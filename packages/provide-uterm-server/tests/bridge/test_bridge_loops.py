@@ -14,7 +14,7 @@ import time
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from provide.uterm.control_channel import encode_control, encode_data
+from provide.uterm.control_channel import encode_control_frame, encode_terminal_data
 from provide.uterm.server.bridge.worker_link import TermBridge
 
 _DLE_STX = "\x10\x02"
@@ -29,8 +29,8 @@ def _decode_msg(raw: str) -> dict:
 
 
 def _ec(msg: dict) -> str:
-    """Shorthand for encode_control."""
-    return encode_control(msg)
+    """Shorthand for encode_control_frame."""
+    return encode_control_frame(msg)
 
 
 class MockSession:
@@ -191,7 +191,7 @@ class TestRecvLoop:
 
         # Input is now sent as raw data (DataChunk), not a JSON envelope.
         # The JS text-input bar sends a real CR; simulate with raw data encoding.
-        ws = MockWS([encode_data("hello\r")])
+        ws = MockWS([encode_terminal_data("hello\r")])
         await bridge._recv_loop(ws)
 
         assert session.sent == ["hello\r"]

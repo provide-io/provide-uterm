@@ -21,7 +21,13 @@ import websockets
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from provide.uterm.control_channel import ControlChannelDecoder, ControlChunk, DataChunk, encode_control, encode_data
+from provide.uterm.control_channel import (
+    ControlChunk,
+    ControlFrameDecoder,
+    DataChunk,
+    encode_control_frame,
+    encode_terminal_data,
+)
 from provide.uterm.server import create_server_app, default_server_config
 from provide.uterm.tunnel.protocol import CHANNEL_DATA, encode_frame
 
@@ -58,12 +64,12 @@ def _auth_headers(subject: str, roles: list[str]) -> dict[str, str]:
     return {"Authorization": f"Bearer {_mint_token(subject, roles)}"}
 
 
-_WS_DECODERS: WeakKeyDictionary[Any, ControlChannelDecoder] = WeakKeyDictionary()
+_WS_DECODERS: WeakKeyDictionary[Any, ControlFrameDecoder] = WeakKeyDictionary()
 _WS_PENDING: WeakKeyDictionary[Any, list[dict[str, Any]]] = WeakKeyDictionary()
 
 
 async def _drain_until(ws: Any, type_: str, timeout: float = 5.0) -> dict[str, Any] | None:
-    decoder = _WS_DECODERS.setdefault(ws, ControlChannelDecoder())
+    decoder = _WS_DECODERS.setdefault(ws, ControlFrameDecoder())
     pending = _WS_PENDING.setdefault(ws, [])
     deadline = asyncio.get_running_loop().time() + timeout
     while asyncio.get_running_loop().time() < deadline:
@@ -93,9 +99,9 @@ async def _drain_until(ws: Any, type_: str, timeout: float = 5.0) -> dict[str, A
 async def _send_frame(ws: Any, payload: dict[str, Any]) -> None:
     frame_type = payload.get("type")
     if frame_type in {"input", "term"}:
-        await ws.send(encode_data(str(payload.get("data", ""))))
+        await ws.send(encode_terminal_data(str(payload.get("data", ""))))
         return
-    await ws.send(encode_control(payload))
+    await ws.send(encode_control_frame(payload))
 
 
 async def _wait_for_hijack_state(ws: Any, *, expected: bool, timeout: float = 5.0) -> dict[str, Any] | None:

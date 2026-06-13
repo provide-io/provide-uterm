@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 from provide.telemetry import get_logger
 from provide.uterm.auth import ResolvedIdentity
-from provide.uterm.control_channel import encode_control
+from provide.uterm.control_channel import encode_control_frame
 from provide.uterm.control_channel_builders import make_identity
 from provide.uterm.gateway._gateway import (
     _read_token,
@@ -368,13 +368,13 @@ async def _make_process_handler(
                                 transport="ssh",
                                 secret=upstream_proxy_secret,
                             )
-                            await ws.send(encode_control(identity_msg))
+                            await ws.send(encode_control_frame(identity_msg))
                         token_data = token_holder[0]
                         if token_data:  # pragma: no cover — resume frame is sent only after a prior successful session
                             resume_msg: dict[str, object] = {"type": "resume", "token": token_data["token"]}
                             if "player_id" in token_data:
                                 resume_msg["player_id"] = token_data["player_id"]
-                            await ws.send(encode_control(resume_msg))
+                            await ws.send(encode_control_frame(resume_msg))
                         t1 = asyncio.create_task(_ssh_to_ws(process, ws))
                         t2 = asyncio.create_task(
                             _ws_to_ssh(

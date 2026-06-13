@@ -12,9 +12,9 @@ from typing import Any
 import websockets
 import websockets.server
 from provide.uterm.control_channel import (
-    ControlChannelDecoder,
     ControlChunk,
-    encode_control,
+    ControlFrameDecoder,
+    encode_control_frame,
 )
 from provide.uterm.gateway import (
     _normalize_crlf,
@@ -28,7 +28,7 @@ from provide.uterm.gateway import (
 
 
 def _decode_control(raw: str) -> dict[str, Any]:
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
     events = decoder.feed(raw)
     events.extend(decoder.finish())
     assert len(events) == 1
@@ -59,7 +59,7 @@ class TestWsToTcpResume:
         from asyncio import StreamWriter
         from typing import cast
 
-        msg = encode_control({"type": "session_token", "token": "tok123"})
+        msg = encode_control_frame({"type": "session_token", "token": "tok123"})
         await _ws_to_tcp(_async_iter([msg]), cast("StreamWriter", MockWriter()), token_holder=token_holder)
         assert written == []
         assert token_holder[0] is not None
@@ -79,7 +79,7 @@ class TestWsToTcpResume:
         from typing import cast
 
         await _ws_to_tcp(
-            _async_iter([encode_control({"type": "resume_ok"})]),
+            _async_iter([encode_control_frame({"type": "resume_ok"})]),
             cast("StreamWriter", MockWriter()),
             token_holder=[None],
         )
@@ -100,7 +100,7 @@ class TestWsToTcpResume:
         from typing import cast
 
         await _ws_to_tcp(
-            _async_iter([encode_control({"type": "resume_failed"})]),
+            _async_iter([encode_control_frame({"type": "resume_failed"})]),
             cast("StreamWriter", MockWriter()),
             token_holder=token_holder,
         )

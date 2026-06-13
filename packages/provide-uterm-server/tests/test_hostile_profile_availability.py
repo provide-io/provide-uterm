@@ -31,7 +31,7 @@ from unittest.mock import AsyncMock
 import pytest
 from websockets.exceptions import InvalidStatus
 
-from provide.uterm.control_channel import encode_control
+from provide.uterm.control_channel import encode_control_frame
 
 # Load the standalone CI script as a module (it lives outside the package tree).
 _SCRIPT_PATH = Path(__file__).resolve().parents[3] / "scripts" / "hostile_profile.py"
@@ -67,7 +67,7 @@ class _FakeConnect:
 
 
 def _hello_wire() -> str:
-    return encode_control({"type": "hello", "role": "admin", "worker_online": True})
+    return encode_control_frame({"type": "hello", "role": "admin", "worker_online": True})
 
 
 def _ns(**overrides: object) -> argparse.Namespace:
@@ -151,7 +151,7 @@ class TestAuthenticatedSessionOnce:
         assert outcome == hp.HUNG
 
     async def test_stream_closes_without_hello_yields_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        other = encode_control({"type": "hijack_state"})
+        other = encode_control_frame({"type": "hijack_state"})
         monkeypatch.setattr(hp.websockets, "connect", lambda *a, **k: _FakeConnect(frames=[other]))
         outcome, _latency = await hp._authenticated_session_once("ws://x/term", "tok", budget_s=5.0, timeout_s=5.0)
         assert outcome == hp.ERROR

@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any
 
 from provide.telemetry import get_tracer
 
-from provide.uterm.control_channel import encode_control, encode_data
+from provide.uterm.control_channel import encode_control_frame, encode_terminal_data
 
 try:
     from provide.uterm.cloudflare.bridge.hijack import HijackSession
@@ -259,9 +259,9 @@ class _SessionRuntimeIoMixin:
                 continue
             try:
                 encoded = (
-                    encode_data(str(payload.get("data", "")))
+                    encode_terminal_data(str(payload.get("data", "")))
                     if frame_type in {"input", "term"}
-                    else encode_control(payload)
+                    else encode_control_frame(payload)
                 )
                 msg_len = len(encoded)
                 if self._queue_bytes + msg_len > self.max_buffer_bytes:

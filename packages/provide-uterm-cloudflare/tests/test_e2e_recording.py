@@ -31,7 +31,7 @@ import pytest
 import websockets
 from cf_e2e_auth import http_auth_headers, ws_auth_headers
 
-from provide.uterm.control_channel import encode_control
+from provide.uterm.control_channel import encode_control_frame
 
 _WS_TIMEOUT_S = 0.5
 _WS_PROCESS_S = 1.0
@@ -75,7 +75,7 @@ async def _connect_worker_send_snapshots(
         with contextlib.suppress(TimeoutError, Exception):
             await asyncio.wait_for(ws.recv(), timeout=_WS_TIMEOUT_S)
         for screen in screens:
-            frame = encode_control(
+            frame = encode_control_frame(
                 {
                     "type": "snapshot",
                     "screen": screen,

@@ -25,7 +25,7 @@ from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
 from provide.telemetry import get_logger
-from provide.uterm.control_channel import DataChunk, encode_control
+from provide.uterm.control_channel import DataChunk, encode_control_frame
 from provide.uterm.server.bridge.frames import make_error_frame
 from provide.uterm.server.bridge.routes.browser_handlers import handle_browser_message
 
@@ -63,14 +63,14 @@ async def dispatch_browser_event(
         hub.metric("ws_browser_rate_limited_total")
         logger.warning("ws_browser_rate_limited worker_id=%s", worker_id)
         with suppress(Exception):
-            await websocket.send_text(encode_control(make_error_frame("rate_limited")))
+            await websocket.send_text(encode_control_frame(make_error_frame("rate_limited")))
             logger.debug("ws_browser_rate_limited_sent worker_id=%s", worker_id)
         return role, can_hijack, owned_hijack
     if mtype is not None and mtype != "input" and not browser_control_bucket.allow():
         hub.metric("ws_browser_control_rate_limited_total")
         logger.warning("ws_browser_control_rate_limited worker_id=%s mtype=%s", worker_id, mtype)
         with suppress(Exception):
-            await websocket.send_text(encode_control(make_error_frame("rate_limited")))
+            await websocket.send_text(encode_control_frame(make_error_frame("rate_limited")))
         return role, can_hijack, owned_hijack
 
     # Resume handled here (not in browser_handlers) because it can
@@ -109,7 +109,7 @@ async def dispatch_browser_event(
                 principal=_fo_subj,
             )
             await websocket.send_text(
-                encode_control(
+                encode_control_frame(
                     {
                         "type": "fanout_result",
                         "group_id": _fo_result.group_id,

@@ -13,7 +13,7 @@ import websockets
 from provide.uterm.colors import apply_color_mode as _apply_color_mode
 from provide.uterm.colors import rgb_to_256 as _rgb_to_256
 from provide.uterm.colors.rgb import _clamp8
-from provide.uterm.control_channel import encode_control
+from provide.uterm.control_channel import encode_control_frame
 from provide.uterm.gateway import (
     TelnetWsGateway,
     _delete_token,
@@ -88,7 +88,7 @@ class TestHandleWsControl:
             written.append(data)
 
         result = await _handle_ws_control(
-            encode_control({"type": "session_token", "token": "abc123"}), holder, _write_fn
+            encode_control_frame({"type": "session_token", "token": "abc123"}), holder, _write_fn
         )
         assert result is True
         assert holder[0] is not None
@@ -101,7 +101,7 @@ class TestHandleWsControl:
         async def _write_fn(data: bytes) -> None:
             written.append(data)
 
-        result = await _handle_ws_control(encode_control({"type": "resume_ok"}), [None], _write_fn)
+        result = await _handle_ws_control(encode_control_frame({"type": "resume_ok"}), [None], _write_fn)
         assert result is True
         assert b"Session resumed" in written[0]
 
@@ -112,7 +112,7 @@ class TestHandleWsControl:
         async def _write_fn(data: bytes) -> None:
             written.append(data)
 
-        result = await _handle_ws_control(encode_control({"type": "resume_failed"}), holder, _write_fn)
+        result = await _handle_ws_control(encode_control_frame({"type": "resume_failed"}), holder, _write_fn)
         assert result is True
         assert holder[0] is None
 
@@ -135,7 +135,9 @@ class TestHandleWsControl:
         async def _write_fn(data: bytes) -> None:
             pass
 
-        result = await _handle_ws_control(encode_control({"type": "session_token", "token": "x"}), holder, _write_fn)
+        result = await _handle_ws_control(
+            encode_control_frame({"type": "session_token", "token": "x"}), holder, _write_fn
+        )
         assert result is True
         assert holder[0] is not None
 
@@ -145,7 +147,7 @@ class TestHandleWsControl:
         async def _write_fn(data: bytes) -> None:
             pass
 
-        result = await _handle_ws_control(encode_control({"type": "resume_failed"}), holder, _write_fn)
+        result = await _handle_ws_control(encode_control_frame({"type": "resume_failed"}), holder, _write_fn)
         assert result is True
         assert holder[0] is None
 

@@ -17,7 +17,7 @@ import httpx
 import pytest
 import websockets
 
-from provide.uterm.control_channel import ControlChannelDecoder, ControlChunk, DataChunk, encode_data
+from provide.uterm.control_channel import ControlChunk, ControlFrameDecoder, DataChunk, encode_terminal_data
 from provide.uterm.server import create_server_app, default_server_config
 
 
@@ -25,7 +25,7 @@ def _ws_url(base_url: str, path: str) -> str:
     return base_url.replace("http://", "ws://") + path
 
 
-_WS_DECODERS: WeakKeyDictionary[Any, ControlChannelDecoder] = WeakKeyDictionary()
+_WS_DECODERS: WeakKeyDictionary[Any, ControlFrameDecoder] = WeakKeyDictionary()
 _WS_PENDING: WeakKeyDictionary[Any, list[dict[str, Any]]] = WeakKeyDictionary()
 
 
@@ -40,7 +40,7 @@ async def _drain_until(ws: Any, type_: str, timeout: float = 5.0) -> dict[str, A
                     return msg
                 continue
             raw = await asyncio.wait_for(ws.recv(), timeout=0.3)
-            decoder = _WS_DECODERS.setdefault(ws, ControlChannelDecoder())
+            decoder = _WS_DECODERS.setdefault(ws, ControlFrameDecoder())
             for event in decoder.feed(raw):
                 if isinstance(event, ControlChunk):
                     pending.append(event.control)
@@ -140,7 +140,7 @@ class TestUshellE2E:
         await self._wait_connected(ushell_server, "ushell-help")
         async with websockets.connect(_ws_url(ushell_server, "/ws/browser/ushell-help/term")) as ws:
             assert await _drain_until(ws, "hello", timeout=5.0) is not None
-            await ws.send(encode_data("help\n"))
+            await ws.send(encode_terminal_data("help\n"))
             output = await _drain_term_until(ws, "ushell commands", timeout=5.0)
         assert "ushell commands" in output
 
@@ -149,6 +149,6 @@ class TestUshellE2E:
         await self._wait_connected(ushell_server, "ushell-py")
         async with websockets.connect(_ws_url(ushell_server, "/ws/browser/ushell-py/term")) as ws:
             assert await _drain_until(ws, "hello", timeout=5.0) is not None
-            await ws.send(encode_data("py 1 + 1\n"))
+            await ws.send(encode_terminal_data("py 1 + 1\n"))
             output = await _drain_term_until(ws, "2", timeout=5.0)
         assert "2" in output

@@ -25,7 +25,7 @@ import pytest
 import websockets
 from cf_e2e_auth import http_auth_headers, ws_auth_headers
 
-from provide.uterm.control_channel import encode_control
+from provide.uterm.control_channel import encode_control_frame
 
 _WS_TIMEOUT_S = 15.0
 _HTTP_UA = "provide-uterm-e2e-test/1.0"
@@ -283,7 +283,7 @@ async def test_two_browsers_receive_same_snapshot(wrangler_server: str) -> None:
         await _drain_until(browser_b, "hello", max_frames=5, timeout=5.0)
 
         # Worker sends snapshot → DO calls broadcast_to_browsers → both sockets receive it.
-        await worker_ws.send(encode_control({"type": "snapshot", "screen": snapshot_screen, "ts": time.time()}))
+        await worker_ws.send(encode_control_frame({"type": "snapshot", "screen": snapshot_screen, "ts": time.time()}))
 
         snap_a, snap_b = await asyncio.gather(
             _drain_until(browser_a, "snapshot", max_frames=10, timeout=10.0),
@@ -315,7 +315,7 @@ async def test_state_persists_after_do_hibernation(wrangler_server: str) -> None
 
     # Step 1-2: connect, send control-channel encoded snapshot, disconnect.
     async with _ws_connect(worker_uri) as ws:
-        await ws.send(encode_control({"type": "snapshot", "screen": snapshot_screen, "ts": time.time()}))
+        await ws.send(encode_control_frame({"type": "snapshot", "screen": snapshot_screen, "ts": time.time()}))
         await asyncio.sleep(1.0)  # let DO process the frame before close
 
     # Step 3: wait for DO to hibernate.

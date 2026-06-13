@@ -12,34 +12,34 @@ from provide.uterm.bridge.contracts import (
 
 if TYPE_CHECKING:
     from provide.uterm.control_channel import (
-        ControlChannelDecoder,
-        ControlChannelProtocolError,
         ControlChunk,
+        ControlFrameDecoder,
+        ControlFrameProtocolError,
         DataChunk,
-        encode_control,
-        encode_data,
+        encode_control_frame,
+        encode_terminal_data,
     )
 else:
     try:
         from provide.uterm.control_channel import (
-            ControlChannelDecoder,
-            ControlChannelProtocolError,
             ControlChunk,
+            ControlFrameDecoder,
+            ControlFrameProtocolError,
             DataChunk,
-            encode_control,
-            encode_data,
+            encode_control_frame,
+            encode_terminal_data,
         )
     except (ImportError, ModuleNotFoundError):  # pragma: no cover
         # Fallback for Cloudflare Durable Objects validation phase
         ControlChunk = Any
-        ControlChannelDecoder = Any
-        ControlChannelProtocolError = Exception
+        ControlFrameDecoder = Any
+        ControlFrameProtocolError = Exception
         DataChunk = Any
 
-        def encode_control(*_a: Any, **_k: Any) -> bytes:
+        def encode_control_frame(*_a: Any, **_k: Any) -> bytes:
             return b""
 
-        def encode_data(*_a: Any, **_k: Any) -> bytes:
+        def encode_terminal_data(*_a: Any, **_k: Any) -> bytes:
             return b""
 
 
@@ -181,11 +181,11 @@ def parse_stream(
     active_limits = limits or MessageLimits()
     if len(raw.encode("utf-8")) > active_limits.max_ws_message_bytes:
         raise ProtocolError("message too large")
-    decoder = ControlChannelDecoder(max_control_payload_bytes=active_limits.max_ws_message_bytes)
+    decoder = ControlFrameDecoder(max_control_payload_bytes=active_limits.max_ws_message_bytes)
     try:
         events = decoder.feed(raw)
         events.extend(decoder.finish())
-    except ControlChannelProtocolError as exc:
+    except ControlFrameProtocolError as exc:
         raise ProtocolError(str(exc)) from exc
     if not events:
         raise ProtocolError("empty frame")
@@ -224,8 +224,8 @@ def parse_frame(
 def frame_json(frame_type: FrameType, **kwargs: Any) -> str:
     payload = {"type": frame_type, "ts": time.time(), **kwargs}
     if frame_type in {"input", "term"}:
-        return encode_data(str(payload.get("data", "")))
-    return encode_control(payload)
+        return encode_terminal_data(str(payload.get("data", "")))
+    return encode_control_frame(payload)
 
 
 # ---------------------------------------------------------------------------

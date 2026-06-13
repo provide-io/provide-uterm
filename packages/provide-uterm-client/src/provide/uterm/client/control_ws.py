@@ -13,11 +13,11 @@ from contextlib import asynccontextmanager
 from typing import Any, Literal
 
 from provide.uterm.control_channel import (
-    ControlChannelDecoder,
     ControlChunk,
+    ControlFrameDecoder,
     DataChunk,
-    encode_control,
-    encode_data,
+    encode_control_frame,
+    encode_terminal_data,
 )
 
 WsRole = Literal["browser", "worker"]
@@ -27,8 +27,8 @@ def encode_logical_frame(payload: Mapping[str, Any]) -> str:
     """Encode one logical terminal/control frame for the inline WS protocol."""
     frame_type = payload.get("type")
     if frame_type in {"input", "term"}:
-        return encode_data(str(payload.get("data", "")))
-    return encode_control(dict(payload))
+        return encode_terminal_data(str(payload.get("data", "")))
+    return encode_control_frame(dict(payload))
 
 
 class LogicalFrameDecoder:
@@ -36,7 +36,7 @@ class LogicalFrameDecoder:
 
     def __init__(self, *, role: WsRole) -> None:
         self._role = role
-        self._decoder = ControlChannelDecoder()
+        self._decoder = ControlFrameDecoder()
 
     def feed(self, raw: str) -> list[dict[str, Any]]:
         frames: list[dict[str, Any]] = []
@@ -119,8 +119,7 @@ class AsyncInlineWebSocketClient:
                 await self._ws.send(data)
                 return
             if isinstance(parsed, Mapping):
-                await self.send_frame(parsed)
-                return
+                raise TypeError("bare JSON control strings are not accepted; use send_frame() or send_json()")
         elif isinstance(data, Mapping):
             await self.send_frame(data)
             return

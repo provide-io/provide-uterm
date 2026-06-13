@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from provide.uterm.control_channel import ControlChannelDecoder, DataChunk
+from provide.uterm.control_channel import ControlFrameDecoder, DataChunk
 from provide.uterm.server.bridge.hub import PolicyContext, PolicyDecision, TermHub
 from provide.uterm.server.bridge.routes.browser_handlers import _handle_input
 
@@ -34,7 +34,7 @@ async def test_policy_gate_allow_all() -> None:
     worker_ws.send_text.assert_called()
     payload = worker_ws.send_text.call_args[0][0]
 
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
     events = decoder.feed(payload)
     chunks = [e.data for e in events if isinstance(e, DataChunk)]
     assert chunks == ["hello"]

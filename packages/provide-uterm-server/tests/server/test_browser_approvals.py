@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from provide.uterm.control_channel import ControlChannelDecoder, DataChunk
+from provide.uterm.control_channel import ControlFrameDecoder, DataChunk
 from provide.uterm.server.bridge.hub import PolicyContext, PolicyDecision, TermHub
 from provide.uterm.server.bridge.routes.browser_handlers import _handle_input
 
@@ -51,7 +51,7 @@ async def test_approval_flow_buffering_and_hold() -> None:
 
     # Check broadcast
     found_pending = False
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
     for call in ws.send_text.call_args_list:
         payload = call[0][0]
         events = decoder.feed(payload)
@@ -84,14 +84,14 @@ async def test_resolve_approval_approved() -> None:
     # Should be sent to worker
     worker_ws.send_text.assert_called()
     payload = worker_ws.send_text.call_args[0][0]
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
     events = decoder.feed(payload)
     chunks = [e.data for e in events if isinstance(e, DataChunk)]
     assert chunks == ["ls -la\n"]
 
     # Should broadcast approval_resolved
     found_resolved = False
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
     for call in ws.send_text.call_args_list:
         payload = call[0][0]
         events = decoder.feed(payload)

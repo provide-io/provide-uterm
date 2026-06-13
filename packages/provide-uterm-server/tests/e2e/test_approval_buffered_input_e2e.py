@@ -17,7 +17,7 @@ import httpx
 import uvicorn
 from playwright.sync_api import sync_playwright
 
-from provide.uterm.control_channel import ControlChannelDecoder, DataChunk, encode_control
+from provide.uterm.control_channel import ControlFrameDecoder, DataChunk, encode_control_frame
 from provide.uterm.server import create_server_app, default_server_config
 from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.server.bridge.hub.ext import PolicyDecision, PolicyGate
@@ -84,12 +84,12 @@ def run_proof():
 
         async def _worker_logic():
             ws_url = base_url.replace("http://", "ws://") + f"/ws/worker/{worker_id}/term"
-            decoder = ControlChannelDecoder()
+            decoder = ControlFrameDecoder()
             async with connect_async_ws(ws_url) as worker_ws:
                 await asyncio.wait_for(worker_ws.recv(), timeout=5.0)
 
                 await worker_ws.send(
-                    encode_control(
+                    encode_control_frame(
                         {
                             "type": "snapshot",
                             "screen": "Welcome to proof terminal\r\n$",

@@ -27,7 +27,7 @@ from provide.uterm.bridge.contracts import (
     MIN_PROTOCOL_VERSION,
     negotiate_protocol_version,
 )
-from provide.uterm.control_channel import encode_control
+from provide.uterm.control_channel import encode_control_frame
 from provide.uterm.server.bridge.frames import (
     coerce_worker_status_frame,
     make_analysis_frame,
@@ -83,7 +83,7 @@ async def _handle_worker_hello(hub: TermHub, websocket: WebSocket, worker_id: st
         )
         with suppress(Exception):
             await websocket.send_text(
-                encode_control(
+                encode_control_frame(
                     {
                         "type": "error",
                         "reason": "protocol_mismatch",

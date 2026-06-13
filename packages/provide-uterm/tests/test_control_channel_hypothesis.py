@@ -11,7 +11,7 @@ text stream. Property tests guard the two invariants we care about most:
    yields back the exact same logical chunks (a string payload as one
    ``DataChunk`` and a control dict as one ``ControlChunk``).
 2. Robustness: feeding arbitrary text into a decoder either parses cleanly or
-   raises ``ControlChannelProtocolError``; it must never crash with a different
+   raises ``ControlFrameProtocolError``; it must never crash with a different
    exception nor silently retain inconsistent buffered state.
 """
 
@@ -23,12 +23,12 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from provide.uterm.control_channel import (
-    ControlChannelDecoder,
-    ControlChannelProtocolError,
     ControlChunk,
+    ControlFrameDecoder,
+    ControlFrameProtocolError,
     DataChunk,
-    encode_control,
-    encode_data,
+    encode_control_frame,
+    encode_terminal_data,
 )
 
 # Strategy for arbitrary JSON-compatible control payloads. Keys must be str
@@ -51,9 +51,9 @@ _arbitrary_text = st.text(max_size=4096)
 @given(payload=_data_payloads)
 @settings(suppress_health_check=[HealthCheck.too_slow], max_examples=200)
 def test_encode_data_round_trips_through_decoder(payload: str) -> None:
-    """Any text payload survives encode_data -> decoder.feed -> finish."""
-    decoder = ControlChannelDecoder()
-    chunks = decoder.feed(encode_data(payload))
+    """Any text payload survives encode_terminal_data -> decoder.feed -> finish."""
+    decoder = ControlFrameDecoder()
+    chunks = decoder.feed(encode_terminal_data(payload))
     chunks.extend(decoder.finish())
     if payload == "":
         assert chunks == []
@@ -67,9 +67,9 @@ def test_encode_data_round_trips_through_decoder(payload: str) -> None:
 @given(payload=_control_dicts)
 @settings(suppress_health_check=[HealthCheck.too_slow], max_examples=200)
 def test_encode_control_round_trips_through_decoder(payload: dict[str, Any]) -> None:
-    """Any JSON-shaped dict survives encode_control -> decoder.feed."""
-    decoder = ControlChannelDecoder()
-    chunks = decoder.feed(encode_control(payload))
+    """Any JSON-shaped dict survives encode_control_frame -> decoder.feed."""
+    decoder = ControlFrameDecoder()
+    chunks = decoder.feed(encode_control_frame(payload))
     chunks.extend(decoder.finish())
     assert len(chunks) == 1
     chunk = chunks[0]
@@ -83,8 +83,8 @@ def test_encode_control_round_trips_through_decoder(payload: dict[str, Any]) -> 
 @settings(suppress_health_check=[HealthCheck.too_slow], max_examples=200)
 def test_mixed_data_and_control_round_trip(data: str, payload: dict[str, Any]) -> None:
     """Concatenated data + control frames decode in order."""
-    decoder = ControlChannelDecoder()
-    chunks = decoder.feed(encode_data(data) + encode_control(payload))
+    decoder = ControlFrameDecoder()
+    chunks = decoder.feed(encode_terminal_data(data) + encode_control_frame(payload))
     chunks.extend(decoder.finish())
     # Strip the empty leading DataChunk for the data == "" edge case.
     chunks = [c for c in chunks if not (isinstance(c, DataChunk) and c.data == "")]
@@ -101,12 +101,12 @@ def test_mixed_data_and_control_round_trip(data: str, payload: dict[str, Any]) -
 @given(text=_arbitrary_text)
 @settings(suppress_health_check=[HealthCheck.too_slow], max_examples=300)
 def test_decoder_never_crashes_on_arbitrary_input(text: str) -> None:
-    """Arbitrary text either parses or raises ControlChannelProtocolError — nothing else."""
-    decoder = ControlChannelDecoder()
+    """Arbitrary text either parses or raises ControlFrameProtocolError — nothing else."""
+    decoder = ControlFrameDecoder()
     try:
         decoder.feed(text)
         decoder.finish()
-    except ControlChannelProtocolError:
+    except ControlFrameProtocolError:
         # Allowed failure mode. Buffer must be cleared on protocol error.
         assert decoder._buffer == ""
         assert decoder._buffer_parts == []
@@ -117,18 +117,18 @@ def test_decoder_never_crashes_on_arbitrary_input(text: str) -> None:
 def test_decoder_chunked_feed_matches_single_feed(text: str) -> None:
     """Feeding text byte-by-byte produces the same chunks as a single feed,
     when neither path raises."""
-    bulk_decoder = ControlChannelDecoder()
-    chunked_decoder = ControlChannelDecoder()
+    bulk_decoder = ControlFrameDecoder()
+    chunked_decoder = ControlFrameDecoder()
     try:
         bulk_chunks = bulk_decoder.feed(text) + bulk_decoder.finish()
-    except ControlChannelProtocolError:
+    except ControlFrameProtocolError:
         return  # Single-feed path rejects this input; chunked behaviour is then unconstrained.
     try:
         chunked_chunks: list[Any] = []
         for ch in text:
             chunked_chunks.extend(chunked_decoder.feed(ch))
         chunked_chunks.extend(chunked_decoder.finish())
-    except ControlChannelProtocolError:
+    except ControlFrameProtocolError:
         return  # Acceptable: chunked path can fail differently on truncation boundaries.
 
     # Both paths succeeded — the *logical* contents must match. Note that

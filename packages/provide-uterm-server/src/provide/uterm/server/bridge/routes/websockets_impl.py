@@ -34,10 +34,10 @@ from provide.uterm.bridge.contracts import (
     PREFERRED_PROTOCOL_VERSION,
 )
 from provide.uterm.control_channel import (
-    ControlChannelDecoder,
-    ControlChannelProtocolError,
+    ControlFrameDecoder,
+    ControlFrameProtocolError,
     DataChunk,
-    encode_control,
+    encode_control_frame,
 )
 from provide.uterm.server.bridge.frames import (
     make_hello_frame,
@@ -121,7 +121,7 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
         await hub.request_snapshot(worker_id)
 
         cleanup_task = asyncio.create_task(_periodic_hijack_cleanup(hub, worker_id, _WORKER_HIJACK_CLEANUP_INTERVAL_S))
-        decoder = ControlChannelDecoder(max_control_payload_bytes=hub.max_ws_message_bytes)
+        decoder = ControlFrameDecoder(max_control_payload_bytes=hub.max_ws_message_bytes)
         try:
             while True:
                 try:
@@ -139,7 +139,7 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                     break
                 try:
                     events = decoder.feed(raw)
-                except ControlChannelProtocolError as exc:
+                except ControlFrameProtocolError as exc:
                     preview = raw[:256]
                     logger.warning(
                         "ws_worker_bad_stream worker_id=%s: %s raw_len=%d preview=%r",
@@ -219,7 +219,9 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                         if hub.worker_frame_on_invalid == "reject":
                             logger.warning("ws_worker_frame_invalid_reject worker_id=%s error=%s", worker_id, exc)
                             with suppress(Exception):
-                                await websocket.send_text(encode_control({"type": "error", "reason": "invalid_frame"}))
+                                await websocket.send_text(
+                                    encode_control_frame({"type": "error", "reason": "invalid_frame"})
+                                )
                                 await websocket.close(code=1003, reason="invalid_frame")
                             break
                         logger.debug("ws_worker_frame_invalid_drop worker_id=%s error=%s", worker_id, exc)
@@ -348,21 +350,21 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
             }
             if hasattr(hub, "deckmux_on_browser_connect"):
                 _hello_kwargs["presence_enabled"] = True
-            await websocket.send_text(encode_control(make_hello_frame(**_hello_kwargs)))
-            await websocket.send_text(encode_control(await hub.hijack_state_msg_for(worker_id, websocket)))
+            await websocket.send_text(encode_control_frame(make_hello_frame(**_hello_kwargs)))
+            await websocket.send_text(encode_control_frame(await hub.hijack_state_msg_for(worker_id, websocket)))
 
             _dm_connect: Any = getattr(hub, "deckmux_on_browser_connect", None)
             if _dm_connect is not None:
                 _dm_principal = getattr(getattr(websocket, "state", None), "uterm_principal", None)
                 sync_msg = await _dm_connect(worker_id, websocket, role, principal=_dm_principal)
                 if sync_msg:
-                    await websocket.send_text(encode_control(sync_msg))
+                    await websocket.send_text(encode_control_frame(sync_msg))
 
             if initial_snapshot is not None:
                 # The connect-time output-policy redaction already happened in
                 # register_browser (role-scoped to this websocket). initial_snapshot
                 # here is already a redacted copy when a policy is active (M5).
-                await websocket.send_text(encode_control(initial_snapshot))
+                await websocket.send_text(encode_control_frame(initial_snapshot))
             else:
                 await hub.request_snapshot(worker_id)
             await hub.activate_browser_broadcasts(worker_id, websocket)
@@ -370,7 +372,7 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
             cleanup_task = asyncio.create_task(
                 _periodic_hijack_cleanup(hub, worker_id, _BROWSER_HIJACK_CLEANUP_INTERVAL_S)
             )
-            decoder = ControlChannelDecoder(max_control_payload_bytes=hub.max_ws_message_bytes)
+            decoder = ControlFrameDecoder(max_control_payload_bytes=hub.max_ws_message_bytes)
             _browser_bucket = TokenBucket(hub.browser_rate_limit_per_sec)
             # Separate budget for non-input control frames. See
             # ``browser_control_rate_limit_per_sec`` in TermHub for the
@@ -387,7 +389,7 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                     continue
                 try:
                     events = decoder.feed(raw)
-                except ControlChannelProtocolError as exc:
+                except ControlFrameProtocolError as exc:
                     logger.warning("ws_browser_bad_stream worker_id=%s: %s", worker_id, exc)
                     with suppress(Exception):
                         await websocket.close(code=1003, reason=str(exc))

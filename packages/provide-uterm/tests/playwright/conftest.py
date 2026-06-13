@@ -20,7 +20,7 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from playwright.sync_api import Page
 
-from provide.uterm.control_channel import encode_control
+from provide.uterm.control_channel import encode_control_frame
 from provide.uterm.server.bridge.hub import TermHub
 
 
@@ -203,7 +203,7 @@ class ColorWorker:
                     "has_trailing_space": False,
                     "ts": time.time(),
                 }
-                await ws.send(encode_control(snapshot))
+                await ws.send(encode_control_frame(snapshot))
 
                 send_count = 0
                 while not self._stop.is_set():
@@ -275,7 +275,7 @@ class AnimatedWorker:
                     "has_trailing_space": False,
                     "ts": time.time(),
                 }
-                await ws.send(encode_control(snapshot))
+                await ws.send(encode_control_frame(snapshot))
 
                 delay = 1.0 / self._fps
                 # Loop frames until stopped (cycles for video recording)

@@ -27,7 +27,7 @@ from provide.uterm.bridge.contracts import (
     MIN_PROTOCOL_VERSION,
     PREFERRED_PROTOCOL_VERSION,
 )
-from provide.uterm.control_channel import encode_control
+from provide.uterm.control_channel import encode_control_frame
 
 if TYPE_CHECKING:
     from provide.uterm.cloudflare.api.http_routes import route_http
@@ -249,7 +249,7 @@ class _FetchMixin:
                 self.browser_resume_tokens[self.ws_key(server)] = resume_token  # server is Any
                 try:
                     server.send(
-                        encode_control(
+                        encode_control_frame(
                             {
                                 "type": "hello",
                                 "worker_id": self.worker_id,

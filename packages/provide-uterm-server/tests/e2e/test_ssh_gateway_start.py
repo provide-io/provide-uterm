@@ -162,7 +162,7 @@ class TestSshWsGatewayStart:
 
     async def test_process_handler_resumes_after_token_received(self) -> None:
         """After server sends session_token, next WS reconnect sends a resume frame."""
-        from provide.uterm.control_channel import encode_control
+        from provide.uterm.control_channel import encode_control_frame
         from provide.uterm.gateway import SshWsGateway
 
         connection_count = 0
@@ -174,7 +174,7 @@ class TestSshWsGatewayStart:
             connection_count += 1
             if connection_count == 1:
                 # First connection: send a session_token frame, then close
-                await ws.send(encode_control({"type": "session_token", "token": "in_memory_token"}))
+                await ws.send(encode_control_frame({"type": "session_token", "token": "in_memory_token"}))
                 await ws.close()
             else:
                 # Second connection: capture the first frame (should be a resume)

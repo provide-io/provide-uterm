@@ -14,7 +14,7 @@ import pytest
 from provide.uterm.cli import _build_parser
 from provide.uterm.cli._watch_app import Exchange, _decode_body, human_size, parse_http_frames, status_style
 from provide.uterm.cli.watch import extract_tunnel_id
-from provide.uterm.control_channel import encode_control
+from provide.uterm.control_channel import encode_control_frame
 
 
 class TestWatchArgParsing:
@@ -75,19 +75,23 @@ class TestExtractTunnelId:
 
 class TestParseHttpFrames:
     def test_extracts_http_req(self) -> None:
-        raw = encode_control({"type": "http_req", "id": "r1", "_channel": "http", "method": "GET", "url": "/test"})
+        raw = encode_control_frame(
+            {"type": "http_req", "id": "r1", "_channel": "http", "method": "GET", "url": "/test"}
+        )
         frames = parse_http_frames(raw)
         assert len(frames) == 1
         assert frames[0]["method"] == "GET"
 
     def test_extracts_http_res(self) -> None:
-        raw = encode_control({"type": "http_res", "id": "r1", "_channel": "http", "status": 200, "duration_ms": 42})
+        raw = encode_control_frame(
+            {"type": "http_res", "id": "r1", "_channel": "http", "status": 200, "duration_ms": 42}
+        )
         frames = parse_http_frames(raw)
         assert len(frames) == 1
         assert frames[0]["status"] == 200
 
     def test_ignores_non_http(self) -> None:
-        raw = encode_control({"type": "hello", "worker_id": "x"})
+        raw = encode_control_frame({"type": "hello", "worker_id": "x"})
         frames = parse_http_frames(raw)
         assert len(frames) == 0
 
@@ -95,8 +99,8 @@ class TestParseHttpFrames:
         assert parse_http_frames("plain terminal data") == []
 
     def test_multiple_frames(self) -> None:
-        f1 = encode_control({"type": "http_req", "id": "r1", "_channel": "http", "method": "GET"})
-        f2 = encode_control({"type": "http_res", "id": "r1", "_channel": "http", "status": 200})
+        f1 = encode_control_frame({"type": "http_req", "id": "r1", "_channel": "http", "method": "GET"})
+        f2 = encode_control_frame({"type": "http_res", "id": "r1", "_channel": "http", "status": 200})
         frames = parse_http_frames(f1 + f2)
         assert len(frames) == 2
 

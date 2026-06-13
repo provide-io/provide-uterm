@@ -149,7 +149,7 @@ class LinkPatternRegistry:
         return list(self._patterns.values())
 
     def sync_payload(self) -> dict[str, Any]:
-        """Return the ready-to-send dict for :func:`~provide.uterm.control_channel.encode_control`.
+        """Return the ready-to-send dict for :func:`~provide.uterm.control_channel.encode_control_frame`.
 
         The returned dict has the shape::
 

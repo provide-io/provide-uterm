@@ -10,7 +10,7 @@ import json
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
-from provide.uterm.control_channel import encode_control, encode_data
+from provide.uterm.control_channel import encode_control_frame, encode_terminal_data
 from provide.uterm.gateway._gateway import (
     _handle_ws_control,
     _handle_ws_control_frame,
@@ -186,7 +186,7 @@ class TestHandleWsControl:
     async def test_control_channel_encoded(self) -> None:
         holder: list[dict | None] = [None]
         write_fn = AsyncMock()
-        msg = encode_control({"type": "session_token", "token": "abc"})
+        msg = encode_control_frame({"type": "session_token", "token": "abc"})
         result = await _handle_ws_control(msg, holder, write_fn)
         assert result is True
         assert holder[0] == {"token": "abc"}
@@ -194,46 +194,28 @@ class TestHandleWsControl:
     async def test_data_chunk_returns_false(self) -> None:
         holder: list[dict | None] = [None]
         write_fn = AsyncMock()
-        msg = encode_data("hello")
+        msg = encode_terminal_data("hello")
         result = await _handle_ws_control(msg, holder, write_fn)
         assert result is False
 
-    async def test_plain_json_fallback(self) -> None:
-        """Trigger the ControlChannelProtocolError -> JSON fallback path."""
+    async def test_plain_json_control_string_is_not_control(self) -> None:
         holder: list[dict | None] = [None]
         write_fn = AsyncMock()
-        with patch("provide.uterm.gateway._gateway.ControlChannelDecoder") as mock_cls:
-            from provide.uterm.control_channel import ControlChannelProtocolError
+        msg = json.dumps({"type": "session_token", "token": "xyz"})
+        result = await _handle_ws_control(msg, holder, write_fn)
+        assert result is False
+        assert holder[0] is None
 
-            instance = mock_cls.return_value
-            instance.feed.side_effect = ControlChannelProtocolError("test")
-            msg = json.dumps({"type": "session_token", "token": "xyz"})
-            result = await _handle_ws_control(msg, holder, write_fn)
-        assert result is True
-        assert holder[0] == {"token": "xyz"}
-
-    async def test_plain_json_non_dict_fallback(self) -> None:
-        """Fallback path: valid JSON but not a dict."""
+    async def test_plain_json_array_is_not_control(self) -> None:
         holder: list[dict | None] = [None]
         write_fn = AsyncMock()
-        with patch("provide.uterm.gateway._gateway.ControlChannelDecoder") as mock_cls:
-            from provide.uterm.control_channel import ControlChannelProtocolError
-
-            instance = mock_cls.return_value
-            instance.feed.side_effect = ControlChannelProtocolError("test")
-            result = await _handle_ws_control(json.dumps([1, 2]), holder, write_fn)
+        result = await _handle_ws_control(json.dumps([1, 2]), holder, write_fn)
         assert result is False
 
-    async def test_invalid_json_fallback_returns_false(self) -> None:
-        """Fallback path: not valid JSON either."""
+    async def test_malformed_unframed_text_returns_false(self) -> None:
         holder: list[dict | None] = [None]
         write_fn = AsyncMock()
-        with patch("provide.uterm.gateway._gateway.ControlChannelDecoder") as mock_cls:
-            from provide.uterm.control_channel import ControlChannelProtocolError
-
-            instance = mock_cls.return_value
-            instance.feed.side_effect = ControlChannelProtocolError("test")
-            result = await _handle_ws_control("not json {{{", holder, write_fn)
+        result = await _handle_ws_control("not json {{{", holder, write_fn)
         assert result is False
 
     async def test_empty_events(self) -> None:
@@ -245,7 +227,7 @@ class TestHandleWsControl:
     async def test_resume_ok_via_control_channel(self) -> None:
         holder: list[dict | None] = [None]
         write_fn = AsyncMock()
-        msg = encode_control({"type": "resume_ok"})
+        msg = encode_control_frame({"type": "resume_ok"})
         result = await _handle_ws_control(msg, holder, write_fn)
         assert result is True
         write_fn.assert_called_once()

@@ -5,13 +5,13 @@
 """Coverage gap tests for hijack subsystem.
 
 Targets:
-- hijack/bridge.py lines 280-282: ControlChannelProtocolError in _recv_loop → return
+- hijack/bridge.py lines 280-282: ControlFrameProtocolError in _recv_loop → return
 - hijack/bridge.py lines 285->287: DataChunk with empty data → skip send_keys
 - hijack/rest_helpers.py line 49: compile_expect_regex with falsy/empty → return None
 - hijack/routes/browser_handlers.py branch 262->273: resume reclaim fails when hijack already active
-- hijack/routes/websockets.py lines 112-116: ControlChannelProtocolError in worker handler → close 1003
+- hijack/routes/websockets.py lines 112-116: ControlFrameProtocolError in worker handler → close 1003
 - hijack/routes/websockets.py lines 119->124: DataChunk with empty data → continue (no broadcast)
-- hijack/routes/websockets.py lines 302-306: ControlChannelProtocolError in browser handler → close 1003
+- hijack/routes/websockets.py lines 302-306: ControlFrameProtocolError in browser handler → close 1003
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from provide.uterm.client import connect_test_ws
-from provide.uterm.control_channel import ControlChannelProtocolError, encode_data
+from provide.uterm.control_channel import ControlFrameProtocolError, encode_terminal_data
 from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.server.bridge.models import WorkerTermState
 from provide.uterm.server.bridge.rest_helpers import compile_expect_regex
@@ -115,15 +115,15 @@ class TestCompileExpectRegexFalsy:
 
 
 # ---------------------------------------------------------------------------
-# hijack/bridge.py lines 280-282: ControlChannelProtocolError in _recv_loop → return
+# hijack/bridge.py lines 280-282: ControlFrameProtocolError in _recv_loop → return
 # ---------------------------------------------------------------------------
 
 
 class TestBridgeRecvLoopProtocolError:
-    """Lines 280-282: ControlChannelProtocolError while decoding a received frame → return from _recv_loop."""
+    """Lines 280-282: ControlFrameProtocolError while decoding a received frame → return from _recv_loop."""
 
     async def test_protocol_error_causes_recv_loop_return(self) -> None:
-        """When decoder.feed raises ControlChannelProtocolError, _recv_loop returns (not crash)."""
+        """When decoder.feed raises ControlFrameProtocolError, _recv_loop returns (not crash)."""
         bot = MagicMock()
         bot.session = None
         bot.set_hijacked = AsyncMock()
@@ -131,21 +131,21 @@ class TestBridgeRecvLoopProtocolError:
         bridge = TermBridge(bot, "w1", "http://localhost:8080")
         bridge._running = True  # must be True or while loop exits immediately
 
-        from provide.uterm.control_channel import ControlChannelDecoder
+        from provide.uterm.control_channel import ControlFrameDecoder
 
         call_count = 0
-        original_feed = ControlChannelDecoder.feed
+        original_feed = ControlFrameDecoder.feed
 
         def patched_feed(self, data):
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                raise ControlChannelProtocolError("bad frame")
+                raise ControlFrameProtocolError("bad frame")
             return original_feed(self, data)
 
         class _FakeWs:
             def __init__(self):
-                self._msgs = ["bad-message", encode_data("good")]
+                self._msgs = ["bad-message", encode_terminal_data("good")]
                 self._idx = 0
 
             async def recv(self):
@@ -156,8 +156,8 @@ class TestBridgeRecvLoopProtocolError:
                 return msg
 
         ws = _FakeWs()
-        with patch.object(ControlChannelDecoder, "feed", patched_feed):
-            # _recv_loop should return after the ControlChannelProtocolError (not loop further)
+        with patch.object(ControlFrameDecoder, "feed", patched_feed):
+            # _recv_loop should return after the ControlFrameProtocolError (not loop further)
             await bridge._recv_loop(ws)
 
         # set_hijacked(False) is called in the finally block
@@ -187,8 +187,8 @@ class TestBridgeRecvLoopEmptyDataChunk:
         # Attach session so bridge finds it
         bridge._attached_session = session
 
-        # encode_data("") produces a data chunk with empty data
-        empty_data_frame = encode_data("")
+        # encode_terminal_data("") produces a data chunk with empty data
+        empty_data_frame = encode_terminal_data("")
 
         class _FakeWs:
             def __init__(self):
@@ -214,7 +214,7 @@ class TestBridgeRecvLoopEmptyDataChunk:
 
 
 # ---------------------------------------------------------------------------
-# hijack/routes/websockets.py lines 112-116: ControlChannelProtocolError in worker → close 1003
+# hijack/routes/websockets.py lines 112-116: ControlFrameProtocolError in worker → close 1003
 # ---------------------------------------------------------------------------
 
 
@@ -223,7 +223,7 @@ class TestWorkerWsBadStream:
 
     def test_bad_stream_closes_with_1003(self) -> None:
         """A worker that sends an unparsable control channel message triggers close(1003)."""
-        from provide.uterm.control_channel import ControlChannelDecoder
+        from provide.uterm.control_channel import ControlFrameDecoder
 
         app, hub = _make_app("admin")
 
@@ -238,10 +238,10 @@ class TestWorkerWsBadStream:
             # Patch decoder to raise on feed
 
             def bad_feed(self, data):
-                raise ControlChannelProtocolError("injected error")
+                raise ControlFrameProtocolError("injected error")
 
-            with patch.object(ControlChannelDecoder, "feed", bad_feed):
-                # Send a message — decoder.feed will raise ControlChannelProtocolError
+            with patch.object(ControlFrameDecoder, "feed", bad_feed):
+                # Send a message — decoder.feed will raise ControlFrameProtocolError
                 worker.send_text("bad stream data")
                 # Worker connection should be closed by the server
                 # The TestClient will raise on next receive or show disconnect
@@ -261,7 +261,7 @@ class TestWorkerWsEmptyDataChunk:
     """Lines 119->124: Worker sends empty data frame → DataChunk with empty data → no broadcast."""
 
     def test_empty_data_chunk_not_broadcast(self) -> None:
-        """Worker sends encode_data('') → DataChunk.data is empty → broadcast NOT called."""
+        """Worker sends encode_terminal_data('') → DataChunk.data is empty → broadcast NOT called."""
         app, hub = _make_app("admin")
         broadcast_calls: list[dict] = []
 
@@ -281,7 +281,7 @@ class TestWorkerWsEmptyDataChunk:
             pre_count = len(broadcast_calls)
 
             # Send empty data frame
-            worker.send_text(encode_data(""))
+            worker.send_text(encode_terminal_data(""))
 
             # Give server a moment to process
             import time as _time
@@ -295,7 +295,7 @@ class TestWorkerWsEmptyDataChunk:
 
 
 # ---------------------------------------------------------------------------
-# hijack/routes/websockets.py lines 302-306: ControlChannelProtocolError in browser → close 1003
+# hijack/routes/websockets.py lines 302-306: ControlFrameProtocolError in browser → close 1003
 # ---------------------------------------------------------------------------
 
 
@@ -304,7 +304,7 @@ class TestBrowserWsBadStream:
 
     def test_browser_bad_stream_closes_connection(self) -> None:
         """A browser that sends an unparsable control channel message → server closes with 1003."""
-        from provide.uterm.control_channel import ControlChannelDecoder
+        from provide.uterm.control_channel import ControlFrameDecoder
 
         app, hub = _make_app("admin")
 
@@ -319,9 +319,9 @@ class TestBrowserWsBadStream:
 
                 # Patch decoder to raise on feed
                 def bad_feed(self, data):
-                    raise ControlChannelProtocolError("browser injected error")
+                    raise ControlFrameProtocolError("browser injected error")
 
-                with patch.object(ControlChannelDecoder, "feed", bad_feed):
+                with patch.object(ControlFrameDecoder, "feed", bad_feed):
                     browser.send_text("corrupt browser data")
                     # Server closes the browser connection with 1003
                     try:

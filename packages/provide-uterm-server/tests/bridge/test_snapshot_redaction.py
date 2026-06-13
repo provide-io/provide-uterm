@@ -24,7 +24,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from provide.uterm.client import connect_test_ws
-from provide.uterm.control_channel import ControlChannelDecoder, encode_control
+from provide.uterm.control_channel import ControlFrameDecoder, encode_control_frame
 from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.server.bridge.hub.ext import OutputPolicyGate, RedactionRule
 from provide.uterm.server.bridge.hub.redaction import StreamRedactor
@@ -48,7 +48,7 @@ _STRIPE_RULES = [RedactionRule(pattern=r"sk_live_\w+", replacement="[REDACTED]")
 
 def _collect_control_frames(ws: AsyncMock) -> list[dict[str, Any]]:
     """Decode all control frames received by a mock WebSocket."""
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
     frames: list[dict[str, Any]] = []
     for call in ws.send_text.call_args_list:
         payload = call[0][0]
@@ -413,7 +413,7 @@ async def test_term_path_still_redacted_regression() -> None:
 
     await hub.broadcast(worker_id, {"type": "term", "data": "key sk_live_ABC active", "ts": 1.0})
 
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
     found_redacted = False
     for call in ws.send_text.call_args_list:
         for event in decoder.feed(call[0][0]):
@@ -472,7 +472,7 @@ async def test_connect_time_snapshot_redaction(monkeypatch: pytest.MonkeyPatch) 
             )
 
     # Send the (possibly redacted) snapshot
-    await browser_ws.send_text(encode_control(initial_snapshot))
+    await browser_ws.send_text(encode_control_frame(initial_snapshot))
 
     # Verify the browser received the redacted snapshot
     frames = _collect_control_frames(browser_ws)
@@ -521,7 +521,7 @@ async def test_connect_time_snapshot_no_gate_unchanged() -> None:
     _gate = getattr(hub, "_output_policy_gate", None)
     if _gate is not None:  # pragma: no branch
         pass  # would apply redaction
-    await browser_ws.send_text(encode_control(initial_snapshot))
+    await browser_ws.send_text(encode_control_frame(initial_snapshot))
 
     frames = _collect_control_frames(browser_ws)
     snap_frames = [f for f in frames if f.get("type") == "snapshot"]

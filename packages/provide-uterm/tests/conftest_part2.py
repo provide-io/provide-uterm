@@ -129,7 +129,7 @@ class WorkerController:
     async def _connect(self) -> None:
         import websockets
 
-        from provide.uterm.control_channel import ControlChannelDecoder, ControlChunk, DataChunk, encode_control
+        from provide.uterm.control_channel import ControlChunk, ControlFrameDecoder, DataChunk, encode_control_frame
 
         ws_url = self._base_url.replace("http://", "ws://") + f"/ws/worker/{self._worker_id}/term"
         try:
@@ -147,8 +147,8 @@ class WorkerController:
                     "prompt_detected": {"prompt_id": "test_prompt"},
                     "ts": time.time(),
                 }
-                await ws.send(encode_control(snapshot_msg))
-                decoder = ControlChannelDecoder()
+                await ws.send(encode_control_frame(snapshot_msg))
+                decoder = ControlFrameDecoder()
                 while not self._stop.is_set():
                     try:
                         raw = await asyncio.wait_for(ws.recv(), timeout=0.1)

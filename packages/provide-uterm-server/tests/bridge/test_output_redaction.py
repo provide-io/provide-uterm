@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from provide.uterm.control_channel import ControlChannelDecoder
+from provide.uterm.control_channel import ControlFrameDecoder
 from provide.uterm.server.bridge.hub import PolicyContext, TermHub
 from provide.uterm.server.bridge.hub.ext import OutputPolicyGate, RedactionRule
 
@@ -41,7 +41,7 @@ async def test_hub_output_redaction_broadcast() -> None:
     # 4. Verify the WebSocket received redacted data
     # We need to find the call with the term data
     found_redacted = False
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
     for call in ws.send_text.call_args_list:
         payload = call[0][0]
         events = decoder.feed(payload)
@@ -66,7 +66,7 @@ async def test_hub_output_redaction_noop_default() -> None:
     await hub.broadcast(worker_id, {"type": "term", "data": raw_data})
 
     # Check that data reached ws unredacted
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
     received_data = ""
     for call in ws.send_text.call_args_list:
         events = decoder.feed(call[0][0])
@@ -109,7 +109,7 @@ async def test_broadcast_builds_policy_context_once_per_frame() -> None:
 
     assert calls == 1, f"expected one policy-context build for 5 same-role viewers, got {calls}"
     # Redaction still applied to every viewer.
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
     for ws in viewers:
         redacted = False
         for call in ws.send_text.call_args_list:
@@ -164,7 +164,7 @@ async def test_hub_output_gate_empty_rules_sends_unredacted_default() -> None:
     await hub.broadcast(worker_id, {"type": "term", "data": raw_data})
 
     found_plain = False
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
     for call in ws.send_text.call_args_list:
         payload = call[0][0]
         for event in decoder.feed(payload):

@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from provide.uterm.control_channel import encode_control, encode_data
+from provide.uterm.control_channel import encode_control_frame, encode_terminal_data
 from provide.uterm.server.bridge.worker_link import TermBridge, _to_ws_url
 
 # ---------------------------------------------------------------------------
@@ -237,7 +237,7 @@ class TestRecvLoopSnapshotReqAndPause:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                return encode_control({"type": "snapshot_req"})
+                return encode_control_frame({"type": "snapshot_req"})
             bridge._running = False
             raise RuntimeError("done")
 
@@ -270,7 +270,7 @@ class TestRecvLoopSnapshotReqAndPause:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                return encode_control({"type": "control", "action": "pause"})
+                return encode_control_frame({"type": "control", "action": "pause"})
             bridge._running = False
             raise RuntimeError("done")
 
@@ -339,7 +339,7 @@ class TestRecvLoopMtypeBranches:
             call_count += 1
             if call_count == 1:
                 # action not in (pause, resume, step) → falls through to 278->259 (False branch)
-                return encode_control({"type": "control", "action": "unknown_action"})
+                return encode_control_frame({"type": "control", "action": "unknown_action"})
             bridge._running = False
             raise RuntimeError("done")
 
@@ -406,7 +406,7 @@ class TestRecvLoopMtypeBranches:
             call_count += 1
             if call_count == 1:
                 # Unknown mtype → falls through all elif → 284->259 (False branch)
-                return encode_control({"type": "completely_unknown"})
+                return encode_control_frame({"type": "completely_unknown"})
             bridge._running = False
             raise RuntimeError("done")
 
@@ -439,19 +439,19 @@ class TestRecvLoopMtypeBranches:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                return encode_control({"type": "control", "action": "resume"})
+                return encode_control_frame({"type": "control", "action": "resume"})
             if call_count == 2:
-                return encode_control({"type": "control", "action": "step"})
+                return encode_control_frame({"type": "control", "action": "step"})
             if call_count == 3:
-                return encode_control({"type": "control", "action": "unknown"})
+                return encode_control_frame({"type": "control", "action": "unknown"})
             if call_count == 4:
-                return encode_data("hello")
+                return encode_terminal_data("hello")
             if call_count == 5:
                 return ""
             if call_count == 6:
-                return encode_control({"type": "resize", "cols": 120, "rows": 40})
+                return encode_control_frame({"type": "resize", "cols": 120, "rows": 40})
             if call_count == 7:
-                return encode_control({"type": "completely_unknown"})
+                return encode_control_frame({"type": "completely_unknown"})
             # Now let _running=False so while exits normally (259->293)
             bridge._running = False
             raise RuntimeError("done")

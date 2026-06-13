@@ -5,11 +5,11 @@
 """Coverage tests for gateway/_gateway.py uncovered branches.
 
 Targets:
-- lines 86-93: ControlChannelProtocolError fallback to JSON parse in _handle_ws_control
+- lines 86-93: ControlFrameProtocolError fallback to JSON parse in _handle_ws_control
 - line 96: empty events list → return False
 - lines 112-113: AttributeError in _handle_ws_control_frame → return False
-- lines 236-237: ControlChannelProtocolError in _ws_to_tcp → continue
-- lines 318-319: ControlChannelProtocolError in _ws_to_ssh → continue
+- lines 236-237: ControlFrameProtocolError in _ws_to_tcp → continue
+- lines 318-319: ControlFrameProtocolError in _ws_to_ssh → continue
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from __future__ import annotations
 import asyncio
 from typing import cast
 
-from provide.uterm.control_channel import encode_data
+from provide.uterm.control_channel import encode_terminal_data
 from provide.uterm.gateway._gateway import (
     _handle_ws_control,
     _handle_ws_control_frame,
@@ -52,14 +52,14 @@ class _MockWriter:
 
 
 # ---------------------------------------------------------------------------
-# _handle_ws_control — lines 86-93: ControlChannelProtocolError → JSON fallback
+# _handle_ws_control — lines 86-93: ControlFrameProtocolError → JSON library fallback
 # ---------------------------------------------------------------------------
 
 
 class TestHandleWsControlProtocolErrorFallback:
-    """ControlChannelProtocolError is raised by decoder.feed → fall back to JSON parse.
+    """ControlFrameProtocolError is raised by decoder.feed → fall back to JSON parse.
 
-    The control channel decoder raises ControlChannelProtocolError when it encounters
+    The control channel decoder raises ControlFrameProtocolError when it encounters
     the DLE character (\\x10) followed by an invalid byte (not DLE or STX).
     We prefix messages with DLE+X to reliably trigger this error path.
     """
@@ -67,7 +67,7 @@ class TestHandleWsControlProtocolErrorFallback:
     async def test_invalid_control_channel_valid_json_dict_with_type(self) -> None:
         """Lines 87-93: decode fails → JSON parse succeeds → dict with type → dispatched.
 
-        Prefix with DLE+X to force ControlChannelProtocolError, then the message
+        Prefix with DLE+X to force ControlFrameProtocolError, then the message
         body is valid JSON with a known type → _handle_ws_control_frame is called.
         """
         written: list[bytes] = []
@@ -86,14 +86,14 @@ class TestHandleWsControlProtocolErrorFallback:
         from unittest.mock import patch
 
         from provide.uterm.control_channel import (
-            ControlChannelDecoder,
-            ControlChannelProtocolError,
+            ControlFrameDecoder,
+            ControlFrameProtocolError,
         )
 
         def _raise_protocol_error(self, data):
-            raise ControlChannelProtocolError("injected")
+            raise ControlFrameProtocolError("injected")
 
-        with patch.object(ControlChannelDecoder, "feed", _raise_protocol_error):
+        with patch.object(ControlFrameDecoder, "feed", _raise_protocol_error):
             msg = '{"type": "resume_ok"}'
             result = await _handle_ws_control(msg, [None], _write_fn)
 
@@ -111,14 +111,14 @@ class TestHandleWsControlProtocolErrorFallback:
         from unittest.mock import patch
 
         from provide.uterm.control_channel import (
-            ControlChannelDecoder,
-            ControlChannelProtocolError,
+            ControlFrameDecoder,
+            ControlFrameProtocolError,
         )
 
         def _raise_protocol_error(self, data):
-            raise ControlChannelProtocolError("injected")
+            raise ControlFrameProtocolError("injected")
 
-        with patch.object(ControlChannelDecoder, "feed", _raise_protocol_error):
+        with patch.object(ControlFrameDecoder, "feed", _raise_protocol_error):
             msg = "not-valid-json-at-all-{{{"
             result = await _handle_ws_control(msg, [None], _write_fn)
 
@@ -135,14 +135,14 @@ class TestHandleWsControlProtocolErrorFallback:
         from unittest.mock import patch
 
         from provide.uterm.control_channel import (
-            ControlChannelDecoder,
-            ControlChannelProtocolError,
+            ControlFrameDecoder,
+            ControlFrameProtocolError,
         )
 
         def _raise_protocol_error(self, data):
-            raise ControlChannelProtocolError("injected")
+            raise ControlFrameProtocolError("injected")
 
-        with patch.object(ControlChannelDecoder, "feed", _raise_protocol_error):
+        with patch.object(ControlFrameDecoder, "feed", _raise_protocol_error):
             # Valid JSON list — not a dict
             msg = "[1, 2, 3]"
             result = await _handle_ws_control(msg, [None], _write_fn)
@@ -160,14 +160,14 @@ class TestHandleWsControlProtocolErrorFallback:
         from unittest.mock import patch
 
         from provide.uterm.control_channel import (
-            ControlChannelDecoder,
-            ControlChannelProtocolError,
+            ControlFrameDecoder,
+            ControlFrameProtocolError,
         )
 
         def _raise_protocol_error(self, data):
-            raise ControlChannelProtocolError("injected")
+            raise ControlFrameProtocolError("injected")
 
-        with patch.object(ControlChannelDecoder, "feed", _raise_protocol_error):
+        with patch.object(ControlFrameDecoder, "feed", _raise_protocol_error):
             msg = '"just a string"'
             result = await _handle_ws_control(msg, [None], _write_fn)
 
@@ -183,7 +183,7 @@ class TestHandleWsControlEmptyEvents:
     """Line 96: decoder.feed returns empty events → return False (no-op)."""
 
     async def test_empty_string_returns_false(self) -> None:
-        """Empty message → ControlChannelDecoder returns no events → return False."""
+        """Empty message → ControlFrameDecoder returns no events → return False."""
         written: list[bytes] = []
 
         async def _write_fn(data: bytes) -> None:
@@ -217,48 +217,48 @@ class TestHandleWsControlFrameAttributeError:
 
 
 # ---------------------------------------------------------------------------
-# _ws_to_tcp — lines 236-237: ControlChannelProtocolError → continue (skip message)
+# _ws_to_tcp — lines 236-237: ControlFrameProtocolError → continue (skip message)
 # ---------------------------------------------------------------------------
 
 
 class TestWsToTcpProtocolError:
-    """Lines 236-237: ControlChannelProtocolError from decoder.feed → continue to next message."""
+    """Lines 236-237: ControlFrameProtocolError from decoder.feed → continue to next message."""
 
     async def test_protocol_error_message_skipped_next_forwarded(self) -> None:
         """A message that corrupts the control channel decoder is skipped; subsequent data is forwarded."""
         writer = _MockWriter()
 
         # First send a valid data message to forward; the decoder will process it.
-        # To trigger ControlChannelProtocolError we need to corrupt decoder state.
+        # To trigger ControlFrameProtocolError we need to corrupt decoder state.
         # We patch the decoder's feed method to raise on first call only.
         from unittest.mock import patch
 
         from provide.uterm.control_channel import (
-            ControlChannelDecoder,
-            ControlChannelProtocolError,
+            ControlFrameDecoder,
+            ControlFrameProtocolError,
         )
 
         call_count = 0
-        original_feed = ControlChannelDecoder.feed
+        original_feed = ControlFrameDecoder.feed
 
         def patched_feed(self, data):
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                raise ControlChannelProtocolError("bad stream")
+                raise ControlFrameProtocolError("bad stream")
             return original_feed(self, data)
 
         # Valid data message that should be forwarded after the error is skipped
-        valid_msg = encode_data("hello")
+        valid_msg = encode_terminal_data("hello")
 
-        with patch.object(ControlChannelDecoder, "feed", patched_feed):
+        with patch.object(ControlFrameDecoder, "feed", patched_feed):
             await _ws_to_tcp(
                 _async_iter(["corrupted", valid_msg]),
                 cast("asyncio.StreamWriter", writer),
                 token_holder=[None],
             )
 
-        # The first message triggered ControlChannelProtocolError (continue),
+        # The first message triggered ControlFrameProtocolError (continue),
         # the second was forwarded.
         assert any(b"hello" in w for w in writer.written)
 
@@ -278,12 +278,12 @@ class TestWsToTcpProtocolError:
 
 
 # ---------------------------------------------------------------------------
-# _ws_to_ssh — lines 318-319: ControlChannelProtocolError → continue
+# _ws_to_ssh — lines 318-319: ControlFrameProtocolError → continue
 # ---------------------------------------------------------------------------
 
 
 class TestWsToSshProtocolError:
-    """Lines 318-319: ControlChannelProtocolError from decoder.feed in _ws_to_ssh → continue."""
+    """Lines 318-319: ControlFrameProtocolError from decoder.feed in _ws_to_ssh → continue."""
 
     async def test_protocol_error_skipped_next_forwarded(self) -> None:
         """A corrupted control channel message is skipped; next data is forwarded to SSH stdout."""
@@ -300,23 +300,23 @@ class TestWsToSshProtocolError:
         from unittest.mock import patch
 
         from provide.uterm.control_channel import (
-            ControlChannelDecoder,
-            ControlChannelProtocolError,
+            ControlFrameDecoder,
+            ControlFrameProtocolError,
         )
 
         call_count = 0
-        original_feed = ControlChannelDecoder.feed
+        original_feed = ControlFrameDecoder.feed
 
         def patched_feed(self, data):
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                raise ControlChannelProtocolError("bad")
+                raise ControlFrameProtocolError("bad")
             return original_feed(self, data)
 
-        valid_msg = encode_data("world")
+        valid_msg = encode_terminal_data("world")
 
-        with patch.object(ControlChannelDecoder, "feed", patched_feed):
+        with patch.object(ControlFrameDecoder, "feed", patched_feed):
             await _ws_to_ssh(
                 _async_iter(["corrupted", valid_msg]),
                 _MockProcess(),

@@ -23,7 +23,7 @@ from typing import Any
 import websockets
 from provide.uterm.client import connect_async_ws
 
-from provide.uterm.control_channel import DLE, STX, encode_control
+from provide.uterm.control_channel import DLE, STX, encode_control_frame
 
 from .conftest import _drain_all, _drain_until, _snapshot_msg, _ws_url
 
@@ -160,7 +160,7 @@ async def test_malformed_control_frames_close_worker_cleanly(live_hub: Any) -> N
         # Worker uses raw websockets (not connect_async_ws) to send malformed frames
         async with websockets.connect(f"{ws_base}/ws/worker/malform/term") as raw_worker:
             # First: send a valid snapshot via raw control channel encoding
-            valid_snapshot = encode_control(_snapshot_msg("valid-first"))
+            valid_snapshot = encode_control_frame(_snapshot_msg("valid-first"))
             await raw_worker.send(valid_snapshot)
             await asyncio.sleep(0.3)
 

@@ -19,14 +19,14 @@ from provide.uterm.cloudflare.auth.jwt import JwtValidationError, decode_jwt
 from provide.uterm.cloudflare.config import JwtConfig
 from provide.uterm.cloudflare.do.session_runtime import SessionRuntime
 
-from provide.uterm.control_channel import ControlChannelDecoder, ControlChunk
+from provide.uterm.control_channel import ControlChunk, ControlFrameDecoder
 
 
 def _decode_control_frames(messages: list[str]) -> list[dict]:
     """Decode a list of control-channel-encoded messages into plain dicts."""
     result = []
     for raw in messages:
-        decoder = ControlChannelDecoder()
+        decoder = ControlFrameDecoder()
         events = decoder.feed(raw)
         events.extend(decoder.finish())
         result.extend(e.control for e in events if isinstance(e, ControlChunk))

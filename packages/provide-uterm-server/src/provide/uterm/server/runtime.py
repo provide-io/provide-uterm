@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 from provide.telemetry import get_logger
 from provide.uterm.control_channel import (
-    ControlChannelDecoder,
-    ControlChannelProtocolError,
+    ControlFrameDecoder,
+    ControlFrameProtocolError,
     DataChunk,
 )
 from provide.uterm.server.connectors import SessionConnector, build_connector
@@ -330,14 +330,14 @@ class HostedSessionRuntime:
         self,
         ws: Any,
         connector: Any,
-        decoder: ControlChannelDecoder,
+        decoder: ControlFrameDecoder,
         raw_text: str,
     ) -> None:
         """Decode inbound data, dispatch events, and send responses."""
         await self._log_wire_recv(raw_text)
         try:
             events = decoder.feed(raw_text)
-        except ControlChannelProtocolError as exc:
+        except ControlFrameProtocolError as exc:
             raise RuntimeError(f"invalid control channel: {exc}") from exc
         responses: list[dict[str, Any]] = []
         for event in events:
@@ -353,7 +353,7 @@ class HostedSessionRuntime:
         connector = self._connector
         if connector is None:
             raise RuntimeError("connector unavailable")
-        decoder = ControlChannelDecoder(max_control_payload_bytes=1_048_576, on_error=self._on_metric)
+        decoder = ControlFrameDecoder(max_control_payload_bytes=1_048_576, on_error=self._on_metric)
         self._state = "running"
         self._connected = True
         await self._enqueue_messages(await connector.set_mode(self.definition.input_mode))

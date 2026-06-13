@@ -10,7 +10,7 @@ import asyncio
 
 import pytest
 
-from provide.uterm.control_channel import ControlChannelDecoder, ControlChunk, encode_control
+from provide.uterm.control_channel import ControlChunk, ControlFrameDecoder, encode_control_frame
 from provide.uterm.control_channel_patterns import LinkPattern, LinkPatternRegistry
 
 # ---------------------------------------------------------------------------
@@ -290,7 +290,7 @@ class TestConcurrentSafety:
 
 
 # ---------------------------------------------------------------------------
-# Round-trip via encode_control / ControlChannelDecoder
+# Round-trip via encode_control_frame / ControlFrameDecoder
 # ---------------------------------------------------------------------------
 
 
@@ -302,9 +302,9 @@ class TestRoundTrip:
         reg.register(LinkPattern(pattern=r"#(\w+)", action="focus", id="tag-jump", hover="Jump to #$1"))
 
         payload = reg.sync_payload()
-        encoded = encode_control(payload)
+        encoded = encode_control_frame(payload)
 
-        decoder = ControlChannelDecoder()
+        decoder = ControlFrameDecoder()
         chunks = decoder.feed(encoded)
 
         assert len(chunks) == 1
@@ -322,7 +322,7 @@ class TestRoundTrip:
 
     def test_empty_registry_round_trips(self) -> None:
         reg = LinkPatternRegistry()
-        encoded = encode_control(reg.sync_payload())
-        decoder = ControlChannelDecoder()
+        encoded = encode_control_frame(reg.sync_payload())
+        decoder = ControlFrameDecoder()
         chunks = decoder.feed(encoded)
         assert chunks == [ControlChunk({"type": "link_patterns", "patterns": []})]

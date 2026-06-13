@@ -27,7 +27,7 @@ import pytest
 import websockets
 from cf_e2e_auth import http_auth_headers, ws_auth_headers
 
-from provide.uterm.control_channel import encode_control
+from provide.uterm.control_channel import encode_control_frame
 
 _WS_TIMEOUT_S = 15.0
 _HTTP_UA = "provide-uterm-e2e-test/1.0"
@@ -159,7 +159,7 @@ async def test_browser_receives_snapshot_after_worker_sends(wrangler_server: str
     worker_id = _new_worker_id()
     worker_uri = f"{base_ws}/ws/worker/{worker_id}/term"
     browser_uri = f"{base_ws}/ws/browser/{worker_id}/term"
-    snapshot_frame = encode_control({"type": "snapshot", "screen": "hello-e2e", "ts": time.time()})
+    snapshot_frame = encode_control_frame({"type": "snapshot", "screen": "hello-e2e", "ts": time.time()})
 
     async with _ws_connect(worker_uri) as worker_ws, _ws_connect(browser_uri) as browser_ws:
         # Drain the hello frame (sent synchronously in fetch() before 101).
@@ -284,7 +284,7 @@ async def test_hijack_snapshot_endpoint(wrangler_server: str) -> None:
     """Worker sends snapshot → GET /hijack/{id}/snapshot returns it."""
     base_ws = _base_ws(wrangler_server)
     worker_id = _new_worker_id()
-    snapshot_frame = encode_control({"type": "snapshot", "screen": "snapshot-e2e-content", "ts": time.time()})
+    snapshot_frame = encode_control_frame({"type": "snapshot", "screen": "snapshot-e2e-content", "ts": time.time()})
 
     async with _ws_connect(f"{base_ws}/ws/worker/{worker_id}/term") as worker_ws:
         await worker_ws.send(snapshot_frame)
@@ -391,7 +391,7 @@ async def test_resume_after_disconnect(wrangler_server: str) -> None:
         assert fresh_token is not None
 
         # Send resume with the old token
-        await ws2.send(encode_control({"type": "resume", "token": token}))
+        await ws2.send(encode_control_frame({"type": "resume", "token": token}))
 
         # Should receive a resumed hello
         resumed_hello = await _recv_ws(ws2)
@@ -419,7 +419,7 @@ async def test_resume_expired_or_invalid_token_ignored(wrangler_server: str) -> 
         assert hello["type"] == "hello"
 
         # Send resume with a fake token
-        await ws.send(encode_control({"type": "resume", "token": "totally-bogus-token-12345"}))
+        await ws.send(encode_control_frame({"type": "resume", "token": "totally-bogus-token-12345"}))
 
         # Send a ping to verify connection still works
         await ws.send(json.dumps({"type": "ping"}))
@@ -448,7 +448,7 @@ async def test_resume_token_is_one_time_use(wrangler_server: str) -> None:
     # First resume — should succeed
     async with _ws_connect(uri) as ws2:
         await _recv_ws(ws2)  # initial hello
-        await ws2.send(encode_control({"type": "resume", "token": token}))
+        await ws2.send(encode_control_frame({"type": "resume", "token": token}))
         resumed = await _recv_ws(ws2)
         assert resumed.get("resumed") is True, f"first resume failed: {resumed}"
 
@@ -456,7 +456,7 @@ async def test_resume_token_is_one_time_use(wrangler_server: str) -> None:
     async with _ws_connect(uri) as ws3:
         hello3 = await _recv_ws(ws3)
         assert hello3["type"] == "hello"
-        await ws3.send(encode_control({"type": "resume", "token": token}))
+        await ws3.send(encode_control_frame({"type": "resume", "token": token}))
 
         # Send ping to verify connection is alive — no resumed hello should come
         await ws3.send(json.dumps({"type": "ping"}))

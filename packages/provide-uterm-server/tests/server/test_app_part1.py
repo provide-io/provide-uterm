@@ -18,7 +18,7 @@ import httpx
 import pytest
 import uvicorn
 
-from provide.uterm.control_channel import ControlChannelDecoder, ControlChunk, DataChunk
+from provide.uterm.control_channel import ControlChunk, ControlFrameDecoder, DataChunk
 from provide.uterm.server import create_server_app, default_server_config
 
 if TYPE_CHECKING:
@@ -29,7 +29,7 @@ def _ws_url(base_url: str, path: str) -> str:
     return base_url.replace("http://", "ws://") + path
 
 
-_WS_DECODERS: WeakKeyDictionary[Any, ControlChannelDecoder] = WeakKeyDictionary()
+_WS_DECODERS: WeakKeyDictionary[Any, ControlFrameDecoder] = WeakKeyDictionary()
 _WS_PENDING: WeakKeyDictionary[Any, list[dict[str, Any]]] = WeakKeyDictionary()
 
 
@@ -44,7 +44,7 @@ async def _drain_until(ws: Any, type_: str, timeout: float = 3.0) -> dict[str, A
                     return msg
                 continue
             raw = await asyncio.wait_for(ws.recv(), timeout=0.3)
-            decoder = _WS_DECODERS.setdefault(ws, ControlChannelDecoder())
+            decoder = _WS_DECODERS.setdefault(ws, ControlFrameDecoder())
             events = decoder.feed(raw)
             for event in events:
                 if isinstance(event, ControlChunk):

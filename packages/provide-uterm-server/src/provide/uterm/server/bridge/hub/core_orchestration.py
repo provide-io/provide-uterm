@@ -21,7 +21,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from provide.telemetry import get_logger
-from provide.uterm.control_channel import encode_data
+from provide.uterm.control_channel import encode_terminal_data
 from provide.uterm.server.bridge.hub.core_helpers import _encode_browser_frame
 from provide.uterm.server.bridge.hub.ext import TelemetryEvent
 
@@ -134,7 +134,7 @@ async def resolve_approval(
         msg += "\\r"
         for ws in list(st.browsers.keys()):
             try:
-                await ws.send_text(encode_data(msg))
+                await ws.send_text(encode_terminal_data(msg))
             except Exception as exc:
                 logger.debug("approval_deny_send_failed worker_id=%s: %s", worker_id, exc)
                 dead.add(ws)

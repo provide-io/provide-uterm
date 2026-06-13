@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Frame-ordering invariant tests for ControlChannelDecoder.
+"""Frame-ordering invariant tests for ControlFrameDecoder.
 
 The decoder must emit chunks in the exact ORDER they appear in the wire stream,
 regardless of how feed() is called (whole, byte-at-a-time, or arbitrary splits).
@@ -23,12 +23,12 @@ import pytest
 
 from provide.uterm.control_channel import (
     DLE,
-    ControlChannelChunk,
-    ControlChannelDecoder,
     ControlChunk,
+    ControlFrameChunk,
+    ControlFrameDecoder,
     DataChunk,
-    encode_control,
-    encode_data,
+    encode_control_frame,
+    encode_terminal_data,
 )
 
 # ---------------------------------------------------------------------------
@@ -36,14 +36,14 @@ from provide.uterm.control_channel import (
 # ---------------------------------------------------------------------------
 
 
-def collect_chunks(stream: str, chunk_sizes: list[int]) -> list[ControlChannelChunk]:
+def collect_chunks(stream: str, chunk_sizes: list[int]) -> list[ControlFrameChunk]:
     """Feed *stream* to a fresh decoder in pieces defined by *chunk_sizes*.
 
     Returns the concatenation of all chunks emitted by feed() across all calls.
     Sizes are consumed left-to-right; any remainder not covered is fed last.
     """
-    decoder = ControlChannelDecoder()
-    results: list[ControlChannelChunk] = []
+    decoder = ControlFrameDecoder()
+    results: list[ControlFrameChunk] = []
     pos = 0
     for size in chunk_sizes:
         piece = stream[pos : pos + size]
@@ -57,7 +57,7 @@ def collect_chunks(stream: str, chunk_sizes: list[int]) -> list[ControlChannelCh
     return results
 
 
-def merge_data_chunks(chunks: list[ControlChannelChunk]) -> list[ControlChannelChunk]:
+def merge_data_chunks(chunks: list[ControlFrameChunk]) -> list[ControlFrameChunk]:
     """Collapse adjacent DataChunks into a single DataChunk.
 
     The decoder may legitimately emit multiple DataChunks for a single logical
@@ -65,7 +65,7 @@ def merge_data_chunks(chunks: list[ControlChannelChunk]) -> list[ControlChannelC
     invariant checks we compare *merged* sequences so that split-chunk noise
     does not produce false failures.
     """
-    merged: list[ControlChannelChunk] = []
+    merged: list[ControlFrameChunk] = []
     for chunk in chunks:
         if merged and isinstance(merged[-1], DataChunk) and isinstance(chunk, DataChunk):
             merged[-1] = DataChunk(merged[-1].data + chunk.data)
@@ -74,7 +74,7 @@ def merge_data_chunks(chunks: list[ControlChannelChunk]) -> list[ControlChannelC
     return merged
 
 
-def assert_ordering_matches(chunks: list[ControlChannelChunk], expected: list[ControlChannelChunk]) -> None:
+def assert_ordering_matches(chunks: list[ControlFrameChunk], expected: list[ControlFrameChunk]) -> None:
     """Assert that merged chunk sequence equals *expected*."""
     assert merge_data_chunks(chunks) == expected
 
@@ -83,14 +83,14 @@ def assert_ordering_matches(chunks: list[ControlChannelChunk], expected: list[Co
 # Fixtures / constants
 # ---------------------------------------------------------------------------
 
-DATA_A = encode_data("AAAA-data-alpha")
-CTRL_B = encode_control({"type": "beta", "seq": 1})
-DATA_C = encode_data("CCCC-data-charlie")
-CTRL_D = encode_control({"type": "delta", "seq": 2})
+DATA_A = encode_terminal_data("AAAA-data-alpha")
+CTRL_B = encode_control_frame({"type": "beta", "seq": 1})
+DATA_C = encode_terminal_data("CCCC-data-charlie")
+CTRL_D = encode_control_frame({"type": "delta", "seq": 2})
 
 BASELINE_STREAM = DATA_A + CTRL_B + DATA_C + CTRL_D
 
-BASELINE_CHUNKS: list[ControlChannelChunk] = [
+BASELINE_CHUNKS: list[ControlFrameChunk] = [
     DataChunk("AAAA-data-alpha"),
     ControlChunk({"type": "beta", "seq": 1}),
     DataChunk("CCCC-data-charlie"),
@@ -139,10 +139,10 @@ def test_all_split_positions(split: int) -> None:
 
 def _header_split_stream() -> str:
     """A simple stream: data + one control frame."""
-    return encode_data("pre") + encode_control({"k": "v"})
+    return encode_terminal_data("pre") + encode_control_frame({"k": "v"})
 
 
-def _header_split_expected() -> list[ControlChannelChunk]:
+def _header_split_expected() -> list[ControlFrameChunk]:
     return [DataChunk("pre"), ControlChunk({"k": "v"})]
 
 
@@ -174,12 +174,12 @@ def test_control_header_splits(split_offset: int) -> None:
 def test_data_with_dle_not_mistaken_for_control() -> None:
     """A literal DLE in data is escaped as DLE DLE; splitting between them is safe.
 
-    Wire bytes for encode_data(x + DLE + y): x DLE DLE y
+    Wire bytes for encode_terminal_data(x + DLE + y): x DLE DLE y
     Split after the first DLE so the two DLEs are in different feed() calls.
     The decoder must not mistake the first DLE for a control-frame start.
     """
     raw_data = f"x{DLE}y"
-    stream = encode_data(raw_data)  # → x \x10 \x10 y on wire
+    stream = encode_terminal_data(raw_data)  # → x \x10 \x10 y on wire
     split = stream.index(DLE) + 1  # position just after first DLE
     chunks = collect_chunks(stream, [split])
     # Ordering invariant: all data arrives before any following control; no
@@ -193,7 +193,7 @@ def test_data_with_dle_not_mistaken_for_control() -> None:
 def test_data_with_dle_byte_by_byte() -> None:
     """Escaped DLE sequence decoded correctly even when fed one byte at a time."""
     raw_data = f"hello{DLE}world{DLE}end"
-    stream = encode_data(raw_data)
+    stream = encode_terminal_data(raw_data)
     chunks = collect_chunks(stream, [1] * len(stream))
     merged = merge_data_chunks(chunks)
     assert len(merged) == 1
@@ -204,7 +204,7 @@ def test_data_with_dle_byte_by_byte() -> None:
 def test_data_with_dle_then_control() -> None:
     """DLE-escaped data followed by a control frame — ordering preserved."""
     raw_data = f"A{DLE}B"
-    stream = encode_data(raw_data) + encode_control({"type": "marker"})
+    stream = encode_terminal_data(raw_data) + encode_control_frame({"type": "marker"})
     expected = [DataChunk(raw_data), ControlChunk({"type": "marker"})]
     # Byte-at-a-time
     chunks = collect_chunks(stream, [1] * len(stream))
@@ -218,8 +218,8 @@ def test_data_with_dle_then_control() -> None:
 
 def test_back_to_back_control_frames_whole() -> None:
     """Two adjacent control frames without data emit in order."""
-    ctrl1 = encode_control({"type": "one"})
-    ctrl2 = encode_control({"type": "two"})
+    ctrl1 = encode_control_frame({"type": "one"})
+    ctrl2 = encode_control_frame({"type": "two"})
     stream = ctrl1 + ctrl2
     chunks = collect_chunks(stream, [len(stream)])
     assert chunks == [ControlChunk({"type": "one"}), ControlChunk({"type": "two"})]
@@ -227,8 +227,8 @@ def test_back_to_back_control_frames_whole() -> None:
 
 def test_back_to_back_control_frames_byte_by_byte() -> None:
     """Two adjacent control frames fed byte-at-a-time still emit in order."""
-    ctrl1 = encode_control({"type": "one"})
-    ctrl2 = encode_control({"type": "two"})
+    ctrl1 = encode_control_frame({"type": "one"})
+    ctrl2 = encode_control_frame({"type": "two"})
     stream = ctrl1 + ctrl2
     chunks = collect_chunks(stream, [1] * len(stream))
     assert chunks == [ControlChunk({"type": "one"}), ControlChunk({"type": "two"})]
@@ -236,7 +236,7 @@ def test_back_to_back_control_frames_byte_by_byte() -> None:
 
 def test_back_to_back_three_control_frames() -> None:
     """Three adjacent control frames emit in exact order."""
-    stream = encode_control({"n": 1}) + encode_control({"n": 2}) + encode_control({"n": 3})
+    stream = encode_control_frame({"n": 1}) + encode_control_frame({"n": 2}) + encode_control_frame({"n": 3})
     chunks = collect_chunks(stream, [1] * len(stream))
     assert chunks == [ControlChunk({"n": 1}), ControlChunk({"n": 2}), ControlChunk({"n": 3})]
 
@@ -248,13 +248,13 @@ def test_back_to_back_three_control_frames() -> None:
 
 def test_interleaved_many_byte_by_byte() -> None:
     """Five data and five control frames interleaved, fed one byte at a time."""
-    expected: list[ControlChannelChunk] = []
+    expected: list[ControlFrameChunk] = []
     stream = ""
     for i in range(5):
         data_text = f"data-segment-{i}"
         ctrl_payload = {"type": "ctrl", "i": i}
-        stream += encode_data(data_text)
-        stream += encode_control(ctrl_payload)
+        stream += encode_terminal_data(data_text)
+        stream += encode_control_frame(ctrl_payload)
         expected.append(DataChunk(data_text))
         expected.append(ControlChunk(ctrl_payload))
 
@@ -283,9 +283,9 @@ def test_chunk_size_sweep(chunk_size: int) -> None:
 def test_control_does_not_precede_data_byte_by_byte() -> None:
     """Control chunk B must appear after ALL of data-A, never before any of it."""
     data_text = "some-data-before-control"
-    stream = encode_data(data_text) + encode_control({"type": "after"})
+    stream = encode_terminal_data(data_text) + encode_control_frame({"type": "after"})
 
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
     saw_data_content = ""
     saw_control = False
     error_msg = None
@@ -312,9 +312,9 @@ def test_control_does_not_precede_data_byte_by_byte() -> None:
 def test_data_after_control_does_not_precede_control_byte_by_byte() -> None:
     """Data-C must appear after control-B, never before it."""
     ctrl_payload = {"type": "mid"}
-    stream = encode_control(ctrl_payload) + encode_data("data-after-control")
+    stream = encode_control_frame(ctrl_payload) + encode_terminal_data("data-after-control")
 
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
     saw_control = False
     saw_data_after = ""
     error_msg = None

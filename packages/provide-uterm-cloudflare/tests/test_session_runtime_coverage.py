@@ -20,11 +20,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from provide.uterm.cloudflare.do.session_runtime import SessionRuntime
 
-from provide.uterm.control_channel import ControlChannelDecoder, ControlChunk
+from provide.uterm.control_channel import ControlChunk, ControlFrameDecoder
 
 
 def _decode_control(raw: str) -> dict:
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
     events = decoder.feed(raw)
     events.extend(decoder.finish())
     ctrl = [e.control for e in events if isinstance(e, ControlChunk)]

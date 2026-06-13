@@ -9,7 +9,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from provide.uterm.control_channel import encode_control, encode_data
+from provide.uterm.control_channel import encode_control_frame, encode_terminal_data
 
 from provide.uterm.client.control_ws import (
     AsyncInlineWebSocketClient,
@@ -20,27 +20,27 @@ from provide.uterm.client.control_ws import (
 
 
 def test_encode_logical_frame_uses_data_channel_for_term_and_input() -> None:
-    assert encode_logical_frame({"type": "term", "data": "abc"}) == encode_data("abc")
-    assert encode_logical_frame({"type": "input", "data": "xyz"}) == encode_data("xyz")
+    assert encode_logical_frame({"type": "term", "data": "abc"}) == encode_terminal_data("abc")
+    assert encode_logical_frame({"type": "input", "data": "xyz"}) == encode_terminal_data("xyz")
 
 
 def test_encode_logical_frame_uses_control_channel_for_other_frames() -> None:
     payload = {"type": "hello", "worker_online": True}
-    assert encode_logical_frame(payload) == encode_control(payload)
+    assert encode_logical_frame(payload) == encode_control_frame(payload)
 
 
 class TestLogicalFrameDecoder:
     def test_browser_decoder_maps_data_to_term(self) -> None:
         decoder = LogicalFrameDecoder(role="browser")
-        assert decoder.feed(encode_data("hello")) == [{"type": "term", "data": "hello"}]
+        assert decoder.feed(encode_terminal_data("hello")) == [{"type": "term", "data": "hello"}]
 
     def test_worker_decoder_maps_data_to_input(self) -> None:
         decoder = LogicalFrameDecoder(role="worker")
-        assert decoder.feed(encode_data("hello")) == [{"type": "input", "data": "hello"}]
+        assert decoder.feed(encode_terminal_data("hello")) == [{"type": "input", "data": "hello"}]
 
     def test_decoder_preserves_control_frames(self) -> None:
         decoder = LogicalFrameDecoder(role="browser")
-        assert decoder.feed(encode_control({"type": "ping"})) == [{"type": "ping"}]
+        assert decoder.feed(encode_control_frame({"type": "ping"})) == [{"type": "ping"}]
 
 
 class TestSyncInlineWebSocketClient:
@@ -50,13 +50,13 @@ class TestSyncInlineWebSocketClient:
 
         client.send_frame({"type": "input", "data": "abc"})
 
-        ws.send_text.assert_called_once_with(encode_data("abc"))
+        ws.send_text.assert_called_once_with(encode_terminal_data("abc"))
 
     def test_recv_frame_decodes_control_and_data(self) -> None:
         ws = MagicMock()
         ws.receive_text.side_effect = [
-            encode_control({"type": "hello", "worker_online": True}),
-            encode_data("screen bytes"),
+            encode_control_frame({"type": "hello", "worker_online": True}),
+            encode_terminal_data("screen bytes"),
         ]
         client = SyncInlineWebSocketClient(ws, role="browser")
 
@@ -71,12 +71,21 @@ class TestAsyncInlineWebSocketClient:
 
         await client.send_frame({"type": "control", "action": "pause"})
 
-        ws.send.assert_awaited_once_with(encode_control({"type": "control", "action": "pause"}))
+        ws.send.assert_awaited_once_with(encode_control_frame({"type": "control", "action": "pause"}))
+
+    async def test_send_rejects_bare_json_control_strings(self) -> None:
+        ws = AsyncMock()
+        client = AsyncInlineWebSocketClient(ws, role="worker")
+
+        with pytest.raises(TypeError, match="bare JSON control strings"):
+            await client.send('{"type":"control","action":"pause"}')
+
+        ws.send.assert_not_called()
 
     async def test_recv_frame_decodes_pending_events(self) -> None:
         ws = AsyncMock()
         ws.recv.side_effect = [
-            encode_control({"type": "hello", "worker_online": True}) + encode_data("typed"),
+            encode_control_frame({"type": "hello", "worker_online": True}) + encode_terminal_data("typed"),
         ]
         client = AsyncInlineWebSocketClient(ws, role="worker")
 
@@ -103,7 +112,7 @@ class TestFifoOrdering:
 
     def test_sync_client_fifo_order(self) -> None:
         """SyncInlineWebSocketClient returns frames in encoding order."""
-        frames = [encode_control({"type": "ping", "seq": i}) + encode_data(f"data{i}") for i in range(3)]
+        frames = [encode_control_frame({"type": "ping", "seq": i}) + encode_terminal_data(f"data{i}") for i in range(3)]
         # Flatten into one big message so multiple frames are buffered at once
         combined = "".join(frames)
 
@@ -124,7 +133,7 @@ class TestFifoOrdering:
 
     async def test_async_client_fifo_order(self) -> None:
         """AsyncInlineWebSocketClient returns frames in encoding order."""
-        frames = [encode_control({"type": "ping", "seq": i}) + encode_data(f"data{i}") for i in range(3)]
+        frames = [encode_control_frame({"type": "ping", "seq": i}) + encode_terminal_data(f"data{i}") for i in range(3)]
         combined = "".join(frames)
 
         ws = AsyncMock()

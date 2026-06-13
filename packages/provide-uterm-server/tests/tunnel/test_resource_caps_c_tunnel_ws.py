@@ -14,14 +14,14 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from provide.uterm.control_channel import ControlChannelDecoder
+from provide.uterm.control_channel import ControlFrameDecoder
 from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.tunnel.fastapi_routes import register_tunnel_routes as _tunnel_registrar
 from provide.uterm.tunnel.protocol import CHANNEL_DATA, encode_frame
 
 
 def _decode_browser_msg(raw: str) -> dict:
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
     events = decoder.feed(raw)
     events.extend(decoder.finish())
     for ev in events:

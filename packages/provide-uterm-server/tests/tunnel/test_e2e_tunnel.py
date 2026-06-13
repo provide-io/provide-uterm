@@ -18,10 +18,10 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from provide.uterm.control_channel import ControlChannelDecoder
+from provide.uterm.control_channel import ControlFrameDecoder
 from provide.uterm.server.app import create_server_app
 from provide.uterm.server.models import ServerConfig
-from provide.uterm.tunnel.protocol import CHANNEL_DATA, encode_control, encode_frame
+from provide.uterm.tunnel.protocol import CHANNEL_DATA, encode_control_frame, encode_frame
 
 
 @pytest.fixture
@@ -39,7 +39,7 @@ def e2e_client() -> TestClient:
 
 def _decode_events(raw: str) -> list[dict[str, Any]]:
     """Decode control-channel encoded browser messages."""
-    dec = ControlChannelDecoder()
+    dec = ControlFrameDecoder()
     events = dec.feed(raw)
     events.extend(dec.finish())
     result = []
@@ -82,7 +82,7 @@ class TestE2ETunnelDataFlow:
 
         with e2e_client.websocket_connect(f"/tunnel/{tid}") as ws:
             ws.send_bytes(
-                encode_control(
+                encode_control_frame(
                     {
                         "type": "open",
                         "channel": 1,
@@ -112,7 +112,7 @@ class TestE2ETunnelDataFlow:
 
         with e2e_client.websocket_connect(f"/tunnel/{tid}") as ws:
             ws.send_bytes(
-                encode_control(
+                encode_control_frame(
                     {
                         "type": "open",
                         "channel": 1,
