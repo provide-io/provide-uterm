@@ -13,7 +13,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from provide.uterm.control_channel import ControlChannelDecoder
+from provide.uterm.control_channel import ControlFrameDecoder
 from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.tunnel.fastapi_routes import (
     register_tunnel_routes as _tunnel_registrar,
@@ -22,7 +22,7 @@ from provide.uterm.tunnel.protocol import (
     CHANNEL_CONTROL,
     CHANNEL_DATA,
     FLAG_EOF,
-    encode_control,
+    encode_control_frame,
     encode_frame,
 )
 from provide.uterm.tunnel.token_hash import hash_token
@@ -47,7 +47,7 @@ def client(app: FastAPI) -> TestClient:
 
 def _decode_browser_msg(raw: str) -> dict[str, Any]:
     """Decode a control-channel-encoded browser message."""
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
     events = decoder.feed(raw)
     events.extend(decoder.finish())
     for ev in events:
@@ -144,7 +144,7 @@ class TestTunnelControl:
     def test_open_message(self, client: TestClient) -> None:
         """Control open message sets up the tunnel."""
         with client.websocket_connect("/tunnel/test-ctrl") as ws:
-            ctrl = encode_control(
+            ctrl = encode_control_frame(
                 {
                     "type": "open",
                     "channel": 1,
@@ -157,13 +157,13 @@ class TestTunnelControl:
     def test_resize_message(self, client: TestClient) -> None:
         """Control resize message is handled without error."""
         with client.websocket_connect("/tunnel/test-resize") as ws:
-            ctrl = encode_control({"type": "resize", "channel": 1, "cols": 120, "rows": 40})
+            ctrl = encode_control_frame({"type": "resize", "channel": 1, "cols": 120, "rows": 40})
             ws.send_bytes(ctrl)
 
     def test_close_message(self, client: TestClient) -> None:
         """Control close message is handled without error."""
         with client.websocket_connect("/tunnel/test-close") as ws:
-            ctrl = encode_control({"type": "close", "channel": 1})
+            ctrl = encode_control_frame({"type": "close", "channel": 1})
             ws.send_bytes(ctrl)
 
     def test_invalid_control_json(self, client: TestClient) -> None:
@@ -187,7 +187,7 @@ class TestTunnelControlExtra:
     def test_snapshot_control(self, client: TestClient) -> None:
         """Snapshot control message updates hub snapshot."""
         with client.websocket_connect("/tunnel/test-snap") as ws:
-            ctrl = encode_control({"type": "snapshot", "screen": "hello screen"})
+            ctrl = encode_control_frame({"type": "snapshot", "screen": "hello screen"})
             ws.send_bytes(ctrl)
 
 
@@ -217,7 +217,7 @@ class TestTunnelBranchCoverage:
     def test_open_with_invalid_input_mode(self, client: TestClient) -> None:
         """Line 167->169: open message with input_mode not in ('hijack', 'open')."""
         with client.websocket_connect("/tunnel/test-bad-mode") as ws:
-            ctrl = encode_control(
+            ctrl = encode_control_frame(
                 {
                     "type": "open",
                     "input_mode": "invalid_mode",
@@ -229,7 +229,7 @@ class TestTunnelBranchCoverage:
     def test_unknown_control_msg_type(self, client: TestClient) -> None:
         """Line 179->exit: control message with unrecognized type falls through."""
         with client.websocket_connect("/tunnel/test-unknown-type") as ws:
-            ctrl = encode_control({"type": "totally_unknown"})
+            ctrl = encode_control_frame({"type": "totally_unknown"})
             ws.send_bytes(ctrl)
 
     def test_prev_was_hijacked_triggers_notify_on_connect(self, hub: TermHub, app: FastAPI) -> None:

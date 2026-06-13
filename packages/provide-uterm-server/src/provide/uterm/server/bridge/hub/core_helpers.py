@@ -21,7 +21,7 @@ from typing import Any
 
 from fastapi import WebSocket
 
-from provide.uterm.control_channel import encode_control, encode_data
+from provide.uterm.control_channel import encode_control_frame, encode_terminal_data
 from provide.uterm.server.bridge.hub.resume import ResumeSession
 
 HijackStateCallback = Callable[[str, bool, str | None], Awaitable[None] | None]
@@ -33,14 +33,14 @@ ResumeCallback = Callable[[str, ResumeSession], Awaitable[bool]]
 
 def _encode_browser_frame(msg: dict[str, Any]) -> str:
     if str(msg.get("type") or "") == "term":
-        return encode_data(str(msg.get("data") or ""))
-    return encode_control(msg)
+        return encode_terminal_data(str(msg.get("data") or ""))
+    return encode_control_frame(msg)
 
 
 def _encode_worker_frame(msg: dict[str, Any]) -> str:
     if str(msg.get("type") or "") == "input":
-        return encode_data(str(msg.get("data") or ""))
-    return encode_control(msg)
+        return encode_terminal_data(str(msg.get("data") or ""))
+    return encode_control_frame(msg)
 
 
 def _mono_to_wall(mono_ts: float | None) -> float | None:

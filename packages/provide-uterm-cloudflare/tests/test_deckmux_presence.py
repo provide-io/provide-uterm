@@ -19,7 +19,7 @@ from types import SimpleNamespace
 
 from provide.uterm.cloudflare.do.session_runtime import SessionRuntime
 
-from provide.uterm.control_channel import ControlChannelDecoder, ControlChunk, encode_control
+from provide.uterm.control_channel import ControlChunk, ControlFrameDecoder, encode_control_frame
 
 # ---------------------------------------------------------------------------
 # Helpers (mirrors test_session_runtime_unit.py conventions)
@@ -27,7 +27,7 @@ from provide.uterm.control_channel import ControlChannelDecoder, ControlChunk, e
 
 
 def _decode_sent(raw: str) -> dict:
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
     events = decoder.feed(raw)
     events.extend(decoder.finish())
     assert len(events) == 1
@@ -156,7 +156,7 @@ async def test_presence_update_relayed_to_other_browsers() -> None:
     ws_b.sent.clear()
 
     # Send presence_update from ws_a
-    presence_msg = encode_control({"type": "presence_update", "user_id": "u1", "scroll_line": 5})
+    presence_msg = encode_control_frame({"type": "presence_update", "user_id": "u1", "scroll_line": 5})
     await rt.webSocketMessage(ws_a, presence_msg)
 
     # ws_b should receive the relay; ws_a should NOT (no echo)
@@ -177,7 +177,7 @@ async def test_queued_input_relayed_to_other_browsers() -> None:
     ws_a.sent.clear()
     ws_b.sent.clear()
 
-    queued_msg = encode_control({"type": "queued_input", "user_id": "u1", "keys": "ls\n"})
+    queued_msg = encode_control_frame({"type": "queued_input", "user_id": "u1", "keys": "ls\n"})
     await rt.webSocketMessage(ws_a, queued_msg)
 
     b_types = _sent_types(ws_b)
@@ -245,7 +245,7 @@ async def test_presence_update_dropped_when_disabled() -> None:
     ws_a.sent.clear()
     ws_b.sent.clear()
 
-    presence_msg = encode_control({"type": "presence_update", "user_id": "u1"})
+    presence_msg = encode_control_frame({"type": "presence_update", "user_id": "u1"})
     await rt.webSocketMessage(ws_a, presence_msg)
 
     assert "presence_update" not in _sent_types(ws_b), "presence_update should be dropped"
@@ -279,7 +279,7 @@ async def test_control_request_dropped_when_disabled() -> None:
     ws_a.sent.clear()
     ws_b.sent.clear()
 
-    ctrl_msg = encode_control({"type": "control_request", "user_id": "u1"})
+    ctrl_msg = encode_control_frame({"type": "control_request", "user_id": "u1"})
     await rt.webSocketMessage(ws_a, ctrl_msg)
 
     assert "control_request" not in _sent_types(ws_b)

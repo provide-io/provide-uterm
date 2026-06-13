@@ -2,10 +2,10 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Lossless byte ↔ str shim for the inline control channel.
+"""Lossless byte ↔ str shim for the inline DLE/STX control-frame stream.
 
-The control channel (``provide.uterm.control_channel``) is a
-str-typed protocol: ``ControlChannelDecoder.feed()`` takes ``str`` and
+The control-frame API (``provide.uterm.control_channel``) is a
+str-typed protocol: ``ControlFrameDecoder.feed()`` takes ``str`` and
 ``DataChunk.data`` is ``str``. But the data carried inside it is raw
 terminal bytes — typically CP437 from a BBS — and must not lose any
 high bytes between the WebSocket boundary and the terminal emulator.
@@ -24,7 +24,7 @@ from __future__ import annotations
 
 
 def ws_frame_to_channel_str(raw: str | bytes) -> str:
-    """Coerce a WebSocket frame into the str form ``ControlChannelDecoder`` expects.
+    """Coerce a WebSocket frame into the str form ``ControlFrameDecoder`` expects.
 
     Binary frames are decoded as latin-1 so every byte survives as a
     codepoint. Text frames are passed through (the sender is responsible

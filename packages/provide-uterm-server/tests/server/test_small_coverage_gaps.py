@@ -273,7 +273,7 @@ class TestWorkerLinkCancelledTask:
 class TestWorkerLinkEmptyDataChunk:
     async def test_recv_loop_empty_data_chunk_skipped(self) -> None:
         """Empty DataChunk in _recv_loop should not call _send_keys."""
-        from provide.uterm.control_channel import encode_data
+        from provide.uterm.control_channel import encode_terminal_data
         from provide.uterm.server.bridge.worker_link import TermBridge
 
         worker = MagicMock()
@@ -283,7 +283,7 @@ class TestWorkerLinkEmptyDataChunk:
         bridge._running = True
 
         # Prepare a ws mock that first yields an empty data frame, then closes
-        empty_data_frame = encode_data("")
+        empty_data_frame = encode_terminal_data("")
         call_count = 0
 
         async def _recv() -> str:

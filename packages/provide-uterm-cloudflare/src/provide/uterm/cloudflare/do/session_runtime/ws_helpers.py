@@ -17,7 +17,7 @@ import secrets
 import time
 from typing import TYPE_CHECKING, Any
 
-from provide.uterm.control_channel import encode_control, encode_data
+from provide.uterm.control_channel import encode_control_frame, encode_terminal_data
 
 if TYPE_CHECKING:
     from provide.uterm.cloudflare.cf_types import CFWebSocket
@@ -153,9 +153,9 @@ class _WsHelperMixin:
     async def send_ws(self, ws: CFWebSocket, payload: dict[str, Any]) -> None:
         frame_type = str(payload.get("type") or "")
         if frame_type in {"input", "term"}:
-            await self._send_text(ws, encode_data(str(payload.get("data", ""))))
+            await self._send_text(ws, encode_terminal_data(str(payload.get("data", ""))))
             return
-        await self._send_text(ws, encode_control(payload))
+        await self._send_text(ws, encode_control_frame(payload))
 
     async def _send_text(self, ws: CFWebSocket, payload: str) -> None:
         result = ws.send(payload)

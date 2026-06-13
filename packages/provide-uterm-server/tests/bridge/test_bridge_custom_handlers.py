@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock
 
-from provide.uterm.control_channel import encode_control
+from provide.uterm.control_channel import encode_control_frame
 from provide.uterm.server.bridge.worker_link import TermBridge
 
 
@@ -75,7 +75,7 @@ class TestRegisterMessageHandler:
 
         bridge.register_message_handler("analyze_req", _on_analyze)
 
-        ws = MockWS([encode_control({"type": "analyze_req", "payload": {"k": 1}})])
+        ws = MockWS([encode_control_frame({"type": "analyze_req", "payload": {"k": 1}})])
         await bridge._recv_loop(ws)
 
         assert len(seen) == 1
@@ -100,9 +100,9 @@ class TestRegisterMessageHandler:
 
         ws = MockWS(
             [
-                encode_control({"type": "snapshot_req"}),
-                encode_control({"type": "control", "action": "step"}),
-                encode_control({"type": "resize", "cols": 100, "rows": 30}),
+                encode_control_frame({"type": "snapshot_req"}),
+                encode_control_frame({"type": "control", "action": "step"}),
+                encode_control_frame({"type": "resize", "cols": 100, "rows": 30}),
             ]
         )
         await bridge._recv_loop(ws)
@@ -122,7 +122,7 @@ class TestRegisterMessageHandler:
         bridge = TermBridge(bot, "bot1", "http://localhost:8000")
         bridge._running = True
 
-        ws = MockWS([encode_control({"type": "totally_unknown", "x": 1})])
+        ws = MockWS([encode_control_frame({"type": "totally_unknown", "x": 1})])
         # Must complete cleanly with no exception.
         await bridge._recv_loop(ws)
 
@@ -143,7 +143,7 @@ class TestRegisterMessageHandler:
         bridge.register_message_handler("custom", _first)
         bridge.register_message_handler("custom", _second)
 
-        ws = MockWS([encode_control({"type": "custom"})])
+        ws = MockWS([encode_control_frame({"type": "custom"})])
         await bridge._recv_loop(ws)
 
         assert first == []
@@ -167,8 +167,8 @@ class TestRegisterMessageHandler:
 
         ws = MockWS(
             [
-                encode_control({"type": "explode"}),
-                encode_control({"type": "good", "n": 7}),
+                encode_control_frame({"type": "explode"}),
+                encode_control_frame({"type": "good", "n": 7}),
             ]
         )
         await bridge._recv_loop(ws)

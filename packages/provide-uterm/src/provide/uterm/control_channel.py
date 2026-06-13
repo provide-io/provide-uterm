@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Inline control channel framing for mixed terminal data and control messages.
+"""Inline DLE/STX control framing for mixed terminal data and control messages.
 
 Control frame headers store the UTF-8 byte length of the JSON payload, not the
 Python character count. ASCII payloads therefore keep their historical wire
@@ -56,8 +56,8 @@ _HEX_DIGITS = frozenset(hexdigits)
 _MAX_CONTROL_FRAME_DEPTH = 32
 
 
-class ControlChannelProtocolError(ValueError):
-    """Raised when an inline control channel chunk is malformed."""
+class ControlFrameProtocolError(ValueError):
+    """Raised when an inline control frame is malformed."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,15 +82,15 @@ class ControlChunk:
         return "control"
 
 
-ControlChannelChunk = DataChunk | ControlChunk
+ControlFrameChunk = DataChunk | ControlChunk
 
 
-def encode_data(data: str) -> str:
+def encode_terminal_data(data: str) -> str:
     """Encode terminal data for the inline stream."""
     return data.replace(DLE, DLE + DLE)
 
 
-def encode_control(payload: Mapping[str, Any]) -> str:
+def encode_control_frame(payload: Mapping[str, Any]) -> str:
     """Encode a control payload for the inline stream."""
     serialized = _json_dumps(dict(payload))
     return f"{DLE}{STX}{len(serialized.encode('utf-8')):08x}:{serialized}"
@@ -100,7 +100,7 @@ def _utf8_payload_end(buf: str, start: int, payload_bytes: int) -> int | None:
     """Return the character index ending a UTF-8 byte-length payload.
 
     Returns None when *buf* does not yet contain ``payload_bytes`` bytes from
-    *start*. Raises :class:`ControlChannelProtocolError` when the declared byte
+    *start*. Raises :class:`ControlFrameProtocolError` when the declared byte
     length splits a Unicode code point (which appending more text cannot fix).
     """
     byte_count = 0
@@ -109,13 +109,13 @@ def _utf8_payload_end(buf: str, start: int, payload_bytes: int) -> int | None:
         byte_count += len(buf[idx].encode("utf-8"))
         idx += 1
         if byte_count > payload_bytes:
-            raise ControlChannelProtocolError("invalid control payload length")
+            raise ControlFrameProtocolError("invalid control payload length")
     if byte_count < payload_bytes:
         return None
     return idx
 
 
-def is_control_framed(message: str) -> bool:
+def is_control_frame(message: str) -> bool:
     """Return ``True`` when *message* is a full control-framed payload.
 
     The check is structural only: it validates the magic bytes, length
@@ -139,14 +139,14 @@ def is_control_framed(message: str) -> bool:
 
     try:
         payload_end = _utf8_payload_end(message, _HEADER_BYTES, payload_bytes)
-    except ControlChannelProtocolError:
+    except ControlFrameProtocolError:
         return False
 
     return payload_end is not None and payload_end == len(message)
 
 
 def _check_json_depth(value: Any, *, max_depth: int) -> None:
-    """Raise ``ControlChannelProtocolError`` if ``value`` nests deeper than ``max_depth``.
+    """Raise ``ControlFrameProtocolError`` if ``value`` nests deeper than ``max_depth``.
 
     Walks the decoded JSON structure iteratively (no Python recursion) so a
     pathological payload cannot crash this check itself. Strings and
@@ -156,7 +156,7 @@ def _check_json_depth(value: Any, *, max_depth: int) -> None:
     while stack:
         node, depth = stack.pop()
         if depth > max_depth:
-            raise ControlChannelProtocolError(f"control payload nests deeper than {max_depth}")
+            raise ControlFrameProtocolError(f"control payload nests deeper than {max_depth}")
         if isinstance(node, dict):
             for child in node.values():
                 if isinstance(child, (dict, list)):
@@ -167,8 +167,8 @@ def _check_json_depth(value: Any, *, max_depth: int) -> None:
                     stack.append((child, depth + 1))
 
 
-class ControlChannelDecoder:
-    """Incrementally decode the inline control channel."""
+class ControlFrameDecoder:
+    """Incrementally decode the inline DLE/STX control-frame stream."""
 
     def __init__(
         self,
@@ -185,25 +185,25 @@ class ControlChannelDecoder:
         self._buffer_parts: list[str] = []
         self._on_error = on_error
 
-    def _report_error(self, message: str) -> ControlChannelProtocolError:
+    def _report_error(self, message: str) -> ControlFrameProtocolError:
         if self._on_error:
-            self._on_error("control_channel_protocol_error")
-        return ControlChannelProtocolError(message)
+            self._on_error("control_frame_protocol_error")
+        return ControlFrameProtocolError(message)
 
-    def feed(self, chunk: str) -> list[ControlChannelChunk]:
+    def feed(self, chunk: str) -> list[ControlFrameChunk]:
         """Decode all complete events from *chunk* and buffer the rest."""
         if not isinstance(chunk, str):
-            raise TypeError(f"control channel chunks must be str, got {type(chunk).__name__!r}")
+            raise TypeError(f"control frame chunks must be str, got {type(chunk).__name__!r}")
         self._buffer_parts.append(chunk)
         total = sum(len(p.encode("utf-8")) for p in self._buffer_parts)
         if total > self._max_buffer_bytes:
             self._buffer_parts.clear()
             self._buffer = ""
-            raise self._report_error(f"control channel buffer overflow: {total} > {self._max_buffer_bytes}")
+            raise self._report_error(f"control frame buffer overflow: {total} > {self._max_buffer_bytes}")
         self._buffer = "".join(self._buffer_parts)
         try:
             events = self._drain(final=False)  # pragma: no mutate
-        except ControlChannelProtocolError:
+        except ControlFrameProtocolError:
             self._buffer_parts.clear()
             self._buffer = ""
             raise
@@ -212,11 +212,11 @@ class ControlChannelDecoder:
         self._buffer_parts = [self._buffer] if self._buffer else []
         return events
 
-    def finish(self) -> list[ControlChannelChunk]:
+    def finish(self) -> list[ControlFrameChunk]:
         """Decode any remaining buffered data and reject truncated control frames."""
         try:
             events = self._drain(final=True)  # pragma: no mutate
-        except ControlChannelProtocolError:
+        except ControlFrameProtocolError:
             self._buffer_parts.clear()
             self._buffer = ""
             raise
@@ -236,7 +236,7 @@ class ControlChannelDecoder:
             raise self._report_error("control payload must be an object")
         try:
             _check_json_depth(payload, max_depth=self._max_frame_depth)
-        except ControlChannelProtocolError as exc:
+        except ControlFrameProtocolError as exc:
             # ``_report_error`` already fires ``self._on_error(...)``; an inline
             # notification here would double-fire the callback for one error
             # (and only adds dead, behaviourally-inert mutable literals).
@@ -248,13 +248,13 @@ class ControlChannelDecoder:
         error hook when the declared byte length splits a Unicode code point."""
         try:
             return _utf8_payload_end(buf, start, payload_bytes)
-        except ControlChannelProtocolError as exc:
+        except ControlFrameProtocolError as exc:
             raise self._report_error(str(exc)) from exc
 
     def _try_parse_frame(self, buf: str, idx: int, buf_len: int, *, final: bool) -> tuple[ControlChunk, int] | None:
         """Parse a control frame at buf[idx]. Returns (chunk, frame_end) or None if incomplete.
 
-        Raises ControlChannelProtocolError on protocol violations.
+        Raises ControlFrameProtocolError on protocol violations.
         Returns None when the frame is not yet complete (only valid when final=False).
         """
         if buf_len - idx < _HEADER_BYTES:
@@ -280,7 +280,7 @@ class ControlChannelDecoder:
 
     @staticmethod
     def _emit_data_chunk(
-        events: list[ControlChannelChunk],
+        events: list[ControlFrameChunk],
         data_parts: list[str],
         buf: str,
         data_start: int,
@@ -300,7 +300,7 @@ class ControlChannelDecoder:
         idx: int,
         data_start: int,
         data_parts: list[str],
-        events: list[ControlChannelChunk],
+        events: list[ControlFrameChunk],
     ) -> None:
         """Flush unconsumed buffer tail and any trailing plain data."""
         if idx > 0:  # pragma: no mutate
@@ -310,8 +310,8 @@ class ControlChannelDecoder:
         if data_parts:
             events.append(DataChunk("".join(data_parts)))
 
-    def _drain(self, *, final: bool) -> list[ControlChannelChunk]:
-        events: list[ControlChannelChunk] = []
+    def _drain(self, *, final: bool) -> list[ControlFrameChunk]:
+        events: list[ControlFrameChunk] = []
         buf = self._buffer
         buf_len = len(buf)
         idx = 0

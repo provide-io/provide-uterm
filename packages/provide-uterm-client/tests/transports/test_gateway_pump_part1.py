@@ -14,8 +14,8 @@ import pytest
 import websockets
 import websockets.server
 from provide.uterm.control_channel import (
-    ControlChannelDecoder,
     ControlChunk,
+    ControlFrameDecoder,
 )
 from provide.uterm.gateway import (
     TelnetWsGateway,
@@ -30,7 +30,7 @@ from provide.uterm.gateway import (
 
 
 def _decode_control(raw: str) -> dict[str, Any]:
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
     events = decoder.feed(raw)
     events.extend(decoder.finish())
     assert len(events) == 1

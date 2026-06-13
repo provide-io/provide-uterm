@@ -231,7 +231,7 @@ class TestMakeProcessHandler:
 
     async def test_handler_cancels_pending(self) -> None:
         """Cover task.cancel() in _process_handler."""
-        from provide.uterm.control_channel import encode_data
+        from provide.uterm.control_channel import encode_terminal_data
 
         handler = await _make_process_handler("ws://test", "passthrough")
 
@@ -248,7 +248,7 @@ class TestMakeProcessHandler:
         process.exit = MagicMock()
 
         # ws yields one message then ends so _ws_to_ssh finishes quickly
-        ws_mock = _mock_ws([encode_data("x")])
+        ws_mock = _mock_ws([encode_terminal_data("x")])
 
         mock_ws_mod = MagicMock()
         mock_ws_mod.connect.return_value = _make_ws_context(ws_mock)
@@ -260,7 +260,7 @@ class TestMakeProcessHandler:
 
     async def test_handler_ssh_reconnect_indicator(self) -> None:
         """SSH handler writes reconnect indicator when WS drops but SSH client stays."""
-        from provide.uterm.control_channel import encode_data
+        from provide.uterm.control_channel import encode_terminal_data
 
         handler = await _make_process_handler("ws://test", "passthrough")
 
@@ -283,7 +283,7 @@ class TestMakeProcessHandler:
         def make_ws_context_for_call() -> MagicMock:
             nonlocal call_count
             call_count += 1
-            ws = _mock_ws([encode_data("x")])  # yields one message then closes
+            ws = _mock_ws([encode_terminal_data("x")])  # yields one message then closes
             return _make_ws_context(ws)
 
         mock_ws_mod = MagicMock()

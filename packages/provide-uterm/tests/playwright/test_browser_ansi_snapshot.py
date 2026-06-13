@@ -36,7 +36,7 @@ from fastapi.responses import HTMLResponse
 from playwright.sync_api import Page
 from starlette.staticfiles import StaticFiles
 
-from provide.uterm.control_channel import encode_control
+from provide.uterm.control_channel import encode_control_frame
 from provide.uterm.server.bridge.hub import TermHub
 
 
@@ -163,7 +163,7 @@ class _SnapshotWorker:
                     "has_trailing_space": False,
                     "ts": time.time(),
                 }
-                await ws.send(encode_control(snapshot_msg))
+                await ws.send(encode_control_frame(snapshot_msg))
                 self._connected.set()
                 while not self._stop.is_set():
                     try:
@@ -190,7 +190,7 @@ class _SnapshotWorker:
             "has_trailing_space": False,
             "ts": time.time(),
         }
-        future = asyncio.run_coroutine_threadsafe(self._ws.send(encode_control(snapshot_msg)), self._loop)
+        future = asyncio.run_coroutine_threadsafe(self._ws.send(encode_control_frame(snapshot_msg)), self._loop)
         future.result(timeout=2.0)
 
     def stop(self) -> None:

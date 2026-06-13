@@ -5,7 +5,7 @@
 """Playwright regression: ProvideTerminal decodes inline control-channel framing.
 
 Fix #14 — ``terminal.ts`` feeds incoming WS payloads through
-``ControlChannelDecoder`` so framed control frames (``DLE STX <len>:<json>``)
+``ControlFrameDecoder`` so framed control frames (``DLE STX <len>:<json>``)
 never render as raw JSON on screen. Only the ``DataChunk`` portions are
 written to xterm.
 
@@ -31,7 +31,7 @@ from fastapi.responses import HTMLResponse
 from playwright.sync_api import Page
 from starlette.staticfiles import StaticFiles
 
-from provide.uterm.control_channel import encode_control
+from provide.uterm.control_channel import encode_control_frame
 
 
 @pytest.fixture(scope="module")
@@ -59,12 +59,12 @@ def terminal_decoder_server() -> Generator[str, None, None]:
         await websocket.accept()
         # Frame 1: a JSON control frame the widget must NOT render.
         await websocket.send_text(
-            encode_control({"type": "control", "marker": sentinel_control_json, "ts": time.time()})
+            encode_control_frame({"type": "control", "marker": sentinel_control_json, "ts": time.time()})
         )
         # Frame 2: raw terminal bytes — these should render.
         await websocket.send_text(sentinel_visible + "\r\n")
         # Frame 3: a second control frame to verify multiple frames per message.
-        await websocket.send_text(encode_control({"type": "control", "marker": sentinel_control_json + "_b"}))
+        await websocket.send_text(encode_control_frame({"type": "control", "marker": sentinel_control_json + "_b"}))
         # Hold the connection open briefly so the browser has time to drain.
         try:
             while True:

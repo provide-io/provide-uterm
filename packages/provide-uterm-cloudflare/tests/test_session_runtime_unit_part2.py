@@ -14,7 +14,7 @@ from types import SimpleNamespace
 import jwt
 from provide.uterm.cloudflare.do.session_runtime import SessionRuntime
 
-from provide.uterm.control_channel import ControlChannelDecoder, ControlChunk, DataChunk
+from provide.uterm.control_channel import ControlChunk, ControlFrameDecoder, DataChunk
 
 _KEY = "test-secret-key-32-bytes-minimum!"
 
@@ -59,7 +59,7 @@ def _make_runtime(worker_id: str = "test-worker", mode: str = "dev") -> SessionR
 
 
 def _decode_sent(raw: str, *, data_frame_type: str | None = None) -> dict:
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
     events = decoder.feed(raw)
     events.extend(decoder.finish())
     assert len(events) == 1

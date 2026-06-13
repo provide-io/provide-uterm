@@ -23,11 +23,11 @@ from provide.uterm.auth import (
     _parse_authorized_keys_line,
 )
 from provide.uterm.control_channel import (
-    ControlChannelDecoder,
-    ControlChannelProtocolError,
     ControlChunk,
+    ControlFrameDecoder,
+    ControlFrameProtocolError,
     DataChunk,
-    encode_control,
+    encode_control_frame,
 )
 from provide.uterm.detection.detector import PromptDetector
 from provide.uterm.io import PromptWaiter
@@ -48,14 +48,14 @@ class TestControlChannelBoundaries:
     def test_feed_overflow_strictly_greater_than(self) -> None:
         """``if total > max_buffer_bytes`` must be strict, not >=.
 
-        Targets: control_channel.ControlChannelDecoder.feed__mutmut_7
+        Targets: control_channel.ControlFrameDecoder.feed__mutmut_7
 
         At ``total == max_buffer_bytes`` the original accepts; the mutant
         (>=) rejects. We feed exactly the limit *as an incomplete control
         frame* so the buffer doesn't drain — the size check is against the
         un-drained buffer total.
         """
-        d = ControlChannelDecoder(max_buffer_bytes=10)
+        d = ControlFrameDecoder(max_buffer_bytes=10)
         # An incomplete control frame: starts with DLE STX but has no full header.
         # This stays in _buffer because it can't be parsed yet, so the size
         # accumulates across feeds.
@@ -63,24 +63,24 @@ class TestControlChannelBoundaries:
         # Under original: total == 10 == max, condition (total > max) is False → no raise.
         d.feed(partial)
         # One more char pushes total to 11 — both original and mutant raise here.
-        with pytest.raises(ControlChannelProtocolError, match="overflow"):
+        with pytest.raises(ControlFrameProtocolError, match="overflow"):
             d.feed("x")
 
     def test_try_parse_frame_header_strictly_less_than(self) -> None:
         """``if buf_len - idx < _HEADER_BYTES`` — strict ``<``, not ``<=``.
 
-        Targets: control_channel.ControlChannelDecoder._try_parse_frame__mutmut_2
+        Targets: control_channel.ControlFrameDecoder._try_parse_frame__mutmut_2
 
         Feeding exactly _HEADER_BYTES bytes of a header but no payload means
         the function should keep going (header present), not bail.
         """
         # Build a real frame with no payload to exercise the >= case.
-        d = ControlChannelDecoder()
-        # encode_control of a tiny dict produces a complete header + 0-length
+        d = ControlFrameDecoder()
+        # encode_control_frame of a tiny dict produces a complete header + 0-length
         # payload frame. The full frame parses successfully under the original;
         # under the mutant (<=) the "header complete" check rejects it as
         # incomplete and finish() raises "truncated control frame".
-        frame = encode_control({})
+        frame = encode_control_frame({})
         d.feed(frame)
         # If the mutation makes the header-length check too strict, no chunks
         # are produced and finish() complains.
@@ -90,13 +90,13 @@ class TestControlChannelBoundaries:
     def test_payload_size_strict_global_limit(self) -> None:
         """``payload_bytes > 1_048_576`` — strict ``>`` (not ``>=``).
 
-        Targets: control_channel.ControlChannelDecoder._try_parse_frame__mutmut_29
+        Targets: control_channel.ControlFrameDecoder._try_parse_frame__mutmut_29
         """
-        d = ControlChannelDecoder(max_control_payload_bytes=10**9)
+        d = ControlFrameDecoder(max_control_payload_bytes=10**9)
         # Build a control frame with payload exactly 1_048_576 bytes. Under
         # the original (>) this is accepted; under the mutant (>=) rejected.
         payload = self._payload_with_encoded_size(1_048_576)
-        frame = encode_control(payload)
+        frame = encode_control_frame(payload)
         assert int(frame[2:10], 16) == 1_048_576
         events = d.feed(frame)
         assert any(isinstance(e, ControlChunk) for e in events)
@@ -104,28 +104,28 @@ class TestControlChannelBoundaries:
     def test_payload_size_strict_instance_limit(self) -> None:
         """``payload_bytes > self._max_control_payload_bytes`` — strict ``>``.
 
-        Targets: control_channel.ControlChannelDecoder._try_parse_frame__mutmut_31
+        Targets: control_channel.ControlFrameDecoder._try_parse_frame__mutmut_31
         """
         # max_control_payload_bytes=200 -> payload of exactly 200 bytes must
         # be accepted (strict >); under the mutant it would be rejected.
-        d = ControlChannelDecoder(max_control_payload_bytes=200)
-        exact = encode_control(self._payload_with_encoded_size(200))
+        d = ControlFrameDecoder(max_control_payload_bytes=200)
+        exact = encode_control_frame(self._payload_with_encoded_size(200))
         assert int(exact[2:10], 16) == 200
         d.feed(exact)
         # Then feed a payload that exceeds the limit.
         big = {"k": "y" * 500}
-        with pytest.raises(ControlChannelProtocolError, match="too large"):
-            d.feed(encode_control(big))
+        with pytest.raises(ControlFrameProtocolError, match="too large"):
+            d.feed(encode_control_frame(big))
 
     def test_flush_remaining_strict_gt_zero(self) -> None:
         """``if idx > 0`` — strict ``>``, not ``>=``.
 
-        Targets: control_channel.ControlChannelDecoder._flush_remaining__mutmut_1
+        Targets: control_channel.ControlFrameDecoder._flush_remaining__mutmut_1
 
         At idx == 0 the flush is a no-op; under the mutant (>=) it would
         emit an empty DataChunk.
         """
-        d = ControlChannelDecoder()
+        d = ControlFrameDecoder()
         events = d.feed("")  # nothing to flush
         # No empty DataChunk should appear.
         assert not any(isinstance(e, DataChunk) and e.data == "" for e in events)
@@ -133,10 +133,10 @@ class TestControlChannelBoundaries:
     def test_drain_data_start_strict_less_than(self) -> None:
         """``if data_start < idx`` — strict ``<``, not ``<=``.
 
-        Targets: control_channel.ControlChannelDecoder._drain__mutmut_26 (pragma
+        Targets: control_channel.ControlFrameDecoder._drain__mutmut_26 (pragma
         no cover — exercises the DLE-at-buffer-boundary edge case).
         """
-        d = ControlChannelDecoder()
+        d = ControlFrameDecoder()
         # Plain data without a DLE: data_start == idx == 0. Under the mutant
         # (<=) it would still try to emit; under the original (<) it would
         # skip the emit and continue.  We only care that the happy path

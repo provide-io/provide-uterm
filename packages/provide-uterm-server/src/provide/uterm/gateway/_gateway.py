@@ -21,12 +21,12 @@ if TYPE_CHECKING:
 from provide.telemetry import get_logger
 from provide.uterm.colors import ColorMode, apply_color_mode
 from provide.uterm.control_channel import (
-    ControlChannelDecoder,
-    ControlChannelProtocolError,
     ControlChunk,
+    ControlFrameDecoder,
+    ControlFrameProtocolError,
     DataChunk,
-    encode_control,
-    encode_data,
+    encode_control_frame,
+    encode_terminal_data,
 )
 from provide.uterm.gateway._iac_negotiate import IacNegotiator
 
@@ -144,17 +144,11 @@ async def _handle_ws_control(
 ) -> bool:
     """Return True if *message* is a gateway control frame (intercept it)."""
     try:
-        decoder = ControlChannelDecoder()
+        decoder = ControlFrameDecoder()
         events = decoder.feed(message)
         events.extend(decoder.finish())
-    except ControlChannelProtocolError:
-        try:
-            data = json.loads(message)
-        except (json.JSONDecodeError, ValueError):
-            return False
-        if not isinstance(data, dict):
-            return False
-        return await _handle_ws_control_frame(data, token_holder, write_fn, token_file=token_file)
+    except ControlFrameProtocolError:
+        return False
 
     if not events:
         return False
@@ -319,7 +313,7 @@ async def _tcp_to_ws(
                 data = _strip_iac(data)
             if not data:
                 continue
-        await ws.send(encode_data(data.decode("latin-1", errors="replace")))
+        await ws.send(encode_terminal_data(data.decode("latin-1", errors="replace")))
 
 
 async def _ws_to_tcp(
@@ -331,7 +325,7 @@ async def _ws_to_tcp(
     token_file: Path | None = None,
 ) -> None:
     """Forward WebSocket messages → raw TCP bytes."""
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
 
     async def _write_fn(data: bytes) -> None:
         writer.write(data)
@@ -341,7 +335,7 @@ async def _ws_to_tcp(
         if isinstance(message, str):
             try:
                 events = decoder.feed(message)
-            except ControlChannelProtocolError:
+            except ControlFrameProtocolError:
                 continue
             for event in events:
                 if isinstance(event, ControlChunk):
@@ -445,7 +439,7 @@ async def _pipe_ws(
             resume_msg: dict[str, object] = {"type": "resume", "token": token_data["token"]}
             if "player_id" in token_data:
                 resume_msg["player_id"] = token_data["player_id"]
-            await gateway_ws.send(encode_control(resume_msg))
+            await gateway_ws.send(encode_control_frame(resume_msg))
         t1 = asyncio.create_task(_tcp_to_ws(reader, gateway_ws, telnet=telnet, negotiator=negotiator, writer=writer))
         t2 = asyncio.create_task(
             _ws_to_tcp(gateway_ws, writer, token_holder=token_holder, color_mode=color_mode, token_file=token_file)
@@ -476,7 +470,7 @@ async def _ssh_to_ws(process: _SshProcessLike, ws: _GatewayWebSocket) -> None:
         if not data:
             break
         payload = data if isinstance(data, str) else data.decode("latin-1", errors="replace")
-        await ws.send(encode_data(payload))
+        await ws.send(encode_terminal_data(payload))
 
 
 async def _ws_to_ssh(
@@ -489,7 +483,7 @@ async def _ws_to_ssh(
 ) -> None:
     """Forward WebSocket messages → SSH stdout."""
     stdout = process.stdout
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
 
     async def _write_fn(data: bytes) -> None:
         stdout.write(data.decode("utf-8", errors="replace"))
@@ -498,7 +492,7 @@ async def _ws_to_ssh(
         if isinstance(message, str):
             try:
                 events = decoder.feed(message)
-            except ControlChannelProtocolError:
+            except ControlFrameProtocolError:
                 continue
             for event in events:
                 if isinstance(event, ControlChunk):

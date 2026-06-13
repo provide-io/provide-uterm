@@ -15,7 +15,7 @@ import asyncio
 import contextlib
 from typing import TYPE_CHECKING, Any, Literal
 
-from provide.uterm.control_channel import encode_control, encode_data
+from provide.uterm.control_channel import encode_control_frame, encode_terminal_data
 from provide.uterm.server.bridge.hub.redaction import StreamRedactor
 from provide.uterm.server.bridge.hub.redaction_defaults import default_rules
 
@@ -25,8 +25,8 @@ if TYPE_CHECKING:
 
 def _encode_runtime_frame(msg: dict[str, Any]) -> str:
     if str(msg.get("type") or "") == "term":
-        return encode_data(str(msg.get("data") or ""))
-    return encode_control(msg)
+        return encode_terminal_data(str(msg.get("data") or ""))
+    return encode_control_frame(msg)
 
 
 def _build_recording_redactor(enabled: bool) -> Callable[[str], str] | None:

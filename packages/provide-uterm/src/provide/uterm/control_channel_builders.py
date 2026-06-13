@@ -4,7 +4,7 @@
 #
 """Typed builder functions for ControlChannel protocol messages.
 
-Each builder returns a fresh dict ready to pass to ``encode_control()``.
+Each builder returns a fresh dict ready to pass to ``encode_control_frame()``.
 Required fields are validated; optional fields are omitted when not provided
 so the serialised JSON stays lean.
 """
@@ -52,7 +52,7 @@ def make_identity(
         transport: Transport type string (default ``"ssh"``).
 
     Returns:
-        A dict ready for ``encode_control()``.
+        A dict ready for ``encode_control_frame()``.
 
     Raises:
         ValueError: If *subject* is empty.
@@ -94,7 +94,7 @@ def make_session_token(token: str, player_id: int | None = None) -> dict[str, An
         player_id: Optional player identifier. Omitted when ``None``.
 
     Returns:
-        A dict ready for ``encode_control()``.
+        A dict ready for ``encode_control_frame()``.
 
     Raises:
         ValueError: If *token* is empty.
@@ -115,7 +115,7 @@ def make_resume(token: str, player_id: int | None = None) -> dict[str, Any]:
         player_id: Optional player identifier. Omitted when ``None``.
 
     Returns:
-        A dict ready for ``encode_control()``.
+        A dict ready for ``encode_control_frame()``.
 
     Raises:
         ValueError: If *token* is empty.
@@ -132,7 +132,7 @@ def make_resume_ok() -> dict[str, Any]:
     """Build a ``resume_ok`` control message.
 
     Returns:
-        A dict ready for ``encode_control()``.
+        A dict ready for ``encode_control_frame()``.
     """
     return schemas.ResumeOkFrame(type="resume_ok").model_dump()
 
@@ -144,7 +144,7 @@ def make_resume_failed(reason: str | None = None) -> dict[str, Any]:
         reason: Optional human-readable failure reason. Omitted when ``None``.
 
     Returns:
-        A dict ready for ``encode_control()``.
+        A dict ready for ``encode_control_frame()``.
     """
     msg: dict[str, Any] = {"type": "resume_failed"}
     if reason is not None:
@@ -167,7 +167,7 @@ def make_link_patterns(patterns: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         patterns: Sequence of pattern mapping dicts.
 
     Returns:
-        A dict ready for ``encode_control()``.
+        A dict ready for ``encode_control_frame()``.
 
     Raises:
         ValueError: If any pattern entry is malformed (missing or invalid field,
@@ -191,7 +191,7 @@ def make_presence_update(user_id: str, **fields: Any) -> dict[str, Any]:
         **fields: Arbitrary additional presence fields (e.g. ``scroll_line=5``).
 
     Returns:
-        A dict ready for ``encode_control()``.
+        A dict ready for ``encode_control_frame()``.
     """
     msg: dict[str, Any] = {"type": "presence_update", "user_id": user_id}
     msg.update(fields)

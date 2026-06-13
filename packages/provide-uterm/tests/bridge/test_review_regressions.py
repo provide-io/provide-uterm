@@ -190,7 +190,7 @@ class TestBroadcastLeaseExpiresAtWallClock:
         owner_ws = _make_ws()
         browser_ws = _make_ws()
 
-        from provide.uterm.control_channel import ControlChannelDecoder
+        from provide.uterm.control_channel import ControlFrameDecoder
 
         mono_now = time.monotonic()
         async with hub._lock:
@@ -205,7 +205,7 @@ class TestBroadcastLeaseExpiresAtWallClock:
 
         # Decode what was sent to browsers
         assert browser_ws.send_text.called
-        decoder = ControlChannelDecoder()
+        decoder = ControlFrameDecoder()
         for call in browser_ws.send_text.call_args_list:
             raw = call.args[0]
             events = decoder.feed(raw)

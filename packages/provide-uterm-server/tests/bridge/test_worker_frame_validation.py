@@ -286,7 +286,7 @@ def test_valid_snapshot_stream_processes_unchanged() -> None:
 def test_term_data_hot_path_unaffected() -> None:
     """Raw terminal data (DataChunk) stays outside the validation wrapper and
     is broadcast to a viewing browser unchanged."""
-    from provide.uterm.control_channel import encode_data
+    from provide.uterm.control_channel import encode_terminal_data
 
     hub, metrics = _make_hub_with_metrics()
     app = _make_app(hub)
@@ -296,7 +296,7 @@ def test_term_data_hot_path_unaffected() -> None:
     ):
         _read_worker_snapshot_req(worker)
         with connect_test_ws(client, "/ws/browser/w1/term") as browser:
-            worker.send_text(encode_data("hello-term"))
+            worker.send_text(encode_terminal_data("hello-term"))
             got_term = False
             for _ in range(40):
                 msg = browser.receive_json()

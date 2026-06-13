@@ -10,7 +10,7 @@ import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from provide.uterm.control_channel import encode_control, encode_data
+from provide.uterm.control_channel import encode_control_frame, encode_terminal_data
 from provide.uterm.gateway._gateway import (
     _pipe_ws,
     _ssh_to_ws,
@@ -97,7 +97,7 @@ class TestWsToTcp:
     async def test_forwards_text_messages(self) -> None:
         writer = MagicMock(spec=asyncio.StreamWriter)
         writer.drain = AsyncMock()
-        msg = encode_data("hi")
+        msg = encode_terminal_data("hi")
         ws = _mock_ws([msg])
         await _ws_to_tcp(ws, writer, token_holder=[None], color_mode="passthrough")
         assert writer.write.called
@@ -122,7 +122,7 @@ class TestWsToTcp:
         holder: list[dict | None] = [None]
         writer = MagicMock(spec=asyncio.StreamWriter)
         writer.drain = AsyncMock()
-        msg = encode_control({"type": "session_token", "token": "t1"})
+        msg = encode_control_frame({"type": "session_token", "token": "t1"})
         ws = _mock_ws([msg])
         await _ws_to_tcp(ws, writer, token_holder=holder, color_mode="passthrough")
         assert holder[0] == {"token": "t1"}
@@ -137,7 +137,7 @@ class TestWsToTcp:
     async def test_color_mode_applied(self) -> None:
         writer = MagicMock(spec=asyncio.StreamWriter)
         writer.drain = AsyncMock()
-        msg = encode_data("\x1b[38;2;255;0;0mRed")
+        msg = encode_terminal_data("\x1b[38;2;255;0;0mRed")
         ws = _mock_ws([msg])
         await _ws_to_tcp(ws, writer, token_holder=[None], color_mode="256")
         written = writer.write.call_args[0][0]
@@ -146,7 +146,7 @@ class TestWsToTcp:
     async def test_del_to_bs_in_text_data(self) -> None:
         writer = MagicMock(spec=asyncio.StreamWriter)
         writer.drain = AsyncMock()
-        msg = encode_data("\x7f")
+        msg = encode_terminal_data("\x7f")
         ws = _mock_ws([msg])
         await _ws_to_tcp(ws, writer, token_holder=[None], color_mode="passthrough")
         written = writer.write.call_args[0][0]
@@ -156,7 +156,7 @@ class TestWsToTcp:
         """Cover the _write_fn closure (lines 237-238)."""
         writer = MagicMock(spec=asyncio.StreamWriter)
         writer.drain = AsyncMock()
-        msg = encode_control({"type": "resume_ok"})
+        msg = encode_control_frame({"type": "resume_ok"})
         ws = _mock_ws([msg])
         await _ws_to_tcp(ws, writer, token_holder=[None], color_mode="passthrough")
         writer.write.assert_called_once_with(b"\r\n[Session resumed]\r\n")
@@ -263,7 +263,7 @@ class TestPipeWs:
         writer = MagicMock(spec=asyncio.StreamWriter)
         writer.drain = AsyncMock()
 
-        msg = encode_data("x")
+        msg = encode_terminal_data("x")
         ws_mock = _mock_ws([msg])
 
         mock_ws_mod = MagicMock()
@@ -438,7 +438,7 @@ class TestWsToSsh:
     async def test_forwards_text_messages(self) -> None:
         process = MagicMock()
         process.stdout = MagicMock()
-        msg = encode_data("hi")
+        msg = encode_terminal_data("hi")
         ws = _mock_ws([msg])
         await _ws_to_ssh(ws, process, token_holder=[None], color_mode="passthrough")
         assert process.stdout.write.called
@@ -454,7 +454,7 @@ class TestWsToSsh:
         holder: list[dict | None] = [None]
         process = MagicMock()
         process.stdout = MagicMock()
-        msg = encode_control({"type": "session_token", "token": "t2"})
+        msg = encode_control_frame({"type": "session_token", "token": "t2"})
         ws = _mock_ws([msg])
         await _ws_to_ssh(ws, process, token_holder=holder, color_mode="passthrough")
         assert holder[0] == {"token": "t2"}
@@ -469,7 +469,7 @@ class TestWsToSsh:
     async def test_color_mode_applied(self) -> None:
         process = MagicMock()
         process.stdout = MagicMock()
-        msg = encode_data("\x1b[38;2;255;0;0mRed")
+        msg = encode_terminal_data("\x1b[38;2;255;0;0mRed")
         ws = _mock_ws([msg])
         await _ws_to_ssh(ws, process, token_holder=[None], color_mode="256")
         written = process.stdout.write.call_args[0][0]
@@ -487,7 +487,7 @@ class TestWsToSsh:
         """Cover the _write_fn closure (line 320)."""
         process = MagicMock()
         process.stdout = MagicMock()
-        msg = encode_control({"type": "resume_ok"})
+        msg = encode_control_frame({"type": "resume_ok"})
         ws = _mock_ws([msg])
         await _ws_to_ssh(ws, process, token_holder=[None], color_mode="passthrough")
         process.stdout.write.assert_called_once()

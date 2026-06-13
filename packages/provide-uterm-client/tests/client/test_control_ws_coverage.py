@@ -10,7 +10,7 @@ import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from provide.uterm.control_channel import encode_control, encode_data
+from provide.uterm.control_channel import encode_control_frame
 
 from provide.uterm.client.control_ws import (
     AsyncInlineWebSocketClient,
@@ -37,7 +37,7 @@ class TestLogicalFrameDecoderFinish:
         """Covers lines 46-47: finish() loop with ControlChunk event."""
         decoder = LogicalFrameDecoder(role="worker")
         # Put a complete control frame into the buffer
-        encoded = encode_control({"type": "done"})
+        encoded = encode_control_frame({"type": "done"})
         decoder._decoder._buffer = encoded
         result = decoder.finish()
         assert result == [{"type": "done"}]
@@ -114,13 +114,14 @@ class TestAsyncSend:
         await client.send("not-json-{{{{")
         ws.send.assert_awaited_once_with("not-json-{{{{")
 
-    async def test_send_str_json_mapping_encodes_as_frame(self) -> None:
-        """Covers lines 108-116: str containing JSON object → encode as frame."""
+    async def test_send_str_json_mapping_is_rejected(self) -> None:
+        """JSON object strings must use send_frame/send_json so control stays framed."""
         ws = AsyncMock()
         client = AsyncInlineWebSocketClient(ws, role="worker")
         payload = {"type": "input", "data": "x"}
-        await client.send(json.dumps(payload))
-        ws.send.assert_awaited_once_with(encode_data("x"))
+        with pytest.raises(TypeError, match="bare JSON control strings"):
+            await client.send(json.dumps(payload))
+        ws.send.assert_not_awaited()
 
     async def test_send_str_json_non_mapping_passes_through(self) -> None:
         """Covers lines 108-120: str with JSON non-object falls through to ws.send."""
@@ -151,7 +152,7 @@ class TestAsyncRecv:
     async def test_recv_returns_json_encoded_frame(self) -> None:
         """Covers lines 134-136: recv() calls recv_frame and json.dumps the result."""
         ws = AsyncMock()
-        ws.recv.return_value = encode_control({"type": "hello", "ok": True})
+        ws.recv.return_value = encode_control_frame({"type": "hello", "ok": True})
         client = AsyncInlineWebSocketClient(ws, role="browser")
         result = await client.recv()
         parsed = json.loads(result)
@@ -164,7 +165,7 @@ class TestSyncReceiveJson:
     def test_receive_json_returns_frame(self) -> None:
         """Covers lines 81-82: receive_json delegates to recv_frame."""
         ws = MagicMock()
-        ws.receive_text.return_value = encode_control({"type": "ack"})
+        ws.receive_text.return_value = encode_control_frame({"type": "ack"})
         client = SyncInlineWebSocketClient(ws, role="browser")
         result = client.receive_json()
         assert result == {"type": "ack"}
@@ -251,7 +252,7 @@ class TestAsyncReceiveJson:
     async def test_receive_json_delegates_to_recv_frame(self) -> None:
         """Covers line 132: receive_json calls recv_frame."""
         ws = AsyncMock()
-        ws.recv.return_value = encode_control({"type": "snapshot"})
+        ws.recv.return_value = encode_control_frame({"type": "snapshot"})
         client = AsyncInlineWebSocketClient(ws, role="browser")
         result = await client.receive_json()
         assert result == {"type": "snapshot"}

@@ -40,7 +40,7 @@ import uuid
 import pytest
 import websockets
 
-from provide.uterm.control_channel import encode_control
+from provide.uterm.control_channel import encode_control_frame
 
 _WS_TIMEOUT_S = 0.5  # short drain — worker WS gets no hello; just let it time out quickly
 _WS_PROCESS_S = 1.0  # time for pywrangler to process a WS frame and persist the event
@@ -179,7 +179,7 @@ async def _connect_worker_send_snapshot(base_ws: str, worker_id: str, screen: st
         with contextlib.suppress(TimeoutError, Exception):
             await asyncio.wait_for(ws.recv(), timeout=_WS_TIMEOUT_S)
         await ws.send(
-            encode_control(
+            encode_control_frame(
                 {
                     "type": "snapshot",
                     "screen": screen,

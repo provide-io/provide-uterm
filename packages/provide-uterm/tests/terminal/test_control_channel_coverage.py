@@ -11,11 +11,11 @@ import pytest
 from provide.uterm.control_channel import (
     DLE,
     STX,
-    ControlChannelDecoder,
-    ControlChannelProtocolError,
     ControlChunk,
+    ControlFrameDecoder,
+    ControlFrameProtocolError,
     DataChunk,
-    encode_control,
+    encode_control_frame,
 )
 
 
@@ -42,13 +42,13 @@ class TestFeedTypeError:
 
     def test_feed_raises_for_non_str(self) -> None:
         """Covers line 74: TypeError raised when chunk is not str."""
-        decoder = ControlChannelDecoder()
+        decoder = ControlFrameDecoder()
         with pytest.raises(TypeError, match="control channel chunks must be str"):
             decoder.feed(b"binary data")  # type: ignore[arg-type]
 
     def test_feed_raises_for_int(self) -> None:
         """Covers line 74: TypeError raised for int input."""
-        decoder = ControlChannelDecoder()
+        decoder = ControlFrameDecoder()
         with pytest.raises(TypeError, match="control channel chunks must be str"):
             decoder.feed(123)  # type: ignore[arg-type]
 
@@ -64,7 +64,7 @@ class TestFinishWithRemainingBuffer:
         """
         from unittest.mock import patch
 
-        decoder = ControlChannelDecoder()
+        decoder = ControlFrameDecoder()
         # Set buffer to non-empty value
         decoder._buffer = "leftover"
 
@@ -74,7 +74,7 @@ class TestFinishWithRemainingBuffer:
 
         with (
             patch.object(decoder, "_drain", side_effect=fake_drain),
-            pytest.raises(ControlChannelProtocolError, match="truncated control frame"),
+            pytest.raises(ControlFrameProtocolError, match="truncated control frame"),
         ):
             decoder.finish()
 
@@ -84,16 +84,16 @@ class TestDrainFinalDleAtEnd:
 
     def test_final_true_raises_on_trailing_dle(self) -> None:
         """Covers lines 98-100: DLE at end with final=True raises truncated error."""
-        decoder = ControlChannelDecoder()
+        decoder = ControlFrameDecoder()
         # DLE followed by nothing — idx+1 >= len means we need final check
         # In final=True mode, this should raise
-        with pytest.raises(ControlChannelProtocolError, match="truncated control frame"):
+        with pytest.raises(ControlFrameProtocolError, match="truncated control frame"):
             decoder.feed(DLE)
             decoder.finish()
 
     def test_feed_partial_dle_buffers_without_error(self) -> None:
         """Covers line 100: DLE at end with final=False just breaks (buffered)."""
-        decoder = ControlChannelDecoder()
+        decoder = ControlFrameDecoder()
         # DLE alone in a feed (not final) — should NOT raise, should buffer
         result = decoder.feed(DLE)
         # No events emitted, DLE is buffered
@@ -101,9 +101,9 @@ class TestDrainFinalDleAtEnd:
 
     def test_finish_raises_on_isolated_dle_in_buffer(self) -> None:
         """Covers lines 98-100: finish() with only DLE in buffer raises."""
-        decoder = ControlChannelDecoder()
+        decoder = ControlFrameDecoder()
         decoder.feed(DLE)  # buffered
-        with pytest.raises(ControlChannelProtocolError, match="truncated control frame"):
+        with pytest.raises(ControlFrameProtocolError, match="truncated control frame"):
             decoder.finish()
 
 
@@ -112,16 +112,16 @@ class TestDrainFinalIncompleteHeader:
 
     def test_final_true_raises_on_incomplete_header(self) -> None:
         """Covers lines 115-117: DLE+STX present but header incomplete with final=True."""
-        decoder = ControlChannelDecoder()
+        decoder = ControlFrameDecoder()
         # Feed DLE+STX plus only a few header bytes (less than 11 total)
         partial = f"{DLE}{STX}0000"  # only 4 hex digits, need 8 + ':'
         decoder.feed(partial)
-        with pytest.raises(ControlChannelProtocolError, match="truncated control frame"):
+        with pytest.raises(ControlFrameProtocolError, match="truncated control frame"):
             decoder.finish()
 
     def test_feed_partial_header_buffers_without_error(self) -> None:
         """Covers line 117: incomplete header with final=False just buffers."""
-        decoder = ControlChannelDecoder()
+        decoder = ControlFrameDecoder()
         partial = f"{DLE}{STX}0000"
         result = decoder.feed(partial)
         assert result == []
@@ -131,13 +131,13 @@ class TestDrainInvalidJson:
     """Cover _drain JSON decode error path (lines 137-138)."""
 
     def test_decoder_raises_on_invalid_json_payload(self) -> None:
-        """Covers lines 137-138: json.JSONDecodeError wraps as ControlChannelProtocolError."""
-        decoder = ControlChannelDecoder()
+        """Covers lines 137-138: json.JSONDecodeError wraps as ControlFrameProtocolError."""
+        decoder = ControlFrameDecoder()
         # Manually construct a frame with invalid JSON
         bad_payload = "not-json!"
         length_hex = f"{len(bad_payload):08x}"
         raw = f"{DLE}{STX}{length_hex}:{bad_payload}"
-        with pytest.raises(ControlChannelProtocolError, match="invalid control json"):
+        with pytest.raises(ControlFrameProtocolError, match="invalid control json"):
             decoder.feed(raw)
 
 
@@ -146,8 +146,8 @@ class TestDecoderEdgeCases:
 
     def test_data_before_control_then_more_data(self) -> None:
         """Covers data_parts flush when control frame starts (line 110-112)."""
-        decoder = ControlChannelDecoder()
-        raw = "before" + encode_control({"type": "ping"}) + "after"
+        decoder = ControlFrameDecoder()
+        raw = "before" + encode_control_frame({"type": "ping"}) + "after"
         events = decoder.feed(raw)
         assert events[0] == DataChunk("before")
         assert events[1] == ControlChunk({"type": "ping"})
@@ -155,20 +155,20 @@ class TestDecoderEdgeCases:
 
     def test_finish_empty_buffer_returns_no_events(self) -> None:
         """Covers finish() with no buffered data — no error, no events."""
-        decoder = ControlChannelDecoder()
+        decoder = ControlFrameDecoder()
         result = decoder.finish()
         assert result == []
 
     def test_buffer_overflow_raises_and_clears(self) -> None:
         """Buffer overflow protection (lines 83-88) clears state and raises."""
-        from provide.uterm.control_channel import ControlChannelProtocolError
+        from provide.uterm.control_channel import ControlFrameProtocolError
 
-        decoder = ControlChannelDecoder(max_buffer_bytes=5)
+        decoder = ControlFrameDecoder(max_buffer_bytes=5)
         # First feed is within limit (3 bytes ≤ 5)
         decoder.feed("abc")
         # After drain, buffer_parts is empty (data was emitted).
         # Second feed of 6 bytes exceeds max_buffer_bytes=5.
-        with pytest.raises(ControlChannelProtocolError, match="buffer overflow"):
+        with pytest.raises(ControlFrameProtocolError, match="buffer overflow"):
             decoder.feed("x" * 6)
         # After overflow, buffer is cleared — next feed starts fresh
         events = decoder.feed("ok")
@@ -216,18 +216,18 @@ class TestDepthErrorWithOnErrorCallback:
         """Covers line 192: on_error is invoked from _parse_frame_payload
         when _check_json_depth raises."""
         # Re-import locally — other tests in this file reload the module,
-        # which can detach the top-level ControlChannelProtocolError binding
+        # which can detach the top-level ControlFrameProtocolError binding
         # from the runtime class used by the decoder.
         from provide.uterm import control_channel as cc
 
         errors: list[str] = []
-        decoder = cc.ControlChannelDecoder(max_frame_depth=2, on_error=errors.append)
+        decoder = cc.ControlFrameDecoder(max_frame_depth=2, on_error=errors.append)
         # depth-3 payload: {"a": {"b": {"c": "leaf"}}}
         payload: dict[str, object] = {"c": "leaf"}
         for k in ("b", "a"):
             payload = {k: payload}
-        with pytest.raises(cc.ControlChannelProtocolError, match="nests deeper than 2"):
-            decoder.feed(cc.encode_control(payload))
+        with pytest.raises(cc.ControlFrameProtocolError, match="nests deeper than 2"):
+            decoder.feed(cc.encode_control_frame(payload))
         # on_error fires exactly once, via _report_error wrapping the protocol
         # error. The inline re-notification that used to double-fire here was
         # removed (it added dead, mutable literals with no behavioural effect).
@@ -238,7 +238,7 @@ class TestOptionalJsonImplementations:
     """Cover the orjson/ujson optional-dep branches in control_channel.
 
     Neither orjson nor ujson is required by provide-uterm, so by default
-    the json fallback is exercised. To cover the orjson and ujson
+    the json library fallback is exercised. To cover the orjson and ujson
     implementations honestly we reload the module with fake modules
     inserted into ``sys.modules``.
     """
@@ -270,7 +270,7 @@ class TestOptionalJsonImplementations:
         original_module = sys.modules["provide.uterm.control_channel"]
         # importlib.reload() mutates the module *in place*, replacing all of
         # its attributes (classes included). Other test files captured the
-        # ORIGINAL ``ControlChannelProtocolError`` class via top-level
+        # ORIGINAL ``ControlFrameProtocolError`` class via top-level
         # ``from ... import`` and will fail ``pytest.raises(...)`` against a
         # post-reload exception that is a different class. Snapshot every
         # attribute now so the finally-clause can put them back atomically.
@@ -279,9 +279,9 @@ class TestOptionalJsonImplementations:
         try:
             cc = importlib.reload(original_module)
             # _json_dumps now goes through the orjson branch (line 23).
-            out = cc.encode_control({"type": "hello"})
+            out = cc.encode_control_frame({"type": "hello"})
             # _json_loads is orjson.loads (line 25).
-            decoder = cc.ControlChannelDecoder()
+            decoder = cc.ControlFrameDecoder()
             events = decoder.feed(out)
             assert events == [cc.ControlChunk({"type": "hello"})]
         finally:
@@ -344,8 +344,8 @@ class TestOptionalJsonImplementations:
         builtins.__import__ = blocked_import  # type: ignore[assignment]
         try:
             cc = importlib.reload(original_module)
-            out = cc.encode_control({"type": "hello"})
-            decoder = cc.ControlChannelDecoder()
+            out = cc.encode_control_frame({"type": "hello"})
+            decoder = cc.ControlFrameDecoder()
             events = decoder.feed(out)
             assert events == [cc.ControlChunk({"type": "hello"})]
         finally:

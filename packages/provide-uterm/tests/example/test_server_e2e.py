@@ -13,19 +13,25 @@ from weakref import WeakKeyDictionary
 import httpx
 import websockets
 
-from provide.uterm.control_channel import ControlChannelDecoder, ControlChunk, DataChunk, encode_control, encode_data
+from provide.uterm.control_channel import (
+    ControlChunk,
+    ControlFrameDecoder,
+    DataChunk,
+    encode_control_frame,
+    encode_terminal_data,
+)
 
 
 def _ws_url(base_url: str, path: str) -> str:
     return base_url.replace("http://", "ws://") + path
 
 
-_WS_DECODERS: WeakKeyDictionary[Any, ControlChannelDecoder] = WeakKeyDictionary()
+_WS_DECODERS: WeakKeyDictionary[Any, ControlFrameDecoder] = WeakKeyDictionary()
 _WS_PENDING: WeakKeyDictionary[Any, list[dict[str, Any]]] = WeakKeyDictionary()
 
 
 async def _drain_until(ws: Any, type_: str, timeout: float = 3.0) -> dict[str, Any] | None:
-    decoder = _WS_DECODERS.setdefault(ws, ControlChannelDecoder())
+    decoder = _WS_DECODERS.setdefault(ws, ControlFrameDecoder())
     pending = _WS_PENDING.setdefault(ws, [])
     deadline = asyncio.get_running_loop().time() + timeout
     while asyncio.get_running_loop().time() < deadline:
@@ -55,9 +61,9 @@ async def _drain_until(ws: Any, type_: str, timeout: float = 3.0) -> dict[str, A
 async def _send_frame(ws: Any, payload: dict[str, Any]) -> None:
     frame_type = payload.get("type")
     if frame_type in {"input", "term"}:
-        await ws.send(encode_data(str(payload.get("data", ""))))
+        await ws.send(encode_terminal_data(str(payload.get("data", ""))))
         return
-    await ws.send(encode_control(payload))
+    await ws.send(encode_control_frame(payload))
 
 
 async def _wait_for_snapshot_text(ws: Any, needle: str, timeout: float = 3.0) -> dict[str, Any] | None:

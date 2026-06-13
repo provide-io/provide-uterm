@@ -6,11 +6,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from provide.uterm.control_channel import ControlChannelDecoder, ControlChunk
+from provide.uterm.control_channel import ControlChunk, ControlFrameDecoder
 
 
 def decode_control_payload(payload: str) -> dict[str, Any]:
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
     events = decoder.feed(payload)
     events.extend(decoder.finish())
     controls = [event.control for event in events if isinstance(event, ControlChunk)]

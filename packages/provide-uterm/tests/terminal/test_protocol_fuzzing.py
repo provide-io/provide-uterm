@@ -9,20 +9,20 @@ from hypothesis import strategies as st
 from provide.uterm.control_channel import (
     DLE,
     STX,
-    ControlChannelDecoder,
-    ControlChannelProtocolError,
     ControlChunk,
+    ControlFrameDecoder,
+    ControlFrameProtocolError,
     DataChunk,
-    encode_control,
+    encode_control_frame,
 )
 
 
 @given(chaos_data=st.lists(st.binary(min_size=1, max_size=100), min_size=1, max_size=50), inject_control=st.booleans())
 @settings(max_examples=100, deadline=None)
 def test_decoder_resilience_under_binary_chaos(chaos_data, inject_control):
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
     valid_payload = {"type": "ping"}
-    control_frame = encode_control(valid_payload)
+    control_frame = encode_control_frame(valid_payload)
 
     # Mix chaos with valid control frames
     for chunk in chaos_data:
@@ -31,20 +31,20 @@ def test_decoder_resilience_under_binary_chaos(chaos_data, inject_control):
             decoder.feed(chunk.decode("latin-1"))
             if inject_control:
                 decoder.feed(control_frame)
-        except ControlChannelProtocolError:
+        except ControlFrameProtocolError:
             # Expected protocol errors from random data are fine; we check for NO CRASHES.
             pass
 
     try:
         decoder.finish()
-    except ControlChannelProtocolError:
+    except ControlFrameProtocolError:
         pass
 
 
 def test_decoder_boundary_splitting_on_control_frames():
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
     payload = {"type": "test", "data": "A" * 100}
-    encoded = encode_control(payload)
+    encoded = encode_control_frame(payload)
 
     events = []
     for char in encoded:
@@ -56,20 +56,20 @@ def test_decoder_boundary_splitting_on_control_frames():
 
 
 def test_decoder_rejects_truncated_header_at_finish():
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
     decoder.feed(f"{DLE}{STX}0000")  # Truncated length
-    with pytest.raises(ControlChannelProtocolError, match="truncated control frame"):
+    with pytest.raises(ControlFrameProtocolError, match="truncated control frame"):
         decoder.finish()
 
 
 def test_decoder_rejects_invalid_hex_length():
-    decoder = ControlChannelDecoder()
-    with pytest.raises(ControlChannelProtocolError, match="invalid control header"):
+    decoder = ControlFrameDecoder()
+    with pytest.raises(ControlFrameProtocolError, match="invalid control header"):
         decoder.feed(f"{DLE}{STX}G0000000:{{}}")  # G is not hex
 
 
 def test_decoder_preserves_complex_ansi_sequences():
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
     # A mix of colors, cursor movements, and a fake Sixel-like sequence
     ansi_data = '\x1b[31mRed\x1b[0m\x1b[H\x1b[2J\x1bP0;0;1q"1;1;100;100#0;2;0;0;0#1;2;100;0;0\x1b\\'
 

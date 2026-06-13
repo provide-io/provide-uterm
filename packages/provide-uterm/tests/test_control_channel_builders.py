@@ -11,7 +11,7 @@ import hmac
 
 import pytest
 
-from provide.uterm.control_channel import ControlChannelDecoder, encode_control
+from provide.uterm.control_channel import ControlFrameDecoder, encode_control_frame
 from provide.uterm.control_channel_builders import (
     _canonical_identity_signature_payload,
     make_identity,
@@ -29,9 +29,9 @@ from provide.uterm.control_channel_builders import (
 
 
 def _round_trip(payload: dict) -> dict:
-    """Encode *payload* via encode_control, decode via ControlChannelDecoder, return the control dict."""
-    decoder = ControlChannelDecoder()
-    encoded = encode_control(payload)
+    """Encode *payload* via encode_control_frame, decode via ControlFrameDecoder, return the control dict."""
+    decoder = ControlFrameDecoder()
+    encoded = encode_control_frame(payload)
     chunks = decoder.feed(encoded)
     assert len(chunks) == 1
     chunk = chunks[0]

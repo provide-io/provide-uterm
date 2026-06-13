@@ -28,11 +28,11 @@ from typing import Any, Protocol, runtime_checkable
 
 from provide.telemetry import get_logger
 from provide.uterm.control_channel import (
-    ControlChannelDecoder,
-    ControlChannelProtocolError,
+    ControlFrameDecoder,
+    ControlFrameProtocolError,
     DataChunk,
-    encode_control,
-    encode_data,
+    encode_control_frame,
+    encode_terminal_data,
 )
 from provide.uterm.defaults import TerminalDefaults
 from provide.uterm.server.bridge.models import _safe_int
@@ -62,8 +62,8 @@ def _to_ws_url(manager_url: str, path: str) -> str:
 
 def _encode_bridge_frame(msg: dict[str, Any]) -> str:
     if str(msg.get("type") or "") == "term":
-        return encode_data(str(msg.get("data") or ""))
-    return encode_control(msg)
+        return encode_terminal_data(str(msg.get("data") or ""))
+    return encode_control_frame(msg)
 
 
 # ---------------------------------------------------------------------------
@@ -363,7 +363,7 @@ class TermBridge:
                     )
 
     async def _recv_loop(self, ws: Any) -> None:
-        decoder = ControlChannelDecoder(max_control_payload_bytes=self._max_ws_message_bytes)
+        decoder = ControlFrameDecoder(max_control_payload_bytes=self._max_ws_message_bytes)
         try:
             while self._running:
                 try:
@@ -373,7 +373,7 @@ class TermBridge:
                     return
                 try:
                     events = decoder.feed(raw if isinstance(raw, str) else raw.decode("latin-1", errors="replace"))
-                except ControlChannelProtocolError as exc:
+                except ControlFrameProtocolError as exc:
                     logger.debug("_recv_loop bad stream worker_id=%s: %s", self._worker_id, exc)
                     return
                 for event in events:
@@ -399,7 +399,7 @@ class TermBridge:
             emulator = getattr(session, "emulator", None)
             snapshot = (emulator.get_snapshot() if emulator else None) or self._latest_snapshot or {}
             await ws.send(
-                encode_control(
+                encode_control_frame(
                     {
                         "type": "snapshot",
                         "screen": snapshot.get("screen", ""),

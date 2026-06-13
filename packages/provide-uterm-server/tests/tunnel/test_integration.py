@@ -14,7 +14,7 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 
-from provide.uterm.control_channel import ControlChannelDecoder
+from provide.uterm.control_channel import ControlFrameDecoder
 from provide.uterm.server import create_server_app, default_server_config
 from provide.uterm.server.models import ServerConfig, TunnelConfig
 from provide.uterm.tunnel.protocol import CHANNEL_DATA, encode_frame
@@ -26,7 +26,7 @@ from provide.uterm.tunnel.protocol import CHANNEL_DATA, encode_frame
 
 def _decode_browser_msgs(raw: str) -> list[dict[str, Any]]:
     """Decode all control-channel-encoded messages from a raw WS text frame."""
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
     events = decoder.feed(raw)
     events.extend(decoder.finish())
     results: list[dict[str, Any]] = []

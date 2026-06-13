@@ -7,7 +7,7 @@
 Covers:
 - line 36: _encode_runtime_frame with type=="term"
 - branch 202->exit: _log_wire_send where type=="term" (log_control NOT called)
-- lines 257-258: ControlChannelProtocolError raised by decoder.feed()
+- lines 257-258: ControlFrameProtocolError raised by decoder.feed()
 - branch 278->260: unknown mtype in _bridge_session (no matching elif)
 """
 
@@ -20,9 +20,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from provide.uterm.control_channel import (
-    ControlChannelProtocolError,
-    encode_control,
-    encode_data,
+    ControlFrameProtocolError,
+    encode_control_frame,
+    encode_terminal_data,
 )
 from provide.uterm.server.models import RecordingConfig, SessionDefinition
 from provide.uterm.server.runtime import HostedSessionRuntime, _encode_runtime_frame
@@ -96,29 +96,29 @@ class _MockWS:
 
 class TestEncodeRuntimeFrame:
     def test_term_type_encodes_as_data(self) -> None:
-        """Line 36: type=='term' → encode_data(msg['data']) returned."""
+        """Line 36: type=='term' → encode_terminal_data(msg['data']) returned."""
         msg = {"type": "term", "data": "hello world"}
         result = _encode_runtime_frame(msg)
-        # encode_data just escapes DLE; for plain text it's identity
-        assert result == encode_data("hello world")
+        # encode_terminal_data just escapes DLE; for plain text it's identity
+        assert result == encode_terminal_data("hello world")
 
     def test_term_type_empty_data(self) -> None:
-        """Line 36: type=='term' with missing data → encode_data('')."""
+        """Line 36: type=='term' with missing data → encode_terminal_data('')."""
         msg = {"type": "term"}
         result = _encode_runtime_frame(msg)
-        assert result == encode_data("")
+        assert result == encode_terminal_data("")
 
     def test_non_term_type_encodes_as_control(self) -> None:
-        """Line 37 (else branch): type!='term' → encode_control(msg)."""
+        """Line 37 (else branch): type!='term' → encode_control_frame(msg)."""
         msg = {"type": "snapshot", "screen": "x"}
         result = _encode_runtime_frame(msg)
-        assert result == encode_control(msg)
+        assert result == encode_control_frame(msg)
 
     def test_no_type_encodes_as_control(self) -> None:
-        """Line 37: missing type treated as non-term → encode_control."""
+        """Line 37: missing type treated as non-term → encode_control_frame."""
         msg = {"foo": "bar"}
         result = _encode_runtime_frame(msg)
-        assert result == encode_control(msg)
+        assert result == encode_control_frame(msg)
 
 
 # ---------------------------------------------------------------------------
@@ -164,14 +164,14 @@ class TestLogWireSendTermBranch:
 
 
 # ---------------------------------------------------------------------------
-# _bridge_session: lines 257-258 (ControlChannelProtocolError)
+# _bridge_session: lines 257-258 (ControlFrameProtocolError)
 # ---------------------------------------------------------------------------
 
 
 class TestBridgeSessionControlChannelError:
     @pytest.mark.asyncio
     async def test_invalid_control_channel_raises_runtime_error(self) -> None:
-        """Lines 257-258: ControlChannelProtocolError from decoder.feed() → RuntimeError raised."""
+        """Lines 257-258: ControlFrameProtocolError from decoder.feed() → RuntimeError raised."""
         rt = _make_runtime()
         rt._queue = asyncio.Queue()
         rt._stop = asyncio.Event()
@@ -194,7 +194,7 @@ class TestBridgeSessionControlChannelError:
 
     @pytest.mark.asyncio
     async def test_invalid_control_channel_via_decoder_patch(self) -> None:
-        """Lines 257-258: RuntimeError raised from ControlChannelProtocolError (via patch)."""
+        """Lines 257-258: RuntimeError raised from ControlFrameProtocolError (via patch)."""
         rt = _make_runtime()
         rt._queue = asyncio.Queue()
         rt._stop = asyncio.Event()
@@ -208,11 +208,11 @@ class TestBridgeSessionControlChannelError:
         connector.poll_messages = _slow_poll
         rt._connector = connector
 
-        # Patch ControlChannelDecoder.feed to raise ControlChannelProtocolError
-        with patch("provide.uterm.server.runtime.ControlChannelDecoder") as mock_decoder_cls:
+        # Patch ControlFrameDecoder.feed to raise ControlFrameProtocolError
+        with patch("provide.uterm.server.runtime.ControlFrameDecoder") as mock_decoder_cls:
             mock_decoder = MagicMock()
             mock_decoder_cls.return_value = mock_decoder
-            mock_decoder.feed.side_effect = ControlChannelProtocolError("bad frame")
+            mock_decoder.feed.side_effect = ControlFrameProtocolError("bad frame")
 
             ws = _MockWS(rt, messages=["any input"])
             with pytest.raises(RuntimeError, match="invalid control channel"):
@@ -242,7 +242,7 @@ class TestBridgeSessionUnknownMtype:
         rt._connector = connector
 
         # Encode an unknown control type that is not snapshot_req, analyze_req, or control
-        unknown_ctrl_msg = encode_control({"type": "unknown_op", "payload": "ignored"})
+        unknown_ctrl_msg = encode_control_frame({"type": "unknown_op", "payload": "ignored"})
 
         ws = _MockWS(rt, messages=[unknown_ctrl_msg])
         await rt._bridge_session(ws)
@@ -271,8 +271,8 @@ class TestBridgeSessionUnknownMtype:
 
         # Multiple unrecognized control messages
         msgs = [
-            encode_control({"type": "ping"}),
-            encode_control({"type": "custom_event", "data": "x"}),
+            encode_control_frame({"type": "ping"}),
+            encode_control_frame({"type": "custom_event", "data": "x"}),
         ]
         ws = _MockWS(rt, messages=msgs)
         # Should complete without error
