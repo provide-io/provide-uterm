@@ -56,12 +56,12 @@ graph TB
     Runtime <--> Connectors
     Agent <-->|"Bridge WS"| Hub
     AI -.->|"tool calls"| Agent
-    Inspect <-->|"CHANNEL_HTTP"| Hub
+    Inspect <-->|"CHANNEL_HTTP<br/>(tunnel)"| Hub
     Share <-->|"binary tunnel"| Hub
     Proxy <-->|"gateway"| Hub
 ```
 
-**Control channel** — JSON control frames (snapshots, hijack state, presence, analysis) are mixed inline with raw terminal bytes in the same WebSocket stream. This makes the system a session orchestration platform, not just a proxy.
+**Control channel** — JSON control frames (snapshots, hijack state, presence, analysis, browser-originated HTTP-inspect actions) are DLE/STX-framed and mixed inline with raw terminal bytes in the same WebSocket stream. Non-terminal WebSocket payloads must use the public framing helpers; CI rejects bare JSON sends on terminal/control WebSocket paths.
 
 **Session model** — Named sessions with pluggable connectors, lifecycle management, JSONL recording, and policy enforcement.
 

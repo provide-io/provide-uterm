@@ -187,6 +187,8 @@ For changed files (recommended for PRs):
 uv run python scripts/run_mutation_gate.py --changed-only --min-mutation-score 100
 ```
 
+Changed-only mode selects touched source files from the configured mutation perimeter. Changes to mutation support files, such as `mutation_equivalents.toml`, mutmut configuration, the gate scripts, or mutation-focused tests, must not silently pass with zero selected mutants; the gate fails with an explicit message unless the run is expanded to a real perimeter.
+
 For full suite:
 
 ```bash
@@ -199,6 +201,16 @@ See `pyproject.toml` `[tool.mutmut]` section for:
 - `paths_to_mutate`: Which files to mutate
 - `tests_dir`: Where to find tests
 - `do_not_mutate`: Files to exclude (typically frontend, transports)
+
+### Static Protocol Checks
+
+Terminal/control WebSocket payloads share one ordered stream. Non-terminal payloads must use DLE/STX control framing or a binary tunnel frame, not bare JSON. Run the static checker locally with:
+
+```bash
+npm run lint:ws-json
+```
+
+The checker scans Python and TypeScript terminal/control paths and ignores ordinary HTTP request bodies plus explicit binary `CHANNEL_HTTP` tunnel frames.
 
 ## Development Workflow
 
@@ -213,7 +225,10 @@ uv run python scripts/run_pytest_gate.py -q
 # 2. Run mutation tests on changed files (validates test quality)
 uv run python scripts/run_mutation_gate.py --changed-only --min-mutation-score 100
 
-# 3. Run memray tests locally (optional, ~15-30 min)
+# 3. Check terminal/control WebSocket JSON framing discipline
+npm run lint:ws-json
+
+# 4. Run memray tests locally (optional, ~15-30 min)
 MEMRAY_UPDATE_BASELINE=1 uv run pytest packages/provide-uterm/tests/memray/ -m memray -v --no-cov
 ```
 
