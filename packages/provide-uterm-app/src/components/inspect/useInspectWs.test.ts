@@ -4,7 +4,7 @@
 //
 import { renderHook, act } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { encodeControlFrame } from "../../utils/controlFrames";
+import { decodeControlFrames, encodeControlFrame } from "../../utils/controlFrames";
 import { useInspectStore } from "../../stores/inspectStore";
 import { useInspectWs } from "./useInspectWs";
 
@@ -215,10 +215,14 @@ describe("useInspectWs", () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("malformed control frame"));
   });
 
-  it("returns a sendJson that posts when socket is open", () => {
+  it("returns a sendJson that posts a DLE/STX control frame when socket is open", () => {
     const { result } = renderHook(() => useInspectWs("s1"));
     result.current.sendJson({ a: 1 });
-    expect((lastSocket as unknown as MockWebSocket).sent).toEqual([JSON.stringify({ a: 1 })]);
+    const sent = (lastSocket as unknown as MockWebSocket).sent;
+    expect(sent).toHaveLength(1);
+    const [frame] = sent;
+    expect(frame).toBeDefined();
+    expect(decodeControlFrames(frame as string)).toEqual([{ a: 1 }]);
   });
 
   it("sendJson is a noop when socket not open", () => {

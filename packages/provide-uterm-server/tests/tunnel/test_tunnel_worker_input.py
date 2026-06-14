@@ -17,6 +17,7 @@ not as a DLE-framed JSON envelope — otherwise the user's PTY sees
 
 from __future__ import annotations
 
+import json
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -24,6 +25,8 @@ import pytest
 
 from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.server.bridge.models import WorkerTermState
+from provide.uterm.server.bridge.routes.browser_handlers import handle_browser_message
+from provide.uterm.tunnel.protocol import CHANNEL_HTTP, decode_frame
 
 
 class _MockWs:
@@ -38,6 +41,101 @@ class _MockWs:
 
     async def send_text(self, payload: str) -> None:
         self.text_sent.append(payload)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "msg",
+    [
+        {"type": "http_action", "id": "req-1", "action": "forward"},
+        {"type": "http_intercept_toggle", "enabled": True},
+        {"type": "http_inspect_toggle", "enabled": False},
+    ],
+)
+async def test_tunnel_worker_receives_http_inspect_controls_as_channel_http_frames(
+    msg: dict[str, Any],
+) -> None:
+    """HTTP inspect controls to tunnel workers use CHANNEL_HTTP, not PTY input."""
+    hub = TermHub(resolve_browser_role=lambda _ws, _wid: "operator")
+    ws = _MockWs()
+    hub.registry._workers["tun-http"] = WorkerTermState(worker_ws=ws, is_tunnel_worker=True)  # type: ignore[attr-defined]
+
+    ok = await hub.send_worker("tun-http", msg)
+
+    assert ok is True
+    assert ws.text_sent == []
+    assert len(ws.bytes_sent) == 1
+    frame = decode_frame(ws.bytes_sent[0])
+    assert frame.channel == CHANNEL_HTTP
+    assert json.loads(frame.payload) == msg
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "msg",
+    [
+        {"type": "http_action", "id": "req-1", "action": "drop"},
+        {"type": "http_intercept_toggle", "enabled": False},
+        {"type": "http_inspect_toggle", "enabled": True},
+    ],
+)
+async def test_browser_originated_http_inspect_controls_reach_tunnel_worker(
+    msg: dict[str, Any],
+) -> None:
+    """Operator browser control frames for inspect/intercept are forwarded."""
+    hub = TermHub(resolve_browser_role=lambda _ws, _wid: "operator")
+    tunnel_ws = _MockWs()
+    browser_ws = _MockWs()
+    hub.registry._workers["tun-browser-http"] = WorkerTermState(
+        worker_ws=tunnel_ws,
+        is_tunnel_worker=True,
+        input_mode="open",
+    )  # type: ignore[attr-defined]
+    hub.registry._workers["tun-browser-http"].browsers[browser_ws] = "operator"  # type: ignore[attr-defined]
+
+    owned_hijack = await handle_browser_message(
+        hub,
+        browser_ws,  # type: ignore[arg-type]
+        "tun-browser-http",
+        "operator",
+        msg,
+        False,
+    )
+
+    assert owned_hijack is False
+    assert browser_ws.text_sent == []
+    assert len(tunnel_ws.bytes_sent) == 1
+    frame = decode_frame(tunnel_ws.bytes_sent[0])
+    assert frame.channel == CHANNEL_HTTP
+    assert json.loads(frame.payload) == msg
+
+
+@pytest.mark.asyncio
+async def test_viewer_browser_cannot_send_http_inspect_controls_to_tunnel_worker() -> None:
+    """HTTP inspect/intercept controls use the same viewer exclusion as input."""
+    hub = TermHub(resolve_browser_role=lambda _ws, _wid: "viewer")
+    tunnel_ws = _MockWs()
+    browser_ws = _MockWs()
+    hub.registry._workers["tun-viewer-http"] = WorkerTermState(
+        worker_ws=tunnel_ws,
+        is_tunnel_worker=True,
+        input_mode="open",
+    )  # type: ignore[attr-defined]
+    hub.registry._workers["tun-viewer-http"].browsers[browser_ws] = "viewer"  # type: ignore[attr-defined]
+
+    owned_hijack = await handle_browser_message(
+        hub,
+        browser_ws,  # type: ignore[arg-type]
+        "tun-viewer-http",
+        "viewer",
+        {"type": "http_intercept_toggle", "enabled": True},
+        False,
+    )
+
+    assert owned_hijack is False
+    assert tunnel_ws.bytes_sent == []
+    assert tunnel_ws.text_sent == []
+    assert browser_ws.text_sent == []
 
 
 @pytest.mark.asyncio
