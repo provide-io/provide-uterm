@@ -61,6 +61,12 @@ DEFAULT_MUTATION_ROOTS: Final[tuple[str, ...]] = (
     "packages/provide-uterm-server/src/provide/uterm/",
     "src/provide/uterm/",
 )
+MUTATION_SUPPORT_FILES: Final[tuple[str, ...]] = (
+    DEFAULT_EQUIVALENTS_FILE,
+    "pyproject.toml",
+    "ci/prepare_mutation_args.sh",
+    "scripts/run_mutation_gate.py",
+)
 
 
 def _uv_mutmut_cmd(python_version: str | None, *args: str) -> list[str]:
@@ -216,7 +222,7 @@ def _prepend_mutant_source_roots(env: dict[str, str], existing_pythonpath: str |
         env["PYTHONPATH"] = os.pathsep.join(pythonpath_parts)
 
 
-def _changed_python_paths(base_ref: str, staged_only: bool, roots: tuple[str, ...]) -> list[str]:
+def _changed_paths(base_ref: str, staged_only: bool) -> list[str]:
     diff_cmd = ["git", "diff", "--name-only"]
     if staged_only:
         diff_cmd.append("--cached")
@@ -226,10 +232,12 @@ def _changed_python_paths(base_ref: str, staged_only: bool, roots: tuple[str, ..
     result = subprocess.run(diff_cmd, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         return []
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
+
+def _changed_python_paths(base_ref: str, staged_only: bool, roots: tuple[str, ...]) -> list[str]:
     changed: list[str] = []
-    for raw in result.stdout.splitlines():
-        path = raw.strip()
+    for path in _changed_paths(base_ref, staged_only):
         if not path.endswith(".py"):
             continue
         if not any(path.startswith(root) for root in roots):
@@ -241,6 +249,28 @@ def _changed_python_paths(base_ref: str, staged_only: bool, roots: tuple[str, ..
         if resolved:
             changed.append(resolved)
     return sorted(set(changed))
+
+
+def _configured_mutation_tests() -> tuple[str, ...]:
+    try:
+        cfg = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    except Exception:
+        return ()
+    tests = cfg.get("tool", {}).get("mutmut", {}).get("tests_dir", [])
+    return tuple(str(path) for path in tests)
+
+
+def _changed_mutation_support_paths(changed_paths: list[str]) -> list[str]:
+    support_files = set(MUTATION_SUPPORT_FILES)
+    configured_tests = tuple(path.rstrip("/") for path in _configured_mutation_tests())
+    support: list[str] = []
+    for path in changed_paths:
+        if path in support_files:
+            support.append(path)
+            continue
+        if any(path == test_path or path.startswith(test_path + "/") for test_path in configured_tests):
+            support.append(path)
+    return sorted(set(support))
 
 
 def _mutation_score(stats: dict[str, int]) -> float:
@@ -492,12 +522,22 @@ def main() -> int:
     max_children = min(max(1, requested_children), half_cpus)
 
     paths_to_mutate: list[str] | None = None
+    changed_support_paths: list[str] = []
     if args.changed_only:
         paths_to_mutate = _changed_python_paths(args.base_ref, args.staged_only, DEFAULT_MUTATION_ROOTS)
         if not paths_to_mutate:
-            print("mutation gate skipped: no changed Python files under mutation roots")
-            return 0
-        print(f"mutation gate targets ({len(paths_to_mutate)}): {paths_to_mutate}")
+            changed_support_paths = _changed_mutation_support_paths(_changed_paths(args.base_ref, args.staged_only))
+            if changed_support_paths:
+                print(
+                    "mutation gate full-perimeter trigger: changed mutation allowlist/config/tests "
+                    f"without changed source mutants: {changed_support_paths}"
+                )
+                paths_to_mutate = None
+            else:
+                print("mutation gate skipped: no changed Python files under mutation roots")
+                return 0
+        else:
+            print(f"mutation gate targets ({len(paths_to_mutate)}): {paths_to_mutate}")
     elif args.paths:
         paths_to_mutate = [p.strip() for p in args.paths.split(",") if p.strip()]
         if not paths_to_mutate:
@@ -514,7 +554,7 @@ def main() -> int:
             paths_to_mutate=paths_to_mutate,
             # An explicitly-narrowed target set (--paths / --changed-only) may
             # legitimately contain only no-mutable-surface files → 0 mutants is OK.
-            allow_empty=paths_to_mutate is not None,
+            allow_empty=paths_to_mutate is not None and not changed_support_paths,
         )
     except RuntimeError as exc:
         print(str(exc))
