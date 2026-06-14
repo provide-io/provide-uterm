@@ -273,6 +273,73 @@ const hijackStyles = css`
   .mkey:active { background: #22c55e22; border-color: #22c55e66; }
 `;
 
+type ValidatedHelloFrame = {
+  type: "hello";
+  can_hijack?: boolean | null;
+  capabilities?: Record<string, unknown> | null;
+  hijack_control?: string | null;
+  hijack_step_supported?: boolean | null;
+  hijacked?: boolean | null;
+  hijacked_by_me?: boolean | null;
+  input_mode?: string | null;
+  resume_token?: string | null;
+  role?: string | null;
+  worker_online?: boolean | null;
+};
+
+type ValidatedHijackStateFrame = {
+  type: "hijack_state";
+  hijacked: boolean;
+  input_mode?: string | null;
+  owner?: string | null;
+};
+
+type ValidatedApprovalPendingFrame = {
+  type: "approval_pending";
+  command: string;
+  expires_at: number;
+  request_id: string;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function optionalBoolean(value: Record<string, unknown>, key: string): boolean {
+  return value[key] === undefined || value[key] === null || typeof value[key] === "boolean";
+}
+
+function optionalString(value: Record<string, unknown>, key: string): boolean {
+  return value[key] === undefined || value[key] === null || typeof value[key] === "string";
+}
+
+function validateHelloFrame(value: unknown): ValidatedHelloFrame | null {
+  if (!isRecord(value) || value.type !== "hello") return null;
+  for (const key of ["can_hijack", "hijacked", "hijacked_by_me", "worker_online", "hijack_step_supported"]) {
+    if (!optionalBoolean(value, key)) return null;
+  }
+  for (const key of ["input_mode", "role", "hijack_control", "resume_token"]) {
+    if (!optionalString(value, key)) return null;
+  }
+  if (value.capabilities !== undefined && value.capabilities !== null && !isRecord(value.capabilities)) return null;
+  return value as ValidatedHelloFrame;
+}
+
+function validateHijackStateFrame(value: unknown): ValidatedHijackStateFrame | null {
+  if (!isRecord(value) || value.type !== "hijack_state") return null;
+  if (typeof value.hijacked !== "boolean") return null;
+  if (!optionalString(value, "owner") || !optionalString(value, "input_mode")) return null;
+  return value as ValidatedHijackStateFrame;
+}
+
+function validateApprovalPendingFrame(value: unknown): ValidatedApprovalPendingFrame | null {
+  if (!isRecord(value) || value.type !== "approval_pending") return null;
+  if (typeof value.request_id !== "string") return null;
+  if (typeof value.command !== "string") return null;
+  if (typeof value.expires_at !== "number" || !Number.isFinite(value.expires_at)) return null;
+  return value as ValidatedApprovalPendingFrame;
+}
+
 @customElement("uterm-session")
 export class UtermSessionElement extends LitElement {
   @property({ type: Object }) config: Partial<HijackConfig> = {};
@@ -551,6 +618,9 @@ export class UtermSessionElement extends LitElement {
       }
 
       case "hello": {
+        const hello = validateHelloFrame(rawMsg);
+        if (!hello) break;
+        const msg = hello;
         state.canHijack = !!msg.can_hijack;
         state.hijacked = !!msg.hijacked;
         state.hijackedByMe = !!msg.hijacked_by_me;
@@ -584,6 +654,9 @@ export class UtermSessionElement extends LitElement {
         break;
 
       case "hijack_state": {
+        const hijackState = validateHijackStateFrame(rawMsg);
+        if (!hijackState) break;
+        const msg = hijackState;
         state.hijacked = msg.hijacked;
         state.hijackedByMe = msg.owner === "me";
         if (!state.hijackedByMe) state.restHijackId = null;
@@ -622,13 +695,16 @@ export class UtermSessionElement extends LitElement {
       case "heartbeat_ack":
         break;
 
-      case "approval_pending":
+      case "approval_pending": {
+        const pending = validateApprovalPendingFrame(rawMsg);
+        if (!pending) break;
         this._pendingApproval = {
-          id: msg.request_id,
-          command: msg.command,
-          expiresAt: msg.expires_at,
+          id: pending.request_id,
+          command: pending.command,
+          expiresAt: pending.expires_at,
         };
         break;
+      }
 
       case "approval_resolved":
         this._pendingApproval = null;

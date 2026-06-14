@@ -10,6 +10,11 @@ import { applyColors, applyThemeClasses, asThemeName, THEME_DEFAULTS, type Theme
 import { ControlChannelDecoder, encodeWsFrame } from "./hijack-codec.js";
 
 const ACK_THROTTLE_MS = 100;
+const TEXT_ENCODER = new TextEncoder();
+
+function utf8ByteLength(value: string): number {
+  return TEXT_ENCODER.encode(value).byteLength;
+}
 
 interface XtermLine {
   translateToString(trimRight?: boolean): string;
@@ -446,7 +451,7 @@ export class TerminalElement extends LitElement {
     ws.onmessage = (event) => {
       const payload = typeof event.data === "string" ? event.data : "";
       if (!payload) return;
-      this._ackBytes += payload.length;
+      this._ackBytes += utf8ByteLength(payload);
       this.scheduleAck();
       let frames: ReturnType<ControlChannelDecoder["feed"]>;
       try {

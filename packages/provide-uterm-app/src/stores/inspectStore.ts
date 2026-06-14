@@ -6,11 +6,14 @@
 import { create } from "zustand";
 import type {
   HttpExchangeEntry,
+  HttpInterceptStateFrame,
   HttpRequestEntry,
   HttpResponseEntry,
 } from "../api/types";
+import { parseHttpInterceptStateFrame } from "../api/validators";
 
 type WsStatus = "connecting" | "connected" | "disconnected";
+type InterceptStateInput = Omit<HttpInterceptStateFrame, "type"> | HttpInterceptStateFrame;
 
 export interface InspectState {
   exchanges: HttpExchangeEntry[];
@@ -26,12 +29,7 @@ export interface InspectState {
   addRequest: (req: HttpRequestEntry) => void;
   addResponse: (res: HttpResponseEntry) => void;
   resolveIntercept: (id: string, action: string) => void;
-  syncInterceptState: (state: {
-    inspect_enabled: boolean;
-    enabled: boolean;
-    timeout_s: number;
-    timeout_action: string;
-  }) => void;
+  syncInterceptState: (state: InterceptStateInput) => void;
   select: (id: string | null) => void;
   setMethodFilter: (method: string) => void;
   setUrlFilter: (url: string) => void;
@@ -81,13 +79,15 @@ export const useInspectStore = create<InspectState>((set) => ({
       ),
     })),
 
-  syncInterceptState: (state) =>
+  syncInterceptState: (state) => {
+    const parsed = parseHttpInterceptStateFrame({ ...state, type: "http_intercept_state" });
     set({
-      inspectEnabled: state.inspect_enabled !== false,
-      interceptEnabled: Boolean(state.enabled),
-      interceptTimeout: Number(state.timeout_s ?? 30),
-      interceptTimeoutAction: String(state.timeout_action ?? "forward"),
-    }),
+      inspectEnabled: parsed.inspect_enabled,
+      interceptEnabled: parsed.enabled,
+      interceptTimeout: parsed.timeout_s,
+      interceptTimeoutAction: parsed.timeout_action,
+    });
+  },
 
   select: (id) => set({ selected: id }),
   setMethodFilter: (method) => set({ methodFilter: method }),

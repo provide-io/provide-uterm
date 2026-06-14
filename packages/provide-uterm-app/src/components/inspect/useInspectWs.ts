@@ -7,6 +7,7 @@ import { useEffect, useRef, useCallback } from "react";
 import { ControlFrameDecoder } from "../../utils/controlFrames";
 import { useInspectStore } from "../../stores/inspectStore";
 import {
+  parseHttpInterceptStateFrame,
   parseHttpRequestEntry,
   parseHttpResponseEntry,
   ValidationError,
@@ -36,7 +37,15 @@ export function useInspectWs(sessionId: string) {
 
     ws.addEventListener("message", (event) => {
       if (typeof event.data !== "string") return;
-      for (const frame of controlDecoder.feed(event.data)) {
+      let frames: Array<Record<string, unknown>>;
+      try {
+        frames = controlDecoder.feed(event.data);
+      } catch (err) {
+        console.warn(`[inspect-ws] malformed control frame: ${err instanceof Error ? err.message : String(err)}`);
+        controlDecoder.reset();
+        return;
+      }
+      for (const frame of frames) {
         if (frame._channel !== "http") continue;
         const type = frame.type as string;
         try {
@@ -45,7 +54,7 @@ export function useInspectWs(sessionId: string) {
           } else if (type === "http_res") {
             addResponse(parseHttpResponseEntry(frame));
           } else if (type === "http_intercept_state") {
-            syncInterceptState(frame as never);
+            syncInterceptState(parseHttpInterceptStateFrame(frame));
           }
         } catch (err) {
           if (err instanceof ValidationError) {

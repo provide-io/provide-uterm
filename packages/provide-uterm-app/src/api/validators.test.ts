@@ -4,6 +4,7 @@
 //
 import { describe, expect, it } from "vitest";
 import {
+  parseHttpInterceptStateFrame,
   parseHttpRequestEntry,
   parseHttpResponseEntry,
   parseRawRecordingEntries,
@@ -214,6 +215,28 @@ describe("parseHttpResponseEntry", () => {
 
   it("rejects non-object", () => {
     expect(() => parseHttpResponseEntry(42)).toThrow(ValidationError);
+  });
+});
+
+const VALID_INTERCEPT_STATE = {
+  type: "http_intercept_state",
+  inspect_enabled: true,
+  enabled: false,
+  timeout_s: 30,
+  timeout_action: "forward",
+};
+
+describe("parseHttpInterceptStateFrame", () => {
+  it("parses a valid intercept state frame", () => {
+    expect(parseHttpInterceptStateFrame(VALID_INTERCEPT_STATE)).toEqual(VALID_INTERCEPT_STATE);
+  });
+
+  it("rejects string booleans instead of coercing them", () => {
+    expect(() => parseHttpInterceptStateFrame({ ...VALID_INTERCEPT_STATE, enabled: "false" })).toThrow(/enabled/);
+  });
+
+  it("rejects non-finite timeouts", () => {
+    expect(() => parseHttpInterceptStateFrame({ ...VALID_INTERCEPT_STATE, timeout_s: Infinity })).toThrow(/timeout_s/);
   });
 });
 

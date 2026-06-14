@@ -14,6 +14,9 @@ const DLE = "\x10";
 const STX = "\x02";
 const CONTROL_LEN_RE = /^[0-9a-fA-F]{8}$/;
 const TEXT_ENCODER = new TextEncoder();
+const DEFAULT_MAX_PAYLOAD_BYTES = 1024 * 1024;
+const DEFAULT_MAX_BUFFER_BYTES = 10 * 1024 * 1024;
+const DEFAULT_MAX_JSON_DEPTH = 32;
 
 function utf8ByteLength(value: string): number {
   return TEXT_ENCODER.encode(value).byteLength;
@@ -37,6 +40,25 @@ function utf8PayloadEnd(raw: string, start: number, payloadBytes: number): numbe
 
 interface ControlFrameDecoderOptions {
   maxPayloadBytes?: number;
+  maxBufferBytes?: number;
+  maxJsonDepth?: number;
+}
+
+function checkJsonDepth(value: unknown, maxDepth: number): void {
+  const stack: Array<{ node: unknown; depth: number }> = [{ node: value, depth: 1 }];
+  while (stack.length > 0) {
+    const entry = stack.pop() as { node: unknown; depth: number };
+    if (entry.depth > maxDepth) {
+      throw new Error(`control payload nests deeper than ${maxDepth}`);
+    }
+    if (typeof entry.node !== "object" || entry.node === null) continue;
+    const children = Array.isArray(entry.node) ? entry.node : Object.values(entry.node);
+    for (const child of children) {
+      if (typeof child === "object" && child !== null) {
+        stack.push({ node: child, depth: entry.depth + 1 });
+      }
+    }
+  }
 }
 
 export function encodeControlFrame(payload: Record<string, unknown>): string {
@@ -47,9 +69,13 @@ export function encodeControlFrame(payload: Record<string, unknown>): string {
 export class ControlFrameDecoder {
   private buffer = "";
   private readonly maxPayloadBytes: number;
+  private readonly maxBufferBytes: number;
+  private readonly maxJsonDepth: number;
 
   constructor(options: ControlFrameDecoderOptions = {}) {
-    this.maxPayloadBytes = options.maxPayloadBytes ?? 1024 * 1024;
+    this.maxPayloadBytes = options.maxPayloadBytes ?? DEFAULT_MAX_PAYLOAD_BYTES;
+    this.maxBufferBytes = options.maxBufferBytes ?? DEFAULT_MAX_BUFFER_BYTES;
+    this.maxJsonDepth = options.maxJsonDepth ?? DEFAULT_MAX_JSON_DEPTH;
   }
 
   reset(): void {
@@ -57,7 +83,19 @@ export class ControlFrameDecoder {
   }
 
   feed(chunk: string): Array<Record<string, unknown>> {
+    try {
+      return this.feedUnsafe(chunk);
+    } catch (err) {
+      this.reset();
+      throw err;
+    }
+  }
+
+  private feedUnsafe(chunk: string): Array<Record<string, unknown>> {
     this.buffer += String(chunk ?? "");
+    if (utf8ByteLength(this.buffer) > this.maxBufferBytes) {
+      throw new Error("control frame buffer overflow");
+    }
     const frames: Array<Record<string, unknown>> = [];
     let cursor = 0;
 
@@ -79,8 +117,7 @@ export class ControlFrameDecoder {
         continue;
       }
       if (marker !== STX) {
-        cursor = dleIdx + 1;
-        continue;
+        throw new Error("invalid control frame prefix");
       }
 
       if (dleIdx + 11 > this.buffer.length) {
@@ -117,6 +154,7 @@ export class ControlFrameDecoder {
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
         throw new Error("control payload must be an object");
       }
+      checkJsonDepth(parsed, this.maxJsonDepth);
 
       frames.push(parsed as Record<string, unknown>);
       cursor = payloadEnd;
