@@ -181,6 +181,40 @@ describe("useInspectWs", () => {
     expect(useInspectStore.getState().interceptTimeout).toBe(10);
   });
 
+  it("rejects malformed http_intercept_state and keeps prior state", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    renderHook(() => useInspectWs("s1"));
+    const frame = makeHttpFrame({
+      type: "http_intercept_state",
+      inspect_enabled: true,
+      enabled: "false",
+      timeout_s: Infinity,
+      timeout_action: "drop",
+    });
+    act(() => lastSocket?.emit("message", { data: frame }));
+    expect(useInspectStore.getState().interceptEnabled).toBe(false);
+    expect(useInspectStore.getState().interceptTimeout).toBe(30);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("http_intercept_state"));
+  });
+
+  it("resets decoder state after malformed control frames so later frames are accepted", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    renderHook(() => useInspectWs("s1"));
+    act(() => lastSocket?.emit("message", { data: "\x10\x02zzzzzzzz:{}" }));
+    const frame = makeHttpFrame({
+      type: "http_req",
+      id: "r1",
+      ts: 1,
+      method: "GET",
+      url: "/x",
+      headers: {},
+      body_size: 0,
+    });
+    act(() => lastSocket?.emit("message", { data: frame }));
+    expect(useInspectStore.getState().exchanges).toHaveLength(1);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("malformed control frame"));
+  });
+
   it("returns a sendJson that posts when socket is open", () => {
     const { result } = renderHook(() => useInspectWs("s1"));
     result.current.sendJson({ a: 1 });
