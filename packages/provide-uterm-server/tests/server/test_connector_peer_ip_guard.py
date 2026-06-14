@@ -131,6 +131,23 @@ async def test_websocket_proceeds_on_benign_peer() -> None:
 
 
 @pytest.mark.asyncio
+async def test_websocket_blocks_private_peer_when_configured() -> None:
+    """With block_private enabled, the post-connect peer check matches create-time policy."""
+    c = _make_ws_connector()
+    c._block_private = True
+    fake_ws = MagicMock()
+    fake_ws.remote_address = ("10.0.0.5", 443)
+    fake_ws.close = AsyncMock()
+    with (
+        patch("websockets.connect", new=AsyncMock(return_value=fake_ws)),
+        pytest.raises(EgressBlockedError, match="internal"),
+    ):
+        await c.start()
+    fake_ws.close.assert_awaited()
+    assert not c.is_connected()
+
+
+@pytest.mark.asyncio
 async def test_websocket_ipv6_peer_tuple_handled() -> None:
     """An IPv6 peername is a 4-tuple (host, port, flowinfo, scopeid); the host
     element (index 0) is used for validation."""
@@ -202,6 +219,18 @@ async def test_telnet_proceeds_on_benign_peer() -> None:
     await c.start()
     assert c._connected is True
     transport.disconnect.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_telnet_blocks_private_peer_when_configured() -> None:
+    """With block_private enabled, the post-connect peer check matches create-time policy."""
+    c = _make_telnet_connector()
+    c._block_private = True
+    transport = _stub_telnet_transport(c, "10.0.0.5")
+    with pytest.raises(EgressBlockedError, match="internal"):
+        await c.start()
+    transport.disconnect.assert_awaited()
+    assert c._connected is False
 
 
 @pytest.mark.asyncio
@@ -283,6 +312,28 @@ async def test_ssh_proceeds_on_benign_peer() -> None:
     assert c.is_connected()
     mock_conn.create_process.assert_awaited_once()
     mock_conn.close.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_ssh_blocks_private_peer_when_configured() -> None:
+    """With block_private enabled, the post-connect peer check matches create-time policy."""
+    import asyncssh
+
+    c = _make_ssh_connector()
+    c._block_private = True
+    mock_conn = MagicMock()
+    mock_conn.get_extra_info = MagicMock(return_value=("10.0.0.5", 22))
+    mock_conn.create_process = AsyncMock()
+    mock_conn.close = MagicMock()
+    mock_conn.wait_closed = AsyncMock()
+    with (
+        patch.object(asyncssh, "connect", new=AsyncMock(return_value=mock_conn)),
+        pytest.raises(EgressBlockedError, match="internal"),
+    ):
+        await c.start()
+    mock_conn.create_process.assert_not_called()
+    mock_conn.close.assert_called_once()
+    assert not c.is_connected()
 
 
 @pytest.mark.asyncio

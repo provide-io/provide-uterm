@@ -152,6 +152,7 @@ class SessionRegistry:
                 worker_bearer_token=self._worker_bearer_token,
                 hub=self._hub,
                 detector=self._detector,
+                block_private_connector_targets=self._block_private,
             )
             self._runtimes[session.session_id] = runtime
         return runtime
