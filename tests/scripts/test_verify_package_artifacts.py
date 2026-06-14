@@ -13,7 +13,7 @@ import yaml
 _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
-from scripts.package_metadata import DEPENDENT_PACKAGES  # noqa: E402
+from scripts.package_metadata import DEPENDENT_PACKAGES, PUBLISHED_PACKAGES  # noqa: E402
 
 _SCRIPT_PATH = _ROOT / "scripts" / "verify_package_artifacts.py"
 _spec = importlib.util.spec_from_file_location("verify_package_artifacts", _SCRIPT_PATH)
@@ -52,8 +52,28 @@ def test_required_package_data_includes_py_typed_and_server_frontend() -> None:
     assert any(member.startswith("provide/uterm/server/frontend/") for member in by_name["provide-uterm-server"])
 
 
-def test_release_workflow_dependent_matrix_matches_package_metadata() -> None:
+def test_release_workflow_matrices_match_package_metadata() -> None:
     workflow = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "release.yml"
     parsed = yaml.safe_load(workflow.read_text(encoding="utf-8"))
-    matrix = parsed["jobs"]["verify-dependents"]["strategy"]["matrix"]["package"]
-    assert tuple(matrix) == DEPENDENT_PACKAGES
+    jobs = parsed["jobs"]
+
+    published = tuple(package.name for package in PUBLISHED_PACKAGES)
+    assert tuple(jobs["build"]["strategy"]["matrix"]["package"]) == published
+
+    for job_name in ("testpypi-dependents", "verify-dependents", "pypi-dependents"):
+        assert tuple(jobs[job_name]["strategy"]["matrix"]["package"]) == DEPENDENT_PACKAGES
+
+
+def test_release_workflow_installed_package_verification_uses_package_metadata() -> None:
+    workflow = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "release.yml"
+    parsed = yaml.safe_load(workflow.read_text(encoding="utf-8"))
+    jobs = parsed["jobs"]
+
+    expected_commands = {
+        "verify-terminal": "python scripts/verify_installed_package.py provide-uterm",
+        "verify-dependents": 'python scripts/verify_installed_package.py "${{ matrix.package }}"',
+        "verify-cloudflare": "python scripts/verify_installed_package.py provide-uterm-cloudflare",
+    }
+    for job_name, command in expected_commands.items():
+        runs = [step.get("run") for step in jobs[job_name]["steps"] if isinstance(step, dict)]
+        assert command in runs

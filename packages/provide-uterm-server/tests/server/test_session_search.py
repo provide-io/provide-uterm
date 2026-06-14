@@ -78,6 +78,7 @@ def _seed_sessions(client: TestClient) -> list[str]:
             "session_id": "staging-ws-1",
             "display_name": "Staging WebSocket",
             "connector_type": "websocket",
+            "connector_config": {"url": "ws://127.0.0.1:1"},
             "tags": ["staging", "web"],
             "visibility": "private",
             "auto_start": False,

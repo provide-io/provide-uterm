@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import pty
 import signal
 from contextlib import suppress
 from unittest.mock import patch
@@ -15,6 +16,7 @@ from unittest.mock import patch
 import pytest
 
 from provide.uterm.tunnel.pty_capture import (
+    SpawnedPty,
     TtyProxy,
     _get_term_size,
     _set_term_size,
@@ -56,8 +58,10 @@ class TestSpawnPty:
 
     @pytest.mark.asyncio
     async def test_read_output(self) -> None:
-        sp = spawn_pty(["echo", "tunnel_test_marker"])
+        master, slave = pty.openpty()
+        sp = SpawnedPty(master_fd=master, child_pid=999999)
         try:
+            os.write(slave, b"tunnel_test_marker\n")
             data = b""
             for _ in range(20):
                 try:
@@ -69,6 +73,7 @@ class TestSpawnPty:
                     break
             assert b"tunnel_test_marker" in data
         finally:
+            os.close(slave)
             sp.close()
 
     @pytest.mark.asyncio
@@ -181,10 +186,11 @@ class TestTtyProxy:
     @pytest.mark.asyncio
     async def test_read_with_pty_fd(self) -> None:
         """read() returns data from a PTY fd."""
-        sp = spawn_pty(["echo", "proxy_read_test"])
+        master, slave = pty.openpty()
         try:
             proxy = TtyProxy()
-            proxy._fd = sp.master_fd
+            proxy._fd = master
+            os.write(slave, b"proxy_read_test\n")
             data = b""
             for _ in range(20):
                 try:
@@ -196,7 +202,8 @@ class TestTtyProxy:
                     break
             assert b"proxy_read_test" in data
         finally:
-            sp.close()
+            os.close(master)
+            os.close(slave)
 
     @pytest.mark.asyncio
     async def test_read_raises_when_not_started(self) -> None:
@@ -227,8 +234,6 @@ class TestTtyProxy:
 
     def test_start_with_pty_fd(self) -> None:
         """start() succeeds when stdin is redirected to a PTY slave."""
-        import pty
-
         master, slave = pty.openpty()
         try:
             with patch("sys.stdin") as mock_stdin:

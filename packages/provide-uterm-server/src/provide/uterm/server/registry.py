@@ -19,7 +19,7 @@ import asyncio
 import json
 import re
 import time
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 
@@ -190,7 +190,7 @@ class SessionRegistry:
         async with self._lock:
             return self._sessions.get(session_id)
 
-    def _validate_create_payload(self, payload: dict[str, Any]) -> tuple[str, str, str, str]:
+    def _validate_create_payload(self, payload: dict[str, Any]) -> tuple[str, str, InputMode, Visibility]:
         """Validate and extract core fields from a session creation payload.
 
         Raises SessionValidationError on invalid input.
@@ -210,14 +210,20 @@ class SessionRegistry:
         input_mode_raw = str(payload.get("input_mode", "open"))
         if input_mode_raw not in {"open", "hijack"}:
             raise SessionValidationError(f"input_mode must be 'open' or 'hijack', got: {input_mode_raw!r}")
+        input_mode: InputMode = "hijack" if input_mode_raw == "hijack" else "open"
         visibility_raw = str(payload.get("visibility", self._default_visibility))
         if visibility_raw not in {"public", "operator", "private"}:
             raise SessionValidationError(
                 f"visibility must be 'public', 'operator', or 'private', got: {visibility_raw!r}"
             )
-        return session_id, connector_type_raw, input_mode_raw, visibility_raw
+        visibility: Visibility = (
+            "operator" if visibility_raw == "operator" else "private" if visibility_raw == "private" else "public"
+        )
+        return session_id, connector_type_raw, input_mode, visibility
 
-    async def create_session(self, payload: dict[str, Any]) -> SessionRuntimeStatus:
+    async def create_session(
+        self, payload: dict[str, Any], *, validate_connector_target: bool = True
+    ) -> SessionRuntimeStatus:
         session_id, connector_type_raw, input_mode_raw, visibility_raw = self._validate_create_payload(payload)
         connector_config = dict(payload.get("connector_config", {}))
         # Egress SSRF chokepoint: EVERY route that creates a session funnels
@@ -227,24 +233,27 @@ class SessionRegistry:
         # import cycle (egress -> webhooks -> bridge.hub -> egress).
         from provide.uterm.server.egress import EgressBlockedError, assert_session_egress_allowed
 
-        try:
-            await assert_session_egress_allowed(connector_type_raw, connector_config, block_private=self._block_private)
-        except EgressBlockedError as exc:
-            raise SessionValidationError(str(exc)) from exc
+        if validate_connector_target:
+            try:
+                await assert_session_egress_allowed(
+                    connector_type_raw, connector_config, block_private=self._block_private
+                )
+            except EgressBlockedError as exc:
+                raise SessionValidationError(str(exc)) from exc
         session = SessionDefinition(
             session_id=session_id,
             display_name=str(payload.get("display_name", session_id)),
             connector_type=connector_type_raw,
             connector_config=connector_config,
-            input_mode=cast("InputMode", input_mode_raw),
-            auto_start=bool(payload.get("auto_start", False)),
+            input_mode=input_mode_raw,
+            auto_start=bool(payload.get("auto_start")),
             tags=[str(v) for v in payload.get("tags", [])],
             recording_enabled=(
                 None if payload.get("recording_enabled") is None else bool(payload.get("recording_enabled"))
             ),
             owner=(None if payload.get("owner") is None else str(payload.get("owner"))),
-            visibility=cast("Visibility", visibility_raw),
-            ephemeral=bool(payload.get("ephemeral", False)),
+            visibility=visibility_raw,
+            ephemeral=bool(payload.get("ephemeral")),
         )
         async with self._lock:
             if self._max_sessions is not None and len(self._sessions) >= self._max_sessions:

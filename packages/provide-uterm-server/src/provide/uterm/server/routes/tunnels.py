@@ -213,7 +213,8 @@ def create_tunnels_router() -> APIRouter:
                         "owner": p.subject_id,
                         "visibility": "private",
                         "recording_enabled": True,
-                    }
+                    },
+                    validate_connector_target=False,
                 )
             except SessionValidationError as exc:
                 raise HTTPException(status_code=422, detail=str(exc)) from exc

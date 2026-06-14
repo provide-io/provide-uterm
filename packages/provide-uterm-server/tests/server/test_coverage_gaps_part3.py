@@ -279,7 +279,7 @@ class TestApiGaps:
         client = self._admin_client()
 
         # Force a validation error by making the registry fail
-        async def _fail(payload: dict[str, Any]) -> Any:
+        async def _fail(payload: dict[str, Any], **_kwargs: Any) -> Any:
             from provide.uterm.server.registry import SessionValidationError
 
             raise SessionValidationError("bad tunnel")
@@ -294,7 +294,7 @@ class TestApiGaps:
         """Lines 591-594: create tunnel returns 409 on ValueError (conflict)."""
         client = self._admin_client()
 
-        async def _conflict(payload: dict[str, Any]) -> Any:
+        async def _conflict(payload: dict[str, Any], **_kwargs: Any) -> Any:
             raise ValueError("session already exists")
 
         original_create = client.app.state.uterm_registry.create_session  # type: ignore[union-attr]
@@ -315,7 +315,14 @@ class TestApiGaps:
         app = create_server_app(cfg)
 
         with TestClient(app) as client:
-            client.post("/api/sessions", json={"session_id": "bd-old2", "connector_type": "websocket"})
+            client.post(
+                "/api/sessions",
+                json={
+                    "session_id": "bd-old2",
+                    "connector_type": "websocket",
+                    "connector_config": {"url": "ws://127.0.0.1:1"},
+                },
+            )
 
             # Connect/disconnect to set stopped_at, then backdate it.
             registry = app.state.uterm_registry

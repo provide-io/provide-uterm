@@ -472,8 +472,8 @@ def test_internal_tunnel_path_skips_egress_guard(connect_client: TestClient) -> 
     assert r.status_code in (200, 409, 422)
 
 
-def test_quick_connect_websocket_no_url_skips_guard(connect_client: TestClient) -> None:
-    """websocket connector with no url in payload must skip the egress guard."""
+def test_quick_connect_websocket_no_url_returns_422_before_dns_guard(connect_client: TestClient) -> None:
+    """websocket connector with no url is invalid before DNS/IP checks."""
     with patch("provide.uterm.server.egress.assert_connector_target_allowed") as mock_guard:
         r = connect_client.post(
             "/api/connect",
@@ -481,8 +481,8 @@ def test_quick_connect_websocket_no_url_skips_guard(connect_client: TestClient) 
             headers={"x-uterm-principal": "user1", "x-uterm-role": "operator"},
         )
         mock_guard.assert_not_called()
-    # May succeed or fail validation (no url), but guard must not fire
-    assert r.status_code in (200, 422)
+    assert r.status_code == 422
+    assert r.json()["detail"] == "websocket connector requires connector_config.url"
 
 
 def test_config_block_private_connector_targets_default_false() -> None:
@@ -685,7 +685,7 @@ def test_update_session_to_metadata_host_rejected(
 async def test_registry_create_session_blocks_metadata_telnet() -> None:
     """SessionRegistry.create_session raises SessionValidationError for a telnet
     connector targeting a metadata IP, regardless of block_private."""
-    from tests.server.test_registry import _make_registry  # local import to reuse harness
+    from .test_registry import _make_registry  # local import to reuse harness
 
     reg = _make_registry()
     with pytest.raises(SessionValidationError, match="metadata"):
@@ -701,7 +701,7 @@ async def test_registry_create_session_blocks_metadata_telnet() -> None:
 @pytest.mark.asyncio
 async def test_registry_create_session_blocks_mapped_ipv6_metadata() -> None:
     """An IPv4-mapped IPv6 metadata literal is normalized and blocked."""
-    from tests.server.test_registry import _make_registry
+    from .test_registry import _make_registry
 
     reg = _make_registry()
     with pytest.raises(SessionValidationError, match="metadata"):
@@ -717,7 +717,7 @@ async def test_registry_create_session_blocks_mapped_ipv6_metadata() -> None:
 @pytest.mark.asyncio
 async def test_registry_create_session_blocks_private_when_flag() -> None:
     """With block_private=True a private host is rejected at the chokepoint."""
-    from tests.server.test_registry import _make_registry
+    from .test_registry import _make_registry
 
     reg = _make_registry(block_private=True)
     with pytest.raises(SessionValidationError, match="internal"):
@@ -733,7 +733,7 @@ async def test_registry_create_session_blocks_private_when_flag() -> None:
 @pytest.mark.asyncio
 async def test_registry_create_session_allows_public_host() -> None:
     """A benign public host passes the chokepoint (no exception)."""
-    from tests.server.test_registry import _make_registry
+    from .test_registry import _make_registry
 
     reg = _make_registry()
     status = await reg.create_session(
@@ -749,7 +749,7 @@ async def test_registry_create_session_allows_public_host() -> None:
 @pytest.mark.asyncio
 async def test_registry_create_session_allows_shell_no_host() -> None:
     """A shell connector (no host) is not guarded and succeeds."""
-    from tests.server.test_registry import _make_registry
+    from .test_registry import _make_registry
 
     reg = _make_registry()
     status = await reg.create_session({"session_id": "reg-shell", "connector_type": "shell"})
@@ -759,7 +759,7 @@ async def test_registry_create_session_allows_shell_no_host() -> None:
 @pytest.mark.asyncio
 async def test_registry_update_session_blocks_metadata_host() -> None:
     """update_session re-validates a host change to a metadata IP."""
-    from tests.server.test_registry import _make_registry
+    from .test_registry import _make_registry
 
     reg = _make_registry()
     await reg.create_session(
