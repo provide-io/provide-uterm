@@ -192,6 +192,7 @@ class TestRuntimeFor:
         assert kwargs["public_base_url"] == "http://h:9999"
         assert kwargs["worker_bearer_token"] == "bearer-x"
         assert kwargs["hub"] is reg._hub
+        assert kwargs["block_private_connector_targets"] is False
 
     async def test_require_session_raises_keyerror_for_unknown(self) -> None:
         reg = _make_registry()

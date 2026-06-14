@@ -105,7 +105,7 @@ jobs:
       - name: Verify installed version
         run: ci/verify_installed_version.sh provide-uterm "${{ steps.ver.outputs.version }}"
       - name: Verify imports
-        run: python -c "import importlib; importlib.import_module('provide.uterm')"
+        run: python scripts/verify_installed_package.py provide-uterm
 
   pypi-terminal:
     name: PyPI · provide-uterm
@@ -173,38 +173,7 @@ jobs:
       - name: Verify installed version
         run: ci/verify_installed_version.sh "${{ matrix.package }}" "${{ steps.ver.outputs.version }}"
       - name: Verify imports and entry points
-        run: |
-          case "${{ matrix.package }}" in
-            provide-uterm-server)
-              imports="provide.uterm.server provide.uterm.tunnel provide.uterm.gateway"
-              entry_points="uterm"
-              ;;
-            provide-uterm-client)
-              imports="provide.uterm.client provide.uterm.transports provide.uterm.ai"
-              entry_points="uterm-mcp"
-              ;;
-            provide-uterm-platform)
-              imports="provide.uterm.pty provide.uterm.manager"
-              entry_points="uterm-manager"
-              ;;
-            *)
-              echo "unknown package: ${{ matrix.package }}" >&2
-              exit 2
-              ;;
-          esac
-          python - "$imports" "$entry_points" <<'PY'
-          import importlib
-          import shutil
-          import sys
-
-          imports = sys.argv[1].split()
-          entry_points = sys.argv[2].split()
-          for name in imports:
-              importlib.import_module(name)
-          missing = [name for name in entry_points if shutil.which(name) is None]
-          if missing:
-              raise SystemExit(f"missing console script(s): {', '.join(missing)}")
-          PY
+        run: python scripts/verify_installed_package.py "${{ matrix.package }}"
 
   pypi-dependents:
     name: PyPI · ${{ matrix.package }}
@@ -268,9 +237,7 @@ jobs:
       - name: Verify installed version
         run: ci/verify_installed_version.sh provide-uterm-cloudflare "${{ steps.ver.outputs.version }}"
       - name: Verify imports and entry points
-        run: |
-          python -c "import importlib; importlib.import_module('provide.uterm.cloudflare')"
-          python -c "import shutil; raise SystemExit(0 if shutil.which('uterm-cf') else 'missing console script: uterm-cf')"
+        run: python scripts/verify_installed_package.py provide-uterm-cloudflare
 
   pypi-cloudflare:
     name: PyPI · provide-uterm-cloudflare

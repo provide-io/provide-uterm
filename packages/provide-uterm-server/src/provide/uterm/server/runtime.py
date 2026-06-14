@@ -226,15 +226,17 @@ class HostedSessionRuntime:
             await self._queue.put(msg)
 
     async def _start_connector(self) -> SessionConnector:
+        connector_config = {
+            **self.definition.connector_config,
+            "input_mode": self.definition.input_mode,
+        }
+        if self.definition.connector_type in {"ssh", "telnet", "websocket"}:
+            connector_config["block_private_connector_targets"] = self._block_private_connector_targets
         connector = build_connector(
             self.definition.session_id,
             self.definition.display_name,
             self.definition.connector_type,
-            {
-                **self.definition.connector_config,
-                "input_mode": self.definition.input_mode,
-                "block_private_connector_targets": self._block_private_connector_targets,
-            },
+            connector_config,
         )
         await connector.start()
         if connector.is_connected():

@@ -9,133 +9,59 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import shutil
 import subprocess  # nosec
+import sys
 import tomllib
 from pathlib import Path
-from typing import Final
 
-BAD_MUTANT_STATES: Final[tuple[str, ...]] = (
-    "not checked",
-    "survived",
-    "suspicious",
-    "timeout",
-    "skipped",
-)
-
-# Mutant states a documented-equivalent allowlist entry may excuse. Only ever applied
-# to a mutant that is ALSO allowlisted (see _apply_equivalent_allowlist), i.e. one
-# with a written, proven equivalence reason — so a non-allowlisted mutant in any of
-# these states still fails the gate. "survived"/"suspicious" are the canonical
-# equivalent outcome (no test can kill behaviorally-identical code). "timeout" is
-# mutmut's wall-clock signal (it SIGXCPU's a run past (estimated_test_time + 1) * 15s;
-# a loaded CI runner crosses that for a small-estimate mutant): for a proven-unkillable
-# mutant it is the SAME fact as "survived" surfaced by CI timing — it cannot hide a
-# kill (a now-killable mutant FAILS FAST, never times out), so it is excusable too;
-# a NON-allowlisted timeout still fails. "no tests"/"skipped" are never excusable.
-EXCUSABLE_STATES: Final[tuple[str, ...]] = (
-    "survived",
-    "suspicious",
-    "timeout",
-)
-
-# Allowlist of documented equivalent mutants (mutant id -> justification),
-# excluded from the killed==N denominator so a file with genuinely-unkillable
-# equivalent mutants can still be enforced. See _load_equivalent_allowlist.
-DEFAULT_EQUIVALENTS_FILE: Final[str] = "mutation_equivalents.toml"
-
-CONFIG_FILES: Final[tuple[str, ...]] = (
-    "pyproject.toml",
-    ".pytest.ini",
-    "pytest.ini",
-)
-MUTMUT_INCOMPATIBLE_PYTEST_ARGS: Final[tuple[str, ...]] = (
-    "--randomly-dont-reorganize",
-    "-x",
-)
-DEFAULT_MUTATION_ROOTS: Final[tuple[str, ...]] = (
-    "packages/provide-uterm/src/provide/uterm/",
-    "packages/provide-uterm-platform/src/provide/uterm/pty/",
-    "packages/provide-uterm-platform/src/provide/uterm/manager/",
-    "packages/provide-uterm-server/src/provide/uterm/",
-    "src/provide/uterm/",
-)
-MUTATION_SUPPORT_FILES: Final[tuple[str, ...]] = (
-    DEFAULT_EQUIVALENTS_FILE,
-    "pyproject.toml",
-    "ci/prepare_mutation_args.sh",
-    "scripts/run_mutation_gate.py",
-)
-
-
-def _uv_mutmut_cmd(python_version: str | None, *args: str) -> list[str]:
-    base = ["uv", "run"]
-    if python_version:
-        base.extend(["--python", python_version])
-    return [*base, "mutmut", *args]
-
-
-def _run(cmd: list[str], *, env: dict[str, str] | None = None) -> None:
-    print("+", " ".join(cmd))
-    completed = subprocess.run(cmd, check=False, env=env)
-    if completed.returncode != 0:
-        raise RuntimeError(f"command failed ({completed.returncode}): {' '.join(cmd)}")
-
-
-def _seed_mutants_config(paths_to_mutate: list[str] | None = None) -> None:
-    mutants = Path("mutants")
-    mutants.mkdir(parents=True, exist_ok=True)
-    for config_name in CONFIG_FILES:
-        src = Path(config_name)
-        if src.exists():
-            dst = mutants / config_name
-            shutil.copy2(src, dst)
-    _sanitize_mutants_pyproject(mutants / "pyproject.toml", paths_to_mutate=paths_to_mutate)
-
-
-def _sanitize_mutants_pyproject(
-    path: Path,
-    *,
-    paths_to_mutate: list[str] | None,
-    strip_workspace: bool = True,
-) -> None:
-    if not path.exists():
-        return
-    text = path.read_text(encoding="utf-8")
-    updated = text
-    for arg in MUTMUT_INCOMPATIBLE_PYTEST_ARGS:
-        updated = updated.replace(f'"{arg}",\n', "")
-        updated = updated.replace(f'"{arg}"', "")
-    if strip_workspace:
-        # Strip uv workspace config — mutants/ doesn't contain workspace members.
-        # Do NOT strip from the root pyproject.toml: uv needs workspace/sources
-        # to resolve packages like provide-uterm that aren't on PyPI.
-        updated = re.sub(
-            r"^\[tool\.uv\.workspace\]\n(?:.*\n)*?\n",
-            "\n",
-            updated,
-            flags=re.MULTILINE,
-        )
-        updated = re.sub(
-            r"^\[tool\.uv\.sources\]\n(?:.*\n)*?\n",
-            "\n",
-            updated,
-            flags=re.MULTILINE,
-        )
-    if paths_to_mutate:
-        encoded = ", ".join(f'"{item}"' for item in paths_to_mutate)
-        updated, count = re.subn(
-            r"^paths_to_mutate\s*=\s*\[[\s\S]*?\]",
-            f"paths_to_mutate = [{encoded}]",
-            updated,
-            count=1,
-            flags=re.MULTILINE,
-        )
-        if count != 1:
-            raise RuntimeError("failed to rewrite paths_to_mutate in mutants/pyproject.toml")
-    if updated != text:
-        path.write_text(updated, encoding="utf-8")
+try:
+    from scripts.mutation_gate_config import (
+        BAD_MUTANT_STATES,
+        DEFAULT_EQUIVALENTS_FILE,
+        DEFAULT_MUTATION_ROOTS,
+        EXCUSABLE_STATES,
+        MUTATION_SUPPORT_FILES,
+    )
+    from scripts.mutation_gate_config import (
+        mutation_score as _mutation_score,
+    )
+    from scripts.mutation_gate_config import (
+        sanitize_mutants_pyproject as _sanitize_mutants_pyproject,
+    )
+    from scripts.mutation_gate_config import (
+        seed_mutants_config as _seed_mutants_config,
+    )
+    from scripts.mutation_gate_config import (
+        state_counts_from as _state_counts_from,
+    )
+    from scripts.mutation_gate_config import (
+        uv_mutmut_cmd as _uv_mutmut_cmd,
+    )
+except ModuleNotFoundError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from mutation_gate_config import (  # type: ignore[no-redef]
+        BAD_MUTANT_STATES,
+        DEFAULT_EQUIVALENTS_FILE,
+        DEFAULT_MUTATION_ROOTS,
+        EXCUSABLE_STATES,
+        MUTATION_SUPPORT_FILES,
+    )
+    from mutation_gate_config import (
+        mutation_score as _mutation_score,
+    )
+    from mutation_gate_config import (
+        sanitize_mutants_pyproject as _sanitize_mutants_pyproject,
+    )
+    from mutation_gate_config import (
+        seed_mutants_config as _seed_mutants_config,
+    )
+    from mutation_gate_config import (
+        state_counts_from as _state_counts_from,
+    )
+    from mutation_gate_config import (
+        uv_mutmut_cmd as _uv_mutmut_cmd,
+    )
 
 
 def _half_cpu_count() -> int:
@@ -273,14 +199,6 @@ def _changed_mutation_support_paths(changed_paths: list[str]) -> list[str]:
     return sorted(set(support))
 
 
-def _mutation_score(stats: dict[str, int]) -> float:
-    total = int(stats.get("total", 0))
-    if total <= 0:
-        return 0.0
-    killed = int(stats.get("killed", 0))
-    return (killed / total) * 100.0
-
-
 def _results_per_mutant(python_version: str | None, env: dict[str, str]) -> list[tuple[str, str]]:
     """Return ``(mutant_name, state)`` for every mutant from ``mutmut results``."""
     cmd = _uv_mutmut_cmd(python_version, "results", "--all", "true")
@@ -295,14 +213,6 @@ def _results_per_mutant(python_version: str | None, env: dict[str, str]) -> list
         name, state = line.rsplit(":", 1)
         mutants.append((name.strip(), state.strip()))
     return mutants
-
-
-def _state_counts_from(mutants: list[tuple[str, str]]) -> dict[str, int]:
-    """Tally mutant ``(name, state)`` pairs into a ``state -> count`` mapping."""
-    counts: dict[str, int] = {}
-    for _name, state in mutants:
-        counts[state] = counts.get(state, 0) + 1
-    return counts
 
 
 def _load_equivalent_allowlist(path: str | Path = DEFAULT_EQUIVALENTS_FILE) -> dict[str, str]:

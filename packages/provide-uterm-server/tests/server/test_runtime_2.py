@@ -15,7 +15,8 @@ import pytest
 
 from provide.uterm.server.models import RecordingConfig, SessionDefinition
 from provide.uterm.server.runtime import HostedSessionRuntime
-from tests.helpers import decode_chunk, encode_frame
+
+from ..helpers import decode_chunk, encode_frame  # noqa: TID252
 
 
 def _make_session(session_id: str = "test-session", connector_type: str = "shell") -> SessionDefinition:

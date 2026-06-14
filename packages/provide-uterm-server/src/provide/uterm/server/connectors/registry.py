@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import importlib
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
@@ -17,6 +19,12 @@ class SessionConnectorFactory(Protocol):
 
 
 _registry: dict[str, SessionConnectorFactory] = {}
+_BUILTIN_CLASSES: dict[str, tuple[str, str]] = {
+    "shell": ("provide.uterm.server.connectors.shell", "ShellSessionConnector"),
+    "ssh": ("provide.uterm.server.connectors.ssh", "SshSessionConnector"),
+    "telnet": ("provide.uterm.server.connectors.telnet", "TelnetSessionConnector"),
+    "websocket": ("provide.uterm.server.connectors.websocket", "WebSocketSessionConnector"),
+}
 
 
 def register_connector(name: str, cls: SessionConnectorFactory) -> None:
@@ -32,6 +40,14 @@ def build_connector(
 ) -> SessionConnector:
     """Instantiate a connector by type name. Raises ValueError for unknown types."""
     cls = _registry.get(connector_type)
+    if cls is None:
+        builtin = _BUILTIN_CLASSES.get(connector_type)
+        if builtin is not None:
+            module_name, class_name = builtin
+            with contextlib.suppress(ImportError):
+                module = importlib.import_module(module_name)
+                register_connector(connector_type, getattr(module, class_name))
+            cls = _registry.get(connector_type)
     if cls is None:
         raise ValueError(f"unsupported connector_type: {connector_type!r}")
     return cls(session_id, display_name, config)

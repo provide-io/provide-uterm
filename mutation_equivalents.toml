@@ -215,42 +215,6 @@ reason = "mode='python'->'XXpythonXX' — model_dump(mode=...) is a serializatio
 mutant = "provide.uterm.server.registry.xǁSessionRegistryǁupdate_session__mutmut_9"
 reason = "mode='python'->'PYTHON' — model_dump(mode=...) is a serialization-format switch only; the result is fed straight back to model_validate (which accepts both python and json shapes), and pydantic treats any non-'json' mode as python — VERIFIED that 'PYTHON'/'XXpythonXX'/None all dump+validate identically. The mode value is never observable in set_mode/update_session."
 [[equivalent]]
-mutant = "provide.uterm.server.registry.xǁSessionRegistryǁcreate_session__mutmut_49"
-reason = "cast(None, input_mode_raw) — typing.cast(type_str, value) is a RUNTIME NO-OP — it returns value unchanged and ignores the type argument entirely. Mutating the cast type-string has zero runtime effect."
-[[equivalent]]
-mutant = "provide.uterm.server.registry.xǁSessionRegistryǁcreate_session__mutmut_53"
-reason = "cast('XXInputModeXX', ...) — typing.cast(type_str, value) is a RUNTIME NO-OP — it returns value unchanged and ignores the type argument entirely. Mutating the cast type-string has zero runtime effect."
-[[equivalent]]
-mutant = "provide.uterm.server.registry.xǁSessionRegistryǁcreate_session__mutmut_54"
-reason = "cast('inputmode', ...) — typing.cast(type_str, value) is a RUNTIME NO-OP — it returns value unchanged and ignores the type argument entirely. Mutating the cast type-string has zero runtime effect."
-[[equivalent]]
-mutant = "provide.uterm.server.registry.xǁSessionRegistryǁcreate_session__mutmut_55"
-reason = "cast('INPUTMODE', ...) — typing.cast(type_str, value) is a RUNTIME NO-OP — it returns value unchanged and ignores the type argument entirely. Mutating the cast type-string has zero runtime effect."
-[[equivalent]]
-mutant = "provide.uterm.server.registry.xǁSessionRegistryǁcreate_session__mutmut_87"
-reason = "cast(None, visibility_raw) — typing.cast(type_str, value) is a RUNTIME NO-OP — it returns value unchanged and ignores the type argument entirely. Mutating the cast type-string has zero runtime effect."
-[[equivalent]]
-mutant = "provide.uterm.server.registry.xǁSessionRegistryǁcreate_session__mutmut_91"
-reason = "cast('XXVisibilityXX', ...) — typing.cast(type_str, value) is a RUNTIME NO-OP — it returns value unchanged and ignores the type argument entirely. Mutating the cast type-string has zero runtime effect."
-[[equivalent]]
-mutant = "provide.uterm.server.registry.xǁSessionRegistryǁcreate_session__mutmut_92"
-reason = "cast('visibility', ...) — typing.cast(type_str, value) is a RUNTIME NO-OP — it returns value unchanged and ignores the type argument entirely. Mutating the cast type-string has zero runtime effect."
-[[equivalent]]
-mutant = "provide.uterm.server.registry.xǁSessionRegistryǁcreate_session__mutmut_93"
-reason = "cast('VISIBILITY', ...) — typing.cast(type_str, value) is a RUNTIME NO-OP — it returns value unchanged and ignores the type argument entirely. Mutating the cast type-string has zero runtime effect."
-[[equivalent]]
-mutant = "provide.uterm.server.registry.xǁSessionRegistryǁcreate_session__mutmut_58"
-reason = "bool(get('auto_start', None)) — bool(payload.get(key, <default>)) where the default is only used when the key is ABSENT, and bool(None) == bool(False) == False — so dropping the default or swapping False->None yields the identical False. VERIFIED bool(None)==bool(False)."
-[[equivalent]]
-mutant = "provide.uterm.server.registry.xǁSessionRegistryǁcreate_session__mutmut_60"
-reason = "bool(get('auto_start'))  # drop default — bool(payload.get(key, <default>)) where the default is only used when the key is ABSENT, and bool(None) == bool(False) == False — so dropping the default or swapping False->None yields the identical False. VERIFIED bool(None)==bool(False)."
-[[equivalent]]
-mutant = "provide.uterm.server.registry.xǁSessionRegistryǁcreate_session__mutmut_96"
-reason = "bool(get('ephemeral', None)) — bool(payload.get(key, <default>)) where the default is only used when the key is ABSENT, and bool(None) == bool(False) == False — so dropping the default or swapping False->None yields the identical False. VERIFIED bool(None)==bool(False)."
-[[equivalent]]
-mutant = "provide.uterm.server.registry.xǁSessionRegistryǁcreate_session__mutmut_98"
-reason = "bool(get('ephemeral'))  # drop default — bool(payload.get(key, <default>)) where the default is only used when the key is ABSENT, and bool(None) == bool(False) == False — so dropping the default or swapping False->None yields the identical False. VERIFIED bool(None)==bool(False)."
-[[equivalent]]
 mutant = "provide.uterm.server.registry.xǁSessionRegistryǁ_on_worker_empty__mutmut_15"
 reason = "_sessions.pop(session_id, None)->pop(session_id) — dict.pop(key, None) -> dict.pop(key) where the key is ALWAYS present at this point: the preceding `if self._sessions.get(session_id) is not session: return` identity guard (held under the lock) proves the key exists, so the missing-key default is never reached."
 [[equivalent]]
