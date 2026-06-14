@@ -21,6 +21,7 @@ just absence of an exception).
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
 
 import pytest
@@ -229,3 +230,73 @@ class TestCollectStatsTimeoutContract:
         assert stats["bad_total"] == 0
         assert stats["killed"] == 2
         assert stats["total"] == 2
+
+
+# ---------------------------------------------------------------------------
+# --changed-only support-file handling
+# ---------------------------------------------------------------------------
+
+
+class TestChangedOnlySupportFiles:
+    def test_mutation_allowlist_change_is_support_change(self) -> None:
+        changed = ["mutation_equivalents.toml"]
+        assert gate._changed_mutation_support_paths(changed) == ["mutation_equivalents.toml"]
+
+    def test_mutation_config_change_is_support_change(self) -> None:
+        changed = ["pyproject.toml"]
+        assert gate._changed_mutation_support_paths(changed) == ["pyproject.toml"]
+
+    def test_bound_mutation_test_change_is_support_change(self) -> None:
+        changed = ["packages/provide-uterm/tests/test_control_channel_patterns.py"]
+        assert gate._changed_mutation_support_paths(changed) == [
+            "packages/provide-uterm/tests/test_control_channel_patterns.py"
+        ]
+
+    def test_changed_only_support_change_runs_full_perimeter(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        calls: list[dict[str, object]] = []
+
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["run_mutation_gate.py", "--changed-only", "--base-ref", "origin/main", "--retries", "0"],
+        )
+        monkeypatch.setattr(gate, "_changed_python_paths", lambda _base, _staged, _roots: [])
+        monkeypatch.setattr(gate, "_changed_paths", lambda _base, _staged: ["mutation_equivalents.toml"])
+        monkeypatch.setattr(gate, "_half_cpu_count", lambda: 1)
+
+        def fake_run_mutation_gate(
+            python_version: str | None,
+            max_children: int,
+            retries: int,
+            min_mutation_score: float,
+            paths_to_mutate: list[str] | None = None,
+            allow_empty: bool = False,
+        ) -> dict[str, int]:
+            calls.append(
+                {
+                    "python_version": python_version,
+                    "max_children": max_children,
+                    "retries": retries,
+                    "min_mutation_score": min_mutation_score,
+                    "paths_to_mutate": paths_to_mutate,
+                    "allow_empty": allow_empty,
+                }
+            )
+            return {"total": 1, "killed": 1, "bad_total": 0}
+
+        monkeypatch.setattr(gate, "run_mutation_gate", fake_run_mutation_gate)
+
+        assert gate.main() == 0
+        assert calls == [
+            {
+                "python_version": "3.11",
+                "max_children": 1,
+                "retries": 0,
+                "min_mutation_score": 100.0,
+                "paths_to_mutate": None,
+                "allow_empty": False,
+            }
+        ]
+        assert "mutation gate full-perimeter trigger" in capsys.readouterr().out
