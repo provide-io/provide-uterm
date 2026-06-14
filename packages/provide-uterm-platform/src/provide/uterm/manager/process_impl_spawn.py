@@ -12,7 +12,7 @@ keeps both modules under 500 LOC while preserving the public import surface
 every method on it are unchanged).
 
 Mutation-enforced at killed==100 alongside ``process_impl.py`` (see
-[tool.mutmut].paths_to_mutate). The six ``@staticmethod`` helpers and the two
+[tool.mutmut].source_paths). The six ``@staticmethod`` helpers and the two
 ``asyncio.sleep``-driven methods (``spawn_swarm``/``monitor_processes``) stay on
 the class in ``process_impl.py`` — the staticmethods are mutmut-skipped via the
 decorator and the sleep users rely on the conftest patching

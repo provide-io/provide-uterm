@@ -30,6 +30,9 @@ try:
         sanitize_mutants_pyproject as _sanitize_mutants_pyproject,
     )
     from scripts.mutation_gate_config import (
+        scoped_test_selection as _scoped_test_selection,
+    )
+    from scripts.mutation_gate_config import (
         seed_mutants_config as _seed_mutants_config,
     )
     from scripts.mutation_gate_config import (
@@ -52,6 +55,9 @@ except ModuleNotFoundError:
     )
     from mutation_gate_config import (
         sanitize_mutants_pyproject as _sanitize_mutants_pyproject,
+    )
+    from mutation_gate_config import (
+        scoped_test_selection as _scoped_test_selection,
     )
     from mutation_gate_config import (
         seed_mutants_config as _seed_mutants_config,
@@ -77,13 +83,13 @@ def _resolve_to_mutmut_path(path: str) -> str | None:
     package paths, so this inode-based lookup maps changed files back to the
     configured mutmut path without hard-coding package prefixes.
 
-    Strategy: walk paths_to_mutate from the root pyproject.toml and return the
+    Strategy: walk source_paths from the root pyproject.toml and return the
     first entry whose resolved inode matches the changed file's inode, so we
     never hard-code package prefixes.
     """
     try:
         cfg = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
-        configured = cfg.get("tool", {}).get("mutmut", {}).get("paths_to_mutate", [])
+        configured = cfg.get("tool", {}).get("mutmut", {}).get("source_paths", [])
     except Exception:
         return path
 
@@ -112,8 +118,8 @@ def _resolve_to_mutmut_path(path: str) -> str | None:
     # Inode lookup failed (e.g. the configured ``src/`` symlink is not resolvable
     # in this checkout). Fall back to a PATH match against the perimeter — but
     # ONLY return a target when the changed file actually corresponds to a
-    # configured ``paths_to_mutate`` entry. A changed file OUTSIDE the perimeter
-    # (e.g. a connector, deliberately not in ``paths_to_mutate``) must be SKIPPED,
+    # configured ``source_paths`` entry. A changed file OUTSIDE the perimeter
+    # (e.g. a connector, deliberately not in ``source_paths``) must be SKIPPED,
     # not force-mutated: mutmut has no bound test suite for it, so it yields
     # ``total=0`` and spuriously fails the gate (changed-only must never widen the
     # mutation surface beyond the full gate's perimeter).
@@ -182,8 +188,12 @@ def _configured_mutation_tests() -> tuple[str, ...]:
         cfg = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
     except Exception:
         return ()
-    tests = cfg.get("tool", {}).get("mutmut", {}).get("tests_dir", [])
-    return tuple(str(path) for path in tests)
+    selection = cfg.get("tool", {}).get("mutmut", {}).get("pytest_add_cli_args_test_selection", [])
+    return tuple(str(path) for path in selection if _looks_like_test_path(str(path)))
+
+
+def _looks_like_test_path(value: str) -> bool:
+    return value == "tests" or value.endswith("/tests") or "/tests/" in value or value.startswith("tests/")
 
 
 def _changed_mutation_support_paths(changed_paths: list[str]) -> list[str]:
@@ -316,7 +326,7 @@ def run_mutation_gate(
     max_children: int,
     retries: int,
     min_mutation_score: float,
-    paths_to_mutate: list[str] | None = None,
+    source_paths: list[str] | None = None,
     allow_empty: bool = False,
 ) -> dict[str, int]:
     attempts = retries + 1
@@ -325,8 +335,9 @@ def run_mutation_gate(
     existing_pythonpath = mutation_env.get("PYTHONPATH")
     _prepend_mutant_source_roots(mutation_env, existing_pythonpath)
     equivalents = _load_equivalent_allowlist()
+    test_selection = _scoped_test_selection(source_paths)
 
-    # mutmut reads paths_to_mutate from the ROOT pyproject.toml (not mutants/).
+    # mutmut reads source_paths from the ROOT pyproject.toml (not mutants/).
     # When --changed-only narrows the targets, rewrite the root config temporarily.
     root_pyproject = Path("pyproject.toml")
     root_original = root_pyproject.read_text(encoding="utf-8") if root_pyproject.exists() else None
@@ -335,13 +346,18 @@ def run_mutation_gate(
         mutants_dir = Path("mutants")
         if mutants_dir.exists():
             shutil.rmtree(mutants_dir)
-        _seed_mutants_config(paths_to_mutate=paths_to_mutate)
+        _seed_mutants_config(source_paths=source_paths, test_selection=test_selection)
         _prepend_mutant_source_roots(mutation_env, existing_pythonpath)
 
         # mutmut reads config from the root pyproject.toml. Normalize it for
         # mutation runs (strip incompatible pytest args and optionally narrow paths).
         if root_original is not None:
-            _sanitize_mutants_pyproject(root_pyproject, paths_to_mutate=paths_to_mutate, strip_workspace=False)
+            _sanitize_mutants_pyproject(
+                root_pyproject,
+                source_paths=source_paths,
+                test_selection=test_selection,
+                strip_workspace=False,
+            )
 
         children = max_children if attempt == 1 else 1
         print(f"Running mutation attempt {attempt}/{attempts} with max-children={children}")
@@ -365,7 +381,7 @@ def run_mutation_gate(
         # is a file with no mutable surface (a Pydantic model, a re-export shim,
         # decorated-only dispatch, constant patterns) — legitimately clean, not a
         # config break. The total>0 guard only matters for the full pyproject
-        # perimeter (where total==0 would mean paths_to_mutate is misconfigured).
+        # perimeter (where total==0 would mean source_paths is misconfigured).
         if allow_empty and last_stats["total"] == 0 and last_stats["bad_total"] == 0:
             print("mutation gate ok: explicitly-targeted file(s) have no mutable surface (0 mutants)")
             return last_stats
@@ -419,8 +435,8 @@ def main() -> int:
         "--paths",
         default=None,
         help=(
-            "Comma-separated explicit subset of [tool.mutmut].paths_to_mutate to mutate "
-            "(format matches paths_to_mutate, e.g. 'src/provide/uterm/auth.py'). Used to "
+            "Comma-separated explicit subset of [tool.mutmut].source_paths to mutate "
+            "(format matches source_paths, e.g. 'src/provide/uterm/auth.py'). Used to "
             "chunk a full-perimeter run into small, stable batches — a single mutmut run "
             "over the whole perimeter trips the fork-loop child-reaping crash at scale. "
             "Mutually exclusive with --changed-only."
@@ -431,29 +447,29 @@ def main() -> int:
     requested_children = args.max_children if args.max_children is not None else half_cpus
     max_children = min(max(1, requested_children), half_cpus)
 
-    paths_to_mutate: list[str] | None = None
+    source_paths: list[str] | None = None
     changed_support_paths: list[str] = []
     if args.changed_only:
-        paths_to_mutate = _changed_python_paths(args.base_ref, args.staged_only, DEFAULT_MUTATION_ROOTS)
-        if not paths_to_mutate:
+        source_paths = _changed_python_paths(args.base_ref, args.staged_only, DEFAULT_MUTATION_ROOTS)
+        if not source_paths:
             changed_support_paths = _changed_mutation_support_paths(_changed_paths(args.base_ref, args.staged_only))
             if changed_support_paths:
                 print(
                     "mutation gate full-perimeter trigger: changed mutation allowlist/config/tests "
                     f"without changed source mutants: {changed_support_paths}"
                 )
-                paths_to_mutate = None
+                source_paths = None
             else:
                 print("mutation gate skipped: no changed Python files under mutation roots")
                 return 0
         else:
-            print(f"mutation gate targets ({len(paths_to_mutate)}): {paths_to_mutate}")
+            print(f"mutation gate targets ({len(source_paths)}): {source_paths}")
     elif args.paths:
-        paths_to_mutate = [p.strip() for p in args.paths.split(",") if p.strip()]
-        if not paths_to_mutate:
+        source_paths = [p.strip() for p in args.paths.split(",") if p.strip()]
+        if not source_paths:
             print("mutation gate skipped: --paths resolved to an empty set")
             return 0
-        print(f"mutation gate targets ({len(paths_to_mutate)}): {paths_to_mutate}")
+        print(f"mutation gate targets ({len(source_paths)}): {source_paths}")
 
     try:
         run_mutation_gate(
@@ -461,10 +477,10 @@ def main() -> int:
             max_children,
             args.retries,
             args.min_mutation_score,
-            paths_to_mutate=paths_to_mutate,
+            source_paths=source_paths,
             # An explicitly-narrowed target set (--paths / --changed-only) may
             # legitimately contain only no-mutable-surface files → 0 mutants is OK.
-            allow_empty=paths_to_mutate is not None and not changed_support_paths,
+            allow_empty=source_paths is not None and not changed_support_paths,
         )
     except RuntimeError as exc:
         print(str(exc))

@@ -254,6 +254,19 @@ async def test_wait_for_guard_deadline_and_interval_arithmetic(clock: _FakeClock
     assert clock.sleeps[0] == pytest.approx(0.02, rel=1e-9)  # interval = max(20, 20)/1000
 
 
+async def test_wait_for_guard_small_timeout_records_interval_without_runaway(clock: _FakeClock) -> None:
+    hub = _FakeHub({"w": _worker({"screen": "no-prompt", "ts": 7.0})})
+
+    ok, out, reason = await PollingCoordinator(hub).wait_for_guard(
+        "w", expect_prompt_id="never", expect_regex=None, timeout_ms=50, poll_interval_ms=20
+    )
+
+    assert ok is False
+    assert out == {"screen": "no-prompt", "ts": 7.0}
+    assert reason == "prompt_guard_not_satisfied"
+    assert clock.sleeps == [pytest.approx(0.02, rel=1e-9)]
+
+
 async def test_wait_for_guard_regex_obj_is_passed_to_matcher(clock: _FakeClock) -> None:
     """A non-matching regex keeps the guard polling (pins expect_regex=regex_obj).
 

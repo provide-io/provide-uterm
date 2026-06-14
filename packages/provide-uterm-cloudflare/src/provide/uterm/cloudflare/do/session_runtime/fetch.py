@@ -161,7 +161,7 @@ class _FetchMixin:
             if auth_error is not None:
                 return auth_error
         if upgrade_header == "websocket":
-            from js import WebSocketPair  # type: ignore[import-not-found]
+            from js import WebSocketPair  # type: ignore[import-not-found]  # ty:ignore[unresolved-import]
 
             socket_role = "browser"
             if path.startswith(("/ws/worker/", "/tunnel/")):

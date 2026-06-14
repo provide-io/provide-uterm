@@ -80,7 +80,7 @@ async def route_profiles(
 
 
 async def _kv_get_profile(kv: object, pid: str) -> dict[str, Any] | None:
-    raw = await kv.get(f"profile:{pid}")  # type: ignore[attr-defined]
+    raw = await kv.get(f"profile:{pid}")  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
     if raw is None:
         return None
     decoded: dict[str, Any] = json.loads(str(raw) if isinstance(raw, str) else raw)
@@ -88,7 +88,7 @@ async def _kv_get_profile(kv: object, pid: str) -> dict[str, Any] | None:
 
 
 async def _kv_put_profile(kv: object, profile: dict[str, Any]) -> None:
-    await kv.put(f"profile:{profile['profile_id']}", json.dumps(profile, ensure_ascii=True))  # type: ignore[attr-defined]
+    await kv.put(f"profile:{profile['profile_id']}", json.dumps(profile, ensure_ascii=True))  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
 
 
 def _can_access(profile: dict[str, Any], principal_id: str) -> bool:
@@ -101,11 +101,11 @@ def _can_access(profile: dict[str, Any], principal_id: str) -> bool:
 
 
 async def _list(kv: object, principal_id: str) -> object:
-    keys_result = await kv.list(prefix="profile:")  # type: ignore[attr-defined]
+    keys_result = await kv.list(prefix="profile:")  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
     keys = [k.get("name") or k for k in (getattr(keys_result, "keys", None) or keys_result or [])]
     profiles = []
     for key in keys:
-        raw = await kv.get(str(key))  # type: ignore[attr-defined]
+        raw = await kv.get(str(key))  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
         if not raw:
             continue
         try:
@@ -128,7 +128,7 @@ async def _get(kv: object, pid: str, principal_id: str) -> object:
 
 async def _create(request: object, kv: object, principal_id: str) -> object:
     try:
-        raw = await request.json()  # type: ignore[attr-defined]
+        raw = await request.json()  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
         body = raw.to_py() if hasattr(raw, "to_py") else raw
     except Exception:
         body = {}
@@ -162,7 +162,7 @@ async def _update(request: object, kv: object, pid: str, principal_id: str) -> o
     if p.get("owner") != principal_id:
         return json_response({"detail": "insufficient privileges"}, status=403)
     try:
-        raw = await request.json()  # type: ignore[attr-defined]
+        raw = await request.json()  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
         body = raw.to_py() if hasattr(raw, "to_py") else raw
     except Exception:
         body = {}
@@ -180,7 +180,7 @@ async def _delete(kv: object, pid: str, principal_id: str) -> object:
         return json_response({"detail": f"unknown profile: {pid}"}, status=404)
     if p.get("owner") != principal_id:
         return json_response({"detail": "insufficient privileges"}, status=403)
-    await kv.delete(f"profile:{pid}")  # type: ignore[attr-defined]
+    await kv.delete(f"profile:{pid}")  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
     return json_response({"ok": True})
 
 
@@ -197,7 +197,7 @@ async def _connect(
     if not _can_access(p, principal_id):
         return json_response({"detail": "insufficient privileges"}, status=403)
     try:
-        raw = await request.json()  # type: ignore[attr-defined]
+        raw = await request.json()  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
         raw.to_py() if hasattr(raw, "to_py") else raw
     except Exception:
         pass

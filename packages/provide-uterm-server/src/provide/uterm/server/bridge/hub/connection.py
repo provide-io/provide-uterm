@@ -278,8 +278,8 @@ class ConnectionManager:
         principal = getattr(getattr(ws, "state", None), "uterm_principal", None)
         if principal is None:
             return None
-        subject_id: str = getattr(principal, "subject_id", "") or ""
-        if subject_id == "anonymous" or not subject_id:
+        subject_id = getattr(principal, "subject_id", None)
+        if not isinstance(subject_id, str) or subject_id == "anonymous" or not subject_id:
             return None
         return subject_id
 
@@ -407,7 +407,9 @@ class ConnectionManager:
         Scans backwards; stops at the first hijack lifecycle event encountered.
         """
         for evt in reversed(st.events):
-            t = str(evt.get("type", ""))
+            t = evt.get("type")
+            if not isinstance(t, str):
+                continue
             if t in {"hijack_owner_expired", "hijack_lease_expired"}:
                 return False
             if t in {"hijack_acquired", "hijack_released"}:

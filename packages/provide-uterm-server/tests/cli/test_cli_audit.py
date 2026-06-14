@@ -72,17 +72,13 @@ class TestAuditCli:
 
     def test_expected_head_match_exits_zero(self, tmp_path: Path) -> None:
         path, chain = _good_log(tmp_path)
-        code, out = _run(
-            ["audit", "verify", str(path), "--expected-seq", "2", "--expected-hash", chain.last_hash]
-        )
+        code, out = _run(["audit", "verify", str(path), "--expected-seq", "2", "--expected-hash", chain.last_hash])
         assert code == 0
         assert out.startswith("OK:")
 
     def test_expected_head_mismatch_exits_one(self, tmp_path: Path) -> None:
         path, _ = _good_log(tmp_path)
-        code, out = _run(
-            ["audit", "verify", str(path), "--expected-seq", "2", "--expected-hash", "f" * 64]
-        )
+        code, out = _run(["audit", "verify", str(path), "--expected-seq", "2", "--expected-hash", "f" * 64])
         assert code == 1
         assert "head" in out
 

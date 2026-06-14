@@ -17,7 +17,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from provide.uterm.io import InputSender, PromptWaiter
+from provide.uterm.io import DEFAULT_INPUT_TYPE, DEFAULT_WAIT_AFTER_SEC, InputSender, PromptWaiter
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -435,25 +435,15 @@ class TestRemainingComputation:
 
 class TestInputSenderDefaults:
     async def test_default_input_type_is_multi_key(self) -> None:
-        """mutmut_1,2: default input_type must be 'multi_key'."""
-        import inspect
-
-        sender = InputSender(_make_session())
-        sig = inspect.signature(sender.send_input)
-        default = sig.parameters["input_type"].default
-        assert default == "multi_key"
-        assert default != "XXmulti_keyXX"
-        assert default != "MULTI_KEY"
+        """Default input type remains multi_key even though it is applied in-body."""
+        assert DEFAULT_INPUT_TYPE == "multi_key"
+        assert DEFAULT_INPUT_TYPE != "XXmulti_keyXX"
+        assert DEFAULT_INPUT_TYPE != "MULTI_KEY"
 
     async def test_default_wait_after_sec_is_0_2(self) -> None:
-        """mutmut_3: wait_after_sec default must be 0.2, not 1.2."""
-        import inspect
-
-        sender = InputSender(_make_session())
-        sig = inspect.signature(sender.send_input)
-        default = sig.parameters["wait_after_sec"].default
-        assert default == pytest.approx(0.2)
-        assert default != pytest.approx(1.2)
+        """Default post-send delay remains 0.2s even though it is applied in-body."""
+        assert pytest.approx(0.2) == DEFAULT_WAIT_AFTER_SEC
+        assert pytest.approx(1.2) != DEFAULT_WAIT_AFTER_SEC
 
 
 # ---------------------------------------------------------------------------

@@ -5,7 +5,7 @@
 """Mutation-killing tests for server/webhooks.py — the SSRF guard + delivery.
 
 This is the dedicated mutmut-binding suite for webhooks.py (wired into
-[tool.mutmut].tests_dir). Its defining property: it NEVER performs real network
+[tool.mutmut].pytest_add_cli_args_test_selection). Its defining property: it NEVER performs real network
 I/O. An autouse fixture replaces ``socket.getaddrinfo`` with a MagicMock and every
 delivery test patches the httpx client + ``asyncio.sleep``. That matters twice:
 

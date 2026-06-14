@@ -58,6 +58,73 @@ MUTATION_SUPPORT_FILES: Final[tuple[str, ...]] = (
     "scripts/mutation_gate_config.py",
 )
 
+PROCESS_MANAGER_SOURCE_PATHS: Final[frozenset[str]] = frozenset(
+    {
+        "src/provide/uterm/manager/process_impl.py",
+        "src/provide/uterm/manager/process_impl_spawn.py",
+    }
+)
+
+PROCESS_MANAGER_MUTATION_TESTS: Final[tuple[str, ...]] = (
+    "packages/provide-uterm-platform/tests/manager/manager/test_process_mutation_killing.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_process_mutation_killing_2.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_process_mutation_killing_3.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_process_mutation_killing_4.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_process_impl_survivors.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_process_kill_part01.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_process_kill_part02.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_process_kill_part03.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_process_kill_part04.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_process_kill_part05.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_process_kill_part06.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_process_kill_part07.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_process_kill_part08.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_process_kill_part09.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_process_additional.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_process_extra.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_process_worker_token_scope.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_coverage_process.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_coverage_process_windows.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_coverage_monitor.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_ext_policy.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_agent_ops_mutation_killing.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_agent_ops_mutation_killing_2.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_coverage_gaps.py",
+)
+
+BRIDGE_COORDINATOR_SOURCE_PATHS: Final[frozenset[str]] = frozenset(
+    {
+        "src/provide/uterm/bridge/coordinator.py",
+    }
+)
+
+BRIDGE_HUB_SOURCE_PATHS: Final[frozenset[str]] = frozenset(
+    {
+        "src/provide/uterm/server/bridge/hub/presence.py",
+        "src/provide/uterm/server/bridge/hub/store.py",
+        "src/provide/uterm/server/bridge/hub/polling_service.py",
+        "src/provide/uterm/deckmux/_service.py",
+        "src/provide/uterm/bridge/schemas.py",
+        *BRIDGE_COORDINATOR_SOURCE_PATHS,
+    }
+)
+
+BRIDGE_HUB_MUTATION_TESTS: Final[tuple[str, ...]] = (
+    "packages/provide-uterm/tests/deckmux/test_presence.py",
+    "packages/provide-uterm/tests/deckmux/test_hub_mixin.py",
+    "packages/provide-uterm/tests/deckmux/test_transfer.py",
+    "packages/provide-uterm/tests/deckmux/test_protocol.py",
+    "packages/provide-uterm/tests/deckmux/test_names.py",
+    "packages/provide-uterm/tests/deckmux/test_edge.py",
+    "packages/provide-uterm/tests/deckmux/test_service_mutants.py",
+    "packages/provide-uterm-server/tests/bridge/test_presence_protocol.py",
+    "packages/provide-uterm/tests/bridge/test_coordinator_units.py",
+    "packages/provide-uterm-server/tests/bridge/test_hub_polling_coverage.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_polling_kill.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_store_kill.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_store_policy_kill.py",
+)
+
 
 def uv_mutmut_cmd(python_version: str | None, *args: str) -> list[str]:
     base = ["uv", "run"]
@@ -80,20 +147,35 @@ def mutation_score(stats: dict[str, int]) -> float:
     return (int(stats.get("killed", 0)) / total) * 100.0
 
 
-def seed_mutants_config(paths_to_mutate: list[str] | None = None) -> None:
+def scoped_test_selection(source_paths: list[str] | None) -> tuple[str, ...] | None:
+    if not source_paths:
+        return None
+    selected = set(source_paths)
+    if selected and selected <= PROCESS_MANAGER_SOURCE_PATHS:
+        return PROCESS_MANAGER_MUTATION_TESTS
+    if selected and selected <= BRIDGE_HUB_SOURCE_PATHS:
+        return BRIDGE_HUB_MUTATION_TESTS
+    return None
+
+
+def seed_mutants_config(
+    source_paths: list[str] | None = None,
+    test_selection: tuple[str, ...] | None = None,
+) -> None:
     mutants = Path("mutants")
     mutants.mkdir(parents=True, exist_ok=True)
     for config_name in CONFIG_FILES:
         src = Path(config_name)
         if src.exists():
             shutil.copy2(src, mutants / config_name)
-    sanitize_mutants_pyproject(mutants / "pyproject.toml", paths_to_mutate=paths_to_mutate)
+    sanitize_mutants_pyproject(mutants / "pyproject.toml", source_paths=source_paths, test_selection=test_selection)
 
 
 def sanitize_mutants_pyproject(
     path: Path,
     *,
-    paths_to_mutate: list[str] | None,
+    source_paths: list[str] | None,
+    test_selection: tuple[str, ...] | None = None,
     strip_workspace: bool = True,
 ) -> None:
     if not path.exists():
@@ -106,16 +188,27 @@ def sanitize_mutants_pyproject(
     if strip_workspace:
         updated = re.sub(r"^\[tool\.uv\.workspace\]\n(?:.*\n)*?\n", "\n", updated, flags=re.MULTILINE)
         updated = re.sub(r"^\[tool\.uv\.sources\]\n(?:.*\n)*?\n", "\n", updated, flags=re.MULTILINE)
-    if paths_to_mutate:
-        encoded = ", ".join(f'"{item}"' for item in paths_to_mutate)
+    if source_paths:
+        encoded = ", ".join(f'"{item}"' for item in source_paths)
         updated, count = re.subn(
-            r"^paths_to_mutate\s*=\s*\[[\s\S]*?\]",
-            f"paths_to_mutate = [{encoded}]",
+            r"^source_paths\s*=\s*\[[\s\S]*?\]",
+            f"source_paths = [{encoded}]",
             updated,
             count=1,
             flags=re.MULTILINE,
         )
         if count != 1:
-            raise RuntimeError("failed to rewrite paths_to_mutate in mutants/pyproject.toml")
+            raise RuntimeError("failed to rewrite source_paths in mutants/pyproject.toml")
+    if test_selection:
+        encoded_tests = ",\n".join(f'    "{item}"' for item in test_selection)
+        updated, count = re.subn(
+            r"^pytest_add_cli_args_test_selection\s*=\s*\[[\s\S]*?^\]",
+            f"pytest_add_cli_args_test_selection = [\n{encoded_tests}\n]",
+            updated,
+            count=1,
+            flags=re.MULTILINE,
+        )
+        if count != 1:
+            raise RuntimeError("failed to rewrite pytest_add_cli_args_test_selection in mutants/pyproject.toml")
     if updated != text:
         path.write_text(updated, encoding="utf-8")

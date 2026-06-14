@@ -44,11 +44,11 @@ _js_crypto: Any = None
 _to_js: Any = None
 _js_object: Any = None
 try:  # pragma: no cover - CF runtime only
-    import js as _js_mod  # type: ignore[import-not-found]
+    import js as _js_mod  # type: ignore[import-not-found]  # ty:ignore[unresolved-import]
 
     _js_crypto = _js_mod.crypto
     _js_object = _js_mod.Object
-    from pyodide.ffi import to_js  # type: ignore[import-not-found]
+    from pyodide.ffi import to_js  # type: ignore[import-not-found]  # ty:ignore[unresolved-import]
 
     _to_js = to_js
 except ImportError:

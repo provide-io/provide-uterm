@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 def _has_cf_service_token(request: object) -> bool:
     """Compatibility stub: raw CF Access headers are not trusted for auth."""
     try:
-        _ = request.headers  # type: ignore[attr-defined]
+        _ = request.headers  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
     except Exception as exc:
         logger.debug("cf_service_token_header_check_failed: %s", exc)
     return False
@@ -36,13 +36,13 @@ async def _require_jwt(request: object, config: CloudflareConfig) -> Response | 
 
     Skipped when auth mode is not ``jwt``.
     """
-    if config.jwt.mode != "jwt":
+    if config.jwt.mode != "jwt":  # ty:ignore[unresolved-attribute]
         return None
     token = extract_bearer_or_cookie(request)
     if not token:
         return json_response({"error": "authentication required"}, status=401)
     try:
-        await decode_jwt(token, config.jwt)
+        await decode_jwt(token, config.jwt)  # ty:ignore[invalid-await, unresolved-attribute]
     except JwtValidationError as exc:
         return json_response({"error": "invalid token", "detail": str(exc)}, status=401)
     return None
@@ -66,7 +66,7 @@ async def _decode_jwt_principal(request: object, config: CloudflareConfig) -> ob
     then collapsed to ``principal=None`` downstream — bulk delete and
     ownerless session creation were executed as if the caller were anonymous.
     """
-    if config.jwt.mode in {"none", "dev"}:
+    if config.jwt.mode in {"none", "dev"}:  # ty:ignore[unresolved-attribute]
         return None
     # CF Access authenticated user
     email = _read_header(
@@ -83,7 +83,7 @@ async def _decode_jwt_principal(request: object, config: CloudflareConfig) -> ob
     if not token:
         return None
     try:
-        decoded: object = await decode_jwt(token, config.jwt)
+        decoded: object = await decode_jwt(token, config.jwt)  # ty:ignore[invalid-await, unresolved-attribute]
         return decoded
     except JwtValidationError:
         return None
@@ -92,7 +92,7 @@ async def _decode_jwt_principal(request: object, config: CloudflareConfig) -> ob
 def _read_header(request: object, *names: str) -> str:
     """Read the first non-empty value of ``names`` from ``request.headers``."""
     try:
-        headers = request.headers  # type: ignore[attr-defined]
+        headers = request.headers  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
     except Exception:
         return ""
     for name in names:
@@ -129,7 +129,7 @@ async def _resolve_principal_id(request: object, config: CloudflareConfig) -> st
     if not token:
         return "anonymous"
     try:
-        principal = await decode_jwt(token, config.jwt)
+        principal = await decode_jwt(token, config.jwt)  # ty:ignore[invalid-await, unresolved-attribute]
         return str(principal.subject_id or "anonymous")
     except JwtValidationError:
         return "anonymous"

@@ -32,6 +32,7 @@ from provide.uterm.control_channel import (
     ControlFrameDecoder,
     encode_control_frame,
 )
+from scripts.benchmark_backends_report import print_comparison
 
 # ── constants ────────────────────────────────────────────────────────────────
 
@@ -432,42 +433,6 @@ async def _run_all(base: str, label: str, *, is_cf: bool = False) -> dict[str, A
     }
 
 
-def _delta(a: float, b: float) -> str:
-    if a == 0:
-        return "N/A"
-    pct = ((b - a) / a) * 100
-    return f"{pct:+.0f}%"
-
-
-def _print_comparison(fa: dict[str, Any], cf: dict[str, Any]) -> None:
-    print(f"\n{'=' * 60}")
-    print(f"  {'Metric':<25} {'FastAPI':>10} {'CF Worker':>10} {'Delta':>8}")
-    print(f"  {'-' * 25} {'-' * 10} {'-' * 10} {'-' * 8}")
-
-    rows = [
-        ("WS handshake p50", fa["handshake"]["p50"], cf["handshake"]["p50"], "ms"),
-        ("WS handshake p95", fa["handshake"]["p95"], cf["handshake"]["p95"], "ms"),
-        ("Hijack cycle p50", fa["hijack"]["p50"], cf["hijack"]["p50"], "ms"),
-        ("Hijack ops/sec", fa["hijack"]["ops_per_sec"], cf["hijack"]["ops_per_sec"], ""),
-        ("Broadcast fps", fa["broadcast"]["fps"], cf["broadcast"]["fps"], ""),
-        ("Broadcast lag p95", fa["broadcast"]["lag_p95"], cf["broadcast"]["lag_p95"], "ms"),
-    ]
-    all_tiers = sorted(set(fa["scaling"]) | set(cf["scaling"]), key=int)
-    for k in all_tiers:
-        fa_v = fa["scaling"].get(k, {}).get("p50", 0)
-        cf_v = cf["scaling"].get(k, {}).get("p50", 0)
-        suffix = ""
-        if k not in cf["scaling"]:
-            suffix = " (FA only)"
-        elif k not in fa["scaling"]:
-            suffix = " (CF only)"
-        rows.append((f"Scale@{k} p50{suffix}", fa_v, cf_v, "ms"))
-
-    for label, fa_v, cf_v, unit in rows:
-        suffix = unit if unit else ""
-        print(f"  {label:<25} {fa_v:>9.1f}{suffix} {cf_v:>9.1f}{suffix} {_delta(fa_v, cf_v):>8}")
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description="Benchmark FastAPI vs CF Worker")
     parser.add_argument("--fastapi-only", action="store_true")
@@ -500,7 +465,7 @@ def main() -> int:
                     results[key] = data[key]
 
     if "fastapi" in results and "cf_worker" in results:
-        _print_comparison(results["fastapi"], results["cf_worker"])
+        print_comparison(results["fastapi"], results["cf_worker"])
 
     # Write JSON
     out_dir = Path("benchmarks")

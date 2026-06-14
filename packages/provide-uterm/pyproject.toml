@@ -153,8 +153,7 @@ partial_branches = [
 
 [tool.mutmut]
 max_children = 6
-paths_to_mutate = ["src/provide/uterm/"]
-tests_dir = ["tests/", "tests_mutation/"]
+source_paths = ["src/provide/uterm/"]
 also_copy = ["scripts/"]
 do_not_mutate = [
     "src/provide/uterm/frontend/",
@@ -164,6 +163,8 @@ do_not_mutate = [
 ]
 pytest_add_cli_args = ["--no-cov", "--timeout=30"]
 pytest_add_cli_args_test_selection = [
+    "tests/",
+    "tests_mutation/",
     "-m",
     "not playwright",
     "--ignore=tests/example/test_server_e2e.py",

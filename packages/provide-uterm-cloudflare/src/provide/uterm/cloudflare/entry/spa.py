@@ -71,7 +71,7 @@ def _spa_response(page_kind: str, **extra_bootstrap: object) -> Response:
         f"<script type='module' src='/assets/{page_script}'></script>"
         "</body></html>"
     )
-    return Response(html, status=200, headers={"content-type": "text/html; charset=utf-8"})
+    return Response(html, status=200, headers={"content-type": "text/html; charset=utf-8"})  # ty:ignore[call-non-callable]
 
 
 __all__ = ["_SHARE_ROUTE_RE", "_SPA_SESSION_RE", "_resolve_spa_route", "_spa_response"]

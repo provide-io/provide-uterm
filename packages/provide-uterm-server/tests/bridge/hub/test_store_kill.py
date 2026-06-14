@@ -23,6 +23,7 @@ from typing import Any
 import pytest
 
 from provide.uterm.bridge.coordinator import HijackSession
+from provide.uterm.server.bridge.hub import store as store_module
 from provide.uterm.server.bridge.hub.store import StateStore
 from provide.uterm.server.bridge.models import WorkerTermState
 
@@ -241,6 +242,14 @@ def test_has_valid_rest_lease_variants() -> None:
     assert StateStore.has_valid_rest_lease(st_past) is False
 
 
+def test_has_valid_rest_lease_expires_at_boundary_is_invalid(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(store_module.time, "monotonic", lambda: 100.0)
+    st = WorkerTermState()
+    st.hijack_session = HijackSession(hijack_id="h", owner="o", lease_expires_at=100.0)
+
+    assert StateStore.has_valid_rest_lease(st) is False
+
+
 def test_is_dashboard_hijack_active_variants() -> None:
     # No owner → False.
     assert StateStore.is_dashboard_hijack_active(WorkerTermState()) is False
@@ -259,6 +268,15 @@ def test_is_dashboard_hijack_active_variants() -> None:
     st_past.hijack_owner = object()
     st_past.hijack_owner_expires_at = time.monotonic() - 100
     assert StateStore.is_dashboard_hijack_active(st_past) is False
+
+
+def test_dashboard_hijack_expiry_boundary_is_inactive(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(store_module.time, "monotonic", lambda: 200.0)
+    st = WorkerTermState()
+    st.hijack_owner = object()
+    st.hijack_owner_expires_at = 200.0
+
+    assert StateStore.is_dashboard_hijack_active(st) is False
 
 
 def test_is_hijacked_is_logical_or() -> None:

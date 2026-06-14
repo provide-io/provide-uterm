@@ -9,7 +9,7 @@ try:
         HijackSession,
     )
 except ImportError:  # pragma: no cover — Pyodide flat-path fallback
-    from hijack.coordinator import (  # type: ignore[import-not-found,no-redef]
+    from hijack.coordinator import (  # type: ignore[import-not-found,no-redef]  # ty:ignore[unresolved-import]
         AcquireResult,
         HijackCoordinator,
         HijackSession,

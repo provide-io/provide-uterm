@@ -17,7 +17,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from provide.uterm.io import PromptWaiter
+from provide.uterm.io import (
+    DEFAULT_PROMPT_IDLE_GRACE_RATIO,
+    DEFAULT_PROMPT_READ_INTERVAL_MS,
+    DEFAULT_PROMPT_REQUIRE_IDLE,
+    DEFAULT_PROMPT_TIMEOUT_MS,
+    PromptWaiter,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -72,40 +78,20 @@ def _session_with_prompt(
 
 class TestWaitForPromptDefaults:
     async def test_default_timeout_is_10000ms(self) -> None:
-        """mutmut_1: timeout_ms default must be 10000, not 10001."""
-        import inspect
-
-        waiter = PromptWaiter(_make_session())
-        sig = inspect.signature(waiter.wait_for_prompt)
-        default = sig.parameters["timeout_ms"].default
-        assert default == 10000
+        """Default timeout remains 10000ms even though it is applied in-body."""
+        assert DEFAULT_PROMPT_TIMEOUT_MS == 10000
 
     async def test_default_read_interval_is_250ms(self) -> None:
-        """mutmut_2: read_interval_ms default must be 250, not 251."""
-        import inspect
-
-        waiter = PromptWaiter(_make_session())
-        sig = inspect.signature(waiter.wait_for_prompt)
-        default = sig.parameters["read_interval_ms"].default
-        assert default == 250
+        """Default read interval remains 250ms even though it is applied in-body."""
+        assert DEFAULT_PROMPT_READ_INTERVAL_MS == 250
 
     async def test_default_require_idle_is_true(self) -> None:
-        """mutmut_3: require_idle default must be True, not False."""
-        import inspect
-
-        waiter = PromptWaiter(_make_session())
-        sig = inspect.signature(waiter.wait_for_prompt)
-        default = sig.parameters["require_idle"].default
-        assert default is True
+        """Default idle gating remains enabled even though it is applied in-body."""
+        assert DEFAULT_PROMPT_REQUIRE_IDLE is True
 
     async def test_default_idle_grace_ratio_is_0_8(self) -> None:
-        """mutmut_4: idle_grace_ratio default must be 0.8, not 1.8."""
-        import inspect
-
-        waiter = PromptWaiter(_make_session())
-        sig = inspect.signature(waiter.wait_for_prompt)
-        default = sig.parameters["idle_grace_ratio"].default
-        assert default == pytest.approx(0.8)
+        """Default idle grace ratio remains 0.8 even though it is applied in-body."""
+        assert pytest.approx(0.8) == DEFAULT_PROMPT_IDLE_GRACE_RATIO
 
 
 # ---------------------------------------------------------------------------

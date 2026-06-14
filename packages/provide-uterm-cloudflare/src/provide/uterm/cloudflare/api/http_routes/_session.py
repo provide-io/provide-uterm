@@ -135,7 +135,7 @@ async def route_session(
             return json_response({"error": "owner or admin role required"}, status=403)
         tombstone_at = time.time()
         runtime.lifecycle_state = "deleted"
-        runtime._deleted_at = tombstone_at  # type: ignore[attr-defined]
+        runtime._deleted_at = tombstone_at  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
         with contextlib.suppress(Exception):
             runtime.store.mark_deleted(runtime.worker_id)
         # Close any active socket connection so the deleted session cannot keep
@@ -148,7 +148,7 @@ async def route_session(
         sockets.extend(getattr(runtime, "raw_sockets", {}).values())
         for sock in sockets:
             with contextlib.suppress(Exception):
-                sock.close(1001, "session deleted")  # type: ignore[attr-defined]
+                sock.close(1001, "session deleted")  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
         return json_response({"ok": True, "session_id": runtime.worker_id, "deleted": True})
 
     if sub == "restart" and method == "POST":

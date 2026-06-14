@@ -46,7 +46,7 @@ def _resolve_security_headers(config: CloudflareConfig) -> list[tuple[str, str]]
     2. Per-field override: if the config field is not None, replace (non-empty)
        or suppress (empty string) the header.
     """
-    mode_defaults = _STRICT_DEFAULTS if config.security_mode != "dev" else _DEV_DEFAULTS
+    mode_defaults = _STRICT_DEFAULTS if config.security_mode != "dev" else _DEV_DEFAULTS  # ty:ignore[unresolved-attribute]
     result: dict[str, str] = dict(mode_defaults)
     for header_name, field_name in _OVERRIDE_FIELDS:
         override = getattr(config, field_name, None)

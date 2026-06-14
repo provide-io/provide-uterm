@@ -14,7 +14,7 @@ on the class in THIS module (the sleep users depend on the conftest patching
 ``process_impl.asyncio.sleep`` by module path; the staticmethods are
 mutmut-skipped via their decorator). The public import surface is unchanged.
 
-Mutation-enforced at killed==100 (see [tool.mutmut].paths_to_mutate, which lists
+Mutation-enforced at killed==100 (see [tool.mutmut].source_paths, which lists
 both this file and ``process_impl_spawn.py``). The 6 @staticmethod
 helpers are mutmut-skipped (decorator skip); the mutable surface is the undecorated
 instance methods. A manager-dir conftest.py autouse fixture blanket-mocks
@@ -50,7 +50,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TypedDict, cast
+from typing import TYPE_CHECKING, Any, TypedDict
 
 import yaml  # type: ignore[import-untyped]
 from provide.telemetry import get_logger
@@ -169,7 +169,7 @@ class AgentProcessManager:
 
     @staticmethod
     def _parse_agent_index(agent_id: str) -> int | None:
-        match = _AGENT_ID_RE.match(str(agent_id or "").strip())
+        match = _AGENT_ID_RE.match(str(agent_id).strip())
         if not match:
             return None
         return int(match.group(1))
@@ -323,7 +323,7 @@ class AgentProcessManager:
     async def _wait_for_process_exit(process: subprocess.Popen[bytes], timeout_s: float) -> None:
         wait_fn = process.wait
         if inspect.iscoroutinefunction(wait_fn):
-            await asyncio.wait_for(cast("Any", wait_fn)(), timeout=timeout_s)
+            await asyncio.wait_for(wait_fn(), timeout=timeout_s)
             return
         loop = asyncio.get_running_loop()
         result = await asyncio.wait_for(loop.run_in_executor(None, wait_fn), timeout=timeout_s)
@@ -350,7 +350,12 @@ class AgentProcessManager:
 
     @staticmethod
     def _resolve_stop_pid(process: subprocess.Popen[bytes] | None, pid: int | None) -> int:
-        raw_pid = pid if pid is not None else getattr(process, "pid", 0)
+        if pid is not None:
+            raw_pid = pid
+        elif process is not None:
+            raw_pid = process.pid
+        else:
+            return 0
         if type(raw_pid) is int:
             return raw_pid
         return 0

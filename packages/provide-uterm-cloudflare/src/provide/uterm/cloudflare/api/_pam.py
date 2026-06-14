@@ -51,7 +51,7 @@ async def handle_pam_event(request: object, env: object) -> object:
         return json_response({"error": "method_not_allowed"}, status=405)
 
     try:
-        raw = await request.json()  # type: ignore[attr-defined]
+        raw = await request.json()  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
         body: dict[str, Any] = raw.to_py() if hasattr(raw, "to_py") else raw
     except Exception:
         return json_response({"error": "invalid_json"}, status=400)

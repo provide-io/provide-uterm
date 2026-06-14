@@ -353,9 +353,7 @@ def verify_records(
         expected_seq += 1
 
     if expected_head is not None and (last_seq, last_hash) != expected_head:
-        return VerifyResult(
-            False, count, last_seq, last_hash, last_seq, "head mismatch — log truncated or rolled back"
-        )
+        return VerifyResult(False, count, last_seq, last_hash, last_seq, "head mismatch — log truncated or rolled back")
 
     return VerifyResult(True, count, last_seq, last_hash, None, None)
 

@@ -260,7 +260,7 @@ async def _handle_hijack_send(
             except PromptRegexError as exc:
                 payload = {"error": str(exc)}
                 if exc.kind == "too_long":
-                    payload["max"] = int(exc.max_length or _MAX_REGEX_LEN)
+                    payload["max"] = int(exc.max_length or _MAX_REGEX_LEN)  # ty:ignore[invalid-assignment]
                 return json_response(payload, status=400)
         timeout_ms = _safe_int(payload.get("timeout_ms"), 5_000, min_val=100, max_val=_MAX_TIMEOUT_MS)
         poll_interval_ms = _safe_int(payload.get("poll_interval_ms"), 200, min_val=50, max_val=5_000)

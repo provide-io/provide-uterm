@@ -271,7 +271,7 @@ class TestChangedOnlySupportFiles:
             max_children: int,
             retries: int,
             min_mutation_score: float,
-            paths_to_mutate: list[str] | None = None,
+            source_paths: list[str] | None = None,
             allow_empty: bool = False,
         ) -> dict[str, int]:
             calls.append(
@@ -280,7 +280,7 @@ class TestChangedOnlySupportFiles:
                     "max_children": max_children,
                     "retries": retries,
                     "min_mutation_score": min_mutation_score,
-                    "paths_to_mutate": paths_to_mutate,
+                    "source_paths": source_paths,
                     "allow_empty": allow_empty,
                 }
             )
@@ -295,8 +295,43 @@ class TestChangedOnlySupportFiles:
                 "max_children": 1,
                 "retries": 0,
                 "min_mutation_score": 100.0,
-                "paths_to_mutate": None,
+                "source_paths": None,
                 "allow_empty": False,
             }
         ]
         assert "mutation gate full-perimeter trigger" in capsys.readouterr().out
+
+
+class TestScopedMutationSelection:
+    def test_process_manager_paths_use_dedicated_tests(self) -> None:
+        selected = gate._scoped_test_selection(["src/provide/uterm/manager/process_impl.py"])
+        assert selected is not None
+        assert "packages/provide-uterm-platform/tests/manager/manager/test_process_kill_part01.py" in selected
+        assert "packages/provide-uterm/tests/bridge/test_coordinator_stress.py" not in selected
+
+    def test_bridge_hub_paths_use_dedicated_tests_without_stress(self) -> None:
+        selected = gate._scoped_test_selection(
+            [
+                "src/provide/uterm/server/bridge/hub/presence.py",
+                "src/provide/uterm/server/bridge/hub/store.py",
+                "src/provide/uterm/server/bridge/hub/polling_service.py",
+                "src/provide/uterm/deckmux/_service.py",
+                "src/provide/uterm/bridge/schemas.py",
+                "src/provide/uterm/bridge/coordinator.py",
+            ]
+        )
+
+        assert selected is not None
+        assert "packages/provide-uterm/tests/bridge/test_coordinator_units.py" in selected
+        assert "packages/provide-uterm-server/tests/bridge/hub/test_store_kill.py" in selected
+        assert "packages/provide-uterm/tests/bridge/test_coordinator_stress.py" not in selected
+
+    def test_bridge_coordinator_path_uses_dedicated_tests_without_stress(self) -> None:
+        selected = gate._scoped_test_selection(["src/provide/uterm/bridge/coordinator.py"])
+
+        assert selected is not None
+        assert "packages/provide-uterm/tests/bridge/test_coordinator_units.py" in selected
+        assert "packages/provide-uterm/tests/bridge/test_coordinator_stress.py" not in selected
+
+    def test_unscoped_path_keeps_full_selection(self) -> None:
+        assert gate._scoped_test_selection(["src/provide/uterm/io.py"]) is None

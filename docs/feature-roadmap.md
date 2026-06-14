@@ -36,7 +36,7 @@ Image-to-ANSI-art converter (static + animated GIF/APNG). Terminal-native visual
 
 ## Already Implemented
 
-- **DeckMux Collaborative Presence** — ARD: `docs/ard-presence-collaboration-layer.md`
+- **DeckMux Collaborative Presence** — Current protocol: `docs/protocol-matrix.md`
 - **HTTP Interception (Phase 4)**
 - **Session Audit Recording** (Core) — ARD: `docs/ard-session-audit-compliance-recording.md`
 - **Shared REST Contracts** — Drastically reduced drift between Server and Cloudflare backends.

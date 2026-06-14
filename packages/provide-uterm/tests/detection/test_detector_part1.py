@@ -231,15 +231,60 @@ def test_prompt_region_all_whitespace_lines() -> None:
     screen = "   \n   \n   "
     region, in_region = PromptDetector.prompt_region({"screen": screen, "cursor": {"y": 0}})
     # last_idx=0, start_idx=0, region is the first line
-    assert isinstance(region, str)
+    assert region == "   "
+    assert in_region is True
+
+
+def test_prompt_region_ignores_trailing_whitespace_only_lines() -> None:
+    """The last content line anchors the region; blank rows below it are excluded."""
+    screen = "top\nprompt>\n   \n\t"
+    region, in_region = PromptDetector.prompt_region({"screen": screen, "cursor": {"y": 1}}, tail_lines=12)
+    assert region == "top\nprompt>"
+    assert in_region is True
+
+
+def test_prompt_region_reverse_scan_does_not_skip_second_to_last_line() -> None:
+    """A prompt on the second-to-last line must beat older content above it."""
+    screen = "old prompt\nactive prompt>\n   "
+    region, in_region = PromptDetector.prompt_region({"screen": screen, "cursor": {"y": 1}}, tail_lines=1)
+    assert region == "active prompt>"
+    assert in_region is True
+
+
+def test_prompt_region_tail_lines_one_returns_only_last_content_line() -> None:
+    screen = "line 0\nline 1\nline 2"
+    region, in_region = PromptDetector.prompt_region({"screen": screen, "cursor": {"y": 2}}, tail_lines=1)
+    assert region == "line 2"
+    assert in_region is True
+
+
+def test_prompt_region_cursor_on_start_boundary_is_in_region() -> None:
+    screen = "line 0\nline 1\nline 2"
+    region, in_region = PromptDetector.prompt_region({"screen": screen, "cursor": {"y": 1}}, tail_lines=2)
+    assert region == "line 1\nline 2"
+    assert in_region is True
+
+
+def test_prompt_region_cursor_on_last_boundary_is_in_region() -> None:
+    screen = "line 0\nline 1\nline 2"
+    region, in_region = PromptDetector.prompt_region({"screen": screen, "cursor": {"y": 2}}, tail_lines=2)
+    assert region == "line 1\nline 2"
+    assert in_region is True
 
 
 def test_prompt_region_cursor_exception_handled() -> None:
     """prompt_region handles non-numeric cursor y gracefully."""
     snapshot = {"screen": "Hello\nWorld", "cursor": {"y": "not_an_int"}}
     region, in_region = PromptDetector.prompt_region(snapshot)
-    assert isinstance(region, str)
-    assert isinstance(in_region, bool)
+    assert region == "Hello\nWorld"
+    assert in_region is True
+
+
+def test_prompt_region_cursor_exception_defaults_to_row_zero() -> None:
+    snapshot = {"screen": "Only prompt", "cursor": {"y": "not_an_int"}}
+    region, in_region = PromptDetector.prompt_region(snapshot)
+    assert region == "Only prompt"
+    assert in_region is True
 
 
 # ---------------------------------------------------------------------------
@@ -294,6 +339,23 @@ def test_resolve_negative_regex_regex_mode() -> None:
     pattern = {"negative_match": {"pattern": r"star\w+", "match_mode": "regex"}}
     result = PromptDetector._resolve_negative_regex(pattern)
     assert result == r"star\w+"
+
+
+def test_resolve_negative_regex_default_match_mode_is_regex() -> None:
+    pattern = {"negative_match": {"pattern": r"star\w+"}}
+    result = PromptDetector._resolve_negative_regex(pattern)
+    assert result == r"star\w+"
+
+
+def test_resolve_negative_regex_missing_pattern_defaults_to_empty_regex() -> None:
+    pattern = {"negative_match": {"match_mode": "regex"}}
+    result = PromptDetector._resolve_negative_regex(pattern)
+    assert result == ""
+
+
+def test_resolve_negative_regex_ignores_non_dict_negative_match() -> None:
+    result = PromptDetector._resolve_negative_regex({"negative_match": "banner"})
+    assert result is None
 
 
 def test_resolve_negative_regex_none_when_absent() -> None:

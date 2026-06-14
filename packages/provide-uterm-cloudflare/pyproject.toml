@@ -83,7 +83,7 @@ fail_under = 100
 show_missing = true
 skip_covered = false
 [tool.mutmut]
-paths_to_mutate = ["src/"]
-tests_dir = ["tests/"]
+source_paths = ["src/"]
 also_copy = ["wrangler.toml"]
 pytest_add_cli_args = ["-o", "addopts=", "--no-header", "-q"]
+pytest_add_cli_args_test_selection = ["tests/"]

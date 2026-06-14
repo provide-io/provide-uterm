@@ -44,7 +44,7 @@ Tests are organized by markers, which allow selective execution:
 
 - **`mutant`** - Mutation testing and mutmut-focused tests
   - Run with: `uv run pytest -m mutant` or `uv run python scripts/run_mutation_gate.py --min-mutation-score 100`
-  - Files: `*_mutmut.py` modules under `packages/provide-uterm/tests/` (and the `[tool.mutmut].tests_dir` list)
+  - Files: `*_mutmut.py` modules under `packages/provide-uterm/tests/` (and the `[tool.mutmut].pytest_add_cli_args_test_selection` list)
   - Time: 5-15 minutes per test
   - Coverage: Validates test suite quality by checking test failure on code mutations
 
@@ -198,8 +198,8 @@ uv run python scripts/run_mutation_gate.py --min-mutation-score 100
 ### Mutation Test Configuration
 
 See `pyproject.toml` `[tool.mutmut]` section for:
-- `paths_to_mutate`: Which files to mutate
-- `tests_dir`: Where to find tests
+- `source_paths`: Which files to mutate
+- `pytest_add_cli_args_test_selection`: Which tests to run for mutation coverage binding
 - `do_not_mutate`: Files to exclude (typically frontend, transports)
 
 ### Static Protocol Checks

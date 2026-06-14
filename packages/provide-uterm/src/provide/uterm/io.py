@@ -19,6 +19,13 @@ from typing import TYPE_CHECKING, Any, Protocol
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+DEFAULT_PROMPT_TIMEOUT_MS = 10000
+DEFAULT_PROMPT_READ_INTERVAL_MS = 250
+DEFAULT_PROMPT_REQUIRE_IDLE = True
+DEFAULT_PROMPT_IDLE_GRACE_RATIO = 0.8
+DEFAULT_INPUT_TYPE = "multi_key"
+DEFAULT_WAIT_AFTER_SEC = 0.2
+
 
 class Session(Protocol):
     """Minimal interface expected by :class:`PromptWaiter` and :class:`InputSender`."""
@@ -118,16 +125,13 @@ class PromptWaiter:
     async def wait_for_prompt(
         self,
         expected_prompt_id: str | None = None,
-        # The mutmut trampoline captures these public-API defaults from the
-        # outer wrapper and passes them positionally into the mutant body, so
-        # mutating the literal here is inert (unkillable trampoline artefact).
-        timeout_ms: int = 10000,  # pragma: no mutate
-        read_interval_ms: int = 250,  # pragma: no mutate
+        timeout_ms: int | None = None,
+        read_interval_ms: int | None = None,
         on_prompt_detected: Callable[[dict[str, Any]], bool] | None = None,
         on_prompt_seen: Callable[[dict[str, Any]], None] | None = None,
         on_prompt_rejected: Callable[[dict[str, Any], str], None] | None = None,
-        require_idle: bool = True,  # pragma: no mutate
-        idle_grace_ratio: float = 0.8,  # pragma: no mutate
+        require_idle: bool | None = None,
+        idle_grace_ratio: float | None = None,
     ) -> dict[str, Any]:
         """Poll the session until a matching prompt is detected.
 
@@ -148,9 +152,14 @@ class PromptWaiter:
             TimeoutError: If no matching prompt detected within ``timeout_ms``.
             ConnectionError: If session is ``None`` or disconnected.
         """
+        effective_timeout_ms = DEFAULT_PROMPT_TIMEOUT_MS if timeout_ms is None else timeout_ms
+        effective_read_interval_ms = DEFAULT_PROMPT_READ_INTERVAL_MS if read_interval_ms is None else read_interval_ms
+        effective_require_idle = DEFAULT_PROMPT_REQUIRE_IDLE if require_idle is None else require_idle
+        effective_idle_grace_ratio = DEFAULT_PROMPT_IDLE_GRACE_RATIO if idle_grace_ratio is None else idle_grace_ratio
+
         start_mono = time.monotonic()
-        timeout_sec = timeout_ms / 1000.0
-        read_interval_sec = read_interval_ms / 1000.0
+        timeout_sec = effective_timeout_ms / 1000.0
+        read_interval_sec = effective_read_interval_ms / 1000.0
 
         while time.monotonic() - start_mono < timeout_sec:
             await self._assert_session_connected()
@@ -178,9 +187,9 @@ class PromptWaiter:
                     is_idle,
                     elapsed,
                     timeout_sec,
-                    idle_grace_ratio,
+                    effective_idle_grace_ratio,
                     read_interval_sec,
-                    require_idle,
+                    effective_require_idle,
                     on_prompt_rejected,
                 ):
                     continue
@@ -206,7 +215,7 @@ class PromptWaiter:
             remaining = max(0, timeout_sec - (time.monotonic() - start_mono))
             await self.session.wait_for_update(timeout_ms=int(min(read_interval_sec, remaining) * 1000))  # type: ignore[union-attr]  # ty:ignore[unresolved-attribute]
 
-        raise TimeoutError(f"No prompt detected within {timeout_ms}ms")
+        raise TimeoutError(f"No prompt detected within {effective_timeout_ms}ms")
 
 
 class InputSender:
@@ -222,10 +231,8 @@ class InputSender:
     async def send_input(
         self,
         keys: str,
-        # mutmut trampoline passes these defaults positionally from the outer
-        # wrapper, so mutating the literal here is inert (trampoline artefact).
-        input_type: str | None = "multi_key",  # pragma: no mutate
-        wait_after_sec: float = 0.2,  # pragma: no mutate
+        input_type: str | None = None,
+        wait_after_sec: float | None = None,
     ) -> None:
         """Send input respecting prompt type.
 
@@ -247,12 +254,15 @@ class InputSender:
         if not await _session_is_connected(self.session):
             raise ConnectionError("Session disconnected")
 
-        if input_type == "single_key":
+        effective_input_type = DEFAULT_INPUT_TYPE if input_type is None else input_type
+        effective_wait_after_sec = DEFAULT_WAIT_AFTER_SEC if wait_after_sec is None else wait_after_sec
+
+        if effective_input_type == "single_key":
             await self.session.send(keys)
-        elif input_type == "any_key":
+        elif effective_input_type == "any_key":
             await self.session.send(" ")
         else:
             await self.session.send(keys + "\r")
 
-        if wait_after_sec > 0:
-            await asyncio.sleep(wait_after_sec)
+        if effective_wait_after_sec > 0:
+            await asyncio.sleep(effective_wait_after_sec)

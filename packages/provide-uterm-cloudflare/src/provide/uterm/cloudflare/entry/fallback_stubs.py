@@ -35,8 +35,8 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 _DurableObject: type = object
 try:
-    from workers import DurableObject as _DurableObject  # pragma: no cover
-    from workers import (  # pragma: no cover
+    from workers import DurableObject as _DurableObject  # pragma: no cover  # ty:ignore[unresolved-import]
+    from workers import (  # pragma: no cover  # ty:ignore[unresolved-import]
         Response,
         WorkerEntrypoint,
     )
@@ -91,30 +91,33 @@ try:
     from provide.uterm.cloudflare.ui.assets import read_asset_text, serve_asset
 except ImportError:  # pragma: no cover — Pyodide flat-layout / validation phase only
     try:
-        from auth.jwt import (  # type: ignore[import-not-found]
+        from auth.jwt import (  # type: ignore[import-not-found]  # ty:ignore[unresolved-import]
             JwtValidationError,
             decode_jwt,
             extract_bearer_or_cookie,
         )
-        from cf_types import (  # type: ignore[import-not-found]
+        from cf_types import (  # type: ignore[import-not-found]  # ty:ignore[unresolved-import]
             Response,
             WorkerEntrypoint,
             json_response,
         )
-        from config import CloudflareConfig  # type: ignore[import-not-found]
-        from do.session_runtime import SessionRuntime  # type: ignore[import-not-found]
-        from state.registry import (  # type: ignore[import-not-found]
+        from config import CloudflareConfig  # type: ignore[import-not-found]  # ty:ignore[unresolved-import]
+        from do.session_runtime import SessionRuntime  # type: ignore[import-not-found]  # ty:ignore[unresolved-import]
+        from state.registry import (  # type: ignore[import-not-found]  # ty:ignore[unresolved-import]
             delete_kv_session,
             get_kv_session,
             list_kv_sessions,
         )
-        from ui.assets import read_asset_text, serve_asset  # type: ignore[import-not-found]
+        from ui.assets import (  # type: ignore[import-not-found]  # ty:ignore[unresolved-import]
+            read_asset_text,
+            serve_asset,
+        )
     except Exception as _exc2:  # pragma: no cover — Pyodide validation phase only
         # Last resort for Pyodide validation phase — stubs for non-handler imports.
         # WorkerEntrypoint / Response / DurableObject came from `workers` above,
         # so handler registration always succeeds.
         _import_error = _tb.format_exc()
-        JwtValidationError = Exception
+        JwtValidationError = Exception  # ty:ignore[conflicting-declarations]
 
         def decode_jwt(*_a: object, **_k: object) -> None:
             return None
@@ -128,19 +131,21 @@ except ImportError:  # pragma: no cover — Pyodide flat-layout / validation pha
             return Response.json(payload, status=status, headers=headers)
 
         try:
-            from config import CloudflareConfig  # type: ignore[import-not-found]
+            from config import CloudflareConfig  # type: ignore[import-not-found]  # ty:ignore[unresolved-import]
         except Exception:
-            CloudflareConfig = object
+            CloudflareConfig = object  # ty:ignore[conflicting-declarations]
 
         try:
-            from do.session_runtime import SessionRuntime  # type: ignore[import-not-found]
+            from do.session_runtime import (  # ty:ignore[unresolved-import]
+                SessionRuntime,  # type: ignore[import-not-found]
+            )
         except Exception:
 
             class SessionRuntime(_DurableObject):
                 """Stub DO for validation phase — real impl loaded at runtime."""
 
                 async def fetch(self, _request):
-                    return Response.json({"error": "not initialized"}, status=503)
+                    return Response.json({"error": "not initialized"}, status=503)  # ty:ignore[unresolved-attribute]
 
         def get_kv_session(*_a: object, **_k: object) -> None:
             return None

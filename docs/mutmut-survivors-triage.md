@@ -41,7 +41,7 @@ Six attack waves landed (the first five are listed here; wave 6 is appended belo
    Result: 40 mutants found but **0 killed / 0 survived / 0 no_tests** —
    the gate's test discovery didn't bind to any covering test.
 
-   Root cause: `[tool.mutmut].paths_to_mutate` in `pyproject.toml`
+   Root cause: `[tool.mutmut].source_paths` in `pyproject.toml`
    currently lists only `src/provide/uterm/{pty/connector,control_channel,
    control_channel_builders,control_channel_patterns,auth,detection/
    detector,detection/engine,io,recording}.py`. None of the files
@@ -51,7 +51,7 @@ Six attack waves landed (the first five are listed here; wave 6 is appended belo
    and the CF DO are all uncovered by the mutmut gate.
 
    **Status (2026-05-23):** `bridge/contracts.py` added to
-   `paths_to_mutate`. The negotiate_protocol_version boundary is now
+   `source_paths`. The negotiate_protocol_version boundary is now
    covered by `test_protocol_negotiation.py` and verified to kill all
    13 mutants the gate produced. The other three recommended
    additions (server-side bridge/models, tunnel/token_hash,
@@ -84,7 +84,7 @@ Six attack waves landed (the first five are listed here; wave 6 is appended belo
    stats-phase `-x` abort:
 
    1. *Name mismatch.* mutmut derives a mutant's name from the
-      `paths_to_mutate` path: `str(path).replace(os.sep, ".")` after
+      `source_paths` path: `str(path).replace(os.sep, ".")` after
       stripping a leading `src.` (`get_mutant_name` in
       `mutmut/__main__.py`). The coverage trampoline keys on the
       *imported* module's `__module__`. A `packages/...` path yields
@@ -96,7 +96,7 @@ Six attack waves landed (the first five are listed here; wave 6 is appended belo
       was actually fine — verified by probing `lim.__file__` under the
       stats env.)
    2. *Stats-phase abort.* mutmut's stats phase runs the whole
-      `tests_dir` under `-x`. `tests/server/test_config.py::
+      pytest selection under `-x`. `tests/server/test_config.py::
       test_loaded_max_sessions_is_enforced_by_app` (and other
       `TestClient` suites) need the autouse auth fixtures in the server
       test package's `conftest_part1.py`. That conftest was never
@@ -111,7 +111,7 @@ Six attack waves landed (the first five are listed here; wave 6 is appended belo
      by `scripts/build_mutation_src_tree.py`): the core package's
      children plus one symlink per cross-package namespace — `server`,
      `tunnel` (provide-uterm-server) and `pty`, `manager`
-     (provide-uterm-platform). All server/platform `paths_to_mutate`
+     (provide-uterm-platform). All server/platform `source_paths`
      entries were switched from `packages/.../src/...` to
      `src/provide/uterm/...`, so the derived name now equals
      `__module__`. `_resolve_to_mutmut_path` in
@@ -135,7 +135,7 @@ Six attack waves landed (the first five are listed here; wave 6 is appended belo
    (100%). The whole server perimeter now binds (e.g. token_hash +
    models + intercept = 119 killed where they were 0/`no_tests`
    before). Files whose unit suites are not yet enumerated in
-   `tests_dir` (the other hub services — lease/router/registry/
+   pytest selection (the other hub services — lease/router/registry/
    connection/presence/store/polling — and a few token_hash/intercept
    survivors) still report `no_tests`/`survived`; that is a *test
    completeness* gap, not a binding-mechanism gap, and is tracked
@@ -331,7 +331,7 @@ If you want to push absolute score higher in a future session:
    careful async-aware test writing.
 
 4. **Recording-tests harness fix.** Adding `test_recording_stores.py`
-   + `test_session_logger.py` to `mutmut.tests_dir` would convert
+   + `test_session_logger.py` to the mutmut pytest selection would convert
    most of the 255 `no_tests` to killed, but the addition currently
    trips the forced-fail step with exit code 4 — appears related to
    pytest's coverage gate. Fixing the harness unlocks the single
@@ -375,8 +375,8 @@ high-ROI.
 (`tests/terminal/test_recording_stores.py` for the In-memory/Null stores,
 plus a new `tests/terminal/test_recording_local.py` for
 `LocalFileRecordingStore`) were never enumerated in
-`[tool.mutmut].tests_dir`, so the gate bound zero tests and reported all
-~249 recording mutants as `no_tests`. Both files are now in `tests_dir`
+`[tool.mutmut].pytest_add_cli_args_test_selection`, so the gate bound zero tests and reported all
+~249 recording mutants as `no_tests`. Both files are now in pytest selection
 (`tests/` is already in `also_copy`). No exit-4/forced-fail recurred — the
 server-package harness fixes (canonical `src/` symlink tree, `pytest_configure`
 guard under `MUTANT_UNDER_TEST`, `--import-mode=importlib`) carry the
@@ -452,7 +452,7 @@ this possible — and the per-file playbook — are recorded in
 `[tool.mutmut]` comments in `pyproject.toml`. Highlights:
 
 - **The mutmut `os.wait()` child-reaping crash was root-caused and fixed.** A
-  `tests_dir` suite that spawned a real `subprocess.Popen` (`test_process.py`)
+  pytest selection suite that spawned a real `subprocess.Popen` (`test_process.py`)
   leaked worker children into mutmut's fork-loop reaper → `KeyError` → every
   server mutant `not_checked`/score 0. Removing that one suite (it bound
   nothing — it covered only the 0-mutant `manager/process.py` shim) unblocked

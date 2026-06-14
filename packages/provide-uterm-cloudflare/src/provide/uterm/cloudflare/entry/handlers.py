@@ -106,7 +106,7 @@ async def _handle_connect(request: object, env: object, config: CloudflareConfig
     if method != "POST":
         return json_response({"error": "method not allowed"}, status=405)
     try:
-        raw = await request.json()  # type: ignore[attr-defined]  # request is a Pyodide proxy
+        raw = await request.json()  # type: ignore[attr-defined]  # request is a Pyodide proxy  # ty:ignore[unresolved-attribute]
         body = raw.to_py() if hasattr(raw, "to_py") else raw
     except Exception as exc:
         logger.debug("connect_body_parse_failed: %s", exc)
@@ -176,11 +176,11 @@ async def _route_request(request: object, env: object, config: CloudflareConfig)
     """Route an incoming request to the appropriate handler."""
     from provide.uterm.cloudflare.entry.registry import _extract_worker_id
 
-    path = urlparse(str(request.url)).path  # type: ignore[attr-defined]
+    path = urlparse(str(request.url)).path  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
 
     # Public routes (no auth).
     if path == "/api/health":
-        return json_response({"ok": True, "service": "provide-uterm-cloudflare", "environment": config.environment})
+        return json_response({"ok": True, "service": "provide-uterm-cloudflare", "environment": config.environment})  # ty:ignore[unresolved-attribute]
     if path.startswith("/assets/"):
         return _entry_attr("serve_asset")(path.removeprefix("/assets/"))
     if _STATIC_ASSET_PATH.match(path):
@@ -213,13 +213,13 @@ async def _route_request(request: object, env: object, config: CloudflareConfig)
             cookie = _share_token_cookie_header(request, sid, token)
             if cookie is not None:
                 headers["Set-Cookie"] = cookie
-            return Response(None, status=302, headers=headers)
+            return Response(None, status=302, headers=headers)  # ty:ignore[call-non-callable]
         share_context = await _resolve_share_context(request, env, sid, config)
         if share_context is None:
             return json_response({"error": "not_found", "session_id": sid}, status=404)
         page, _share_role = share_context
         target = f"/app/{page}/{sid}"
-        return Response(None, status=302, headers={"location": target})
+        return Response(None, status=302, headers={"location": target})  # ty:ignore[call-non-callable]
 
     if spa is not None and "session_id" in spa[1]:
         share_context = await _resolve_share_context(request, env, str(spa[1]["session_id"]), config)
@@ -242,7 +242,7 @@ async def _route_request(request: object, env: object, config: CloudflareConfig)
         auth_error = await _require_jwt(request, config)
         if auth_error is not None:
             return auth_error
-        return await handler(request, env, config)  # type: ignore[operator]
+        return await handler(request, env, config)  # type: ignore[operator]  # ty:ignore[call-non-callable]
 
     # DO-proxied routes (includes /tunnel/{id} for WSS upgrade).
     worker_id = _extract_worker_id(path)
@@ -299,7 +299,9 @@ async def _api_tunnels(request: object, env: object, config: CloudflareConfig) -
     try:
         from provide.uterm.cloudflare.api._tunnel_api import handle_tunnels
     except ImportError:  # pragma: no cover
-        from api._tunnel_api import handle_tunnels  # type: ignore[import-not-found,no-redef]
+        from api._tunnel_api import (  # ty:ignore[unresolved-import]
+            handle_tunnels,  # type: ignore[import-not-found,no-redef]
+        )
 
     principal = await _decode_jwt_principal(request, config)
     return await handle_tunnels(request, env, principal)
@@ -309,7 +311,9 @@ async def _api_tunnel_revoke(request: object, env: object, config: CloudflareCon
     try:
         from provide.uterm.cloudflare.api._tunnel_api import handle_tunnel_revoke_tokens
     except ImportError:  # pragma: no cover
-        from api._tunnel_api import handle_tunnel_revoke_tokens  # type: ignore[no-redef]
+        from api._tunnel_api import (  # ty:ignore[unresolved-import]
+            handle_tunnel_revoke_tokens,  # type: ignore[no-redef]
+        )
 
     principal = await _decode_jwt_principal(request, config)
     return await handle_tunnel_revoke_tokens(request, env, tunnel_id, principal)
@@ -319,17 +323,19 @@ async def _api_tunnel_rotate(request: object, env: object, config: CloudflareCon
     try:
         from provide.uterm.cloudflare.api._tunnel_api import handle_tunnel_rotate_tokens
     except ImportError:  # pragma: no cover
-        from api._tunnel_api import handle_tunnel_rotate_tokens  # type: ignore[no-redef]
+        from api._tunnel_api import (  # ty:ignore[unresolved-import]
+            handle_tunnel_rotate_tokens,  # type: ignore[no-redef]
+        )
 
     principal = await _decode_jwt_principal(request, config)
-    return await handle_tunnel_rotate_tokens(request, env, tunnel_id, principal, ttl_s=config.tunnel_token_ttl_s)
+    return await handle_tunnel_rotate_tokens(request, env, tunnel_id, principal, ttl_s=config.tunnel_token_ttl_s)  # ty:ignore[unresolved-attribute]
 
 
 async def _api_pam_events(request: object, env: object, _config: CloudflareConfig) -> Response:
     try:
         from provide.uterm.cloudflare.api._pam import handle_pam_event
     except ImportError:  # pragma: no cover
-        from api._pam import handle_pam_event  # type: ignore[import-not-found,no-redef]
+        from api._pam import handle_pam_event  # type: ignore[import-not-found,no-redef]  # ty:ignore[unresolved-import]
 
     return await handle_pam_event(request, env)
 
@@ -340,7 +346,7 @@ async def _api_profiles(request: object, env: object, config: CloudflareConfig) 
     path = urlparse(str(getattr(request, "url", ""))).path
     method = str(getattr(request, "method", "GET")).upper()
     # In dev mode, use a fixed principal. In JWT mode, resolve from token.
-    principal_id = "dev-user" if config.jwt.mode == "dev" else await _resolve_principal_id(request, config)
+    principal_id = "dev-user" if config.jwt.mode == "dev" else await _resolve_principal_id(request, config)  # ty:ignore[unresolved-attribute]
     return await route_profiles(request, env, path, method, principal_id)
 
 

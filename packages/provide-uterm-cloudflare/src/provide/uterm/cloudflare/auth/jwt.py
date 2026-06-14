@@ -26,11 +26,11 @@ _js_crypto: Any = None
 _to_js: Any = None
 _js_object: Any = None
 try:
-    import js as _js_mod  # type: ignore[import-not-found]  # pragma: no cover
+    import js as _js_mod  # type: ignore[import-not-found]  # pragma: no cover  # ty:ignore[unresolved-import]
 
     _js_crypto = _js_mod.crypto  # pragma: no cover
     _js_object = _js_mod.Object  # pragma: no cover
-    from pyodide.ffi import to_js  # type: ignore[import-not-found]  # pragma: no cover
+    from pyodide.ffi import to_js  # type: ignore[import-not-found]  # pragma: no cover  # ty:ignore[unresolved-import]
 
     _to_js = to_js  # pragma: no cover
 
@@ -81,7 +81,7 @@ async def _request_jwks(url: str) -> dict[str, Any]:
     Outside CF (tests / local dev), falls back to ``urllib`` as a last resort.
     """
     try:
-        from js import (
+        from js import (  # ty:ignore[unresolved-import]
             fetch as _js_fetch,  # CF Workers native async fetch  # pragma: no cover
         )
 
@@ -386,7 +386,7 @@ def extract_bearer_or_cookie(request: object) -> str | None:
     upgrade requests protected by Cloudflare Access.
     """
     try:
-        auth_header = str(request.headers.get("Authorization") or "")  # type: ignore[attr-defined]
+        auth_header = str(request.headers.get("Authorization") or "")  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
         if auth_header.lower().startswith("bearer "):
             token = auth_header[7:].strip()
             if token:
@@ -394,7 +394,7 @@ def extract_bearer_or_cookie(request: object) -> str | None:
     except Exception:
         pass
     try:
-        cookie_header = str(request.headers.get("Cookie") or "")  # type: ignore[attr-defined]
+        cookie_header = str(request.headers.get("Cookie") or "")  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
         for part in cookie_header.split(";"):
             name, _, value = part.strip().partition("=")
             if name.strip() == "CF_Authorization" and value.strip():
