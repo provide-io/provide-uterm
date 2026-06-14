@@ -156,11 +156,10 @@ class WorkerTermState:
     # ``True`` for workers connected via the binary-framed tunnel WS
     # (``/tunnel/{id}``). The send path uses ``ws.send_bytes`` with raw
     # PTY-bound bytes for ``input`` messages instead of the default
-    # ``ws.send_text`` with a DLE-framed JSON envelope. Non-input
-    # messages (control frames) are dropped for tunnel workers because
-    # the existing ``uterm share`` bridge loop writes every received
-    # byte straight to its PTY — sending a JSON envelope would garble
-    # the user's terminal. See ``hub.send_worker``.
+    # ``ws.send_text`` with a DLE-framed JSON envelope. HTTP inspect
+    # controls use the tunnel ``CHANNEL_HTTP`` side-channel; other
+    # non-input messages are dropped because the existing ``uterm share``
+    # bridge loop writes PTY data directly. See ``hub.send_worker``.
     is_tunnel_worker: bool = False
 
     @property
