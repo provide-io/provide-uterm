@@ -82,7 +82,7 @@ The columns map to:
 | Permissions-Policy | ✅ | camera / mic / geolocation denied. |
 | CORS allowlist | ⚠ | Confirm: are cross-origin browser clients in scope? If yes, document the allowlist; if no, ensure CORS is closed by default. |
 | WebSocket origin validation | ✅ | `WebSocketOriginMiddleware` enforces same-origin by default and denies cross-origin browser upgrades unless explicitly allowed. |
-| Connector egress / SSRF filtering | ✅ | Connector-target validation is centralised at the `SessionRegistry` chokepoint via `assert_session_egress_allowed` (`server/egress.py`), blocking private/loopback/link-local/metadata targets (incl. IPv4-mapped IPv6 `169.254.169.254`). Gated on `security.block_private_connector_targets` (default off). |
+| Connector egress / SSRF filtering | ✅ | Connector-target validation is centralised at the `SessionRegistry` chokepoint via `assert_session_egress_allowed` (`server/egress.py`) and repeated after runtime connect for SSH, telnet, and websocket peer IPs. Metadata targets are always blocked; private/loopback/link-local targets are blocked when `security.block_private_connector_targets` is enabled (default off). User-supplied `ssh.client_key_path` is rejected so session creators cannot make the server use arbitrary local key files. |
 | Subresource Integrity (SRI) on CDN assets | ✅ | `tests/test_frontend_sri.py` verifies. |
 | TLS cert pinning | ❌ | Not implemented. Standard PKI is enough for most deployments; opt-in pinning could be a future feature. |
 

@@ -790,6 +790,18 @@ async def test_helper_ssh_derives_host_and_blocks_metadata() -> None:
 
 
 @pytest.mark.asyncio
+async def test_helper_ssh_rejects_client_key_path() -> None:
+    from provide.uterm.server.egress import EgressBlockedError, assert_session_egress_allowed
+
+    with pytest.raises(EgressBlockedError, match="client_key_path"):
+        await assert_session_egress_allowed(
+            "ssh",
+            {"host": "93.184.216.34", "client_key_path": "/tmp/id"},
+            block_private=False,
+        )
+
+
+@pytest.mark.asyncio
 async def test_helper_telnet_derives_host_and_blocks_metadata() -> None:
     from provide.uterm.server.egress import EgressBlockedError, assert_session_egress_allowed
 
@@ -807,10 +819,20 @@ async def test_helper_websocket_derives_host_from_url() -> None:
 
 @pytest.mark.asyncio
 async def test_helper_websocket_no_url_short_circuits() -> None:
-    """websocket connector with no url -> no host derived -> no guard, no raise."""
-    from provide.uterm.server.egress import assert_session_egress_allowed
+    """websocket connector with no url is invalid config, not runtime retry churn."""
+    from provide.uterm.server.egress import EgressBlockedError, assert_session_egress_allowed
 
-    await assert_session_egress_allowed("websocket", {}, block_private=False)
+    with pytest.raises(EgressBlockedError, match="requires connector_config.url"):
+        await assert_session_egress_allowed("websocket", {}, block_private=False)
+
+
+@pytest.mark.asyncio
+async def test_helper_websocket_invalid_scheme_rejected() -> None:
+    """websocket connector URLs must be ws:// or wss://."""
+    from provide.uterm.server.egress import EgressBlockedError, assert_session_egress_allowed
+
+    with pytest.raises(EgressBlockedError, match="url scheme"):
+        await assert_session_egress_allowed("websocket", {"url": "https://example.com/ws"}, block_private=False)
 
 
 @pytest.mark.asyncio

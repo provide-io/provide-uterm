@@ -44,6 +44,7 @@ class SshSessionConnector(SessionConnector):
             "insecure_no_host_check",
             "input_mode",
             "hub_overlay",
+            "block_private_connector_targets",
         }
     )
 
@@ -58,7 +59,7 @@ class SshSessionConnector(SessionConnector):
             else:
                 client_keys.append(raw_client_keys)
         if config.get("client_key_path") is not None:
-            client_keys.append(str(config["client_key_path"]))
+            raise ValueError("ssh connector_config.client_key_path is not supported")
         if config.get("client_key") is not None:
             client_keys.append(str(config["client_key"]))
         if config.get("client_key_data") is not None:
@@ -98,6 +99,7 @@ class SshSessionConnector(SessionConnector):
             )
         self._input_mode = str(config.get("input_mode", "open"))
         self._hub_overlay: bool = bool(config.get("hub_overlay", True))
+        self._block_private = bool(config.get("block_private_connector_targets", False))
         self._paused = False
         self._connected = False
         self._bytes_received = 0
@@ -159,7 +161,7 @@ class SshSessionConnector(SessionConnector):
             return
         peer_ip = peer[0]
         try:
-            assert_ip_allowed(str(peer_ip), block_private=False)
+            assert_ip_allowed(str(peer_ip), block_private=self._block_private)
         except Exception:
             conn.close()
             with contextlib.suppress(Exception):
@@ -189,8 +191,8 @@ class SshSessionConnector(SessionConnector):
         # application data.  The SSH handshake (incl. host-key/known-hosts
         # verification) already completed against the original hostname, so this
         # touches no verification; it only reads the connected peer IP.  Aborts
-        # on a blocked (cloud-metadata) peer.  Only metadata IPs are enforced
-        # (always-on, no config); private-range blocking is not threaded here.
+        # on a blocked peer. Metadata IPs are always blocked; private/internal
+        # peers are blocked when the server config enables that policy.
         await self._assert_peer_allowed(conn)
         process = await conn.create_process(term_type="ansi", term_size=(_COLS, _ROWS), encoding=None)
         self._conn = conn

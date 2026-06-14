@@ -4,7 +4,7 @@
 //
 import { renderHook, act } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { encodeControlFrame } from "../../utils/controlFrames";
+import { decodeControlFrames, encodeControlFrame } from "../../utils/controlFrames";
 import { useInspectStore } from "../../stores/inspectStore";
 import { useInspectWs } from "./useInspectWs";
 
@@ -181,10 +181,48 @@ describe("useInspectWs", () => {
     expect(useInspectStore.getState().interceptTimeout).toBe(10);
   });
 
-  it("returns a sendJson that posts when socket is open", () => {
+  it("rejects malformed http_intercept_state and keeps prior state", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    renderHook(() => useInspectWs("s1"));
+    const frame = makeHttpFrame({
+      type: "http_intercept_state",
+      inspect_enabled: true,
+      enabled: "false",
+      timeout_s: Infinity,
+      timeout_action: "drop",
+    });
+    act(() => lastSocket?.emit("message", { data: frame }));
+    expect(useInspectStore.getState().interceptEnabled).toBe(false);
+    expect(useInspectStore.getState().interceptTimeout).toBe(30);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("http_intercept_state"));
+  });
+
+  it("resets decoder state after malformed control frames so later frames are accepted", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    renderHook(() => useInspectWs("s1"));
+    act(() => lastSocket?.emit("message", { data: "\x10\x02zzzzzzzz:{}" }));
+    const frame = makeHttpFrame({
+      type: "http_req",
+      id: "r1",
+      ts: 1,
+      method: "GET",
+      url: "/x",
+      headers: {},
+      body_size: 0,
+    });
+    act(() => lastSocket?.emit("message", { data: frame }));
+    expect(useInspectStore.getState().exchanges).toHaveLength(1);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("malformed control frame"));
+  });
+
+  it("returns a sendJson that posts a DLE/STX control frame when socket is open", () => {
     const { result } = renderHook(() => useInspectWs("s1"));
     result.current.sendJson({ a: 1 });
-    expect((lastSocket as unknown as MockWebSocket).sent).toEqual([JSON.stringify({ a: 1 })]);
+    const sent = (lastSocket as unknown as MockWebSocket).sent;
+    expect(sent).toHaveLength(1);
+    const [frame] = sent;
+    expect(frame).toBeDefined();
+    expect(decodeControlFrames(frame as string)).toEqual([{ a: 1 }]);
   });
 
   it("sendJson is a noop when socket not open", () => {

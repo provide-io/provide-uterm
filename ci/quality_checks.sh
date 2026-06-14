@@ -42,6 +42,7 @@ step "max-loc"            uv run python scripts/check_max_loc.py --max-lines 500
 step "codegen-frames"     uv run python scripts/codegen_frames.py --check
 step "spdx-headers"       uv run python scripts/check_spdx_headers.py
 step "event-literals"     uv run python scripts/check_event_literals.py
+step "bare-json-ws-sends" uv run python scripts/check_bare_json_ws_sends.py
 step "ruff-format"        uv run ruff format --check packages/provide-uterm/src packages/provide-uterm/tests scripts
 step "ruff-check"         uv run ruff check packages/provide-uterm/src packages/provide-uterm/tests scripts
 step "mypy (strict)"      ci/typecheck.sh mypy
