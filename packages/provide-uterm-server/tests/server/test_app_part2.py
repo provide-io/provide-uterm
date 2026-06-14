@@ -280,7 +280,7 @@ class TestReferenceServerApp:
             ssh_server.close()
             await ssh_server.wait_closed()
 
-    async def test_ssh_connector_can_use_a_generated_client_key(
+    async def test_ssh_connector_rejects_client_key_path(
         self,
         live_reference_server: str,
         free_port: int,
@@ -326,15 +326,8 @@ class TestReferenceServerApp:
                         },
                     },
                 )
-                assert created.status_code == 200
-                await self._wait_for_connected(live_reference_server, "ssh-key-local")
-
-            async with websockets.connect(_ws_url(live_reference_server, "/ws/browser/ssh-key-local/term")) as browser:
-                hello = await _drain_until(browser, "hello", timeout=5.0)
-                assert hello is not None
-                assert hello["worker_online"] is True
-                snapshot = await _drain_snapshot_containing(browser, "welcome from key-backed ssh server", timeout=10.0)
-                assert snapshot is not None, "SSH echo greeting did not appear in any snapshot"
+                assert created.status_code == 422
+                assert "client_key_path" in created.text
         finally:
             await _delete_session(live_reference_server, "ssh-key-local")
             ssh_server.close()

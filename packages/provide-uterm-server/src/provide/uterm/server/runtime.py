@@ -57,6 +57,7 @@ class HostedSessionRuntime:
         hub: TermHub | None = None,
         detector: PatternDetector | None = None,
         max_buffer_bytes: int = 1_048_576,  # 1MB default
+        block_private_connector_targets: bool = False,
     ) -> None:
         self.definition = definition
         self._public_base_url = public_base_url.rstrip("/")
@@ -74,6 +75,7 @@ class HostedSessionRuntime:
         self._queue: asyncio.Queue[dict[str, Any]] | None = None
         self._queue_bytes = 0
         self._max_buffer_bytes = max_buffer_bytes
+        self._block_private_connector_targets = block_private_connector_targets
         self._stop = asyncio.Event()
         self._connected = False
         self._state: SessionLifecycle = "stopped"
@@ -228,7 +230,11 @@ class HostedSessionRuntime:
             self.definition.session_id,
             self.definition.display_name,
             self.definition.connector_type,
-            {**self.definition.connector_config, "input_mode": self.definition.input_mode},
+            {
+                **self.definition.connector_config,
+                "input_mode": self.definition.input_mode,
+                "block_private_connector_targets": self._block_private_connector_targets,
+            },
         )
         await connector.start()
         if connector.is_connected():
