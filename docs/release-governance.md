@@ -26,7 +26,7 @@
 ## Release checklist
 
 1. Baseline capture complete (`scripts/capture_rc_baseline.sh`).
-2. Artifact verification complete (`scripts/verify_package_artifacts.py`).
+2. Artifact verification complete (`scripts/verify_package_artifacts.py`), including wheel/sdist metadata, package data, frontend assets for `provide-uterm-server`, import roots, and console entry points for every published Python package.
 3. Supply-chain checks complete (`scripts/release_governance_check.sh`).
 4. SLO/load test report attached (`scripts/load_profile.py` output).
 5. On-call acknowledged current runbook and alert thresholds.

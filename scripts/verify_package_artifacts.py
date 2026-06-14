@@ -6,25 +6,16 @@ import subprocess  # nosec
 import sys
 import tarfile
 import zipfile
-from dataclasses import dataclass
 from email.parser import Parser
 from pathlib import Path
 from shutil import which
 
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-
-@dataclass(frozen=True)
-class PackageSpec:
-    name: str
-    import_names: tuple[str, ...]
-    required_members: tuple[str, ...]
-    entry_points: dict[str, str]
-
-    @property
-    def wheel_prefix(self) -> str:
-        return self.name.replace("-", "_")
+from scripts.package_metadata import PUBLISHED_PACKAGES, PackageSpec  # noqa: E402
 
 
 def _expected_frontend_files() -> tuple[str, ...]:
@@ -39,38 +30,10 @@ def _expected_frontend_files() -> tuple[str, ...]:
     )
 
 
-PUBLISHED_PACKAGES = (
-    PackageSpec(
-        name="provide-uterm",
-        import_names=("provide.uterm",),
-        required_members=("provide/uterm/py.typed",),
-        entry_points={},
-    ),
-    PackageSpec(
-        name="provide-uterm-server",
-        import_names=("provide.uterm.server", "provide.uterm.tunnel", "provide.uterm.gateway"),
-        required_members=("provide/uterm/py.typed", "provide/uterm/server/frontend/", *_expected_frontend_files()),
-        entry_points={"uterm": "provide.uterm.cli:main"},
-    ),
-    PackageSpec(
-        name="provide-uterm-client",
-        import_names=("provide.uterm.client", "provide.uterm.transports", "provide.uterm.ai"),
-        required_members=("provide/uterm/ai/py.typed",),
-        entry_points={"uterm-mcp": "provide.uterm.ai.cli:main"},
-    ),
-    PackageSpec(
-        name="provide-uterm-platform",
-        import_names=("provide.uterm.pty", "provide.uterm.manager"),
-        required_members=("provide/uterm/py.typed", "provide/uterm/pty/py.typed"),
-        entry_points={"uterm-manager": "provide.uterm.manager.cli:main"},
-    ),
-    PackageSpec(
-        name="provide-uterm-cloudflare",
-        import_names=("provide.uterm.cloudflare",),
-        required_members=("provide/uterm/cloudflare/py.typed",),
-        entry_points={"uterm-cf": "provide.uterm.cloudflare.cli:main"},
-    ),
-)
+def _required_members(package: PackageSpec) -> tuple[str, ...]:
+    if package.name == "provide-uterm-server":
+        return (*package.required_members, *_expected_frontend_files())
+    return package.required_members
 
 
 def _build() -> None:
@@ -149,8 +112,9 @@ def main() -> int:
         wheel, sdist = _artifact_pair(package)
         wheel_members = _wheel_members(wheel)
         sdist_members = _sdist_members(sdist)
-        _assert_contains(wheel_members, package.required_members, f"{package.name} wheel")
-        _assert_contains(sdist_members, package.required_members, f"{package.name} sdist")
+        required = _required_members(package)
+        _assert_contains(wheel_members, required, f"{package.name} wheel")
+        _assert_contains(sdist_members, required, f"{package.name} sdist")
         _assert_wheel_metadata(wheel, package)
         _assert_entry_points(wheel, package)
         checked += 1
