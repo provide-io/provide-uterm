@@ -26,7 +26,9 @@ _ROWS = 25
 class TelnetSessionConnector(SessionConnector):
     """Connect a hosted session to a remote telnet endpoint."""
 
-    _VALID_CONFIG_KEYS: frozenset[str] = frozenset({"host", "port", "input_mode", "hub_overlay"})
+    _VALID_CONFIG_KEYS: frozenset[str] = frozenset(
+        {"host", "port", "input_mode", "hub_overlay", "block_private_connector_targets"}
+    )
 
     def __init__(self, session_id: str, display_name: str, config: dict[str, Any]) -> None:
         unknown = set(config) - self._VALID_CONFIG_KEYS
@@ -40,6 +42,7 @@ class TelnetSessionConnector(SessionConnector):
         self._connected = False
         self._input_mode = str(config.get("input_mode", "open"))
         self._hub_overlay: bool = bool(config.get("hub_overlay", True))
+        self._block_private = bool(config.get("block_private_connector_targets", False))
         self._paused = False
         self._received_bytes = 0
         self._screen_buffer = ""
@@ -96,7 +99,7 @@ class TelnetSessionConnector(SessionConnector):
         if not peer_ip:
             return
         try:
-            assert_ip_allowed(peer_ip, block_private=False)
+            assert_ip_allowed(peer_ip, block_private=self._block_private)
         except Exception:
             with contextlib.suppress(Exception):
                 await self._transport.disconnect()
@@ -112,7 +115,8 @@ class TelnetSessionConnector(SessionConnector):
         await self._transport.connect(self._host, self._port)
         # M3 (DNS-rebinding) post-connect mitigation: validate the REAL peer IP
         # we reached before marking the connector live.  Aborts on a blocked
-        # (cloud-metadata) peer; only metadata IPs are enforced (always-on).
+        # peer. Metadata IPs are always blocked; private/internal peers are
+        # blocked when the server config enables that policy.
         await self._assert_peer_allowed()
         self._connected = True
 
