@@ -20,7 +20,8 @@ from unittest.mock import AsyncMock
 
 from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.server.bridge.models import WorkerTermState
-from tests.bridge.control_channel_helpers import decode_control_payloads
+
+from .control_channel_helpers import decode_control_payloads
 
 
 def _make_hub(**kwargs: Any) -> TermHub:

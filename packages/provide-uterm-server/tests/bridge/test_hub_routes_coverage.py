@@ -16,7 +16,8 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from provide.uterm.server.bridge.hub import TermHub
-from tests.bridge.control_channel_helpers import decode_control_payload, decode_control_payloads
+
+from .control_channel_helpers import decode_control_payload, decode_control_payloads
 
 
 def _make_app() -> tuple[TermHub, FastAPI]:

@@ -16,7 +16,6 @@ Scenarios
 from __future__ import annotations
 
 import asyncio
-import json
 from typing import Any
 
 from provide.uterm.client import connect_async_ws
@@ -51,7 +50,7 @@ async def test_two_sessions_eventbus_isolated(two_session_server: Any) -> None:
             event_bus.watch("s2") as sub2,
         ):
             # s1 worker fires; s2 worker stays silent
-            await w1.send(json.dumps(snapshot_msg("$ s1 event", "s1")))
+            await w1.send_json(snapshot_msg("$ s1 event", "s1"))
             s1_event = await asyncio.wait_for(sub1.queue.get(), timeout=3.0)
             assert s1_event is not None
             assert s1_event["worker_id"] == "s1"
@@ -61,7 +60,7 @@ async def test_two_sessions_eventbus_isolated(two_session_server: Any) -> None:
             assert sub2.queue.empty(), "s2 subscriber received an s1 event — isolation broken"
 
             # Now s2 fires
-            await w2.send(json.dumps(snapshot_msg("$ s2 event", "s2")))
+            await w2.send_json(snapshot_msg("$ s2 event", "s2"))
             s2_event = await asyncio.wait_for(sub2.queue.get(), timeout=3.0)
             assert s2_event is not None
             assert s2_event["worker_id"] == "s2"
@@ -93,10 +92,10 @@ async def test_two_sessions_concurrent_long_polls(two_session_server: Any) -> No
         await asyncio.sleep(0.5)
 
         # Fire events in reverse order to make sure routing is correct
-        await w2.send(json.dumps(snapshot_msg("$ s2 concurrent", "s2")))
+        await w2.send_json(snapshot_msg("$ s2 concurrent", "s2"))
         resp2 = await asyncio.wait_for(poll2, timeout=15.0)
 
-        await w1.send(json.dumps(snapshot_msg("$ s1 concurrent", "s1")))
+        await w1.send_json(snapshot_msg("$ s1 concurrent", "s1"))
         resp1 = await asyncio.wait_for(poll1, timeout=15.0)
 
     assert resp1.status_code == 200

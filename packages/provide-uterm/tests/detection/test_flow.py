@@ -118,6 +118,24 @@ def test_flow_engine_tail_preference_keeps_single_match(login_ruleset: RuleSet) 
     assert step.current_prompt_id == "login.name"
 
 
+def test_flow_engine_passes_explicit_cursor_to_detection_snapshot(
+    login_ruleset: RuleSet, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen_cursors: list[dict[str, int]] = []
+
+    def capture_snapshot(self: FlowEngine, snapshot: dict[str, object], prompt_ids: list[str]) -> None:
+        seen_cursors.append(snapshot["cursor"])  # type: ignore[arg-type]
+
+    monkeypatch.setattr(FlowEngine, "_detect_prompt", capture_snapshot)
+    engine = FlowEngine(login_ruleset)
+
+    step = engine.advance("login", "Enter your name:", cursor=(7, 8))
+
+    assert step.current_prompt_id is None
+    assert seen_cursors
+    assert all(cursor == {"x": 7, "y": 8} for cursor in seen_cursors)
+
+
 def test_flow_engine_handles_end_anchored_prompt_with_trailing_blank_lines() -> None:
     """Regression: an end-anchored prompt (\\Z/$) can match the detector's tail
     region while finding nothing in the full screen when trailing blank lines

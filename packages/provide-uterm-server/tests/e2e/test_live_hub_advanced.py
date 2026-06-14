@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import time
 from contextlib import asynccontextmanager
 from typing import Any
@@ -61,19 +60,17 @@ class TestBrowserRoles:
                 await _drain_all(browser)  # hello, hijack_state
 
                 # Switch to open mode via worker hello
-                await worker.send(
-                    json.dumps(
-                        {
-                            "type": "worker_hello",
-                            "input_mode": "open",
-                            "ts": time.time(),
-                        }
-                    )
+                await worker.send_json(
+                    {
+                        "type": "worker_hello",
+                        "input_mode": "open",
+                        "ts": time.time(),
+                    }
                 )
                 # Wait for mode switch to propagate to the browser
                 await _drain_until(browser, "hijack_state", timeout=2.0)
 
-                await browser.send(json.dumps({"type": "input", "data": "test"}))
+                await browser.send_json({"type": "input", "data": "test"})
                 # Viewer input is rejected or ignored; no input appears in worker messages
                 msgs = await _drain_all(worker, timeout=0.5)
                 input_msgs = [m for m in msgs if m.get("type") == "input"]
@@ -100,19 +97,17 @@ class TestBrowserRoles:
             await _drain_all(browser)
 
             # Switch to open mode
-            await worker.send(
-                json.dumps(
-                    {
-                        "type": "worker_hello",
-                        "input_mode": "open",
-                        "ts": time.time(),
-                    }
-                )
+            await worker.send_json(
+                {
+                    "type": "worker_hello",
+                    "input_mode": "open",
+                    "ts": time.time(),
+                }
             )
             # Wait for mode switch to propagate to the browser
             await _drain_until(browser, "hijack_state", timeout=2.0)
 
-            await browser.send(json.dumps({"type": "input", "data": "opkey"}))
+            await browser.send_json({"type": "input", "data": "opkey"})
             inp = await _drain_until(worker, "input")
             assert inp is not None, "Worker should receive input from operator in open mode"
             assert inp["data"] == "opkey", f"Input data should be 'opkey', got {inp.get('data')}"
@@ -125,7 +120,7 @@ class TestBrowserRoles:
             connect_async_ws(_ws_url(base_url, "/ws/worker/op2/term")),
         ):
             await _drain_all(browser)
-            await browser.send(json.dumps({"type": "hijack_request"}))
+            await browser.send_json({"type": "hijack_request"})
             # Operator cannot hijack; error or no state change
             msg = await _drain_until(browser, "error", timeout=1.0)
             # May receive error or no state change; operator hijack should be rejected
@@ -141,7 +136,7 @@ class TestBrowserRoles:
             await worker.recv()  # snapshot_req
             await _drain_all(browser)
 
-            await browser.send(json.dumps({"type": "hijack_request"}))
+            await browser.send_json({"type": "hijack_request"})
             state = await _drain_until(browser, "hijack_state")
             assert state is not None, "Should receive hijack_state after hijack_request"
             assert state.get("hijacked") is True, f"Should be hijacked, got {state}"
@@ -167,7 +162,7 @@ class TestLeaseExpiry:
             assert r.status_code == 200, f"Acquire should succeed, got {r.status_code}: {r.text}"
 
             # Immediately send a snapshot so guard passes for any upcoming send
-            await worker.send(json.dumps(_snapshot_msg()))
+            await worker.send_json(_snapshot_msg())
             ctrl = await _drain_until(worker, "control")
             assert ctrl is not None, "Should receive control message after acquire"
             assert ctrl["action"] == "pause", f"Control action should be pause, got {ctrl.get('action')}"
@@ -188,7 +183,7 @@ class TestLeaseExpiry:
 
             async with connect_async_ws(_ws_url(base_url, "/ws/browser/le2/term")) as b1:
                 await _drain_all(b1)
-                await b1.send(json.dumps({"type": "hijack_request"}))
+                await b1.send_json({"type": "hijack_request"})
                 state = await _drain_until(b1, "hijack_state")
                 assert state is not None, "Should receive hijack_state after hijack_request"
                 assert state["owner"] == "me", f"b1 should own hijack, got {state.get('owner')}"
@@ -262,7 +257,7 @@ class TestRestHijackAdvanced:
             hijack_id = r.json()["hijack_id"]
 
             # Send a snapshot so poll doesn't timeout
-            await worker.send(json.dumps(_snapshot_msg("test snapshot")))
+            await worker.send_json(_snapshot_msg("test snapshot"))
 
             # Poll snapshot endpoint — wait_ms=500 lets it block until snapshot arrives
             r2 = await http.get(f"/worker/rha1/hijack/{hijack_id}/snapshot?wait_ms=500")
@@ -286,7 +281,7 @@ class TestRestHijackAdvanced:
             await _drain_until(worker, "control")
 
             # Send a snapshot to ensure we have a valid state
-            await worker.send(json.dumps(_snapshot_msg()))
+            await worker.send_json(_snapshot_msg())
             # Use step endpoint with wait — avoids sleep by letting server block
             await _drain_until(worker, "snapshot", timeout=2.0)
 
@@ -340,27 +335,25 @@ class TestAnalyzeRoundTrip:
             await _drain_all(browser)
 
             # Browser acquires hijack first
-            await browser.send(json.dumps({"type": "hijack_request"}))
+            await browser.send_json({"type": "hijack_request"})
             state = await _drain_until(browser, "hijack_state")
             assert state is not None, "Should receive hijack_state after hijack_request"
             await _drain_until(worker, "control")  # pause
 
             # Browser sends analyze_req (only works for hijack owner)
-            await browser.send(json.dumps({"type": "analyze_req", "ts": time.time()}))
+            await browser.send_json({"type": "analyze_req", "ts": time.time()})
 
             # Worker receives it
             analyze = await _drain_until(worker, "analyze_req", timeout=2.0)
             assert analyze is not None, "Worker should receive analyze_req"
 
             # Worker sends analysis back
-            await worker.send(
-                json.dumps(
-                    {
-                        "type": "analysis",
-                        "formatted": "test analysis result",
-                        "ts": time.time(),
-                    }
-                )
+            await worker.send_json(
+                {
+                    "type": "analysis",
+                    "formatted": "test analysis result",
+                    "ts": time.time(),
+                }
             )
 
             # Browser receives it
@@ -402,14 +395,12 @@ class TestInputModeLifecycle:
             await _drain_all(browser)
 
             # Worker sends worker_hello with open mode
-            await worker.send(
-                json.dumps(
-                    {
-                        "type": "worker_hello",
-                        "input_mode": "open",
-                        "ts": time.time(),
-                    }
-                )
+            await worker.send_json(
+                {
+                    "type": "worker_hello",
+                    "input_mode": "open",
+                    "ts": time.time(),
+                }
             )
 
             # Browser should receive an update reflecting open mode

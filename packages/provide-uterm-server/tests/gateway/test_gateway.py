@@ -10,7 +10,7 @@ import json
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
-from provide.uterm.control_channel import encode_control_frame, encode_terminal_data
+from provide.uterm.control_channel import DLE, STX, encode_control_frame, encode_terminal_data
 from provide.uterm.gateway._gateway import (
     _handle_ws_control,
     _handle_ws_control_frame,
@@ -217,6 +217,14 @@ class TestHandleWsControl:
         write_fn = AsyncMock()
         result = await _handle_ws_control("not json {{{", holder, write_fn)
         assert result is False
+
+    async def test_malformed_framed_control_returns_false(self) -> None:
+        holder: list[dict | None] = [None]
+        write_fn = AsyncMock()
+        result = await _handle_ws_control(f"{DLE}{STX}00000020:{{", holder, write_fn)
+        assert result is False
+        assert holder[0] is None
+        write_fn.assert_not_called()
 
     async def test_empty_events(self) -> None:
         holder: list[dict | None] = [None]

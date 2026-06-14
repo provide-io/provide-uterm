@@ -137,7 +137,7 @@ class TestTermBroadcast:
             await _drain(browser, count=3)  # hello, hijack_state, worker_connected
             await worker.recv()  # snapshot_req
 
-            await worker.send(json.dumps({"type": "term", "data": "hello e2e", "ts": time.time()}))
+            await worker.send_json({"type": "term", "data": "hello e2e", "ts": time.time()})
             msg = await _drain_until(browser, "term")
             assert msg is not None
             assert msg["data"] == "hello e2e"
@@ -152,7 +152,7 @@ class TestTermBroadcast:
             await _drain(browser, count=3)
             await worker.recv()  # snapshot_req
 
-            await worker.send(json.dumps(_snapshot_msg("snapshot test")))
+            await worker.send_json(_snapshot_msg("snapshot test"))
             msg = await _drain_until(browser, "snapshot")
             assert msg is not None
             assert msg["screen"] == "snapshot test"
@@ -174,7 +174,7 @@ class TestTermBroadcast:
                 await _drain(b, count=3, timeout=3.0)
             await worker.recv()  # snapshot_req
 
-            await worker.send(json.dumps({"type": "term", "data": "broadcast-test", "ts": time.time()}))
+            await worker.send_json({"type": "term", "data": "broadcast-test", "ts": time.time()})
 
             results = await asyncio.gather(
                 _drain_until(b1, "term"),
@@ -218,7 +218,7 @@ class TestBrowserHello:
         _, base_url = live_hub
         async with connect_async_ws(_ws_url(base_url, "/ws/worker/h3/term")) as worker:
             await worker.recv()  # snapshot_req
-            await worker.send(json.dumps(_snapshot_msg("cached screen content")))
+            await worker.send_json(_snapshot_msg("cached screen content"))
 
             async with connect_async_ws(_ws_url(base_url, "/ws/browser/h3/term")) as browser:
                 snapshot = await _drain_until(browser, "snapshot", timeout=2.0)
@@ -258,7 +258,7 @@ class TestRestHijackCycle:
                 await _drain_until(worker, "control")  # pause control
 
                 # Send a snapshot so the guard check passes.
-                await worker.send(json.dumps(_snapshot_msg()))
+                await worker.send_json(_snapshot_msg())
 
                 r2 = await http.post(
                     f"/worker/r2/hijack/{hijack_id}/send",
@@ -344,7 +344,7 @@ class TestWsHijack:
             await _drain(browser, count=3)
             await _drain_until(worker, "snapshot_req")  # drain all initial snapshot_reqs
 
-            await browser.send(json.dumps({"type": "hijack_request"}))
+            await browser.send_json({"type": "hijack_request"})
 
             # Hub may send another snapshot_req before pause; drain until control arrives.
             ctrl = await _drain_until(worker, "control")
@@ -366,11 +366,11 @@ class TestWsHijack:
             await _drain(browser, count=3)
             await _drain_until(worker, "snapshot_req")  # drain initial snapshot_reqs
 
-            await browser.send(json.dumps({"type": "hijack_request"}))
+            await browser.send_json({"type": "hijack_request"})
             await _drain_until(worker, "control")  # pause (skips any snapshot_req)
             await _drain_until(browser, "hijack_state")
 
-            await browser.send(json.dumps({"type": "hijack_release"}))
+            await browser.send_json({"type": "hijack_release"})
 
             resume = await _drain_until(worker, "control")
             assert resume is not None
@@ -386,11 +386,11 @@ class TestWsHijack:
             await _drain(browser, count=3)
             await _drain_until(worker, "snapshot_req")  # drain initial snapshot_reqs
 
-            await browser.send(json.dumps({"type": "hijack_request"}))
+            await browser.send_json({"type": "hijack_request"})
             await _drain_until(worker, "control")  # pause (skips any snapshot_req)
             await _drain_until(browser, "hijack_state")
 
-            await browser.send(json.dumps({"type": "input", "data": "testkey"}))
+            await browser.send_json({"type": "input", "data": "testkey"})
             inp = await _drain_for_type(worker, "input")
             assert inp is not None
             assert inp["data"] == "testkey"
@@ -405,7 +405,7 @@ class TestWsHijack:
             await _drain(b1, count=3)
             await _drain_until(worker, "snapshot_req")  # drain initial snapshot_reqs
 
-            await b1.send(json.dumps({"type": "hijack_request"}))
+            await b1.send_json({"type": "hijack_request"})
             await _drain_until(worker, "control")  # pause (skips any snapshot_req)
             await _drain_until(b1, "hijack_state")
 
@@ -428,7 +428,7 @@ class TestWsHijack:
             await _drain(b2, count=3)
             await _drain_until(worker, "snapshot_req")
 
-            await b1.send(json.dumps({"type": "hijack_request"}))
+            await b1.send_json({"type": "hijack_request"})
             pause = await _drain_until(worker, "control")
             assert pause is not None
             assert pause["action"] == "pause"
@@ -441,7 +441,7 @@ class TestWsHijack:
             assert b2_state is not None
             assert b2_state["owner"] == "other"
 
-            await b1.send(json.dumps({"type": "hijack_release"}))
+            await b1.send_json({"type": "hijack_release"})
             resume = await _drain_until(worker, "control")
             assert resume is not None
             assert resume["action"] == "resume"
@@ -449,7 +449,7 @@ class TestWsHijack:
             await _drain_until(b1, "hijack_state")
             await _drain_until(b2, "hijack_state")
 
-            await b2.send(json.dumps({"type": "hijack_request"}))
+            await b2.send_json({"type": "hijack_request"})
             pause2 = await _drain_until(worker, "control")
             assert pause2 is not None
             assert pause2["action"] == "pause"

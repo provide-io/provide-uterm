@@ -122,7 +122,7 @@ async def test_sse_shell_snapshot_received(shell_server: Any) -> None:
         )
         await asyncio.wait_for(ready.wait(), timeout=3.0)
 
-        await worker.send(json.dumps(snapshot_msg("$ shell sse test")))
+        await worker.send_json(snapshot_msg("$ shell sse test"))
         events = await asyncio.wait_for(collect_task, timeout=10.0)
 
     assert len(events) == 1
@@ -156,8 +156,8 @@ async def test_sse_two_sessions_isolated(multi_session_server: Any) -> None:
         # Immediately follow with a positive-control event from the shell
         # session: if filtering is broken, collect_task will receive the
         # telnet event first and the worker_id assertion will fail.
-        await w_telnet.send(json.dumps(snapshot_msg("$ telnet event")))
-        await w_shell.send(json.dumps(snapshot_msg("$ shell event")))
+        await w_telnet.send_json(snapshot_msg("$ telnet event"))
+        await w_shell.send_json(snapshot_msg("$ shell event"))
         events = await asyncio.wait_for(collect_task, timeout=8.0)
 
     assert len(events) == 1
@@ -225,8 +225,8 @@ async def test_sse_pattern_filter(shell_server: Any) -> None:
         # matching positive-control event. If the pattern filter is broken
         # the non-matching event would arrive first and the screen_hash
         # assertion below would fail.
-        await worker.send(json.dumps(snapshot_msg("loading...")))
-        await worker.send(json.dumps(snapshot_msg("root@host:~$ ")))
+        await worker.send_json(snapshot_msg("loading..."))
+        await worker.send_json(snapshot_msg("root@host:~$ "))
         events = await asyncio.wait_for(collect_task, timeout=8.0)
 
     assert len(events) == 1
@@ -263,7 +263,7 @@ async def test_sse_event_types_filter(shell_server: Any) -> None:
         # snapshot should be filtered; hijack_acquired (injected immediately
         # after) is the positive control. If the event_types filter is broken
         # the snapshot would arrive first and the type assertion would fail.
-        await worker.send(json.dumps(snapshot_msg("$ x")))
+        await worker.send_json(snapshot_msg("$ x"))
         event_bus = hub.event_bus
         assert event_bus is not None
         event_bus._enqueue(  # type: ignore[attr-defined]

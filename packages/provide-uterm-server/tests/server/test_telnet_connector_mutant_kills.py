@@ -213,6 +213,11 @@ class TestSnapshotKeys:
 
 
 class TestScreenDisplay:
+    def test_screen_without_hub_overlay_returns_raw_screen_buffer(self) -> None:
+        c = _make_connector(config={"host": "127.0.0.1", "port": 2323, "hub_overlay": False})
+        c._screen_buffer = "raw telnet output"
+        assert c._screen() == "raw telnet output"
+
     def test_open_mode_shows_shared_input(self) -> None:
         """mut_8: == 'open' → != 'open' flips display."""
         c = _make_connector()

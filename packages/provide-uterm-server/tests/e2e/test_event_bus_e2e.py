@@ -105,7 +105,7 @@ async def test_worker_snapshot_arrives_via_long_poll(live_app_with_bus: Any) -> 
             await wait_for_subscribers(_hub, "s1", 1)
 
             # Worker sends a snapshot — hub.broadcast → append_event → EventBus
-            await worker.send(json.dumps(_snapshot_msg("$ e2e live poll")))
+            await worker.send_json(_snapshot_msg("$ e2e live poll"))
 
             response = await asyncio.wait_for(poll_task, timeout=8.0)
 
@@ -157,7 +157,7 @@ async def test_event_types_filter_excludes_non_matching(live_app_with_bus: Any) 
             await wait_for_subscribers(_hub, "s1", 1)
 
             # Send snapshot (should be returned) — hub routes it through broadcast
-            await worker.send(json.dumps(_snapshot_msg("$ filtered")))
+            await worker.send_json(_snapshot_msg("$ filtered"))
 
             response = await asyncio.wait_for(poll_task, timeout=8.0)
 
