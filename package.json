@@ -19,6 +19,7 @@
     "typecheck:app": "npm run typecheck --workspace=packages/provide-uterm-app",
     "lint:frontend": "npm run lint --workspace=packages/provide-uterm-frontend",
     "lint:app": "npm run lint --workspace=packages/provide-uterm-app",
+    "lint:ws-json": "uv run python scripts/check_bare_json_ws_sends.py",
     "fix:frontend": "npm run fix --workspace=packages/provide-uterm-frontend",
     "fix:app": "npm run fix --workspace=packages/provide-uterm-app"
   },
