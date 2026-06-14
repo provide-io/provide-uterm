@@ -62,6 +62,33 @@ describe("ControlFrameDecoder", () => {
     expect(() => decoder.feed(frame)).toThrow("control payload too large");
   });
 
+  it("rejects retained partial data larger than the aggregate buffer cap", () => {
+    const decoder = new ControlFrameDecoder({ maxBufferBytes: 10 });
+
+    expect(() => decoder.feed(`${DLE}${STX}00000020:`)).toThrow("control frame buffer overflow");
+  });
+
+  it("rejects JSON payloads deeper than the configured nesting cap", () => {
+    const decoder = new ControlFrameDecoder({ maxJsonDepth: 2 });
+    const frame = encodeControlFrame({ outer: { inner: { value: true } } });
+
+    expect(() => decoder.feed(frame)).toThrow("control payload nests deeper than 2");
+  });
+
+  it("clears buffered malformed frames so the next valid frame can decode", () => {
+    const decoder = new ControlFrameDecoder();
+    const frame = encodeControlFrame({ _channel: "http", type: "http_req", id: "r1" });
+
+    expect(() => decoder.feed(`${DLE}${STX}zzzzzzzz:{}`)).toThrow("invalid control frame length");
+    expect(decoder.feed(frame)).toEqual([{ _channel: "http", type: "http_req", id: "r1" }]);
+  });
+
+  it("rejects malformed DLE prefixes deterministically", () => {
+    const decoder = new ControlFrameDecoder();
+
+    expect(() => decoder.feed(`${DLE}xignored`)).toThrow("invalid control frame prefix");
+  });
+
   it("rejects non-hex length headers", () => {
     const decoder = new ControlFrameDecoder();
 

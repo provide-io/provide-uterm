@@ -90,6 +90,14 @@ export interface HttpResponseEntry {
   duration_ms: number;
 }
 
+export interface HttpInterceptStateFrame {
+  type: "http_intercept_state";
+  inspect_enabled: boolean;
+  enabled: boolean;
+  timeout_s: number;
+  timeout_action: string;
+}
+
 export interface HttpExchangeEntry {
   id: string;
   request: HttpRequestEntry;
