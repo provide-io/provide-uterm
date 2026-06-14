@@ -21,12 +21,14 @@ through the module object so that patch keeps taking effect.
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import TYPE_CHECKING, Any, cast
 
 from provide.telemetry import get_logger
 from provide.uterm.server.bridge.frames import make_hijack_state_frame
 from provide.uterm.server.bridge.hub.redaction import StreamRedactor
 from provide.uterm.server.bridge.hub.router_redaction import _redact_frame_fields
+from provide.uterm.tunnel.protocol import CHANNEL_HTTP, encode_frame
 
 if TYPE_CHECKING:
     from fastapi import WebSocket
@@ -34,6 +36,14 @@ if TYPE_CHECKING:
     from provide.uterm.server.bridge.hub.router_impl import MessageRouter
 
 logger = get_logger(__name__)
+
+_HTTP_INSPECT_CONTROL_TYPES = frozenset(
+    {
+        "http_action",
+        "http_intercept_toggle",
+        "http_inspect_toggle",
+    }
+)
 
 
 async def payloads_by_role(
@@ -256,11 +266,11 @@ async def broadcast_hijack_state(router: MessageRouter, worker_id: str) -> None:
 async def send_worker(router: MessageRouter, worker_id: str, msg: dict[str, Any], *, source: Any = None) -> bool:
     """Send *msg* to the worker WebSocket; returns False if no worker is connected.
 
-    Tunnel workers (``is_tunnel_worker=True``) use a different wire
-    format: ``input`` messages are sent as raw bytes (the worker
-    writes them straight to its PTY), other message types are
-    dropped because the worker's bridge loop has no JSON-envelope
-    handling.
+    Tunnel workers (``is_tunnel_worker=True``) use the binary tunnel
+    protocol: ``input`` messages are sent as raw UTF-8 PTY bytes, HTTP
+    inspect controls are sent on ``CHANNEL_HTTP``, and other message
+    types are dropped because the worker's bridge loop has no JSON
+    envelope handling.
     """
     from provide.uterm.server.bridge.hub.core import _encode_worker_frame
 
@@ -276,10 +286,14 @@ async def send_worker(router: MessageRouter, worker_id: str, msg: dict[str, Any]
         is_tunnel = st.is_tunnel_worker
     try:
         if is_tunnel:
-            # Tunnel wire format: hub → worker is raw bytes for input,
-            # nothing for control. Matches the existing ``uterm share``
-            # bridge loop which writes every received byte to PTY.
-            if msg.get("type") != "input":
+            # Tunnel wire format: hub → worker input is raw PTY bytes;
+            # inspect/intercept commands use the HTTP side-channel.
+            msg_type = msg.get("type")
+            if msg_type in _HTTP_INSPECT_CONTROL_TYPES:
+                payload = json.dumps(msg, separators=(",", ":")).encode()
+                await ws.send_bytes(encode_frame(CHANNEL_HTTP, payload))
+                return True
+            if msg_type != "input":
                 return True
             data = msg.get("data")
             if not isinstance(data, str):

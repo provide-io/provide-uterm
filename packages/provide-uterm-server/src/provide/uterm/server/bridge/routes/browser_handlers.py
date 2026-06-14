@@ -41,6 +41,14 @@ else:
 
 logger = get_logger(__name__)
 
+_HTTP_INSPECT_CONTROL_TYPES = frozenset(
+    {
+        "http_action",
+        "http_intercept_toggle",
+        "http_inspect_toggle",
+    }
+)
+
 
 def _is_noop_policy_gate(gate: object) -> bool:
     """Return True for the default no-op policy gate, including module aliases."""
@@ -92,6 +100,18 @@ async def _handle_hijack_step(hub: TermHub, ws: WebSocket, worker_id: str) -> No
             await hub.append_event(worker_id, "hijack_step", {"owner": "dashboard_ws"})
 
 
+async def _handle_http_inspect_control(
+    hub: TermHub,
+    ws: WebSocket,
+    worker_id: str,
+    msg_b: dict[str, Any],
+) -> None:
+    """Forward inspect/intercept control only when browser input is permitted."""
+    if not await hub.prepare_browser_input(worker_id, ws):
+        return
+    await hub.send_worker(worker_id, msg_b)
+
+
 async def handle_browser_message(
     hub: TermHub,
     ws: WebSocket,
@@ -124,6 +144,8 @@ async def handle_browser_message(
             await ws.send_text(encode_control_frame(make_pong_frame(ts=time.time())))
     elif mtype == "input":
         await _handle_input(hub, ws, worker_id, msg_b)
+    elif mtype in _HTTP_INSPECT_CONTROL_TYPES:
+        await _handle_http_inspect_control(hub, ws, worker_id, msg_b)
     return owned_hijack
 
 

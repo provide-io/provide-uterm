@@ -4,7 +4,7 @@
 //
 
 import { useEffect, useRef, useCallback } from "react";
-import { ControlFrameDecoder } from "../../utils/controlFrames";
+import { ControlFrameDecoder, encodeControlFrame } from "../../utils/controlFrames";
 import { useInspectStore } from "../../stores/inspectStore";
 import {
   parseHttpInterceptStateFrame,
@@ -20,7 +20,7 @@ export function useInspectWs(sessionId: string) {
   const sendJson = useCallback((msg: Record<string, unknown>) => {
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(msg));
+      ws.send(encodeControlFrame(msg));
     }
   }, []);
 
