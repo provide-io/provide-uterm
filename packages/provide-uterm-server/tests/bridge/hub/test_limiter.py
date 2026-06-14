@@ -237,16 +237,23 @@ def test_acquire_access_moves_client_to_end_lru() -> None:
     assert "new-client" in limiter.rest_acquire_per_client
 
 
-def test_evict_if_full_protects_keep_key_inside_eviction_window() -> None:
-    """``_evict_if_full`` never drops *keep*, even when it sits inside the
-    oldest-half eviction window.
+def test_evict_if_full_noop_at_exact_cap() -> None:
+    """The cache is allowed to sit exactly at the configured cap."""
+    per_client = {f"c{i}": TokenBucket(5.0) for i in range(REST_CLIENT_CACHE_MAX)}
 
-    Via the public API ``_touch`` always moves *keep* to the end first, so this
-    defensive branch is exercised directly here (keep = the oldest key)."""
+    RateLimiter._evict_if_full(per_client)
+
+    assert len(per_client) == REST_CLIENT_CACHE_MAX
+    assert "c0" in per_client
+    assert f"c{REST_CLIENT_CACHE_MAX - 1}" in per_client
+
+
+def test_evict_if_full_drops_oldest_half_on_overflow() -> None:
+    """``_evict_if_full`` trims the oldest half once the cache exceeds the cap."""
     per_client = {f"c{i}": TokenBucket(5.0) for i in range(REST_CLIENT_CACHE_MAX + 1)}
-    keep = "c0"  # oldest key — inside the first REST_CLIENT_EVICT_COUNT entries
 
-    RateLimiter._evict_if_full(per_client, keep=keep)
+    RateLimiter._evict_if_full(per_client)
 
-    assert keep in per_client  # protected despite being in the eviction window
-    assert "c1" not in per_client  # a non-keep key in the window was evicted
+    assert len(per_client) == REST_CLIENT_CACHE_MAX + 1 - REST_CLIENT_EVICT_COUNT
+    assert "c0" not in per_client
+    assert f"c{REST_CLIENT_EVICT_COUNT}" in per_client

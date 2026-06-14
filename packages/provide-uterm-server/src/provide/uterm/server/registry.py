@@ -4,7 +4,7 @@
 #
 """Session registry for the hosted terminal server.
 
-Mutation-enforced at killed==100 (see [tool.mutmut].paths_to_mutate). The bound suite
+Mutation-enforced at killed==100 (see [tool.mutmut].source_paths). The bound suite
 is tests/server/test_registry_mutation_killing.py — a SELF-CONTAINED, fully-mocked
 suite (patches HostedSessionRuntime / connectors.registered_types / egress /
 asyncio.sleep and drives the EventBus queue with mocks, consuming the SSE generators

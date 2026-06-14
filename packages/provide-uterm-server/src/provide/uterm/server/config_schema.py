@@ -4,7 +4,7 @@
 #
 """Canonical configuration schema for the hosted terminal server application.
 
-Mutation-enforced at killed==100 (see [tool.mutmut].paths_to_mutate). mutmut only
+Mutation-enforced at killed==100 (see [tool.mutmut].source_paths). mutmut only
 mutates this module's two undecorated module-level helpers (``_clean_path`` and the
 ``_require_secure_url`` SSRF guard) — it skips every ``@model_validator`` /
 ``@field_validator`` / ``@classmethod`` by design — so those two functions carry the

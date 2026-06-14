@@ -33,7 +33,10 @@ from typing import TYPE_CHECKING, Any, cast
 try:
     from provide.uterm.cloudflare.do._webhook_crypto import decrypt_secret, encrypt_secret
 except ImportError:  # pragma: no cover - CF flat bundle path
-    from _webhook_crypto import decrypt_secret, encrypt_secret  # type: ignore[import-not-found,no-redef]
+    from _webhook_crypto import (  # type: ignore[import-not-found,no-redef]  # ty:ignore[unresolved-import]
+        decrypt_secret,
+        encrypt_secret,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +71,7 @@ async def _deliver_webhook(
     fetch_fn = _fetch or _outbound_fetch
     if fetch_fn is None:
         try:
-            import js  # type: ignore[import-not-found]  # CF flat path
+            import js  # type: ignore[import-not-found]  # CF flat path  # ty:ignore[unresolved-import]
 
             fetch_fn = js.fetch  # pragma: no cover
         except ImportError:

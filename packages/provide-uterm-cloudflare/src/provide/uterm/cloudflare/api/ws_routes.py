@@ -37,7 +37,7 @@ _ROLE_RANK = {"viewer": 0, "operator": 1, "admin": 2}
 try:
     from provide.uterm.cloudflare.contracts import MessageLimits, ProtocolError, RuntimeProtocol, parse_stream
 except Exception:  # pragma: no cover
-    from contracts import (  # type: ignore[import-not-found,no-redef]  # pragma: no cover
+    from contracts import (  # type: ignore[import-not-found,no-redef]  # pragma: no cover  # ty:ignore[unresolved-import]
         MessageLimits,
         ProtocolError,
         RuntimeProtocol,
@@ -192,7 +192,7 @@ async def _handle_presence_message(runtime: RuntimeProtocol, ws: CFWebSocket, fr
         owner_key = None
         active = runtime.hijack.session
         if active is not None:
-            for ws_id, candidate in list(runtime.browser_sockets.items()):  # type: ignore[attr-defined]
+            for ws_id, candidate in list(runtime.browser_sockets.items()):  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
                 if runtime.browser_hijack_owner.get(ws_id) == active.hijack_id:
                     owner_key = ws_id
                     target_ws = candidate
@@ -201,18 +201,18 @@ async def _handle_presence_message(runtime: RuntimeProtocol, ws: CFWebSocket, fr
             try:
                 await runtime.send_ws(target_ws, frame)
             except Exception:
-                runtime.browser_sockets.pop(owner_key, None)  # type: ignore[attr-defined]
+                runtime.browser_sockets.pop(owner_key, None)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
         return
 
     # presence_update / queued_input: relay to all other browsers.
     try:
-        all_ws = list(runtime.ctx.getWebSockets())  # type: ignore[attr-defined]
+        all_ws = list(runtime.ctx.getWebSockets())  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
     except Exception:
         all_ws = []
     if not all_ws:
-        all_ws = list(runtime.browser_sockets.values())  # type: ignore[attr-defined]
+        all_ws = list(runtime.browser_sockets.values())  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
     for other_ws in all_ws:
-        if runtime._socket_role(other_ws) != "browser":  # type: ignore[attr-defined]
+        if runtime._socket_role(other_ws) != "browser":  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
             continue
         if runtime.ws_key(other_ws) == sender_key:
             continue
@@ -220,7 +220,7 @@ async def _handle_presence_message(runtime: RuntimeProtocol, ws: CFWebSocket, fr
         try:
             await runtime.send_ws(other_ws, frame)
         except Exception:
-            runtime.browser_sockets.pop(ws_id, None)  # type: ignore[attr-defined]
+            runtime.browser_sockets.pop(ws_id, None)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
 
 
 async def _handle_resume(runtime: RuntimeProtocol, ws: CFWebSocket, frame: dict[str, Any]) -> None:
@@ -292,7 +292,7 @@ async def _handle_resume(runtime: RuntimeProtocol, ws: CFWebSocket, frame: dict[
             "ts": time.time(),
         },
     )
-    await runtime.send_hijack_state(ws)  # type: ignore[attr-defined]
+    await runtime.send_hijack_state(ws)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
     if runtime.last_snapshot is not None:
         await runtime.send_ws(ws, runtime.last_snapshot)
     logger.info(

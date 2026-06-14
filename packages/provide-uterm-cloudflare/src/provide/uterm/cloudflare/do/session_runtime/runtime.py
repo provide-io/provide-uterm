@@ -25,10 +25,15 @@ try:
     from provide.uterm.cloudflare.config import CloudflareConfig
     from provide.uterm.cloudflare.state.store import SqliteStateStore
 except Exception:  # pragma: no cover
-    from bridge.hijack import HijackCoordinator  # type: ignore[import-not-found,no-redef]
-    from cf_types import CFWebSocket, DurableObject  # type: ignore[import-not-found,no-redef]
-    from config import CloudflareConfig  # type: ignore[import-not-found,no-redef]
-    from state.store import SqliteStateStore  # type: ignore[import-not-found,no-redef]
+    from bridge.hijack import (  # ty:ignore[unresolved-import]
+        HijackCoordinator,  # type: ignore[import-not-found,no-redef]
+    )
+    from cf_types import (  # type: ignore[import-not-found,no-redef]  # ty:ignore[unresolved-import]
+        CFWebSocket,
+        DurableObject,
+    )
+    from config import CloudflareConfig  # type: ignore[import-not-found,no-redef]  # ty:ignore[unresolved-import]
+    from state.store import SqliteStateStore  # type: ignore[import-not-found,no-redef]  # ty:ignore[unresolved-import]
 
 from .auth import _AuthMixin
 from .fetch import _FetchMixin

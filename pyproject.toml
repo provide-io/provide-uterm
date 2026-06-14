@@ -226,7 +226,7 @@ max_modules = "D"
 max_average = "A"
 
 [tool.mutmut]
-paths_to_mutate = [
+source_paths = [
     "src/provide/uterm/pty/connector.py",
     "src/provide/uterm/control_channel.py",
     "src/provide/uterm/control_channel_builders.py",
@@ -238,7 +238,7 @@ paths_to_mutate = [
     # detection/flow.py — FlowEngine.advance tail-most prompt selection
     #   (login-load-bearing; a hand-rolled max() once slipped the 100% coverage
     #   gate, so it is mutation-enforced). Bound by test_flow.py, wired into
-    #   tests_dir below.
+    #   pytest_add_cli_args_test_selection below.
     "src/provide/uterm/detection/flow.py",
     "src/provide/uterm/io.py",
     "src/provide/uterm/recording.py",
@@ -257,7 +257,7 @@ paths_to_mutate = [
     # matches ``__module__`` — so EVERY server mutant reported ``no_tests``.
     # The ``src/provide/uterm/server`` symlink (-> the server package's source)
     # makes the derived name equal ``provide.uterm.server...`` and binding
-    # works. The matching test files are in ``tests_dir`` below.
+    # works. The matching test files are in ``pytest_add_cli_args_test_selection`` below.
     #
     # HijackLease.expire boundary + lease arithmetic.
     "src/provide/uterm/server/bridge/models.py",
@@ -279,7 +279,7 @@ paths_to_mutate = [
     #   surface at all — its 459 mutants are pure/sync UNDECORATED code (the _helpers.py
     #   accessors, per-module _registry/_authz/_principal accessors, create_*_router
     #   bodies, and NESTED undecorated helpers like health's _posture_caller_is_privileged).
-    #   The dedicated suite test_routes_mutation_killing.py (wired into tests_dir) builds
+    #   The dedicated suite test_routes_mutation_killing.py (wired into pytest selection) builds
     #   each router with mocked app-state, pulls the handler endpoints off router.routes,
     #   and calls them directly with a mocked Request (no TestClient/full-app lifespan).
     #   390 killed + 69 documented equivalents (64 typing.cast no-ops across the accessors
@@ -292,7 +292,7 @@ paths_to_mutate = [
     #   registration time, so a mutant perturbing the resolver/delivery args drives the C
     #   resolver (or real httpx + real sleeps) in a mutmut-forked child, crashing it. Fix:
     #   a dedicated FULLY NETWORK-MOCKED kill suite (test_webhooks_mutation_killing.py,
-    #   wired into tests_dir) whose autouse getaddrinfo MagicMock + patched httpx/sleep
+    #   wired into pytest selection) whose autouse getaddrinfo MagicMock + patched httpx/sleep
     #   keep all egress out of the forked child (segfault 307 -> 0). 400 killed + 6
     #   documented equivalents excused via mutation_equivalents.toml. The 7 part suites
     #   stay the normal-pytest coverage suite (real DNS is safe without forking), UNWIRED.
@@ -303,7 +303,7 @@ paths_to_mutate = [
     #   the real SSE generators/timers AND depend on connector-registry state the mutants
     #   tree lacks (test_invalid_input_mode_raises aborts the stats phase because 'shell'
     #   isn't registered there). Fix: a dedicated SELF-CONTAINED fully-mocked kill suite
-    #   (test_registry_mutation_killing.py, wired into tests_dir) that patches
+    #   (test_registry_mutation_killing.py, wired into pytest selection) that patches
     #   HostedSessionRuntime / registered_types / egress / asyncio.sleep and drives the
     #   EventBus queue with mocks, consuming the SSE generator with a per-step
     #   asyncio.wait_for bound — so no external state or real async streaming reaches a
@@ -320,7 +320,7 @@ paths_to_mutate = [
     # defaults aren't inside a function, so the file's only mutable surface is its two
     # UNDECORATED module-level helpers: _clean_path and the _require_secure_url SSRF
     # guard. All 34 mutants are bound + killed by test_models_mutation_killing.py
-    # (wired into tests_dir) EXCEPT one documented equivalent
+    # (wired into pytest selection) EXCEPT one documented equivalent
     # (_require_secure_url__mutmut_14, the unreachable-fallback string) excused via
     # mutation_equivalents.toml. The decorated Pydantic validators stay line/branch +
     # unit tested via test_config.py (mutmut cannot reach them in any file).
@@ -349,7 +349,7 @@ paths_to_mutate = [
     #   no-ops, 4 getattr-config-field-always-set, 2 `or 'default'`-masked .get defaults,
     #   1 int(None or 0)==0 getattr, 1 `% 360` sign-flip. The 14 mocked manager suites
     #   (test_process_mutation_killing{,_2..5}.py + test_process_*/_coverage_*) are wired in
-    #   tests_dir below; test_process.py stays UNWIRED (real Popen).
+    #   pytest selection below; test_process.py stays UNWIRED (real Popen).
     #
     # process_impl_spawn.py — the low-level spawn/stop group (spawn_agent /
     #   _spawn_process / _spawn_platform_kwargs / _build_preexec_rlimit_fn /
@@ -369,18 +369,18 @@ paths_to_mutate = [
     # lease.py — RE-ENABLED at killed==100 (489/489, 0 survived, 0 no_tests). The
     # dedicated suites (test_lease.py + the ownership/atomic suites + the five
     # test_lease_kill_*.py behaviour-pinning suites, ~188 tests) are wired into
-    # tests_dir below; the sole equivalent-class mutant (the _LeaseHubCallbacks
+    # pytest selection below; the sole equivalent-class mutant (the _LeaseHubCallbacks
     # .metric Protocol-stub default) was removed via `= ...`. The CI mutmut
     # KeyError that previously mass-reported not_checked here was traced to the
     # subprocess-spawning test_process.py leaking worker children into mutmut's
-    # fork-loop os.wait() — that suite is now removed from tests_dir (above).
+    # fork-loop os.wait() — that suite is now removed from pytest selection (above).
     "src/provide/uterm/server/bridge/hub/lease.py",
     "src/provide/uterm/server/bridge/hub/router.py",
     # connection.py — ConnectionManager (register/deregister worker + browser,
-    # disconnect, cleanup). Kill-suites wired in tests_dir below (the dedicated
+    # disconnect, cleanup). Kill-suites wired in pytest selection below (the dedicated
     # test_connections_* suites + test_connection_kill_*.py behaviour-pinning
     # suites). Enforced at killed==100 now that the mutmut child-reaping crash is
-    # fixed (test_process.py removed from tests_dir).
+    # fixed (test_process.py removed from pytest selection).
     "src/provide/uterm/server/bridge/hub/connection.py",
     # connection_hijack.py — module-level bodies of ConnectionManager's
     # hijack-clearing lifecycle (disconnect_worker / _event_bus_close /
@@ -399,7 +399,7 @@ paths_to_mutate = [
     # DeckMux presence service — split out of DeckMuxMixin in #6 follow-up.
     "src/provide/uterm/deckmux/_service.py",
 ]
-tests_dir = [
+pytest_add_cli_args_test_selection = [
     "packages/provide-uterm/tests/shell/test_shell_render.py",
     "packages/provide-uterm/tests/deckmux/test_presence.py",
     "packages/provide-uterm/tests/deckmux/test_hub_mixin.py",
@@ -439,10 +439,13 @@ tests_dir = [
     "packages/provide-uterm/tests/test_auth_authorized_keys.py",
     "packages/provide-uterm/tests/test_auth_resolver.py",
     "packages/provide-uterm/tests/detection/test_detector.py",
+    "packages/provide-uterm/tests/detection/test_detector_part1.py",
     "packages/provide-uterm/tests/detection/test_detector_compile_mutmut.py",
     "packages/provide-uterm/tests/detection/test_detector_detect_mutmut.py",
     "packages/provide-uterm/tests/detection/test_detector_diagnostics_mutmut.py",
     "packages/provide-uterm/tests/detection/test_detector_survivors.py",
+    "packages/provide-uterm/tests/detection/test_detector_survivors_diagnostics.py",
+    "packages/provide-uterm/tests/detection/test_detector_survivors_logging.py",
     "packages/provide-uterm/tests/detection/test_detector_survivors_2.py",
     "packages/provide-uterm/tests/detection/test_engine.py",
     "packages/provide-uterm/tests/detection/test_engine_mutmut.py",
@@ -476,7 +479,7 @@ tests_dir = [
     # the security-bearing syscall args (dir/file modes, O_NOFOLLOW, S_ISREG,
     # utf-8 encoding) that chmod/fchmod otherwise mask; this wraps them to assert.
     "packages/provide-uterm/tests/terminal/test_recording_kill.py",
-    # Server-package coverage — matches the server-package paths_to_mutate
+    # Server-package coverage — matches the server-package source_paths
     # entries above. Without these the gate finds the mutants but binds
     # to zero tests and reports them all as ``no_tests``.
     "packages/provide-uterm-server/tests/bridge/test_hijack_lease.py",
@@ -488,7 +491,7 @@ tests_dir = [
     # not-done guard / await_decision timeout wiring; this binds those mutants.
     "packages/provide-uterm-server/tests/tunnel/test_intercept_kill.py",
     # SessionRegistry (server/registry.py) dedicated mutmut suite — PRESERVED but
-    # commented out in lockstep with registry.py's deferral from paths_to_mutate
+    # commented out in lockstep with registry.py's deferral from source_paths
     # above (2026-06-01). Wiring these takes registry.py from ~14% (no bound
     # tests) to ~53% (219/415 killed); test_registry.py + test_runtime.py are the
     # dedicated suite, and the SSE/coverage suites cover watch_session_events /
@@ -505,10 +508,10 @@ tests_dir = [
     # this binds the undecorated helpers + create_*_router bodies via router-endpoint
     # extraction with mocked Request — no TestClient/full-app lifespan).
     "packages/provide-uterm-server/tests/server/test_routes_mutation_killing.py",
-    # test_process.py (manager process supervisor) — REMOVED from tests_dir
+    # test_process.py (manager process supervisor) — REMOVED from pytest selection
     # (2026-06-02). It exercises process_impl.py, but process_impl.py is NOT in the
     # perimeter (and the listed manager/process.py + config.py are 0-mutant, see the
-    # paths_to_mutate note above), so it bound nothing useful — and it is the only
+    # source_paths note above), so it bound nothing useful — and it is the only
     # wired suite that spawns real OS subprocesses (subprocess.Popen / spawn()).
     # Its leftover worker children get reaped by mutmut's fork-loop os.wait()
     # (read_one_child_exit_status, mutmut/__main__.py), whose result dict is keyed
@@ -556,21 +559,21 @@ tests_dir = [
     "packages/provide-uterm-server/tests/bridge/test_presence_protocol.py",
     # WorkerRegistry (hub/registry.py) — the *hub* registry (distinct from the
     # server SessionRegistry that test_registry_mutation_killing.py covers). Its
-    # dedicated suite was never wired in, so the file sat at ~61% under tests_dir.
+    # dedicated suite was never wired in, so the file sat at ~61% under pytest selection.
     "packages/provide-uterm-server/tests/bridge/hub/test_registry.py",
     # HijackCoordinator (bridge/coordinator.py) — dedicated unit + stress suites
-    # were never wired in (file sat at ~31% under tests_dir).
+    # were never wired in (file sat at ~31% under pytest selection).
     "packages/provide-uterm/tests/bridge/test_coordinator_units.py",
     "packages/provide-uterm/tests/bridge/test_coordinator_stress.py",
     # PollingCoordinator (hub/polling_service.py) — snapshot-polling kill suites
-    # (never wired in; file sat at ~21% under tests_dir). The coverage suite is a
+    # (never wired in; file sat at ~21% under pytest selection). The coverage suite is a
     # real-hub integration pass; test_polling_kill.py is a deterministic
     # fake-clock suite that pins the deadline/interval arithmetic + re-request
     # gates the wall-clock suite cannot reach.
     "packages/provide-uterm-server/tests/bridge/test_hub_polling_coverage.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_polling_kill.py",
     # StateStore (hub/store.py) — line-buffer + lifecycle + role/policy helpers.
-    # No dedicated suite was wired (file sat at ~14% under tests_dir, 196 mutants
+    # No dedicated suite was wired (file sat at ~14% under pytest selection, 196 mutants
     # with no bound test). test_store_kill.py covers buffer/shutdown/lifecycle/
     # metric/predicates; test_store_policy_kill.py covers the branch-heavy
     # resolve_role_for_browser / prepare_policy_context / _map_roles surface.
@@ -599,6 +602,7 @@ tests_dir = [
     "packages/provide-uterm-platform/tests/manager/manager/test_process_mutation_killing_2.py",
     "packages/provide-uterm-platform/tests/manager/manager/test_process_mutation_killing_3.py",
     "packages/provide-uterm-platform/tests/manager/manager/test_process_mutation_killing_4.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_process_impl_survivors.py",
     "packages/provide-uterm-platform/tests/manager/manager/test_process_kill_part01.py",
     "packages/provide-uterm-platform/tests/manager/manager/test_process_kill_part02.py",
     "packages/provide-uterm-platform/tests/manager/manager/test_process_kill_part03.py",
@@ -619,7 +623,7 @@ tests_dir = [
     "packages/provide-uterm-platform/tests/manager/manager/test_agent_ops_mutation_killing_2.py",
     "packages/provide-uterm-platform/tests/manager/manager/test_coverage_gaps.py",
     # Full-app (create_server_app) suites LAST. mutmut's stats phase runs the
-    # whole tests_dir with ``-x`` (stop on first failure); these TestClient/
+    # whole pytest selection with ``-x`` (stop on first failure); these TestClient/
     # full-app tests are intermittently fragile in the mutants tree (a stray
     # "I/O operation on closed file" logging error during lifespan teardown can
     # fail test_loaded_max_sessions_is_enforced_by_app). Keeping them last means a
@@ -637,7 +641,7 @@ also_copy = [
     "packages/provide-uterm-platform/src",
     "packages/provide-uterm-platform/tests/pty",
     # Server-package source + tests for the bridge/tunnel mutants added
-    # to paths_to_mutate. ``mutants/`` needs both copied alongside so the
+    # to source_paths. ``mutants/`` needs both copied alongside so the
     # mutated source resolves and the test discovery finds the suites.
     "packages/provide-uterm-server/src",
     "packages/provide-uterm-server/tests/bridge",

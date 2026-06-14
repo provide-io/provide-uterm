@@ -118,9 +118,13 @@ class TestScanEventsForResume:
         acquire stop -> False."""
         assert self._scan([{"type": "hijack_acquired"}, {"type": "hijack_owner_expired"}]) is False
 
-    def test_missing_type_key_defaults_empty_string(self) -> None:
-        """Events with no 'type' key coerce to '' (not a lifecycle event) -> True."""
+    def test_missing_type_key_is_ignored(self) -> None:
+        """Events with no 'type' key are ignored as malformed non-lifecycle events."""
         assert self._scan([{"foo": "bar"}]) is True
+
+    def test_malformed_newer_event_does_not_mask_expiry(self) -> None:
+        """Malformed newer events are ignored, so an older expiry is still honored."""
+        assert self._scan([{"type": "hijack_owner_expired"}, {"type": None}]) is False
 
 
 # ===========================================================================

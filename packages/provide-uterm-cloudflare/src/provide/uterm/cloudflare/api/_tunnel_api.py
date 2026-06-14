@@ -83,7 +83,7 @@ async def handle_tunnels(request: object, env: object, principal: object | None 
     if method != "POST":
         return json_response({"error": "method not allowed"}, status=405)
     try:
-        raw = await request.json()  # type: ignore[attr-defined]
+        raw = await request.json()  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
         body = raw.to_py() if hasattr(raw, "to_py") else raw
     except Exception:
         body = {}
@@ -351,7 +351,7 @@ async def resolve_share_context(
 async def consume_tunnel_invite(request: object, env: object, tunnel_id: str) -> tuple[str, str, str] | None:
     """Consume a one-time tunnel invite and return ``(page_kind, role, token)``."""
     try:
-        query = parse_qs(urlparse(str(request.url)).query)  # type: ignore[attr-defined]
+        query = parse_qs(urlparse(str(request.url)).query)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
         invite = (query.get("invite", [None]) or [None])[0]
     except Exception:
         invite = None

@@ -270,7 +270,7 @@ def pytest_configure(config: pytest.Config) -> None:
     # which instantiates mutated bridge/hub services (e.g. RateLimiter). During
     # the mutmut stats phase the mutated trampoline raises
     # MutmutProgrammaticFailException, aborting the entire stats run before any
-    # test binds. The mutmut tests_dir enumerates its suites explicitly and
+    # test binds. The mutmut pytest_add_cli_args_test_selection enumerates its suites explicitly and
     # imports their targets directly, so this connector pre-registration is
     # unnecessary there.
     if _os.environ.get("MUTANT_UNDER_TEST"):

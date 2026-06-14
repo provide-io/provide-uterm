@@ -49,9 +49,9 @@ def _attach_share_token_cookie(response: Response, request: object, tunnel_id: s
     """Refresh an existing share-token cookie without reading URL tokens."""
     cookie = _share_token_cookie_header(request, tunnel_id)
     if cookie is not None:
-        headers = dict(response.headers or {})
+        headers = dict(response.headers or {})  # ty:ignore[unresolved-attribute]
         headers["Set-Cookie"] = cookie
-        response.headers = headers
+        response.headers = headers  # ty:ignore[invalid-assignment]
     return response
 
 

@@ -116,12 +116,12 @@ class PromptDetector:
         if not screen:
             return ("", False)
 
-        # Preserve empty trailing lines if present.
         lines = screen.split("\n")
-        # Find the last line with any non-whitespace content.
+        # Find the last line with any non-whitespace content while preserving
+        # the original line text in the returned region.
         last_idx = 0
-        for i in range(len(lines) - 1, -1, -1):
-            if lines[i].rstrip():
+        for i, line in reversed(list(enumerate(lines))):
+            if line.strip():
                 last_idx = i
                 break
         start_idx = max(0, last_idx - max(1, int(tail_lines)) + 1)
@@ -200,7 +200,7 @@ class PromptDetector:
         nm = pattern.get("negative_match")
         if nm and isinstance(nm, dict):
             sub_pattern = str(nm.get("pattern", ""))
-            match_mode = str(nm.get("match_mode", "regex"))
+            match_mode = str(nm.get("match_mode"))
             if match_mode == "contains":
                 return re.escape(sub_pattern)
             if match_mode == "exact":

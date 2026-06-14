@@ -11,7 +11,9 @@ Classes: TestSpawnProcessExtra, TestKillAgentExtra, TestReleaseAgentAccountExtra
 from __future__ import annotations
 
 import asyncio
+import os
 import time
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -89,7 +91,10 @@ class TestSpawnProcessExtra:
     def test_default_log_dir_fallback(self, pm, tmp_path, monkeypatch):
         """mutmut_5: Path('logs/workers') fallback when _log_dir empty."""
         pm._log_dir = ""
+        mutation_source_root = Path("src").resolve()
         monkeypatch.chdir(tmp_path)
+        if os.environ.get("MUTANT_UNDER_TEST"):
+            (tmp_path / "src").symlink_to(mutation_source_root, target_is_directory=True)
         with patch("subprocess.Popen") as mp:
             mp.return_value = MagicMock(pid=1)
             pm._spawn_process("agent_002", ["echo"], {})

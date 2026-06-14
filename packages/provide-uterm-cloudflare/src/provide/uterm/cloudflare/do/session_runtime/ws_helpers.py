@@ -41,7 +41,7 @@ class _WsHelperMixin:
 
         key = f"{time.time_ns()}_{secrets.token_hex(4)}"
         with contextlib.suppress(Exception):
-            ws._ut_ws_key = key  # type: ignore[attr-defined]
+            ws._ut_ws_key = key  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
         return key
 
     def _socket_role(self, ws: CFWebSocket) -> str:
@@ -108,9 +108,9 @@ class _WsHelperMixin:
         # In none/dev mode every caller is already treated as admin by design
         # (no per-socket role granularity), so the admin fallback is intentional,
         # not a privilege escalation.
-        if self.config.jwt.mode not in {"none", "dev"}:  # type: ignore[attr-defined]
+        if self.config.jwt.mode not in {"none", "dev"}:  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
             logger.warning("browser role unavailable (post-hibernation fallback), defaulting to viewer")
-        return "admin" if self.config.jwt.mode in {"none", "dev"} else "viewer"  # type: ignore[attr-defined]
+        return "admin" if self.config.jwt.mode in {"none", "dev"} else "viewer"  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
 
     def _socket_worker_id(self, ws: CFWebSocket) -> str:
         """Return the worker_id from the socket attachment (stored at connect time).
@@ -126,7 +126,7 @@ class _WsHelperMixin:
                     return parts[2]
         except Exception as exc:
             logger.debug("failed to deserialize worker_id from attachment: %s", exc)
-        worker_id: str = self.worker_id  # type: ignore[attr-defined]
+        worker_id: str = self.worker_id  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
         return worker_id
 
     def _register_socket(self, ws: CFWebSocket, role: str) -> None:
@@ -135,20 +135,20 @@ class _WsHelperMixin:
             self.worker_ws = ws
             return
         if role == "raw":
-            self.raw_sockets[ws_id] = ws  # type: ignore[attr-defined]
+            self.raw_sockets[ws_id] = ws  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
             return
-        self.browser_sockets[ws_id] = ws  # type: ignore[attr-defined]
+        self.browser_sockets[ws_id] = ws  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
 
     def _remove_ws(self, ws: CFWebSocket) -> None:
         """Remove *ws* from all socket registries (worker, browser, raw)."""
         ws_id = self.ws_key(ws)
         if ws is self.worker_ws:
             self.worker_ws = None
-        self.browser_sockets.pop(ws_id, None)  # type: ignore[attr-defined]
-        self.raw_sockets.pop(ws_id, None)  # type: ignore[attr-defined]
-        self.browser_hijack_owner.pop(ws_id, None)  # type: ignore[attr-defined]
-        self.browser_resume_tokens.pop(ws_id, None)  # type: ignore[attr-defined]
-        self._flow.forget(ws_id)  # type: ignore[attr-defined]
+        self.browser_sockets.pop(ws_id, None)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
+        self.raw_sockets.pop(ws_id, None)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
+        self.browser_hijack_owner.pop(ws_id, None)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
+        self.browser_resume_tokens.pop(ws_id, None)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
+        self._flow.forget(ws_id)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
 
     async def send_ws(self, ws: CFWebSocket, payload: dict[str, Any]) -> None:
         frame_type = str(payload.get("type") or "")
@@ -170,7 +170,7 @@ class _WsHelperMixin:
         registered, so we exclude it from the peer list) and ``False`` in
         ``fetch()`` (the socket is not yet in the registry).
         """
-        if not self.meta.get("presence"):  # type: ignore[attr-defined]
+        if not self.meta.get("presence"):  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
             return
         exclude_ws: CFWebSocket | None = ws if exclude_self else None
         connected_ids = self._get_presence_browser_ids(exclude_ws=exclude_ws)
@@ -180,8 +180,8 @@ class _WsHelperMixin:
                 "type": "presence_sync",
                 "users": [{"user_id": uid} for uid in connected_ids],
                 "config": {
-                    "auto_transfer_idle_s": self.config.deckmux_auto_transfer_idle_s,  # type: ignore[attr-defined]
-                    "keystroke_queue": self.config.deckmux_keystroke_queue,  # type: ignore[attr-defined]
+                    "auto_transfer_idle_s": self.config.deckmux_auto_transfer_idle_s,  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
+                    "keystroke_queue": self.config.deckmux_keystroke_queue,  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
                 },
                 "ts": __import__("time").time(),
             },
@@ -197,11 +197,11 @@ class _WsHelperMixin:
         """
         exclude_key = self.ws_key(exclude_ws) if exclude_ws is not None else None
         try:
-            all_ws = list(self.ctx.getWebSockets())  # type: ignore[attr-defined]
+            all_ws = list(self.ctx.getWebSockets())  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
         except Exception:
             all_ws = []
         if not all_ws:
-            all_ws = list(self.browser_sockets.values())  # type: ignore[attr-defined]
+            all_ws = list(self.browser_sockets.values())  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
         ids: list[str] = []
         for candidate in all_ws:
             if self._socket_role(candidate) != "browser":

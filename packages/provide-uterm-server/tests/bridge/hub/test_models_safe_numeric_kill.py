@@ -5,11 +5,11 @@
 """Mutation-killing tests for ``models._safe_int`` / ``models._safe_float``.
 
 These pure coercion helpers gate request-model numeric fields. ``models.py`` is in
-the mutmut perimeter, but its covering tests lived only in non-``tests_dir`` suites,
+the mutmut perimeter, but its covering tests lived only outside the configured mutation test selection,
 so the helpers' mutants reported ``no tests`` once a ``models.py`` edit triggered the
 changed-only gate. This self-contained suite (no async / subprocess / WebSocket —
 reaper-safe) pins every branch and boundary so each operator/condition/exception
-mutation flips an assertion, and is wired into ``[tool.mutmut].tests_dir``.
+mutation flips an assertion, and is wired into ``[tool.mutmut].pytest_add_cli_args_test_selection``.
 """
 
 from __future__ import annotations

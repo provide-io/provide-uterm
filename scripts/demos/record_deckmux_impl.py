@@ -13,10 +13,8 @@ from __future__ import annotations
 
 import asyncio
 import sys
-import textwrap
 import time
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from provide.uterm.deckmux._hub_mixin import DeckMuxMixin
 from provide.uterm.server.bridge.hub import TermHub
@@ -35,6 +33,17 @@ from scripts.demos import (
     wait_for_presence_bar,
     wait_for_terminal,
 )
+from scripts.demos.record_deckmux_scenario import (
+    JOIN_MESSAGES,
+    navigate_away,
+    scroll_to_bottom,
+    scroll_up,
+    type_from_self,
+    write_incident_data,
+)
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class _DeckMuxTermHub(DeckMuxMixin, TermHub):
@@ -72,183 +81,6 @@ _CAST: list[dict[str, str]] = [
 _HERO_NAMES = ["operator", "falcon_finn", "heron_hugo"]
 
 # ---------------------------------------------------------------------------
-# Fake incident data
-# ---------------------------------------------------------------------------
-
-_INCIDENT_DIR = Path("/tmp/incident")
-
-
-def _write_incident_data() -> None:
-    """Write realistic fake log/stat files used by the demo commands."""
-    _INCIDENT_DIR.mkdir(parents=True, exist_ok=True)
-
-    # ~150 lines of realistic syslog with ERROR/FATAL lines
-    syslog_lines: list[str] = []
-    base_ts = "2026-04-11T14:2"
-    for i in range(150):
-        minute = i // 10
-        second = (i * 4) % 60
-        ts = f"{base_ts}{minute}:{second:02d}.{i % 1000:03d}Z"
-        if i in {42, 67, 89, 91, 93, 95, 98, 100, 102, 105, 110, 115, 120, 125, 130}:
-            syslog_lines.append(f"{ts} api-server ERROR: database connection timeout after 30000ms (pool exhausted)")
-        elif i in {92, 103, 112, 128}:
-            syslog_lines.append(f'{ts} postgres FATAL: too many connections for role "app_user"')
-        elif i % 7 == 0:
-            syslog_lines.append(f"{ts} api-server WARN: connection pool utilization at {75 + (i % 25)}%")
-        elif i % 11 == 0:
-            syslog_lines.append(f"{ts} nginx INFO: upstream response time {200 + i * 3}ms for /api/v1/orders")
-        else:
-            syslog_lines.append(
-                f"{ts} api-server INFO: request completed status=200 path=/api/v1/health latency={12 + i % 30}ms"
-            )
-    (_INCIDENT_DIR / "syslog.txt").write_text("\n".join(syslog_lines) + "\n")
-
-    # pg_stat_activity showing 47 idle-in-transaction connections
-    pg_header = "  pid  |  state                |  query_start              |  query"
-    pg_sep = "-------+-----------------------+---------------------------+--------------------------------------------"
-    pg_rows: list[str] = [pg_header, pg_sep]
-    for i in range(47):
-        pid = 10200 + i
-        pg_rows.append(
-            f" {pid} | idle in transaction   | 2026-04-11 14:1{i % 10}:{(i * 7) % 60:02d}     "  # noqa: S608
-            f"| SELECT * FROM orders WHERE customer_id = {1000 + i}"
-        )
-    pg_rows.extend([pg_sep, "(47 rows)"])
-    (_INCIDENT_DIR / "pg_stat.txt").write_text("\n".join(pg_rows) + "\n")
-
-    # Docker logs with ConnectionPool errors
-    docker_lines: list[str] = []
-    for i in range(50):
-        ts = f"2026-04-11T14:2{i // 10}:{(i * 3) % 60:02d}.{i:03d}Z"
-        if i % 4 == 0:
-            docker_lines.append(f"{ts} [ERROR] ConnectionPool exhausted: 47/50 connections idle-in-transaction")
-        elif i % 4 == 1:
-            docker_lines.append(f"{ts} [WARN]  Connection acquire timeout: waited 30000ms")
-        elif i % 4 == 2:
-            docker_lines.append(f"{ts} [INFO]  Request completed: POST /api/v1/orders status=503 latency=30012ms")
-        else:
-            docker_lines.append(f"{ts} [INFO]  Health check: db=timeout api=degraded uptime=3h42m")
-    (_INCIDENT_DIR / "docker_logs.txt").write_text("\n".join(docker_lines) + "\n")
-
-    # Health check JSON responses
-    (_INCIDENT_DIR / "health_degraded.json").write_text(
-        '{\n  "status": "degraded",\n  "db": "timeout",\n  "api": "ok",\n  "connections": 47,\n  "pool_max": 50\n}\n'
-    )
-    (_INCIDENT_DIR / "health_ok.json").write_text(
-        '{\n  "status": "healthy",\n  "db": "ok",\n  "api": "ok",\n  "connections": 3,\n  "pool_max": 50\n}\n'
-    )
-
-    # Docker ps output
-    (_INCIDENT_DIR / "docker_ps.txt").write_text(
-        textwrap.dedent("""\
-        NAMES            STATUS          PORTS
-        api-server       Up 3 hours      0.0.0.0:8080->8080/tcp
-        postgres         Up 3 hours      0.0.0.0:5432->5432/tcp
-        redis            Up 3 hours      0.0.0.0:6379->6379/tcp
-        nginx            Up 3 hours      0.0.0.0:80->80/tcp, 0.0.0.0:443->443/tcp
-        worker-1         Up 3 hours
-        worker-2         Up 3 hours
-        celery-beat      Up 3 hours
-    """)
-    )
-
-    # Recovery docker logs (shown after fix)
-    (_INCIDENT_DIR / "docker_logs_recovery.txt").write_text(
-        textwrap.dedent("""\
-        2026-04-11T14:31:02.100Z [INFO]  Connection pool recovered: 3/50 active connections
-        2026-04-11T14:31:02.200Z [INFO]  Health check: db=ok api=ok uptime=3h44m
-        2026-04-11T14:31:03.100Z [INFO]  Request completed: GET /api/v1/health status=200 latency=12ms
-        2026-04-11T14:31:04.050Z [INFO]  Request completed: POST /api/v1/orders status=201 latency=45ms
-        2026-04-11T14:31:05.001Z [INFO]  Connection pool stable: 5/50 active connections
-    """)
-    )
-
-
-# ---------------------------------------------------------------------------
-# Step helpers (callables for BrowserStep)
-# ---------------------------------------------------------------------------
-
-
-def _scroll_up(lines: int):
-    """Return a BrowserStep callable that scrolls xterm up N lines via the Terminal API."""
-
-    def _do(page: object) -> None:
-        import contextlib
-
-        with contextlib.suppress(Exception):
-            page.evaluate(  # type: ignore[union-attr]
-                f"""() => {{
-                    const t = document.querySelector('uterm-session')?.terminal;
-                    if (t) t.scrollLines(-{lines});
-                }}"""
-            )
-
-    return _do
-
-
-def _scroll_to_bottom():
-    """Return a BrowserStep callable that scrolls xterm to the bottom via the Terminal API."""
-
-    def _do(page: object) -> None:
-        import contextlib
-
-        with contextlib.suppress(Exception):
-            page.evaluate(  # type: ignore[union-attr]
-                """() => {
-                    const t = document.querySelector('uterm-session')?.terminal;
-                    if (t) t.scrollToBottom();
-                }"""
-            )
-
-    return _do
-
-
-def _navigate_away():
-    """Return a BrowserStep callable that disconnects by navigating to about:blank."""
-
-    def _do(page: object) -> None:
-        import contextlib
-
-        with contextlib.suppress(Exception):
-            page.goto("about:blank")  # type: ignore[union-attr]
-
-    return _do
-
-
-def _type_from_self(text: str, wait_s: float = 1.0):
-    """Return a callable that types into THIS user's own browser input field.
-
-    Unlike ``_send_cmd`` (which always types on Tanuki Tim's page), this callable
-    operates on whichever page the step interleaver passes in — proving that
-    different users are actually typing.
-    """
-    cmd_text = text.rstrip("\r")
-
-    def _do(page: object) -> None:
-        import contextlib
-
-        with contextlib.suppress(Exception):
-            page.fill("#inputfield", cmd_text + "\\r")  # type: ignore[union-attr]
-            page.click("#inputsend")  # type: ignore[union-attr]
-        time.sleep(wait_s)
-
-    return _do
-
-
-# What each user types when they join the incident channel
-_JOIN_MESSAGES: dict[str, str | None] = {
-    "bear_brody": "echo '[Bear Brody] SRE on-call — joining, checking logs'",
-    "crane_cara": "echo '[Crane Cara] Backend — pulling up app traces'",
-    "falcon_finn": "echo '[Falcon Finn] DBA — standby, will check connection pool'",
-    "lynx_liam": "echo '[Lynx Liam] Security — auditing commands'",
-    "wolf_willa": "echo '[Wolf Willa] DevOps — looking at container health'",
-    "heron_hugo": None,  # eng manager watches, doesn't type
-    "marten_mira": "echo '[Marten Mira] QA — checking error reports'",
-    "sentinel": None,  # bot doesn't type
-}
-
-
-# ---------------------------------------------------------------------------
 # record()
 # ---------------------------------------------------------------------------
 
@@ -260,7 +92,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     and a 3-column composite video. The reel highlight comes from the composite.
     """
     feat_dir = out_dir(FEATURE, base_out)
-    _write_incident_data()
+    write_incident_data()
 
     # Deckmux needs per-context principals so each Playwright tab presents
     # as a distinct persona to the presence machinery — header mode is the
@@ -390,9 +222,9 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
             (_wait_term, 0.5, None),
         ]
         # Each user types their own message from their own browser after joining
-        msg = _JOIN_MESSAGES.get(uname)
+        msg = JOIN_MESSAGES.get(uname)
         if msg:
-            join.append((_type_from_self(msg), 0.3, None))
+            join.append((type_from_self(msg), 0.3, None))
         else:
             join.append((None, 0.3, None))
         join_steps_per_user[uname] = pre_pad + join
@@ -436,7 +268,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
         steps: list[BrowserStep] = []
         for i in range(act3_len):
             if i == scroll_at_step:
-                steps.append((_scroll_up(scroll_lines), 1.0, None))
+                steps.append((scroll_up(scroll_lines), 1.0, None))
             else:
                 steps.append((None, 0.3, None))
         return steps
@@ -457,7 +289,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     # Bear Brody types from HIS browser when verifying.
     # Tanuki Tim only types the handoff announcements.
 
-    # Falcon Finn's commands (typed from Falcon Finn's page via _type_from_self)
+    # Falcon Finn's commands (typed from Falcon Finn's page via type_from_self)
     brandon_fix_cmds = [
         "echo '[Falcon Finn] Taking over — checking idle connections'",
         "echo '[Falcon Finn] psql> SELECT count(*) FROM pg_stat_activity WHERE state = idle_in_transaction'",
@@ -492,7 +324,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
 
     # Falcon Finn's Act 4: types his fix commands from his own browser
     act4_brandon: list[BrowserStep] = [(None, 1.5, None)]  # step 0: wait for Tanuki Tim's handoff msg
-    act4_brandon.extend((_type_from_self(cmd, wait_s=1.0), 0.3, None) for cmd in brandon_fix_cmds)
+    act4_brandon.extend((type_from_self(cmd, wait_s=1.0), 0.3, None) for cmd in brandon_fix_cmds)
     while len(act4_brandon) < act4_len:
         act4_brandon.append((None, 0.3, None))
 
@@ -501,9 +333,9 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     act4_kal: list[BrowserStep] = []
     for i in range(act4_len):
         if i == kal_verify_start - 1:
-            act4_kal.append((_scroll_to_bottom(), 0.5, None))
+            act4_kal.append((scroll_to_bottom(), 0.5, None))
         elif i >= kal_verify_start and (i - kal_verify_start) < len(kal_verify_cmds):
-            act4_kal.append((_type_from_self(kal_verify_cmds[i - kal_verify_start], wait_s=1.0), 0.3, None))
+            act4_kal.append((type_from_self(kal_verify_cmds[i - kal_verify_start], wait_s=1.0), 0.3, None))
         else:
             act4_kal.append((None, 0.3, None))
 
@@ -528,7 +360,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
         steps: list[BrowserStep] = []
         for i in range(act5_len):
             if i == depart_step:
-                steps.append((_navigate_away(), 0.3, None))
+                steps.append((navigate_away(), 0.3, None))
             else:
                 steps.append((None, 0.3, None))
         return steps

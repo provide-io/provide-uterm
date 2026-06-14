@@ -16,7 +16,7 @@ Usage::
     # background delivery starts immediately
     await manager.shutdown()  # cancels all delivery tasks
 
-Mutation-enforced at killed==100 (see [tool.mutmut].paths_to_mutate). The bound
+Mutation-enforced at killed==100 (see [tool.mutmut].source_paths). The bound
 suite is tests/server/test_webhooks_mutation_killing.py, which mocks ALL egress
 (socket.getaddrinfo + httpx + asyncio.sleep) so mutmut's forked workers never drive
 the real C resolver/network — required because doing so segfaults the worker. It also

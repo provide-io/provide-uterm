@@ -50,15 +50,15 @@ class _AuthMixin:
     """Mixin providing JWT/share-token authentication helpers for SessionRuntime."""
 
     def _share_role_for_request(self, request: object) -> str | None:
-        ip_binding = bool(getattr(self.config, "tunnel_ip_binding", False))  # type: ignore[attr-defined]
+        ip_binding = bool(getattr(self.config, "tunnel_ip_binding", False))  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
 
         token = None
         try:
             from http.cookies import SimpleCookie
 
-            cookie_header = str(request.headers.get("cookie") or request.headers.get("Cookie") or "")  # type: ignore[attr-defined]
+            cookie_header = str(request.headers.get("cookie") or request.headers.get("Cookie") or "")  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
             cookies = SimpleCookie(cookie_header)
-            cookie_key = f"uterm_tunnel_{self.worker_id}"  # type: ignore[attr-defined]
+            cookie_key = f"uterm_tunnel_{self.worker_id}"  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
             if cookie_key in cookies:
                 token = cookies[cookie_key].value
         except Exception:
@@ -70,9 +70,9 @@ class _AuthMixin:
         from provide.uterm.tunnel.token_hash import verify_token
 
         role: str | None = None
-        if self._control_token_hash and verify_token(token, self._control_token_hash):  # type: ignore[attr-defined]
+        if self._control_token_hash and verify_token(token, self._control_token_hash):  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
             role = "admin"
-        elif self._share_token_hash and verify_token(token, self._share_token_hash):  # type: ignore[attr-defined]
+        elif self._share_token_hash and verify_token(token, self._share_token_hash):  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
             role = "viewer"
 
         if role is None:
@@ -82,15 +82,15 @@ class _AuthMixin:
         # WS/fetch path once the tunnel's TTL elapses, mirroring the Default
         # Worker's resolve_share_context gate. expires_at is set at
         # issuance/rotation (now + ttl_s, configurable per-tunnel, default 1h).
-        expires_at = self._session_expires_at  # type: ignore[attr-defined]
+        expires_at = self._session_expires_at  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
         if expires_at is not None and time.time() > expires_at:
             return None
 
         if ip_binding:
-            issued_ip = self._issued_ip or ""  # type: ignore[attr-defined]
+            issued_ip = self._issued_ip or ""  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
             client_ip = ""
             try:
-                client_ip = str(request.headers.get("CF-Connecting-IP") or "")  # type: ignore[attr-defined]
+                client_ip = str(request.headers.get("CF-Connecting-IP") or "")  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
             except Exception:
                 pass
             if issued_ip and client_ip != issued_ip:
@@ -115,7 +115,7 @@ class _AuthMixin:
         Returns ``(principal, None)`` when auth succeeds or is not required
         (``none``/``dev`` mode), or ``(None, error_response)`` on failure.
         """
-        if self.config.jwt.mode in {"none", "dev"}:  # type: ignore[attr-defined]
+        if self.config.jwt.mode in {"none", "dev"}:  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
             return None, None
         share_role = self._share_role_for_request(request)
         if share_role is not None:
@@ -128,7 +128,7 @@ class _AuthMixin:
                 headers={"content-type": "application/json"},
             )
         try:
-            principal = await decode_jwt(token, self.config.jwt)  # type: ignore[attr-defined]
+            principal = await decode_jwt(token, self.config.jwt)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
             return principal, None
         except JwtValidationError as exc:
             return None, Response(
@@ -154,7 +154,7 @@ class _AuthMixin:
         Falls back to ``"viewer"`` if the token is missing or invalid (the token
         was already validated in ``fetch()``; this is only for role extraction).
         """
-        if self.config.jwt.mode in {"none", "dev"}:  # type: ignore[attr-defined]
+        if self.config.jwt.mode in {"none", "dev"}:  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
             return "admin"
         share_role = self._share_role_for_request(request)
         if share_role is not None:
@@ -163,7 +163,7 @@ class _AuthMixin:
         if not token:
             return "viewer"
         try:
-            principal = await decode_jwt(token, self.config.jwt)  # type: ignore[attr-defined]
+            principal = await decode_jwt(token, self.config.jwt)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
         except JwtValidationError:
             return "viewer"
         # Other exceptions (e.g. network errors fetching JWKS) propagate so the
@@ -171,7 +171,7 @@ class _AuthMixin:
         jwt_role = _resolve_jwt_role(principal)
         if jwt_role == "admin":
             return "admin"
-        owner = self.meta.get("owner")  # type: ignore[attr-defined]
+        owner = self.meta.get("owner")  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
         if owner is not None and principal.subject_id == owner:
             return "operator"
         return jwt_role
@@ -181,13 +181,13 @@ class _AuthMixin:
 
         Used by session route handlers to check per-session ownership.
         """
-        if self.config.jwt.mode in {"none", "dev"}:  # type: ignore[attr-defined]
+        if self.config.jwt.mode in {"none", "dev"}:  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
             return None
         token = self._extract_token(request)
         if not token:
             return None
         try:
-            principal = await decode_jwt(token, self.config.jwt)  # type: ignore[attr-defined]
+            principal = await decode_jwt(token, self.config.jwt)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
             return principal.subject_id
         except JwtValidationError:
             return None

@@ -7,7 +7,7 @@
 
 Why this exists
 ---------------
-mutmut derives a mutant's *name* from the path passed in ``paths_to_mutate``:
+mutmut derives a mutant's *name* from the path passed in ``source_paths``:
 it takes ``str(path).replace(os.sep, ".")`` and strips a leading ``src.``
 prefix (see ``get_mutant_name`` in ``mutmut/__main__.py``). The trampoline that
 records which test exercises which mutant keys coverage on the *imported*

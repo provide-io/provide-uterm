@@ -29,7 +29,7 @@
 #     is reported as a WARNING by the gate; it never weakens enforcement, because
 #     a renumbered equivalent reappears as a new unexcused survivor.
 #
-# Add entries as files are re-enabled into [tool.mutmut].paths_to_mutate. Keep the
+# Add entries as files are re-enabled into [tool.mutmut].source_paths. Keep the
 # justification specific enough that a reviewer can confirm the equivalence.
 
 [[equivalent]]
@@ -117,17 +117,6 @@ reason = "_principal_browser_counts.get(subject_id, 0) -> get(subject_id, 1). Th
 [[equivalent]]
 mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁ_update_lock_state__mutmut_24"
 reason = "Same as _rollback_browser_quota__mutmut_16 but in _update_lock_state's per-principal decrement: get(subject_id, 0) -> get(subject_id, 1); 1-1=0 and 0-1=-1 both hit `<= 0` -> identical pop outcome. Equivalent."
-
-# mutmut TRAMPOLINE-MASKED default-argument mutation (the documented auth.py class):
-# the generated trampoline keeps the ORIGINAL signature `defer_broadcast: bool = False`,
-# binds kwargs = {'defer_broadcast': defer_broadcast} using that original default, then
-# forwards them EXPLICITLY to the __mutmut_1 variant — so the variant's mutated default
-# (`= True`) is dead code that no caller ever reaches. Unkillable by construction.
-# (The real False-default behaviour IS regression-tested by
-# test_connection_kill_iter2.py::TestRegisterBrowserDefaultDeferBroadcast.)
-[[equivalent]]
-mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁregister_browser__mutmut_1"
-reason = "Default-argument mutation defer_broadcast=False->True. mutmut's trampoline keeps the original default and forwards the bound kwarg explicitly to the variant, so the mutated default is never exercised — unkillable trampoline artifact, not a real behaviour gap (the default IS regression-tested)."
 
 # --- config_schema.py (_require_secure_url SSRF guard) --------------------
 # config_schema.py's only mutable surface is its two UNDECORATED module-level
@@ -602,9 +591,6 @@ reason = "wait_for_guard initial last_snapshot None -> ''; the slow path always 
 [[equivalent]]
 mutant = "provide.uterm.server.bridge.hub.store.xǁStateStoreǁprepare_policy_context__mutmut_6"
 reason = "prepare_policy_context initial principal None -> ''; both branches of the immediately-following if/else reassign principal (resolve_principal or the ws.state getattr), so the '' initial value is a dead store overwritten before any read — unobservable."
-[[equivalent]]
-mutant = "provide.uterm.server.bridge.hub.store.xǁStateStoreǁmetric__mutmut_1"
-reason = "Trampoline-masked default-arg mutation metric(value=1->2); mutmut's dispatcher keeps the original signature and forwards the bound default (1) explicitly to the variant, so the mutated default is never exercised — unkillable trampoline artifact (the documented auth.py class). The real default IS regression-tested (test_metric_default_value_is_one asserts a no-value call emits 1)."
 # --- tunnel/intercept.py: "forward" is both a canonical action AND the fallback
 #     default, so mutating any "forward" literal just routes through the fallback
 #     to the identical "forward"; default-arg value mutations are trampoline-masked.

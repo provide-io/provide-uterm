@@ -290,13 +290,30 @@ class TestTamper:
         prev = GENESIS_HASH
         for seq in (1, 3):
             payload = _canonical_payload(
-                seq=seq, ts=1.0, mono_ns=1, action="a", principal="", session_id="",
-                source_ip="", detail={}, prev_hash=prev,
+                seq=seq,
+                ts=1.0,
+                mono_ns=1,
+                action="a",
+                principal="",
+                session_id="",
+                source_ip="",
+                detail={},
+                prev_hash=prev,
             )
             rh = compute_record_hash(payload)
             recs.append(
-                {"seq": seq, "ts": 1.0, "mono_ns": 1, "action": "a", "principal": "",
-                 "session_id": "", "source_ip": "", "detail": {}, "prev_hash": prev, "record_hash": rh}
+                {
+                    "seq": seq,
+                    "ts": 1.0,
+                    "mono_ns": 1,
+                    "action": "a",
+                    "principal": "",
+                    "session_id": "",
+                    "source_ip": "",
+                    "detail": {},
+                    "prev_hash": prev,
+                    "record_hash": rh,
+                }
             )
             prev = rh
         result = verify_records(recs)
@@ -312,8 +329,15 @@ class TestTamper:
 
     def test_malformed_record_wrong_type(self) -> None:
         rec = {
-            "seq": "not-an-int", "ts": 1.0, "mono_ns": 1, "action": "a", "principal": "",
-            "session_id": "", "source_ip": "", "detail": {}, "prev_hash": GENESIS_HASH,
+            "seq": "not-an-int",
+            "ts": 1.0,
+            "mono_ns": 1,
+            "action": "a",
+            "principal": "",
+            "session_id": "",
+            "source_ip": "",
+            "detail": {},
+            "prev_hash": GENESIS_HASH,
             "record_hash": "x",
         }
         result = verify_records([rec])
@@ -322,8 +346,15 @@ class TestTamper:
 
     def test_malformed_record_bool_seq(self) -> None:
         rec = {
-            "seq": True, "ts": 1.0, "mono_ns": 1, "action": "a", "principal": "",
-            "session_id": "", "source_ip": "", "detail": {}, "prev_hash": GENESIS_HASH,
+            "seq": True,
+            "ts": 1.0,
+            "mono_ns": 1,
+            "action": "a",
+            "principal": "",
+            "session_id": "",
+            "source_ip": "",
+            "detail": {},
+            "prev_hash": GENESIS_HASH,
             "record_hash": "x",
         }
         result = verify_records([rec])

@@ -175,24 +175,24 @@ class RateLimiter:
         if bucket is None:
             bucket = TokenBucket(rate)
         per_client[client_id] = bucket  # (re)insert at the most-recent end
-        RateLimiter._evict_if_full(per_client, keep=client_id)
+        RateLimiter._evict_if_full(per_client)
         return bucket
 
     @staticmethod
-    def _evict_if_full(per_client: dict[str, TokenBucket], *, keep: str) -> None:
+    def _evict_if_full(per_client: dict[str, TokenBucket]) -> None:
         """Drop the oldest entries of *per_client* if it exceeds the cap.
 
         Insertion order is recency order (callers move touched keys to
         the end), so iterating from the front and trimming the first
         ``REST_CLIENT_EVICT_COUNT`` entries is a true LRU eviction. The
-        *keep* key — the client that just triggered the call — is never
-        evicted. The eviction count is half the cap so the next overflow
-        is amortised across many calls.
+        client that just triggered the call has already been reinserted
+        at the end, so it is outside the oldest-half eviction window.
+        The eviction count is half the cap so the next overflow is
+        amortised across many calls.
         """
         if len(per_client) > REST_CLIENT_CACHE_MAX:
             for k in list(per_client)[:REST_CLIENT_EVICT_COUNT]:
-                if k != keep:
-                    del per_client[k]
+                del per_client[k]
 
 
 __all__ = ["REST_CLIENT_CACHE_MAX", "REST_CLIENT_EVICT_COUNT", "RateLimiter"]

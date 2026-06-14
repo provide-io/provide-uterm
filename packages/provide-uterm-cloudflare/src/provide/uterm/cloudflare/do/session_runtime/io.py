@@ -31,13 +31,20 @@ try:
     from provide.uterm.cloudflare.state.registry import KV_REFRESH_S, update_kv_session
     from provide.uterm.cloudflare.state.store import LeaseRecord
 except Exception:  # pragma: no cover
-    from bridge.hijack import HijackSession  # type: ignore[import-not-found,no-redef]
-    from cf_types import CFWebSocket  # type: ignore[import-not-found,no-redef]  # noqa: TC002
-    from do._webhooks import fire_webhooks  # type: ignore[import-not-found,no-redef]
-    from do.persistence import clear_lease as _clear_lease  # type: ignore[import-not-found,no-redef]
-    from do.persistence import persist_lease as _persist_lease  # type: ignore[no-redef]
-    from state.registry import KV_REFRESH_S, update_kv_session  # type: ignore[import-not-found,no-redef]
-    from state.store import LeaseRecord  # type: ignore[import-not-found,no-redef]
+    from bridge.hijack import HijackSession  # type: ignore[import-not-found,no-redef]  # ty:ignore[unresolved-import]
+    from cf_types import (  # ty:ignore[unresolved-import]
+        CFWebSocket,  # type: ignore[import-not-found,no-redef]  # noqa: TC002
+    )
+    from do._webhooks import fire_webhooks  # type: ignore[import-not-found,no-redef]  # ty:ignore[unresolved-import]
+    from do.persistence import (  # ty:ignore[unresolved-import]
+        clear_lease as _clear_lease,  # type: ignore[import-not-found,no-redef]
+    )
+    from do.persistence import persist_lease as _persist_lease  # type: ignore[no-redef]  # ty:ignore[unresolved-import]
+    from state.registry import (  # type: ignore[import-not-found,no-redef]  # ty:ignore[unresolved-import]
+        KV_REFRESH_S,
+        update_kv_session,
+    )
+    from state.store import LeaseRecord  # type: ignore[import-not-found,no-redef]  # ty:ignore[unresolved-import]
 
 from .flow_control import PAUSE as _FLOW_PAUSE
 

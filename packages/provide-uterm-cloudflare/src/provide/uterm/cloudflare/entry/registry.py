@@ -44,14 +44,14 @@ def _extract_worker_id(path: str) -> str | None:
     return None
 
 
-class Default(WorkerEntrypoint):  # type: ignore[misc]
+class Default(WorkerEntrypoint):  # type: ignore[misc]  # ty:ignore[invalid-base]
     """Default HTTP handler exposed to the Cloudflare Workers runtime."""
 
     async def fetch(self, request: object) -> object:
         if not hasattr(self, "_config"):
             if _import_error:  # pragma: no cover
                 logger.error("IMPORT_FALLBACK:\n%s", _import_error)  # pragma: no cover
-            self._config = CloudflareConfig.from_env(self.env)
+            self._config = CloudflareConfig.from_env(self.env)  # ty:ignore[unresolved-attribute]
         response = await _route_request(request, self.env, self._config)
         if getattr(response, "status", None) != 101:
             _apply_security_headers(response, self._config)
