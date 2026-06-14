@@ -59,7 +59,10 @@ Open the inspect page in your browser (the share URL is printed at startup). The
 
 ## Protocol Reference
 
-All messages use CHANNEL_HTTP (0x03) in the tunnel binary protocol.
+The inspect feature crosses two protocol layers:
+
+- Proxy/tunnel worker ↔ server: HTTP inspection messages use `CHANNEL_HTTP` (`0x03`) in the binary tunnel protocol.
+- Browser ↔ server: inspect actions and toggles are DLE/STX-framed control messages on the browser terminal/control WebSocket. The server authorizes them with the same input permission model used for terminal input: viewers cannot mutate inspect/intercept state; operators/admins can in open mode, and the active dashboard owner can in hijack mode.
 
 ### Proxy → Browser
 
@@ -84,6 +87,8 @@ All messages use CHANNEL_HTTP (0x03) in the tunnel binary protocol.
 ```
 
 ### Browser → Proxy
+
+Browsers send these payloads as DLE/STX control frames to the hub. The hub relays authorized messages to the tunnel worker as `CHANNEL_HTTP` frames.
 
 **`http_action`** — resolve a paused request:
 ```json

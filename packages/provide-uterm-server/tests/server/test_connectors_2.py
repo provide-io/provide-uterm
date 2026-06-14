@@ -224,12 +224,12 @@ class TestSshSessionConnector:
         c = SshSessionConnector("s", "S", {"host": "h", "insecure_no_host_check": True, "client_keys": "mykey"})
         assert "mykey" in c._client_keys
 
-    def test_client_key_path(self) -> None:
+    def test_client_key_path_rejected(self) -> None:
         pytest.importorskip("asyncssh")
         from provide.uterm.server.connectors.ssh import SshSessionConnector
 
-        c = SshSessionConnector("s", "S", {"host": "h", "insecure_no_host_check": True, "client_key_path": "/tmp/id"})  # noqa: S108,RUF100
-        assert "/tmp/id" in c._client_keys
+        with pytest.raises(ValueError, match="client_key_path is not supported"):
+            SshSessionConnector("s", "S", {"host": "h", "insecure_no_host_check": True, "client_key_path": "/tmp/id"})  # noqa: S108,RUF100
 
     def test_client_key_str(self) -> None:
         pytest.importorskip("asyncssh")

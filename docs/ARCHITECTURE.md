@@ -16,6 +16,7 @@ The most critical low-level component is the **Control Channel Framing** (`contr
 - **DLE** (`0x10`) is the escape character.
 - **Data**: Raw terminal bytes have their `DLE` bytes doubled (`0x10 0x10`) to escape them.
 - **Control Frames**: Encoded as `DLE STX [8-hex length] : [JSON]`.
+- **Discipline**: Non-terminal WebSocket payloads must be sent through the public framing helpers. CI runs `scripts/check_bare_json_ws_sends.py` to catch bare JSON sends on terminal/control WebSocket paths.
 
 ### Why?
 This ensures perfect synchronization between terminal output and metadata (like resizing, presence updates, or annotations). It works identically in Python (server) and TypeScript (browser), preventing the race conditions common in multi-channel terminal proxies.
@@ -80,7 +81,8 @@ Treats collaboration as a first-class citizen rather than an afterthought.
 ---
 
 ## 6. Communication & Tunneling Protocol
-The system defines a **Channel-Based Multiplexing** protocol over WebSockets for tunneling:
+The system defines a **Channel-Based Multiplexing** protocol over WebSockets for tunneling. This is distinct from the browser control channel: browser inspect actions are DLE/STX control frames to the hub, and the hub relays authorized inspect actions to tunnel workers on `0x03`.
+
 - `0x00`: **Control** (Resize, heartbeat).
 - `0x01`: **Terminal** (Raw PTY bytes).
 - `0x02`: **TCP Forwarding** (Raw socket data).
@@ -110,7 +112,7 @@ The Fan-Out controller allows an operator to broadcast input to N target session
 ---
 
 ## 10. End-to-End Data Flow
-1. **Browser Input**: Encoded into the DLE/STX format and sent over WebSocket.
+1. **Browser Input**: Terminal input is DLE-escaped data; browser-originated controls are DLE/STX-framed JSON.
 2. **Hub Ingestion**: The Hub decodes the stream and validates the `hijack` lease.
 3. **Worker Dispatch**: Input bytes are forwarded to the Worker (Agent).
 4. **Agent/PTY**: The local agent writes the bytes to the UNIX PTY.

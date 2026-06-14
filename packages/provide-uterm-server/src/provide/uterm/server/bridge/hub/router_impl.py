@@ -242,11 +242,11 @@ class MessageRouter:
     async def send_worker(self, worker_id: str, msg: dict[str, Any], *, source: Any = None) -> bool:
         """Send *msg* to the worker WebSocket; returns False if no worker is connected.
 
-        Tunnel workers (``is_tunnel_worker=True``) use a different wire
-        format: ``input`` messages are sent as raw bytes (the worker
-        writes them straight to its PTY), other message types are
-        dropped because the worker's bridge loop has no JSON-envelope
-        handling.
+        Tunnel workers (``is_tunnel_worker=True``) use the binary tunnel
+        protocol: ``input`` messages are sent as raw UTF-8 PTY bytes, HTTP
+        inspect controls are sent on ``CHANNEL_HTTP``, and other message
+        types are dropped because the worker's bridge loop has no JSON
+        envelope handling.
         """
         return await _send_worker_impl(self, worker_id, msg, source=source)
 

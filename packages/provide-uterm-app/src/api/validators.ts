@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
-import type { HttpRequestEntry, HttpResponseEntry } from "./types";
+import type { HttpInterceptStateFrame, HttpRequestEntry, HttpResponseEntry } from "./types";
 
 export class ValidationError extends Error {
   constructor(public readonly path: string, public readonly reason: string) {
@@ -30,7 +30,7 @@ function requireBoolean(obj: Record<string, unknown>, key: string, path: string)
 
 function requireNumber(obj: Record<string, unknown>, key: string, path: string): number {
   const v = obj[key];
-  if (typeof v !== "number" || Number.isNaN(v)) {
+  if (typeof v !== "number" || !Number.isFinite(v)) {
     throw new ValidationError(`${path}.${key}`, `expected number, got ${typeof v}`);
   }
   return v;
@@ -168,4 +168,16 @@ export function parseHttpResponseEntry(value: unknown, path = "frame"): HttpResp
   if (typeof value.body_truncated === "boolean") out.body_truncated = value.body_truncated;
   if (typeof value.body_binary === "boolean") out.body_binary = value.body_binary;
   return out;
+}
+
+export function parseHttpInterceptStateFrame(value: unknown, path = "frame"): HttpInterceptStateFrame {
+  if (!isRecord(value)) throw new ValidationError(path, "expected object");
+  if (value.type !== "http_intercept_state") throw new ValidationError(`${path}.type`, `expected "http_intercept_state"`);
+  return {
+    type: "http_intercept_state",
+    inspect_enabled: requireBoolean(value, "inspect_enabled", path),
+    enabled: requireBoolean(value, "enabled", path),
+    timeout_s: requireNumber(value, "timeout_s", path),
+    timeout_action: requireString(value, "timeout_action", path),
+  };
 }

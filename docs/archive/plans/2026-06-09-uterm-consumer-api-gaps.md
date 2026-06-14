@@ -1,5 +1,7 @@
 # uterm Consumer-Driven API Gaps — Implementation Plan
 
+> **Historical archive:** This plan has been completed and moved out of the active planning area. Keep it as provenance for the uterm/uwarp consumer API work; do not treat unchecked or dated instructions below as current implementation guidance without verifying against the active docs and code.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Use `superpowers:test-driven-development` for every code task — this repo enforces 100% branch coverage, so tests come first, always.
 
 **Goal:** Close the API gaps in `provide-uterm` that force its largest real consumer (`uwarp-space`) to reimplement, work around, or under-use uterm features — then (optionally, Part B) update `uwarp-space` to adopt the cleaned-up surface.

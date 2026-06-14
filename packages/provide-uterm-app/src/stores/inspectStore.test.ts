@@ -112,6 +112,21 @@ describe("inspectStore", () => {
       expect(s.interceptTimeout).toBe(60);
       expect(s.interceptTimeoutAction).toBe("drop");
     });
+
+    it("does not coerce string booleans or non-finite timeouts", () => {
+      expect(() =>
+        useInspectStore.getState().syncInterceptState({
+          inspect_enabled: true,
+          enabled: "false" as never,
+          timeout_s: Infinity,
+          timeout_action: "drop",
+        }),
+      ).toThrow(/enabled/);
+      const s = useInspectStore.getState();
+      expect(s.interceptEnabled).toBe(false);
+      expect(s.interceptTimeout).toBe(30);
+      expect(s.interceptTimeoutAction).toBe("forward");
+    });
   });
 
   describe("filters", () => {

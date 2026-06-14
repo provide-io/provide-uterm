@@ -108,6 +108,23 @@ jobs:
       # Run server package tests with its own package coverage gate
       - run: uv run pytest -q packages/provide-uterm-server/tests/ --timeout=60 --timeout-method=thread
 
+  client-quality:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: uv sync --frozen --package provide-uterm-client --extra dev
+      # Run client package tests with its own 100% branch coverage gate.
+      - run: uv run --directory packages/provide-uterm-client pytest -q tests
+
   pty-unit:
     runs-on: ubuntu-latest
     strategy:
