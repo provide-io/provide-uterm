@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import time
 from contextlib import asynccontextmanager
 
@@ -133,7 +132,7 @@ class TestRestSendRateLimit:
                 await _drain_until(worker, "control")
 
                 # Send snapshot so guard passes; drain_until replaces sleep
-                await worker.send(json.dumps(_snapshot_msg()))
+                await worker.send_json(_snapshot_msg())
                 await _drain_until(worker, "snapshot", timeout=1.0)
 
                 async def send_key():
@@ -167,7 +166,7 @@ class TestRestSendRateLimit:
                 await _drain_until(worker, "control")
 
                 # Send snapshot; drain_until replaces sleep
-                await worker.send(json.dumps(_snapshot_msg()))
+                await worker.send_json(_snapshot_msg())
                 await _drain_until(worker, "snapshot", timeout=1.0)
 
                 async def step():
@@ -196,20 +195,18 @@ class TestBrowserWsRateLimit:
                 await _drain_all(browser)
 
                 # Switch to open mode; wait for mode propagation to browser
-                await worker.send(
-                    json.dumps(
-                        {
-                            "type": "worker_hello",
-                            "input_mode": "open",
-                            "ts": time.time(),
-                        }
-                    )
+                await worker.send_json(
+                    {
+                        "type": "worker_hello",
+                        "input_mode": "open",
+                        "ts": time.time(),
+                    }
                 )
                 await _drain_until(browser, "hijack_state", timeout=2.0)
 
                 # Fire 50 input messages rapidly from browser
                 for i in range(50):
-                    await browser.send(json.dumps({"type": "input", "data": f"key{i}"}))
+                    await browser.send_json({"type": "input", "data": f"key{i}"})
 
                 # Drain all input messages received by worker
                 msgs = await _drain_all(worker, timeout=0.7)

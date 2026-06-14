@@ -23,7 +23,8 @@ import pytest
 
 from provide.uterm.server.bridge.hub import BrowserRoleResolutionError, TermHub
 from provide.uterm.server.bridge.models import WorkerTermState
-from tests.bridge.control_channel_helpers import decode_control_payload
+
+from .control_channel_helpers import decode_control_payload
 
 
 def _make_hub(**kwargs: Any) -> TermHub:

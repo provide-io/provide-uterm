@@ -12,7 +12,8 @@ from unittest.mock import AsyncMock, MagicMock
 from provide.uterm.control_channel import encode_control_frame
 from provide.uterm.server.bridge.models import _safe_float
 from provide.uterm.server.bridge.worker_link import TermBridge, _safe_int
-from tests.bridge.control_channel_helpers import decode_control_payload
+
+from .control_channel_helpers import decode_control_payload
 
 
 class TestSafeInt:

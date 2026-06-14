@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import time
 from typing import Any
 
@@ -61,14 +60,12 @@ class TestConcurrentBrowsers:
             await ready.wait()
 
             # Worker broadcasts a term message
-            await worker.send(
-                json.dumps(
-                    {
-                        "type": "term",
-                        "data": "broadcast test",
-                        "ts": time.time(),
-                    }
-                )
+            await worker.send_json(
+                {
+                    "type": "term",
+                    "data": "broadcast test",
+                    "ts": time.time(),
+                }
             )
 
             # Wait for all browser tasks to complete
@@ -87,7 +84,7 @@ class TestConcurrentBrowsers:
         async def _try_hijack(i: int) -> None:
             async with connect_async_ws(_ws_url(base_url, "/ws/browser/stress3/term")) as browser:
                 await _drain_all(browser)
-                await browser.send(json.dumps({"type": "hijack_request"}))
+                await browser.send_json({"type": "hijack_request"})
                 # Bumped from 3.0s to 6.0s: with 10 concurrent WS connections,
                 # the per-browser deadline can be tight on slow CI runners and
                 # a None result here used to be silently filtered, masking the
@@ -143,7 +140,7 @@ class TestBroadcastUnderLoad:
 
             # Send 20 rapid term messages
             for j in range(20):
-                await worker.send(json.dumps({"type": "term", "data": f"msg{j}", "ts": time.time()}))
+                await worker.send_json({"type": "term", "data": f"msg{j}", "ts": time.time()})
 
             await asyncio.gather(*browser_tasks)
 
@@ -173,7 +170,7 @@ class TestBroadcastUnderLoad:
             await ready5.wait()  # Wait for all browsers ready
 
             # Worker sends snapshot
-            await worker.send(json.dumps(_snapshot_msg("stress test content")))
+            await worker.send_json(_snapshot_msg("stress test content"))
 
             await asyncio.gather(*browser_tasks)
 

@@ -15,7 +15,6 @@ Scenarios
 from __future__ import annotations
 
 import asyncio
-import json
 import time
 from typing import Any
 
@@ -100,7 +99,7 @@ async def test_three_subscribers_different_event_filters(live_server: Any) -> No
         await wait_for_subscribers(hub, "flt1", 3)
 
         # Fire a snapshot — sub1 and sub3 should unblock; sub2 stays blocked
-        await worker.send(json.dumps(snapshot_msg("$ filter test")))
+        await worker.send_json(snapshot_msg("$ filter test"))
         resp1 = await asyncio.wait_for(sub1_task, timeout=8.0)
 
         # Acquire hijack via WS — sub2 and sub3 (already got snapshot, now gets hijack too)
@@ -108,7 +107,7 @@ async def test_three_subscribers_different_event_filters(live_server: Any) -> No
 
         async with _caws(ws_url(base_url, "/ws/browser/flt1/term")) as browser_ws:
             await asyncio.sleep(0.05)
-            await browser_ws.send(json.dumps({"type": "hijack_request"}))
+            await browser_ws.send_json({"type": "hijack_request"})
             resp2 = await asyncio.wait_for(sub2_task, timeout=8.0)
 
         # Await sub3 while http client is still alive — sub3 uses the same client
@@ -152,7 +151,7 @@ async def test_pattern_filter_passes_matching_screen(live_server: Any) -> None:
         # a matching positive-control event. If the pattern filter leaks the
         # non-matching event will dequeue first and the screen assertion
         # below will fail.
-        await worker.send(json.dumps(snapshot_msg("loading...")))
+        await worker.send_json(snapshot_msg("loading..."))
         event_bus._enqueue(  # type: ignore[attr-defined]
             "flt1",
             {"type": "snapshot", "worker_id": "flt1", "data": {"screen": "root@host:~$ ", "screen_hash": "p1"}},

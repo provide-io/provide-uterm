@@ -85,6 +85,11 @@ class TestInitMutations:
 
 
 class TestScreenMutations:
+    def test_screen_without_hub_overlay_returns_raw_screen_buffer(self) -> None:
+        c = _make({"url": "ws://x", "hub_overlay": False})
+        c._screen_buffer = "raw websocket output"
+        assert c._screen() == "raw websocket output"
+
     def test_separator_is_dashes(self) -> None:
         """mutmut_3: separator must be '-', not 'XX-XX'."""
         c = _make({"url": "ws://x"})

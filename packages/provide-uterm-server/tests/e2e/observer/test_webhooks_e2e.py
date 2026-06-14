@@ -136,7 +136,7 @@ async def test_webhook_snapshot_delivered(shell_server: Any) -> None:
         async with connect_async_ws(ws_url(base_url, "/ws/worker/wh1/term")) as worker:
             await worker.recv()  # snapshot_req
             await asyncio.sleep(0.1)
-            await worker.send(json.dumps(snapshot_msg("$ webhook e2e")))
+            await worker.send_json(snapshot_msg("$ webhook e2e"))
 
             payload = await asyncio.wait_for(received.get(), timeout=8.0)
 
@@ -171,7 +171,7 @@ async def test_webhook_event_types_filter(shell_server: Any) -> None:
             # immediately after) is the positive control: if the filter
             # leaks, the snapshot would dequeue first and the type
             # assertion below would fail.
-            await worker.send(json.dumps(snapshot_msg("$ filtered")))
+            await worker.send_json(snapshot_msg("$ filtered"))
             event_bus = hub.event_bus
             assert event_bus is not None
             event_bus._enqueue(  # type: ignore[attr-defined]
@@ -210,7 +210,7 @@ async def test_webhook_unregister_stops_delivery(shell_server: Any) -> None:
         async with connect_async_ws(ws_url(base_url, "/ws/worker/wh1/term")) as worker:
             await worker.recv()
             await asyncio.sleep(0.1)
-            await worker.send(json.dumps(snapshot_msg("$ after unregister")))
+            await worker.send_json(snapshot_msg("$ after unregister"))
             # Probe for an unexpected delivery — fails fast on regression
             # (any item arriving wakes wait_for_condition immediately) and
             # waits up to 0.5s on pass.
@@ -267,7 +267,7 @@ async def test_webhook_hmac_signature_header(shell_server: Any) -> None:
         async with connect_async_ws(ws_url(base_url, "/ws/worker/wh1/term")) as worker:
             await worker.recv()
             await asyncio.sleep(0.1)
-            await worker.send(json.dumps(snapshot_msg("$ signed")))
+            await worker.send_json(snapshot_msg("$ signed"))
             # Wait for delivery
             deadline2 = loop.time() + 8.0
             while not captured and loop.time() < deadline2:

@@ -15,7 +15,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.server.bridge.models import HijackSession, WorkerTermState
-from tests.bridge.control_channel_helpers import decode_control_payload
+
+from .control_channel_helpers import decode_control_payload
 
 # ---------------------------------------------------------------------------
 # Helpers

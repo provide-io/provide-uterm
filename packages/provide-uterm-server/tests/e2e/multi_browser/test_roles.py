@@ -17,7 +17,6 @@ Scenarios
 from __future__ import annotations
 
 import asyncio
-import json
 import time
 from typing import Any
 
@@ -53,14 +52,14 @@ async def test_viewer_cannot_send_input_eventbus_stable(live_server: Any) -> Non
             await drain_all(viewer_ws)  # hello + hijack_state
 
             # Viewer tries to send input (should be silently dropped)
-            await viewer_ws.send(json.dumps({"type": "input", "data": "x"}))
+            await viewer_ws.send_json({"type": "input", "data": "x"})
 
             # Start long-poll subscriber
             poll_task = asyncio.create_task(long_poll(base_url, "s1", timeout_ms=5000, max_events=1))
             await wait_for_subscribers(hub, "s1", 1)
 
             # Worker sends a snapshot — EventBus delivers it
-            await worker.send(json.dumps(snapshot_msg("$ after viewer input")))
+            await worker.send_json(snapshot_msg("$ after viewer input"))
 
             response = await asyncio.wait_for(poll_task, timeout=8.0)
 
@@ -90,7 +89,7 @@ async def test_operator_open_mode_input_eventbus_delivers(live_server: Any) -> N
         await worker.recv()  # snapshot_req
 
         # Switch session to open input mode
-        await worker.send(json.dumps({"type": "worker_hello", "input_mode": "open", "ts": time.time()}))
+        await worker.send_json({"type": "worker_hello", "input_mode": "open", "ts": time.time()})
 
         async with connect_browser(base_url, "s1", role="operator") as op_ws:
             await drain_all(op_ws)
@@ -108,7 +107,7 @@ async def test_operator_open_mode_input_eventbus_delivers(live_server: Any) -> N
                 await wait_for_subscribers(hub, "s1", 1)
 
                 # Operator sends input
-                await op_ws.send(json.dumps({"type": "input", "data": "hello\r"}))
+                await op_ws.send_json({"type": "input", "data": "hello\r"})
 
                 response = await asyncio.wait_for(poll_task, timeout=8.0)
 
@@ -144,7 +143,7 @@ async def test_admin_hijack_eventbus_delivers_hijack_acquired(live_server: Any) 
                 await wait_for_subscribers(hub, "s1", 1)
 
                 # Admin browser acquires WS hijack
-                await admin_ws.send(json.dumps({"type": "hijack_request"}))
+                await admin_ws.send_json({"type": "hijack_request"})
                 state = await drain_until_hijack_state(admin_ws, hijacked=True, timeout=2.0)
                 assert state is not None, "Admin browser should receive hijack_state after hijack_request"
                 assert state["hijacked"] is True

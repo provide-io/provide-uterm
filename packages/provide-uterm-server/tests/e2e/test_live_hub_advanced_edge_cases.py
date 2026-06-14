@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from typing import Any
 
 import httpx
@@ -64,7 +63,7 @@ class TestGuardChecking:
             await _drain_until(worker, "control")
 
             # Send snapshot with specific prompt_id
-            await worker.send(json.dumps(_snapshot_msg("screen", "actual_prompt")))
+            await worker.send_json(_snapshot_msg("screen", "actual_prompt"))
             # Drain until hub processes the snapshot (no-sleep: drain_until acts as barrier)
             await _drain_until(worker, "snapshot", timeout=1.0)
 
@@ -93,7 +92,7 @@ class TestGuardChecking:
             await _drain_until(worker, "control")
 
             # Send snapshot with specific prompt
-            await worker.send(json.dumps(_snapshot_msg("screen", "correct_prompt")))
+            await worker.send_json(_snapshot_msg("screen", "correct_prompt"))
             # Drain until hub processes the snapshot
             await _drain_until(worker, "snapshot", timeout=1.0)
 
@@ -212,7 +211,7 @@ class TestMultiBrowserContention:
 
                 # All three send hijack_request simultaneously
                 for b in (b1, b2, b3):
-                    await b.send(json.dumps({"type": "hijack_request"}))
+                    await b.send_json({"type": "hijack_request"})
 
                 # Collect states — no sleep needed; drain_until blocks until message arrives
                 states = {
@@ -242,7 +241,7 @@ class TestBrowserDisconnect:
 
             async with connect_async_ws(_ws_url(base_url, "/ws/browser/bd1/term")) as browser:
                 await _drain_all(browser)
-                await browser.send(json.dumps({"type": "hijack_request"}))
+                await browser.send_json({"type": "hijack_request"})
                 state_bd1 = await _drain_until(browser, "hijack_state")
                 assert state_bd1 is not None, "Should receive hijack_state after hijack_request"
                 await _drain_until(worker, "control")  # pause
@@ -260,7 +259,7 @@ class TestBrowserDisconnect:
 
             async with connect_async_ws(_ws_url(base_url, "/ws/browser/bd2/term")) as b1:
                 await _drain_all(b1)
-                await b1.send(json.dumps({"type": "hijack_request"}))
+                await b1.send_json({"type": "hijack_request"})
                 state1 = await _drain_until(b1, "hijack_state")
                 assert state1 is not None, "b1 should receive hijack_state"
                 assert state1["owner"] == "me", f"b1 should be owner, got {state1.get('owner')}"
@@ -270,7 +269,7 @@ class TestBrowserDisconnect:
 
             async with connect_async_ws(_ws_url(base_url, "/ws/browser/bd2/term")) as b2:
                 await _drain_all(b2)
-                await b2.send(json.dumps({"type": "hijack_request"}))
+                await b2.send_json({"type": "hijack_request"})
                 state2 = await _drain_until(b2, "hijack_state")
                 # b2 should be able to hijack now
                 assert state2 is not None, "b2 should receive hijack_state"
@@ -288,7 +287,7 @@ class TestSnapshotLifecycle:
         _, base_url = live_hub
         async with connect_async_ws(_ws_url(base_url, "/ws/worker/sl1/term")) as worker:
             await worker.recv()
-            await worker.send(json.dumps(_snapshot_msg("cached content")))
+            await worker.send_json(_snapshot_msg("cached content"))
 
             async with connect_async_ws(_ws_url(base_url, "/ws/browser/sl1/term")) as browser:
                 # Should receive cached snapshot (sent on browser connect)
@@ -302,7 +301,7 @@ class TestSnapshotLifecycle:
         async with connect_async_ws(_ws_url(base_url, "/ws/browser/sl2/term")) as sl2_browser:
             async with connect_async_ws(_ws_url(base_url, "/ws/worker/sl2/term")) as worker:
                 await worker.recv()
-                await worker.send(json.dumps(_snapshot_msg("old snapshot")))
+                await worker.send_json(_snapshot_msg("old snapshot"))
                 # Wait for snapshot to be acknowledged by hub
                 await _drain_until(sl2_browser, "snapshot", timeout=2.0)
 

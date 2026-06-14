@@ -201,6 +201,11 @@ def _attach_mock_ssh(connector: Any) -> tuple[MagicMock, MagicMock, MagicMock]:
 
 
 class TestSshSessionConnector:
+    def test_screen_without_hub_overlay_returns_raw_screen_buffer(self) -> None:
+        c = _make_ssh_connector({"host": "h", "insecure_no_host_check": True, "hub_overlay": False})
+        c._screen_buffer = "raw ssh output"
+        assert c._screen() == "raw ssh output"
+
     def test_client_keys_list(self) -> None:
         pytest.importorskip("asyncssh")
         from provide.uterm.server.connectors.ssh import SshSessionConnector

@@ -55,7 +55,7 @@ class TestWorkerDropsMidHijack:
                 await _drain_until(browser, "worker_connected", timeout=2.0)
 
                 # Browser acquires hijack
-                await browser.send(json.dumps({"type": "hijack_request"}))
+                await browser.send_json({"type": "hijack_request"})
                 state = await _drain_until(browser, "hijack_state")
                 assert state is not None, "Should receive hijack_state"
                 assert state.get("owner") == "me", f"Browser should own hijack, got {state}"
@@ -83,7 +83,7 @@ class TestBrowserDropsMidHijack:
 
             async with connect_async_ws(_ws_url(base_url, "/ws/browser/chaos3/term")) as browser:
                 await _drain_all(browser)
-                await browser.send(json.dumps({"type": "hijack_request"}))
+                await browser.send_json({"type": "hijack_request"})
                 state = await _drain_until(browser, "hijack_state")
                 assert state is not None, "Should receive hijack_state"
                 ctrl = await _drain_until(worker, "control")
@@ -110,7 +110,7 @@ class TestBrowserDropsMidHijack:
                 await _drain_all(b2)
 
                 # b1 acquires hijack
-                await b1.send(json.dumps({"type": "hijack_request"}))
+                await b1.send_json({"type": "hijack_request"})
                 state = await _drain_until(b1, "hijack_state")
                 assert state is not None, "b1 should receive hijack_state"
                 assert state.get("owner") == "me", f"b1 should own hijack, got {state}"
