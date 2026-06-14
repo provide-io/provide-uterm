@@ -11,6 +11,7 @@ import contextlib
 import hashlib
 import time
 from typing import Any
+from urllib.parse import urlparse
 
 from provide.telemetry import get_logger
 from provide.uterm.screen import decode_cp437
@@ -25,19 +26,30 @@ logger = get_logger(__name__)
 class WebSocketSessionConnector(SessionConnector):
     """Connect a hosted session to a remote WebSocket endpoint."""
 
-    _VALID_CONFIG_KEYS: frozenset[str] = frozenset({"url", "input_mode", "hub_overlay"})
+    _VALID_CONFIG_KEYS: frozenset[str] = frozenset(
+        {"url", "input_mode", "hub_overlay", "block_private_connector_targets"}
+    )
 
     def __init__(self, session_id: str, display_name: str, config: dict[str, Any]) -> None:
         unknown = set(config) - self._VALID_CONFIG_KEYS
         if unknown:
             raise ValueError(f"unknown websocket connector_config keys: {sorted(unknown)}")
+        if config.get("url") is None:
+            raise ValueError("websocket connector requires connector_config.url")
+        url = str(config["url"])
+        parsed = urlparse(url)
+        if parsed.scheme not in {"ws", "wss"}:
+            raise ValueError("websocket connector_config.url scheme must be ws or wss")
+        if not parsed.hostname:
+            raise ValueError("websocket connector_config.url must include a host")
         self._session_id = session_id
         self._display_name = display_name
-        self._url = str(config["url"])
+        self._url = url
         self._ws: Any | None = None
         self._connected = False
         self._input_mode = str(config.get("input_mode", "open"))
         self._hub_overlay: bool = bool(config.get("hub_overlay", True))
+        self._block_private = bool(config.get("block_private_connector_targets", False))
         self._paused = False
         self._received_bytes = 0
         self._screen_buffer = ""
@@ -95,8 +107,8 @@ class WebSocketSessionConnector(SessionConnector):
         # peer IP we reached (no second DNS lookup) before any application data
         # flows; the TLS handshake already completed using the original
         # hostname, so SNI / cert validation are untouched.  Abort on a blocked
-        # peer.  Only metadata IPs are enforced here (always-on, no config); the
-        # private-range block is not threaded to connectors.
+        # peer. Metadata IPs are always blocked; private/internal peers are
+        # blocked when the server config enables that policy.
         await self._assert_peer_allowed(ws)
         self._ws = ws
         self._connected = True
@@ -117,7 +129,7 @@ class WebSocketSessionConnector(SessionConnector):
             return
         peer_ip = peer[0]
         try:
-            assert_ip_allowed(str(peer_ip), block_private=False)
+            assert_ip_allowed(str(peer_ip), block_private=self._block_private)
         except Exception:
             with contextlib.suppress(Exception):
                 await ws.close()

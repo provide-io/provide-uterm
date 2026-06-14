@@ -57,6 +57,28 @@ def _make_connector() -> MagicMock:
     return connector
 
 
+@pytest.mark.asyncio
+async def test_start_connector_threads_block_private_to_connector_config() -> None:
+    session = SessionDefinition(
+        session_id="private-peer",
+        display_name="Private Peer",
+        connector_type="websocket",
+        connector_config={"url": "wss://example.com/term"},
+        auto_start=False,
+    )
+    rt = HostedSessionRuntime(
+        session,
+        public_base_url="http://localhost:9999",
+        recording=RecordingConfig(),
+        block_private_connector_targets=True,
+    )
+    connector = _make_connector()
+    with patch("provide.uterm.server.runtime.build_connector", return_value=connector) as mock_build:
+        await rt._start_connector()
+    mock_build.assert_called_once()
+    assert mock_build.call_args.args[3]["block_private_connector_targets"] is True
+
+
 # ---------------------------------------------------------------------------
 # _ws_url
 # ---------------------------------------------------------------------------

@@ -239,22 +239,29 @@ async def assert_session_egress_allowed(
 
     Host derivation:
       * ssh / telnet  -> ``connector_config["host"]``
-      * websocket     -> ``urlparse(connector_config["url"]).hostname`` (when a
-                         ``url`` is present)
+      * websocket     -> ``urlparse(connector_config["url"]).hostname`` after
+                         requiring a ``ws://`` or ``wss://`` URL
 
     Connector types that take no user-supplied host or URL (shell / local /
-    pty / the internal tunnel websocket with no url) yield no host and are
-    intentionally left unguarded — there is nothing attacker-controlled to
-    validate.  When a host IS derived it is passed to
+    pty) yield no host and are intentionally left unguarded — there is nothing
+    attacker-controlled to validate.  When a host IS derived it is passed to
     ``assert_connector_target_allowed`` which raises ``EgressBlockedError``.
     """
     target_host: str | None = None
     if connector_type in {"ssh", "telnet"}:
+        if connector_type == "ssh" and connector_config.get("client_key_path") is not None:
+            raise EgressBlockedError("ssh connector_config.client_key_path is not supported")
         host = connector_config.get("host")
         target_host = str(host) if host is not None else None
     elif connector_type == "websocket":
         url = connector_config.get("url")
-        if url is not None:
-            target_host = urlparse(str(url)).hostname
+        if url is None:
+            raise EgressBlockedError("websocket connector requires connector_config.url")
+        parsed = urlparse(str(url))
+        if parsed.scheme not in {"ws", "wss"}:
+            raise EgressBlockedError("websocket connector_config.url scheme must be ws or wss")
+        target_host = parsed.hostname
+        if not target_host:
+            raise EgressBlockedError("websocket connector_config.url must include a host")
     if target_host is not None:
         await assert_connector_target_allowed(target_host, block_private=block_private)
