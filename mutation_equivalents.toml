@@ -429,12 +429,6 @@ reason = "forwarded_proto default mutation: the default is read only when the x-
 [[equivalent]]
 mutant = "provide.uterm.server.routes.pages.x__is_secure_request__mutmut_10"
 reason = "forwarded_proto default mutation: the default is read only when the x-forwarded-proto header is absent, and its sole consumer (a substring-of-https test) treats empty / str-of-None / xxxx identically -- all fall through to the url.scheme check. Equivalent."
-[[equivalent]]
-mutant = "provide.uterm.server.routes.pages.x__set_auth_cookie__mutmut_1"
-reason = "samesite default-argument mutation -- the mutmut trampoline forwards the bound original default, so the variant default is dead code no caller reaches. Equivalent."
-[[equivalent]]
-mutant = "provide.uterm.server.routes.pages.x__set_auth_cookie__mutmut_2"
-reason = "samesite default-argument mutation -- the mutmut trampoline forwards the bound original default, so the variant default is dead code no caller reaches. Equivalent."
 
 # ---------------------------------------------------------------------------
 # manager/process_impl.py (AgentProcessManager) — 28 documented equivalents.
@@ -595,9 +589,6 @@ reason = "prepare_policy_context initial principal None -> ''; both branches of 
 #     default, so mutating any "forward" literal just routes through the fallback
 #     to the identical "forward"; default-arg value mutations are trampoline-masked.
 [[equivalent]]
-mutant = "provide.uterm.tunnel.intercept.xǁInterceptGateǁ__init____mutmut_1"
-reason = "Trampoline-masked default-arg InterceptGate(timeout_s=30.0->31.0); the dispatcher forwards the bound 30.0 to the variant, so the mutated default is never reached. Real default tested (test_default_timeout_s)."
-[[equivalent]]
 mutant = "provide.uterm.tunnel.intercept.xǁInterceptGateǁ__init____mutmut_2"
 reason = "Trampoline-masked default-arg InterceptGate(timeout_action='forward'->'XXforwardXX'); dispatcher forwards the bound 'forward'. Real default tested (test_default_timeout_action)."
 [[equivalent]]
@@ -609,12 +600,6 @@ reason = "timeout_action validation tuple ('forward','drop')->('XXforwardXX','dr
 [[equivalent]]
 mutant = "provide.uterm.tunnel.intercept.xǁInterceptGateǁ__init____mutmut_17"
 reason = "timeout_action validation tuple 'forward'->'FORWARD'; redundant with the else default 'forward' (input 'forward' falls through to the same 'forward') — unobservable."
-[[equivalent]]
-mutant = "provide.uterm.tunnel.intercept.xǁInterceptGateǁcancel_all__mutmut_1"
-reason = "Trampoline-masked default-arg cancel_all(action='forward'->'XXforwardXX'); dispatcher forwards the bound 'forward'. Real default tested (test_cancel_all_default_forward)."
-[[equivalent]]
-mutant = "provide.uterm.tunnel.intercept.xǁInterceptGateǁcancel_all__mutmut_2"
-reason = "Trampoline-masked default-arg cancel_all(action='forward'->'FORWARD'); dispatcher forwards the bound 'forward'. Real default tested."
 [[equivalent]]
 mutant = "provide.uterm.tunnel.intercept.x_parse_action_message__mutmut_4"
 reason = "msg.get('action', 'forward'->None) default; only used when 'action' is absent, and str(None)='None' is then normalized back to 'forward' by the validation — identical to the original default, unobservable."
