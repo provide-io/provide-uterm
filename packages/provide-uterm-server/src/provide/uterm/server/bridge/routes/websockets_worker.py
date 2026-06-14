@@ -164,7 +164,6 @@ async def _dispatch_worker_frame(hub: TermHub, worker_id: str, mtype: str, frame
     """
     if mtype == "snapshot":
         await hub.update_last_snapshot(worker_id, frame)
-        await hub.broadcast(worker_id, frame)
         await hub.append_event(
             worker_id,
             "snapshot",
@@ -174,6 +173,7 @@ async def _dispatch_worker_frame(hub: TermHub, worker_id: str, mtype: str, frame
                 "screen": frame.get("screen", ""),
             },
         )
+        await hub.broadcast(worker_id, frame)
     elif mtype == "analysis":
         await hub.broadcast(worker_id, frame)
     else:  # mtype == "status"

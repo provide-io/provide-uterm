@@ -171,7 +171,7 @@ class TestInterceptGateCancelAll:
         tasks = [asyncio.create_task(_w(f"c{i}")) for i in range(3)]
         await asyncio.sleep(0)
         assert g.cancel_all("drop") == 3
-        await asyncio.gather(*tasks)
+        await asyncio.wait_for(asyncio.gather(*tasks), timeout=1.0)
         assert all(r["action"] == "drop" for r in results)
         assert g.pending_count == 0
 
@@ -188,7 +188,7 @@ class TestInterceptGateCancelAll:
         t = asyncio.create_task(_w())
         await asyncio.sleep(0)
         g.cancel_all()
-        await t
+        await asyncio.wait_for(t, timeout=1.0)
         assert results[0]["action"] == "forward"
 
     async def test_cancel_all_skips_done_futures(self) -> None:
@@ -204,7 +204,7 @@ class TestInterceptGateCancelAll:
         g.resolve("m1", _drop())
         await asyncio.sleep(0)
         assert g.cancel_all("drop") == 3
-        await asyncio.gather(*tasks)
+        await asyncio.wait_for(asyncio.gather(*tasks), timeout=1.0)
         assert len(results) == 5
 
 
