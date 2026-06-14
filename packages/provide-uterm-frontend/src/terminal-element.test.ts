@@ -42,8 +42,42 @@ class MockXterm {
   attachCustomKeyEventHandler(_cb: (e: KeyboardEvent) => boolean): void {}
 }
 
+class MockWebSocket {
+  static readonly OPEN = 1;
+
+  readyState = MockWebSocket.OPEN;
+  sent: string[] = [];
+  onopen: (() => void) | null = null;
+  onmessage: ((event: { data: string }) => void) | null = null;
+  onclose: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+
+  constructor(readonly url: string) {
+    mockSockets.push(this);
+  }
+
+  send(data: string): void {
+    this.sent.push(data);
+  }
+
+  close(): void {
+    this.onclose?.();
+  }
+
+  open(): void {
+    this.onopen?.();
+  }
+
+  receive(data: string): void {
+    this.onmessage?.({ data });
+  }
+}
+
+let mockSockets: MockWebSocket[] = [];
+
 beforeEach(() => {
   MockXterm.instances = [];
+  mockSockets = [];
   vi.useFakeTimers();
   
   // biome-ignore lint/suspicious/noExplicitAny: test mock
@@ -54,6 +88,7 @@ beforeEach(() => {
     getItem: vi.fn().mockReturnValue(null),
     setItem: vi.fn(),
   });
+  vi.stubGlobal("WebSocket", MockWebSocket);
   
   Object.defineProperty(document, "fonts", {
     value: { ready: Promise.resolve() },
@@ -123,5 +158,19 @@ describe("TerminalElement", () => {
     dots.forEach((dot) => {
       expect(dot.classList.contains("connected")).toBe(true);
     });
+  });
+
+  it("ACKs received data using UTF-8 wire byte length", async () => {
+    const el = document.createElement("uterm-terminal") as TerminalElement;
+    document.body.appendChild(el);
+    await el.updateComplete;
+
+    el.connect();
+    const ws = mockSockets[0]!;
+    ws.open();
+    ws.receive("👋");
+    vi.advanceTimersByTime(100);
+
+    expect(ws.sent.find((s) => s.includes('"ack"'))).toContain('"bytes":4');
   });
 });

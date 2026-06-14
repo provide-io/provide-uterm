@@ -22,6 +22,11 @@ const RECONNECT_ANIM_INTERVAL_MS = 80;
 // the cumulative bytes received so the DO can size its Tier-A backpressure
 // window (see docs/ard-cloudflare-backpressure.md).
 const ACK_THROTTLE_MS = 100;
+const TEXT_ENCODER = new TextEncoder();
+
+function utf8ByteLength(value: string): number {
+  return TEXT_ENCODER.encode(value).byteLength;
+}
 
 export function resolveWsUrl(state: HijackState): string {
   const { config } = state;
@@ -211,7 +216,7 @@ export function connectWs(state: HijackState, handlers: HijackHandlers): void {
       const raw = typeof e.data === "string" ? (e.data as string) : String(e.data);
       // Count raw received bytes (pre-decode, matching the DO's per-frame
       // msg_len) and ACK on a throttle to drive Tier-A backpressure.
-      state.ackBytes += raw.length;
+      state.ackBytes += utf8ByteLength(raw);
       scheduleAck(state);
       const frames = state.wsDecoder.feed(raw);
       for (const frame of frames) {

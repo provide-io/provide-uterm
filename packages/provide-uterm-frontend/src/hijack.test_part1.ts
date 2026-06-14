@@ -1672,6 +1672,16 @@ describe("ProvideHijack Tier-A backpressure ACKs", () => {
     expect(ack).toContain('"bytes":5');
   });
 
+  it("ACKs received data using UTF-8 wire byte length", () => {
+    makeWidget();
+    getWs().open();
+    getWs().sent = [];
+    getWs().receive("👋");
+    vi.advanceTimersByTime(100);
+    const ack = getWs().sent.find((s) => s.includes('"ack"'));
+    expect(ack).toContain('"bytes":4');
+  });
+
   it("coalesces frames within one window into a single cumulative ACK", () => {
     makeWidget();
     getWs().open();
@@ -1681,5 +1691,42 @@ describe("ProvideHijack Tier-A backpressure ACKs", () => {
     const acks = getWs().sent.filter((s) => s.includes('"ack"'));
     expect(acks).toHaveLength(1);
     expect(acks[0]).toContain('"bytes":5');
+  });
+});
+
+describe("ProvideHijack authority frame validation", () => {
+  it("ignores malformed hello authority fields", () => {
+    const { widget } = makeWidget();
+    sendMessage({
+      type: "hello",
+      can_hijack: "true",
+      hijacked: true,
+      hijacked_by_me: true,
+      worker_online: true,
+    });
+    const state = (widget as unknown as { _hijackState: { canHijack: boolean; hijacked: boolean; hijackedByMe: boolean } })
+      ._hijackState;
+    expect(state.canHijack).toBe(false);
+    expect(state.hijacked).toBe(false);
+    expect(state.hijackedByMe).toBe(false);
+  });
+
+  it("ignores malformed hijack_state authority fields", () => {
+    const { widget } = makeWidget();
+    sendMessage({ type: "hijack_state", hijacked: "true", owner: "me" });
+    const state = (widget as unknown as { _hijackState: { hijacked: boolean; hijackedByMe: boolean } })._hijackState;
+    expect(state.hijacked).toBe(false);
+    expect(state.hijackedByMe).toBe(false);
+  });
+
+  it("ignores malformed approval_pending fields", () => {
+    const { widget } = makeWidget();
+    sendMessage({
+      type: "approval_pending",
+      request_id: "approval-1",
+      command: "rm -rf /tmp/example",
+      expires_at: Infinity,
+    });
+    expect((widget as unknown as { _pendingApproval: unknown })._pendingApproval).toBeNull();
   });
 });
