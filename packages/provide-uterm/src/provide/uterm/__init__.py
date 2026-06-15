@@ -142,6 +142,7 @@ __all__ = [
     "control_channel_namespace",
     "control_plane_namespace",
     "frames",
+    "channels",
 ]
 
 from provide.uterm.control import channel as control_channel_namespace
@@ -151,4 +152,6 @@ from provide.uterm.control import plane as control_plane_namespace
 def __getattr__(name: str) -> object:
     if name == "frames":
         return import_module("provide.uterm.frames")
+    if name == "channels":
+        return import_module("provide.uterm.channels")
     raise AttributeError(name)
