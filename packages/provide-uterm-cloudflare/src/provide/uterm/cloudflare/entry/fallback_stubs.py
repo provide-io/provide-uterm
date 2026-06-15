@@ -128,7 +128,10 @@ except ImportError:  # pragma: no cover — Pyodide flat-layout / validation pha
         def json_response(payload: object, status: int = 200, headers: object | None = None):
             if Response is None:
                 return None
-            return Response.json(payload, status=status, headers=headers)
+            typed_headers = (
+                {str(key): str(value) for key, value in headers.items()} if isinstance(headers, dict) else None
+            )
+            return Response.json(payload, status=status, headers=typed_headers)
 
         try:
             from config import CloudflareConfig  # type: ignore[import-not-found]  # ty:ignore[unresolved-import]

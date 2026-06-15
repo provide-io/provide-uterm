@@ -14,6 +14,10 @@ if TYPE_CHECKING:
     import aiosqlite
 
 
+def _row_data(row: Any) -> dict[str, Any]:
+    return cast("dict[str, Any]", dict(row))
+
+
 class SqliteLeaseStore:
     def __init__(self, tx: Any) -> None:
         self._tx = tx
@@ -56,7 +60,7 @@ class SqliteLeaseStore:
         await cursor.close()
         if row is None:
             return None
-        data = dict(row)
+        data = _row_data(row)
         if data.get("deleted_at") is not None:
             return None
         return LeaseRecord(**data)

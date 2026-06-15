@@ -58,7 +58,7 @@ def register_workerctl_routes(hub: TermHub, router: APIRouter) -> None:
     ) -> Any:
         # input_mode is validated by Pydantic to be "hijack" or "open" via the
         # regex pattern on InputModeRequest, so the cast is sound.
-        ok, err = await hub.set_input_mode(worker_id, request.input_mode)  # type: ignore[arg-type]
+        ok, err = await hub.set_input_mode(worker_id, request.input_mode)  # type: ignore[arg-type]  # ty:ignore[invalid-argument-type]
         if not ok:
             status = 404 if err == "not_found" else 409
             error_msg = (

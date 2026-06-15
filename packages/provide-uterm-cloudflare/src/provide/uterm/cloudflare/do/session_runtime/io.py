@@ -16,13 +16,13 @@ import contextlib
 import json
 import logging
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from provide.telemetry import get_tracer
 
 from provide.uterm.control_channel import encode_control_frame, encode_terminal_data
 
-try:
+if TYPE_CHECKING:
     from provide.uterm.cloudflare.bridge.hijack import HijackSession
     from provide.uterm.cloudflare.cf_types import CFWebSocket
     from provide.uterm.cloudflare.do._webhooks import fire_webhooks
@@ -30,25 +30,29 @@ try:
     from provide.uterm.cloudflare.do.persistence import persist_lease as _persist_lease
     from provide.uterm.cloudflare.state.registry import KV_REFRESH_S, update_kv_session
     from provide.uterm.cloudflare.state.store import LeaseRecord
-except Exception:  # pragma: no cover
-    from bridge.hijack import HijackSession  # type: ignore[import-not-found,no-redef]  # ty:ignore[unresolved-import]
-    from cf_types import (  # ty:ignore[unresolved-import]
-        CFWebSocket,  # type: ignore[import-not-found,no-redef]  # noqa: TC002
-    )
-    from do._webhooks import fire_webhooks  # type: ignore[import-not-found,no-redef]  # ty:ignore[unresolved-import]
-    from do.persistence import (  # ty:ignore[unresolved-import]
-        clear_lease as _clear_lease,  # type: ignore[import-not-found,no-redef]
-    )
-    from do.persistence import persist_lease as _persist_lease  # type: ignore[no-redef]  # ty:ignore[unresolved-import]
-    from state.registry import (  # type: ignore[import-not-found,no-redef]  # ty:ignore[unresolved-import]
-        KV_REFRESH_S,
-        update_kv_session,
-    )
-    from state.store import LeaseRecord  # type: ignore[import-not-found,no-redef]  # ty:ignore[unresolved-import]
+else:
+    try:
+        from provide.uterm.cloudflare.bridge.hijack import HijackSession
+        from provide.uterm.cloudflare.cf_types import CFWebSocket
+        from provide.uterm.cloudflare.do._webhooks import fire_webhooks
+        from provide.uterm.cloudflare.do.persistence import clear_lease as _clear_lease
+        from provide.uterm.cloudflare.do.persistence import persist_lease as _persist_lease
+        from provide.uterm.cloudflare.state.registry import KV_REFRESH_S, update_kv_session
+        from provide.uterm.cloudflare.state.store import LeaseRecord
+    except Exception:  # pragma: no cover
+        from bridge.hijack import HijackSession
+        from cf_types import CFWebSocket  # noqa: TC002
+        from do._webhooks import fire_webhooks
+        from do.persistence import clear_lease as _clear_lease
+        from do.persistence import persist_lease as _persist_lease
+        from state.registry import KV_REFRESH_S, update_kv_session
+        from state.store import LeaseRecord
 
 from .flow_control import PAUSE as _FLOW_PAUSE
 
 if TYPE_CHECKING:
+    from provide.uterm.cloudflare.contracts import RuntimeProtocol
+
     from .flow_control import FlowController
 
 
@@ -368,7 +372,7 @@ class _SessionRuntimeIoMixin:
                 event.get("type"),
             )
             return
-        task = asyncio.create_task(fire_webhooks(self, event, _webhooks=webhooks))  # type: ignore[arg-type]
+        task = asyncio.create_task(fire_webhooks(cast("RuntimeProtocol", self), event, _webhooks=webhooks))
         self._webhook_tasks.add(task)
         task.add_done_callback(self._webhook_tasks.discard)
 

@@ -88,7 +88,7 @@ def consume_tunnel_invite(
     issued_ip = raw.get("issued_ip")
     return TunnelInvite(
         session_id=session_id,
-        role=role,  # type: ignore[arg-type]
+        role=role,  # type: ignore[arg-type]  # ty:ignore[invalid-argument-type]
         tunnel_token=tunnel_token,
         expires_at=float(expires_at),
         issued_ip=str(issued_ip) if issued_ip is not None else None,

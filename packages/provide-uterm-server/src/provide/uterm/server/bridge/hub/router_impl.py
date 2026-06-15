@@ -206,7 +206,7 @@ class MessageRouter:
 
     async def broadcast(self, worker_id: str, msg: dict[str, Any]) -> None:
         """Send *msg* to all browser WebSockets registered for *worker_id*."""
-        await _broadcast_impl(self, worker_id, msg)
+        await _broadcast_impl(self, worker_id, msg)  # ty:ignore[invalid-argument-type]
 
     async def send_hijack_state_to(
         self,
@@ -223,7 +223,7 @@ class MessageRouter:
     ) -> set[WebSocket]:
         """Send a hijack_state message to each browser; return the set of dead sockets."""
         return await _send_hijack_state_to_impl(
-            self,
+            self,  # ty:ignore[invalid-argument-type]
             browsers,
             worker_id=worker_id,
             is_hijacked=is_hijacked,
@@ -237,7 +237,7 @@ class MessageRouter:
 
     async def broadcast_hijack_state(self, worker_id: str) -> None:
         """Send a hijack_state message to every browser for *worker_id*, cleaning up dead sockets."""
-        await _broadcast_hijack_state_impl(self, worker_id)
+        await _broadcast_hijack_state_impl(self, worker_id)  # ty:ignore[invalid-argument-type]
 
     async def send_worker(self, worker_id: str, msg: dict[str, Any], *, source: Any = None) -> bool:
         """Send *msg* to the worker WebSocket; returns False if no worker is connected.
@@ -248,7 +248,7 @@ class MessageRouter:
         types are dropped because the worker's bridge loop has no JSON
         envelope handling.
         """
-        return await _send_worker_impl(self, worker_id, msg, source=source)
+        return await _send_worker_impl(self, worker_id, msg, source=source)  # ty:ignore[invalid-argument-type]
 
     # -- Behavioral heuristics ------------------------------------------
     # Thin wrappers over :mod:`router_behavioral` (keystroke timing / audit);
@@ -256,23 +256,23 @@ class MessageRouter:
 
     def record_keystroke(self, source: Any) -> None:
         """Record the timing of a keystroke from a browser."""
-        _record_keystroke_impl(self, source)
+        _record_keystroke_impl(self, source)  # ty:ignore[invalid-argument-type]
 
     def get_heuristics(self, source: Any) -> dict[str, float]:
         """Return behavioral metrics for the given browser."""
-        return _get_heuristics_impl(self, source)
+        return _get_heuristics_impl(self, source)  # ty:ignore[invalid-argument-type]
 
     def forget_browser(self, ws: Any) -> None:
         """Drop heuristic state for a disconnected browser."""
-        _forget_browser_impl(self, ws)
+        _forget_browser_impl(self, ws)  # ty:ignore[invalid-argument-type]
 
     async def run_behavioral_audit_loop(self) -> None:
         """Periodically audit active connections for behavioral anomalies."""
-        await _run_behavioral_audit_loop_impl(self)
+        await _run_behavioral_audit_loop_impl(self)  # ty:ignore[invalid-argument-type]
 
     async def audit_all_browsers(self) -> None:
         """Iterate all active browsers and evaluate behavioral heuristics."""
-        await _audit_all_browsers_impl(self)
+        await _audit_all_browsers_impl(self)  # ty:ignore[invalid-argument-type]
 
     # -- Worker / browser lifecycle helpers -----------------------------
 

@@ -63,7 +63,7 @@ def _register() -> None:
     try:
         from provide.uterm.server.connectors.registry import register_connector
 
-        register_connector("pty", PTYConnector)  # type: ignore[arg-type]
+        register_connector("pty", PTYConnector)  # type: ignore[arg-type]  # ty:ignore[invalid-argument-type]
     except ImportError:
         return
     # connectors/__init__.py computes KNOWN_CONNECTOR_TYPES at import time; if it

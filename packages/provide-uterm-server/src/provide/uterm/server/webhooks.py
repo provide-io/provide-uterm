@@ -34,7 +34,7 @@ import re
 import socket
 import time
 import uuid
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
@@ -415,7 +415,9 @@ async def _delivery_url_allowed(
             resolved_addresses = addresses_result
     except Exception:
         return False
-    addresses = tuple(resolved_addresses)
+    if not isinstance(resolved_addresses, Iterable):
+        return False
+    addresses = tuple(str(address) for address in resolved_addresses)
     if not addresses:
         return False
     try:

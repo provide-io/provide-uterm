@@ -490,15 +490,15 @@ class ConnectionManager:
 
     async def disconnect_worker(self, worker_id: str) -> bool:
         """Programmatically disconnect the worker WS (body in :mod:`connection_hijack`)."""
-        return await connection_hijack.disconnect_worker(self, worker_id)
+        return await connection_hijack.disconnect_worker(self, worker_id)  # ty:ignore[invalid-argument-type]
 
     def _event_bus_close(self, worker_id: str) -> None:
         """Indirect EventBus close, read on the hub each call (body in :mod:`connection_hijack`)."""
-        connection_hijack._event_bus_close(self, worker_id)
+        connection_hijack._event_bus_close(self, worker_id)  # ty:ignore[invalid-argument-type]
 
     async def force_release_hijack(self, worker_id: str) -> bool:
         """Forcibly clear any active hijack and send a resume frame (body in :mod:`connection_hijack`)."""
-        return await connection_hijack.force_release_hijack(self, worker_id)
+        return await connection_hijack.force_release_hijack(self, worker_id)  # ty:ignore[invalid-argument-type]
 
 
 __all__ = ["ConnectionManager"]

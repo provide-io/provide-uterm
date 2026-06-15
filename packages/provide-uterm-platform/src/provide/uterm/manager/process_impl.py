@@ -307,17 +307,17 @@ class AgentProcessManager:
         env.pop(worker_var, None)
 
     async def spawn_agent(self, config_path: str, agent_id: str) -> str:
-        return await process_impl_spawn.spawn_agent(self, config_path, agent_id)
+        return await process_impl_spawn.spawn_agent(self, config_path, agent_id)  # ty:ignore[invalid-argument-type]
 
     def _spawn_process(self, agent_id: str, cmd: list[str], env: dict[str, str]) -> subprocess.Popen[bytes]:
-        return process_impl_spawn._spawn_process(self, agent_id, cmd, env)
+        return process_impl_spawn._spawn_process(self, agent_id, cmd, env)  # ty:ignore[invalid-argument-type]
 
     def _spawn_platform_kwargs(self) -> _PopenPlatformKwargs:
-        return process_impl_spawn._spawn_platform_kwargs(self)
+        return process_impl_spawn._spawn_platform_kwargs(self)  # ty:ignore[invalid-argument-type]
 
     def _build_preexec_rlimit_fn(self) -> Any | None:
         """Return a preexec function that applies configured worker resource limits."""
-        return process_impl_spawn._build_preexec_rlimit_fn(self)
+        return process_impl_spawn._build_preexec_rlimit_fn(self)  # ty:ignore[invalid-argument-type]
 
     @staticmethod
     async def _wait_for_process_exit(process: subprocess.Popen[bytes], timeout_s: float) -> None:
@@ -369,7 +369,7 @@ class AgentProcessManager:
         timeout_s: float = _STOP_TIMEOUT_S,
     ) -> None:
         return await process_impl_spawn._stop_process_tree(
-            self,
+            self,  # ty:ignore[invalid-argument-type]
             agent_id=agent_id,
             process=process,
             pid=pid,
@@ -471,16 +471,16 @@ class AgentProcessManager:
         """Monitor agent processes for crashes or completion."""
         _monitor_iter = 0
         while True:
-            await _handle_exited_processes(self)
+            await _handle_exited_processes(self)  # ty:ignore[invalid-argument-type]
             self._spawn_tasks = [t for t in self._spawn_tasks if not t.done()]
-            await _handle_heartbeat_timeouts(self)
-            _handle_stale_queued(self)
-            await _handle_bust_respawn(self)
-            await _handle_desired_state(self)
+            await _handle_heartbeat_timeouts(self)  # ty:ignore[invalid-argument-type]
+            _handle_stale_queued(self)  # ty:ignore[invalid-argument-type]
+            await _handle_bust_respawn(self)  # ty:ignore[invalid-argument-type]
+            await _handle_desired_state(self)  # ty:ignore[invalid-argument-type]
             _monitor_iter += 1
             if _monitor_iter % 360 == 0:  # ~1 hour at 10s interval
                 with contextlib.suppress(Exception):
-                    _cleanup_old_worker_logs(self)
+                    _cleanup_old_worker_logs(self)  # ty:ignore[invalid-argument-type]
             await asyncio.sleep(self.manager.health_check_interval)
 
 

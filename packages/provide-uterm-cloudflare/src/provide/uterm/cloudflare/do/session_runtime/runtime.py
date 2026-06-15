@@ -19,21 +19,22 @@ from typing import TYPE_CHECKING, Any
 
 from provide.telemetry import get_tracer
 
-try:
+if TYPE_CHECKING:
     from provide.uterm.cloudflare.bridge.hijack import HijackCoordinator
     from provide.uterm.cloudflare.cf_types import CFWebSocket, DurableObject
     from provide.uterm.cloudflare.config import CloudflareConfig
     from provide.uterm.cloudflare.state.store import SqliteStateStore
-except Exception:  # pragma: no cover
-    from bridge.hijack import (  # ty:ignore[unresolved-import]
-        HijackCoordinator,  # type: ignore[import-not-found,no-redef]
-    )
-    from cf_types import (  # type: ignore[import-not-found,no-redef]  # ty:ignore[unresolved-import]
-        CFWebSocket,
-        DurableObject,
-    )
-    from config import CloudflareConfig  # type: ignore[import-not-found,no-redef]  # ty:ignore[unresolved-import]
-    from state.store import SqliteStateStore  # type: ignore[import-not-found,no-redef]  # ty:ignore[unresolved-import]
+else:
+    try:
+        from provide.uterm.cloudflare.bridge.hijack import HijackCoordinator
+        from provide.uterm.cloudflare.cf_types import CFWebSocket, DurableObject
+        from provide.uterm.cloudflare.config import CloudflareConfig
+        from provide.uterm.cloudflare.state.store import SqliteStateStore
+    except Exception:  # pragma: no cover
+        from bridge.hijack import HijackCoordinator
+        from cf_types import CFWebSocket, DurableObject
+        from config import CloudflareConfig
+        from state.store import SqliteStateStore
 
 from .auth import _AuthMixin
 from .fetch import _FetchMixin

@@ -19,13 +19,19 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from provide.uterm.detection.detector import PromptDetector
+from typing import Any, Protocol
 
 # Emit under the detector module's logger name (see module docstring).
 logger = logging.getLogger("provide.uterm.detection.detector")
+
+
+class PatternDetector(Protocol):
+    _patterns: list[dict[str, Any]]
+    _compile_failures: list[dict[str, Any]]
+    _compiled_all: list[tuple[re.Pattern[str], dict[str, Any]]]
+    _compiled_no_cursor_end_req: list[tuple[re.Pattern[str], dict[str, Any]]]
+    _compiled: list[tuple[re.Pattern[str], dict[str, Any]]]
+    _strict: bool
 
 
 class DetectorPatternCompileError(ValueError):
@@ -40,7 +46,7 @@ class DetectorPatternCompileError(ValueError):
     """
 
 
-def compile_patterns(detector: PromptDetector) -> list[tuple[re.Pattern[str], dict[str, Any]]]:
+def compile_patterns(detector: PatternDetector) -> list[tuple[re.Pattern[str], dict[str, Any]]]:
     """Compile regex patterns for efficient matching.
 
     Returns:
@@ -112,7 +118,7 @@ def compile_patterns(detector: PromptDetector) -> list[tuple[re.Pattern[str], di
     return compiled
 
 
-def swap_patterns(detector: PromptDetector, candidate: list[dict[str, Any]]) -> None:
+def swap_patterns(detector: PatternDetector, candidate: list[dict[str, Any]]) -> None:
     """Atomically replace ``detector._patterns`` with ``candidate``.
 
     Compiles the candidate set into locals first. In ``strict=True``

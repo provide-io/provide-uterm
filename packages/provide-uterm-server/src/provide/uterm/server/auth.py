@@ -112,7 +112,7 @@ def _resolve_principal(
     api_key_store: Any,
 ) -> Principal:
     connection = _HeadersAndCookies(headers=headers, cookies=cookies)
-    return _provider(auth, api_key_store).resolve_principal_sync(connection)  # type: ignore[arg-type]
+    return _provider(auth, api_key_store).resolve_principal_sync(connection)  # type: ignore[arg-type]  # ty:ignore[invalid-argument-type]
 
 
 @dataclass(slots=True)

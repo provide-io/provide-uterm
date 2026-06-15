@@ -10,17 +10,16 @@
 #   ci/typecheck.sh ty             — informational: log ty errors, exit 0
 #
 # The split exists because:
-#   - The core package (provide-uterm) is the only tree known to be 100%
-#     clean under mypy strict mode today. The other packages still surface
-#     legitimate (or near-legitimate) errors that we want CI to track but
-#     not block on yet.
-#   - ty (Astral's experimental type-checker) has known cross-file resolution
-#     gaps (see [tool.mypy.overrides] in pyproject.toml) and reports false
-#     positives across every package, so it always runs in informational mode.
+#   - Core and Cloudflare are strict mypy gates. The remaining packages still
+#     surface legitimate (or near-legitimate) errors that CI tracks in soft
+#     mode until their package-specific type debt is retired.
+#   - ty (Astral's experimental type-checker) is kept informational while it
+#     matures, but the repository is expected to stay diagnostic-clean.
 set -euo pipefail
 
 STRICT_PACKAGES=(
   "packages/provide-uterm/src/"
+  "packages/provide-uterm-cloudflare/src/"
 )
 
 SOFT_PACKAGES=(
@@ -28,7 +27,6 @@ SOFT_PACKAGES=(
   "packages/provide-uterm-server/src/"
   "packages/provide-uterm-client/src/"
   "packages/provide-uterm-platform/src/"
-  "packages/provide-uterm-cloudflare/src/"
 )
 
 mode="${1:-mypy}"
@@ -56,7 +54,7 @@ case "${mode}" in
       echo "::endgroup::"
     done
     if [ "${rc}" -ne 0 ]; then
-      echo "::warning::ty reported issues (known cross-file resolution gap; informational only)"
+      echo "::warning::ty reported issues (informational only)"
     fi
     exit 0
     ;;

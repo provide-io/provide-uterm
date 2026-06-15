@@ -432,7 +432,7 @@ async def _pipe_ws(
     if ws_ssl is not None:
         connect_kwargs["ssl"] = ws_ssl
 
-    async with websockets.connect(ws_url, **connect_kwargs) as ws:  # type: ignore[arg-type]
+    async with websockets.connect(ws_url, **connect_kwargs) as ws:  # type: ignore[arg-type]  # ty:ignore[invalid-argument-type]
         gateway_ws = cast("_GatewayWebSocket", ws)
         token_data = token_holder[0]
         if token_data:

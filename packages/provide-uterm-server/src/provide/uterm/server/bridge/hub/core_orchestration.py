@@ -55,7 +55,7 @@ async def set_worker_hello_mode(hub: TermHub, worker_id: str, mode: str) -> bool
     # unknown values so the cast on the next line is sound.
     if mode not in ("hijack", "open"):
         raise ValueError(f"invalid input mode: {mode!r}")
-    return await hub.set_worker_hello(worker_id, mode)  # type: ignore[arg-type]
+    return await hub.set_worker_hello(worker_id, mode)  # type: ignore[arg-type]  # ty:ignore[invalid-argument-type]
 
 
 async def emit_telemetry(

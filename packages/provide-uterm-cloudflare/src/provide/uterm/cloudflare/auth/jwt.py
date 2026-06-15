@@ -4,7 +4,7 @@ import base64
 import json
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 # Module-level JWKS cache: url → (fetched_at, jwks_dict).
 # Avoids a network round-trip on every authenticated request within the same
@@ -291,7 +291,7 @@ async def _verify_pyjwt(token: str, config: JwtConfig) -> dict[str, Any]:
             algorithms=list(config.algorithms),
             issuer=config.issuer,
             audience=config.audience,
-            options=options,  # type: ignore[arg-type]  # PyJWT Options stub
+            options=cast("Any", options),  # PyJWT Options stub is narrower than accepted runtime dict.
             leeway=max(0, int(config.clock_skew_seconds)),
         )
     except InvalidTokenError as exc:

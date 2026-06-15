@@ -40,12 +40,15 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 logger = logging.getLogger(__name__)
 
 # Sentinel used when UshellConnector cannot be imported (missing dependency).
 _IMPORT_ERROR: str | None = None
+
+if TYPE_CHECKING:
+    from provide.uterm.cloudflare.state.registry import list_kv_sessions as _worker_list_kv_sessions
 
 
 def _load_connector(session_id: str, env: Any, storage: Any = None) -> Any:
@@ -72,9 +75,10 @@ def _load_connector(session_id: str, env: Any, storage: Any = None) -> Any:
         ctx["list_kv_sessions"] = _list_sessions
     except Exception:
         try:
-            from state.registry import (  # ty:ignore[unresolved-import]
-                list_kv_sessions as _lks,  # type: ignore[import-not-found]
-            )
+            if TYPE_CHECKING:
+                _lks = _worker_list_kv_sessions
+            else:
+                from state.registry import list_kv_sessions as _lks
 
             async def _list_sessions2() -> list[dict[str, Any]]:
                 result: list[dict[str, Any]] = await _lks(env)

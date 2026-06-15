@@ -53,7 +53,7 @@ def _register() -> None:
     try:
         from provide.uterm.server.connectors.registry import register_connector
 
-        register_connector("pty_capture", CaptureConnector)  # type: ignore[arg-type]
+        register_connector("pty_capture", CaptureConnector)  # type: ignore[arg-type]  # ty:ignore[invalid-argument-type]
     except ImportError:
         pass
 

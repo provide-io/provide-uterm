@@ -354,7 +354,7 @@ async def _make_process_handler(
                     # arguments; passing a heterogeneous ``**dict[str, object]``
                     # makes mypy enumerate them all. The runtime call is fine
                     # because we only ever populate the ``ssl`` key.
-                    async with websockets.connect(effective_ws_url, **connect_kwargs) as ws:  # type: ignore[arg-type]
+                    async with websockets.connect(effective_ws_url, **connect_kwargs) as ws:  # type: ignore[arg-type]  # ty:ignore[invalid-argument-type]
                         # Proxy-asserted identity (from resolver) goes first,
                         # so the upstream can choose to trust it *before*
                         # any resume/banner traffic. Only emitted when a
