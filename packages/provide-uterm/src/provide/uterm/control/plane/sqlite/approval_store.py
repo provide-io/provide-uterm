@@ -13,6 +13,10 @@ if TYPE_CHECKING:
     import aiosqlite
 
 
+def _row_data(row: Any) -> dict[str, Any]:
+    return cast("dict[str, Any]", dict(row))
+
+
 class SqliteApprovalStore:
     def __init__(self, tx: Any) -> None:
         self._tx = tx
@@ -62,7 +66,7 @@ class SqliteApprovalStore:
         await cursor.close()
         if row is None:
             return None
-        return ApprovalRecord(**dict(row))
+        return ApprovalRecord(**_row_data(row))
 
     async def list_pending(self) -> list[ApprovalRecord]:
         cursor = await self._conn.execute(
@@ -70,4 +74,4 @@ class SqliteApprovalStore:
         )
         rows = await cursor.fetchall()
         await cursor.close()
-        return [ApprovalRecord(**dict(row)) for row in rows]
+        return [ApprovalRecord(**_row_data(row)) for row in rows]

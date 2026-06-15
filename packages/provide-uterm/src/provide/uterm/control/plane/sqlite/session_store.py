@@ -13,6 +13,10 @@ if TYPE_CHECKING:
     import aiosqlite
 
 
+def _row_data(row: Any) -> dict[str, Any]:
+    return cast("dict[str, Any]", dict(row))
+
+
 class SqliteSessionStore:
     def __init__(self, tx: Any) -> None:
         self._tx = tx
@@ -64,7 +68,7 @@ class SqliteSessionStore:
         await cursor.close()
         if row is None:
             return None
-        return SessionRecord(**dict(row))
+        return SessionRecord(**_row_data(row))
 
     async def mark_deleted(self, session_id: str, deleted_at: float) -> None:
         await self._conn.execute(

@@ -13,7 +13,7 @@ import logging
 import re
 import time
 import uuid
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 from provide.uterm.cloudflare.entry import auth as _auth_mod
@@ -299,9 +299,10 @@ async def _api_tunnels(request: object, env: object, config: CloudflareConfig) -
     try:
         from provide.uterm.cloudflare.api._tunnel_api import handle_tunnels
     except ImportError:  # pragma: no cover
-        from api._tunnel_api import (  # ty:ignore[unresolved-import]
-            handle_tunnels,  # type: ignore[import-not-found,no-redef]
-        )
+        if TYPE_CHECKING:
+            from provide.uterm.cloudflare.api._tunnel_api import handle_tunnels
+        else:
+            from api._tunnel_api import handle_tunnels
 
     principal = await _decode_jwt_principal(request, config)
     return await handle_tunnels(request, env, principal)
@@ -311,9 +312,10 @@ async def _api_tunnel_revoke(request: object, env: object, config: CloudflareCon
     try:
         from provide.uterm.cloudflare.api._tunnel_api import handle_tunnel_revoke_tokens
     except ImportError:  # pragma: no cover
-        from api._tunnel_api import (  # ty:ignore[unresolved-import]
-            handle_tunnel_revoke_tokens,  # type: ignore[no-redef]
-        )
+        if TYPE_CHECKING:
+            from provide.uterm.cloudflare.api._tunnel_api import handle_tunnel_revoke_tokens
+        else:
+            from api._tunnel_api import handle_tunnel_revoke_tokens
 
     principal = await _decode_jwt_principal(request, config)
     return await handle_tunnel_revoke_tokens(request, env, tunnel_id, principal)
@@ -323,9 +325,10 @@ async def _api_tunnel_rotate(request: object, env: object, config: CloudflareCon
     try:
         from provide.uterm.cloudflare.api._tunnel_api import handle_tunnel_rotate_tokens
     except ImportError:  # pragma: no cover
-        from api._tunnel_api import (  # ty:ignore[unresolved-import]
-            handle_tunnel_rotate_tokens,  # type: ignore[no-redef]
-        )
+        if TYPE_CHECKING:
+            from provide.uterm.cloudflare.api._tunnel_api import handle_tunnel_rotate_tokens
+        else:
+            from api._tunnel_api import handle_tunnel_rotate_tokens
 
     principal = await _decode_jwt_principal(request, config)
     return await handle_tunnel_rotate_tokens(request, env, tunnel_id, principal, ttl_s=config.tunnel_token_ttl_s)  # ty:ignore[unresolved-attribute]

@@ -13,6 +13,10 @@ if TYPE_CHECKING:
     import aiosqlite
 
 
+def _row_data(row: Any) -> dict[str, Any]:
+    return cast("dict[str, Any]", dict(row))
+
+
 class SqliteTokenStore:
     def __init__(self, tx: Any) -> None:
         self._tx = tx
@@ -57,7 +61,7 @@ class SqliteTokenStore:
         await cursor.close()
         if row is None:
             return None
-        return SessionTokenRecord(**dict(row))
+        return SessionTokenRecord(**_row_data(row))
 
     async def create_resume_token(self, record: ResumeTokenRecord) -> None:
         data = asdict(record)
@@ -92,7 +96,7 @@ class SqliteTokenStore:
         await cursor.close()
         if row is None:
             return None
-        data = dict(row)
+        data = _row_data(row)
         if data.get("revoked_at") is not None:
             return None
         return ResumeTokenRecord(
@@ -117,7 +121,7 @@ class SqliteTokenStore:
         if row is None:
             await cursor.close()
             return None
-        data = dict(row)
+        data = _row_data(row)
         if data.get("revoked_at") is not None:
             await cursor.close()
             return None

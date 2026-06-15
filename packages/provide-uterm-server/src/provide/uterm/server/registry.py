@@ -347,7 +347,7 @@ class SessionRegistry:
         # see the new mode immediately (connector WS pipeline is async).
         # SessionDefinition.model_validate above already enforced the
         # ``Literal['hijack', 'open']`` shape — cast tells mypy that.
-        await self._hub.set_input_mode(session_id, mode)  # type: ignore[arg-type]
+        await self._hub.set_input_mode(session_id, mode)  # type: ignore[arg-type]  # ty:ignore[invalid-argument-type]
         return runtime.status()
 
     async def clear_session(self, session_id: str) -> SessionRuntimeStatus:

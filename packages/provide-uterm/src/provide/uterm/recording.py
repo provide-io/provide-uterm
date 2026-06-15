@@ -316,7 +316,8 @@ class InMemoryRecordingStore:
         # Tail behaviour: return last N events
         return all_events[-normalized_limit:]
 
-    async def get_path(self, _session_id: str) -> Path | None:
+    async def get_path(self, session_id: str) -> Path | None:
+        _ = session_id
         return None
 
 
@@ -329,13 +330,16 @@ class NullRecordingStore:
     consistent.
     """
 
-    async def start_session(self, _session_id: str, _metadata: dict[str, Any]) -> None:
+    async def start_session(self, session_id: str, metadata: dict[str, Any]) -> None:
+        _ = (session_id, metadata)
         return
 
-    async def append_events(self, _session_id: str, _events: list[dict[str, Any]]) -> None:
+    async def append_events(self, session_id: str, events: list[dict[str, Any]]) -> None:
+        _ = (session_id, events)
         return
 
-    async def end_session(self, _session_id: str) -> None:
+    async def end_session(self, session_id: str) -> None:
+        _ = session_id
         return
 
     async def recording_meta(self, session_id: str) -> dict[str, Any]:
@@ -343,12 +347,14 @@ class NullRecordingStore:
 
     async def get_entries(
         self,
-        _session_id: str,
+        session_id: str,
         limit: int = 200,  # pragma: no mutate — trampoline-masked default
         offset: int | None = None,
         event: str | None = None,
     ) -> list[dict[str, Any]]:
+        _ = (session_id, limit, offset, event)
         return []
 
-    async def get_path(self, _session_id: str) -> Path | None:
+    async def get_path(self, session_id: str) -> Path | None:
+        _ = session_id
         return None

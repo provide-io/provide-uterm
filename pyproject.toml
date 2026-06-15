@@ -146,21 +146,6 @@ python-version = "3.11"
 extra-paths = []
 
 [tool.ty.rules]
-# `invalid-argument-type` stays globally ignored because, with it enabled, ty
-# surfaces 50 firings spread across 16 files in 3 packages (provide-uterm-server
-# ~44, mostly gateway/_ssh_handler.py + gateway/_gateway.py; plus platform and
-# cloudflare). They are genuine type debt — protocol mismatches and third-party
-# stub gaps (PyJWT Options, CF Workers Response, asyncssh) — most already
-# carrying `# type: ignore[arg-type]` for mypy. ty cannot scope a rule to a
-# path/module the way mypy overrides can, and the fixes live in package source
-# owned by other lanes (A3 platform, A4 server, A1 cloudflare), so they can't be
-# made from the infra lane. Tracked as cross-lane follow-ups (see A6 plan).
-# Re-narrow this to per-package mypy-style overrides once that debt is paid down.
-invalid-argument-type = "ignore"
-# `unused-type-ignore-comment` is global noise from the cross-package
-# `# type: ignore` debt above: many ignores are needed by mypy but read as
-# unused by ty, and vice-versa. Keep global until the two checkers converge.
-unused-type-ignore-comment = "ignore"
 
 [tool.codespell]
 skip = ".git,*.pyc,__pycache__,.venv,node_modules,uv.lock,package-lock.json,*.mmd,./packages/provide-uterm/src/provide/uterm/frontend/assets/*.js,packages/provide-uterm/src/provide/uterm/frontend/assets/*.js,./packages/provide-uterm-server/src/provide/uterm/server/frontend/assets/*.js,packages/provide-uterm-server/src/provide/uterm/server/frontend/assets/*.js,./packages/provide-uterm-cloudflare/python_modules/provide/uterm/frontend/assets/*.js,packages/provide-uterm-cloudflare/python_modules/provide/uterm/frontend/assets/*.js,packages/provide-uterm-cloudflare/python_modules/structlog/*,mutants"

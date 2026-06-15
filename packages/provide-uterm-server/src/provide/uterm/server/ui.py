@@ -9,7 +9,7 @@ from __future__ import annotations
 import importlib.resources
 import json
 from html import escape
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from provide.telemetry import get_logger
 
@@ -18,14 +18,14 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 # Cached Vite manifest — loaded once on first call.
-_vite_manifest: dict[str, object] | None = None
+_vite_manifest: dict[str, Any] | None = None
 _vite_manifest_loaded = False
 
-_vanilla_manifest: dict[str, object] | None = None
+_vanilla_manifest: dict[str, Any] | None = None
 _vanilla_manifest_loaded = False
 
 
-def _read_vanilla_manifest() -> dict[str, object] | None:
+def _read_vanilla_manifest() -> dict[str, Any] | None:
     global _vanilla_manifest, _vanilla_manifest_loaded
     if _vanilla_manifest_loaded:
         return _vanilla_manifest
@@ -56,7 +56,7 @@ def _resolve_vanilla_asset(entry_name: str) -> str:
     return entry_name.split("/")[-1].replace(".ts", ".js")
 
 
-def _read_vite_manifest() -> dict[str, object] | None:
+def _read_vite_manifest() -> dict[str, Any] | None:
     """Read the Vite manifest.json from the frontend package-data.
 
     Returns the parsed manifest dict, or None if the manifest doesn't exist
