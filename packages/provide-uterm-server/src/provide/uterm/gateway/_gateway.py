@@ -11,6 +11,7 @@ import contextlib
 import json
 import os
 from typing import TYPE_CHECKING, Any, Protocol, cast
+from urllib.parse import urlsplit, urlunsplit
 
 if TYPE_CHECKING:
     import collections.abc
@@ -168,6 +169,7 @@ async def _handle_ws_control_frame(
     write_fn: collections.abc.Callable[[bytes], collections.abc.Coroutine[object, object, None]],
     *,
     token_file: Path | None = None,
+    redirect_holder: list[str | None] | None = None,
 ) -> bool:
     try:
         msg_type = data.get("type") if isinstance(data.get("type"), str) else None
@@ -191,6 +193,10 @@ async def _handle_ws_control_frame(
         token_holder[0] = None
         if token_file is not None:
             _delete_token(token_file)
+        return True
+    if msg_type == "redirect" and isinstance(data.get("path"), str):
+        if redirect_holder is not None:
+            redirect_holder[0] = str(data["path"])
         return True
     return False
 
@@ -277,6 +283,110 @@ def _require_websockets() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Redirect helpers
+# ---------------------------------------------------------------------------
+
+
+def _apply_redirect(current_url: str, path: str) -> str | None:
+    """Validate and apply a same-origin redirect path to *current_url*.
+
+    Keeps the scheme+netloc from *current_url* and replaces the path+query
+    from *path*. Returns ``None`` (rejected) if *path*:
+
+    - does not start with ``/`` (relative path — open-redirect risk)
+    - starts with ``//`` (protocol-relative — could redirect to a different host)
+    - contains ``://`` (absolute URL — explicit cross-origin attempt)
+    """
+    if not path:
+        return None
+    if path.startswith("//"):
+        return None
+    if "://" in path:
+        return None
+    if not path.startswith("/"):
+        return None
+    parsed = urlsplit(current_url)
+    # Split off the query string from the path if present.
+    if "?" in path:
+        new_path, new_query = path.split("?", 1)
+    else:
+        new_path, new_query = path, ""
+    return urlunsplit((parsed.scheme, parsed.netloc, new_path, new_query, ""))
+
+
+async def _run_gateway_session(
+    *,
+    ws_url: str,
+    redirect_holder: list[str | None],
+    pump: collections.abc.Callable[[str], collections.abc.Coroutine[Any, Any, int | None]],
+    client_connected: collections.abc.Callable[[], bool],
+    show_reconnecting: collections.abc.Callable[[], collections.abc.Coroutine[Any, Any, None]],
+    max_reconnects: int = 12,
+    reconnect_delay: float = 3.0,
+    max_redirects: int = 5,
+) -> None:
+    """Shared reconnect/redirect loop for telnet and SSH gateways.
+
+    Args:
+        ws_url: Initial WebSocket URL.
+        redirect_holder: Single-element list used as a mutable cell. The pump
+            (via ``_handle_ws_control_frame``) writes a path string here when
+            the server sends a ``redirect`` control frame. The loop reads it
+            after each pump run to decide whether to redirect.
+        pump: Async callable that connects to *url* and runs the bidirectional
+            pipe. Returns the WS close code (or None) when it ends.
+        client_connected: Callable that returns False when the downstream
+            client (TCP reader / SSH stdin) has disconnected.
+        show_reconnecting: Async callable to display a "reconnecting…"
+            indicator to the downstream client.
+        max_reconnects: Maximum consecutive reconnect attempts before giving up.
+            Reset to 0 on a successful redirect.
+        reconnect_delay: Seconds to sleep between reconnect attempts.
+        max_redirects: Maximum number of consecutive redirects before aborting.
+    """
+    current = ws_url
+    attempt = 0
+    redirects = 0
+
+    while attempt <= max_reconnects:
+        if not client_connected():
+            break
+        redirect_holder[0] = None
+        close_code: int | None = None
+        try:
+            close_code = await pump(current)
+        except Exception as exc:
+            logger.debug("gateway_pump_error attempt=%d: %s", attempt, exc)
+
+        if not client_connected():
+            break
+
+        if redirect_holder[0]:
+            new = _apply_redirect(current, redirect_holder[0])
+            if new is None:
+                logger.warning("gateway_redirect_rejected", target=redirect_holder[0])
+                break
+            redirects += 1
+            if redirects > max_redirects:
+                logger.warning("gateway_redirect_cap_exceeded", count=redirects)
+                break
+            logger.debug("gateway_redirect_follow", target=new)
+            current = new
+            attempt = 0
+            continue  # immediate reconnect, NO delay
+
+        if close_code == 1000:
+            break  # deliberate server close
+
+        attempt += 1
+        if attempt > max_reconnects:
+            break
+        with contextlib.suppress(Exception):
+            await show_reconnecting()
+        await asyncio.sleep(reconnect_delay)
+
+
+# ---------------------------------------------------------------------------
 # Shared pump helpers
 # ---------------------------------------------------------------------------
 
@@ -323,6 +433,7 @@ async def _ws_to_tcp(
     token_holder: list[dict[str, Any] | None],
     color_mode: ColorMode = "passthrough",
     token_file: Path | None = None,
+    redirect_holder: list[str | None] | None = None,
 ) -> None:
     """Forward WebSocket messages → raw TCP bytes."""
     decoder = ControlFrameDecoder()
@@ -339,7 +450,11 @@ async def _ws_to_tcp(
                 continue
             for event in events:
                 if isinstance(event, ControlChunk):
-                    await _handle_ws_control_frame(event.control, token_holder, _write_fn, token_file=token_file)
+                    await _handle_ws_control_frame(
+                        event.control, token_holder, _write_fn, token_file=token_file, redirect_holder=redirect_holder
+                    )
+                    if redirect_holder is not None and redirect_holder[0]:
+                        return
                     continue
                 raw = event.data.encode("latin-1", errors="replace")
                 raw = raw.replace(b"\x7f", b"\x08")  # DEL→BS
@@ -368,6 +483,7 @@ async def _pipe_ws(
     iac_negotiate: bool = False,
     iac_negotiate_timeout: float = 0.4,
     ws_ssl: _ssl.SSLContext | bool | None = None,
+    redirect_holder: list[str | None] | None = None,
 ) -> int | None:
     """Open a WebSocket to *ws_url* and bidirectionally pipe with reader/writer.
 
@@ -442,7 +558,14 @@ async def _pipe_ws(
             await gateway_ws.send(encode_control_frame(resume_msg))
         t1 = asyncio.create_task(_tcp_to_ws(reader, gateway_ws, telnet=telnet, negotiator=negotiator, writer=writer))
         t2 = asyncio.create_task(
-            _ws_to_tcp(gateway_ws, writer, token_holder=token_holder, color_mode=color_mode, token_file=token_file)
+            _ws_to_tcp(
+                gateway_ws,
+                writer,
+                token_holder=token_holder,
+                color_mode=color_mode,
+                token_file=token_file,
+                redirect_holder=redirect_holder,
+            )
         )
         _done, pending = await asyncio.wait([t1, t2], return_when=asyncio.FIRST_COMPLETED)
         for task in pending:  # pragma: no branch — may be empty if both finish
@@ -480,6 +603,7 @@ async def _ws_to_ssh(
     token_holder: list[dict[str, Any] | None],
     color_mode: ColorMode = "passthrough",
     token_file: Path | None = None,
+    redirect_holder: list[str | None] | None = None,
 ) -> None:
     """Forward WebSocket messages → SSH stdout."""
     stdout = process.stdout
@@ -496,7 +620,11 @@ async def _ws_to_ssh(
                 continue
             for event in events:
                 if isinstance(event, ControlChunk):
-                    await _handle_ws_control_frame(event.control, token_holder, _write_fn, token_file=token_file)
+                    await _handle_ws_control_frame(
+                        event.control, token_holder, _write_fn, token_file=token_file, redirect_holder=redirect_holder
+                    )
+                    if redirect_holder is not None and redirect_holder[0]:
+                        return
                     continue
                 raw = event.data.encode("latin-1", errors="replace")
                 raw = apply_color_mode(raw, color_mode)
