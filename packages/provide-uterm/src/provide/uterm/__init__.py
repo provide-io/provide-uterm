@@ -65,6 +65,12 @@ from provide.uterm.control_channel_builders import (
 from provide.uterm.control_channel_patterns import LinkPattern, LinkPatternRegistry
 from provide.uterm.file_io import load_ans, load_palette, load_txt
 from provide.uterm.line_editor import LineEditor
+from provide.uterm.render.segments import (
+    SEGMENT_COLOR_NAMES,
+    Segment,
+    ansi_to_segments,
+    tokens_to_segments,
+)
 from provide.uterm.screen import (
     clean_screen_for_display,
     decode_cp437,
@@ -90,6 +96,10 @@ __all__ = [
     "DEFAULT_PALETTE",
     "DEFAULT_RGB",
     "normalize_colors",
+    "SEGMENT_COLOR_NAMES",
+    "Segment",
+    "ansi_to_segments",
+    "tokens_to_segments",
     "preview_ansi",
     "register_color_dialect",
     "unregister_color_dialect",
