@@ -19,6 +19,12 @@ from provide.uterm.render.palette import (
     nearest_16,
     nearest_256,
 )
+from provide.uterm.render.segments import (
+    SEGMENT_COLOR_NAMES,
+    Segment,
+    ansi_to_segments,
+    tokens_to_segments,
+)
 from provide.uterm.render.sgr import (
     SGR_FUNCTIONS,
     ColorMode,
@@ -29,11 +35,15 @@ from provide.uterm.render.sgr import (
 
 __all__ = [
     "ANSI16_PALETTE",
+    "SEGMENT_COLOR_NAMES",
     "ColorMode",
     "SGR_FUNCTIONS",
+    "Segment",
+    "ansi_to_segments",
     "nearest_16",
     "nearest_256",
     "sgr_16",
     "sgr_256",
     "sgr_truecolor",
+    "tokens_to_segments",
 ]
