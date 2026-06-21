@@ -32,6 +32,7 @@ from provide.uterm.control_channel import encode_control_frame
 from provide.uterm.control_channel_builders import make_identity
 from provide.uterm.gateway._gateway import (
     _read_token,
+    _run_gateway_session,
     _ssh_to_ws,
     _ws_to_ssh,
 )
@@ -231,6 +232,61 @@ def _token_file_for_connection(base: Path | None, fingerprint: str | None) -> Pa
     return base
 
 
+async def _ssh_pump(
+    process: asyncssh.SSHServerProcess[Any],
+    url: str,
+    *,
+    ws_ssl: _ssl.SSLContext | bool | None,
+    token_holder: list[dict[str, Any] | None],
+    color_mode: ColorMode,
+    token_file: Path | None,
+    resolved_identity: ResolvedIdentity | None,
+    upstream_proxy_secret: str | bytes | None,
+    redirect_holder: list[str | None] | None,
+) -> int | None:
+    """Run one WebSocket connection attempt for an SSH session.
+
+    Returns the WS close code or None.
+    """
+    import websockets
+
+    connect_kwargs: dict[str, object] = {}
+    if ws_ssl is not None:
+        connect_kwargs["ssl"] = ws_ssl
+    async with websockets.connect(url, **connect_kwargs) as ws:  # type: ignore[arg-type]  # ty:ignore[invalid-argument-type]
+        if resolved_identity is not None:
+            identity_msg = make_identity(
+                subject=resolved_identity.subject,
+                claims=dict(resolved_identity.claims),
+                fingerprint=resolved_identity.fingerprint,
+                transport="ssh",
+                secret=upstream_proxy_secret,
+            )
+            await ws.send(encode_control_frame(identity_msg))
+        token_data = token_holder[0]
+        if token_data:  # pragma: no cover — resume frame is sent only after a prior successful session
+            resume_msg: dict[str, object] = {"type": "resume", "token": token_data["token"]}
+            if "player_id" in token_data:
+                resume_msg["player_id"] = token_data["player_id"]
+            await ws.send(encode_control_frame(resume_msg))
+        t1 = asyncio.create_task(_ssh_to_ws(process, ws))
+        t2 = asyncio.create_task(
+            _ws_to_ssh(
+                ws,
+                process,
+                token_holder=token_holder,
+                color_mode=color_mode,
+                token_file=token_file,
+                redirect_holder=redirect_holder,
+            )
+        )
+        _done, pending = await asyncio.wait([t1, t2], return_when=asyncio.FIRST_COMPLETED)
+        for task in pending:  # pragma: no branch — may be empty if both finish
+            task.cancel()
+        await asyncio.gather(*[*_done, *pending], return_exceptions=True)
+    return getattr(ws, "close_code", None)
+
+
 async def _make_process_handler(
     ws_url: str,
     color_mode: ColorMode,
@@ -338,76 +394,35 @@ async def _make_process_handler(
             if saved:
                 token_holder[0] = saved
 
+        redirect_holder: list[str | None] = [None]
+
+        async def pump(url: str) -> int | None:
+            return await _ssh_pump(
+                process,
+                url,
+                ws_ssl=ws_ssl,
+                token_holder=token_holder,
+                color_mode=color_mode,
+                token_file=effective_token_file,
+                resolved_identity=resolved_identity,
+                upstream_proxy_secret=upstream_proxy_secret,
+                redirect_holder=redirect_holder,
+            )
+
+        async def show_reconnecting() -> None:
+            with contextlib.suppress(Exception):
+                stdout.write("\x1b7\x1b[999;1H\x1b[2;36m* reconnecting...\x1b[0m\x1b8")
+
         try:
-            import websockets
-
-            for attempt in range(max_reconnects + 1):
-                # SSH client disconnected — nothing to do
-                if hasattr(stdin, "at_eof") and stdin.at_eof():
-                    break
-
-                try:
-                    connect_kwargs: dict[str, object] = {}
-                    if ws_ssl is not None:
-                        connect_kwargs["ssl"] = ws_ssl
-                    # websockets.connect has 14+ specifically-typed keyword
-                    # arguments; passing a heterogeneous ``**dict[str, object]``
-                    # makes mypy enumerate them all. The runtime call is fine
-                    # because we only ever populate the ``ssl`` key.
-                    async with websockets.connect(effective_ws_url, **connect_kwargs) as ws:  # type: ignore[arg-type]  # ty:ignore[invalid-argument-type]
-                        # Proxy-asserted identity (from resolver) goes first,
-                        # so the upstream can choose to trust it *before*
-                        # any resume/banner traffic. Only emitted when a
-                        # resolver matched — otherwise the upstream sees no
-                        # identity frame and falls back to its own auth.
-                        if resolved_identity is not None:
-                            identity_msg = make_identity(
-                                subject=resolved_identity.subject,
-                                claims=dict(resolved_identity.claims),
-                                fingerprint=resolved_identity.fingerprint,
-                                transport="ssh",
-                                secret=upstream_proxy_secret,
-                            )
-                            await ws.send(encode_control_frame(identity_msg))
-                        token_data = token_holder[0]
-                        if token_data:  # pragma: no cover — resume frame is sent only after a prior successful session
-                            resume_msg: dict[str, object] = {"type": "resume", "token": token_data["token"]}
-                            if "player_id" in token_data:
-                                resume_msg["player_id"] = token_data["player_id"]
-                            await ws.send(encode_control_frame(resume_msg))
-                        t1 = asyncio.create_task(_ssh_to_ws(process, ws))
-                        t2 = asyncio.create_task(
-                            _ws_to_ssh(
-                                ws,
-                                process,
-                                token_holder=token_holder,
-                                color_mode=color_mode,
-                                token_file=effective_token_file,
-                            )
-                        )
-                        _done, pending = await asyncio.wait([t1, t2], return_when=asyncio.FIRST_COMPLETED)
-                        for task in pending:  # pragma: no branch — may be empty if both finish
-                            task.cancel()
-                        await asyncio.gather(*[*_done, *pending], return_exceptions=True)
-                except Exception as exc:
-                    logger.debug("ssh_ws_pipe_error attempt=%d: %s", attempt, exc)
-
-                # SSH client disconnected — done
-                if hasattr(stdin, "at_eof") and stdin.at_eof():
-                    break
-
-                # WS closed but SSH client still connected — show reconnect indicator
-                if attempt < max_reconnects:
-                    logger.debug(
-                        "ssh_ws_disconnected: reconnecting in %.1fs (attempt %d/%d)",
-                        reconnect_delay,
-                        attempt + 1,
-                        max_reconnects,
-                    )
-                    with contextlib.suppress(Exception):
-                        stdout.write("\x1b7\x1b[999;1H\x1b[2;36m* reconnecting...\x1b[0m\x1b8")
-                    await asyncio.sleep(reconnect_delay)
-
+            await _run_gateway_session(
+                ws_url=effective_ws_url,
+                redirect_holder=redirect_holder,
+                pump=pump,
+                client_connected=lambda: not (hasattr(stdin, "at_eof") and stdin.at_eof()),
+                show_reconnecting=show_reconnecting,
+                max_reconnects=max_reconnects,
+                reconnect_delay=reconnect_delay,
+            )
         except Exception as exc:
             logger.debug("ssh_ws_session_ended: %s", exc)
         finally:
