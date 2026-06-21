@@ -23,6 +23,7 @@ from provide.uterm.gateway._gateway import (
     _pipe_ws,
     _read_token,
     _require_websockets,
+    _run_gateway_session,
 )
 
 if TYPE_CHECKING:
@@ -165,58 +166,37 @@ class TelnetWsGateway:
             if saved:
                 token_holder[0] = saved
 
+        redirect_holder: list[str | None] = [None]
+
+        async def pump(url: str) -> int | None:
+            return await _pipe_ws(
+                reader,
+                writer,
+                url,
+                ws_ssl=self._ws_ssl,
+                token_holder=token_holder,
+                color_mode=self._color_mode,
+                telnet=True,
+                token_file=self._token_file,
+                iac_negotiate=self._iac_negotiate,
+                iac_negotiate_timeout=self._iac_negotiate_timeout,
+                redirect_holder=redirect_holder,
+            )
+
+        async def show_reconnecting() -> None:
+            writer.write(b"\x1b7\x1b[999;1H\x1b[2;36m* reconnecting...\x1b[0m\x1b8")
+            await writer.drain()
+
         try:
-            for attempt in range(max_reconnects + 1):
-                if reader.at_eof():
-                    break
-                close_code: int | None = None
-                try:
-                    close_code = await _pipe_ws(
-                        reader,
-                        writer,
-                        self._ws_url,
-                        ws_ssl=self._ws_ssl,
-                        token_holder=token_holder,
-                        color_mode=self._color_mode,
-                        telnet=True,
-                        token_file=self._token_file,
-                        iac_negotiate=self._iac_negotiate,
-                        iac_negotiate_timeout=self._iac_negotiate_timeout,
-                    )
-                except Exception as exc:
-                    logger.debug("telnet_ws_pipe_error attempt=%d: %s", attempt, exc)
-
-                # TCP client closed — we're done
-                if reader.at_eof():
-                    break
-
-                # Deliberate server-side close (WS normal closure 1000): the
-                # session ended on purpose (e.g. the user quit), so end the
-                # telnet connection instead of reconnecting. Transient drops /
-                # DO hibernation use 1006/None and still reconnect below.
-                if close_code == 1000:
-                    logger.debug("ws_closed_normally: not reconnecting (deliberate close)")
-                    break
-
-                # WS closed while TCP is still alive (hibernation or transient drop)
-                if attempt < max_reconnects:
-                    logger.debug(
-                        "ws_disconnected_tcp_alive: reconnecting in %.1fs (attempt %d/%d)",
-                        reconnect_delay,
-                        attempt + 1,
-                        max_reconnects,
-                    )
-                    # Show a reconnect indicator on the bottom row so telnet/SSH
-                    # clients get the same feedback as the browser WebSocket client.
-                    # Uses save/restore cursor so the game display is not disturbed.
-                    try:
-                        writer.write(b"\x1b7\x1b[999;1H\x1b[2;36m* reconnecting...\x1b[0m\x1b8")
-                        await writer.drain()
-                    except Exception:
-                        pass
-                    await asyncio.sleep(reconnect_delay)
-                else:
-                    logger.debug("ws_reconnect_exhausted: giving up after %d attempts", max_reconnects)
+            await _run_gateway_session(
+                ws_url=self._ws_url,
+                redirect_holder=redirect_holder,
+                pump=pump,
+                client_connected=lambda: not reader.at_eof(),
+                show_reconnecting=show_reconnecting,
+                max_reconnects=max_reconnects,
+                reconnect_delay=reconnect_delay,
+            )
         finally:
             with contextlib.suppress(Exception):
                 writer.close()
