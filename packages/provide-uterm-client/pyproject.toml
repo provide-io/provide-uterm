@@ -30,6 +30,8 @@ dev = [
     "websockets>=16.0",
     "asyncssh>=2.22.0",
     "fastmcp>=2.0",
+    # tests/ai/ exercise MCP hijack against a FastAPI app — test-only dep.
+    "fastapi>=0.136.1",
 ]
 
 [project.scripts]
