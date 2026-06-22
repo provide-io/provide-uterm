@@ -836,6 +836,15 @@ async def test_helper_websocket_invalid_scheme_rejected() -> None:
 
 
 @pytest.mark.asyncio
+async def test_helper_websocket_url_without_host_rejected() -> None:
+    """A ws:// URL with a valid scheme but no host is invalid config."""
+    from provide.uterm.server.egress import EgressBlockedError, assert_session_egress_allowed
+
+    with pytest.raises(EgressBlockedError, match="must include a host"):
+        await assert_session_egress_allowed("websocket", {"url": "ws:///path"}, block_private=False)
+
+
+@pytest.mark.asyncio
 async def test_helper_ssh_no_host_short_circuits() -> None:
     """ssh connector with no host key -> short-circuits without guarding."""
     from provide.uterm.server.egress import assert_session_egress_allowed

@@ -421,6 +421,10 @@ class TestDeliveryUrlAllowed:
         the final ValueError guard returns False (pragma-no-cover branch)."""
         assert await _delivery_url_allowed("https://h.example", lambda _h: ("not-an-ip",)) is False
 
+    async def test_non_iterable_resolution_denied(self) -> None:
+        """A resolver yielding a non-iterable value → not isinstance(..., Iterable) → False."""
+        assert await _delivery_url_allowed("https://h.example", lambda _h: 42) is False  # type: ignore[arg-type,return-value]
+
 
 # ===========================================================================
 # WebhookManager.__init__ / delegation / registry CRUD

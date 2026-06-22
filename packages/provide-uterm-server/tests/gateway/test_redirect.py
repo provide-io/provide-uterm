@@ -283,3 +283,32 @@ class TestRunGatewaySession:
 
         # Connected on first iteration, pump runs, then disconnected → stop
         assert len(calls) == 1
+
+    async def test_negative_max_reconnects_exits_loop_without_pump(self) -> None:
+        """max_reconnects < 0 → `attempt(0) <= max_reconnects` is false on entry.
+
+        Covers the while-condition-false exit of the reconnect loop: the body
+        never runs, so pump is never called and the session returns immediately.
+        """
+        redirect_holder: list[str | None] = [None]
+        calls: list[str] = []
+
+        async def pump(url: str) -> int | None:
+            calls.append(url)
+            return None
+
+        async def show_reconnecting() -> None:
+            pass
+
+        await _run_gateway_session(
+            ws_url="ws://host/ws/t",
+            redirect_holder=redirect_holder,
+            pump=pump,
+            client_connected=lambda: True,
+            show_reconnecting=show_reconnecting,
+            max_reconnects=-1,
+            reconnect_delay=0.0,
+            max_redirects=5,
+        )
+
+        assert calls == []

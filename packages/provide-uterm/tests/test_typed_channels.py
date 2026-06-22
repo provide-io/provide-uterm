@@ -92,3 +92,61 @@ def test_parse_channel_hello_rejects_invalid_channel_entries() -> None:
     assert parse_channel_hello(encode_control_frame({"type": "hello", "channels": {"": 1}})) is None
     assert parse_channel_hello(encode_control_frame({"type": "hello", "channels": {"game": True}})) is None
     assert parse_channel_hello(encode_control_frame({"type": "hello", "channels": {"game": "1"}})) is None
+
+
+def test_init_rejects_default_channel_not_in_supported() -> None:
+    from provide.uterm.channels import NegotiatedChannels
+
+    with pytest.raises(ValueError, match="default channel is not supported"):
+        NegotiatedChannels({"game": 1}, default_channel="missing")
+
+
+def test_init_rejects_empty_supported_map() -> None:
+    from provide.uterm.channels import NegotiatedChannels
+
+    with pytest.raises(ValueError, match="at least one supported channel is required"):
+        NegotiatedChannels({})
+
+
+def test_channel_op_requires_channel_when_no_default_configured() -> None:
+    from provide.uterm.channels import NegotiatedChannels
+
+    channels = NegotiatedChannels({"game": 1})  # no default_channel
+
+    with pytest.raises(ValueError, match="channel is required when no default_channel"):
+        channels.is_negotiated()  # channel=None and no default → _select_channel raises
+
+
+def test_export_grants_returns_an_independent_copy() -> None:
+    from provide.uterm.channels import ChannelHello, NegotiatedChannels
+
+    channels = NegotiatedChannels({"game": 1}, default_channel="game")
+    channels.handle_hello(ChannelHello(channels={"game": 1}))
+
+    grants = channels.export_grants()
+    assert grants == {"game": 1}
+
+    grants["game"] = 99  # mutating the export must not affect internal state
+    assert channels.granted == {"game": 1}
+
+
+def test_parse_channel_hello_returns_none_when_decoder_raises() -> None:
+    """A validly-framed payload whose JSON nests past the decoder depth limit.
+
+    ``is_control_frame`` is structural only (no depth check) so it passes, but
+    ``ControlFrameDecoder.feed`` raises ``ControlFrameProtocolError`` — exercising
+    the ``except`` guard that returns ``None``.
+    """
+    import json
+
+    from provide.uterm.channels import parse_channel_hello
+
+    from provide.uterm.control_channel import DLE, STX
+
+    inner: object = 1
+    for _ in range(40):  # > _MAX_CONTROL_FRAME_DEPTH (32)
+        inner = {"x": inner}
+    serialized = json.dumps({"type": "hello", "channels": inner})
+    raw = f"{DLE}{STX}{len(serialized.encode('utf-8')):08x}:{serialized}"
+
+    assert parse_channel_hello(raw) is None
