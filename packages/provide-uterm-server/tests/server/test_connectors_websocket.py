@@ -37,6 +37,10 @@ class TestWebSocketSessionConnector:
         with pytest.raises(ValueError, match="url scheme"):
             WebSocketSessionConnector("s", "n", {"url": "https://x/ws"})
 
+    def test_url_without_host_raises_value_error(self) -> None:
+        with pytest.raises(ValueError, match="must include a host"):
+            WebSocketSessionConnector("s", "n", {"url": "ws:///path"})
+
     def test_valid_config_accepted(self) -> None:
         c = self._make({"url": "ws://x", "input_mode": "open"})
         assert c._input_mode == "open"

@@ -297,3 +297,23 @@ def test_registry_register_and_build() -> None:
     register_connector("_test_fake", _Fake)
     inst = build_connector("s", "n", "_test_fake", {})
     assert isinstance(inst, _Fake)
+
+
+def test_registry_build_connector_lazy_loads_builtin() -> None:
+    """A builtin type absent from _registry is lazily imported + registered."""
+    from provide.uterm.server.connectors import registry as registry_mod
+    from provide.uterm.server.connectors.registry import _BUILTIN_CLASSES, build_connector
+
+    connector_type = "shell"
+    assert connector_type in _BUILTIN_CLASSES
+    # Drop the pre-registered builtin so build_connector takes the lazy path.
+    saved = registry_mod._registry.pop(connector_type, None)
+    try:
+        assert registry_mod._registry.get(connector_type) is None
+        inst = build_connector("sid", "name", connector_type, {})
+        assert inst is not None
+        # The lazy path must have re-registered the builtin.
+        assert registry_mod._registry.get(connector_type) is not None
+    finally:
+        if saved is not None:
+            registry_mod._registry[connector_type] = saved

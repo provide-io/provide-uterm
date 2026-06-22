@@ -162,6 +162,22 @@ class TestWsToTcp:
         writer.write.assert_called_once_with(b"\r\n[Session resumed]\r\n")
         writer.drain.assert_called()
 
+    async def test_redirect_frame_returns_early(self) -> None:
+        """A redirect control frame sets redirect_holder[0] and returns the pump."""
+        writer = MagicMock(spec=asyncio.StreamWriter)
+        writer.drain = AsyncMock()
+        redirect_holder: list[str | None] = [None]
+        msg = encode_control_frame({"type": "redirect", "path": "/ws/x"})
+        ws = _mock_ws([msg])
+        await _ws_to_tcp(
+            ws,
+            writer,
+            token_holder=[None],
+            color_mode="passthrough",
+            redirect_holder=redirect_holder,
+        )
+        assert redirect_holder[0] == "/ws/x"
+
 
 # ---------------------------------------------------------------------------
 # _pipe_ws
@@ -526,3 +542,19 @@ class TestWsToSsh:
         process.stdout.write.assert_called_once()
         written = process.stdout.write.call_args[0][0]
         assert "Session resumed" in written
+
+    async def test_redirect_frame_returns_early(self) -> None:
+        """A redirect control frame sets redirect_holder[0] and returns the pump."""
+        process = MagicMock()
+        process.stdout = MagicMock()
+        redirect_holder: list[str | None] = [None]
+        msg = encode_control_frame({"type": "redirect", "path": "/ws/x"})
+        ws = _mock_ws([msg])
+        await _ws_to_ssh(
+            ws,
+            process,
+            token_holder=[None],
+            color_mode="passthrough",
+            redirect_holder=redirect_holder,
+        )
+        assert redirect_holder[0] == "/ws/x"
