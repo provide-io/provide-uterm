@@ -31,6 +31,7 @@ from provide.uterm.auth import ResolvedIdentity
 from provide.uterm.control_channel import encode_control_frame
 from provide.uterm.control_channel_builders import make_identity
 from provide.uterm.gateway._gateway import (
+    _GATEWAY_HELLO_FRAME,
     _read_token,
     _run_gateway_session,
     _ssh_to_ws,
@@ -243,6 +244,7 @@ async def _ssh_pump(
     resolved_identity: ResolvedIdentity | None,
     upstream_proxy_secret: str | bytes | None,
     redirect_holder: list[str | None] | None,
+    advertise_redirect: bool = True,
 ) -> int | None:
     """Run one WebSocket connection attempt for an SSH session.
 
@@ -269,6 +271,11 @@ async def _ssh_pump(
             if "player_id" in token_data:
                 resume_msg["player_id"] = token_data["player_id"]
             await ws.send(encode_control_frame(resume_msg))
+        # Advertise the gateway's own redirect-follow capability (see
+        # _GATEWAY_HELLO_FRAME; mirrors _pipe_ws). Opt out with
+        # advertise_redirect=False for a plain upstream.
+        if advertise_redirect:
+            await ws.send(encode_control_frame(_GATEWAY_HELLO_FRAME))
         t1 = asyncio.create_task(_ssh_to_ws(process, ws))
         t2 = asyncio.create_task(
             _ws_to_ssh(
