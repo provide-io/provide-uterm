@@ -173,19 +173,24 @@ class TestSshWsGatewayStart:
             nonlocal connection_count
             connection_count += 1
             if connection_count == 1:
-                # First connection: send a session_token frame, then close
+                # First connection: send a session_token frame, then drop transiently
+                # (close code 1001 "going away", not a clean 1000) so the gateway
+                # reconnects and replays the token as a resume frame. A 1000 close
+                # would be treated as a deliberate end (no reconnect, no resume).
                 await ws.send(encode_control_frame({"type": "session_token", "token": "in_memory_token"}))
-                await ws.close()
+                await asyncio.sleep(0.2)  # let the gateway read+store the token before the drop
+                await ws.close(code=1001)
             else:
-                # Second connection: capture the first frame (should be a resume)
+                # Second connection: the gateway replays the stored token as a
+                # resume frame. It need not be the very first frame (the capability
+                # hello can precede it), so scan every frame until the conn drains.
                 async for msg in ws:
+                    reconnected.set()
                     if isinstance(msg, str):
                         with contextlib.suppress(Exception):
                             payload = decode_control_payload(msg)
                             if payload.get("type") == "resume":
                                 resume_msgs.append(str(payload.get("token") or ""))
-                    reconnected.set()
-                    break
 
         ws_srv = await websockets.serve(_handler, "127.0.0.1", 0)
         ws_port: int = ws_srv.sockets[0].getsockname()[1]
