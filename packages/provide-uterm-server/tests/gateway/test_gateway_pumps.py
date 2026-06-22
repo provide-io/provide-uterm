@@ -251,6 +251,39 @@ class TestPipeWs:
         with patch.dict("sys.modules", {"websockets": mock_ws_mod}):
             await _pipe_ws(reader, writer, "ws://test", token_holder=[None], telnet=False)
 
+    async def test_advertises_supports_redirect_by_default(self) -> None:
+        """The gateway advertises its own redirect-follow capability on connect."""
+        reader = AsyncMock(spec=asyncio.StreamReader)
+        reader.read = AsyncMock(return_value=b"")
+        writer = MagicMock(spec=asyncio.StreamWriter)
+        writer.drain = AsyncMock()
+
+        ws_mock = _mock_ws([])
+        mock_ws_mod = MagicMock()
+        mock_ws_mod.connect.return_value = _make_ws_context(ws_mock)
+
+        with patch.dict("sys.modules", {"websockets": mock_ws_mod}):
+            await _pipe_ws(reader, writer, "ws://test", token_holder=[None], telnet=False)
+            # No resume token, so the capability hello is the first (only) send.
+            first_send = ws_mock.send.call_args_list[0][0][0]
+            assert "hello" in first_send
+            assert "supports_redirect" in first_send
+
+    async def test_advertise_redirect_can_be_disabled(self) -> None:
+        """advertise_redirect=False suppresses the capability hello (plain-server mode)."""
+        reader = AsyncMock(spec=asyncio.StreamReader)
+        reader.read = AsyncMock(return_value=b"")
+        writer = MagicMock(spec=asyncio.StreamWriter)
+        writer.drain = AsyncMock()
+
+        ws_mock = _mock_ws([])
+        mock_ws_mod = MagicMock()
+        mock_ws_mod.connect.return_value = _make_ws_context(ws_mock)
+
+        with patch.dict("sys.modules", {"websockets": mock_ws_mod}):
+            await _pipe_ws(reader, writer, "ws://test", token_holder=[None], telnet=False, advertise_redirect=False)
+            assert all("supports_redirect" not in call[0][0] for call in ws_mock.send.call_args_list)
+
     async def test_cancels_pending_task(self) -> None:
         """Cover line 285: task.cancel() when one pump finishes first."""
 

@@ -484,6 +484,7 @@ async def _pipe_ws(
     iac_negotiate_timeout: float = 0.4,
     ws_ssl: _ssl.SSLContext | bool | None = None,
     redirect_holder: list[str | None] | None = None,
+    advertise_redirect: bool = True,
 ) -> int | None:
     """Open a WebSocket to *ws_url* and bidirectionally pipe with reader/writer.
 
@@ -556,6 +557,17 @@ async def _pipe_ws(
             if "player_id" in token_data:
                 resume_msg["player_id"] = token_data["player_id"]
             await gateway_ws.send(encode_control_frame(resume_msg))
+        # Capability hello: this gateway implements redirect-following (the
+        # _run_gateway_session loop), so it advertises its OWN transport
+        # capability — "supports_redirect" — to the upstream control channel.
+        # A redirect-aware server (e.g. a uwarp picker) then hands off via a
+        # `redirect` frame instead of proxying; a server that doesn't understand
+        # the feature ignores it. This is also the first frame a hello-less
+        # telnet client would otherwise never send, so it nudges a server whose
+        # initial paint waits on the first message. NOTE: deliberately generic —
+        # no application/game-specific feature names belong here.
+        if advertise_redirect:
+            await gateway_ws.send(encode_control_frame({"type": "hello", "v": 1, "features": ["supports_redirect"]}))
         t1 = asyncio.create_task(_tcp_to_ws(reader, gateway_ws, telnet=telnet, negotiator=negotiator, writer=writer))
         t2 = asyncio.create_task(
             _ws_to_tcp(
