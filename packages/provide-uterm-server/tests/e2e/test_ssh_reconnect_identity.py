@@ -106,8 +106,10 @@ class TestSshReconnectIdentity:
             identity_frames_per_conn.append(frames_this_conn)
 
             if conn_index == 1:
-                # Close immediately to trigger the gateway's reconnect loop.
-                await ws.close()
+                # Simulate a transient server-side drop (close code 1001 "going away",
+                # NOT a clean 1000) so the gateway's reconnect loop fires. A 1000 close
+                # is treated as a deliberate end and would not reconnect.
+                await ws.close(code=1001)
             else:
                 # Signal the test that the second connection has arrived.
                 second_conn_ready.set()
@@ -189,7 +191,8 @@ class TestSshReconnectIdentity:
 
             if conn_index == 1:
                 first_identity = payload
-                await ws.close()
+                # Transient drop (1001 "going away", not a clean 1000) → gateway reconnects.
+                await ws.close(code=1001)
             else:
                 second_identity = payload
                 second_conn_ready.set()

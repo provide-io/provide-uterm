@@ -287,6 +287,15 @@ def _require_websockets() -> None:
 # ---------------------------------------------------------------------------
 
 
+# Capability hello the telnet/SSH gateways send upstream on every (re)connect to
+# advertise their OWN redirect-follow support (the ``_run_gateway_session`` loop):
+# a redirect-aware server (e.g. a uwarp picker) then hands off via a ``redirect``
+# control frame instead of proxying; servers that don't understand it ignore it.
+# Shared by both transports so the wire shape can never drift. Deliberately
+# generic — transport capabilities only, never app/game-specific feature names.
+_GATEWAY_HELLO_FRAME: dict[str, Any] = {"type": "hello", "v": 1, "features": ["supports_redirect"]}
+
+
 def _apply_redirect(current_url: str, path: str) -> str | None:
     """Validate and apply a same-origin redirect path to *current_url*.
 
@@ -484,6 +493,7 @@ async def _pipe_ws(
     iac_negotiate_timeout: float = 0.4,
     ws_ssl: _ssl.SSLContext | bool | None = None,
     redirect_holder: list[str | None] | None = None,
+    advertise_redirect: bool = True,
 ) -> int | None:
     """Open a WebSocket to *ws_url* and bidirectionally pipe with reader/writer.
 
@@ -556,6 +566,11 @@ async def _pipe_ws(
             if "player_id" in token_data:
                 resume_msg["player_id"] = token_data["player_id"]
             await gateway_ws.send(encode_control_frame(resume_msg))
+        # Advertise this gateway's own redirect-follow capability (see
+        # _GATEWAY_HELLO_FRAME). Opt out with advertise_redirect=False for a
+        # plain upstream that should never receive the unsolicited hello.
+        if advertise_redirect:
+            await gateway_ws.send(encode_control_frame(_GATEWAY_HELLO_FRAME))
         t1 = asyncio.create_task(_tcp_to_ws(reader, gateway_ws, telnet=telnet, negotiator=negotiator, writer=writer))
         t2 = asyncio.create_task(
             _ws_to_tcp(
