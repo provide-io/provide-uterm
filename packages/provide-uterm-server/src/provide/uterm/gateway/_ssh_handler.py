@@ -269,6 +269,11 @@ async def _ssh_pump(
             if "player_id" in token_data:
                 resume_msg["player_id"] = token_data["player_id"]
             await ws.send(encode_control_frame(resume_msg))
+        # Advertise the gateway's own redirect-follow capability (mirrors _pipe_ws):
+        # a redirect-aware server hands off via a `redirect` frame this gateway
+        # follows, instead of proxying. Generic transport capability — no app/game
+        # feature names here.
+        await ws.send(encode_control_frame({"type": "hello", "v": 1, "features": ["supports_redirect"]}))
         t1 = asyncio.create_task(_ssh_to_ws(process, ws))
         t2 = asyncio.create_task(
             _ws_to_ssh(
