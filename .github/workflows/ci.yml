@@ -121,7 +121,11 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
-      - run: uv sync --frozen --package provide-uterm-client --extra dev
+      # Full workspace env: the client's integration tests build a real server
+      # app (provide.uterm.server/gateway/annotation), so they need the sibling
+      # packages installed — not just the isolated client + extra. Mirrors the
+      # other *-quality jobs.
+      - run: uv sync --frozen --group dev
       # Run client package tests with its own 100% branch coverage gate.
       - run: uv run --directory packages/provide-uterm-client pytest -q tests
 

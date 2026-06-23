@@ -2089,7 +2089,6 @@ all = [
 ]
 dev = [
     { name = "asyncssh" },
-    { name = "fastapi" },
     { name = "fastmcp" },
     { name = "httpx" },
     { name = "mypy" },
@@ -2118,7 +2117,6 @@ requires-dist = [
     { name = "asyncssh", marker = "extra == 'all'", specifier = ">=2.22.0" },
     { name = "asyncssh", marker = "extra == 'dev'", specifier = ">=2.22.0" },
     { name = "asyncssh", marker = "extra == 'ssh'", specifier = ">=2.22.0" },
-    { name = "fastapi", marker = "extra == 'dev'", specifier = ">=0.136.1" },
     { name = "fastmcp", marker = "extra == 'all'", specifier = ">=2.0" },
     { name = "fastmcp", marker = "extra == 'dev'", specifier = ">=2.0" },
     { name = "fastmcp", marker = "extra == 'mcp'", specifier = ">=2.0" },
