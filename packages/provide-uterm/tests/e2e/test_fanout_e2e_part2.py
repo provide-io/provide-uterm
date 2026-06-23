@@ -19,7 +19,7 @@ import httpx
 from provide.uterm.client import connect_async_ws
 
 from ._live_server import live_server_with_bus
-from .test_fanout_e2e_part1 import _drain_initial, _sessions, _ws_url
+from .test_fanout_e2e_part1 import _await_collectors, _drain_initial, _sessions, _ws_url
 
 ADMIN_H = {"X-Uterm-Principal": "admin-user", "X-Uterm-Role": "admin"}
 
@@ -271,12 +271,12 @@ async def test_concurrent_broadcasts_different_groups() -> None:
                 gid_b = resp_b.json()["group_id"]
 
                 async def _emit_a() -> None:
-                    await asyncio.sleep(0.05)
+                    await _await_collectors(hub, group_a_wids)
                     for wid in group_a_wids:
                         await hub.append_event(wid, "term", {"data": "alpha-output\n"})
 
                 async def _emit_b() -> None:
-                    await asyncio.sleep(0.05)
+                    await _await_collectors(hub, group_b_wids)
                     for wid in group_b_wids:
                         await hub.append_event(wid, "term", {"data": "beta-output\n"})
 
