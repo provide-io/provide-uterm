@@ -134,7 +134,9 @@ jobs:
       # other *-quality jobs.
       - run: uv sync --frozen --group dev
       # Run client package tests with its own 100% branch coverage gate.
-      - run: uv run --directory packages/provide-uterm-client pytest -q tests
+      # --timeout so a hung test fails fast (naming it) instead of stalling the
+      # job to the 20-min cap — mirrors server-quality.
+      - run: uv run --directory packages/provide-uterm-client pytest -q tests --timeout=60 --timeout-method=thread
 
   pty-unit:
     runs-on: ubuntu-latest
