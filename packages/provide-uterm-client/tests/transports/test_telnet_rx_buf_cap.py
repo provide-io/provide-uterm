@@ -12,6 +12,7 @@ Tests:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 
 import pytest
 
@@ -39,13 +40,19 @@ class _OneShotServer:
         self._server = await asyncio.start_server(self._handler, "127.0.0.1", 0)
         return self._server.sockets[0].getsockname()[1]
 
-    async def _handler(self, _reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+    async def _handler(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         if self._payload:
             writer.write(self._payload)
             try:
                 await writer.drain()
             except (ConnectionResetError, BrokenPipeError):
                 pass
+        # Hold the connection open until the client disconnects, so its receive()
+        # can read the payload and run the rx-buffer cap check before teardown.
+        # Closing immediately races receive() on slower event loops (py3.11),
+        # surfacing as a BrokenPipe / "Connection lost" instead of the cap error.
+        with contextlib.suppress(Exception):
+            await reader.read()
         writer.close()
 
     async def stop(self) -> None:
@@ -84,6 +91,10 @@ class TestRxBufCap:
             with pytest.raises(ConnectionError, match="telnet receive buffer exceeded"):
                 await t.receive(4096, timeout_ms=2000)
         finally:
+            # Disconnect the client first so the server handler (holding the
+            # connection open) returns, then stop the server.
+            with contextlib.suppress(Exception):
+                await t.disconnect()
             await srv.stop()
 
     # -----------------------------------------------------------------------
@@ -113,4 +124,8 @@ class TestRxBufCap:
             assert isinstance(result, bytes)
             assert b"login:" in result
         finally:
+            # Disconnect the client first so the server handler (holding the
+            # connection open) returns, then stop the server.
+            with contextlib.suppress(Exception):
+                await t.disconnect()
             await srv.stop()

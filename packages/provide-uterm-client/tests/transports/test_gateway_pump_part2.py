@@ -227,6 +227,7 @@ class TestPipeWsResume:
                     cast("StreamWriter", MockWriter()),
                     f"ws://127.0.0.1:{port}",
                     token_holder=token_holder,
+                    advertise_redirect=False,  # isolate resume behavior from the capability hello
                 ),
                 timeout=3.0,
             )
@@ -277,6 +278,7 @@ class TestPipeWsResume:
                     cast("StreamWriter", MockWriter()),
                     f"ws://127.0.0.1:{port}",
                     token_holder=[None],
+                    advertise_redirect=False,  # no hello — assert no resume frame is sent
                 ),
                 timeout=3.0,
             )

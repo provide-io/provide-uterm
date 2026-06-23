@@ -274,6 +274,7 @@ class TestPipeWs:
                     cast("StreamWriter", MockWriter()),
                     f"ws://127.0.0.1:{ws_port}",
                     token_holder=[None],
+                    advertise_redirect=False,  # isolate resume behavior from the capability hello
                 ),
                 timeout=3.0,
             )
