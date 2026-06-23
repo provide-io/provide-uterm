@@ -11,6 +11,9 @@ header-mode credentials so tests don't have to attach them by hand.
 
 from __future__ import annotations
 
+import asyncio
+import asyncio.base_events
+import contextlib
 import socket
 from typing import Any
 
@@ -79,5 +82,30 @@ def _install_websockets_dev_principal_autoauth() -> None:
     _websockets.connect = _patched_connect  # type: ignore[assignment]
 
 
+def _install_bounded_server_wait_closed() -> None:
+    """Bound ``asyncio.Server.wait_closed()`` so transport-test teardown can't hang.
+
+    Python 3.12 changed ``Server.wait_closed()`` to block until every active
+    connection closes. Many transport tests use a one-shot server whose handler
+    holds the connection (writes, then sleeps/awaits) without closing its writer,
+    so ``wait_closed()`` deadlocks there on 3.12 (3.11/3.13/3.14 do not). Cap it:
+    ``close()`` already stopped accepting, and any lingering handler finishes on
+    its own. This only affects the (test-only) hang path — normal closes return
+    well under the timeout.
+    """
+    server_cls = asyncio.base_events.Server
+    if getattr(server_cls.wait_closed, "_uterm_bounded", False):
+        return
+    _orig = server_cls.wait_closed
+
+    async def _bounded(self: Any) -> None:
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(_orig(self), timeout=1.0)
+
+    _bounded._uterm_bounded = True  # type: ignore[attr-defined]
+    server_cls.wait_closed = _bounded  # type: ignore[method-assign]
+
+
+_install_bounded_server_wait_closed()
 _install_httpx_dev_principal_autoauth()
 _install_websockets_dev_principal_autoauth()
