@@ -18,7 +18,7 @@ from typing import Any
 import httpx
 from provide.uterm.client import connect_async_ws
 
-from ._live_server import live_server_with_bus
+from ._live_server import live_server_with_bus, wait_for_subscribers
 
 ADMIN_H = {"X-Uterm-Principal": "admin-user", "X-Uterm-Role": "admin"}
 
@@ -44,6 +44,18 @@ async def _drain_initial(ws: Any) -> None:
     """Drain the initial snapshot_req the server sends on worker connect."""
     with contextlib.suppress(TimeoutError):
         await asyncio.wait_for(ws.recv(), timeout=2.0)
+
+
+async def _await_collectors(hub: Any, worker_ids: list[str]) -> None:
+    """Wait until the fanout send has subscribed an OutputCollector for every worker.
+
+    The collector only captures output appended AFTER it subscribes to the EventBus,
+    so injecting via ``hub.append_event`` after a fixed sleep races the subscription
+    and silently drops output on a slow/loaded runner (the source of the flake).
+    Delegates to the shared ``wait_for_subscribers`` helper for each worker.
+    """
+    for wid in worker_ids:
+        await wait_for_subscribers(hub, wid, 1)
 
 
 # ---------------------------------------------------------------------------
@@ -80,9 +92,10 @@ async def test_parallel_broadcast_5_sessions() -> None:
                 assert resp.status_code == 200
                 group_id = resp.json()["group_id"]
 
-                # Emit output concurrently after a small delay
+                # Emit output once the fanout send has subscribed its collectors
+                # (deterministic hand-off, not a racy fixed sleep).
                 async def _emit() -> None:
-                    await asyncio.sleep(0.05)
+                    await _await_collectors(hub, wids)
                     for wid in wids:
                         await hub.append_event(wid, "term", {"data": "hello world\n"})
 
@@ -142,7 +155,7 @@ async def test_parallel_broadcast_with_disconnected_workers() -> None:
                 group_id = resp.json()["group_id"]
 
                 async def _emit() -> None:
-                    await asyncio.sleep(0.05)
+                    await _await_collectors(hub, connected_ids)
                     for wid in connected_ids:
                         await hub.append_event(wid, "term", {"data": "output\n"})
 
@@ -351,7 +364,7 @@ async def test_divergence_detection() -> None:
                 group_id = resp.json()["group_id"]
 
                 async def _emit() -> None:
-                    await asyncio.sleep(0.05)
+                    await _await_collectors(hub, wids)
                     # 4 workers: similar output
                     for wid in wids[:4]:
                         await hub.append_event(
