@@ -30,6 +30,12 @@ jobs:
   # ── Build (all packages in parallel — uses workspace sources) ─────────
   build:
     name: Build ${{ matrix.package }}
+    # Guard the whole pipeline: on a `release` event, only proceed for version
+    # tags (v*). Every other job needs: build, so a non-version release (e.g. an
+    # asset-hosting release like demo-assets) skips build and the entire publish
+    # chain skips with it. push (v* tags) and workflow_dispatch are unaffected
+    # (the first clause is true, and short-circuits the tag_name lookup).
+    if: github.event_name != 'release' || startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
@@ -110,7 +116,8 @@ jobs:
   pypi-terminal:
     name: PyPI · provide-uterm
     needs: verify-terminal
-    if: github.event_name == 'release'
+    # Belt-and-suspenders on the actual PyPI publish: only version-tag releases.
+    if: github.event_name == 'release' && startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -178,7 +185,7 @@ jobs:
   pypi-dependents:
     name: PyPI · ${{ matrix.package }}
     needs: [verify-dependents, pypi-terminal]
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' && startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -242,7 +249,7 @@ jobs:
   pypi-cloudflare:
     name: PyPI · provide-uterm-cloudflare
     needs: [verify-cloudflare, pypi-terminal]
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' && startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
