@@ -20,10 +20,12 @@ class SessionConnectorFactory(Protocol):
 
 _registry: dict[str, SessionConnectorFactory] = {}
 _BUILTIN_CLASSES: dict[str, tuple[str, str]] = {
-    "shell": ("provide.uterm.server.connectors.shell", "ShellSessionConnector"),
+    # Network connectors: modern→legacy
+    "websocket": ("provide.uterm.server.connectors.websocket", "WebSocketSessionConnector"),
     "ssh": ("provide.uterm.server.connectors.ssh", "SshSessionConnector"),
     "telnet": ("provide.uterm.server.connectors.telnet", "TelnetSessionConnector"),
-    "websocket": ("provide.uterm.server.connectors.websocket", "WebSocketSessionConnector"),
+    # Local connectors
+    "shell": ("provide.uterm.server.connectors.shell", "ShellSessionConnector"),
 }
 
 

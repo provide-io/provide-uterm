@@ -35,37 +35,43 @@ if TYPE_CHECKING:
     from provide.uterm.transports.ws_transport import WebSocketTransport
 
 __all__ = [
-    "ChaosTransport",
+    # Base
     "ConnectionTransport",
-    "OnReconnect",
-    "ReconnectingSession",
-    "ReconnectPolicy",
-    "SSHStreamReader",
-    "SSHStreamWriter",
-    "TelnetClient",
-    "TelnetTransport",
+    # Network transports: modern→legacy
     "WebSocketStreamReader",
     "WebSocketStreamWriter",
     "WebSocketTransport",
-    "connect_with_reconnect",
+    "SSHStreamReader",
+    "SSHStreamWriter",
     "start_ssh_server",
+    "TelnetClient",
+    "TelnetTransport",
     "start_telnet_server",
+    # Wrappers
+    "ChaosTransport",
+    # Reconnect helpers
+    "OnReconnect",
+    "ReconnectingSession",
+    "ReconnectPolicy",
+    "connect_with_reconnect",
 ]
 
 
 def __getattr__(name: str) -> object:
     module_by_name = {
         "ConnectionTransport": "provide.uterm.transports.base",
-        "ChaosTransport": "provide.uterm.transports.chaos",
+        # Network transports: modern→legacy
+        "WebSocketStreamReader": "provide.uterm.transports.websocket",
+        "WebSocketStreamWriter": "provide.uterm.transports.websocket",
+        "WebSocketTransport": "provide.uterm.transports.ws_transport",
         "SSHStreamReader": "provide.uterm.transports.ssh",
         "SSHStreamWriter": "provide.uterm.transports.ssh",
         "start_ssh_server": "provide.uterm.transports.ssh",
         "TelnetClient": "provide.uterm.transports.telnet",
         "TelnetTransport": "provide.uterm.transports.telnet",
         "start_telnet_server": "provide.uterm.transports.telnet",
-        "WebSocketStreamReader": "provide.uterm.transports.websocket",
-        "WebSocketStreamWriter": "provide.uterm.transports.websocket",
-        "WebSocketTransport": "provide.uterm.transports.ws_transport",
+        # Wrappers
+        "ChaosTransport": "provide.uterm.transports.chaos",
     }
     if name in {"ReconnectingSession", "ReconnectPolicy", "OnReconnect", "connect_with_reconnect"}:
         module = __import__("provide.uterm.transports.reconnect", fromlist=[name])
