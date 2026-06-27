@@ -87,8 +87,32 @@ ENV PYTHONUNBUFFERED=1
 # in-image re-resolution), including the `uv run pywrangler` CMD below.
 ENV UV_FROZEN=1
 
-# Install wrangler CLI (required by pywrangler)
-RUN npm install -g wrangler@latest
+# Install wrangler CLI (required by pywrangler) into a dedicated prefix so we can
+# force a patched undici via an npm override. wrangler bundles miniflare, which
+# resolves undici 6.26.0 — CVE-2026-12151 (HIGH: denial of service via unbounded
+# memory), fixed in 6.27.0. The override pins undici to >=6.27.0,<7 across the
+# dependency tree (Trivy's HIGH/CRITICAL gate flags the bundled 6.26.0). The
+# wrangler binary is symlinked onto PATH so pywrangler resolves it exactly as a
+# global install would.
+RUN mkdir -p /opt/wrangler \
+    && cd /opt/wrangler \
+    && printf '{"name":"wrangler-host","private":true,"overrides":{"undici":"^6.27.0"}}\n' > package.json \
+    && npm install --no-audit --no-fund wrangler@latest \
+    && ln -sf /opt/wrangler/node_modules/.bin/wrangler /usr/local/bin/wrangler \
+    && wrangler --version
+
+# node:26-slim's bundled npm (11.17.0, already latest) ALSO vendors undici 6.26.0
+# — the same CVE-2026-12151. npm is a build-time tool here (the worker runtime
+# never invokes it), but Trivy scans it regardless, and an npm override can't
+# reach npm's own bundled copy. Replace it in place with the patched 6.27.0
+# (semver-compatible patch — npm's registry HTTP still works).
+RUN U=/usr/local/lib/node_modules/npm/node_modules/undici \
+    && t="$(mktemp -d)" && cd "$t" \
+    && npm pack undici@6.27.0 >/dev/null \
+    && tar xzf undici-*.tgz \
+    && rm -rf "$U" && mv package "$U" \
+    && cd / && rm -rf "$t" \
+    && node -e "console.log('npm-bundled undici ->', require('/usr/local/lib/node_modules/npm/node_modules/undici/package.json').version)"
 
 WORKDIR /app
 
