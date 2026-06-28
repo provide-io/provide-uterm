@@ -79,6 +79,41 @@ async def test_connect_transport_threads_close_timeout() -> None:
     )
 
 
+async def test_connect_transport_threads_origin_and_headers() -> None:
+    session = WebSocketSession(
+        "wss://example.com/ws",
+        origin="https://warp.undef.games",
+        additional_headers={"User-Agent": "bot"},
+    )
+    transport = _mock_transport()
+    session._transport = transport
+
+    await session._connect_transport()
+
+    transport.connect.assert_awaited_once_with(
+        host="",
+        port=0,
+        url="wss://example.com/ws",
+        ping_interval=20,
+        ping_timeout=20,
+        close_timeout=10,
+        origin="https://warp.undef.games",
+        additional_headers={"User-Agent": "bot"},
+    )
+
+
+async def test_connect_transport_omits_origin_when_none() -> None:
+    session = WebSocketSession("wss://example.com/ws")
+    transport = _mock_transport()
+    session._transport = transport
+
+    await session._connect_transport()
+
+    _, kwargs = transport.connect.await_args
+    assert "origin" not in kwargs
+    assert "additional_headers" not in kwargs
+
+
 async def test_connect_starts_reader() -> None:
     session = WebSocketSession("wss://example.com/ws")
     transport = _mock_transport()
