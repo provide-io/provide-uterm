@@ -48,7 +48,9 @@ class WebSocketTransport(ConnectionTransport):
         self._url = kwargs.get("url") or f"wss://{host}:{port}"
 
         forwarded: dict[str, Any] = {}
-        for key in ("max_size", "ping_interval", "ping_timeout", "close_timeout"):
+        # origin/additional_headers let a bot present an allowed Origin (and UA)
+        # so a worker that gates cross-origin upgrades (the 4403 path) accepts it.
+        for key in ("max_size", "ping_interval", "ping_timeout", "close_timeout", "origin", "additional_headers"):
             value = kwargs.get(key)
             if value is not None:
                 forwarded[key] = value
