@@ -24,6 +24,8 @@ Example::
 
 from __future__ import annotations
 
+from typing import Any
+
 from provide.uterm.transport_session import TransportSession
 from provide.uterm.transports.ws_transport import WebSocketTransport
 
@@ -38,6 +40,8 @@ async def connect_ws(
     ping_interval: int = TerminalDefaults.WS_PING_INTERVAL,
     ping_timeout: int = TerminalDefaults.WS_PING_TIMEOUT,
     close_timeout: int = TerminalDefaults.WS_CLOSE_TIMEOUT,
+    origin: str | None = None,
+    additional_headers: dict[str, str] | None = None,
 ) -> WebSocketSession:
     """Connect to a WebSocket server and return a Session-protocol-compliant object.
 
@@ -61,6 +65,8 @@ async def connect_ws(
         ping_interval=ping_interval,
         ping_timeout=ping_timeout,
         close_timeout=close_timeout,
+        origin=origin,
+        additional_headers=additional_headers,
     )
     await session.connect()
     return session
@@ -82,15 +88,26 @@ class WebSocketSession(TransportSession):
         ping_interval: int = TerminalDefaults.WS_PING_INTERVAL,
         ping_timeout: int = TerminalDefaults.WS_PING_TIMEOUT,
         close_timeout: int = TerminalDefaults.WS_CLOSE_TIMEOUT,
+        origin: str | None = None,
+        additional_headers: dict[str, str] | None = None,
     ) -> None:
         self.url = url
         self._ping_interval = ping_interval
         self._ping_timeout = ping_timeout
         self._close_timeout = close_timeout
+        self._origin = origin
+        self._additional_headers = additional_headers
         super().__init__(WebSocketTransport(), cols=cols, rows=rows, send_encoding="utf-8")
 
     async def _connect_transport(self) -> None:
         """Open the WebSocket connection to :attr:`url`."""
+        # origin/additional_headers are omitted when None so a worker that gates
+        # cross-origin WS upgrades (the 4403 path) gets the bot's allowed Origin.
+        extra: dict[str, Any] = {}
+        if self._origin is not None:
+            extra["origin"] = self._origin
+        if self._additional_headers is not None:
+            extra["additional_headers"] = self._additional_headers
         await self._transport.connect(
             host="",
             port=0,
@@ -98,4 +115,5 @@ class WebSocketSession(TransportSession):
             ping_interval=self._ping_interval,
             ping_timeout=self._ping_timeout,
             close_timeout=self._close_timeout,
+            **extra,
         )
