@@ -35,6 +35,13 @@ class FlowEngine:
     def __init__(self, ruleset: RuleSet) -> None:
         self._flows = {flow.id: flow for flow in ruleset.flows}
         self._prompt_patterns = {pattern["id"]: pattern for pattern in ruleset.to_prompt_patterns()}
+        # Cache one PromptDetector per prompt-id set. ``advance`` calls
+        # ``_detect_prompt`` once per flow step, and login polls ``advance``
+        # every ~0.2s — building a detector per call recompiled every pattern
+        # thousands of times (megabytes of compile logs, CPU that starves the
+        # shared game process). The patterns are immutable after construction,
+        # so the detector for a given prompt-id set is stable and reusable.
+        self._detector_cache: dict[tuple[str, ...], PromptDetector] = {}
 
     def advance(self, flow_id: str, screen: str, cursor: tuple[int, int] | None = None) -> FlowStep:
         """Return the next action for *flow_id* on the current screen.
@@ -113,10 +120,17 @@ class FlowEngine:
     def _detect_prompt(self, snapshot: dict[str, Any], prompt_ids: list[str]) -> Any | None:
         if not prompt_ids:
             return None
-        patterns = [self._prompt_patterns[prompt_id] for prompt_id in prompt_ids if prompt_id in self._prompt_patterns]
-        if not patterns:
-            return None
-        return PromptDetector(patterns).detect_prompt(snapshot)
+        key = tuple(prompt_ids)
+        detector = self._detector_cache.get(key)
+        if detector is None:
+            patterns = [
+                self._prompt_patterns[prompt_id] for prompt_id in prompt_ids if prompt_id in self._prompt_patterns
+            ]
+            if not patterns:
+                return None
+            detector = PromptDetector(patterns)
+            self._detector_cache[key] = detector
+        return detector.detect_prompt(snapshot)
 
     def _is_terminal(self, action: ActionRule, *, is_last: bool) -> bool:
         if action.kind == "noop":
