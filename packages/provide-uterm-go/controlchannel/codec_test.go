@@ -168,6 +168,34 @@ func TestFinishRejectsTruncatedFrame(t *testing.T) {
 	}
 }
 
+func TestFinishRejectsShortHeader(t *testing.T) {
+	d := NewDecoder(DecoderOptions{})
+	if _, err := d.Feed("\x10\x0200"); err != nil {
+		t.Fatal(err)
+	}
+	_, err := d.Finish()
+	if err == nil || err.Error() != "truncated control frame" {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestTrailingGarbageAfterJSON(t *testing.T) {
+	payload := "{}garbage"
+	frame := fmt.Sprintf("\x10\x02%08x:%s", len(payload), payload)
+	d := NewDecoder(DecoderOptions{})
+	_, err := d.Feed(frame)
+	if err == nil || err.Error() != "invalid control json" {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestEncodeControlFrameUnserializable(t *testing.T) {
+	_, err := EncodeControlFrame(map[string]any{"ch": make(chan int)})
+	if err == nil {
+		t.Fatal("expected marshal error")
+	}
+}
+
 func TestFinishRejectsLoneDLE(t *testing.T) {
 	d := NewDecoder(DecoderOptions{})
 	if _, err := d.Feed("x\x10"); err != nil {
