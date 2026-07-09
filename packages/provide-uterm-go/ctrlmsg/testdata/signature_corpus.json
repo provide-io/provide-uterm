@@ -1,0 +1,4898 @@
+[
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "9cf23d2465ee73098acc0ff4dec582f0f49ee0a9ff44ad8df2b3146bfaef257f",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "9cf23d2465ee73098acc0ff4dec582f0f49ee0a9ff44ad8df2b3146bfaef257f",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "2cb711e120e07d37384e19cf93fdf5264742f23ef14ada185d7324901bbd8c87",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "2cb711e120e07d37384e19cf93fdf5264742f23ef14ada185d7324901bbd8c87",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "47709961ba996cd8763122146df2734cf28322d9f9816201c7dc62ab53d68f32",
+  "subject": "user:alice",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "47709961ba996cd8763122146df2734cf28322d9f9816201c7dc62ab53d68f32",
+  "subject": "user:alice",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "2ab79592811de7ee9d2b1b9dac39985c3d2cf0d6aaad9aa5f9da6cac8974ea4a",
+  "subject": "user:alice",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "2ab79592811de7ee9d2b1b9dac39985c3d2cf0d6aaad9aa5f9da6cac8974ea4a",
+  "subject": "user:alice",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "4f6fec20201e4ec377dd4a985d6d07f1674200db135bb0de71c172b2523852dd",
+  "subject": "user:alice",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "4f6fec20201e4ec377dd4a985d6d07f1674200db135bb0de71c172b2523852dd",
+  "subject": "user:alice",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "3315b5df679bf63ab55cb7e943c3295bc61b152061468ec58560739313c5a2c7",
+  "subject": "user:alice",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "3315b5df679bf63ab55cb7e943c3295bc61b152061468ec58560739313c5a2c7",
+  "subject": "user:alice",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "ac250886da14faeb543b306a693f9f4d123a99ca32a3785d5d7931bdf33df611",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "ac250886da14faeb543b306a693f9f4d123a99ca32a3785d5d7931bdf33df611",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "ba6d700d4b3be66eb651d52788da116c26b82b2640f737a06586cf7f8a05ec18",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "ba6d700d4b3be66eb651d52788da116c26b82b2640f737a06586cf7f8a05ec18",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "c8358deb534986a134e0e5fbbabb9081392297eb20793e869e3f6ee358935f5b",
+  "subject": "user:alice",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "c8358deb534986a134e0e5fbbabb9081392297eb20793e869e3f6ee358935f5b",
+  "subject": "user:alice",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "f5fca76864bf800c391737397b1b0f8f701771ac6ea214953e1abeb9f378ad87",
+  "subject": "user:alice",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "f5fca76864bf800c391737397b1b0f8f701771ac6ea214953e1abeb9f378ad87",
+  "subject": "user:alice",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "824f87bcac4da66186ffbcf2968b0ea605eddb0610c252dbca6e88c3de17163d",
+  "subject": "user:alice",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "824f87bcac4da66186ffbcf2968b0ea605eddb0610c252dbca6e88c3de17163d",
+  "subject": "user:alice",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "4c9be24c5c007b3e2e315907817c99725d27c232cc23e54f314b255b0b59bbf1",
+  "subject": "user:alice",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "4c9be24c5c007b3e2e315907817c99725d27c232cc23e54f314b255b0b59bbf1",
+  "subject": "user:alice",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "c64ec646bdfa6bce8f1f79ea9b7109cb55a8aa661ab2f3d8811d976650312608",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "c64ec646bdfa6bce8f1f79ea9b7109cb55a8aa661ab2f3d8811d976650312608",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "1d6cc095de2619cdcc6ef4449a738830195242fe2797aa5d7a0fa2992be8f7fb",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "1d6cc095de2619cdcc6ef4449a738830195242fe2797aa5d7a0fa2992be8f7fb",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "e9b9da0e3e3d91f1196ef000c3a001bd5639d33628443af17d36bb29a684c35a",
+  "subject": "user:alice",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "e9b9da0e3e3d91f1196ef000c3a001bd5639d33628443af17d36bb29a684c35a",
+  "subject": "user:alice",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "4853f7d05a1d383a43c744c046d2aa402367a3fb13c20e7831bd5eec49392113",
+  "subject": "user:alice",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "4853f7d05a1d383a43c744c046d2aa402367a3fb13c20e7831bd5eec49392113",
+  "subject": "user:alice",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "fa88c0717b65613b1701e03500b92e667b6ac3e5f4839162997da26aba9d7f8c",
+  "subject": "user:alice",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "fa88c0717b65613b1701e03500b92e667b6ac3e5f4839162997da26aba9d7f8c",
+  "subject": "user:alice",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "718467a92fc0dab1939fc59f9f69b13a269f8f57d601cf6c723e3b47f07766bc",
+  "subject": "user:alice",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "718467a92fc0dab1939fc59f9f69b13a269f8f57d601cf6c723e3b47f07766bc",
+  "subject": "user:alice",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "139b7958daa66ba67c560a8dae95810a91ae084fc7dd2d2c1fe06e0b64ccf1f6",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "139b7958daa66ba67c560a8dae95810a91ae084fc7dd2d2c1fe06e0b64ccf1f6",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "251b4e0bec9b8ef8b8c6a0fe6f1f82d4d81d4b030ea580eb4f4eeb7a3d9f36a5",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "251b4e0bec9b8ef8b8c6a0fe6f1f82d4d81d4b030ea580eb4f4eeb7a3d9f36a5",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "5351ffe74f6e1eee09c061b826e3dc55ee672edc3f905ee687ce9be1f332f7d5",
+  "subject": "user:alice",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "5351ffe74f6e1eee09c061b826e3dc55ee672edc3f905ee687ce9be1f332f7d5",
+  "subject": "user:alice",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "88e2ba96fcf1ffb32f72992a43288434dc82332415d2252723726e295b6252bd",
+  "subject": "user:alice",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "88e2ba96fcf1ffb32f72992a43288434dc82332415d2252723726e295b6252bd",
+  "subject": "user:alice",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "72175c4e3bb905b74b0b5ddf67fceeb7d8056dc8ccae4b78c830c9a7daca12ca",
+  "subject": "user:alice",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "72175c4e3bb905b74b0b5ddf67fceeb7d8056dc8ccae4b78c830c9a7daca12ca",
+  "subject": "user:alice",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "b595b240cb013f3668e076504f14ee7886fc42ffd7f413227b84610da5fd5128",
+  "subject": "user:alice",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "b595b240cb013f3668e076504f14ee7886fc42ffd7f413227b84610da5fd5128",
+  "subject": "user:alice",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "a30d10024210322206edc020e47ccf96f6c20c1ed56e3a2634d011ba4cf0da7a",
+  "subject": "user:bob",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "a30d10024210322206edc020e47ccf96f6c20c1ed56e3a2634d011ba4cf0da7a",
+  "subject": "user:bob",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "f9bfa620c59d37bb84a68fcef0e30b6adaa7f17f0171ecfd9829ab8fd2c5e05f",
+  "subject": "user:bob",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "f9bfa620c59d37bb84a68fcef0e30b6adaa7f17f0171ecfd9829ab8fd2c5e05f",
+  "subject": "user:bob",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "1ede95efa1af481fd00beb8899844f8e714d33416643d39df7db845779b42807",
+  "subject": "user:bob",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "1ede95efa1af481fd00beb8899844f8e714d33416643d39df7db845779b42807",
+  "subject": "user:bob",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "819b8c6f703b354de93962c078e03a217535516c06153b8fe33f109e0b00a31e",
+  "subject": "user:bob",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "819b8c6f703b354de93962c078e03a217535516c06153b8fe33f109e0b00a31e",
+  "subject": "user:bob",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "f32cb820400468fc1f8708844a49fea300899e0040aa036bafd15b137afa3ed4",
+  "subject": "user:bob",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "f32cb820400468fc1f8708844a49fea300899e0040aa036bafd15b137afa3ed4",
+  "subject": "user:bob",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "b3a65a12f54a94a966e1653863f385b9da307ffa31a9edc38068c6d478586f41",
+  "subject": "user:bob",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "b3a65a12f54a94a966e1653863f385b9da307ffa31a9edc38068c6d478586f41",
+  "subject": "user:bob",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "8d7e3e596026cfaeb412b649164b48ca566b4830a2a1ae51e9d7e000adb01b23",
+  "subject": "user:bob",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "8d7e3e596026cfaeb412b649164b48ca566b4830a2a1ae51e9d7e000adb01b23",
+  "subject": "user:bob",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "4101a378bbea8b7d0e22cef28cb120726c95b183cb52196d78f8e36a1922cb66",
+  "subject": "user:bob",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "4101a378bbea8b7d0e22cef28cb120726c95b183cb52196d78f8e36a1922cb66",
+  "subject": "user:bob",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "5677620339b9c6333336ce39e970a1f5c771278572486b93cbeb181c12f8601c",
+  "subject": "user:bob",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "5677620339b9c6333336ce39e970a1f5c771278572486b93cbeb181c12f8601c",
+  "subject": "user:bob",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "d28476079cda09776623ee92779a1a7ef9c3d3636644078c2625d3667641917c",
+  "subject": "user:bob",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "d28476079cda09776623ee92779a1a7ef9c3d3636644078c2625d3667641917c",
+  "subject": "user:bob",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "f7f20e9e18fca303aa039245b2cb9aec4b691a218a853118a403d0e89aca7815",
+  "subject": "user:bob",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "f7f20e9e18fca303aa039245b2cb9aec4b691a218a853118a403d0e89aca7815",
+  "subject": "user:bob",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "e5dbf688e1dcb62747f3a5fcd49c6648588b06888254f56847ae4dec1c4e2f69",
+  "subject": "user:bob",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "e5dbf688e1dcb62747f3a5fcd49c6648588b06888254f56847ae4dec1c4e2f69",
+  "subject": "user:bob",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "b90d142f661e2be76169442d73afff65599bc54056a86c14f98b379945d1f964",
+  "subject": "user:bob",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "b90d142f661e2be76169442d73afff65599bc54056a86c14f98b379945d1f964",
+  "subject": "user:bob",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "dfd2a56be72d97540e9dae9b72376490302bd9b62a9c525ef6ba8eeea2b647bf",
+  "subject": "user:bob",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "dfd2a56be72d97540e9dae9b72376490302bd9b62a9c525ef6ba8eeea2b647bf",
+  "subject": "user:bob",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "d7e3d4d404f511ae710fffb2c9f84df958a82dbd37636cedab78eec582fefdb0",
+  "subject": "user:bob",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "d7e3d4d404f511ae710fffb2c9f84df958a82dbd37636cedab78eec582fefdb0",
+  "subject": "user:bob",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "3c69e5ef5391312fb48cb62182d98a0b86a837e99268b63dc421ed76b9cb38c8",
+  "subject": "user:bob",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "3c69e5ef5391312fb48cb62182d98a0b86a837e99268b63dc421ed76b9cb38c8",
+  "subject": "user:bob",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "0a2394c4b7b349e466bb24dcb0c979a3d047fef0a801cde5234dafd377d9bd09",
+  "subject": "user:bob",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "0a2394c4b7b349e466bb24dcb0c979a3d047fef0a801cde5234dafd377d9bd09",
+  "subject": "user:bob",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "97bd7c94da170065fc31614c9fbdf06f4c529f5c51459b34e320edf5d815b9cc",
+  "subject": "user:bob",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "97bd7c94da170065fc31614c9fbdf06f4c529f5c51459b34e320edf5d815b9cc",
+  "subject": "user:bob",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "fda2ca5e36ed4ca5d9dfd9f34a7d213850f239838c1392b0bb0f967a6b88fad3",
+  "subject": "user:bob",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "fda2ca5e36ed4ca5d9dfd9f34a7d213850f239838c1392b0bb0f967a6b88fad3",
+  "subject": "user:bob",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "90d5a245469133a5b3fd2db546f4326afc1eec4a74a25314b3244d4bde787d7b",
+  "subject": "user:bob",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "90d5a245469133a5b3fd2db546f4326afc1eec4a74a25314b3244d4bde787d7b",
+  "subject": "user:bob",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "9afd7bf425bbfee2d9628bc2258e1846e776a5dd53e3aed369733ea6058a9877",
+  "subject": "user:bob",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "9afd7bf425bbfee2d9628bc2258e1846e776a5dd53e3aed369733ea6058a9877",
+  "subject": "user:bob",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "39a19921c599ff919459a042c5c5ab767110eec17f9ebdc0729582d2ec3c5489",
+  "subject": "user:bob",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "39a19921c599ff919459a042c5c5ab767110eec17f9ebdc0729582d2ec3c5489",
+  "subject": "user:bob",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "eec4e22f3e3207c64a88b725777eeac52504ae42255ec2a3d1384b230cd52434",
+  "subject": "user:bob",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "eec4e22f3e3207c64a88b725777eeac52504ae42255ec2a3d1384b230cd52434",
+  "subject": "user:bob",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "4262b5de681a05e7acd78250b33cdb9da42e999493d28293f16fad313a7b6b51",
+  "subject": "user:bob",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "4262b5de681a05e7acd78250b33cdb9da42e999493d28293f16fad313a7b6b51",
+  "subject": "user:bob",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "071132c720eb535f182cd85f4ae312744b33b688ee77b27eca4861b3b6e232f3",
+  "subject": "svc:worker-1",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "071132c720eb535f182cd85f4ae312744b33b688ee77b27eca4861b3b6e232f3",
+  "subject": "svc:worker-1",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "7ae668a3841e93cf9061eab3f8c2b5d6f6d9d669138cd3a467d119631e7aebcf",
+  "subject": "svc:worker-1",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "7ae668a3841e93cf9061eab3f8c2b5d6f6d9d669138cd3a467d119631e7aebcf",
+  "subject": "svc:worker-1",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "0a13d54a5e820d57789ca9dcfe1458f9a2438250c8b2c39dddccf535b7e3e973",
+  "subject": "svc:worker-1",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "0a13d54a5e820d57789ca9dcfe1458f9a2438250c8b2c39dddccf535b7e3e973",
+  "subject": "svc:worker-1",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "5a0545dc78abca7bd33a4a0be40f813079d2ed481cf1e1080e9a611c89ddc21e",
+  "subject": "svc:worker-1",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "5a0545dc78abca7bd33a4a0be40f813079d2ed481cf1e1080e9a611c89ddc21e",
+  "subject": "svc:worker-1",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "6048a5e160a33ad475efae77c350357344c706507f02851d26e58df527c22c20",
+  "subject": "svc:worker-1",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "6048a5e160a33ad475efae77c350357344c706507f02851d26e58df527c22c20",
+  "subject": "svc:worker-1",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "546b35d062cf016c1b7ad24298f1c5bc43a172aabe3e43e524ebc8458489d50e",
+  "subject": "svc:worker-1",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "546b35d062cf016c1b7ad24298f1c5bc43a172aabe3e43e524ebc8458489d50e",
+  "subject": "svc:worker-1",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "80c7d0d349213e73c5baec39ada1e5e336cdb64282bb1652d8d3b7e1be3c876f",
+  "subject": "svc:worker-1",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "80c7d0d349213e73c5baec39ada1e5e336cdb64282bb1652d8d3b7e1be3c876f",
+  "subject": "svc:worker-1",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "46181b36a420126b0a1e4ac2a1837de2f2a475ead55ab7851ad637f3ba7a2cc4",
+  "subject": "svc:worker-1",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "46181b36a420126b0a1e4ac2a1837de2f2a475ead55ab7851ad637f3ba7a2cc4",
+  "subject": "svc:worker-1",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "b4d9ed54e6be98e59c2b845518a2b8731ccc46385dbeb22a06136be17e67b7b1",
+  "subject": "svc:worker-1",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "b4d9ed54e6be98e59c2b845518a2b8731ccc46385dbeb22a06136be17e67b7b1",
+  "subject": "svc:worker-1",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "227b61d95703b91792ee3a95eb4fd6a6f87b3c822cc0eb12f7ffd4f70dece225",
+  "subject": "svc:worker-1",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "227b61d95703b91792ee3a95eb4fd6a6f87b3c822cc0eb12f7ffd4f70dece225",
+  "subject": "svc:worker-1",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "a86ce2ef3a080a39abe118c1158daacb800c61b0121bab9cdedbf6709608cb3e",
+  "subject": "svc:worker-1",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "a86ce2ef3a080a39abe118c1158daacb800c61b0121bab9cdedbf6709608cb3e",
+  "subject": "svc:worker-1",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "78ceac92407d5046fecd1ffd76c5c21268df07d3f9c2af81ec8e3d596ea98565",
+  "subject": "svc:worker-1",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "78ceac92407d5046fecd1ffd76c5c21268df07d3f9c2af81ec8e3d596ea98565",
+  "subject": "svc:worker-1",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "d6c2c39edd1f95e179944abdc25dda848559b563031183b437219f5eb6a8370f",
+  "subject": "svc:worker-1",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "d6c2c39edd1f95e179944abdc25dda848559b563031183b437219f5eb6a8370f",
+  "subject": "svc:worker-1",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "0d2343db1961905573749178173e982fd88e023d712a4f79446f0b80f3cc9981",
+  "subject": "svc:worker-1",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "0d2343db1961905573749178173e982fd88e023d712a4f79446f0b80f3cc9981",
+  "subject": "svc:worker-1",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "d8bc5bc668b267789db160ce763aa19a592ff1a21389249ac57b6728a587a573",
+  "subject": "svc:worker-1",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "d8bc5bc668b267789db160ce763aa19a592ff1a21389249ac57b6728a587a573",
+  "subject": "svc:worker-1",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "a94afa4429cc7f4e25de99dd98c63ab78a6ef79ac9dcc8e181cf62a8ebc2c29e",
+  "subject": "svc:worker-1",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "a94afa4429cc7f4e25de99dd98c63ab78a6ef79ac9dcc8e181cf62a8ebc2c29e",
+  "subject": "svc:worker-1",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "555049740b7ffd9041a9bae52f1c00b67b4631416c29ed7c2aae3df0d7d3ca79",
+  "subject": "svc:worker-1",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "555049740b7ffd9041a9bae52f1c00b67b4631416c29ed7c2aae3df0d7d3ca79",
+  "subject": "svc:worker-1",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "96dd43956bb53e7a7d41a24d16f00f3d8967ed1c5d64d026efba0bab170d95c6",
+  "subject": "svc:worker-1",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "96dd43956bb53e7a7d41a24d16f00f3d8967ed1c5d64d026efba0bab170d95c6",
+  "subject": "svc:worker-1",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "41ef5f1f84e243aee240ce7052aa8a8b908ee8fa9cdece90336c1f676f8f4b03",
+  "subject": "svc:worker-1",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "41ef5f1f84e243aee240ce7052aa8a8b908ee8fa9cdece90336c1f676f8f4b03",
+  "subject": "svc:worker-1",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "7ada85f197998c35d5d50231d9fbbea44371976350979377d010728f29e76c79",
+  "subject": "svc:worker-1",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "7ada85f197998c35d5d50231d9fbbea44371976350979377d010728f29e76c79",
+  "subject": "svc:worker-1",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "fcba2517eb4fc53d02d42ca573654caa73b191beab7e0deef706905fdd936754",
+  "subject": "svc:worker-1",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "fcba2517eb4fc53d02d42ca573654caa73b191beab7e0deef706905fdd936754",
+  "subject": "svc:worker-1",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "327f3016d20d9ad1d415e9975f97a02b0da49143b6772fc6eb3fa06855ef30e7",
+  "subject": "svc:worker-1",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "327f3016d20d9ad1d415e9975f97a02b0da49143b6772fc6eb3fa06855ef30e7",
+  "subject": "svc:worker-1",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "2880ea6add04e2d843f7bb2150b30f89fd5765f327a3fb358811e09ad9f81d1c",
+  "subject": "svc:worker-1",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "2880ea6add04e2d843f7bb2150b30f89fd5765f327a3fb358811e09ad9f81d1c",
+  "subject": "svc:worker-1",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "bf600b55d03ae107e5b833ae581e3bb2e883ab98eb1da6a377a33822f0c1a3d3",
+  "subject": "svc:worker-1",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "bf600b55d03ae107e5b833ae581e3bb2e883ab98eb1da6a377a33822f0c1a3d3",
+  "subject": "svc:worker-1",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "2c77c98ac867530475f4825595517e358ce8207c156f13678511d59cb69d1445",
+  "subject": "u",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "2c77c98ac867530475f4825595517e358ce8207c156f13678511d59cb69d1445",
+  "subject": "u",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "96bdc5d51d00a6b46af67aa393ac1bf10cd53d5dd93c8968769f3e08c591c7b9",
+  "subject": "u",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "96bdc5d51d00a6b46af67aa393ac1bf10cd53d5dd93c8968769f3e08c591c7b9",
+  "subject": "u",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "248d7161c15e354ea5938f9685ada8fbdab0567c884659ffbf49fa13d2a012e3",
+  "subject": "u",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "248d7161c15e354ea5938f9685ada8fbdab0567c884659ffbf49fa13d2a012e3",
+  "subject": "u",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "17060e175d9ac7d80048d8d722a2164a5c45e1d96a9b00a1af0d9b510e845344",
+  "subject": "u",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "17060e175d9ac7d80048d8d722a2164a5c45e1d96a9b00a1af0d9b510e845344",
+  "subject": "u",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "45f34d1a2770b073a4c32fd4f0c04d18ce131496497cd36c1b26378640c6096d",
+  "subject": "u",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "45f34d1a2770b073a4c32fd4f0c04d18ce131496497cd36c1b26378640c6096d",
+  "subject": "u",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "517f321b941ba28bbcaf983e565c73fdddc8a909469ae1df86bac2063c3355e5",
+  "subject": "u",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "517f321b941ba28bbcaf983e565c73fdddc8a909469ae1df86bac2063c3355e5",
+  "subject": "u",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "f8a7b0df8e6648e94ea8b542ff5279886752bb7c0f3e3f93bb7133d972ed4fc1",
+  "subject": "u",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "f8a7b0df8e6648e94ea8b542ff5279886752bb7c0f3e3f93bb7133d972ed4fc1",
+  "subject": "u",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "06b2f79ce7bce6bfef1f82477ec3c024aa34efd226e966a0f56f6bb8e9728e37",
+  "subject": "u",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "06b2f79ce7bce6bfef1f82477ec3c024aa34efd226e966a0f56f6bb8e9728e37",
+  "subject": "u",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "e5dd3118da025c54491b9fb72abc049cdd0564b530abf9bb19a8175a7609f241",
+  "subject": "u",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "e5dd3118da025c54491b9fb72abc049cdd0564b530abf9bb19a8175a7609f241",
+  "subject": "u",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "a3f30cb317f311d44d672f97719a6154b335bdb68b74e7801d0f8e3d67702390",
+  "subject": "u",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "a3f30cb317f311d44d672f97719a6154b335bdb68b74e7801d0f8e3d67702390",
+  "subject": "u",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "b26dbe00c5f6992c9a087003ab1f391bf03688c4f483e9246ee0bc69baeaef96",
+  "subject": "u",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "b26dbe00c5f6992c9a087003ab1f391bf03688c4f483e9246ee0bc69baeaef96",
+  "subject": "u",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "46e2adfb8d01f622fdecc62476668a2a5331346a407da17dcf2069a8a9ea9366",
+  "subject": "u",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "46e2adfb8d01f622fdecc62476668a2a5331346a407da17dcf2069a8a9ea9366",
+  "subject": "u",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "ef34119e13536c8b24798c6f6adc2909d9a024d269de31f7280795108f8db2ea",
+  "subject": "u",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "ef34119e13536c8b24798c6f6adc2909d9a024d269de31f7280795108f8db2ea",
+  "subject": "u",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "c4080ac286ea34fb84d0400c4beb6832f9414a9bbabc04e5b740e1a5f2dc36d0",
+  "subject": "u",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "c4080ac286ea34fb84d0400c4beb6832f9414a9bbabc04e5b740e1a5f2dc36d0",
+  "subject": "u",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "851682c7b29a493acf92bc18cd52321f12b0cc31d1443a488ffd995c35add612",
+  "subject": "u",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "851682c7b29a493acf92bc18cd52321f12b0cc31d1443a488ffd995c35add612",
+  "subject": "u",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "4bc6cf995365f6c9e34978d091e6b6a5f90312abe8c359566073db2070b8a60d",
+  "subject": "u",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "4bc6cf995365f6c9e34978d091e6b6a5f90312abe8c359566073db2070b8a60d",
+  "subject": "u",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "342fe440538e1cb8429154111ad0505286922659334b2cd67115d289f1ab27aa",
+  "subject": "u",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "342fe440538e1cb8429154111ad0505286922659334b2cd67115d289f1ab27aa",
+  "subject": "u",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "596b25b386a9a38e7fa26222175576f97f8a39128d3dd1aeaa14c6876b438dd3",
+  "subject": "u",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "596b25b386a9a38e7fa26222175576f97f8a39128d3dd1aeaa14c6876b438dd3",
+  "subject": "u",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "40d5d3d1affbd9bb1257d7e34b98d65fc369c83f51bc5061bc16bdde30b37760",
+  "subject": "u",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "40d5d3d1affbd9bb1257d7e34b98d65fc369c83f51bc5061bc16bdde30b37760",
+  "subject": "u",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "d89def2e190e1209e7ddf1ac7146f7c67a8fedd8a0d767da1f11b3cedb2970eb",
+  "subject": "u",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "d89def2e190e1209e7ddf1ac7146f7c67a8fedd8a0d767da1f11b3cedb2970eb",
+  "subject": "u",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "94f2c343314a10b63f4076384ff4978d10693c6f664545143210a7a34ba670da",
+  "subject": "u",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "94f2c343314a10b63f4076384ff4978d10693c6f664545143210a7a34ba670da",
+  "subject": "u",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "26bb5689753f36e1ab2c053ee1c3ba36e5f06ecd51340f76b2583d1caaacd759",
+  "subject": "u",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "26bb5689753f36e1ab2c053ee1c3ba36e5f06ecd51340f76b2583d1caaacd759",
+  "subject": "u",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "52403a26bd46318600b07b760444c67413d63436b8ef14b71fad6d603db07bbe",
+  "subject": "u",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "52403a26bd46318600b07b760444c67413d63436b8ef14b71fad6d603db07bbe",
+  "subject": "u",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "cbcb3936f67f08167c2aa8d1f0f8e83ed6c5252dbe2a99f46bb1c008d3e81988",
+  "subject": "u",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "cbcb3936f67f08167c2aa8d1f0f8e83ed6c5252dbe2a99f46bb1c008d3e81988",
+  "subject": "u",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "22e31bb2ab4fa7a6371b5815c9d9db247dd3c0c751eb40053fd0b65aa758b37e",
+  "subject": "user:with:colons",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "22e31bb2ab4fa7a6371b5815c9d9db247dd3c0c751eb40053fd0b65aa758b37e",
+  "subject": "user:with:colons",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "65b2727806bfad9e5d147c8b35e322dff55feacfd4a055ad59c67ca8d42c654b",
+  "subject": "user:with:colons",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "65b2727806bfad9e5d147c8b35e322dff55feacfd4a055ad59c67ca8d42c654b",
+  "subject": "user:with:colons",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "b63500541eafb9c74e66d2c7f2a10f4c3910d51a29b4cb369f8e653b3087369d",
+  "subject": "user:with:colons",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "b63500541eafb9c74e66d2c7f2a10f4c3910d51a29b4cb369f8e653b3087369d",
+  "subject": "user:with:colons",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "cb94d84af6d9ff3aa9627b74e1ce3bfcfea9a2841ef0e657b397849a249fc71a",
+  "subject": "user:with:colons",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "cb94d84af6d9ff3aa9627b74e1ce3bfcfea9a2841ef0e657b397849a249fc71a",
+  "subject": "user:with:colons",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "d3fb4d09258f9d88bdb72a212b7d32fd59ceed672c93107d0892f568d0110a5d",
+  "subject": "user:with:colons",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "d3fb4d09258f9d88bdb72a212b7d32fd59ceed672c93107d0892f568d0110a5d",
+  "subject": "user:with:colons",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "27d818af242ad6590ecf53b13b51d03dfe78e0f34bb8ca004d2ede710467b21a",
+  "subject": "user:with:colons",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "27d818af242ad6590ecf53b13b51d03dfe78e0f34bb8ca004d2ede710467b21a",
+  "subject": "user:with:colons",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "851ce95b1c98d9c8438847a0082964e95666eccd30b3047279e9be46ec15d1a5",
+  "subject": "user:with:colons",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "851ce95b1c98d9c8438847a0082964e95666eccd30b3047279e9be46ec15d1a5",
+  "subject": "user:with:colons",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "189120eaccfd58e81dbb1b7285e2e0cede693043bf5704ce1639dd7f56686850",
+  "subject": "user:with:colons",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "189120eaccfd58e81dbb1b7285e2e0cede693043bf5704ce1639dd7f56686850",
+  "subject": "user:with:colons",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "814c5a83f2565731ff80ef7a45ad2b31d444cfb94dd8d5d93b9c82eab82a31cf",
+  "subject": "user:with:colons",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "814c5a83f2565731ff80ef7a45ad2b31d444cfb94dd8d5d93b9c82eab82a31cf",
+  "subject": "user:with:colons",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "e21db3d04920ca1b9c7316d01ff6db682204b72c1b82d27f7189d38a06584480",
+  "subject": "user:with:colons",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "e21db3d04920ca1b9c7316d01ff6db682204b72c1b82d27f7189d38a06584480",
+  "subject": "user:with:colons",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "8e7d74ba8d24c1c672797c469763d0870ca50d0cb0686d034d9eb0c457d2262c",
+  "subject": "user:with:colons",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "8e7d74ba8d24c1c672797c469763d0870ca50d0cb0686d034d9eb0c457d2262c",
+  "subject": "user:with:colons",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "01f2606906e26c41d18305a7ceb16cd2ce172dc553baabab8af280a27383e82a",
+  "subject": "user:with:colons",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "01f2606906e26c41d18305a7ceb16cd2ce172dc553baabab8af280a27383e82a",
+  "subject": "user:with:colons",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "3f79b6c90dcaa5260a3e98af9f81eabaeb8ebadf5e180dce1bf2d2cac2d1cd19",
+  "subject": "user:with:colons",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "3f79b6c90dcaa5260a3e98af9f81eabaeb8ebadf5e180dce1bf2d2cac2d1cd19",
+  "subject": "user:with:colons",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "e2f3bc5701f8867dc00d44a3490e08fcf0ab1e14d648fa0d589738241ba8568a",
+  "subject": "user:with:colons",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "e2f3bc5701f8867dc00d44a3490e08fcf0ab1e14d648fa0d589738241ba8568a",
+  "subject": "user:with:colons",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "8dd169214a45e708e174acbf9c56db9040c7112778d7fe9439ab94071d316e54",
+  "subject": "user:with:colons",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "8dd169214a45e708e174acbf9c56db9040c7112778d7fe9439ab94071d316e54",
+  "subject": "user:with:colons",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "7418c92c1e82ed0bce7d70e10e148ee062dfd4cccb445827a9c184554410df6f",
+  "subject": "user:with:colons",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "7418c92c1e82ed0bce7d70e10e148ee062dfd4cccb445827a9c184554410df6f",
+  "subject": "user:with:colons",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "fdad9a9f88a17d71b028a1c723f7488536b58a811404c5ba19c866f3684d8f0a",
+  "subject": "user:with:colons",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "fdad9a9f88a17d71b028a1c723f7488536b58a811404c5ba19c866f3684d8f0a",
+  "subject": "user:with:colons",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "6c14680c5fc7e3aea55df01b2785b30cabfd0754aa95046557772faa4236f692",
+  "subject": "user:with:colons",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "6c14680c5fc7e3aea55df01b2785b30cabfd0754aa95046557772faa4236f692",
+  "subject": "user:with:colons",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "5927e198e1f39e2e19b5051963d073e4a9addf1f403546362a686a65bc014891",
+  "subject": "user:with:colons",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "5927e198e1f39e2e19b5051963d073e4a9addf1f403546362a686a65bc014891",
+  "subject": "user:with:colons",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "cca736a427129c96d95eb5ba06c7d1fa93538642f632ca0612dbd56ff22edadd",
+  "subject": "user:with:colons",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "cca736a427129c96d95eb5ba06c7d1fa93538642f632ca0612dbd56ff22edadd",
+  "subject": "user:with:colons",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "8f44170b4d87fa46c57d777132e7a0dc95853f3f1e8f614061fdb04641cd185f",
+  "subject": "user:with:colons",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "8f44170b4d87fa46c57d777132e7a0dc95853f3f1e8f614061fdb04641cd185f",
+  "subject": "user:with:colons",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "3e10e16bbd037e677da0440e40e0aeddbf168a36d5472652fe29daa01a889e84",
+  "subject": "user:with:colons",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "3e10e16bbd037e677da0440e40e0aeddbf168a36d5472652fe29daa01a889e84",
+  "subject": "user:with:colons",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "e62de562ae8451965eacbfa2a3ba38a0403738dec569f83b55c491883f7ed5ec",
+  "subject": "user:with:colons",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "e62de562ae8451965eacbfa2a3ba38a0403738dec569f83b55c491883f7ed5ec",
+  "subject": "user:with:colons",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "866254a6de3acb19c505ae743fcadccc40370852ae38e219d4f432d5fcbe13d8",
+  "subject": "user:with:colons",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "866254a6de3acb19c505ae743fcadccc40370852ae38e219d4f432d5fcbe13d8",
+  "subject": "user:with:colons",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "9b6ec15c07232cbc7a43985a4f93c76420b24a40bcfe7f8b45237034680a5ff3",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "9b6ec15c07232cbc7a43985a4f93c76420b24a40bcfe7f8b45237034680a5ff3",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "c29a3a1deb460c09e9c81a06a7f136a4b7a7984d7dee95030a14abb6faf6aa12",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "c29a3a1deb460c09e9c81a06a7f136a4b7a7984d7dee95030a14abb6faf6aa12",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "1fd8b88f56ab584e67f264556ac919505445d098094a5a8b2725fea5ab228016",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "1fd8b88f56ab584e67f264556ac919505445d098094a5a8b2725fea5ab228016",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "d2765b47d678d0a1280ef24908b3ee59666c8fa50a260591eb0b7f22d40b1e8b",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "d2765b47d678d0a1280ef24908b3ee59666c8fa50a260591eb0b7f22d40b1e8b",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "40cc4a33591f9d180d7053997178d604ef086eb65cc19d1dd642a517b98be5a9",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "40cc4a33591f9d180d7053997178d604ef086eb65cc19d1dd642a517b98be5a9",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "6ba1c8ee7e75ef76ced9418fd959910f704becea60db5f3247dda4bfa6f7e2d2",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "6ba1c8ee7e75ef76ced9418fd959910f704becea60db5f3247dda4bfa6f7e2d2",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "1bc160e2ce078e2b92a3f23d9d7e4730f4a732773d0609a65f4f53ccc0d09409",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "1bc160e2ce078e2b92a3f23d9d7e4730f4a732773d0609a65f4f53ccc0d09409",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "3e528eda89a3c6abfae51bd02a3b40e4c8921eaadd3128b42b4838bf8d7aa492",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "3e528eda89a3c6abfae51bd02a3b40e4c8921eaadd3128b42b4838bf8d7aa492",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "67c48f0e742ea0dbb733fe07bf0320457c86b45cea3d819001090d2dc302934f",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "67c48f0e742ea0dbb733fe07bf0320457c86b45cea3d819001090d2dc302934f",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "57dfc4bb656eab8ac2799881a1717f3aa45af5ec62905663f694f905751f9f96",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "57dfc4bb656eab8ac2799881a1717f3aa45af5ec62905663f694f905751f9f96",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "479d4a536dda5bf3e1c15f4ef9a3d49c6acc9c8f0a17b1118b01681a097afe08",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "479d4a536dda5bf3e1c15f4ef9a3d49c6acc9c8f0a17b1118b01681a097afe08",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "c936b15963c210620a24ba05d1907c60bb7e2016cad7a311a5eda46cf957fc53",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "c936b15963c210620a24ba05d1907c60bb7e2016cad7a311a5eda46cf957fc53",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "52d9673f9def9761bda46407b47ed2ed88616b467d5bc49d16a9ad7dec582a53",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "52d9673f9def9761bda46407b47ed2ed88616b467d5bc49d16a9ad7dec582a53",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "9f27073a91b989268da6a63401b4b984c4d0337616dc90758545a5d19cb46735",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "9f27073a91b989268da6a63401b4b984c4d0337616dc90758545a5d19cb46735",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "1001758f50414533f27394dbb19ec3186f633d132f43749ea54fe9047c627d63",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "1001758f50414533f27394dbb19ec3186f633d132f43749ea54fe9047c627d63",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "024ee325cfc3c147f75be22e901780855f887ca5f03b61c8a905fcd2c344f8a3",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "024ee325cfc3c147f75be22e901780855f887ca5f03b61c8a905fcd2c344f8a3",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "eb99fc365d636c45db7b4f1eb0ea107bad88d6f5b01399fe75370744514232e3",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "eb99fc365d636c45db7b4f1eb0ea107bad88d6f5b01399fe75370744514232e3",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "a312502e7fa2573a548305aede9de40594569621eace0204eb6496867568dae9",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "a312502e7fa2573a548305aede9de40594569621eace0204eb6496867568dae9",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "069df4a848cf8abcc2a481129c7b2bbe518db50c07267d21bc90da3af533b9ce",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "069df4a848cf8abcc2a481129c7b2bbe518db50c07267d21bc90da3af533b9ce",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "218fa4da950b0f9c2f67dc3a363adc2ccfed8b6657536cc1950368d4848f8960",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "218fa4da950b0f9c2f67dc3a363adc2ccfed8b6657536cc1950368d4848f8960",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "5dc9903ecd2ce159256bc5ef0db27e5070e13e69e9255649975039d5520e2a4d",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "5dc9903ecd2ce159256bc5ef0db27e5070e13e69e9255649975039d5520e2a4d",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "8f46b81ce98e1dfdbb35c10e428312f94d3f308b0804478dbabb4ff2c2516fe7",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "8f46b81ce98e1dfdbb35c10e428312f94d3f308b0804478dbabb4ff2c2516fe7",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "6ec0407b9e63aeabbc84a923943f005cb340b15d28873df4209b75c60e712f78",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "6ec0407b9e63aeabbc84a923943f005cb340b15d28873df4209b75c60e712f78",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "8beaa8cb9c9ad1a65742144a22d26df5e2b00a86ea7dd32062877f97f9324e4e",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "8beaa8cb9c9ad1a65742144a22d26df5e2b00a86ea7dd32062877f97f9324e4e",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "b37460f93ca4f6c4af983f036fecbeac559957ecc186c2ab938a0a82d10705fa",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "b37460f93ca4f6c4af983f036fecbeac559957ecc186c2ab938a0a82d10705fa",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "7409ad039677fa2bbf4f71e7078f59759cd66525572c3c446f9448f561927584",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "7409ad039677fa2bbf4f71e7078f59759cd66525572c3c446f9448f561927584",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "a729d51b83e71fa8c03bd1e16b6d3a022e8ca7cab94f509f2af1ba829276c940",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "a729d51b83e71fa8c03bd1e16b6d3a022e8ca7cab94f509f2af1ba829276c940",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "ddc9184620a97ec3d7c1018b55b7626cf6ae24e378c23696c52582993522e6d5",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "ddc9184620a97ec3d7c1018b55b7626cf6ae24e378c23696c52582993522e6d5",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "b167e266c336b8d7ba5bfc17b9e5a4c2a7e2d8e7d7235ceb1f65638775fc0701",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "b167e266c336b8d7ba5bfc17b9e5a4c2a7e2d8e7d7235ceb1f65638775fc0701",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "36d54f75e3bebe13b15e7125dd4b28d6a5639db437d6b5db9d391b0704883e0c",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "36d54f75e3bebe13b15e7125dd4b28d6a5639db437d6b5db9d391b0704883e0c",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "66276ec4b1658b5b4248e2342405f54f3a5937c49a12c0707d64a3605dfb8d5e",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "66276ec4b1658b5b4248e2342405f54f3a5937c49a12c0707d64a3605dfb8d5e",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "56d73068c8ecdf12e7a2c509452f19bf60e5245fbc88b729410076e2f81638b6",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "56d73068c8ecdf12e7a2c509452f19bf60e5245fbc88b729410076e2f81638b6",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "f301812b6eb14f7dd7503c05796d236e26210a7d34461b132af167d25ec6340a",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "f301812b6eb14f7dd7503c05796d236e26210a7d34461b132af167d25ec6340a",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "dfb9b6dbefcb06d9926eb188f782509e8e100fee939e5819a02b36a00c2d4f4b",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "dfb9b6dbefcb06d9926eb188f782509e8e100fee939e5819a02b36a00c2d4f4b",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "55fcaab61e2ddd005c8f71abfa434dd819c58cb3deb752e83e8fc763ce571e00",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "55fcaab61e2ddd005c8f71abfa434dd819c58cb3deb752e83e8fc763ce571e00",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:abc123",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "666b0800b512deb2828c5429b46e2518b69af99e88b960cc61a3e4da1353be22",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "666b0800b512deb2828c5429b46e2518b69af99e88b960cc61a3e4da1353be22",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "98d0b5c34c00098fff9a571186618401e1e638d974db5b480d0d8fca72e8e21f",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "98d0b5c34c00098fff9a571186618401e1e638d974db5b480d0d8fca72e8e21f",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "39ae0cb93227a6b2bf00a265114cb863fb40ce8fa774924b19e7fe02a5164da1",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "39ae0cb93227a6b2bf00a265114cb863fb40ce8fa774924b19e7fe02a5164da1",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "4f09e42fa2a797c17823183387829b665386560fb554c1db922ac0a86386d8d2",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "4f09e42fa2a797c17823183387829b665386560fb554c1db922ac0a86386d8d2",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "a59ff7171be98ef4d756dcada6895e07bb0311c8ab426b7a5889f2a561b49375",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "a59ff7171be98ef4d756dcada6895e07bb0311c8ab426b7a5889f2a561b49375",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "5347b11c38c5fbeea925c316cea9cb46f1c1a04f28b2482454be1950b79fffd9",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "5347b11c38c5fbeea925c316cea9cb46f1c1a04f28b2482454be1950b79fffd9",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "fp",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "bbdc5f62a8d916e29acde86436e6dec5ac1ce21824a68ea068a661d0cdfe9bf1",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "bbdc5f62a8d916e29acde86436e6dec5ac1ce21824a68ea068a661d0cdfe9bf1",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "2e27c7b61657adfd9d4c9a38417a2248841c19e541843054da1d269f401e09d9",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "2e27c7b61657adfd9d4c9a38417a2248841c19e541843054da1d269f401e09d9",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "862095bcda695647660f6bb4be4ec58c174376b5215bd2b84ee523f2fedd00a4",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "862095bcda695647660f6bb4be4ec58c174376b5215bd2b84ee523f2fedd00a4",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "46192fbc888f2c734e10344290c7c24a0d54c585ea1d4476bf452333d27a475c",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "46192fbc888f2c734e10344290c7c24a0d54c585ea1d4476bf452333d27a475c",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "ea78a07ad44f0cc78ad0e88e8dc1586031059df0595590ab7aea4c2d71783231",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "ea78a07ad44f0cc78ad0e88e8dc1586031059df0595590ab7aea4c2d71783231",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "proxy-secret",
+  "signature": "b8c263703b0f4a64c59bade9673f23d79be055e5b36deb457a18a5e55117e998",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "b8c263703b0f4a64c59bade9673f23d79be055e5b36deb457a18a5e55117e998",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": null,
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": false,
+  "secret": "s",
+  "signature": "a34c95711d3412c9f85c7ed13769273332f4f466682639148f336e8c336d81b1",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "a34c95711d3412c9f85c7ed13769273332f4f466682639148f336e8c336d81b1",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{\"role\": \"admin\"}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "1856c52ac231d3e48fa04cd79c6b4c1ceeed68fa5d36947a69ef08e23d0f58bc",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"role\": \"admin\"}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "79449eae67b0acde6977780c047abb19dc468e4cf7b62e64c19e00e6ef7c631d",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"role\": \"admin\"}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "another-longer-secret-value-9999",
+  "signature": "43d6c97d2cf33bbf38dbfbbc02c5b9eb645535a0c8164cc185a1e113db7051b1",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"role\": \"admin\"}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "\u00fcni-secret",
+  "signature": "3f1c3a797e4479916adde2b0427411fd6f0ff2d621c1779a4f5f73556f8850e8",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"role\": \"admin\"}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "signature": "071bc4394ebd7db9908ab93d0524af0b211786ccf4e1be4865eb947f40aa0073",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"role\": \"admin\", \"org\": \"acme\"}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "c22d7a4c2655ca28240d223637eef5f7c403e6390c44c43132891d442cb08f98",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"role\": \"admin\", \"org\": \"acme\"}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "36e574edc8f332e56c6783c7924bfb1fe9af7ee26d018e009dec7c82677933d7",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"role\": \"admin\", \"org\": \"acme\"}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "another-longer-secret-value-9999",
+  "signature": "6ca57090cfc29d1839310b318d86764af025e38c44d618c37ff92f2b37fbc69f",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"role\": \"admin\", \"org\": \"acme\"}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "\u00fcni-secret",
+  "signature": "ce3edd1aab8eb044d710bae39da1c9f73b355ac381dacef5b164adc70319e541",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"role\": \"admin\", \"org\": \"acme\"}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "signature": "139368cb7f0b0ee9a1fa67e5b4a9eb4d2beaca9655ef405ded7574add5ed4362",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"scope\": [\"write\", \"read\"], \"role\": \"admin\"}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "a45740cdfb94ddaf00077a193f19888f3280196ec2f49b8d07b39128027ce221",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"scope\": [\"write\", \"read\"], \"role\": \"admin\"}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "67a3e5251ec933bf09c1fe5370d58eedb19779dea5f0c0b2afb793b1ed4670e2",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"scope\": [\"write\", \"read\"], \"role\": \"admin\"}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "another-longer-secret-value-9999",
+  "signature": "369b72b8f78dee0a44d8ba06488fff8670bb4396eda9091afa8e2c48f99e7ae9",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"scope\": [\"write\", \"read\"], \"role\": \"admin\"}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "\u00fcni-secret",
+  "signature": "d6d93dfae9ac5ced7264dcdf4b62bbbafa8dbc9c8a0ad5de623d3a665c0cca4c",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"scope\": [\"write\", \"read\"], \"role\": \"admin\"}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "signature": "84037b13bdfb2c307f4db3cd72b11284708f9efbf0d6a8385ba0215f70af70ba",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"a\": 1, \"b\": 2, \"c\": 3}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "9bb1f8ef3443c2e62f42a08817f2f2083021388b6bcb6c1460427b99c92eba66",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"a\": 1, \"b\": 2, \"c\": 3}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "870672dcc33e4de918edb1c8209080a5ee667f89b3e226b7be5a8f929462d109",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"a\": 1, \"b\": 2, \"c\": 3}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "another-longer-secret-value-9999",
+  "signature": "b6d21bc8531732c88bb4bb6d06fb2e3d439380a8af59cb817efd42e35286ae30",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"a\": 1, \"b\": 2, \"c\": 3}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "\u00fcni-secret",
+  "signature": "a62ffe2d1b8b45d59f2588be33e540155ea326fab045f665add5732f26c5c5a4",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"a\": 1, \"b\": 2, \"c\": 3}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "signature": "cedb99d5ab988158782d5bc2a37f280b02b9074e1a26690ee4043152aca891fc",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"nested\": {\"x\": {\"y\": {\"z\": \"deep\"}}}}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "995ca0adff8bddd1c37341c9350abaa5b22fb13d39481b5e770512bfb93f4e40",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"nested\": {\"x\": {\"y\": {\"z\": \"deep\"}}}}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "0ab9f3474bc625c810dbce20fd9ddfc884ca3b1a87f7d0d3341a20ed7102641b",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"nested\": {\"x\": {\"y\": {\"z\": \"deep\"}}}}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "another-longer-secret-value-9999",
+  "signature": "b0b991e3673a7b00968bdcfe8b6b48a39a7043c83e728b70646d007f2071a87d",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"nested\": {\"x\": {\"y\": {\"z\": \"deep\"}}}}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "\u00fcni-secret",
+  "signature": "e36805caa77c4c1244f8783d50a3250fefa0afb88bdb35cae2b51dfe8b15fe37",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"nested\": {\"x\": {\"y\": {\"z\": \"deep\"}}}}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "signature": "53ea1007b0a1ceab19dc3c167d9a1852501d08085c63ec522d21281a182d8bec",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"list\": [1, 2, 3, {\"k\": \"v\"}, [4, 5]]}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "b782af97032513470131f87e6a4e404252b09d96de2d256500b9303fcbdc7f15",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"list\": [1, 2, 3, {\"k\": \"v\"}, [4, 5]]}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "4f3c75134c0562fa1fdb9e4636d0322cfa9cddb937554237fa1e6eef17a9b4d6",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"list\": [1, 2, 3, {\"k\": \"v\"}, [4, 5]]}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "another-longer-secret-value-9999",
+  "signature": "9b1690684769a380ec5080176fbd148c30e40a60977fac5d97621504a4404a6f",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"list\": [1, 2, 3, {\"k\": \"v\"}, [4, 5]]}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "\u00fcni-secret",
+  "signature": "15de7b2c5bd5b32a985f16f570c68e28a70e4e0871b22c02756c453cb200af0f",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"list\": [1, 2, 3, {\"k\": \"v\"}, [4, 5]]}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "signature": "d38874b81b3cade5ebe2b3367256da5418e5c030825e77e6266ee49314ec5375",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"empty_list\": [], \"empty_dict\": {}}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "3cbc6665ec066191bf6ed6230e423122667a317fbd2a4f6755afc302f041b5a4",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"empty_list\": [], \"empty_dict\": {}}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "5e63b18b1b76682e1bc45dfea28cd1ff25e7967711f9b4891c834fbdf9409b5e",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"empty_list\": [], \"empty_dict\": {}}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "another-longer-secret-value-9999",
+  "signature": "0131d348f23203cf822c6efe3389cde4803a9db7f8d3619bd91b26b02a6fd090",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"empty_list\": [], \"empty_dict\": {}}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "\u00fcni-secret",
+  "signature": "0c0893ebbecfbabf9400ac6f2f3d6ffca508a3be2275d83b82f225a1276063b8",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"empty_list\": [], \"empty_dict\": {}}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "signature": "1b3fcb8c52c81cf466d83fca5a218e905e5fd5fac55865676f4399f10d08f152",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"bool_t\": true, \"bool_f\": false, \"null\": null}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "6629cd080e741d6882ad70c68123bf3baa3c02d4477a3a07c60d27fa441930d6",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"bool_t\": true, \"bool_f\": false, \"null\": null}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "b96733144b22324412f8ce0f54ed32ffba65053f11b8455875a2e724d9b65b25",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"bool_t\": true, \"bool_f\": false, \"null\": null}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "another-longer-secret-value-9999",
+  "signature": "83b246133ed4ed7dd0119891c9202a05a1f4bfb478d6c3c7ff870ea5da9b5548",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"bool_t\": true, \"bool_f\": false, \"null\": null}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "\u00fcni-secret",
+  "signature": "2ad83b9c9ec328f77155f7138a3db664b67a38c471e0ea162cf436f38f81d5cb",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"bool_t\": true, \"bool_f\": false, \"null\": null}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "signature": "31864b74624da45709f6357b24f1f8ef45a4d9b06b48f380cecc2f9229dea2a2",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"mixed\": [true, false, null, 1, \"s\", 2.5]}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "1f326d143a7232ad943de9f0dcb631a3fcfb9617dea5b0e74df78ee7a12d1094",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"mixed\": [true, false, null, 1, \"s\", 2.5]}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "43edc3df28a3e6ae2b4111a185583dc0194f66c56e955f804f0046d762fa3b96",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"mixed\": [true, false, null, 1, \"s\", 2.5]}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "another-longer-secret-value-9999",
+  "signature": "d6a703c531a1930478a01eebcba2884c46ed26e0f56e43087f1f0fe310993fea",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"mixed\": [true, false, null, 1, \"s\", 2.5]}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "\u00fcni-secret",
+  "signature": "e22e2e05bdf08bf2ac23510e87c2f1e8a9a0c91d7d3de411b66931b5b959e3ce",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"mixed\": [true, false, null, 1, \"s\", 2.5]}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "signature": "1c07495d8c7d32654f4fb7d66b5088c91390e60d6d78e4f4cc9615038659e377",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"z\": 1, \"a\": 1, \"M\": 1, \"m\": 1, \"0\": 1, \"_\": 1}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "b45a27ed2dbb93df89eefe2ec8a90535e77bbf7da816225472fdd271dad4290d",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"z\": 1, \"a\": 1, \"M\": 1, \"m\": 1, \"0\": 1, \"_\": 1}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "8f5c3c87e5567a42326ea3b9f00b1673196b16ed291b2083d8151bbfe550925a",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"z\": 1, \"a\": 1, \"M\": 1, \"m\": 1, \"0\": 1, \"_\": 1}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "another-longer-secret-value-9999",
+  "signature": "b7391f44cbb0bc2e5d646a679ad93e355d861975d194a718928b368e60d328cb",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"z\": 1, \"a\": 1, \"M\": 1, \"m\": 1, \"0\": 1, \"_\": 1}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "\u00fcni-secret",
+  "signature": "d55fef8533449ae3096927311c0cd8768487574a9f51eaf7f5532cb09a53afd5",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"z\": 1, \"a\": 1, \"M\": 1, \"m\": 1, \"0\": 1, \"_\": 1}",
+  "fingerprint": "SHA256:abc",
+  "has_claims": true,
+  "secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "signature": "c7385c60fa8d2d43316abccfa0415013751dd49ffd165c81f32e060e02058a59",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"name\": \"Jos\\u00e9\"}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "81ad1e6f72a0fbd7496e9711874f965771c67d72021da1c0d34809becd3a1fb2",
+  "subject": "\u00fcser:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{\"name\": \"Jos\\u00e9\"}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "2aef6b380a2b87f45bf87e7c2b4f6744f77e5a9190690ebbaf0173831b529f45",
+  "subject": "\u00fcser:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{\"name\": \"Jos\\u00e9\"}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "another-longer-secret-value-9999",
+  "signature": "cf9f9af55d9963c522666745707c30e1f4a8b561073230f45832593a1f930657",
+  "subject": "\u00fcser:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{\"arrow\": \"\\u2192\", \"emoji\": \"\\ud83d\\ude00\"}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "9bfd190e573cdabd2dd7bca922012424c19717b76cb9ee270d4c681c466545cf",
+  "subject": "\u00fcser:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{\"arrow\": \"\\u2192\", \"emoji\": \"\\ud83d\\ude00\"}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "e76e81193d2d4d04a309b0b984bc476bbdf1fd42ea8a10f927563a924bcc57a6",
+  "subject": "\u00fcser:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{\"arrow\": \"\\u2192\", \"emoji\": \"\\ud83d\\ude00\"}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "another-longer-secret-value-9999",
+  "signature": "cddfad741dd9e0d79fb6478537b0f3ca88f701dcd1b5cb4646fe1331a3062172",
+  "subject": "\u00fcser:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{\"astral\": \"\\ud834\\udd1e clef\", \"cjk\": \"\\u6d4b\\u8bd5\\u6587\\u5b57\"}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "c97549354c878ec89cf674da272f5e0d8601d63e952bb7eee8e127f3fad91b62",
+  "subject": "\u00fcser:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{\"astral\": \"\\ud834\\udd1e clef\", \"cjk\": \"\\u6d4b\\u8bd5\\u6587\\u5b57\"}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "c47e1c8f929984abad8a37a36238bd2100d15ad5225a91eed4c750a30836cb11",
+  "subject": "\u00fcser:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{\"astral\": \"\\ud834\\udd1e clef\", \"cjk\": \"\\u6d4b\\u8bd5\\u6587\\u5b57\"}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "another-longer-secret-value-9999",
+  "signature": "3505be82b8cff2687d53d823cb0717afffee3338a785a548fff2562b80fce06a",
+  "subject": "\u00fcser:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{\"ctrl\": \"line1\\nline2\\ttab\\rcr\\bbs\\fff\"}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "44e44dbd7104943303961fa9139104c650aa9326e5f654783ada48f9714d5504",
+  "subject": "\u00fcser:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{\"ctrl\": \"line1\\nline2\\ttab\\rcr\\bbs\\fff\"}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "a7b1eb23a9feb3ba1fa972786a78d8dd54cb931fadb3bc5af12f044402b90296",
+  "subject": "\u00fcser:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{\"ctrl\": \"line1\\nline2\\ttab\\rcr\\bbs\\fff\"}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "another-longer-secret-value-9999",
+  "signature": "8a983869cab8dcaea74da868ea76d0c4b7ff3d84c10d6ab1ac0a63be0134a831",
+  "subject": "\u00fcser:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{\"del\": \"\\u007f\", \"low\": \"\\u0000\\u0001\\u001f\"}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "d3e1972f2ba15d0c3d47bf5ae3fa76c860b5f2002579d223436cdab392101814",
+  "subject": "\u00fcser:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{\"del\": \"\\u007f\", \"low\": \"\\u0000\\u0001\\u001f\"}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "4526fe16bcc8e0ccb198f8ad3dcf773cacf5bc9a14ead3915ecb1850a228798f",
+  "subject": "\u00fcser:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{\"del\": \"\\u007f\", \"low\": \"\\u0000\\u0001\\u001f\"}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "another-longer-secret-value-9999",
+  "signature": "dcc6df3b3231c2fa9358514d5488a68cf34c2e232e546ef046c91d8d82c531fe",
+  "subject": "\u00fcser:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{\"\\u00e9\": \"accented key\", \"\\u2192\": \"arrow key\", \"\\ud83d\\ude00\": \"emoji key\"}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "bce37061a119d8ca9a596a563021cdba788bf8324c3c5264dbea7bc218804ebe",
+  "subject": "\u00fcser:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{\"\\u00e9\": \"accented key\", \"\\u2192\": \"arrow key\", \"\\ud83d\\ude00\": \"emoji key\"}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "4a601f340ce86d03c0916af8bdc1cff73adced575da127034202961166019322",
+  "subject": "\u00fcser:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{\"\\u00e9\": \"accented key\", \"\\u2192\": \"arrow key\", \"\\ud83d\\ude00\": \"emoji key\"}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "another-longer-secret-value-9999",
+  "signature": "148b915773ea71223ae4e95161c6c1509940cccea31e68e7a9363a779a3b675f",
+  "subject": "\u00fcser:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{\"quote\": \"he said \\\"hi\\\"\", \"back\": \"a\\\\b\"}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "edb6d6df63bec7664931910431aeb8daf91fcaec5ba717360e8b5982c1628fd6",
+  "subject": "\u00fcser:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{\"quote\": \"he said \\\"hi\\\"\", \"back\": \"a\\\\b\"}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "b57de3e775a221e4ddb01085acd60db0cff31c220b10dcc17b70eb5a2011d45f",
+  "subject": "\u00fcser:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{\"quote\": \"he said \\\"hi\\\"\", \"back\": \"a\\\\b\"}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "another-longer-secret-value-9999",
+  "signature": "12cd80115e537593f633c51337a413ee237a9952cef3ae725eaa906c641445ec",
+  "subject": "\u00fcser:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{\"mix\": \"\\u00dcn\\u00efc\\u00f6d\\u00e9 \\u2192 \\ud83d\\ude00 \\u6d4b\\u8bd5 \\ud834\\udd1e\"}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "1432ee18305e09ce41cce5769e97d1a0c32878506145c7eae665f068bdb99c7d",
+  "subject": "\u00fcser:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{\"mix\": \"\\u00dcn\\u00efc\\u00f6d\\u00e9 \\u2192 \\ud83d\\ude00 \\u6d4b\\u8bd5 \\ud834\\udd1e\"}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "fd58672dc9cac4a31dc6961c01be1af07f27fb00ade125bed635e7587c5858ae",
+  "subject": "\u00fcser:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{\"mix\": \"\\u00dcn\\u00efc\\u00f6d\\u00e9 \\u2192 \\ud83d\\ude00 \\u6d4b\\u8bd5 \\ud834\\udd1e\"}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "another-longer-secret-value-9999",
+  "signature": "72f3f03f95743cb0dbdec7448dc7348ea0e17e2b08c7602fe7238ca66eb1a714",
+  "subject": "\u00fcser:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{\"f\": 1.5}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "17763011c1fdd3cfe801e655f4252d97dca685da38e6534572974e9bc90cecad",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"f\": 0.1}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "c592c03fa589f0362d7e88df828306573eab3f1d64d80b4d9bb0a61609dd2fa5",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"f\": 0.2}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "f518432181c95ab42662a7cfa43e7d74a9716fb77a4b2daa82af5561f152e8d2",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"f\": 0.3}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "723c0f37484a4a5fda7fc32dcbb000454fd63a0f3a9fb6632244db038c09dc4d",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"f\": 3.14159}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "c832d749389e92f834828bae40cb18dd2452a86b5b7c2652a7a6e2d15988cda7",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"f\": 2.718281828459045}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "0def901b5e24ee4da5d34b0e33c4b7b32b4b314ad6a7555e1b0d8cd9ae024b9d",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"f\": 1e+20}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "e25fdf5ddd521e99684eca30c889c07c8acd281fa423ac7e7109f9bf1a1543b6",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"f\": 1e+16}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "5494310bc45493b474c49ae0967c1e2fcf51e96e467cd50eaa24bf4f18af3072",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"f\": 1000000000000000.0}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "26b8f8e0b9aa235bb4554e96f5502578748b06e689f10da17e001207d4a03feb",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"f\": 1e-05}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "e35f7682da31dceb5c50adf3dece62ebbcf327db2549aa3199d3dd5de34b4256",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"f\": 0.0001}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "2796eecb38eb386b138bb8e58527b328ab760497f6fe51ddf56955d1d21c4084",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"f\": 0.0001}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "2796eecb38eb386b138bb8e58527b328ab760497f6fe51ddf56955d1d21c4084",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"f\": 1e+100}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "f263d309d9221dd03af102aa4b04ad675fafcc46a84c63005abb0187e124586c",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"f\": 1e-10}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "f67e7dbeb66999c451504ad2d94f70677cb692e73508b4419b603ffb36bb41c4",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"f\": -0.0}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "c93a5b2e58e192733c2786c47b0b7b9db3dfd1e7c920209eb43d6d30506cc705",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"f\": 0.0}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "c7d9545ef81eeaafb28c3406ba88cd5d8c93e000680c485cc7ba36525855562d",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"f\": 2.0}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "29ff44f7b2493af9ef3457ac106533a043be808ec8200c7427a28f1391009025",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"f\": 100.0}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "4ccf6afaeb3fb8daf181c4972d833e87e115c81a4cd10dde3d4385fa5e500190",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"f\": 1.5e+16}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "7ab3414dc17f2818fd1fdbff73b94fee655c59f19d9281f9ad63b3fdd8f731b2",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"f\": -1.5e-16}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "f4c54585fb6d677c6ec037a35ce7ca0ad0248466f7260dfebb6b3f4383599210",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"f\": 123456789.0}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "3ddb38f8df32d57cdd6713c58032733e6aef34fdf7c80377f1a909a0e985b0e5",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"f\": 9999999999999998.0}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "e37a4982ae70546a381bc2919b57b8efe3ada04cb5111d515234a7096a619ca3",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"f\": 6.022e+23}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "05692428d7e2b6d972216adacf0609c35fbf35be77e18e504b73934e725fbf2c",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"f\": 1.602176634e-19}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "40f888af07c7159f7a2356bbd3f7b11173f7a99d6f65b677582d9f91c4865ae6",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"i\": 0}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "13f833e34ced9fe353cbcd822e1d021372e8d4dbf1e12212d196b7619203710b",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"i\": 1}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "1cc9448864239c4b8b7ab3a8f87f8616ff6c131e94887677430dd9c486ff1750",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"i\": -1}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "fb4962474576725248dcc0806d9e5307aa71c1a59c224b0bde9ae070e9ec33a3",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"i\": 42}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "dd502372bd4f17f0b4d3da983266c5be5e1f2b85a17f104768af7325692e0acd",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"i\": -42}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "fa855970c254e56eb0a1aa30fedc4f6e977d604e50a7270f980528504163494c",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"i\": 255}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "66f392407c716fb5b844319295d0b061e287689bc5d9874bbfdcbda21f4f002e",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"i\": 65535}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "c9b73ac73b0bb8722d7316622f546a00c83d6e4fbd622621ef8edf10c3503271",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"i\": 2147483647}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "a27ad2c8e77d052391fde2a53b68608e72b77f447c90d1d5ce836945ea440d0d",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"i\": -2147483648}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "be9efea7c6c419eef79b5787eb508195e8c87bd9797a33583d25eb226cad8feb",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"i\": 1000000000000000}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "14075836ed701305d5a6a135c53ef4eed5a9541e037f1ee519e32656b4beb04b",
+  "subject": "user:num",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"i\": -46675558829, \"f\": -528534232559.92847, \"tiny\": 1.6296624121260065e-09, \"big\": -5.46560301328626e+21, \"s\": \"\", \"nested\": {\"list\": [0.07410679048234226, 0.5342381738671825, 0.6042688493096219], \"flag\": false}}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "another-longer-secret-value-9999",
+  "signature": "637a0a634e2ac86daf4d58337004f931a4323d23cc12c9d3ec45c5cdd9248954",
+  "subject": "user:bob",
+  "transport": ""
+ },
+ {
+  "claims_json": "{\"i\": -236381760091, \"f\": 368938184645.52954, \"tiny\": 3.3266257735644248e-09, \"big\": -1.1853966900411009e+20, \"s\": \"\", \"nested\": {\"list\": [0.4032399768424756, 0.5540690635216557, 0.8989546573291787], \"flag\": false}}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "signature": "6acefe6e551418626075cb7198c60c46044b535abf1741d4a76b5902869e5b76",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": ""
+ },
+ {
+  "claims_json": "{\"i\": 201822205945, \"f\": 223877657304.52222, \"tiny\": 7.362388402140738e-09, \"big\": -9.22590966550954e+20, \"s\": \"Z8sZi95\", \"nested\": {\"list\": [0.0926918048417904, 0.5245103093930297, 0.35089811299817464], \"flag\": false}}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "8e79913db473441f3a6eb256149cece9bc5933c6cb17a130027e79d1049df0bb",
+  "subject": "u",
+  "transport": "local"
+ },
+ {
+  "claims_json": "{\"i\": 813434798769, \"f\": 973750993490.2742, \"tiny\": 1.1408269070354254e-09, \"big\": -1.2176215923337728e+19, \"s\": \"\", \"nested\": {\"list\": [0.7216117458952575, 0.49037885058035147, 0.018910727333654953], \"flag\": false}}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "another-longer-secret-value-9999",
+  "signature": "4349f0a9e43a9f15ca55dcf67b24d737ffe1ee3cf6e019556fda05ce7976cbf1",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{\"i\": 499222186708, \"f\": 157736136820.40088, \"tiny\": -8.298496543502732e-09, \"big\": -9.639203042850546e+18, \"s\": \"=\", \"nested\": {\"list\": [0.20661118088232877, 0.4624891508094289, 0.6049392994076246], \"flag\": true}}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "\u00fcni-secret",
+  "signature": "a55d57337e75b50590d9dfead99ea7674d52ee893775216c8ec76f995f041c54",
+  "subject": "user:with:colons",
+  "transport": "local"
+ },
+ {
+  "claims_json": "{\"i\": -85161943067, \"f\": -324540026664.56885, \"tiny\": -3.3269442512265693e-09, \"big\": -6.23465340889469e+22, \"s\": \"|c&/\", \"nested\": {\"list\": [0.6522136457535059, 0.2435534301020822, 0.7237701419977929], \"flag\": true}}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "another-longer-secret-value-9999",
+  "signature": "6e660148d52000d4d8cba59fc4be4746c46a905da1bd0e6c1992968c94129c32",
+  "subject": "u",
+  "transport": ""
+ },
+ {
+  "claims_json": "{\"i\": -352976812333, \"f\": 300938126710.08276, \"tiny\": -8.526606575577355e-10, \"big\": -3.930545132185311e+17, \"s\": \"\", \"nested\": {\"list\": [0.20926135563270842, 0.09008498846793822, 0.010544938170523599], \"flag\": true}}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "signature": "91e3c434027a6adce45a1031c764ab1c7a0538aa5471c89042551e75a0bd496a",
+  "subject": "user:bob",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"i\": -122213591670, \"f\": -698369642617.6433, \"tiny\": 1.681675921806624e-09, \"big\": -1.4494979956655846e+17, \"s\": \"PAF2q)\", \"nested\": {\"list\": [0.5756725650558016, 0.9428008977341035, 0.6128354682884105], \"flag\": false}}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "another-longer-secret-value-9999",
+  "signature": "5e6b422fdae2240b026a52b0d872654a689be82857cda1bc8ec20c8e9042720d",
+  "subject": "user:with:colons",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"i\": -349754797972, \"f\": -322998317224.27563, \"tiny\": -9.276736757488774e-09, \"big\": 9.380773517151846e+18, \"s\": \"DH^I\", \"nested\": {\"list\": [0.38205562137562843, 0.30592394278468305, 0.6527804211953914], \"flag\": false}}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "\u00fcni-secret",
+  "signature": "88e354497cea06d4c034ce534efcd3d3fe43181ae071ae67da1d79c086b71bfe",
+  "subject": "svc:worker-1",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{\"i\": -782571604729, \"f\": 730512942927.3843, \"tiny\": -4.866101633334255e-10, \"big\": -2.196452173132479e+20, \"s\": \"&&rf<\", \"nested\": {\"list\": [0.6267510301230658, 0.400223452663799, 0.09056495119568175], \"flag\": false}}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "signature": "6fa99673cc1b4fd561cb18d633b5e22d635ffe986fa32f072f8e8d1235301cb9",
+  "subject": "user:alice",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"i\": -638627313162, \"f\": 649124465256.1526, \"tiny\": 8.934215510058711e-09, \"big\": -8.98346682784633e+18, \"s\": \"pgEaV~sK\", \"nested\": {\"list\": [0.3013526792858807, 0.8572805257648985, 0.40346997653660943], \"flag\": true}}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "another-longer-secret-value-9999",
+  "signature": "4f8bdef71c325ed7099047d63d8d1ea3603a4048b62b3a071b9d629fcc66edf5",
+  "subject": "user:with:colons",
+  "transport": "local"
+ },
+ {
+  "claims_json": "{\"i\": -959869885948, \"f\": -465442521429.24255, \"tiny\": -3.139334202023851e-09, \"big\": -8.482377220851631e+21, \"s\": \"E@!Om\", \"nested\": {\"list\": [0.3196677809384285, 0.9744091261936513, 0.727744735565932], \"flag\": false}}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "\u00fcni-secret",
+  "signature": "a2a7ed61c0d209d98e26d8b900b6756eb2b6bea573e12d6cb0859bcf6e292c94",
+  "subject": "svc:worker-1",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{\"i\": -848037461129, \"f\": -743133930956.4963, \"tiny\": 8.037130029258185e-09, \"big\": -9.433215759706595e+18, \"s\": \"}&O\", \"nested\": {\"list\": [0.11691577760688765, 0.8623156580963939, 0.13008149491475163], \"flag\": true}}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "\u00fcni-secret",
+  "signature": "10bb2dabbaa4ce80e593b5dbced2b2a99c43e659a17b62dcf1fa06475e3b337b",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "local"
+ },
+ {
+  "claims_json": "{\"i\": -433561302415, \"f\": 155964456907.26392, \"tiny\": 2.4456961689403573e-09, \"big\": -5.540641348748083e+20, \"s\": \"TP;$#\", \"nested\": {\"list\": [0.7744447432238166, 0.07591452568008006, 0.607054855944881], \"flag\": true}}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "c05bb6ceb24bd118a4950cc4989ba13738a82a55b3dacf9335fadb3ee3b557e9",
+  "subject": "u",
+  "transport": ""
+ },
+ {
+  "claims_json": "{\"i\": -467455922822, \"f\": -118406596349.7052, \"tiny\": -3.976835698744021e-09, \"big\": 3.516606876469793e+21, \"s\": \"zPeh2)\", \"nested\": {\"list\": [0.49909104250239156, 0.6635882480074736, 0.6332365848781993], \"flag\": true}}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "signature": "7e8b4a88dfc7bf0d9beb036b5478bfa3a284db318205572763b824f57527f1eb",
+  "subject": "user:with:colons",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{\"i\": 481019369726, \"f\": 39071842593.22864, \"tiny\": 7.431256586374616e-09, \"big\": 4.56047865992513e+23, \"s\": \"7m\", \"nested\": {\"list\": [0.8173083349443095, 0.9824779447327959, 0.9603340333778547], \"flag\": true}}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "5d1f33ba94cbf4f72d76023f483370b0b957c26b6940cb4a6a3e659720814ef8",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{\"i\": 76797191380, \"f\": -697441808805.7233, \"tiny\": 9.886809186317533e-09, \"big\": -6.427385508883036e+18, \"s\": \"\\\"_Q*%Yy;\", \"nested\": {\"list\": [0.4834903126151281, 0.4937014529956335, 0.3302191590030328], \"flag\": true}}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "another-longer-secret-value-9999",
+  "signature": "123984dc4427b1f0c62288c8a7d9e46096f665b73830c2ec9aa395b7a38a2cdf",
+  "subject": "user:with:colons",
+  "transport": "local"
+ },
+ {
+  "claims_json": "{\"i\": -153964416131, \"f\": 41977590461.72302, \"tiny\": -4.374759854674814e-09, \"big\": 9.520740579550387e+20, \"s\": \"-0n}42z\", \"nested\": {\"list\": [0.1885385129651561, 0.4199444924247926, 0.7318888343656487], \"flag\": false}}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "signature": "b437b96ce7823fbf91d325aec50e008c050e254208d4a73300c16739a98d30ab",
+  "subject": "user:bob",
+  "transport": "local"
+ },
+ {
+  "claims_json": "{\"i\": 707349124936, \"f\": 266806582365.3296, \"tiny\": 3.1340433223216565e-09, \"big\": -4.2367468478247395e+23, \"s\": \"`+y=H#7\", \"nested\": {\"list\": [0.843005812720766, 0.1468829339620371, 0.8855676157198477], \"flag\": false}}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "0866807cf932be769ecd4dda1a41167c931171ad03b791bf5fcccc5f4d1873c1",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"i\": -492431393619, \"f\": 428852239311.1404, \"tiny\": -9.291709819355657e-09, \"big\": -5.26457515708265e+21, \"s\": \":o;\", \"nested\": {\"list\": [0.0027132677501916502, 0.9476202479821149, 0.4952772685304907], \"flag\": true}}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "2a395c7fb318062c3833248ed0b441b8f08edf82ffe7a16286d04e4f1afc6554",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{\"i\": -268226438447, \"f\": -880752943856.4989, \"tiny\": 2.8417328826804964e-09, \"big\": -1.4085445663690892e+21, \"s\": \".d\", \"nested\": {\"list\": [0.7747334777063647, 0.783629850241142, 0.9699619467163877], \"flag\": true}}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "signature": "26a30cefdcf1d658014c00184b1e0ff151bdf45e6eab53bf3bfa57b2ed23c937",
+  "subject": "u",
+  "transport": "local"
+ },
+ {
+  "claims_json": "{\"i\": 689011448219, \"f\": 290815259820.3889, \"tiny\": 1.4754379358194688e-09, \"big\": 7.040347095329344e+16, \"s\": \"oitaxkW7\", \"nested\": {\"list\": [0.23219660271483855, 0.7484769967264958, 0.5715219095598149], \"flag\": true}}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "820fc87e07465f63bc355e661312d8d64f558011fb9e47e98c411df350529ca7",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{\"i\": -580899338423, \"f\": 549496490130.5383, \"tiny\": 8.821941491859055e-09, \"big\": -9.874395990460476e+21, \"s\": \")r'4\", \"nested\": {\"list\": [0.43748046737712754, 0.4768842946315506, 0.12278232229188568], \"flag\": false}}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "\u00fcni-secret",
+  "signature": "dcb96049a41f34a2f93fd82c9f3362dee3f8d715640bd102c8462b8d37e2fa08",
+  "subject": "user:alice",
+  "transport": "telnet"
+ },
+ {
+  "claims_json": "{\"i\": -141776673324, \"f\": 333500792431.3772, \"tiny\": 8.416881695699636e-09, \"big\": -6.479806381440657e+18, \"s\": \"t\\\\Cg\", \"nested\": {\"list\": [0.5429143128905575, 0.1187918917903773, 0.03339342232464093], \"flag\": true}}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "\u00fcni-secret",
+  "signature": "26b601faf5b69bc09785a21ba67df418c51402ef36df23660618a8e3a13b430d",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": "local"
+ },
+ {
+  "claims_json": "{\"i\": 480404588979, \"f\": -522915414948.1212, \"tiny\": -5.947287833096535e-10, \"big\": 6.453489227431859e+20, \"s\": \"QMI\", \"nested\": {\"list\": [0.3374914300319314, 0.41424495459362265, 0.6678114701442764], \"flag\": true}}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "signature": "0220da151562b0ebbb7ce69b4964e67df6674c72e9348da389e31f24488fa80f",
+  "subject": "u",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"i\": 945725512644, \"f\": 85447328210.08655, \"tiny\": -2.468531942163381e-09, \"big\": 9.133989663633209e+20, \"s\": \"\", \"nested\": {\"list\": [0.5029057052010956, 0.6728961067735423, 0.9609582389875857], \"flag\": true}}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "1cda5a072d8987ba62b82c1989fdcfc2ac8d341287423b19f0ff86952c587ab7",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": ""
+ },
+ {
+  "claims_json": "{\"i\": 199473502788, \"f\": 605171298316.1953, \"tiny\": 1.869680724600418e-09, \"big\": -5.970690059045094e+19, \"s\": \"%,@\", \"nested\": {\"list\": [0.8694422053369129, 0.04728891140709468, 0.9138557161938413], \"flag\": false}}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "signature": "f9ed8986c5b4108bd82aa929f5d2a2abaa15454b2d386d6f829f29440eb9dc7d",
+  "subject": "user:alice",
+  "transport": ""
+ },
+ {
+  "claims_json": "{\"i\": 144975678857, \"f\": 677565789643.7012, \"tiny\": -5.716410672210388e-09, \"big\": 7.178169648550248e+21, \"s\": \"<)v;sL]\", \"nested\": {\"list\": [0.4373727632363327, 0.5405631195791162, 0.16281406234512275], \"flag\": true}}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "0cb73fbc8718a3f0f8bfd981ea4c12e0b459a43eb93386c6be245e993bcdbefb",
+  "subject": "svc:worker-1",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"i\": 877637868843, \"f\": 800354072851.7529, \"tiny\": -2.031563080862557e-09, \"big\": -7.619489164608707e+17, \"s\": \"`^J>8T93\", \"nested\": {\"list\": [0.6301075075454662, 0.5652524327342197, 0.264163275743042], \"flag\": false}}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "937627c0d85a0a003610fe5d32474b3a7cd7ae89aa4c83185ec51298bb85f298",
+  "subject": "user:bob",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{\"i\": -849440248716, \"f\": -877038474713.8828, \"tiny\": -4.343421365049755e-09, \"big\": 3.709859422315433e+17, \"s\": \"\", \"nested\": {\"list\": [0.03082075138244722, 0.035281218830143346, 0.49784486916471005], \"flag\": false}}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "\u00fcni-secret",
+  "signature": "63eddb4ccf5fd772fce85d198a1d133d99d094ec724d5d24e4505b147e524030",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"i\": -60266700684, \"f\": 681350550344.978, \"tiny\": 9.865687234730386e-09, \"big\": 8.46557620442811e+19, \"s\": \"p5[\", \"nested\": {\"list\": [0.2492925068402455, 0.027123953199923112, 0.5086142230639163], \"flag\": true}}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "81a56efcc9a91e801aeeb21e33d7c4af84a6d58ac7e0163397d30bc4cc7a5bee",
+  "subject": "user:alice",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{\"i\": -264782597885, \"f\": 123938565543.65234, \"tiny\": 2.4423486569865667e-09, \"big\": -1.8542350056539777e+21, \"s\": \"7,`M!NJG\", \"nested\": {\"list\": [0.7922438706273941, 0.9125247949344216, 0.010519416432189233], \"flag\": false}}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "another-longer-secret-value-9999",
+  "signature": "7092c42af5c4b6906d39a3d3c2d5349d1b0c453e9a13984cf7bffbde45a6af8c",
+  "subject": "user:with:colons",
+  "transport": ""
+ },
+ {
+  "claims_json": "{\"i\": 526515790726, \"f\": -4629893754.130737, \"tiny\": -1.4755103882500158e-09, \"big\": -5.4439737786026066e+20, \"s\": \"FMtQ\", \"nested\": {\"list\": [0.4122336475548346, 0.7355345143371885, 0.41325559139525436], \"flag\": true}}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "another-longer-secret-value-9999",
+  "signature": "9d50fb1ecdd154a465051320f8a976cd9e99d6e56d750f7a4503c5b1a9d38f22",
+  "subject": "user:bob",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"i\": 112764604945, \"f\": 278253955335.7312, \"tiny\": 1.249330897978372e-09, \"big\": 2.367513753036946e+19, \"s\": \"F&\", \"nested\": {\"list\": [0.6192725065497182, 0.8301436001509324, 0.1359194254661692], \"flag\": true}}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "\u00fcni-secret",
+  "signature": "61ef5a14e29d4322d069eb4ed6e69973160250ac91e2473321dd101dd31beb4d",
+  "subject": "svc:worker-1",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"i\": -854661149668, \"f\": -798854969497.744, \"tiny\": -9.192103675775224e-09, \"big\": -5.407090257306772e+18, \"s\": \")D<u]w\", \"nested\": {\"list\": [0.13896834141911518, 0.4021579406339335, 0.4624913211032039], \"flag\": true}}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "signature": "1e9f17e437ccc0ece12851995dfa970244bcddd7f0a7263940dad890b699c829",
+  "subject": "user:with:colons",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"i\": 77522523382, \"f\": -410181668699.4459, \"tiny\": -1.7133680744916591e-09, \"big\": 5.571608683921262e+19, \"s\": \"VP\", \"nested\": {\"list\": [0.3422810140809426, 0.5210095305896639, 0.9822375676245819], \"flag\": true}}",
+  "fingerprint": "fp",
+  "has_claims": true,
+  "secret": "another-longer-secret-value-9999",
+  "signature": "ff5c673fd63df18d0bc76c775066474da21b37eb0c3e6d82fb434930338d7cc3",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": "ws"
+ },
+ {
+  "claims_json": "{\"i\": 572814836381, \"f\": 342849090173.7439, \"tiny\": -9.364939076674968e-09, \"big\": -3.016438521629953e+18, \"s\": \"stH(>\\\\5\", \"nested\": {\"list\": [0.5232521836489161, 0.08072717909739457, 0.592980094948224], \"flag\": false}}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "signature": "78f17e02795a486ddda551c9debce8790063fbd3ada11f3f6e8a20ff1c8cb74e",
+  "subject": "\u7528\u6237:\u6d4b\u8bd5",
+  "transport": ""
+ },
+ {
+  "claims_json": "{\"i\": -368441694587, \"f\": 197959531015.95728, \"tiny\": -8.196475416346767e-09, \"big\": 7.135651884724664e+20, \"s\": \"\", \"nested\": {\"list\": [0.03258654880355627, 0.4437899817020998, 0.20939237318632054], \"flag\": false}}",
+  "fingerprint": "SHA256:zZ+/==",
+  "has_claims": true,
+  "secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "signature": "c2454c6fcd20c1bce0fd55954ac3a9efd1ec3590efb91b9aad48f0fa45a1e053",
+  "subject": "user:bob",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"i\": -467111642117, \"f\": -485216523588.6863, \"tiny\": 2.505648917585135e-09, \"big\": -6.784565565842464e+22, \"s\": \"\", \"nested\": {\"list\": [0.10070013879069284, 0.01341009530563364, 0.7440826605021984], \"flag\": false}}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "another-longer-secret-value-9999",
+  "signature": "19b32d9ecb7db767ab878861097e56a3aa2ac2539ef07cf8dc93ebf2e35a1f46",
+  "subject": "\u00fcser:m\u00efxed",
+  "transport": ""
+ },
+ {
+  "claims_json": "{\"i\": 290625003543, \"f\": -455825895362.79736, \"tiny\": -3.4131872841046838e-09, \"big\": 7.947151168879306e+19, \"s\": \"Vg0SO'=\", \"nested\": {\"list\": [0.28937718686064196, 0.40137022577676784, 0.22112896851242414], \"flag\": true}}",
+  "fingerprint": "SHA256:abc123",
+  "has_claims": true,
+  "secret": "s",
+  "signature": "d790452699192705708e4558e4f2b47c2dae22757994c4bb55bb9da20c9aa12c",
+  "subject": "svc:worker-1",
+  "transport": ""
+ },
+ {
+  "claims_json": "{\"v\": 9.727796332368917e+20}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "0ca755bf2bfcd4aab20268c70fc71304bcba079fcc87e0b9d0cb6088d06a2b32",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": 277737.28790710407}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "511abd0f58ab00ed2ad5ad3ff2b70f99201c77fc994e3cf0c9febccbb4a2f588",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -8.689881264814306e+16}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "24e23902615383a77d16786a4d2044472b0d1a036ff38b5e3c945ab5e1e27c2d",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -310.2085769385068}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "7d07134009950cefe212ba3d26ab95695547c42043553d639752c7ab55298ae6",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": 9.379915310293891e+20}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "460cfa8d82d9be25f7e8a925bcddd7c2b22510fe9c55bd8130b63493f78af100",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": 9.668008212927451e-12}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "716ba25ca7fa40df0042f5f90cae991c10b2b8fb167b07f9223e1a7eb27fbfb3",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": 480683377.0504857}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "af7122cc63f898df4ccbffc0b42bd2a088189ff3ba2c0da3a8e8a053037c4a01",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": 6.335297996084187e-14}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "a8b906f6b1fc8c67d723a13dc2c4b8ed24e345f7b91140ecf977b9b7f18d0b84",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -8.709463163898458e+20}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "fdf12869d2e405801cdd65b688b3d9ef20f1f45232fccc55fc051df91b7e3fc8",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": 735.4876498796834}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "7e2577680492a8682dad3730799571d451c2fbede30f95839e863c137676185d",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": 8.271966722873102e+16}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "9c86d7cd1432ccdf75c41429eb9b2c027c364f6b6f98f03c881e49f39ba17c8c",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -8981405119116.91}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "9e5f6ba17ba02d7b014a33b72e9c348f997113f3bf0bae5fa4c60eebca0d3f0a",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -784828.0735632207}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "b5c62f26bbe094dac17d15131606d52ad6a82c18de367e9f6274263181f029ec",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -3.375855271725492e-12}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "2fe632fb50da0a07019173909d8701bd92293ae7104d8e18f883e92247f98a97",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -4.377325535581768e-09}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "036438149ca96696631dc3f253d4b683b1780dde90d63e911bfce890dc4edcde",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -9.14419978968151e+25}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "4b6b6af2b994cefdaf1e9900480d7b5232b083e409fa6d2e07277ea6898a0b3d",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -9.235652648008141e+17}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "8caacceb8ba762596f0fffa662f3fe1202e89f3af0c137aee154b6beb20e8859",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": 0.5225612104024757}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "1a74f716ecf60b474e889530e073dc0f218e2e7b8375c592974dd3bc5dc90c75",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": 6.18535478201634e-05}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "6bc6d38e190c5fe39ac481fba51405c7f6384e1b0ce0c8c53ab6886ef9b98f28",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -3.186159693160479e-22}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "4252de6401492b1e282d964edd3271c98e81ca9c74a14aff0d275164d27f2283",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -8.415793421151451e-31}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "56dfebdb1d9c8241ffcdbcd6d0d616d1583cd741163cbfbd75df53b77ffb566f",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": 8.26703118365651e+16}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "3b457e03f9ae341e6020e37863c73b77157ec618c240b0641d429dc5d7be086b",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": 5.070669079620975e-07}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "57f2dd1b84d7976eabf96f55c493fb95894118504c9218932a66e8f3951eec53",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": 7.047896200660768e+16}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "7c5fdfdd9e4e2b2c52a4b47485d9283ef39460c247f654670645e2b7f054fc40",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": 5.203547861916547e-32}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "b9c2893368b490dea76f34bb95202712550b9f46845dedd4311850cb6b2e02b7",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": 6.749148919589909e-23}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "b03970ec9530f359e3638514c3bf2c0864f33cbcbd9021ba8cf474afd3e51f3d",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -9.673161620740402e-29}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "dcf37e1192605a5e899ae4957b97b051e1d9eb276eafa7528bb82b5b06f2cb62",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -4.707005067767922e+26}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "606953f4788be47267f19a0dc0bc0c83ba33392b291ea80f6d1e0418d781767b",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": 2.530132878706566e+24}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "4765555b2e567f2f210a883bbfcbc74a417bf92b88182871a74306830f5c5cd0",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -6.475150743537638e-25}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "bc00833b353f85c239903284f777b57ad30c90bb00adde86dcc3b0fdc96f5ed3",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": 76446718.01627558}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "c3e9c056aaf5d181d4c24fad5901d518f9f8207d992e99c3fe8a398e64e10730",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -8851693591.838688}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "eac27f5de6dea23fbc9b5b30351c3d20473a450228f9999f52e71ed76fc5dfa1",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -5695875491917.483}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "67bca3ad3d97d24dcc1ee693330090f9fcdad6acedf67a3d7f98de3cc43d9314",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -9.220393969935634e+17}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "638c9b80a711ef5bc4b50c45dec2d86e0e0e653eddc980cd9c9eed78accf0b72",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -6949.24156435909}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "1714b553c3eb93bc3ff31a6c6ee5c6f6116212acd110dd00f487ce6b6f8ef959",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": 1511082880.537329}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "f0bce70fb50315834a8088c60829fc54e9648778cc6af13ed83a12d042d45179",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": 5.418099791239204e-19}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "909e6dbf5178a66fd1380f119b344cdbc3bde0a2db7c5ed0f998757275def2c5",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -86482195251645.58}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "93b1c29712fb3a82468e120863fa32d9d36d110a09c789f33dd26765bba76edf",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -0.0093415923299842}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "19efd9dc076686a359aa69a64ceb1f046feb92464743a6a5bc1dfc1cebe66489",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -8.329306231651166e+20}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "7aab02cfbe9785a83d4247d7697015cd1dd444a222ada8d882fc8013a93c5566",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": 6.60671400231613e+29}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "bafe62836b2a3857a99116807bd47af218e1593ae2d475afbfed62f62540cd2c",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -0.987557126840517}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "34d1a81d541aff35813e29d001d9c870de7201d157f9bce7b7a8de9a5047c2ee",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": 3.8555913466034776e-17}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "c88413b9e9042ca3780b0a32101b7f3166748a4afedcfa4d9f36fd6356265d6a",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -8052308.381584778}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "f9210fa327f6baab5c7d847a6169f66ba9ba53ce395519d0e1d26d458fe3dd12",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -84238.92032082909}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "0b8590992920bcf3bd502b34cfce615c1f340948ec95f3b5a98f080c6c6a2c30",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -3.837562205989209e-30}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "2f6eba4ab601af8ed15663b1179d87d1226d012fa55587633126cbbdb45e7196",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -2.3975166173090567e-13}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "5402cb885f109567f00d91c9279b605d454b4534dbaaeaa02e88b3080e4cdf87",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": 5.174845863094593e-26}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "3efc0147e292542f474e565b6a887c40256895e99ce448a7a48f2b54db6dd3d7",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -90.2732695896809}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "402c0f9669ba03bf9c722ea75daf56a5e2586caa56afb1b4395f4a08649ca4f9",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": 3.0836150293690444e+29}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "e16c1a8d79a562e69a9097cecdba6f9409e0b8a6fcfa261f366e94f9f1e3a235",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -8.77888980827053e+18}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "2e953ed28f03dd2b39b49a03997a5b964618fdfc1b93ceb9416761421cd241dd",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -7.803871388408973e-06}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "0a0ff15cd0fa7e6e15e548ac546a8cf7691b4ef5b530794a1336a345b79fc375",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": 9.672828604409308e+21}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "2b47348f6226b79874c8669ded178d0deb42f3ffd53df84d0d7df0b21d3087fb",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -57047.92456791008}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "b721f62652bc8db6cfb76990dadf8b264bd5332d4ef1f4f65a48d55d3e24c696",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": 1.3869396407736656e+20}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "0ad1dc48b6d2f98eeaca01fac45608f893c4f6ff6f4eba98dc273d51a2a1cc97",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -4869943394694.0205}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "d324f0d030d42f0808f749eaaa3100b2fff05129e171c9812b7c3e26c4496c0e",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": 0.0002485047072632751}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "43e44fdfe1509d3e313ae43c3ec15155db82c55cf2041078ae0ec80b20d2c07d",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -3.1082328532564984e+28}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "58766b5363d080d1fa24a1d21ab23db89e0cf7cd0e283a79070a360009987f14",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": 2.8977524082041238e+20}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "b8b3e7913ae8787141fa46a6817ff3fd81580151c4d4b95dbe51b678edaf15af",
+  "subject": "user:rand",
+  "transport": "ssh"
+ },
+ {
+  "claims_json": "{\"v\": -1.6682470302808893e+18}",
+  "fingerprint": "",
+  "has_claims": true,
+  "secret": "proxy-secret",
+  "signature": "593a321fa2a77f03d339a29dbc11e521c5291c1788e35c43a7d14cc6baf77ae1",
+  "subject": "user:rand",
+  "transport": "ssh"
+ }
+]
