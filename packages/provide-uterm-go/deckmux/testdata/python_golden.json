@@ -1,0 +1,565 @@
+{
+  "color_taken": {
+    "color": "#607d8b",
+    "id": "test-id",
+    "taken": [
+      "#ff5722"
+    ]
+  },
+  "control_transfer_min": {
+    "from_user_id": "u1",
+    "queued_keys": "",
+    "reason": "handover",
+    "to_user_id": "u2",
+    "type": "control_transfer"
+  },
+  "control_transfer_queued": {
+    "from_user_id": "u1",
+    "queued_keys": "ls\r",
+    "reason": "auto_idle",
+    "to_user_id": "u2",
+    "type": "control_transfer"
+  },
+  "encode_keys": [
+    {
+      "display": "↑",
+      "raw": "\u001b[A"
+    },
+    {
+      "display": "↓",
+      "raw": "\u001b[B"
+    },
+    {
+      "display": "→",
+      "raw": "\u001b[C"
+    },
+    {
+      "display": "←",
+      "raw": "\u001b[D"
+    },
+    {
+      "display": "↵",
+      "raw": "\r"
+    },
+    {
+      "display": "↵",
+      "raw": "\n"
+    },
+    {
+      "display": "⇥",
+      "raw": "\t"
+    },
+    {
+      "display": "⌫",
+      "raw": ""
+    },
+    {
+      "display": "⌫",
+      "raw": "\b"
+    },
+    {
+      "display": "⎋",
+      "raw": "\u001b"
+    },
+    {
+      "display": "ls↵",
+      "raw": "ls\r"
+    },
+    {
+      "display": "↑hello←",
+      "raw": "\u001b[Ahello\u001b[D"
+    },
+    {
+      "display": "",
+      "raw": "\u0001"
+    },
+    {
+      "display": "ab",
+      "raw": "a\u0002b"
+    },
+    {
+      "display": "",
+      "raw": ""
+    },
+    {
+      "display": "⎋[",
+      "raw": "\u001b["
+    }
+  ],
+  "initials": [
+    {
+      "initials": "RF",
+      "name": "Red Fox"
+    },
+    {
+      "initials": "RF",
+      "name": "red fox"
+    },
+    {
+      "initials": "AL",
+      "name": "Alice"
+    },
+    {
+      "initials": "AB",
+      "name": "A B C"
+    },
+    {
+      "initials": "A",
+      "name": "A"
+    },
+    {
+      "initials": "SP",
+      "name": "Storm Petrel"
+    }
+  ],
+  "names": [
+    {
+      "color": "#ff5722",
+      "id": "conn-123",
+      "initials": "JT",
+      "name": "Jade Tanuki"
+    },
+    {
+      "color": "#607d8b",
+      "id": "sre:alice",
+      "initials": "SP",
+      "name": "Storm Pike"
+    },
+    {
+      "color": "#3498db",
+      "id": "svc-bot",
+      "initials": "MI",
+      "name": "Moss Ibis"
+    },
+    {
+      "color": "#ff5722",
+      "id": "test-id",
+      "initials": "SM",
+      "name": "Spark Marten"
+    },
+    {
+      "color": "#1abc9c",
+      "id": "id-a",
+      "initials": "BD",
+      "name": "Birch Deer"
+    },
+    {
+      "color": "#e67e22",
+      "id": "id-b",
+      "initials": "AP",
+      "name": "Ash Pike"
+    },
+    {
+      "color": "#e91e63",
+      "id": "probe-conn",
+      "initials": "OO",
+      "name": "Onyx Otter"
+    },
+    {
+      "color": "#1abc9c",
+      "id": "col-0",
+      "initials": "BV",
+      "name": "Bronze Viper"
+    }
+  ],
+  "presence_from_identity": [
+    {
+      "claims": {
+        "display_name": "Alice Liddell",
+        "role": "oncall"
+      },
+      "connection_id": "conn-1",
+      "result": {
+        "color": "#9b59b6",
+        "cols": 0,
+        "initials": "AL",
+        "is_owner": false,
+        "name": "Alice Liddell",
+        "pin": null,
+        "queued_keys": "",
+        "role": "oncall",
+        "rows": 0,
+        "scroll_line": 0,
+        "scroll_range": [
+          0,
+          0
+        ],
+        "selection": null,
+        "total_lines": 0,
+        "typing": false,
+        "user_id": "sre:alice"
+      },
+      "role": "",
+      "subject": "sre:alice"
+    },
+    {
+      "claims": {
+        "display": "Bob"
+      },
+      "connection_id": "conn-2",
+      "result": {
+        "color": "#3498db",
+        "cols": 0,
+        "initials": "BO",
+        "is_owner": false,
+        "name": "Bob",
+        "pin": null,
+        "queued_keys": "",
+        "role": "",
+        "rows": 0,
+        "scroll_line": 0,
+        "scroll_range": [
+          0,
+          0
+        ],
+        "selection": null,
+        "total_lines": 0,
+        "typing": false,
+        "user_id": "x"
+      },
+      "role": "",
+      "subject": "x"
+    },
+    {
+      "claims": {},
+      "connection_id": "conn-3",
+      "result": {
+        "color": "#e74c3c",
+        "cols": 0,
+        "initials": "AL",
+        "is_owner": false,
+        "name": "alice",
+        "pin": null,
+        "queued_keys": "",
+        "role": "",
+        "rows": 0,
+        "scroll_line": 0,
+        "scroll_range": [
+          0,
+          0
+        ],
+        "selection": null,
+        "total_lines": 0,
+        "typing": false,
+        "user_id": "sre:alice"
+      },
+      "role": "",
+      "subject": "sre:alice"
+    },
+    {
+      "claims": {},
+      "connection_id": "conn-4",
+      "result": {
+        "color": "#e67e22",
+        "cols": 0,
+        "initials": "AL",
+        "is_owner": false,
+        "name": "alice",
+        "pin": null,
+        "queued_keys": "",
+        "role": "",
+        "rows": 0,
+        "scroll_line": 0,
+        "scroll_range": [
+          0,
+          0
+        ],
+        "selection": null,
+        "total_lines": 0,
+        "typing": false,
+        "user_id": "alice"
+      },
+      "role": "",
+      "subject": "alice"
+    },
+    {
+      "claims": {},
+      "connection_id": "conn-5",
+      "result": {
+        "color": "#607d8b",
+        "cols": 0,
+        "initials": "FL",
+        "is_owner": false,
+        "name": "Flint Lynx",
+        "pin": null,
+        "queued_keys": "",
+        "role": "",
+        "rows": 0,
+        "scroll_line": 0,
+        "scroll_range": [
+          0,
+          0
+        ],
+        "selection": null,
+        "total_lines": 0,
+        "typing": false,
+        "user_id": "role:"
+      },
+      "role": "",
+      "subject": "role:"
+    },
+    {
+      "claims": {
+        "color": "#ff00aa"
+      },
+      "connection_id": "conn-6",
+      "result": {
+        "color": "#ff00aa",
+        "cols": 0,
+        "initials": "X",
+        "is_owner": false,
+        "name": "x",
+        "pin": null,
+        "queued_keys": "",
+        "role": "",
+        "rows": 0,
+        "scroll_line": 0,
+        "scroll_range": [
+          0,
+          0
+        ],
+        "selection": null,
+        "total_lines": 0,
+        "typing": false,
+        "user_id": "x"
+      },
+      "role": "",
+      "subject": "x"
+    },
+    {
+      "claims": {
+        "role": "admin"
+      },
+      "connection_id": "c",
+      "result": {
+        "color": "#ff5722",
+        "cols": 0,
+        "initials": "X",
+        "is_owner": false,
+        "name": "x",
+        "pin": null,
+        "queued_keys": "",
+        "role": "admin",
+        "rows": 0,
+        "scroll_line": 0,
+        "scroll_range": [
+          0,
+          0
+        ],
+        "selection": null,
+        "total_lines": 0,
+        "typing": false,
+        "user_id": "x"
+      },
+      "role": "viewer",
+      "subject": "x"
+    },
+    {
+      "claims": {},
+      "connection_id": "c",
+      "result": {
+        "color": "#ff5722",
+        "cols": 0,
+        "initials": "X",
+        "is_owner": false,
+        "name": "x",
+        "pin": null,
+        "queued_keys": "",
+        "role": "viewer",
+        "rows": 0,
+        "scroll_line": 0,
+        "scroll_range": [
+          0,
+          0
+        ],
+        "selection": null,
+        "total_lines": 0,
+        "typing": false,
+        "user_id": "x"
+      },
+      "role": "viewer",
+      "subject": "x"
+    }
+  ],
+  "presence_leave": {
+    "type": "presence_leave",
+    "user_id": "u1"
+  },
+  "presence_sync": {
+    "config": {
+      "idle_timeout": 30
+    },
+    "type": "presence_sync",
+    "users": [
+      {
+        "name": "Alice",
+        "user_id": "u1"
+      }
+    ]
+  },
+  "presence_update_full": {
+    "color": "#fff",
+    "is_owner": true,
+    "name": "Alice",
+    "pin": {
+      "line": 5
+    },
+    "queued_keys": "ls",
+    "role": "admin",
+    "scroll_line": 42,
+    "scroll_range": [
+      0,
+      100
+    ],
+    "selection": {
+      "start": 0
+    },
+    "type": "presence_update",
+    "typing": true,
+    "user_id": "u1"
+  },
+  "presence_update_min": {
+    "color": "#fff",
+    "name": "Alice",
+    "role": "admin",
+    "type": "presence_update",
+    "user_id": "u1"
+  },
+  "signed_identity": [
+    {
+      "frame": {
+        "fingerprint": "",
+        "signature": "2076553b8340b50bcb41c6fee766da1363b66aba120e12cc0ed3986df91378ee",
+        "subject": "x",
+        "transport": "ssh",
+        "type": "identity",
+        "version": 1
+      },
+      "secret": "my-secret"
+    },
+    {
+      "frame": {
+        "claims": {
+          "display_name": "Alice",
+          "role": "oncall"
+        },
+        "fingerprint": "SHA256:abc",
+        "signature": "fd3d84dd73c9bc1b5239e000f06f02713b4814dcfc7a10816125c5c29f9e255f",
+        "subject": "sre:alice",
+        "transport": "ssh",
+        "type": "identity",
+        "version": 1
+      },
+      "secret": "top-secret"
+    },
+    {
+      "frame": {
+        "claims": {},
+        "fingerprint": "",
+        "signature": "5e126764f51521cba6b5669620b14119ff25796d6494b348c70de85d3ce4ff55",
+        "subject": "user:bob",
+        "transport": "ws",
+        "type": "identity",
+        "version": 1
+      },
+      "secret": "s3"
+    }
+  ],
+  "sync_payload": {
+    "config": {
+      "auto_transfer_idle_s": 30,
+      "keystroke_queue": "display"
+    },
+    "type": "presence_sync",
+    "users": [
+      {
+        "color": "#e74c3c",
+        "cols": 0,
+        "initials": "AL",
+        "is_owner": false,
+        "name": "Alice",
+        "pin": null,
+        "queued_keys": "",
+        "role": "operator",
+        "rows": 0,
+        "scroll_line": 0,
+        "scroll_range": [
+          0,
+          0
+        ],
+        "selection": null,
+        "total_lines": 0,
+        "typing": false,
+        "user_id": "sre:alice"
+      },
+      {
+        "color": "#3498db",
+        "cols": 0,
+        "initials": "BO",
+        "is_owner": false,
+        "name": "Bob",
+        "pin": null,
+        "queued_keys": "",
+        "role": "viewer",
+        "rows": 0,
+        "scroll_line": 0,
+        "scroll_range": [
+          0,
+          0
+        ],
+        "selection": null,
+        "total_lines": 0,
+        "typing": false,
+        "user_id": "sre:bob"
+      }
+    ]
+  },
+  "to_dict_default": {
+    "color": "#fff",
+    "cols": 0,
+    "initials": "",
+    "is_owner": false,
+    "name": "Alice",
+    "pin": null,
+    "queued_keys": "",
+    "role": "admin",
+    "rows": 0,
+    "scroll_line": 0,
+    "scroll_range": [
+      0,
+      0
+    ],
+    "selection": null,
+    "total_lines": 0,
+    "typing": false,
+    "user_id": "u1"
+  },
+  "to_dict_full": {
+    "color": "#fff",
+    "cols": 132,
+    "initials": "AL",
+    "is_owner": true,
+    "name": "Alice",
+    "pin": {
+      "col": 5,
+      "row": 4
+    },
+    "queued_keys": "ls↵",
+    "role": "admin",
+    "rows": 43,
+    "scroll_line": 7,
+    "scroll_range": [
+      3,
+      27
+    ],
+    "selection": {
+      "start": {
+        "col": 2,
+        "row": 1
+      }
+    },
+    "total_lines": 99,
+    "typing": true,
+    "user_id": "u1"
+  }
+}
