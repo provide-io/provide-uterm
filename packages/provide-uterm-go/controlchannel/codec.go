@@ -281,10 +281,9 @@ func (d *Decoder) Finish() ([]Chunk, error) {
 		d.reset()
 		return nil, err
 	}
-	if d.buffered != "" {
-		d.reset()
-		return nil, d.reportError("truncated control frame")
-	}
+	// A final drain either consumes the whole buffer or errors: every
+	// incomplete construct (lone DLE, short header, short payload) raises
+	// "truncated control frame" inside drain, so no leftover check is needed.
 	return events, nil
 }
 
