@@ -1,0 +1,180 @@
+{
+  "analysis_null_raw": {
+    "formatted": "f",
+    "raw": null,
+    "ts": 4.5,
+    "type": "analysis"
+  },
+  "analysis_raw": {
+    "formatted": "f",
+    "raw": {
+      "k": [
+        1,
+        2
+      ]
+    },
+    "ts": 5.5,
+    "type": "analysis"
+  },
+  "error": {
+    "message": "boom",
+    "type": "error"
+  },
+  "heartbeat_ack": {
+    "lease_expires_at": 456.25,
+    "ts": 123.5,
+    "type": "heartbeat_ack"
+  },
+  "hello": {
+    "can_hijack": true,
+    "hijacked": false,
+    "input_mode": "raw",
+    "protocol": {
+      "selected": 2,
+      "server_max": 2,
+      "server_min": 1
+    },
+    "type": "hello",
+    "worker_id": "w1",
+    "worker_online": true
+  },
+  "hijack_state_off": {
+    "hijacked": false,
+    "input_mode": "raw",
+    "lease_expires_at": null,
+    "owner": null,
+    "type": "hijack_state"
+  },
+  "hijack_state_on": {
+    "hijacked": true,
+    "input_mode": "cooked",
+    "lease_expires_at": 99.5,
+    "owner": "alice",
+    "type": "hijack_state"
+  },
+  "identity_defaults": {
+    "fingerprint": "",
+    "subject": "user:bob",
+    "transport": "ssh",
+    "type": "identity",
+    "version": 1
+  },
+  "identity_full": {
+    "claims": {
+      "n": 3,
+      "role": "admin"
+    },
+    "fingerprint": "SHA256:fp",
+    "subject": "user:alice",
+    "transport": "ws",
+    "type": "identity",
+    "version": 1
+  },
+  "link_patterns": {
+    "patterns": [
+      {
+        "action": "cmd",
+        "group": 1,
+        "id": "p1",
+        "pattern": "foo(\\d+)",
+        "payload": "run {1}"
+      },
+      {
+        "action": "url",
+        "class": "link",
+        "flags": "i",
+        "hover": "open",
+        "line_contains": "http",
+        "pattern": "https?://\\S+"
+      }
+    ],
+    "type": "link_patterns"
+  },
+  "pong": {
+    "ts": 123.5,
+    "type": "pong"
+  },
+  "presence_update": {
+    "scroll_line": 5,
+    "type": "presence_update",
+    "typing": true,
+    "user_id": "u1"
+  },
+  "resume": {
+    "player_id": 7,
+    "token": "rtok",
+    "type": "resume"
+  },
+  "resume_failed": {
+    "reason": "expired",
+    "type": "resume_failed"
+  },
+  "resume_ok": {
+    "type": "resume_ok"
+  },
+  "session_token": {
+    "player_id": 3,
+    "token": "tok",
+    "type": "session_token"
+  },
+  "session_token_no_player": {
+    "token": "tok2",
+    "type": "session_token"
+  },
+  "snapshot_full": {
+    "cols": 132,
+    "cursor": {
+      "x": 0,
+      "y": 0
+    },
+    "cursor_at_end": false,
+    "has_trailing_space": true,
+    "prompt_detected": {
+      "confidence": 0.75,
+      "prompt_id": "shell"
+    },
+    "raw_tail": "tail\u001b[1m",
+    "rows": 43,
+    "screen": "s",
+    "screen_hash": "h",
+    "ts": 10.5,
+    "type": "snapshot"
+  },
+  "snapshot_minimal": {
+    "cols": 80,
+    "cursor": {
+      "x": 1,
+      "y": 2
+    },
+    "cursor_at_end": true,
+    "has_trailing_space": false,
+    "prompt_detected": null,
+    "raw_tail": null,
+    "rows": 25,
+    "screen": "line1\nline2",
+    "screen_hash": "abc123",
+    "ts": 9.5,
+    "type": "snapshot"
+  },
+  "status": {
+    "cpu": 12.5,
+    "tag": "ok",
+    "ts": 6.5,
+    "type": "status"
+  },
+  "term": {
+    "data": "hi\u001b[0m\u00e9",
+    "ts": 3.5,
+    "type": "term"
+  },
+  "worker_connected": {
+    "ts": 1.5,
+    "type": "worker_connected",
+    "worker_id": "w1"
+  },
+  "worker_disconnected": {
+    "ts": 2.5,
+    "type": "worker_disconnected",
+    "worker_id": "w1"
+  }
+}
