@@ -148,7 +148,10 @@ repos:
           - .secrets.baseline
           - --no-verify
           - --exclude-files
-          - "(^|/)(\\.secrets\\.baseline|\\.venv|\\.pytest_cache|\\.mypy_cache|\\.ruff_cache|\\.uterm-recordings|node_modules|dist|build|htmlcov)/?|^packages/provide-uterm-server/src/provide/uterm/server/frontend/assets/"
+          # The Go testdata exclusion covers differential-parity goldens
+          # (e.g. ctrlmsg HMAC signature corpora) — synthetic test vectors,
+          # not real credentials.
+          - "(^|/)(\\.secrets\\.baseline|\\.venv|\\.pytest_cache|\\.mypy_cache|\\.ruff_cache|\\.uterm-recordings|node_modules|dist|build|htmlcov)/?|^packages/provide-uterm-server/src/provide/uterm/server/frontend/assets/|^packages/provide-uterm-go/[^/]+/testdata/"
         language: python
         language_version: python3
         additional_dependencies:
