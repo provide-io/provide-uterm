@@ -124,6 +124,23 @@ class TestWebSocketStreamWriter:
         writer = WebSocketStreamWriter(ws)
         await writer.wait_closed()  # should not raise
 
+    async def test_drain_splits_multibyte_char_across_two_flushes(self) -> None:
+        """A write()+drain() per transport chunk must not corrupt a multi-byte
+        UTF-8 character whose bytes land in two separate chunks — the
+        incremental decoder must hold the dangling lead byte(s) over to the
+        next drain() instead of replacing them.
+        """
+        ws = _make_ws()
+        writer = WebSocketStreamWriter(ws)
+        encoded = "café".encode()  # "é" is 2 bytes: 0xC3 0xA9
+        split = len(encoded) - 1  # split inside "é", after its lead byte
+        writer.write(encoded[:split])
+        await writer.drain()
+        writer.write(encoded[split:])
+        await writer.drain()
+        sent = "".join(call.args[0] for call in ws.send_text.await_args_list)
+        assert sent == "café"
+
     async def test_drain_with_disconnect_marks_closed(self) -> None:
         from fastapi import WebSocketDisconnect
 

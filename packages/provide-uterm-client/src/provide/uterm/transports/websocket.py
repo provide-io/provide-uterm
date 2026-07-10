@@ -11,6 +11,8 @@ session handlers to run unmodified over a WebSocket connection.
 
 from __future__ import annotations
 
+import codecs
+
 try:
     from fastapi import WebSocket, WebSocketDisconnect
 except ImportError as _e:  # pragma: no cover - optional dep guard
@@ -70,6 +72,12 @@ class WebSocketStreamWriter:
         self._ws = ws
         self._pending = bytearray()
         self._closed = False
+        # Stateful across drain() calls: a caller may write()+drain() once per
+        # transport read, and a multi-byte UTF-8 character can straddle two
+        # such reads. A one-shot decode(errors="replace") per drain would
+        # corrupt the split character; the incremental decoder holds the
+        # dangling lead byte(s) until the continuation arrives.
+        self._decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
 
     def write(self, data: bytes) -> None:
         """Append *data* to the pending output buffer."""
@@ -79,8 +87,10 @@ class WebSocketStreamWriter:
     async def drain(self) -> None:
         """Flush the pending buffer as a WebSocket text message."""
         if self._pending and not self._closed:
-            text = bytes(self._pending).decode("utf-8", errors="replace")
+            text = self._decoder.decode(bytes(self._pending))
             self._pending.clear()
+            if not text:
+                return
             try:
                 await self._ws.send_text(text)
             except (WebSocketDisconnect, RuntimeError):
