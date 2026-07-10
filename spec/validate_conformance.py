@@ -50,6 +50,7 @@ def main() -> int:
 
     errors: list[str] = []
     checked = 0
+    required_count = 0
     for category, entries in categories.items():
         python_exports = get_python_exports(category)
         go_exports = get_go_exports(category)
@@ -57,6 +58,8 @@ def main() -> int:
             name = entry["name"]
             required = bool(entry.get("required", True))
             checked += 1
+            if required:
+                required_count += 1
 
             # kind: type names are literal PascalCase in both languages
             # (Python classes are PascalCase too) -- no transform. kind:
@@ -73,7 +76,7 @@ def main() -> int:
                 errors.append(f"[{category}] go: missing {go_name!r} (spec name {name!r})")
 
     noun = "category" if len(categories) == 1 else "categories"
-    print(f"checked {checked} spec entries across {len(categories)} {noun}")
+    print(f"checked {checked} spec entries ({required_count} required) across {len(categories)} {noun}")
     if errors:
         print(f"\n{len(errors)} conformance error(s):")
         for err in errors:
