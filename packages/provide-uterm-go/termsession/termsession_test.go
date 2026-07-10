@@ -298,6 +298,27 @@ func TestSendErrorPropagates(t *testing.T) {
 	}
 }
 
+// readLineFrom accumulates Read calls into buf until a line terminator
+// ('\r' or '\n') is seen, the buffer fills, or a read error/EOF occurs, then
+// returns the bytes read so far. A single Read call is not guaranteed to
+// return a whole line — TCP has no message boundaries — so a test scripting
+// a line-oriented exchange over a raw net.Conn must loop, not assume one
+// call captures everything.
+func readLineFrom(conn net.Conn, buf []byte) []byte {
+	total := 0
+	for total < len(buf) {
+		n, err := conn.Read(buf[total:])
+		total += n
+		if n > 0 && (buf[total-1] == '\r' || buf[total-1] == '\n') {
+			break
+		}
+		if err != nil {
+			break
+		}
+	}
+	return buf[:total]
+}
+
 // TestTelnetSessionLoopback runs the real telnet transport against a
 // scripted TCP server end-to-end.
 func TestTelnetSessionLoopback(t *testing.T) {
@@ -312,20 +333,22 @@ func TestTelnetSessionLoopback(t *testing.T) {
 			return
 		}
 		defer func() { _ = conn.Close() }()
-		// Ignore the client's negotiation, send a banner with CP437 art.
-		// The read deadlines are generous safety nets (not protocol timing):
-		// under whole-module -race load the client's negotiation and the gap
-		// before it echoes "guest" can be slow, and a tight deadline would
-		// race it (a flaky-test source). 30s never expires before the test's
-		// own waitForScreen bound.
+		// Ignore the client's negotiation, send a banner with CP437 art. The
+		// read deadline is a generous safety net (not protocol timing).
 		buf := make([]byte, 64)
 		_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 		_, _ = conn.Read(buf)
 		_, _ = conn.Write(append([]byte{0xC9, 0xCD, 0xBB, '\r', '\n'}, []byte("login: ")...))
-		// Echo the next line back.
+		// Echo the next line back. TCP gives no guarantee a single Read call
+		// returns the client's whole "guest\r" write in one shot — a short
+		// read here would echo a truncated fragment and the client would
+		// never see "guest", regardless of how generous any timeout is (this
+		// was the actual cause of a flake previously misdiagnosed as CPU
+		// contention: widening 10s->30s made zero difference because the
+		// bug was never about time). Accumulate until a line terminator.
 		_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
-		n, _ := conn.Read(buf)
-		_, _ = conn.Write(buf[:n])
+		line := readLineFrom(conn, buf)
+		_, _ = conn.Write(line)
 		time.Sleep(100 * time.Millisecond)
 	}()
 
