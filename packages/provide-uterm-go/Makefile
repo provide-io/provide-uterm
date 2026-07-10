@@ -20,7 +20,7 @@ GOLANGCI_LINT ?= golangci-lint
 # JSON-encode guards the Python originals also exclude. Whole-module ~93.6%.
 COVER_THRESHOLD ?= 92.0
 
-.PHONY: fmt fmt-check vet lint test race cover vuln quality-gate
+.PHONY: fmt fmt-check vet lint test race cover vuln quality-gate build-binaries
 
 fmt:
 	gofmt -w .
@@ -49,6 +49,15 @@ cover:
 
 vuln:
 	$(GO) run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+# Builds all 3 shipped binaries into a throwaway dir so a cmd/ build break
+# fails this step by name instead of hiding inside quality-gate's coverage run.
+build-binaries:
+	@mkdir -p bin
+	$(GO) build -o bin/uterm ./cmd/uterm
+	$(GO) build -o bin/uterm-mcp ./cmd/uterm-mcp
+	$(GO) build -o bin/uterm-manager ./cmd/uterm-manager
+	@echo "all 3 binaries built"
 
 quality-gate: fmt-check vet lint race cover
 	@echo "go quality gate passed"
