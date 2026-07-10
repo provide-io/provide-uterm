@@ -202,7 +202,11 @@ class TransportSession:
         Args:
             timeout_ms: Maximum wait time in milliseconds.
             since: Sequence number from :meth:`screen_change_seq`.
-                If ``None``, waits for any next update.
+                If ``None``, waits for any next update. (The Go port's
+                ``WaitForScreenChange`` uses a negative ``since`` for this
+                same "wait for any" case instead of an optional/pointer type —
+                intentional, not a bug: it keeps a shared Go interface with
+                multiple implementers simple.)
 
         Returns:
             ``True`` if the screen changed, ``False`` on timeout.

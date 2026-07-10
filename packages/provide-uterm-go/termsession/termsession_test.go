@@ -135,6 +135,9 @@ func TestReaderFeedsEmulatorAndSignalsUpdates(t *testing.T) {
 	if !strings.Contains(s.ANSIScreen(), "hello prompt>") {
 		t.Fatal("ANSI screen missing content")
 	}
+	if s.UpdateSeq() != s.ScreenChangeSeq() {
+		t.Fatalf("UpdateSeq() = %d, want ScreenChangeSeq() = %d", s.UpdateSeq(), s.ScreenChangeSeq())
+	}
 }
 
 func TestWatchersSeeRawBytesBeforeEmulator(t *testing.T) {
