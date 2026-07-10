@@ -1,0 +1,100 @@
+{
+  "approvals": [
+    {
+      "approval_id": "appr-1",
+      "command": "rm -rf /tmp/demo",
+      "created_at": 50.0,
+      "requested_by": "bob",
+      "resolved_at": null,
+      "resolved_by": null,
+      "session_id": "sess-1",
+      "state": "pending"
+    },
+    {
+      "approval_id": "appr-2",
+      "command": "ls",
+      "created_at": 40.0,
+      "requested_by": null,
+      "resolved_at": 45.0,
+      "resolved_by": "carol",
+      "session_id": "sess-1",
+      "state": "approved"
+    }
+  ],
+  "audit_head": {
+    "record_hash": "cafebabe",
+    "seq": 42
+  },
+  "leases": [
+    {
+      "created_at": 100.0,
+      "deleted_at": null,
+      "hijack_id": "hij-1",
+      "lease_expires_at": 12345.0,
+      "owner": "alice",
+      "session_id": "sess-1"
+    }
+  ],
+  "resume_tokens": [
+    {
+      "created_at": 5.0,
+      "expires_at": 9999.0,
+      "revoked_at": null,
+      "role": "viewer",
+      "session_id": "sess-1",
+      "token_value": "resume-abc",
+      "was_hijack_owner": true
+    },
+    {
+      "created_at": 6.0,
+      "expires_at": 8888.0,
+      "revoked_at": null,
+      "role": "admin",
+      "session_id": "sess-2",
+      "token_value": "resume-def",
+      "was_hijack_owner": false
+    }
+  ],
+  "session_tokens": [
+    {
+      "created_at": 1.0,
+      "expires_at": 2.0,
+      "revoked_at": null,
+      "session_id": "sess-1",
+      "token_kind": "share",
+      "token_value": "share-token-xyz"
+    },
+    {
+      "created_at": 1.0,
+      "expires_at": null,
+      "revoked_at": null,
+      "session_id": "sess-1",
+      "token_kind": "operator",
+      "token_value": "op-token"
+    }
+  ],
+  "sessions": [
+    {
+      "connector_type": "pty",
+      "created_at": 100.5,
+      "deleted_at": null,
+      "display_name": "Golden Session",
+      "lifecycle_state": "running",
+      "owner": "alice",
+      "session_id": "sess-1",
+      "updated_at": 200.25,
+      "visibility": "private"
+    },
+    {
+      "connector_type": "shell",
+      "created_at": 10.0,
+      "deleted_at": null,
+      "display_name": "No Owner",
+      "lifecycle_state": "waiting",
+      "owner": null,
+      "session_id": "sess-2",
+      "updated_at": 10.0,
+      "visibility": "public"
+    }
+  ]
+}
