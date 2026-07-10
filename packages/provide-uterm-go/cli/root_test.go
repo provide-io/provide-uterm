@@ -56,13 +56,12 @@ func TestExecuteUnknownCommand(t *testing.T) {
 }
 
 func TestExecuteStubsExitNonZero(t *testing.T) {
+	// listen, watch, and audit are now implemented (see listen.go, watch*.go,
+	// audit*.go) and have their own tests; only share/tunnel/inspect remain stubs.
 	cases := [][]string{
-		{"listen", "wss://x"},
 		{"share", "-s", "https://x"},
 		{"tunnel", "1234"},
 		{"inspect", "3000"},
-		{"watch", "tun-1"},
-		{"audit", "verify", "/tmp/log.jsonl"},
 	}
 	for _, args := range cases {
 		var out, errw bytes.Buffer
