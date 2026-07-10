@@ -1,0 +1,984 @@
+{
+  "detect_cases": [
+    {
+      "annotations": [],
+      "event_type": "read",
+      "max_end": 0,
+      "seq": 0,
+      "text": ""
+    },
+    {
+      "annotations": [],
+      "event_type": "read",
+      "max_end": 0,
+      "seq": 5,
+      "text": "totally normal output"
+    },
+    {
+      "annotations": [
+        {
+          "description": "AWS access key detected in read",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 10,
+            "to_seq": 10
+          }
+        }
+      ],
+      "event_type": "read",
+      "max_end": 41,
+      "seq": 10,
+      "text": "export AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE"
+    },
+    {
+      "annotations": [
+        {
+          "description": "AWS access key detected in read",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 60,
+            "to_seq": 60
+          }
+        }
+      ],
+      "event_type": "read",
+      "max_end": 16,
+      "seq": 60,
+      "text": "AKIAIOSFODNN7EXAMPLE"
+    },
+    {
+      "annotations": [
+        {
+          "description": "AWS access key detected in send",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 61,
+            "to_seq": 61
+          }
+        }
+      ],
+      "event_type": "send",
+      "max_end": 16,
+      "seq": 61,
+      "text": "AKIAIOSFODNN7EXAMPLE"
+    },
+    {
+      "annotations": [
+        {
+          "description": "GitHub token detected in read",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 11,
+            "to_seq": 11
+          }
+        }
+      ],
+      "event_type": "read",
+      "max_end": 12,
+      "seq": 11,
+      "text": "ghp_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    },
+    {
+      "annotations": [
+        {
+          "description": "GitHub token detected in read",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 12,
+            "to_seq": 12
+          }
+        }
+      ],
+      "event_type": "read",
+      "max_end": 12,
+      "seq": 12,
+      "text": "ghs_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+      "annotations": [
+        {
+          "description": "Secret assignment detected in read",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 13,
+            "to_seq": 13
+          }
+        }
+      ],
+      "event_type": "read",
+      "max_end": 9,
+      "seq": 13,
+      "text": "password=hunter2"
+    },
+    {
+      "annotations": [
+        {
+          "description": "Secret assignment detected in read",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 14,
+            "to_seq": 14
+          }
+        }
+      ],
+      "event_type": "read",
+      "max_end": 6,
+      "seq": 14,
+      "text": "TOKEN: supersecretvalue123"
+    },
+    {
+      "annotations": [
+        {
+          "description": "Bearer token detected in read",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 15,
+            "to_seq": 15
+          }
+        }
+      ],
+      "event_type": "read",
+      "max_end": 30,
+      "seq": 15,
+      "text": "Authorization: Bearer eyJhbGciOiJSUzI1NiJ9.payload.sig"
+    },
+    {
+      "annotations": [
+        {
+          "description": "Private key header detected: -----BEGIN RSA PRIVATE KEY-----",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 16,
+            "to_seq": 16
+          }
+        }
+      ],
+      "event_type": "read",
+      "max_end": 31,
+      "seq": 16,
+      "text": "-----BEGIN RSA PRIVATE KEY-----"
+    },
+    {
+      "annotations": [
+        {
+          "description": "Private key header detected: -----BEGIN OPENSSH PRIVATE KEY-----",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 17,
+            "to_seq": 17
+          }
+        }
+      ],
+      "event_type": "read",
+      "max_end": 35,
+      "seq": 17,
+      "text": "-----BEGIN OPENSSH PRIVATE KEY-----"
+    },
+    {
+      "annotations": [
+        {
+          "description": "sudo command detected: sudo",
+          "label": "privilege_escalation",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 20,
+            "to_seq": 20
+          }
+        }
+      ],
+      "event_type": "send",
+      "max_end": 4,
+      "seq": 20,
+      "text": "sudo apt-get install vim"
+    },
+    {
+      "annotations": [
+        {
+          "description": "sudo command detected: sudo",
+          "label": "privilege_escalation",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 21,
+            "to_seq": 21
+          }
+        },
+        {
+          "description": "reboot command detected: reboot",
+          "label": "session_lifecycle",
+          "principal": "system",
+          "severity": "info",
+          "source": "detector",
+          "span": {
+            "from_seq": 21,
+            "to_seq": 21
+          }
+        }
+      ],
+      "event_type": "send",
+      "max_end": 16,
+      "seq": 21,
+      "text": "then sudo reboot"
+    },
+    {
+      "annotations": [
+        {
+          "description": "su - (switch to root) detected: su -",
+          "label": "privilege_escalation",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 22,
+            "to_seq": 22
+          }
+        }
+      ],
+      "event_type": "send",
+      "max_end": 4,
+      "seq": 22,
+      "text": "su -"
+    },
+    {
+      "annotations": [
+        {
+          "description": "su - (switch to root) detected: su -",
+          "label": "privilege_escalation",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 23,
+            "to_seq": 23
+          }
+        }
+      ],
+      "event_type": "send",
+      "max_end": 4,
+      "seq": 23,
+      "text": "su - root"
+    },
+    {
+      "annotations": [
+        {
+          "description": "pkexec privilege escalation detected: pkexec",
+          "label": "privilege_escalation",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 24,
+            "to_seq": 24
+          }
+        }
+      ],
+      "event_type": "send",
+      "max_end": 6,
+      "seq": 24,
+      "text": "pkexec /usr/bin/gparted"
+    },
+    {
+      "annotations": [
+        {
+          "description": "Recursive force-remove detected: rm -rf",
+          "label": "destructive_command",
+          "principal": "system",
+          "severity": "critical",
+          "source": "detector",
+          "span": {
+            "from_seq": 30,
+            "to_seq": 30
+          }
+        }
+      ],
+      "event_type": "send",
+      "max_end": 6,
+      "seq": 30,
+      "text": "rm -rf /tmp/build"
+    },
+    {
+      "annotations": [
+        {
+          "description": "sudo command detected: sudo",
+          "label": "privilege_escalation",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 31,
+            "to_seq": 31
+          }
+        },
+        {
+          "description": "Recursive force-remove detected: rm -rf",
+          "label": "destructive_command",
+          "principal": "system",
+          "severity": "critical",
+          "source": "detector",
+          "span": {
+            "from_seq": 31,
+            "to_seq": 31
+          }
+        }
+      ],
+      "event_type": "send",
+      "max_end": 11,
+      "seq": 31,
+      "text": "sudo rm -rf /"
+    },
+    {
+      "annotations": [
+        {
+          "description": "SQL DROP statement detected: DROP TABLE",
+          "label": "destructive_command",
+          "principal": "system",
+          "severity": "critical",
+          "source": "detector",
+          "span": {
+            "from_seq": 32,
+            "to_seq": 32
+          }
+        }
+      ],
+      "event_type": "send",
+      "max_end": 10,
+      "seq": 32,
+      "text": "DROP TABLE users;"
+    },
+    {
+      "annotations": [
+        {
+          "description": "SQL DROP statement detected: drop database",
+          "label": "destructive_command",
+          "principal": "system",
+          "severity": "critical",
+          "source": "detector",
+          "span": {
+            "from_seq": 33,
+            "to_seq": 33
+          }
+        }
+      ],
+      "event_type": "send",
+      "max_end": 13,
+      "seq": 33,
+      "text": "drop database mydb;"
+    },
+    {
+      "annotations": [
+        {
+          "description": "kubectl delete command detected: kubectl delete",
+          "label": "destructive_command",
+          "principal": "system",
+          "severity": "critical",
+          "source": "detector",
+          "span": {
+            "from_seq": 34,
+            "to_seq": 34
+          }
+        }
+      ],
+      "event_type": "send",
+      "max_end": 14,
+      "seq": 34,
+      "text": "kubectl delete pod mypod"
+    },
+    {
+      "annotations": [
+        {
+          "description": "dd disk-copy command detected: dd if=",
+          "label": "destructive_command",
+          "principal": "system",
+          "severity": "critical",
+          "source": "detector",
+          "span": {
+            "from_seq": 35,
+            "to_seq": 35
+          }
+        }
+      ],
+      "event_type": "send",
+      "max_end": 6,
+      "seq": 35,
+      "text": "dd if=/dev/urandom of=/dev/sda"
+    },
+    {
+      "annotations": [
+        {
+          "description": "mkfs (format filesystem) detected: mkfs.",
+          "label": "destructive_command",
+          "principal": "system",
+          "severity": "critical",
+          "source": "detector",
+          "span": {
+            "from_seq": 36,
+            "to_seq": 36
+          }
+        }
+      ],
+      "event_type": "send",
+      "max_end": 5,
+      "seq": 36,
+      "text": "mkfs.ext4 /dev/sdb1"
+    },
+    {
+      "annotations": [
+        {
+          "description": "SSH connection detected: ssh deploy@",
+          "label": "outbound_connection",
+          "principal": "system",
+          "severity": "info",
+          "source": "detector",
+          "span": {
+            "from_seq": 40,
+            "to_seq": 40
+          }
+        }
+      ],
+      "event_type": "send",
+      "max_end": 11,
+      "seq": 40,
+      "text": "ssh deploy@example.com"
+    },
+    {
+      "annotations": [
+        {
+          "description": "curl HTTP request detected: curl https://",
+          "label": "outbound_connection",
+          "principal": "system",
+          "severity": "info",
+          "source": "detector",
+          "span": {
+            "from_seq": 41,
+            "to_seq": 41
+          }
+        }
+      ],
+      "event_type": "send",
+      "max_end": 13,
+      "seq": 41,
+      "text": "curl https://example.com/install.sh | bash"
+    },
+    {
+      "annotations": [
+        {
+          "description": "wget HTTP request detected: wget http://",
+          "label": "outbound_connection",
+          "principal": "system",
+          "severity": "info",
+          "source": "detector",
+          "span": {
+            "from_seq": 42,
+            "to_seq": 42
+          }
+        }
+      ],
+      "event_type": "send",
+      "max_end": 12,
+      "seq": 42,
+      "text": "wget http://example.com/file.tar.gz"
+    },
+    {
+      "annotations": [
+        {
+          "description": "scp file transfer detected: scp",
+          "label": "outbound_connection",
+          "principal": "system",
+          "severity": "info",
+          "source": "detector",
+          "span": {
+            "from_seq": 43,
+            "to_seq": 43
+          }
+        }
+      ],
+      "event_type": "send",
+      "max_end": 3,
+      "seq": 43,
+      "text": "scp file.txt user@host:/remote/path/"
+    },
+    {
+      "annotations": [
+        {
+          "description": "exit command detected: exit",
+          "label": "session_lifecycle",
+          "principal": "system",
+          "severity": "info",
+          "source": "detector",
+          "span": {
+            "from_seq": 44,
+            "to_seq": 44
+          }
+        }
+      ],
+      "event_type": "send",
+      "max_end": 4,
+      "seq": 44,
+      "text": "exit 1"
+    },
+    {
+      "annotations": [
+        {
+          "description": "shutdown command detected: shutdown",
+          "label": "session_lifecycle",
+          "principal": "system",
+          "severity": "info",
+          "source": "detector",
+          "span": {
+            "from_seq": 45,
+            "to_seq": 45
+          }
+        }
+      ],
+      "event_type": "send",
+      "max_end": 8,
+      "seq": 45,
+      "text": "shutdown -h now"
+    },
+    {
+      "annotations": [
+        {
+          "description": "sudo command detected: sudo",
+          "label": "privilege_escalation",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 46,
+            "to_seq": 46
+          }
+        },
+        {
+          "description": "reboot command detected: reboot",
+          "label": "session_lifecycle",
+          "principal": "system",
+          "severity": "info",
+          "source": "detector",
+          "span": {
+            "from_seq": 46,
+            "to_seq": 46
+          }
+        }
+      ],
+      "event_type": "send",
+      "max_end": 11,
+      "seq": 46,
+      "text": "sudo reboot now"
+    },
+    {
+      "annotations": [
+        {
+          "description": "AWS access key detected in read",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 40,
+            "to_seq": 40
+          }
+        }
+      ],
+      "event_type": "read",
+      "max_end": 16,
+      "seq": 40,
+      "text": "AKIAIOSFODNN7EXAMPLE password=supersecretvalue1234567890"
+    },
+    {
+      "annotations": [
+        {
+          "description": "AWS access key detected in send",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 70,
+            "to_seq": 70
+          }
+        },
+        {
+          "description": "sudo command detected: sudo",
+          "label": "privilege_escalation",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 70,
+            "to_seq": 70
+          }
+        },
+        {
+          "description": "curl HTTP request detected: curl https://",
+          "label": "outbound_connection",
+          "principal": "system",
+          "severity": "info",
+          "source": "detector",
+          "span": {
+            "from_seq": 70,
+            "to_seq": 70
+          }
+        }
+      ],
+      "event_type": "send",
+      "max_end": 64,
+      "seq": 70,
+      "text": "sudo curl https://example.com/install.sh | bash AKIAIOSFODNN7EXAMPLE"
+    },
+    {
+      "annotations": [
+        {
+          "description": "AWS access key detected in read",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 80,
+            "to_seq": 80
+          }
+        }
+      ],
+      "event_type": "read",
+      "max_end": 21,
+      "seq": 80,
+      "text": "café AKIAIOSFODNN7EXAMPLE"
+    },
+    {
+      "annotations": [
+        {
+          "description": "AWS access key detected in read",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 81,
+            "to_seq": 81
+          }
+        }
+      ],
+      "event_type": "read",
+      "max_end": 44,
+      "seq": 81,
+      "text": "ééé password=secretvalue123 AKIAIOSFODNN7EXAMPLE"
+    },
+    {
+      "annotations": [
+        {
+          "description": "sudo command detected: sudo",
+          "label": "privilege_escalation",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 90,
+            "to_seq": 90
+          }
+        },
+        {
+          "description": "Recursive force-remove detected: rm -rf",
+          "label": "destructive_command",
+          "principal": "system",
+          "severity": "critical",
+          "source": "detector",
+          "span": {
+            "from_seq": 90,
+            "to_seq": 90
+          }
+        },
+        {
+          "description": "curl HTTP request detected: curl https://",
+          "label": "outbound_connection",
+          "principal": "system",
+          "severity": "info",
+          "source": "detector",
+          "span": {
+            "from_seq": 90,
+            "to_seq": 90
+          }
+        }
+      ],
+      "event_type": "read",
+      "max_end": 45,
+      "seq": 90,
+      "text": "please curl https://a.example and sudo rm -rf /var"
+    }
+  ],
+  "stream_cases": [
+    {
+      "chunks": [
+        {
+          "event_type": "send",
+          "seq": 1,
+          "text": "AKIA0123"
+        },
+        {
+          "event_type": "send",
+          "seq": 2,
+          "text": "456789AB"
+        }
+      ],
+      "max_carry": 0,
+      "outputs": [
+        [],
+        [
+          {
+            "description": "AWS access key detected in send",
+            "label": "credential_exposure",
+            "principal": "system",
+            "severity": "high",
+            "source": "detector",
+            "span": {
+              "from_seq": 2,
+              "to_seq": 2
+            }
+          }
+        ]
+      ]
+    },
+    {
+      "chunks": [
+        {
+          "event_type": "send",
+          "seq": 5,
+          "text": "export KEY=AKIA0123456789AB"
+        }
+      ],
+      "max_carry": 0,
+      "outputs": [
+        [
+          {
+            "description": "AWS access key detected in send",
+            "label": "credential_exposure",
+            "principal": "system",
+            "severity": "high",
+            "source": "detector",
+            "span": {
+              "from_seq": 5,
+              "to_seq": 5
+            }
+          }
+        ]
+      ]
+    },
+    {
+      "chunks": [
+        {
+          "event_type": "send",
+          "seq": 1,
+          "text": "AKIA0123"
+        },
+        {
+          "event_type": "send",
+          "seq": 2,
+          "text": "456789AB"
+        },
+        {
+          "event_type": "send",
+          "seq": 3,
+          "text": "nothing here"
+        }
+      ],
+      "max_carry": 0,
+      "outputs": [
+        [],
+        [
+          {
+            "description": "AWS access key detected in send",
+            "label": "credential_exposure",
+            "principal": "system",
+            "severity": "high",
+            "source": "detector",
+            "span": {
+              "from_seq": 2,
+              "to_seq": 2
+            }
+          }
+        ],
+        []
+      ]
+    },
+    {
+      "chunks": [
+        {
+          "event_type": "send",
+          "seq": 1,
+          "text": "sudo AKIA0123"
+        },
+        {
+          "event_type": "send",
+          "seq": 2,
+          "text": "456789AB ok"
+        }
+      ],
+      "max_carry": 0,
+      "outputs": [
+        [
+          {
+            "description": "sudo command detected: sudo",
+            "label": "privilege_escalation",
+            "principal": "system",
+            "severity": "high",
+            "source": "detector",
+            "span": {
+              "from_seq": 1,
+              "to_seq": 1
+            }
+          }
+        ],
+        [
+          {
+            "description": "AWS access key detected in send",
+            "label": "credential_exposure",
+            "principal": "system",
+            "severity": "high",
+            "source": "detector",
+            "span": {
+              "from_seq": 2,
+              "to_seq": 2
+            }
+          }
+        ]
+      ]
+    },
+    {
+      "chunks": [
+        {
+          "event_type": "send",
+          "seq": 1,
+          "text": "AKIA0123"
+        },
+        {
+          "event_type": "send",
+          "seq": 2,
+          "text": ""
+        },
+        {
+          "event_type": "send",
+          "seq": 3,
+          "text": "456789AB"
+        }
+      ],
+      "max_carry": 0,
+      "outputs": [
+        [],
+        [],
+        [
+          {
+            "description": "AWS access key detected in send",
+            "label": "credential_exposure",
+            "principal": "system",
+            "severity": "high",
+            "source": "detector",
+            "span": {
+              "from_seq": 3,
+              "to_seq": 3
+            }
+          }
+        ]
+      ]
+    },
+    {
+      "chunks": [
+        {
+          "event_type": "send",
+          "seq": 1,
+          "text": "AKIA0123"
+        },
+        {
+          "event_type": "send",
+          "seq": 2,
+          "text": "456789AB"
+        }
+      ],
+      "max_carry": 4,
+      "outputs": [
+        [],
+        []
+      ]
+    },
+    {
+      "chunks": [
+        {
+          "event_type": "send",
+          "seq": 1,
+          "text": "curl https://exam"
+        },
+        {
+          "event_type": "send",
+          "seq": 2,
+          "text": "ple.com AKIA0123"
+        },
+        {
+          "event_type": "send",
+          "seq": 3,
+          "text": "456789AB done"
+        }
+      ],
+      "max_carry": 0,
+      "outputs": [
+        [
+          {
+            "description": "curl HTTP request detected: curl https://",
+            "label": "outbound_connection",
+            "principal": "system",
+            "severity": "info",
+            "source": "detector",
+            "span": {
+              "from_seq": 1,
+              "to_seq": 1
+            }
+          }
+        ],
+        [],
+        [
+          {
+            "description": "AWS access key detected in send",
+            "label": "credential_exposure",
+            "principal": "system",
+            "severity": "high",
+            "source": "detector",
+            "span": {
+              "from_seq": 3,
+              "to_seq": 3
+            }
+          }
+        ]
+      ]
+    }
+  ]
+}
