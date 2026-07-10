@@ -9,13 +9,17 @@ prefer popular maintained libraries over 1:1 ports where sensible; use
 opus/sonnet for coding subagents; use the latest version of every package
 and Go itself.
 
-## Status: the port is functionally complete
+## Status: the port is functionally complete + hardened
 
-38 Go packages committed on `main`. Whole-module `go build ./...`,
-`go test -race ./...`, and `go vet ./...` are clean; `make quality-gate`
-(gofmt/vet/golangci-lint/race/coverage) passes at 97.1% total coverage;
-govulncheck reports 0 called vulnerabilities. A `uterm` binary builds and its
-subcommand tree mirrors the Python CLI. Go 1.26.5, all deps on latest.
+50 Go packages, 3 binaries (uterm, uterm-mcp, uterm-manager) committed on
+`main`. Whole-module `go build ./...`, `go test -race ./...`, and
+`go vet ./...` are clean; `make quality-gate`
+(gofmt/vet/golangci-lint/race/coverage) passes at **95.3%** total coverage
+(floor 95.0, up from 92.0 — manager rose 77%→94.2% this pass); govulncheck
+reports 0 called vulnerabilities. Go 1.26.5, all deps on latest. Binary build
+and vuln scan are now explicit, separately-visible CI steps
+(`make build-binaries`, `make vuln`), and a Go mutation gate (gremlins) runs
+over a small pure-function perimeter — see "Mutation gate" below.
 
 ## What "compatible" means (answer to Tim's question)
 
@@ -147,16 +151,16 @@ pty (platform PTY/PAM/uid), annotation, server egress guard (SSRF) +
 discovery + recording routes + PAM.
 
 50 packages, 3 binaries (uterm, uterm-mcp, uterm-manager). Coverage: library/
-wire packages ~100%; integration outliers manager ~77, server/gateway ~86,
+wire packages ~100%; integration outliers manager ~94.2% (real-child-process
+monitor-loop tests added this pass; residual is syscall-fault-injection-only:
+rename/write/MkdirAll failures, log rotation), server ~88, gateway ~86,
 cli ~91 (live-socket / TTY / multi-process / OS-signal branches). Whole-module
-total 93.7%; floor 92% in the Makefile with documented rationale. govulncheck:
+total 95.3%; floor 95.0 in the Makefile with documented rationale. govulncheck:
 0 called vulns.
 
 Only intentional skip: tracing.py (OpenTelemetry span setup — project rule
-forbids direct OTel; ptel covers logging). Documented partials: PAM tunnel
-bridge (pam_tunnel PamTunnelBridge — depends on the worker-link layer);
-manager monitor-loop reconciliation undertested (needs live multi-process
-orchestration).
+forbids direct OTel; ptel covers logging). Documented partial: PAM tunnel
+bridge (pam_tunnel PamTunnelBridge — depends on the worker-link layer).
 
 CLI status: ALL subcommands now real — server, proxy, listen, watch, audit,
 and share/tunnel/inspect (via the tunnelclient package: byte-faithful frame
@@ -193,7 +197,9 @@ list are now done.**
   add `// pragma: allowlist secret` (or `# pragma...` inside TOML fixtures)
   for legitimate test tokens; codespell ignore-words holds shiftin/shttp/
   defint. Re-add + retry after a hook auto-fix.
-- CI `go-quality` job runs `make quality-gate`.
+- CI `go-quality` job runs `make quality-gate`, `make build-binaries`,
+  `make vuln`, `make interop-test` (Go→Python), and the reverse
+  Python→Go interop pytest. `go-mutation-gate` is a separate CI job.
 - vt/pyte provenance: pyte is LGPL; commit 92a17735 records the fresh-
   implementation rationale — add a licensing-docs note if the module ships.
 - Session memory `project-go-port` mirrors this state;
