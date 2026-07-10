@@ -52,6 +52,14 @@ CATEGORY_SOURCES: dict[str, dict[str, list[dict[str, object]]]] = {
             {"dir": "packages/provide-uterm-go/client", "type": "HijackClient"},
         ],
     },
+    "emulator": {
+        "python": [
+            {"file": "packages/provide-uterm/src/provide/uterm/emulator.py", "class": "TerminalEmulator"},
+        ],
+        "go": [
+            {"dir": "packages/provide-uterm-go/emulator", "type": "TerminalEmulator"},
+        ],
+    },
 }
 
 

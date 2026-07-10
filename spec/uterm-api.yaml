@@ -37,6 +37,14 @@ api:
       kind: type
       required: true
       note: "base session type wrapping any transport + terminal emulator"
+    - name: connect
+      kind: function
+      required: true
+      note: >-
+        Lifecycle method that opens the underlying transport (Python:
+        TransportSession.connect; Go: TransportSession.Connect). The
+        connect_telnet/connect_ws module helpers wrap it for the common
+        transports.
     - name: connect_telnet
       kind: function
       required: true
@@ -168,3 +176,37 @@ api:
     - name: post
       kind: function
       required: true
+  # provide.uterm.emulator.TerminalEmulator (Python) <->
+  # packages/provide-uterm-go/emulator.TerminalEmulator (Go). The transport-
+  # agnostic terminal state machine both sessions embed: feed it bytes, read
+  # back a snapshot / ANSI screen. Public and parity-guaranteed in both.
+  emulator:
+    - name: TerminalEmulator
+      kind: type
+      required: true
+      note: "transport-agnostic terminal state machine embedded by every session"
+    - name: process
+      kind: function
+      required: true
+      note: "feed raw bytes into the emulator (Python: process; Go: Process)"
+    - name: get_snapshot
+      kind: function
+      required: true
+      note: "structured screen snapshot (Python: get_snapshot; Go: GetSnapshot)"
+    - name: ansi_screen
+      kind: function
+      required: true
+      note: "ANSI-rendered screen text (Python: ansi_screen; Go: ANSIScreen)"
+    - name: reset
+      kind: function
+      required: true
+    - name: resize
+      kind: function
+      required: true
+    - name: get_raw_tail
+      kind: function
+      required: false
+      note: >-
+        Both languages expose the raw-output tail, but the names diverge
+        (Python: get_raw_tail; Go: RawTail, not GetRawTail), so this is an
+        accepted naming difference rather than an enforced parity symbol.
