@@ -20,6 +20,7 @@ import (
 	ptel "github.com/provide-io/provide-telemetry/go"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/deckmux"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/fanout"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverauth"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
@@ -102,6 +103,12 @@ type Server struct {
 	// connect (see (*Server).deck) and wired to the hub browser broadcast.
 	deckOnce     sync.Once
 	deckPresence *deckmux.DeckMuxPresence
+
+	// fanout is the fan-out controller backing the /api/fanout routes, the
+	// browser-WS fanout_send message, and (via those REST routes) the MCP
+	// fanout_group_create / fanout_send tools. Always constructed (the Python
+	// factory always wires fan_out_controller).
+	fanout *fanout.Controller
 }
 
 // New assembles a Server from deps. It validates required dependencies, builds
@@ -146,6 +153,7 @@ func New(deps Deps) (*Server, error) {
 		startTime: deps.Clock.Wall(),
 	}
 	s.computeAllowedOrigins()
+	s.fanout = fanout.NewController(deps.Hub, fanout.Config{Clock: deps.Clock})
 	s.handler = s.buildHandler()
 	return s, nil
 }
@@ -179,6 +187,7 @@ func (s *Server) buildHandler() http.Handler {
 	s.registerSSERoutes(mux)
 	s.registerWebhookRoutes(mux)
 	s.registerBridgeRESTRoutes(mux)
+	s.registerFanoutRoutes(mux)
 	s.registerWSRoutes(mux)
 	s.registerPageRoutes(mux)
 	return s.requestLogging(s.securityHeaders(s.corsAndOrigin(mux)))

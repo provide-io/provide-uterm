@@ -35,12 +35,13 @@ func (s *Server) resolveBrowserRole(ctx context.Context, p *serverauth.Principal
 // handleBrowserWS serves /ws/browser/{id}/term — dashboard viewers + hijack
 // control. Port of ws_browser_term.
 //
-// Deviations (documented): fan-out and resume-token reclaim are omitted. This
-// handler covers viewer streaming + the WS hijack lifecycle (request / release /
-// step / heartbeat) + input (with the per-frame token-bucket rate limits, the
+// Deviations (documented): resume-token reclaim is omitted. This handler covers
+// viewer streaming + the WS hijack lifecycle (request / release / step /
+// heartbeat) + input (with the per-frame token-bucket rate limits, the
 // lease/permission gate prepare_browser_input, and the input-approval hold/park
-// pipeline, see browserRecvLoop + browserInputGated) + snapshot_req/ping, plus
-// DeckMux collaborative presence (connect/message/disconnect).
+// pipeline, see browserRecvLoop + browserInputGated) + snapshot_req/ping +
+// fanout_send (see browserFanoutSend), plus DeckMux collaborative presence
+// (connect/message/disconnect).
 func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 	workerID := r.PathValue("worker_id")
 	if !validID(workerID) {
