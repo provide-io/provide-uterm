@@ -41,7 +41,7 @@ func TestBuildRecordingStore(t *testing.T) {
 // context.Background() before building, then fails fast on a bad config path.
 func TestRunServerNilContext(t *testing.T) {
 	//nolint:staticcheck // deliberately passing a nil context to exercise the guard
-	if err := runServer(nil, "/no/such/config.toml", "", 0); err == nil {
+	if err := runServer(nil, "/no/such/config.toml", "", 0, ""); err == nil {
 		t.Fatal("bad config should error even with a nil context")
 	}
 }
@@ -70,7 +70,7 @@ notify_socket = "/nonexistent-uterm-dir/pam.sock"
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	bundle, err := buildServer(ctx, path, "", 0)
+	bundle, err := buildServer(ctx, path, "", 0, "")
 	if err != nil {
 		t.Fatalf("buildServer with pam: %v", err)
 	}

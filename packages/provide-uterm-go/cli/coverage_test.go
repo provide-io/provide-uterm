@@ -134,7 +134,7 @@ jwt_public_key_pem = "-----BEGIN PUBLIC KEY-----\nMFkwabc\n-----END PUBLIC KEY--
 	}
 	// Exercises buildServer's webhook auth branch end-to-end (engine open +
 	// server.New).
-	b, err := buildServer(context.Background(), path, "", 0)
+	b, err := buildServer(context.Background(), path, "", 0, "")
 	if err != nil {
 		t.Fatalf("buildServer webhook: %v", err)
 	}

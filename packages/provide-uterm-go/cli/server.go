@@ -48,13 +48,17 @@ func newServerCmd() *cobra.Command {
 			configPath, _ := cmd.Flags().GetString("config")
 			host, _ := cmd.Flags().GetString("host")
 			port, _ := cmd.Flags().GetInt("port")
-			return runServer(cmd.Context(), configPath, host, port)
+			frontendDir, _ := cmd.Flags().GetString("frontend-dir")
+			return runServer(cmd.Context(), configPath, host, port, frontendDir)
 		},
 	}
 	f := cmd.Flags()
 	f.String("config", "", "Path to a TOML config file")
 	f.String("host", "", "Override the bind host")
 	f.Int("port", 0, "Override the bind port")
+	f.String("frontend-dir", "", "Path to the built frontend assets directory "+
+		"(packages/provide-uterm-server/src/provide/uterm/server/frontend after `npm run build:frontend`); "+
+		"empty serves a minimal vanilla shell with no static asset mount")
 	return cmd
 }
 
@@ -81,7 +85,7 @@ func applyServerOverrides(cfg *serverconfig.UtermServerConfig, host string, port
 // up telemetry (the app layer — the one place SetupTelemetry belongs), builds
 // the authenticator/authz, TermHub, control-plane engine, and a concrete
 // SessionRegistry, and returns the wired server without binding a socket.
-func buildServer(ctx context.Context, configPath, host string, port int) (*serverBundle, error) {
+func buildServer(ctx context.Context, configPath, host string, port int, frontendDir string) (*serverBundle, error) {
 	cfg, err := serverconfig.LoadServerConfig(configPath)
 	if err != nil {
 		return nil, err
@@ -131,17 +135,18 @@ func buildServer(ctx context.Context, configPath, host string, port int) (*serve
 	registry := NewSessionRegistry(cfg)
 
 	srv, err := server.New(server.Deps{
-		Hub:       h,
-		Auth:      auth,
-		Authz:     serverauth.NewAuthorizationService(),
-		Config:    cfg,
-		Registry:  registry,
-		APIKeys:   apiKeys,
-		Metrics:   metrics,
-		Clock:     clock,
-		Version:   Version,
-		Logger:    logger,
-		Recording: buildRecordingStore(cfg),
+		Hub:         h,
+		Auth:        auth,
+		Authz:       serverauth.NewAuthorizationService(),
+		Config:      cfg,
+		Registry:    registry,
+		APIKeys:     apiKeys,
+		Metrics:     metrics,
+		Clock:       clock,
+		Version:     Version,
+		Logger:      logger,
+		Recording:   buildRecordingStore(cfg),
+		FrontendDir: frontendDir,
 	})
 	if err != nil {
 		_ = engine.Close(ctx)
@@ -187,14 +192,14 @@ func controlPlaneConfig(cfg *serverconfig.UtermServerConfig) cp.Config {
 
 // runServer builds the server and runs it until SIGINT/SIGTERM, then shuts down
 // gracefully (HTTP drain + hub shutdown via server.Run, then the engine).
-func runServer(ctx context.Context, configPath, host string, port int) error {
+func runServer(ctx context.Context, configPath, host string, port int, frontendDir string) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	sigCtx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	bundle, err := buildServer(sigCtx, configPath, host, port)
+	bundle, err := buildServer(sigCtx, configPath, host, port, frontendDir)
 	if err != nil {
 		return err
 	}
