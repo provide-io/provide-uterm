@@ -12,24 +12,32 @@ import (
 
 // Sweep intervals, matching factory_sweeps.py.
 const (
-	approvalSweepInterval = 30 * time.Second
-	idleSweepInterval     = 60 * time.Second
-	sessionSweepInterval  = 300 * time.Second
+	approvalSweepInterval     = 30 * time.Second
+	idleSweepInterval         = 60 * time.Second
+	sessionSweepInterval      = 300 * time.Second
+	tunnelInviteSweepInterval = 60 * time.Second
 )
 
 // StartSweeps launches the background maintenance goroutines. They run until ctx
 // is cancelled; Shutdown waits for them via sweepWG. Idempotent.
 //
-// Deviation: the tunnel-token, recording-retention, control-plane-reap, and
-// node-registry-heartbeat sweeps are not launched here — they depend on
-// infrastructure (tunnel token maps, recording directory, control-plane engine,
-// discovery provider) outside this HTTP layer's dependency set.
+// Deviation: the recording-retention, control-plane-reap, and node-registry-
+// heartbeat sweeps are not launched here — they depend on infrastructure
+// (recording directory, control-plane engine, discovery provider) outside this
+// HTTP layer's dependency set.
 func (s *Server) StartSweeps(ctx context.Context) {
 	s.sweepOnce.Do(func() {
 		s.launchSweep(ctx, approvalSweepInterval, s.sweepApprovals)
 		s.launchSweep(ctx, idleSweepInterval, s.sweepIdleSessions)
 		s.launchSweep(ctx, sessionSweepInterval, s.sweepExpiredSessions)
+		s.launchSweep(ctx, tunnelInviteSweepInterval, s.sweepTunnelInvites)
 	})
+}
+
+// sweepTunnelInvites drops expired one-time tunnel invites. Port of
+// sweep_expired_tunnel_invites.
+func (s *Server) sweepTunnelInvites(context.Context) {
+	s.deps.TunnelStore.SweepExpired(s.clock.Wall())
 }
 
 // launchSweep runs fn on a fixed cadence until ctx is done.

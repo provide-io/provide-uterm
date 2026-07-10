@@ -10,17 +10,14 @@ import (
 	"strings"
 )
 
-// registerTunnelRoutes wires POST /api/connect (quick-connect). Port of the
-// quick_connect route in tunnels.py.
-//
-// Deviation: the tunnel token/invite lifecycle routes (POST /api/tunnels,
-// DELETE/POST /api/tunnels/{id}/tokens[/rotate], and the /s/{id} share consumer)
-// are NOT ported — they depend on the tunnel-invite issuance/verification
-// infrastructure (issue_tunnel_invites, BLAKE2b token hashing, share cookies)
-// which is not part of the ported Go package set. quick_connect is the only
-// tunnel-family route the Go client targets.
+// registerTunnelRoutes wires POST /api/connect (quick-connect) plus the full
+// tunnel invite/token lifecycle. Port of tunnels.py + the /s/{id} share
+// consumer from app/routes_wiring.py. The lifecycle routes are registered by
+// registerTunnelLifecycleRoutes (routes_tunnels_full.go), backed by the tunnel
+// package (BLAKE2b token hashing, one-time invites, share cookies).
 func (s *Server) registerTunnelRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/connect", s.authenticated(s.handleQuickConnect))
+	s.registerTunnelLifecycleRoutes(mux)
 }
 
 // reservedConnectKeys are the top-level quick-connect keys that are NOT folded
