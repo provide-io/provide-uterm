@@ -38,6 +38,7 @@ func TestConstantValues(t *testing.T) {
 		{"GatewayTelnetPort", GatewayTelnetPort, 2112},
 		{"GatewaySSHPort", GatewaySSHPort, 2222},
 		{"ProxyPort", ProxyPort, 8765},
+		{"ProxyPollMS", ProxyPollMS, 50},
 		{"ServerPort", ServerPort, 8780},
 		{"TelnetRemotePort", TelnetRemotePort, 23},
 		{"SSHRemotePort", SSHRemotePort, 22},
