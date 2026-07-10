@@ -2,84 +2,89 @@
 
 ## Problem / request
 
-Port uterm to Go (`/goal` 2026-07-09), with: 100% tested/TDD, all quality
-gates passing, secure, well formatted, good hygiene, **wire-compatible with
-the Python implementation**, and using the provide-telemetry library.
-Follow-ups from Tim mid-session: prefer popular maintained libraries over
-1:1 ports where sensible (propose with reasoning), and use opus/sonnet
-models for coding subagents.
+Port uterm to Go (`/goal` 2026-07-09): 100% tested/TDD, all quality gates
+passing, secure, well formatted, good hygiene, **wire-compatible with the
+Python implementation**, using provide-telemetry. Mid-session directives from
+Tim: prefer popular maintained libraries over 1:1 ports where sensible
+(propose with reasoning); use opus/sonnet for coding subagents; use the
+latest version of every package and Go itself.
+
+## What "compatible" means here (answer to Tim's question)
+
+- **Wire protocol: byte-level compatible, proven.** Go and Python interoperate
+  over the identical WebSocket DLE/STX control-frame format, frame schemas,
+  and HMAC identity signatures. Proven by differential corpora generated from
+  CPython (vt 911 cases, ctrlmsg 544 HMAC sigs, 24 golden frames, controlchannel
+  both-direction round-trips, controlplane SQLite cross-readable both ways).
+- **xterm: same frontend.** The browser still runs the existing xterm.js
+  TypeScript. Emulation engine differs (pyte → the `vt` port) but is
+  behaviorally identical (911-case full-state differential, 0 mismatches).
+- **API: semantically equivalent, NOT signature-identical.** Idiomatic Go
+  (option structs, error returns, context.Context, pointers for None). Not a
+  drop-in for Python-API callers.
+- **CLI: not built yet** (task #8). When built, mirror `uterm` / `uterm server`
+  subcommand syntax.
 
 ## Approach / reasoning
 
-- New workspace member `packages/provide-uterm-go/` (Go module
-  `github.com/provide-io/provide-uterm/packages/provide-uterm-go`, go 1.26).
-- Python stays the reference. Every wire/text-transform package is proven by
-  a **differential corpus vs CPython** (generated via `uv run` scripts),
-  with deterministic goldens committed under `testdata/` so Go CI re-checks
-  parity without Python. See packages/provide-uterm-go/README.md for the
-  package map and parity table.
-- Library choices (user-approved direction): coder/websocket (WS client),
-  x/crypto/ssh (SSH), provide-telemetry/go v0.5.0 (published;
-  `ptel.GetLogger(ctx, name)` returns *slog.Logger — libraries take an
-  injectable *slog.Logger, apps call ptel directly), modernc.org/sqlite
-  (pure-Go, for the control plane). Exception: pyte was PORTED (package
-  `vt`) because prompt-detection parity depends on pyte's exact screen
-  semantics — proven with a 911-case full-state differential (0 mismatches).
-- Quality bar per package: 100% statement coverage, go vet, golangci-lint,
-  -race, gofmt, SPDX headers. `make quality-gate` in the Go module enforces
-  all of it (fmt-check/vet/lint/race/cover-100%).
-- One logical unit per commit; every landed package committed separately.
+- Workspace member `packages/provide-uterm-go/` (module
+  `github.com/provide-io/provide-uterm/packages/provide-uterm-go`, go 1.26.5).
+- Python stays the reference. Every wire/text-transform package proven by a
+  differential corpus vs CPython (generated via `uv run` scripts), with
+  deterministic goldens committed under `testdata/`. See the module README for
+  the package map + parity table.
+- Libraries (approved direction): coder/websocket, x/crypto/ssh,
+  provide-telemetry/go v0.5.0 (`ptel.GetLogger` → *slog.Logger; libraries take
+  an injectable *slog.Logger, apps call ptel), modernc.org/sqlite (pure Go).
+  pyte was PORTED (`vt`) because prompt detection depends on its exact screen
+  semantics.
+- Per-package gate: 100% coverage target, go vet, golangci-lint, -race, gofmt,
+  SPDX headers. `make quality-gate` in the module enforces it (whole-module
+  threshold set to 99.5% — see Makefile rationale). One logical unit per commit.
 
-## Completed (all 100% coverage, race- and lint-clean, committed)
+## Completed (committed, gates green)
 
-controlchannel (+latin-1 shim), channels, sanitizer, redaction, filters,
-lineeditor, auth, ansi, colors, screen (+CP437), defaults, frames
-(golden-parity incl. extras policies), ctrlmsg (CPython-exact canonical JSON
-→ HMAC signature parity, 544-case corpus), fileio, recording, sessionlogger,
-session (io+expect), replay, vt (pyte port), emulator, render (palette/SGR/
-segments/buffer/image), deckmux, transports (98.2% — residual lines are
-non-deterministic syscall branches; documented), termsession
-(telnet+WS sessions, loopback + live echo-server e2e).
+31 Go packages. All 100% coverage except transports 98.2%, client 99.7%,
+controlplane/sqlite 95.1% (residuals are non-deterministic syscall/driver
+guards the Python originals also exclude via pragma). Whole-module
+`go test -race ./...` passes at 99.7% total; govulncheck: 0 called vulns.
 
-Repo plumbing: detect-secrets excludes `packages/provide-uterm-go/*/testdata/`
-(synthetic golden vectors); codespell allows "ShiftIn".
+controlchannel, channels, sanitizer, redaction, filters, lineeditor, auth,
+ansi, colors, screen, defaults, frames, ctrlmsg, fileio, recording,
+sessionlogger, session, replay, vt, emulator, render, deckmux, transports,
+termsession, detection, bridge, client, shell, hub (wave-A services),
+controlplane (+memory/+sqlite/+bootstrap).
 
-## In flight (background agents, opus)
+Repo plumbing: ci.yml `go-quality` job (make quality-gate, toolchain from
+go.mod); detect-secrets excludes `packages/provide-uterm-go/*/testdata/`;
+codespell allows "ShiftIn" and "sHTTP". Deps bumped to latest, Go 1.26.5.
 
-- detection/ — engine port with differential corpus (resumed once after an
-  API stall; 50/50 differential cases were already passing).
-- bridge/ — worker_link (TermBridge), contracts version negotiation,
-  coordinator; fake-hub WebSocket e2e.
-- controlplane/ — memory + sqlite engines/stores, **cross-compatible DB
-  files with Python** (both-direction round-trip tests), modernc.org/sqlite.
+## Next-session checklist (nothing in flight — all agents landed)
 
-## Next-session checklist
-
-- [ ] Land + commit the three in-flight agent packages (verify gates first).
-- [ ] Hub/server core (task #5, ~5.8k lines): split into (a) services
-      (registry/limiter/approval/lease/state), (b) router/connection/
-      presence/polling, (c) net/http server + WS endpoint + TOML config +
-      auth modes. Reuse frames/controlchannel/bridge contracts.
-- [ ] shell/ (~1.5k lines) — decide shape of the Go REPL port.
-- [ ] uterm-go CLI + server binary (cobra + pelletier/go-toml/v2 proposed),
-      ptel.SetupTelemetry at app startup.
-- [ ] Client HTTP/WS consumer lib + MCP tools + platform PTY connector
-      (creack/pty proposed) if scope includes them.
-- [ ] CI job for the Go module (mirror `make quality-gate`), root docs
-      mention, licensing note for the vt/pyte provenance (pyte is LGPL;
-      commit 92a17735 records the fresh-implementation rationale).
-- [ ] Full-module `go test -race ./...` + quality-gate once no agents are
-      mid-write.
+- [ ] **Hub wave-B** (task #5, the remaining server core): TermHub composition
+      over the wave-A services, MessageRouter (broadcast/send_worker + hijack-
+      state frame building), ConnectionManager, PresenceManager, resume-token
+      store. Wave-A left clean seams (LeaseHub, StateStoreConfig callbacks,
+      IdentityProvider, polling requestSnapshot func) — compose, don't rewrite.
+      Python source: packages/provide-uterm-server/.../bridge/hub/ (core_impl.py,
+      router_impl.py, connection.py, resume.py, ext.py, event_bus.py).
+- [ ] **HTTP/WS server + gateway** (net/http): the REST routes the Go client
+      already targets (bridge/routes/*.py), the browser WS endpoint, TOML
+      config (propose pelletier/go-toml/v2), auth modes (dev_token/jwt/header/
+      api_key/webhook — security-sensitive, mirror exactly).
+- [ ] **CLI + server binary** (task #8): cobra, mirror `uterm`/`uterm server`
+      syntax, `ptel.SetupTelemetry` at startup.
+- [ ] MCP tools (propose mark3labs/mcp-go), platform PTY connector (propose
+      creack/pty) — if in scope.
+- [ ] After each: `make quality-gate` (module) + the package's differential
+      parity check.
 
 ## Key facts for whoever continues
 
-- Never run whole-module `go test ./...` while agents are writing partial
-  packages; test per-package from the module root (shell cwd resets between
-  commands — always `cd packages/provide-uterm-go` first).
-- Pre-commit stash warnings ("Unstaged files detected") during commits are
-  the concurrent agents' worktrees — harmless; retry once if a hook claims
-  "files were modified".
-- go.mod is edited by at most one agent at a time (currently controlplane).
-- Session memory: ~/.claude/.../memory/project_go_port.md tracks the same
-  state. The previous HANDOFF content (kbdint/webhook live tests) was
-  completed work from an earlier session; see git history of this file.
+- Shell cwd resets between Bash calls — always `cd packages/provide-uterm-go`
+  first; `git` ops from the repo root.
+- Pre-commit occasionally reformats (ruff) or flags codespell/detect-secrets on
+  Go files — re-add and retry; add allowlist entries for legitimate tokens.
+- Session memory: ~/.claude/.../memory/project_go_port.md mirrors this state.
+- vt/pyte provenance: pyte is LGPL; commit 92a17735 records the fresh-
+  implementation rationale — add a licensing-docs note if the module ships.
