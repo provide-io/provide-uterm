@@ -106,7 +106,9 @@ func TestUIPageBootstrap(t *testing.T) {
 			if boot["session_id"] != c.sessionID {
 				t.Fatalf("%s: session_id=%v want %s", c.path, boot["session_id"], c.sessionID)
 			}
-			// share_role is always present (null in this port).
+			// share_role is always present; null for a non-share principal (this
+			// request carries an IdP header, not a tunnel-share cookie). The
+			// share-cookie path is covered by TestSharePageEmitsShareRole.
 			if v, ok := boot["share_role"]; !ok || v != nil {
 				t.Fatalf("%s: share_role=%v present=%v want null", c.path, v, ok)
 			}

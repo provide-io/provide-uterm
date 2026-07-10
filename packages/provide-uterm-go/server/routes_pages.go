@@ -16,13 +16,12 @@ import (
 // and the static asset mount (Config.UI.AssetsPath). Port of pages.py + ui.py +
 // mount_frontend_assets.
 //
-// Deviation from Python: the tunnel share cookie (uterm_tunnel_{id}) and the
-// bootstrap "share_role" are NOT set here. In this Go port the /s/{id} share
-// consumer (handleShareConsumer in routes_tunnels_full.go) already sets that
-// HttpOnly cookie before redirecting to the page, and there is no request-state
-// carrier (Python's request.state.uterm_share_role) threaded into the page
-// routes — so share_role is emitted as null. This is a documented simplification;
-// the core dashboard/session/operator/replay/inspect rendering is at full parity.
+// The tunnel-share flow is at parity: the /s/{id} share consumer
+// (handleShareConsumer in routes_tunnels_full.go) sets the HttpOnly
+// uterm_tunnel_{id} cookie, resolvePrincipal validates it into a share
+// principal (resolveShareprincipal in tunnel_share_auth.go), and the session/
+// operator/replay/inspect handlers emit its role in the "share_role" bootstrap
+// via sharePageRole. Non-share principals emit null, as before.
 func (s *Server) registerPageRoutes(mux *http.ServeMux) {
 	s.ui = newUIManifests(s.deps.FrontendDir)
 
@@ -126,7 +125,7 @@ func (s *Server) handleSessionPage(w http.ResponseWriter, r *http.Request) {
 	}
 	cdn := cdnFromUI(s.cfg.UI)
 	s.setPageCookies(w, r, principalOf(r).Name(), "user", isSecureRequest(r))
-	writePage(w, s.ui.sessionPageHTML(def.DisplayName, s.cfg.UI.AssetsPath, id, false, s.cfg.UI.AppPath, nil, cdn))
+	writePage(w, s.ui.sessionPageHTML(def.DisplayName, s.cfg.UI.AssetsPath, id, false, s.cfg.UI.AppPath, sharePageRole(principalOf(r)), cdn))
 }
 
 func (s *Server) handleOperatorPage(w http.ResponseWriter, r *http.Request) {
@@ -136,7 +135,7 @@ func (s *Server) handleOperatorPage(w http.ResponseWriter, r *http.Request) {
 	}
 	cdn := cdnFromUI(s.cfg.UI)
 	s.setPageCookies(w, r, principalOf(r).Name(), "operator", isSecureRequest(r))
-	writePage(w, s.ui.sessionPageHTML(def.DisplayName, s.cfg.UI.AssetsPath, id, true, s.cfg.UI.AppPath, nil, cdn))
+	writePage(w, s.ui.sessionPageHTML(def.DisplayName, s.cfg.UI.AssetsPath, id, true, s.cfg.UI.AppPath, sharePageRole(principalOf(r)), cdn))
 }
 
 func (s *Server) handleReplayPage(w http.ResponseWriter, r *http.Request) {
@@ -146,7 +145,7 @@ func (s *Server) handleReplayPage(w http.ResponseWriter, r *http.Request) {
 	}
 	cdn := cdnFromUI(s.cfg.UI)
 	s.setPageCookies(w, r, principalOf(r).Name(), "operator", isSecureRequest(r))
-	writePage(w, s.ui.replayPageHTML(def.DisplayName, s.cfg.UI.AssetsPath, id, s.cfg.UI.AppPath, nil, cdn))
+	writePage(w, s.ui.replayPageHTML(def.DisplayName, s.cfg.UI.AssetsPath, id, s.cfg.UI.AppPath, sharePageRole(principalOf(r)), cdn))
 }
 
 func (s *Server) handleInspectPage(w http.ResponseWriter, r *http.Request) {
@@ -156,5 +155,5 @@ func (s *Server) handleInspectPage(w http.ResponseWriter, r *http.Request) {
 	}
 	cdn := cdnFromUI(s.cfg.UI)
 	s.setPageCookies(w, r, principalOf(r).Name(), "operator", isSecureRequest(r))
-	writePage(w, s.ui.inspectPageHTML(def.DisplayName, s.cfg.UI.AssetsPath, id, s.cfg.UI.AppPath, nil, cdn))
+	writePage(w, s.ui.inspectPageHTML(def.DisplayName, s.cfg.UI.AssetsPath, id, s.cfg.UI.AppPath, sharePageRole(principalOf(r)), cdn))
 }
