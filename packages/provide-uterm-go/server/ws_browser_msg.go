@@ -36,9 +36,11 @@ func (s *Server) dispatchBrowserMessage(ctx context.Context, conn *websocket.Con
 		s.writeFrame(ctx, conn, frames.PongFrame{Type: frames.TypePong, TS: frames.Ptr(s.clock.Wall())})
 	case "presence_update", "queued_input", "control_request":
 		s.deckHandle(workerID, bc, msg)
+	case "fanout_send":
+		s.browserFanoutSend(ctx, conn, bc, msg)
 	default:
-		// Unhandled types (fanout, resume, http_*) are dropped in this
-		// interop-subset port.
+		// Unhandled types (resume, http_*) are dropped in this interop-subset
+		// port.
 	}
 	return owned
 }
