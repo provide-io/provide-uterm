@@ -6,20 +6,26 @@
 package server
 
 import (
-	"html"
 	"net/http"
 	"strings"
+
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
 )
 
 // registerPageRoutes wires the HTML dashboard pages (under Config.UI.AppPath)
-// and the static asset mount (Config.UI.AssetsPath). Port of pages.py +
+// and the static asset mount (Config.UI.AssetsPath). Port of pages.py + ui.py +
 // mount_frontend_assets.
 //
-// Deviation: the Python pages render full xterm.js shells from server/ui.py and
-// set auth/tunnel cookies. This port serves a minimal HTML shell that points at
-// the mounted assets; the auth-cookie side effect is omitted (the SPA reads its
-// token from the standard auth flow).
+// Deviation from Python: the tunnel share cookie (uterm_tunnel_{id}) and the
+// bootstrap "share_role" are NOT set here. In this Go port the /s/{id} share
+// consumer (handleShareConsumer in routes_tunnels_full.go) already sets that
+// HttpOnly cookie before redirecting to the page, and there is no request-state
+// carrier (Python's request.state.uterm_share_role) threaded into the page
+// routes — so share_role is emitted as null. This is a documented simplification;
+// the core dashboard/session/operator/replay/inspect rendering is at full parity.
 func (s *Server) registerPageRoutes(mux *http.ServeMux) {
+	s.ui = newUIManifests(s.deps.FrontendDir)
+
 	app := strings.TrimRight(s.cfg.UI.AppPath, "/")
 	if app == "" {
 		app = "/app"
@@ -27,9 +33,9 @@ func (s *Server) registerPageRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+app+"/{$}", s.authenticated(s.handleDashboardPage))
 	mux.HandleFunc("GET "+app+"/connect", s.authenticated(s.handleConnectPage))
 	mux.HandleFunc("GET "+app+"/session/{session_id}", s.authenticated(s.handleSessionPage))
-	mux.HandleFunc("GET "+app+"/operator/{session_id}", s.authenticated(s.handleSessionPage))
-	mux.HandleFunc("GET "+app+"/replay/{session_id}", s.authenticated(s.handleSessionPage))
-	mux.HandleFunc("GET "+app+"/inspect/{session_id}", s.authenticated(s.handleSessionPage))
+	mux.HandleFunc("GET "+app+"/operator/{session_id}", s.authenticated(s.handleOperatorPage))
+	mux.HandleFunc("GET "+app+"/replay/{session_id}", s.authenticated(s.handleReplayPage))
+	mux.HandleFunc("GET "+app+"/inspect/{session_id}", s.authenticated(s.handleInspectPage))
 
 	if s.deps.FrontendDir != "" {
 		assets := strings.TrimRight(s.cfg.UI.AssetsPath, "/")
@@ -41,31 +47,114 @@ func (s *Server) registerPageRoutes(mux *http.ServeMux) {
 	}
 }
 
-func (s *Server) handleDashboardPage(w http.ResponseWriter, _ *http.Request) {
-	s.writeHTML(w, s.cfg.Server.Title, "operator dashboard")
+// isSecureRequest reports whether the request arrived over HTTPS. Port of
+// _is_secure_request: trust X-Forwarded-Proto (behind a reverse proxy) then fall
+// back to the direct connection scheme.
+func isSecureRequest(r *http.Request) bool {
+	if strings.Contains(strings.ToLower(r.Header.Get("X-Forwarded-Proto")), "https") {
+		return true
+	}
+	return r.TLS != nil
 }
 
-func (s *Server) handleConnectPage(w http.ResponseWriter, _ *http.Request) {
-	s.writeHTML(w, s.cfg.Server.Title, "connect")
+// setAuthCookie sets an HttpOnly page cookie. Port of _set_auth_cookie.
+func setAuthCookie(w http.ResponseWriter, name, value string, secure bool) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     name,
+		Value:    value,
+		Secure:   secure,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// setPageCookies sets the principal + surface cookies always, and the token
+// cookie only in jwt mode for a non-anonymous principal. Port of
+// _set_page_cookies (minus the tunnel share cookie — see registerPageRoutes).
+func (s *Server) setPageCookies(w http.ResponseWriter, r *http.Request, principalName, surface string, secure bool) {
+	setAuthCookie(w, s.cfg.Auth.PrincipalCookie, principalName, secure)
+	setAuthCookie(w, s.cfg.Auth.SurfaceCookie, surface, secure)
+	if s.cfg.Auth.Mode == "jwt" && principalName != "anonymous" {
+		if token := bearerToken(r); token != "" {
+			setAuthCookie(w, s.cfg.Auth.TokenCookie, token, secure)
+		}
+	}
+}
+
+// writePage writes an HTML page response with the standard content type.
+func writePage(w http.ResponseWriter, htmlDoc string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(htmlDoc))
+}
+
+// readablePageSession validates the session_id, loads the definition (404), and
+// checks the read capability (403), returning the definition + id on success.
+func (s *Server) readablePageSession(w http.ResponseWriter, r *http.Request) (*serverconfig.SessionDefinition, string, bool) {
+	id := r.PathValue("session_id")
+	if !requireID(w, "session_id", id) {
+		return nil, "", false
+	}
+	def, ok := s.definitionOr404(w, r, id)
+	if !ok {
+		return nil, "", false
+	}
+	if !s.deps.Authz.CanReadSession(principalOf(r), def) {
+		detailError(w, http.StatusForbidden, "insufficient privileges")
+		return nil, "", false
+	}
+	return def, id, true
+}
+
+func (s *Server) handleDashboardPage(w http.ResponseWriter, r *http.Request) {
+	cdn := cdnFromUI(s.cfg.UI)
+	// Cookies are response headers — set them before writing the body/status.
+	s.setPageCookies(w, r, principalOf(r).Name(), "operator", isSecureRequest(r))
+	writePage(w, s.ui.operatorDashboardHTML(s.cfg.Server.Title, s.cfg.UI.AppPath, s.cfg.UI.AssetsPath, cdn))
+}
+
+func (s *Server) handleConnectPage(w http.ResponseWriter, r *http.Request) {
+	cdn := cdnFromUI(s.cfg.UI)
+	s.setPageCookies(w, r, principalOf(r).Name(), "operator", isSecureRequest(r))
+	writePage(w, s.ui.connectPageHTML(s.cfg.Server.Title, s.cfg.UI.AssetsPath, s.cfg.UI.AppPath, cdn))
 }
 
 func (s *Server) handleSessionPage(w http.ResponseWriter, r *http.Request) {
-	id, ok := s.readableSession(w, r)
+	def, id, ok := s.readablePageSession(w, r)
 	if !ok {
 		return
 	}
-	s.writeHTML(w, s.cfg.Server.Title, "session "+id)
+	cdn := cdnFromUI(s.cfg.UI)
+	s.setPageCookies(w, r, principalOf(r).Name(), "user", isSecureRequest(r))
+	writePage(w, s.ui.sessionPageHTML(def.DisplayName, s.cfg.UI.AssetsPath, id, false, s.cfg.UI.AppPath, nil, cdn))
 }
 
-// writeHTML renders the minimal page shell.
-func (s *Server) writeHTML(w http.ResponseWriter, title, heading string) {
-	assets := html.EscapeString(s.cfg.UI.AssetsPath)
-	body := "<!-- provide-uterm shell -->\n" +
-		"<main data-assets=\"" + assets + "\">\n" +
-		"  <h1>" + html.EscapeString(title) + "</h1>\n" +
-		"  <p>" + html.EscapeString(heading) + "</p>\n" +
-		"</main>\n"
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(body))
+func (s *Server) handleOperatorPage(w http.ResponseWriter, r *http.Request) {
+	def, id, ok := s.readablePageSession(w, r)
+	if !ok {
+		return
+	}
+	cdn := cdnFromUI(s.cfg.UI)
+	s.setPageCookies(w, r, principalOf(r).Name(), "operator", isSecureRequest(r))
+	writePage(w, s.ui.sessionPageHTML(def.DisplayName, s.cfg.UI.AssetsPath, id, true, s.cfg.UI.AppPath, nil, cdn))
+}
+
+func (s *Server) handleReplayPage(w http.ResponseWriter, r *http.Request) {
+	def, id, ok := s.readablePageSession(w, r)
+	if !ok {
+		return
+	}
+	cdn := cdnFromUI(s.cfg.UI)
+	s.setPageCookies(w, r, principalOf(r).Name(), "operator", isSecureRequest(r))
+	writePage(w, s.ui.replayPageHTML(def.DisplayName, s.cfg.UI.AssetsPath, id, s.cfg.UI.AppPath, nil, cdn))
+}
+
+func (s *Server) handleInspectPage(w http.ResponseWriter, r *http.Request) {
+	def, id, ok := s.readablePageSession(w, r)
+	if !ok {
+		return
+	}
+	cdn := cdnFromUI(s.cfg.UI)
+	s.setPageCookies(w, r, principalOf(r).Name(), "operator", isSecureRequest(r))
+	writePage(w, s.ui.inspectPageHTML(def.DisplayName, s.cfg.UI.AssetsPath, id, s.cfg.UI.AppPath, nil, cdn))
 }

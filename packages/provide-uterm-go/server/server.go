@@ -92,6 +92,10 @@ type Server struct {
 	logger  *slog.Logger
 	handler http.Handler
 
+	// ui renders the HTML dashboard/session pages, caching the built-frontend
+	// Vite + vanilla manifests. Built in registerPageRoutes from deps.FrontendDir.
+	ui *uiManifests
+
 	ready     atomic.Bool
 	startTime float64
 
