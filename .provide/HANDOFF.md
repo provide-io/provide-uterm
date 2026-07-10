@@ -72,11 +72,25 @@ wave-B TermHub/router/connection/presence/resume + ResolveApproval),
 serverauth (5 auth modes), serverconfig (TOML), server (net/http +
 coder/websocket, DeckMux presence + input-approval gating + tunnel
 invite/token lifecycle live), tunnel (invite/token, BLAKE2b hash-parity).
-CLI/gateway: gateway (telnet/SSH listener), cli + cmd/uterm.
+CLI/gateway: gateway (telnet/SSH listener), tunnelclient (share/tunnel/
+inspect), cli + cmd/uterm.
+Feature parity (2026-07-10): connectors (real shell/ssh/telnet/websocket
+sessions), fanout (difflib-exact divergence controller, wired to browser-WS +
+MCP), mcp (uterm-mcp binary, ~21 tools), manager (uterm-manager fleet binary),
+pty (platform PTY/PAM/uid), annotation, server egress guard (SSRF) +
+discovery + recording routes + PAM.
 
-41 packages. Coverage: library packages ~100%; integration outliers server
-~85%, cli ~92%, gateway ~86% (non-deterministic live-socket / TTY / OS-signal
-branches). Whole-module total 96.2%; floor 95% in the Makefile.
+50 packages, 3 binaries (uterm, uterm-mcp, uterm-manager). Coverage: library/
+wire packages ~100%; integration outliers manager ~77, server/gateway ~86,
+cli ~91 (live-socket / TTY / multi-process / OS-signal branches). Whole-module
+total 93.7%; floor 92% in the Makefile with documented rationale. govulncheck:
+0 called vulns.
+
+Only intentional skip: tracing.py (OpenTelemetry span setup — project rule
+forbids direct OTel; ptel covers logging). Documented partials: PAM tunnel
+bridge (pam_tunnel PamTunnelBridge — depends on the worker-link layer);
+manager monitor-loop reconciliation undertested (needs live multi-process
+orchestration).
 
 CLI status: ALL subcommands now real — server, proxy, listen, watch, audit,
 and share/tunnel/inspect (via the tunnelclient package: byte-faithful frame
