@@ -10,9 +10,11 @@ package termsession
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/controlchannel"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/emulator"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/screen"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/session"
@@ -36,6 +38,11 @@ const (
 // currently always empty. Callbacks must not block.
 type WatchFunc func(state map[string]any, raw []byte)
 
+// ControlFrameFunc receives one parsed inline control-frame payload (e.g.
+// {"type": "render_speed", "cps": 2400}). Only ever invoked when the session
+// was constructed with Options.ControlFrames; callbacks must not block.
+type ControlFrameFunc func(payload map[string]any)
+
 // TransportSession owns the background reader loop, the screen-change
 // sequence counter, the raw-byte watcher fan-out, and the connect/close
 // lifecycle over any transports.ConnectionTransport plus a TerminalEmulator.
@@ -57,6 +64,13 @@ type TransportSession struct {
 	updateCh  chan struct{}
 	watchers  []WatchFunc
 
+	// controlDecoder is nil unless Options.ControlFrames was set — DLE/STX
+	// parsing is opt-in. Off by default: every byte from the wire (even one
+	// that happens to start with the control-frame magic bytes) goes
+	// straight to the emulator/watchers unmodified, exactly as it always has.
+	controlDecoder  *controlchannel.Decoder
+	controlWatchers []ControlFrameFunc
+
 	readerDone chan struct{}
 	readerStop context.CancelFunc
 }
@@ -67,6 +81,11 @@ type Options struct {
 	Cols, Rows int
 	// SendEncoding defaults to EncodingUTF8.
 	SendEncoding SendEncoding
+	// ControlFrames enables inline DLE/STX control-frame parsing. When true,
+	// a server-emitted control frame (e.g. a "render_speed" event) is parsed
+	// out and routed to AddControlFrameWatch callbacks instead of appearing
+	// as literal text on the rendered screen. Off by default.
+	ControlFrames bool
 }
 
 // New wraps transport with terminal emulation. connect is the
@@ -81,7 +100,7 @@ func New(transport transports.ConnectionTransport, connect func(ctx context.Cont
 	if opts.SendEncoding == "" {
 		opts.SendEncoding = EncodingUTF8
 	}
-	return &TransportSession{
+	s := &TransportSession{
 		transport:        transport,
 		cols:             opts.Cols,
 		rows:             opts.Rows,
@@ -90,6 +109,10 @@ func New(transport transports.ConnectionTransport, connect func(ctx context.Cont
 		emu:              emulator.New(opts.Cols, opts.Rows, ""),
 		updateCh:         make(chan struct{}),
 	}
+	if opts.ControlFrames {
+		s.controlDecoder = controlchannel.NewDecoder(controlchannel.DecoderOptions{})
+	}
+	return s
 }
 
 // Connect opens the transport connection and starts the background reader.
@@ -232,6 +255,16 @@ func (s *TransportSession) AddWatch(callback WatchFunc) {
 	s.watchers = append(s.watchers, callback)
 }
 
+// AddControlFrameWatch registers a callback fired with each inline control
+// frame's parsed payload. Only invoked when the session was constructed with
+// Options.ControlFrames; a harmless no-op registration otherwise (the
+// decoder is never engaged, so nothing will ever call it).
+func (s *TransportSession) AddControlFrameWatch(callback ControlFrameFunc) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.controlWatchers = append(s.controlWatchers, callback)
+}
+
 // Emulator exposes the underlying terminal emulator.
 func (s *TransportSession) Emulator() *emulator.TerminalEmulator {
 	return s.emu
@@ -261,6 +294,13 @@ func (s *TransportSession) readerLoop(ctx context.Context, done chan<- struct{})
 		if len(data) == 0 {
 			continue
 		}
+		if s.controlDecoder != nil {
+			var ok bool
+			data, ok = s.splitControlFrames(data)
+			if !ok {
+				continue
+			}
+		}
 		s.mu.Lock()
 		watchers := make([]WatchFunc, len(s.watchers))
 		copy(watchers, s.watchers)
@@ -278,4 +318,41 @@ func (s *TransportSession) readerLoop(ctx context.Context, done chan<- struct{})
 		s.updateCh = make(chan struct{})
 		s.mu.Unlock()
 	}
+}
+
+// splitControlFrames runs data through the control-frame decoder. Control
+// chunks are dispatched to control-frame watchers; data chunks are re-joined
+// and returned (CP437-re-encoded, matching the raw wire encoding the
+// emulator/watchers already expect). ok is false when the read contained
+// only control frames — there is nothing left for the caller to feed onward
+// this round.
+func (s *TransportSession) splitControlFrames(data []byte) (out []byte, ok bool) {
+	chunks, err := s.controlDecoder.Feed(screen.DecodeCP437(data))
+	if err != nil {
+		// A malformed control-frame stream is treated like any other
+		// unusable read: skip this round rather than kill the reader.
+		return nil, false
+	}
+	var text strings.Builder
+	s.mu.Lock()
+	controlWatchers := make([]ControlFrameFunc, len(s.controlWatchers))
+	copy(controlWatchers, s.controlWatchers)
+	s.mu.Unlock()
+	for _, chunk := range chunks {
+		switch c := chunk.(type) {
+		case controlchannel.DataChunk:
+			text.WriteString(c.Data)
+		case controlchannel.ControlChunk:
+			for _, cb := range controlWatchers {
+				func() {
+					defer func() { _ = recover() }() // watcher panics must not kill the reader
+					cb(c.Control)
+				}()
+			}
+		}
+	}
+	if text.Len() == 0 {
+		return nil, false
+	}
+	return screen.EncodeCP437(text.String()), true
 }

@@ -21,6 +21,9 @@ type TelnetOptions struct {
 	Term string
 	// ConnectTimeout defaults to 30s.
 	ConnectTimeout time.Duration
+	// ControlFrames enables inline DLE/STX control-frame parsing (see
+	// Options.ControlFrames). Off by default.
+	ControlFrames bool
 }
 
 // NewTelnetSession builds a telnet-backed TransportSession (full RFC 854 IAC
@@ -49,7 +52,9 @@ func NewTelnetSession(host string, port int, opts TelnetOptions) *TransportSessi
 			Timeout: opts.ConnectTimeout,
 		})
 	}
-	return New(transport, connect, Options{Cols: opts.Cols, Rows: opts.Rows, SendEncoding: EncodingCP437})
+	return New(transport, connect, Options{
+		Cols: opts.Cols, Rows: opts.Rows, SendEncoding: EncodingCP437, ControlFrames: opts.ControlFrames,
+	})
 }
 
 // ConnectTelnet dials a telnet server and returns a connected session. Port
@@ -71,6 +76,9 @@ type WSOptions struct {
 	Origin string
 	// AdditionalHeaders are extra upgrade headers.
 	AdditionalHeaders http.Header
+	// ControlFrames enables inline DLE/STX control-frame parsing (see
+	// Options.ControlFrames). Off by default.
+	ControlFrames bool
 }
 
 // NewWSSession builds a WebSocket-backed TransportSession (UTF-8 send
@@ -96,7 +104,9 @@ func NewWSSession(url string, opts WSOptions) *TransportSession {
 			},
 		})
 	}
-	return New(transport, connect, Options{Cols: opts.Cols, Rows: opts.Rows, SendEncoding: EncodingUTF8})
+	return New(transport, connect, Options{
+		Cols: opts.Cols, Rows: opts.Rows, SendEncoding: EncodingUTF8, ControlFrames: opts.ControlFrames,
+	})
 }
 
 // ConnectWS dials a WebSocket server and returns a connected session. Port
