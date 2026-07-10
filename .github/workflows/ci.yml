@@ -91,6 +91,16 @@ jobs:
       # (not just declared versions) — separate, visible step rather than
       # folded into quality-gate so a vuln finding doesn't read as a lint fail.
       - run: make -C packages/provide-uterm-go vuln
+      # The live interop test needs a Python toolchain, so this job (unlike the
+      # rest of the Go gate) also installs uv + Python.
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+      # Sync the Python server deps so `uv run uterm server` can boot.
+      - run: uv sync --frozen --group dev
+      # Live Go↔Python runtime interop proof: starts a real Python `uterm
+      # server` and drives it from the Go client over REST + the WS control
+      # channel. Kept out of quality-gate because it needs Python (see Makefile).
+      - run: make -C packages/provide-uterm-go interop-test
 
   annotation-quality:
     runs-on: ubuntu-latest
