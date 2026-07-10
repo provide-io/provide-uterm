@@ -11,6 +11,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/deckmux"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverauth"
 )
@@ -42,9 +43,12 @@ func (c *workerConn) Close(_ context.Context) error {
 
 // browserConn adapts a browser WebSocket to hub.BrowserSender + hub.BrowserCloser.
 // It also carries the resolved principal so the hub's identity provider (when
-// wired) can read it via UtermPrincipal.
+// wired) can read it via UtermPrincipal. The embedded deckmux.AnonConn gives it
+// a stable per-connection anonymous DeckMux identity (satisfying deckmux.Conn),
+// so an anonymous browser's presence/ownership never leaks across reconnects.
 type browserConn struct {
 	wsBase
+	deckmux.AnonConn
 	principal *serverauth.Principal
 }
 

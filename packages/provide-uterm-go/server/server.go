@@ -19,6 +19,7 @@ import (
 
 	ptel "github.com/provide-io/provide-telemetry/go"
 
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/deckmux"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverauth"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
@@ -91,6 +92,11 @@ type Server struct {
 
 	sweepWG   sync.WaitGroup
 	sweepOnce sync.Once
+
+	// DeckMux collaborative-presence service, lazily built on first browser
+	// connect (see (*Server).deck) and wired to the hub browser broadcast.
+	deckOnce     sync.Once
+	deckPresence *deckmux.DeckMuxPresence
 }
 
 // New assembles a Server from deps. It validates required dependencies, builds
