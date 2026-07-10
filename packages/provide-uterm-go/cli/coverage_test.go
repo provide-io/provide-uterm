@@ -16,50 +16,42 @@ import (
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
 )
 
-func TestConfigHelpers(t *testing.T) {
-	if configStr(nil, "k", "fb") != "fb" {
-		t.Fatal("nil map should return fallback")
-	}
-	cc := map[string]any{"host": "h", "port": 42, "p64": float64(7), "p64b": int64(9), "empty": ""}
-	if configStr(cc, "host", "fb") != "h" || configStr(cc, "empty", "fb") != "fb" {
-		t.Fatal("configStr string handling")
-	}
-	if configInt(nil, "k", 5) != 5 {
-		t.Fatal("configInt nil fallback")
-	}
-	if configInt(cc, "port", 0) != 42 || configInt(cc, "p64", 0) != 7 || configInt(cc, "p64b", 0) != 9 {
-		t.Fatal("configInt numeric handling")
-	}
-	if configInt(cc, "host", 3) != 3 {
-		t.Fatal("configInt should fall back on non-numeric")
-	}
-}
-
 func TestDefaultConnect(t *testing.T) {
 	ctx := context.Background()
 
-	// shell → no live connector.
-	if s, err := defaultConnect(ctx, serverconfig.SessionDefinition{ConnectorType: "shell"}); err != nil || s != nil {
-		t.Fatalf("shell: %v %v", s, err)
+	// shell → real PTY-backed connector.
+	shellConn, err := defaultConnect(ctx, serverconfig.SessionDefinition{
+		SessionID: "sh", DisplayName: "sh", ConnectorType: "shell",
+	})
+	if err != nil || shellConn == nil {
+		t.Fatalf("shell connect: %v %v", shellConn, err)
 	}
+	_ = shellConn.Stop(ctx)
 
 	// telnet → real dial to a loopback echo server.
 	host, port := startEchoServer(t, nil)
-	sess, err := defaultConnect(ctx, serverconfig.SessionDefinition{
-		ConnectorType:   "telnet",
+	tconn, err := defaultConnect(ctx, serverconfig.SessionDefinition{
+		SessionID: "tn", DisplayName: "tn", ConnectorType: "telnet",
 		ConnectorConfig: map[string]any{"host": host, "port": port},
 	})
-	if err != nil || sess == nil {
-		t.Fatalf("telnet connect: %v %v", sess, err)
+	if err != nil || tconn == nil {
+		t.Fatalf("telnet connect: %v %v", tconn, err)
 	}
-	_ = sess.Close(ctx)
+	_ = tconn.Stop(ctx)
 
-	// websocket → bad URL fails.
+	// websocket → bad URL fails at dial.
 	if _, err := defaultConnect(ctx, serverconfig.SessionDefinition{
-		ConnectorType:   "websocket",
+		SessionID: "ws", DisplayName: "ws", ConnectorType: "websocket",
 		ConnectorConfig: map[string]any{"url": "ws://127.0.0.1:1/nope"},
 	}); err == nil {
 		t.Fatal("expected websocket dial failure")
+	}
+
+	// unknown connector type → Build error.
+	if _, err := defaultConnect(ctx, serverconfig.SessionDefinition{
+		SessionID: "x", DisplayName: "x", ConnectorType: "bogus",
+	}); err == nil {
+		t.Fatal("expected unsupported connector_type error")
 	}
 }
 
