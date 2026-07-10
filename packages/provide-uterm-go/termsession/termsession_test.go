@@ -98,7 +98,12 @@ func newFakeSession(t *testing.T, ft *fakeTransport, opts Options) *TransportSes
 
 func waitForScreen(t *testing.T, s *TransportSession, substr string) session.Snapshot {
 	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
+	// 30s (not 10s): under heavy CPU contention (e.g. a nested-virtualization
+	// container running the whole-module -race suite at once), the real PTY
+	// negotiate-then-echo round trip in TestTelnetSessionLoopback can
+	// genuinely take longer than 10s to complete — a generous safety net,
+	// not protocol timing.
+	deadline := time.Now().Add(30 * time.Second)
 	for {
 		snap := s.Snapshot()
 		if strings.Contains(snap.Screen, substr) {
