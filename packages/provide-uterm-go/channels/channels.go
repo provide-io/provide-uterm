@@ -8,6 +8,7 @@
 package channels
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -203,6 +204,14 @@ func coerceChannelMap(value map[string]any) (map[string]int, error) {
 				return nil, errors.New("channel versions must be integers")
 			}
 			channels[name] = int(v)
+		case json.Number:
+			// controlchannel decodes wire numbers as json.Number to preserve
+			// the int/float distinction; a channel version must be an integer.
+			n, err := v.Int64()
+			if err != nil {
+				return nil, errors.New("channel versions must be integers")
+			}
+			channels[name] = int(n)
 		default:
 			return nil, errors.New("channel versions must be integers")
 		}

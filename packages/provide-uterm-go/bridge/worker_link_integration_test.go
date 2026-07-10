@@ -7,6 +7,7 @@ package bridge
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -287,7 +288,7 @@ func TestTermBridgeEndToEnd(t *testing.T) {
 		t.Fatalf("hello input_mode = %v", hello["input_mode"])
 	}
 	proto, _ := hello["protocol"].(map[string]any)
-	if proto["min"] != float64(MinProtocolVersion) || proto["max"] != float64(MaxProtocolVersion) {
+	if jnum(proto["min"]) != MinProtocolVersion || jnum(proto["max"]) != MaxProtocolVersion {
 		t.Fatalf("hello protocol = %v", proto)
 	}
 	if _, ok := hello["capabilities"]; !ok {
@@ -432,3 +433,17 @@ var errNoControlFrame = &decodeError{"no control frame decoded"}
 type decodeError struct{ msg string }
 
 func (e *decodeError) Error() string { return e.msg }
+
+// jnum coerces a decoded JSON number (json.Number, float64, or int) to int.
+func jnum(v any) int {
+	switch n := v.(type) {
+	case json.Number:
+		i, _ := n.Int64()
+		return int(i)
+	case float64:
+		return int(n)
+	case int:
+		return n
+	}
+	return -1
+}
