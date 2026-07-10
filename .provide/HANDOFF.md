@@ -32,6 +32,34 @@ subcommand tree mirrors the Python CLI. Go 1.26.5, all deps on latest.
 - **CLI: `uterm server` + `uterm proxy` fully wired**, same flags/help as
   Python. Tunnel/TUI subcommands stubbed (see below).
 
+## Verification / proofs (runnable)
+
+- **Conformance suite** `packages/provide-uterm-go/conformance/`: the single
+  authoritative Go↔Python gate. `gen_vectors.py` emits authoritative
+  input→output pairs from the Python reference; the Go test replays each and
+  asserts byte-agreement, **regenerating live from Python (uv) when reachable**
+  else the committed golden. Surfaces covered: control-frame encode/decode,
+  terminal-data framing, screen normalize + CP437, ansi normalize + 256
+  upgrade, webhook HMAC, identity HMAC signature, **DeckMux identity
+  (name/color/initials hash)**, emulator snapshot. Run:
+  `cd packages/provide-uterm-go && go test ./conformance/` (add
+  `UTERM_CONFORMANCE_NO_REGEN=1` to force the golden path).
+- **Bug the suite caught + fixed** (37d96a56): controlchannel decoded wire
+  JSON numbers to float64, losing Python's int/float distinction, so
+  identity-frame HMAC signatures diverged for integer claims. Fixed with
+  json.Number end-to-end; verified Go and Python produce the identical HMAC
+  signature for an integer-claim identity.
+- **Live server** (demonstrated): `uterm server` binds, serves `/api/health`
+  200, gates unauth `/api/sessions` 401, dev_token mints an HS256 JWT that
+  unlocks `/api/sessions` + `/api/metrics` 200; provide.telemetry emits
+  structured logs with the token masked.
+- **Live DeckMux deck** (demonstrated + now pinned in conformance): 3 users
+  join a deck → distinct hash-generated names/colors/initials, presence_update
+  broadcast, control_request → control_transfer, disconnect → presence_leave.
+  Python confirmed the Go-generated names/colors/initials match for the same
+  user ids and that every Go-emitted deck frame validates under the Python
+  Pydantic schema (PresenceSync/Update/Leave, ControlTransfer).
+
 ## Package inventory (all committed, gates green)
 
 Core/wire: controlchannel, channels, sanitizer, redaction, filters,

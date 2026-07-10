@@ -30,7 +30,18 @@ from provide.uterm import ansi as _ansi
 from provide.uterm import screen as _screen
 from provide.uterm.control_channel import encode_control_frame, encode_terminal_data
 from provide.uterm.control_channel_builders import make_identity
+from provide.uterm.deckmux._names import generate_color, generate_initials, generate_name
 from provide.uterm.emulator import TerminalEmulator
+
+# Stable connection ids whose hash-derived DeckMux identity (name/color/
+# initials) the Go port must reproduce exactly.
+_DECK_USER_IDS = [
+    "a0e513b7c8cbebf8a35cdc82540a062d",  # pragma: allowlist secret
+    "a6e0e99f65086b6d11e7fbeb62feb403",  # pragma: allowlist secret
+    "94b5819612dba2e9a9fa1029d0e88ade",  # pragma: allowlist secret
+    "deadbeefcafebabe0011223344556677",  # pragma: allowlist secret
+    "0000000000000000000000000000abcd",  # pragma: allowlist secret
+]
 
 # A deterministic corpus of payloads exercising the wire edge cases: escaped
 # DLE, nested structures, unicode (BMP + astral), CP437 high bytes, empty.
@@ -112,6 +123,15 @@ def main() -> None:
                 "frame": make_identity(subj, claims=claims, secret=secret),
             }
             for subj, claims, secret in _IDENTITY_SIG_CASES
+        ],
+        "deck_identity": [
+            {
+                "user_id": uid,
+                "name": generate_name(uid),
+                "color": generate_color(uid, frozenset()),
+                "initials": generate_initials(generate_name(uid)),
+            }
+            for uid in _DECK_USER_IDS
         ],
         "emulator_snapshot": {
             "feed_b64": base64.b64encode(b"\x1b[1;32mReady\x1b[0m\r\nprompt> ").decode(),

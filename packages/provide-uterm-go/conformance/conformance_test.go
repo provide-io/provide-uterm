@@ -34,6 +34,7 @@ import (
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/ansi"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/controlchannel"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/ctrlmsg"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/deckmux"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/emulator"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/screen"
 )
@@ -74,6 +75,12 @@ type vectors struct {
 		Secret  string         `json:"secret"`
 		Frame   map[string]any `json:"frame"`
 	} `json:"identity_signature"`
+	DeckIdentity []struct {
+		UserID   string `json:"user_id"`
+		Name     string `json:"name"`
+		Color    string `json:"color"`
+		Initials string `json:"initials"`
+	} `json:"deck_identity"`
 	EmulatorSnapshot struct {
 		FeedB64     string         `json:"feed_b64"`
 		Cols        int            `json:"cols"`
@@ -322,6 +329,27 @@ func TestIdentitySignature(t *testing.T) {
 		}
 		if !jsonEqual(frame, c.Frame) {
 			t.Fatalf("case %d: identity frame mismatch\n go: %#v\n py: %#v", i, frame, c.Frame)
+		}
+	}
+}
+
+// TestDeckIdentity proves the DeckMux hash-derived identity (name, color,
+// initials from a connection id) is byte-identical to Python's — so a Go deck
+// and a Python deck assign the same name/color to the same user.
+func TestDeckIdentity(t *testing.T) {
+	v, _ := loadVectors(t)
+	if len(v.DeckIdentity) == 0 {
+		t.Fatal("no deck-identity vectors")
+	}
+	for i, c := range v.DeckIdentity {
+		if got := deckmux.GenerateName(c.UserID); got != c.Name {
+			t.Fatalf("case %d name: go=%q py=%q", i, got, c.Name)
+		}
+		if got := deckmux.GenerateColor(c.UserID, nil); got != c.Color {
+			t.Fatalf("case %d color: go=%q py=%q", i, got, c.Color)
+		}
+		if got := deckmux.GenerateInitials(c.Name); got != c.Initials {
+			t.Fatalf("case %d initials: go=%q py=%q", i, got, c.Initials)
 		}
 	}
 }

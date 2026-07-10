@@ -61,6 +61,38 @@
       "decoded": "╔═╗"
     }
   ],
+  "deck_identity": [
+    {
+      "color": "#607d8b",
+      "initials": "SG",
+      "name": "Storm Gecko",
+      "user_id": "a0e513b7c8cbebf8a35cdc82540a062d"
+    },
+    {
+      "color": "#f39c12",
+      "initials": "JB",
+      "name": "Jade Bear",
+      "user_id": "a6e0e99f65086b6d11e7fbeb62feb403"
+    },
+    {
+      "color": "#ff5722",
+      "initials": "MC",
+      "name": "Maple Crane",
+      "user_id": "94b5819612dba2e9a9fa1029d0e88ade"
+    },
+    {
+      "color": "#2ecc71",
+      "initials": "SH",
+      "name": "Slate Heron",
+      "user_id": "deadbeefcafebabe0011223344556677"
+    },
+    {
+      "color": "#f39c12",
+      "initials": "SH",
+      "name": "Spark Hawk",
+      "user_id": "0000000000000000000000000000abcd"
+    }
+  ],
   "emulator_snapshot": {
     "cols": 40,
     "cursor": {
