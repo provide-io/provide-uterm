@@ -6,19 +6,21 @@
 
 GO ?= go
 GOLANGCI_LINT ?= golangci-lint
-# 92.0, not 100.0: the library/wire packages are all at (or within a hair of)
+# 95.0, not 100.0: the library/wire packages are all at (or within a hair of)
 # 100%. The lower whole-module floor accommodates the integration packages
 # whose residual lines are non-deterministic and cannot be covered without
 # fault injection or elaborate process/socket harnesses:
-#   - manager (~77%): the agent-fleet supervisor's monitor loop (desired-state
+#   - manager (~94%): the agent-fleet supervisor's monitor loop (desired-state
 #     reconciliation, queued-launch/stale handling, log cleanup, restart
-#     respawn) needs live multi-process orchestration to exercise.
-#   - server (~86%): WS/HTTP/SSE write-failure branches on live sockets.
+#     respawn) is now exercised with real child processes; what remains is
+#     syscall-failure branches (rename/write/MkdirAll errors, log rotation)
+#     that need actual fault injection.
+#   - server (~88%): WS/HTTP/SSE write-failure branches on live sockets.
 #   - gateway (~86%): telnet/SSH listener accept + raw-mode / signal branches.
 #   - cli (~91%): mid-bridge transport-send failures and OS/signal branches.
 # transports/client/controlplane-sqlite/hub/pty carry only syscall/driver/
-# JSON-encode guards the Python originals also exclude. Whole-module ~93.6%.
-COVER_THRESHOLD ?= 92.0
+# JSON-encode guards the Python originals also exclude. Whole-module ~95.3%.
+COVER_THRESHOLD ?= 95.0
 
 # Driver for the mutation gate (stdlib-only Python >= 3.11; tomllib + json).
 PYTHON ?= python3
