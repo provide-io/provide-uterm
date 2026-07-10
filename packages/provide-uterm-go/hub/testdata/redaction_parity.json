@@ -1,0 +1,74 @@
+{
+  "cases": [
+    {
+      "input": "",
+      "expected_go_subset": "",
+      "full_python": ""
+    },
+    {
+      "input": "just some normal terminal output with no secrets",
+      "expected_go_subset": "just some normal terminal output with no secrets",
+      "full_python": "just some normal terminal output with no secrets"
+    },
+    {
+      "input": "aws id AKIAIOSFODNN7EXAMPLE embedded",
+      "expected_go_subset": "aws id [AWS_ACCESS_KEY_REDACTED] embedded",
+      "full_python": "aws id [AWS_ACCESS_KEY_REDACTED] embedded"
+    },
+    {
+      "input": "aws_secret_access_key=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY here",
+      "expected_go_subset": "[AWS_SECRET_REDACTED] here",
+      "full_python": "[AWS_SECRET_REDACTED] here"
+    },
+    {
+      "input": "clone with ghp_1234567890abcdefghijklmnopqrstuvwxAB token",
+      "expected_go_subset": "clone with [GITHUB_TOKEN_REDACTED] token",
+      "full_python": "clone with [GITHUB_TOKEN_REDACTED] token"
+    },
+    {
+      "input": "slack xoxb-123456789012-123456789012-abcdefghijklmnopqrstuvwx sent",
+      "expected_go_subset": "slack [SLACK_TOKEN_REDACTED] sent",
+      "full_python": "slack [SLACK_TOKEN_REDACTED] sent"
+    },
+    {
+      "input": "jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c ok",
+      "expected_go_subset": "jwt [JWT_REDACTED] ok",
+      "full_python": "jwt [JWT_REDACTED] ok"
+    },
+    {
+      "input": "-----BEGIN RSA PRIVATE KEY-----\nMIIBOgIBAAJBAKj34GkxFhD90vcNLYLInFEX6Ppy1tPf9Cnzj4p4WGeKLs1Pt8Qu\nKUpRKfFLfRYC9AIKjbJTWit+CqvjWYzvQwECAwEAAQ==\n-----END RSA PRIVATE KEY-----",
+      "expected_go_subset": "[PRIVATE_KEY_REDACTED]",
+      "full_python": "[PRIVATE_KEY_REDACTED]"
+    },
+    {
+      "input": "Authorization: Bearer abc.def-ghi_123+/=",
+      "expected_go_subset": "Authorization: Bearer [REDACTED]",
+      "full_python": "Authorization: Bearer [REDACTED]"
+    },
+    {
+      "input": "login password=hunter2 now",
+      "expected_go_subset": "login password=hunter2 now",
+      "full_python": "login [PASSWORD_REDACTED] now"
+    },
+    {
+      "input": "cfg api_key=SECRETVALUE123 loaded",
+      "expected_go_subset": "cfg api_key=SECRETVALUE123 loaded",
+      "full_python": "cfg [API_KEY_REDACTED] loaded"
+    },
+    {
+      "input": "env token=abcdef12345678 set",
+      "expected_go_subset": "env token=abcdef12345678 set",
+      "full_python": "env [TOKEN_REDACTED] set"
+    },
+    {
+      "input": "AKIAIOSFODNN7EXAMPLE and ghp_1234567890abcdefghijklmnopqrstuvwxAB together",
+      "expected_go_subset": "[AWS_ACCESS_KEY_REDACTED] and [GITHUB_TOKEN_REDACTED] together",
+      "full_python": "[AWS_ACCESS_KEY_REDACTED] and [GITHUB_TOKEN_REDACTED] together"
+    },
+    {
+      "input": "AKIAIOSFODNN7EXAMPLE then AROA1234567890ABCDEF",
+      "expected_go_subset": "[AWS_ACCESS_KEY_REDACTED] then [AWS_ACCESS_KEY_REDACTED]",
+      "full_python": "[AWS_ACCESS_KEY_REDACTED] then [AWS_ACCESS_KEY_REDACTED]"
+    }
+  ]
+}

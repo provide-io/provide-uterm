@@ -112,6 +112,11 @@ func buildServer(ctx context.Context, configPath, host string, port int) (*serve
 		BrowserRateLimitPerSec:     cfg.BrowserRateLimitPerSec,
 		MaxConnectionsPerPrincipal: cfg.MaxConnectionsPerPrincipal,
 		MaxWorkers:                 cfg.MaxWorkers,
+		// Wire the real StreamRedactor as the output-redaction seam. It stays
+		// dormant until an OutputPolicyGate yields rules (none by default, matching
+		// the Python NoOp-gate default), so live output is unchanged unless a gate
+		// is configured; when one is, snapshots + broadcasts redact per recipient.
+		Redactor: hub.RedactFrameFields,
 	})
 
 	engine, err := bootstrap.New(controlPlaneConfig(cfg))

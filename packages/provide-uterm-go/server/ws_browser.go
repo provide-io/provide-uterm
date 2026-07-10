@@ -35,12 +35,12 @@ func (s *Server) resolveBrowserRole(ctx context.Context, p *serverauth.Principal
 // handleBrowserWS serves /ws/browser/{id}/term — dashboard viewers + hijack
 // control. Port of ws_browser_term.
 //
-// Deviations (documented): fan-out, resume-token reclaim, the lease/permission
-// input gate (prepare_browser_input), and the per-frame token-bucket rate
-// limits are omitted. This handler covers viewer streaming + the WS hijack
-// lifecycle (request / release / step / heartbeat) + input (with the
-// input-approval hold/park pipeline, see browserInputGated) + snapshot_req/ping,
-// plus DeckMux collaborative presence (connect/message/disconnect).
+// Deviations (documented): fan-out and resume-token reclaim are omitted. This
+// handler covers viewer streaming + the WS hijack lifecycle (request / release /
+// step / heartbeat) + input (with the per-frame token-bucket rate limits, the
+// lease/permission gate prepare_browser_input, and the input-approval hold/park
+// pipeline, see browserRecvLoop + browserInputGated) + snapshot_req/ping, plus
+// DeckMux collaborative presence (connect/message/disconnect).
 func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 	workerID := r.PathValue("worker_id")
 	if !validID(workerID) {
@@ -155,6 +155,8 @@ func (s *Server) browserRecvLoop(ctx context.Context, conn *websocket.Conn, work
 	dec := controlchannel.NewDecoder(controlchannel.DecoderOptions{MaxControlPayloadBytes: s.deps.Hub.MaxWSMessageBytes()})
 	conn.SetReadLimit(int64(s.deps.Hub.MaxWSMessageBytes()))
 	bg := context.Background()
+	// Per-connection token buckets rate-limit input + control frames separately.
+	buckets := s.newBrowserBuckets()
 	owned := false
 	for {
 		msgType, raw, err := conn.Read(ctx)
@@ -179,6 +181,12 @@ func (s *Server) browserRecvLoop(ctx context.Context, conn *websocket.Conn, work
 				msg = map[string]any{"type": "input", "data": e.Data}
 			case controlchannel.ControlChunk:
 				msg = e.Control
+			}
+			mtype, _ := msg["type"].(string)
+			// Per-frame rate limit: an exceeded frame is dropped (with an error
+			// frame + metric) before it reaches the dispatch/DeckMux/approval paths.
+			if !s.rateLimitBrowserFrame(bg, bc, workerID, mtype, buckets) {
+				continue
 			}
 			owned = s.dispatchBrowserMessage(bg, conn, workerID, bc, role, canHijack, owned, msg)
 		}
