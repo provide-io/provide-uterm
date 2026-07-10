@@ -53,6 +53,22 @@ subcommand tree mirrors the Python CLI. Go 1.26.5, all deps on latest.
   200, gates unauth `/api/sessions` 401, dev_token mints an HS256 JWT that
   unlocks `/api/sessions` + `/api/metrics` 200; provide.telemetry emits
   structured logs with the token masked.
+- **Live Go↔Python runtime interop** `packages/provide-uterm-go/interop/`: the
+  one proof that is neither offline nor demonstrated-by-hand but an automated
+  test driving a REAL Python server from the Go client over the real wire. It
+  starts an actual `uv run uterm server` subprocess (ephemeral loopback port,
+  dev_token auth, `UTERM_API_ONLY=1`), polls `/api/health` until ready, reads
+  the minted JWT back from `UTERM_DEV_TOKEN_PATH`, then with the Go
+  `client.HijackClient`/`client.ControlWSClient`: (1) REST — authenticated
+  `/api/health` + `/api/sessions` listing, then the full operator hijack lease
+  round-trip (mode → acquire → send → snapshot → release) asserting the sent
+  marker echoes into the transcript; (2) WebSocket — dials the browser control
+  WS, consumes the hello handshake frame, sends an input frame and reads the
+  echoed screen back over the inline DLE/STX channel. Skips gracefully when uv
+  or the Python deps are absent (mirrors the conformance skip); tears the
+  subprocess down via a process-group SIGTERM→SIGKILL fallback. Kept OUT of the
+  Go quality-gate (needs Python): `make -C packages/provide-uterm-go
+  interop-test`, wired into CI's `go-quality` job with its own uv+python setup.
 - **Live DeckMux deck** (demonstrated + now pinned in conformance): 3 users
   join a deck → distinct hash-generated names/colors/initials, presence_update
   broadcast, control_request → control_transfer, disconnect → presence_leave.

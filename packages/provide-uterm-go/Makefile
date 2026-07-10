@@ -20,7 +20,7 @@ GOLANGCI_LINT ?= golangci-lint
 # JSON-encode guards the Python originals also exclude. Whole-module ~93.6%.
 COVER_THRESHOLD ?= 92.0
 
-.PHONY: fmt fmt-check vet lint test race cover vuln quality-gate build-binaries
+.PHONY: fmt fmt-check vet lint test race cover vuln quality-gate build-binaries interop-test
 
 fmt:
 	gofmt -w .
@@ -61,3 +61,11 @@ build-binaries:
 
 quality-gate: fmt-check vet lint race cover
 	@echo "go quality gate passed"
+
+# Live Go↔Python runtime interop proof. Kept SEPARATE from quality-gate (and
+# from race/cover) on purpose: it starts a real Python `uterm server` via
+# `uv run`, so it needs a Python toolchain + synced deps that the rest of the
+# Go gate deliberately does not. It skips gracefully when uv is absent, but the
+# gate must never depend on Python being present.
+interop-test:
+	$(GO) test ./interop/... -run TestLivePythonInterop -count=1 -v
