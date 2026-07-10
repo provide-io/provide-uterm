@@ -56,7 +56,7 @@ func TestTryAcquireRestPauseFrame(t *testing.T) {
 	mustEqual(t, frame["action"].(string), "pause", "action")
 	mustEqual(t, frame["owner"].(string), "bob", "owner")
 	mustEqual(t, frame["hijack_id"].(string), "HID-42", "hijack_id")
-	mustEqual(t, frame["ts"].(float64), f.clock.Wall(), "ts is wall clock")
+	mustEqual(t, jnumf(frame["ts"]), f.clock.Wall(), "ts is wall clock")
 }
 
 func TestTryAcquireRestNoWorker(t *testing.T) {

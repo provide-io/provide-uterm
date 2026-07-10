@@ -6,6 +6,7 @@
 package bridge
 
 import (
+	"encoding/json"
 	"strconv"
 	"time"
 )
@@ -33,6 +34,18 @@ func safeInt(val any, def, minVal int) int {
 		result = int(v)
 	case float64:
 		result = int(v)
+	case json.Number:
+		// controlchannel decodes wire numbers as json.Number.
+		n, err := v.Int64()
+		if err != nil {
+			f, ferr := v.Float64()
+			if ferr != nil {
+				return def
+			}
+			result = int(f)
+		} else {
+			result = int(n)
+		}
 	case bool:
 		if v {
 			result = 1

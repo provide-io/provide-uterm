@@ -7,6 +7,7 @@ package hub
 
 import (
 	"context"
+	"encoding/json"
 	"sync"
 	"testing"
 )
@@ -194,3 +195,17 @@ func makeState() *WorkerTermState {
 }
 
 func (f leaseFixture) now() float64 { return f.clock.Monotonic() }
+
+// jnumf coerces a decoded JSON number (json.Number/float64/int) to float64.
+func jnumf(v any) float64 {
+	switch n := v.(type) {
+	case json.Number:
+		f, _ := n.Float64()
+		return f
+	case float64:
+		return n
+	case int:
+		return float64(n)
+	}
+	return -1
+}

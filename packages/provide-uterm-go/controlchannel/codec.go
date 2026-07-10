@@ -289,6 +289,14 @@ func (d *Decoder) Finish() ([]Chunk, error) {
 
 func (d *Decoder) parseFramePayload(payloadRaw string) (map[string]any, error) {
 	dec := json.NewDecoder(strings.NewReader(payloadRaw))
+	// Preserve each JSON number's source text as json.Number rather than
+	// collapsing to float64. Python's json.loads keeps the int/float
+	// distinction ("1" -> int, "1.0" -> float), which is load-bearing for
+	// identity-frame HMAC signatures: a verifier must canonicalize the
+	// received claims exactly as the producer did. float64 loses that
+	// distinction (both decode to 1.0), so an integer claim would re-sign as
+	// "1.0" and fail verification against Python's "1".
+	dec.UseNumber()
 	var payload any
 	if err := dec.Decode(&payload); err != nil {
 		return nil, d.reportError("invalid control json")

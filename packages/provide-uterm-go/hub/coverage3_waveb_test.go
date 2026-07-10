@@ -131,7 +131,7 @@ func TestBroadcastHijackStateRestLease(t *testing.T) {
 	frame := decodeOneControl(t, ws.last())
 	mustEqual(t, frame["hijacked"], true, "rest hijacked broadcast")
 	mustEqual(t, frame["owner"], "other", "rest owner other")
-	mustEqual(t, frame["lease_expires_at"], 5100.0, "rest lease wall time")
+	mustEqual(t, jnumf(frame["lease_expires_at"]), 5100.0, "rest lease wall time")
 }
 
 func TestCleanupBrowserDisconnectFacadeError(t *testing.T) {

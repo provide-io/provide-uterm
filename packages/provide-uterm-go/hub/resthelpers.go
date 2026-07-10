@@ -6,6 +6,7 @@
 package hub
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 )
@@ -87,6 +88,8 @@ func toStr(v any) string {
 }
 
 // coerceFloat coerces an int/float value to float64, returning def otherwise.
+// json.Number is handled because controlchannel decodes wire numbers into it
+// (preserving the int/float text form for signature-faithful round-trips).
 func coerceFloat(v any, def float64) float64 {
 	switch n := v.(type) {
 	case float64:
@@ -95,6 +98,12 @@ func coerceFloat(v any, def float64) float64 {
 		return float64(n)
 	case int64:
 		return float64(n)
+	case json.Number:
+		f, err := n.Float64()
+		if err != nil {
+			return def
+		}
+		return f
 	default:
 		return def
 	}

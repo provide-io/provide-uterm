@@ -6,6 +6,7 @@
 package controlchannel
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -90,7 +91,7 @@ func TestRoundTripMixedDataAndControl(t *testing.T) {
 		t.Fatalf("data[0] = %q", got)
 	}
 	ctrl := events[1].(ControlChunk)
-	if ctrl.Control["type"] != "hello" || ctrl.Control["n"] != float64(1) {
+	if ctrl.Control["type"] != "hello" || ctrl.Control["n"] != json.Number("1") {
 		t.Fatalf("control = %#v", ctrl.Control)
 	}
 	if got := events[2].(DataChunk).Data; got != "after" {
