@@ -9,9 +9,8 @@
 //
 // The subcommand surface mirrors the Python `uterm` CLI (provide.uterm.cli)
 // one-for-one: proxy, listen, share, tunnel, inspect, watch, audit, server.
-// Only the subcommands whose Go dependencies have been ported are wired for
-// real (server, proxy); the rest render identical help but report that they
-// are not yet available in the Go build and exit non-zero.
+// All subcommands are wired for real; share/tunnel/inspect drive the ported
+// tunnelclient package (tunnel WS client, PTY capture, HTTP proxy + intercept).
 package cli
 
 import (

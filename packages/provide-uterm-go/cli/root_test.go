@@ -55,11 +55,11 @@ func TestExecuteUnknownCommand(t *testing.T) {
 	}
 }
 
-func TestExecuteStubsExitNonZero(t *testing.T) {
-	// listen, watch, and audit are now implemented (see listen.go, watch*.go,
-	// audit*.go) and have their own tests; only share/tunnel/inspect remain stubs.
+func TestExecuteMissingRequiredServer(t *testing.T) {
+	// share/tunnel/inspect all require --server; omitting it must fail before any
+	// network work (cobra required-flag enforcement).
 	cases := [][]string{
-		{"share", "-s", "https://x"},
+		{"share"},
 		{"tunnel", "1234"},
 		{"inspect", "3000"},
 	}
@@ -67,10 +67,26 @@ func TestExecuteStubsExitNonZero(t *testing.T) {
 		var out, errw bytes.Buffer
 		code := Execute(args, &out, &errw)
 		if code == 0 {
-			t.Fatalf("%v should exit non-zero", args)
+			t.Fatalf("%v without --server should exit non-zero", args)
 		}
-		if !strings.Contains(errw.String(), "not yet available in the Go build") {
-			t.Fatalf("%v: missing stub message, got %q", args, errw.String())
+		if !strings.Contains(errw.String(), "server") {
+			t.Fatalf("%v: expected required-flag error, got %q", args, errw.String())
+		}
+	}
+}
+
+func TestExecuteTunnelRegistrationFailure(t *testing.T) {
+	// A --server pointing nowhere makes the registration POST fail; the command
+	// must surface an error and exit non-zero (no stub message anymore).
+	cases := [][]string{
+		{"share", "-s", "http://127.0.0.1:1"},
+		{"tunnel", "1234", "-s", "http://127.0.0.1:1"},
+		{"inspect", "3000", "-s", "http://127.0.0.1:1"},
+	}
+	for _, args := range cases {
+		var out, errw bytes.Buffer
+		if code := Execute(args, &out, &errw); code == 0 {
+			t.Fatalf("%v should exit non-zero when the server is unreachable", args)
 		}
 	}
 }
@@ -84,12 +100,6 @@ func TestExecuteWriteErrorBranch(t *testing.T) {
 	// An erroring command with a failing error-writer must still exit non-zero.
 	if code := Execute([]string{"listen", "wss://x"}, &bytes.Buffer{}, failingWriter{}); code == 0 {
 		t.Fatal("expected non-zero exit even when error write fails")
-	}
-}
-
-func TestStubErrMessage(t *testing.T) {
-	if got := (stubErr{cmd: "share"}).Error(); got != "uterm share: not yet available in the Go build" {
-		t.Fatalf("unexpected stub message: %q", got)
 	}
 }
 
