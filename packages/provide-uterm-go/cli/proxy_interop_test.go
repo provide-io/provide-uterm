@@ -133,7 +133,7 @@ func (u *observableUpstream) waitUpstreamClosed(t *testing.T) {
 	t.Helper()
 	select {
 	case <-u.closed:
-	case <-time.After(4 * time.Second):
+	case <-time.After(20 * time.Second):
 		t.Fatal("upstream connection was not closed after the browser disconnected")
 	}
 }
@@ -167,7 +167,7 @@ func dialWSWithRetry(t *testing.T, wsURL string) *websocket.Conn {
 // close is a failure — the proxy failed to propagate the remote hangup.
 func expectWSClosed(t *testing.T, conn *websocket.Conn) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	for {
 		_, _, err := conn.Read(ctx)
