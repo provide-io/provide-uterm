@@ -68,25 +68,33 @@ Emulation/IO: vt, emulator, render, session, sessionlogger, recording,
 fileio, replay, detection, deckmux, shell.
 Transport/bridge/client: transports, termsession, bridge, client.
 Server: controlplane(+memory/+sqlite/+bootstrap), hub (wave-A services +
-wave-B TermHub/router/connection/presence/resume), serverauth (5 auth
-modes), serverconfig (TOML), server (net/http + coder/websocket).
-Binary: cli + cmd/uterm.
+wave-B TermHub/router/connection/presence/resume + ResolveApproval),
+serverauth (5 auth modes), serverconfig (TOML), server (net/http +
+coder/websocket, DeckMux presence + input-approval gating + tunnel
+invite/token lifecycle live), tunnel (invite/token, BLAKE2b hash-parity).
+CLI/gateway: gateway (telnet/SSH listener), cli + cmd/uterm.
 
-Coverage: library packages ~100%; integration outliers server ~85% and cli
-~96% (non-deterministic live-socket write / OS-signal branches). Floor set to
-95% in the Makefile with documented rationale.
+41 packages. Coverage: library packages ~100%; integration outliers server
+~85%, cli ~92%, gateway ~86% (non-deterministic live-socket / TTY / OS-signal
+branches). Whole-module total 96.2%; floor 95% in the Makefile.
+
+CLI status: server, proxy, listen, watch, audit fully working. share, tunnel,
+inspect still stubbed — they need a tunnel *client* port (PTY→tunnel-WS→URL
+share, local TCP port-forward, HTTP reverse-proxy-with-inspection). The
+tunnel package is server-side invite/token only; the client transport in
+cli/share.py, cli/tunnel.py, cli/inspect.py is not yet ported.
 
 ## Documented follow-ups (not blocking; scoped, isolated)
 
-- **hub-API-dependent server gaps**: approval command re-injection +
-  `approval_resolved` broadcast, tunnel invite/token lifecycle, and the full
-  browser policy pipeline (input approval/hold, DeckMux fan-out, per-frame
-  rate limits) — the server package covers the interop surface; these need
-  small hub API additions (InMemoryApprovalStore iterator + ResolveApproval;
-  tunnel infra port).
-- **redaction engine** (hub left an OutputPolicyGate + Redactor seam) and
-  **tunnel wire-framing** (TunnelSender seam) — port when the tunnel/
-  redaction Python modules are needed.
+- **CLI share/tunnel/inspect**: port the tunnel *client* (cli/share.py 318L,
+  cli/tunnel.py 267L, cli/inspect.py 454L) — connects a local PTY / TCP port /
+  HTTP proxy to a tunnel server. Reuse the committed tunnel package for the
+  token/invite shapes.
+- **browser policy remainder**: per-frame token-bucket rate limits and the
+  lease/permission gate (prepare_browser_input) on the browser WS — DeckMux +
+  approval hold are live; these two are still omitted.
+- **redaction engine** (hub left an OutputPolicyGate + Redactor seam) — port
+  when the redaction Python modules are needed.
 - **CLI stubs**: listen/share/tunnel/inspect/watch (need the tunnel-client /
   gateway-listener / TUI ports) and audit (Python's float-repr hash chain is
   not byte-reproducible in Go — needs a canonical re-serialization decision).
