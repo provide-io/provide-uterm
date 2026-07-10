@@ -46,6 +46,11 @@ type SessionRegistryImpl struct {
 	recDeflt bool
 	// connect builds the live connector; overridable in tests with a fake.
 	connect connectFn
+	// egress is the SSRF / connector-target guard; blockPrivate carries
+	// security.block_private_connector_targets. Together they enforce the egress
+	// policy at the CreateSession chokepoint (port of assert_session_egress_allowed).
+	egress       *server.EgressGuard
+	blockPrivate bool
 }
 
 var _ server.SessionRegistry = (*SessionRegistryImpl)(nil)
@@ -55,9 +60,11 @@ var _ server.SessionRegistry = (*SessionRegistryImpl)(nil)
 // defaults follow cfg.Recording.EnabledByDefault.
 func NewSessionRegistry(cfg *serverconfig.UtermServerConfig) *SessionRegistryImpl {
 	r := &SessionRegistryImpl{
-		entries:  map[string]*sessionEntry{},
-		recDeflt: cfg.Recording.EnabledByDefault,
-		connect:  defaultConnect,
+		entries:      map[string]*sessionEntry{},
+		recDeflt:     cfg.Recording.EnabledByDefault,
+		connect:      defaultConnect,
+		egress:       server.NewEgressGuard(nil, nil),
+		blockPrivate: cfg.Security.BlockPrivateConnectorTargets,
 	}
 	for _, def := range cfg.Sessions {
 		r.seed(def)
@@ -156,9 +163,15 @@ func (r *SessionRegistryImpl) GetSession(_ context.Context, id string) (*server.
 
 // CreateSession creates a session from a free-form definition payload. A missing
 // session_id → 422; a duplicate id → 409.
-func (r *SessionRegistryImpl) CreateSession(_ context.Context, payload map[string]any) (*server.SessionStatus, error) {
+func (r *SessionRegistryImpl) CreateSession(ctx context.Context, payload map[string]any) (*server.SessionStatus, error) {
 	def, err := definitionFromPayload(payload)
 	if err != nil {
+		return nil, err
+	}
+	// Egress chokepoint: block cloud-metadata targets always, and private
+	// targets when security.block_private_connector_targets is set. Returns
+	// *server.EgressBlockedError → HTTP 422.
+	if err := r.egress.AssertSessionEgressAllowed(ctx, def.ConnectorType, def.ConnectorConfig, r.blockPrivate); err != nil {
 		return nil, err
 	}
 	r.mu.Lock()

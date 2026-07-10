@@ -1,0 +1,346 @@
+{
+  "ips": [
+    {
+      "ip": "169.254.169.254",
+      "blocked_default": true,
+      "blocked_default_reason": "metadata",
+      "blocked_private": true,
+      "blocked_private_reason": "metadata"
+    },
+    {
+      "ip": "100.100.100.200",
+      "blocked_default": true,
+      "blocked_default_reason": "metadata",
+      "blocked_private": true,
+      "blocked_private_reason": "metadata"
+    },
+    {
+      "ip": "fd00:ec2::254",
+      "blocked_default": true,
+      "blocked_default_reason": "metadata",
+      "blocked_private": true,
+      "blocked_private_reason": "metadata"
+    },
+    {
+      "ip": "8.8.8.8",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": false,
+      "blocked_private_reason": ""
+    },
+    {
+      "ip": "1.1.1.1",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": false,
+      "blocked_private_reason": ""
+    },
+    {
+      "ip": "93.184.216.34",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": false,
+      "blocked_private_reason": ""
+    },
+    {
+      "ip": "10.0.0.1",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
+      "ip": "10.255.255.255",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
+      "ip": "172.16.5.5",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
+      "ip": "172.31.0.1",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
+      "ip": "192.168.1.1",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
+      "ip": "127.0.0.1",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
+      "ip": "0.0.0.0",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
+      "ip": "255.255.255.255",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
+      "ip": "169.254.1.1",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
+      "ip": "100.64.0.1",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": false,
+      "blocked_private_reason": ""
+    },
+    {
+      "ip": "224.0.0.1",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
+      "ip": "239.1.2.3",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
+      "ip": "240.0.0.1",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
+      "ip": "198.18.0.1",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
+      "ip": "192.0.2.1",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
+      "ip": "203.0.113.9",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
+      "ip": "192.0.0.170",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
+      "ip": "198.51.100.7",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
+      "ip": "2606:4700:4700::1111",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": false,
+      "blocked_private_reason": ""
+    },
+    {
+      "ip": "2600:1901::1",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": false,
+      "blocked_private_reason": ""
+    },
+    {
+      "ip": "::1",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
+      "ip": "::",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
+      "ip": "fe80::1",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
+      "ip": "fc00::1",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
+      "ip": "fd12::34",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
+      "ip": "ff02::1",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
+      "ip": "2001:db8::1",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
+      "ip": "2001::1",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
+      "ip": "64:ff9b:1::1",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
+      "ip": "::ffff:169.254.169.254",
+      "blocked_default": true,
+      "blocked_default_reason": "metadata",
+      "blocked_private": true,
+      "blocked_private_reason": "metadata"
+    },
+    {
+      "ip": "::ffff:8.8.8.8",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": false,
+      "blocked_private_reason": ""
+    },
+    {
+      "ip": "::ffff:10.0.0.1",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
+      "ip": "2002:a9fe:a9fe::",
+      "blocked_default": true,
+      "blocked_default_reason": "metadata",
+      "blocked_private": true,
+      "blocked_private_reason": "metadata"
+    },
+    {
+      "ip": "2002:0808:0808::",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": false,
+      "blocked_private_reason": ""
+    },
+    {
+      "ip": "64:ff9b::169.254.169.254",
+      "blocked_default": true,
+      "blocked_default_reason": "metadata",
+      "blocked_private": true,
+      "blocked_private_reason": "metadata"
+    },
+    {
+      "ip": "64:ff9b::8.8.8.8",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": false,
+      "blocked_private_reason": ""
+    },
+    {
+      "ip": "::a9fe:a9fe",
+      "blocked_default": true,
+      "blocked_default_reason": "metadata",
+      "blocked_private": true,
+      "blocked_private_reason": "metadata"
+    },
+    {
+      "ip": "::0808:0808",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": false,
+      "blocked_private_reason": ""
+    }
+  ],
+  "webhooks": [
+    {
+      "url": "https://169.254.169.254/health",
+      "blocked": true
+    },
+    {
+      "url": "https://[fd00:ec2::254]:8443/x",
+      "blocked": true
+    },
+    {
+      "url": "http://100.100.100.200/",
+      "blocked": true
+    },
+    {
+      "url": "https://10.0.0.5/policy",
+      "blocked": false
+    },
+    {
+      "url": "https://8.8.8.8/hook",
+      "blocked": false
+    },
+    {
+      "url": "https://[64:ff9b::169.254.169.254]/x",
+      "blocked": true
+    },
+    {
+      "url": "not a url at all",
+      "blocked": false
+    },
+    {
+      "url": "",
+      "blocked": false
+    }
+  ]
+}

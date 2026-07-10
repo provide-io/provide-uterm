@@ -21,16 +21,38 @@ const (
 // StartSweeps launches the background maintenance goroutines. They run until ctx
 // is cancelled; Shutdown waits for them via sweepWG. Idempotent.
 //
-// Deviation: the recording-retention, control-plane-reap, and node-registry-
-// heartbeat sweeps are not launched here — they depend on infrastructure
-// (recording directory, control-plane engine, discovery provider) outside this
-// HTTP layer's dependency set.
+// Deviation: the recording-retention and control-plane-reap sweeps are not
+// launched here — they depend on infrastructure (recording directory,
+// control-plane engine) outside this HTTP layer's dependency set. The
+// node-registry heartbeat IS launched (its inputs — governance config, hub
+// counts, egress guard — are all available to the server).
 func (s *Server) StartSweeps(ctx context.Context) {
 	s.sweepOnce.Do(func() {
 		s.launchSweep(ctx, approvalSweepInterval, s.sweepApprovals)
 		s.launchSweep(ctx, idleSweepInterval, s.sweepIdleSessions)
 		s.launchSweep(ctx, sessionSweepInterval, s.sweepExpiredSessions)
 		s.launchSweep(ctx, tunnelInviteSweepInterval, s.sweepTunnelInvites)
+		s.startNodeRegistryHeartbeat(ctx)
+	})
+}
+
+// startNodeRegistryHeartbeat launches the discovery announcer on the governance-
+// configured cadence, but only when a webhook provider is actually configured
+// (matching factory_sweeps.node_registry_heartbeat, which returns early for the
+// no-op provider). Errors are best-effort — logged and swallowed.
+func (s *Server) startNodeRegistryHeartbeat(ctx context.Context) {
+	provider := s.buildDiscoveryProvider()
+	if _, noop := provider.(NoOpDiscoveryProvider); noop {
+		return
+	}
+	interval := time.Duration(s.cfg.Governance.RegistryWebhookIntervalS * float64(time.Second))
+	if interval <= 0 {
+		interval = 60 * time.Second
+	}
+	s.launchSweep(ctx, interval, func(ctx context.Context) {
+		if err := provider.Announce(ctx, s.nodeStatus(ctx)); err != nil {
+			s.logger.Warn("node_registry_heartbeat_failed", "error", err)
+		}
 	})
 }
 
