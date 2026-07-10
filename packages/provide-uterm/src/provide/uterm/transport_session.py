@@ -274,12 +274,13 @@ class TransportSession:
         """Background task: read from transport (IAC-stripped), feed into emulator."""
         try:
             while self._connected:
-                data = await self._transport.receive(4096, timeout_ms=500)
-                if data:
+                raw = await self._transport.receive(4096, timeout_ms=500)
+                if raw:
+                    data: bytes | None = raw
                     if self._control_decoder is not None:
-                        data = self._split_control_frames(data)
-                        if data is None:
-                            continue
+                        data = self._split_control_frames(raw)
+                    if data is None:
+                        continue
                     # Fan out to any registered watchers BEFORE the emulator
                     # consumes the bytes, so they see the raw wire content
                     # (ANSI SGR codes etc.) and not pyte's decoded display.
