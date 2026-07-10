@@ -241,11 +241,27 @@ func TestWorkerWSBinaryAndControlFrames(t *testing.T) {
 	defer func() { _ = bc.conn.Close(websocket.StatusNormalClosure, "") }()
 	bc.waitFrame(t, "hello", 5*time.Second)
 
-	// Binary terminal data → DataChunk broadcast path.
-	if err := conn.Write(ctx, websocket.MessageBinary, []byte("term-output")); err != nil {
-		t.Fatalf("binary: %v", err)
-	}
-	// analysis + status + an unknown control type.
+	// Binary terminal data → DataChunk broadcast path. The observer only becomes
+	// broadcast-eligible once the handshake reaches ActivateBrowserBroadcasts,
+	// which runs AFTER the hello frame the test waited for above. A single
+	// one-shot send can therefore land while the browser is still startup-pending
+	// and be silently skipped (harmless in production, where terminal output is a
+	// continuous stream). Re-send each poll until the browser is active and the
+	// chunk arrives — the widened startup window under -race is why a one-shot
+	// send flaked there but not without instrumentation.
+	waitUntil(t, 5*time.Second, func() bool {
+		if werr := conn.Write(ctx, websocket.MessageBinary, []byte("term-output")); werr != nil {
+			t.Fatalf("binary: %v", werr)
+		}
+		select {
+		case d := <-bc.data:
+			return strings.Contains(d, "term-output")
+		case <-time.After(100 * time.Millisecond):
+			return false
+		}
+	})
+	// analysis + status + an unknown control type. The browser is now activated,
+	// so these one-shot control frames are delivered and dispatched.
 	for _, msg := range []map[string]any{
 		{"type": "analysis", "data": map[string]any{"x": 1}},
 		{"type": "status", "state": "running"},
@@ -259,16 +275,8 @@ func TestWorkerWSBinaryAndControlFrames(t *testing.T) {
 			t.Fatalf("write control: %v", err)
 		}
 	}
-	// The browser receives the broadcast term data + analysis, proving both the
-	// binary DataChunk path and the analysis dispatch branch executed.
-	waitUntil(t, 5*time.Second, func() bool {
-		select {
-		case d := <-bc.data:
-			return strings.Contains(d, "term-output")
-		case <-time.After(100 * time.Millisecond):
-			return false
-		}
-	})
+	// The browser receives the analysis frame, proving both the binary DataChunk
+	// path and the analysis dispatch branch executed.
 	bc.waitFrame(t, "analysis", 5*time.Second)
 }
 
