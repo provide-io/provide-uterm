@@ -1,0 +1,39 @@
+{
+  "hmac_secret": "uterm-test-secret-32-byte-minimum-key",
+  "hmac_cases": [
+    {
+      "secret": "uterm-test-secret-32-byte-minimum-key",
+      "body_utf8": "{\"a\":1}",
+      "timestamp": "1700000000.0",
+      "signature": "sha256=d705381dd11e6135d8c03ab12db9eb955a601b60ca341851adcd0bb66541750e"
+    },
+    {
+      "secret": "uterm-test-secret-32-byte-minimum-key",
+      "body_utf8": "",
+      "timestamp": "1700000000",
+      "signature": "sha256=5384a4973936f5339e25cf26649613f87b8a1baa462f407967259883b858aacc"
+    },
+    {
+      "secret": "uterm-test-secret-32-byte-minimum-key",
+      "body_utf8": "{\"subject_id\":\"user-1\",\"roles\":[\"viewer\"]}",
+      "timestamp": "1700000000.5",
+      "signature": "sha256=1a77b27da087437cfc72effda0fc03b3f7628ddb2f8b42f62e38a247fd1a5691"
+    }
+  ],
+  "jwt_hs256": {
+    "secret": "uterm-test-secret-32-byte-minimum-key",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhbGljZSIsInJvbGVzIjpbIm9wZXJhdG9yIiwidmlld2VyIl0sInNjb3BlIjoicmVhZCB3cml0ZSIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6MTcwMDAwMDAwMCwiZXhwIjo0ODUzNjAwMDAwfQ.6htWGTnYRt8ZJTJ0JuB3mUbSjWon4l7fx0d7OCCxwM8",
+    "sub": "alice",
+    "issuer": "provide-uterm",
+    "audience": "provide-uterm-server",
+    "expected_roles": [
+      "operator",
+      "viewer"
+    ],
+    "expected_scopes": [
+      "read",
+      "write"
+    ]
+  },
+  "verify_self": true
+}
