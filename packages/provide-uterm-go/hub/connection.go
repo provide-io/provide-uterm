@@ -1,0 +1,259 @@
+//
+// SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
+
+package hub
+
+import "context"
+
+// ConnectionManager owns the worker/browser connection-churn surface: the REST
+// rate-limit gates, worker WS lifecycle (register/deregister/hello/tunnel-flag/
+// snapshot), browser WS lifecycle (register/activate/disconnect with the
+// per-principal quota + resume-token minting), and the hijack-clearing
+// lifecycle (disconnect_worker / force_release_hijack in connection_hijack.go).
+// Port of provide.uterm.server.bridge.hub.connection.ConnectionManager.
+//
+// It holds a back reference to the composing [TermHub] and uses the hub's
+// shared mutex, preserving the Python lock semantics verbatim.
+type ConnectionManager struct {
+	hub *TermHub
+}
+
+func newConnectionManager(hub *TermHub) *ConnectionManager { return &ConnectionManager{hub: hub} }
+
+// -- Rate limiting -----------------------------------------------------------
+
+// AllowRESTAcquireFor gates a REST hijack-acquire, logging a rejection. Port of
+// allow_rest_acquire_for.
+func (c *ConnectionManager) AllowRESTAcquireFor(clientID string) bool {
+	allowed := c.hub.Limiter.AllowRESTAcquire(clientID)
+	if !allowed {
+		c.hub.logger.Warn(eventRateLimitTriggered, "client_id", clientID, "limit_type", "rest_acquire")
+	}
+	return allowed
+}
+
+// AllowRESTSendFor gates a REST send/step, logging a rejection. Port of
+// allow_rest_send_for.
+func (c *ConnectionManager) AllowRESTSendFor(clientID string) bool {
+	allowed := c.hub.Limiter.AllowRESTSend(clientID)
+	if !allowed {
+		c.hub.logger.Warn(eventRateLimitTriggered, "client_id", clientID, "limit_type", "rest_send")
+	}
+	return allowed
+}
+
+// WorkerToken returns the configured worker bearer token. Port of worker_token.
+func (c *ConnectionManager) WorkerToken() *string { return c.hub.workerToken }
+
+// -- Worker connection lifecycle ---------------------------------------------
+
+// RegisterWorker registers ws as the active worker for workerID, clearing stale
+// (expired) hijack state from a prior session. Port of register_worker. Returns
+// (prevWasHijacked, error); a full worker map for a brand-new worker id yields a
+// [WebSocketRejection] with code 1008.
+func (c *ConnectionManager) RegisterWorker(_ context.Context, workerID string, ws WorkerWS) (bool, error) {
+	hub := c.hub
+	hub.lock.Lock()
+	if !hub.registry.Contains(workerID) && hub.registry.Len() >= hub.maxWorkers {
+		hub.lock.Unlock()
+		return false, &WebSocketRejection{Code: 1008, Reason: "worker capacity exceeded"}
+	}
+	st := hub.registry.SetDefault(workerID, NewWorkerTermState())
+	if len(st.Events) > hub.eventDequeMaxlen {
+		st.Events = st.Events[len(st.Events)-hub.eventDequeMaxlen:]
+	}
+	now := hub.clock.Monotonic()
+	expired := st.HijackSession != nil && st.HijackSession.LeaseExpiresAt <= now
+	prevWasHijacked := expired || (st.HijackSession == nil && st.HijackOwner != nil)
+	if expired {
+		st.HijackSession = nil
+	}
+	if prevWasHijacked {
+		st.HijackOwner = nil
+		st.HijackOwnerExpiresAt = nil
+	}
+	st.WorkerWS = ws
+	hub.lock.Unlock()
+	hub.logger.Info(eventSessionRegistered, "worker_id", workerID, "session_type", "worker")
+	return prevWasHijacked, nil
+}
+
+// IsActiveWorker reports whether ws is still the registered worker. Port of
+// is_active_worker.
+func (c *ConnectionManager) IsActiveWorker(_ context.Context, workerID string, ws WorkerWS) bool {
+	hub := c.hub
+	hub.lock.Lock()
+	defer hub.lock.Unlock()
+	st := hub.registry.Get(workerID)
+	return st != nil && st.WorkerWS == ws
+}
+
+// SetWorkerTunnelFlag marks whether workerID's worker WS uses the tunnel wire
+// format. Port of set_worker_tunnel_flag.
+func (c *ConnectionManager) SetWorkerTunnelFlag(_ context.Context, workerID string, value bool) {
+	hub := c.hub
+	hub.lock.Lock()
+	defer hub.lock.Unlock()
+	if st := hub.registry.Get(workerID); st != nil {
+		st.IsTunnelWorker = value
+	}
+}
+
+// SetWorkerHello applies a worker_hello: sets input_mode and records the
+// protocol version. Port of set_worker_hello. Returns false when the worker is
+// unknown or when switching to "open" while a hijack is active.
+func (c *ConnectionManager) SetWorkerHello(_ context.Context, workerID, mode string, protocolVersion *int) (bool, error) {
+	hub := c.hub
+	if protocolVersion != nil {
+		hub.logger.Info("worker_hello_protocol", "worker_id", workerID, "version", *protocolVersion)
+		if *protocolVersion < 1 {
+			hub.logger.Warn("worker_hello_legacy_protocol", "worker_id", workerID, "version", *protocolVersion)
+		}
+	}
+	hub.lock.Lock()
+	defer hub.lock.Unlock()
+	st := hub.registry.Get(workerID)
+	if st == nil {
+		return false, nil
+	}
+	if mode == InputModeOpen && hub.State.IsHijacked(st) {
+		hub.logger.Warn("worker_hello_mode_blocked", "worker_id", workerID)
+		return false, nil
+	}
+	st.InputMode = mode
+	if protocolVersion != nil {
+		st.ProtocolVersion = protocolVersion
+	}
+	return true, nil
+}
+
+// UpdateLastSnapshot stores snapshot as the most recent snapshot for workerID.
+// Port of update_last_snapshot.
+func (c *ConnectionManager) UpdateLastSnapshot(_ context.Context, workerID string, snapshot map[string]any) {
+	hub := c.hub
+	hub.lock.Lock()
+	defer hub.lock.Unlock()
+	if st := hub.registry.Get(workerID); st != nil {
+		st.LastSnapshot = snapshot
+	}
+}
+
+// DeregisterWorker clears ws as the active worker if it is still current. Port
+// of deregister_worker. Returns (shouldBroadcastDisconnect, wasHijacked).
+func (c *ConnectionManager) DeregisterWorker(_ context.Context, workerID string, ws WorkerWS) (bool, bool) {
+	hub := c.hub
+	hub.lock.Lock()
+	defer hub.lock.Unlock()
+	st := hub.registry.Get(workerID)
+	if st == nil || st.WorkerWS != ws {
+		return false, false
+	}
+	wasHijacked := st.HijackSession != nil || st.HijackOwner != nil
+	st.WorkerWS = nil
+	st.HijackSession = nil
+	st.HijackOwner = nil
+	st.HijackOwnerExpiresAt = nil
+	return true, wasHijacked
+}
+
+// -- Browser connection lifecycle --------------------------------------------
+
+// browserPrincipalSubjectID returns the principal subject_id for quota tracking,
+// or nil for an exempt connection (no principal, or the "anonymous" subject).
+// Port of _browser_principal_subject_id.
+func browserPrincipalSubjectID(ws BrowserConn) *string {
+	pc, ok := ws.(principalCarrier)
+	if !ok {
+		return nil
+	}
+	principal := pc.UtermPrincipal()
+	pr, ok := principal.(*Principal)
+	if !ok || pr == nil {
+		return nil
+	}
+	if pr.SubjectID == "" || pr.SubjectID == "anonymous" {
+		return nil
+	}
+	return strp(pr.SubjectID)
+}
+
+// ActivateBrowserBroadcasts allows broadcasts to a browser after its startup
+// frames have been sent. Port of activate_browser_broadcasts.
+func (c *ConnectionManager) ActivateBrowserBroadcasts(_ context.Context, workerID string, ws BrowserConn) {
+	hub := c.hub
+	hub.lock.Lock()
+	defer hub.lock.Unlock()
+	st := hub.registry.Get(workerID)
+	if st != nil {
+		if _, ok := st.Browsers[ws]; ok {
+			delete(hub.startupPendingBrowsers, ws)
+		}
+	}
+}
+
+// rollbackBrowserQuota undoes the per-principal quota increment for ws (caller
+// holds the lock). Port of _rollback_browser_quota.
+func (c *ConnectionManager) rollbackBrowserQuota(ws BrowserConn) {
+	hub := c.hub
+	delete(hub.wsToResumeToken, ws)
+	subjectID, ok := hub.wsPrincipal[ws]
+	if !ok {
+		return
+	}
+	delete(hub.wsPrincipal, ws)
+	remaining := hub.principalBrowserCounts[subjectID] - 1
+	if remaining <= 0 {
+		delete(hub.principalBrowserCounts, subjectID)
+	} else {
+		hub.principalBrowserCounts[subjectID] = remaining
+	}
+}
+
+// scanEventsForResume scans event history to decide if a resume frame is still
+// needed on browser disconnect. Port of _scan_events_for_resume.
+func scanEventsForResume(st *WorkerTermState) bool {
+	for i := len(st.Events) - 1; i >= 0; i-- {
+		t, ok := st.Events[i]["type"].(string)
+		if !ok {
+			continue
+		}
+		if t == "hijack_owner_expired" || t == "hijack_lease_expired" {
+			return false
+		}
+		if t == "hijack_acquired" || t == "hijack_released" {
+			break
+		}
+	}
+	return true
+}
+
+// updateLockState applies disconnect mutations to st and returns
+// (wasOwner, restStillActive, resumeWithoutOwner). Caller holds the lock.
+// Port of _update_lock_state.
+func (c *ConnectionManager) updateLockState(st *WorkerTermState, ws BrowserConn, ownedHijack bool) (bool, bool, bool) {
+	hub := c.hub
+	wasOwner := hub.State.IsDashboardHijackActive(st) && st.HijackOwner == ws
+	restStillActive := false
+	resumeWithoutOwner := false
+	delete(st.Browsers, ws)
+	if subjectID, ok := hub.wsPrincipal[ws]; ok {
+		delete(hub.wsPrincipal, ws)
+		remaining := hub.principalBrowserCounts[subjectID] - 1
+		if remaining <= 0 {
+			delete(hub.principalBrowserCounts, subjectID)
+		} else {
+			hub.principalBrowserCounts[subjectID] = remaining
+		}
+	}
+	switch {
+	case wasOwner:
+		st.HijackOwner = nil
+		st.HijackOwnerExpiresAt = nil
+		restStillActive = hub.State.HasValidRESTLease(st)
+	case ownedHijack && st.WorkerWS != nil && !hub.State.IsHijacked(st):
+		resumeWithoutOwner = scanEventsForResume(st)
+	}
+	return wasOwner, restStillActive, resumeWithoutOwner
+}

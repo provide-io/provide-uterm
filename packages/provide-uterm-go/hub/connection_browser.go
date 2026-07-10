@@ -1,0 +1,124 @@
+//
+// SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
+
+package hub
+
+import "context"
+
+// RegisterBrowser registers ws as a browser for workerID and returns the
+// initial state map. Port of register_browser.
+//
+// The per-principal quota gate runs BEFORE minting the resume token so a
+// rejected connection never orphans a token. On any error after the quota
+// increment the increment is rolled back (mirroring the Python try/except).
+// Returns a [WebSocketRejection] (code 1008) when the principal is at its
+// connection cap.
+func (c *ConnectionManager) RegisterBrowser(
+	ctx context.Context, workerID string, ws BrowserConn, role string, deferBroadcast bool,
+) (map[string]any, error) {
+	hub := c.hub
+	var resumeToken string
+	hub.lock.Lock()
+
+	subjectID := browserPrincipalSubjectID(ws)
+	if subjectID != nil {
+		current := hub.principalBrowserCounts[*subjectID]
+		if current >= hub.maxConnectionsPerPrincipal {
+			hub.lock.Unlock()
+			return nil, &WebSocketRejection{Code: 1008, Reason: "too many connections"}
+		}
+		hub.principalBrowserCounts[*subjectID] = current + 1
+		hub.wsPrincipal[ws] = *subjectID
+	}
+
+	// Everything past the increment is guarded so a failure rolls the quota
+	// slot back (mirroring the Python try/except BaseException).
+	if hub.resumeStore != nil {
+		token, err := hub.resumeStore.Create(ctx, workerID, role, hub.resumeTTLS)
+		if err != nil {
+			c.rollbackBrowserQuota(ws)
+			hub.lock.Unlock()
+			return nil, err
+		}
+		resumeToken = token
+		hub.wsToResumeToken[ws] = token
+	}
+	st := hub.registry.SetDefault(workerID, NewWorkerTermState())
+	st.Browsers[ws] = role
+	if deferBroadcast {
+		hub.startupPendingBrowsers[ws] = true
+	}
+	var resumeTokenAny any
+	if resumeToken != "" {
+		resumeTokenAny = resumeToken
+	}
+	initialState := map[string]any{
+		"is_hijacked":      hub.State.IsHijacked(st),
+		"hijacked_by_me":   hub.State.IsDashboardHijackActive(st) && st.HijackOwner == ws,
+		"worker_online":    st.WorkerWS != nil,
+		"input_mode":       st.InputMode,
+		"initial_snapshot": st.LastSnapshot,
+		"resume_token":     resumeTokenAny,
+	}
+	hub.lock.Unlock()
+
+	// Redact the connect-time snapshot OUTSIDE the lock (the policy context
+	// build re-acquires the hub lock). redact returns a COPY.
+	if snap, _ := initialState["initial_snapshot"].(map[string]any); snap != nil && hub.outputPolicyGate != nil {
+		redacted, err := hub.Router.RedactSnapshotForRecipient(ctx, workerID, snap, ws)
+		if err != nil {
+			return nil, err
+		}
+		initialState["initial_snapshot"] = redacted
+	}
+	hub.logger.Info(eventSessionRegistered, "worker_id", workerID, "session_type", "browser", "role", role)
+	return initialState, nil
+}
+
+// CleanupBrowserDisconnect handles a browser WS disconnect atomically. Port of
+// cleanup_browser_disconnect. Returns a map with was_owner, rest_still_active,
+// resume_without_owner.
+func (c *ConnectionManager) CleanupBrowserDisconnect(
+	ctx context.Context, workerID string, ws BrowserConn, ownedHijack bool,
+) (map[string]any, error) {
+	hub := c.hub
+	browserCount := -1
+	wasOwner, restStillActive, resumeWithoutOwner := false, false, false
+
+	hub.lock.Lock()
+	st := hub.registry.Get(workerID)
+	if st != nil {
+		wasOwner, restStillActive, resumeWithoutOwner = c.updateLockState(st, ws, ownedHijack)
+		browserCount = len(st.Browsers)
+	}
+	// Pop the resume token + startup-pending flag under the lock (these
+	// hub-level maps are lock-guarded in this port).
+	token := ""
+	if hub.resumeStore != nil {
+		token = hub.wsToResumeToken[ws]
+		delete(hub.wsToResumeToken, ws)
+	}
+	delete(hub.startupPendingBrowsers, ws)
+	hub.lock.Unlock()
+
+	// Mark the resume token with hijack ownership OUTSIDE the lock; do NOT
+	// revoke — the token must survive until reconnect or TTL.
+	if hub.resumeStore != nil && token != "" && (wasOwner || ownedHijack) {
+		if err := hub.resumeStore.MarkHijackOwner(ctx, token, true); err != nil {
+			return nil, err
+		}
+	}
+
+	// Fire the empty-browser callback when the last browser left.
+	if browserCount == 0 && hub.onWorkerEmpty != nil {
+		hub.spawnWorkerEmpty(ctx, workerID)
+	}
+	hub.logger.Info(eventSessionDisconnected, "worker_id", workerID, "session_type", "browser")
+	return map[string]any{
+		"was_owner":            wasOwner,
+		"rest_still_active":    restStillActive,
+		"resume_without_owner": resumeWithoutOwner,
+	}, nil
+}
