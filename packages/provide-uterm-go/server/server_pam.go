@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/pty"
@@ -33,15 +34,26 @@ import (
 //     out-of-tree socket is refused (no session created).
 //   - the relay-forward POST is egress-guarded (SSRF) before it leaves.
 //
-// Deviation from Python: the relay tunnel-provisioning + PamTunnelBridge path
-// (pam_tunnel.py) is NOT ported — it depends on the worker-link bridge outside
-// this HTTP layer. The event relay-forward IS ported.
+// The relay tunnel-provisioning + PamTunnelBridge path (pam_tunnel.py) is ported
+// in server_pam_tunnel.go: when relay is configured, onOpen provisions a CF DO
+// tunnel and, if the session's connector is reachable via the optional
+// connectorLookup surface, starts a PamTunnelBridge (tracked in bridges for
+// onClose teardown).
 type PamIntegration struct {
 	cfg      serverconfig.PamConfig
 	registry SessionRegistry
 	egress   *EgressGuard
 	client   *http.Client
 	logger   loggerLike
+
+	// bridges tracks the live PamTunnelBridge per session id so onClose can stop
+	// it. Guarded by bridgesMu because PAM events may be dispatched concurrently.
+	bridgesMu sync.Mutex
+	bridges   map[string]*PamTunnelBridge
+
+	// newTunnel, when non-nil, overrides the tunnel-client factory a provisioned
+	// bridge uses (test seam; production leaves it nil → the real client).
+	newTunnel func(wsURL, token string) tunnelConn
 }
 
 // loggerLike is the subset of slog.Logger PamIntegration uses (kept narrow so
@@ -64,6 +76,7 @@ func NewPamIntegration(cfg serverconfig.PamConfig, registry SessionRegistry, egr
 		egress:   egress,
 		client:   &http.Client{Timeout: 5 * time.Second},
 		logger:   logger,
+		bridges:  map[string]*PamTunnelBridge{},
 	}
 }
 
@@ -117,12 +130,15 @@ func (p *PamIntegration) onOpen(ctx context.Context, ev pty.PamEvent) {
 		p.forwardToRelay(ctx, map[string]any{
 			"event": "open", "username": ev.Username, "tty": ev.TTY, "pid": ev.PID, "mode": ev.Mode,
 		})
+		p.provisionTunnel(ctx, ev)
 	}
 }
 
-// onClose stops the session then best-effort relays the close event.
+// onClose stops the tunnel bridge, then the session, then best-effort relays the
+// close event.
 func (p *PamIntegration) onClose(ctx context.Context, ev pty.PamEvent) {
 	sessionID := pamSessionID(ev)
+	p.stopBridge(sessionID)
 	if _, err := p.registry.StopSession(ctx, sessionID); err != nil {
 		p.logger.Warn("pam_session_stop_failed", "session_id", sessionID, "error", err)
 	}

@@ -216,9 +216,14 @@ func TestPamCreateNotifyDefaultCommand(t *testing.T) {
 }
 
 func TestPamOnOpenAndCloseWithRelay(t *testing.T) {
-	var hits int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		atomic.AddInt32(&hits, 1)
+	var events, tunnels int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/pam-events":
+			atomic.AddInt32(&events, 1)
+		case "/api/tunnels":
+			atomic.AddInt32(&tunnels, 1)
+		}
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
@@ -229,8 +234,14 @@ func TestPamOnOpenAndCloseWithRelay(t *testing.T) {
 	}, reg)
 	pi.onOpen(context.Background(), pty.PamEvent{Event: "open", Username: "a", TTY: "/dev/pts/1"})
 	pi.onClose(context.Background(), pty.PamEvent{Event: "close", Username: "a", TTY: "/dev/pts/1"})
-	if atomic.LoadInt32(&hits) != 2 {
-		t.Fatalf("want 2 relay POSTs (open+close), got %d", hits)
+	// open + close each POST /api/pam-events; open also POSTs /api/tunnels. The
+	// fakeRegistry exposes no connector, so no bridge is started (the tunnel
+	// response body is empty → parse fails → logged and swallowed).
+	if atomic.LoadInt32(&events) != 2 {
+		t.Fatalf("want 2 pam-event POSTs (open+close), got %d", events)
+	}
+	if atomic.LoadInt32(&tunnels) != 1 {
+		t.Fatalf("want 1 tunnel-provisioning POST on open, got %d", tunnels)
 	}
 }
 

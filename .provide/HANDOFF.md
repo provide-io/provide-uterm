@@ -196,8 +196,12 @@ total 95.3%; floor 95.0 in the Makefile with documented rationale. govulncheck:
 0 called vulns.
 
 Only intentional skip: tracing.py (OpenTelemetry span setup — project rule
-forbids direct OTel; ptel covers logging). Documented partial: PAM tunnel
-bridge (pam_tunnel PamTunnelBridge — depends on the worker-link layer).
+forbids direct OTel; ptel covers logging). The PAM tunnel bridge (pam_tunnel
+PamTunnelBridge) is now ported (server/server_pam_tunnel.go): onOpen provisions a
+CF DO tunnel and, when the session's connector is reachable via the optional
+connectorLookup surface, starts a PamTunnelBridge (PTY-mode duplex pump or
+capture-mode one-way pump, reusing the tunnelclient wire client), tracked for
+onClose teardown.
 
 CLI status: ALL subcommands now real — server, proxy, listen, watch, audit,
 and share/tunnel/inspect (via the tunnelclient package: byte-faithful frame
