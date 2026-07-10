@@ -1,0 +1,170 @@
+#
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+
+# Canonical public API surface for provide-uterm's session + hijack-client
+# layer -- the two surfaces a Python or Go integrator actually calls day to
+# day. Each language MUST export an equivalent of every `required: true`
+# symbol, named per naming_conventions below. Modeled on provide-telemetry's
+# spec/telemetry-api.yaml (see that repo for the pattern this was copied
+# from).
+#
+# Symbol fields:
+#   name:       for kind: function, a snake_case canonical name (transformed
+#               per naming_conventions for Go); for kind: type, the literal
+#               PascalCase name used as-is in BOTH languages (Python classes
+#               are PascalCase too, so no transform applies).
+#   kind:       function | type
+#   required:   true  -> missing symbol is a conformance error for every
+#                        language covered by this spec (currently python, go)
+#               false -> symbol is optional (see note for why)
+#   note:       human-readable rationale, especially for required: false
+#               entries and any accepted cross-language behavioral/calling
+#               convention difference.
+
+spec_version: "1"
+
+naming_conventions:
+  python: snake_case
+  go: PascalCase
+
+api:
+  # provide.uterm.transport_session / telnet_session / ws_session (Python)
+  # <-> packages/provide-uterm-go/termsession (Go).
+  session:
+    - name: TransportSession
+      kind: type
+      required: true
+      note: "base session type wrapping any transport + terminal emulator"
+    - name: connect_telnet
+      kind: function
+      required: true
+    - name: connect_ws
+      kind: function
+      required: true
+    - name: TelnetSession
+      kind: type
+      required: false
+      note: >-
+        Python has a distinct TelnetSession subclass; Go collapses
+        telnet/websocket sessions into TransportSession +
+        NewTelnetSession/TelnetOptions instead of a distinct type. Accepted
+        structural difference, not a gap -- ConnectTelnet/NewTelnetSession
+        cover the same capability.
+    - name: WebSocketSession
+      kind: type
+      required: false
+      note: "Same rationale as telnet_session above (NewWSSession/WSOptions)."
+    - name: snapshot
+      kind: function
+      required: true
+      note: "method on the session type"
+    - name: ansi_screen
+      kind: function
+      required: true
+    - name: send
+      kind: function
+      required: true
+    - name: send_expect
+      kind: function
+      required: true
+    - name: wait_for_update
+      kind: function
+      required: true
+    - name: is_connected
+      kind: function
+      required: true
+    - name: screen_change_seq
+      kind: function
+      required: true
+    - name: update_seq
+      kind: function
+      required: true
+      note: >-
+        Alias for screen_change_seq, kept for cross-language parity (Python:
+        "Alias used by some callers"; Go: TransportSession.UpdateSeq).
+    - name: wait_for_screen_change
+      kind: function
+      required: true
+      note: >-
+        "Wait for any next update" is spelled since=None in Python and a
+        negative since in Go -- an accepted, documented calling-convention
+        difference (WaitForScreenChange is part of Go's shared
+        session.Session interface with multiple implementers, so it stays a
+        plain int rather than a pointer/optional type). Not a gap.
+    - name: add_watch
+      kind: function
+      required: true
+    - name: add_control_frame_watch
+      kind: function
+      required: true
+    - name: close
+      kind: function
+      required: true
+  # provide.uterm.client.hijack.HijackClient (Python) <->
+  # packages/provide-uterm-go/client.HijackClient (Go).
+  hijack_client:
+    - name: HijackClient
+      kind: type
+      required: true
+    - name: acquire
+      kind: function
+      required: true
+    - name: heartbeat
+      kind: function
+      required: true
+    - name: send
+      kind: function
+      required: true
+    - name: step
+      kind: function
+      required: true
+    - name: release
+      kind: function
+      required: true
+    - name: snapshot
+      kind: function
+      required: true
+    - name: events
+      kind: function
+      required: true
+    - name: set_input_mode
+      kind: function
+      required: true
+    - name: disconnect_worker
+      kind: function
+      required: true
+    - name: health
+      kind: function
+      required: true
+    - name: list_sessions
+      kind: function
+      required: true
+    - name: get_session
+      kind: function
+      required: true
+    - name: session_snapshot
+      kind: function
+      required: true
+    - name: session_events
+      kind: function
+      required: true
+    - name: watch_session_events
+      kind: function
+      required: true
+    - name: set_session_mode
+      kind: function
+      required: true
+    - name: connect_session
+      kind: function
+      required: true
+    - name: disconnect_session
+      kind: function
+      required: true
+    - name: quick_connect
+      kind: function
+      required: true
+    - name: post
+      kind: function
+      required: true
