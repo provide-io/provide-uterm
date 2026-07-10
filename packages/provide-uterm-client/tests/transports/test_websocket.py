@@ -124,6 +124,17 @@ class TestWebSocketStreamWriter:
         writer = WebSocketStreamWriter(ws)
         await writer.wait_closed()  # should not raise
 
+    async def test_drain_dangling_lead_byte_sends_nothing(self) -> None:
+        """A flush containing only the incomplete lead byte(s) of a multi-byte
+        UTF-8 character decodes to "" — drain() must not send an empty text
+        frame, just hold the dangling byte(s) for the next flush.
+        """
+        ws = _make_ws()
+        writer = WebSocketStreamWriter(ws)
+        writer.write("é".encode()[:1])  # lone 0xC3 lead byte, no continuation yet
+        await writer.drain()
+        ws.send_text.assert_not_called()
+
     async def test_drain_splits_multibyte_char_across_two_flushes(self) -> None:
         """A write()+drain() per transport chunk must not corrupt a multi-byte
         UTF-8 character whose bytes land in two separate chunks — the
