@@ -14,12 +14,15 @@ and Go itself.
 50 Go packages, 3 binaries (uterm, uterm-mcp, uterm-manager) committed on
 `main`. Whole-module `go build ./...`, `go test -race ./...`, and
 `go vet ./...` are clean; `make quality-gate`
-(gofmt/vet/golangci-lint/race/coverage) passes at **95.3%** total coverage
-(floor 95.0, up from 92.0 — manager rose 77%→94.2% this pass); govulncheck
-reports 0 called vulnerabilities. Go 1.26.5, all deps on latest. Binary build
-and vuln scan are now explicit, separately-visible CI steps
+(gofmt/vet/golangci-lint/race/coverage) passes at **97.2%** total coverage
+(floor 97.0, up from 92.0 across two hardening passes — manager 77%→94.2%,
+then server/gateway/cli 88.5/85.8/90.8%→95.7/98.7/97.7% via real live-socket
+tests, disproving the "these need fault injection" assumption for all four);
+govulncheck reports 0 called vulnerabilities. Go 1.26.5, all deps on latest.
+Binary build and vuln scan are explicit, separately-visible CI steps
 (`make build-binaries`, `make vuln`), and a Go mutation gate (gremlins) runs
-over a small pure-function perimeter — see "Mutation gate" below.
+over a small pure-function perimeter — see "Mutation gate" below. The only
+previously-documented unported piece (the PAM tunnel bridge) is now closed.
 
 ## What "compatible" means (answer to Tim's question)
 
@@ -33,8 +36,8 @@ over a small pure-function perimeter — see "Mutation gate" below.
   pyte-port, behaviorally identical.
 - **API: semantically equivalent, idiomatic Go** (option structs, error
   returns, context.Context), not signature-identical.
-- **CLI: `uterm server` + `uterm proxy` fully wired**, same flags/help as
-  Python. Tunnel/TUI subcommands stubbed (see below).
+- **CLI: every subcommand is real** (server, proxy, listen, share, tunnel,
+  inspect, watch, audit), same flags/help as Python.
 
 ## Verification / proofs (runnable)
 
@@ -110,6 +113,15 @@ over a small pure-function perimeter — see "Mutation gate" below.
   which the shared frontend (`terminal-element.ts` renders only string payloads)
   silently discards — Go now sends UTF-8 TEXT frames like Python's `send_text`.
   Skips gracefully when uv/Python deps are absent; scoped to `go test ./cli/`.
+- **PAM tunnel bridge** `server/server_pam_tunnel.go`: closes the last
+  documented-unported piece. `onOpen` provisions a CF DO relay tunnel
+  (egress-guarded POST `/api/tunnels`) and, when the session's connector is
+  reachable via the optional `connectorLookup` surface, starts a
+  `PamTunnelBridge` — PTY-mode duplex pump or capture-mode one-way pump,
+  reusing the existing `tunnelclient` wire client — tracked in a
+  `map[string]*PamTunnelBridge` for `onClose` teardown. Real tests (no live
+  CF DO needed): relay-provisioning success/failure, both bridge modes,
+  connector-lookup-miss no-op, stop-on-start-failure.
 - **Live DeckMux deck** (demonstrated + now pinned in conformance): 3 users
   join a deck → distinct hash-generated names/colors/initials, presence_update
   broadcast, control_request → control_transfer, disconnect → presence_leave.
@@ -188,12 +200,15 @@ pty (platform PTY/PAM/uid), annotation, server egress guard (SSRF) +
 discovery + recording routes + PAM.
 
 50 packages, 3 binaries (uterm, uterm-mcp, uterm-manager). Coverage: library/
-wire packages ~100%; integration outliers manager ~94.2% (real-child-process
-monitor-loop tests added this pass; residual is syscall-fault-injection-only:
-rename/write/MkdirAll failures, log rotation), server ~88, gateway ~86,
-cli ~91 (live-socket / TTY / multi-process / OS-signal branches). Whole-module
-total 95.3%; floor 95.0 in the Makefile with documented rationale. govulncheck:
-0 called vulns.
+wire packages ~100%; integration outliers manager ~94.2%, server ~95.7%,
+gateway ~98.7%, cli ~97.7%, pty ~90% (now the lowest — platform PAM/uid-mapping
+syscall guards Python's own platform code also excludes). All four of
+manager/server/gateway/cli were raised via REAL child processes and REAL live
+sockets (httptest servers, ephemeral-port listeners, real subprocess teardown)
+— what remains in each is genuinely fault-injection-only (a specific syscall
+failing in a way a test cannot trigger), not something that "needs mocking".
+Whole-module total 97.2%; floor 97.0 in the Makefile with documented
+rationale. govulncheck: 0 called vulns.
 
 Only intentional skip: tracing.py (OpenTelemetry span setup — project rule
 forbids direct OTel; ptel covers logging). The PAM tunnel bridge (pam_tunnel
@@ -220,15 +235,34 @@ list are now done.**
 ## Historical follow-ups (all resolved)
 
 - **browser policy remainder**: per-frame token-bucket rate limits and the
-  lease/permission gate (prepare_browser_input) on the browser WS — DeckMux +
-  approval hold are live; these two are still omitted.
-- **redaction engine** (hub left an OutputPolicyGate + Redactor seam) — port
-  when the redaction Python modules are needed.
-- **CLI stubs**: listen/share/tunnel/inspect/watch (need the tunnel-client /
-  gateway-listener / TUI ports) and audit (Python's float-repr hash chain is
-  not byte-reproducible in Go — needs a canonical re-serialization decision).
-- **Optional**: MCP tools (propose mark3labs/mcp-go), platform PTY connector
-  (propose creack/pty).
+  lease/permission gate — done (58221750).
+- **redaction engine** — done (58221750), byte-identical to Python.
+- **CLI stubs** — all real; audit's float-repr hash chain got a canonical
+  Go re-serialization (f67b4494).
+- **MCP tools / platform PTY connector** — done (mark3labs/mcp-go,
+  creack/pty), feature-parity push.
+- **PAM tunnel bridge** — done, see "Package inventory" above.
+
+## Bugs the proof suites caught (real, cross-language, pre-existing)
+
+Each of these was a genuine defect the "prove it, don't assert it" methodology
+surfaced — not something introduced by the port itself:
+
+- **controlchannel JSON int/float fidelity** (37d96a56) — see "Verification"
+  above.
+- **`uterm proxy` outbound frame type** (f51c7ec5) — the Go proxy sent
+  BINARY WS frames; the shared xterm.js frontend only renders string
+  payloads, so a browser on the Go proxy would have shown a blank terminal.
+  Also fixed a 200ms vs Python's 50ms poll-interval drift. Caught by the new
+  `proxy_interop_test.go` cross-language differential test.
+- **`WebSocketStreamWriter` UTF-8 corruption** (63bdc019, Python-side,
+  `provide-uterm-client/transports/websocket.py`) — `drain()` decoded each
+  flush independently with `errors="replace"`, so a multi-byte UTF-8
+  character split across two `write()+drain()` cycles (which happens when a
+  transport hands data back one chunk at a time, e.g. `WsTerminalProxy`'s
+  byte-at-a-time forwarding) was silently corrupted into replacement
+  characters. Fixed with a persistent incremental UTF-8 decoder. Caught by
+  `TestProxyEchoContractPython` intermittently failing on a multibyte payload.
 
 ## Key facts for whoever continues
 
