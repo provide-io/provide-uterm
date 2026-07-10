@@ -56,12 +56,12 @@ type OutputPolicyGate interface {
 	GetRedactionRules(ctx context.Context, pc PolicyContext) ([]RedactionRule, error)
 }
 
-// Redactor applies a rule set to a frame map, returning a redacted COPY. It is
-// the seam the server wave wires to the real StreamRedactor; the hub never
-// mutates the input. When no [Redactor] is configured the broadcast path treats
-// a non-empty rule set as "leave the frame unchanged" (documented deviation:
-// the regex redaction engine — redaction.py / redaction_defaults.py — is not
-// part of the wave-B port).
+// Redactor applies a rule set to a frame map, returning a redacted COPY; the hub
+// never mutates the input. [RedactFrameFields] is the concrete implementation
+// wiring the real [StreamRedactor] (redaction.go / redaction_defaults.go /
+// router_redaction.go) — assign it to TermHubConfig.Redactor to activate output
+// redaction. When no [Redactor] is configured the broadcast/read paths treat a
+// non-empty rule set as "leave the frame unchanged".
 type Redactor func(msg map[string]any, rules []RedactionRule) map[string]any
 
 // ConnectionHeuristics carries behavioral metrics for one connection. Port of
