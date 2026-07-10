@@ -55,9 +55,11 @@ type SessionRegistryImpl struct {
 
 var _ server.SessionRegistry = (*SessionRegistryImpl)(nil)
 
-// NewSessionRegistry seeds a registry from cfg.Sessions, auto-starting sessions
-// flagged auto_start (mirroring the Python registry bootstrap). Recording
-// defaults follow cfg.Recording.EnabledByDefault.
+// NewSessionRegistry seeds a registry from cfg.Sessions; every session starts in
+// the waiting state. Sessions flagged auto_start are spawned separately at server
+// boot via StartAutoStartSessions (mirroring the Python lifespan boot task) —
+// construction has no connector side effects. Recording defaults follow
+// cfg.Recording.EnabledByDefault.
 func NewSessionRegistry(cfg *serverconfig.UtermServerConfig) *SessionRegistryImpl {
 	r := &SessionRegistryImpl{
 		entries:      map[string]*sessionEntry{},

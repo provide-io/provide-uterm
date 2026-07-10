@@ -34,6 +34,7 @@ type serverBundle struct {
 	cfg      *serverconfig.UtermServerConfig
 	logger   *slog.Logger
 	devToken string
+	registry *SessionRegistryImpl
 }
 
 // newServerCmd registers the `server` subcommand — the primary command. It
@@ -163,7 +164,7 @@ func buildServer(ctx context.Context, configPath, host string, port int, fronten
 			}
 		}()
 	}
-	return &serverBundle{srv: srv, engine: engine, cfg: cfg, logger: logger, devToken: devToken}, nil
+	return &serverBundle{srv: srv, engine: engine, cfg: cfg, logger: logger, devToken: devToken, registry: registry}, nil
 }
 
 // buildRecordingStore selects the recording store from config. Port of the
@@ -212,6 +213,11 @@ func runServer(ctx context.Context, configPath, host string, port int, frontendD
 	if bundle.devToken != "" {
 		bundle.logger.Info("uterm_dev_token_issued", "token", bundle.devToken)
 	}
+
+	// Spawn auto_start sessions in the background so a slow/failed connector dial
+	// never blocks the server from listening (mirrors the Python lifespan boot
+	// task registry.start_auto_start_sessions).
+	go bundle.registry.StartAutoStartSessions(sigCtx)
 
 	return bundle.srv.Run(sigCtx)
 }
