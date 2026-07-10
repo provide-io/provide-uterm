@@ -23,6 +23,7 @@ import (
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverauth"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/tunnel"
 )
 
 // WebhookManager is the optional session-webhook surface. When nil, the webhook
@@ -52,6 +53,10 @@ type Deps struct {
 	Config *serverconfig.UtermServerConfig
 	// Registry is the session-management surface. Required.
 	Registry SessionRegistry
+	// TunnelStore backs the tunnel invite/token lifecycle routes (POST
+	// /api/tunnels, token rotate/revoke, the /s/{id} share consumer). nil → a
+	// fresh in-memory store is created in New.
+	TunnelStore tunnel.Store
 	// APIKeys backs the /api/keys routes. nil → routes report keys disabled.
 	APIKeys *serverauth.ApiKeyStore
 	// Profiles backs the /api/profiles routes. nil → those routes are 503.
@@ -127,6 +132,9 @@ func New(deps Deps) (*Server, error) {
 	}
 	if deps.Logger == nil {
 		deps.Logger = ptel.GetLogger(context.Background(), "provide.uterm.server")
+	}
+	if deps.TunnelStore == nil {
+		deps.TunnelStore = tunnel.NewMemStore()
 	}
 
 	s := &Server{

@@ -1,0 +1,49 @@
+{
+  "note": "blake2b-256 hex of plain (Python tunnel/token_hash.hash_token). Go tunnel.HashToken must match byte-for-byte.",
+  "cases": [
+    {
+      "plain": "hello-token-123",
+      "blake2b_hex": "dd2c3c64e5c88907f3bb792f15550eb239db66cd3a4066ebce32c9f602f9918f"
+    },
+    {
+      "plain": "",
+      "blake2b_hex": ""
+    },
+    {
+      "plain": "a",
+      "blake2b_hex": "8928aae63c84d87ea098564d1e03ad813f107add474e56aedd286349c0c03ea4"
+    },
+    {
+      "plain": "unicode-\u00e9\u00e8-token",
+      "blake2b_hex": "3f2b89b1fca5c7a9a1f0a009f7aba23ef695af931951a1e2ca4fd80a480848b2"
+    },
+    {
+      "plain": "AaBbCc_-0123456789",
+      "blake2b_hex": "8991526d55f55678b7a1b57167d4aa49de104299e66db1f5d4899964cea4764c"
+    },
+    {
+      "plain": " spaces around ",
+      "blake2b_hex": "cf696aa2d836c3bf2e297873a9d2fcf150217144731d2a7bce8d0731d23d5f99"
+    },
+    {
+      "plain": "71z2O6UAyE3SCRO6lqVuFQacw1AxT3owvJaqsyMXNDQ",
+      "blake2b_hex": "3e6f3252c27e701bbcb73990ddeb7b4cfce9ef28ab009d7612f58b7992e94f87"
+    },
+    {
+      "plain": "xZYNaC6eQT8qWzUFVOgLAPjvhidg2rwyetPk-Ta_Pwo",
+      "blake2b_hex": "275752a8a8cdc4f44fc112d8b8891de3aa909000f6921b8f5c4dfa823f462f2c"
+    },
+    {
+      "plain": "qqpxFj5rDRblRN5t1dELChbRPiqHx7ryxVG7_Trv1i0",
+      "blake2b_hex": "ce5ed322f43b0505b3913bc1cbc97a9f7b81842a5d13cf7e7b3ac2faeebeafe2"
+    },
+    {
+      "plain": "FZXhD42JrxKwGbcy5c87FqkBuuK6AtfBQuMu8SBQ3xc",
+      "blake2b_hex": "69118b653a193aff5a25a7e2f584ded5fed3238327e21ca0b9e708f47046e2c1"
+    },
+    {
+      "plain": "SzbOHoQiSnrWjdAu9XNRQGGLYOBvRwz5H1b3AmQWCl0",
+      "blake2b_hex": "792375d3c84a3fce4f8fddc432b3d24ffa753a7d58b2904a5c2718a59d5a1c5d"
+    }
+  ]
+}
