@@ -15,6 +15,7 @@
 package cli
 
 import (
+	"errors"
 	"io"
 
 	"github.com/spf13/cobra"
@@ -61,6 +62,12 @@ func Execute(args []string, out, errw io.Writer) int {
 	root.SetOut(out)
 	root.SetErr(errw)
 	if err := root.Execute(); err != nil {
+		// A silent error (e.g. audit TAMPERED) already wrote its own report to
+		// stdout and only needs the non-zero exit code.
+		var se *silentError
+		if errors.As(err, &se) {
+			return 1
+		}
 		// cobra silences its own printing (SilenceErrors); surface the error
 		// message ourselves so both usage errors and command failures report.
 		if _, werr := io.WriteString(errw, "error: "+err.Error()+"\n"); werr != nil {
