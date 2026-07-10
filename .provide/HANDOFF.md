@@ -69,6 +69,27 @@ subcommand tree mirrors the Python CLI. Go 1.26.5, all deps on latest.
   subprocess down via a process-group SIGTERM→SIGKILL fallback. Kept OUT of the
   Go quality-gate (needs Python): `make -C packages/provide-uterm-go
   interop-test`, wired into CI's `go-quality` job with its own uv+python setup.
+- **Live Python↔Go runtime interop (reverse direction)**
+  `packages/provide-uterm-client/tests/test_go_server_interop.py`: the mirror of
+  the above — an automated test driving a REAL Go `uterm server` binary from the
+  REAL Python client library over the real wire. It builds `./cmd/uterm` fresh
+  into a pytest tmp dir, launches it (ephemeral loopback port, dev_token auth via
+  a `--config` TOML that also pins a test worker-bearer token, JWT read back from
+  `UTERM_DEV_TOKEN_PATH`), polls `/api/health`, then with the Python
+  `HijackClient`/`connect_async_ws`: (1) REST — authenticated `/api/health` +
+  `/api/sessions` listing (asserts `provide-shell` present), then the full
+  operator hijack lease round-trip (input mode → acquire → send → snapshot →
+  release) asserting the sent marker echoes into the snapshot; (2) WebSocket —
+  dials the browser control WS, consumes the hello frame, sends an input frame,
+  reads the echo back over the inline DLE/STX channel. Documented deviation: the
+  Go server's `provide-shell` reference session is an in-process registry
+  connector (not a hub worker), so the test attaches a real Python *worker* to
+  the Go hub over `/ws/worker/…` and drives Python-worker ↔ Go-hub ↔
+  Python-browser — a strictly richer proof. Marked `@pytest.mark.go_interop`,
+  skips gracefully when the Go toolchain is absent, tears the subprocess down via
+  a process-group SIGTERM→SIGKILL fallback, and runs in CI's `go-quality` job
+  (which already has both Go and the synced Python env). BOTH interop directions
+  are now live-proven.
 - **Live DeckMux deck** (demonstrated + now pinned in conformance): 3 users
   join a deck → distinct hash-generated names/colors/initials, presence_update
   broadcast, control_request → control_transfer, disconnect → presence_leave.

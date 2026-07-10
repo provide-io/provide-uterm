@@ -101,6 +101,12 @@ jobs:
       # server` and drives it from the Go client over REST + the WS control
       # channel. Kept out of quality-gate because it needs Python (see Makefile).
       - run: make -C packages/provide-uterm-go interop-test
+      # Reverse-direction live interop proof: build a real Go `uterm server`
+      # binary and drive it from the real Python client library over REST + the
+      # WS control channel. This job already has both Go and the synced Python
+      # env, so it is the natural home. --no-cov because this single file cannot
+      # meet the client package's 100% coverage gate on its own.
+      - run: uv run pytest packages/provide-uterm-client/tests/test_go_server_interop.py -m go_interop --no-cov
 
   annotation-quality:
     runs-on: ubuntu-latest
@@ -169,8 +175,10 @@ jobs:
       - run: uv sync --frozen --group dev
       # Run client package tests with its own 100% branch coverage gate.
       # --timeout so a hung test fails fast (naming it) instead of stalling the
-      # job to the 20-min cap — mirrors server-quality.
-      - run: uv run --directory packages/provide-uterm-client pytest -q tests --timeout=60 --timeout-method=thread
+      # job to the 20-min cap — mirrors server-quality. The go_interop test needs
+      # a built Go binary and runs in the go-quality job instead, so exclude it
+      # here (GitHub runners ship a preinstalled Go it would otherwise pick up).
+      - run: uv run --directory packages/provide-uterm-client pytest -q tests -m "not go_interop" --timeout=60 --timeout-method=thread
 
   pty-unit:
     runs-on: ubuntu-latest
