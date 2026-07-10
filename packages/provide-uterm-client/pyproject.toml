@@ -48,6 +48,9 @@ where = ["src"]
 consider_namespace_packages = true
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "go_interop: tests requiring a built Go uterm binary",
+]
 addopts = [
     "--import-mode=importlib",
     "-v",
