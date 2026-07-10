@@ -201,13 +201,14 @@ discovery + recording routes + PAM.
 
 50 packages, 3 binaries (uterm, uterm-mcp, uterm-manager). Coverage: library/
 wire packages ~100%; integration outliers manager ~94.2%, server ~95.7%,
-gateway ~98.7%, cli ~97.7%, pty ~90% (now the lowest — platform PAM/uid-mapping
-syscall guards Python's own platform code also excludes). All four of
-manager/server/gateway/cli were raised via REAL child processes and REAL live
-sockets (httptest servers, ephemeral-port listeners, real subprocess teardown)
-— what remains in each is genuinely fault-injection-only (a specific syscall
-failing in a way a test cannot trigger), not something that "needs mocking".
-Whole-module total 97.2%; floor 97.0 in the Makefile with documented
+gateway ~98.7%, cli ~97.7%, pty ~95.6% on macOS (higher on Linux CI —
+SO_PEERCRED is Linux-only). All five of manager/server/gateway/cli/pty were
+raised via REAL child processes, REAL live sockets/PTYs (httptest servers,
+ephemeral-port listeners, real subprocess teardown, real PTY spawn+reap) —
+what remains in each is genuinely fault-injection-only (a specific syscall
+failing in a way a test cannot trigger) or a real-libpam success path the
+fail-closed test stub can never reach, not something that "needs mocking".
+Whole-module total 97.4%; floor 97.2 in the Makefile with documented
 rationale. govulncheck: 0 called vulns.
 
 Only intentional skip: tracing.py (OpenTelemetry span setup — project rule

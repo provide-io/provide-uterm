@@ -20,11 +20,13 @@ GOLANGCI_LINT ?= golangci-lint
 #   - gateway (~99%): a handful of crypto/rand and channel-accept error arms.
 #   - cli (~98%): external-constructor failures (telemetry/engine wiring),
 #     os.Hostname()/json.Marshal(fixed map) failure arms.
-#   - pty (~90%): the lowest remaining package — PAM/uid-mapping syscall
-#     guards Python's own platform code also excludes from its gate.
+#   - pty (~95.6% on macOS, higher on Linux CI — SO_PEERCRED is Linux-only):
+#     real-libpam success paths (the fail-closed stub can never authenticate),
+#     /etc/passwd read failures, and a few accept-vs-Stop/queue-drain races
+#     that only manifest under adversarial scheduling.
 # transports/client/controlplane-sqlite/hub carry only syscall/driver/
-# JSON-encode guards the Python originals also exclude. Whole-module ~97.2%.
-COVER_THRESHOLD ?= 97.0
+# JSON-encode guards the Python originals also exclude. Whole-module ~97.4%.
+COVER_THRESHOLD ?= 97.2
 
 # Driver for the mutation gate (stdlib-only Python >= 3.11; tomllib + json).
 PYTHON ?= python3
