@@ -20,6 +20,7 @@ import (
 	cp "github.com/provide-io/provide-uterm/packages/provide-uterm-go/controlplane"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/controlplane/bootstrap"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/recording"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/server"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverauth"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
@@ -130,22 +131,48 @@ func buildServer(ctx context.Context, configPath, host string, port int) (*serve
 	registry := NewSessionRegistry(cfg)
 
 	srv, err := server.New(server.Deps{
-		Hub:      h,
-		Auth:     auth,
-		Authz:    serverauth.NewAuthorizationService(),
-		Config:   cfg,
-		Registry: registry,
-		APIKeys:  apiKeys,
-		Metrics:  metrics,
-		Clock:    clock,
-		Version:  Version,
-		Logger:   logger,
+		Hub:       h,
+		Auth:      auth,
+		Authz:     serverauth.NewAuthorizationService(),
+		Config:    cfg,
+		Registry:  registry,
+		APIKeys:   apiKeys,
+		Metrics:   metrics,
+		Clock:     clock,
+		Version:   Version,
+		Logger:    logger,
+		Recording: buildRecordingStore(cfg),
 	})
 	if err != nil {
 		_ = engine.Close(ctx)
 		return nil, err
 	}
+
+	// PAM integration (opt-in): a no-op unless pam.notify_socket is set. Started
+	// on the server context so it stops on shutdown. Port of run_pam_integration.
+	if cfg.Pam.NotifySocket != nil && *cfg.Pam.NotifySocket != "" {
+		pam := server.NewPamIntegration(cfg.Pam, registry, nil, logger)
+		go func() {
+			if err := pam.Run(ctx); err != nil {
+				logger.Warn("pam_integration_error", "error", err)
+			}
+		}()
+	}
 	return &serverBundle{srv: srv, engine: engine, cfg: cfg, logger: logger, devToken: devToken}, nil
+}
+
+// buildRecordingStore selects the recording store from config. Port of the
+// factory's recording-store selection: a local JSONL store rooted at the
+// configured directory, an in-memory store, or a no-op NullStore.
+func buildRecordingStore(cfg *serverconfig.UtermServerConfig) recording.Store {
+	switch cfg.Recording.StoreType {
+	case "local":
+		return recording.NewLocalFileStore(cfg.Recording.Directory)
+	case "memory":
+		return recording.NewInMemoryStore()
+	default:
+		return recording.NullStore{}
+	}
 }
 
 // controlPlaneConfig maps the server config's control-plane section onto the

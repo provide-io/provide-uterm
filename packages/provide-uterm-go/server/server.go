@@ -22,6 +22,7 @@ import (
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/deckmux"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/fanout"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/recording"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverauth"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/tunnel"
@@ -64,6 +65,9 @@ type Deps struct {
 	Profiles ProfileStore
 	// Webhooks backs the session-webhook routes. nil → 503.
 	Webhooks WebhookManager
+	// Recording backs the /api/sessions/{id}/recording routes (meta, entries,
+	// download). nil → a NullStore (recording reported unavailable/empty).
+	Recording recording.Store
 	// Metrics is the shared counter map. nil → a fresh one. For hub counters to
 	// appear in /api/metrics, the CLI must pass this same instance as the hub's
 	// OnMetric sink.
@@ -109,6 +113,11 @@ type Server struct {
 	// fanout_group_create / fanout_send tools. Always constructed (the Python
 	// factory always wires fan_out_controller).
 	fanout *fanout.Controller
+
+	// egress is the SSRF / DNS-rebinding guard shared by the discovery + PAM
+	// relay webhook announcers (port of provide.uterm.server.egress). Always
+	// constructed with the default (real DNS) resolver + the server clock.
+	egress *EgressGuard
 }
 
 // New assembles a Server from deps. It validates required dependencies, builds
@@ -143,6 +152,9 @@ func New(deps Deps) (*Server, error) {
 	if deps.TunnelStore == nil {
 		deps.TunnelStore = tunnel.NewMemStore()
 	}
+	if deps.Recording == nil {
+		deps.Recording = recording.NullStore{}
+	}
 
 	s := &Server{
 		deps:      deps,
@@ -154,6 +166,7 @@ func New(deps Deps) (*Server, error) {
 	}
 	s.computeAllowedOrigins()
 	s.fanout = fanout.NewController(deps.Hub, fanout.Config{Clock: deps.Clock})
+	s.egress = NewEgressGuard(nil, func() float64 { return deps.Clock.Wall() })
 	s.handler = s.buildHandler()
 	return s, nil
 }
@@ -186,6 +199,7 @@ func (s *Server) buildHandler() http.Handler {
 	s.registerTunnelRoutes(mux)
 	s.registerSSERoutes(mux)
 	s.registerWebhookRoutes(mux)
+	s.registerRecordingRoutes(mux)
 	s.registerBridgeRESTRoutes(mux)
 	s.registerFanoutRoutes(mux)
 	s.registerWSRoutes(mux)

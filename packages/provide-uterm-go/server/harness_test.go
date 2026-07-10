@@ -55,6 +55,9 @@ type fakeRegistry struct {
 	snapshot    map[string]any
 	events      []map[string]any
 	watch       map[string]any
+	// created / stopped capture create/stop calls for the PAM integration tests.
+	created []map[string]any
+	stopped []string
 }
 
 func newFakeRegistry() *fakeRegistry {
@@ -109,6 +112,7 @@ func (f *fakeRegistry) CreateSession(_ context.Context, payload map[string]any) 
 	st := &SessionStatus{SessionID: id, DisplayName: id, ConnectorType: stringField(payload, "connector_type"), LifecycleState: "waiting", InputMode: "hijack", Visibility: "private", Tags: []string{}}
 	f.mu.Lock()
 	f.statuses[id] = st
+	f.created = append(f.created, payload)
 	f.mu.Unlock()
 	return st, nil
 }
@@ -132,6 +136,9 @@ func (f *fakeRegistry) StartSession(_ context.Context, id string) (*SessionStatu
 	return f.controlStatus(id)
 }
 func (f *fakeRegistry) StopSession(_ context.Context, id string) (*SessionStatus, error) {
+	f.mu.Lock()
+	f.stopped = append(f.stopped, id)
+	f.mu.Unlock()
 	return f.controlStatus(id)
 }
 func (f *fakeRegistry) RestartSession(_ context.Context, id string) (*SessionStatus, error) {
