@@ -57,6 +57,44 @@ func TestRegistrySeedAndList(t *testing.T) {
 	}
 }
 
+func TestStartAutoStartSessions(t *testing.T) {
+	r := newTestRegistry(t) // DefaultServerConfig seeds provide-shell with auto_start=true
+	ctx := context.Background()
+
+	// Bug baseline: a freshly seeded auto_start session is waiting/disconnected
+	// (NewSessionRegistry does not spawn it — the boot step is what does).
+	st, err := r.GetSession(ctx, "provide-shell")
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	if st.LifecycleState != "waiting" || st.Connected {
+		t.Fatalf("pre-boot want waiting/disconnected, got %s/%v", st.LifecycleState, st.Connected)
+	}
+
+	// A session without auto_start must be left untouched by the boot step.
+	if _, err := r.CreateSession(ctx, map[string]any{"session_id": "manual", "connector_type": "shell"}); err != nil {
+		t.Fatalf("create manual: %v", err)
+	}
+
+	r.StartAutoStartSessions(ctx)
+
+	st, err = r.GetSession(ctx, "provide-shell")
+	if err != nil {
+		t.Fatalf("GetSession after boot: %v", err)
+	}
+	if st.LifecycleState != "running" || !st.Connected {
+		t.Fatalf("auto_start session: want running/connected, got %s/%v", st.LifecycleState, st.Connected)
+	}
+
+	manual, err := r.GetSession(ctx, "manual")
+	if err != nil {
+		t.Fatalf("GetSession manual: %v", err)
+	}
+	if manual.LifecycleState != "waiting" || manual.Connected {
+		t.Fatalf("manual session should stay waiting, got %s/%v", manual.LifecycleState, manual.Connected)
+	}
+}
+
 func TestRegistryGetDefinitionAndSession(t *testing.T) {
 	r := newTestRegistry(t)
 	ctx := context.Background()

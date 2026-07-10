@@ -58,6 +58,26 @@ func (r *SessionRegistryImpl) StartSession(ctx context.Context, id string) (*ser
 	return r.snapshotStatus(e), nil
 }
 
+// StartAutoStartSessions starts every session flagged auto_start, mirroring the
+// Python registry bootstrap (registry.start_auto_start_sessions). Connector
+// failures are recorded as each session's last_error by StartSession rather than
+// aborting the batch, so one bad session never blocks the others. It is invoked
+// once at server boot (see runServer) — NewSessionRegistry only seeds sessions
+// as waiting; nothing spawns them until this runs.
+func (r *SessionRegistryImpl) StartAutoStartSessions(ctx context.Context) {
+	r.mu.Lock()
+	ids := make([]string, 0, len(r.order))
+	for _, id := range r.order {
+		if r.entries[id].def.AutoStart {
+			ids = append(ids, id)
+		}
+	}
+	r.mu.Unlock()
+	for _, id := range ids {
+		_, _ = r.StartSession(ctx, id)
+	}
+}
+
 // StopSession tears down any live connector and marks the session stopped.
 func (r *SessionRegistryImpl) StopSession(ctx context.Context, id string) (*server.SessionStatus, error) {
 	r.mu.Lock()
