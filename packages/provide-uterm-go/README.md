@@ -47,7 +47,31 @@ Highlights:
 - client `transports/*` → `transports`
 - `transport_session` / `telnet_session` / `ws_session` → `termsession`
 - `bridge` worker side (`worker_link`, contracts) → `bridge`
+- client `hijack` / `control_ws` → `client`; `shell` → `shell`
 - `control/plane` → `controlplane`
+- server `bridge/hub` (registry/limiter/lease/store/router/connection/
+  presence/resume + TermHub) → `hub`
+- server `auth*` / `authorization` / `webhook*` / `api_keys` / `dev_idp` →
+  `serverauth`; `config*` / `profiles` → `serverconfig`
+- server `routes/*` + `app/*` + `runtime` (HTTP/WS) → `server`
+- `cli` + `server/cli` → `cli` (logic) + `cmd/uterm` (binary)
+
+## Build & run
+
+```bash
+cd packages/provide-uterm-go
+go build ./cmd/uterm          # produces the `uterm` binary
+./uterm --help                # mirrors the Python `uterm` subcommand tree
+./uterm server --config server.toml   # runs the reference hosted server
+make quality-gate             # fmt/vet/lint/race/coverage over all packages
+```
+
+`uterm server` and `uterm proxy` are fully wired; a Go `uterm server`
+accepts the same TOML config, serves the same REST/WS routes, and speaks the
+same wire protocol as the Python server (proven by an in-process e2e test
+running a real Go worker ↔ hub ↔ browser). The tunnel/TUI-dependent
+subcommands (listen/share/tunnel/inspect/watch/audit) are stubbed with the
+matching flag surface pending their supporting ports.
 
 ## Dependencies
 

@@ -5,6 +5,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 # New-session bootstrap prompt — provide-uterm Go port
 
+> STATUS 2026-07-09: the port is functionally COMPLETE — 38 packages, the
+> `uterm` binary builds, `uterm server`/`uterm proxy` are wired, whole-module
+> gates pass. Only the documented follow-ups in .provide/HANDOFF.md remain
+> (hub-API-dependent server gaps, CLI stubs, optional MCP/PTY). Use this
+> prompt to pick those up.
+
 Paste the block below to start the next session.
 
 ---
