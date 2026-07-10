@@ -26,15 +26,15 @@ READ FIRST, before doing anything:
   package) and the differential-parity contract.
 - The auto-memory note "project-go-port" (loaded via MEMORY.md).
 
-STATE: 31 Go packages are ported, committed, and green — controlchannel,
-channels, sanitizer, redaction, filters, lineeditor, auth, ansi, colors,
-screen, defaults, frames, ctrlmsg, fileio, recording, sessionlogger, session,
-replay, vt (pyte port), emulator, render, deckmux, transports, termsession,
-detection, bridge (worker link), client (REST + control WS), shell, hub
-(wave-A services), controlplane (memory + sqlite + bootstrap). Whole-module
-`go test -race ./...` passes at 99.7% total coverage; `make quality-gate`
-(in the Go module) passes; deps are on latest and Go is 1.26.5. A CI
-`go-quality` job runs the gate.
+STATE: the port is functionally COMPLETE — 38 Go packages committed and
+green, including the full server stack (controlplane, hub wave-A+B, serverauth,
+serverconfig, server HTTP/WS) and the `uterm` binary (cli + cmd/uterm).
+Whole-module `go build ./...`, `go test -race ./...`, and `go vet ./...` are
+clean; `make quality-gate` passes at 97.1% total coverage (floor 95% — server
+~85% and cli ~96% carry non-deterministic live-socket/OS-signal branches);
+govulncheck 0 called. Go 1.26.5, all deps latest. A CI `go-quality` job runs
+the gate. `go build ./cmd/uterm` yields a working binary whose help tree
+mirrors the Python CLI; `uterm server` and `uterm proxy` run end to end.
 
 NON-NEGOTIABLE RULES (same as last session):
 1. Python is the reference. Anything touching a wire format or observable
@@ -61,26 +61,25 @@ NON-NEGOTIABLE RULES (same as last session):
    mention AI/Claude in commit messages. Shell cwd resets between Bash calls —
    `cd packages/provide-uterm-go` first for go, repo root for git.
 
-REMAINING WORK (in priority order — see HANDOFF checklist for detail):
-1. Hub wave-B: compose TermHub over the wave-A services (clean seams already
-   exist: LeaseHub, StateStoreConfig callbacks, IdentityProvider, polling
-   requestSnapshot func), then MessageRouter (broadcast/send_worker +
-   hijack-state frame building), ConnectionManager, PresenceManager, resume-
-   token store. Python: packages/provide-uterm-server/.../bridge/hub/
-   (core_impl.py, router_impl.py, connection.py, resume.py, ext.py,
-   event_bus.py).
-2. HTTP/WS server + gateway over net/http: the REST routes the Go client
-   already targets (bridge/routes/*.py), the browser WS endpoint, TOML config
-   (propose pelletier/go-toml/v2), auth modes (dev_token/jwt/header/api_key/
-   webhook — security-sensitive, mirror exactly, reuse the Go auth package).
-3. CLI + server binary: cobra, mirror the Python `uterm` / `uterm server`
-   subcommand syntax so commands match, `ptel.SetupTelemetry` at startup.
-4. Optional if in scope: MCP tools (propose mark3labs/mcp-go), platform PTY
-   connector (propose creack/pty).
+REMAINING WORK (all optional/scoped follow-ups — see HANDOFF for detail):
+1. Hub-API-dependent server gaps: approval command re-injection +
+   `approval_resolved` broadcast (needs an InMemoryApprovalStore iterator +
+   ResolveApproval facade on the hub package), the tunnel invite/token
+   lifecycle, and the full browser policy pipeline (input approval/hold,
+   DeckMux fan-out, per-frame rate limits). The `server` package covers the
+   interop surface; these extend it.
+2. CLI stubs to flesh out: listen (gateway listener), share/tunnel/inspect
+   (tunnel client), watch (TUI), audit (blocked on a canonical re-
+   serialization decision — Python's float-repr hash chain is not
+   byte-reproducible in Go). Each already registers the matching flag surface.
+3. Redaction engine + tunnel wire-framing (the hub left OutputPolicyGate /
+   Redactor / TunnelSender seams).
+4. Optional: MCP tools (propose mark3labs/mcp-go), platform PTY connector
+   (propose creack/pty).
 
-Start by reading the three docs above, then confirm the module still builds
-and gates pass (`cd packages/provide-uterm-go && make quality-gate`), then
-begin hub wave-B. Ask me only if a genuine scope decision comes up; otherwise
+Start by reading the docs above, confirm the module still builds and gates
+pass (`cd packages/provide-uterm-go && make quality-gate`), then pick the
+highest-value follow-up. Ask only on a genuine scope decision; otherwise
 proceed.
 
 ---
