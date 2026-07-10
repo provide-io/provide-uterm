@@ -30,6 +30,7 @@ import asyncio
 import contextlib
 from typing import TYPE_CHECKING, Any
 
+from provide.uterm.control_channel import ControlFrameDecoder, DataChunk
 from provide.uterm.emulator import TerminalEmulator
 
 if TYPE_CHECKING:
@@ -61,6 +62,7 @@ class TransportSession:
         cols: int = 80,
         rows: int = 25,
         send_encoding: str = "utf-8",
+        control_frames: bool = False,
     ) -> None:
         self._transport = transport
         self._cols = cols
@@ -76,6 +78,16 @@ class TransportSession:
         # Used by worker_term_bridge to fan terminal output (with colors
         # intact) to the swarm manager's hijack hub.
         self._watchers: list[Callable[[dict[str, Any], bytes], None]] = []
+        # control_frames is OFF by default: every byte from the wire (even one
+        # that happens to start with the DLE/STX control-frame magic bytes)
+        # goes straight to the emulator/watchers unmodified, exactly as it
+        # always has. Opt in to have inline DLE/STX control frames (e.g. a
+        # server-emitted "render_speed" event) parsed out and routed to
+        # control-frame watchers instead of appearing as literal text on the
+        # rendered screen.
+        self._control_frames = control_frames
+        self._control_decoder: ControlFrameDecoder | None = ControlFrameDecoder() if control_frames else None
+        self._control_watchers: list[Callable[[dict[str, Any]], None]] = []
 
     async def _connect_transport(self) -> None:
         """Open the underlying transport. Override in subclasses.
@@ -243,12 +255,31 @@ class TransportSession:
         del interval_s  # reserved for compatibility with TermBridge variants
         self._watchers.append(callback)
 
+    def add_control_frame_watch(self, callback: Callable[[dict[str, Any]], None]) -> None:
+        """Register a callback fired with each inline control frame's payload.
+
+        Only invoked when the session was constructed with
+        ``control_frames=True``; a no-op registration otherwise (there is
+        nothing to dispatch since the decoder is never engaged). The payload
+        is the parsed JSON object (e.g. ``{"type": "render_speed", "cps": 2400}``)
+        — the raw framing bytes never reach the emulator or :meth:`add_watch`
+        callbacks in this mode.
+
+        Args:
+            callback: ``(control_payload) -> None``. Must not block.
+        """
+        self._control_watchers.append(callback)
+
     async def _reader_loop(self) -> None:
         """Background task: read from transport (IAC-stripped), feed into emulator."""
         try:
             while self._connected:
                 data = await self._transport.receive(4096, timeout_ms=500)
                 if data:
+                    if self._control_decoder is not None:
+                        data = self._split_control_frames(data)
+                        if data is None:
+                            continue
                     # Fan out to any registered watchers BEFORE the emulator
                     # consumes the bytes, so they see the raw wire content
                     # (ANSI SGR codes etc.) and not pyte's decoded display.
@@ -261,3 +292,26 @@ class TransportSession:
                     self._update_event.set()
         except (asyncio.CancelledError, ConnectionResetError, OSError, ConnectionError):
             self._connected = False
+
+    def _split_control_frames(self, data: bytes) -> bytes | None:
+        """Run *data* through the control-frame decoder.
+
+        Control chunks are dispatched to control-frame watchers; data chunks
+        are re-joined and returned (CP437-encoded, matching the raw wire
+        encoding the emulator/watchers already expect). Returns ``None`` when
+        the chunk contained only control frames (nothing left for the caller
+        to feed onward this round).
+        """
+        assert self._control_decoder is not None  # guarded by the caller
+        text = data.decode("cp437", errors="replace")
+        terminal_text_parts: list[str] = []
+        for chunk in self._control_decoder.feed(text):
+            if isinstance(chunk, DataChunk):
+                terminal_text_parts.append(chunk.data)
+            else:
+                for cb in self._control_watchers:
+                    with contextlib.suppress(Exception):
+                        cb(chunk.control)
+        if not terminal_text_parts:
+            return None
+        return "".join(terminal_text_parts).encode("cp437", errors="replace")

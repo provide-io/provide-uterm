@@ -50,6 +50,15 @@ def test_constructor_custom_params() -> None:
     assert session._rows == 40
 
 
+def test_constructor_control_frames_off_by_default() -> None:
+    assert WebSocketSession("ws://h/ws")._control_decoder is None
+
+
+def test_constructor_control_frames_propagates() -> None:
+    session = WebSocketSession("ws://h/ws", control_frames=True)
+    assert session._control_decoder is not None
+
+
 # ---------------------------------------------------------------------------
 # _connect_transport hook
 # ---------------------------------------------------------------------------
@@ -150,7 +159,18 @@ async def test_connect_ws_factory() -> None:
         mock_t.connect.assert_awaited_once_with(
             host="", port=0, url="wss://bbs.example.com/ws", ping_interval=20, ping_timeout=20, close_timeout=10
         )
+        assert session._control_decoder is None
 
+        await session.close()
+
+
+async def test_connect_ws_factory_control_frames() -> None:
+    with patch("provide.uterm.ws_session.WebSocketTransport") as mock_cls:
+        mock_cls.return_value = _mock_transport()
+
+        session = await connect_ws("wss://bbs.example.com/ws", control_frames=True)
+
+        assert session._control_decoder is not None
         await session.close()
 
 

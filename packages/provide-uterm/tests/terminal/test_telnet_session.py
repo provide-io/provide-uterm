@@ -63,6 +63,15 @@ def test_constructor_custom_params() -> None:
     assert session._connect_timeout == 10.0
 
 
+def test_constructor_control_frames_off_by_default() -> None:
+    assert TelnetSession("localhost", 23)._control_decoder is None
+
+
+def test_constructor_control_frames_propagates() -> None:
+    session = TelnetSession("localhost", 23, control_frames=True)
+    assert session._control_decoder is not None
+
+
 # ---------------------------------------------------------------------------
 # connect / close lifecycle
 # ---------------------------------------------------------------------------
@@ -119,8 +128,19 @@ async def test_connect_telnet_factory() -> None:
         session = await connect_telnet("bbs.example.com", 2102, cols=120, rows=40, term="VT100")
 
         assert session.is_connected()
+        assert session._control_decoder is None
         mock_t.connect.assert_awaited_once()
 
+        await session.close()
+
+
+async def test_connect_telnet_factory_control_frames() -> None:
+    with patch("provide.uterm.telnet_session.TelnetTransport") as mock_transport_cls:
+        mock_transport_cls.return_value = _mock_transport()
+
+        session = await connect_telnet("bbs.example.com", 2102, control_frames=True)
+
+        assert session._control_decoder is not None
         await session.close()
 
 
