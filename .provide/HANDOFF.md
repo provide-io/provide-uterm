@@ -85,7 +85,14 @@ PTY capture, http-proxy + intercept). Proven: share streams a real PTY to a
 tunnel WS, tunnel forwards a local TCP port, inspect reverse-proxies HTTP with
 inspection + intercept-drop.
 
-## Documented follow-ups (not blocking; scoped, isolated)
+Output redaction + browser-WS per-frame rate limits + the lease/permission
+gate are all live (58221750): the StreamRedactor is byte-identical to Python
+over the default rule set; browser input/control frames are token-bucketed
+(rate_limited error + drop on exceed), and non-owner / expired-lease inputs
+are dropped at the worker-forward point. **All follow-ups from the earlier
+list are now done.**
+
+## Historical follow-ups (all resolved)
 
 - **browser policy remainder**: per-frame token-bucket rate limits and the
   lease/permission gate (prepare_browser_input) on the browser WS — DeckMux +
