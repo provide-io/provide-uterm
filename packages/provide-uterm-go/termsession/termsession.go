@@ -211,8 +211,20 @@ func (s *TransportSession) ScreenChangeSeq() int {
 	return s.changeSeq
 }
 
+// UpdateSeq is an alias for ScreenChangeSeq, kept for parity with the Python
+// port (TransportSession.update_seq = screen_change_seq — "used by some
+// callers").
+func (s *TransportSession) UpdateSeq() int {
+	return s.ScreenChangeSeq()
+}
+
 // WaitForScreenChange blocks until the screen updates beyond since (pass a
-// negative since to wait for any next update), or the timeout elapses.
+// negative since to wait for any next update — the Go convention for the
+// Python port's since=None "wait for any change" case, chosen because
+// WaitForScreenChange is part of the shared session.Session interface with
+// multiple implementers; an int keeps the interface simple across all of
+// them without introducing a pointer/optional-int type everywhere), or the
+// timeout elapses.
 func (s *TransportSession) WaitForScreenChange(ctx context.Context, timeout time.Duration, since int) (bool, error) {
 	deadline := time.Now().Add(timeout)
 	for {
