@@ -101,3 +101,23 @@ Every package is held to 100% statement coverage (`COVER_THRESHOLD=100.0`),
 `go vet`, `golangci-lint`, and `-race` cleanliness. New files need the SPDX
 header block. `testdata/` golden corpora are excluded from detect-secrets
 (synthetic test vectors, not credentials).
+
+### Mutation gate
+
+```bash
+make mutation-gate   # gremlins over sanitizer/colors/filters/lineeditor
+```
+
+Coverage proves lines execute; mutation testing proves the tests actually
+*assert* on behavior. `make mutation-gate` runs
+[gremlins](https://github.com/go-gremlins/gremlins) (via `go run`, no `go.mod`
+entry) over a small perimeter of already-~100%-covered pure-function packages —
+`sanitizer`, `colors`, `filters`, `lineeditor` — and enforces the same bar as
+the Python side: **every mutant must be KILLED**, except a documented allowlist
+of genuinely-equivalent survivors in `mutation_equivalents.toml`. The gate
+(`ci/mutation_gate.py`, stdlib-only, needs `python3` >= 3.11) fails on any
+unexcused survivor, uncovered mutant, or timeout. It is kept out of
+`quality-gate` because it is minutes-slow and needs Python; the CI
+`go-mutation-gate` job runs it separately. The perimeter is intentionally small
+(mutation testing recompiles+reruns the test binary per mutant); extend it one
+well-covered package at a time.

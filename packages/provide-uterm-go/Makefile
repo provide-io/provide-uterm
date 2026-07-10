@@ -20,7 +20,10 @@ GOLANGCI_LINT ?= golangci-lint
 # JSON-encode guards the Python originals also exclude. Whole-module ~93.6%.
 COVER_THRESHOLD ?= 92.0
 
-.PHONY: fmt fmt-check vet lint test race cover vuln quality-gate build-binaries interop-test
+# Driver for the mutation gate (stdlib-only Python >= 3.11; tomllib + json).
+PYTHON ?= python3
+
+.PHONY: fmt fmt-check vet lint test race cover vuln quality-gate build-binaries interop-test mutation-gate
 
 fmt:
 	gofmt -w .
@@ -69,3 +72,13 @@ quality-gate: fmt-check vet lint race cover
 # gate must never depend on Python being present.
 interop-test:
 	$(GO) test ./interop/... -run TestLivePythonInterop -count=1 -v
+
+# Mutation gate for a SMALL perimeter of already-~100%-covered pure-function
+# packages (sanitizer, colors, filters, lineeditor). Kept SEPARATE from
+# quality-gate: mutation testing recompiles+reruns the test binary once per
+# covered mutant, so it is minutes-slow versus seconds for `go test`, and it
+# needs `python3` to drive gremlins + enforce the equivalent-mutant allowlist.
+# Enforces killed==100% minus the documented equivalents in
+# mutation_equivalents.toml. gremlins is fetched via `go run` (no go.mod entry).
+mutation-gate:
+	$(PYTHON) ci/mutation_gate.py

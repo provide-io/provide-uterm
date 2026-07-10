@@ -1,0 +1,65 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Documented equivalent-mutant allowlist for the Go mutation gate.
+#
+# ci/mutation_gate.py runs `gremlins unleash` over a small, well-covered
+# perimeter and enforces that EVERY surviving (LIVED) mutant is listed here.
+# It mirrors the Python-side mutation_equivalents.toml: some mutants are
+# *equivalent* — the mutated code is behaviorally identical to the original, so
+# NO test can ever distinguish them (e.g. a `<` vs `<=` boundary flip on a value
+# where both branches return the same result). Such mutants survive forever and
+# would pin an otherwise-perfect package below 100%.
+#
+# Each [[equivalent]] entry is keyed by package + file + line + column + mutator
+# (exactly as gremlins reports them in its JSON output). Rules mirror the Python
+# gate:
+#   - `reason` MUST justify WHY the mutation is behaviorally equivalent. "I could
+#     not write a test" is NOT a reason — that is a missing test, not equivalence.
+#   - A NOT_COVERED mutant is NEVER excusable (it is a coverage gap).
+#   - A TIMED_OUT mutant is NEVER excused here — a timeout can mask a real
+#     survivor, so the gate treats any timeout as a failure (raise
+#     --timeout-coefficient until the perimeter reports zero timeouts). None of
+#     the current perimeter packages produce genuine (infinite-loop) timeouts.
+#   - A stale entry (its mutant was later killed, or moved by a source edit) is
+#     reported as a WARNING by the gate; it never weakens enforcement, because a
+#     relocated equivalent reappears as a new unexcused survivor.
+
+[[equivalent]]
+package = "sanitizer"
+file = "sanitizer.go"
+line = 79
+column = 19
+mutator = "CONDITIONALS_BOUNDARY"
+reason = """\
+SanitizeKeystrokes: `len(filtered) <= maxBytes` -> `len(filtered) < maxBytes`. \
+When len(filtered) == maxBytes the original returns filtered, and the mutant \
+falls through to `filtered[:maxBytes]`, which equals filtered exactly. For \
+len < maxBytes both return filtered; for len > maxBytes both return \
+filtered[:maxBytes]. The output is byte-identical for every input — no test \
+can distinguish the two, so the mutant is behaviorally equivalent."""
+
+[[equivalent]]
+package = "colors"
+file = "rgb.go"
+line = 44
+column = 7
+mutator = "CONDITIONALS_BOUNDARY"
+reason = """\
+clamp8: `if v < 0` -> `if v <= 0`. The only differing input is v == 0: the \
+original skips the branch and returns v (0); the mutant enters the branch and \
+returns the literal 0. Both yield 0. clamp8 returns an identical value for \
+every input, so no test (direct or via RGBTo256/RGBTo16Index) can distinguish \
+them — behaviorally equivalent."""
+
+[[equivalent]]
+package = "colors"
+file = "rgb.go"
+line = 47
+column = 7
+mutator = "CONDITIONALS_BOUNDARY"
+reason = """\
+clamp8: `if v > 255` -> `if v >= 255`. The only differing input is v == 255: \
+the original skips the branch and returns v (255); the mutant enters the branch \
+and returns the literal 255. Both yield 255. clamp8 returns an identical value \
+for every input — behaviorally equivalent."""
