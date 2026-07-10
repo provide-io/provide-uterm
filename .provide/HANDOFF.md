@@ -78,18 +78,15 @@ CLI/gateway: gateway (telnet/SSH listener), cli + cmd/uterm.
 ~85%, cli ~92%, gateway ~86% (non-deterministic live-socket / TTY / OS-signal
 branches). Whole-module total 96.2%; floor 95% in the Makefile.
 
-CLI status: server, proxy, listen, watch, audit fully working. share, tunnel,
-inspect still stubbed — they need a tunnel *client* port (PTY→tunnel-WS→URL
-share, local TCP port-forward, HTTP reverse-proxy-with-inspection). The
-tunnel package is server-side invite/token only; the client transport in
-cli/share.py, cli/tunnel.py, cli/inspect.py is not yet ported.
+CLI status: ALL subcommands now real — server, proxy, listen, watch, audit,
+and share/tunnel/inspect (via the tunnelclient package: byte-faithful frame
+codec with live wire-parity vs Python, coder/websocket client, creack/pty
+PTY capture, http-proxy + intercept). Proven: share streams a real PTY to a
+tunnel WS, tunnel forwards a local TCP port, inspect reverse-proxies HTTP with
+inspection + intercept-drop.
 
 ## Documented follow-ups (not blocking; scoped, isolated)
 
-- **CLI share/tunnel/inspect**: port the tunnel *client* (cli/share.py 318L,
-  cli/tunnel.py 267L, cli/inspect.py 454L) — connects a local PTY / TCP port /
-  HTTP proxy to a tunnel server. Reuse the committed tunnel package for the
-  token/invite shapes.
 - **browser policy remainder**: per-frame token-bucket rate limits and the
   lease/permission gate (prepare_browser_input) on the browser WS — DeckMux +
   approval hold are live; these two are still omitted.
