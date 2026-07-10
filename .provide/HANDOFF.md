@@ -264,6 +264,58 @@ surfaced — not something introduced by the port itself:
   characters. Fixed with a persistent incremental UTF-8 decoder. Caught by
   `TestProxyEchoContractPython` intermittently failing on a multibyte payload.
 
+## `act` + real-CI hardening pass (2026-07-10, commits 0d5779e0→a844bd82)
+
+Ran the actual `go-quality` job through `act` (local GitHub Actions runner,
+`catthehacker/ubuntu:act-latest`, native arm64 to avoid a QEMU-on-amd64
+toolchain crash unrelated to this repo) instead of trusting local `make`
+invocations, then cross-checked every finding against the real GitHub-hosted
+run for the same push. Found and fixed real, previously-invisible bugs:
+
+- **`api_only` was broken** (8ccb1c1e) — `mount_frontend_assets()` in
+  `server/app/factory_impl.py` ran unconditionally, so a headless
+  `UTERM_API_ONLY=1` server crashed (Starlette `RuntimeError`) whenever the
+  frontend bundle wasn't built. `go-quality`'s CI job never builds the
+  frontend (unlike `quality`/`server-quality`), so this broke the interop
+  test on a fresh checkout every time. Gated it the same way as the existing
+  `_validate_frontend_assets()` check.
+- **Interop teardown deadlock** (6e69c9a5) — both `interop_test.go` and
+  `proxy_interop_test.go` used a single-buffered `exited chan error` that
+  the early-death check drained once; `stop()`'s later read after a SIGKILL
+  fallback then blocked forever (nothing sends twice). A crashed Python
+  subprocess ate the full 10-minute Go test timeout instead of failing in
+  under a second. Fixed by closing a `waitDone chan struct{}` instead
+  (receivable any number of times) with the error stored alongside it.
+  Verified: injecting a bogus CLI flag now fails in 0.51s, not 600s.
+- **pty root-guard test fragility** (3b4c798a) — 11 `uidmap_test.go` tests
+  assumed "resolve my own current user" always succeeds, but the intentional
+  privileged-uid/gid guard rejects 0:0. `act`'s default container runs as
+  root; GitHub-hosted `ubuntu-latest` never does (no `container:` block ⇒
+  the non-root `runner` user), so this never bit real CI, but it's a latent
+  fragility now closed via a graceful skip-if-root.
+- **`TestTelnetSessionLoopback` flake, 3rd occurrence** (a844bd82) — widened
+  10s→30s. Confirmed via the real GitHub-hosted `go-quality` run's own logs
+  (not just local `act`) that this flake is real, not an artifact of local
+  virtualization. Likely worse now than earlier this session: the
+  manager/server/gateway/cli coverage push added substantially more
+  live-socket/subprocess tests, increasing cross-package CPU contention
+  during whole-module `go test -race ./...`. Not guaranteed fully eliminated
+  — flag if it recurs.
+- **CLAUDE.md doc-count drift** (0d5779e0) — `check_docs_accuracy.py` failed
+  in CI's `docs-quality` job: "8 packages under packages/, found 9" — the Go
+  port's own directory was never added to the root CLAUDE.md package table.
+- **Two coverage regressions from this session's own changes**, both closed
+  with tests: `flow.py`'s FlowEngine detector-cache hit branch (7e06d768 —
+  every existing test used a different gate-prompt each step, so the cache
+  key never repeated) broke the `quality` job; the UTF-8-decoder fix's
+  dangling-lead-byte empty-flush branch (15023969) broke `client-quality`.
+
+All of the above were found by actually running the pipeline (locally via
+`act`, then cross-checked against the real hosted run for the same commit)
+rather than trusting `make`/`pytest` invocations run in a warm local dev
+environment that always happened to have a built frontend and a non-root
+shell.
+
 ## Key facts for whoever continues
 
 - Shell cwd resets between Bash calls — `cd packages/provide-uterm-go` first;
