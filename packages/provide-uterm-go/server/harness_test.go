@@ -51,6 +51,9 @@ type fakeRegistry struct {
 	annotateErr error
 	controlErr  error
 	snapErr     error
+	analysisErr error
+	eventsErr   error
+	watchErr    error
 	analysis    map[string]any
 	snapshot    map[string]any
 	events      []map[string]any
@@ -168,6 +171,9 @@ func (f *fakeRegistry) status(id string) (*SessionStatus, error) {
 }
 
 func (f *fakeRegistry) AnalyzeSession(_ context.Context, id string) (map[string]any, error) {
+	if f.analysisErr != nil {
+		return nil, f.analysisErr
+	}
 	if _, ok := f.GetDefinition(context.Background(), id); !ok {
 		return nil, ErrSessionNotFound
 	}
@@ -182,6 +188,9 @@ func (f *fakeRegistry) LastSnapshot(context.Context, string) (map[string]any, er
 }
 
 func (f *fakeRegistry) Events(context.Context, string, int) ([]map[string]any, error) {
+	if f.eventsErr != nil {
+		return nil, f.eventsErr
+	}
 	if f.events == nil {
 		return []map[string]any{}, nil
 	}
@@ -189,6 +198,9 @@ func (f *fakeRegistry) Events(context.Context, string, int) ([]map[string]any, e
 }
 
 func (f *fakeRegistry) WatchSessionEvents(context.Context, string, WatchParams) (map[string]any, error) {
+	if f.watchErr != nil {
+		return nil, f.watchErr
+	}
 	if f.watch == nil {
 		return map[string]any{}, nil
 	}
@@ -243,7 +255,9 @@ func newTestServer(t *testing.T, opt func(cfg *serverconfig.UtermServerConfig, d
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	return &testServer{srv: srv, reg: reg, hub: h, metrics: metrics, apiKeys: apiKeys}
+	// deps.Hub may have been swapped by opt (e.g. a hub with custom rate
+	// limits); reflect the effective hub so ts.hub matches the server's.
+	return &testServer{srv: srv, reg: reg, hub: deps.Hub, metrics: metrics, apiKeys: apiKeys}
 }
 
 // do issues a request against the wrapped handler and returns the recorder.
