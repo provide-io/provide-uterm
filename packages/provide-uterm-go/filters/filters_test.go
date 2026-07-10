@@ -87,6 +87,16 @@ func TestConsumeEscapeCSI(t *testing.T) {
 	if string(rest) != "x" {
 		t.Fatalf("rest = %q", rest)
 	}
+	// CSI final-byte range is [0x40, 0x7E] inclusive. Exercise both edges:
+	// '@' (0x40) — e.g. ICH — and '~' (0x7E) — e.g. the VT-keypad tilde.
+	rest = consumeAndRemainder(t, ConsumeEscape, []byte("[@x"))
+	if string(rest) != "x" {
+		t.Fatalf("final '@': rest = %q", rest)
+	}
+	rest = consumeAndRemainder(t, ConsumeEscape, []byte("[3~x"))
+	if string(rest) != "x" {
+		t.Fatalf("final '~': rest = %q", rest)
+	}
 }
 
 func TestConsumeEscapeSS3AndAlt(t *testing.T) {

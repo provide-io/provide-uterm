@@ -92,6 +92,11 @@ func TestRGBTo16Index(t *testing.T) {
 		{"near red palette entry", 200, 5, 5, 4},
 		{"clamp over-range to bright white", 400, 400, 400, 15},
 		{"clamp negative to black", -100, -100, -100, 0},
+		// Distance tie between palette idx 1 ({0,0,205}) and idx 9 ({92,92,255}):
+		// both are exactly 9089 away. Strict `<` keeps the first (lower) index,
+		// matching Python's rgb_to_16_index (first-wins). A `<=` regression would
+		// return 9.
+		{"distance tie prefers lower index", 0, 92, 230, 1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -133,6 +138,10 @@ func TestParseComponent(t *testing.T) {
 		{"010", 10},
 		{"255", 255},
 		{"000000000255", 255}, // long but zero-padded — real value kept
+		// Saturation boundary: a 9-digit value is parsed as-is (fits int, and is
+		// clamped to 255 downstream); saturation only kicks in above 9 digits.
+		{"999999999", 999999999}, // exactly 9 digits — real value kept
+		{"1000000000", 1 << 30},  // 10 digits — saturated to 1<<30
 	}
 	for _, tt := range tests {
 		if got := parseComponent(tt.in); got != tt.want {
@@ -165,6 +174,10 @@ func TestRewriteParams(t *testing.T) {
 		{"already 256 passthrough (16)", "38;5;42", Mode16, "\x1b[38;5;42m"},
 		{"mixed params preserved", "1;38;2;255;0;0", Mode256, "\x1b[1;38;5;196m"},
 		{"truncated run preserved", "38;2;255", Mode256, "\x1b[38;2;255m"},
+		// Exactly four params (head at index 0) makes i+4 == n, so the
+		// `i+4 < n` bounds guard must reject the run — reading parts[i+4]
+		// would be out of range. Preserved verbatim.
+		{"four-param run lacks blue", "38;2;1;2", Mode256, "\x1b[38;2;1;2m"},
 		{"non-digit params preserved", "38;2;x;y;z", Mode256, "\x1b[38;2;x;y;zm"},
 		{"empty component not truecolor", "38;2;;0;0", Mode256, "\x1b[38;2;;0;0m"},
 		{"multiple truecolor runs", "1;38;2;255;0;0;48;2;0;255;0", Mode256, "\x1b[1;38;5;196;48;5;46m"},
