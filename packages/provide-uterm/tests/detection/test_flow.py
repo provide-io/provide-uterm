@@ -81,6 +81,16 @@ def test_flow_engine_advances_to_matching_action(login_ruleset: RuleSet) -> None
     assert step.kv_data["attempt"] == 3
 
 
+def test_flow_engine_reuses_cached_detector_for_repeated_prompt_ids(login_ruleset: RuleSet) -> None:
+    """A second advance() call with the same gate prompts hits the per-prompt-id-set
+    detector cache instead of rebuilding a PromptDetector."""
+    engine = FlowEngine(login_ruleset)
+    first = engine.advance("login", "Attempt 3\r\nEnter your name:")
+    second = engine.advance("login", "Attempt 3\r\nEnter your name:")
+
+    assert first.current_prompt_id == second.current_prompt_id == "login.name"
+
+
 def test_flow_engine_honors_negative_match(login_ruleset: RuleSet) -> None:
     engine = FlowEngine(login_ruleset)
     step = engine.advance("login", "Enter password:")
