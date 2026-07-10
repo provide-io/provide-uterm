@@ -11,20 +11,37 @@ import (
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
 )
 
-// registerApprovalRoutes wires the /api/approvals approve/reject routes. Port of
-// approvals.py.
-//
-// Deviations: GET /api/approvals (list pending) is NOT registered — the ported
-// hub.InMemoryApprovalStore exposes no iterator over its internal request map,
-// and this package may not modify the hub. Likewise the command-injection side
-// effect of approval (Python hub.resolve_approval, which un-holds the buffered
-// command and broadcasts approval_resolved) has no exported Go facade, so
-// approve/reject here perform the one-shot state transition (Claim) and return
-// the same REST contract, but do not re-inject the held command. Both are
-// tracked as follow-ups requiring a hub API addition.
+// registerApprovalRoutes wires the /api/approvals list + approve/reject routes.
+// Port of approvals.py. Approve/reject now resolve through hub.ResolveApproval,
+// which claims the request exactly once, re-injects the held command to the
+// worker (approve) or broadcasts a terminal rejection (reject), releases parked
+// browsers, and broadcasts approval_resolved.
 func (s *Server) registerApprovalRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/approvals", s.authenticated(s.handleListApprovals))
 	mux.HandleFunc("POST /api/approvals/{request_id}/approve", s.authenticated(s.handleApprove))
 	mux.HandleFunc("POST /api/approvals/{request_id}/reject", s.authenticated(s.handleReject))
+}
+
+// handleListApprovals returns every pending approval (admin only). Port of the
+// GET /api/approvals list handler.
+func (s *Server) handleListApprovals(w http.ResponseWriter, r *http.Request) {
+	if !s.requireApprovalAdmin(w, r) {
+		return
+	}
+	pending := s.deps.Hub.Approvals.PendingApprovals()
+	out := make([]map[string]any, 0, len(pending))
+	for _, req := range pending {
+		out = append(out, map[string]any{
+			"id":           req.ID,
+			"worker_id":    req.WorkerID,
+			"submitter_id": req.SubmitterID,
+			"command":      req.Command,
+			"status":       string(req.Status),
+			"created_at":   req.CreatedAt,
+			"expires_at":   req.ExpiresAt,
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // requireApprovalAdmin enforces the admin gate for approvals, returning the
@@ -51,7 +68,11 @@ func (s *Server) handleApprove(w http.ResponseWriter, r *http.Request) {
 		detailError(w, http.StatusForbidden, "Cannot approve your own command")
 		return
 	}
-	if !s.deps.Hub.Approvals.Claim(requestID, hub.ApprovalApproved) {
+	resolved, err := s.deps.Hub.ResolveApproval(r.Context(), requestID, true, nil, resolverPrincipal(r))
+	if err != nil {
+		s.logger.Debug("resolve_approval_failed", "request_id", requestID, "error", err)
+	}
+	if !resolved {
 		detailError(w, http.StatusBadRequest, "Approval request is not pending")
 		return
 	}
@@ -68,9 +89,27 @@ func (s *Server) handleReject(w http.ResponseWriter, r *http.Request) {
 		detailError(w, http.StatusNotFound, "Approval request not found")
 		return
 	}
-	if !s.deps.Hub.Approvals.Claim(requestID, hub.ApprovalRejected) {
+	var reason *string
+	if v := r.URL.Query().Get("reason"); v != "" {
+		reason = &v
+	}
+	resolved, err := s.deps.Hub.ResolveApproval(r.Context(), requestID, false, reason, resolverPrincipal(r))
+	if err != nil {
+		s.logger.Debug("resolve_approval_failed", "request_id", requestID, "error", err)
+	}
+	if !resolved {
 		detailError(w, http.StatusBadRequest, "Approval request is not pending")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "rejected"})
+}
+
+// resolverPrincipal adapts the request principal to a hub.Principal for the
+// approval audit log (nil when unauthenticated).
+func resolverPrincipal(r *http.Request) *hub.Principal {
+	p := principalOf(r)
+	if p == nil {
+		return nil
+	}
+	return &hub.Principal{SubjectID: p.SubjectID}
 }

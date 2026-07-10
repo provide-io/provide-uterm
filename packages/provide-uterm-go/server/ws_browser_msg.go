@@ -34,25 +34,19 @@ func (s *Server) dispatchBrowserMessage(ctx context.Context, conn *websocket.Con
 		s.browserHeartbeat(ctx, conn, workerID, bc)
 	case "ping":
 		s.writeFrame(ctx, conn, frames.PongFrame{Type: frames.TypePong, TS: frames.Ptr(s.clock.Wall())})
+	case "presence_update", "queued_input", "control_request":
+		s.deckHandle(workerID, bc, msg)
 	default:
-		// Unhandled types (presence, fanout, resume, http_*) are dropped in this
+		// Unhandled types (fanout, resume, http_*) are dropped in this
 		// interop-subset port.
 	}
 	return owned
 }
 
-// browserInput forwards keystrokes to the worker (routing records the keystroke
-// and enforces input gating).
+// browserInput forwards keystrokes to the worker through the input-approval
+// pipeline (hold/park/resume + policy gate). See browserInputGated.
 func (s *Server) browserInput(ctx context.Context, workerID string, bc *browserConn, msg map[string]any) {
-	data := stringField(msg, "data")
-	if data == "" {
-		return
-	}
-	if len(data) > s.deps.Hub.MaxInputChars() {
-		s.writeFrame(ctx, bcConn(bc), frames.MakeErrorFrame("Input too long."))
-		return
-	}
-	_, _ = s.deps.Hub.Router.SendWorker(ctx, workerID, map[string]any{"type": "input", "data": data, "ts": s.clock.Wall()}, bc)
+	s.browserInputGated(ctx, workerID, bc, msg)
 }
 
 // browserHijackRequest acquires the WS hijack lease (admin only).

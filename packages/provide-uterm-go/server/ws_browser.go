@@ -35,12 +35,12 @@ func (s *Server) resolveBrowserRole(ctx context.Context, p *serverauth.Principal
 // handleBrowserWS serves /ws/browser/{id}/term — dashboard viewers + hijack
 // control. Port of ws_browser_term.
 //
-// Deviations (documented): the full browser policy pipeline is not ported here.
-// Input approval/hold (policy gate), fan-out, DeckMux presence, resume-token
-// reclaim, and the per-frame token-bucket rate limits are omitted — this
-// handler covers viewer streaming + the WS hijack lifecycle (request / release /
-// step / heartbeat) + input + snapshot_req/ping, which is the interop surface a
-// browser client and the hub exchange.
+// Deviations (documented): fan-out, resume-token reclaim, the lease/permission
+// input gate (prepare_browser_input), and the per-frame token-bucket rate
+// limits are omitted. This handler covers viewer streaming + the WS hijack
+// lifecycle (request / release / step / heartbeat) + input (with the
+// input-approval hold/park pipeline, see browserInputGated) + snapshot_req/ping,
+// plus DeckMux collaborative presence (connect/message/disconnect).
 func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 	workerID := r.PathValue("worker_id")
 	if !validID(workerID) {
@@ -83,6 +83,9 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 
 	owned := s.browserRecvLoop(r.Context(), conn, workerID, bc, role, canHijack)
 	cancel()
+	// DeckMux disconnect (broadcasts presence_leave) runs before the hub
+	// browser cleanup, mirroring the Python finally ordering.
+	s.deckOnDisconnect(workerID, bc)
 	s.browserCleanup(bg, workerID, bc, owned)
 }
 
@@ -107,6 +110,10 @@ func (s *Server) browserHandshake(ctx context.Context, conn *websocket.Conn, wor
 	} else {
 		_ = s.deps.Hub.RequestSnapshot(ctx, workerID)
 	}
+	// Register with DeckMux + send presence_sync BEFORE activating broadcasts,
+	// so the fan-out to existing browsers skips this still-startup-pending
+	// socket (matching the Python on_browser_connect ordering).
+	s.deckOnConnect(ctx, bc, workerID, role)
 	s.deps.Hub.ActivateBrowserBroadcasts(ctx, workerID, bc)
 	return true
 }
