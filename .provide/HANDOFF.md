@@ -94,6 +94,22 @@ over a small pure-function perimeter — see "Mutation gate" below.
   a process-group SIGTERM→SIGKILL fallback, and runs in CI's `go-quality` job
   (which already has both Go and the synced Python env). BOTH interop directions
   are now live-proven.
+- **Live `uterm proxy` cross-language parity** `packages/provide-uterm-go/cli/proxy_interop_test.go`:
+  a single observable fake TCP echo upstream and a single Go WebSocket client
+  drive BOTH the in-process Go `uterm proxy` (`TestProxyEchoContractGo`, via
+  `serveProxy` on an ephemeral port) and a REAL `uv run uterm proxy` Python
+  subprocess (`TestProxyEchoContractPython`, ephemeral port, process-group
+  teardown) through one shared `proxyEchoContract` assertion — so any divergence
+  surfaces as a differential failure. The contract asserts: (1) upstream banner
+  flows remote→browser; (2) a multibyte UTF-8 TEXT keystroke payload echoes
+  browser→remote→browser byte-identically (matching the real xterm.js frontend,
+  which sends `ws.send(string)`); (3) a browser WS close tears down the upstream
+  connection; (4) an upstream hangup closes the browser WS. This proof caught and
+  fixed two real gaps: the Go proxy polled the remote every 200ms vs Python's
+  50ms (now `defaults.ProxyPollMS`), and the Go proxy sent outbound BINARY frames
+  which the shared frontend (`terminal-element.ts` renders only string payloads)
+  silently discards — Go now sends UTF-8 TEXT frames like Python's `send_text`.
+  Skips gracefully when uv/Python deps are absent; scoped to `go test ./cli/`.
 - **Live DeckMux deck** (demonstrated + now pinned in conformance): 3 users
   join a deck → distinct hash-generated names/colors/initials, presence_update
   broadcast, control_request → control_transfer, disconnect → presence_leave.
