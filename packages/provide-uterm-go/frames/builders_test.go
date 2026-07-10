@@ -18,7 +18,10 @@ func tsIsNow(t *testing.T, ts *float64) {
 		t.Fatal("ts not stamped")
 	}
 	now := float64(time.Now().UnixNano()) / 1e9
-	if *ts <= 0 || now-*ts > 60 {
+	// Two-sided window: the stamp must be neither stale nor implausibly far in
+	// the future. A one-sided (lower-bound-only) check lets a mangled unit
+	// conversion (e.g. nowTS multiplying instead of dividing by 1e9) survive.
+	if *ts <= 0 || now-*ts > 60 || *ts-now > 60 {
 		t.Fatalf("ts %v is not current (now %v)", *ts, now)
 	}
 }

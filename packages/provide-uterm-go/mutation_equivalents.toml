@@ -63,3 +63,18 @@ clamp8: `if v > 255` -> `if v >= 255`. The only differing input is v == 255: \
 the original skips the branch and returns v (255); the mutant enters the branch \
 and returns the literal 255. Both yield 255. clamp8 returns an identical value \
 for every input — behaviorally equivalent."""
+
+[[equivalent]]
+package = "frames"
+file = "extras.go"
+line = 19
+column = 40
+mutator = "ARITHMETIC_BASE"
+reason = """\
+marshalWithExtras: `make(map[string]any, len(known)+len(extra))` -> \
+`... len(known)-len(extra)`. The second argument to make(map, n) is only a \
+capacity HINT: Go ignores it as a sizing optimization and never observes it in \
+the map's contents. A negative runtime hint does not panic (unlike a negative \
+slice length) — it is clamped — so the resulting map is byte-identical for \
+every (known, extra) pair. No test can distinguish the two, so the mutant is \
+behaviorally equivalent."""

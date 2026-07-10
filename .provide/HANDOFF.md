@@ -107,12 +107,33 @@ Added to mirror the Python `scripts/run_mutation_gate.py` rigor. Tool:
 [gremlins](https://github.com/go-gremlins/gremlins) v0.6.0, invoked via
 `go run` (no `go.mod` entry — same pattern as golangci-lint/govulncheck).
 Perimeter (small on purpose — mutation testing recompiles+reruns per mutant):
-`sanitizer`, `colors`, `filters`, `lineeditor` — pure-function packages already
-at ~100% coverage with real branch/boundary/arithmetic logic. Score: **158
-mutants killed, 0 unexcused survivors, 3 documented-equivalent** (100% of the
-non-equivalent perimeter). Run: `cd packages/provide-uterm-go && make
-mutation-gate` (needs `python3` >= 3.11; driver `ci/mutation_gate.py`, stdlib
-only). Fails on any unexcused LIVED / NOT_COVERED / TIMED_OUT mutant.
+`sanitizer`, `colors`, `filters`, `lineeditor`, `redaction`, `channels`,
+`frames` — pure-function packages already at ~100% coverage with real
+branch/boundary/arithmetic logic. Score: **212 mutants killed, 0 unexcused
+survivors, 4 documented-equivalent** (100% of the non-equivalent perimeter).
+Run: `cd packages/provide-uterm-go && make mutation-gate` (needs `python3` >=
+3.11; driver `ci/mutation_gate.py`, stdlib only). Fails on any unexcused LIVED /
+NOT_COVERED / TIMED_OUT mutant.
+
+- Perimeter expansion (2026-07-10): added `redaction` (clean, 3 killed),
+  `channels`, and `frames`. Two real assertion gaps fixed with tests: channels
+  `negotiate` `version > 0` (the existing "zero" channel was unsupported so the
+  `ok &&` short-circuit hid the boundary — made it a supported channel so the
+  "not granted at version 0" assertion is load-bearing), and frames `nowTS`
+  `/1e9` unit conversion (the `tsIsNow` helper only lower-bounded the stamp;
+  widened to a two-sided window so a `*1e9` mutant no longer survives). Also
+  closed a channels coverage gap first (the `json.Number` fractional-version
+  reject path in `coerceChannelMap`) so the package is a true 100% before
+  mutating. One new documented-equivalent: frames `extras.go` marshalWithExtras
+  `make(map, len(known)+len(extra))` -> `-` — the map capacity is only a sizing
+  HINT (a negative runtime hint is clamped, not a panic), so contents are
+  byte-identical. NOTE: `ansi` and `ctrlmsg` were evaluated and DEFERRED — their
+  `switch` cases carry comparison expressions (`case 30 <= code && code <= 37`),
+  and Go's coverage profile marks only the case BODY covered, not the
+  case-condition position, so gremlins reports those (fully-tested) mutants as
+  NOT_COVERED — a tooling artifact the gate treats as FAIL and cannot excuse.
+  Pick switch-with-`if`-body packages, not comparison-in-case ones, when
+  extending further.
 
 - The run surfaced 9 real assertion gaps that coverage had missed, all fixed
   with tests: sanitizer `~` (0x7E) printable-boundary; colors distance-tie
