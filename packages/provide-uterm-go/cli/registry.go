@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/connectors"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/server"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
-	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/termsession"
 )
 
 // sessionEntry is one managed session: its immutable definition plus the mutable
@@ -21,7 +21,7 @@ type sessionEntry struct {
 	def       serverconfig.SessionDefinition
 	lifecycle string // "waiting" | "running" | "stopped"
 	inputMode string
-	session   *termsession.TransportSession // nil when no live connector
+	conn      connectors.Connector // nil when no live connector
 	lastErr   *string
 	stoppedAt *float64
 	createdAt string
@@ -30,14 +30,15 @@ type sessionEntry struct {
 
 // connectFn opens a live connector for a session definition. It returns
 // (nil, nil) when the connector type has no live transport ("no live connector"
-// → a running-but-not-connected status), a connected session on success, or an
-// error when the dial fails.
-type connectFn func(ctx context.Context, def serverconfig.SessionDefinition) (*termsession.TransportSession, error)
+// → a running-but-not-connected status), a started connector on success, or an
+// error when the build/dial fails.
+type connectFn func(ctx context.Context, def serverconfig.SessionDefinition) (connectors.Connector, error)
 
-// SessionRegistryImpl is a minimal, real in-memory SessionRegistry over the
-// config's declared [[sessions]]. Telnet/WebSocket sessions get a live
-// termsession connector on Start; every other connector type is tracked as
-// running-but-not-connected. It satisfies server.SessionRegistry.
+// SessionRegistryImpl is a real in-memory SessionRegistry over the config's
+// declared [[sessions]], backed by the connectors package. Each session gets a
+// real connector (shell PTY / ssh / telnet / websocket) started on demand, so
+// `uterm server` hosts live terminals rather than not-connected stubs. It
+// satisfies server.SessionRegistry.
 type SessionRegistryImpl struct {
 	mu       sync.Mutex
 	order    []string
@@ -92,7 +93,7 @@ func (r *SessionRegistryImpl) recordingEnabled(def serverconfig.SessionDefinitio
 
 // snapshotStatus builds the wire status for an entry (caller holds r.mu).
 func (r *SessionRegistryImpl) snapshotStatus(e *sessionEntry) *server.SessionStatus {
-	connected := e.session != nil && e.session.IsConnected()
+	connected := e.conn != nil && e.conn.IsConnected()
 	tags := e.def.Tags
 	if tags == nil {
 		tags = []string{}
@@ -211,8 +212,8 @@ func (r *SessionRegistryImpl) DeleteSession(ctx context.Context, id string) erro
 		}
 	}
 	r.mu.Unlock()
-	if ok && e.session != nil {
-		_ = e.session.Close(ctx)
+	if ok && e.conn != nil {
+		_ = e.conn.Stop(ctx)
 	}
 	return nil
 }

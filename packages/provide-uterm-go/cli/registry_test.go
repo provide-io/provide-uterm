@@ -10,27 +10,27 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/connectors"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/server"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
-	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/termsession"
 )
 
 // newTestRegistry builds a registry with a scripted connect hook: connector_type
 // "boom" errors, "none" yields no live connector, anything else yields a fake
-// connected session.
+// connected connector.
 func newTestRegistry(t *testing.T) *SessionRegistryImpl {
 	t.Helper()
 	cfg := serverconfig.DefaultServerConfig()
 	cfg.Recording.EnabledByDefault = true
 	r := NewSessionRegistry(cfg)
-	r.connect = func(_ context.Context, def serverconfig.SessionDefinition) (*termsession.TransportSession, error) {
+	r.connect = func(_ context.Context, def serverconfig.SessionDefinition) (connectors.Connector, error) {
 		switch def.ConnectorType {
 		case "boom":
 			return nil, errors.New("dial failed")
 		case "none":
 			return nil, nil
 		default:
-			return newFakeSession(), nil
+			return newFakeConnector(), nil
 		}
 	}
 	return r
@@ -292,9 +292,9 @@ func TestRegistryStartDeletedMidConnect(t *testing.T) {
 	// The connect hook deletes the entry before returning a live session,
 	// simulating a concurrent delete: Start must not resurrect it and must
 	// close the orphaned session.
-	r.connect = func(_ context.Context, def serverconfig.SessionDefinition) (*termsession.TransportSession, error) {
+	r.connect = func(_ context.Context, def serverconfig.SessionDefinition) (connectors.Connector, error) {
 		_ = r.DeleteSession(ctx, def.SessionID)
-		return newFakeSession(), nil
+		return newFakeConnector(), nil
 	}
 	if _, err := r.StartSession(ctx, "provide-shell"); !errors.Is(err, server.ErrSessionNotFound) {
 		t.Fatalf("want ErrSessionNotFound after mid-connect delete, got %v", err)
