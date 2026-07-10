@@ -42,6 +42,7 @@ async def connect_ws(
     close_timeout: int = TerminalDefaults.WS_CLOSE_TIMEOUT,
     origin: str | None = None,
     additional_headers: dict[str, str] | None = None,
+    control_frames: bool = False,
 ) -> WebSocketSession:
     """Connect to a WebSocket server and return a Session-protocol-compliant object.
 
@@ -49,6 +50,11 @@ async def connect_ws(
         url: Full WebSocket URL (ws:// or wss://).
         cols: Terminal width (default 80).
         rows: Terminal height (default 25).
+        control_frames: When ``True``, inline DLE/STX control frames are
+            parsed out of the stream and routed to
+            ``session.add_control_frame_watch(...)`` instead of appearing as
+            literal text on screen. Off by default — every byte goes straight
+            to the emulator unmodified, matching a plain WS terminal client.
 
     Returns:
         A :class:`WebSocketSession` that satisfies :class:`~provide.uterm.io.Session`.
@@ -67,6 +73,7 @@ async def connect_ws(
         close_timeout=close_timeout,
         origin=origin,
         additional_headers=additional_headers,
+        control_frames=control_frames,
     )
     await session.connect()
     return session
@@ -90,6 +97,7 @@ class WebSocketSession(TransportSession):
         close_timeout: int = TerminalDefaults.WS_CLOSE_TIMEOUT,
         origin: str | None = None,
         additional_headers: dict[str, str] | None = None,
+        control_frames: bool = False,
     ) -> None:
         self.url = url
         self._ping_interval = ping_interval
@@ -97,7 +105,9 @@ class WebSocketSession(TransportSession):
         self._close_timeout = close_timeout
         self._origin = origin
         self._additional_headers = additional_headers
-        super().__init__(WebSocketTransport(), cols=cols, rows=rows, send_encoding="utf-8")
+        super().__init__(
+            WebSocketTransport(), cols=cols, rows=rows, send_encoding="utf-8", control_frames=control_frames
+        )
 
     async def _connect_transport(self) -> None:
         """Open the WebSocket connection to :attr:`url`."""

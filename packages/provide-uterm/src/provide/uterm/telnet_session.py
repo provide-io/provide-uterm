@@ -48,6 +48,7 @@ async def connect_telnet(
     rows: int = 25,
     term: str = "ANSI",
     connect_timeout: float = 30.0,
+    control_frames: bool = False,
 ) -> TelnetSession:
     """Connect to a telnet server and return a Session-protocol-compliant object.
 
@@ -61,6 +62,11 @@ async def connect_telnet(
         rows: Terminal height (default 25).
         term: Terminal type string (default ``"ANSI"``).
         connect_timeout: TCP connect timeout in seconds.
+        control_frames: When ``True``, inline DLE/STX control frames are
+            parsed out of the stream and routed to
+            ``session.add_control_frame_watch(...)`` instead of appearing as
+            literal text on screen. Off by default — every byte goes straight
+            to the emulator unmodified, matching a plain telnet client.
 
     Returns:
         A :class:`TelnetSession` that satisfies :class:`~provide.uterm.io.Session`.
@@ -70,7 +76,9 @@ async def connect_telnet(
         ``session.add_watch(...)`` on the returned session; do not monkey-patch
         the emulator internals.
     """
-    session = TelnetSession(host, port, cols=cols, rows=rows, term=term, connect_timeout=connect_timeout)
+    session = TelnetSession(
+        host, port, cols=cols, rows=rows, term=term, connect_timeout=connect_timeout, control_frames=control_frames
+    )
     await session.connect()
     return session
 
@@ -97,6 +105,7 @@ class TelnetSession(TransportSession):
         rows: int = 25,
         term: str = "ANSI",
         connect_timeout: float = 30.0,
+        control_frames: bool = False,
     ) -> None:
         self._host = host
         self._port = port
@@ -107,7 +116,7 @@ class TelnetSession(TransportSession):
         self.port = port
         # CP437 send encoding preserves the high-byte / ANSI conventions that
         # BBS servers expect on the wire.
-        super().__init__(TelnetTransport(), cols=cols, rows=rows, send_encoding="cp437")
+        super().__init__(TelnetTransport(), cols=cols, rows=rows, send_encoding="cp437", control_frames=control_frames)
 
     async def _connect_transport(self) -> None:
         """Open the TCP connection with full IAC negotiation (NAWS/TTYPE)."""
