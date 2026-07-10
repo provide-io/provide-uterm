@@ -98,7 +98,7 @@ func newFakeSession(t *testing.T, ft *fakeTransport, opts Options) *TransportSes
 
 func waitForScreen(t *testing.T, s *TransportSession, substr string) session.Snapshot {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(10 * time.Second)
 	for {
 		snap := s.Snapshot()
 		if strings.Contains(snap.Screen, substr) {
@@ -308,12 +308,17 @@ func TestTelnetSessionLoopback(t *testing.T) {
 		}
 		defer func() { _ = conn.Close() }()
 		// Ignore the client's negotiation, send a banner with CP437 art.
+		// The read deadlines are generous safety nets (not protocol timing):
+		// under whole-module -race load the client's negotiation and the gap
+		// before it echoes "guest" can be slow, and a tight deadline would
+		// race it (a flaky-test source). 30s never expires before the test's
+		// own waitForScreen bound.
 		buf := make([]byte, 64)
-		_ = conn.SetReadDeadline(time.Now().Add(time.Second))
+		_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 		_, _ = conn.Read(buf)
 		_, _ = conn.Write(append([]byte{0xC9, 0xCD, 0xBB, '\r', '\n'}, []byte("login: ")...))
-		// Echo one line back.
-		_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+		// Echo the next line back.
+		_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 		n, _ := conn.Read(buf)
 		_, _ = conn.Write(buf[:n])
 		time.Sleep(100 * time.Millisecond)
