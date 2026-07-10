@@ -71,7 +71,7 @@ func TestRuleIDsAreUnique(t *testing.T) {
 func TestCredentialPositiveMatches(t *testing.T) {
 	cases := []struct{ id, text string }{
 		{"cred.aws_access_key", "export AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE"}, // pragma: allowlist secret
-		{"cred.aws_access_key", "AKIAIOSFODNN7EXAMPLE"}, // pragma: allowlist secret
+		{"cred.aws_access_key", "AKIAIOSFODNN7EXAMPLE"},                          // pragma: allowlist secret
 		{"cred.github_token", "ghp_" + repeat("A", 36)},
 		{"cred.github_token", "ghs_" + repeat("b", 40)},
 		{"cred.generic_secret", "password=hunter2"}, // pragma: allowlist secret
