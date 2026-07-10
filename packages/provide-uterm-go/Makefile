@@ -6,21 +6,25 @@
 
 GO ?= go
 GOLANGCI_LINT ?= golangci-lint
-# 95.0, not 100.0: the library/wire packages are all at (or within a hair of)
-# 100%. The lower whole-module floor accommodates the integration packages
-# whose residual lines are non-deterministic and cannot be covered without
-# fault injection or elaborate process/socket harnesses:
-#   - manager (~94%): the agent-fleet supervisor's monitor loop (desired-state
-#     reconciliation, queued-launch/stale handling, log cleanup, restart
-#     respawn) is now exercised with real child processes; what remains is
-#     syscall-failure branches (rename/write/MkdirAll errors, log rotation)
-#     that need actual fault injection.
-#   - server (~88%): WS/HTTP/SSE write-failure branches on live sockets.
-#   - gateway (~86%): telnet/SSH listener accept + raw-mode / signal branches.
-#   - cli (~91%): mid-bridge transport-send failures and OS/signal branches.
-# transports/client/controlplane-sqlite/hub/pty carry only syscall/driver/
-# JSON-encode guards the Python originals also exclude. Whole-module ~95.3%.
-COVER_THRESHOLD ?= 95.0
+# 97.0, not 100.0: the library/wire packages are all at (or within a hair of)
+# 100%. A pass across manager/server/gateway/cli proved the "these need fault
+# injection" assumption largely wrong — real child processes and real live
+# sockets (httptest, ephemeral-port listeners, actual subprocess teardown)
+# drove all four from the 77-91% range up to 94-99%. What is left in each is
+# now genuinely fault-injection-only (a specific syscall failing in a way a
+# test cannot trigger):
+#   - manager (~94%): syscall-failure branches (rename/write/MkdirAll errors,
+#     log rotation) in the monitor loop's reconciliation.
+#   - server (~96%): frame-encoder/deckmux internal-error log arms; handshake
+#     mid-write races; OS/socket-level Serve() failure branches.
+#   - gateway (~99%): a handful of crypto/rand and channel-accept error arms.
+#   - cli (~98%): external-constructor failures (telemetry/engine wiring),
+#     os.Hostname()/json.Marshal(fixed map) failure arms.
+#   - pty (~90%): the lowest remaining package — PAM/uid-mapping syscall
+#     guards Python's own platform code also excludes from its gate.
+# transports/client/controlplane-sqlite/hub carry only syscall/driver/
+# JSON-encode guards the Python originals also exclude. Whole-module ~97.2%.
+COVER_THRESHOLD ?= 97.0
 
 # Driver for the mutation gate (stdlib-only Python >= 3.11; tomllib + json).
 PYTHON ?= python3
