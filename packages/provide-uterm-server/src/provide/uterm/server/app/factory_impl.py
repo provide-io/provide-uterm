@@ -498,5 +498,9 @@ def create_server_app(
         require_hub_route_authz=_require_hub_route_authz,
     )
     install_cors_security_telemetry(app, config=config)
-    mount_frontend_assets(app, config=config)
+    # Same api_only gate as the frontend-asset presence check above: an
+    # API-only/headless server must not require the (possibly unbuilt) bundled
+    # UI directory to exist just to mount it.
+    if not api_only and not _api_only_env:
+        mount_frontend_assets(app, config=config)
     return app
