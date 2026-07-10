@@ -32,10 +32,10 @@ import (
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/defaults"
 )
 
-// referenceSessionID is the auto-started reference session the Python server
-// ships in its default config (UtermServerConfig.sessions). It is a "shell"
-// connector in open input-mode with auto_start=true, so it exists the moment
-// the server reports healthy — no session-creation dance required.
+// referenceSessionID is the auto-started reference session both the Python and
+// Go servers ship in their default config (UtermServerConfig.sessions). It is a
+// "shell" connector in open input-mode with auto_start=true, so it exists the
+// moment the server reports healthy — no session-creation dance required.
 const referenceSessionID = "provide-shell"
 
 // syncBuffer is a concurrency-safe buffer: the child process's output copier
