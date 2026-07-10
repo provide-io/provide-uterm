@@ -271,6 +271,29 @@ jobs:
           GITHUB_EVENT_BEFORE: ${{ github.event.before }}
         run: ci/prepare_mutation_args.sh
 
+  # Go-side mutation gate: gremlins over a small, ~100%-covered perimeter
+  # (sanitizer/colors/filters/lineeditor). Separate from go-quality because
+  # mutation testing is minutes-slow and needs python3 to drive the gate +
+  # enforce the equivalent-mutant allowlist. Mirrors the Python mutation-gate's
+  # killed==100%-minus-documented-equivalents bar.
+  go-mutation-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      # Go toolchain pinned by the module's go.mod (go directive).
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16  # v6.5.0
+        with:
+          go-version-file: "packages/provide-uterm-go/go.mod"
+          cache-dependency-path: "packages/provide-uterm-go/go.sum"
+      # Python 3.11+ drives the gate (tomllib + json, stdlib only).
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.11"
+      # Run gremlins over the perimeter; fails on any unexcused survivor,
+      # NOT_COVERED, or TIMED_OUT mutant. gremlins is fetched via `go run`.
+      - run: make -C packages/provide-uterm-go mutation-gate
+
   compliance:
     runs-on: ubuntu-latest
     strategy:

@@ -76,6 +76,35 @@ subcommand tree mirrors the Python CLI. Go 1.26.5, all deps on latest.
   user ids and that every Go-emitted deck frame validates under the Python
   Pydantic schema (PresenceSync/Update/Leave, ControlTransfer).
 
+## Mutation gate (Go side)
+
+Added to mirror the Python `scripts/run_mutation_gate.py` rigor. Tool:
+[gremlins](https://github.com/go-gremlins/gremlins) v0.6.0, invoked via
+`go run` (no `go.mod` entry — same pattern as golangci-lint/govulncheck).
+Perimeter (small on purpose — mutation testing recompiles+reruns per mutant):
+`sanitizer`, `colors`, `filters`, `lineeditor` — pure-function packages already
+at ~100% coverage with real branch/boundary/arithmetic logic. Score: **158
+mutants killed, 0 unexcused survivors, 3 documented-equivalent** (100% of the
+non-equivalent perimeter). Run: `cd packages/provide-uterm-go && make
+mutation-gate` (needs `python3` >= 3.11; driver `ci/mutation_gate.py`, stdlib
+only). Fails on any unexcused LIVED / NOT_COVERED / TIMED_OUT mutant.
+
+- The run surfaced 9 real assertion gaps that coverage had missed, all fixed
+  with tests: sanitizer `~` (0x7E) printable-boundary; colors distance-tie
+  first-wins parity (RGBTo16Index(0,92,230)==1, matches CPython), 9-vs-10-digit
+  parseComponent saturation, and the `i+4 < n` truecolor-run bounds guard;
+  filters CSI final-byte edges `@`/`~`; lineeditor backspace cursor decrement +
+  Ctrl+W scan loops reaching buffer index 0.
+- The 3 allowlisted equivalents (`packages/provide-uterm-go/mutation_equivalents.toml`)
+  are `<`/`>` vs `<=`/`>=` boundary flips where both branches return the same
+  value: sanitizer `len(filtered) <= maxBytes` (`filtered[:maxBytes]==filtered`
+  at equality) and the two clamp8 edges (clamp of 0 / 255).
+- IMPORTANT: gremlins derives each mutant's timeout from the tiny baseline test
+  time; too-low `--timeout-coefficient` spuriously times out mutants (masking
+  real survivors). The gate uses 100 (zero timeouts locally) and FAILS on any
+  timeout so a slow runner surfaces loudly. CI job: `go-mutation-gate` in
+  `.github/workflows/ci.yml` (separate from `go-quality`).
+
 ## Package inventory (all committed, gates green)
 
 Core/wire: controlchannel, channels, sanitizer, redaction, filters,
