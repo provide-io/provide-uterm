@@ -35,6 +35,10 @@ const (
 	ProxyPort = 8765
 	// ProxyWSPath is the uterm proxy default WebSocket path.
 	ProxyWSPath = "/ws/terminal"
+	// ProxyPollMS is the interval in milliseconds between remote-receive polls
+	// in the WS→transport proxy. Mirrors WsTerminalProxy._POLL_MS in Python
+	// (packages/provide-uterm-server/.../fastapi_utils.py).
+	ProxyPollMS = 50
 	// ServerHost is the provide-uterm-server default bind host.
 	ServerHost = "127.0.0.1"
 	// ServerPort is the provide-uterm-server default port.

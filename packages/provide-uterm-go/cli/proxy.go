@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -141,14 +142,21 @@ func bridgeProxy(ctx context.Context, cancel context.CancelFunc, conn *websocket
 			if ctx.Err() != nil {
 				return
 			}
-			data, err := tr.Receive(ctx, 4096, 200*time.Millisecond)
+			data, err := tr.Receive(ctx, 4096, time.Duration(defaults.ProxyPollMS)*time.Millisecond)
 			if err != nil {
 				return
 			}
 			if len(data) == 0 {
 				continue
 			}
-			if err := conn.Write(ctx, websocket.MessageBinary, data); err != nil {
+			// The Python WsTerminalProxy sends TEXT frames (send_text with UTF-8
+			// replace semantics) and the shared browser frontend renders ONLY
+			// string payloads — terminal-element.ts discards a non-string
+			// (binary) WS message. Mirror Python for drop-in parity: sanitize to
+			// valid UTF-8, then send a TEXT frame. Valid UTF-8 (all real terminal
+			// text) passes through byte-identical.
+			text := strings.ToValidUTF8(string(data), "�")
+			if err := conn.Write(ctx, websocket.MessageText, []byte(text)); err != nil {
 				return
 			}
 		}
