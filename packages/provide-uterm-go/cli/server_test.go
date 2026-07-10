@@ -162,7 +162,7 @@ func TestBuildServerAndServeHealth(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	bundle, err := buildServer(ctx, path, "", 0)
+	bundle, err := buildServer(ctx, path, "", 0, "")
 	if err != nil {
 		t.Fatalf("buildServer: %v", err)
 	}
@@ -199,7 +199,7 @@ func TestBuildServerAndServeHealth(t *testing.T) {
 }
 
 func TestBuildServerConfigError(t *testing.T) {
-	if _, err := buildServer(context.Background(), "/no/such/config.toml", "", 0); err == nil {
+	if _, err := buildServer(context.Background(), "/no/such/config.toml", "", 0, ""); err == nil {
 		t.Fatal("expected config load error")
 	}
 }
@@ -211,13 +211,13 @@ func TestRunServerLifecycle(t *testing.T) {
 		time.Sleep(150 * time.Millisecond)
 		cancel()
 	}()
-	if err := runServer(ctx, path, "", 0); err != nil {
+	if err := runServer(ctx, path, "", 0, ""); err != nil {
 		t.Fatalf("runServer: %v", err)
 	}
 }
 
 func TestRunServerBuildError(t *testing.T) {
-	if err := runServer(context.Background(), "/no/such.toml", "", 0); err == nil {
+	if err := runServer(context.Background(), "/no/such.toml", "", 0, ""); err == nil {
 		t.Fatal("expected error from bad config")
 	}
 }
