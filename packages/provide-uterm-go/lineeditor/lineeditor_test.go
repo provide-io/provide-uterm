@@ -90,6 +90,21 @@ func TestBackspace(t *testing.T) {
 	}
 }
 
+func TestBackspaceMovesCursor(t *testing.T) {
+	// The backspace handler must decrement cursorPos; a following insert then
+	// lands at the correct position. With the decrement broken the cursor would
+	// point past the (now shorter) buffer and the insert would panic.
+	e := New(80, false, nil)
+	typeString(t, e, "abc") // buffer "abc", cursor 3
+	if _, _, err := e.ProcessChar(0x7f); err != nil {
+		t.Fatal(err)
+	}
+	typeString(t, e, "z") // insert at cursor 2 -> "abz"
+	if e.Buffer() != "abz" {
+		t.Fatalf("buffer = %q", e.Buffer())
+	}
+}
+
 func TestBackspaceMidLine(t *testing.T) {
 	rec := &recorder{}
 	e := New(80, false, rec.write)
@@ -237,6 +252,29 @@ func TestCtrlWKillWordBackward(t *testing.T) {
 	typeString(t, e3, "\x17")
 	if rec.out.Len() != 0 {
 		t.Fatalf("out = %q", rec.out.String())
+	}
+}
+
+func TestCtrlWReachesBufferStart(t *testing.T) {
+	// A word extending to index 0 (no leading space): the second scan loop must
+	// stop at pos==0 rather than read buffer[-1].
+	e := New(80, false, nil)
+	typeString(t, e, "foo")
+	if _, _, err := e.ProcessChar(0x17); err != nil {
+		t.Fatal(err)
+	}
+	if e.Buffer() != "" {
+		t.Fatalf("word-at-start: buffer = %q", e.Buffer())
+	}
+	// An all-spaces buffer: the first (trailing-space) scan loop must stop at
+	// pos==0 rather than read buffer[-1].
+	e2 := New(80, false, nil)
+	typeString(t, e2, "   ")
+	if _, _, err := e2.ProcessChar(0x17); err != nil {
+		t.Fatal(err)
+	}
+	if e2.Buffer() != "" {
+		t.Fatalf("all-spaces: buffer = %q", e2.Buffer())
 	}
 }
 

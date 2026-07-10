@@ -51,6 +51,11 @@ func TestSanitizeKeystrokes(t *testing.T) {
 	if got := SanitizeKeystrokes("a\x00b\x7fc→d\x02", DefaultMaxBytes); got != "abcd" {
 		t.Fatalf("got %q", got)
 	}
+	// Printable-ASCII boundary: space (0x20) and tilde (0x7E) are the inclusive
+	// edges of the allowed range and must survive filtering.
+	if got := SanitizeKeystrokes(" ~", DefaultMaxBytes); got != " ~" {
+		t.Fatalf("boundary got %q", got)
+	}
 }
 
 func TestSanitizeKeystrokesTruncates(t *testing.T) {
