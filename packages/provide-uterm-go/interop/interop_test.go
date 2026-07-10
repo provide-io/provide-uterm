@@ -124,7 +124,13 @@ type pyServer struct {
 	wsBase  string
 	token   string
 	log     *syncBuffer
-	exited  chan error
+	// waitDone is closed (never sent-on) when cmd.Wait() returns, so both
+	// waitHealthy's early-death check and stop()'s teardown wait can observe
+	// completion independently — a data-carrying chan with a single buffered
+	// slot would let one of the two drain it and leave the other blocked
+	// forever on a channel nothing will ever send to again.
+	waitDone chan struct{}
+	waitErr  error
 }
 
 // startPyServer launches the server and blocks until it is healthy and has
@@ -166,13 +172,16 @@ func startPyServer(t *testing.T, ctx context.Context) *pyServer {
 	}
 
 	srv := &pyServer{
-		cmd:     cmd,
-		baseURL: fmt.Sprintf("http://%s:%d", defaults.ServerHost, port),
-		wsBase:  fmt.Sprintf("ws://%s:%d", defaults.ServerHost, port),
-		log:     logbuf,
-		exited:  make(chan error, 1),
+		cmd:      cmd,
+		baseURL:  fmt.Sprintf("http://%s:%d", defaults.ServerHost, port),
+		wsBase:   fmt.Sprintf("ws://%s:%d", defaults.ServerHost, port),
+		log:      logbuf,
+		waitDone: make(chan struct{}),
 	}
-	go func() { srv.exited <- cmd.Wait() }()
+	go func() {
+		srv.waitErr = cmd.Wait()
+		close(srv.waitDone)
+	}()
 	t.Cleanup(srv.stop)
 
 	srv.waitHealthy(t, ctx)
@@ -188,12 +197,12 @@ func (s *pyServer) waitHealthy(t *testing.T, ctx context.Context) {
 	deadline := time.Now().Add(45 * time.Second)
 	for time.Now().Before(deadline) {
 		select {
-		case err := <-s.exited:
+		case <-s.waitDone:
 			log := s.log.String()
 			if looksLikeMissingDeps(log) {
-				t.Skipf("Python server deps unavailable (exit: %v); skipping live interop\n%s", err, tail(log))
+				t.Skipf("Python server deps unavailable (exit: %v); skipping live interop\n%s", s.waitErr, tail(log))
 			}
-			t.Fatalf("Python server exited before healthy (%v):\n%s", err, tail(log))
+			t.Fatalf("Python server exited before healthy (%v):\n%s", s.waitErr, tail(log))
 		default:
 		}
 		if h, err := hc.Health(ctx); err == nil && (h["status"] == "ok" || h["ok"] == true) {
@@ -233,11 +242,11 @@ func (s *pyServer) stop() {
 	pgid := s.cmd.Process.Pid
 	_ = syscall.Kill(-pgid, syscall.SIGTERM)
 	select {
-	case <-s.exited:
+	case <-s.waitDone:
 		return
 	case <-time.After(5 * time.Second):
 		_ = syscall.Kill(-pgid, syscall.SIGKILL)
-		<-s.exited
+		<-s.waitDone
 	}
 }
 

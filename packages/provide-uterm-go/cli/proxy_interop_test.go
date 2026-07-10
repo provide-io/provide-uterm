@@ -252,10 +252,16 @@ func TestProxyEchoContractPython(t *testing.T) {
 // pyProxy is a running Python `uterm proxy` subprocess bound to an ephemeral
 // loopback port.
 type pyProxy struct {
-	cmd    *exec.Cmd
-	wsURL  string
-	log    *proxyLogBuf
-	exited chan error
+	cmd   *exec.Cmd
+	wsURL string
+	log   *proxyLogBuf
+	// waitDone is closed (never sent-on) when cmd.Wait() returns, so both
+	// waitListening's early-death check and stop()'s teardown wait can
+	// observe completion independently — see interop_test.go's pyServer for
+	// why a data-carrying chan with one buffered slot deadlocks the second
+	// reader once the first has drained it.
+	waitDone chan struct{}
+	waitErr  error
 }
 
 // startPyProxy launches `uv run uterm proxy <host> <port> ...` against the given
@@ -293,12 +299,15 @@ func startPyProxy(t *testing.T, upstreamHost string, upstreamPort int) *pyProxy 
 	}
 
 	p := &pyProxy{
-		cmd:    cmd,
-		wsURL:  fmt.Sprintf("ws://127.0.0.1:%d%s", proxyPort, defaults.ProxyWSPath),
-		log:    logbuf,
-		exited: make(chan error, 1),
+		cmd:      cmd,
+		wsURL:    fmt.Sprintf("ws://127.0.0.1:%d%s", proxyPort, defaults.ProxyWSPath),
+		log:      logbuf,
+		waitDone: make(chan struct{}),
 	}
-	go func() { p.exited <- cmd.Wait() }()
+	go func() {
+		p.waitErr = cmd.Wait()
+		close(p.waitDone)
+	}()
 	t.Cleanup(p.stop)
 
 	p.waitListening(t, proxyPort)
@@ -314,12 +323,12 @@ func (p *pyProxy) waitListening(t *testing.T, port int) {
 	deadline := time.Now().Add(45 * time.Second)
 	for time.Now().Before(deadline) {
 		select {
-		case err := <-p.exited:
+		case <-p.waitDone:
 			log := p.log.String()
 			if looksLikeMissingProxyDeps(log) {
-				t.Skipf("Python proxy deps unavailable (exit: %v); skipping live parity\n%s", err, proxyTail(log))
+				t.Skipf("Python proxy deps unavailable (exit: %v); skipping live parity\n%s", p.waitErr, proxyTail(log))
 			}
-			t.Fatalf("Python proxy exited before listening (%v):\n%s", err, proxyTail(log))
+			t.Fatalf("Python proxy exited before listening (%v):\n%s", p.waitErr, proxyTail(log))
 		default:
 		}
 		conn, err := net.DialTimeout("tcp", addr, 500*time.Millisecond)
@@ -341,11 +350,11 @@ func (p *pyProxy) stop() {
 	pgid := p.cmd.Process.Pid
 	_ = syscall.Kill(-pgid, syscall.SIGTERM)
 	select {
-	case <-p.exited:
+	case <-p.waitDone:
 		return
 	case <-time.After(5 * time.Second):
 		_ = syscall.Kill(-pgid, syscall.SIGKILL)
-		<-p.exited
+		<-p.waitDone
 	}
 }
 
