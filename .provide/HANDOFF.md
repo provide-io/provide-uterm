@@ -293,14 +293,18 @@ run for the same push. Found and fixed real, previously-invisible bugs:
   root; GitHub-hosted `ubuntu-latest` never does (no `container:` block ⇒
   the non-root `runner` user), so this never bit real CI, but it's a latent
   fragility now closed via a graceful skip-if-root.
-- **`TestTelnetSessionLoopback` flake, 3rd occurrence** (a844bd82) — widened
-  10s→30s. Confirmed via the real GitHub-hosted `go-quality` run's own logs
-  (not just local `act`) that this flake is real, not an artifact of local
-  virtualization. Likely worse now than earlier this session: the
-  manager/server/gateway/cli coverage push added substantially more
-  live-socket/subprocess tests, increasing cross-package CPU contention
-  during whole-module `go test -race ./...`. Not guaranteed fully eliminated
-  — flag if it recurs.
+- **`TestTelnetSessionLoopback` was never a timing flake** (a844bd82 was a
+  wrong diagnosis, corrected by 1b5df351): widening the deadline 10s→30s
+  made *zero* difference on real GitHub-hosted CI — same failure, same
+  exact 30s mark, ruling out CPU contention entirely. Root cause: the fake
+  server's second `conn.Read()` assumed one call returns the client's whole
+  `"guest\r"` write. TCP gives no such guarantee; a short read silently
+  echoes a truncated fragment, and no amount of waiting makes `"guest"`
+  appear. Fixed by accumulating reads until a line terminator (`readLineFrom`
+  in `termsession_test.go`), matching a real line-oriented protocol handler.
+  Verified locally and its logic reasoned through carefully — but note this
+  was diagnosed and fixed *after* pushing the (ineffective) 30s widening, so
+  confirm the next real CI run is clean before treating this as fully closed.
 - **CLAUDE.md doc-count drift** (0d5779e0) — `check_docs_accuracy.py` failed
   in CI's `docs-quality` job: "8 packages under packages/, found 9" — the Go
   port's own directory was never added to the root CLAUDE.md package table.
