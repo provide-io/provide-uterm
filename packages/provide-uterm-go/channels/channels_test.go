@@ -34,7 +34,7 @@ func TestNewNegotiatedValidation(t *testing.T) {
 }
 
 func TestHandleHelloNegotiatesMinVersions(t *testing.T) {
-	n := mustNegotiated(t, map[string]int{"term": 3, "inspect": 1}, "term")
+	n := mustNegotiated(t, map[string]int{"term": 3, "inspect": 1, "zero": 4}, "term")
 	ack, err := n.HandleHello(Hello{Channels: map[string]int{"term": 5, "inspect": 1, "unknown": 2, "zero": 0}}, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -194,6 +194,7 @@ func TestParseChannelHelloRejects(t *testing.T) {
 		helloFrame(t, map[string]any{"type": "hello"}),                                           // missing channels
 		helloFrame(t, map[string]any{"type": "hello", "channels": "nope"}),                       // non-mapping
 		helloFrame(t, map[string]any{"type": "hello", "channels": map[string]any{"term": true}}), // bool version
+		helloFrame(t, map[string]any{"type": "hello", "channels": map[string]any{"term": 1.5}}),  // fractional json.Number version
 	}
 	for _, raw := range cases {
 		if got := ParseChannelHello(raw); got != nil {

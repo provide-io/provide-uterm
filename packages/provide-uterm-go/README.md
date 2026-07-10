@@ -143,14 +143,15 @@ via `packages/provide-uterm-client/tests/test_go_server_interop.py`
 ### Mutation gate
 
 ```bash
-make mutation-gate   # gremlins over sanitizer/colors/filters/lineeditor
+make mutation-gate   # gremlins over sanitizer/colors/filters/lineeditor/redaction/channels/frames
 ```
 
 Coverage proves lines execute; mutation testing proves the tests actually
 *assert* on behavior. `make mutation-gate` runs
 [gremlins](https://github.com/go-gremlins/gremlins) (via `go run`, no `go.mod`
 entry) over a small perimeter of already-~100%-covered pure-function packages —
-`sanitizer`, `colors`, `filters`, `lineeditor` — and enforces the same bar as
+`sanitizer`, `colors`, `filters`, `lineeditor`, `redaction`, `channels`,
+`frames` — and enforces the same bar as
 the Python side: **every mutant must be KILLED**, except a documented allowlist
 of genuinely-equivalent survivors in `mutation_equivalents.toml`. The gate
 (`ci/mutation_gate.py`, stdlib-only, needs `python3` >= 3.11) fails on any
