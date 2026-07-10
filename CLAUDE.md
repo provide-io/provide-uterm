@@ -69,7 +69,7 @@ docker compose -f docker/docker-compose.yml up
 
 ## Architecture
 
-**Monorepo** using uv workspace (Python) + npm workspaces (TypeScript). 8 packages under `packages/`:
+**Monorepo** using uv workspace (Python) + npm workspaces (TypeScript), plus a standalone Go port. 9 packages under `packages/`:
 
 | Package | Role |
 |---------|------|
@@ -81,6 +81,7 @@ docker compose -f docker/docker-compose.yml up
 | `provide-uterm-annotation` | Annotation layer (100% coverage gate, own CI job) |
 | `provide-uterm-frontend` | Browser UI (vanilla TypeScript, xterm.js) |
 | `provide-uterm-app` | App shell |
+| `provide-uterm-go` | Standalone Go port (module, own toolchain/CI — not part of the uv/npm workspaces) |
 
 **Three-Layer Bridge System** (core architecture):
 1. **HijackableMixin** — Worker-side mixin for hijackability at checkpoints
