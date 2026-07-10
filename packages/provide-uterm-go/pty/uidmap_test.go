@@ -13,6 +13,12 @@ import (
 
 func intPtr(i int) *int { return &i }
 
+// currentUser returns the OS test-runner's own identity for tests that resolve
+// "myself" and expect success. Skips (not fails) when running as root: the
+// privileged-uid/gid guard in Resolve is intentional security hardening, so a
+// root test runner (some containerized dev/CI setups; never GitHub-hosted
+// ubuntu-latest, which runs as the non-root "runner" user) would otherwise
+// fail these tests against correct, deliberate behavior rather than a bug.
 func currentUser(t *testing.T) (u *user.User, uid, gid int) {
 	t.Helper()
 	u, err := user.Current()
@@ -21,6 +27,9 @@ func currentUser(t *testing.T) (u *user.User, uid, gid int) {
 	}
 	uid, _ = strconv.Atoi(u.Uid)
 	gid, _ = strconv.Atoi(u.Gid)
+	if uid == 0 {
+		t.Skip("running as root — privileged-uid resolution is intentionally rejected")
+	}
 	return u, uid, gid
 }
 
