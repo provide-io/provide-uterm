@@ -18,6 +18,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/controlchannel"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/session"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/transports"
 )
@@ -457,4 +458,200 @@ func TestWaitForScreenChangeZeroTimeout(t *testing.T) {
 	if err != nil || changed {
 		t.Fatalf("changed=%v err=%v", changed, err)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// ControlFrames: off by default (raw passthrough), opt-in DLE/STX parsing
+// ---------------------------------------------------------------------------
+
+func controlFrameBytes(t *testing.T, payload map[string]any) []byte {
+	t.Helper()
+	encoded, err := controlchannel.EncodeControlFrame(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return []byte(encoded)
+}
+
+// TestControlFramesOffByDefaultIsRawPassthrough asserts default behavior: a
+// DLE/STX-framed message is NOT parsed — the exact unmodified bytes reach
+// watchers/the emulator, exactly like a plain (non-uterm-aware) client.
+func TestControlFramesOffByDefaultIsRawPassthrough(t *testing.T) {
+	frame := controlFrameBytes(t, map[string]any{"type": "render_speed", "cps": float64(2400)})
+	chunk := append(append([]byte(nil), frame...), []byte("hi")...)
+	ft := &fakeTransport{}
+	s := newFakeSession(t, ft, Options{})
+	if s.controlDecoder != nil {
+		t.Fatal("controlDecoder should be nil when ControlFrames is unset")
+	}
+
+	var mu sync.Mutex
+	var seen [][]byte
+	s.AddWatch(func(_ map[string]any, raw []byte) {
+		mu.Lock()
+		defer mu.Unlock()
+		seen = append(seen, append([]byte(nil), raw...))
+	})
+
+	ft.queue(chunk)
+	waitUntilTermsession(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(seen) == 1
+	})
+	mu.Lock()
+	defer mu.Unlock()
+	if len(seen) != 1 || string(seen[0]) != string(chunk) {
+		t.Fatalf("seen = %q, want [%q]", seen, chunk)
+	}
+}
+
+// TestControlFramesEnabledRoutesControlChunksToWatcher asserts that with
+// ControlFrames: true, a DLE/STX frame is parsed out and dispatched to
+// control-frame watchers instead of reaching the emulator/screen.
+func TestControlFramesEnabledRoutesControlChunksToWatcher(t *testing.T) {
+	frame := controlFrameBytes(t, map[string]any{"type": "render_speed", "cps": float64(2400)})
+	chunk := append(append([]byte(nil), frame...), []byte("hi")...)
+	ft := &fakeTransport{}
+	s := newFakeSession(t, ft, Options{ControlFrames: true})
+	if s.controlDecoder == nil {
+		t.Fatal("controlDecoder should be set when ControlFrames is true")
+	}
+
+	var mu sync.Mutex
+	var seen []map[string]any
+	s.AddControlFrameWatch(func(payload map[string]any) {
+		mu.Lock()
+		defer mu.Unlock()
+		seen = append(seen, payload)
+	})
+
+	ft.queue(chunk)
+	waitUntilTermsession(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(seen) == 1
+	})
+	mu.Lock()
+	if len(seen) != 1 || seen[0]["type"] != "render_speed" {
+		mu.Unlock()
+		t.Fatalf("seen = %+v", seen)
+	}
+	mu.Unlock()
+
+	snap := waitForScreen(t, s, "hi")
+	if strings.Contains(snap.Screen, "render_speed") {
+		t.Fatalf("control payload leaked onto screen: %q", snap.Screen)
+	}
+}
+
+// TestControlFramesEnabledPureTextChunkUnaffected asserts a chunk with no
+// control frame at all still reaches the emulator/watchers normally when
+// ControlFrames is true — the decoder is transparent for it.
+func TestControlFramesEnabledPureTextChunkUnaffected(t *testing.T) {
+	ft := &fakeTransport{}
+	s := newFakeSession(t, ft, Options{ControlFrames: true})
+
+	var mu sync.Mutex
+	var seen [][]byte
+	s.AddWatch(func(_ map[string]any, raw []byte) {
+		mu.Lock()
+		defer mu.Unlock()
+		seen = append(seen, append([]byte(nil), raw...))
+	})
+
+	ft.queue([]byte("plain text"))
+	waitUntilTermsession(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(seen) == 1
+	})
+	mu.Lock()
+	if len(seen) != 1 || string(seen[0]) != "plain text" {
+		mu.Unlock()
+		t.Fatalf("seen = %q", seen)
+	}
+	mu.Unlock()
+	waitForScreen(t, s, "plain text")
+}
+
+// TestControlFramesEnabledChunkWithOnlyControlFrame asserts a read containing
+// ONLY a control frame (no trailing text) does not feed a phantom empty
+// chunk to the emulator/watchers.
+func TestControlFramesEnabledChunkWithOnlyControlFrame(t *testing.T) {
+	frame := controlFrameBytes(t, map[string]any{"type": "ping"})
+	ft := &fakeTransport{}
+	s := newFakeSession(t, ft, Options{ControlFrames: true})
+
+	var mu sync.Mutex
+	var rawSeen [][]byte
+	s.AddWatch(func(_ map[string]any, raw []byte) {
+		mu.Lock()
+		defer mu.Unlock()
+		rawSeen = append(rawSeen, append([]byte(nil), raw...))
+	})
+	var controlSeen []map[string]any
+	s.AddControlFrameWatch(func(payload map[string]any) {
+		mu.Lock()
+		defer mu.Unlock()
+		controlSeen = append(controlSeen, payload)
+	})
+
+	ft.queue(frame)
+	waitUntilTermsession(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(controlSeen) == 1
+	})
+
+	ft.queue([]byte("later"))
+	waitForScreen(t, s, "later")
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(rawSeen) != 1 || string(rawSeen[0]) != "later" {
+		t.Fatalf("rawSeen = %q, want only [\"later\"]", rawSeen)
+	}
+}
+
+// TestControlFrameWatchNoopWhenDisabled asserts registering a control-frame
+// watcher on a ControlFrames:false session is harmless.
+func TestControlFrameWatchNoopWhenDisabled(t *testing.T) {
+	ft := &fakeTransport{}
+	s := newFakeSession(t, ft, Options{})
+	s.AddControlFrameWatch(func(map[string]any) {})
+	if len(s.controlWatchers) != 1 {
+		t.Fatalf("controlWatchers = %d, want 1", len(s.controlWatchers))
+	}
+	if s.controlDecoder != nil {
+		t.Fatal("controlDecoder should remain nil")
+	}
+}
+
+// TestControlFramesMalformedFrameSkipsRoundNotReader asserts a decode error
+// (malformed control-frame header) is treated like any other unusable read —
+// the round is skipped, the reader keeps running, and a subsequent valid
+// plain-text chunk still comes through normally.
+func TestControlFramesMalformedFrameSkipsRoundNotReader(t *testing.T) {
+	malformed := []byte(controlchannel.DLE + controlchannel.STX + "not-hex-len:{}")
+	ft := &fakeTransport{}
+	s := newFakeSession(t, ft, Options{ControlFrames: true})
+
+	ft.queue(malformed)
+	ft.queue([]byte("still alive"))
+	waitForScreen(t, s, "still alive")
+}
+
+// waitUntilTermsession polls cond every 5ms for up to 3s. Local to this file
+// to avoid colliding with any package-level waitUntil helper elsewhere.
+func waitUntilTermsession(t *testing.T, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("condition not met before timeout")
 }
