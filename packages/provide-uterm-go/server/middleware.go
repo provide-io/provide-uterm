@@ -182,10 +182,15 @@ func authRequest(r *http.Request) *serverauth.Request {
 	return &serverauth.Request{Headers: headers, Cookies: cookies, SourceIP: sourceIP(r)}
 }
 
-// resolvePrincipal runs the configured authenticator against r. A nil principal
-// (webhook deny) is normalized to the anonymous principal so callers only test
-// isAnonymous.
+// resolvePrincipal resolves the request principal. A tunnel-share cookie is
+// tried first (port of _require_authenticated running resolve_tunnel_share_
+// principal ahead of the configured resolver), then the configured
+// authenticator. A nil principal (webhook deny) is normalized to the anonymous
+// principal so callers only test isAnonymous.
 func (s *Server) resolvePrincipal(r *http.Request) *serverauth.Principal {
+	if share := s.resolveShareprincipal(r); share != nil {
+		return share
+	}
 	p, err := s.deps.Auth.Authenticate(r.Context(), authRequest(r))
 	if err != nil || p == nil {
 		return serverauth.AnonymousPrincipal()
