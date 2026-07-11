@@ -59,4 +59,4 @@ require (
 	modernc.org/memory v1.11.0 // indirect
 )
 
-replace github.com/litevirt/litevirt => /Users/tim/code/gh/colonelpanik/litevirt
+replace github.com/litevirt/litevirt => github.com/livingstaccato/litevirt v0.0.0-20260711044027-dac213711fba
