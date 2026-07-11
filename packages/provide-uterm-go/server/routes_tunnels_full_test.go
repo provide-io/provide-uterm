@@ -251,6 +251,10 @@ func TestShareConsumerViewerInvite(t *testing.T) {
 	if ck == nil || ck.Value != "share-tok" || !ck.HttpOnly {
 		t.Fatalf("viewer cookie = %+v", ck)
 	}
+	// Path "/" so a browser replays it to /app/{page}/{id}, not just /s/.
+	if ck.Path != "/" {
+		t.Fatalf("viewer cookie path = %q, want /", ck.Path)
+	}
 
 	// Operator invite → operator page + operator cookie.
 	rec = ts.do("GET", "/s/sc2?invite="+url.QueryEscape(control), "", nil)

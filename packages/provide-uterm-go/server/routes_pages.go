@@ -56,11 +56,15 @@ func isSecureRequest(r *http.Request) bool {
 	return r.TLS != nil
 }
 
-// setAuthCookie sets an HttpOnly page cookie. Port of _set_auth_cookie.
+// setAuthCookie sets an HttpOnly page cookie. Port of _set_auth_cookie. Path is
+// "/" so the cookie reaches every route (Go's http.SetCookie would otherwise
+// default it to the request-URI directory, e.g. /app; Starlette's set_cookie
+// defaults path="/", which this matches).
 func setAuthCookie(w http.ResponseWriter, name, value string, secure bool) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     name,
 		Value:    value,
+		Path:     "/",
 		Secure:   secure,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,

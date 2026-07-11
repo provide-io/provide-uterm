@@ -253,8 +253,9 @@ func TestUIPageCookies(t *testing.T) {
 	// jwt mode + bearer token → token cookie set.
 	jwtTS := newTestServer(t, func(cfg *serverconfig.UtermServerConfig, _ *Deps) { cfg.Auth.Mode = "jwt" })
 	rec = jwtTS.do("GET", "/app/", "", headers)
-	if c := cookieByName(rec.Result().Cookies(), "uterm_token"); c == nil || c.Value != "tok123" {
-		t.Fatalf("token cookie=%v want tok123", c)
+	// Path "/" so the page cookie reaches the API/WS routes, not just /app.
+	if c := cookieByName(rec.Result().Cookies(), "uterm_token"); c == nil || c.Value != "tok123" || c.Path != "/" {
+		t.Fatalf("token cookie=%v want tok123 path=/", c)
 	}
 
 	// jwt mode but no bearer token → no token cookie.
