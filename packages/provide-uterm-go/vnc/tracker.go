@@ -1,6 +1,7 @@
 package vnc
 
 import (
+	"fmt"
 	"image"
 	"image/draw"
 	"sync"
@@ -17,16 +18,27 @@ func NewFramebufferTracker(width, height int) *FramebufferTracker {
 	}
 }
 
-func (t *FramebufferTracker) ApplyRawUpdate(x, y, w, h int, pixels []byte) {
+func (t *FramebufferTracker) ApplyRawUpdate(x, y, w, h int, pixels []byte) error {
+	if w < 0 || h < 0 {
+		return fmt.Errorf("invalid dimensions: w=%d, h=%d", w, h)
+	}
+	expectedLen := w * h * 4
+	if len(pixels) < expectedLen {
+		return fmt.Errorf("invalid pixel buffer size: expected %d, got %d", expectedLen, len(pixels))
+	}
+
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	
-	src := image.NewRGBA(image.Rect(0, 0, w, h))
-	src.Pix = pixels
-	src.Stride = w * 4
+	src := &image.RGBA{
+		Pix:    pixels,
+		Stride: w * 4,
+		Rect:   image.Rect(0, 0, w, h),
+	}
 
 	r := image.Rect(x, y, x+w, y+h)
 	draw.Draw(t.img, r, src, image.Point{0, 0}, draw.Src)
+	return nil
 }
 
 func (t *FramebufferTracker) GetImage() *image.RGBA {
