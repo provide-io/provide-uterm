@@ -88,6 +88,11 @@ _TOOL_ARGS: dict[str, dict[str, Any]] = {
     "fanout_group_create": {"session_ids": ["s1"]},
     "fanout_send": {"group_id": "g1", "data": "hi"},
     "session_annotate": {"session_id": "s1", "label": "x"},
+    "gui_hijack_begin": {"worker_id": "w1"},
+    "gui_hijack_release": {"worker_id": "w1", "hijack_id": "h1"},
+    "gui_screenshot": {"worker_id": "w1", "hijack_id": "h1"},
+    "gui_click": {"worker_id": "w1", "hijack_id": "h1", "x": 0, "y": 0},
+    "gui_type": {"worker_id": "w1", "hijack_id": "h1", "text": "x"},
 }
 
 

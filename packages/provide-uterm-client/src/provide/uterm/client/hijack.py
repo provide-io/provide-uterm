@@ -306,6 +306,47 @@ class HijackClient:
             params={"after_seq": after_seq, "limit": limit},
         )
 
+    # -- GUI lifecycle --------------------------------------------------------
+
+    async def gui_screenshot(
+        self,
+        worker_id: str,
+        hijack_id: str,
+    ) -> tuple[bool, dict[str, Any]]:
+        """Read a GUI screenshot from an active hijack session."""
+        return await self._request(
+            "GET",
+            f"{self._hp(worker_id, hijack_id)}/gui/screenshot",
+        )
+
+    async def gui_click(
+        self,
+        worker_id: str,
+        hijack_id: str,
+        x: int,
+        y: int,
+        button: str = "left",
+    ) -> tuple[bool, dict[str, Any]]:
+        """Send a GUI click event."""
+        return await self._request(
+            "POST",
+            f"{self._hp(worker_id, hijack_id)}/gui/click",
+            json={"x": x, "y": y, "button": button},
+        )
+
+    async def gui_type(
+        self,
+        worker_id: str,
+        hijack_id: str,
+        text: str,
+    ) -> tuple[bool, dict[str, Any]]:
+        """Send GUI text typing."""
+        return await self._request(
+            "POST",
+            f"{self._hp(worker_id, hijack_id)}/gui/type",
+            json={"text": text},
+        )
+
     # -- worker control -------------------------------------------------------
 
     async def set_input_mode(
