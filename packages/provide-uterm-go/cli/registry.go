@@ -163,18 +163,37 @@ func (r *SessionRegistryImpl) GetSession(_ context.Context, id string) (*server.
 	return r.snapshotStatus(e), nil
 }
 
-// CreateSession creates a session from a free-form definition payload. A missing
-// session_id → 422; a duplicate id → 409.
+// CreateSession creates a session from a free-form (caller-supplied) definition
+// payload, egress-guarding the connector target. A missing session_id → 422; a
+// duplicate id → 409.
 func (r *SessionRegistryImpl) CreateSession(ctx context.Context, payload map[string]any) (*server.SessionStatus, error) {
+	return r.createSession(ctx, payload, true)
+}
+
+// CreateSessionInternal creates a server-minted session WITHOUT the connector-
+// target egress check — for inbound tunnel placeholders whose connector_config
+// (tunnel_type, no dial-out url) is not caller-controlled and never dialed. Port
+// of create_session(validate_connector_target=False) (routes/tunnels.py). Never
+// wire this to a user-supplied connector config.
+func (r *SessionRegistryImpl) CreateSessionInternal(ctx context.Context, payload map[string]any) (*server.SessionStatus, error) {
+	return r.createSession(ctx, payload, false)
+}
+
+// createSession is the shared create core; validateEgress gates the SSRF
+// chokepoint (block cloud-metadata targets always, private targets when
+// security.block_private_connector_targets is set; returns *server.
+// EgressBlockedError → HTTP 422).
+func (r *SessionRegistryImpl) createSession(
+	ctx context.Context, payload map[string]any, validateEgress bool,
+) (*server.SessionStatus, error) {
 	def, err := definitionFromPayload(payload)
 	if err != nil {
 		return nil, err
 	}
-	// Egress chokepoint: block cloud-metadata targets always, and private
-	// targets when security.block_private_connector_targets is set. Returns
-	// *server.EgressBlockedError → HTTP 422.
-	if err := r.egress.AssertSessionEgressAllowed(ctx, def.ConnectorType, def.ConnectorConfig, r.blockPrivate); err != nil {
-		return nil, err
+	if validateEgress {
+		if err := r.egress.AssertSessionEgressAllowed(ctx, def.ConnectorType, def.ConnectorConfig, r.blockPrivate); err != nil {
+			return nil, err
+		}
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()

@@ -104,6 +104,12 @@ func (f *fakeRegistry) GetSession(_ context.Context, id string) (*SessionStatus,
 	return nil, ErrSessionNotFound
 }
 
+// CreateSessionInternal shares the fake's create path — the egress bypass is a
+// property of the real registry, not the fake.
+func (f *fakeRegistry) CreateSessionInternal(ctx context.Context, payload map[string]any) (*SessionStatus, error) {
+	return f.CreateSession(ctx, payload)
+}
+
 func (f *fakeRegistry) CreateSession(_ context.Context, payload map[string]any) (*SessionStatus, error) {
 	if f.createErr != nil {
 		return nil, f.createErr

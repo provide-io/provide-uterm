@@ -121,7 +121,11 @@ func (s *Server) handleCreateTunnel(w http.ResponseWriter, r *http.Request) {
 		"visibility":        "private",
 		"recording_enabled": true,
 	}
-	if _, err := s.deps.Registry.CreateSession(r.Context(), payload); err != nil {
+	// Internal create: the tunnel session is an inbound placeholder (websocket
+	// connector, tunnel_type, no dial-out url) so it bypasses the connector-
+	// target egress check, mirroring create_session(validate_connector_target=
+	// False). The payload is server-built, not caller-controlled.
+	if _, err := s.deps.Registry.CreateSessionInternal(r.Context(), payload); err != nil {
 		s.writeCreateError(w, err)
 		return
 	}

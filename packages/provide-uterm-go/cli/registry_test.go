@@ -112,6 +112,29 @@ func TestRegistryGetDefinitionAndSession(t *testing.T) {
 	}
 }
 
+func TestCreateSessionInternalBypassesEgress(t *testing.T) {
+	r := newTestRegistry(t)
+	ctx := context.Background()
+	// A websocket session with no connector_config.url: the egress chokepoint
+	// rejects it, but an inbound tunnel placeholder is server-minted and never
+	// dialed, so CreateSessionInternal must skip that check.
+	payload := map[string]any{
+		"session_id":       "tunnel-x",
+		"connector_type":   "websocket",
+		"connector_config": map[string]any{"tunnel_type": "terminal"},
+	}
+	if _, err := r.CreateSession(ctx, payload); err == nil {
+		t.Fatal("CreateSession should egress-reject a websocket session with no url")
+	}
+	st, err := r.CreateSessionInternal(ctx, payload)
+	if err != nil {
+		t.Fatalf("CreateSessionInternal: %v", err)
+	}
+	if st.SessionID != "tunnel-x" || st.LifecycleState != "waiting" {
+		t.Fatalf("unexpected status: %+v", st)
+	}
+}
+
 func TestRegistryCreateValidation(t *testing.T) {
 	r := newTestRegistry(t)
 	ctx := context.Background()
