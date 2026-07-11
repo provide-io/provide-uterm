@@ -22,8 +22,8 @@ func (t *FramebufferTracker) ApplyRawUpdate(x, y, w, h int, pixels []byte) error
 	if w < 0 || h < 0 {
 		return fmt.Errorf("invalid dimensions: w=%d, h=%d", w, h)
 	}
-	expectedLen := w * h * 4
-	if len(pixels) < expectedLen {
+	expectedLen := int64(w) * int64(h) * 4
+	if int64(len(pixels)) < expectedLen {
 		return fmt.Errorf("invalid pixel buffer size: expected %d, got %d", expectedLen, len(pixels))
 	}
 
