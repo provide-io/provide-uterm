@@ -203,7 +203,7 @@ type grpcReader struct {
 }
 
 func (r *grpcReader) Read(p []byte) (n int, err error) {
-	if len(r.buf) == 0 {
+	for len(r.buf) == 0 {
 		msg, err := r.stream.Recv()
 		if err != nil {
 			return 0, err
@@ -221,7 +221,11 @@ func (c *LitevirtAIClient) RunHandshakeAndLoop() error {
 	// 1. ProtocolVersion
 	var ver [12]byte
 	if _, err := io.ReadFull(r, ver[:]); err != nil { return err }
-	if err := c.stream.Send(&pb.VNCData{Data: []byte("RFB 003.008\n")}); err != nil { return err }
+	
+	c.streamMu.Lock()
+	err := c.stream.Send(&pb.VNCData{Data: []byte("RFB 003.008\n")})
+	c.streamMu.Unlock()
+	if err != nil { return err }
 	
 	// 2. Security
 	var numSecTypes [1]byte
@@ -232,7 +236,10 @@ func (c *LitevirtAIClient) RunHandshakeAndLoop() error {
 	if _, err := io.ReadFull(r, secTypes); err != nil { return err }
 	
 	// Assume type 1 (None) is supported
-	if err := c.stream.Send(&pb.VNCData{Data: []byte{1}}); err != nil { return err }
+	c.streamMu.Lock()
+	err = c.stream.Send(&pb.VNCData{Data: []byte{1}})
+	c.streamMu.Unlock()
+	if err != nil { return err }
 	
 	// SecurityResult
 	var secResult [4]byte
@@ -240,7 +247,10 @@ func (c *LitevirtAIClient) RunHandshakeAndLoop() error {
 	if binary.BigEndian.Uint32(secResult[:]) != 0 { return fmt.Errorf("security failed") }
 	
 	// 3. ClientInit (shared=1)
-	if err := c.stream.Send(&pb.VNCData{Data: []byte{1}}); err != nil { return err }
+	c.streamMu.Lock()
+	err = c.stream.Send(&pb.VNCData{Data: []byte{1}})
+	c.streamMu.Unlock()
+	if err != nil { return err }
 	
 	// 4. ServerInit
 	var serverInit [24]byte
@@ -256,16 +266,12 @@ func (c *LitevirtAIClient) RunHandshakeAndLoop() error {
 	c.tracker = NewFramebufferTracker(int(width), int(height))
 	c.trackerMu.Unlock()
 	
-	// 5. SetPixelFormat (RGBA 32-bit) & SetEncodings (Raw = 0)
-	// We'll skip sending the literal packets here for brevity but in reality we'd construct and send them.
-	// For this test task, we assume the server defaults to Raw or we rely on QEMU defaults.
-	
 	// 6. FramebufferUpdate loop
 	for {
 		var msgType [1]byte
 		if _, err := io.ReadFull(r, msgType[:]); err != nil { return err }
 		if msgType[0] != ServerFramebufferUpdate {
-			continue // Skip other server messages
+			return fmt.Errorf("unsupported server message type: %d", msgType[0])
 		}
 		
 		var header [3]byte // padding + numRects
@@ -281,10 +287,22 @@ func (c *LitevirtAIClient) RunHandshakeAndLoop() error {
 			rh := int(binary.BigEndian.Uint16(rect[6:8]))
 			encoding := binary.BigEndian.Uint32(rect[8:12])
 			
-			if encoding == 0 { // Raw
-				pixels := make([]byte, rw*rh*4)
-				if _, err := io.ReadFull(r, pixels); err != nil { return err }
-				c.tracker.ApplyRawUpdate(rx, ry, rw, rh, pixels)
+			if encoding != 0 {
+				return fmt.Errorf("unsupported encoding: %d", encoding)
+			}
+			
+			if rw > int(width) || rh > int(height) {
+				return fmt.Errorf("rectangle too large")
+			}
+			
+			pixels := make([]byte, rw*rh*4)
+			if _, err := io.ReadFull(r, pixels); err != nil { return err }
+			
+			c.trackerMu.Lock()
+			t := c.tracker
+			c.trackerMu.Unlock()
+			if t != nil {
+				t.ApplyRawUpdate(rx, ry, rw, rh, pixels)
 			}
 		}
 	}

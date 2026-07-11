@@ -72,7 +72,7 @@ type grpcReader struct {
 }
 
 func (r *grpcReader) Read(p []byte) (n int, err error) {
-	if len(r.buf) == 0 {
+	for len(r.buf) == 0 {
 		msg, err := r.stream.Recv()
 		if err != nil {
 			return 0, err
@@ -144,7 +144,7 @@ func (c *LitevirtAIClient) RunHandshakeAndLoop() error {
 		var msgType [1]byte
 		if _, err := io.ReadFull(r, msgType[:]); err != nil { return err }
 		if msgType[0] != ServerFramebufferUpdate {
-			continue // Skip other server messages
+			return fmt.Errorf("unsupported server message type: %d", msgType[0])
 		}
 		
 		var header [3]byte // padding + numRects
@@ -160,15 +160,22 @@ func (c *LitevirtAIClient) RunHandshakeAndLoop() error {
 			rh := int(binary.BigEndian.Uint16(rect[6:8]))
 			encoding := binary.BigEndian.Uint32(rect[8:12])
 			
-			if encoding == 0 { // Raw
-				pixels := make([]byte, rw*rh*4)
-				if _, err := io.ReadFull(r, pixels); err != nil { return err }
-				
-				c.trackerMu.Lock()
-				if c.tracker != nil {
-					c.tracker.ApplyRawUpdate(rx, ry, rw, rh, pixels)
-				}
-				c.trackerMu.Unlock()
+			if encoding != 0 {
+				return fmt.Errorf("unsupported encoding: %d", encoding)
+			}
+			
+			if rw > int(width) || rh > int(height) {
+				return fmt.Errorf("rectangle too large")
+			}
+			
+			pixels := make([]byte, rw*rh*4)
+			if _, err := io.ReadFull(r, pixels); err != nil { return err }
+			
+			c.trackerMu.Lock()
+			t := c.tracker
+			c.trackerMu.Unlock()
+			if t != nil {
+				t.ApplyRawUpdate(rx, ry, rw, rh, pixels)
 			}
 		}
 	}
