@@ -296,3 +296,29 @@ func extractError(body any) string {
 	encoded, _ := json.Marshal(body)
 	return string(encoded)
 }
+
+func (c *HijackClient) GUIScreenshot(ctx context.Context, workerID, hijackID string) (map[string]any, error) {
+	path, err := c.hp(workerID, hijackID)
+	if err != nil {
+		return nil, err
+	}
+	return c.requestObject(ctx, "GET", path+"/gui/screenshot", nil, nil, 0)
+}
+
+func (c *HijackClient) GUIClick(ctx context.Context, workerID, hijackID string, x, y int, button string) (map[string]any, error) {
+	path, err := c.hp(workerID, hijackID)
+	if err != nil {
+		return nil, err
+	}
+	body := map[string]any{"x": x, "y": y, "button": button}
+	return c.requestObject(ctx, "POST", path+"/gui/click", body, nil, 0)
+}
+
+func (c *HijackClient) GUIType(ctx context.Context, workerID, hijackID string, text string) (map[string]any, error) {
+	path, err := c.hp(workerID, hijackID)
+	if err != nil {
+		return nil, err
+	}
+	body := map[string]any{"text": text}
+	return c.requestObject(ctx, "POST", path+"/gui/type", body, nil, 0)
+}

@@ -45,6 +45,10 @@ type UtermClient interface {
 	QuickConnect(ctx context.Context, connectorType string, opts client.QuickConnectOptions) (map[string]any, error)
 	WatchSessionEvents(ctx context.Context, sessionID string, opts client.WatchOptions) (any, error)
 	Post(ctx context.Context, path string, body map[string]any) (any, error)
+
+	GUIScreenshot(ctx context.Context, workerID, hijackID string) (map[string]any, error)
+	GUIClick(ctx context.Context, workerID, hijackID string, x, y int, button string) (map[string]any, error)
+	GUIType(ctx context.Context, workerID, hijackID string, text string) (map[string]any, error)
 }
 
 // Compile-time assertion that the real client satisfies the tool interface.
@@ -133,6 +137,7 @@ func NewServer(c UtermClient, authCtx *AuthorizationContext) *server.MCPServer {
 	s := server.NewMCPServer(serverName, serverVersion, server.WithToolCapabilities(false))
 	s.AddTools(hijackTools(c, authCtx)...)
 	s.AddTools(sessionTools(c, authCtx)...)
+	s.AddTools(guiTools(c, authCtx)...)
 	return s
 }
 
@@ -154,4 +159,6 @@ var AllToolNames = []string{
 	"fanout_group_create", "fanout_send",
 	// annotation
 	"session_annotate",
+	// gui
+	"gui_hijack_begin", "gui_hijack_release", "gui_screenshot", "gui_click", "gui_type",
 }
