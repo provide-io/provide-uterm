@@ -376,19 +376,16 @@ func (r *wsReader) Read(p []byte) (n int, err error) {
 // Allowed messages are written to dst.
 func filterRFBInput(dst io.Writer, src io.Reader, leaseMgr HijackLeaseManager, sessionID string) error {
 	// 1. Handshake: Protocol Version (12 bytes)
-	var ver [12]byte
-	if _, err := io.ReadFull(src, ver[:]); err != nil { return err }
-	if _, err := dst.Write(ver[:]); err != nil { return err }
+	if _, err := io.CopyN(dst, src, 12); err != nil { return err }
 
 	// 2. Handshake: Security (1 byte)
 	var sec [1]byte
 	if _, err := io.ReadFull(src, sec[:]); err != nil { return err }
+	if sec[0] != 1 { return fmt.Errorf("unsupported security type %d", sec[0]) }
 	if _, err := dst.Write(sec[:]); err != nil { return err }
 
 	// 3. Handshake: ClientInit (1 byte)
-	var init [1]byte
-	if _, err := io.ReadFull(src, init[:]); err != nil { return err }
-	if _, err := dst.Write(init[:]); err != nil { return err }
+	if _, err := io.CopyN(dst, src, 1); err != nil { return err }
 
 	// Normal Phase
 	var msgType [1]byte
@@ -397,40 +394,31 @@ func filterRFBInput(dst io.Writer, src io.Reader, leaseMgr HijackLeaseManager, s
 		
 		switch msgType[0] {
 		case ClientSetPixelFormat: // 0 (20 bytes total)
-			payload := make([]byte, 19)
-			if _, err := io.ReadFull(src, payload); err != nil { return err }
-			dst.Write(msgType[:])
-			dst.Write(payload)
+			if _, err := dst.Write(msgType[:]); err != nil { return err }
+			if _, err := io.CopyN(dst, src, 19); err != nil { return err }
 		
 		case ClientSetEncodings: // 2
 			var header [3]byte // padding(1) + num(2)
 			if _, err := io.ReadFull(src, header[:]); err != nil { return err }
 			num := binary.BigEndian.Uint16(header[1:3])
 			
-			payload := make([]byte, int(num)*4)
-			if int(num) > 0 {
-				if _, err := io.ReadFull(src, payload); err != nil { return err }
-			}
-			
-			dst.Write(msgType[:])
-			dst.Write(header[:])
-			if int(num) > 0 {
-				dst.Write(payload)
+			if _, err := dst.Write(msgType[:]); err != nil { return err }
+			if _, err := dst.Write(header[:]); err != nil { return err }
+			if num > 0 {
+				if _, err := io.CopyN(dst, src, int64(num)*4); err != nil { return err }
 			}
 			
 		case ClientFramebufferUpdateRequest: // 3 (10 bytes total)
-			payload := make([]byte, 9)
-			if _, err := io.ReadFull(src, payload); err != nil { return err }
-			dst.Write(msgType[:])
-			dst.Write(payload)
+			if _, err := dst.Write(msgType[:]); err != nil { return err }
+			if _, err := io.CopyN(dst, src, 9); err != nil { return err }
 			
 		case ClientKeyEvent: // 4 (8 bytes total)
 			payload := make([]byte, 7)
 			if _, err := io.ReadFull(src, payload); err != nil { return err }
 			
 			if leaseMgr == nil || leaseMgr.HasLease(sessionID) {
-				dst.Write(msgType[:])
-				dst.Write(payload)
+				if _, err := dst.Write(msgType[:]); err != nil { return err }
+				if _, err := dst.Write(payload); err != nil { return err }
 			}
 			
 		case ClientPointerEvent: // 5 (6 bytes total)
@@ -438,8 +426,8 @@ func filterRFBInput(dst io.Writer, src io.Reader, leaseMgr HijackLeaseManager, s
 			if _, err := io.ReadFull(src, payload); err != nil { return err }
 			
 			if leaseMgr == nil || leaseMgr.HasLease(sessionID) {
-				dst.Write(msgType[:])
-				dst.Write(payload)
+				if _, err := dst.Write(msgType[:]); err != nil { return err }
+				if _, err := dst.Write(payload); err != nil { return err }
 			}
 			
 		case 6: // ClientCutText
@@ -447,16 +435,20 @@ func filterRFBInput(dst io.Writer, src io.Reader, leaseMgr HijackLeaseManager, s
 			if _, err := io.ReadFull(src, header[:]); err != nil { return err }
 			length := binary.BigEndian.Uint32(header[3:7])
 			
+			if length > 1048576 {
+				return fmt.Errorf("ClientCutText too large")
+			}
+			
 			payload := make([]byte, int(length))
 			if length > 0 {
 				if _, err := io.ReadFull(src, payload); err != nil { return err }
 			}
 			
 			if leaseMgr == nil || leaseMgr.HasLease(sessionID) {
-				dst.Write(msgType[:])
-				dst.Write(header[:])
+				if _, err := dst.Write(msgType[:]); err != nil { return err }
+				if _, err := dst.Write(header[:]); err != nil { return err }
 				if length > 0 {
-					dst.Write(payload)
+					if _, err := dst.Write(payload); err != nil { return err }
 				}
 			}
 			
@@ -489,7 +481,9 @@ func ServeHumanRelay(w http.ResponseWriter, r *http.Request, cc grpc.ClientConnI
 	// Force close on exit to prevent leaks
 	defer c.Close(websocket.StatusInternalError, "handler exited")
 
-	ctx := context.Background() // Detach from request context for long-lived streams
+	ctx, cancel := context.WithCancel(context.Background()) // Detach from request context for long-lived streams
+	defer cancel()
+	
 	client := pb.NewLiteVirtClient(cc)
 	outCtx := metadata.AppendToOutgoingContext(ctx, "x-vm-name", vmName)
 	
