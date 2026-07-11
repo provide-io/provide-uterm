@@ -112,9 +112,11 @@ import (
 
 // LitevirtAIClient is the Headless AI Client (Stream B) for litevirt.
 type LitevirtAIClient struct {
-	mu      sync.Mutex
-	tracker *FramebufferTracker
-	stream  grpc.BidiStreamingClient[pb.VNCData, pb.VNCData]
+	trackerMu sync.Mutex
+	tracker   *FramebufferTracker
+
+	streamMu sync.Mutex
+	stream   grpc.BidiStreamingClient[pb.VNCData, pb.VNCData]
 }
 
 func NewLitevirtAIClient(ctx context.Context, cc grpc.ClientConnInterface, vmName string) (*LitevirtAIClient, error) {
@@ -133,22 +135,29 @@ func NewLitevirtAIClient(ctx context.Context, cc grpc.ClientConnInterface, vmNam
 }
 
 func (c *LitevirtAIClient) Screenshot() (image.Image, error) {
-	return c.tracker.GetImage(), nil
+	c.trackerMu.Lock()
+	t := c.tracker
+	c.trackerMu.Unlock()
+	
+	if t == nil {
+		return nil, fmt.Errorf("framebuffer tracker not initialized")
+	}
+	return t.GetImage(), nil
 }
 
 func (c *LitevirtAIClient) InjectPointer(x, y int, buttonMask uint8) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	
 	buf := EncodePointerEvent(x, y, buttonMask)
+	
+	c.streamMu.Lock()
+	defer c.streamMu.Unlock()
 	return c.stream.Send(&pb.VNCData{Data: buf})
 }
 
 func (c *LitevirtAIClient) InjectKey(keySym uint32, down bool) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	
 	buf := EncodeKeyEvent(keySym, down)
+	
+	c.streamMu.Lock()
+	defer c.streamMu.Unlock()
 	return c.stream.Send(&pb.VNCData{Data: buf})
 }
 ```
@@ -243,9 +252,9 @@ func (c *LitevirtAIClient) RunHandshakeAndLoop() error {
 	nameLen := binary.BigEndian.Uint32(serverInit[20:24])
 	if _, err := io.CopyN(io.Discard, r, int64(nameLen)); err != nil { return err }
 	
-	c.mu.Lock()
+	c.trackerMu.Lock()
 	c.tracker = NewFramebufferTracker(int(width), int(height))
-	c.mu.Unlock()
+	c.trackerMu.Unlock()
 	
 	// 5. SetPixelFormat (RGBA 32-bit) & SetEncodings (Raw = 0)
 	// We'll skip sending the literal packets here for brevity but in reality we'd construct and send them.
