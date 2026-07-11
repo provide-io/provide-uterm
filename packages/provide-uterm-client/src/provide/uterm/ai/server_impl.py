@@ -50,6 +50,7 @@ from provide.uterm.ai.auth import (
     McpPrincipal,
     principal_from_headers,
 )
+from provide.uterm.ai.server_tools_gui import register_gui_tools
 from provide.uterm.ai.server_tools_hijack import register_hijack_tools
 from provide.uterm.ai.server_tools_session import register_session_tools
 
@@ -86,7 +87,7 @@ __all__ = [
     "principal_from_headers",
 ]
 
-TOOL_COUNT = 21
+TOOL_COUNT = 26
 
 # Backwards-compatible alias: the canonical unescape logic now lives in
 # ``provide.uterm.client.sanitizer`` so both MCP code paths share it, but the
@@ -147,5 +148,6 @@ def create_mcp_app(
 
     register_hijack_tools(mcp, client, auth_ctx)
     register_session_tools(mcp, client, auth_ctx)
+    register_gui_tools(mcp, client, auth_ctx)
 
     return mcp

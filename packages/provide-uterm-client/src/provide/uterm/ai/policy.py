@@ -57,6 +57,12 @@ TOOL_REQUIRED_ROLES: dict[str, Role] = {
     "hijack_send": "admin",
     "hijack_step": "admin",
     "hijack_release": "admin",
+    # GUI hijack lifecycle
+    "gui_hijack_begin": "admin",
+    "gui_hijack_release": "admin",
+    "gui_screenshot": "operator",
+    "gui_click": "admin",
+    "gui_type": "admin",
     # Session read-only inspection.
     "session_list": "viewer",
     "session_status": "viewer",
