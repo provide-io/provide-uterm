@@ -301,8 +301,12 @@ func (s *Server) handleShareConsumer(w http.ResponseWriter, r *http.Request) {
 		// The Secure flag comes from static config, never from a spoofable
 		// forwarded-proto header, so an untrusted peer cannot flip it.
 		http.SetCookie(w, &http.Cookie{
-			Name:     "uterm_tunnel_" + sessionID,
-			Value:    invite.TunnelToken,
+			Name:  "uterm_tunnel_" + sessionID,
+			Value: invite.TunnelToken,
+			// Path "/" so the cookie reaches /app/{page}/{id} and the session
+			// API/WS (Go would otherwise scope it to /s/; Starlette's set_cookie
+			// defaults path="/").
+			Path:     "/",
 			Secure:   s.cfg.Tunnel.CookieSecure,
 			HttpOnly: true,
 			SameSite: sameSiteMode(s.cfg.Tunnel.CookieSamesite),
