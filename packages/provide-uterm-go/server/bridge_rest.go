@@ -35,6 +35,8 @@ func (s *Server) registerBridgeRESTRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /worker/{worker_id}/hijack/{hijack_id}/gui/screenshot", s.authenticated(s.handleHijackGUIScreenshot))
 	mux.HandleFunc("POST /worker/{worker_id}/hijack/{hijack_id}/gui/click", s.authenticated(s.handleHijackGUIClick))
 	mux.HandleFunc("POST /worker/{worker_id}/hijack/{hijack_id}/gui/type", s.authenticated(s.handleHijackGUIType))
+	mux.HandleFunc("POST /worker/{worker_id}/hijack/{hijack_id}/gui/key", s.authenticated(s.handleHijackGUIKey))
+	mux.HandleFunc("POST /worker/{worker_id}/hijack/{hijack_id}/gui/drag", s.authenticated(s.handleHijackGUIDrag))
 
 	s.registerWorkerCtlRoutes(mux)
 }
@@ -393,5 +395,62 @@ func (s *Server) handleHijackGUIType(w http.ResponseWriter, r *http.Request) {
 		_ = sess.InjectKey(uint32(r), true)
 		_ = sess.InjectKey(uint32(r), false)
 	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleHijackGUIKey(w http.ResponseWriter, r *http.Request) {
+	workerID, hijackID, ok := bridgeParams(w, r, true)
+	if !ok {
+		return
+	}
+	sess, ok := s.requireGraphicalSession(w, r, workerID, hijackID)
+	if !ok {
+		return
+	}
+	body, _ := decodeJSONBody(r)
+	keyName := stringField(body, "key_name")
+	var sym uint32
+	switch keyName {
+	case "Enter":
+		sym = 0xFF0D
+	case "Tab":
+		sym = 0xFF09
+	case "Esc":
+		sym = 0xFF1B
+	case "Backspace":
+		sym = 0xFF08
+	case "Up":
+		sym = 0xFF52
+	case "Down":
+		sym = 0xFF54
+	case "Left":
+		sym = 0xFF51
+	case "Right":
+		sym = 0xFF53
+	default:
+		sym = 0
+	}
+	_ = sess.InjectKey(sym, true)
+	_ = sess.InjectKey(sym, false)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleHijackGUIDrag(w http.ResponseWriter, r *http.Request) {
+	workerID, hijackID, ok := bridgeParams(w, r, true)
+	if !ok {
+		return
+	}
+	sess, ok := s.requireGraphicalSession(w, r, workerID, hijackID)
+	if !ok {
+		return
+	}
+	body, _ := decodeJSONBody(r)
+	startX := intField(body, "start_x", 0)
+	startY := intField(body, "start_y", 0)
+	endX := intField(body, "end_x", 0)
+	endY := intField(body, "end_y", 0)
+	_ = sess.InjectPointer(startX, startY, 1)
+	_ = sess.InjectPointer(endX, endY, 1)
+	_ = sess.InjectPointer(endX, endY, 0)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }

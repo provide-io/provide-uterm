@@ -106,3 +106,38 @@ def register_gui_tools(
             return rejection
         ok, data = await client.gui_type(worker_id, hijack_id, text=text)
         return _ok(ok, data)
+
+    @mcp.tool()
+    @authorized("gui_key", auth_ctx)
+    async def gui_key(
+        worker_id: str,
+        hijack_id: str,
+        key_name: str,
+        ctx: Context | None = None,
+    ) -> dict[str, Any]:
+        """Send GUI key event."""
+        rejection = _reject_bad_ids((worker_id, "worker_id"), (hijack_id, "hijack_id"))
+        if rejection is not None:
+            return rejection
+        ok, data = await client.gui_key(worker_id, hijack_id, key_name=key_name)
+        return _ok(ok, data)
+
+    @mcp.tool()
+    @authorized("gui_drag", auth_ctx)
+    async def gui_drag(
+        worker_id: str,
+        hijack_id: str,
+        start_x: int,
+        start_y: int,
+        end_x: int,
+        end_y: int,
+        ctx: Context | None = None,
+    ) -> dict[str, Any]:
+        """Send GUI drag event."""
+        rejection = _reject_bad_ids((worker_id, "worker_id"), (hijack_id, "hijack_id"))
+        if rejection is not None:
+            return rejection
+        ok, data = await client.gui_drag(
+            worker_id, hijack_id, start_x=start_x, start_y=start_y, end_x=end_x, end_y=end_y
+        )
+        return _ok(ok, data)

@@ -14,6 +14,8 @@ func guiTools(c UtermClient, auth *AuthorizationContext) []server.ServerTool {
 		guiScreenshotTool(c, auth),
 		guiClickTool(c, auth),
 		guiTypeTool(c, auth),
+		guiKeyTool(c, auth),
+		guiDragTool(c, auth),
 	}
 }
 
@@ -86,6 +88,46 @@ func guiTypeTool(c UtermClient, auth *AuthorizationContext) server.ServerTool {
 		hijackID := req.GetString("hijack_id", "")
 		text := req.GetString("text", "")
 		m, err := c.GUIType(ctx, workerID, hijackID, text)
+		return resultFromObject(m, err)
+	}
+	return server.ServerTool{Tool: tool, Handler: auth.guard("hijack_send", fn)}
+}
+
+func guiKeyTool(c UtermClient, auth *AuthorizationContext) server.ServerTool {
+	tool := mcpgo.NewTool("gui_key",
+		mcpgo.WithDescription("Send GUI key event."),
+		mcpgo.WithString("worker_id", mcpgo.Required()),
+		mcpgo.WithString("hijack_id", mcpgo.Required()),
+		mcpgo.WithString("key_name", mcpgo.Required()),
+	)
+	fn := func(ctx context.Context, req mcpgo.CallToolRequest) map[string]any {
+		workerID := req.GetString("worker_id", "")
+		hijackID := req.GetString("hijack_id", "")
+		keyName := req.GetString("key_name", "")
+		m, err := c.GUIKey(ctx, workerID, hijackID, keyName)
+		return resultFromObject(m, err)
+	}
+	return server.ServerTool{Tool: tool, Handler: auth.guard("hijack_send", fn)}
+}
+
+func guiDragTool(c UtermClient, auth *AuthorizationContext) server.ServerTool {
+	tool := mcpgo.NewTool("gui_drag",
+		mcpgo.WithDescription("Send GUI drag event."),
+		mcpgo.WithString("worker_id", mcpgo.Required()),
+		mcpgo.WithString("hijack_id", mcpgo.Required()),
+		mcpgo.WithNumber("start_x", mcpgo.Required()),
+		mcpgo.WithNumber("start_y", mcpgo.Required()),
+		mcpgo.WithNumber("end_x", mcpgo.Required()),
+		mcpgo.WithNumber("end_y", mcpgo.Required()),
+	)
+	fn := func(ctx context.Context, req mcpgo.CallToolRequest) map[string]any {
+		workerID := req.GetString("worker_id", "")
+		hijackID := req.GetString("hijack_id", "")
+		startX := int(req.GetFloat("start_x", 0))
+		startY := int(req.GetFloat("start_y", 0))
+		endX := int(req.GetFloat("end_x", 0))
+		endY := int(req.GetFloat("end_y", 0))
+		m, err := c.GUIDrag(ctx, workerID, hijackID, startX, startY, endX, endY)
 		return resultFromObject(m, err)
 	}
 	return server.ServerTool{Tool: tool, Handler: auth.guard("hijack_send", fn)}

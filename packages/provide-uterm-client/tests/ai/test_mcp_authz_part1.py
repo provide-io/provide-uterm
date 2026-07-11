@@ -93,6 +93,8 @@ _TOOL_ARGS: dict[str, dict[str, Any]] = {
     "gui_screenshot": {"worker_id": "w1", "hijack_id": "h1"},
     "gui_click": {"worker_id": "w1", "hijack_id": "h1", "x": 0, "y": 0},
     "gui_type": {"worker_id": "w1", "hijack_id": "h1", "text": "x"},
+    "gui_key": {"worker_id": "w1", "hijack_id": "h1", "key_name": "Enter"},
+    "gui_drag": {"worker_id": "w1", "hijack_id": "h1", "start_x": 0, "start_y": 0, "end_x": 10, "end_y": 10},
 }
 
 
