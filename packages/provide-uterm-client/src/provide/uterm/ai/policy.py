@@ -63,6 +63,8 @@ TOOL_REQUIRED_ROLES: dict[str, Role] = {
     "gui_screenshot": "operator",
     "gui_click": "admin",
     "gui_type": "admin",
+    "gui_key": "operator",
+    "gui_drag": "operator",
     # Session read-only inspection.
     "session_list": "viewer",
     "session_status": "viewer",
@@ -118,3 +120,6 @@ ALLOWED_CONNECTOR_TYPES: frozenset[str] = frozenset(
 def is_allowed_connector(connector_type: str) -> bool:
     """Return ``True`` when *connector_type* is on the spawn allowlist."""
     return connector_type in ALLOWED_CONNECTOR_TYPES
+
+
+HIJACK_LEASE_REQUIRED_TOOLS = frozenset({"gui_key", "gui_drag"})

@@ -322,3 +322,21 @@ func (c *HijackClient) GUIType(ctx context.Context, workerID, hijackID string, t
 	body := map[string]any{"text": text}
 	return c.requestObject(ctx, "POST", path+"/gui/type", body, nil, 0)
 }
+
+func (c *HijackClient) GUIKey(ctx context.Context, workerID, hijackID string, keyName string) (map[string]any, error) {
+	path, err := c.hp(workerID, hijackID)
+	if err != nil {
+		return nil, err
+	}
+	body := map[string]any{"key_name": keyName}
+	return c.requestObject(ctx, "POST", path+"/gui/key", body, nil, 0)
+}
+
+func (c *HijackClient) GUIDrag(ctx context.Context, workerID, hijackID string, startX, startY, endX, endY int) (map[string]any, error) {
+	path, err := c.hp(workerID, hijackID)
+	if err != nil {
+		return nil, err
+	}
+	body := map[string]any{"start_x": startX, "start_y": startY, "end_x": endX, "end_y": endY}
+	return c.requestObject(ctx, "POST", path+"/gui/drag", body, nil, 0)
+}

@@ -49,6 +49,8 @@ type UtermClient interface {
 	GUIScreenshot(ctx context.Context, workerID, hijackID string) (map[string]any, error)
 	GUIClick(ctx context.Context, workerID, hijackID string, x, y int, button string) (map[string]any, error)
 	GUIType(ctx context.Context, workerID, hijackID string, text string) (map[string]any, error)
+	GUIKey(ctx context.Context, workerID, hijackID string, keyName string) (map[string]any, error)
+	GUIDrag(ctx context.Context, workerID, hijackID string, startX, startY, endX, endY int) (map[string]any, error)
 }
 
 // Compile-time assertion that the real client satisfies the tool interface.
@@ -160,5 +162,5 @@ var AllToolNames = []string{
 	// annotation
 	"session_annotate",
 	// gui
-	"gui_hijack_begin", "gui_hijack_release", "gui_screenshot", "gui_click", "gui_type",
+	"gui_hijack_begin", "gui_hijack_release", "gui_screenshot", "gui_click", "gui_type", "gui_key", "gui_drag",
 }

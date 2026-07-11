@@ -347,6 +347,35 @@ class HijackClient:
             json={"text": text},
         )
 
+    async def gui_key(
+        self,
+        worker_id: str,
+        hijack_id: str,
+        key_name: str,
+    ) -> tuple[bool, dict[str, Any]]:
+        """Send GUI key event."""
+        return await self._request(
+            "POST",
+            f"{self._hp(worker_id, hijack_id)}/gui/key",
+            json={"key_name": key_name},
+        )
+
+    async def gui_drag(
+        self,
+        worker_id: str,
+        hijack_id: str,
+        start_x: int,
+        start_y: int,
+        end_x: int,
+        end_y: int,
+    ) -> tuple[bool, dict[str, Any]]:
+        """Send a GUI drag event."""
+        return await self._request(
+            "POST",
+            f"{self._hp(worker_id, hijack_id)}/gui/drag",
+            json={"start_x": start_x, "start_y": start_y, "end_x": end_x, "end_y": end_y},
+        )
+
     # -- worker control -------------------------------------------------------
 
     async def set_input_mode(
