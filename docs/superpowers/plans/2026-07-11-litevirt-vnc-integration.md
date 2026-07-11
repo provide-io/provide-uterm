@@ -45,19 +45,23 @@ const (
 	ServerFramebufferUpdate = 0
 )
 
-// WritePointerEvent writes an RFB PointerEvent to the given writer.
-func WritePointerEvent(w io.Writer, x, y int, buttonMask uint8) error {
+// EncodePointerEvent serializes an RFB PointerEvent to bytes.
+func EncodePointerEvent(x, y int, buttonMask uint8) []byte {
 	buf := make([]byte, 6)
 	buf[0] = ClientPointerEvent
 	buf[1] = buttonMask
+	
+	// Clamp x and y to uint16
+	if x < 0 { x = 0 } else if x > 65535 { x = 65535 }
+	if y < 0 { y = 0 } else if y > 65535 { y = 65535 }
+	
 	binary.BigEndian.PutUint16(buf[2:4], uint16(x))
 	binary.BigEndian.PutUint16(buf[4:6], uint16(y))
-	_, err := w.Write(buf)
-	return err
+	return buf
 }
 
-// WriteKeyEvent writes an RFB KeyEvent to the given writer.
-func WriteKeyEvent(w io.Writer, keySym uint32, down bool) error {
+// EncodeKeyEvent serializes an RFB KeyEvent to bytes.
+func EncodeKeyEvent(keySym uint32, down bool) []byte {
 	buf := make([]byte, 8)
 	buf[0] = ClientKeyEvent
 	if down {
@@ -67,8 +71,7 @@ func WriteKeyEvent(w io.Writer, keySym uint32, down bool) error {
 	}
 	// bytes 2-3 are padding (zero)
 	binary.BigEndian.PutUint32(buf[4:8], keySym)
-	_, err := w.Write(buf)
-	return err
+	return buf
 }
 ```
 
@@ -137,14 +140,7 @@ func (c *LitevirtAIClient) InjectPointer(x, y int, buttonMask uint8) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	
-	pr, pw := io.Pipe()
-	go func() {
-		WritePointerEvent(pw, x, y, buttonMask)
-		pw.Close()
-	}()
-	
-	buf := make([]byte, 6)
-	io.ReadFull(pr, buf)
+	buf := EncodePointerEvent(x, y, buttonMask)
 	return c.stream.Send(&pb.VNCData{Data: buf})
 }
 
@@ -152,14 +148,7 @@ func (c *LitevirtAIClient) InjectKey(keySym uint32, down bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	
-	pr, pw := io.Pipe()
-	go func() {
-		WriteKeyEvent(pw, keySym, down)
-		pw.Close()
-	}()
-	
-	buf := make([]byte, 8)
-	io.ReadFull(pr, buf)
+	buf := EncodeKeyEvent(keySym, down)
 	return c.stream.Send(&pb.VNCData{Data: buf})
 }
 ```
