@@ -8,6 +8,8 @@ package hub
 import (
 	"context"
 	"log/slog"
+
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/gui"
 )
 
 // Input modes for a worker. Mirrors provide.uterm.bridge.contracts.InputMode.
@@ -124,6 +126,7 @@ type WorkerTermState struct {
 	LastActivityAt  float64
 	ProtocolVersion *int
 	IsTunnelWorker  bool
+	GraphicalSession gui.GraphicalSession
 }
 
 // NewWorkerTermState creates a worker state with the Python dataclass
