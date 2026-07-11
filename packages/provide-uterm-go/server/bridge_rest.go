@@ -6,8 +6,16 @@
 package server
 
 import (
+	"bytes"
+	"encoding/base64"
+	"image/png"
 	"net/http"
 	"strings"
+
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/gui"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/vnc"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // registerBridgeRESTRoutes wires the REST hijack + worker-control routes (the
@@ -22,6 +30,12 @@ func (s *Server) registerBridgeRESTRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /worker/{worker_id}/hijack/{hijack_id}/send", s.authenticated(s.handleHijackSend))
 	mux.HandleFunc("POST /worker/{worker_id}/hijack/{hijack_id}/step", s.authenticated(s.handleHijackStep))
 	mux.HandleFunc("POST /worker/{worker_id}/hijack/{hijack_id}/release", s.authenticated(s.handleHijackRelease))
+
+	mux.HandleFunc("POST /worker/{worker_id}/gui/attach", s.authenticated(s.handleGUIAttach))
+	mux.HandleFunc("GET /worker/{worker_id}/hijack/{hijack_id}/gui/screenshot", s.authenticated(s.handleHijackGUIScreenshot))
+	mux.HandleFunc("POST /worker/{worker_id}/hijack/{hijack_id}/gui/click", s.authenticated(s.handleHijackGUIClick))
+	mux.HandleFunc("POST /worker/{worker_id}/hijack/{hijack_id}/gui/type", s.authenticated(s.handleHijackGUIType))
+
 	s.registerWorkerCtlRoutes(mux)
 }
 
@@ -244,4 +258,140 @@ func (s *Server) handleHijackEvents(w http.ResponseWriter, r *http.Request) {
 		"events":           rows,
 		"lease_expires_at": s.monoToWall(freshExpires),
 	})
+}
+
+func (s *Server) handleGUIAttach(w http.ResponseWriter, r *http.Request) {
+	workerID, _, ok := bridgeParams(w, r, false)
+	if !ok {
+		return
+	}
+	if !s.authorizeHubRoute(w, r, workerID, hubMode) {
+		return
+	}
+	body, _ := decodeJSONBody(r)
+	target := stringField(body, "target_address")
+	vmName := stringField(body, "vm_name")
+	
+	cc, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		detailError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	
+	client, err := vnc.NewLitevirtAIClient(r.Context(), cc, vmName)
+	if err != nil {
+		detailError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	
+	st, err := s.deps.Hub.Registry.Require(workerID)
+	if err != nil {
+		detailError(w, http.StatusNotFound, "worker not found")
+		return
+	}
+	st.GraphicalSession = client
+	
+	go func() {
+		if err := client.RunHandshakeAndLoop(); err != nil {
+			s.logger.Warn("gui loop exited", "error", err)
+		}
+	}()
+	
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleHijackGUIScreenshot(w http.ResponseWriter, r *http.Request) {
+	workerID, hijackID, ok := bridgeParams(w, r, true)
+	if !ok {
+		return
+	}
+	if !s.authorizeHubRoute(w, r, workerID, hubRead) {
+		return
+	}
+	ctx := r.Context()
+	hs, _ := s.deps.Hub.GetRestSession(ctx, workerID, hijackID)
+	if hs == nil {
+		bridgeError(w, http.StatusNotFound, "Invalid or expired hijack session.")
+		return
+	}
+	st, err := s.deps.Hub.Registry.Require(workerID)
+	if err != nil || st.GraphicalSession == nil {
+		bridgeError(w, http.StatusNotFound, "No graphical session attached.")
+		return
+	}
+	img, err := st.GraphicalSession.Screenshot()
+	if err != nil {
+		bridgeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	var buf bytes.Buffer
+	_ = png.Encode(&buf, img)
+	freshExpires := s.deps.Hub.GetFreshHijackExpiry(workerID, hijackID, hs.LeaseExpiresAt)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":               true,
+		"worker_id":        workerID,
+		"hijack_id":        hijackID,
+		"screenshot":       base64.StdEncoding.EncodeToString(buf.Bytes()),
+		"lease_expires_at": s.monoToWall(freshExpires),
+	})
+}
+
+func (s *Server) requireGraphicalSession(w http.ResponseWriter, r *http.Request, workerID, hijackID string) (gui.GraphicalSession, bool) {
+	if !s.authorizeHubRoute(w, r, workerID, hubHijack) {
+		return nil, false
+	}
+	hs, _ := s.deps.Hub.GetRestSession(r.Context(), workerID, hijackID)
+	if hs == nil {
+		bridgeError(w, http.StatusNotFound, "Invalid or expired hijack session.")
+		return nil, false
+	}
+	st, err := s.deps.Hub.Registry.Require(workerID)
+	if err != nil || st.GraphicalSession == nil {
+		bridgeError(w, http.StatusNotFound, "No graphical session attached.")
+		return nil, false
+	}
+	return st.GraphicalSession, true
+}
+
+func (s *Server) handleHijackGUIClick(w http.ResponseWriter, r *http.Request) {
+	workerID, hijackID, ok := bridgeParams(w, r, true)
+	if !ok {
+		return
+	}
+	sess, ok := s.requireGraphicalSession(w, r, workerID, hijackID)
+	if !ok {
+		return
+	}
+	body, _ := decodeJSONBody(r)
+	x := intField(body, "x", 0)
+	y := intField(body, "y", 0)
+	button := stringField(body, "button")
+	var mask uint8
+	switch button {
+	case "left": mask = 1
+	case "middle": mask = 2
+	case "right": mask = 4
+	}
+	_ = sess.InjectPointer(x, y, mask)
+	_ = sess.InjectPointer(x, y, 0)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleHijackGUIType(w http.ResponseWriter, r *http.Request) {
+	workerID, hijackID, ok := bridgeParams(w, r, true)
+	if !ok {
+		return
+	}
+	sess, ok := s.requireGraphicalSession(w, r, workerID, hijackID)
+	if !ok {
+		return
+	}
+	body, _ := decodeJSONBody(r)
+	text := stringField(body, "text")
+	for _, r := range text {
+		// Basic uint32 translation for standard ASCII
+		_ = sess.InjectKey(uint32(r), true)
+		_ = sess.InjectKey(uint32(r), false)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
