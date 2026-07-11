@@ -3,6 +3,7 @@ package mcp
 import (
 	"bytes"
 	"encoding/base64"
+	"fmt"
 	"image/png"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/gui"
 )
@@ -32,6 +33,8 @@ func HandleGUIClick(session gui.GraphicalSession, x, y int, button string) error
 		mask = 2
 	case "right":
 		mask = 4
+	default:
+		return fmt.Errorf("unsupported button: %q, expected left, middle, or right", button)
 	}
 	// Simulate press then release
 	if err := session.InjectPointer(x, y, mask); err != nil {
