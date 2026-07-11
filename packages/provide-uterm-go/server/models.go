@@ -97,6 +97,10 @@ type SessionRegistry interface {
 	// CreateSession creates a session from a free-form definition payload.
 	// Returns *SessionValidationError (422) or *SessionConflictError (409).
 	CreateSession(ctx context.Context, payload map[string]any) (*SessionStatus, error)
+	// CreateSessionInternal creates a server-minted session (inbound tunnel
+	// placeholder) without the connector-target egress check. Port of
+	// create_session(validate_connector_target=False).
+	CreateSessionInternal(ctx context.Context, payload map[string]any) (*SessionStatus, error)
 	// UpdateSession applies a partial update. *SessionValidationError → 422,
 	// ErrSessionNotFound → 404.
 	UpdateSession(ctx context.Context, sessionID string, payload map[string]any) (*SessionStatus, error)
