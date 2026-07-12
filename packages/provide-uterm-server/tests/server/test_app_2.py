@@ -133,8 +133,11 @@ class TestOnResumeCallback:
     def test_create_server_app_uses_memory_control_plane_by_default(self) -> None:
         app = self._make_app()
 
-        assert app.state.uterm_control_plane.__class__.__name__ == "MemoryControlPlane"
-        assert app.state.uterm_hub.resume_store.__class__.__name__ == "ControlPlaneResumeStore"
+        with TestClient(app):
+            assert app.state.uterm_control_plane.__class__.__name__ == "MemoryControlPlane"
+            assert app.state.uterm_hub.resume_store.__class__.__name__ == "ControlPlaneResumeStore"
+            assert app.state.uterm_graphical_target_registry is not None
+        assert app.state.uterm_graphical_target_registry._closed is True
 
     def test_create_server_app_bootstraps_sqlite_control_plane(self, tmp_path) -> None:
         db_path = tmp_path / "control-plane.db"

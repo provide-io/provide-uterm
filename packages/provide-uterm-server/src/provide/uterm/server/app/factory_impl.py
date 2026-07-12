@@ -66,6 +66,7 @@ from provide.uterm.server.auth import (
 )
 from provide.uterm.server.bridge.hub import ControlPlaneResumeStore, EventBus, ResumeSession, TermHub
 from provide.uterm.server.bridge.identity import Principal
+from provide.uterm.server.graphical import GraphicalTargetRegistry
 from provide.uterm.server.policy import SessionPolicyResolver
 from provide.uterm.server.profiles import FileProfileStore
 from provide.uterm.server.registry import SessionRegistry
@@ -188,6 +189,7 @@ def create_server_app(
     authz = AuthorizationService(authz_provider)
     policy = SessionPolicyResolver(config.auth, authz=authz)
     registry: SessionRegistry | None = None
+    graphical_target_registry: GraphicalTargetRegistry | None = None
     metrics: dict[str, int] = initial_metrics()
     # Token state values are heterogeneous (str token values, float expiries,
     # int counters); the registry expects ``dict[str, object]`` per-session.
@@ -368,6 +370,8 @@ def create_server_app(
 
     @asynccontextmanager
     async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        nonlocal graphical_target_registry
+
         async def _delayed_boot() -> None:
             # Yield to the event loop so FastAPI finishes its own startup tasks
             # (route registration, middleware init) before we connect sessions.
@@ -375,6 +379,8 @@ def create_server_app(
             await registry.start_auto_start_sessions()
 
         await control_plane.migrate()
+        graphical_target_registry = GraphicalTargetRegistry(config.graphical_targets, control_plane)
+        _app.state.uterm_graphical_target_registry = graphical_target_registry
 
         # WORM audit chain (opt-in): resume+verify the chain, then start the
         # periodic head checkpoint.  ``audit_event`` is threaded so the resume
@@ -462,6 +468,8 @@ def create_server_app(
             # tracked correctly on Python 3.11 (see ``_aclose_webhook_gates``).
             await _aclose_webhook_gates(policy_gate, behavioral_audit_gate, telemetry_sink)
             await registry.shutdown()
+            if graphical_target_registry is not None:
+                await graphical_target_registry.close()
             await control_plane.close()
 
     app = FastAPI(title=config.server.title, lifespan=_lifespan)
@@ -478,6 +486,7 @@ def create_server_app(
     app.state.uterm_webhooks = webhook_manager
     app.state.uterm_profile_store = profile_store
     app.state.uterm_control_plane = control_plane
+    app.state.uterm_graphical_target_registry = graphical_target_registry
     app.state.uterm_durability_capabilities = durability_capabilities
     app.state.uterm_tunnel_tokens = tunnel_tokens
     app.state.uterm_tunnel_invites = tunnel_invites
