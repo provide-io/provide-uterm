@@ -226,27 +226,43 @@ func mustConnectDiscardTunnel(t *testing.T) *tunnelclient.Client {
 
 // httpResult is a minimal captured proxy response.
 type httpResult struct {
-	status int
-	body   string
+	status  int
+	body    string
+	headers http.Header
+}
+
+func (r httpResult) headerGet(k string) string {
+	if r.headers == nil {
+		return ""
+	}
+	return r.headers.Get(k)
+}
+
+// tryGet performs one GET against the local proxy. On dial errors it returns
+// status 0 so callers can retry without failing the test.
+func tryGet(port int, path string) httpResult {
+	url := "http://127.0.0.1:" + strconv.Itoa(port) + path
+	resp, err := http.Get(url) //nolint:noctx,gosec // test-local URL
+	if err != nil {
+		return httpResult{}
+	}
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	return httpResult{status: resp.StatusCode, body: string(body), headers: resp.Header.Clone()}
 }
 
 func getWithRetry(t *testing.T, port int, path string) httpResult {
 	t.Helper()
-	url := "http://127.0.0.1:" + strconv.Itoa(port) + path
 	deadline := time.Now().Add(3 * time.Second)
-	var lastErr error
+	var last httpResult
 	for time.Now().Before(deadline) {
-		resp, err := http.Get(url) //nolint:noctx,gosec // test-local URL
-		if err != nil {
-			lastErr = err
-			time.Sleep(20 * time.Millisecond)
-			continue
+		last = tryGet(port, path)
+		if last.status != 0 {
+			return last
 		}
-		body, _ := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		return httpResult{status: resp.StatusCode, body: string(body)}
+		time.Sleep(20 * time.Millisecond)
 	}
-	t.Fatalf("GET %s failed: %v", url, lastErr)
+	t.Fatalf("GET http://127.0.0.1:%d%s failed: no successful response", port, path)
 	return httpResult{}
 }
 

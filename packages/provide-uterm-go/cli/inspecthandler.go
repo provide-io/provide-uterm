@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -214,13 +215,33 @@ func decodeActionMessage(isText bool, data []byte) (map[string]any, bool) {
 	return msg, true
 }
 
+// actionRID coerces an http_action id from JSON (string or number) to the
+// string form used by InterceptGate ("r1", "r2", …).
+func actionRID(v any) string {
+	switch t := v.(type) {
+	case string:
+		return t
+	case float64:
+		if t == float64(int64(t)) {
+			return strconv.FormatInt(int64(t), 10)
+		}
+		return strconv.FormatFloat(t, 'g', -1, 64)
+	case json.Number:
+		return t.String()
+	default:
+		if v == nil {
+			return ""
+		}
+		return fmt.Sprint(v)
+	}
+}
+
 // dispatchAction applies one decoded action message to the gate.
 func (s *inspectSession) dispatchAction(ctx context.Context, msg map[string]any) {
 	switch typeOf(msg) {
 	case "http_action":
 		decision := tunnelclient.ParseActionMessage(msg)
-		rid, _ := msg["id"].(string)
-		s.gate.Resolve(rid, decision)
+		s.gate.Resolve(actionRID(msg["id"]), decision)
 	case "http_intercept_toggle":
 		s.gate.SetEnabled(boolOf(msg["enabled"], false))
 		if !s.gate.Enabled() {
