@@ -39,6 +39,13 @@ def _ensure_owner_only_dir(directory: Path) -> None:
     directory.chmod(0o700)
 
 
+def _normalize_limit(limit: int) -> int:
+    """Clamp *limit* to 1..500; treat 0 as the default of 200 (Go/C# parity)."""
+    if limit == 0:
+        limit = 200
+    return max(1, min(limit, 500))
+
+
 def _open_append_owner_only(path: Path) -> TextIOWrapper:
     """Open ``path`` for append, symlink-safe, with owner-only (0o600) perms.
 
@@ -140,8 +147,10 @@ class RecordingStore(Protocol):
 
         Args:
             session_id: The session to read from.
-            limit: Maximum number of events to return (clamped 1..500).
+            limit: Maximum number of events to return. ``0`` means the default
+                of 200; values are then clamped to 1..500 (Go/C# parity).
             offset: Number of matching events to skip from the start.
+                Negative values skip nothing.
             event: Optional event-type filter.
         """
         ...
@@ -202,6 +211,7 @@ class LocalFileRecordingStore(RecordingStore):
             if f:
                 event = {"ts": time.time(), "event": "log_stop", "data": {}, "session_id": session_id}
                 f.write(json.dumps(event) + "\n")
+                f.flush()
                 f.close()
 
     async def recording_meta(self, session_id: str) -> dict[str, Any]:
@@ -224,7 +234,9 @@ class LocalFileRecordingStore(RecordingStore):
         if not path.exists():
             return []
 
-        normalized_limit = max(1, min(limit, 500))
+        normalized_limit = _normalize_limit(limit)
+        # Negative offset skips nothing (matches Go file/memory store).
+        skip = 0 if offset is None else max(0, offset)
 
         def _read() -> list[dict[str, Any]]:
             if offset is not None:
@@ -236,7 +248,7 @@ class LocalFileRecordingStore(RecordingStore):
                             item = json.loads(line)
                             if event and item.get("event") != event:
                                 continue
-                            if skipped < offset:
+                            if skipped < skip:
                                 skipped += 1
                                 continue
                             entries.append(item)
@@ -309,10 +321,12 @@ class InMemoryRecordingStore:
         if event is not None:
             all_events = [e for e in all_events if e.get("event") == event]
 
-        normalized_limit = max(1, min(limit, 500))
+        normalized_limit = _normalize_limit(limit)
 
         if offset is not None:
-            return all_events[offset : offset + normalized_limit]
+            # Negative offset skips nothing (Go/C# parity).
+            start = max(0, offset)
+            return all_events[start : start + normalized_limit]
         # Tail behaviour: return last N events
         return all_events[-normalized_limit:]
 

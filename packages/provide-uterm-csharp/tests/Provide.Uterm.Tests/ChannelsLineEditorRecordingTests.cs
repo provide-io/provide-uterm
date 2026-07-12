@@ -166,9 +166,16 @@ public class ChannelsLineEditorRecordingTests
             var meta = await local.RecordingMetaAsync("s1");
             Assert.True(meta.Exists);
             var path = await local.GetPathAsync("s1");
+            Assert.False(string.IsNullOrEmpty(path));
             Assert.True(File.Exists(path));
             var entries = await local.GetEntriesAsync("s1", new Query { Limit = 100 });
             Assert.NotEmpty(entries);
+
+            // Missing session: empty path (Python returns None).
+            Assert.Equal("", await local.GetPathAsync("no-such-session"));
+            var missingMeta = await local.RecordingMetaAsync("no-such-session");
+            Assert.False(missingMeta.Exists);
+            Assert.Equal("", missingMeta.Path);
         }
         finally
         {
