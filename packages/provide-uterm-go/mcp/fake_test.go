@@ -147,6 +147,31 @@ func (f *fakeClient) WatchSessionEvents(_ context.Context, sessionID string, opt
 	return f.val()
 }
 
+func (f *fakeClient) GUIScreenshot(_ context.Context, workerID, hijackID string) (map[string]any, error) {
+	f.record("GUIScreenshot", map[string]any{"workerID": workerID, "hijackID": hijackID})
+	return f.obj()
+}
+
+func (f *fakeClient) GUIClick(_ context.Context, workerID, hijackID string, x, y int, button string) (map[string]any, error) {
+	f.record("GUIClick", map[string]any{"workerID": workerID, "hijackID": hijackID, "x": x, "y": y, "button": button})
+	return f.obj()
+}
+
+func (f *fakeClient) GUIType(_ context.Context, workerID, hijackID, text string) (map[string]any, error) {
+	f.record("GUIType", map[string]any{"workerID": workerID, "hijackID": hijackID, "text": text})
+	return f.obj()
+}
+
+func (f *fakeClient) GUIKey(_ context.Context, workerID, hijackID, keyName string) (map[string]any, error) {
+	f.record("GUIKey", map[string]any{"workerID": workerID, "hijackID": hijackID, "key_name": keyName})
+	return f.obj()
+}
+
+func (f *fakeClient) GUIDrag(_ context.Context, workerID, hijackID string, startX, startY, endX, endY int) (map[string]any, error) {
+	f.record("GUIDrag", map[string]any{"workerID": workerID, "hijackID": hijackID, "start_x": startX, "start_y": startY, "end_x": endX, "end_y": endY})
+	return f.obj()
+}
+
 func (f *fakeClient) Post(_ context.Context, path string, body map[string]any) (any, error) {
 	f.record("Post", map[string]any{"path": path, "body": body})
 	return f.val()
