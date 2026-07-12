@@ -55,12 +55,12 @@ type GraphicalTargetRegistry struct {
 	active       int
 	closing      bool
 	closed       bool
-	drain        chan struct{}
 	closeAttempt *graphicalCloseAttempt
 }
 
 type graphicalCloseAttempt struct {
 	done    chan struct{}
+	drain   chan struct{}
 	err     error
 	waiters int
 }
@@ -69,7 +69,7 @@ func NewGraphicalTargetRegistry(static []serverconfig.GraphicalTargetDefinition,
 	if engine == nil {
 		return nil, errors.New("graphical target control plane is required")
 	}
-	r := &GraphicalTargetRegistry{static: make(map[string]serverconfig.GraphicalTargetDefinition, len(static)), engine: engine, owns: owns, drain: make(chan struct{})}
+	r := &GraphicalTargetRegistry{static: make(map[string]serverconfig.GraphicalTargetDefinition, len(static)), engine: engine, owns: owns}
 	for _, target := range static {
 		if err := target.Validate(); err != nil {
 			return nil, errors.New("invalid static graphical target")
@@ -118,11 +118,11 @@ func (r *GraphicalTargetRegistry) leave() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.active--
-	if r.closing && r.active == 0 {
+	if r.closing && r.active == 0 && r.closeAttempt != nil {
 		select {
-		case <-r.drain:
+		case <-r.closeAttempt.drain:
 		default:
-			close(r.drain)
+			close(r.closeAttempt.drain)
 		}
 	}
 }
@@ -347,13 +347,9 @@ func (r *GraphicalTargetRegistry) Close(ctx context.Context) error {
 	}
 	if !r.closing {
 		r.closing = true
-		r.closeAttempt = &graphicalCloseAttempt{done: make(chan struct{})}
+		r.closeAttempt = &graphicalCloseAttempt{done: make(chan struct{}), drain: make(chan struct{})}
 		if r.active == 0 {
-			select {
-			case <-r.drain:
-			default:
-				close(r.drain)
-			}
+			close(r.closeAttempt.drain)
 		}
 		go r.finishClose(r.closeAttempt)
 	}
@@ -373,7 +369,7 @@ func (r *GraphicalTargetRegistry) Close(ctx context.Context) error {
 	}
 }
 func (r *GraphicalTargetRegistry) finishClose(attempt *graphicalCloseAttempt) {
-	<-r.drain
+	<-attempt.drain
 	var err error
 	if r.owns {
 		err = r.engine.Close(context.Background())

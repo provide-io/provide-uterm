@@ -144,6 +144,67 @@ func TestGraphicalRegistryCloseFailurePublishesToWaitersAndLaterRetries(t *testi
 	}
 }
 
+func TestGraphicalRegistryRetryCloseRedrainsOperationsStartedAfterFailure(t *testing.T) {
+	base := memory.New(cp.Config{})
+	_ = base.Open(context.Background())
+	failure := errors.New("first close failed")
+	operationBegan := make(chan struct{})
+	releaseOperation := make(chan struct{})
+	secondCloseCalled := make(chan struct{})
+	var closeCalls atomic.Int32
+	engine := &graphicalLifecycleEngine{Engine: base}
+	engine.close = func(context.Context) error {
+		if closeCalls.Add(1) == 1 {
+			return failure
+		}
+		close(secondCloseCalled)
+		return nil
+	}
+	engine.begin = func(ctx context.Context) (cp.Tx, error) {
+		close(operationBegan)
+		<-releaseOperation
+		return base.Begin(ctx)
+	}
+	r, _ := NewGraphicalTargetRegistry(nil, engine, true)
+	if err := r.Close(context.Background()); !errors.Is(err, failure) {
+		t.Fatalf("first registry close = %v", err)
+	}
+	opDone := make(chan error, 1)
+	go func() { _, err := r.List(context.Background(), SystemTargetScope()); opDone <- err }()
+	<-operationBegan
+	retryDone := make(chan error, 1)
+	go func() { retryDone <- r.Close(context.Background()) }()
+	for {
+		r.mu.Lock()
+		closing := r.closing
+		attempt := r.closeAttempt
+		r.mu.Unlock()
+		if closing && attempt != nil {
+			select {
+			case <-attempt.drain:
+				t.Fatal("retry drain opened while a reopened operation was active")
+			default:
+			}
+			break
+		}
+	}
+	select {
+	case <-secondCloseCalled:
+		t.Fatal("retry closed engine before reopened operation drained")
+	default:
+	}
+	if _, err := r.List(context.Background(), SystemTargetScope()); !errors.Is(err, ErrGraphicalTargetClosed) {
+		t.Fatalf("new operation during retry = %v", err)
+	}
+	close(releaseOperation)
+	if err := <-opDone; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-retryDone; err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestGraphicalRegistryCloseDrainsActiveOperationAndRejectsNewOperations(t *testing.T) {
 	base := memory.New(cp.Config{})
 	_ = base.Open(context.Background())
@@ -280,5 +341,25 @@ func TestGraphicalRegistryConcurrentBorrowedCloseDoesNotCloseEngine(t *testing.T
 	wg.Wait()
 	if calls.Load() != 0 {
 		t.Fatalf("borrowed close calls = %d", calls.Load())
+	}
+}
+
+func TestServerShutdownPropagatesGraphicalRegistryCloseFailure(t *testing.T) {
+	failure := errors.New("graphical close failure")
+	base := memory.New(cp.Config{})
+	var calls atomic.Int32
+	engine := &graphicalLifecycleEngine{Engine: base, close: func(context.Context) error {
+		if calls.Add(1) == 1 {
+			return failure
+		}
+		return nil
+	}}
+	registry, _ := NewGraphicalTargetRegistry(nil, engine, true)
+	ts := newTestServer(t, func(_ *serverconfig.UtermServerConfig, deps *Deps) { deps.GraphicalTargets = registry })
+	if err := ts.srv.Shutdown(); !errors.Is(err, failure) {
+		t.Fatalf("Shutdown error = %v", err)
+	}
+	if err := ts.srv.Shutdown(); err != nil {
+		t.Fatalf("Shutdown retry = %v", err)
 	}
 }
