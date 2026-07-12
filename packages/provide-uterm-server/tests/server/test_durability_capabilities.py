@@ -29,6 +29,7 @@ def test_sqlite_mode_reports_process_local_tunnel_webhook_and_fanout_state(tmp_p
     assert capabilities["control_plane_backend"] == "sqlite"
     assert capabilities["ha_safe"] is False
     assert "resume_tokens" in capabilities["durable_state"]
+    assert "graphical_targets" in capabilities["durable_state"]
     assert "tunnel_tokens" in capabilities["process_local_state"]
     assert "webhook_registrations" in capabilities["process_local_state"]
     assert "fanout_groups" in capabilities["process_local_state"]
@@ -40,16 +41,21 @@ def test_sqlite_mode_reports_process_local_tunnel_webhook_and_fanout_state(tmp_p
     assert response.json() == capabilities
 
 
-def test_sqlite_durability_advertises_only_the_wired_resume_token_store() -> None:
+def test_sqlite_durability_advertises_wired_resume_and_graphical_target_stores() -> None:
     cfg = SimpleNamespace(control_plane=SimpleNamespace(backend="sqlite"))
     caps = _build_durability_capabilities(cfg)
-    # Only the resume-token store is wired into the reference server. Session
-    # records are NOT written to the control plane (no ControlPlaneSessionStore),
-    # so the advert must not claim them as durable.
-    assert caps.durable_state == ("resume_tokens",)
+    assert caps.durable_state == ("resume_tokens", "graphical_targets")
     assert "control_plane_session_records" not in caps.durable_state
     assert "approvals" not in caps.durable_state
     assert "leases" not in caps.durable_state
     assert "approvals" in caps.process_local_state
     assert "leases" in caps.process_local_state
     assert "session_registry_runtime_state" in caps.process_local_state
+
+
+def test_memory_durability_reports_graphical_targets_as_process_local() -> None:
+    cfg = SimpleNamespace(control_plane=SimpleNamespace(backend="memory"))
+    caps = _build_durability_capabilities(cfg)
+
+    assert "graphical_targets" in caps.process_local_state
+    assert "graphical_targets" not in caps.durable_state
