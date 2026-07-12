@@ -284,20 +284,22 @@ func defaultGovernanceConfig() GovernanceConfig {
 
 // UtermServerConfig ports config_schema.UtermServerConfig, the top-level model.
 type UtermServerConfig struct {
-	Environment  string              `json:"environment" toml:"environment"`
-	Server       ServerBindConfig    `json:"server" toml:"server"`
-	Auth         AuthConfig          `json:"auth" toml:"auth"`
-	ControlPlane ControlPlaneConfig  `json:"control_plane" toml:"control_plane"`
-	UI           UiConfig            `json:"ui" toml:"ui"`
-	Recording    RecordingConfig     `json:"recording" toml:"recording"`
-	Profiles     ProfileStoreConfig  `json:"profiles" toml:"profiles"`
-	Security     SecurityConfig      `json:"security" toml:"security"`
-	Tunnel       TunnelConfig        `json:"tunnel" toml:"tunnel"`
-	Webhooks     WebhooksConfig      `json:"webhooks" toml:"webhooks"`
-	Pam          PamConfig           `json:"pam" toml:"pam"`
-	Governance   GovernanceConfig    `json:"governance" toml:"governance"`
-	Audit        AuditConfig         `json:"audit" toml:"audit"`
-	Sessions     []SessionDefinition `json:"sessions" toml:"sessions"`
+	Environment      string                      `json:"environment" toml:"environment"`
+	Server           ServerBindConfig            `json:"server" toml:"server"`
+	Auth             AuthConfig                  `json:"auth" toml:"auth"`
+	ControlPlane     ControlPlaneConfig          `json:"control_plane" toml:"control_plane"`
+	UI               UiConfig                    `json:"ui" toml:"ui"`
+	Recording        RecordingConfig             `json:"recording" toml:"recording"`
+	Profiles         ProfileStoreConfig          `json:"profiles" toml:"profiles"`
+	Security         SecurityConfig              `json:"security" toml:"security"`
+	Tunnel           TunnelConfig                `json:"tunnel" toml:"tunnel"`
+	Webhooks         WebhooksConfig              `json:"webhooks" toml:"webhooks"`
+	Pam              PamConfig                   `json:"pam" toml:"pam"`
+	Governance       GovernanceConfig            `json:"governance" toml:"governance"`
+	Audit            AuditConfig                 `json:"audit" toml:"audit"`
+	Graphical        GraphicalConfig             `json:"graphical" toml:"graphical"`
+	GraphicalTargets []GraphicalTargetDefinition `json:"graphical_targets" toml:"graphical_targets"`
+	Sessions         []SessionDefinition         `json:"sessions" toml:"sessions"`
 
 	SessionIdleTimeoutS        int     `json:"session_idle_timeout_s" toml:"session_idle_timeout_s"`
 	SessionRetentionS          int     `json:"session_retention_s" toml:"session_retention_s"`
@@ -324,6 +326,8 @@ func DefaultServerConfig() *UtermServerConfig {
 		Pam:                        defaultPamConfig(),
 		Governance:                 defaultGovernanceConfig(),
 		Audit:                      AuditConfig{},
+		Graphical:                  GraphicalConfig{DynamicAllowedCIDRs: []string{}},
+		GraphicalTargets:           []GraphicalTargetDefinition{},
 		Sessions:                   defaultSessions(),
 		BrowserRateLimitPerSec:     300,
 		WorkerFrameOnInvalid:       "drop",

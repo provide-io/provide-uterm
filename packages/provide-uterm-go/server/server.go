@@ -55,6 +55,10 @@ type Deps struct {
 	Config *serverconfig.UtermServerConfig
 	// Registry is the session-management surface. Required.
 	Registry SessionRegistry
+	// GraphicalTargets is the optional merged static/runtime target registry.
+	// This phase only owns its lifecycle; no public graphical CRUD routes are
+	// registered yet.
+	GraphicalTargets *GraphicalTargetRegistry
 	// TunnelStore backs the tunnel invite/token lifecycle routes (POST
 	// /api/tunnels, token rotate/revoke, the /s/{id} share consumer). nil → a
 	// fresh in-memory store is created in New.
@@ -276,5 +280,10 @@ func (s *Server) Shutdown() error {
 	}
 	s.sweepWG.Wait()
 	s.deps.Hub.Shutdown()
+	if s.deps.GraphicalTargets != nil {
+		if err := s.deps.GraphicalTargets.Close(context.Background()); httpErr == nil {
+			httpErr = err
+		}
+	}
 	return httpErr
 }
