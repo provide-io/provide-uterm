@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from provide.uterm.control.plane.memory.approval_store import MemoryApprovalStore
 from provide.uterm.control.plane.memory.graphical_target_store import MemoryGraphicalTargetStore
@@ -17,6 +17,7 @@ from provide.uterm.control.plane.memory.transaction import MemoryState, MemoryTr
 
 if TYPE_CHECKING:
     from provide.uterm.control.plane.capability import EngineCapabilities
+    from provide.uterm.control.plane.transaction import Transaction
     from provide.uterm.control.plane.types import ControlPlaneConfig
 
 
@@ -112,5 +113,7 @@ class MemoryControlPlane:
     def lease_store(self, tx: MemoryTransaction) -> MemoryLeaseStore:
         return MemoryLeaseStore(tx.state, tx)
 
-    def graphical_target_store(self, tx: Any) -> MemoryGraphicalTargetStore:
+    def graphical_target_store(self, tx: Transaction) -> MemoryGraphicalTargetStore:
+        if not isinstance(tx, MemoryTransaction):
+            raise TypeError("memory graphical target store requires MemoryTransaction")
         return MemoryGraphicalTargetStore(tx.state, tx)

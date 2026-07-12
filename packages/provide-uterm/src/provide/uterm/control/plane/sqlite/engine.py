@@ -7,7 +7,7 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from provide.uterm.control.plane.sqlite.approval_store import SqliteApprovalStore
 from provide.uterm.control.plane.sqlite.connection import SqliteConnectionError, connect_sqlite
@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     import aiosqlite
 
     from provide.uterm.control.plane import ControlPlaneConfig, EngineCapabilities
+    from provide.uterm.control.plane.transaction import Transaction
 
 
 @dataclass(slots=True)
@@ -164,5 +165,7 @@ class SqliteControlPlane:
     def lease_store(self, tx: SqliteTransaction) -> SqliteLeaseStore:
         return SqliteLeaseStore(tx)
 
-    def graphical_target_store(self, tx: Any) -> SqliteGraphicalTargetStore:
+    def graphical_target_store(self, tx: Transaction) -> SqliteGraphicalTargetStore:
+        if not isinstance(tx, SqliteTransaction):
+            raise TypeError("sqlite graphical target store requires SqliteTransaction")
         return SqliteGraphicalTargetStore(tx)

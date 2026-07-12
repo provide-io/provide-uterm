@@ -5,13 +5,14 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING
 
 from provide.uterm.control.plane.graphical_target import GraphicalTargetRecord
 
 if TYPE_CHECKING:
-    import aiosqlite
+    import sqlite3
+
+    from provide.uterm.control.plane.sqlite.transaction import SqliteTransaction
 
 
 def _json(value: object) -> str:
@@ -19,20 +20,10 @@ def _json(value: object) -> str:
 
 
 class SqliteGraphicalTargetStore:
-    def __init__(self, tx: Any) -> None:
-        self._tx = tx
-
-    @property
-    def _conn(self) -> aiosqlite.Connection:
-        conn = getattr(self._tx, "conn", None)
-        if conn is None:
-            conn = getattr(self._tx, "_conn", None)
-        if conn is None:  # pragma: no cover - defensive guard for bad adapters
-            raise AttributeError("transaction has no sqlite connection")
-        return cast("aiosqlite.Connection", conn)
+    def __init__(self, tx: SqliteTransaction) -> None:
+        self._conn = tx._conn
 
     async def put_graphical_target(self, record: GraphicalTargetRecord) -> None:
-        data = asdict(record)
         await self._conn.execute(
             """
             INSERT INTO cp_graphical_targets VALUES(
@@ -56,41 +47,63 @@ class SqliteGraphicalTargetStore:
                 created_at=excluded.created_at, updated_at=excluded.updated_at
             """,
             (
-                data["target_id"],
-                data["endpoint"],
-                data["tls_mode"],
-                data["ca_secret_ref"],
-                data["client_cert_secret_ref"],
-                data["client_key_secret_ref"],
-                data["expected_server_name"],
-                _json(data["allowed_vm_patterns"]),
-                data["tenant_id"],
-                data["minimum_role"],
-                data["connect_timeout_s"],
-                data["handshake_timeout_s"],
-                data["read_timeout_s"],
-                data["write_timeout_s"],
-                data["shutdown_timeout_s"],
-                data["max_grpc_message_bytes"],
-                data["max_framebuffer_width"],
-                data["max_framebuffer_height"],
-                data["max_rectangles"],
-                data["max_clipboard_bytes"],
-                data["max_pixel_allocation_bytes"],
-                _json(data["allowed_cidrs"]),
-                _json(data["audit_labels"]),
-                data["created_at"],
-                data["updated_at"],
+                record.target_id,
+                record.endpoint,
+                record.tls_mode,
+                record.ca_secret_ref,
+                record.client_cert_secret_ref,
+                record.client_key_secret_ref,
+                record.expected_server_name,
+                _json(record.allowed_vm_patterns),
+                record.tenant_id,
+                record.minimum_role,
+                record.connect_timeout_s,
+                record.handshake_timeout_s,
+                record.read_timeout_s,
+                record.write_timeout_s,
+                record.shutdown_timeout_s,
+                record.max_grpc_message_bytes,
+                record.max_framebuffer_width,
+                record.max_framebuffer_height,
+                record.max_rectangles,
+                record.max_clipboard_bytes,
+                record.max_pixel_allocation_bytes,
+                _json(record.allowed_cidrs),
+                _json(record.audit_labels),
+                record.created_at,
+                record.updated_at,
             ),
         )
 
     @staticmethod
-    def _record(row: Any) -> GraphicalTargetRecord:
-        data = dict(row)
-        data["allowed_vm_patterns"] = tuple(json.loads(data["allowed_vm_patterns"]))
-        data["allowed_cidrs"] = tuple(json.loads(data["allowed_cidrs"]))
-        data["audit_labels"] = tuple(tuple(pair) for pair in json.loads(data["audit_labels"]))
-        return GraphicalTargetRecord(**data)
+    def _record(row: sqlite3.Row) -> GraphicalTargetRecord:
+        return GraphicalTargetRecord(
+            target_id=row["target_id"],
+            endpoint=row["endpoint"],
+            tls_mode=row["tls_mode"],
+            ca_secret_ref=row["ca_secret_ref"],
+            client_cert_secret_ref=row["client_cert_secret_ref"],
+            client_key_secret_ref=row["client_key_secret_ref"],
+            expected_server_name=row["expected_server_name"],
+            allowed_vm_patterns=tuple(json.loads(row["allowed_vm_patterns"])),
+            tenant_id=row["tenant_id"],
+            minimum_role=row["minimum_role"],
+            connect_timeout_s=row["connect_timeout_s"],
+            handshake_timeout_s=row["handshake_timeout_s"],
+            read_timeout_s=row["read_timeout_s"],
+            write_timeout_s=row["write_timeout_s"],
+            shutdown_timeout_s=row["shutdown_timeout_s"],
+            max_grpc_message_bytes=row["max_grpc_message_bytes"],
+            max_framebuffer_width=row["max_framebuffer_width"],
+            max_framebuffer_height=row["max_framebuffer_height"],
+            max_rectangles=row["max_rectangles"],
+            max_clipboard_bytes=row["max_clipboard_bytes"],
+            max_pixel_allocation_bytes=row["max_pixel_allocation_bytes"],
+            allowed_cidrs=tuple(json.loads(row["allowed_cidrs"])),
+            audit_labels=tuple(tuple(pair) for pair in json.loads(row["audit_labels"])),
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
 
     async def get_graphical_target(self, target_id: str) -> GraphicalTargetRecord | None:
         cursor = await self._conn.execute("SELECT * FROM cp_graphical_targets WHERE target_id = ?", (target_id,))
