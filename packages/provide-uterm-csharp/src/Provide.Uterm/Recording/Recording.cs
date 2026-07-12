@@ -156,7 +156,8 @@ public sealed class InMemoryStore : IRecordingStore
             var arr = filtered.ToList();
             if (query.Offset is int offset)
             {
-                arr = arr.Skip(offset).Take(limit).ToList();
+                // Negative offset skips nothing (Python/Go parity).
+                arr = arr.Skip(Math.Max(0, offset)).Take(limit).ToList();
             }
             else
             {
@@ -259,7 +260,8 @@ public sealed class LocalFileStore : IRecordingStore, IDisposable
         var path = PathFor(sessionId);
         if (!File.Exists(path))
         {
-            return Task.FromResult(new Meta { SessionId = sessionId, Exists = false, Path = path });
+            // Match Python: no file → exists false and no path string.
+            return Task.FromResult(new Meta { SessionId = sessionId, Exists = false });
         }
 
         var info = new FileInfo(path);
@@ -308,13 +310,19 @@ public sealed class LocalFileStore : IRecordingStore, IDisposable
         var arr = filtered.ToList();
         if (query.Offset is int offset)
         {
-            return arr.Skip(offset).Take(limit).ToList();
+            // Negative offset skips nothing (Python/Go parity).
+            return arr.Skip(Math.Max(0, offset)).Take(limit).ToList();
         }
 
         return arr.TakeLast(limit).ToList();
     }
 
-    public Task<string> GetPathAsync(string sessionId) => Task.FromResult(PathFor(sessionId));
+    public Task<string> GetPathAsync(string sessionId)
+    {
+        var path = PathFor(sessionId);
+        // Match Python get_path: only return a path when the file exists.
+        return Task.FromResult(File.Exists(path) ? path : "");
+    }
 
     public void Dispose()
     {

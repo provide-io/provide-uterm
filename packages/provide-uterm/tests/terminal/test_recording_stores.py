@@ -160,12 +160,19 @@ class TestInMemoryRecordingStoreGetEntries:
         entries = await store.get_entries("no-such")
         assert entries == []
 
-    async def test_limit_clamped_to_one(self) -> None:
+    async def test_limit_zero_means_default_200(self) -> None:
+        """limit=0 is the documented default (200), matching Go/C# normalizeLimit."""
         store = InMemoryRecordingStore()
         await store.start_session("s1", {})
         await store.append_events("s1", [{"ts": 1.0, "event": "read", "data": {}}])
         entries = await store.get_entries("s1", limit=0)
-        assert len(entries) == 1
+        # start + 1 append = 2 events, all within default 200
+        assert len(entries) == 2
+
+        for i in range(250):
+            await store.append_events("s1", [{"ts": float(i), "event": "read", "data": {"i": i}}])
+        entries = await store.get_entries("s1", limit=0)
+        assert len(entries) == 200
 
     async def test_limit_clamped_to_five_hundred(self) -> None:
         store = InMemoryRecordingStore()
@@ -182,6 +189,17 @@ class TestInMemoryRecordingStoreGetEntries:
         assert len(entries) == 200
         assert entries[0]["data"]["i"] == 50
         assert entries[-1]["data"]["i"] == 249
+
+
+class TestInMemoryRecordingStoreOffsetClamp:
+    async def test_negative_offset_skips_nothing(self) -> None:
+        store = InMemoryRecordingStore()
+        await store.append_events(
+            "s1",
+            [{"ts": float(i), "event": "read", "data": {"i": i}} for i in range(5)],
+        )
+        entries = await store.get_entries("s1", limit=10, offset=-3)
+        assert [e["data"]["i"] for e in entries] == [0, 1, 2, 3, 4]
 
 
 class TestInMemoryRecordingStoreGetPath:

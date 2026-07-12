@@ -158,11 +158,18 @@ class TestLocalFileRecordingStoreGetEntries:
         out = await store.get_entries("s1", limit=1, offset=0)
         assert [e["n"] for e in out] == [0]
 
-    async def test_limit_clamped_to_one(self, tmp_path: Path) -> None:
+    async def test_limit_zero_means_default_200(self, tmp_path: Path) -> None:
+        """limit=0 is the documented default (200), matching Go/C# normalizeLimit."""
         store = LocalFileRecordingStore(tmp_path)
         await store.append_events("s1", [{"event": "e", "n": i} for i in range(5)])
         out = await store.get_entries("s1", limit=0)
-        assert len(out) == 1
+        assert len(out) == 5  # fewer than 200 → full set
+
+        await store.append_events("s1", [{"event": "e", "n": i} for i in range(5, 250)])
+        out = await store.get_entries("s1", limit=0)
+        assert len(out) == 200
+        assert out[0]["n"] == 50
+        assert out[-1]["n"] == 249
 
     async def test_limit_clamped_to_five_hundred(self, tmp_path: Path) -> None:
         store = LocalFileRecordingStore(tmp_path)
