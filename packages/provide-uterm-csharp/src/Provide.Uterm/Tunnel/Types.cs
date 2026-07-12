@@ -5,6 +5,7 @@
 
 using System.Security.Cryptography;
 using System.Text;
+using Org.BouncyCastle.Crypto.Digests;
 
 namespace Provide.Uterm.Tunnel;
 
@@ -45,19 +46,43 @@ public sealed class Invite
     public string? IssuedIp { get; set; }
 }
 
-/// <summary>Token hashing / verification (BLAKE2b-256 hex digests when available).</summary>
+/// <summary>
+/// Token hashing / verification. BLAKE2b-256 hex digests, byte-for-byte with
+/// Python hashlib.blake2b(..., digest_size=32).hexdigest() and Go blake2b.Sum256.
+/// </summary>
 public static class TunnelTokens
 {
+    /// <summary>
+    /// BLAKE2b-256 hex digest of <paramref name="token"/> UTF-8 bytes.
+    /// Empty plain returns empty string (matches Python/Go).
+    /// </summary>
     public static string HashToken(string token)
     {
-        // Use SHA-256 hex as a portable stand-in; Go uses BLAKE2b for at-rest digests.
-        // The verify helper is consistent within this port.
-        var digest = SHA256.HashData(Encoding.UTF8.GetBytes(token));
-        return Convert.ToHexString(digest).ToLowerInvariant();
+        if (string.IsNullOrEmpty(token))
+        {
+            return "";
+        }
+
+        var input = Encoding.UTF8.GetBytes(token);
+        // Blake2bDigest ctor takes bit length of output (256 → 32 bytes).
+        var digest = new Blake2bDigest(256);
+        digest.BlockUpdate(input, 0, input.Length);
+        var output = new byte[digest.GetDigestSize()];
+        digest.DoFinal(output, 0);
+        return Convert.ToHexString(output).ToLowerInvariant();
     }
 
+    /// <summary>
+    /// Constant-time compare of HashToken(plain) against stored hash.
+    /// Empty plain or empty stored hash never authenticates (Python/Go parity).
+    /// </summary>
     public static bool VerifyToken(string token, string tokenHash)
     {
+        if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(tokenHash))
+        {
+            return false;
+        }
+
         var computed = HashToken(token);
         return CryptographicOperations.FixedTimeEquals(
             Encoding.UTF8.GetBytes(computed),
@@ -103,12 +128,7 @@ public sealed class MemoryTunnelStore
     {
         lock (_lock)
         {
-            if (!_invites.Remove(inviteHash, out var inv))
-            {
-                return null;
-            }
-
-            return inv;
+            return _invites.Remove(inviteHash, out var inv) ? inv : null;
         }
     }
 }

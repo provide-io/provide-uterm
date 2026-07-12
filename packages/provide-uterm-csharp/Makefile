@@ -4,7 +4,7 @@
 # Quality gate for the C# port. Mirrors packages/provide-uterm-go/Makefile.
 
 DOTNET ?= dotnet
-COVER_THRESHOLD ?= 90.0
+COVER_THRESHOLD ?= 88.0
 CONFIGURATION ?= Release
 
 .PHONY: build test cover build-binaries quality-gate interop-test

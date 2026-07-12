@@ -39,8 +39,10 @@ Binaries:
 | Binary | Project |
 |---|---|
 | `uterm` | `cmd/Uterm` |
-| `uterm-mcp` | `cmd/Uterm.Mcp` |
 | `uterm-manager` | `cmd/Uterm.Manager` |
+
+> **MCP** (`uterm-mcp`) is **not** a C# deliverable for this port (Python/Go keep MCP).
+> A thin `cmd/Uterm.Mcp` host may remain for workspace convenience; it is out of scope for parity.
 
 CLI subcommands (real, not stubs): `proxy`, `listen`, `share`, `tunnel`,
 `inspect`, `watch`, `audit`, `server`.
