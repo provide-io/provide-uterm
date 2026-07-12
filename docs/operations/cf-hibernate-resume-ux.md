@@ -1,6 +1,6 @@
 # CF hibernation + resume UX / settings
 
-**Status:** as-built inventory + product decisions
+**Status:** as-built (Level A proven; Level B optional live CF)
 **Date:** 2026-07-12
 **Related:** [cf-do-architecture.md](../../packages/provide-uterm-cloudflare/docs/cf-do-architecture.md), frontend `hijack-websocket.ts` / `session-element.ts`
 
@@ -11,10 +11,11 @@
 | Layer | Proof | Live CF DO eviction? |
 |-------|--------|----------------------|
 | DO accepts hibernatable sockets (`acceptWebSocket` + attachment) | Code + unit tests | No |
-| Post-wake role recovery (`deserializeAttachment` / `_socket_role`) | Unit tests | No |
-| `getWebSockets()` broadcast after in-memory wipe | Unit tests | No |
-| SQLite `_restore_state()` (lease wall-clock, etc.) | Unit tests | No |
-| Browser **session resume** via one-time token | Unit (`test_cf_resume.py`) + e2e markers (`test_e2e_ws.py`, needs `real_cf`) | Only if `real_cf` env |
+| Post-wake role recovery (`deserializeAttachment` / `_socket_role`) | Unit tests + demo | No |
+| `getWebSockets()` broadcast after in-memory wipe | Unit tests + demo | No |
+| SQLite `_restore_state()` (lease wall-clock, etc.) | Unit tests + demo | No |
+| Browser **session resume** via one-time token | Unit (`test_cf_resume.py`) + demo; e2e markers (`test_e2e_ws.py`, needs `real_cf`) | Only if `real_cf` env |
+| Frontend **“Resumed”** flash | `session-element.ts` + vitest `session-element-resume.test.ts` | Browser-local |
 | Frontend “Waking…” + reconnect spinner | Vitest frontend tests | Browser-local |
 
 **Honest bar:** hibernate *logic* is designed and unit-tested against fakes.
@@ -25,7 +26,49 @@
 3. Sends a frame or reconnects.
 4. Asserts worker still routes, snapshot/hello restore, optional `resumed: true`.
 
-That live step is **not** green in default CI (marked / optional). To determine “it works” for production: run `real_cf` e2e or a manual wrangler session.
+That live step is **not** green in default CI (marked / optional).
+
+```bash
+# Level A (always — demo + unit + frontend flash)
+bash scripts/prove_cf_hibernate_resume.sh
+
+# Standalone banner demo (same two paths as the recording demos)
+uv run python scripts/demo_cf_hibernate_resume.py
+
+# Level B local (flat vendor + JWT harness + wrangler — NOT pywrangler)
+bash scripts/prove_cf_hibernate_resume.sh --real-cf
+# or directly:
+bash scripts/run_cf_resume_e2e_local.sh
+
+# Level B against deployed worker
+# 1) Mint CF_Authorization via Access service-auth (policy lives on the
+#    legacy hostname; same AUD as provide-uterm-cloudflare wrangler.toml):
+#      curl -D- -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
+#           -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
+#           https://undef-terminal-cloudflare.neurotic.workers.dev/api/health
+#    Parse CF_Authorization=… cookie → CF_E2E_JWT.
+# 2) Run:
+REAL_CF=1 REAL_CF_URL=https://provide-uterm-cloudflare.neurotic.workers.dev \
+  CF_E2E_JWT=… CF_ACCESS_CLIENT_ID=… CF_ACCESS_CLIENT_SECRET=… \
+  uv run pytest -m real_cf packages/provide-uterm-cloudflare/tests/test_e2e_ws.py \
+  -k 'resume or hello_includes_resume' --no-cov -p no:randomly -p no:xdist
+```
+
+**Credentials (not in git):** Access service token for E2E is recorded in local
+Claude project memory `project_cf_auth_deploy.md` (undef-terminal CF Access
+service auth pair + AUD). Worker secrets on the live account are only
+`WORKER_BEARER_TOKEN` + `WEBHOOK_SECRET_KEY` (`wrangler secret list`).
+
+**Level B notes (2026-07-12):**
+
+- Deployed: `https://provide-uterm-cloudflare.neurotic.workers.dev` — health 200.
+- Production resume e2e (4 tests) **passed** with Access-minted JWT as Bearer.
+- `workers.dev` hostname does not accept Access client headers alone (401);
+  mint JWT via Access-gated legacy host, then send `Authorization: Bearer`.
+- `pywrangler dev` re-syncs `python_modules/` into a broken Pyodide layout. Use
+  `bash .ci/vendor_cf_worker.sh` then `npx wrangler dev` (scripted above).
+- Vendor shim replaces heavy `provide.uterm.__init__` (pydantic) and overlays
+  `provide.uterm.cloudflare` so DO imports resolve under Workers.
 
 ### Two different “sleep” stories
 
@@ -58,96 +101,36 @@ flowchart TB
 | `Offline` (bad) | WS open, worker still offline after ~10s | Red |
 | Reconnect spinner (xterm) | Reconnecting after close | Cyan braille animation in terminal |
 | `Connected (watching/shared/…)` | Worker online | Green |
-| Resume token | `hello.resume_token` → `sessionStorage` | **No visible “Resumed” label** |
-| `hello.resumed` | Server can set `resumed: true` after successful token | **Frontend does not surface it** |
+| Resume token | `hello.resume_token` → `sessionStorage` (`uterm_resume_<workerId>`) | Silent persist |
+| `hello.resumed` | After successful `type: resume` | **“Resumed”** status for ~2.5s, then normal Connected |
 
-So: there is a **wake** indicator, not a **session resumed** indicator.
-
-## Recommended: resume / hibernate indicators
-
-### Status strings (session chrome)
-
-| State | Dot | Text | Trigger |
-|-------|-----|------|---------|
-| Connecting | bad | Connecting… | first open |
-| Waking DO / worker | warn | Waking… | existing |
-| Session restored | live (brief) | Resumed | `hello.resumed === true` for ~2–3s, then normal Connected |
-| Reconnecting | bad | Reconnecting in Ns… | existing |
-| Offline worker | bad | Offline | existing |
-
-Optional subtle toast: “Session restored (role: operator)” when `resumed`.
-
-### Visual options
-
-1. **Status bar only** (minimal) — extend `_updateStatus()` / `setStatus`.
-2. **LED pulse** — reuse `data-led-indicator` with a third class `resuming`.
-3. **Terminal banner** — one-line notice (noisy; prefer status bar).
-
-### Distinguish DO wake vs token resume
-
-| Event | How we know | Label |
-|-------|-------------|--------|
-| DO/worker cold | `worker_connected` after Waking | Connected |
-| Token resume | `hello.resumed === true` | **Resumed** |
-| Plain reconnect without token | hello without resumed | Connected |
-
-Wire: in `session-element` hello handler, if `msg.resumed`, `setStatus("live", "Resumed")` then after timeout call `_updateStatus()`.
-
-## Settings / knobs (server + client)
-
-### Already partially wired
-
-| Knob | Today | Gap |
-|------|--------|-----|
-| `resume_ttl_s` | Read via `getattr(config, "resume_ttl_s", 300)` | **Not on `CloudflareConfig`** — always 300s |
-| Resume tokens | SQLite `resume_tokens` | OK |
-| Waking timeout | Frontend `WAKING_TIMEOUT_MS = 10_000` | Hardcoded |
-
-### Proposed config (CF Worker env / `CloudflareConfig`)
+## Settings / knobs
 
 | Env / field | Default | Meaning |
 |-------------|---------|---------|
-| `RESUME_TTL_S` | `300` | Resume token lifetime |
-| `RESUME_ENABLED` | `true` | Mint/accept resume tokens (kill-switch) |
-| `WAKING_TIMEOUT_MS` | `10000` | Could stay client-only; optional hello capability |
-| `HIBERNATE_HEARTBEAT_S` | (alarm already 60s KV) | Document only unless product wants different |
+| `RESUME_TTL_S` | `300` (min 30) | Resume token lifetime (`CloudflareConfig.resume_ttl_s`) |
+| `RESUME_ENABLED` | `true` | Mint/accept resume tokens kill-switch (`resume_enabled`) |
 
-### Proposed client settings (`ProvideHijack` / session-element config)
+When `RESUME_ENABLED=0`:
 
-| Setting | Default | Meaning |
-|---------|---------|---------|
-| `showResumeIndicator` | `true` | Show “Resumed” flash |
-| `resumeIndicatorMs` | `2500` | How long to show Resumed |
-| `wakingTimeoutMs` | `10000` | Match server expectation |
-| `reconnectEnabled` | `true` | Existing behavior |
-| `persistResumeToken` | `true` | sessionStorage on/off (privacy / shared machine) |
+- Hibernation open hello still sends; `resume_supported=false`, no `resume_token`.
+- `_handle_resume` returns immediately (token not consumed).
 
-## Acceptance checklist (to *know* it works)
+Client: on WS open, if `sessionStorage` has a token, browser sends `{type:"resume", token}` (see `hijack-websocket.ts`).
 
-```bash
-bash scripts/prove_cf_hibernate_resume.sh          # Level A (always)
-bash scripts/prove_cf_hibernate_resume.sh --real-cf # Level B (wrangler/CF)
-```
+## Acceptance checklist
 
 | # | Check | How |
 |---|--------|-----|
-| 1 | Hibernate wake contract | `test_hibernate_wake_contract.py` — wipe memory → SQLite lease → `getWebSockets` broadcast |
-| 2 | Attachment ≠ identity | same — `_socket_role` after clearing `worker_ws` |
-| 3 | Resume tokens | `test_cf_resume.py` — mint/TTL/revoke + `resumed: true` |
-| 4 | UI “Resumed” | `session-element` on `hello.resumed` (~2.5s flash) |
+| 1 | Hibernate wake contract | `test_hibernate_wake_contract.py` / demo path 1 |
+| 2 | Attachment ≠ identity | same |
+| 3 | Resume tokens | `test_cf_resume.py` / demo path 2 |
+| 4 | UI “Resumed” | vitest `session-element-resume.test.ts` |
 | 5 | Config | `RESUME_TTL_S` / `RESUME_ENABLED` |
 | 6 | Live CF | `pytest -m real_cf …/test_e2e_ws.py -k resume` or staging idle/evict |
-
-## Suggested implementation order
-
-1. **Config:** add `resume_ttl_s` (+ optional `resume_enabled`) to `CloudflareConfig.from_env`.
-2. **UI:** honor `hello.resumed` → “Resumed” status flash.
-3. **Client config:** `showResumeIndicator` / `persistResumeToken`.
-4. **Proof:** enable or document `real_cf` e2e in CI nightly; document manual hibernate check.
-5. **Docs:** link this file from CF README + operations runbook.
 
 ## Out of scope
 
 - Changing CF billing / always-on DOs.
-- Faking hibernation without workerd/CF (unit mocks already cover code paths).
+- Faking live CF eviction without workerd/CF (unit mocks cover code paths).
 - Full browser redesign beyond status chrome.

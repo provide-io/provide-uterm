@@ -41,7 +41,46 @@ cp -R "$ROOT/packages/provide-uterm/src/provide/uterm/." "$VENDOR/provide/uterm/
 cp -Rn "$ROOT/packages/provide-uterm-server/src/provide/uterm/." "$VENDOR/provide/uterm/" 2>/dev/null || true
 cp -Rn "$ROOT/packages/provide-uterm-client/src/provide/uterm/." "$VENDOR/provide/uterm/" 2>/dev/null || true
 
+# The full package __init__ eagerly imports pydantic-backed builders and heavy
+# ANSI/render helpers. Pyodide on Workers has no pydantic_core binary, so that
+# import crashes the DO before any route runs. The worker only needs submodules
+# (bridge, control_channel, tunnel, shell, …) via explicit imports — replace
+# with a namespace-style init that does not pull optional heavy deps.
+cat >"$VENDOR/provide/uterm/__init__.py" <<'PY'
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+"""CF Worker vendor shim for provide.uterm (no eager pydantic imports)."""
+from __future__ import annotations
+
+import pkgutil
+
+__path__ = pkgutil.extend_path(__path__, __name__)
+__version__ = "0.0.0-cf-vendor"
+PY
+
+# Ensure provide/ is a namespace package root if missing.
+if [ ! -f "$VENDOR/provide/__init__.py" ]; then
+  printf '%s\n' '# namespace' >"$VENDOR/provide/__init__.py"
+fi
+
+# Pyodide resolves provide.uterm from python_modules first and does not always
+# merge the worker src tree as a second path. Overlay the cloudflare package
+# from src so ``provide.uterm.cloudflare`` resolves under the same package root.
+CF_SRC="$CF/src/provide/uterm/cloudflare"
+if [ -d "$CF_SRC" ]; then
+  rm -rf "$VENDOR/provide/uterm/cloudflare"
+  cp -R "$CF_SRC" "$VENDOR/provide/uterm/cloudflare"
+fi
+
 # Strip bytecode caches to keep the uploaded bundle lean.
 find "$VENDOR" -name __pycache__ -type d -prune -exec rm -rf {} +
 
 echo "CF Worker vendor tree built: $VENDOR"
+# Smoke: required submodules for DO + tunnel share paths.
+for sub in provide/telemetry provide/uterm/bridge provide/uterm/tunnel provide/uterm/control_channel.py provide/uterm/cloudflare; do
+  if [ ! -e "$VENDOR/$sub" ]; then
+    echo "ERROR: missing $VENDOR/$sub after vendor build" >&2
+    exit 1
+  fi
+done
+echo "vendor smoke ok (telemetry, bridge, tunnel, control_channel, cloudflare)"
