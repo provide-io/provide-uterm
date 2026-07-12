@@ -128,4 +128,28 @@ describe("session resume UI", () => {
 
     expect(statusText(widget)).not.toContain("Resumed");
   });
+
+  it("keeps Resumed flash when hijack_state follows immediately", () => {
+    const widget = document.createElement("uterm-session") as UtermSessionElement;
+    widget.config = { workerId: "resume-flash-hold" };
+    document.body.appendChild(widget);
+    widget.connect();
+    flushLit(widget);
+
+    const ws = MockWebSocket.instances[MockWebSocket.instances.length - 1];
+    ws.open();
+    ws.receive(
+      encodeControlFrame({
+        type: "hello",
+        worker_online: false,
+        resume_token: "tok-new",
+        resumed: true,
+      }),
+    );
+    // Server always sends hijack_state right after a successful resume hello.
+    ws.receive(encodeControlFrame({ type: "hijack_state", hijacked: false, owner: null }));
+    flushLit(widget);
+
+    expect(statusText(widget)).toContain("Resumed");
+  });
 });
