@@ -50,8 +50,8 @@ class TestApiKeyStore:
 
     def test_validate_revoked_key(self) -> None:
         store = ApiKeyStore()
-        raw_key, record = store.create("my-key")
-        store.revoke(record.key_id)
+        raw_key, record = store.create("my-key", tenant_id="tenant-a")
+        store.revoke_for_tenant(record.key_id, "tenant-a")
         assert store.validate(raw_key) is None
 
     def test_validate_expired_key(self) -> None:
@@ -69,19 +69,19 @@ class TestApiKeyStore:
 
     def test_revoke_returns_true_for_existing(self) -> None:
         store = ApiKeyStore()
-        _raw_key, record = store.create("my-key")
-        assert store.revoke(record.key_id) is True
+        _raw_key, record = store.create("my-key", tenant_id="tenant-a")
+        assert store.revoke_for_tenant(record.key_id, "tenant-a") is True
         assert record.revoked is True
 
     def test_revoke_returns_false_for_unknown(self) -> None:
         store = ApiKeyStore()
-        assert store.revoke("nonexistent") is False
+        assert store.revoke_for_tenant("nonexistent", "tenant-a") is False
 
     def test_list_keys(self) -> None:
         store = ApiKeyStore()
-        store.create("key-a")
-        store.create("key-b")
-        keys = store.list_keys()
+        store.create("key-a", tenant_id="tenant-a")
+        store.create("key-b", tenant_id="tenant-a")
+        keys = store.list_keys_for_tenant("tenant-a")
         assert len(keys) == 2
         names = {k.name for k in keys}
         assert names == {"key-a", "key-b"}
