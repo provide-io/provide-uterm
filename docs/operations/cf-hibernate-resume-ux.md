@@ -40,17 +40,31 @@ bash scripts/prove_cf_hibernate_resume.sh --real-cf
 # or directly:
 bash scripts/run_cf_resume_e2e_local.sh
 
-# Level B against deployed worker (needs principal JWT + Access if gated)
+# Level B against deployed worker
+# 1) Mint CF_Authorization via Access service-auth (policy lives on the
+#    legacy hostname; same AUD as provide-uterm-cloudflare wrangler.toml):
+#      curl -D- -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
+#           -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
+#           https://undef-terminal-cloudflare.neurotic.workers.dev/api/health
+#    Parse CF_Authorization=… cookie → CF_E2E_JWT.
+# 2) Run:
 REAL_CF=1 REAL_CF_URL=https://provide-uterm-cloudflare.neurotic.workers.dev \
-  CF_E2E_JWT=…  # optional: CF_ACCESS_CLIENT_ID/SECRET
+  CF_E2E_JWT=… CF_ACCESS_CLIENT_ID=… CF_ACCESS_CLIENT_SECRET=… \
   uv run pytest -m real_cf packages/provide-uterm-cloudflare/tests/test_e2e_ws.py \
-  -k 'resume or hello_includes_resume' --no-cov
+  -k 'resume or hello_includes_resume' --no-cov -p no:randomly -p no:xdist
 ```
 
-**Local Level B notes (2026-07-12):**
+**Credentials (not in git):** Access service token for E2E is recorded in local
+Claude project memory `project_cf_auth_deploy.md` (undef-terminal CF Access
+service auth pair + AUD). Worker secrets on the live account are only
+`WORKER_BEARER_TOKEN` + `WEBHOOK_SECRET_KEY` (`wrangler secret list`).
 
-- Deployed health: `https://provide-uterm-cloudflare.neurotic.workers.dev/api/health` → 200.
-- Authenticated routes on prod return 401 without a CF Access / principal JWT.
+**Level B notes (2026-07-12):**
+
+- Deployed: `https://provide-uterm-cloudflare.neurotic.workers.dev` — health 200.
+- Production resume e2e (4 tests) **passed** with Access-minted JWT as Bearer.
+- `workers.dev` hostname does not accept Access client headers alone (401);
+  mint JWT via Access-gated legacy host, then send `Authorization: Bearer`.
 - `pywrangler dev` re-syncs `python_modules/` into a broken Pyodide layout. Use
   `bash .ci/vendor_cf_worker.sh` then `npx wrangler dev` (scripted above).
 - Vendor shim replaces heavy `provide.uterm.__init__` (pydantic) and overlays
