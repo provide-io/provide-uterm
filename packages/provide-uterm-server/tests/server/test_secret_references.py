@@ -155,6 +155,29 @@ def test_file_redacts_unsupported_anchor_open(tmp_path: Path, monkeypatch: pytes
     assert "anchor-secret" not in str(exc.value)
 
 
+def test_file_redacts_missing_base_directory_anchor(tmp_path: Path) -> None:
+    missing_base = tmp_path / "deleted-sensitive-base"
+    reference = SecretReference.parse("file:key", base_dir=missing_base)
+    with pytest.raises(SecretResolutionError) as exc:
+        reference.resolve()
+    assert str(exc.value) == "file secret is unavailable"
+    assert str(missing_base) not in str(exc.value)
+
+
+def test_file_redacts_anchor_oserror(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    reference = SecretReference.parse("file:key", base_dir=tmp_path)
+
+    def denied_anchor(path: object, flags: int, *, dir_fd: int | None = None) -> int:
+        raise PermissionError(f"denied sensitive anchor {path}")
+
+    monkeypatch.setattr(secrets_module.os, "open", denied_anchor)
+    monkeypatch.setattr(secrets_module.os, "supports_dir_fd", os.supports_dir_fd | {denied_anchor})
+    with pytest.raises(SecretResolutionError) as exc:
+        reference.resolve()
+    assert str(exc.value) == "file secret is unavailable"
+    assert str(tmp_path) not in str(exc.value)
+
+
 def test_file_redacts_unsupported_fallback_stat(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     reference = SecretReference.parse("file:stat-secret", base_dir=tmp_path)
     real_open = secrets_module.os.open
