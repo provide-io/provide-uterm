@@ -28,29 +28,46 @@ CONFIGURATION ?= Release
 build:
 	$(DOTNET) build -c $(CONFIGURATION)
 
-# Serialize test host: parallel collections + live Kestrel/native interop has
-# crashed the ubuntu CI host (glibc malloc assert). xunit.runner.json also
-# sets maxParallelThreads=1; keep CLI flags as belt-and-suspenders.
+# Serialize + batch test hosts. Ubuntu CI hits glibc free()/malloc crashes after
+# ~300–400 tests in one process (native PTY/SSH residual). Fresh process per batch.
+# Filters use class-name prefixes from --list-tests (no catch-all ~Term/~Coverage).
+TEST_BATCH_1 := FullyQualifiedName~AnsiColors|FullyQualifiedName~ChannelsLineEditor|FullyQualifiedName~Conformance|FullyQualifiedName~CtrlMsg|FullyQualifiedName~Defaults|FullyQualifiedName~Filters|FullyQualifiedName~Frames|FullyQualifiedName~Redaction|FullyQualifiedName~Sanitizer|FullyQualifiedName~Screen|FullyQualifiedName~Vt|FullyQualifiedName~DeckMux|FullyQualifiedName~ServerRecordingHttp|FullyQualifiedName~ControlChannel
+TEST_BATCH_2 := FullyQualifiedName~Hub|FullyQualifiedName~ServerIntegration|FullyQualifiedName~ServerConfig|FullyQualifiedName~ClientDefaults|FullyQualifiedName~Session|FullyQualifiedName~TermSession|FullyQualifiedName~ModuleSurface|FullyQualifiedName~SmokeSurface|FullyQualifiedName~MoreSurface
+TEST_BATCH_3 := FullyQualifiedName~Cli|FullyQualifiedName~Embed|FullyQualifiedName~Gateway|FullyQualifiedName~Gui|FullyQualifiedName~Interop|FullyQualifiedName~LiveParity|FullyQualifiedName~PtyAndUnicode|FullyQualifiedName~Shell|FullyQualifiedName~Tunnel|FullyQualifiedName~Emulator|FullyQualifiedName~KnownHosts|FullyQualifiedName~SshPolicy
+TEST_BATCH_4 := FullyQualifiedName~Coverage|FullyQualifiedName~DeepCoverage|FullyQualifiedName~HighCoverage|FullyQualifiedName~Over90|FullyQualifiedName~HubAndCli
+
+XUNIT_ARGS := -- xUnit.ParallelizeAssembly=false xUnit.ParallelizeTestCollections=false xUnit.MaxParallelThreads=1
+
+define DOTNET_TEST_BATCH
+	@echo "=== test batch: $(1) ==="
+	@$(DOTNET) test -c $(CONFIGURATION) --no-build --filter "$(2)" $(XUNIT_ARGS) \
+	  || $(DOTNET) test -c $(CONFIGURATION) --filter "$(2)" $(XUNIT_ARGS)
+endef
+
 test:
-	$(DOTNET) test -c $(CONFIGURATION) --no-build -- \
-		xUnit.ParallelizeAssembly=false \
-		xUnit.ParallelizeTestCollections=false \
-		xUnit.MaxParallelThreads=1 \
-	|| $(DOTNET) test -c $(CONFIGURATION) -- \
-		xUnit.ParallelizeAssembly=false \
-		xUnit.ParallelizeTestCollections=false \
-		xUnit.MaxParallelThreads=1
+	$(call DOTNET_TEST_BATCH,1 library,$(TEST_BATCH_1))
+	$(call DOTNET_TEST_BATCH,2 server/hub,$(TEST_BATCH_2))
+	$(call DOTNET_TEST_BATCH,3 native/cli,$(TEST_BATCH_3))
+	$(call DOTNET_TEST_BATCH,4 coverage-boost,$(TEST_BATCH_4))
 
 # AC3: byte-exact Python differential driver (mirrors Go conformance/conformance_test.go).
 conformance-test:
 	$(DOTNET) test -c $(CONFIGURATION) --filter "FullyQualifiedName~ConformanceVectors" -v n
 
+define DOTNET_COVER_BATCH
+	@echo "=== cover batch: $(1) ==="
+	@$(DOTNET) test -c $(CONFIGURATION) --filter "$(2)" \
+	  --collect:"XPlat Code Coverage" --results-directory coverage-out \
+	  -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeByFile="**/UnicodeNormTables.cs;**/UnicodeWidthTables.cs;**/CharsetTables.cs" \
+	  xUnit.ParallelizeAssembly=false xUnit.ParallelizeTestCollections=false xUnit.MaxParallelThreads=1
+endef
+
 cover:
 	@rm -rf coverage-out
-	$(DOTNET) test -c $(CONFIGURATION) \
-		--collect:"XPlat Code Coverage" \
-		--results-directory coverage-out \
-		-- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeByFile="**/UnicodeNormTables.cs;**/UnicodeWidthTables.cs;**/CharsetTables.cs"
+	$(call DOTNET_COVER_BATCH,1,$(TEST_BATCH_1))
+	$(call DOTNET_COVER_BATCH,2,$(TEST_BATCH_2))
+	$(call DOTNET_COVER_BATCH,3,$(TEST_BATCH_3))
+	$(call DOTNET_COVER_BATCH,4,$(TEST_BATCH_4))
 	@python3 ci/coverage_gate.py coverage-out $(COVER_THRESHOLD)
 
 build-binaries:

@@ -116,34 +116,35 @@ class _LifecycleMixin:
             if not already_initialized:
                 # Hibernation-restore path: fetch() did not run for this connection, so
                 # send hello here.  For normal upgrades fetch() already sent it.
-                _open_resume_token = secrets.token_urlsafe(32)
-                _open_resume_ttl = float(getattr(self.config, "resume_ttl_s", 300))
-                self.store.create_resume_token(_open_resume_token, self.worker_id, browser_role, _open_resume_ttl)
-                self.browser_resume_tokens[ws_id] = _open_resume_token
-                await self.send_ws(
-                    ws,
-                    {
-                        "type": "hello",
-                        "worker_id": self.worker_id,
-                        "worker_online": self.worker_ws is not None or self._ushell is not None,
-                        # can_hijack and role reflect the JWT-resolved browser role.
-                        "can_hijack": browser_role == "admin",
-                        "input_mode": self.input_mode,
-                        "role": browser_role,
-                        "hijack_control": "rest",
-                        "hijack_step_supported": True,
-                        "resume_supported": True,
-                        "resume_token": _open_resume_token,
-                        "presence_enabled": bool(self.meta.get("presence")),
-                        "protocol_version": CURRENT_PROTOCOL_VERSION,
-                        "protocol": {
-                            "selected": PREFERRED_PROTOCOL_VERSION,
-                            "server_min": MIN_PROTOCOL_VERSION,
-                            "server_max": MAX_PROTOCOL_VERSION,
-                        },
-                        "ts": time.time(),
+                _resume_on = bool(getattr(self.config, "resume_enabled", True))
+                _open_resume_token = secrets.token_urlsafe(32) if _resume_on else ""
+                if _resume_on:
+                    _open_resume_ttl = float(getattr(self.config, "resume_ttl_s", 300))
+                    self.store.create_resume_token(_open_resume_token, self.worker_id, browser_role, _open_resume_ttl)
+                    self.browser_resume_tokens[ws_id] = _open_resume_token
+                hello: dict[str, object] = {
+                    "type": "hello",
+                    "worker_id": self.worker_id,
+                    "worker_online": self.worker_ws is not None or self._ushell is not None,
+                    # can_hijack and role reflect the JWT-resolved browser role.
+                    "can_hijack": browser_role == "admin",
+                    "input_mode": self.input_mode,
+                    "role": browser_role,
+                    "hijack_control": "rest",
+                    "hijack_step_supported": True,
+                    "resume_supported": _resume_on,
+                    "presence_enabled": bool(self.meta.get("presence")),
+                    "protocol_version": CURRENT_PROTOCOL_VERSION,
+                    "protocol": {
+                        "selected": PREFERRED_PROTOCOL_VERSION,
+                        "server_min": MIN_PROTOCOL_VERSION,
+                        "server_max": MAX_PROTOCOL_VERSION,
                     },
-                )
+                    "ts": time.time(),
+                }
+                if _resume_on:
+                    hello["resume_token"] = _open_resume_token
+                await self.send_ws(ws, hello)
             await self._maybe_send_presence_sync(ws, exclude_self=True)
             await self.send_hijack_state(ws)
             if self.last_snapshot is not None:

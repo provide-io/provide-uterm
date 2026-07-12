@@ -173,6 +173,11 @@ class CloudflareConfig:
     security_permissions_policy: str | None = None
     deckmux_auto_transfer_idle_s: int = 30
     deckmux_keystroke_queue: str = "display"
+    # Browser WS resume-token TTL (seconds). Consumed by create_resume_token /
+    # _handle_resume via getattr(config, "resume_ttl_s", 300).
+    resume_ttl_s: int = 300
+    # When False, mint/accept of resume tokens is disabled (kill-switch).
+    resume_enabled: bool = True
 
     @classmethod
     def from_env(cls, env: Any) -> CloudflareConfig:
@@ -288,4 +293,6 @@ class CloudflareConfig:
             security_permissions_policy=_get_optional("SECURITY_PERMISSIONS_POLICY"),
             deckmux_auto_transfer_idle_s=max(1, int(_get("DECKMUX_AUTO_TRANSFER_IDLE_S", "30"))),
             deckmux_keystroke_queue=_get("DECKMUX_KEYSTROKE_QUEUE", "display") or "display",
+            resume_ttl_s=max(30, int(_get("RESUME_TTL_S", "300"))),
+            resume_enabled=_get_bool("RESUME_ENABLED", default=True),
         )
