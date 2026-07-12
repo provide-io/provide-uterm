@@ -201,8 +201,22 @@ public static class Root
         }
 
         using var cts = new CancellationTokenSource();
-        Console.CancelKeyPress += (_, ev) => { ev.Cancel = true; cts.Cancel(); };
-        ProxyCommand.RunAsync(opts, cts.Token).GetAwaiter().GetResult();
+        // WaitForCancel blocks on Ctrl-C in production; tests inject a no-op then cancel.
+        var waiter = Task.Run(() =>
+        {
+            WaitCancel();
+            cts.Cancel();
+        });
+        try
+        {
+            ProxyCommand.RunAsync(opts, cts.Token).GetAwaiter().GetResult();
+        }
+        catch (OperationCanceledException)
+        {
+            // expected on cancel
+        }
+
+        waiter.GetAwaiter().GetResult();
         return 0;
     }
 
@@ -530,20 +544,23 @@ public static class Root
                 return 0;
             }
 
-            var tcs = new TaskCompletionSource();
-            Console.CancelKeyPress += (_, ev) =>
-            {
-                ev.Cancel = true;
-                tcs.TrySetResult();
-            };
-            await tcs.Task.ConfigureAwait(false);
+            // Interactive: wait for Ctrl-C (or test WaitForCancel hook), then stop.
+            await Task.Run(WaitCancel).ConfigureAwait(false);
             await server.StopAsync().ConfigureAwait(false);
         }
 
         return 0;
     }
 
-    private static void WaitCancel()
+    /// <summary>
+    /// Test hook for the interactive Ctrl-C wait. Production default blocks until
+    /// SIGINT; tests assign a no-op to exercise non-<c>--once</c> command paths.
+    /// </summary>
+    internal static Action WaitForCancel { get; set; } = DefaultWaitCancel;
+
+    private static void WaitCancel() => WaitForCancel();
+
+    private static void DefaultWaitCancel()
     {
         var tcs = new TaskCompletionSource();
         Console.CancelKeyPress += (_, ev) =>

@@ -131,7 +131,15 @@ public sealed class ManagerServer : IAsyncDisposable
     public async Task StopAsync()
     {
         _cts?.Cancel();
-        _listener?.Stop();
+        try
+        {
+            _listener?.Stop();
+        }
+        catch (ObjectDisposedException)
+        {
+            // already closed
+        }
+
         if (_loop is not null)
         {
             try { await _loop.ConfigureAwait(false); }
@@ -314,6 +322,16 @@ public static class ManagerProgram
         await using var server = new ManagerServer(manager);
         await server.StartAsync().ConfigureAwait(false);
         Console.WriteLine($"uterm-manager listening on {server.BaseAddress}");
+        // Interactive wait: production blocks on Ctrl-C; tests assign WaitForCancel.
+        await Task.Run(WaitForCancel).ConfigureAwait(false);
+        return 0;
+    }
+
+    /// <summary>Test hook for the interactive manager wait loop.</summary>
+    internal static Action WaitForCancel { get; set; } = DefaultWaitCancel;
+
+    private static void DefaultWaitCancel()
+    {
         using var cts = new CancellationTokenSource();
         Console.CancelKeyPress += (_, e) =>
         {
@@ -322,13 +340,11 @@ public static class ManagerProgram
         };
         try
         {
-            await Task.Delay(Timeout.Infinite, cts.Token).ConfigureAwait(false);
+            Task.Delay(Timeout.Infinite, cts.Token).GetAwaiter().GetResult();
         }
         catch (OperationCanceledException)
         {
             // shutdown
         }
-
-        return 0;
     }
 }
