@@ -7,10 +7,11 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from provide.uterm.control.plane.sqlite.approval_store import SqliteApprovalStore
 from provide.uterm.control.plane.sqlite.connection import SqliteConnectionError, connect_sqlite
+from provide.uterm.control.plane.sqlite.graphical_target_store import SqliteGraphicalTargetStore
 from provide.uterm.control.plane.sqlite.lease_store import SqliteLeaseStore
 from provide.uterm.control.plane.sqlite.migration import SqliteMigrationError, apply_migrations
 from provide.uterm.control.plane.sqlite.session_store import SqliteSessionStore
@@ -162,3 +163,6 @@ class SqliteControlPlane:
 
     def lease_store(self, tx: SqliteTransaction) -> SqliteLeaseStore:
         return SqliteLeaseStore(tx)
+
+    def graphical_target_store(self, tx: Any) -> SqliteGraphicalTargetStore:
+        return SqliteGraphicalTargetStore(tx)

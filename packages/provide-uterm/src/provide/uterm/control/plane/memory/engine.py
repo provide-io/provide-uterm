@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from provide.uterm.control.plane.memory.approval_store import MemoryApprovalStore
 from provide.uterm.control.plane.memory.graphical_target_store import MemoryGraphicalTargetStore
@@ -112,5 +112,5 @@ class MemoryControlPlane:
     def lease_store(self, tx: MemoryTransaction) -> MemoryLeaseStore:
         return MemoryLeaseStore(tx.state, tx)
 
-    def graphical_target_store(self, tx: MemoryTransaction) -> MemoryGraphicalTargetStore:
+    def graphical_target_store(self, tx: Any) -> MemoryGraphicalTargetStore:
         return MemoryGraphicalTargetStore(tx.state, tx)

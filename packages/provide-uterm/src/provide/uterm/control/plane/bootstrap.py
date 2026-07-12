@@ -4,10 +4,11 @@
 #
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
     from provide.uterm.control.plane.capability import EngineCapabilities
+    from provide.uterm.control.plane.graphical_target import GraphicalTargetStore
     from provide.uterm.control.plane.transaction import Transaction
     from provide.uterm.control.plane.types import ControlPlaneConfig
 
@@ -24,6 +25,8 @@ class ControlPlane(Protocol):
     async def begin(self) -> Transaction: ...
 
     async def reap(self, *, now: float, retention_s: int) -> int: ...
+
+    def graphical_target_store(self, tx: Any) -> GraphicalTargetStore: ...
 
     async def get_audit_head(self) -> tuple[int, str] | None:
         """Return the persisted audit-chain head ``(seq, record_hash)``, or
