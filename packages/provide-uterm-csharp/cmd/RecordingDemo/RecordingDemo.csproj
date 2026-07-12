@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Provide.Uterm.Demos</RootNamespace>
+    <AssemblyName>uterm-demo-recording</AssemblyName>
+    <Description>Library-level session recording demo (C#) — screen snapshots → JSONL.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Provide.Uterm/Provide.Uterm.csproj" />
+  </ItemGroup>
+
+</Project>

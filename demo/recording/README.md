@@ -5,15 +5,46 @@ Snapshots of the terminal screen are stored alongside send/receive events so you
 reconstruct exactly what the terminal looked like at any point in time. Recordings are
 downloadable for audit trails, compliance, or offline replay.
 
-**What you'll see:** A series of deployment commands runs in a live terminal session. The
-demo then opens the replay viewer filtered to screen snapshots — the rendered-screen pane
-steps through each captured state as playback advances, showing the terminal evolving from
-empty to a completed deployment log. The full JSONL recording is available for download.
+**What you'll see:** Library demos (Python / Go / C#) start a `LocalFile*` recording store,
+append a short deploy story as **screen snapshots**, then print JSONL metadata and a sample
+line. The multi-language asciinema casts prove each implementation persists the same
+lifecycle (`log_start` → `snapshot`… → `log_stop`).
 
-## Files
+## Multi-language terminal casts
+
+| Language | Cast | Store type |
+|----------|------|------------|
+| **Python** | [python/terminal.cast](python/terminal.cast) | `LocalFileRecordingStore` |
+| **Go** | [go/terminal.cast](go/terminal.cast) | `recording.LocalFileStore` |
+| **C#** | [csharp/terminal.cast](csharp/terminal.cast) | `Provide.Uterm.Recording.LocalFileStore` |
+
+Legacy root [terminal.cast](terminal.cast) is refreshed from the **Python** matrix cast.
+
+### Re-record the matrix
+
+From the repo root (requires `asciinema`, `go`, `dotnet`):
+
+```bash
+uv run python -m scripts.demos.record_recording_matrix
+# or a subset:
+uv run python -m scripts.demos.record_recording_matrix --langs python,go,csharp
+```
+
+Demo programs (also runnable without asciinema):
+
+```bash
+uv run python scripts/demos/recording_matrix/demo_python.py
+(cd packages/provide-uterm-go && go run ./cmd/demo-recording)
+dotnet run --project packages/provide-uterm-csharp/cmd/RecordingDemo -c Release
+```
+
+## Full-stack browser demo (Python server)
+
+The original server+browser recorder still lives in
+`scripts/demos/record_recording.py` (FastAPI + hijack + replay UI).
 
 | File | Description |
 |------|-------------|
-| [browser.mp4](browser.mp4) | Full browser recording |
-| [browser_trim.mp4](browser_trim.mp4) | Highlight clip |
-| [terminal.cast](terminal.cast) | Terminal session (asciinema) |
+| [browser_trim.mp4](browser_trim.mp4) | Highlight clip (Python server UI) |
+| [terminal.cast](terminal.cast) | Library-level Python cast (matrix) |
+| [screenshots/](screenshots/) | Browser stills from full-stack demo |
