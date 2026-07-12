@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://provide.io/schemas/uterm-live-harness-result.json",
+  "title": "Uterm live harness result",
+  "type": "object",
+  "required": ["scenario_id", "language", "status", "events"],
+  "properties": {
+    "scenario_id": { "type": "string" },
+    "language": { "type": "string", "enum": ["python", "go", "csharp"] },
+    "status": { "type": "string", "enum": ["pass", "fail", "unsupported"] },
+    "capabilities": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string" },
+          "ts_ms": { "type": "number" },
+          "payload_b64": { "type": "string" },
+          "fields": { "type": "object" }
+        }
+      }
+    },
+    "error": { "type": "string" }
+  },
+  "additionalProperties": false
+}

@@ -32,6 +32,14 @@ public static class ProxyCommand
         public string Transport { get; init; } = "telnet";
         /// <summary>Upstream WSS/WS URL when Transport is websocket.</summary>
         public string? UpstreamWsUrl { get; init; }
+        /// <summary>SSH username (required for --transport ssh).</summary>
+        public string SshUser { get; init; } = "";
+        /// <summary>SSH password (optional if key auth is added later).</summary>
+        public string SshPassword { get; init; } = "";
+        /// <summary>OpenSSH known_hosts file paths (required unless insecure).</summary>
+        public List<string> KnownHostsFiles { get; init; } = new();
+        /// <summary>Explicit insecure opt-in; never the default.</summary>
+        public bool InsecureSkipHostKeyVerify { get; init; }
     }
 
     /// <summary>Build the ASP.NET app for the proxy. Exposed for in-process tests.</summary>
@@ -115,7 +123,13 @@ public static class ProxyCommand
         else if (transport == "ssh")
         {
             tr = new SshTransport();
-            connectOpts.Ssh = new SshOptions { InsecureSkipHostKeyVerify = true };
+            connectOpts.Ssh = new SshOptions
+            {
+                User = opts.SshUser,
+                Password = opts.SshPassword,
+                KnownHostsFiles = opts.KnownHostsFiles.ToList(),
+                InsecureSkipHostKeyVerify = opts.InsecureSkipHostKeyVerify,
+            };
         }
         else
         {

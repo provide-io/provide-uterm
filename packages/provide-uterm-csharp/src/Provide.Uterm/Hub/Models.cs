@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
+using Provide.Uterm.Gui;
+
 namespace Provide.Uterm.Hub;
 
 /// <summary>Input modes for a worker. Mirrors provide.uterm.bridge.contracts.InputMode.</summary>
@@ -78,6 +80,9 @@ public sealed class WorkerTermState
     public double LastActivityAt { get; set; }
     public int? ProtocolVersion { get; set; }
     public bool IsTunnelWorker { get; set; }
+
+    /// <summary>Optional remote GUI session (memory fixture or RFB client).</summary>
+    public IGraphicalSession? GraphicalSession { get; set; }
 
     public HijackLease Lease() => new()
     {

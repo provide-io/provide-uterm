@@ -5,10 +5,15 @@
 
 using System.Text;
 using Renci.SshNet;
+using Renci.SshNet.Common;
 
 namespace Provide.Uterm.Transports;
 
-/// <summary>SSH shell transport via SSH.NET.</summary>
+/// <summary>
+/// SSH shell transport via SSH.NET.
+/// Host-key policy: fail closed unless <see cref="SshOptions.InsecureSkipHostKeyVerify"/>
+/// is set or a matching OpenSSH known_hosts entry is found.
+/// </summary>
 public sealed class SshTransport : IConnectionTransport, IDisposable
 {
     private SshClient? _client;
@@ -48,8 +53,35 @@ public sealed class SshTransport : IConnectionTransport, IDisposable
                 "SSH host key verification is required; set KnownHostsFiles or InsecureSkipHostKeyVerify");
         }
 
+        if (!ssh.InsecureSkipHostKeyVerify && KnownHosts.ExistingFiles(ssh.KnownHostsFiles).Count == 0)
+        {
+            throw new InvalidOperationException(
+                "SSH host key verification is required; no readable known_hosts files found");
+        }
+
         var client = new SshClient(conn);
-        client.Connect();
+        client.HostKeyReceived += (_, e) =>
+        {
+            if (ssh.InsecureSkipHostKeyVerify)
+            {
+                e.CanTrust = true;
+                return;
+            }
+
+            e.CanTrust = KnownHosts.Matches(host, port, e.HostKeyName, e.HostKey, ssh.KnownHostsFiles);
+        };
+
+        try
+        {
+            client.Connect();
+        }
+        catch (SshConnectionException ex) when (!ssh.InsecureSkipHostKeyVerify)
+        {
+            client.Dispose();
+            throw new InvalidOperationException(
+                "SSH host key verification failed (key not trusted by known_hosts)", ex);
+        }
+
         var term = options.Term;
         var shell = client.CreateShellStream(term, (uint)options.Cols, (uint)options.Rows, 0, 0, 4096);
         lock (_lock)

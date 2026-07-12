@@ -204,6 +204,9 @@ public class CoverageTo95Tests
             Port = proxyPort,
             Path = "/ws/ssh",
             Transport = "ssh",
+            SshUser = "u",
+            SshPassword = "p",
+            InsecureSkipHostKeyVerify = true,
         };
         await using var app = ProxyCommand.Build(opts, new[] { $"http://127.0.0.1:{proxyPort}" });
         await app.StartAsync();
