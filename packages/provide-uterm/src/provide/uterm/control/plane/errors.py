@@ -26,3 +26,7 @@ class ControlPlaneConflictError(ControlPlaneError):
     backend detects this optimistically at commit time so that, e.g., a
     lease-acquire race yields exactly one winner on both backends.
     """
+
+
+class ControlPlaneDataError(ControlPlaneError):
+    """Raised when persisted control-plane data cannot be decoded safely."""
