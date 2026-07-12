@@ -6,9 +6,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from contextlib import suppress
-from typing import TYPE_CHECKING, TypeVar
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Literal, TypeVar
 
 from provide.uterm.control.plane.errors import ControlPlaneConflictError
 from provide.uterm.control.plane.graphical_target import GraphicalTargetRecord
@@ -19,9 +21,11 @@ if TYPE_CHECKING:
 
     from provide.uterm.control.plane import ControlPlane
     from provide.uterm.control.plane.graphical_target import GraphicalTargetStore
+    from provide.uterm.control.plane.transaction import Transaction
 
 _T = TypeVar("_T")
 _MAX_CONFLICT_ATTEMPTS = 3
+_ROLLBACK_TIMEOUT_S = 1.0
 
 
 class GraphicalTargetError(RuntimeError):
@@ -44,6 +48,37 @@ class GraphicalTargetTransactionError(GraphicalTargetError):
     """Raised when transaction conflict retries are exhausted."""
 
 
+class GraphicalTargetForbiddenError(GraphicalTargetError):
+    """Raised when a tenant scope attempts a cross-tenant mutation."""
+
+
+class GraphicalTargetClosedError(GraphicalTargetError):
+    """Raised when an operation is attempted after registry shutdown."""
+
+
+@dataclass(frozen=True, slots=True)
+class GraphicalTargetScope:
+    """Explicit tenant or privileged system scope for registry operations."""
+
+    kind: Literal["tenant", "system"]
+    tenant_id: str | None = None
+
+    def __post_init__(self) -> None:
+        if (self.kind == "tenant") != (self.tenant_id is not None):
+            raise ValueError("tenant scope requires exactly one tenant_id")
+
+    @classmethod
+    def tenant(cls, tenant_id: str) -> GraphicalTargetScope:
+        return cls("tenant", tenant_id)
+
+    @classmethod
+    def system(cls) -> GraphicalTargetScope:
+        return cls("system")
+
+    def permits(self, tenant_id: str | None) -> bool:
+        return self.kind == "system" or self.tenant_id == tenant_id
+
+
 class GraphicalTargetRegistry:
     """Merge static target policy with runtime control-plane records.
 
@@ -63,27 +98,35 @@ class GraphicalTargetRegistry:
         self._owns_control_plane = owns_control_plane
         self._closed = False
 
-    async def get(self, target_id: str, *, tenant_id: str | None = None) -> GraphicalTargetDefinition | None:
+    async def get(self, scope: GraphicalTargetScope, target_id: str) -> GraphicalTargetDefinition | None:
+        self._ensure_open()
         static = self._static.get(target_id)
         if static is not None:
-            return static if static.tenant_id == tenant_id or tenant_id is None else None
-        record = await self.get_runtime_record(target_id)
-        if record is None or (tenant_id is not None and record.tenant_id != tenant_id):
+            return static if scope.permits(static.tenant_id) else None
+        record = await self.get_runtime_record(scope, target_id)
+        if record is None:
             return None
         return self._from_record(record)
 
-    async def list(self, *, tenant_id: str | None = None) -> list[GraphicalTargetDefinition]:
+    async def list(self, scope: GraphicalTargetScope) -> list[GraphicalTargetDefinition]:
+        self._ensure_open()
         records = await self._run_tx(lambda store: store.list_graphical_targets())
         merged = {
             record.target_id: self._from_record(record) for record in records if record.target_id not in self._static
         }
         merged.update(self._static)
         return sorted(
-            (target for target in merged.values() if tenant_id is None or target.tenant_id == tenant_id),
+            (target for target in merged.values() if scope.permits(target.tenant_id)),
             key=lambda target: target.target_id,
         )
 
-    async def create(self, target: GraphicalTargetDefinition) -> GraphicalTargetDefinition:
+    async def create(
+        self,
+        scope: GraphicalTargetScope,
+        target: GraphicalTargetDefinition,
+    ) -> GraphicalTargetDefinition:
+        self._ensure_open()
+        self._require_scope(scope, target.tenant_id)
         if target.target_id in self._static:
             raise GraphicalTargetAlreadyExistsError("graphical target already exists")
 
@@ -95,7 +138,13 @@ class GraphicalTargetRegistry:
         await self._run_tx(create_record)
         return target
 
-    async def update(self, target: GraphicalTargetDefinition) -> GraphicalTargetDefinition:
+    async def update(
+        self,
+        scope: GraphicalTargetScope,
+        target: GraphicalTargetDefinition,
+    ) -> GraphicalTargetDefinition:
+        self._ensure_open()
+        self._require_scope(scope, target.tenant_id)
         if target.target_id in self._static:
             raise GraphicalTargetImmutableError("static graphical target is immutable")
 
@@ -103,51 +152,84 @@ class GraphicalTargetRegistry:
             current = await store.get_graphical_target(target.target_id)
             if current is None:
                 raise GraphicalTargetNotFoundError("graphical target not found")
+            self._require_scope(scope, current.tenant_id)
             await store.put_graphical_target(self._to_record(target, created_at=current.created_at))
 
         await self._run_tx(update_record)
         return target
 
-    async def delete(self, target_id: str) -> None:
-        if target_id in self._static:
+    async def delete(self, scope: GraphicalTargetScope, target_id: str) -> None:
+        self._ensure_open()
+        static = self._static.get(target_id)
+        if static is not None:
+            self._require_scope(scope, static.tenant_id)
             raise GraphicalTargetImmutableError("static graphical target is immutable")
 
         async def delete_record(store: GraphicalTargetStore) -> None:
-            if await store.get_graphical_target(target_id) is None:
+            current = await store.get_graphical_target(target_id)
+            if current is None:
                 raise GraphicalTargetNotFoundError("graphical target not found")
+            self._require_scope(scope, current.tenant_id)
             await store.delete_graphical_target(target_id)
 
         await self._run_tx(delete_record)
 
-    async def get_runtime_record(self, target_id: str) -> GraphicalTargetRecord | None:
-        return await self._run_tx(lambda store: store.get_graphical_target(target_id))
+    async def get_runtime_record(
+        self,
+        scope: GraphicalTargetScope,
+        target_id: str,
+    ) -> GraphicalTargetRecord | None:
+        self._ensure_open()
+        record = await self._run_tx(lambda store: store.get_graphical_target(target_id))
+        return record if record is None or scope.permits(record.tenant_id) else None
 
     async def close(self) -> None:
         if self._closed:
             return
-        self._closed = True
         if self._owns_control_plane:
             await self._control_plane.close()
+        self._closed = True
 
     async def _run_tx(self, operation: Callable[[GraphicalTargetStore], Awaitable[_T]]) -> _T:
+        self._ensure_open()
         for attempt in range(_MAX_CONFLICT_ATTEMPTS):
-            transaction = await self._control_plane.begin()
-            store = self._control_plane.graphical_target_store(transaction)
+            transaction: Transaction | None = None
             try:
+                transaction = await self._control_plane.begin()
+                store = self._control_plane.graphical_target_store(transaction)
                 result = await operation(store)
                 await transaction.commit()
-            except ControlPlaneConflictError as exc:
-                with suppress(Exception):
-                    await transaction.rollback()
+            except BaseException as exc:
+                if transaction is not None:
+                    await self._rollback(transaction)
+                if not isinstance(exc, ControlPlaneConflictError):
+                    raise
                 if attempt + 1 == _MAX_CONFLICT_ATTEMPTS:
-                    raise GraphicalTargetTransactionError("graphical target transaction conflicted") from exc
+                    raise GraphicalTargetTransactionError("graphical target transaction conflicted") from None
+                await asyncio.sleep(0)
                 continue
-            except Exception:
-                with suppress(Exception):
-                    await transaction.rollback()
-                raise
             return result
         raise AssertionError("unreachable")  # pragma: no cover
+
+    @staticmethod
+    async def _rollback(transaction: Transaction) -> None:
+        rollback_task = asyncio.create_task(asyncio.wait_for(transaction.rollback(), timeout=_ROLLBACK_TIMEOUT_S))
+        try:
+            await asyncio.shield(rollback_task)
+        except asyncio.CancelledError:
+            with suppress(BaseException):
+                await rollback_task
+        except BaseException:
+            pass
+
+    def _ensure_open(self) -> None:
+        if self._closed:
+            raise GraphicalTargetClosedError("graphical target registry is closed")
+
+    @staticmethod
+    def _require_scope(scope: GraphicalTargetScope, tenant_id: str | None) -> None:
+        if not scope.permits(tenant_id):
+            raise GraphicalTargetForbiddenError("graphical target tenant scope denied")
 
     @staticmethod
     def _to_record(target: GraphicalTargetDefinition, *, created_at: float | None = None) -> GraphicalTargetRecord:
