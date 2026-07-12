@@ -239,15 +239,32 @@ class GraphicalTargetRegistry:
             if self._owns_control_plane:
                 await self._control_plane.close()
         except BaseException as exc:
-            async with self._lifecycle:
-                self._closing = False
-                self._close_outcomes[generation] = exc
-                self._lifecycle.notify_all()
+            await self._publish_close_outcome_safely(generation, exc)
             raise
+        cancellation = await self._publish_close_outcome_safely(generation, None)
+        if cancellation is not None:
+            raise cancellation
+
+    async def _publish_close_outcome_safely(
+        self,
+        generation: int,
+        outcome: BaseException | None,
+    ) -> asyncio.CancelledError | None:
+        publication = asyncio.create_task(self._publish_close_outcome(generation, outcome))
+        cancellation: asyncio.CancelledError | None = None
+        while not publication.done():
+            try:
+                await asyncio.shield(publication)
+            except asyncio.CancelledError as exc:
+                cancellation = exc
+        publication.result()
+        return cancellation
+
+    async def _publish_close_outcome(self, generation: int, outcome: BaseException | None) -> None:
         async with self._lifecycle:
-            self._closed = True
+            self._closed = outcome is None
             self._closing = False
-            self._close_outcomes[generation] = None
+            self._close_outcomes[generation] = outcome
             self._lifecycle.notify_all()
 
     async def _run_tx(self, operation: Callable[[GraphicalTargetStore], Awaitable[_T]]) -> _T:

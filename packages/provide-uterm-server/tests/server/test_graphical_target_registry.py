@@ -537,3 +537,69 @@ async def test_cancelled_close_while_draining_is_retryable() -> None:
     await operation
     await asyncio.wait_for(retry, timeout=1)
     plane.close.assert_awaited_once()
+
+
+async def test_cancel_after_control_plane_close_still_publishes_closed_outcome() -> None:
+    close_started = asyncio.Event()
+    release_close = asyncio.Event()
+    close_completed = asyncio.Event()
+    plane = AsyncMock()
+
+    async def close_plane() -> None:
+        close_started.set()
+        await release_close.wait()
+        close_completed.set()
+
+    plane.close.side_effect = close_plane
+    registry = GraphicalTargetRegistry((), plane, owns_control_plane=True)
+    leader = asyncio.create_task(registry.close())
+    await close_started.wait()
+    waiter = asyncio.create_task(registry.close())
+    await asyncio.sleep(0)
+
+    await registry._lifecycle.acquire()
+    try:
+        release_close.set()
+        await close_completed.wait()
+        await asyncio.sleep(0)
+        leader.cancel()
+    finally:
+        registry._lifecycle.release()
+
+    with pytest.raises(asyncio.CancelledError):
+        await leader
+    await asyncio.wait_for(waiter, timeout=1)
+    await registry.close()
+    assert registry._closed is True
+    assert registry._closing is False
+    plane.close.assert_awaited_once()
+    with pytest.raises(GraphicalTargetClosedError, match="graphical target registry is closed"):
+        await registry.list(SYSTEM)
+
+
+async def test_cancelled_borrowed_close_still_publishes_success() -> None:
+    publication_started = asyncio.Event()
+    release_publication = asyncio.Event()
+    plane = AsyncMock()
+    registry = GraphicalTargetRegistry((), plane)
+    original_publish = registry._publish_close_outcome
+
+    async def delayed_publish(generation: int, outcome: BaseException | None) -> None:
+        publication_started.set()
+        await release_publication.wait()
+        await original_publish(generation, outcome)
+
+    registry._publish_close_outcome = delayed_publish  # type: ignore[method-assign]
+    leader = asyncio.create_task(registry.close())
+    await publication_started.wait()
+    waiter = asyncio.create_task(registry.close())
+    await asyncio.sleep(0)
+    leader.cancel()
+    release_publication.set()
+
+    with pytest.raises(asyncio.CancelledError):
+        await leader
+    await asyncio.wait_for(waiter, timeout=1)
+    assert registry._closed is True
+    assert registry._closing is False
+    plane.close.assert_not_awaited()
