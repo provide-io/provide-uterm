@@ -3,19 +3,19 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Validate the Python and Go public session/hijack-client APIs against
+"""Validate the Python, Go, and C# public session/hijack-client APIs against
 spec/uterm-api.yaml.
 
 Modeled on provide-telemetry's spec/validate_conformance.py: a canonical YAML
 spec lists required symbols; per-language extractors statically parse the
 actual source (no import/build required); every `required: true` symbol must
 have a same-named-under-the-language's-naming-convention counterpart in both
-languages, or this fails.
+languages (python, go, csharp), or this fails.
 
 Usage:
     uv run python spec/validate_conformance.py
 
-Exit code 0 if both languages conform, 1 otherwise.
+Exit code 0 if all languages conform, 1 otherwise.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _conformance_extractors import get_go_exports, get_python_exports, to_pascal_case
+from _conformance_extractors import get_csharp_exports, get_go_exports, get_python_exports, to_pascal_case
 
 try:
     import yaml
@@ -54,6 +54,7 @@ def main() -> int:
     for category, entries in categories.items():
         python_exports = get_python_exports(category)
         go_exports = get_go_exports(category)
+        csharp_exports = get_csharp_exports(category)
         for entry in entries:
             name = entry["name"]
             required = bool(entry.get("required", True))
@@ -61,12 +62,14 @@ def main() -> int:
             if required:
                 required_count += 1
 
-            # kind: type names are literal PascalCase in both languages
+            # kind: type names are literal PascalCase in all languages
             # (Python classes are PascalCase too) -- no transform. kind:
-            # function names are snake_case in Python, PascalCase in Go.
+            # function names are snake_case in Python, PascalCase in Go/C#.
             go_name = name if entry.get("kind") == "type" else to_pascal_case(name)
+            cs_name = go_name  # C# uses the same PascalCase convention as Go
             py_ok = name in python_exports
             go_ok = go_name in go_exports
+            cs_ok = cs_name in csharp_exports
 
             if not required:
                 continue
@@ -74,6 +77,8 @@ def main() -> int:
                 errors.append(f"[{category}] python: missing {name!r}")
             if not go_ok:
                 errors.append(f"[{category}] go: missing {go_name!r} (spec name {name!r})")
+            if not cs_ok:
+                errors.append(f"[{category}] csharp: missing {cs_name!r} (spec name {name!r})")
 
     noun = "category" if len(categories) == 1 else "categories"
     print(f"checked {checked} spec entries ({required_count} required) across {len(categories)} {noun}")
@@ -82,7 +87,7 @@ def main() -> int:
         for err in errors:
             print(f"  - {err}")
         return 1
-    print("all required symbols present in both languages")
+    print("all required symbols present in python, go, and csharp")
     return 0
 
 

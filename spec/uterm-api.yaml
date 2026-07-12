@@ -4,7 +4,7 @@
 #
 
 # Canonical public API surface for provide-uterm's session + hijack-client
-# layer -- the two surfaces a Python or Go integrator actually calls day to
+# layer -- the surfaces a Python, Go, or C# integrator actually calls day to
 # day. Each language MUST export an equivalent of every `required: true`
 # symbol, named per naming_conventions below. Modeled on provide-telemetry's
 # spec/telemetry-api.yaml (see that repo for the pattern this was copied
@@ -28,6 +28,7 @@ spec_version: "1"
 naming_conventions:
   python: snake_case
   go: PascalCase
+  csharp: PascalCase
 
 api:
   # provide.uterm.transport_session / telnet_session / ws_session (Python)
