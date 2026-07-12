@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from provide.uterm.control.plane.memory.approval_store import MemoryApprovalStore
+from provide.uterm.control.plane.memory.graphical_target_store import MemoryGraphicalTargetStore
 from provide.uterm.control.plane.memory.lease_store import MemoryLeaseStore
 from provide.uterm.control.plane.memory.session_store import MemorySessionStore
 from provide.uterm.control.plane.memory.token_store import MemoryTokenStore
@@ -110,3 +111,6 @@ class MemoryControlPlane:
 
     def lease_store(self, tx: MemoryTransaction) -> MemoryLeaseStore:
         return MemoryLeaseStore(tx.state, tx)
+
+    def graphical_target_store(self, tx: MemoryTransaction) -> MemoryGraphicalTargetStore:
+        return MemoryGraphicalTargetStore(tx.state, tx)

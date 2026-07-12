@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from provide.uterm.control.plane.approval.types import ApprovalRecord
+    from provide.uterm.control.plane.graphical_target.types import GraphicalTargetRecord
     from provide.uterm.control.plane.lease.types import LeaseRecord
     from provide.uterm.control.plane.session.types import SessionRecord
     from provide.uterm.control.plane.token.types import ResumeTokenRecord, SessionTokenRecord
@@ -29,6 +30,7 @@ class MemoryState:
     sessions: dict[str, SessionRecord] = field(default_factory=dict)
     approvals: dict[str, ApprovalRecord] = field(default_factory=dict)
     leases: dict[str, LeaseRecord] = field(default_factory=dict)
+    graphical_targets: dict[str, GraphicalTargetRecord] = field(default_factory=dict)
     # Latest audit-chain head (seq, record_hash); None until first set. Non-durable.
     audit_head: tuple[int, str] | None = None
 
@@ -40,6 +42,7 @@ def _copy_state(state: MemoryState) -> MemoryState:
         sessions=state.sessions.copy(),
         approvals=state.approvals.copy(),
         leases=state.leases.copy(),
+        graphical_targets=state.graphical_targets.copy(),
     )
 
 
@@ -112,6 +115,11 @@ class MemoryTransaction:
                 or _detect_conflict(self._root.sessions, self._snapshot.sessions, self.state.sessions)
                 or _detect_conflict(self._root.approvals, self._snapshot.approvals, self.state.approvals)
                 or _detect_conflict(self._root.leases, self._snapshot.leases, self.state.leases)
+                or _detect_conflict(
+                    self._root.graphical_targets,
+                    self._snapshot.graphical_targets,
+                    self.state.graphical_targets,
+                )
             )
             if conflict:
                 self.closed = True
@@ -121,6 +129,11 @@ class MemoryTransaction:
             _merge_table(self._root.sessions, self._snapshot.sessions, self.state.sessions)
             _merge_table(self._root.approvals, self._snapshot.approvals, self.state.approvals)
             _merge_table(self._root.leases, self._snapshot.leases, self.state.leases)
+            _merge_table(
+                self._root.graphical_targets,
+                self._snapshot.graphical_targets,
+                self.state.graphical_targets,
+            )
         self.closed = True
 
     async def rollback(self) -> None:
