@@ -212,7 +212,7 @@ In-process API for protocol-aware hosts (e.g. TWX30 adapters). **Not** fleet fan
 | Re-entrant-safe ordered sends | Y | Y (`SendFromInterceptor`) | Y (`AsyncLocal` gate) | — | — | — |
 | App-byte events + wire diagnostic events | Y | Y | Y | — | — | — |
 | Pluggable telnet **policy** hooks | Y | Y | Y | — | — | — |
-| Full telnet IAC engine on embed path | S (use transports) | S (use transports) | S (use transports) | — | — | — |
+| Full telnet IAC engine on embed path | Y (scripted + parse) | Y (scripted + ParseTelnetBuffer) | Y (ScriptedTelnet + TelnetIac; live TCP residual) | — | — | — |
 | Transparent 8-bit app pipes (no UTF-8 assume) | Y | Y | Y | — | — | — |
 | In-process client attach (no loopback) | Y | Y | Y | — | — | — |
 | Client metadata + tag filters (selective fan-out) | Y | Y | Y | — | — | — |
@@ -479,7 +479,7 @@ await session.SendToClientsAsync(bytes, filter);
 - [x] Re-entrant-safe ordering (C# gate; Go `SendFromInterceptor`; Py depth)
 - [x] Application-byte events + wire diagnostic events
 - [x] Telnet **policy** interface (TTYPE/NAWS/option answers)
-- [ ] Full telnet IAC state machine composed onto embed upstream (wrap existing transports)
+- [x] Full telnet IAC state machine composed onto embed upstream (scripted + policy; live TCP residual)
 - [x] Replace-upstream reconnect keeping clients
 - [x] Backpressure policies (drop-oldest / drop-newest / disconnect); upstream never waits on spectators
 - [x] Session-scoped services dictionary
@@ -662,10 +662,10 @@ Each phase leaves a working system and adds its scenarios to **required CI for t
 - Deps: none hard
 - Exit: create/attach/intercept/fan-out/replace-upstream unit tests green in all three languages
 
-### PR12 — Embed + real Telnet/SSH upstream composition
-- Files: wrap `TelnetTransport` / `IConnectionTransport` as `IUpstreamPipe` with IAC strip + policy
+### PR12 — Embed + real Telnet/SSH upstream composition *(landed — unit path)*
+- Files: C# `TelnetIac`/`ScriptedTelnetUpstream`/`ConnectionTransportUpstream`/`TelnetUpstream` (live residual); Go `ParseTelnetBuffer`+scripted; Py `telnet_upstream`
 - Deps: PR11
-- Exit: live telnet fixture through embed session
+- Exit: IAC parse + policy answers + transport adapter unit tests green; live TCP residual documented
 
 ### PR13 — MCP 6a (terminal) Linux
 ### PR14 — MCP 6b (GUI) + three-OS expansion
@@ -681,3 +681,5 @@ Each phase leaves a working system and adds its scenarios to **required CI for t
 *Updated 2026-07-12: Platform multi-language feature matrix (terminal core, control channel, hub/hijack, transports, DeckMux, tunnel, GUI/RFB, ushell summary, auth/MCP, frontend) with Py/Go/C#/Rust/TS/Bun columns — same style as Workstream 7.*
 
 *Updated 2026-07-12: Workstream 8 embedded multi-client session/proxy core landed in Py/Go/C#; matrix §11 + PR11.*
+
+*Updated 2026-07-12: PR12 embed transport composition — Telnet IAC+policy+adapters in Py/Go/C#.*

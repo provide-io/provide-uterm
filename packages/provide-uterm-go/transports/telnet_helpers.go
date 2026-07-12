@@ -47,3 +47,38 @@ func BuildDo(option byte) []byte { return []byte{iacByte, cmdDO, option} }
 
 // BuildDont returns an IAC DONT <option> sequence (port of TelnetClient.dont).
 func BuildDont(option byte) []byte { return []byte{iacByte, cmdDONT, option} }
+
+// EscapeIAC doubles 0xFF bytes for binary-safe telnet send.
+func EscapeIAC(data []byte) []byte {
+	out := make([]byte, 0, len(data)+4)
+	for _, b := range data {
+		out = append(out, b)
+		if b == iacByte {
+			out = append(out, iacByte)
+		}
+	}
+	return out
+}
+
+// TelnetEvent is a public negotiation/subnegotiation event from ParseTelnetBuffer.
+type TelnetEvent struct {
+	IsSubneg bool
+	Cmd      byte
+	Opt      byte
+	Payload  []byte // for subneg: bytes between SB and IAC SE (includes option)
+}
+
+// ParseTelnetBuffer is the public form of the RFC 854 parser used by embed sessions.
+func ParseTelnetBuffer(buf []byte, final bool) (payload []byte, events []TelnetEvent, consumed int) {
+	p, evs, c := parseTelnetBuffer(buf, final)
+	out := make([]TelnetEvent, 0, len(evs))
+	for _, e := range evs {
+		switch e.kind {
+		case evNegotiate:
+			out = append(out, TelnetEvent{IsSubneg: false, Cmd: e.cmd, Opt: e.opt})
+		case evSubneg:
+			out = append(out, TelnetEvent{IsSubneg: true, Payload: append([]byte(nil), e.payload...)})
+		}
+	}
+	return p, out, c
+}

@@ -207,6 +207,44 @@ func TestReplaceUpstreamAndPolicy(t *testing.T) {
 	_ = s.Close(ctx)
 }
 
+func TestScriptedTelnetUpstream_PolicyAndEmbed(t *testing.T) {
+	up := NewScriptedTelnetUpstream(DefaultTelnetPolicy{Term: "ANSI-BBS"})
+	var wires []WireEventKind
+	up.SetOnWire(func(k WireEventKind, _ []byte, _ string) { wires = append(wires, k) })
+	_ = up.Connect(context.Background())
+	up.PushWire([]byte{255, 253, 0}) // DO BINARY
+	up.PushWire([]byte("GO"))
+	h := NewHub()
+	s, _ := h.CreateSession(Options{})
+	if err := s.ConnectUpstream(context.Background(), up); err != nil {
+		t.Fatal(err)
+	}
+	c, _ := s.AttachClient(ClientMetadata{ClientID: "c1"})
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	got, err := c.Receive(ctx)
+	if err != nil || !bytes.Equal(got, []byte("GO")) {
+		t.Fatalf("got %q err %v", got, err)
+	}
+	if len(wires) == 0 {
+		t.Fatal("expected wire events")
+	}
+	if len(up.SentWire()) == 0 {
+		t.Fatal("expected policy reply")
+	}
+	_ = s.SendToUpstream(ctx, []byte{255, 1})
+	found := false
+	for _, b := range up.SentWire() {
+		if bytes.Equal(b, []byte{255, 255, 1}) {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("iac escape missing")
+	}
+	_ = s.Close(ctx)
+}
+
 func TestUpstreamLostAndDupClient(t *testing.T) {
 	h := NewHub()
 	s, _ := h.CreateSession(Options{})

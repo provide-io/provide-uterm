@@ -31,6 +31,7 @@ EXCLUDE_SUBSTR = (
     "Transports/WebSocketTransport.cs",
     "Gateway/SshWsGateway.cs",  # live FxSsh accept + channel pump residual
     "Vnc/RfbClient.cs",  # live RFB TCP client residual (unit-tested encode + handshake smoke)
+    "Embed/TelnetUpstream.cs",  # live TCP telnet residual (IAC+policy unit-tested via ScriptedTelnetUpstream)
 )
 
 
