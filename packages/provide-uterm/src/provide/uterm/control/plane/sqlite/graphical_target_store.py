@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
+from provide.uterm.control.plane.errors import ControlPlaneDataError
 from provide.uterm.control.plane.graphical_target import GraphicalTargetRecord
 
 if TYPE_CHECKING:
@@ -19,6 +20,33 @@ def _json(value: object) -> str:
     return json.dumps(value, separators=(",", ":"), ensure_ascii=False)
 
 
+def _decode_string_tuple(raw: str, *, target_id: str, field: str) -> tuple[str, ...]:
+    try:
+        decoded: object = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ControlPlaneDataError(f"graphical target {target_id!r} has invalid {field}: malformed JSON") from exc
+    if not isinstance(decoded, list) or not all(isinstance(value, str) for value in decoded):
+        raise ControlPlaneDataError(f"graphical target {target_id!r} has invalid {field}: expected a list of strings")
+    return tuple(decoded)
+
+
+def _decode_labels(raw: str, *, target_id: str) -> tuple[tuple[str, str], ...]:
+    try:
+        decoded: object = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ControlPlaneDataError(f"graphical target {target_id!r} has invalid audit_labels: malformed JSON") from exc
+    if not isinstance(decoded, list):
+        raise ControlPlaneDataError(f"graphical target {target_id!r} has invalid audit_labels: expected label pairs")
+    labels: list[tuple[str, str]] = []
+    for pair in decoded:
+        if not isinstance(pair, list) or len(pair) != 2 or not isinstance(pair[0], str) or not isinstance(pair[1], str):
+            raise ControlPlaneDataError(
+                f"graphical target {target_id!r} has invalid audit_labels: expected label pairs"
+            )
+        labels.append((pair[0], pair[1]))
+    return tuple(labels)
+
+
 class SqliteGraphicalTargetStore:
     def __init__(self, tx: SqliteTransaction) -> None:
         self._conn = tx._conn
@@ -26,7 +54,15 @@ class SqliteGraphicalTargetStore:
     async def put_graphical_target(self, record: GraphicalTargetRecord) -> None:
         await self._conn.execute(
             """
-            INSERT INTO cp_graphical_targets VALUES(
+            INSERT INTO cp_graphical_targets(
+                target_id, endpoint, tls_mode, ca_secret_ref, client_cert_secret_ref,
+                client_key_secret_ref, expected_server_name, allowed_vm_patterns,
+                tenant_id, minimum_role, connect_timeout_s, handshake_timeout_s,
+                read_timeout_s, write_timeout_s, shutdown_timeout_s,
+                max_grpc_message_bytes, max_framebuffer_width, max_framebuffer_height,
+                max_rectangles, max_clipboard_bytes, max_pixel_allocation_bytes,
+                allowed_cidrs, audit_labels, created_at, updated_at
+            ) VALUES(
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
             ON CONFLICT(target_id) DO UPDATE SET
@@ -77,15 +113,18 @@ class SqliteGraphicalTargetStore:
 
     @staticmethod
     def _record(row: sqlite3.Row) -> GraphicalTargetRecord:
+        target_id: str = row["target_id"]
         return GraphicalTargetRecord(
-            target_id=row["target_id"],
+            target_id=target_id,
             endpoint=row["endpoint"],
             tls_mode=row["tls_mode"],
             ca_secret_ref=row["ca_secret_ref"],
             client_cert_secret_ref=row["client_cert_secret_ref"],
             client_key_secret_ref=row["client_key_secret_ref"],
             expected_server_name=row["expected_server_name"],
-            allowed_vm_patterns=tuple(json.loads(row["allowed_vm_patterns"])),
+            allowed_vm_patterns=_decode_string_tuple(
+                row["allowed_vm_patterns"], target_id=target_id, field="allowed_vm_patterns"
+            ),
             tenant_id=row["tenant_id"],
             minimum_role=row["minimum_role"],
             connect_timeout_s=row["connect_timeout_s"],
@@ -99,20 +138,43 @@ class SqliteGraphicalTargetStore:
             max_rectangles=row["max_rectangles"],
             max_clipboard_bytes=row["max_clipboard_bytes"],
             max_pixel_allocation_bytes=row["max_pixel_allocation_bytes"],
-            allowed_cidrs=tuple(json.loads(row["allowed_cidrs"])),
-            audit_labels=tuple(tuple(pair) for pair in json.loads(row["audit_labels"])),
+            allowed_cidrs=_decode_string_tuple(row["allowed_cidrs"], target_id=target_id, field="allowed_cidrs"),
+            audit_labels=_decode_labels(row["audit_labels"], target_id=target_id),
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )
 
     async def get_graphical_target(self, target_id: str) -> GraphicalTargetRecord | None:
-        cursor = await self._conn.execute("SELECT * FROM cp_graphical_targets WHERE target_id = ?", (target_id,))
+        cursor = await self._conn.execute(
+            """
+            SELECT target_id, endpoint, tls_mode, ca_secret_ref, client_cert_secret_ref,
+                   client_key_secret_ref, expected_server_name, allowed_vm_patterns,
+                   tenant_id, minimum_role, connect_timeout_s, handshake_timeout_s,
+                   read_timeout_s, write_timeout_s, shutdown_timeout_s,
+                   max_grpc_message_bytes, max_framebuffer_width, max_framebuffer_height,
+                   max_rectangles, max_clipboard_bytes, max_pixel_allocation_bytes,
+                   allowed_cidrs, audit_labels, created_at, updated_at
+            FROM cp_graphical_targets WHERE target_id = ?
+            """,
+            (target_id,),
+        )
         row = await cursor.fetchone()
         await cursor.close()
         return None if row is None else self._record(row)
 
     async def list_graphical_targets(self) -> list[GraphicalTargetRecord]:
-        cursor = await self._conn.execute("SELECT * FROM cp_graphical_targets ORDER BY target_id ASC")
+        cursor = await self._conn.execute(
+            """
+            SELECT target_id, endpoint, tls_mode, ca_secret_ref, client_cert_secret_ref,
+                   client_key_secret_ref, expected_server_name, allowed_vm_patterns,
+                   tenant_id, minimum_role, connect_timeout_s, handshake_timeout_s,
+                   read_timeout_s, write_timeout_s, shutdown_timeout_s,
+                   max_grpc_message_bytes, max_framebuffer_width, max_framebuffer_height,
+                   max_rectangles, max_clipboard_bytes, max_pixel_allocation_bytes,
+                   allowed_cidrs, audit_labels, created_at, updated_at
+            FROM cp_graphical_targets ORDER BY target_id ASC
+            """
+        )
         rows = await cursor.fetchall()
         await cursor.close()
         return [self._record(row) for row in rows]
