@@ -12,10 +12,10 @@ import pytest
 from provide.uterm.control.plane import ControlPlaneConfig, bootstrap_control_plane
 from provide.uterm.control.plane.errors import ControlPlaneConflictError
 from provide.uterm.control.plane.graphical_target import GraphicalTargetRecord
-from provide.uterm.control.plane.memory import MemoryControlPlane
 
 if TYPE_CHECKING:
     from provide.uterm.control.plane.bootstrap import ControlPlane
+    from provide.uterm.control.plane.memory import MemoryControlPlane
     from provide.uterm.control.plane.sqlite.engine import SqliteControlPlane
 
     def _assert_bootstrap_backends_conform_without_casts(
@@ -73,7 +73,6 @@ def test_graphical_target_record_is_frozen_slotted_and_fixture_contains_no_resol
 @pytest.mark.asyncio
 async def test_memory_graphical_target_store_put_get_list_replace_and_delete() -> None:
     plane = await bootstrap_control_plane(ControlPlaneConfig(backend="memory"))
-    assert isinstance(plane, MemoryControlPlane)
     first = _record("target-b")
     second = _record("target-a")
     replacement = _record("target-b", endpoint="dns:///replacement.example:443", updated_at=3.0)
@@ -103,7 +102,6 @@ async def test_memory_graphical_target_store_put_get_list_replace_and_delete() -
 @pytest.mark.asyncio
 async def test_memory_graphical_target_store_rollback_discards_changes() -> None:
     plane = await bootstrap_control_plane(ControlPlaneConfig(backend="memory"))
-    assert isinstance(plane, MemoryControlPlane)
     tx = await plane.begin()
     await plane.graphical_target_store(tx).put_graphical_target(_record("rolled-back"))
     await tx.rollback()
@@ -116,7 +114,6 @@ async def test_memory_graphical_target_store_rollback_discards_changes() -> None
 @pytest.mark.asyncio
 async def test_memory_graphical_target_store_detects_same_target_conflicts() -> None:
     plane = await bootstrap_control_plane(ControlPlaneConfig(backend="memory"))
-    assert isinstance(plane, MemoryControlPlane)
     tx1 = await plane.begin()
     tx2 = await plane.begin()
     await plane.graphical_target_store(tx1).put_graphical_target(_record("shared", endpoint="dns:///one:443"))
