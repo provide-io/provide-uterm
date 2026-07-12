@@ -9,3 +9,9 @@ coverage-out/
 bin/
 **/bin/
 **/obj/
+# xUnit / blame hang dumps
+**/TestResults/
+**/*.dmp
+**/coverage*/
+**/bin/
+**/obj/
