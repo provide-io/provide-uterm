@@ -174,3 +174,24 @@ def test_resume_config_from_env() -> None:
     cfg = CloudflareConfig.from_env(env)
     assert cfg.resume_ttl_s == 90
     assert cfg.resume_enabled is False
+
+
+@pytest.mark.asyncio
+async def test_hibernate_websocket_open_resume_disabled() -> None:
+    """Hibernation restore hello path with RESUME_ENABLED=0.
+
+    Covers lifecycle.py branches when resume is off: no token mint, no
+    resume_token field on hello (``if _resume_on`` false arms).
+    """
+    rt = _make_runtime("hib-resume-off")
+    rt.config.resume_enabled = False
+    # Socket not pre-registered → already_initialized=False (hibernate path).
+    ws = _HibernatableWs(f"browser:viewer:{rt.worker_id}")
+    await rt.webSocketOpen(ws)  # type: ignore[arg-type]
+
+    assert ws.sent, "hello must still be sent when resume is disabled"
+    hello = _decode(ws.sent[0])
+    assert hello["type"] == "hello"
+    assert hello.get("resume_supported") is False
+    assert "resume_token" not in hello
+    assert rt.browser_resume_tokens == {}

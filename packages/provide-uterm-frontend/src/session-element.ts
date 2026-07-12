@@ -757,6 +757,11 @@ export class UtermSessionElement extends LitElement {
   }
 
   private _updateStatus(): void {
+    // Keep the brief "Resumed" flash after hello.resumed. Resume replies send
+    // hijack_state immediately afterward, which would otherwise clobber it.
+    if (this._resumeFlashTimer !== null) {
+      return;
+    }
     const state = this._hijackState;
     const connected = !!(state.ws && state.ws.readyState === WebSocket.OPEN);
     this._connected = connected;

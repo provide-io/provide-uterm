@@ -186,42 +186,45 @@ async def _route_request(request: object, env: object, config: CloudflareConfig)
     if _STATIC_ASSET_PATH.match(path):
         return _entry_attr("serve_asset")(path.removeprefix("/"))
 
-    try:
-        from provide.uterm.cloudflare.api._tunnel_api import (
-            consume_tunnel_invite as _consume_tunnel_invite,
-        )
-        from provide.uterm.cloudflare.api._tunnel_api import (
-            resolve_share_context as _resolve_share_context,
-        )
-    except ImportError:  # pragma: no cover
-        import importlib
-
-        _tunnel_api = importlib.import_module("api._tunnel_api")
-        _consume_tunnel_invite = _tunnel_api.consume_tunnel_invite
-        _resolve_share_context = _tunnel_api.resolve_share_context
-
     spa = _resolve_spa_route(path)
-    if spa is not None and spa[0] == "share" and "session_id" in spa[1]:
-        # /s/{id}?invite=... consumes a one-time invite, stamps an HttpOnly
-        # cookie, then redirects to a clean /app URL.
-        sid = str(spa[1]["session_id"])
-        invite_context = await _consume_tunnel_invite(request, env, sid)
-        if invite_context is not None:
-            page, _share_role, token = invite_context
-            target = f"/app/{page}/{sid}"
-            headers = {"location": target}
-            cookie = _share_token_cookie_header(request, sid, token)
-            if cookie is not None:
-                headers["Set-Cookie"] = cookie
-            return Response(None, status=302, headers=headers)  # ty:ignore[call-non-callable]
-        share_context = await _resolve_share_context(request, env, sid, config)
-        if share_context is None:
-            return json_response({"error": "not_found", "session_id": sid}, status=404)
-        page, _share_role = share_context
-        target = f"/app/{page}/{sid}"
-        return Response(None, status=302, headers={"location": target})  # ty:ignore[call-non-callable]
-
+    # Share/SPA invite paths need tunnel helpers; load them only here so a
+    # missing vendored ``provide.uterm.tunnel`` cannot 500 browser/worker WS
+    # upgrades (those proxy to the DO without share resolution).
     if spa is not None and "session_id" in spa[1]:
+        try:
+            from provide.uterm.cloudflare.api._tunnel_api import (
+                consume_tunnel_invite as _consume_tunnel_invite,
+            )
+            from provide.uterm.cloudflare.api._tunnel_api import (
+                resolve_share_context as _resolve_share_context,
+            )
+        except ImportError:  # pragma: no cover
+            import importlib
+
+            _tunnel_api = importlib.import_module("api._tunnel_api")
+            _consume_tunnel_invite = _tunnel_api.consume_tunnel_invite
+            _resolve_share_context = _tunnel_api.resolve_share_context
+
+        if spa[0] == "share":
+            # /s/{id}?invite=... consumes a one-time invite, stamps an HttpOnly
+            # cookie, then redirects to a clean /app URL.
+            sid = str(spa[1]["session_id"])
+            invite_context = await _consume_tunnel_invite(request, env, sid)
+            if invite_context is not None:
+                page, _share_role, token = invite_context
+                target = f"/app/{page}/{sid}"
+                headers = {"location": target}
+                cookie = _share_token_cookie_header(request, sid, token)
+                if cookie is not None:
+                    headers["Set-Cookie"] = cookie
+                return Response(None, status=302, headers=headers)  # ty:ignore[call-non-callable]
+            share_context = await _resolve_share_context(request, env, sid, config)
+            if share_context is None:
+                return json_response({"error": "not_found", "session_id": sid}, status=404)
+            page, _share_role = share_context
+            target = f"/app/{page}/{sid}"
+            return Response(None, status=302, headers={"location": target})  # ty:ignore[call-non-callable]
+
         share_context = await _resolve_share_context(request, env, str(spa[1]["session_id"]), config)
         if share_context is not None:
             _, share_role = share_context

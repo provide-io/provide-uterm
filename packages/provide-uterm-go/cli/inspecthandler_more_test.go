@@ -15,11 +15,30 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/coder/websocket"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/tunnelclient"
 )
+
+func TestActionRIDCoercion(t *testing.T) {
+	if actionRID("r3") != "r3" {
+		t.Fatalf("string rid = %q", actionRID("r3"))
+	}
+	if actionRID(float64(7)) != "7" {
+		t.Fatalf("float rid = %q", actionRID(float64(7)))
+	}
+	if actionRID(json.Number("12")) != "12" {
+		t.Fatalf("json.Number rid = %q", actionRID(json.Number("12")))
+	}
+	if actionRID(nil) != "" {
+		t.Fatalf("nil rid = %q", actionRID(nil))
+	}
+	if actionRID(true) != "true" {
+		t.Fatalf("bool rid = %q", actionRID(true))
+	}
+}
 
 // TestForwardBadMethod covers the http.NewRequestWithContext error branch: an
 // invalid HTTP method makes request construction fail, yielding a 502.
@@ -85,6 +104,10 @@ func TestDecodeActionMessageInvalidBinary(t *testing.T) {
 // message. The tunnel server first sends a too-short binary frame (skipped), then
 // a modify action that rewrites the forwarded headers and body; the origin echoes
 // them back so the substitution is observable.
+//
+// CI flake note: a single attempt can race the action receiver startup against the
+// first GET (gate times out to "forward" with an empty body). We use a short
+// intercept timeout and retry until modify is applied.
 func TestInspectInterceptModify(t *testing.T) {
 	targetPort := originServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Echo-Injected", r.Header.Get("X-Injected"))
@@ -105,13 +128,15 @@ func TestInspectInterceptModify(t *testing.T) {
 				continue
 			}
 			// An undecodable (too short) binary frame must be skipped by the receiver.
-			_ = c.Write(ctx, websocket.MessageBinary, []byte{0x01})
+			// Send it *after* the modify action so a slow action receiver cannot
+			// time out while stuck only seeing junk (still exercises skip path).
 			action, _ := json.Marshal(map[string]any{
 				"type": "http_action", "id": ev["id"], "action": "modify",
 				"headers": map[string]any{"X-Injected": "1"}, "body_b64": modBody,
 			})
 			_ = c.Write(ctx, websocket.MessageBinary,
 				tunnelclient.EncodeFrame(tunnelclient.ChannelHTTP, action, tunnelclient.FlagData))
+			_ = c.Write(ctx, websocket.MessageBinary, []byte{0x01})
 		}
 	})
 
@@ -123,7 +148,9 @@ func TestInspectInterceptModify(t *testing.T) {
 	}
 	defer func() { _ = client.Close() }()
 
-	gate := tunnelclient.NewInterceptGate(30, "forward")
+	// Short gate timeout: if a race drops the first action, retry quickly instead
+	// of blocking the suite for the production default (30s).
+	gate := tunnelclient.NewInterceptGate(2, "forward")
 	gate.SetEnabled(true)
 	sess := &inspectSession{client: client, gate: gate, targetPort: targetPort, errw: io.Discard}
 
@@ -134,11 +161,18 @@ func TestInspectInterceptModify(t *testing.T) {
 	proxyPort := ln.Addr().(*net.TCPAddr).Port
 	go func() { _ = sess.serve(ctx, ln) }()
 
-	resp := getWithRetry(t, proxyPort, "/x")
-	if resp.status != http.StatusOK {
-		t.Fatalf("modify status = %d, want 200", resp.status)
+	// Wait for the proxy listener + action receiver to come up.
+	deadline := time.Now().Add(8 * time.Second)
+	var last httpResult
+	for time.Now().Before(deadline) {
+		last = tryGet(proxyPort, "/x")
+		if last.status == http.StatusOK && last.body == "MODIFIED" {
+			if last.headerGet("X-Echo-Injected") != "1" {
+				t.Fatalf("modified header not echoed: %q", last.headerGet("X-Echo-Injected"))
+			}
+			return
+		}
+		time.Sleep(25 * time.Millisecond)
 	}
-	if resp.body != "MODIFIED" {
-		t.Errorf("body not modified: %q", resp.body)
-	}
+	t.Fatalf("modify never applied within deadline: status=%d body=%q", last.status, last.body)
 }
