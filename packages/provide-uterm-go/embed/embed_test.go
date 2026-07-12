@@ -14,12 +14,12 @@ import (
 )
 
 type scriptInterceptor struct {
-	mu            sync.Mutex
-	nextUp        *InterceptResult
-	nextCli       *InterceptResult
-	afterInject   bool
-	injectDepth   int
-	reenterPong   []byte
+	mu          sync.Mutex
+	nextUp      *InterceptResult
+	nextCli     *InterceptResult
+	afterInject bool
+	injectDepth int
+	reenterPong []byte
 }
 
 func (s *scriptInterceptor) OnUpstream(ctx context.Context, c InterceptContext) (InterceptResult, error) {
@@ -55,6 +55,26 @@ func (s *scriptInterceptor) OnClient(ctx context.Context, c InterceptContext) (I
 		return r, nil
 	}
 	return Pass(), nil
+}
+
+func (s *scriptInterceptor) setNextUp(r InterceptResult) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cp := r
+	s.nextUp = &cp
+}
+
+func (s *scriptInterceptor) setNextCli(r InterceptResult) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cp := r
+	s.nextCli = &cp
+}
+
+func (s *scriptInterceptor) setAfterInject(v bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.afterInject = v
 }
 
 func TestCreateConnectFanout(t *testing.T) {
@@ -115,8 +135,7 @@ func TestInterceptorOutcomes(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	r := Consume()
-	si.nextUp = &r
+	si.setNextUp(Consume())
 	_ = up.PushFromRemote([]byte("NOPE"))
 	time.Sleep(30 * time.Millisecond)
 	short, cancel2 := context.WithTimeout(context.Background(), 40*time.Millisecond)
@@ -126,37 +145,32 @@ func TestInterceptorOutcomes(t *testing.T) {
 		t.Fatal("expected consume timeout")
 	}
 
-	r = Replace([]byte("REP"))
-	si.nextUp = &r
+	si.setNextUp(Replace([]byte("REP")))
 	_ = up.PushFromRemote([]byte("ORIG"))
 	got, err := c.Receive(ctx)
 	if err != nil || !bytes.Equal(got, []byte("REP")) {
 		t.Fatalf("replace %q %v", got, err)
 	}
 
-	r = Inject([]byte("INJ"))
-	si.nextUp = &r
-	si.afterInject = true
+	si.setNextUp(Inject([]byte("INJ")))
+	si.setAfterInject(true)
 	_ = up.PushFromRemote([]byte("DROPME"))
 	got, err = c.Receive(ctx)
 	if err != nil || !bytes.Equal(got, []byte("INJ")) {
 		t.Fatalf("inject %q %v", got, err)
 	}
 
-	r = Defer()
-	si.nextUp = &r
+	si.setNextUp(Defer())
 	_ = up.PushFromRemote([]byte("LATER"))
 	time.Sleep(30 * time.Millisecond)
-	p := Pass()
-	si.nextUp = &p
+	si.setNextUp(Pass())
 	_ = s.FlushDeferred(ctx)
 	got, err = c.Receive(ctx)
 	if err != nil || !bytes.Equal(got, []byte("LATER")) {
 		t.Fatalf("defer %q %v", got, err)
 	}
 
-	r = Consume()
-	si.nextCli = &r
+	si.setNextCli(Consume())
 	_ = s.SendToUpstream(ctx, []byte("LOCAL"))
 	for _, b := range up.Sent() {
 		if bytes.Equal(b, []byte("LOCAL")) {

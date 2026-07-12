@@ -1,29 +1,29 @@
 # Graphical Session Runtime (VNC/RDP) Design
 
 ## 1. Overview
-The **Graphical Session Runtime** is a new core component in `uterm` that brings its signature collaboration features—presence, recording, and arbitrated control (hijack leases)—to graphical protocols like VNC and RDP. 
+The **Graphical Session Runtime** is a new core component in `uterm` that brings its signature collaboration features—presence, recording, and arbitrated control (hijack leases)—to graphical protocols like VNC and RDP.
 
 By splitting a graphical session into a **broadcasted view** (framebuffer) and an **arbitrated input channel** (pointer/keyboard), it allows humans and AIs to collaboratively operate a graphical console. To ensure long-term flexibility, the system relies on a generic `GraphicalSession` interface, with VNC (RFB) serving as the initial hypervisor-level implementation, leaving a clean seam for future OS-level RDP integrations.
 
-## 2. Architecture 
+## 2. Architecture
 
 The runtime sits between the remote target (e.g., `litevirt` ProxyVNC) and `uterm`'s consumers (browsers and AI agents).
 
 ```mermaid
 flowchart TD
     LV[Target VNC / RDP Server] <-->|Protocol Bytes| GS[Graphical Session Runtime]
-    
+
     subgraph uterm [uterm Go Server]
         GS -->|1. Pixel Updates| FT[Framebuffer Tracker]
         FT -->|2. Rasterize| PNG[PNG Generator]
         GS -->|Broadcast| DM[DeckMux / Presence]
         HL[HijackLease Manager] -->|Gatekeeper| GS
     end
-    
+
     PNG -->|gui_screenshot| AI[AI Agent]
     GS -->|View-only Web Stream| NV1[Human Viewer 1]
     GS <-->|Active Web Stream| NV2[Human Viewer 2]
-    
+
     AI -->|gui_click / gui_type| HL
     NV2 -->|Mouse / Keyboard events| HL
 ```
@@ -47,11 +47,11 @@ import (
 type GraphicalSession interface {
 	// Framebuffer access for AI Vision Models
 	Screenshot() (image.Image, error)
-	
+
 	// Input injection (Strictly gated by HijackLease)
 	InjectPointer(x, y int, buttonMask uint8) error
 	InjectKey(keySym uint32, down bool) error
-	
+
 	// Stream multiplexing for Humans
 	// Returns a web-friendly stream (e.g., WebSocket-framed RFB for noVNC)
 	// Inputs from this stream are dropped unless the subscriber holds the lease.
@@ -63,7 +63,7 @@ type GraphicalSession interface {
 
 The initial implementation targets the RFB protocol to interface with `litevirt`/QEMU.
 
-**Minimal "Raw" Parser**: 
+**Minimal "Raw" Parser**:
 Instead of importing unmaintained and bloated Go VNC libraries that handle legacy encodings (Tight, ZRLE), `uterm` will vendor a minimal, purpose-built RFB parser. During the RFB handshake, the `uterm` client will explicitly advertise that it **only supports `Raw` and `CopyRect` encodings**.
 
 The remote VNC server will be forced to send uncompressed pixel bytes. This makes the `FramebufferTracker` implementation exceptionally simple and robust: we simply read `x, y, w, h` bounds and drop the raw RGBA pixels straight into our Go `image.RGBA`. While this uses more internal backend bandwidth, it guarantees stable, fast PNG generation for the AI.
@@ -90,7 +90,7 @@ To allow the AI to interact with the graphical console, `uterm` exposes generic 
 2. The browser loads the `uterm` UI, which embeds a web-friendly canvas (e.g., `noVNC` for RFB backends).
 3. The browser connects via WebSocket to the `uterm` Go server.
 4. The Go server adds the human to `DeckMux` and begins piping display updates to the browser.
-5. **Arbitration**: 
+5. **Arbitration**:
    - By default, `uterm` drops any pointer/key events sent from the browser.
    - The user clicks a "Take Control" button in the UI.
    - The Go server acquires the `HijackLease`.

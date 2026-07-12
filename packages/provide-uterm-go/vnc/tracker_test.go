@@ -1,18 +1,18 @@
 package vnc_test
 
 import (
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/vnc"
 	"image/color"
 	"strings"
 	"testing"
-	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/vnc"
 )
 
 func TestFramebufferTracker(t *testing.T) {
 	t.Run("HappyPath", func(t *testing.T) {
 		tracker := vnc.NewFramebufferTracker(100, 100)
 		pixels := []byte{
-			255, 0, 0, 255,  255, 0, 0, 255,
-			255, 0, 0, 255,  255, 0, 0, 255,
+			255, 0, 0, 255, 255, 0, 0, 255,
+			255, 0, 0, 255, 255, 0, 0, 255,
 		}
 		err := tracker.ApplyRawUpdate(10, 10, 2, 2, pixels)
 		if err != nil {

@@ -6,12 +6,12 @@ import (
 
 // RFB Message Types
 const (
-	ClientSetPixelFormat = 0
-	ClientSetEncodings   = 2
+	ClientSetPixelFormat           = 0
+	ClientSetEncodings             = 2
 	ClientFramebufferUpdateRequest = 3
-	ClientKeyEvent       = 4
-	ClientPointerEvent   = 5
-	
+	ClientKeyEvent                 = 4
+	ClientPointerEvent             = 5
+
 	ServerFramebufferUpdate = 0
 )
 
@@ -27,7 +27,7 @@ func EncodePointerEvent(x, y int, buttonMask uint8) []byte {
 	} else if y > 65535 {
 		y = 65535
 	}
-	
+
 	buf := make([]byte, 6)
 	buf[0] = ClientPointerEvent
 	buf[1] = buttonMask

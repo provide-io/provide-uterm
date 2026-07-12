@@ -84,11 +84,11 @@ func Inject(p []byte) InterceptResult {
 
 // ClientMetadata tags for selective fan-out.
 type ClientMetadata struct {
-	ClientID       string
-	Tags           map[string]struct{}
-	Attributes     map[string]string
-	Backpressure   BackpressurePolicy
-	QueueCapacity  int
+	ClientID      string
+	Tags          map[string]struct{}
+	Attributes    map[string]string
+	Backpressure  BackpressurePolicy
+	QueueCapacity int
 }
 
 // ClientFilter selects clients for SendToClients.
@@ -301,19 +301,19 @@ type Session struct {
 	inter    ByteInterceptor
 	telnet   TelnetPolicy
 
-	mu        sync.Mutex
-	lifecycle SessionLifecycle
-	upstream  UpstreamPipe
-	clients   map[string]*clientSlot
-	deferred  []deferredItem
-	cancel    context.CancelFunc
+	mu         sync.Mutex
+	lifecycle  SessionLifecycle
+	upstream   UpstreamPipe
+	clients    map[string]*clientSlot
+	deferred   []deferredItem
+	cancel     context.CancelFunc
 	readerDone chan struct{}
-	depth     int // re-entrancy depth while holding mu during pipeline work
+	depth      int // re-entrancy depth while holding mu during pipeline work
 
-	onApp      func(dir ByteDirection, data []byte, clientID string)
-	onClient   func(data []byte, clientID string)
-	onWire     func(kind WireEventKind, data []byte, detail string)
-	onLife     func(SessionLifecycle, string)
+	onApp    func(dir ByteDirection, data []byte, clientID string)
+	onClient func(data []byte, clientID string)
+	onWire   func(kind WireEventKind, data []byte, detail string)
+	onLife   func(SessionLifecycle, string)
 }
 
 func newSession(id string, opts Options) *Session {

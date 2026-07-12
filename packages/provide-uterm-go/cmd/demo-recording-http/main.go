@@ -121,7 +121,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "temp dir: %v\n", err)
 		os.Exit(1)
 	}
-	defer os.RemoveAll(tmp)
+	defer func() { _ = os.RemoveAll(tmp) }()
 
 	const sid = "demo-http-go"
 	store := recording.NewLocalFileStore(tmp)
@@ -198,7 +198,7 @@ func main() {
 		if err != nil {
 			return 0, err.Error()
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		b, _ := io.ReadAll(resp.Body)
 		return resp.StatusCode, string(b)
 	}

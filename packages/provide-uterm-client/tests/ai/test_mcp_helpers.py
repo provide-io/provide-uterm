@@ -42,6 +42,13 @@ class TestToolMetadata:
         expected = {
             "fanout_group_create",
             "fanout_send",
+            "gui_click",
+            "gui_drag",
+            "gui_hijack_begin",
+            "gui_hijack_release",
+            "gui_key",
+            "gui_screenshot",
+            "gui_type",
             "hijack_begin",
             "hijack_heartbeat",
             "hijack_read",

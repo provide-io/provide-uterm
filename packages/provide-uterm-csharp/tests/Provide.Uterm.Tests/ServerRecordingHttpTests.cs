@@ -320,4 +320,156 @@ public class ServerRecordingHttpTests
         cfg.Recording.StoreType = "null";
         Assert.IsType<NullStore>(ServerFactory.BuildRecordingStore(cfg));
     }
+
+    [Fact]
+    public async Task Recording_EdgeGates_And_AnnotateAuth()
+    {
+        var store = new InMemoryStore();
+        await store.StartSessionAsync("s1", new Dictionary<string, object?>());
+        var (server, client, sid, _) = await StartAsync(store);
+        await using (server)
+        using (client)
+        {
+            // invalid limit / session id on entries
+            Assert.Equal(HttpStatusCode.UnprocessableEntity,
+                (await client.GetAsync($"/api/sessions/{sid}/recording/entries?limit=0")).StatusCode);
+            Assert.Equal(HttpStatusCode.UnprocessableEntity,
+                (await client.GetAsync($"/api/sessions/{sid}/recording/entries?limit=999")).StatusCode);
+            Assert.Equal(HttpStatusCode.UnprocessableEntity,
+                (await client.GetAsync("/api/sessions/bad!id/recording")).StatusCode);
+
+            // annotate unknown / invalid id
+            Assert.Equal(HttpStatusCode.NotFound,
+                (await client.PostAsync("/api/sessions/nope/annotate",
+                    new StringContent("""{"label":"x"}""", Encoding.UTF8, "application/json"))).StatusCode);
+            Assert.Equal(HttpStatusCode.UnprocessableEntity,
+                (await client.PostAsync("/api/sessions/bad!id/annotate",
+                    new StringContent("""{"label":"x"}""", Encoding.UTF8, "application/json"))).StatusCode);
+
+            // empty severity falls back to info
+            var ann = await client.PostAsync($"/api/sessions/{sid}/annotate",
+                new StringContent("""{"label":"ok","severity":""}""", Encoding.UTF8, "application/json"));
+            Assert.Equal(HttpStatusCode.OK, ann.StatusCode);
+        }
+
+        // viewer cannot annotate private (mutate denied) — use public + viewer without mutate
+        var port = FreePort();
+        var cfg = UtermServerConfig.Default();
+        cfg.Server.Host = "127.0.0.1";
+        cfg.Server.Port = port;
+        cfg.Auth.Mode = "dev_token";
+        cfg.Sessions.Add(new SessionDefinition
+        {
+            SessionId = "pub",
+            DisplayName = "Pub",
+            ConnectorType = "shell",
+            Visibility = "public",
+            Owner = "someoneelse",
+        });
+        var token = DevIdp.Setup(cfg.Auth, new DevIdp.Options
+        {
+            TokenPath = Path.Combine(Path.GetTempPath(), "uterm-ann-" + Guid.NewGuid().ToString("N")),
+            Subject = "viewer-user",
+            Roles = new[] { "viewer" },
+        });
+        var clock = new RealClock();
+        var srv = new UtermServer(new ServerDeps
+        {
+            Hub = new TermHub(new TermHubConfig { Clock = clock }),
+            Auth = new LocalIdentityProvider(cfg.Auth, new ApiKeyStore()),
+            Authz = new AuthorizationService(),
+            Config = cfg,
+            Registry = new InMemorySessionRegistry(cfg.Sessions),
+            Version = "test",
+            Clock = clock,
+            Recording = new InMemoryStore(),
+        });
+        srv.Build(new[] { $"http://127.0.0.1:{port}" });
+        await srv.StartAsync();
+        await using (srv)
+        {
+            using var c = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
+            c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            var forb = await c.PostAsync("/api/sessions/pub/annotate",
+                new StringContent("""{"label":"x"}""", Encoding.UTF8, "application/json"));
+            Assert.Equal(HttpStatusCode.Forbidden, forb.StatusCode);
+        }
+    }
+
+    [Fact]
+    public async Task RecordingDownload_RejectsPathOutsideDirectory()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "uterm-rec-confine-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var outside = Path.Combine(Path.GetTempPath(), "uterm-escape-" + Guid.NewGuid().ToString("N") + ".jsonl");
+        await File.WriteAllTextAsync(outside, "{}\n");
+        try
+        {
+            var port = FreePort();
+            var cfg = UtermServerConfig.Default();
+            cfg.Server.Host = "127.0.0.1";
+            cfg.Server.Port = port;
+            cfg.Auth.Mode = "dev_token";
+            cfg.Recording.Directory = dir;
+            cfg.Sessions.Add(new SessionDefinition
+            {
+                SessionId = "s1",
+                DisplayName = "S1",
+                ConnectorType = "shell",
+                Visibility = "public",
+                Owner = "dev-user",
+            });
+            var token = DevIdp.Setup(cfg.Auth, new DevIdp.Options
+            {
+                TokenPath = Path.Combine(Path.GetTempPath(), "uterm-conf-" + Guid.NewGuid().ToString("N")),
+                Subject = "dev-user",
+                Roles = new[] { "admin" },
+            });
+            var clock = new RealClock();
+            var store = new PathOverrideStore(outside);
+            var server = new UtermServer(new ServerDeps
+            {
+                Hub = new TermHub(new TermHubConfig { Clock = clock }),
+                Auth = new LocalIdentityProvider(cfg.Auth, new ApiKeyStore()),
+                Authz = new AuthorizationService(),
+                Config = cfg,
+                Registry = new InMemorySessionRegistry(cfg.Sessions),
+                Version = "test",
+                Clock = clock,
+                Recording = store,
+            });
+            server.Build(new[] { $"http://127.0.0.1:{port}" });
+            await server.StartAsync();
+            await using (server)
+            {
+                using var client = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                var dl = await client.GetAsync("/api/sessions/s1/recording/download");
+                Assert.Equal(HttpStatusCode.NotFound, dl.StatusCode);
+            }
+
+            // Path.GetFullPath throws on null char → catch branch
+            Assert.False(UtermServer.RecordingPathAllowed("\0bad", dir));
+        }
+        finally
+        {
+            try { File.Delete(outside); } catch { /* best effort */ }
+            try { Directory.Delete(dir, true); } catch { /* best effort */ }
+        }
+    }
+
+    /// <summary>Store that claims an arbitrary path for download confinement tests.</summary>
+    private sealed class PathOverrideStore : IRecordingStore
+    {
+        private readonly string _path;
+        public PathOverrideStore(string path) => _path = path;
+        public Task StartSessionAsync(string sessionId, IReadOnlyDictionary<string, object?> metadata) => Task.CompletedTask;
+        public Task AppendEventsAsync(string sessionId, IReadOnlyList<Event> events) => Task.CompletedTask;
+        public Task EndSessionAsync(string sessionId) => Task.CompletedTask;
+        public Task<Meta> RecordingMetaAsync(string sessionId) =>
+            Task.FromResult(new Meta { SessionId = sessionId, Exists = true, Path = _path, SizeBytes = 1 });
+        public Task<IReadOnlyList<Event>> GetEntriesAsync(string sessionId, Query query) =>
+            Task.FromResult<IReadOnlyList<Event>>(Array.Empty<Event>());
+        public Task<string> GetPathAsync(string sessionId) => Task.FromResult(_path);
+    }
 }

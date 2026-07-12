@@ -4,7 +4,7 @@
 #
 """GUI control MCP tool registrations.
 
-:func:`register_gui_tools` registers five tools on a :class:`FastMCP`
+:func:`register_gui_tools` registers seven tools on a :class:`FastMCP`
 instance for GUI interactions.
 """
 

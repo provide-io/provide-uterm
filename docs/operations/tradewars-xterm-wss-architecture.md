@@ -1,7 +1,7 @@
 # tradewars.space — browser xterm → WSS architecture
 
-**Status:** design / as-built notes  
-**Date:** 2026-07-12  
+**Status:** design / as-built notes
+**Date:** 2026-07-12
 **Related:** TWX `feat/uterm-embed` (local front doors), provide-uterm TermHub browser WS
 
 ## Problem
@@ -57,25 +57,25 @@ flowchart TB
 
 ### Layers
 
-1. **Browser (xterm.js)**  
-   - Renders ANSI; sends keystrokes as WebSocket **text** frames (UTF-8).  
+1. **Browser (xterm.js)**
+   - Renders ANSI; sends keystrokes as WebSocket **text** frames (UTF-8).
    - Opens `wss://tradewars.space/...` (or the site’s known API host), **not**
      loopback.
 
-2. **Public edge**  
-   - TLS + HTTP reverse proxy (or Cloudflare Worker / DO).  
-   - Upgrades `/ws/browser/{session}/term` (or product-specific path) to the hub.  
+2. **Public edge**
+   - TLS + HTTP reverse proxy (or Cloudflare Worker / DO).
+   - Upgrades `/ws/browser/{session}/term` (or product-specific path) to the hub.
    - Authenticates (cookie / bearer) before upgrade; injects principal for RBAC.
 
-3. **Hub (provide-uterm TermHub)**  
+3. **Hub (provide-uterm TermHub)**
    - Routes browser ↔ worker; leases (viewer / operator / admin); control frames
-     (DLE/STX) mixed with raw terminal bytes.  
+     (DLE/STX) mixed with raw terminal bytes.
    - Optional recording (JSONL) via the thin HTTP surface:
      `GET …/recording`, `…/entries`, `…/download`, `POST …/annotate`.
 
-4. **Game path (TWX)**  
+4. **Game path (TWX)**
    - **Upstream:** TCP host:port **or** `wss://…` (`WebSocketUpstream`) when the
-     game is already behind a TLS WebSocket.  
+     game is already behind a TLS WebSocket.
    - **Local front doors (dev / desktop):** TWX can also listen for local
      TCP / WS / SSH clients into the same `GameInstance` — these are for UX and
      tooling on the machine, **not** for the public browser origin.
@@ -103,8 +103,8 @@ sequenceDiagram
   end
 ```
 
-- **Terminal data:** opaque bytes / UTF-8 text (as today on Python/Go/C# hubs).  
-- **Control:** DLE/STX-framed JSON (hello, snapshot, hijack state, presence).  
+- **Terminal data:** opaque bytes / UTF-8 text (as today on Python/Go/C# hubs).
+- **Control:** DLE/STX-framed JSON (hello, snapshot, hijack state, presence).
 - Do **not** send bare JSON on the term WebSocket without the control codec
   (CI guards bare JSON on term paths).
 
@@ -123,8 +123,8 @@ the public edge; the browser on tradewars.space never dials them directly.
 ## Auth and roles
 
 - **Browser role** resolved at hub connect: viewer (read) vs operator (input /
-  hijack) vs admin.  
-- Share links / tunnel tokens may mint constrained principals (`share:{session}:…`).  
+  hijack) vs admin.
+- Share links / tunnel tokens may mint constrained principals (`share:{session}:…`).
 - Recording download/read requires `session.recording.read` in addition to
   session read (parity across Python / Go / C# thin HTTP).
 
@@ -153,9 +153,9 @@ when the edge and session state should colocate.
 
 ## Anti-patterns
 
-1. **Teaching the SPA to open `ws://127.0.0.1`** for production play.  
-2. **Relying on CORS** to “allow” cross-origin WebSockets to a home TWX.  
-3. **Exposing unauthenticated raw WS** to the public internet.  
+1. **Teaching the SPA to open `ws://127.0.0.1`** for production play.
+2. **Relying on CORS** to “allow” cross-origin WebSockets to a home TWX.
+3. **Exposing unauthenticated raw WS** to the public internet.
 4. **Skipping path confinement** on recording download (all ports enforce
    file under `recording.directory`).
 
@@ -172,14 +172,14 @@ when the edge and session state should colocate.
 
 ## Acceptance criteria
 
-1. From https://tradewars.space, xterm connects only via **`wss://` on the public host** (or documented same-site API host).  
-2. Keystrokes and screen updates feel interactive (single WS, not REST polling).  
-3. Auth gates the upgrade; viewers cannot inject input without operator/admin lease.  
-4. Optional session recording is readable via the **thin HTTP surface** on the same hub language as deployed.  
+1. From https://tradewars.space, xterm connects only via **`wss://` on the public host** (or documented same-site API host).
+2. Keystrokes and screen updates feel interactive (single WS, not REST polling).
+3. Auth gates the upgrade; viewers cannot inject input without operator/admin lease.
+4. Optional session recording is readable via the **thin HTTP surface** on the same hub language as deployed.
 5. Local TWX WS/SSH/TCP remain available for desktop/dev without being the public origin path.
 
 ## Out of scope (this doc)
 
-- TWX product packaging / origin push policy.  
-- Full browser replay UI parity on Go/C# (library + thin HTTP first).  
+- TWX product packaging / origin push policy.
+- Full browser replay UI parity on Go/C# (library + thin HTTP first).
 - Game protocol semantics (only the terminal transport).

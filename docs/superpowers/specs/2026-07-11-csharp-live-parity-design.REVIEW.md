@@ -1,9 +1,9 @@
 # Design Review: Standalone C# Live Transport and GUI Parity
 
-**Document:** `docs/superpowers/specs/2026-07-11-csharp-live-parity-design.md`  
-**Branch / worktree:** `review/csharp-live-parity-design`  
-**Method:** three parallel read-only subagents (architecture, parity-vs-code, security/CI) + synthesis  
-**Date:** 2026-07-11  
+**Document:** `docs/superpowers/specs/2026-07-11-csharp-live-parity-design.md`
+**Branch / worktree:** `review/csharp-live-parity-design`
+**Method:** three parallel read-only subagents (architecture, parity-vs-code, security/CI) + synthesis
+**Date:** 2026-07-11
 **Verdict:** **Needs revision** before implementation plans
 
 ---

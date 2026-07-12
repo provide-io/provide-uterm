@@ -29,7 +29,7 @@ func (t *FramebufferTracker) ApplyRawUpdate(x, y, w, h int, pixels []byte) error
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	
+
 	src := &image.RGBA{
 		Pix:    pixels,
 		Stride: w * 4,
@@ -44,7 +44,7 @@ func (t *FramebufferTracker) ApplyRawUpdate(x, y, w, h int, pixels []byte) error
 func (t *FramebufferTracker) GetImage() *image.RGBA {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	
+
 	// Return a copy to avoid race conditions when encoding
 	copyImg := image.NewRGBA(t.img.Rect)
 	copy(copyImg.Pix, t.img.Pix)
