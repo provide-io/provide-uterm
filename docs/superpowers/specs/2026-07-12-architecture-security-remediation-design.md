@@ -1,7 +1,7 @@
 # Architecture and Security Remediation Design
 
-**Date:** 2026-07-12  
-**Status:** Approved design  
+**Date:** 2026-07-12
+**Status:** Approved design
 **Source review:** `ARCHITECTURE_CODE_REVIEW.md`
 
 ## Objective
