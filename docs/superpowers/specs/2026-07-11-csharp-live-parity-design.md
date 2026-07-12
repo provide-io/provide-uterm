@@ -155,8 +155,8 @@ Legend for matrix: **Y** = implemented and product-usable · **S** = stub / part
 
 | Feature | Py | Go | C# | Rust | TS | Bun |
 |---------|:--:|:--:|:--:|:----:|:--:|:---:|
-| Dedicated ushell package/module | Y | Y | S | — | — | — |
-| Unit / connector tests | Y | Y | S | — | — | — |
+| Dedicated ushell package/module | Y | Y | Y (dispatcher; connector open) | — | — | — |
+| Unit / connector tests | Y | Y | Y (unit; connector Layer B open) | — | — | — |
 | CF DO / server session wiring (`ushell` connector type) | Y | Y | — | — | — | — |
 | Standalone REPL entry (`__main__` / CLI) | Y | via server | — | — | — | — |
 
@@ -165,28 +165,28 @@ Legend for matrix: **Y** = implemented and product-usable · **S** = stub / part
 | Feature | Py | Go | C# | Rust | TS | Bun |
 |---------|:--:|:--:|:--:|:----:|:--:|:---:|
 | LineBuffer (CR/LF submit, BS/DEL, ESC/CSI swallow, max len) | Y | Y | Y | — | — | — |
-| Ctrl-C clear / Ctrl-D EOF semantics | Y | Y | S | — | — | — |
+| Ctrl-C clear / Ctrl-D EOF semantics | Y | Y | Y | — | — | — |
 | ANSI prompt / banner / Error/Info/Success/Heading | Y | Y | Y | — | — | — |
-| FmtKV / FmtTable (Go/Python-aligned) | Y | Y | S | — | — | — |
-| Exact help text / per-command `help <cmd>` | Y | Y | — | — | — | — |
+| FmtKV / FmtTable (Go/Python-aligned) | Y | Y | Y | — | — | — |
+| Exact help text / per-command `help <cmd>` | Y | Y | Y | — | — | — |
 
 #### 7.3 Commands (dispatcher)
 
 | Command | Py | Go | C# | Rust | TS | Bun |
 |---------|:--:|:--:|:--:|:----:|:--:|:---:|
-| `help` / `help <cmd>` | Y | Y | S | — | — | — |
-| `clear` | Y | Y | S | — | — | — |
-| `exit` / `quit` / EOF | Y | Y | — | — | — | — |
-| `py <expr>` | Y (sandbox) | S (unavailable stub) | — | — | — | — |
-| `sessions` / `sessions kill` | Y | Y | — | — | — | — |
-| `kv` list/get/set/delete | Y | Y | — | — | — | — |
-| `fetch` HTTP(S) | Y | Y | — | — | — | — |
-| `storage` list/get | Y | Y | — | — | — | — |
-| `env` (ushell context keys) | Y | Y | S (OS env dump ≠ contract) | — | — | — |
-| `render` image→ANSI (+ animation) | Y | Y | — | — | — | — |
-| `cast` asciicast v2 replay | Y | Y | — | — | — | — |
-| Unknown-command error frame | Y | Y | S | — | — | — |
-| Injectable context (KV/storage/list sessions) | Y | Y | — | — | — | — |
+| `help` / `help <cmd>` | Y | Y | Y | — | — | — |
+| `clear` | Y | Y | Y | — | — | — |
+| `exit` / `quit` / EOF | Y | Y | Y | — | — | — |
+| `py <expr>` | Y (sandbox) | S (unavailable stub) | S (Go-aligned stub) | — | — | — |
+| `sessions` / `sessions kill` | Y | Y | Y | — | — | — |
+| `kv` list/get/set/delete | Y | Y | Y | — | — | — |
+| `fetch` HTTP(S) | Y | Y | Y | — | — | — |
+| `storage` list/get | Y | Y | Y | — | — | — |
+| `env` (ushell context keys) | Y | Y | Y | — | — | — |
+| `render` image→ANSI (+ animation) | Y | Y | Y (injectable renderer) | — | — | — |
+| `cast` asciicast v2 replay | Y | Y | Y | — | — | — |
+| Unknown-command error frame | Y | Y | Y | — | — | — |
+| Injectable context (KV/storage/list sessions) | Y | Y | Y | — | — | — |
 
 #### 7.4 `py` / sandbox
 
@@ -194,8 +194,8 @@ Legend for matrix: **Y** = implemented and product-usable · **S** = stub / part
 |---------|:--:|:--:|:--:|:----:|:--:|:---:|
 | Restricted eval/exec sandbox | Y | — | — | — | — | — |
 | Session-persistent namespace | Y | — | — | — | — | — |
-| Portable stub (`usage` + unavailable message) | N/A | Y | — (required) | — | — | — |
-| Capability tag `ushell.py` | `python` | `stub` | `stub` (target) | — | — | — |
+| Portable stub (`usage` + unavailable message) | N/A | Y | Y (Go wording) | — | — | — |
+| Capability tag `ushell.py` | `python` | `stub` | `stub` | — | — | — |
 
 #### 7.5 UshellConnector (SessionConnector)
 
@@ -207,7 +207,7 @@ Legend for matrix: **Y** = implemented and product-usable · **S** = stub / part
 | Welcome / banner / worker hello frames | Y | Y | — | — | — | — |
 | HandleControl (flow pause/resume) | Y | Y | — | — | — | — |
 | Flow-pause backpressure | Y | Y | — | — | — | — |
-| AnimatedResult streaming (render/cast) | Y | Y | — | — | — | — |
+| AnimatedResult streaming (render/cast) | Y | Y | Y (dispatcher returns frames; connector play open) | — | — | — |
 | GetSnapshot | Y | Y | — | — | — | — |
 | GetAnalysis | Y | Y | — | — | — | — |
 | Clear / SetMode | Y | Y | — | — | — | — |
@@ -217,22 +217,22 @@ Legend for matrix: **Y** = implemented and product-usable · **S** = stub / part
 
 Checkable delivery items for the C# program (flip when landed + tested):
 
-- [ ] Types / `Result` + animated result (`types.go`)
-- [ ] Context / binding interfaces (`context.go`)
-- [ ] Dispatcher routing + exact error/usage strings (`dispatcher.go`)
-- [ ] Full `help` / `help <cmd>` text (`help.go`)
-- [ ] `clear`, `exit`/`quit`, `env` (context semantics)
-- [ ] `sessions` / `sessions kill`
-- [ ] `kv` list/get/set/delete
-- [ ] `fetch` (http/https only, size/time limits)
-- [ ] `storage` list/get
-- [ ] `render` (+ animation frames)
-- [ ] `cast` (+ fps/loop)
-- [ ] `py` stub matching Go strings
-- [ ] HTTP helpers + frame builders (`http.go`, `frame.go`)
+- [x] Types / `Result` + animated result (`types.go`)
+- [x] Context / binding interfaces (`context.go`)
+- [x] Dispatcher routing + exact error/usage strings (`dispatcher.go`)
+- [x] Full `help` / `help <cmd>` text (`help.go`)
+- [x] `clear`, `exit`/`quit`, `env` (context semantics)
+- [x] `sessions` / `sessions kill`
+- [x] `kv` list/get/set/delete
+- [x] `fetch` (http/https only, size/time limits)
+- [x] `storage` list/get
+- [x] `render` (+ animation frames)
+- [x] `cast` (+ fps/loop)
+- [x] `py` stub matching Go strings
+- [x] HTTP helpers (`http.go`; frame builders deferred with connector)
 - [ ] **UshellConnector** lifecycle (input, poll, control, snapshot, analysis, flow, animation)
 - [ ] Wire `connector_type=ushell` on C# server/session path
-- [ ] Unit tests ported from Go shell tests
+- [x] Unit tests ported from Go shell tests (dispatcher + command branches)
 - [ ] Layer B scenario(s): help, kv, fetch fixture, connector echo/dispatch
 
 #### 7.7 Future languages (Rust / TS / Bun)
@@ -411,10 +411,10 @@ Each phase leaves a working system and adds its scenarios to **required CI for t
 ### PR6 — Telnet full negotiation + WS foundation
 ### PR7 — SSH gateway pump *(partially landed — FxSsh)*
 ### PR8 — RFB client Raw + deterministic fixture *(partially landed)*
-### PR9 — Ushell linebuffer/output already partial; **dispatcher + commands**
-- Files: expand `Shell/` from Go `shell/` (types, dispatcher, help, kv, fetch, storage, render, cast, py stub, http, frame)
+### PR9 — Ushell linebuffer/output already partial; **dispatcher + commands** *(landed)*
+- Files: expand `Shell/` from Go `shell/` (types, dispatcher, help, kv, fetch, storage, render, cast, py stub, http)
 - Deps: existing render/ANSI surfaces
-- Exit: Go-aligned unit tests for each command; exact help/error strings
+- Exit: Go-aligned unit tests for each command; exact help/error strings — **done** (`CommandDispatcher` + `UshellDispatcherTests`; coverlet ≥97%)
 
 ### PR10 — UshellConnector lifecycle
 - Files: connector input/snapshot/analysis/flow/modes/welcome frames
@@ -429,3 +429,5 @@ Each phase leaves a working system and adds its scenarios to **required CI for t
 *Revised after multi-agent design review (architecture, parity gap, security/CI). Review notes: `docs/superpowers/specs/2026-07-11-csharp-live-parity-design.REVIEW.md`.*
 
 *Updated 2026-07-12: Workstream 7 ushell — multi-language feature matrix (Py/Go/C#/Rust/TS/Bun); checkable C# delivery list; Rust/TS/Bun absent in monorepo.*
+
+*Updated 2026-07-12: PR9 landed — C# `Shell/` dispatcher + commands (Go oracle); connector (PR10) still open.*

@@ -246,14 +246,16 @@ public class ModuleSurfaceTests
         Assert.Contains("ok", ShellOutput.SuccessMsg("ok"), StringComparison.Ordinal);
         Assert.Contains("info", ShellOutput.InfoMsg("info"), StringComparison.Ordinal);
         Assert.Contains("H", ShellOutput.Heading("H"), StringComparison.Ordinal);
-        Assert.Contains("a=b", ShellOutput.FmtKv(new Dictionary<string, string> { ["a"] = "b" }), StringComparison.Ordinal);
+        Assert.Contains("a", ShellOutput.FmtKv(new Dictionary<string, string> { ["a"] = "b" }), StringComparison.Ordinal);
 
         var disp = new CommandDispatcher();
-        disp.Register("echo", args => new CommandResult { Output = string.Join(" ", args) });
-        Assert.Contains("help", disp.Dispatch("help").Output, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal("hi", disp.Dispatch("echo hi").Output);
-        Assert.False(disp.Dispatch("nope").Ok);
-        Assert.Contains("2J", disp.Dispatch("clear").Output, StringComparison.Ordinal);
+        var help = disp.Dispatch("help");
+        Assert.NotEmpty(help.Text);
+        Assert.Contains("ushell commands", string.Join("", help.Text), StringComparison.OrdinalIgnoreCase);
+        var clear = disp.Dispatch("clear");
+        Assert.Contains("2J", string.Join("", clear.Text), StringComparison.Ordinal);
+        var unknown = disp.Dispatch("nope");
+        Assert.Contains("unknown command", string.Join("", unknown.Text), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

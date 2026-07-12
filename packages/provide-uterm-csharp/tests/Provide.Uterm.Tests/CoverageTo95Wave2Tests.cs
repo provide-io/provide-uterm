@@ -676,12 +676,11 @@ public class CoverageTo95Wave2Tests
         _ = ShellOutput.Heading("h");
         _ = ShellOutput.FmtKv(new Dictionary<string, string> { ["a"] = "1" });
         var disp = new CommandDispatcher();
-        disp.Register("echo", args => new CommandResult { Output = string.Join(" ", args) });
         _ = disp.Dispatch("");
         _ = disp.Dispatch("help");
         _ = disp.Dispatch("clear");
         _ = disp.Dispatch("env");
-        _ = disp.Dispatch("echo hi there");
+        _ = disp.Dispatch("py");
         _ = disp.Dispatch("nope");
 
         var scr = new Vt.Screen(8, 3);
