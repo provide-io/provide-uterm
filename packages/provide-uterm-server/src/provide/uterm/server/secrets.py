@@ -130,6 +130,8 @@ class SecretReference:
                 current = os.open(anchor, directory_flags)
             except (NotImplementedError, TypeError) as exc:
                 raise SecretResolutionError(_UNSUPPORTED_FILE_ERROR) from exc
+            except OSError as exc:
+                raise SecretResolutionError("file secret is unavailable") from exc
             descriptors.append(current)
             if not parts:
                 return os.dup(current)
