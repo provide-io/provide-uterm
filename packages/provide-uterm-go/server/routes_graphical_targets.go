@@ -3,6 +3,7 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -11,7 +12,7 @@ import (
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
 )
 
-const maxGraphicalTargetPage = 100
+const maxGraphicalTargetPage = 200
 
 func (s *Server) registerGraphicalTargetRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/graphical-targets", s.authenticated(s.handleListGraphicalTargets))
@@ -49,28 +50,45 @@ func publicGraphicalTarget(target serverconfig.GraphicalTargetDefinition) map[st
 	return out
 }
 
-func decodeGraphicalTarget(r *http.Request) (serverconfig.GraphicalTargetDefinition, error) {
+func decodeGraphicalTarget(r *http.Request) (serverconfig.GraphicalTargetDefinition, bool, error) {
+	var raw map[string]json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+		return serverconfig.GraphicalTargetDefinition{}, false, err
+	}
+	_, hasTenant := raw["tenant_id"]
+	encoded, err := json.Marshal(raw)
+	if err != nil {
+		return serverconfig.GraphicalTargetDefinition{}, hasTenant, err
+	}
 	var target serverconfig.GraphicalTargetDefinition
-	dec := json.NewDecoder(r.Body)
+	dec := json.NewDecoder(bytes.NewReader(encoded))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&target); err != nil {
-		return target, err
+		return target, hasTenant, err
 	}
-	return target, nil
+	return target, hasTenant, nil
+}
+
+func graphicalError(w http.ResponseWriter, status int, code, message string) {
+	writeJSON(w, status, map[string]any{"detail": map[string]string{"code": code, "message": message}})
 }
 
 func graphicalRouteError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrGraphicalTargetAlreadyExists):
-		detailError(w, http.StatusConflict, "graphical target already exists")
+		graphicalError(w, http.StatusConflict, "graphical_target_exists", "graphical target already exists")
 	case errors.Is(err, ErrGraphicalTargetImmutable):
-		detailError(w, http.StatusConflict, "static graphical target is immutable")
+		graphicalError(w, http.StatusConflict, "graphical_target_immutable", "static graphical target is immutable")
+	case errors.Is(err, ErrGraphicalTargetTransaction):
+		graphicalError(w, http.StatusConflict, "graphical_target_conflict", "graphical target transaction conflicted")
+	case errors.Is(err, ErrGraphicalTargetInvalid):
+		graphicalError(w, http.StatusUnprocessableEntity, "graphical_target_invalid", "graphical target definition is invalid")
 	case errors.Is(err, ErrGraphicalTargetNotFound), errors.Is(err, ErrGraphicalTargetForbidden):
-		detailError(w, http.StatusNotFound, "graphical target not found")
+		graphicalError(w, http.StatusNotFound, "graphical_target_not_found", "graphical target not found")
 	case errors.Is(err, ErrGraphicalTargetClosed):
-		detailError(w, http.StatusServiceUnavailable, "graphical target service unavailable")
+		graphicalError(w, http.StatusServiceUnavailable, "graphical_target_unavailable", "graphical target service is unavailable")
 	default:
-		detailError(w, http.StatusBadGateway, "graphical target backend unavailable")
+		graphicalError(w, http.StatusServiceUnavailable, "graphical_target_backend_error", "graphical target backend failed")
 	}
 }
 
@@ -79,14 +97,14 @@ func (s *Server) handleListGraphicalTargets(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		return
 	}
-	limit := 50
+	limit := 100
 	offset := 0
 	var err error
 	if raw := r.URL.Query().Get("limit"); raw != "" {
 		limit, err = strconv.Atoi(raw)
 	}
 	if err != nil || limit < 1 || limit > maxGraphicalTargetPage {
-		detailError(w, http.StatusUnprocessableEntity, "limit must be between 1 and 100")
+		detailError(w, http.StatusUnprocessableEntity, "limit must be between 1 and 200")
 		return
 	}
 	if raw := r.URL.Query().Get("offset"); raw != "" {
@@ -101,21 +119,28 @@ func (s *Server) handleListGraphicalTargets(w http.ResponseWriter, r *http.Reque
 		graphicalRouteError(w, err)
 		return
 	}
-	if offset > len(targets) {
-		offset = len(targets)
-	}
-	end := offset + limit
-	if end > len(targets) {
-		end = len(targets)
-	}
-	out := make([]map[string]any, 0, end-offset)
-	for _, target := range targets[offset:end] {
+	filtered := make([]serverconfig.GraphicalTargetDefinition, 0, len(targets))
+	for _, target := range targets {
 		if target.TenantID == nil || *target.TenantID != principalOf(r).TenantID {
-			continue
+			graphicalError(w, http.StatusNotFound, "graphical_target_not_found", "graphical target not found")
+			return
 		}
-		out = append(out, publicGraphicalTarget(target))
+		filtered = append(filtered, target)
 	}
-	writeJSON(w, http.StatusOK, out)
+	total := len(filtered)
+	start := offset
+	if start > total {
+		start = total
+	}
+	end := start + limit
+	if end > total {
+		end = total
+	}
+	items := make([]map[string]any, 0, end-start)
+	for _, target := range filtered[start:end] {
+		items = append(items, publicGraphicalTarget(target))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "limit": limit, "offset": offset, "total": total})
 }
 
 func (s *Server) handleGetGraphicalTarget(w http.ResponseWriter, r *http.Request) {
@@ -140,16 +165,16 @@ func (s *Server) handleCreateGraphicalTarget(w http.ResponseWriter, r *http.Requ
 	if !ok {
 		return
 	}
-	target, err := decodeGraphicalTarget(r)
+	target, hasTenant, err := decodeGraphicalTarget(r)
 	if err != nil {
 		detailError(w, http.StatusUnprocessableEntity, "invalid request body")
 		return
 	}
-	tenant := principalOf(r).TenantID
-	if target.TenantID != nil && *target.TenantID != tenant {
-		detailError(w, http.StatusForbidden, "graphical target access denied")
+	if hasTenant {
+		graphicalError(w, http.StatusUnprocessableEntity, "tenant_managed", "tenant_id is assigned from authenticated identity")
 		return
 	}
+	tenant := principalOf(r).TenantID
 	target.TenantID = &tenant
 	created, err := s.deps.GraphicalTargets.Create(r.Context(), scope, target)
 	if err != nil {
@@ -165,22 +190,22 @@ func (s *Server) handleUpdateGraphicalTarget(w http.ResponseWriter, r *http.Requ
 	if !ok {
 		return
 	}
-	target, err := decodeGraphicalTarget(r)
+	target, hasTenant, err := decodeGraphicalTarget(r)
 	if err != nil {
 		detailError(w, http.StatusUnprocessableEntity, "invalid request body")
 		return
 	}
+	if hasTenant {
+		graphicalError(w, http.StatusUnprocessableEntity, "tenant_managed", "tenant_id is assigned from authenticated identity")
+		return
+	}
 	id := r.PathValue("target_id")
 	if target.TargetID != "" && target.TargetID != id {
-		detailError(w, http.StatusUnprocessableEntity, "target_id must match request path")
+		graphicalError(w, http.StatusConflict, "target_id_mismatch", "target_id must match the request path")
 		return
 	}
 	target.TargetID = id
 	tenant := principalOf(r).TenantID
-	if target.TenantID != nil && *target.TenantID != tenant {
-		detailError(w, http.StatusForbidden, "graphical target access denied")
-		return
-	}
 	target.TenantID = &tenant
 	updated, err := s.deps.GraphicalTargets.Update(r.Context(), scope, target)
 	if err != nil {
