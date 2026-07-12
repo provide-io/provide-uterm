@@ -18,13 +18,17 @@ DOTNET ?= dotnet
 COVER_THRESHOLD ?= 97.0
 CONFIGURATION ?= Release
 
-.PHONY: build test cover build-binaries quality-gate interop-test
+.PHONY: build test cover build-binaries quality-gate interop-test conformance-test
 
 build:
 	$(DOTNET) build -c $(CONFIGURATION)
 
 test:
 	$(DOTNET) test -c $(CONFIGURATION) --no-build || $(DOTNET) test -c $(CONFIGURATION)
+
+# AC3: byte-exact Python differential driver (mirrors Go conformance/conformance_test.go).
+conformance-test:
+	$(DOTNET) test -c $(CONFIGURATION) --filter "FullyQualifiedName~ConformanceVectors" -v n
 
 cover:
 	@rm -rf coverage-out
@@ -43,7 +47,7 @@ build-binaries:
 	@test ! -e bin/Uterm.Mcp -a ! -e bin/Uterm.Mcp.dll
 	@echo "uterm + uterm-manager binaries under bin/ (MCP not shipped for C#)"
 
-quality-gate: build test cover build-binaries
+quality-gate: build conformance-test test cover build-binaries
 	@echo "csharp quality gate passed"
 
 # Optional live C# client -> Python server interop. Skips when uv is absent.
