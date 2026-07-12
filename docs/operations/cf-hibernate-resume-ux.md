@@ -35,9 +35,26 @@ bash scripts/prove_cf_hibernate_resume.sh
 # Standalone banner demo (same two paths as the recording demos)
 uv run python scripts/demo_cf_hibernate_resume.py
 
-# Level B (optional live)
+# Level B local (flat vendor + JWT harness + wrangler — NOT pywrangler)
 bash scripts/prove_cf_hibernate_resume.sh --real-cf
+# or directly:
+bash scripts/run_cf_resume_e2e_local.sh
+
+# Level B against deployed worker (needs principal JWT + Access if gated)
+REAL_CF=1 REAL_CF_URL=https://provide-uterm-cloudflare.neurotic.workers.dev \
+  CF_E2E_JWT=…  # optional: CF_ACCESS_CLIENT_ID/SECRET
+  uv run pytest -m real_cf packages/provide-uterm-cloudflare/tests/test_e2e_ws.py \
+  -k 'resume or hello_includes_resume' --no-cov
 ```
+
+**Local Level B notes (2026-07-12):**
+
+- Deployed health: `https://provide-uterm-cloudflare.neurotic.workers.dev/api/health` → 200.
+- Authenticated routes on prod return 401 without a CF Access / principal JWT.
+- `pywrangler dev` re-syncs `python_modules/` into a broken Pyodide layout. Use
+  `bash .ci/vendor_cf_worker.sh` then `npx wrangler dev` (scripted above).
+- Vendor shim replaces heavy `provide.uterm.__init__` (pydantic) and overlays
+  `provide.uterm.cloudflare` so DO imports resolve under Workers.
 
 ### Two different “sleep” stories
 
