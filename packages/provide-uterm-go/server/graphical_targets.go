@@ -23,6 +23,7 @@ var (
 	ErrGraphicalTargetTransaction   = errors.New("graphical target transaction conflicted")
 	ErrGraphicalTargetClosed        = errors.New("graphical target registry is closed")
 	ErrGraphicalTargetPersistedData = errors.New("invalid persisted graphical target")
+	ErrGraphicalTargetInvalid       = errors.New("invalid graphical target")
 )
 
 type TargetScope struct {
@@ -212,7 +213,7 @@ func (r *GraphicalTargetRegistry) Create(ctx context.Context, scope TargetScope,
 		return t, err
 	}
 	if err := t.Validate(); err != nil {
-		return t, errors.New("invalid graphical target")
+		return t, ErrGraphicalTargetInvalid
 	}
 	if _, ok := r.static[t.TargetID]; ok {
 		return t, ErrGraphicalTargetAlreadyExists
@@ -239,7 +240,7 @@ func (r *GraphicalTargetRegistry) Update(ctx context.Context, scope TargetScope,
 		return t, err
 	}
 	if err := t.Validate(); err != nil {
-		return t, errors.New("invalid graphical target")
+		return t, ErrGraphicalTargetInvalid
 	}
 	if _, ok := r.static[t.TargetID]; ok {
 		return t, ErrGraphicalTargetImmutable

@@ -98,7 +98,10 @@ func ExtractBearerToken(req *Request) string {
 func (p *LocalIdentityProvider) PrincipalFromHeaderAuth(req *Request) *Principal {
 	principal := firstNonEmpty(req.Header(p.Auth.PrincipalHeader), req.Cookie(p.Auth.PrincipalCookie), "anonymous")
 	roleRaw := firstNonEmpty(req.Header(p.Auth.RoleHeader), req.Cookie(p.Auth.RoleCookie), "")
-	tenant, _ := CanonicalTenantID(firstNonEmpty(req.Header(p.Auth.TenantHeader), req.Cookie(p.Auth.TenantCookie)))
+	tenant, err := CanonicalTenantID(firstNonEmpty(req.Header(p.Auth.TenantHeader), req.Cookie(p.Auth.TenantCookie)))
+	if err != nil {
+		return AnonymousPrincipal()
+	}
 	return &Principal{
 		SubjectID: principal,
 		TenantID:  tenant,

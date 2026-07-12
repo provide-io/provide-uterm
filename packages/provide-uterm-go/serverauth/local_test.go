@@ -45,6 +45,7 @@ func headerAuthConfig() *serverconfig.AuthConfig {
 	return &serverconfig.AuthConfig{
 		Mode: "header", PrincipalHeader: "x-uterm-principal", RoleHeader: "x-uterm-role",
 		PrincipalCookie: "uterm_principal", RoleCookie: "uterm_role",
+		TenantHeader: "x-uterm-tenant", TenantCookie: "uterm_tenant",
 	}
 }
 
@@ -83,18 +84,18 @@ func TestAnonymousPrincipal(t *testing.T) {
 func TestHeaderAuth(t *testing.T) {
 	idp := NewLocalIdentityProvider(headerAuthConfig(), nil)
 
-	p := idp.PrincipalFromHeaderAuth(&Request{Headers: map[string]string{"x-uterm-principal": "alice"}})
+	p := idp.PrincipalFromHeaderAuth(&Request{Headers: map[string]string{"x-uterm-principal": "alice", "x-uterm-tenant": "tenant-a"}})
 	if p.SubjectID != "alice" || !p.Roles.Has("viewer") { // missing role → viewer
 		t.Errorf("missing role default wrong: %+v", p)
 	}
 	for _, role := range []string{"viewer", "operator", "admin"} {
-		p := idp.PrincipalFromHeaderAuth(&Request{Headers: map[string]string{"x-uterm-principal": "u", "x-uterm-role": role}})
+		p := idp.PrincipalFromHeaderAuth(&Request{Headers: map[string]string{"x-uterm-principal": "u", "x-uterm-role": role, "x-uterm-tenant": "tenant-a"}})
 		if !p.Roles.Has(role) {
 			t.Errorf("role %q not accepted: %+v", role, p)
 		}
 	}
 	// cookie-provided principal
-	p2, err := idp.Authenticate(context.Background(), &Request{Cookies: map[string]string{"uterm_principal": "cookie_user"}})
+	p2, err := idp.Authenticate(context.Background(), &Request{Cookies: map[string]string{"uterm_principal": "cookie_user", "uterm_tenant": "tenant-a"}})
 	if err != nil || p2.SubjectID != "cookie_user" {
 		t.Errorf("cookie principal: %v %+v", err, p2)
 	}
@@ -123,7 +124,7 @@ func TestHeaderTrustedProxyAllowlistFailClosed(t *testing.T) {
 
 	// Trusted source → header honoured.
 	trusted, err := idp.Authenticate(context.Background(), &Request{
-		Headers:  map[string]string{"x-uterm-principal": "ops", "x-uterm-role": "admin"},
+		Headers:  map[string]string{"x-uterm-principal": "ops", "x-uterm-role": "admin", "x-uterm-tenant": "tenant-a"},
 		SourceIP: "10.0.0.5",
 	})
 	if err != nil {

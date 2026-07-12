@@ -75,3 +75,16 @@ func TestGraphicalCapabilitiesAreExplicit(t *testing.T) {
 		t.Fatal("tenantless anonymous principal gained graphical access")
 	}
 }
+
+func TestHeaderAuthFailsClosedWithoutCanonicalTenant(t *testing.T) {
+	auth := serverconfig.DefaultServerConfig().Auth
+	provider := NewLocalIdentityProvider(&auth, nil)
+	for _, tenant := range []string{"", "../spoof"} {
+		p := provider.PrincipalFromHeaderAuth(&Request{Headers: map[string]string{
+			auth.PrincipalHeader: "admin", auth.RoleHeader: "admin", auth.TenantHeader: tenant,
+		}})
+		if p.SubjectID != "anonymous" || p.TenantID != "" || p.Roles.Has("admin") {
+			t.Errorf("tenant %q retained authority: %#v", tenant, p)
+		}
+	}
+}
