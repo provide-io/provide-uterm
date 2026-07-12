@@ -35,7 +35,11 @@ class SecretReference:
     def parse(cls, value: str | SecretReference, *, base_dir: Path | None = None) -> SecretReference:
         if isinstance(value, cls):
             return value if base_dir is None else cls(value.scheme, value.locator, base_dir.resolve())
-        if not isinstance(value, str) or ":" not in value:
+        if (
+            not isinstance(value, str)
+            or ":" not in value
+            or any(ord(character) < 32 or ord(character) == 127 for character in value)
+        ):
             raise ValueError("invalid secret reference syntax")
         scheme, locator = value.split(":", 1)
         if scheme == "env":
@@ -103,13 +107,15 @@ class SecretReference:
 
     def _open_file(self, path: Path) -> int:
         """Walk path components by descriptor so no symlink is ever followed."""
-        nofollow = getattr(os, "O_NOFOLLOW", 0)
-        common_flags = getattr(os, "O_CLOEXEC", 0) | nofollow
+        required = ("O_NOFOLLOW", "O_DIRECTORY", "geteuid")
+        if os.name != "posix" or any(not hasattr(os, name) for name in required) or os.open not in os.supports_dir_fd:
+            raise SecretResolutionError("secure file secrets are unsupported on this platform")
+        common_flags = getattr(os, "O_CLOEXEC", 0) | os.O_NOFOLLOW
         if path.is_absolute():
             anchor, parts = Path(path.anchor), path.parts[1:]
         else:
             anchor, parts = cast("Path", self.base_dir), path.parts
-        directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | common_flags
+        directory_flags = os.O_RDONLY | os.O_DIRECTORY | common_flags
         descriptors: list[int] = []
         try:
             current = os.open(anchor, directory_flags)
@@ -128,6 +134,8 @@ class SecretReference:
     def _open_component(component: str, flags: int, directory_fd: int) -> int:
         try:
             return os.open(component, flags, dir_fd=directory_fd)
+        except (NotImplementedError, TypeError) as exc:
+            raise SecretResolutionError("secure file secrets are unsupported on this platform") from exc
         except OSError as exc:
             try:
                 metadata = os.stat(component, dir_fd=directory_fd, follow_symlinks=False)

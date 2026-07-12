@@ -424,6 +424,8 @@ class GovernanceConfig(ServerBaseModel):
 class UtermServerConfig(ServerBaseModel):
     """Top-level application config for the standalone server."""
 
+    model_config = ConfigDict(extra="forbid", validate_assignment=True)
+
     environment: Literal["dev", "production"] = "production"
     server: ServerBindConfig = Field(default_factory=ServerBindConfig)
     auth: AuthConfig = Field(default_factory=lambda: AuthConfig(mode="dev_token"))
@@ -454,29 +456,22 @@ class UtermServerConfig(ServerBaseModel):
     session_idle_timeout_s: int = 0
     session_retention_s: int = 0
     browser_rate_limit_per_sec: float = 300
-    # Finding #5d: how the worker WS recv loop handles a malformed inbound
-    # control frame (one whose fields fail the frame builder's type
-    # validation, e.g. snapshot ``cursor.x="abc"``).  ``drop`` (default)
-    # isolates the bad frame — it is dropped, ``ws_worker_frame_invalid_total``
-    # increments, and the worker session (plus every browser viewing it)
-    # stays alive; one bad frame can no longer DoS the session.  ``reject``
-    # sends a structured ``invalid_frame`` error frame and closes the worker
-    # WS with code 1003.
+    # Invalid worker frames are isolated by default; reject closes with 1003.
     worker_frame_on_invalid: Literal["drop", "reject"] = "drop"
-    # Maximum concurrent BROWSER WebSocket connections per authenticated
-    # principal (identified by subject_id).  Workers and anonymous principals
-    # are exempt; only concrete human principals are counted.  Prevents a
-    # single authenticated user from exhausting server memory with thousands
-    # of open browser tabs.
+    # Per-principal browser connection cap; workers and anonymous users are exempt.
     max_connections_per_principal: int = 25
-    # Generous GLOBAL cap on the number of distinct worker_ids the hub will
-    # register. Unlike max_connections_per_principal (BROWSER-only), workers
-    # share a static principal, so a per-principal cap would wrongly limit the
-    # whole fleet. This bounds OOM from a single token holder opening thousands
-    # of unique worker_id WS connections; real fleets are large, so the default
-    # is high and only pathological floods hit it. Reconnects of an already-
-    # registered worker_id are never counted against the cap.
+    # Global worker-ID cap; reconnects of an existing ID do not consume it.
     max_workers: int = 10000
+
+    def __setattr__(self, name: str, value: object) -> None:
+        had_value = name in self.__dict__
+        previous = self.__dict__.get(name)
+        try:
+            super().__setattr__(name, value)
+        except Exception:
+            if had_value:
+                object.__setattr__(self, name, previous)
+            raise
 
     @field_validator("max_workers")
     @classmethod

@@ -12,7 +12,7 @@ from collections.abc import Mapping
 from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, field_validator, model_validator
 
 from provide.uterm.server.auth_roles import KNOWN_ROLES
 from provide.uterm.server.secrets import SecretReference  # noqa: TC001 -- Pydantic needs runtime type
@@ -175,13 +175,9 @@ class GraphicalConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     allow_dynamic_targets: bool = False
     dynamic_allowed_cidrs: tuple[str, ...] = ()
-    targets: tuple[GraphicalTargetDefinition, ...] = Field(default=(), exclude=True)
 
     @model_validator(mode="after")
-    def _unique_targets(self) -> GraphicalConfig:
-        ids = [target.target_id for target in self.targets]
-        if len(ids) != len(set(ids)):
-            raise ValueError("duplicate graphical target_id")
+    def _normalize_cidrs(self) -> GraphicalConfig:
         normalized = GraphicalTargetDefinition._validate_cidrs(self.dynamic_allowed_cidrs)
         object.__setattr__(self, "dynamic_allowed_cidrs", normalized)
         return self
