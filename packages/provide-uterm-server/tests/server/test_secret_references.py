@@ -73,6 +73,15 @@ def test_file_rejects_traversal_directory_symlink_and_oversize(tmp_path: Path) -
     link.symlink_to(regular)
     with pytest.raises(SecretResolutionError, match="symbolic links"):
         SecretReference.parse("file:link", base_dir=tmp_path).resolve()
+    real_directory = tmp_path / "real-directory"
+    real_directory.mkdir()
+    nested = real_directory / "key"
+    nested.write_bytes(b"nested-secret")
+    nested.chmod(0o600)
+    linked_directory = tmp_path / "linked"
+    linked_directory.symlink_to(real_directory, target_is_directory=True)
+    with pytest.raises(SecretResolutionError, match="symbolic links"):
+        SecretReference.parse("file:linked/key", base_dir=tmp_path).resolve()
     huge = tmp_path / "huge"
     huge.write_bytes(b"x" * (MAX_SECRET_BYTES + 1))
     huge.chmod(0o600)

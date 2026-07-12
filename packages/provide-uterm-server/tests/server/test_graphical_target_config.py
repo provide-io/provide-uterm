@@ -39,6 +39,13 @@ def test_target_normalizes_immutable_collections_and_serializes_references_only(
         target.target_id = "changed"
 
 
+def test_target_accepts_bracketed_ipv6_endpoint_and_ip_server_identity() -> None:
+    target = GraphicalTargetDefinition.model_validate(
+        valid_target(endpoint="dns:///[2001:db8::1]:443", expected_server_name="2001:db8::1")
+    )
+    assert target.endpoint == "dns:///[2001:db8::1]:443"
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [
@@ -49,6 +56,25 @@ def test_target_normalizes_immutable_collections_and_serializes_references_only(
         ("endpoint", "dns:///host"),
         ("endpoint", "dns:///host:443?override=evil"),
         ("endpoint", "dns:///user@host:443"),
+        ("endpoint", "dns:///bad host:443"),
+        ("endpoint", "dns:///host/name:443"),
+        ("endpoint", "dns:///[::1:443"),
+        ("endpoint", "dns:///[127.0.0.1]:443"),
+        ("endpoint", "dns:///[not-ipv6]:443"),
+        ("endpoint", "dns:///host:0"),
+        ("endpoint", "dns:///host:65536"),
+        ("endpoint", "dns:///host:https"),
+        ("endpoint", "dns:///host:\uff11\uff12"),
+        ("endpoint", "dns:///täst.example:443"),
+        ("endpoint", f"dns:///{'a' * 64}.example:443"),
+        ("endpoint", "dns:///bad..example:443"),
+        ("minimum_role", "superuser"),
+        ("expected_server_name", "bad identity/name"),
+        ("expected_server_name", "bad identity"),
+        ("expected_server_name", "täst.example"),
+        ("expected_server_name", ""),
+        ("expected_server_name", "a" * 254),
+        ("expected_server_name", f"{'a' * 64}.example"),
         ("tls_mode", "optional"),
         ("allowed_vm_patterns", [""]),
         ("allowed_vm_patterns", ["../prod"]),
@@ -109,3 +135,8 @@ def test_server_mapping_loads_static_targets_and_dev_dynamic_mode() -> None:
     assert config.graphical.allow_dynamic_targets is True
     assert config.graphical.dynamic_allowed_cidrs == ("127.0.0.0/8",)
     assert config.graphical_targets[0].target_id == "prod-vnc"
+
+
+def test_graphical_config_canonicalizes_dynamic_cidrs() -> None:
+    config = GraphicalConfig(dynamic_allowed_cidrs=["2001:0db8::/32", "10.0.0.0/8", "10.0.0.0/8"])
+    assert config.dynamic_allowed_cidrs == ("2001:db8::/32", "10.0.0.0/8")

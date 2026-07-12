@@ -14,11 +14,13 @@ from urllib.parse import urlsplit
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from provide.uterm.server.auth_roles import KNOWN_ROLES
 from provide.uterm.server.secrets import SecretReference  # noqa: TC001 -- Pydantic needs runtime type
 
 _NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 _VM_PATTERN = re.compile(r"^[A-Za-z0-9_*?.:-]{1,256}$")
 _LABEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
+_DNS_LABEL = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
 
 
 def _positive(value: int | float) -> int | float:
@@ -29,6 +31,35 @@ def _positive(value: int | float) -> int | float:
 
 PositiveFloat = Annotated[float, AfterValidator(_positive)]
 PositiveInt = Annotated[int, AfterValidator(_positive)]
+
+
+def _validate_network_identity(value: str) -> str:
+    """Accept canonical ASCII DNS names or IP literals used by TLS/gRPC."""
+    if not value or len(value) > 253 or not value.isascii():
+        raise ValueError("network identity must be an ASCII DNS name or IP address")
+    try:
+        ipaddress.ip_address(value)
+    except ValueError:
+        if any(not _DNS_LABEL.fullmatch(label) for label in value.split(".")):
+            raise ValueError("network identity must be a valid DNS name or IP address") from None
+    return value
+
+
+def _split_endpoint_address(address: str) -> tuple[str, str]:
+    if address.startswith("["):
+        closing = address.find("]")
+        if closing < 0 or closing + 1 >= len(address) or address[closing + 1] != ":":
+            raise ValueError("endpoint must include a valid host and port")
+        host, port = address[1:closing], address[closing + 2 :]
+        try:
+            if ipaddress.ip_address(host).version != 6:
+                raise ValueError
+        except ValueError:
+            raise ValueError("endpoint contains an invalid IPv6 literal") from None
+        return host, port
+    if address.count(":") != 1:
+        raise ValueError("endpoint must bracket IPv6 literals")
+    return tuple(address.rsplit(":", 1))  # type: ignore[return-value]
 
 
 class GraphicalTargetDefinition(BaseModel):
@@ -60,7 +91,7 @@ class GraphicalTargetDefinition(BaseModel):
     allowed_cidrs: tuple[str, ...] = ()
     audit_labels: tuple[tuple[str, str], ...] = ()
 
-    @field_validator("target_id", "minimum_role")
+    @field_validator("target_id")
     @classmethod
     def _validate_name(cls, value: str) -> str:
         if not _NAME.fullmatch(value):
@@ -74,6 +105,18 @@ class GraphicalTargetDefinition(BaseModel):
             raise ValueError("tenant_id must be a safe identifier")
         return value
 
+    @field_validator("minimum_role")
+    @classmethod
+    def _validate_role(cls, value: str) -> str:
+        if value not in KNOWN_ROLES:
+            raise ValueError("minimum_role must be viewer, operator, or admin")
+        return value
+
+    @field_validator("expected_server_name")
+    @classmethod
+    def _validate_server_name(cls, value: str | None) -> str | None:
+        return None if value is None else _validate_network_identity(value)
+
     @field_validator("endpoint")
     @classmethod
     def _validate_endpoint(cls, value: str) -> str:
@@ -81,8 +124,11 @@ class GraphicalTargetDefinition(BaseModel):
         if not value.startswith("dns:///") or parsed.netloc or parsed.query or parsed.fragment:
             raise ValueError("endpoint must use dns:///host:port syntax")
         address = parsed.path[1:]
-        host, separator, port = address.rpartition(":")
-        if not separator or not host or not port.isdigit() or not 1 <= int(port) <= 65535 or "@" in host:
+        if "/" in address or "@" in address:
+            raise ValueError("endpoint must include a valid host and port")
+        host, port = _split_endpoint_address(address)
+        _validate_network_identity(host)
+        if not port.isascii() or not port.isdigit() or not 1 <= int(port) <= 65535:
             raise ValueError("endpoint must include a valid host and port")
         return value
 
@@ -136,5 +182,6 @@ class GraphicalConfig(BaseModel):
         ids = [target.target_id for target in self.targets]
         if len(ids) != len(set(ids)):
             raise ValueError("duplicate graphical target_id")
-        GraphicalTargetDefinition._validate_cidrs(self.dynamic_allowed_cidrs)
+        normalized = GraphicalTargetDefinition._validate_cidrs(self.dynamic_allowed_cidrs)
+        object.__setattr__(self, "dynamic_allowed_cidrs", normalized)
         return self

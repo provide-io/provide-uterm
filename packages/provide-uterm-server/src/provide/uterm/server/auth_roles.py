@@ -12,7 +12,8 @@ from typing import Any
 # source (JWT claims, proxy headers, the webhook IDP) MUST be filtered to this
 # set; anything outside it is dropped so a compromised issuer cannot inject a
 # privileged role like ``superuser``/``root``.
-_KNOWN_ROLES = frozenset({"viewer", "operator", "admin"})
+KNOWN_ROLES = frozenset({"viewer", "operator", "admin"})
+_KNOWN_ROLES = KNOWN_ROLES
 # Fallback role applied when role filtering leaves nothing.
 _DEFAULT_ROLE = "viewer"
 
