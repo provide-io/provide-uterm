@@ -87,7 +87,7 @@ __all__ = [
     "principal_from_headers",
 ]
 
-TOOL_COUNT = 26
+TOOL_COUNT = 28
 
 # Backwards-compatible alias: the canonical unescape logic now lives in
 # ``provide.uterm.client.sanitizer`` so both MCP code paths share it, but the

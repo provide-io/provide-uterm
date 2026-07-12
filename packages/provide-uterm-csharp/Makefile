@@ -28,8 +28,18 @@ CONFIGURATION ?= Release
 build:
 	$(DOTNET) build -c $(CONFIGURATION)
 
+# Serialize test host: parallel collections + live Kestrel/native interop has
+# crashed the ubuntu CI host (glibc malloc assert). xunit.runner.json also
+# sets maxParallelThreads=1; keep CLI flags as belt-and-suspenders.
 test:
-	$(DOTNET) test -c $(CONFIGURATION) --no-build || $(DOTNET) test -c $(CONFIGURATION)
+	$(DOTNET) test -c $(CONFIGURATION) --no-build -- \
+		xUnit.ParallelizeAssembly=false \
+		xUnit.ParallelizeTestCollections=false \
+		xUnit.MaxParallelThreads=1 \
+	|| $(DOTNET) test -c $(CONFIGURATION) -- \
+		xUnit.ParallelizeAssembly=false \
+		xUnit.ParallelizeTestCollections=false \
+		xUnit.MaxParallelThreads=1
 
 # AC3: byte-exact Python differential driver (mirrors Go conformance/conformance_test.go).
 conformance-test:

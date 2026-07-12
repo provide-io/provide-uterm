@@ -36,12 +36,12 @@ func roleAtLeast(actual, minimum string) bool {
 // authorization chokepoint rather than silently exposed.
 var toolRequiredRoles = map[string]string{
 	// Hijack lifecycle — exclusive worker takeover.
-	"hijack_begin":     "admin",
-	"hijack_heartbeat": "admin",
-	"hijack_read":      "operator",
-	"hijack_send":      "admin",
-	"hijack_step":      "admin",
-	"hijack_release":   "admin",
+	"hijack_begin":       "admin",
+	"hijack_heartbeat":   "admin",
+	"hijack_read":        "operator",
+	"hijack_send":        "admin",
+	"hijack_step":        "admin",
+	"hijack_release":     "admin",
 	"gui_hijack_begin":   "admin",
 	"gui_hijack_release": "admin",
 	"gui_screenshot":     "operator",

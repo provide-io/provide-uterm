@@ -42,7 +42,7 @@ graph TB
 
     subgraph Workers
         Agent["Worker / Agent"]
-        AI["AI Tools (MCP)<br/><i>21 session control tools</i>"]
+        AI["AI Tools (MCP)<br/><i>28 session control tools</i>"]
     end
 
     subgraph CLI
@@ -177,7 +177,7 @@ Enable per-session with `presence: true`. Works on both FastAPI and CF backends 
 
 ### AI/MCP Integration
 
-21 tools for AI agents to control terminal sessions via the [Model Context Protocol](https://modelcontextprotocol.io/):
+28 tools for AI agents to control terminal sessions via the [Model Context Protocol](https://modelcontextprotocol.io/):
 
 ```bash
 uterm-mcp  # starts MCP server for Claude, GPT, or any MCP-compatible agent

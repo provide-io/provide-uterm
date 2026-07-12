@@ -117,15 +117,15 @@ type WorkerTermState struct {
 	// HijackPending is a transient REST-acquire reservation held while the
 	// worker is paused OUTSIDE the hub lock. See
 	// [HijackLeaseManager.TryAcquireRest].
-	HijackPending   *string
-	InputMode       string
-	LastSnapshot    map[string]any
-	Events          []map[string]any
-	EventSeq        int
-	MinEventSeq     int
-	LastActivityAt  float64
-	ProtocolVersion *int
-	IsTunnelWorker  bool
+	HijackPending    *string
+	InputMode        string
+	LastSnapshot     map[string]any
+	Events           []map[string]any
+	EventSeq         int
+	MinEventSeq      int
+	LastActivityAt   float64
+	ProtocolVersion  *int
+	IsTunnelWorker   bool
 	GraphicalSession gui.GraphicalSession
 }
 

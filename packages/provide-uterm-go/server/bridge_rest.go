@@ -273,32 +273,32 @@ func (s *Server) handleGUIAttach(w http.ResponseWriter, r *http.Request) {
 	body, _ := decodeJSONBody(r)
 	target := stringField(body, "target_address")
 	vmName := stringField(body, "vm_name")
-	
+
 	cc, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		detailError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	
+
 	client, err := vnc.NewLitevirtAIClient(r.Context(), cc, vmName)
 	if err != nil {
 		detailError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	
+
 	st, err := s.deps.Hub.Registry.Require(workerID)
 	if err != nil {
 		detailError(w, http.StatusNotFound, "worker not found")
 		return
 	}
 	st.GraphicalSession = client
-	
+
 	go func() {
 		if err := client.RunHandshakeAndLoop(); err != nil {
 			s.logger.Warn("gui loop exited", "error", err)
 		}
 	}()
-	
+
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
@@ -370,9 +370,12 @@ func (s *Server) handleHijackGUIClick(w http.ResponseWriter, r *http.Request) {
 	button := stringField(body, "button")
 	var mask uint8
 	switch button {
-	case "left": mask = 1
-	case "middle": mask = 2
-	case "right": mask = 4
+	case "left":
+		mask = 1
+	case "middle":
+		mask = 2
+	case "right":
+		mask = 4
 	}
 	_ = sess.InjectPointer(x, y, mask)
 	_ = sess.InjectPointer(x, y, 0)

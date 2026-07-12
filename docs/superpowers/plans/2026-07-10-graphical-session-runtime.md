@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Define `gui.GraphicalSession` Interface
+## Task 1: Define `gui.GraphicalSession` Interface
 
 **Files:**
 - Create: `packages/provide-uterm-go/gui/session.go`
@@ -74,7 +74,7 @@ git add gui/session.go gui/session_test.go
 git commit -m "feat: define GraphicalSession interface"
 ```
 
-### Task 2: Build `vnc.FramebufferTracker`
+## Task 2: Build `vnc.FramebufferTracker`
 
 **Files:**
 - Create: `packages/provide-uterm-go/vnc/tracker.go`
@@ -93,14 +93,14 @@ import (
 
 func TestFramebufferTracker(t *testing.T) {
 	tracker := vnc.NewFramebufferTracker(100, 100)
-	
+
 	// Create a 2x2 red rect update
 	pixels := []byte{
 		255, 0, 0, 255,  255, 0, 0, 255,
 		255, 0, 0, 255,  255, 0, 0, 255,
 	}
 	tracker.ApplyRawUpdate(10, 10, 2, 2, pixels)
-	
+
 	img := tracker.GetImage()
 	c := img.At(10, 10).(color.RGBA)
 	if c.R != 255 || c.G != 0 || c.B != 0 {
@@ -139,7 +139,7 @@ func NewFramebufferTracker(width, height int) *FramebufferTracker {
 func (t *FramebufferTracker) ApplyRawUpdate(x, y, w, h int, pixels []byte) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	
+
 	src := image.NewRGBA(image.Rect(0, 0, w, h))
 	src.Pix = pixels
 	src.Stride = w * 4
@@ -151,7 +151,7 @@ func (t *FramebufferTracker) ApplyRawUpdate(x, y, w, h int, pixels []byte) {
 func (t *FramebufferTracker) GetImage() *image.RGBA {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	
+
 	// Return a copy to avoid race conditions when encoding
 	copyImg := image.NewRGBA(t.img.Rect)
 	copy(copyImg.Pix, t.img.Pix)
@@ -172,7 +172,7 @@ git add vnc/tracker.go vnc/tracker_test.go
 git commit -m "feat: implement vnc.FramebufferTracker"
 ```
 
-### Task 3: MCP GUI Tools Skeleton
+## Task 3: MCP GUI Tools Skeleton
 
 Since full MCP integration requires wiring up the session manager, we'll implement the tool handlers that assume an active session.
 
@@ -194,8 +194,8 @@ import (
 )
 
 type stubSession struct{}
-func (s *stubSession) Screenshot() (image.Image, error) { 
-	return image.NewRGBA(image.Rect(0, 0, 1, 1)), nil 
+func (s *stubSession) Screenshot() (image.Image, error) {
+	return image.NewRGBA(image.Rect(0, 0, 1, 1)), nil
 }
 func (s *stubSession) InjectPointer(x, y int, buttonMask uint8) error { return nil }
 func (s *stubSession) InjectKey(keySym uint32, down bool) error { return nil }
@@ -235,12 +235,12 @@ func HandleGUIScreenshot(session gui.GraphicalSession) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, img); err != nil {
 		return "", err
 	}
-	
+
 	return base64.StdEncoding.EncodeToString(buf.Bytes()), nil
 }
 

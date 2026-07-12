@@ -48,7 +48,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "tempdir: %v\n", err)
 		os.Exit(1)
 	}
-	defer os.RemoveAll(tmp)
+	defer func() { _ = os.RemoveAll(tmp) }()
 
 	store := recording.NewLocalFileStore(tmp)
 	sid := "demo-recording-go"

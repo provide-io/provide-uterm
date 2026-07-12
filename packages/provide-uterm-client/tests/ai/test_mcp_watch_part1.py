@@ -74,8 +74,8 @@ async def _call(mcp: FastMCP, tool: str, args: dict[str, Any] | None = None) -> 
 # ---------------------------------------------------------------------------
 
 
-def test_tool_count_is_21() -> None:
-    assert TOOL_COUNT == 21
+def test_tool_count_is_28() -> None:
+    assert TOOL_COUNT == 28
 
 
 # ---------------------------------------------------------------------------

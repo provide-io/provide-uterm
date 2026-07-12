@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **provide-uterm** is a terminal session platform that creates, transports, secures, shares, records, replays, and arbitrates terminal sessions across browsers, WebSockets, telnet, SSH, local PTYs, and remote workers. It's built around xterm.js as the screen, with provide-uterm managing the entire ecosystem.
 
-Key capabilities: session control (hijack leasing with viewer/operator/admin roles), pluggable connectors, tunnel sharing, HTTP inspection/interception, collaborative presence (DeckMux), AI/MCP integration (21 tools), and agent fleet management.
+Key capabilities: session control (hijack leasing with viewer/operator/admin roles), pluggable connectors, tunnel sharing, HTTP inspection/interception, collaborative presence (DeckMux), AI/MCP integration (28 tools), and agent fleet management.
 
 ## Build & Run Commands
 
@@ -69,7 +69,7 @@ docker compose -f docker/docker-compose.yml up
 
 ## Architecture
 
-**Monorepo** using uv workspace (Python) + npm workspaces (TypeScript), plus a standalone Go port. 9 packages under `packages/`:
+**Monorepo** using uv workspace (Python) + npm workspaces (TypeScript), plus standalone Go and C# ports. 10 packages under `packages/`:
 
 | Package | Role |
 |---------|------|
@@ -82,6 +82,7 @@ docker compose -f docker/docker-compose.yml up
 | `provide-uterm-frontend` | Browser UI (vanilla TypeScript, xterm.js) |
 | `provide-uterm-app` | App shell |
 | `provide-uterm-go` | Standalone Go port (module, own toolchain/CI — not part of the uv/npm workspaces) |
+| `provide-uterm-csharp` | Standalone C# port (.NET 10, own quality gate) |
 
 **Three-Layer Bridge System** (core architecture):
 1. **HijackableMixin** — Worker-side mixin for hijackability at checkpoints

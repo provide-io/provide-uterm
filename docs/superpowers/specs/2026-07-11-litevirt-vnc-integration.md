@@ -30,10 +30,10 @@ flowchart TD
     subgraph uterm [uterm Go Server]
         P <-->|Stream A (Compressed)| HR[Human Relay]
         P <-->|Stream B (Raw)| HC[Headless AI Client]
-        
+
         HR --> |Parse Input| HL[HijackLeaseManager]
         HL --> |Gated| HR
-        
+
         HC --> |Raw Pixels| FT[FramebufferTracker]
     end
 
@@ -50,7 +50,7 @@ flowchart TD
 
 ## 4. Implementation Details
 - **gRPC Connection:** `uterm` will use a standard gRPC client to connect to `litevirt`, passing the VM name via the `x-vm-name` metadata header as required by the `ProxyVNC` RPC.
-- **RFB Parsing:** 
+- **RFB Parsing:**
   - The Human Relay only needs a parser for Client-to-Server messages (which are standard and simple).
   - The Headless AI Client needs a minimal parser for the RFB Handshake, Initialization, and Server-to-Client `FramebufferUpdate` messages (supporting only `Raw` encoding).
 - **Concurrency:** The two streams operate independently. QEMU natively supports multiple concurrent VNC connections and handles the multiplexing of input events from both streams.
