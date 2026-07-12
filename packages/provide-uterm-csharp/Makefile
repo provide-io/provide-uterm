@@ -17,7 +17,8 @@ DOTNET ?= dotnet
 # Residual policy: drop an exclusion only when a dedicated OS/harness job
 # exercises that path; conformance/live Layer B is a separate gate (not coverlet).
 # Also residual: NativeUnixPty (posix_spawn), SshWsGateway (FxSsh accept pump),
-# RfbClient (live RFB TCP). Opt into native PTY via PreferNativePty / UTERM_NATIVE_PTY=1.
+# RfbClient (live RFB TCP). Embed/TelnetUpstream live TCP residual (scripted IAC tested).
+# Opt into native PTY via PreferNativePty / UTERM_NATIVE_PTY=1.
 # MCP is not part of the C# port (operator de-scope); sources and binary removed.
 COVER_THRESHOLD ?= 97.0
 CONFIGURATION ?= Release
