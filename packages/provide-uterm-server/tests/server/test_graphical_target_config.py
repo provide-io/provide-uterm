@@ -118,10 +118,10 @@ def test_target_rejects_invalid_tls_combinations(overrides: dict[str, object]) -
 
 def test_graphical_config_rejects_duplicates_and_dynamic_production() -> None:
     target = valid_target()
-    with pytest.raises(ValidationError, match="duplicate graphical target_id"):
-        GraphicalConfig(targets=[target, target])
     with pytest.raises(ValueError, match="allow_dynamic_targets"):
         config_from_mapping({"environment": "production", "graphical": {"allow_dynamic_targets": True}})
+    with pytest.raises(ValueError, match="duplicate graphical target_id"):
+        config_from_mapping({"graphical_targets": [target, target]})
 
 
 def test_server_mapping_loads_static_targets_and_dev_dynamic_mode() -> None:
@@ -140,3 +140,20 @@ def test_server_mapping_loads_static_targets_and_dev_dynamic_mode() -> None:
 def test_graphical_config_canonicalizes_dynamic_cidrs() -> None:
     config = GraphicalConfig(dynamic_allowed_cidrs=["2001:0db8::/32", "10.0.0.0/8", "10.0.0.0/8"])
     assert config.dynamic_allowed_cidrs == ("2001:db8::/32", "10.0.0.0/8")
+
+
+def test_production_config_rejects_and_rolls_back_graphical_replacement() -> None:
+    config = config_from_mapping({"environment": "production"})
+    original = config.graphical
+    with pytest.raises(ValueError, match="allow_dynamic_targets"):
+        config.graphical = GraphicalConfig(allow_dynamic_targets=True)
+    assert config.graphical is original
+    config.server.port = 9999
+    assert config.server.port == 9999
+
+
+def test_nested_graphical_config_cannot_be_mutated() -> None:
+    config = config_from_mapping({"environment": "production"})
+    with pytest.raises(ValidationError):
+        config.graphical.allow_dynamic_targets = True
+    assert config.graphical.allow_dynamic_targets is False

@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+import provide.uterm.server.secrets as secrets_module
 from provide.uterm.server.secrets import MAX_SECRET_BYTES, SecretReference, SecretResolutionError
 
 
@@ -46,6 +47,13 @@ def test_invalid_reference_syntax_is_rejected_without_echoing_value(text: str) -
         SecretReference.parse(text)
     if text:
         assert text not in str(exc.value)
+
+
+@pytest.mark.parametrize("text", ["file:key\x00suffix", "file:key\nname", "env:SECRET\x7f"])
+def test_reference_rejects_control_characters_without_leakage(text: str) -> None:
+    with pytest.raises(ValueError, match="invalid secret reference") as exc:
+        SecretReference.parse(text)
+    assert text not in str(exc.value)
 
 
 def test_missing_env_and_file_errors_are_stable_and_redacted(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -105,6 +113,35 @@ def test_absolute_file_and_growth_during_read_are_bounded(tmp_path: Path, monkey
     monkeypatch.setattr(os, "fstat", hidden_size)
     with pytest.raises(SecretResolutionError, match="exceeds maximum size"):
         reference.resolve(max_bytes=3)
+
+
+def test_file_fails_closed_when_secure_primitives_are_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    reference = SecretReference.parse("file:key", base_dir=tmp_path)
+    monkeypatch.delattr(secrets_module.os, "O_NOFOLLOW")
+    with pytest.raises(SecretResolutionError, match="secure file secrets are unsupported"):
+        reference.resolve()
+
+
+def test_file_redacts_unsupported_dir_fd_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    reference = SecretReference.parse("file:sensitive-name", base_dir=tmp_path)
+    real_open = secrets_module.os.open
+
+    def unsupported_open(path: object, flags: int, *, dir_fd: int | None = None) -> int:
+        if dir_fd is not None:
+            raise NotImplementedError("sensitive-name leaked by platform")
+        return real_open(path, flags)
+
+    monkeypatch.setattr(secrets_module.os, "open", unsupported_open)
+    monkeypatch.setattr(secrets_module.os, "supports_dir_fd", os.supports_dir_fd | {unsupported_open})
+    with pytest.raises(SecretResolutionError, match="secure file secrets are unsupported") as exc:
+        reference.resolve()
+    assert "sensitive-name" not in str(exc.value)
+
+
+def test_env_reference_works_without_file_primitives(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PORTABLE_SECRET", "portable")
+    monkeypatch.delattr(secrets_module.os, "O_NOFOLLOW")
+    assert SecretReference.parse("env:PORTABLE_SECRET").resolve() == b"portable"
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX ownership/mode checks")
