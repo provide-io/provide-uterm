@@ -353,10 +353,14 @@ public class UshellDispatcherTests
         Assert.True(StrUtil.Truthy(new object()));
 
         var lb = new LineBuffer();
-        Assert.Null(lb.Feed("\x1b[1;2A")); // CSI with params (loop arm)
-        Assert.Null(lb.Feed("ab"));
-        Assert.Null(lb.Feed("\x04")); // Ctrl-D with buffer: ignore
-        Assert.Equal("ab", lb.Feed("\r"));
+        lb.Feed("\x1b[1;2A"); // CSI with params (loop arm)
+        Assert.Empty(lb.TakeCompleted());
+        lb.Feed("ab");
+        Assert.Equal("ab", lb.Text);
+        lb.Feed("\x04"); // Ctrl-D with buffer: submit line (Go parity)
+        Assert.Equal(new[] { "ab" }, lb.TakeCompleted());
+        lb.Feed("z\r");
+        Assert.Equal(new[] { "z" }, lb.TakeCompleted());
     }
 
     [Fact]

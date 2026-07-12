@@ -660,14 +660,19 @@ public class CoverageTo95Wave2Tests
         ed2.ProcessChar('\r');
 
         var lb = new LineBuffer { MaxLength = 16 };
-        Assert.Null(lb.Feed("hi"));
-        Assert.Null(lb.Feed("\x1b[A"));
-        Assert.Null(lb.Feed("\x1bOA"));
-        Assert.Equal("hi", lb.Feed("\r"));
-        Assert.Equal("\x03", lb.Feed("\x03"));
-        Assert.Equal("", lb.Feed("\x04"));
+        lb.Feed("hi");
+        Assert.Empty(lb.TakeCompleted());
+        lb.Feed("\x1b[A");
+        lb.Feed("\x1bOA");
+        lb.Feed("\r");
+        Assert.Equal(new[] { "hi" }, lb.TakeCompleted());
+        lb.Feed("\x03");
+        Assert.Equal(new[] { "\x03" }, lb.TakeCompleted());
+        lb.Feed("\x04");
+        Assert.Equal(new[] { "\x04" }, lb.TakeCompleted());
         lb.Feed("ab\x7f");
-        Assert.Equal("a", lb.Feed("\n"));
+        lb.Feed("\n");
+        Assert.Equal(new[] { "a" }, lb.TakeCompleted());
         lb.Clear();
 
         _ = ShellOutput.ErrorMsg("e");
