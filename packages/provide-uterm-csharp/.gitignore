@@ -1,0 +1,11 @@
+bin/
+obj/
+coverage-out/
+*.user
+.vs/
+coverage/
+coverage*/
+coverage-out/
+bin/
+**/bin/
+**/obj/

@@ -8,8 +8,9 @@ Unlike provide-telemetry's flat "one __init__.py, one go/ dir" extractors,
 provide-uterm's session/hijack-client API is method-level and spread across
 multiple files per language (TransportSession's methods live in
 transport_session.py; connect_telnet/connect_ws are module functions in
-sibling files; HijackClient's methods live in client/hijack.py). Each
-category in CATEGORY_SOURCES below declares exactly where to look.
+sibling files; HijackClient's methods live in client/hijack.py). C# is
+scanned like Go (PascalCase public types/methods). Each category in
+CATEGORY_SOURCES below declares exactly where to look.
 """
 
 from __future__ import annotations
@@ -29,9 +30,10 @@ _GO_ACRONYMS: dict[str, str] = {
     "ws": "WS",
 }
 
-# category -> {"python": [source, ...], "go": [source, ...]}
+# category -> {"python": [...], "go": [...], "csharp": [...]}
 # Python source: {"file": <path>, "class": <name>} or {"file": <path>, "module_functions": True}
 # Go source:     {"dir": <path>, "type": <name>} or {"dir": <path>, "top_level_functions": True}
+# C# source:     {"dir": <path>, "type": <name>} or {"dir": <path>, "top_level_functions": True}
 CATEGORY_SOURCES: dict[str, dict[str, list[dict[str, object]]]] = {
     "session": {
         "python": [
@@ -43,6 +45,10 @@ CATEGORY_SOURCES: dict[str, dict[str, list[dict[str, object]]]] = {
             {"dir": "packages/provide-uterm-go/termsession", "type": "TransportSession"},
             {"dir": "packages/provide-uterm-go/termsession", "top_level_functions": True},
         ],
+        "csharp": [
+            {"dir": "packages/provide-uterm-csharp/src/Provide.Uterm/TermSession", "type": "TransportSession"},
+            {"dir": "packages/provide-uterm-csharp/src/Provide.Uterm/TermSession", "top_level_functions": True},
+        ],
     },
     "hijack_client": {
         "python": [
@@ -51,6 +57,9 @@ CATEGORY_SOURCES: dict[str, dict[str, list[dict[str, object]]]] = {
         "go": [
             {"dir": "packages/provide-uterm-go/client", "type": "HijackClient"},
         ],
+        "csharp": [
+            {"dir": "packages/provide-uterm-csharp/src/Provide.Uterm/Client", "type": "HijackClient"},
+        ],
     },
     "emulator": {
         "python": [
@@ -58,6 +67,9 @@ CATEGORY_SOURCES: dict[str, dict[str, list[dict[str, object]]]] = {
         ],
         "go": [
             {"dir": "packages/provide-uterm-go/emulator", "type": "TerminalEmulator"},
+        ],
+        "csharp": [
+            {"dir": "packages/provide-uterm-csharp/src/Provide.Uterm/Emulator", "type": "TerminalEmulator"},
         ],
     },
 }
@@ -167,4 +179,61 @@ def get_go_exports(category: str, repo_root: Path | None = None) -> set[str]:
             names |= _go_top_level_functions(dir_path)
         elif "type" in source:
             names |= _go_type_methods(dir_path, str(source["type"]))
+    return names
+
+
+def _csharp_files(dir_path: Path) -> list[Path]:
+    if not dir_path.is_dir():
+        return []
+    return sorted(dir_path.rglob("*.cs"))
+
+
+def _csharp_type_methods(dir_path: Path, type_name: str) -> set[str]:
+    """Return {type_name} plus public method names declared on type_name.
+
+    Matches `public ... TypeName` / `public sealed class TypeName` and methods
+    of the form `public ... Name(` inside the scanned files. PascalCase names
+    only (same convention as Go).
+    """
+    type_pattern = re.compile(rf"\b(?:public\s+)?(?:sealed\s+|abstract\s+|static\s+)*class\s+{re.escape(type_name)}\b")
+    # public [async] [static] ReturnType MethodName(
+    method_pattern = re.compile(
+        r"^\s*public\s+(?:async\s+)?(?:static\s+)?(?:[\w.<>\[\]?,]+\s+)+([A-Z]\w*)\s*\(",
+        re.MULTILINE,
+    )
+    names: set[str] = set()
+    found_type = False
+    for cs_file in _csharp_files(dir_path):
+        text = cs_file.read_text(encoding="utf-8")
+        if type_pattern.search(text):
+            found_type = True
+            names |= set(method_pattern.findall(text))
+    if found_type:
+        names.add(type_name)
+    return names
+
+
+def _csharp_top_level_functions(dir_path: Path) -> set[str]:
+    """Return public static method names in dir_path (PascalCase only)."""
+    # public static [async] ReturnType Name(
+    pattern = re.compile(
+        r"^\s*public\s+static\s+(?:async\s+)?(?:[\w.<>\[\]?,]+\s+)+([A-Z]\w*)\s*\(",
+        re.MULTILINE,
+    )
+    names: set[str] = set()
+    for cs_file in _csharp_files(dir_path):
+        names |= set(pattern.findall(cs_file.read_text(encoding="utf-8")))
+    return names
+
+
+def get_csharp_exports(category: str, repo_root: Path | None = None) -> set[str]:
+    """Union every C# source's exported names for the given category."""
+    repo_root = repo_root or _REPO_ROOT
+    names: set[str] = set()
+    for source in CATEGORY_SOURCES.get(category, {}).get("csharp", []):
+        dir_path = repo_root / str(source["dir"])
+        if source.get("top_level_functions"):
+            names |= _csharp_top_level_functions(dir_path)
+        elif "type" in source:
+            names |= _csharp_type_methods(dir_path, str(source["type"]))
     return names

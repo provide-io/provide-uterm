@@ -1,0 +1,167 @@
+{
+ "identity_default": {
+  "fingerprint": "",
+  "subject": "user:alice",
+  "transport": "ssh",
+  "type": "identity",
+  "version": 1
+ },
+ "identity_empty_claims_signed": {
+  "claims": {},
+  "fingerprint": "",
+  "signature": "99d30946ab74bd5e3b72c0a2f5555a0817cad2f8f5436b569b5ea20fc4a41079",
+  "subject": "user:x",
+  "transport": "ssh",
+  "type": "identity",
+  "version": 1
+ },
+ "identity_full": {
+  "claims": {
+   "org": "acme",
+   "role": "admin"
+  },
+  "fingerprint": "SHA256:abc123",
+  "subject": "user:bob",
+  "transport": "ws",
+  "type": "identity",
+  "version": 1
+ },
+ "identity_signed": {
+  "claims": {
+   "role": "admin",
+   "scope": [
+    "write",
+    "read"
+   ]
+  },
+  "fingerprint": "SHA256:abc",
+  "signature": "edf93f1552ad5deab9fc3bc413deb14d9c70d3303094dbbaca67cf12f478fedb",
+  "subject": "user:alice",
+  "transport": "ws",
+  "type": "identity",
+  "version": 1
+ },
+ "identity_signed_no_claims": {
+  "fingerprint": "fp",
+  "signature": "c64ec646bdfa6bce8f1f79ea9b7109cb55a8aa661ab2f3d8811d976650312608",
+  "subject": "user:alice",
+  "transport": "ssh",
+  "type": "identity",
+  "version": 1
+ },
+ "identity_unicode_claims": {
+  "claims": {
+   "arrow": "\u2192",
+   "n": 3,
+   "name": "Jos\u00e9"
+  },
+  "fingerprint": "",
+  "signature": "9a196e28ae17f0af060dc7b1b350969699b03a79a15172b6749a330a954202b7",
+  "subject": "\u00fcser",
+  "transport": "ssh",
+  "type": "identity",
+  "version": 1
+ },
+ "link_all_optional": {
+  "patterns": [
+   {
+    "action": "url",
+    "class": "external-link",
+    "flags": "gi",
+    "group": 1,
+    "hover": "Open link",
+    "id": "p.num",
+    "pattern": "\\d+",
+    "payload": "https://example.com/"
+   }
+  ],
+  "type": "link_patterns"
+ },
+ "link_empty": {
+  "patterns": [],
+  "type": "link_patterns"
+ },
+ "link_line_contains": {
+  "patterns": [
+   {
+    "action": "cmd",
+    "line_contains": "Warps to Sector",
+    "pattern": "\\((\\d+)\\)"
+   }
+  ],
+  "type": "link_patterns"
+ },
+ "link_multi": {
+  "patterns": [
+   {
+    "action": "cmd",
+    "pattern": "alpha"
+   },
+   {
+    "action": "url",
+    "pattern": "beta"
+   },
+   {
+    "action": "key",
+    "pattern": "gamma"
+   }
+  ],
+  "type": "link_patterns"
+ },
+ "link_single": {
+  "patterns": [
+   {
+    "action": "cmd",
+    "pattern": "\\bsector\\b"
+   }
+  ],
+  "type": "link_patterns"
+ },
+ "presence_fields": {
+  "cursor_col": 10,
+  "scroll_line": 42,
+  "type": "presence_update",
+  "user_id": "u2"
+ },
+ "presence_min": {
+  "type": "presence_update",
+  "user_id": "u1"
+ },
+ "resume_failed_empty": {
+  "reason": "",
+  "type": "resume_failed"
+ },
+ "resume_failed_none": {
+  "type": "resume_failed"
+ },
+ "resume_failed_reason": {
+  "reason": "token expired",
+  "type": "resume_failed"
+ },
+ "resume_min": {
+  "token": "resume-tok",
+  "type": "resume"
+ },
+ "resume_ok": {
+  "type": "resume_ok"
+ },
+ "resume_player": {
+  "player_id": 15,
+  "token": "resume-tok",
+  "type": "resume"
+ },
+ "session_token_min": {
+  "token": "tok-abc",
+  "type": "session_token"
+ },
+ "session_token_player": {
+  "player_id": 42,
+  "token": "tok-xyz",
+  "type": "session_token"
+ },
+ "session_token_player_zero": {
+  "player_id": 0,
+  "token": "tok",
+  "type": "session_token"
+ }
+}

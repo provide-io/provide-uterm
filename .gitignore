@@ -101,3 +101,9 @@ artifacts/
 # Internal dev-process artifacts (kept in the external archive, not the public repo)
 .provide/HANDOFF.md
 docs/superpowers/
+
+# C# port build outputs
+packages/provide-uterm-csharp/bin/
+packages/provide-uterm-csharp/**/bin/
+packages/provide-uterm-csharp/**/obj/
+packages/provide-uterm-csharp/coverage-out/
