@@ -338,7 +338,7 @@ Port the **Go** ushell package (`packages/provide-uterm-go/shell`) to C# so stan
 |------|-------------------|--------|
 | **Py** | `packages/provide-uterm/.../shell/` (+ CF `do/ushell`) | Full reference + Python `py` sandbox |
 | **Go** | `packages/provide-uterm-go/shell/` | Full portable port (~4k LOC w/ tests); `py` stub |
-| **C#** | `packages/provide-uterm-csharp/.../Shell/` | Dispatcher + commands (Go oracle); connector open |
+| **C#** | `packages/provide-uterm-csharp/.../Shell/` | Dispatcher + commands + UshellConnector (Go oracle); registry `ushell` |
 | **Rust** | — | **Not present** in monorepo |
 | **TS** | — | **Not present** (frontend is xterm UI only; no ushell package) |
 | **Bun** | — | **Not present** (would share a TS package if one is added) |
@@ -349,7 +349,7 @@ Legend for matrix: **Y** = implemented and product-usable · **S** = stub / part
 
 | Feature | Py | Go | C# | Rust | TS | Bun |
 |---------|:--:|:--:|:--:|:----:|:--:|:---:|
-| Dedicated ushell package/module | Y | Y | Y (dispatcher; connector open) | — | — | — |
+| Dedicated ushell package/module | Y | Y | Y (dispatcher + connector) | — | — | — |
 | Unit / connector tests | Y | Y | Y (unit; connector Layer B open) | — | — | — |
 | CF DO / server session wiring (`ushell` connector type) | Y | Y | — | — | — | — |
 | Standalone REPL entry (`__main__` / CLI) | Y | via server | — | — | — | — |

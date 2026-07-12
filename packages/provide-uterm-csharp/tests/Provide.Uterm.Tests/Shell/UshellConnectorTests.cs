@@ -142,7 +142,13 @@ public class UshellConnectorTests
         Assert.Contains("ushell", snap.Screen, StringComparison.Ordinal);
         Assert.Contains("analysis", conn.Analysis(), StringComparison.Ordinal);
         conn.Clear();
+        var afterClear = conn.Events();
+        Assert.NotEmpty(afterClear);
+        Assert.Contains("2J", FrameData(afterClear), StringComparison.Ordinal);
+        Assert.Contains(ShellOutput.Prompt.Trim(), FrameData(afterClear), StringComparison.Ordinal);
         conn.SetMode("open");
+        var afterMode = conn.Events();
+        Assert.Contains(afterMode, f => f.TryGetValue("type", out var t) && t is "worker_hello");
         Assert.Null(conn.Session());
         await conn.StopAsync();
         Assert.False(conn.IsConnected());

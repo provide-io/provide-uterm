@@ -303,7 +303,13 @@ public sealed class UshellConnector : IConnector
         }
     }
 
-    void IConnector.Clear() => _ = ClearScreen();
+    void IConnector.Clear()
+    {
+        lock (_gate)
+        {
+            _pending.AddRange(ClearScreen());
+        }
+    }
 
     Snapshot IConnector.Snapshot()
     {
