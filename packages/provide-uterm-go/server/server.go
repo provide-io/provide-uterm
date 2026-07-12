@@ -107,6 +107,9 @@ type Server struct {
 	originWildcard bool
 
 	httpSrv *http.Server
+	// shutdownHTTP is a test seam for deterministic multi-error shutdown
+	// coverage. Production servers leave it nil and use httpSrv.Shutdown.
+	shutdownHTTP func(context.Context) error
 
 	sweepWG   sync.WaitGroup
 	sweepOnce sync.Once
@@ -272,18 +275,21 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 // down. It mirrors the Python lifespan shutdown sequence (ready=false first).
 func (s *Server) Shutdown() error {
 	s.ready.Store(false)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	var httpErr error
-	if s.httpSrv != nil {
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
+	if s.shutdownHTTP != nil {
+		httpErr = s.shutdownHTTP(shutdownCtx)
+	} else if s.httpSrv != nil {
 		httpErr = s.httpSrv.Shutdown(shutdownCtx)
 	}
 	s.sweepWG.Wait()
 	s.deps.Hub.Shutdown()
+	var graphicalErr error
 	if s.deps.GraphicalTargets != nil {
-		if err := s.deps.GraphicalTargets.Close(context.Background()); httpErr == nil {
-			httpErr = err
-		}
+		graphicalErr = s.deps.GraphicalTargets.Close(shutdownCtx)
 	}
-	return httpErr
+	return joinShutdownErrors(httpErr, graphicalErr)
 }
+
+func joinShutdownErrors(errs ...error) error { return errors.Join(errs...) }

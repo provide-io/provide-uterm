@@ -120,7 +120,7 @@ func canonicalCIDRs(values []string) ([]string, error) {
 	seen := map[string]bool{}
 	for _, v := range values {
 		p, e := netip.ParsePrefix(v)
-		if e != nil || p.String() != v {
+		if e != nil || p != p.Masked() || p.String() != v {
 			return nil, fmt.Errorf("allowed_cidrs must contain canonical networks")
 		}
 		if !seen[v] {

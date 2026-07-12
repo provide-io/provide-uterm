@@ -22,6 +22,7 @@ var (
 	ErrGraphicalTargetForbidden     = errors.New("graphical target tenant scope denied")
 	ErrGraphicalTargetTransaction   = errors.New("graphical target transaction conflicted")
 	ErrGraphicalTargetClosed        = errors.New("graphical target registry is closed")
+	ErrGraphicalTargetPersistedData = errors.New("invalid persisted graphical target")
 )
 
 type TargetScope struct {
@@ -59,10 +60,9 @@ type GraphicalTargetRegistry struct {
 }
 
 type graphicalCloseAttempt struct {
-	done    chan struct{}
-	drain   chan struct{}
-	err     error
-	waiters int
+	done  chan struct{}
+	drain chan struct{}
+	err   error
 }
 
 func NewGraphicalTargetRegistry(static []serverconfig.GraphicalTargetDefinition, engine cp.Engine, owns bool) (*GraphicalTargetRegistry, error) {
@@ -71,6 +71,7 @@ func NewGraphicalTargetRegistry(static []serverconfig.GraphicalTargetDefinition,
 	}
 	r := &GraphicalTargetRegistry{static: make(map[string]serverconfig.GraphicalTargetDefinition, len(static)), engine: engine, owns: owns}
 	for _, target := range static {
+		target = cloneTarget(target)
 		if err := target.Validate(); err != nil {
 			return nil, errors.New("invalid static graphical target")
 		}
@@ -152,7 +153,10 @@ func (r *GraphicalTargetRegistry) Get(ctx context.Context, scope TargetScope, id
 	if err != nil || rec == nil {
 		return nil, err
 	}
-	t := fromGraphicalRecord(*rec)
+	t, err := fromGraphicalRecord(*rec)
+	if err != nil {
+		return nil, err
+	}
 	if !scope.permits(t.TenantID) {
 		return nil, nil
 	}
@@ -173,7 +177,11 @@ func (r *GraphicalTargetRegistry) List(ctx context.Context, scope TargetScope) (
 	merged := map[string]serverconfig.GraphicalTargetDefinition{}
 	for _, rec := range records {
 		if _, shadow := r.static[rec.TargetID]; !shadow {
-			merged[rec.TargetID] = fromGraphicalRecord(rec)
+			target, convertErr := fromGraphicalRecord(rec)
+			if convertErr != nil {
+				return nil, convertErr
+			}
+			merged[rec.TargetID] = target
 		}
 	}
 	for id, t := range r.static {
@@ -193,6 +201,7 @@ func (r *GraphicalTargetRegistry) Create(ctx context.Context, scope TargetScope,
 		return t, err
 	}
 	defer r.leave()
+	t = cloneTarget(t)
 	if err := t.Validate(); err != nil {
 		return t, errors.New("invalid graphical target")
 	}
@@ -219,6 +228,7 @@ func (r *GraphicalTargetRegistry) Update(ctx context.Context, scope TargetScope,
 		return t, err
 	}
 	defer r.leave()
+	t = cloneTarget(t)
 	if err := t.Validate(); err != nil {
 		return t, errors.New("invalid graphical target")
 	}
@@ -236,7 +246,10 @@ func (r *GraphicalTargetRegistry) Update(ctx context.Context, scope TargetScope,
 		if cur == nil {
 			return ErrGraphicalTargetNotFound
 		}
-		old := fromGraphicalRecord(*cur)
+		old, convertErr := fromGraphicalRecord(*cur)
+		if convertErr != nil {
+			return convertErr
+		}
 		if e = r.scoped(scope, old.TenantID); e != nil {
 			return e
 		}
@@ -263,7 +276,10 @@ func (r *GraphicalTargetRegistry) Delete(ctx context.Context, scope TargetScope,
 		if cur == nil {
 			return ErrGraphicalTargetNotFound
 		}
-		t := fromGraphicalRecord(*cur)
+		t, convertErr := fromGraphicalRecord(*cur)
+		if convertErr != nil {
+			return convertErr
+		}
 		if e = r.scoped(scope, t.TenantID); e != nil {
 			return e
 		}
@@ -283,7 +299,10 @@ func (r *GraphicalTargetRegistry) RuntimeRecord(ctx context.Context, scope Targe
 	if err != nil || rec == nil {
 		return rec, err
 	}
-	t := fromGraphicalRecord(*rec)
+	t, convertErr := fromGraphicalRecord(*rec)
+	if convertErr != nil {
+		return nil, convertErr
+	}
 	if !scope.permits(t.TenantID) {
 		return nil, nil
 	}
@@ -345,34 +364,40 @@ func (r *GraphicalTargetRegistry) Close(ctx context.Context) error {
 		r.mu.Unlock()
 		return nil
 	}
-	if !r.closing {
-		r.closing = true
-		r.closeAttempt = &graphicalCloseAttempt{done: make(chan struct{}), drain: make(chan struct{})}
-		if r.active == 0 {
-			close(r.closeAttempt.drain)
+	if r.closing {
+		attempt := r.closeAttempt
+		r.mu.Unlock()
+		select {
+		case <-attempt.done:
+			return attempt.err
+		default:
 		}
-		go r.finishClose(r.closeAttempt)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-attempt.done:
+			return attempt.err
+		}
 	}
-	attempt := r.closeAttempt
-	attempt.waiters++
+	r.closing = true
+	attempt := &graphicalCloseAttempt{done: make(chan struct{}), drain: make(chan struct{})}
+	r.closeAttempt = attempt
+	if r.active == 0 {
+		close(attempt.drain)
+	}
 	r.mu.Unlock()
-	select {
-	case <-attempt.done:
-		return attempt.err
-	default:
-	}
+	return r.finishClose(ctx, attempt)
+}
+
+func (r *GraphicalTargetRegistry) finishClose(ctx context.Context, attempt *graphicalCloseAttempt) error {
+	var err error
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
-	case <-attempt.done:
-		return attempt.err
-	}
-}
-func (r *GraphicalTargetRegistry) finishClose(attempt *graphicalCloseAttempt) {
-	<-attempt.drain
-	var err error
-	if r.owns {
-		err = r.engine.Close(context.Background())
+		err = ctx.Err()
+	case <-attempt.drain:
+		if r.owns {
+			err = r.engine.Close(ctx)
+		}
 	}
 	r.mu.Lock()
 	attempt.err = err
@@ -383,6 +408,7 @@ func (r *GraphicalTargetRegistry) finishClose(attempt *graphicalCloseAttempt) {
 	}
 	close(attempt.done)
 	r.mu.Unlock()
+	return err
 }
 
 func nullPtr(n cp.NullString) *string {
@@ -412,12 +438,18 @@ func toGraphicalRecord(t serverconfig.GraphicalTargetDefinition, created float64
 	for _, k := range keys {
 		labels = append(labels, cp.AuditLabel{Key: k, Value: t.AuditLabels[k]})
 	}
-	return cp.GraphicalTargetRecord{TargetID: t.TargetID, Endpoint: t.Endpoint, TLSMode: t.TLSMode, CASecretRef: ptrNull(t.CASecretRef), ClientCertSecretRef: ptrNull(t.ClientCertSecretRef), ClientKeySecretRef: ptrNull(t.ClientKeySecretRef), ExpectedServerName: ptrNull(t.ExpectedServerName), AllowedVMPatterns: cp.NewStringTuple(t.AllowedVMPatterns...), TenantID: ptrNull(t.TenantID), MinimumRole: t.MinimumRole, ConnectTimeoutS: t.ConnectTimeoutS, HandshakeTimeoutS: t.HandshakeTimeoutS, ReadTimeoutS: t.ReadTimeoutS, WriteTimeoutS: t.WriteTimeoutS, ShutdownTimeoutS: t.ShutdownTimeoutS, MaxGRPCMessageBytes: t.MaxGRPCMessageBytes, MaxFramebufferWidth: t.MaxFramebufferWidth, MaxFramebufferHeight: t.MaxFramebufferHeight, MaxRectangles: t.MaxRectangles, MaxClipboardBytes: t.MaxClipboardBytes, MaxPixelAllocationBytes: t.MaxPixelAllocationBytes, AllowedCIDRs: cp.NewStringTuple(t.AllowedCIDRs...), AuditLabels: cp.NewAuditLabels(labels...), CreatedAt: created, UpdatedAt: now}
+	patterns := append([]string{}, t.AllowedVMPatterns...)
+	cidrs := append([]string{}, t.AllowedCIDRs...)
+	return cp.GraphicalTargetRecord{TargetID: t.TargetID, Endpoint: t.Endpoint, TLSMode: t.TLSMode, CASecretRef: ptrNull(t.CASecretRef), ClientCertSecretRef: ptrNull(t.ClientCertSecretRef), ClientKeySecretRef: ptrNull(t.ClientKeySecretRef), ExpectedServerName: ptrNull(t.ExpectedServerName), AllowedVMPatterns: cp.NewStringTuple(patterns...), TenantID: ptrNull(t.TenantID), MinimumRole: t.MinimumRole, ConnectTimeoutS: t.ConnectTimeoutS, HandshakeTimeoutS: t.HandshakeTimeoutS, ReadTimeoutS: t.ReadTimeoutS, WriteTimeoutS: t.WriteTimeoutS, ShutdownTimeoutS: t.ShutdownTimeoutS, MaxGRPCMessageBytes: t.MaxGRPCMessageBytes, MaxFramebufferWidth: t.MaxFramebufferWidth, MaxFramebufferHeight: t.MaxFramebufferHeight, MaxRectangles: t.MaxRectangles, MaxClipboardBytes: t.MaxClipboardBytes, MaxPixelAllocationBytes: t.MaxPixelAllocationBytes, AllowedCIDRs: cp.NewStringTuple(cidrs...), AuditLabels: cp.NewAuditLabels(labels...), CreatedAt: created, UpdatedAt: now}
 }
-func fromGraphicalRecord(r cp.GraphicalTargetRecord) serverconfig.GraphicalTargetDefinition {
+func fromGraphicalRecord(r cp.GraphicalTargetRecord) (serverconfig.GraphicalTargetDefinition, error) {
 	labels := map[string]string{}
 	for _, v := range r.AuditLabels.Values() {
 		labels[v.Key] = v.Value
 	}
-	return serverconfig.GraphicalTargetDefinition{TargetID: r.TargetID, Endpoint: r.Endpoint, TLSMode: r.TLSMode, CASecretRef: nullPtr(r.CASecretRef), ClientCertSecretRef: nullPtr(r.ClientCertSecretRef), ClientKeySecretRef: nullPtr(r.ClientKeySecretRef), ExpectedServerName: nullPtr(r.ExpectedServerName), AllowedVMPatterns: r.AllowedVMPatterns.Values(), TenantID: nullPtr(r.TenantID), MinimumRole: r.MinimumRole, ConnectTimeoutS: r.ConnectTimeoutS, HandshakeTimeoutS: r.HandshakeTimeoutS, ReadTimeoutS: r.ReadTimeoutS, WriteTimeoutS: r.WriteTimeoutS, ShutdownTimeoutS: r.ShutdownTimeoutS, MaxGRPCMessageBytes: r.MaxGRPCMessageBytes, MaxFramebufferWidth: r.MaxFramebufferWidth, MaxFramebufferHeight: r.MaxFramebufferHeight, MaxRectangles: r.MaxRectangles, MaxClipboardBytes: r.MaxClipboardBytes, MaxPixelAllocationBytes: r.MaxPixelAllocationBytes, AllowedCIDRs: r.AllowedCIDRs.Values(), AuditLabels: labels}
+	target := serverconfig.GraphicalTargetDefinition{TargetID: r.TargetID, Endpoint: r.Endpoint, TLSMode: r.TLSMode, CASecretRef: nullPtr(r.CASecretRef), ClientCertSecretRef: nullPtr(r.ClientCertSecretRef), ClientKeySecretRef: nullPtr(r.ClientKeySecretRef), ExpectedServerName: nullPtr(r.ExpectedServerName), AllowedVMPatterns: r.AllowedVMPatterns.Values(), TenantID: nullPtr(r.TenantID), MinimumRole: r.MinimumRole, ConnectTimeoutS: r.ConnectTimeoutS, HandshakeTimeoutS: r.HandshakeTimeoutS, ReadTimeoutS: r.ReadTimeoutS, WriteTimeoutS: r.WriteTimeoutS, ShutdownTimeoutS: r.ShutdownTimeoutS, MaxGRPCMessageBytes: r.MaxGRPCMessageBytes, MaxFramebufferWidth: r.MaxFramebufferWidth, MaxFramebufferHeight: r.MaxFramebufferHeight, MaxRectangles: r.MaxRectangles, MaxClipboardBytes: r.MaxClipboardBytes, MaxPixelAllocationBytes: r.MaxPixelAllocationBytes, AllowedCIDRs: r.AllowedCIDRs.Values(), AuditLabels: labels}
+	if err := target.Validate(); err != nil {
+		return serverconfig.GraphicalTargetDefinition{}, ErrGraphicalTargetPersistedData
+	}
+	return target, nil
 }
