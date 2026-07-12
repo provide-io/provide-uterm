@@ -124,12 +124,19 @@ Wire: in `session-element` hello handler, if `msg.resumed`, `setStatus("live", "
 
 ## Acceptance checklist (to *know* it works)
 
-1. **Unit (CI always):** resume token mint → reconnect → `resumed: true` (`test_cf_resume`).
-2. **Frontend unit:** hello with `resumed` shows indicator (add if implementing UI).
-3. **real_cf e2e:** optional job or manual wrangler:
-   - connect → note resume_token → kill WS → reconnect + resume → term data flows.
-4. **Hibernate-specific (manual / staging):** idle DO until eviction (or force), keep WS open if CF allows, send keystroke, assert no permanent Offline.
-5. **Config:** `RESUME_TTL_S` respected in create_resume_token TTL.
+```bash
+bash scripts/prove_cf_hibernate_resume.sh          # Level A (always)
+bash scripts/prove_cf_hibernate_resume.sh --real-cf # Level B (wrangler/CF)
+```
+
+| # | Check | How |
+|---|--------|-----|
+| 1 | Hibernate wake contract | `test_hibernate_wake_contract.py` — wipe memory → SQLite lease → `getWebSockets` broadcast |
+| 2 | Attachment ≠ identity | same — `_socket_role` after clearing `worker_ws` |
+| 3 | Resume tokens | `test_cf_resume.py` — mint/TTL/revoke + `resumed: true` |
+| 4 | UI “Resumed” | `session-element` on `hello.resumed` (~2.5s flash) |
+| 5 | Config | `RESUME_TTL_S` / `RESUME_ENABLED` |
+| 6 | Live CF | `pytest -m real_cf …/test_e2e_ws.py -k resume` or staging idle/evict |
 
 ## Suggested implementation order
 
