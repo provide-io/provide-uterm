@@ -239,8 +239,17 @@ func (w *WebhookIdentityProvider) principalFromResponse(respBody []byte) (*Princ
 	if dn, ok := data["display_name"].(string); ok {
 		displayName = &dn
 	}
+	tenant := ""
+	if rawTenant, present := data["tenant_id"]; present {
+		var tenantErr error
+		tenant, tenantErr = CanonicalTenantID(asStr(rawTenant))
+		if tenantErr != nil {
+			return nil, tenantErr
+		}
+	}
 	return &Principal{
 		SubjectID:   subject,
+		TenantID:    tenant,
 		Roles:       FilterKnownRoles(roles),
 		Scopes:      scopes,
 		Claims:      claims,

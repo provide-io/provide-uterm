@@ -90,6 +90,15 @@ func inSet(v string, options ...string) bool {
 
 // validateAuth ports the AuthConfig model_validators.
 func validateAuth(a *AuthConfig) error {
+	for field, value := range map[string]string{
+		"auth.jwt_tenant_claim": a.JWTTenantClaim,
+		"auth.tenant_header":    a.TenantHeader,
+		"auth.tenant_cookie":    a.TenantCookie,
+	} {
+		if !graphicalNameRE.MatchString(value) {
+			return fmt.Errorf("%s must be a safe source name", field)
+		}
+	}
 	if !inSet(a.IdentityProvider, "local", "webhook") {
 		return literalError("auth.identity_provider", "local", "webhook")
 	}

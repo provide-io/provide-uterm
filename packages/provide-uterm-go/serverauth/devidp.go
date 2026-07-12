@@ -45,6 +45,7 @@ func resolvedTokenPath(explicit string) string {
 type DevIDPOptions struct {
 	TokenPath string
 	Subject   string
+	TenantID  string
 	Roles     []string
 	TTLS      int
 }
@@ -65,6 +66,13 @@ func SetupDevIDP(auth *serverconfig.AuthConfig, opts DevIDPOptions) (string, err
 	if ttl == 0 {
 		ttl = DevTokenTTLS
 	}
+	tenantID := opts.TenantID
+	if tenantID == "" {
+		tenantID = "dev"
+	}
+	if _, err := CanonicalTenantID(tenantID); err != nil {
+		return "", err
+	}
 
 	secret := tokenURLSafe(48) // ~384 bits, above the 32-char floor
 	auth.Mode = "jwt"
@@ -76,6 +84,9 @@ func SetupDevIDP(auth *serverconfig.AuthConfig, opts DevIDPOptions) (string, err
 	if auth.JWTAudience == "" {
 		auth.JWTAudience = "provide-uterm-server"
 	}
+	if auth.JWTTenantClaim == "" {
+		auth.JWTTenantClaim = "tenant_id"
+	}
 	if auth.WorkerBearerToken == nil || *auth.WorkerBearerToken == "" {
 		wt := tokenURLSafe(32)
 		auth.WorkerBearerToken = &wt
@@ -83,12 +94,13 @@ func SetupDevIDP(auth *serverconfig.AuthConfig, opts DevIDPOptions) (string, err
 
 	now := time.Now().Unix()
 	claims := jwt.MapClaims{
-		"sub":              subject,
-		"iss":              auth.JWTIssuer,
-		"aud":              auth.JWTAudience,
-		"iat":              now,
-		"exp":              now + int64(ttl),
-		auth.JWTRolesClaim: roles,
+		"sub":               subject,
+		"iss":               auth.JWTIssuer,
+		"aud":               auth.JWTAudience,
+		"iat":               now,
+		"exp":               now + int64(ttl),
+		auth.JWTRolesClaim:  roles,
+		auth.JWTTenantClaim: tenantID,
 	}
 	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
 	if err != nil {

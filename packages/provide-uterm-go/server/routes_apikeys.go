@@ -23,7 +23,7 @@ func (s *Server) registerAPIKeyRoutes(mux *http.ServeMux) {
 // requireAPIKeyAdmin enforces admin + api-keys-enabled, matching the shared
 // authorization block of api_keys.py.
 func (s *Server) requireAPIKeyAdmin(w http.ResponseWriter, r *http.Request) bool {
-	if !s.deps.Authz.IsAdmin(principalOf(r)) {
+	if !s.deps.Authz.IsAdmin(principalOf(r)) || principalOf(r).TenantID == "" {
 		detailError(w, http.StatusForbidden, "admin role required")
 		return false
 	}
@@ -92,7 +92,7 @@ func (s *Server) handleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		v := int(raw)
 		expiresIn = &v
 	}
-	rawKey, record := s.deps.APIKeys.Create(name, scopeSet, expiresIn)
+	rawKey, record := s.deps.APIKeys.CreateForTenant(principalOf(r).TenantID, name, scopeSet, expiresIn)
 	s.audit(r, "api_key.create", map[string]any{"key_id": record.KeyID, "name": name})
 	writeJSON(w, http.StatusOK, map[string]any{
 		"key":        rawKey,
@@ -108,7 +108,7 @@ func (s *Server) handleListAPIKeys(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAPIKeyAdmin(w, r) {
 		return
 	}
-	keys := s.deps.APIKeys.ListKeys()
+	keys := s.deps.APIKeys.ListKeysForTenant(principalOf(r).TenantID)
 	out := make([]map[string]any, 0, len(keys))
 	for _, k := range keys {
 		out = append(out, map[string]any{
@@ -129,8 +129,8 @@ func (s *Server) handleRevokeAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	keyID := r.PathValue("key_id")
-	if !s.deps.APIKeys.Revoke(keyID) {
-		detailError(w, http.StatusNotFound, "unknown key: "+keyID)
+	if !s.deps.APIKeys.RevokeForTenant(principalOf(r).TenantID, keyID) {
+		detailError(w, http.StatusNotFound, "unknown key")
 		return
 	}
 	s.audit(r, "api_key.revoke", map[string]any{"key_id": keyID})

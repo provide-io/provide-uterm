@@ -19,6 +19,7 @@ import (
 // stored.
 type ApiKey struct {
 	KeyID      string
+	TenantID   string
 	KeyHash    string
 	Name       string
 	Scopes     Set
@@ -67,6 +68,11 @@ func tokenURLSafe(nbytes int) string {
 // Create ports ApiKeyStore.create: returns (rawKey, record). expiresInS nil =
 // never expires.
 func (s *ApiKeyStore) Create(name string, scopes Set, expiresInS *int) (string, *ApiKey) {
+	return s.CreateForTenant("", name, scopes, expiresInS)
+}
+
+// CreateForTenant creates a key bound to exactly one tenant.
+func (s *ApiKeyStore) CreateForTenant(tenantID, name string, scopes Set, expiresInS *int) (string, *ApiKey) {
 	rawKey := tokenURLSafe(32)
 	keyHash := HashKey(rawKey)
 	if scopes == nil {
@@ -79,6 +85,7 @@ func (s *ApiKeyStore) Create(name string, scopes Set, expiresInS *int) (string, 
 	}
 	record := &ApiKey{
 		KeyID:     keyHash[:16],
+		TenantID:  tenantID,
 		KeyHash:   keyHash,
 		Name:      name,
 		Scopes:    scopes,
@@ -89,6 +96,31 @@ func (s *ApiKeyStore) Create(name string, scopes Set, expiresInS *int) (string, 
 	s.keys[record.KeyID] = record
 	s.mu.Unlock()
 	return rawKey, record
+}
+
+// ListKeysForTenant returns only records owned by tenantID.
+func (s *ApiKeyStore) ListKeysForTenant(tenantID string) []*ApiKey {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]*ApiKey, 0)
+	for _, record := range s.keys {
+		if record.TenantID == tenantID {
+			out = append(out, record)
+		}
+	}
+	return out
+}
+
+// RevokeForTenant revokes a key only when it belongs to tenantID.
+func (s *ApiKeyStore) RevokeForTenant(tenantID, keyID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	record, ok := s.keys[keyID]
+	if !ok || record.TenantID != tenantID {
+		return false
+	}
+	record.Revoked = true
+	return true
 }
 
 // Validate ports ApiKeyStore.validate: returns the record or nil. Uses a

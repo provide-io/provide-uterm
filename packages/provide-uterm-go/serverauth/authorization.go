@@ -14,17 +14,19 @@ import (
 // RoleCapabilities ports authorization.ROLE_CAPABILITIES — the RBAC map of
 // role → granted capability set.
 var RoleCapabilities = map[string]Set{
-	"viewer": NewSet("session.read", "session.recording.read"),
+	"viewer": NewSet("session.read", "session.recording.read", "graphical.target.read", "graphical.session.attach"),
 	"operator": NewSet(
 		"session.read", "session.recording.read",
 		"session.control.create", "session.control.connect",
 		"session.control.mode", "session.control.clear", "session.control.update",
+		"graphical.target.read", "graphical.session.attach",
 	),
 	"admin": NewSet(
 		"session.read", "session.recording.read",
 		"session.control.create", "session.control.connect",
 		"session.control.mode", "session.control.clear", "session.control.update",
 		"session.control.delete", "session.control.hijack",
+		"graphical.target.read", "graphical.target.manage", "graphical.session.attach",
 	),
 }
 
@@ -50,6 +52,9 @@ type LocalAuthorizationProvider struct{}
 
 // CapabilitiesFor ports LocalAuthorizationProvider.capabilities_for.
 func (LocalAuthorizationProvider) CapabilitiesFor(p *Principal) Set {
+	if p == nil {
+		return NewSet()
+	}
 	roleCaps := NewSet()
 	for role := range p.Roles {
 		for cap := range RoleCapabilities[role] {
@@ -70,6 +75,9 @@ func (LocalAuthorizationProvider) CapabilitiesFor(p *Principal) Set {
 
 // HasCapability ports has_capability.
 func (l LocalAuthorizationProvider) HasCapability(p *Principal, capability string) bool {
+	if strings.HasPrefix(capability, "graphical.") && (p == nil || p.TenantID == "") {
+		return false
+	}
 	return l.CapabilitiesFor(p).Has(capability)
 }
 

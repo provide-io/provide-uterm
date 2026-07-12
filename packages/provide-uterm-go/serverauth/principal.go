@@ -27,9 +27,22 @@ package serverauth
 
 import (
 	"context"
+	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 )
+
+var tenantIDRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
+
+// CanonicalTenantID validates the single canonical tenant identity accepted at
+// public authorization boundaries. It intentionally does not trim or coerce.
+func CanonicalTenantID(value string) (string, error) {
+	if !tenantIDRE.MatchString(value) {
+		return "", fmt.Errorf("tenant_id must be a safe identifier")
+	}
+	return value, nil
+}
 
 // Set is an unordered string set, the Go analogue of Python's frozenset used
 // for a Principal's roles and scopes.
@@ -64,6 +77,7 @@ func (s Set) Sorted() []string {
 // principal.
 type Principal struct {
 	SubjectID   string
+	TenantID    string
 	Roles       Set
 	Scopes      Set
 	Claims      map[string]any

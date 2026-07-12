@@ -35,6 +35,7 @@ func (fakeAuth) Authenticate(_ context.Context, req *serverauth.Request) (*serve
 	}
 	return &serverauth.Principal{
 		SubjectID: subject,
+		TenantID:  req.Header("x-tenant"),
 		Roles:     serverauth.NewSet(role),
 		Scopes:    serverauth.NewSet("*"),
 	}, nil
@@ -284,7 +285,7 @@ func (ts *testServer) do(method, target string, body string, headers map[string]
 
 // admin/viewer header sets.
 func adminHeaders() map[string]string {
-	return map[string]string{"X-Subject": "admin1", "X-Role": "admin"}
+	return map[string]string{"X-Subject": "admin1", "X-Role": "admin", "X-Tenant": "test-tenant"}
 }
 func viewerHeaders() map[string]string {
 	return map[string]string{"X-Subject": "view1", "X-Role": "viewer"}

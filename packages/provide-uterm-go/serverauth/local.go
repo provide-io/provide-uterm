@@ -98,8 +98,10 @@ func ExtractBearerToken(req *Request) string {
 func (p *LocalIdentityProvider) PrincipalFromHeaderAuth(req *Request) *Principal {
 	principal := firstNonEmpty(req.Header(p.Auth.PrincipalHeader), req.Cookie(p.Auth.PrincipalCookie), "anonymous")
 	roleRaw := firstNonEmpty(req.Header(p.Auth.RoleHeader), req.Cookie(p.Auth.RoleCookie), "")
+	tenant, _ := CanonicalTenantID(firstNonEmpty(req.Header(p.Auth.TenantHeader), req.Cookie(p.Auth.TenantCookie)))
 	return &Principal{
 		SubjectID: principal,
+		TenantID:  tenant,
 		Roles:     FilterKnownRoles([]string{roleRaw}),
 		Scopes:    NewSet(),
 		Claims:    map[string]any{},
@@ -139,6 +141,7 @@ func (p *LocalIdentityProvider) PrincipalFromAPIKey(req *Request) *Principal {
 	}
 	return &Principal{
 		SubjectID: "apikey:" + record.KeyID,
+		TenantID:  record.TenantID,
 		Roles:     roles,
 		Scopes:    scopes,
 		Claims:    map[string]any{"key_id": record.KeyID, "key_name": record.Name},
@@ -168,8 +171,17 @@ func (p *LocalIdentityProvider) PrincipalFromJWTToken(token string) (*Principal,
 	if subject == "" {
 		return nil, errors.New("sub claim is required")
 	}
+	tenant := ""
+	if rawTenant, present := claims[p.Auth.JWTTenantClaim]; present {
+		var err error
+		tenant, err = CanonicalTenantID(asStr(rawTenant))
+		if err != nil {
+			return nil, err
+		}
+	}
 	return &Principal{
 		SubjectID: subject,
+		TenantID:  tenant,
 		Roles:     p.rolesFromClaims(claims),
 		Scopes:    p.scopesFromClaims(claims),
 		Claims:    map[string]any(claims),
