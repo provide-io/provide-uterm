@@ -14,6 +14,14 @@ from provide.uterm.control.plane.graphical_target import GraphicalTargetRecord
 from provide.uterm.control.plane.sqlite import SqliteControlPlane
 
 
+class _ForeignTransaction:
+    async def commit(self) -> None:
+        pass
+
+    async def rollback(self) -> None:
+        pass
+
+
 def _record(target_id: str, *, endpoint: str | None = None, updated_at: float = 2.0) -> GraphicalTargetRecord:
     return GraphicalTargetRecord(
         target_id=target_id,
@@ -113,3 +121,10 @@ async def test_sqlite_graphical_target_store_delete_and_rollback(tmp_path: Path)
     assert await plane.graphical_target_store(read_tx).list_graphical_targets() == []
     await read_tx.rollback()
     await plane.close()
+
+
+def test_sqlite_graphical_target_store_rejects_foreign_transaction() -> None:
+    plane = SqliteControlPlane(ControlPlaneConfig())
+
+    with pytest.raises(TypeError, match="SqliteTransaction"):
+        plane.graphical_target_store(_ForeignTransaction())

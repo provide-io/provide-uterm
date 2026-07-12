@@ -4,7 +4,7 @@
 #
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
     from provide.uterm.control.plane.capability import EngineCapabilities
@@ -26,7 +26,7 @@ class ControlPlane(Protocol):
 
     async def reap(self, *, now: float, retention_s: int) -> int: ...
 
-    def graphical_target_store(self, tx: Any) -> GraphicalTargetStore: ...
+    def graphical_target_store(self, tx: Transaction) -> GraphicalTargetStore: ...
 
     async def get_audit_head(self) -> tuple[int, str] | None:
         """Return the persisted audit-chain head ``(seq, record_hash)``, or

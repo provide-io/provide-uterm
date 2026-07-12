@@ -15,8 +15,10 @@ from provide.uterm.control.plane.graphical_target import GraphicalTargetRecord
 
 if TYPE_CHECKING:
     from provide.uterm.control.plane.bootstrap import ControlPlane
+    from provide.uterm.control.plane.graphical_target import GraphicalTargetStore
     from provide.uterm.control.plane.memory import MemoryControlPlane
     from provide.uterm.control.plane.sqlite.engine import SqliteControlPlane
+    from provide.uterm.control.plane.transaction import Transaction
 
     def _assert_bootstrap_backends_conform_without_casts(
         memory: MemoryControlPlane,
@@ -25,6 +27,18 @@ if TYPE_CHECKING:
         memory_plane: ControlPlane = memory
         sqlite_plane: ControlPlane = sqlite
         _ = (memory_plane, sqlite_plane)
+
+    def _assert_shared_transaction_signature(plane: ControlPlane, tx: Transaction) -> None:
+        store: GraphicalTargetStore = plane.graphical_target_store(tx)
+        _ = store
+
+
+class _ForeignTransaction:
+    async def commit(self) -> None:
+        pass
+
+    async def rollback(self) -> None:
+        pass
 
 
 def _record(target_id: str, *, endpoint: str | None = None, updated_at: float = 2.0) -> GraphicalTargetRecord:
@@ -122,3 +136,11 @@ async def test_memory_graphical_target_store_detects_same_target_conflicts() -> 
     await tx1.commit()
     with pytest.raises(ControlPlaneConflictError):
         await tx2.commit()
+
+
+@pytest.mark.asyncio
+async def test_memory_graphical_target_store_rejects_foreign_transaction() -> None:
+    plane = await bootstrap_control_plane(ControlPlaneConfig(backend="memory"))
+
+    with pytest.raises(TypeError, match="MemoryTransaction"):
+        plane.graphical_target_store(_ForeignTransaction())
