@@ -46,8 +46,11 @@ Binaries:
 > `Uterm.Mcp` binary in this tree.
 
 CLI subcommands (real, not stubs): `proxy`, `listen`, `share`, `tunnel`,
-`inspect`, `watch`, `audit`, `server`. `proxy --once` starts Kestrel, prints
-ready, then stops (real bind).
+`inspect`, `watch`, `audit`, `server`.
+
+- `uterm listen WS_URL` — local telnet → remote terminal WebSocket (uwarp-compatible)
+- `uterm proxy --transport websocket --url wss://…` — local browser WS → remote WSS
+- `proxy --once` starts Kestrel, hits `/health`, then stops
 
 ## Build & run
 
