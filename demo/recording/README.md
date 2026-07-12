@@ -41,6 +41,18 @@ uv run python scripts/demos/recording_matrix/demo_python.py
 dotnet run --project packages/provide-uterm-csharp/cmd/RecordingDemo -c Release
 ```
 
+### Thin server HTTP surface (annotate + meta/entries/download)
+
+Same four REST routes as Python `routes/sessions.py`, on Go and C# servers:
+
+```bash
+(cd packages/provide-uterm-go && go run ./cmd/demo-recording-http)
+dotnet run --project packages/provide-uterm-csharp/cmd/RecordingHttpDemo -c Release
+```
+
+See [recording-store-parity.md](../../docs/operations/recording-store-parity.md)
+for the route table and auth capabilities.
+
 ## Full-stack browser demo (Python server)
 
 The original server+browser recorder still lives in
