@@ -153,6 +153,9 @@ func (r *GraphicalTargetRegistry) Get(ctx context.Context, scope TargetScope, id
 	if err != nil || rec == nil {
 		return nil, err
 	}
+	if !scope.permits(nullPtr(rec.TenantID)) {
+		return nil, nil
+	}
 	t, err := fromGraphicalRecord(*rec)
 	if err != nil {
 		return nil, err
@@ -177,6 +180,9 @@ func (r *GraphicalTargetRegistry) List(ctx context.Context, scope TargetScope) (
 	merged := map[string]serverconfig.GraphicalTargetDefinition{}
 	for _, rec := range records {
 		if _, shadow := r.static[rec.TargetID]; !shadow {
+			if !scope.permits(nullPtr(rec.TenantID)) {
+				continue
+			}
 			target, convertErr := fromGraphicalRecord(rec)
 			if convertErr != nil {
 				return nil, convertErr
@@ -202,11 +208,11 @@ func (r *GraphicalTargetRegistry) Create(ctx context.Context, scope TargetScope,
 	}
 	defer r.leave()
 	t = cloneTarget(t)
-	if err := t.Validate(); err != nil {
-		return t, errors.New("invalid graphical target")
-	}
 	if err := r.scoped(scope, t.TenantID); err != nil {
 		return t, err
+	}
+	if err := t.Validate(); err != nil {
+		return t, errors.New("invalid graphical target")
 	}
 	if _, ok := r.static[t.TargetID]; ok {
 		return t, ErrGraphicalTargetAlreadyExists
@@ -229,11 +235,11 @@ func (r *GraphicalTargetRegistry) Update(ctx context.Context, scope TargetScope,
 	}
 	defer r.leave()
 	t = cloneTarget(t)
-	if err := t.Validate(); err != nil {
-		return t, errors.New("invalid graphical target")
-	}
 	if err := r.scoped(scope, t.TenantID); err != nil {
 		return t, err
+	}
+	if err := t.Validate(); err != nil {
+		return t, errors.New("invalid graphical target")
 	}
 	if _, ok := r.static[t.TargetID]; ok {
 		return t, ErrGraphicalTargetImmutable
@@ -245,6 +251,9 @@ func (r *GraphicalTargetRegistry) Update(ctx context.Context, scope TargetScope,
 		}
 		if cur == nil {
 			return ErrGraphicalTargetNotFound
+		}
+		if !scope.permits(nullPtr(cur.TenantID)) {
+			return ErrGraphicalTargetForbidden
 		}
 		old, convertErr := fromGraphicalRecord(*cur)
 		if convertErr != nil {
@@ -276,6 +285,9 @@ func (r *GraphicalTargetRegistry) Delete(ctx context.Context, scope TargetScope,
 		if cur == nil {
 			return ErrGraphicalTargetNotFound
 		}
+		if !scope.permits(nullPtr(cur.TenantID)) {
+			return ErrGraphicalTargetForbidden
+		}
 		t, convertErr := fromGraphicalRecord(*cur)
 		if convertErr != nil {
 			return convertErr
@@ -298,6 +310,9 @@ func (r *GraphicalTargetRegistry) RuntimeRecord(ctx context.Context, scope Targe
 	rec, err := r.getRecord(ctx, id)
 	if err != nil || rec == nil {
 		return rec, err
+	}
+	if !scope.permits(nullPtr(rec.TenantID)) {
+		return nil, nil
 	}
 	t, convertErr := fromGraphicalRecord(*rec)
 	if convertErr != nil {

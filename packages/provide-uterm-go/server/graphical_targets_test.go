@@ -150,6 +150,63 @@ func TestGraphicalRegistryRejectsAndRedactsCorruptPersistedRecords(t *testing.T)
 	}
 }
 
+func TestGraphicalRegistryAuthorizesRawTenantBeforePersistedValidation(t *testing.T) {
+	for _, backend := range []string{"memory", "sqlite"} {
+		t.Run(backend, func(t *testing.T) {
+			ctx := context.Background()
+			var engine cp.Engine
+			if backend == "memory" {
+				engine = memory.New(cp.Config{})
+			} else {
+				engine = sqlite.New(cp.Config{DatabaseURL: t.TempDir() + "/tenant.db"})
+			}
+			if err := engine.Open(ctx); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = engine.Close(context.Background()) })
+			if err := engine.Migrate(ctx); err != nil {
+				t.Fatal(err)
+			}
+			tenantB := "tenant-b"
+			corrupt := toGraphicalRecord(graphicalTarget("corrupt-b", &tenantB), 1)
+			corrupt.Endpoint = "dns:///sensitive-corrupt"
+			tx, _ := engine.Begin(ctx)
+			if err := engine.GraphicalTargetStore(tx).Put(ctx, corrupt); err != nil {
+				t.Fatal(err)
+			}
+			if err := tx.Commit(ctx); err != nil {
+				t.Fatal(err)
+			}
+			r, _ := NewGraphicalTargetRegistry(nil, engine, false)
+			tenantA, _ := NewTenantTargetScope("tenant-a")
+			scopeB, _ := NewTenantTargetScope(tenantB)
+			if got, err := r.Get(ctx, tenantA, "corrupt-b"); err != nil || got != nil {
+				t.Fatalf("cross-tenant Get = %#v, %v", got, err)
+			}
+			if got, err := r.RuntimeRecord(ctx, tenantA, "corrupt-b"); err != nil || got != nil {
+				t.Fatalf("cross-tenant runtime = %#v, %v", got, err)
+			}
+			if got, err := r.List(ctx, tenantA); err != nil || len(got) != 0 {
+				t.Fatalf("cross-tenant List = %#v, %v", got, err)
+			}
+			proposed := graphicalTarget("corrupt-b", nil)
+			tenantAID := "tenant-a"
+			proposed.TenantID = &tenantAID
+			if _, err := r.Update(ctx, tenantA, proposed); !errors.Is(err, ErrGraphicalTargetForbidden) {
+				t.Fatalf("cross-tenant Update = %v", err)
+			}
+			if err := r.Delete(ctx, tenantA, "corrupt-b"); !errors.Is(err, ErrGraphicalTargetForbidden) {
+				t.Fatalf("cross-tenant Delete = %v", err)
+			}
+			for _, scope := range []TargetScope{SystemTargetScope(), scopeB} {
+				if _, err := r.Get(ctx, scope, "corrupt-b"); !errors.Is(err, ErrGraphicalTargetPersistedData) {
+					t.Fatalf("authorized Get = %v", err)
+				}
+			}
+		})
+	}
+}
+
 func TestGraphicalRegistryValidationDoesNotNormalizeCallerSlices(t *testing.T) {
 	base := memory.New(cp.Config{})
 	_ = base.Open(context.Background())
