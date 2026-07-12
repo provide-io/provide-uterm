@@ -6,18 +6,24 @@
 
 from provide.uterm.server.graphical.targets import (
     GraphicalTargetAlreadyExistsError,
+    GraphicalTargetClosedError,
     GraphicalTargetError,
+    GraphicalTargetForbiddenError,
     GraphicalTargetImmutableError,
     GraphicalTargetNotFoundError,
     GraphicalTargetRegistry,
+    GraphicalTargetScope,
     GraphicalTargetTransactionError,
 )
 
 __all__ = [
     "GraphicalTargetAlreadyExistsError",
+    "GraphicalTargetClosedError",
     "GraphicalTargetError",
+    "GraphicalTargetForbiddenError",
     "GraphicalTargetImmutableError",
     "GraphicalTargetNotFoundError",
     "GraphicalTargetRegistry",
+    "GraphicalTargetScope",
     "GraphicalTargetTransactionError",
 ]

@@ -369,7 +369,7 @@ def create_server_app(
     profile_store = FileProfileStore(config.profiles.directory)
 
     @asynccontextmanager
-    async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    async def _running_lifespan(_app: FastAPI) -> AsyncIterator[None]:
         nonlocal graphical_target_registry
 
         async def _delayed_boot() -> None:
@@ -471,6 +471,19 @@ def create_server_app(
             if graphical_target_registry is not None:
                 await graphical_target_registry.close()
             await control_plane.close()
+
+    @asynccontextmanager
+    async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        try:
+            async with _running_lifespan(_app):
+                yield
+        except BaseException:
+            if graphical_target_registry is not None:
+                with contextlib.suppress(BaseException):
+                    await graphical_target_registry.close()
+            with contextlib.suppress(BaseException):
+                await control_plane.close()
+            raise
 
     app = FastAPI(title=config.server.title, lifespan=_lifespan)
     app.state.uterm_config = config

@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sqlite3
 import time
 from typing import TYPE_CHECKING, Any
@@ -16,6 +17,9 @@ from fastapi.testclient import TestClient
 from provide.uterm.client import connect_test_ws
 from provide.uterm.server import create_server_app, default_server_config
 from provide.uterm.server.bridge.hub import ResumeSession
+from provide.uterm.server.config_schema import AuditConfig
+from provide.uterm.server.config_schema_graphical import GraphicalTargetDefinition
+from provide.uterm.server.graphical import GraphicalTargetScope
 
 if TYPE_CHECKING:
     pass
@@ -161,6 +165,99 @@ class TestOnResumeCallback:
 
         assert app.state.uterm_control_plane.__class__.__name__ == "SqliteControlPlane"
         assert "cp_resume_tokens" in tables
+
+    def test_sqlite_graphical_targets_persist_across_factory_restart(self, tmp_path) -> None:
+        db_path = tmp_path / "graphical-restart.db"
+        config = default_server_config()
+        config.auth.mode = "header"
+        config.auth.header_mode_acknowledged = True
+        config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
+        config.sessions = []
+        config.control_plane.backend = "sqlite"
+        config.control_plane.database_url = str(db_path)
+        target = GraphicalTargetDefinition(target_id="persisted", endpoint="dns:///persisted.example:443")
+
+        first = create_server_app(config)
+        with TestClient(first):
+            asyncio.run(first.state.uterm_graphical_target_registry.create(GraphicalTargetScope.system(), target))
+
+        second = create_server_app(config)
+        with TestClient(second):
+            restored = asyncio.run(
+                second.state.uterm_graphical_target_registry.get(GraphicalTargetScope.system(), "persisted")
+            )
+        assert restored == target
+
+    def test_startup_failure_closes_graphical_registry_then_control_plane(
+        self,
+        tmp_path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        import provide.uterm.server.app.factory_impl as factory_impl
+
+        events: list[str] = []
+        config = default_server_config()
+        config.auth.mode = "header"
+        config.auth.header_mode_acknowledged = True
+        config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
+        config.sessions = []
+        config.audit = AuditConfig(chain_enabled=True, chain_file=str(tmp_path / "audit.log"))
+        app = create_server_app(config)
+        plane = app.state.uterm_control_plane
+        plane_type = type(plane)
+        original_close = plane_type.close
+
+        async def fail_resume(*_args: object, **_kwargs: object) -> None:
+            registry = app.state.uterm_graphical_target_registry
+            original_registry_close = registry.close
+
+            async def close_registry() -> None:
+                events.append("registry")
+                await original_registry_close()
+
+            monkeypatch.setattr(registry, "close", close_registry)
+            raise RuntimeError("injected startup failure")
+
+        async def close_plane(instance: object) -> None:
+            events.append("control-plane")
+            await original_close(instance)
+
+        monkeypatch.setattr(factory_impl, "resume_audit_chain", fail_resume)
+        monkeypatch.setattr(plane_type, "close", close_plane)
+        with pytest.raises(RuntimeError, match="injected startup failure"):
+            with TestClient(app):
+                pass
+
+        registry = app.state.uterm_graphical_target_registry
+        assert registry._closed is True
+        assert events == ["registry", "control-plane"]
+
+    def test_migration_failure_closes_partially_opened_control_plane(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        config = default_server_config()
+        config.auth.mode = "header"
+        config.auth.header_mode_acknowledged = True
+        config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
+        config.sessions = []
+        app = create_server_app(config)
+        plane = app.state.uterm_control_plane
+        plane_type = type(plane)
+        closed = False
+
+        async def fail_migrate(_instance: object) -> None:
+            raise RuntimeError("injected migration failure")
+
+        async def close_plane(_instance: object) -> None:
+            nonlocal closed
+            closed = True
+
+        monkeypatch.setattr(plane_type, "migrate", fail_migrate)
+        monkeypatch.setattr(plane_type, "close", close_plane)
+        with pytest.raises(RuntimeError, match="injected migration failure"):
+            with TestClient(app):
+                pass
+
+        assert closed is True
+        assert app.state.uterm_graphical_target_registry is None
 
     def test_on_resume_allows_resume_with_sqlite_control_plane(self, tmp_path) -> None:
         db_path = tmp_path / "resume.db"
