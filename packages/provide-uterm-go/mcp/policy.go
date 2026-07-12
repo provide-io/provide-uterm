@@ -42,6 +42,13 @@ var toolRequiredRoles = map[string]string{
 	"hijack_send":      "admin",
 	"hijack_step":      "admin",
 	"hijack_release":   "admin",
+	"gui_hijack_begin":   "admin",
+	"gui_hijack_release": "admin",
+	"gui_screenshot":     "operator",
+	"gui_click":          "operator",
+	"gui_type":           "operator",
+	"gui_key":            "operator",
+	"gui_drag":           "operator",
 	// Session read-only inspection.
 	"session_list":   "viewer",
 	"session_status": "viewer",

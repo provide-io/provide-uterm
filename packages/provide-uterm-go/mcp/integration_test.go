@@ -45,6 +45,7 @@ func startMCP(t *testing.T, baseURL, role string) *mcptest.Server {
 	c := client.NewHijackClient(baseURL)
 	auth := &AuthorizationContext{DefaultPrincipal: newPrincipal("local", role)}
 	tools := append(hijackTools(c, auth), sessionTools(c, auth)...)
+	tools = append(tools, guiTools(c, auth)...)
 	srv, err := mcptest.NewServer(t, tools...)
 	if err != nil {
 		t.Fatalf("mcptest.NewServer: %v", err)
@@ -86,8 +87,8 @@ func TestIntegrationListTools(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListTools: %v", err)
 	}
-	if len(lt.Tools) != 21 {
-		t.Fatalf("expected 21 tools, got %d", len(lt.Tools))
+	if len(lt.Tools) != 28 {
+		t.Fatalf("expected 28 tools, got %d", len(lt.Tools))
 	}
 	got := make([]string, 0, len(lt.Tools))
 	for _, tool := range lt.Tools {
