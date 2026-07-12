@@ -105,6 +105,49 @@ public class GuiRestAndPngTests
     }
 
     [Fact]
+    public async Task Gui_Attach_Rfb_RequiresTarget_And_FailsClosedOnConnect()
+    {
+        var (server, baseUrl, token) = await StartServerAsync();
+        await using (server)
+        {
+            using var client = HijackClient.WithBearer(baseUrl, token);
+            var missing = await Assert.ThrowsAsync<ApiException>(() =>
+                client.GuiAttachAsync("demo", new Dictionary<string, object?>
+                {
+                    ["mode"] = "rfb",
+                }));
+            Assert.Equal(422, missing.StatusCode);
+
+            var badAddr = await Assert.ThrowsAsync<ApiException>(() =>
+                client.GuiAttachAsync("demo", new Dictionary<string, object?>
+                {
+                    ["mode"] = "rfb",
+                    ["target_address"] = "not-a-host-port",
+                }));
+            Assert.Equal(422, badAddr.StatusCode);
+
+            // Closed port → 502
+            var closed = FreePort();
+            var fail = await Assert.ThrowsAsync<ApiException>(() =>
+                client.GuiAttachAsync("demo", new Dictionary<string, object?>
+                {
+                    ["mode"] = "rfb",
+                    ["target_address"] = $"127.0.0.1:{closed}",
+                }));
+            Assert.Equal(502, fail.StatusCode);
+
+            // rfb:// scheme accepted by parser then fails connect
+            var fail2 = await Assert.ThrowsAsync<ApiException>(() =>
+                client.GuiAttachAsync("demo", new Dictionary<string, object?>
+                {
+                    ["mode"] = "rfb",
+                    ["target_address"] = $"rfb://127.0.0.1:{closed}",
+                }));
+            Assert.Equal(502, fail2.StatusCode);
+        }
+    }
+
+    [Fact]
     public async Task Gui_Attach_EmptyMode_InfersFromTarget()
     {
         var (server, baseUrl, token) = await StartServerAsync();

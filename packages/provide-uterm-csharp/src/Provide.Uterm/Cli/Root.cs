@@ -313,9 +313,9 @@ public static class Root
             o.WriteLine("  WS_URL    upstream terminal WebSocket (ws:// or wss://)");
             o.WriteLine("  --host    bind host (default 127.0.0.1)");
             o.WriteLine("  --port    telnet listen port (default gateway port; 0 = ephemeral)");
-            o.WriteLine("  --protocol  telnet|ssh (default telnet; ssh is accept-only stub)");
-            o.WriteLine("  --allow-unauthenticated  allow non-loopback telnet bind");
-            o.WriteLine("  --once    bind, print ready, stop (no accept)");
+            o.WriteLine("  --protocol  telnet|ssh (default telnet)");
+            o.WriteLine("  --allow-unauthenticated  allow non-loopback telnet/ssh bind");
+            o.WriteLine("  --once    bind, print ready, stop (no accept wait)");
             return 0;
         }
 
@@ -346,16 +346,49 @@ public static class Root
             : (proto.Equals("ssh", StringComparison.OrdinalIgnoreCase)
                 ? TerminalDefaults.GatewaySshPort
                 : TerminalDefaults.GatewayTelnetPort);
+        var allowUnauth = f.ContainsKey("allow-unauthenticated");
 
         if (proto.Equals("ssh", StringComparison.OrdinalIgnoreCase))
         {
-            e.WriteLine("error: ssh gateway pump is not yet wired; use --protocol telnet");
+            // Ephemeral port when --port 0 (FxSsh needs a concrete bind port).
+            if (port == 0)
+            {
+                var probe = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+                probe.Start();
+                port = ((System.Net.IPEndPoint)probe.LocalEndpoint).Port;
+                probe.Stop();
+            }
+
+            var sshGw = new SshWsGateway(wsUrl, allowUnauthenticated: allowUnauth);
+            try
+            {
+                sshGw.Start(host, port);
+                o.WriteLine($"listen: ssh gateway on {host}:{sshGw.Port} → {wsUrl}");
+                if (f.ContainsKey("once"))
+                {
+                    o.WriteLine("listen ready");
+                    return 0;
+                }
+
+                WaitCancel();
+            }
+            finally
+            {
+                sshGw.StopAsync().GetAwaiter().GetResult();
+            }
+
+            return 0;
+        }
+
+        if (!proto.Equals("telnet", StringComparison.OrdinalIgnoreCase))
+        {
+            e.WriteLine("error: --protocol must be telnet or ssh");
             return 1;
         }
 
         var telnet = new TelnetGateway
         {
-            AllowUnauthenticated = f.ContainsKey("allow-unauthenticated"),
+            AllowUnauthenticated = allowUnauth,
             OnAccept = (client, ct) => GatewayDrive.RunAsync(client, wsUrl, ct),
         };
         try

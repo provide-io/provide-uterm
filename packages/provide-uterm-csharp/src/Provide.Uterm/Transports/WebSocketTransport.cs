@@ -4,16 +4,25 @@
 //
 
 using System.Net.WebSockets;
-using System.Text;
 
 namespace Provide.Uterm.Transports;
 
 /// <summary>Client WebSocket transport for terminal streams.</summary>
 public sealed class WebSocketTransport : IConnectionTransport, IAsyncDisposable
 {
+    /// <summary>Hard cap on a single reassembled message (bytes).</summary>
+    public const int DefaultMaxMessageBytes = 1 * 1024 * 1024;
+
     private ClientWebSocket? _ws;
     private readonly object _lock = new();
     private ConnectOptions _options = new();
+    private int _maxMessageBytes = DefaultMaxMessageBytes;
+
+    public int MaxMessageBytes
+    {
+        get => _maxMessageBytes;
+        set => _maxMessageBytes = value <= 0 ? DefaultMaxMessageBytes : value;
+    }
 
     public async Task ConnectAsync(string host, int port, ConnectOptions? options = null, CancellationToken cancellationToken = default)
     {
@@ -23,6 +32,13 @@ public sealed class WebSocketTransport : IConnectionTransport, IAsyncDisposable
         if (string.IsNullOrEmpty(url))
         {
             url = $"wss://{host}:{port}";
+        }
+
+        // Scheme gate
+        if (!url.StartsWith("ws://", StringComparison.OrdinalIgnoreCase) &&
+            !url.StartsWith("wss://", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("WebSocket URL must use ws:// or wss:// scheme", nameof(options));
         }
 
         var ws = new ClientWebSocket();
@@ -82,6 +98,12 @@ public sealed class WebSocketTransport : IConnectionTransport, IAsyncDisposable
             ws = _ws ?? throw TransportErrors.NotConnected;
         }
 
+        if (data.Length > _maxMessageBytes)
+        {
+            throw new InvalidOperationException(
+                $"WebSocket message size {data.Length} exceeds max {_maxMessageBytes}");
+        }
+
         var type = _options.Ws.SendBinary ? WebSocketMessageType.Binary : WebSocketMessageType.Text;
         await ws.SendAsync(data, type, endOfMessage: true, cancellationToken);
     }
@@ -96,16 +118,36 @@ public sealed class WebSocketTransport : IConnectionTransport, IAsyncDisposable
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(timeout);
-        var buf = new byte[Math.Max(1, maxBytes)];
+        var chunk = new byte[Math.Max(1, Math.Min(maxBytes, 64 * 1024))];
+        using var ms = new MemoryStream();
         try
         {
-            var result = await ws.ReceiveAsync(buf, cts.Token);
-            if (result.MessageType == WebSocketMessageType.Close)
+            while (true)
             {
-                throw TransportErrors.ConnectionClosed;
+                var result = await ws.ReceiveAsync(chunk, cts.Token);
+                if (result.MessageType == WebSocketMessageType.Close)
+                {
+                    throw TransportErrors.ConnectionClosed;
+                }
+
+                if (result.Count > 0)
+                {
+                    if (ms.Length + result.Count > _maxMessageBytes)
+                    {
+                        throw new InvalidOperationException(
+                            $"WebSocket reassembled message exceeds max {_maxMessageBytes}");
+                    }
+
+                    ms.Write(chunk, 0, result.Count);
+                }
+
+                if (result.EndOfMessage)
+                {
+                    break;
+                }
             }
 
-            return buf[..result.Count];
+            return ms.ToArray();
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
