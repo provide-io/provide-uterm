@@ -102,7 +102,7 @@ def _principal_from_header_auth(
 
 
 def _anonymous_principal() -> Principal:
-    return Principal(subject_id="anonymous", roles=frozenset({"viewer"}), scopes=frozenset())
+    return Principal.anonymous()
 
 
 def _resolve_principal(
@@ -176,7 +176,12 @@ class LocalIdentityProvider(IdentityProvider):
                         detail={"method": "header", "reason": "untrusted_source", "source_ip": source},
                     )
                     return self._anonymous_principal()
-            return self._principal_from_header_auth(headers, cookies)
+            try:
+                return self._principal_from_header_auth(headers, cookies)
+            except ValueError as exc:
+                logger.warning("header_auth_rejected_invalid_tenant error=%s", exc)
+                audit_event("auth.failure", detail={"method": "header", "reason": "invalid_tenant"})
+                return self._anonymous_principal()
         if mode != "jwt":
             raise ValueError(f"unknown auth mode: {mode!r}")
 
@@ -275,7 +280,7 @@ class LocalIdentityProvider(IdentityProvider):
         )
 
     def _anonymous_principal(self) -> Principal:
-        return Principal(subject_id="anonymous", roles=frozenset({"viewer"}), scopes=frozenset())
+        return Principal.anonymous()
 
     def _principal_from_header_auth(self, headers: Any, cookies: Any) -> Principal:
         principal = (
@@ -285,7 +290,10 @@ class LocalIdentityProvider(IdentityProvider):
         )
         role_raw = headers.get(self.auth.role_header) or self._cookie_value(cookies, self.auth.role_cookie) or ""
         roles = _filter_known_roles([role_raw])
-        tenant = headers.get(self.auth.tenant_header) or self._cookie_value(cookies, self.auth.tenant_cookie)
+        if self.auth.tenant_header in headers:
+            tenant = headers.get(self.auth.tenant_header)
+        else:
+            tenant = cookies.get(self.auth.tenant_cookie)
         return Principal(
             subject_id=str(principal),
             tenant_id=canonical_tenant_id(tenant),
@@ -341,6 +349,7 @@ class LocalIdentityProvider(IdentityProvider):
         audit_event("auth.success", principal=record.key_id, detail={"method": "api_key"})
         return Principal(
             subject_id=f"apikey:{record.key_id}",
+            tenant_id=record.tenant_id,
             roles=roles,
             scopes=scopes,
             claims={"key_id": record.key_id, "key_name": record.name},

@@ -47,6 +47,34 @@ class Principal:
     def name(self) -> str:
         return self.display_name or self.subject_id
 
+    @classmethod
+    def anonymous(cls) -> Principal:
+        """Create the intentionally tenantless unauthenticated identity."""
+        return cls(subject_id="anonymous", tenant_id=None, roles=frozenset({"viewer"}), scopes=frozenset())
+
+    @classmethod
+    def system_worker(cls) -> Principal:
+        """Create a tenantless infrastructure worker; never valid for tenant APIs."""
+        return cls(subject_id="worker", tenant_id=None, roles=frozenset({"admin"}), scopes=frozenset({"*"}))
+
+    @classmethod
+    def session_share(
+        cls,
+        *,
+        subject_id: str,
+        roles: frozenset[str],
+        scopes: frozenset[str],
+        admin_session_scope: str | None = None,
+    ) -> Principal:
+        """Create a tenantless session-bound share identity."""
+        return cls(
+            subject_id=subject_id,
+            tenant_id=None,
+            roles=roles,
+            scopes=scopes,
+            admin_session_scope=admin_session_scope,
+        )
+
 
 @runtime_checkable
 class IdentityProvider(Protocol):

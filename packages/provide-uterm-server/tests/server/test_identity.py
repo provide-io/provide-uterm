@@ -32,6 +32,13 @@ def test_principal_carries_canonical_tenant_identity() -> None:
     assert principal.tenant_id == "tenant-a"
 
 
+def test_named_tenantless_principals_make_policy_explicit() -> None:
+    from provide.uterm.server.bridge.identity import Principal
+
+    assert Principal.anonymous().tenant_id is None
+    assert Principal.system_worker().tenant_id is None
+
+
 def test_identity_provider_protocol():
     """Verify IdentityProvider protocol structure."""
     from provide.uterm.server.bridge.identity import IdentityProvider, Principal

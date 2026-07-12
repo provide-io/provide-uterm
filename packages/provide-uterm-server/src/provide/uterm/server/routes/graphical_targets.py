@@ -70,6 +70,23 @@ def _public_target(target: GraphicalTargetDefinition) -> dict[str, Any]:
     )
 
 
+def _verify_result_tenant(
+    request: Request,
+    scope: GraphicalTargetScope,
+    actor: str,
+    target: GraphicalTargetDefinition,
+) -> None:
+    if target.tenant_id == scope.tenant_id:
+        return
+    audit_event(
+        "graphical_target.tenant_mismatch",
+        principal=actor,
+        source_ip=source_ip(request),
+        detail={"expected_tenant_id": scope.tenant_id},
+    )
+    raise _error(404, "graphical_target_not_found", "graphical target not found")
+
+
 def _map_registry_error(exc: Exception) -> HTTPException:
     if isinstance(exc, GraphicalTargetNotFoundError | GraphicalTargetForbiddenError):
         return _error(404, "graphical_target_not_found", "graphical target not found")
@@ -94,12 +111,14 @@ def create_graphical_targets_router() -> APIRouter:
         limit: Annotated[int, Query(ge=1, le=200)] = 100,
         offset: Annotated[int, Query(ge=0)] = 0,
     ) -> dict[str, Any]:
-        scope, _actor = await _scope(request, "graphical.target.read")
+        scope, actor = await _scope(request, "graphical.target.read")
         registry = _registry(request)
         try:
             targets = await registry.list(scope)
         except Exception as exc:
             raise _map_registry_error(exc) from exc
+        for target in targets:
+            _verify_result_tenant(request, scope, actor, target)
         return {
             "items": [_public_target(target) for target in targets[offset : offset + limit]],
             "limit": limit,
@@ -109,7 +128,7 @@ def create_graphical_targets_router() -> APIRouter:
 
     @router.get("/{target_id}")
     async def get_target(request: Request, target_id: TargetId) -> dict[str, Any]:
-        scope, _actor = await _scope(request, "graphical.target.read")
+        scope, actor = await _scope(request, "graphical.target.read")
         registry = _registry(request)
         try:
             target = await registry.get(scope, target_id)
@@ -117,6 +136,7 @@ def create_graphical_targets_router() -> APIRouter:
             raise _map_registry_error(exc) from exc
         if target is None:
             raise _error(404, "graphical_target_not_found", "graphical target not found")
+        _verify_result_tenant(request, scope, actor, target)
         return _public_target(target)
 
     @router.post("", status_code=201)
@@ -128,6 +148,7 @@ def create_graphical_targets_router() -> APIRouter:
             created = await registry.create(scope, target)
         except Exception as exc:
             raise _map_registry_error(exc) from exc
+        _verify_result_tenant(request, scope, actor, created)
         audit_event(
             "graphical_target.create",
             principal=actor,
@@ -147,6 +168,7 @@ def create_graphical_targets_router() -> APIRouter:
             updated = await registry.update(scope, target)
         except Exception as exc:
             raise _map_registry_error(exc) from exc
+        _verify_result_tenant(request, scope, actor, updated)
         audit_event(
             "graphical_target.update",
             principal=actor,

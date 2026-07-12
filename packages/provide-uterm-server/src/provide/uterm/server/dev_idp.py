@@ -108,6 +108,7 @@ def setup_dev_idp(
             "iat": now,
             "exp": now + ttl_s,
             auth.jwt_roles_claim: list(roles),
+            auth.jwt_tenant_claim: auth.dev_tenant_id,
         },
         secret,
         algorithm="HS256",

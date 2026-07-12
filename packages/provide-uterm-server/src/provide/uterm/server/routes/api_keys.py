@@ -74,11 +74,10 @@ def create_api_keys_router() -> APIRouter:
             expires_in_s = int(expires_in_s)
             if expires_in_s < 60:
                 raise HTTPException(status_code=422, detail="expires_in_s must be >= 60")
-        raw_key, record = store.create(
-            name,
-            scopes=scopes,
-            expires_in_s=expires_in_s,
-        )
+        create_kwargs: dict[str, Any] = {"scopes": scopes, "expires_in_s": expires_in_s}
+        if hasattr(principal, "tenant_id"):
+            create_kwargs["tenant_id"] = principal.tenant_id
+        raw_key, record = store.create(name, **create_kwargs)
         audit_event(
             "api_key.create",
             principal=principal.subject_id,
