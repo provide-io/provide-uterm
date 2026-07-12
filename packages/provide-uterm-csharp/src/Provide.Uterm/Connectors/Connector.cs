@@ -219,6 +219,12 @@ public sealed class ConnectorRegistry
         Register("ws", cfg => new WebSocketConnector(GetString(cfg, "url", "ws://127.0.0.1/")));
         Register("shell", cfg => new ShellConnector(GetString(cfg, "shell", "")));
         Register("pty", cfg => new ShellConnector(GetString(cfg, "shell", "")));
+        Register("ushell", cfg => new Shell.UshellConnector(
+            GetString(cfg, "session_id", GetString(cfg, "id", "ushell")),
+            new Shell.UshellConnectorConfig
+            {
+                DisplayName = GetString(cfg, "display_name", ""),
+            }));
     }
 
     public void Register(string type, Func<IReadOnlyDictionary<string, object?>, IConnector> factory) =>

@@ -224,17 +224,25 @@ public class ModuleSurfaceTests
     public void Shell_LineBuffer_And_Ansi()
     {
         var lb = new LineBuffer { MaxLength = 32 };
-        Assert.Null(lb.Feed("he"));
+        lb.Feed("he");
+        Assert.Empty(lb.TakeCompleted());
         Assert.Equal("he", lb.Text);
-        Assert.Equal("hello", lb.Feed("llo\r\n"));
+        _ = lb.TakeEcho();
+        lb.Feed("llo\r\n");
+        Assert.Equal(new[] { "hello" }, lb.TakeCompleted());
         Assert.Equal("", lb.Text);
-        Assert.Null(lb.Feed("ab\x7f"));
+        lb.Feed("ab\x7f");
         Assert.Equal("a", lb.Text);
-        Assert.Equal("\x03", lb.Feed("\x03"));
-        Assert.Equal("", lb.Feed("\x04"));
-        Assert.Null(lb.Feed("\x1b[A")); // arrow escape consumed
-        Assert.Null(lb.Feed("x\x1bOP"));
-        Assert.Equal("x", lb.Feed("\n"));
+        _ = lb.TakeEcho();
+        lb.Feed("\x03");
+        Assert.Equal(new[] { "\x03" }, lb.TakeCompleted());
+        lb.Feed("\x04");
+        Assert.Equal(new[] { "\x04" }, lb.TakeCompleted());
+        lb.Feed("\x1b[A"); // arrow escape consumed
+        Assert.Empty(lb.TakeCompleted());
+        lb.Feed("x\x1bOP");
+        lb.Feed("\n");
+        Assert.Equal(new[] { "x" }, lb.TakeCompleted());
         lb.Clear();
 
         // MaxLength truncate path

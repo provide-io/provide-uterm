@@ -28,7 +28,7 @@ C# connects to and controls remote graphical sessions. It does not launch or hos
 | RFB client | partial | Security None + Raw client; tracker + attach `mode=rfb` |
 | GUI control | partial | Memory + RFB attach; lease-gated screenshot/input REST |
 | REST session/hijack | partial production | Health, sessions, hijack, WS present |
-| **Ushell** | **dispatcher landed (PR9)** | `Shell/` CommandDispatcher + commands (Go oracle). **No** `UshellConnector` / session wiring yet (PR10). |
+| **Ushell** | **dispatcher + connector landed** | `Shell/` CommandDispatcher + commands (PR9); `UshellConnector` lifecycle + `ConnectorRegistry` type `ushell` (PR10). Full hosted session path still shares generic session create (not a separate CF DO). |
 | **Embedded session / proxy** | **core landed (WS8)** | `Embed/` hub + session + intercept outcomes + in-process clients + `MemoryUpstream`. Telnet **policy hooks** present; full IAC engine still partial. |
 | Offline codec conformance (Layer A) | production | `vectors.json` / `ConformanceVectorsTests` |
 | Live harness (Layer B) | scaffolded | `conformance/live/` schema + sample scenario |
@@ -126,7 +126,7 @@ Backend *deployment* matrix (orthogonal to language): FastAPI (Py server) · CF 
 | WebSocket client transport | Y | Y | Y | — | Y (browser) | — |
 | SSH gateway (accept → term WS) | Y | Y | S (FxSsh partial) | — | — | — |
 | Telnet gateway | Y | Y | S | — | — | — |
-| Shell / ushell connector type | Y | Y | — (PR10) | — | — | — |
+| Shell / ushell connector type | Y | Y | Y (`ushell` registry) | — | — | — |
 | PAM / LD_PRELOAD capture | Y (platform) | Y | — | — | — | — |
 
 ### 5. DeckMux (collaborative presence)
@@ -174,7 +174,7 @@ Protocol message types and FastAPI↔CF backend contract: `docs/protocol-matrix.
 | LineBuffer + ANSI shell I/O | Y | Y | Y | — | — | — |
 | Command dispatcher + suite | Y | Y | Y | — | — | — |
 | `py` sandbox | Y | S (stub) | S (stub) | — | — | — |
-| UshellConnector lifecycle | Y | Y | — (PR10) | — | — | — |
+| UshellConnector lifecycle | Y | Y | Y | — | — | — |
 | Session `connector_type=ushell` | Y (+ CF DO) | Y | — | — | — | — |
 
 ### 9. Auth / config / manager / MCP
@@ -330,7 +330,7 @@ No C# MCP binary.
 
 Port the **Go** ushell package (`packages/provide-uterm-go/shell`) to C# so standalone C# can host the same in-session shell connector and command surface as Go/Python (observable parity).
 
-**Already in C#:** full `Shell/` dispatcher + commands (PR9); LineBuffer + ANSI I/O. **Still open:** UshellConnector + session wiring (PR10). Platform-wide matrix (terminal/DeckMux/tunnel/etc.): § **Platform multi-language feature matrix** above.
+**Already in C#:** full `Shell/` dispatcher + commands (PR9); LineBuffer (Go echo/completed parity); `UshellConnector` (Start/Stop/Poll/HandleInput/Control/Snapshot/Analysis/Clear/SetMode/animation) + registry `ushell`. Platform-wide matrix: § **Platform multi-language feature matrix** above.
 
 **Language columns (inventory date: 2026-07-12):**
 
@@ -395,17 +395,17 @@ Legend for matrix: **Y** = implemented and product-usable · **S** = stub / part
 
 | Feature | Py | Go | C# | Rust | TS | Bun |
 |---------|:--:|:--:|:--:|:----:|:--:|:---:|
-| Start / Stop / IsConnected | Y | Y | — | — | — | — |
-| HandleInput (echo + dispatch on submit) | Y | Y | — | — | — | — |
-| PollMessages (pending term frames) | Y | Y | — | — | — | — |
-| Welcome / banner / worker hello frames | Y | Y | — | — | — | — |
-| HandleControl (flow pause/resume) | Y | Y | — | — | — | — |
-| Flow-pause backpressure | Y | Y | — | — | — | — |
-| AnimatedResult streaming (render/cast) | Y | Y | Y (dispatcher returns frames; connector play open) | — | — | — |
-| GetSnapshot | Y | Y | — | — | — | — |
-| GetAnalysis | Y | Y | — | — | — | — |
-| Clear / SetMode | Y | Y | — | — | — | — |
-| Concurrent-safe connector | asyncio | mutex | — | — | — | — |
+| Start / Stop / IsConnected | Y | Y | Y | — | — | — |
+| HandleInput (echo + dispatch on submit) | Y | Y | Y | — | — | — |
+| PollMessages (pending term frames) | Y | Y | Y | — | — | — |
+| Welcome / banner / worker hello frames | Y | Y | Y | — | — | — |
+| HandleControl (flow pause/resume) | Y | Y | Y | — | — | — |
+| Flow-pause backpressure | Y | Y | Y | — | — | — |
+| AnimatedResult streaming (render/cast) | Y | Y | Y | — | — | — |
+| GetSnapshot | Y | Y | Y | — | — | — |
+| GetAnalysis | Y | Y | Y | — | — | — |
+| Clear / SetMode | Y | Y | Y | — | — | — |
+| Concurrent-safe connector | asyncio | mutex | lock | — | — | — |
 
 #### 7.6 C# implementation checklist (Go oracle)
 
@@ -424,10 +424,10 @@ Checkable delivery items for the C# program (flip when landed + tested):
 - [x] `cast` (+ fps/loop)
 - [x] `py` stub matching Go strings
 - [x] HTTP helpers (`http.go`; frame builders deferred with connector)
-- [ ] **UshellConnector** lifecycle (input, poll, control, snapshot, analysis, flow, animation)
-- [ ] Wire `connector_type=ushell` on C# server/session path
-- [x] Unit tests ported from Go shell tests (dispatcher + command branches)
-- [ ] Layer B scenario(s): help, kv, fetch fixture, connector echo/dispatch
+- [x] **UshellConnector** lifecycle (input, poll, control, snapshot, analysis, flow, animation)
+- [x] Wire `connector_type=ushell` on C# connector registry (`ConnectorRegistry`); session create uses registry factories where configured
+- [x] Unit tests ported from Go shell tests (dispatcher + command branches + connector lifecycle)
+- [ ] Layer B scenario(s): help, kv, fetch fixture, connector echo/dispatch (deferred — scripted unit path is the gate)
 
 #### 7.7 Future languages (Rust / TS / Bun)
 
@@ -652,10 +652,10 @@ Each phase leaves a working system and adds its scenarios to **required CI for t
 - Deps: existing render/ANSI surfaces
 - Exit: Go-aligned unit tests for each command; exact help/error strings — **done** (`CommandDispatcher` + `UshellDispatcherTests`; coverlet ≥97%)
 
-### PR10 — UshellConnector lifecycle
-- Files: connector input/snapshot/analysis/flow/modes/welcome frames
+### PR10 — UshellConnector lifecycle *(landed)*
+- Files: `Shell/Connector.cs`, `Shell/Frame.cs`, Go-aligned `LineBuffer`, `ConnectorRegistry` `ushell`, `UshellConnectorTests`
 - Deps: PR9
-- Exit: connector black-box scenarios; wire as session connector type where server already lists shell sessions
+- Exit: connector unit tests on real type (Start/HandleInput/Poll/Control/Snapshot/Analysis); registry create — **done**
 
 ### PR11 — Embedded session/proxy core *(landed — core)*
 - Files: Py `embed/`, Go `embed/`, C# `Embed/` (+ tests); design matrix §11 / Workstream 8
@@ -676,7 +676,9 @@ Each phase leaves a working system and adds its scenarios to **required CI for t
 
 *Updated 2026-07-12: Workstream 7 ushell — multi-language feature matrix (Py/Go/C#/Rust/TS/Bun); checkable C# delivery list; Rust/TS/Bun absent in monorepo.*
 
-*Updated 2026-07-12: PR9 landed — C# `Shell/` dispatcher + commands (Go oracle); connector (PR10) still open.*
+*Updated 2026-07-12: PR9 landed — C# `Shell/` dispatcher + commands (Go oracle).*
+
+*Updated 2026-07-12: PR10 landed — C# `UshellConnector` + registry `ushell`; matrices/checklist flipped.*
 
 *Updated 2026-07-12: Platform multi-language feature matrix (terminal core, control channel, hub/hijack, transports, DeckMux, tunnel, GUI/RFB, ushell summary, auth/MCP, frontend) with Py/Go/C#/Rust/TS/Bun columns — same style as Workstream 7.*
 
