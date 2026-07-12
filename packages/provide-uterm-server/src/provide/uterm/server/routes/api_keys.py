@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Annotated, Any, cast
 from fastapi import APIRouter, Body, HTTPException, Path, Request
 
 from provide.uterm.server.audit import audit_event
+from provide.uterm.server.bridge.identity import canonical_tenant_id
 
 if TYPE_CHECKING:
     from provide.uterm.server.auth import Principal
@@ -40,7 +41,13 @@ def _tenant_scope(principal: Principal) -> str:
     tenant_id = getattr(principal, "tenant_id", None)
     if not isinstance(tenant_id, str):
         raise HTTPException(status_code=403, detail="tenant identity required for API key management")
-    return tenant_id
+    try:
+        canonical = canonical_tenant_id(tenant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail="tenant identity required for API key management") from exc
+    if canonical is None or canonical != tenant_id:
+        raise HTTPException(status_code=403, detail="tenant identity required for API key management")
+    return canonical
 
 
 def create_api_keys_router() -> APIRouter:

@@ -23,6 +23,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import APIRouter, HTTPException
+from hypothesis import given
+from hypothesis import strategies as st
 
 from provide.uterm.server.auth import Principal
 
@@ -1934,6 +1936,55 @@ class TestApiKeysRoutes:
         store.revoke_for_tenant.assert_not_called()
         store.list_keys.assert_not_called()
         store.revoke.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "tenant_id",
+        ["", " tenant", "tenant ", "tenant\nspoof", "租戶", "../tenant", "tenant/path", "a" * 129],
+    )
+    async def test_malformed_tenant_is_denied_before_any_store_call(self, tenant_id: str) -> None:
+        await self._assert_all_key_routes_reject_tenant(tenant_id)
+
+    @given(
+        st.one_of(
+            st.text(alphabet="\x00\n\r\t /\\", min_size=1, max_size=20),
+            st.text(alphabet="租戶é😀", min_size=1, max_size=20),
+            st.text(alphabet="a", min_size=129, max_size=140),
+        )
+    )
+    async def test_generated_malformed_tenant_is_denied_before_any_store_call(self, tenant_id: str) -> None:
+        await self._assert_all_key_routes_reject_tenant(tenant_id)
+
+    async def _assert_all_key_routes_reject_tenant(self, tenant_id: str) -> None:
+        authz = MagicMock()
+        authz.is_admin = AsyncMock(return_value=True)
+        store = MagicMock()
+        principal = SimpleNamespace(subject_id="adversarial-admin", tenant_id=tenant_id)
+        request = self._state(authz=authz, principal=principal, store=store)
+        operations = (
+            (_endpoint(self._router(), self._KEYS, "POST"), (request, {"name": "x", "scopes": ["admin"]})),
+            (_endpoint(self._router(), self._KEYS, "GET"), (request,)),
+            (_endpoint(self._router(), self._KEY, "DELETE"), (request, "key-id")),
+        )
+        for operation, arguments in operations:
+            with pytest.raises(HTTPException) as exc:
+                await operation(*arguments)
+            assert exc.value.status_code == 403
+            assert exc.value.detail == "tenant identity required for API key management"
+        store.create.assert_not_called()
+        store.list_keys_for_tenant.assert_not_called()
+        store.revoke_for_tenant.assert_not_called()
+
+    @pytest.mark.parametrize("canonical", [None, "normalized-different"])
+    def test_tenant_scope_rejects_nonidentical_canonical_result(self, canonical: str | None) -> None:
+        from provide.uterm.server.routes.api_keys import _tenant_scope
+
+        principal = Principal(subject_id="admin", tenant_id="tenant-input")
+        with (
+            patch("provide.uterm.server.routes.api_keys.canonical_tenant_id", return_value=canonical),
+            pytest.raises(HTTPException) as exc,
+        ):
+            _tenant_scope(principal)
+        assert exc.value.status_code == 403
 
     # ---- create_api_keys_router: structure ----------------------------------
 
