@@ -55,9 +55,9 @@ ready, then stops (real bind).
 cd packages/provide-uterm-csharp
 export DOTNET_ROOT="$(brew --prefix dotnet)/libexec"   # Homebrew layout
 make build-binaries
-./bin/Uterm --help
-./bin/Uterm server --host 127.0.0.1 --port 8780
-./bin/Uterm.Manager --help
+./bin/uterm --help
+./bin/uterm server --host 127.0.0.1 --port 8780
+./bin/uterm-manager --help
 make quality-gate   # build + test + coverage floor + binaries
 ```
 

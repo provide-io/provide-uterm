@@ -18,7 +18,7 @@ DOTNET ?= dotnet
 COVER_THRESHOLD ?= 97.0
 CONFIGURATION ?= Release
 
-.PHONY: build test cover build-binaries quality-gate interop-test conformance-test
+.PHONY: build test cover build-binaries quality-gate interop-test conformance-test prove-wss
 
 build:
 	$(DOTNET) build -c $(CONFIGURATION)
@@ -43,9 +43,13 @@ build-binaries:
 	@mkdir -p bin
 	$(DOTNET) publish cmd/Uterm/Uterm.csproj -c $(CONFIGURATION) -o bin --no-self-contained
 	$(DOTNET) publish cmd/Uterm.Manager/Uterm.Manager.csproj -c $(CONFIGURATION) -o bin --no-self-contained
-	@# Guard: MCP must not be present after publish (operator de-scope).
-	@test ! -e bin/Uterm.Mcp -a ! -e bin/Uterm.Mcp.dll
-	@echo "uterm + uterm-manager binaries under bin/ (MCP not shipped for C#)"
+	@# Guard: lowercase ship names (uterm / uterm-manager). On case-insensitive
+	@# macOS APFS, `test ! -e bin/Uterm` is false when bin/uterm exists, so we
+	@# check the directory listing for exact spellings instead.
+	@test -x bin/uterm -a -x bin/uterm-manager
+	@ls -1 bin | grep -E '^(Uterm|Uterm\.Manager|Uterm\.Mcp)$$' && \
+	  { echo "error: unexpected PascalCase/MCP binary in bin/"; exit 1; } || true
+	@echo "uterm + uterm-manager binaries under bin/ (lowercase; MCP not shipped)"
 
 quality-gate: build conformance-test test cover build-binaries
 	@echo "csharp quality gate passed"
@@ -57,3 +61,9 @@ interop-test:
 	else \
 	  echo "uv not found; interop-test skipped"; \
 	fi
+
+# Live WSS connect proof via shipped WebSocketTransport (not part of quality-gate).
+# Usage: make prove-wss URL=wss://host/path
+URL ?= wss://proving.warp.undef.games/r/warp/u/genesis/ws/terminal
+prove-wss:
+	$(DOTNET) run -c $(CONFIGURATION) --project ci/ProveWss/ProveWss.csproj -- $(URL)
