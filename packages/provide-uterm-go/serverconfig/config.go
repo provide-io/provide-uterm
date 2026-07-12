@@ -49,6 +49,9 @@ type AuthConfig struct {
 	ClockSkewSeconds       int      `json:"clock_skew_seconds" toml:"clock_skew_seconds"`
 	JWTRolesClaim          string   `json:"jwt_roles_claim" toml:"jwt_roles_claim"`
 	JWTScopesClaim         string   `json:"jwt_scopes_claim" toml:"jwt_scopes_claim"`
+	JWTTenantClaim         string   `json:"jwt_tenant_claim" toml:"jwt_tenant_claim"`
+	TenantHeader           string   `json:"tenant_header" toml:"tenant_header"`
+	TenantCookie           string   `json:"tenant_cookie" toml:"tenant_cookie"`
 	WorkerBearerToken      *string  `json:"worker_bearer_token" toml:"worker_bearer_token"`
 	APIKeysEnabled         bool     `json:"api_keys_enabled" toml:"api_keys_enabled"`
 	HeaderModeAcknowledged bool     `json:"header_mode_acknowledged" toml:"header_mode_acknowledged"`
@@ -87,6 +90,9 @@ func defaultAuthConfig() AuthConfig {
 		ClockSkewSeconds:                15,
 		JWTRolesClaim:                   "roles",
 		JWTScopesClaim:                  "scope",
+		JWTTenantClaim:                  "tenant_id",
+		TenantHeader:                    "x-uterm-tenant",
+		TenantCookie:                    "uterm_tenant",
 		TrustedProxyIPs:                 []string{},
 		IdentityProvider:                "local",
 		DelegateRoles:                   true,

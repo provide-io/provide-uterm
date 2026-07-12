@@ -206,6 +206,7 @@ func (s *Server) buildHandler() http.Handler {
 	s.registerSessionRoutes(mux)
 	s.registerApprovalRoutes(mux)
 	s.registerAPIKeyRoutes(mux)
+	s.registerGraphicalTargetRoutes(mux)
 	s.registerProfileRoutes(mux)
 	s.registerTunnelRoutes(mux)
 	s.registerSSERoutes(mux)
