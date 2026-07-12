@@ -24,6 +24,14 @@ def test_principal_instantiation():
     assert p.name == "alice"
 
 
+def test_principal_carries_canonical_tenant_identity() -> None:
+    from provide.uterm.server.bridge.identity import Principal
+
+    principal = Principal(subject_id="alice", tenant_id="tenant-a")
+
+    assert principal.tenant_id == "tenant-a"
+
+
 def test_identity_provider_protocol():
     """Verify IdentityProvider protocol structure."""
     from provide.uterm.server.bridge.identity import IdentityProvider, Principal

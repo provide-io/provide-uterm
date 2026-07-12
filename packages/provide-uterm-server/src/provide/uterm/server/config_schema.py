@@ -59,6 +59,9 @@ class AuthConfig(ServerBaseModel):
     clock_skew_seconds: int = 15
     jwt_roles_claim: str = "roles"
     jwt_scopes_claim: str = "scope"
+    jwt_tenant_claim: str = "tenant_id"
+    tenant_header: str = "x-uterm-tenant"
+    tenant_cookie: str = "uterm_tenant"
     worker_bearer_token: str | None = None
     api_keys_enabled: bool = False
     header_mode_acknowledged: bool = False

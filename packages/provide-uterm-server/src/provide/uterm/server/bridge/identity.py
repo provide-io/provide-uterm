@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
@@ -13,12 +14,24 @@ if TYPE_CHECKING:
     from starlette.requests import Request
     from starlette.websockets import WebSocket
 
+_TENANT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+
+
+def canonical_tenant_id(value: object | None) -> str | None:
+    """Validate an untrusted tenant identifier without coercing its type."""
+    if value is None:
+        return None
+    if not isinstance(value, str) or not _TENANT_ID.fullmatch(value):
+        raise ValueError("tenant_id must be a safe identifier")
+    return value
+
 
 @dataclass(slots=True)
 class Principal:
     """Resolved browser or API principal."""
 
     subject_id: str
+    tenant_id: str | None = None
     roles: frozenset[str] = frozenset()
     scopes: frozenset[str] = frozenset()
     claims: dict[str, Any] = field(default_factory=dict)

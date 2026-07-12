@@ -25,7 +25,7 @@ from provide.uterm.server.auth_webhook import (
     WebhookIdentityProvider,
     _BoundedReplayCache,  # noqa: F401  # re-exported for legacy server.auth import surface
 )
-from provide.uterm.server.bridge.identity import IdentityProvider, Principal
+from provide.uterm.server.bridge.identity import IdentityProvider, Principal, canonical_tenant_id
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -268,6 +268,7 @@ class LocalIdentityProvider(IdentityProvider):
             raise ValueError("sub claim is required")
         return Principal(
             subject_id=subject,
+            tenant_id=canonical_tenant_id(claims.get(self.auth.jwt_tenant_claim)),
             roles=self._roles_from_claims(claims),
             scopes=self._scopes_from_claims(claims),
             claims=claims,
@@ -284,7 +285,13 @@ class LocalIdentityProvider(IdentityProvider):
         )
         role_raw = headers.get(self.auth.role_header) or self._cookie_value(cookies, self.auth.role_cookie) or ""
         roles = _filter_known_roles([role_raw])
-        return Principal(subject_id=str(principal), roles=roles, scopes=frozenset())
+        tenant = headers.get(self.auth.tenant_header) or self._cookie_value(cookies, self.auth.tenant_cookie)
+        return Principal(
+            subject_id=str(principal),
+            tenant_id=canonical_tenant_id(tenant),
+            roles=roles,
+            scopes=frozenset(),
+        )
 
     def _principal_from_api_key(self, headers: Any) -> Principal | None:
         if not self.auth.api_keys_enabled:

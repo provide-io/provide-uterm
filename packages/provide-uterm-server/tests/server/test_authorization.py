@@ -42,6 +42,40 @@ def _session(
 
 
 class TestCapabilitiesFor:
+    @pytest.mark.parametrize(
+        ("role", "expected"),
+        [
+            ("viewer", {"graphical.target.read", "graphical.session.attach"}),
+            ("operator", {"graphical.target.read", "graphical.target.manage", "graphical.session.attach"}),
+            ("admin", {"graphical.target.read", "graphical.target.manage", "graphical.session.attach"}),
+        ],
+    )
+    async def test_graphical_capabilities_are_mapped_to_roles(
+        self, authz: AuthorizationService, role: str, expected: set[str]
+    ) -> None:
+        principal = Principal(subject_id="user", tenant_id="tenant-a", roles=frozenset({role}))
+
+        assert await authz.capabilities_for(principal) >= expected
+
+    @pytest.mark.parametrize(
+        ("principal_tenant", "target_tenant", "allowed"),
+        [("tenant-a", "tenant-a", True), ("tenant-a", "tenant-b", False), (None, "tenant-a", False)],
+    )
+    async def test_graphical_session_attach_requires_tenant_equality(
+        self,
+        authz: AuthorizationService,
+        principal_tenant: str | None,
+        target_tenant: str,
+        allowed: bool,
+    ) -> None:
+        principal = Principal(
+            subject_id="admin",
+            tenant_id=principal_tenant,
+            roles=frozenset({"admin"}),
+        )
+
+        assert await authz.can_attach_graphical_session(principal, target_tenant) is allowed
+
     async def test_viewer_has_read_caps(self, authz: AuthorizationService) -> None:
         p = _principal(roles=["viewer"])
         caps = await authz.capabilities_for(p)
