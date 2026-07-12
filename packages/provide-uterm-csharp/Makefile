@@ -33,21 +33,34 @@ build:
 # Filters use class-name prefixes from --list-tests (no catch-all ~Term/~Coverage).
 TEST_BATCH_1 := FullyQualifiedName~AnsiColors|FullyQualifiedName~ChannelsLineEditor|FullyQualifiedName~Conformance|FullyQualifiedName~CtrlMsg|FullyQualifiedName~Defaults|FullyQualifiedName~Filters|FullyQualifiedName~Frames|FullyQualifiedName~Redaction|FullyQualifiedName~Sanitizer|FullyQualifiedName~Screen|FullyQualifiedName~Vt|FullyQualifiedName~DeckMux|FullyQualifiedName~ServerRecordingHttp|FullyQualifiedName~ControlChannel
 TEST_BATCH_2 := FullyQualifiedName~Hub|FullyQualifiedName~ServerIntegration|FullyQualifiedName~ServerConfig|FullyQualifiedName~ClientDefaults|FullyQualifiedName~Session|FullyQualifiedName~TermSession|FullyQualifiedName~ModuleSurface|FullyQualifiedName~SmokeSurface|FullyQualifiedName~MoreSurface
-TEST_BATCH_3 := FullyQualifiedName~Cli|FullyQualifiedName~Embed|FullyQualifiedName~Gateway|FullyQualifiedName~Gui|FullyQualifiedName~Interop|FullyQualifiedName~LiveParity|FullyQualifiedName~PtyAndUnicode|FullyQualifiedName~Shell|FullyQualifiedName~Tunnel|FullyQualifiedName~Emulator|FullyQualifiedName~KnownHosts|FullyQualifiedName~SshPolicy
+# Native-heavy classes get their own process (batch 3 crashed Ubuntu after ~18
+# tests when Cli+Pty+Gateway shared one host).
+TEST_BATCH_3A := FullyQualifiedName~Cli
+TEST_BATCH_3B := FullyQualifiedName~Embed|FullyQualifiedName~Emulator|FullyQualifiedName~Gui|FullyQualifiedName~Interop
+TEST_BATCH_3C := FullyQualifiedName~Gateway|FullyQualifiedName~Shell|FullyQualifiedName~Tunnel|FullyQualifiedName~KnownHosts|FullyQualifiedName~SshPolicy
+TEST_BATCH_3D := FullyQualifiedName~PtyAndUnicode|FullyQualifiedName~LiveParity
 TEST_BATCH_4 := FullyQualifiedName~Coverage|FullyQualifiedName~DeepCoverage|FullyQualifiedName~HighCoverage|FullyQualifiedName~Over90|FullyQualifiedName~HubAndCli
 
 XUNIT_ARGS := -- xUnit.ParallelizeAssembly=false xUnit.ParallelizeTestCollections=false xUnit.MaxParallelThreads=1
 
+# One process per filter; retry once on host crash.
 define DOTNET_TEST_BATCH
 	@echo "=== test batch: $(1) ==="
-	@$(DOTNET) test -c $(CONFIGURATION) --no-build --filter "$(2)" $(XUNIT_ARGS) \
-	  || $(DOTNET) test -c $(CONFIGURATION) --filter "$(2)" $(XUNIT_ARGS)
+	@$(DOTNET) test -c $(CONFIGURATION) --no-build --filter "$(2)" $(XUNIT_ARGS); \
+	ec=$$?; \
+	if [ $$ec -ne 0 ]; then \
+	  echo "batch $(1) retry (ec=$$ec)…"; \
+	  $(DOTNET) test -c $(CONFIGURATION) --filter "$(2)" $(XUNIT_ARGS); \
+	fi
 endef
 
 test:
 	$(call DOTNET_TEST_BATCH,1 library,$(TEST_BATCH_1))
 	$(call DOTNET_TEST_BATCH,2 server/hub,$(TEST_BATCH_2))
-	$(call DOTNET_TEST_BATCH,3 native/cli,$(TEST_BATCH_3))
+	$(call DOTNET_TEST_BATCH,3a cli,$(TEST_BATCH_3A))
+	$(call DOTNET_TEST_BATCH,3b embed/gui,$(TEST_BATCH_3B))
+	$(call DOTNET_TEST_BATCH,3c gateway/shell/tunnel,$(TEST_BATCH_3C))
+	$(call DOTNET_TEST_BATCH,3d pty/live,$(TEST_BATCH_3D))
 	$(call DOTNET_TEST_BATCH,4 coverage-boost,$(TEST_BATCH_4))
 
 # AC3: byte-exact Python differential driver (mirrors Go conformance/conformance_test.go).
@@ -66,7 +79,10 @@ cover:
 	@rm -rf coverage-out
 	$(call DOTNET_COVER_BATCH,1,$(TEST_BATCH_1))
 	$(call DOTNET_COVER_BATCH,2,$(TEST_BATCH_2))
-	$(call DOTNET_COVER_BATCH,3,$(TEST_BATCH_3))
+	$(call DOTNET_COVER_BATCH,3a,$(TEST_BATCH_3A))
+	$(call DOTNET_COVER_BATCH,3b,$(TEST_BATCH_3B))
+	$(call DOTNET_COVER_BATCH,3c,$(TEST_BATCH_3C))
+	$(call DOTNET_COVER_BATCH,3d,$(TEST_BATCH_3D))
 	$(call DOTNET_COVER_BATCH,4,$(TEST_BATCH_4))
 	@python3 ci/coverage_gate.py coverage-out $(COVER_THRESHOLD)
 

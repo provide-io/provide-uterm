@@ -1,7 +1,7 @@
 # CF hibernation + resume UX / settings
 
-**Status:** as-built inventory + product decisions  
-**Date:** 2026-07-12  
+**Status:** as-built inventory + product decisions
+**Date:** 2026-07-12
 **Related:** [cf-do-architecture.md](../../packages/provide-uterm-cloudflare/docs/cf-do-architecture.md), frontend `hijack-websocket.ts` / `session-element.ts`
 
 ## Does hibernation “work”?
@@ -17,12 +17,12 @@
 | Browser **session resume** via one-time token | Unit (`test_cf_resume.py`) + e2e markers (`test_e2e_ws.py`, needs `real_cf`) | Only if `real_cf` env |
 | Frontend “Waking…” + reconnect spinner | Vitest frontend tests | Browser-local |
 
-**Honest bar:** hibernate *logic* is designed and unit-tested against fakes.  
+**Honest bar:** hibernate *logic* is designed and unit-tested against fakes.
 **Full proof** needs a `real_cf` (or miniflare/workerd) run that:
 
-1. Opens browser WSS → DO.  
-2. Forces DO eviction / idle hibernation (or waits for CF idle).  
-3. Sends a frame or reconnects.  
+1. Opens browser WSS → DO.
+2. Forces DO eviction / idle hibernation (or waits for CF idle).
+3. Sends a frame or reconnects.
 4. Asserts worker still routes, snapshot/hello restore, optional `resumed: true`.
 
 That live step is **not** green in default CI (marked / optional). To determine “it works” for production: run `real_cf` e2e or a manual wrangler session.
@@ -47,7 +47,7 @@ flowchart TB
   end
 ```
 
-- **Hibernation:** user may not reconnect; DO wakes in place. Frontend may show **Waking…** while `worker_online` is false.  
+- **Hibernation:** user may not reconnect; DO wakes in place. Frontend may show **Waking…** while `worker_online` is false.
 - **Resume token:** used when the **browser** socket dies (network blip, tab sleep, proxy timeout). Independent of DO hibernate, but shares UX (“getting session back”).
 
 ## What the UI does today
@@ -79,8 +79,8 @@ Optional subtle toast: “Session restored (role: operator)” when `resumed`.
 
 ### Visual options
 
-1. **Status bar only** (minimal) — extend `_updateStatus()` / `setStatus`.  
-2. **LED pulse** — reuse `data-led-indicator` with a third class `resuming`.  
+1. **Status bar only** (minimal) — extend `_updateStatus()` / `setStatus`.
+2. **LED pulse** — reuse `data-led-indicator` with a third class `resuming`.
 3. **Terminal banner** — one-line notice (noisy; prefer status bar).
 
 ### Distinguish DO wake vs token resume
@@ -124,23 +124,23 @@ Wire: in `session-element` hello handler, if `msg.resumed`, `setStatus("live", "
 
 ## Acceptance checklist (to *know* it works)
 
-1. **Unit (CI always):** resume token mint → reconnect → `resumed: true` (`test_cf_resume`).  
-2. **Frontend unit:** hello with `resumed` shows indicator (add if implementing UI).  
-3. **real_cf e2e:** optional job or manual wrangler:  
-   - connect → note resume_token → kill WS → reconnect + resume → term data flows.  
-4. **Hibernate-specific (manual / staging):** idle DO until eviction (or force), keep WS open if CF allows, send keystroke, assert no permanent Offline.  
+1. **Unit (CI always):** resume token mint → reconnect → `resumed: true` (`test_cf_resume`).
+2. **Frontend unit:** hello with `resumed` shows indicator (add if implementing UI).
+3. **real_cf e2e:** optional job or manual wrangler:
+   - connect → note resume_token → kill WS → reconnect + resume → term data flows.
+4. **Hibernate-specific (manual / staging):** idle DO until eviction (or force), keep WS open if CF allows, send keystroke, assert no permanent Offline.
 5. **Config:** `RESUME_TTL_S` respected in create_resume_token TTL.
 
 ## Suggested implementation order
 
-1. **Config:** add `resume_ttl_s` (+ optional `resume_enabled`) to `CloudflareConfig.from_env`.  
-2. **UI:** honor `hello.resumed` → “Resumed” status flash.  
-3. **Client config:** `showResumeIndicator` / `persistResumeToken`.  
-4. **Proof:** enable or document `real_cf` e2e in CI nightly; document manual hibernate check.  
+1. **Config:** add `resume_ttl_s` (+ optional `resume_enabled`) to `CloudflareConfig.from_env`.
+2. **UI:** honor `hello.resumed` → “Resumed” status flash.
+3. **Client config:** `showResumeIndicator` / `persistResumeToken`.
+4. **Proof:** enable or document `real_cf` e2e in CI nightly; document manual hibernate check.
 5. **Docs:** link this file from CF README + operations runbook.
 
 ## Out of scope
 
-- Changing CF billing / always-on DOs.  
-- Faking hibernation without workerd/CF (unit mocks already cover code paths).  
+- Changing CF billing / always-on DOs.
+- Faking hibernation without workerd/CF (unit mocks already cover code paths).
 - Full browser redesign beyond status chrome.
