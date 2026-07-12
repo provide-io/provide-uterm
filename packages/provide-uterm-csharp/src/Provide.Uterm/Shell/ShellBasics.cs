@@ -8,8 +8,7 @@ using System.Text;
 namespace Provide.Uterm.Shell;
 
 /// <summary>
-/// Basic ushell line buffer + ANSI output helpers.
-/// Port of packages/provide-uterm-go/shell (linebuffer + output surface).
+/// Ushell keystroke line buffer. Port of packages/provide-uterm-go/shell/linebuffer.go.
 /// </summary>
 public sealed class LineBuffer
 {
@@ -58,7 +57,6 @@ public sealed class LineBuffer
 
             if (ch is '\r' or '\n')
             {
-                // swallow CRLF pair
                 if (ch == '\r' && i + 1 < chunk.Length && chunk[i + 1] == '\n')
                 {
                     i++;
@@ -112,86 +110,4 @@ public sealed class LineBuffer
     }
 
     public void Clear() => _buf.Clear();
-}
-
-public static class ShellOutput
-{
-    public const string Reset = "\x1b[0m";
-    public const string Bold = "\x1b[1m";
-    public const string Red = "\x1b[31m";
-    public const string Green = "\x1b[32m";
-    public const string Yellow = "\x1b[33m";
-    public const string Cyan = "\x1b[36m";
-    public const string Prompt = Cyan + "ushell> " + Reset;
-    public const string Banner = Bold + "provide-uterm ushell" + Reset + "\r\n";
-
-    public static string ErrorMsg(string msg) => Red + "error: " + msg + Reset + "\r\n";
-    public static string InfoMsg(string msg) => Cyan + msg + Reset + "\r\n";
-    public static string SuccessMsg(string msg) => Green + msg + Reset + "\r\n";
-    public static string Heading(string msg) => Bold + msg + Reset + "\r\n";
-
-    public static string FmtKv(IReadOnlyDictionary<string, string> kv)
-    {
-        var sb = new StringBuilder();
-        foreach (var (k, v) in kv)
-        {
-            sb.Append(k).Append('=').Append(v).Append("\r\n");
-        }
-
-        return sb.ToString();
-    }
-}
-
-public sealed class CommandResult
-{
-    public bool Ok { get; set; } = true;
-    public string Output { get; set; } = "";
-    public string Error { get; set; } = "";
-}
-
-public sealed class CommandDispatcher
-{
-    private readonly Dictionary<string, Func<string[], CommandResult>> _commands = new(StringComparer.OrdinalIgnoreCase);
-
-    public CommandDispatcher()
-    {
-        Register("help", _ => new CommandResult
-        {
-            Output = ShellOutput.Heading("commands") + string.Join("\r\n", _commands.Keys.OrderBy(k => k)) + "\r\n",
-        });
-        Register("clear", _ => new CommandResult { Output = "\x1b[2J\x1b[H" });
-        Register("env", _ =>
-        {
-            var kv = Environment.GetEnvironmentVariables()
-                .Cast<System.Collections.DictionaryEntry>()
-                .Take(20)
-                .ToDictionary(e => e.Key?.ToString() ?? "", e => e.Value?.ToString() ?? "");
-            return new CommandResult { Output = ShellOutput.FmtKv(kv) };
-        });
-    }
-
-    public void Register(string name, Func<string[], CommandResult> handler) => _commands[name] = handler;
-
-    public CommandResult Dispatch(string line)
-    {
-        var trimmed = line.Trim();
-        if (trimmed.Length == 0)
-        {
-            return new CommandResult();
-        }
-
-        var parts = trimmed.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        var name = parts[0];
-        var args = parts.Skip(1).ToArray();
-        if (!_commands.TryGetValue(name, out var handler))
-        {
-            return new CommandResult
-            {
-                Ok = false,
-                Error = ShellOutput.ErrorMsg($"{name}: unknown command"),
-            };
-        }
-
-        return handler(args);
-    }
 }
