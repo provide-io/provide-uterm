@@ -136,34 +136,127 @@ No C# MCP binary.
 
 Port the **Go** ushell package (`packages/provide-uterm-go/shell`) to C# so standalone C# can host the same in-session shell connector and command surface as Go/Python (observable parity).
 
-**Already in C# (partial):** `Shell/ShellBasics.cs` — `LineBuffer` keystroke protocol + ANSI output/format helpers (linebuffer + output surface only).
+**Already in C# (partial):** `Shell/ShellBasics.cs` — `LineBuffer` keystroke protocol + ANSI output/format helpers, plus a **toy** `CommandDispatcher` (`help`/`clear`/`env` only — not product parity).
 
-**Missing in C# (required for parity):**
+**Language columns (inventory date: 2026-07-12):**
 
-| Surface | Go reference | C# target |
-|---|---|---|
-| Types / `Result` | `types.go` | Shared result frames |
-| Context / interfaces | `context.go` | Storage, session list hooks |
-| Command dispatcher | `dispatcher.go` | Case-insensitive routing, exact error/usage strings |
-| help / clear / sessions / env | `help.go`, dispatcher | Same names + help text |
-| kv | `cmd_kv.go` | In-memory / bound store |
-| fetch | `cmd_fetch.go` | HttpClient; http/https only |
-| storage | `cmd_storage.go` | Bound filesystem policy |
-| render | `cmd_render.go` | Image → ANSI frames via existing render port |
-| cast | `cmd_cast.go` | Asciicast v2 fetch + replay frames |
-| HTTP helpers | `http.go` | Shared fetch client |
-| Frame builders | `frame.go` | Term / WorkerHello |
-| **UshellConnector** | `connector.go` | SessionConnector lifecycle: input, snapshots, analysis, flow control, modes, animation streaming, welcome frames |
+| Lang | Package / location | Status |
+|------|-------------------|--------|
+| **Py** | `packages/provide-uterm/.../shell/` (+ CF `do/ushell`) | Full reference + Python `py` sandbox |
+| **Go** | `packages/provide-uterm-go/shell/` | Full portable port (~4k LOC w/ tests); `py` stub |
+| **C#** | `packages/provide-uterm-csharp/.../Shell/ShellBasics.cs` | Linebuffer + basic output + stub dispatcher |
+| **Rust** | — | **Not present** in monorepo |
+| **TS** | — | **Not present** (frontend is xterm UI only; no ushell package) |
+| **Bun** | — | **Not present** (would share a TS package if one is added) |
+
+Legend for matrix: **Y** = implemented and product-usable · **S** = stub / partial · **—** = absent · **N/A** = not applicable by design
+
+#### 7.1 Stack / packaging
+
+| Feature | Py | Go | C# | Rust | TS | Bun |
+|---------|:--:|:--:|:--:|:----:|:--:|:---:|
+| Dedicated ushell package/module | Y | Y | S | — | — | — |
+| Unit / connector tests | Y | Y | S | — | — | — |
+| CF DO / server session wiring (`ushell` connector type) | Y | Y | — | — | — | — |
+| Standalone REPL entry (`__main__` / CLI) | Y | via server | — | — | — | — |
+
+#### 7.2 Line editor + ANSI I/O
+
+| Feature | Py | Go | C# | Rust | TS | Bun |
+|---------|:--:|:--:|:--:|:----:|:--:|:---:|
+| LineBuffer (CR/LF submit, BS/DEL, ESC/CSI swallow, max len) | Y | Y | Y | — | — | — |
+| Ctrl-C clear / Ctrl-D EOF semantics | Y | Y | S | — | — | — |
+| ANSI prompt / banner / Error/Info/Success/Heading | Y | Y | Y | — | — | — |
+| FmtKV / FmtTable (Go/Python-aligned) | Y | Y | S | — | — | — |
+| Exact help text / per-command `help <cmd>` | Y | Y | — | — | — | — |
+
+#### 7.3 Commands (dispatcher)
+
+| Command | Py | Go | C# | Rust | TS | Bun |
+|---------|:--:|:--:|:--:|:----:|:--:|:---:|
+| `help` / `help <cmd>` | Y | Y | S | — | — | — |
+| `clear` | Y | Y | S | — | — | — |
+| `exit` / `quit` / EOF | Y | Y | — | — | — | — |
+| `py <expr>` | Y (sandbox) | S (unavailable stub) | — | — | — | — |
+| `sessions` / `sessions kill` | Y | Y | — | — | — | — |
+| `kv` list/get/set/delete | Y | Y | — | — | — | — |
+| `fetch` HTTP(S) | Y | Y | — | — | — | — |
+| `storage` list/get | Y | Y | — | — | — | — |
+| `env` (ushell context keys) | Y | Y | S (OS env dump ≠ contract) | — | — | — |
+| `render` image→ANSI (+ animation) | Y | Y | — | — | — | — |
+| `cast` asciicast v2 replay | Y | Y | — | — | — | — |
+| Unknown-command error frame | Y | Y | S | — | — | — |
+| Injectable context (KV/storage/list sessions) | Y | Y | — | — | — | — |
+
+#### 7.4 `py` / sandbox
+
+| Feature | Py | Go | C# | Rust | TS | Bun |
+|---------|:--:|:--:|:--:|:----:|:--:|:---:|
+| Restricted eval/exec sandbox | Y | — | — | — | — | — |
+| Session-persistent namespace | Y | — | — | — | — | — |
+| Portable stub (`usage` + unavailable message) | N/A | Y | — (required) | — | — | — |
+| Capability tag `ushell.py` | `python` | `stub` | `stub` (target) | — | — | — |
+
+#### 7.5 UshellConnector (SessionConnector)
+
+| Feature | Py | Go | C# | Rust | TS | Bun |
+|---------|:--:|:--:|:--:|:----:|:--:|:---:|
+| Start / Stop / IsConnected | Y | Y | — | — | — | — |
+| HandleInput (echo + dispatch on submit) | Y | Y | — | — | — | — |
+| PollMessages (pending term frames) | Y | Y | — | — | — | — |
+| Welcome / banner / worker hello frames | Y | Y | — | — | — | — |
+| HandleControl (flow pause/resume) | Y | Y | — | — | — | — |
+| Flow-pause backpressure | Y | Y | — | — | — | — |
+| AnimatedResult streaming (render/cast) | Y | Y | — | — | — | — |
+| GetSnapshot | Y | Y | — | — | — | — |
+| GetAnalysis | Y | Y | — | — | — | — |
+| Clear / SetMode | Y | Y | — | — | — | — |
+| Concurrent-safe connector | asyncio | mutex | — | — | — | — |
+
+#### 7.6 C# implementation checklist (Go oracle)
+
+Checkable delivery items for the C# program (flip when landed + tested):
+
+- [ ] Types / `Result` + animated result (`types.go`)
+- [ ] Context / binding interfaces (`context.go`)
+- [ ] Dispatcher routing + exact error/usage strings (`dispatcher.go`)
+- [ ] Full `help` / `help <cmd>` text (`help.go`)
+- [ ] `clear`, `exit`/`quit`, `env` (context semantics)
+- [ ] `sessions` / `sessions kill`
+- [ ] `kv` list/get/set/delete
+- [ ] `fetch` (http/https only, size/time limits)
+- [ ] `storage` list/get
+- [ ] `render` (+ animation frames)
+- [ ] `cast` (+ fps/loop)
+- [ ] `py` stub matching Go strings
+- [ ] HTTP helpers + frame builders (`http.go`, `frame.go`)
+- [ ] **UshellConnector** lifecycle (input, poll, control, snapshot, analysis, flow, animation)
+- [ ] Wire `connector_type=ushell` on C# server/session path
+- [ ] Unit tests ported from Go shell tests
+- [ ] Layer B scenario(s): help, kv, fetch fixture, connector echo/dispatch
+
+#### 7.7 Future languages (Rust / TS / Bun)
+
+Not in this C# program’s critical path. If added later:
+
+| Target | Suggested approach |
+|--------|-------------------|
+| **Rust** | New crate mirroring Go `shell/` API; `py` stub; connector trait |
+| **TypeScript** | Shared package (e.g. `packages/provide-uterm-ushell-ts`); Node 20+ |
+| **Bun** | Consume same TS package; Bun-specific only if fetch/fs differ — prefer one implementation |
+
+Do not invent language-specific command sets; black-box scenarios stay shared.
 
 **`py` command policy (match Go, not Python implementation identity):**
 
 - Python: restricted eval/exec sandbox (`commands/py.py` + `_sandbox.py`).
 - Go: **stub** — empty arg → `usage: py <expr>`; otherwise `py: unavailable in the Go build (Python sandbox not ported)` (`cmd_py.go`).
-- C#: **same stub strings and routing** so black-box scenarios agree with Go. Do **not** embed CPython or ship a C# “Python-like” REPL. Capability tag if needed: `ushell.py: python` vs `ushell.py: stub` (go|csharp).
+- C# / Rust / TS / Bun: **same stub policy** (wording may say “this build” instead of “Go build” if strings are generalized in a future cross-lang polish — until then C# copies Go strings).
+- Do **not** embed CPython / Deno Python / etc. Capability: `ushell.py: python` vs `ushell.py: stub`.
 
-**Oracle:** Go for all portable commands and connector I/O; Python only for codec/ANSI where Layer A already applies. Parity scenarios: help text, kv round-trip, fetch against httptest fixture, cast replay event sequence, connector echo/dispatch, flow-pause backpressure, snapshot shape.
+**Oracle:** Go for portable commands and connector I/O; Python for codec/ANSI Layer A and for `py` *when* testing the sandbox. Parity scenarios: help text, kv round-trip, fetch against httptest fixture, cast replay event sequence, connector echo/dispatch, flow-pause backpressure, snapshot shape.
 
-**Completion:** unit tests ported from Go shell tests; connector black-box scenario in Layer B; residual policy only for true network arms of fetch/cast if needed.
+**Completion (C#):** checklist §7.6 green; connector black-box in Layer B; residual policy only for true network arms of fetch/cast if needed.
 
 ## Security Requirements
 
@@ -335,4 +428,4 @@ Each phase leaves a working system and adds its scenarios to **required CI for t
 
 *Revised after multi-agent design review (architecture, parity gap, security/CI). Review notes: `docs/superpowers/specs/2026-07-11-csharp-live-parity-design.REVIEW.md`.*
 
-*Updated 2026-07-12: Workstream 7 ushell — Go has full port; C# only ShellBasics; `py` stub policy matches Go.*
+*Updated 2026-07-12: Workstream 7 ushell — multi-language feature matrix (Py/Go/C#/Rust/TS/Bun); checkable C# delivery list; Rust/TS/Bun absent in monorepo.*
