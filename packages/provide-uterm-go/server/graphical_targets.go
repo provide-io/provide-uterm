@@ -48,23 +48,28 @@ func (s TargetScope) permits(tenant *string) bool {
 }
 
 type GraphicalTargetRegistry struct {
-	static    map[string]serverconfig.GraphicalTargetDefinition
-	engine    cp.Engine
-	owns      bool
-	mu        sync.Mutex
-	active    int
-	closing   bool
-	closed    bool
-	drain     chan struct{}
-	closeDone chan struct{}
-	closeErr  error
+	static       map[string]serverconfig.GraphicalTargetDefinition
+	engine       cp.Engine
+	owns         bool
+	mu           sync.Mutex
+	active       int
+	closing      bool
+	closed       bool
+	drain        chan struct{}
+	closeAttempt *graphicalCloseAttempt
+}
+
+type graphicalCloseAttempt struct {
+	done    chan struct{}
+	err     error
+	waiters int
 }
 
 func NewGraphicalTargetRegistry(static []serverconfig.GraphicalTargetDefinition, engine cp.Engine, owns bool) (*GraphicalTargetRegistry, error) {
 	if engine == nil {
 		return nil, errors.New("graphical target control plane is required")
 	}
-	r := &GraphicalTargetRegistry{static: make(map[string]serverconfig.GraphicalTargetDefinition, len(static)), engine: engine, owns: owns, drain: make(chan struct{}), closeDone: make(chan struct{})}
+	r := &GraphicalTargetRegistry{static: make(map[string]serverconfig.GraphicalTargetDefinition, len(static)), engine: engine, owns: owns, drain: make(chan struct{})}
 	for _, target := range static {
 		if err := target.Validate(); err != nil {
 			return nil, errors.New("invalid static graphical target")
@@ -337,39 +342,50 @@ func runGraphicalTx[T any](ctx context.Context, engine cp.Engine, op func(cp.Gra
 func (r *GraphicalTargetRegistry) Close(ctx context.Context) error {
 	r.mu.Lock()
 	if r.closed {
-		err := r.closeErr
 		r.mu.Unlock()
-		return err
+		return nil
 	}
 	if !r.closing {
 		r.closing = true
+		r.closeAttempt = &graphicalCloseAttempt{done: make(chan struct{})}
 		if r.active == 0 {
-			close(r.drain)
+			select {
+			case <-r.drain:
+			default:
+				close(r.drain)
+			}
 		}
-		go r.finishClose()
+		go r.finishClose(r.closeAttempt)
 	}
-	done := r.closeDone
+	attempt := r.closeAttempt
+	attempt.waiters++
 	r.mu.Unlock()
+	select {
+	case <-attempt.done:
+		return attempt.err
+	default:
+	}
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-done:
-		r.mu.Lock()
-		defer r.mu.Unlock()
-		return r.closeErr
+	case <-attempt.done:
+		return attempt.err
 	}
 }
-func (r *GraphicalTargetRegistry) finishClose() {
+func (r *GraphicalTargetRegistry) finishClose(attempt *graphicalCloseAttempt) {
 	<-r.drain
 	var err error
 	if r.owns {
 		err = r.engine.Close(context.Background())
 	}
 	r.mu.Lock()
-	r.closeErr = err
-	r.closed = true
+	attempt.err = err
+	r.closed = err == nil
 	r.closing = false
-	close(r.closeDone)
+	if r.closeAttempt == attempt {
+		r.closeAttempt = nil
+	}
+	close(attempt.done)
 	r.mu.Unlock()
 }
 
