@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"unicode/utf8"
 
 	cp "github.com/provide-io/provide-uterm/packages/provide-uterm-go/controlplane"
 )
@@ -77,6 +78,9 @@ func textJSON(raw any, targetID, field string) (string, error) {
 	text, ok := raw.(string)
 	if !ok {
 		return "", cp.DataError(fmt.Sprintf("graphical target %q has invalid %s: stored value is not text", targetID, field))
+	}
+	if !utf8.ValidString(text) {
+		return "", cp.DataError(fmt.Sprintf("graphical target %q has invalid %s: stored text is not valid UTF-8", targetID, field))
 	}
 	return text, nil
 }

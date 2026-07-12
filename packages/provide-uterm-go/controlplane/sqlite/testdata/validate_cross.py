@@ -21,6 +21,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from provide.uterm.control.plane import ControlPlaneConfig
+from provide.uterm.control.plane.graphical_target import GraphicalTargetRecord
 from provide.uterm.control.plane.sqlite import SqliteControlPlane
 
 
@@ -32,6 +33,7 @@ async def read_all(db_path: str, expected: dict) -> dict:
     tokens = plane.token_store(tx)
     approvals = plane.approval_store(tx)
     leases = plane.lease_store(tx)
+    graphical_targets = plane.graphical_target_store(tx)
 
     out: dict = {"sessions": [], "session_tokens": [], "resume_tokens": [], "approvals": [], "leases": []}
     for s in expected["sessions"]:
@@ -49,6 +51,11 @@ async def read_all(db_path: str, expected: dict) -> dict:
     for lease in expected["leases"]:
         rec = await leases.get_lease(lease["session_id"])
         out["leases"].append(asdict(rec))
+    if "graphical_targets" in expected:
+        out["graphical_targets"] = []
+        for target in expected["graphical_targets"]:
+            rec = await graphical_targets.get_graphical_target(target["target_id"])
+            out["graphical_targets"].append(json.loads(json.dumps(asdict(rec))))
     await tx.rollback()
 
     head = await plane.get_audit_head()
@@ -57,7 +64,28 @@ async def read_all(db_path: str, expected: dict) -> dict:
     return out
 
 
+async def create_target_db(db_path: str, expected: dict) -> None:
+    plane = SqliteControlPlane(ControlPlaneConfig(database_url=db_path))
+    await plane.migrate()
+    tx = await plane.begin()
+    store = plane.graphical_target_store(tx)
+    for target in expected["graphical_targets"]:
+        fields = target.copy()
+        fields["allowed_vm_patterns"] = tuple(target["allowed_vm_patterns"])
+        fields["allowed_cidrs"] = tuple(target["allowed_cidrs"])
+        fields["audit_labels"] = tuple(tuple(pair) for pair in target["audit_labels"])
+        await store.put_graphical_target(GraphicalTargetRecord(**fields))
+    await tx.commit()
+    await plane.close()
+
+
 def main() -> None:
+    if sys.argv[1] == "--create":
+        db_path = sys.argv[2]
+        expected = json.loads(Path(sys.argv[3]).read_text())
+        asyncio.run(create_target_db(db_path, expected))
+        print("CROSS_COMPAT_CREATED")
+        return
     db_path = sys.argv[1]
     expected = json.loads(Path(sys.argv[2]).read_text())
     got = asyncio.run(read_all(db_path, expected))
