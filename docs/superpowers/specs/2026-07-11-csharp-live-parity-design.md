@@ -28,7 +28,7 @@ C# connects to and controls remote graphical sessions. It does not launch or hos
 | RFB client | partial | Security None + Raw client; tracker + attach `mode=rfb` |
 | GUI control | partial | Memory + RFB attach; lease-gated screenshot/input REST |
 | REST session/hijack | partial production | Health, sessions, hijack, WS present |
-| **Ushell** | **stub only** | `Shell/ShellBasics.cs` = LineBuffer + ANSI output helpers only. **No** `UshellConnector`, dispatcher, or command suite. Go has full port under `packages/provide-uterm-go/shell` (~4k LOC incl. tests). |
+| **Ushell** | **dispatcher landed (PR9)** | `Shell/` CommandDispatcher + commands (Go oracle). **No** `UshellConnector` / session wiring yet (PR10). |
 | Offline codec conformance (Layer A) | production | `vectors.json` / `ConformanceVectorsTests` |
 | Live harness (Layer B) | scaffolded | `conformance/live/` schema + sample scenario |
 | Coverage residuals | active | Live PTY/transports/SSH gateway/RFB residual exclusions |
@@ -36,6 +36,175 @@ C# connects to and controls remote graphical sessions. It does not launch or hos
 | Monorepo CI (C#) | ubuntu `csharp-quality` | Local `make quality-gate` exists |
 
 **Oracle language per surface:** Python owns codec vectors and the **Python** `py` sandbox; **Go owns the portable ushell command model** (dispatcher, help/kv/fetch/storage/render/cast, connector lifecycle) and is the C# oracle for ushell; Go owns real PTY, SSH known_hosts, SSH/telnet gateways, GUI REST; Python server does **not** implement `/gui/*` today (`gui_rest` capability: `go|csharp`).
+
+## Platform multi-language feature matrix
+
+Same style as Workstream 7 (ushell): inventory **what exists where** across implementation languages, not backend-vs-backend contracts (those stay in `docs/protocol-matrix.md` for FastAPI ↔ CF).
+
+**Inventory date: 2026-07-12.** Re-verify before treating a cell as a delivery commitment.
+
+### Language columns / packages
+
+| Lang | Package(s) / location | Role |
+|------|----------------------|------|
+| **Py** | `provide-uterm` (core), `provide-uterm-server`, `provide-uterm-client`, `provide-uterm-platform`, `provide-uterm-cloudflare`, `provide-uterm-annotation` | Full product stack + CF Worker; codec + server reference |
+| **Go** | `packages/provide-uterm-go/` (monolith package tree) | Standalone port; PTY/SSH/gateway/GUI oracle for C# live parity |
+| **C#** | `packages/provide-uterm-csharp/` (`Provide.Uterm`) | Standalone .NET port; live-parity program (this doc) |
+| **Rust** | — | **Not present** in monorepo |
+| **TS** | `packages/provide-uterm-frontend/` (+ generated `frames.ts`) | Browser UI: xterm, hijack client, **DeckMux UI** |
+| **Bun** | — | **Not present** (would share a TS package if one is added) |
+
+Legend: **Y** = product-usable · **S** = stub / partial / types-only · **—** = absent · **N/A** = not applicable by design · **CF** under Py means Cloudflare Worker/DO path (Python-authored)
+
+Backend *deployment* matrix (orthogonal to language): FastAPI (Py server) · CF Worker (Py) · Go `uterm` server · C# `uterm` server. Wire contracts for FastAPI↔CF: `docs/protocol-matrix.md`.
+
+### 0. Packaging / binaries / quality
+
+| Feature | Py | Go | C# | Rust | TS | Bun |
+|---------|:--:|:--:|:--:|:----:|:--:|:---:|
+| Workspace / installable package | Y | Y | Y | — | Y (npm) | — |
+| CLI binary (`uterm`) | Y | Y | Y | — | — | — |
+| Manager binary (`uterm-manager`) | Y | Y | Y | — | — | — |
+| MCP server / tools binary | Y (`uterm-mcp`) | Y (`mcp/`) | **N/A** (de-scope) | — | — | — |
+| Offline codec vectors (Layer A) | Y | Y | Y | — | S (codec unit tests) | — |
+| Live harness (Layer B) | S | S | S | — | — | — |
+| Unit coverage floor enforced | Y (100% core gates) | Y (~97%+) | Y (97% coverlet) | — | Y (vitest) | — |
+| Mutation testing perimeter | Y (mutmut) | Y (gremlins) | — (Stryker later) | — | — | — |
+| CI quality job | Y | Y | Y (`csharp-quality`) | — | Y (`npm-quality`) | — |
+
+### 1. Terminal core (ANSI / screen / emulator / render)
+
+| Feature | Py | Go | C# | Rust | TS | Bun |
+|---------|:--:|:--:|:--:|:----:|:--:|:---:|
+| ANSI decode / SGR / CSI | Y | Y | Y | — | S (xterm.js host) | — |
+| Colors / palette / truecolor helpers | Y | Y | Y | — | S (themes) | — |
+| Screen buffer / cell model | Y | Y | Y | — | via xterm | — |
+| Emulator (feed bytes → screen) | Y | Y | Y | — | via xterm | — |
+| Render (screen → ANSI / lines) | Y | Y | Y | — | Y (xterm paint) | — |
+| VT / charset / width tables | Y | Y | Y | — | via xterm | — |
+| Sanitizer / redaction primitives | Y | Y | Y | — | — | — |
+| Recording (asciicast-style capture) | Y | Y | Y | — | — | — |
+| Replay viewer | Y | Y | Y | — | — | — |
+| Session logger | Y | Y | Y | — | — | — |
+| Line editor (CLI password/line) | Y | Y | Y | — | — | — |
+| Prompt / flow detection engine | Y | Y | S | — | — | — |
+| Annotation detector package | Y (`provide-uterm-annotation`) | Y | Y | — | — | — |
+
+### 2. Control channel / frames / schemas
+
+| Feature | Py | Go | C# | Rust | TS | Bun |
+|---------|:--:|:--:|:--:|:----:|:--:|:---:|
+| DLE/STX control framing | Y | Y | Y | — | Y (hijack-codec) | — |
+| Pydantic → JSON Schema → `frames.ts` codegen | Y (source) | consume | consume | — | Y (generated) | — |
+| CtrlMsg / identity / canonical JSON | Y | Y | Y | — | S (decode) | — |
+| Browser/worker hello + capabilities | Y | Y | Y | — | Y | — |
+
+### 3. Hub / session / hijack / presence plumbing
+
+| Feature | Py | Go | C# | Rust | TS | Bun |
+|---------|:--:|:--:|:--:|:----:|:--:|:---:|
+| TermHub registry + leases | Y | Y | Y | — | consume | — |
+| Roles (viewer/operator/admin) | Y | Y | Y | — | Y | — |
+| REST hijack acquire/heartbeat/send/step/release | Y (+ CF) | Y | Y | — | Y client | — |
+| WS hijack control frames | Y (FastAPI) | Y | Y | — | Y | — |
+| Snapshot / events | Y | Y | Y | — | Y | — |
+| Session resume tokens | Y (+ CF always-on) | Y | S | — | Y (sessionStorage) | — |
+| Rate limit / approvals | Y | Y | Y | — | Y (approval UX) | — |
+| Worker link (TermBridge) | Y | Y | Y | — | — | — |
+| Multi-session fanout | Y | Y | Y | — | — | — |
+
+### 4. Transports / connectors / gateways
+
+| Feature | Py | Go | C# | Rust | TS | Bun |
+|---------|:--:|:--:|:--:|:----:|:--:|:---:|
+| Session connector abstraction | Y | Y | Y | — | — | — |
+| PTY connector (Unix) | Y | Y | Y (opt-in native) | — | — | — |
+| ConPTY (Windows) | S/platform | S | — | — | — | — |
+| SSH client transport | Y | Y | Y (known_hosts) | — | — | — |
+| Telnet client transport | Y | Y | S (minimal IAC) | — | — | — |
+| WebSocket client transport | Y | Y | Y | — | Y (browser) | — |
+| SSH gateway (accept → term WS) | Y | Y | S (FxSsh partial) | — | — | — |
+| Telnet gateway | Y | Y | S | — | — | — |
+| Shell / ushell connector type | Y | Y | — (PR10) | — | — | — |
+| PAM / LD_PRELOAD capture | Y (platform) | Y | — | — | — | — |
+
+### 5. DeckMux (collaborative presence)
+
+Protocol message types and FastAPI↔CF backend contract: `docs/protocol-matrix.md` § DeckMux. Below is **language implementation** depth.
+
+| Feature | Py | Go | C# | Rust | TS | Bun |
+|---------|:--:|:--:|:--:|:----:|:--:|:---:|
+| Protocol builders (`presence_*`, control transfer) | Y | Y | — | — | Y (client) | — |
+| Identity parse / principal | Y | Y | Y | — | consume | — |
+| Deterministic names/colors/initials | Y | Y | Y | — | S (display) | — |
+| Presence service / hub mixin | Y | Y | S (hub Presence only) | — | — | — |
+| Transfer manager + keystroke queue | Y | Y | — | — | Y (queue UX) | — |
+| Auto-idle transfer + warning | Y | Y | — | — | Y | — |
+| Edge indicators / ghost overlays | — | Y (edge helpers) | — | — | Y | — |
+| Presence bar / control panel UI | — | — | — | — | Y | — |
+| CF DO presence broadcast | Y (CF) | — | — | — | consume | — |
+| Golden / differential tests | Y | Y | S | — | Y (vitest) | — |
+
+### 6. Tunnel / share / HTTP inspect
+
+| Feature | Py | Go | C# | Rust | TS | Bun |
+|---------|:--:|:--:|:--:|:----:|:--:|:---:|
+| Binary multiplex protocol (ch 0–3) | Y | Y | Y | — | S (term path) | — |
+| Tunnel store / tokens / rotate/revoke | Y (+ CF) | Y | S (types) | — | — | — |
+| Tunnel client (agent) | Y | Y | Y | — | — | — |
+| Share invite bootstrap + cookie | Y (+ CF) | Y | S | — | Y (app routes) | — |
+| HTTP inspect channel + UI | Y | Y | S | — | Y (`/app/inspect`) | — |
+| Intercept / kill / caps | Y | Y | S | — | — | — |
+
+### 7. GUI / RFB / graphical sessions
+
+| Feature | Py | Go | C# | Rust | TS | Bun |
+|---------|:--:|:--:|:--:|:----:|:--:|:---:|
+| GUI REST attach/screenshot/input | — (no `/gui/*` today) | Y | Y | — | — | — |
+| Memory graphical session fixture | — | Y | Y | — | — | — |
+| RFB client (Security None + Raw) | — | Y | Y | — | — | — |
+| Litevirt gRPC dual-stream | — | Y | **N/A** (v1) | — | — | — |
+| Lease gating on GUI input | — | Y | Y | — | — | — |
+
+### 8. Ushell (summary — detail in Workstream 7)
+
+| Feature | Py | Go | C# | Rust | TS | Bun |
+|---------|:--:|:--:|:--:|:----:|:--:|:---:|
+| LineBuffer + ANSI shell I/O | Y | Y | Y | — | — | — |
+| Command dispatcher + suite | Y | Y | Y | — | — | — |
+| `py` sandbox | Y | S (stub) | S (stub) | — | — | — |
+| UshellConnector lifecycle | Y | Y | — (PR10) | — | — | — |
+| Session `connector_type=ushell` | Y (+ CF DO) | Y | — | — | — | — |
+
+### 9. Auth / config / manager / MCP
+
+| Feature | Py | Go | C# | Rust | TS | Bun |
+|---------|:--:|:--:|:--:|:----:|:--:|:---:|
+| Server auth modes (jwt/api_key/header/webhook/dev_token) | Y | Y | Y | — | consume | — |
+| Authorization / roles / webhooks | Y | Y | Y | — | — | — |
+| TOML / config schema | Y | Y | Y | — | — | — |
+| External Management Tier (process manager) | Y | Y | Y | — | — | — |
+| MCP terminal tools (sessions/hijack) | Y | Y | **N/A** | — | — | — |
+| MCP GUI tools | Y | Y | **N/A** | — | — | — |
+| AI/MCP consumer against foreign backend | Y | Y | as target only | — | — | — |
+
+### 10. Frontend-only surfaces (TS)
+
+| Feature | Py | Go | C# | Rust | TS | Bun |
+|---------|:--:|:--:|:--:|:----:|:--:|:---:|
+| xterm terminal host | — | — | — | — | Y | — |
+| Hijack page / session element | — | — | — | — | Y | — |
+| Approval prompt UX | — | — | — | — | Y | — |
+| DeckMux UI (presence bar, overlays, menu) | — | — | — | — | Y | — |
+| Terminal themes / settings | — | — | — | — | Y | — |
+
+### How to use this matrix
+
+- **C# live-parity program (this design):** close **S**/**—** cells that map to Workstreams 1–7 and PR plan; capability-tag intentional supersets/gaps.
+- **Oracle reminder:** Layer A codecs → Python vectors; PTY/SSH/gateway/GUI → Go; ushell commands/connector → Go; DeckMux protocol goldens → Python (+ Go golden tests); browser UX → TS.
+- **Not a delivery commit:** cells are inventory. Flip checklist items in Workstream §7.6 and the PR plan when scenarios go green.
+- **Rust / Bun:** reserved columns only; no monorepo packages yet. Prefer one shared design over language-specific command/protocol dialects.
+- **CF:** Python implementation deployed on Workers/DO; compare FastAPI↔CF in `docs/protocol-matrix.md`, not as a separate language.
 
 ## Architecture
 
@@ -136,7 +305,7 @@ No C# MCP binary.
 
 Port the **Go** ushell package (`packages/provide-uterm-go/shell`) to C# so standalone C# can host the same in-session shell connector and command surface as Go/Python (observable parity).
 
-**Already in C# (partial):** `Shell/ShellBasics.cs` — `LineBuffer` keystroke protocol + ANSI output/format helpers, plus a **toy** `CommandDispatcher` (`help`/`clear`/`env` only — not product parity).
+**Already in C#:** full `Shell/` dispatcher + commands (PR9); LineBuffer + ANSI I/O. **Still open:** UshellConnector + session wiring (PR10). Platform-wide matrix (terminal/DeckMux/tunnel/etc.): § **Platform multi-language feature matrix** above.
 
 **Language columns (inventory date: 2026-07-12):**
 
@@ -144,7 +313,7 @@ Port the **Go** ushell package (`packages/provide-uterm-go/shell`) to C# so stan
 |------|-------------------|--------|
 | **Py** | `packages/provide-uterm/.../shell/` (+ CF `do/ushell`) | Full reference + Python `py` sandbox |
 | **Go** | `packages/provide-uterm-go/shell/` | Full portable port (~4k LOC w/ tests); `py` stub |
-| **C#** | `packages/provide-uterm-csharp/.../Shell/ShellBasics.cs` | Linebuffer + basic output + stub dispatcher |
+| **C#** | `packages/provide-uterm-csharp/.../Shell/` | Dispatcher + commands (Go oracle); connector open |
 | **Rust** | — | **Not present** in monorepo |
 | **TS** | — | **Not present** (frontend is xterm UI only; no ushell package) |
 | **Bun** | — | **Not present** (would share a TS package if one is added) |
@@ -431,3 +600,5 @@ Each phase leaves a working system and adds its scenarios to **required CI for t
 *Updated 2026-07-12: Workstream 7 ushell — multi-language feature matrix (Py/Go/C#/Rust/TS/Bun); checkable C# delivery list; Rust/TS/Bun absent in monorepo.*
 
 *Updated 2026-07-12: PR9 landed — C# `Shell/` dispatcher + commands (Go oracle); connector (PR10) still open.*
+
+*Updated 2026-07-12: Platform multi-language feature matrix (terminal core, control channel, hub/hijack, transports, DeckMux, tunnel, GUI/RFB, ushell summary, auth/MCP, frontend) with Py/Go/C#/Rust/TS/Bun columns — same style as Workstream 7.*
