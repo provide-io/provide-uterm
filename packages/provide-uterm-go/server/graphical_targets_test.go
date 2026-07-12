@@ -6,12 +6,16 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	cp "github.com/provide-io/provide-uterm/packages/provide-uterm-go/controlplane"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/controlplane/memory"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/controlplane/sqlite"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
 )
 
@@ -19,6 +23,17 @@ type graphicalLifecycleEngine struct {
 	cp.Engine
 	close func(context.Context) error
 	begin func(context.Context) (cp.Tx, error)
+}
+
+type closeWaiterContext struct {
+	context.Context
+	reached chan struct{}
+	once    sync.Once
+}
+
+func (c *closeWaiterContext) Done() <-chan struct{} {
+	c.once.Do(func() { close(c.reached) })
+	return c.Context.Done()
 }
 
 func (e *graphicalLifecycleEngine) Close(ctx context.Context) error { return e.close(ctx) }
@@ -71,6 +86,94 @@ func TestGraphicalRegistryMergeScopeCRUDAndStaticPrecedence(t *testing.T) {
 	}
 }
 
+func TestGraphicalRegistryRejectsAndRedactsCorruptPersistedRecords(t *testing.T) {
+	for _, backend := range []string{"memory", "sqlite"} {
+		t.Run(backend, func(t *testing.T) {
+			ctx := context.Background()
+			var engine cp.Engine
+			if backend == "memory" {
+				engine = memory.New(cp.Config{})
+			} else {
+				engine = sqlite.New(cp.Config{DatabaseURL: t.TempDir() + "/targets.db"})
+			}
+			if err := engine.Open(ctx); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = engine.Close(context.Background()) })
+			if err := engine.Migrate(ctx); err != nil {
+				t.Fatal(err)
+			}
+			payloads := []string{"dns:///sensitive-invalid-endpoint", "sensitive-tls", "sensitive-role", "10.0.0.1/8", "literal-sensitive-secret"}
+			records := make([]cp.GraphicalTargetRecord, 6)
+			for i := range records {
+				records[i] = toGraphicalRecord(graphicalTarget(fmt.Sprintf("corrupt-%d", i), nil), 1)
+			}
+			records[0].Endpoint = payloads[0]
+			records[1].TLSMode = payloads[1]
+			records[2].MinimumRole = payloads[2]
+			records[3].ConnectTimeoutS = 0
+			records[4].AllowedCIDRs = cp.NewStringTuple(payloads[3])
+			records[5].CASecretRef = cp.Str(payloads[4])
+			tx, _ := engine.Begin(ctx)
+			for _, rec := range records {
+				if err := engine.GraphicalTargetStore(tx).Put(ctx, rec); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := tx.Commit(ctx); err != nil {
+				t.Fatal(err)
+			}
+			r, _ := NewGraphicalTargetRegistry(nil, engine, false)
+			assertRedacted := func(err error) {
+				t.Helper()
+				if !errors.Is(err, ErrGraphicalTargetPersistedData) {
+					t.Fatalf("error = %v", err)
+				}
+				for _, payload := range payloads {
+					if strings.Contains(err.Error(), payload) {
+						t.Fatalf("persisted payload leaked: %v", err)
+					}
+				}
+			}
+			for i := range records {
+				_, err := r.Get(ctx, SystemTargetScope(), fmt.Sprintf("corrupt-%d", i))
+				if err == nil {
+					t.Fatalf("corrupt record %d was accepted", i)
+				}
+				assertRedacted(err)
+			}
+			_, err := r.List(ctx, SystemTargetScope())
+			assertRedacted(err)
+			_, err = r.RuntimeRecord(ctx, SystemTargetScope(), "corrupt-0")
+			assertRedacted(err)
+		})
+	}
+}
+
+func TestGraphicalRegistryValidationDoesNotNormalizeCallerSlices(t *testing.T) {
+	base := memory.New(cp.Config{})
+	_ = base.Open(context.Background())
+	patterns := []string{"*", "*"}
+	cidrs := []string{"10.0.0.0/8", "10.0.0.0/8"}
+	target := graphicalTarget("copy", nil)
+	target.AllowedVMPatterns = patterns
+	target.AllowedCIDRs = cidrs
+	r, err := NewGraphicalTargetRegistry([]serverconfig.GraphicalTargetDefinition{target}, base, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(patterns) != 2 || len(cidrs) != 2 {
+		t.Fatal("constructor normalization mutated caller slices")
+	}
+	target.TargetID = "runtime"
+	if _, err = r.Create(context.Background(), SystemTargetScope(), target); err != nil {
+		t.Fatal(err)
+	}
+	if len(patterns) != 2 || len(cidrs) != 2 {
+		t.Fatal("create normalization mutated caller slices")
+	}
+}
+
 func TestGraphicalRegistryCopiesValuesAndCloses(t *testing.T) {
 	ctx := context.Background()
 	engine := memory.New(cp.Config{})
@@ -118,15 +221,9 @@ func TestGraphicalRegistryCloseFailurePublishesToWaitersAndLaterRetries(t *testi
 	results := make(chan error, 2)
 	go func() { results <- r.Close(context.Background()) }()
 	<-started
-	go func() { results <- r.Close(context.Background()) }()
-	for {
-		r.mu.Lock()
-		waiters := r.closeAttempt.waiters
-		r.mu.Unlock()
-		if waiters == 2 {
-			break
-		}
-	}
+	waiterCtx := &closeWaiterContext{Context: context.Background(), reached: make(chan struct{})}
+	go func() { results <- r.Close(waiterCtx) }()
+	<-waiterCtx.reached
 	close(release)
 	for range 2 {
 		if err := <-results; !errors.Is(err, failure) {
@@ -249,9 +346,15 @@ func TestGraphicalRegistryCanceledCloseCallerDoesNotStrandAttempt(t *testing.T) 
 	base := memory.New(cp.Config{})
 	_ = base.Open(context.Background())
 	started := make(chan struct{})
-	release := make(chan struct{})
 	var calls atomic.Int32
-	engine := &graphicalLifecycleEngine{Engine: base, close: func(context.Context) error { calls.Add(1); close(started); <-release; return nil }}
+	engine := &graphicalLifecycleEngine{Engine: base, close: func(ctx context.Context) error {
+		if calls.Add(1) == 1 {
+			close(started)
+			<-ctx.Done()
+			return ctx.Err()
+		}
+		return nil
+	}}
 	r, _ := NewGraphicalTargetRegistry(nil, engine, true)
 	ctx, cancel := context.WithCancel(context.Background())
 	first := make(chan error, 1)
@@ -261,17 +364,43 @@ func TestGraphicalRegistryCanceledCloseCallerDoesNotStrandAttempt(t *testing.T) 
 	if err := <-first; !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled leader = %v", err)
 	}
-	waiter := make(chan error, 1)
-	go func() { waiter <- r.Close(context.Background()) }()
-	close(release)
-	if err := <-waiter; err != nil {
+	if err := r.Close(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if calls.Load() != 1 {
+	if calls.Load() != 2 {
 		t.Fatalf("close calls = %d", calls.Load())
 	}
 	if err := r.Close(context.Background()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestGraphicalRegistryLeaderContextCancelsEngineCloseAndAllowsRetry(t *testing.T) {
+	base := memory.New(cp.Config{})
+	started := make(chan struct{})
+	var calls atomic.Int32
+	engine := &graphicalLifecycleEngine{Engine: base, close: func(ctx context.Context) error {
+		if calls.Add(1) == 1 {
+			close(started)
+			<-ctx.Done()
+			return ctx.Err()
+		}
+		return nil
+	}}
+	r, _ := NewGraphicalTargetRegistry(nil, engine, true)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- r.Close(ctx) }()
+	<-started
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled close = %v", err)
+	}
+	if err := r.Close(context.Background()); err != nil {
+		t.Fatalf("retry = %v", err)
+	}
+	if calls.Load() != 2 {
+		t.Fatalf("close calls = %d", calls.Load())
 	}
 }
 
@@ -294,8 +423,8 @@ func TestGraphicalRegistryCanceledLeaderAfterEngineCloseBeforePublication(t *tes
 	<-returned
 	cancel()
 	r.mu.Unlock()
-	if err := <-result; !errors.Is(err, context.Canceled) {
-		t.Fatalf("canceled before publication = %v", err)
+	if err := <-result; err != nil {
+		t.Fatalf("successful engine close outcome = %v", err)
 	}
 	if err := r.Close(context.Background()); err != nil {
 		t.Fatalf("published close outcome = %v", err)
@@ -361,5 +490,49 @@ func TestServerShutdownPropagatesGraphicalRegistryCloseFailure(t *testing.T) {
 	}
 	if err := ts.srv.Shutdown(); err != nil {
 		t.Fatalf("Shutdown retry = %v", err)
+	}
+}
+
+func TestJoinShutdownErrorsPreservesHTTPAndGraphicalFailures(t *testing.T) {
+	httpErr := errors.New("http shutdown")
+	graphicalErr := errors.New("graphical shutdown")
+	joined := joinShutdownErrors(httpErr, graphicalErr)
+	if !errors.Is(joined, httpErr) || !errors.Is(joined, graphicalErr) {
+		t.Fatalf("joined error = %v", joined)
+	}
+}
+
+func TestServerShutdownJoinsHTTPAndGraphicalFailures(t *testing.T) {
+	httpErr := errors.New("http failure")
+	graphicalErr := errors.New("graphical failure")
+	base := memory.New(cp.Config{})
+	engine := &graphicalLifecycleEngine{Engine: base, close: func(context.Context) error { return graphicalErr }}
+	registry, _ := NewGraphicalTargetRegistry(nil, engine, true)
+	ts := newTestServer(t, func(_ *serverconfig.UtermServerConfig, deps *Deps) { deps.GraphicalTargets = registry })
+	ts.srv.shutdownHTTP = func(context.Context) error { return httpErr }
+	err := ts.srv.Shutdown()
+	if !errors.Is(err, httpErr) || !errors.Is(err, graphicalErr) {
+		t.Fatalf("Shutdown error = %v", err)
+	}
+}
+
+func TestServerGraphicalShutdownUsesBoundedContext(t *testing.T) {
+	base := memory.New(cp.Config{})
+	observed := make(chan time.Duration, 1)
+	engine := &graphicalLifecycleEngine{Engine: base, close: func(ctx context.Context) error {
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			return errors.New("missing deadline")
+		}
+		observed <- time.Until(deadline)
+		return nil
+	}}
+	registry, _ := NewGraphicalTargetRegistry(nil, engine, true)
+	ts := newTestServer(t, func(_ *serverconfig.UtermServerConfig, deps *Deps) { deps.GraphicalTargets = registry })
+	if err := ts.srv.Shutdown(); err != nil {
+		t.Fatal(err)
+	}
+	if d := <-observed; d <= 0 || d > 11*time.Second {
+		t.Fatalf("shutdown deadline = %v", d)
 	}
 }
