@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import time
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 
 import pytest
@@ -85,6 +86,30 @@ class TestApiKeyStore:
         names = {k.name for k in keys}
         assert names == {"key-a", "key-b"}
 
+    def test_tenant_scoped_list_and_atomic_revoke_conceal_foreign_keys(self) -> None:
+        store = ApiKeyStore()
+        _raw_a, key_a = store.create("key-a", tenant_id="tenant-a")
+        _raw_b, key_b = store.create("key-b", tenant_id="tenant-b")
+
+        assert store.list_keys_for_tenant("tenant-a") == [key_a]
+        assert store.revoke_for_tenant(key_b.key_id, "tenant-a") is False
+        assert store.revoke_for_tenant(key_a.key_id, "tenant-a") is True
+        assert store.revoke_for_tenant(key_a.key_id, "tenant-a") is True
+        assert key_a.revoked is True
+        assert key_b.revoked is False
+
+    def test_concurrent_scoped_revoke_never_authorizes_foreign_tenant(self) -> None:
+        store = ApiKeyStore()
+        _raw, key = store.create("shared-race", tenant_id="tenant-a")
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            foreign = list(pool.map(lambda _index: store.revoke_for_tenant(key.key_id, "tenant-b"), range(32)))
+            own = list(pool.map(lambda _index: store.revoke_for_tenant(key.key_id, "tenant-a"), range(32)))
+
+        assert foreign == [False] * 32
+        assert own == [True] * 32
+        assert key.revoked is True
+
     def test_create_with_scopes(self) -> None:
         store = ApiKeyStore()
         _raw, record = store.create("scoped", scopes=frozenset({"read", "write"}))
@@ -120,6 +145,16 @@ class TestApiKeyStore:
 
 
 class TestApiKeyDataclass:
+    def test_legacy_positional_signature_is_compatible(self) -> None:
+        key = ApiKey("id", "hash", "name", frozenset({"admin"}), 1.0, 2.0, 3.0, True)
+
+        assert key.scopes == frozenset({"admin"})
+        assert key.created_at == 1.0
+        assert key.expires_at == 2.0
+        assert key.last_used_at == 3.0
+        assert key.revoked is True
+        assert key.tenant_id is None
+
     def test_defaults(self) -> None:
         key = ApiKey(key_id="abc", key_hash="def", name="test")
         assert key.revoked is False

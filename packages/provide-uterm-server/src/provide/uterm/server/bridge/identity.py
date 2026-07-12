@@ -31,7 +31,6 @@ class Principal:
     """Resolved browser or API principal."""
 
     subject_id: str
-    tenant_id: str | None = None
     roles: frozenset[str] = frozenset()
     scopes: frozenset[str] = frozenset()
     claims: dict[str, Any] = field(default_factory=dict)
@@ -42,6 +41,8 @@ class Principal:
     # so a per-session grant cannot escalate into cross-session admin if the
     # principal is ever resolved independently of the request path.
     admin_session_scope: str | None = None
+    # Appended to preserve the public positional constructor used by embedders.
+    tenant_id: str | None = None
 
     @property
     def name(self) -> str:

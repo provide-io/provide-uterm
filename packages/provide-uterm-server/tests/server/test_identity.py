@@ -39,6 +39,27 @@ def test_named_tenantless_principals_make_policy_explicit() -> None:
     assert Principal.system_worker().tenant_id is None
 
 
+def test_principal_legacy_positional_signature_is_compatible() -> None:
+    from provide.uterm.server.bridge.identity import Principal
+
+    claims = {"legacy": True}
+    principal = Principal(
+        "alice",
+        frozenset({"admin"}),
+        frozenset({"session.read"}),
+        claims,
+        "Alice",
+        "session-1",
+    )
+
+    assert principal.roles == frozenset({"admin"})
+    assert principal.scopes == frozenset({"session.read"})
+    assert principal.claims is claims
+    assert principal.display_name == "Alice"
+    assert principal.admin_session_scope == "session-1"
+    assert principal.tenant_id is None
+
+
 def test_identity_provider_protocol():
     """Verify IdentityProvider protocol structure."""
     from provide.uterm.server.bridge.identity import IdentityProvider, Principal
