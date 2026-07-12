@@ -11,28 +11,38 @@ using Provide.Uterm.ControlChannel;
 namespace Provide.Uterm.Gateway;
 
 /// <summary>
-/// Bidirectional pump: local TCP client ↔ remote terminal WebSocket.
+/// Bidirectional pump: local stream (TCP/SSH channel) ↔ remote terminal WebSocket.
 /// Port of packages/provide-uterm-go/gateway pumpOnce / drive (core path).
 /// </summary>
 public static class GatewayDrive
 {
     /// <summary>
     /// Run one session for an accepted TCP client against <paramref name="wsUrl"/>.
-    /// Returns when either side closes or <paramref name="cancellationToken"/> fires.
     /// </summary>
     public static async Task RunAsync(
         TcpClient client,
         string wsUrl,
         CancellationToken cancellationToken = default)
     {
-        using var _ = client; // dispose when done
+        using var _ = client;
         await using var network = client.GetStream();
+        await RunAsync(network, wsUrl, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Run one session for an arbitrary local duplex stream (TCP or SSH channel)
+    /// against <paramref name="wsUrl"/>.
+    /// </summary>
+    public static async Task RunAsync(
+        Stream local,
+        string wsUrl,
+        CancellationToken cancellationToken = default)
+    {
         using var ws = new ClientWebSocket();
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         await ws.ConnectAsync(new Uri(wsUrl), cts.Token).ConfigureAwait(false);
 
-        // Capability hello (same as Go gateway).
         var hello = ControlChannelCodec.EncodeControlFrame(GatewayPump.HelloFrame());
         await ws.SendAsync(
             Encoding.UTF8.GetBytes(hello),
@@ -45,21 +55,20 @@ public static class GatewayDrive
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
         var token = linked.Token;
 
-        var tcpToWs = Task.Run(async () =>
+        var localToWs = Task.Run(async () =>
         {
             var buf = new byte[4096];
             try
             {
                 while (!token.IsCancellationRequested && ws.State == WebSocketState.Open)
                 {
-                    var n = await network.ReadAsync(buf.AsMemory(0, buf.Length), token)
+                    var n = await local.ReadAsync(buf.AsMemory(0, buf.Length), token)
                         .ConfigureAwait(false);
                     if (n <= 0)
                     {
                         break;
                     }
 
-                    // Client → WS: latin-1 channel string + DLE escape (EncodeTerminalData).
                     var channel = WsBytes.WsBytesToChannelStr(buf.AsSpan(0, n));
                     var encoded = ControlChannelCodec.EncodeTerminalData(channel);
                     await ws.SendAsync(
@@ -79,7 +88,7 @@ public static class GatewayDrive
             }
         }, token);
 
-        var wsToTcp = Task.Run(async () =>
+        var wsToLocal = Task.Run(async () =>
         {
             var buf = new byte[16 * 1024];
             try
@@ -100,12 +109,11 @@ public static class GatewayDrive
                     if (result.MessageType == WebSocketMessageType.Binary)
                     {
                         var slice = buf.AsSpan(0, result.Count).ToArray();
-                        await network.WriteAsync(slice, token).ConfigureAwait(false);
-                        await network.FlushAsync(token).ConfigureAwait(false);
+                        await local.WriteAsync(slice, token).ConfigureAwait(false);
+                        await local.FlushAsync(token).ConfigureAwait(false);
                         continue;
                     }
 
-                    // Text: demux control frames vs terminal data.
                     var text = Encoding.UTF8.GetString(buf, 0, result.Count);
                     IReadOnlyList<Chunk> events;
                     try
@@ -114,10 +122,9 @@ public static class GatewayDrive
                     }
                     catch
                     {
-                        // not a control stream — forward raw
                         var raw = Encoding.UTF8.GetBytes(text);
-                        await network.WriteAsync(raw, token).ConfigureAwait(false);
-                        await network.FlushAsync(token).ConfigureAwait(false);
+                        await local.WriteAsync(raw, token).ConfigureAwait(false);
+                        await local.FlushAsync(token).ConfigureAwait(false);
                         continue;
                     }
 
@@ -131,10 +138,9 @@ public static class GatewayDrive
                             case DataChunk data:
                             {
                                 var bytes = WsBytes.ChannelStrToBytes(data.Data);
-                                // Telnet-friendly: DEL→BS, bare LF → CRLF
                                 bytes = TelnetWriteTransform(bytes);
-                                await network.WriteAsync(bytes, token).ConfigureAwait(false);
-                                await network.FlushAsync(token).ConfigureAwait(false);
+                                await local.WriteAsync(bytes, token).ConfigureAwait(false);
+                                await local.FlushAsync(token).ConfigureAwait(false);
                                 break;
                             }
                         }
@@ -153,7 +159,7 @@ public static class GatewayDrive
 
         try
         {
-            await Task.WhenAny(tcpToWs, wsToTcp).ConfigureAwait(false);
+            await Task.WhenAny(localToWs, wsToLocal).ConfigureAwait(false);
         }
         finally
         {
@@ -176,7 +182,6 @@ public static class GatewayDrive
     /// <summary>Telnet-side output transforms (DEL→BS, CRLF normalize).</summary>
     internal static byte[] TelnetWriteTransform(byte[] raw)
     {
-        // DEL (0x7f) → BS (0x08)
         for (var i = 0; i < raw.Length; i++)
         {
             if (raw[i] == 0x7f)
@@ -185,7 +190,6 @@ public static class GatewayDrive
             }
         }
 
-        // bare \n → \r\n (without doubling existing \r\n)
         var latin1 = Encoding.GetEncoding("ISO-8859-1");
         var s = latin1.GetString(raw);
         s = s.Replace("\r\n", "\n", StringComparison.Ordinal);

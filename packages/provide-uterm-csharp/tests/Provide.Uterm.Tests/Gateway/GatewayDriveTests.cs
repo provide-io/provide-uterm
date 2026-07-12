@@ -243,8 +243,18 @@ public class GatewayDriveTests
 
         o.GetStringBuilder().Clear();
         e.GetStringBuilder().Clear();
-        Assert.Equal(1, Root.Execute(
-            new[] { "listen", "wss://example.com/ws/terminal", "--protocol", "ssh" }, o, e));
-        Assert.Contains("ssh gateway pump is not yet wired", e.ToString(), StringComparison.Ordinal);
+        o.GetStringBuilder().Clear();
+        e.GetStringBuilder().Clear();
+        var sshPort = FreePort();
+        Assert.Equal(0, Root.Execute(
+            new[]
+            {
+                "listen", "wss://example.com/ws/terminal", "--protocol", "ssh",
+                "--host", "127.0.0.1", "--port", sshPort.ToString(), "--once",
+            },
+            o,
+            e));
+        Assert.Contains("listen: ssh gateway", o.ToString(), StringComparison.Ordinal);
+        Assert.Contains("listen ready", o.ToString(), StringComparison.Ordinal);
     }
 }

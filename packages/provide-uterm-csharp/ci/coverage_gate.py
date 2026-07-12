@@ -25,9 +25,12 @@ EXCLUDE_SUBSTR = (
     # OS/socket-only residual packages (documented, matching Go residual policy for
     # live-socket / PTY / real-SSH paths that unit tests cannot fully exercise).
     "Pty/PtyTransport.cs",
+    "Pty/NativeUnixPty.cs",  # posix_spawn/openpty/P-Invoke residual
     "Transports/SshTransport.cs",
     "Transports/TelnetTransport.cs",
     "Transports/WebSocketTransport.cs",
+    "Gateway/SshWsGateway.cs",  # live FxSsh accept + channel pump residual
+    "Vnc/RfbClient.cs",  # live RFB TCP client residual (unit-tested encode + handshake smoke)
 )
 
 

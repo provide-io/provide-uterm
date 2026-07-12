@@ -37,15 +37,16 @@ public class RootCoverageTests
     }
 
     [Fact]
-    public void Listen_Ssh_Once_NotWired()
+    public void Listen_Ssh_Once_Ready()
     {
         using var o = new StringWriter();
         using var e = new StringWriter();
         var port = FreePort();
-        Assert.Equal(1, Root.Execute(
+        Assert.Equal(0, Root.Execute(
             ["listen", "ws://127.0.0.1:9/ws", "--protocol", "ssh", "--host", "127.0.0.1", "--port", port.ToString(), "--once"],
             o, e));
-        Assert.Contains("ssh", e.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ssh gateway", o.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("listen ready", o.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
