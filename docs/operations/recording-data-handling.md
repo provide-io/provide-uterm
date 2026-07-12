@@ -26,8 +26,10 @@ prioritize debuggability over confidentiality.
 ## What is recorded
 
 The store interface is `RecordingStore` in
-`packages/provide-uterm/src/provide/uterm/recording.py`. Each session is
-written as a sequence of JSONL events:
+`packages/provide-uterm/src/provide/uterm/recording.py` (ported to Go and C#
+with the same lifecycle and query semantics — see
+[recording-store-parity.md](./recording-store-parity.md) for diagrams and the
+cross-language map). Each session is written as a sequence of JSONL events:
 
 | Event type                | Source         | Contents                      |
 | ------------------------- | -------------- | ----------------------------- |

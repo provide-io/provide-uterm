@@ -41,7 +41,7 @@ class RecordingStore(Protocol):
 
 Implementations: `InMemoryRecordingStore` (tests), `FileRecordingStore` (JSONL on disk), `S3RecordingStore` (pluggable via boto3 or httpx), `SqliteRecordingStore` (embedded, no deps).
 
-> **As-built (2026-06):** the shipped `RecordingStore` Protocol
+> **As-built (2026-06, updated 2026-07):** the shipped `RecordingStore` Protocol
 > (`provide-uterm/src/provide/uterm/recording.py`) is **async** with the
 > methods `start_session(session_id, metadata)`,
 > `append_events(session_id, events)`, `end_session(session_id)`,
@@ -52,6 +52,12 @@ Implementations: `InMemoryRecordingStore` (tests), `FileRecordingStore` (JSONL o
 > `InMemoryRecordingStore`, `NullRecordingStore`, and
 > `WebhookRecordingStore` (`server/recording.py`). The proposed
 > `S3RecordingStore` and `SqliteRecordingStore` were never built.
+>
+> **Multi-language ports:** Go (`packages/provide-uterm-go/recording`) and C#
+> (`Provide.Uterm.Recording`) implement the same store contract. Query parity
+> includes `limit=0` → default 200, clamp 1..500, and negative `offset` → skip
+> nothing. See [recording-store-parity.md](./operations/recording-store-parity.md)
+> for method maps, mermaid diagrams, and the asciinema demo matrix.
 
 ### Event Schema
 
