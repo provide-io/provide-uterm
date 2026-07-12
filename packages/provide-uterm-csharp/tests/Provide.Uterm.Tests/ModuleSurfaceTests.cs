@@ -225,9 +225,9 @@ public class ModuleSurfaceTests
     public void Shell_LineBuffer_And_Ansi()
     {
         var lb = new LineBuffer { MaxLength = 32 };
-        Assert.Null(lb.Feed("help"));
-        Assert.Equal("help", lb.Text);
-        Assert.Equal("hello", lb.Feed("lo\r\n"));
+        Assert.Null(lb.Feed("he"));
+        Assert.Equal("he", lb.Text);
+        Assert.Equal("hello", lb.Feed("llo\r\n"));
         Assert.Equal("", lb.Text);
         Assert.Null(lb.Feed("ab\x7f"));
         Assert.Equal("a", lb.Text);
