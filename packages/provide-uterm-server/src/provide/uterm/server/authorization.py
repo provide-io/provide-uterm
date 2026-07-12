@@ -25,7 +25,9 @@ Role = str
 Capability = str
 
 ROLE_CAPABILITIES: dict[Role, frozenset[Capability]] = {
-    "viewer": frozenset({"session.read", "session.recording.read"}),
+    "viewer": frozenset(
+        {"session.read", "session.recording.read", "graphical.target.read", "graphical.session.attach"}
+    ),
     "operator": frozenset(
         {
             "session.read",
@@ -35,6 +37,9 @@ ROLE_CAPABILITIES: dict[Role, frozenset[Capability]] = {
             "session.control.mode",
             "session.control.clear",
             "session.control.update",
+            "graphical.target.read",
+            "graphical.target.manage",
+            "graphical.session.attach",
         }
     ),
     "admin": frozenset(
@@ -48,9 +53,17 @@ ROLE_CAPABILITIES: dict[Role, frozenset[Capability]] = {
             "session.control.update",
             "session.control.delete",
             "session.control.hijack",
+            "graphical.target.read",
+            "graphical.target.manage",
+            "graphical.session.attach",
         }
     ),
 }
+
+
+def _tenant_for_policy(principal: Principal) -> str | None:
+    tenant_id = getattr(principal, "tenant_id", None)
+    return tenant_id if isinstance(tenant_id, str) else None
 
 
 @runtime_checkable
@@ -213,6 +226,7 @@ class WebhookAuthorizationProvider:
         payload = {
             "principal": {
                 "subject_id": principal.subject_id,
+                "tenant_id": _tenant_for_policy(principal),
                 "roles": list(principal.roles),
                 "scopes": list(principal.scopes),
                 "claims": principal.claims,
@@ -233,7 +247,11 @@ class WebhookAuthorizationProvider:
     async def capabilities_for(self, principal: Principal) -> frozenset[Capability]:
         # Webhooks usually return specific booleans, but for full cap sets we might need a separate endpoint.
         # Fallback to empty if not implemented or error.
-        payload = {"subject_id": principal.subject_id, "action": "capabilities"}
+        payload = {
+            "subject_id": principal.subject_id,
+            "tenant_id": _tenant_for_policy(principal),
+            "action": "capabilities",
+        }
         body = json.dumps(payload, separators=(",", ":")).encode()
         try:
             await assert_webhook_target_allowed(self.url)
@@ -241,7 +259,7 @@ class WebhookAuthorizationProvider:
             if resp.status_code == 200:
                 return frozenset(resp.json().get("capabilities", []))
         except Exception:
-            pass
+            return frozenset()
         return frozenset()
 
     async def has_capability(self, principal: Principal, capability: Capability) -> bool:
@@ -286,6 +304,7 @@ class WebhookAuthorizationProvider:
         payload = {
             "principal": {
                 "subject_id": principal.subject_id,
+                "tenant_id": _tenant_for_policy(principal),
                 "roles": list(principal.roles),
             },
             "session_id": session.session_id,
@@ -307,7 +326,7 @@ class WebhookAuthorizationProvider:
                 raw_role = resp.json().get("role", "viewer")
                 return next(iter(_filter_known_roles([raw_role])))
         except Exception:
-            pass
+            return "viewer"
         return "viewer"
 
 
@@ -368,6 +387,12 @@ class AuthorizationService:
         if callable(method):
             return bool(await method(principal))
         return await LocalAuthorizationProvider().can_create_session(principal)
+
+    async def can_attach_graphical_session(self, principal: Principal, target_tenant_id: str) -> bool:
+        """Require capability and exact canonical tenant equality for attach."""
+        if principal.tenant_id is None or principal.tenant_id != target_tenant_id:
+            return False
+        return await self.has_capability(principal, "graphical.session.attach")
 
     async def can_mutate_session(self, principal: Principal, session: SessionDefinition, action: Capability) -> bool:
         provider: Any = self._provider

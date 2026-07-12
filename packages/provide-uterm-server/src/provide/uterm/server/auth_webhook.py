@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 from provide.telemetry import get_logger
 from provide.uterm.server.audit import audit_event as _direct_audit_event
 from provide.uterm.server.auth_roles import _DEFAULT_ROLE, _filter_known_roles
-from provide.uterm.server.bridge.identity import IdentityProvider, Principal
+from provide.uterm.server.bridge.identity import IdentityProvider, Principal, canonical_tenant_id
 from provide.uterm.server.tracing import inject_trace_context
 
 if TYPE_CHECKING:
@@ -251,6 +251,7 @@ class WebhookIdentityProvider(IdentityProvider):
                 # (e.g. admin) outside the recognised set.
                 return Principal(
                     subject_id=data["subject_id"],
+                    tenant_id=canonical_tenant_id(data.get("tenant_id")),
                     roles=_filter_known_roles(data.get("roles", [_DEFAULT_ROLE])),
                     scopes=frozenset(data.get("scopes", [])),
                     claims=data.get("claims", {}),
