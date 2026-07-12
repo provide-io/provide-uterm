@@ -1,0 +1,13 @@
+{"version":3,"term":{"cols":80,"rows":24},"timestamp":1783869628,"command":"go run ./cmd/demo-recording 2>/Volumes/data/pyv/provide-uterm/demo/recording/go/terminal.cast.stderr","env":{"SHELL":"/bin/zsh"}}
+[0.193, "o", "\r\n\u001b[1;35m══════════════════════════════════\u001b[0m\r\n\u001b[1;35m  \u001b[1mprovide-uterm recording — Go\u001b[0m\u001b[1;35m  \u001b[0m\r\n\u001b[1;35m══════════════════════════════════\u001b[0m\r\n\r\n\u001b[1;36m  → language=go  store=LocalFileStore\u001b[0m\r\n"]
+[0.006, "o", "\u001b[1;32m  ✓ session started: demo-recording-go\u001b[0m\r\n"]
+[0.006, "o", "\u001b[1;36m  → snapshot 0: 0 screen bytes\u001b[0m\r\n"]
+[0.158, "o", "\u001b[1;36m  → snapshot 1: 48 screen bytes\u001b[0m\r\n"]
+[0.156, "o", "\u001b[1;36m  → snapshot 2: 80 screen bytes\u001b[0m\r\n"]
+[0.156, "o", "\u001b[1;36m  → snapshot 3: 116 screen bytes\u001b[0m\r\n"]
+[0.156, "o", "\u001b[1;36m  → snapshot 4: 153 screen bytes\u001b[0m\r\n"]
+[0.159, "o", "\u001b[1;36m  → snapshot 5: 201 screen bytes\u001b[0m\r\n"]
+[0.158, "o", "    \u001b[2mexists:\u001b[0m \u001b[1mtrue\u001b[0m\r\n    \u001b[2msize_bytes:\u001b[0m \u001b[1m1700\u001b[0m\r\n    \u001b[2mpath:\u001b[0m \u001b[1m/var/folders/sg/wy47gw996f78fznt898m8x540000gn/T/uterm-rec-go-715804512/demo-recording-go.jsonl\u001b[0m\r\n    \u001b[2mentries:\u001b[0m \u001b[1m8\u001b[0m\r\n    \u001b[2msnapshots:\u001b[0m \u001b[1m6\u001b[0m\r\n"]
+[0.000, "o", "\u001b[1;36m  → jsonl: {\"data\":{\"demo\":\"recording_matrix\",\"feature\":\"session_recording\",\"lang\":\"go\"},\"event\":\"log_start\",\"s…\u001b[0m\r\n\u001b[1;36m  → jsonl: {\"data\":{\"cols\":80,\"rows\":24,\"screen\":\"\",\"seq\":0,\"source\":\"go\"},\"event\":\"snapshot\",\"session_id\":\"dem…\u001b[0m\r\n"]
+[0.000, "o", "\u001b[1;32m  ✓ Go LocalFileStore: screen snapshots persisted as JSONL\u001b[0m\r\n"]
+[0.006, "x", "0"]
