@@ -33,8 +33,17 @@ func CapabilityError(msg string) *Error { return newError("capability", msg) }
 // race yields exactly one winner on both backends.
 func ConflictError(msg string) *Error { return newError("conflict", msg) }
 
+// DataError reports invalid persisted data without echoing its contents.
+func DataError(msg string) *Error { return newError("data", msg) }
+
 // IsConflict reports whether err is (or wraps) a control-plane conflict error.
 func IsConflict(err error) bool {
 	var e *Error
 	return errors.As(err, &e) && e.Kind == "conflict"
+}
+
+// IsDataError reports whether err is (or wraps) a persisted-data error.
+func IsDataError(err error) bool {
+	var e *Error
+	return errors.As(err, &e) && e.Kind == "data"
 }

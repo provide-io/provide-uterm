@@ -249,3 +249,8 @@ func (e *Engine) ApprovalStore(tx cp.Tx) cp.ApprovalStore {
 func (e *Engine) LeaseStore(tx cp.Tx) cp.LeaseStore {
 	return &leaseStore{eng: e, conn: txConn(tx).conn}
 }
+
+// GraphicalTargetStore returns a graphical target store bound to tx.
+func (e *Engine) GraphicalTargetStore(tx cp.Tx) cp.GraphicalTargetStore {
+	return &graphicalTargetStore{conn: txConn(tx).conn}
+}

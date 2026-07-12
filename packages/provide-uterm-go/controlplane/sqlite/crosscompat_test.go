@@ -217,6 +217,47 @@ func TestCrossCompatPythonToGo(t *testing.T) {
 	assertGoldenEqual(t, want, got)
 }
 
+// TestCrossCompatPythonV2ForwardToGoV3 proves a Python-created pre-target
+// database can be migrated by Go and then use the shared v3 target schema.
+func TestCrossCompatPythonV2ForwardToGoV3(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbCopy := filepath.Join(t.TempDir(), "golden_py.sqlite")
+	src, err := os.ReadFile("testdata/golden_py.sqlite")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dbCopy, src, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	e := sqlite.New(cp.Config{Backend: cp.BackendSQLite, DatabaseURL: dbCopy})
+	if err := e.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := e.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := cp.GraphicalTargetRecord{
+		TargetID: "cross-target", Endpoint: "dns:///cross.example:443", TLSMode: "mtls",
+		AllowedVMPatterns: cp.NewStringTuple("prod-*"), MinimumRole: "operator",
+		AllowedCIDRs: cp.NewStringTuple("203.0.113.0/24"), AuditLabels: cp.NewAuditLabels(),
+	}
+	if err := e.GraphicalTargetStore(tx).Put(ctx, rec); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	readTx, _ := e.Begin(ctx)
+	got, err := e.GraphicalTargetStore(readTx).Get(ctx, rec.TargetID)
+	if err != nil || got == nil || *got != rec {
+		t.Fatalf("target = %#v, %v", got, err)
+	}
+	_ = readTx.Rollback(ctx)
+	_ = e.Close(ctx)
+}
+
 // TestCrossCompatGoToPython builds a DB with the Go engine that matches the
 // golden expectations, then validates it via the Python sqlite engine. It skips
 // when Python/uv is unavailable so CI without Python still passes.

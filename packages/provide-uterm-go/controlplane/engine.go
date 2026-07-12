@@ -82,4 +82,5 @@ type Engine interface {
 	TokenStore(tx Tx) TokenStore
 	ApprovalStore(tx Tx) ApprovalStore
 	LeaseStore(tx Tx) LeaseStore
+	GraphicalTargetStore(tx Tx) GraphicalTargetStore
 }

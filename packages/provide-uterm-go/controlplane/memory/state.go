@@ -19,11 +19,12 @@ type SessionTokenKey struct {
 // exactly as the Python dicts; audit_head is tracked separately (non-durable)
 // and is not part of transaction snapshots.
 type State struct {
-	SessionTokens map[SessionTokenKey]cp.SessionTokenRecord
-	ResumeTokens  map[string]cp.ResumeTokenRecord
-	Sessions      map[string]cp.SessionRecord
-	Approvals     map[string]cp.ApprovalRecord
-	Leases        map[string]cp.LeaseRecord
+	SessionTokens    map[SessionTokenKey]cp.SessionTokenRecord
+	ResumeTokens     map[string]cp.ResumeTokenRecord
+	Sessions         map[string]cp.SessionRecord
+	Approvals        map[string]cp.ApprovalRecord
+	Leases           map[string]cp.LeaseRecord
+	GraphicalTargets map[string]cp.GraphicalTargetRecord
 	// AuditHead is the latest audit-chain head; nil until first set. Non-durable.
 	AuditHead *cp.AuditHead
 }
@@ -31,11 +32,12 @@ type State struct {
 // newState returns an empty State with all tables initialized.
 func newState() *State {
 	return &State{
-		SessionTokens: map[SessionTokenKey]cp.SessionTokenRecord{},
-		ResumeTokens:  map[string]cp.ResumeTokenRecord{},
-		Sessions:      map[string]cp.SessionRecord{},
-		Approvals:     map[string]cp.ApprovalRecord{},
-		Leases:        map[string]cp.LeaseRecord{},
+		SessionTokens:    map[SessionTokenKey]cp.SessionTokenRecord{},
+		ResumeTokens:     map[string]cp.ResumeTokenRecord{},
+		Sessions:         map[string]cp.SessionRecord{},
+		Approvals:        map[string]cp.ApprovalRecord{},
+		Leases:           map[string]cp.LeaseRecord{},
+		GraphicalTargets: map[string]cp.GraphicalTargetRecord{},
 	}
 }
 
@@ -44,11 +46,12 @@ func newState() *State {
 // audit_head from transaction snapshots.
 func (s *State) copyTables() *State {
 	out := &State{
-		SessionTokens: make(map[SessionTokenKey]cp.SessionTokenRecord, len(s.SessionTokens)),
-		ResumeTokens:  make(map[string]cp.ResumeTokenRecord, len(s.ResumeTokens)),
-		Sessions:      make(map[string]cp.SessionRecord, len(s.Sessions)),
-		Approvals:     make(map[string]cp.ApprovalRecord, len(s.Approvals)),
-		Leases:        make(map[string]cp.LeaseRecord, len(s.Leases)),
+		SessionTokens:    make(map[SessionTokenKey]cp.SessionTokenRecord, len(s.SessionTokens)),
+		ResumeTokens:     make(map[string]cp.ResumeTokenRecord, len(s.ResumeTokens)),
+		Sessions:         make(map[string]cp.SessionRecord, len(s.Sessions)),
+		Approvals:        make(map[string]cp.ApprovalRecord, len(s.Approvals)),
+		Leases:           make(map[string]cp.LeaseRecord, len(s.Leases)),
+		GraphicalTargets: make(map[string]cp.GraphicalTargetRecord, len(s.GraphicalTargets)),
 	}
 	for k, v := range s.SessionTokens {
 		out.SessionTokens[k] = v
@@ -64,6 +67,9 @@ func (s *State) copyTables() *State {
 	}
 	for k, v := range s.Leases {
 		out.Leases[k] = v
+	}
+	for k, v := range s.GraphicalTargets {
+		out.GraphicalTargets[k] = v
 	}
 	return out
 }

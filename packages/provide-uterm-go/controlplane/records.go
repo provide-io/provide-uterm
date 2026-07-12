@@ -148,6 +148,38 @@ type LeaseRecord struct {
 	DeletedAt      NullFloat
 }
 
+// GraphicalTargetRecord contains only target configuration and secret
+// references; resolved certificate or private-key bytes do not belong here.
+// Every field is comparable, making the record immutable-by-value and safe for
+// optimistic conflict detection.
+type GraphicalTargetRecord struct {
+	TargetID                string
+	Endpoint                string
+	TLSMode                 string
+	CASecretRef             NullString
+	ClientCertSecretRef     NullString
+	ClientKeySecretRef      NullString
+	ExpectedServerName      NullString
+	AllowedVMPatterns       StringTuple
+	TenantID                NullString
+	MinimumRole             string
+	ConnectTimeoutS         float64
+	HandshakeTimeoutS       float64
+	ReadTimeoutS            float64
+	WriteTimeoutS           float64
+	ShutdownTimeoutS        float64
+	MaxGRPCMessageBytes     int64
+	MaxFramebufferWidth     int64
+	MaxFramebufferHeight    int64
+	MaxRectangles           int64
+	MaxClipboardBytes       int64
+	MaxPixelAllocationBytes int64
+	AllowedCIDRs            StringTuple
+	AuditLabels             AuditLabels
+	CreatedAt               float64
+	UpdatedAt               float64
+}
+
 // AuditHead is the persisted audit-chain head “(seq, record_hash)“.
 type AuditHead struct {
 	Seq        int64
