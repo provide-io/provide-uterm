@@ -12,7 +12,6 @@ using Provide.Uterm.Connectors;
 using Provide.Uterm.Emulator;
 using Provide.Uterm.Hub;
 using Provide.Uterm.Manager;
-using Provide.Uterm.Mcp;
 using Provide.Uterm.Recording;
 using Provide.Uterm.Redaction;
 using Provide.Uterm.Server;
@@ -245,38 +244,6 @@ public class DeepCoverageTests
         Assert.NotNull(store.GetToken("t1"));
     }
 
-    [Fact]
-    public async Task Mcp_AllTools_WithMockClient()
-    {
-        var handler = new StubHandler();
-        using var http = new HttpClient(handler);
-        using var client = new HijackClient("http://mock.test", httpClient: http);
-        var mcp = new McpServer(client);
-
-        foreach (var name in McpServer.AllToolNames)
-        {
-            var args = new Dictionary<string, object?>
-            {
-                ["worker_id"] = "w1",
-                ["hijack_id"] = "h1",
-                ["session_id"] = "s1",
-                ["keys"] = "x",
-                ["input_mode"] = "open",
-                ["mode"] = name.Contains("read", StringComparison.Ordinal) ? "events" : "snapshot",
-                ["lease_s"] = 30,
-                ["owner"] = "op",
-            };
-            var res = await mcp.CallAsync(name, args);
-            Assert.NotNull(res);
-        }
-
-        // no-client tools return error payloads
-        var bare = new McpServer();
-        var begin = await bare.CallAsync("hijack_begin", new Dictionary<string, object?> { ["worker_id"] = "w" });
-        Assert.NotNull(begin);
-        var err = await bare.CallAsync("server_health");
-        Assert.NotNull(err);
-    }
 
     [Fact]
     public async Task Server_SessionCrud_And_InputMode()

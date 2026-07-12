@@ -28,9 +28,6 @@ EXCLUDE_SUBSTR = (
     "Transports/SshTransport.cs",
     "Transports/TelnetTransport.cs",
     "Transports/WebSocketTransport.cs",
-    # MCP is out of scope for the C# port (operator request).
-    "Mcp/",
-    "cmd/Uterm.Mcp",
 )
 
 

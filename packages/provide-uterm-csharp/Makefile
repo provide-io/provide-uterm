@@ -4,7 +4,7 @@
 # Quality gate for the C# port. Mirrors packages/provide-uterm-go/Makefile.
 
 DOTNET ?= dotnet
-# 96.5 (not 100): pure library packages are near-full. Remaining misses are the
+# 97.0 (not 100): pure library packages are near-full. Remaining misses are the
 # same residual class Go documents (COVER_THRESHOLD 97.2 with per-package notes):
 #   - Cli/Manager DefaultWaitCancel: real Console.CancelKeyPress wait (tests inject
 #     WaitForCancel no-op to exercise non--once paths without blocking).
@@ -14,9 +14,8 @@ DOTNET ?= dotnet
 #   - CtrlMsg CanonicalJson FallbackScientific: only when R→sci round-trip fails.
 #   - Live OS transports (Pty/Telnet/Ssh/WebSocket) excluded from denominator
 #     entirely (unit tests cannot drive real PTY/SSH handshakes fully).
-#   - Mcp/ excluded: MCP is out of scope for the C# port (operator request).
-# Whole-port measured ~96.7% on the residual-adjusted denominator.
-COVER_THRESHOLD ?= 96.5
+# MCP is not part of the C# port (operator de-scope); sources and binary removed.
+COVER_THRESHOLD ?= 97.0
 CONFIGURATION ?= Release
 
 .PHONY: build test cover build-binaries quality-gate interop-test
@@ -36,11 +35,13 @@ cover:
 	@python3 ci/coverage_gate.py coverage-out $(COVER_THRESHOLD)
 
 build-binaries:
+	@rm -rf bin
 	@mkdir -p bin
 	$(DOTNET) publish cmd/Uterm/Uterm.csproj -c $(CONFIGURATION) -o bin --no-self-contained
-	$(DOTNET) publish cmd/Uterm.Mcp/Uterm.Mcp.csproj -c $(CONFIGURATION) -o bin --no-self-contained
 	$(DOTNET) publish cmd/Uterm.Manager/Uterm.Manager.csproj -c $(CONFIGURATION) -o bin --no-self-contained
-	@echo "all 3 binaries built under bin/"
+	@# Guard: MCP must not be present after publish (operator de-scope).
+	@test ! -e bin/Uterm.Mcp -a ! -e bin/Uterm.Mcp.dll
+	@echo "uterm + uterm-manager binaries under bin/ (MCP not shipped for C#)"
 
 quality-gate: build test cover build-binaries
 	@echo "csharp quality gate passed"

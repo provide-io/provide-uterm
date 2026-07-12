@@ -18,7 +18,6 @@ using Provide.Uterm.CtrlMsg;
 using Provide.Uterm.DeckMux;
 using Provide.Uterm.Emulator;
 using Provide.Uterm.Hub;
-using Provide.Uterm.Mcp;
 using Provide.Uterm.Server;
 using Provide.Uterm.ServerAuth;
 using Provide.Uterm.ServerConfig;
@@ -30,7 +29,7 @@ using FileIoHelper = Provide.Uterm.FileIo.FileIo;
 namespace Provide.Uterm.Tests;
 
 /// <summary>
-/// Dense coverage for highest-miss modules: Vt.*, Server, Mcp, TermSession,
+/// Dense coverage for highest-miss modules: Vt.*, Server, TermSession,
 /// Hub lease/approvals, Auth, DeckMux identity, Bridge, Cli, FileIo.
 /// </summary>
 public class HighCoverageBoostTests
@@ -431,90 +430,6 @@ public class HighCoverageBoostTests
 
     // ---------- Mcp ----------
 
-    [Fact]
-    public async Task Mcp_AllTools_NullClient_And_MockClient()
-    {
-        var bare = new McpServer();
-        foreach (var name in McpServer.AllToolNames)
-        {
-            var res = await bare.CallAsync(name, new Dictionary<string, object?>
-            {
-                ["worker_id"] = "w",
-                ["hijack_id"] = "h",
-                ["session_id"] = "s",
-                ["keys"] = "x",
-                ["input_mode"] = "open",
-                ["mode"] = "events",
-                ["note"] = "n",
-                ["group_id"] = "g",
-                ["workers"] = new[] { "w1" },
-            });
-            Assert.NotNull(res);
-            // tools that need client should err; local-only tools ok
-            if (name.StartsWith("gui_", StringComparison.Ordinal) ||
-                name is "session_connect" or "session_disconnect" or "session_create"
-                    or "fanout_group_create" or "fanout_send" or "session_annotate")
-            {
-                Assert.True(res.TryGetValue("ok", out var ok) && ok is true);
-            }
-            else if (name is "session_subscribe")
-            {
-                Assert.True(res.ContainsKey("ok") || res.ContainsKey("error"));
-            }
-            else
-            {
-                Assert.True(res.TryGetValue("ok", out var ok2) && ok2 is false);
-            }
-        }
-
-        Assert.True((await bare.CallAsync("nope_tool"))["ok"] is false);
-
-        var handler = new StubHttp();
-        using var http = new HttpClient(handler);
-        using var client = new HijackClient("http://mock.test", httpClient: http);
-        var mcp = new McpServer(client);
-        foreach (var name in McpServer.AllToolNames)
-        {
-            var res = await mcp.CallAsync(name, new Dictionary<string, object?>
-            {
-                ["worker_id"] = "w1",
-                ["hijack_id"] = "h1",
-                ["session_id"] = "s1",
-                ["keys"] = "ab",
-                ["input_mode"] = "hijack",
-                ["mode"] = name.Contains("read", StringComparison.Ordinal) ? "events" : "snapshot",
-                ["lease_s"] = 30L,
-                ["owner"] = "op",
-                ["note"] = "hi",
-                ["group_id"] = "g1",
-                ["workers"] = new[] { "w1", "w2" },
-                ["display_name"] = "D",
-            });
-            Assert.NotNull(res);
-        }
-
-        // hijack_read snapshot mode
-        var snap = await mcp.CallAsync("hijack_read", new Dictionary<string, object?>
-        {
-            ["worker_id"] = "w1", ["hijack_id"] = "h1", ["mode"] = "snapshot",
-        });
-        Assert.NotNull(snap);
-
-        // Register custom tool that throws
-        mcp.Register(new McpTool
-        {
-            Name = "boom",
-            Description = "throws",
-            Handler = (_, _) => throw new InvalidOperationException("boom"),
-        });
-        var boom = await mcp.CallAsync("boom");
-        Assert.False((bool)boom["ok"]!);
-
-        Assert.Equal(0, await McpProgram.RunAsync(["--help"]));
-        Assert.Equal(0, await McpProgram.RunAsync(["--list-tools"]));
-        Assert.Equal(0, await McpProgram.RunAsync(["help"]));
-        Assert.Equal(0, await McpProgram.RunAsync(["list-tools"]));
-    }
 
     // ---------- Auth ----------
 

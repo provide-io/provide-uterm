@@ -30,7 +30,7 @@ Portable surfaces live as namespaces under `src/Provide.Uterm/`:
 `ControlChannel`, `CtrlMsg`, `Frames`, `Defaults`, `Ansi`, `Colors`, `Screen`,
 `Vt`, `Emulator`, `DeckMux`, `Client`, `TermSession`, `Transports`, `Session`,
 `Hub`, `Server`, `ServerAuth`, `ServerConfig`, `Connectors`, `Gateway`,
-`Tunnel`, `TunnelClient`, `Fanout`, `Mcp`, `Manager`, `Pty`, `Recording`,
+`Tunnel`, `TunnelClient`, `Fanout`, `Manager`, `Pty`, `Recording`,
 `Replay`, `Redaction`, `Sanitizer`, `Filters`, `Channels`, `Shell`,
 `Detection`, `Annotation`, `Render`, `Bridge`, `ControlPlane`, `Cli`, …
 
@@ -41,11 +41,13 @@ Binaries:
 | `uterm` | `cmd/Uterm` |
 | `uterm-manager` | `cmd/Uterm.Manager` |
 
-> **MCP** (`uterm-mcp`) is **not** a C# deliverable for this port (Python/Go keep MCP).
-> A thin `cmd/Uterm.Mcp` host may remain for workspace convenience; it is out of scope for parity.
+> **MCP** (`uterm-mcp`) is **not shipped** for the C# port (operator de-scope).
+> Python and Go keep the MCP tool surface. There is no `Mcp/` namespace and no
+> `Uterm.Mcp` binary in this tree.
 
 CLI subcommands (real, not stubs): `proxy`, `listen`, `share`, `tunnel`,
-`inspect`, `watch`, `audit`, `server`.
+`inspect`, `watch`, `audit`, `server`. `proxy --once` starts Kestrel, prints
+ready, then stops (real bind).
 
 ## Build & run
 
@@ -55,7 +57,6 @@ export DOTNET_ROOT="$(brew --prefix dotnet)/libexec"   # Homebrew layout
 make build-binaries
 ./bin/Uterm --help
 ./bin/Uterm server --host 127.0.0.1 --port 8780
-./bin/Uterm.Mcp --help
 ./bin/Uterm.Manager --help
 make quality-gate   # build + test + coverage floor + binaries
 ```
@@ -66,14 +67,13 @@ make quality-gate   # build + test + coverage floor + binaries
 make quality-gate
 ```
 
-Coverage excludes pure Unicode/charset lookup tables (data-only), live
+Coverage excludes pure Unicode/charset lookup tables (data-only) and live
 OS/socket residual packages (`Pty/PtyTransport`, live telnet/SSH/WebSocket
-transport bodies), and the out-of-scope `Mcp/` tree (operator de-scoped MCP
-for C#). The gate floor is `COVER_THRESHOLD=96.5` (measured ~96.7% of that
-denominator). Remaining misses match Go’s residual class: production
-`Console.CancelKeyPress` wait arms (tests inject `WaitForCancel` no-ops to
-exercise non-`--once` CLI paths), WebSocket accept/stop races, and rare
-codec/float fallback branches — not untested library logic.
+transport bodies). The gate floor is `COVER_THRESHOLD=97.0` (Go-comparable;
+Go uses 97.2 with documented residuals). Remaining misses match Go’s residual
+class: production `Console.CancelKeyPress` wait arms (tests inject
+`WaitForCancel` no-ops), WebSocket accept/stop races, and rare codec/float
+fallback branches — not untested library logic.
 
 ## Conformance
 

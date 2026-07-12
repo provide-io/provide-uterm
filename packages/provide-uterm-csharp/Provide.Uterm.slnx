@@ -1,7 +1,6 @@
 <Solution>
   <Folder Name="/cmd/">
     <Project Path="cmd/Uterm.Manager/Uterm.Manager.csproj" />
-    <Project Path="cmd/Uterm.Mcp/Uterm.Mcp.csproj" />
     <Project Path="cmd/Uterm/Uterm.csproj" />
   </Folder>
   <Folder Name="/src/">

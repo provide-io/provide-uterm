@@ -44,6 +44,7 @@ public class RealCliTests
         var text = o.ToString();
         Assert.Contains("proxy listening", text, StringComparison.Ordinal);
         Assert.Contains("proxy ready", text, StringComparison.Ordinal);
+        Assert.Contains("uterm-proxy", text, StringComparison.Ordinal); // health body from real bind
         Assert.DoesNotContain("stub", text, StringComparison.OrdinalIgnoreCase);
     }
 
