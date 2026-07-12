@@ -144,6 +144,24 @@ A versioned behavioral contract supplements byte-level conformance. Each operati
 
 Language-specific role/capability tables and tests are generated from or checked against this contract. Deliberately unsupported features appear in executable capability metadata rather than only in prose documentation.
 
+## Runtime-neutral Python REST routes
+
+Portable HTTP/JSON endpoints shared by the FastAPI server and Cloudflare Python runtime use the published `routedef` package as their canonical handler contract. The dependency is pinned to `routedef>=0.1.1,<0.2.0` while the library remains in its pre-1.0 compatibility window.
+
+Each migrated route is defined once as a `RouteDef` with method, path, handler, stable name, and metadata for authentication, required capability/role, request/body limits, public errors, idempotency, and audit event. Handlers accept `RouteRequest` and return `RouteResponse`; runtime services enter through a typed context protocol. FastAPI mounts the route table with `build_fastapi_router`; Cloudflare dispatches the same table with `CloudflareDispatcher`.
+
+The migration includes every portable JSON REST family for which both runtimes expose equivalent behavior. Framework-specific surfaces remain native:
+
+- WebSocket upgrades and terminal/control byte streams;
+- streaming and file-download responses;
+- static pages and frontend assets;
+- middleware, application lifespan, background sweeps, and framework lifecycle hooks;
+- Go and C# HTTP handlers.
+
+Those native surfaces are still checked against the behavioral contract. `RouteDef` does not replace Pydantic/domain validation, authorization services, storage protocols, or framework lifecycle management.
+
+Migration is characterization-first. Before changing a route family, tests pin current status codes, headers, bodies, auth denials, validation errors, side effects, audit events, and idempotency for both adapters. The shared handler is then tested directly without a server, followed by adapter-parity tests. Route inventory/drift checks prove that every eligible dual-runtime route is represented exactly once and every excluded native route has a documented reason.
+
 ## CI and quality gates
 
 - Ruff format/lint and Bandit gate every first-party Python production `src` tree.
@@ -181,6 +199,7 @@ Required suites include:
 - GUI HTTP error propagation and partial typing;
 - embed concurrent callers, re-entrant interceptor enqueueing, ordering, recursion limits, lifecycle state/events, EOF, backpressure, transactional replacement, and callback failure;
 - behavioral-contract checks for each maintained port;
+- direct and adapter-parity tests for every migrated `RouteDef` family, plus eligible-route inventory drift checks;
 - recording path, permissions, retention, and tracked-artifact guards.
 
 ## Rollout
@@ -192,6 +211,7 @@ Required suites include:
 5. Land the embed actor runtime and lifecycle corrections.
 6. Expand CI gates with ratcheted baselines where necessary.
 7. Land parity metadata, recording safeguards, generated perimeter documentation, migration notes, and removal of legacy paths.
+8. Migrate portable FastAPI/Cloudflare JSON REST families to shared `RouteDef` tables incrementally, deleting duplicate handlers only after characterization and parity tests pass.
 
 GUI attachment remains disabled or explicitly development-only until steps 1 through 4 pass their security and integration suites.
 
@@ -206,4 +226,4 @@ GUI attachment remains disabled or explicitly development-only until steps 1 thr
 - CI gates all first-party Python production sources and includes graphical policy/parser code in Go quality metrics.
 - Static and runtime targets coexist through the existing control-plane abstraction with immutable static precedence.
 - Full affected Python, Go, C#, frontend, conformance, security, and quality suites pass.
-
+- All eligible dual-runtime Python REST routes use one `RouteDef` handler implementation; native exclusions are machine-checked and documented.

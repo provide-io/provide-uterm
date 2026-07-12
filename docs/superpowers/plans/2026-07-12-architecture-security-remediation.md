@@ -289,6 +289,51 @@ Existing lifecycle/config/route files are modified only to delegate into these u
 - [ ] Run `git diff --check`, full Python workspace tests, Go quality/vulnerability/fuzz gates, C# quality gate, npm typecheck/lint/tests, conformance, hostile-client tests, root quality gate, and changed mutation gates.
 - [ ] Commit with `docs: close architecture remediation program` only after every required verification is green.
 
+## Phase F — runtime-neutral REST convergence
+
+### Task 18: RouteDef foundation and eligible-route inventory
+
+**Files:**
+- Modify: root/package Python dependencies and lockfile to add `routedef>=0.1.1,<0.2.0`
+- Create: shared route metadata keys, typed application contexts, and route inventory/check scripts
+- Test: `tests/conformance/test_routedef_inventory.py` and package-local adapter contract tests
+
+- [ ] Write an inventory test that compares FastAPI and Cloudflare HTTP/JSON routes, classifies portable candidates, and requires every exclusion to use a known reason (`websocket`, `stream`, `download`, `static`, `lifecycle`, or runtime-only capability).
+- [ ] Write dependency/adapter smoke tests proving `RouteDef`, `RouteTable`, FastAPI routing, and Cloudflare dispatch work in the normal and vendored Pyodide environments.
+- [ ] Run tests and observe failure because dependency, inventory, and shared metadata are absent.
+- [ ] Add the pinned dependency, vendor/update Cloudflare modules through the repository's supported process, define typed contexts and metadata constants aligned with `behavioral-contract.yaml`, and implement deterministic inventory checking.
+- [ ] Run dependency, vendor-tree, adapter, and inventory tests.
+- [ ] Commit with `feat(routes): establish shared routedef foundation`.
+
+### Task 19: Characterize and migrate portable route families
+
+**Files:**
+- Create: focused shared route modules grouped by domain (health, sessions, control/lease, tunnels, profiles, approvals, fanout, recordings metadata, and other inventory-confirmed portable JSON families)
+- Modify: FastAPI route assembly and Cloudflare dispatcher assembly to mount the same route tables
+- Test: direct handler tests, FastAPI adapter tests, Cloudflare adapter tests, and normalized cross-backend parity suites for each family
+
+- [ ] For one route family at a time, write characterization tests pinning successful status/body/headers, malformed input, auth/capability denial, not-found/conflict behavior, side effects, audit event, limits, and idempotency in both current runtimes.
+- [ ] Run each family characterization suite before migration and require green; this is the compatibility baseline.
+- [ ] Write direct `RouteDef` handler and dual-adapter parity tests, then run them and observe failure because the shared family does not exist.
+- [ ] Implement the minimal runtime-neutral handlers against typed context protocols, mount them through both adapters, and remove the two duplicate implementations only after parity is green.
+- [ ] Repeat red-green-refactor for every eligible inventory family; never batch uncharacterized families.
+- [ ] Run full FastAPI, Cloudflare, conformance, auth, coverage, and Pyodide vendor suites.
+- [ ] Commit each family separately using `refactor(routes): share <family> routedef handlers` so regressions are bisectable.
+
+### Task 20: Route metadata/behavioral-contract convergence and legacy removal
+
+**Files:**
+- Modify: `spec/behavioral-contract.yaml`, its generator/checker, route metadata checks, docs, and CI gates
+- Remove: superseded duplicate portable handlers/adapters after inventory reaches zero unexplained candidates
+- Test: contract drift, route uniqueness, eligibility, auth metadata, public errors, limits, audit events, and no-dead-handler tests
+
+- [ ] Write drift tests requiring each portable `RouteDef` to match the behavioral contract for operation ID, capability/role, state/lease requirement, limits, public errors, idempotency, and audit event.
+- [ ] Write uniqueness/dead-code tests proving an eligible method/path is registered once per runtime and no superseded handler remains reachable or imported.
+- [ ] Verify failures, then make route metadata and the behavioral generator share one canonical operation identifier and add checks to root quality/conformance gates.
+- [ ] Delete legacy portable route implementations and update architecture/migration documentation, retaining native exclusions with machine-readable reasons.
+- [ ] Run full Python workspace tests, both adapter suites, coverage/mutation gates for changed policy handlers, vendor-tree validation, and package artifact checks.
+- [ ] Commit with `refactor(routes): complete routedef convergence`.
+
 ## Execution rules
 
 - Execute tasks in order within each phase. Tasks 11–12 may proceed independently from Tasks 1–10 after Task 4's shared schema decisions are stable; Tasks 14–16 may proceed after their affected production changes land.
@@ -296,4 +341,4 @@ Existing lifecycle/config/route files are modified only to delegate into these u
 - Use a fresh implementation subagent per task, then a spec-compliance reviewer, then a code-quality reviewer. Reviewer findings must be fixed and re-reviewed before the task closes.
 - Agents must not overwrite unrelated user changes. Each task commits only its declared files.
 - GUI attachment stays disabled/default-denied until Tasks 1–10 pass integration/security gates.
-
+- Tasks 18–20 begin after Task 13 establishes the behavioral contract; individual route-family migrations may proceed independently only when their files and state dependencies do not overlap.
