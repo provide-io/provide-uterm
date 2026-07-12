@@ -4,11 +4,8 @@
 #
 """Canonical configuration schema for the hosted terminal server application.
 
-Mutation-enforced at killed==100 (see [tool.mutmut].source_paths). mutmut only
-mutates this module's two undecorated module-level helpers (``_clean_path`` and the
-``_require_secure_url`` SSRF guard) — it skips every ``@model_validator`` /
-``@field_validator`` / ``@classmethod`` by design — so those two functions carry the
-behaviour-pinning kill-tests in ``tests/server/test_models_mutation_killing.py``.
+Mutation-enforced at killed==100. The undecorated helpers carry mutation tests;
+mutmut skips the Pydantic-decorated validators.
 """
 
 from __future__ import annotations
@@ -21,6 +18,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from provide.uterm.bridge.contracts import Visibility  # noqa: TC001 — Pydantic needs it at runtime
 from provide.uterm.defaults import TerminalDefaults
+from provide.uterm.server.config_schema_graphical import GraphicalConfig as GraphicalConfig
+from provide.uterm.server.config_schema_graphical import GraphicalTargetDefinition as GraphicalTargetDefinition
 
 # CDN URLs for xterm.js and fonts loaded into the operator dashboard HTML.
 XTERM_CDN_DEFAULT = "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0"
@@ -335,15 +334,7 @@ class ServerBindConfig(ServerBaseModel):
         return self
 
 
-# SessionDefinition lives in a sibling module to keep this file under 500 LOC.
-# It is a pure Pydantic model (zero mutmut mutants); the mutation-bearing
-# helpers (_clean_path, _require_secure_url) deliberately stay here so this
-# module keeps a non-empty mutant set. The import is placed AFTER ServerBaseModel
-# and SERVER_BUILTIN_CONNECTOR_TYPES (which the sibling imports back) and BEFORE
-# UtermServerConfig (which references SessionDefinition). Re-exported below so
-# ``from provide.uterm.server.config_schema import SessionDefinition`` resolves.
-# `as SessionDefinition` marks this an explicit re-export (PEP 484) so strict
-# mypy lets `from ...config_schema import SessionDefinition` resolve downstream.
+# Kept in a sibling to bound this module; the explicit alias supports strict mypy re-export checks.
 from provide.uterm.server.config_schema_session import SessionDefinition as SessionDefinition  # noqa: E402
 
 
@@ -433,9 +424,6 @@ class GovernanceConfig(ServerBaseModel):
 class UtermServerConfig(ServerBaseModel):
     """Top-level application config for the standalone server."""
 
-    # Declared deployment intent. Secure-by-default = production; drives the
-    # production assertion (_validate_environment_profile) and the startup
-    # security-posture self-report (compute_security_posture).
     environment: Literal["dev", "production"] = "production"
     server: ServerBindConfig = Field(default_factory=ServerBindConfig)
     auth: AuthConfig = Field(default_factory=lambda: AuthConfig(mode="dev_token"))
@@ -449,6 +437,8 @@ class UtermServerConfig(ServerBaseModel):
     pam: PamConfig = Field(default_factory=PamConfig)
     governance: GovernanceConfig = Field(default_factory=GovernanceConfig)
     audit: AuditConfig = Field(default_factory=AuditConfig)
+    graphical: GraphicalConfig = Field(default_factory=GraphicalConfig)
+    graphical_targets: tuple[GraphicalTargetDefinition, ...] = ()
     sessions: list[SessionDefinition] = Field(
         default_factory=lambda: [
             SessionDefinition(
@@ -494,6 +484,15 @@ class UtermServerConfig(ServerBaseModel):
         if value < 1:
             raise ValueError(f"max_workers must be >= 1, got: {value}")
         return value
+
+    @model_validator(mode="after")
+    def _validate_graphical_targets(self) -> UtermServerConfig:
+        target_ids = [target.target_id for target in self.graphical_targets]
+        if len(target_ids) != len(set(target_ids)):
+            raise ValueError("duplicate graphical target_id")
+        if self.environment == "production" and self.graphical.allow_dynamic_targets:
+            raise ValueError("graphical.allow_dynamic_targets is invalid in production")
+        return self
 
 
 SessionDefinition.model_rebuild()
