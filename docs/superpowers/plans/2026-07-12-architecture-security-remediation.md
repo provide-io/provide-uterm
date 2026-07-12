@@ -338,6 +338,9 @@ Existing lifecycle/config/route files are modified only to delegate into these u
 
 - Execute tasks in order within each phase. Tasks 11–12 may proceed independently from Tasks 1–10 after Task 4's shared schema decisions are stable; Tasks 14–16 may proceed after their affected production changes land.
 - Every production change requires a newly written test observed failing for the intended reason before implementation.
+- Run `ruff format` and `ruff check` against every Python file immediately after it is created or modified, and again before task handoff. Do not defer formatting/lint cleanup to the end of a multi-file task.
+- Run mypy as soon as new public interfaces and record types compile, before expanding their implementation, and rerun it after every signature change. `Any`, `cast`, ignores, and uncovered defensive branches may not be used to conceal an incompatible contract.
+- Within each touched subsystem, investigate stability defects exposed during implementation—corrupt persisted state, error-boundary leaks, ignored failures, races, resource leaks, and false-success responses—and add a failing regression test before fixing them. Do not knowingly defer a discovered Critical or Important defect merely because the original task emphasized a happy path.
 - Use a fresh implementation subagent per task, then a spec-compliance reviewer, then a code-quality reviewer. Reviewer findings must be fixed and re-reviewed before the task closes.
 - Agents must not overwrite unrelated user changes. Each task commits only its declared files.
 - GUI attachment stays disabled/default-denied until Tasks 1–10 pass integration/security gates.
