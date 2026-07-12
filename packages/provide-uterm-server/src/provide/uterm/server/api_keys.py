@@ -74,17 +74,6 @@ class ApiKeyStore:
                 return record
         return None
 
-    def revoke(self, key_id: str) -> bool:
-        """Revoke a key by ID. Returns ``True`` if found."""
-        if key_id in self._keys:
-            self._keys[key_id].revoked = True
-            return True
-        return False
-
-    def list_keys(self) -> list[ApiKey]:
-        """List all keys (never exposes the raw key or full hash)."""
-        return list(self._keys.values())
-
     def list_keys_for_tenant(self, tenant_id: str) -> list[ApiKey]:
         """List only records owned by one tenant; system records stay hidden."""
         return [record for record in self._keys.values() if record.tenant_id == tenant_id]
