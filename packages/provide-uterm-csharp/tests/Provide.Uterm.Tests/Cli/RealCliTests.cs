@@ -119,30 +119,45 @@ public class RealCliTests
     [Fact]
     public void Inspect_Once_BindsProxy()
     {
-        // Upstream that always responds
-        using var upstream = new HttpListener();
+        // Upstream that always responds. Avoid `using` — HttpListener.Dispose can throw
+        // ObjectDisposedException under parallel test port races on macOS.
+        var upstream = new HttpListener();
         var upstreamPort = FreePort();
         upstream.Prefixes.Add($"http://127.0.0.1:{upstreamPort}/");
         upstream.Start();
-        var upTask = Task.Run(async () =>
+        _ = Task.Run(async () =>
         {
-            var ctx = await upstream.GetContextAsync();
-            var buf = Encoding.UTF8.GetBytes("ok");
-            ctx.Response.StatusCode = 200;
-            ctx.Response.ContentLength64 = buf.Length;
-            await ctx.Response.OutputStream.WriteAsync(buf);
-            ctx.Response.Close();
+            try
+            {
+                var ctx = await upstream.GetContextAsync();
+                var buf = Encoding.UTF8.GetBytes("ok");
+                ctx.Response.StatusCode = 200;
+                ctx.Response.ContentLength64 = buf.Length;
+                await ctx.Response.OutputStream.WriteAsync(buf);
+                ctx.Response.Close();
+            }
+            catch
+            {
+                // listener stopped before accept
+            }
         });
 
-        using var o = new StringWriter();
-        using var e = new StringWriter();
-        var code = Root.Execute(
-            new[] { "inspect", "--upstream", $"http://127.0.0.1:{upstreamPort}", "--host", "127.0.0.1", "--once" },
-            o,
-            e);
-        Assert.Equal(0, code);
-        Assert.Contains("inspect: proxying", o.ToString(), StringComparison.Ordinal);
-        try { upstream.Stop(); } catch { /* port race with other tests */ }
+        try
+        {
+            using var o = new StringWriter();
+            using var e = new StringWriter();
+            var code = Root.Execute(
+                new[] { "inspect", "--upstream", $"http://127.0.0.1:{upstreamPort}", "--host", "127.0.0.1", "--once" },
+                o,
+                e);
+            Assert.Equal(0, code);
+            Assert.Contains("inspect: proxying", o.ToString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            try { upstream.Stop(); } catch { /* ignore */ }
+            try { upstream.Close(); } catch { /* ignore */ }
+        }
     }
 
     [Fact]

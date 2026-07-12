@@ -226,15 +226,17 @@ public static class Root
         {
             o.WriteLine("uterm listen — gateway telnet/SSH listener");
             o.WriteLine("  --protocol  telnet|ssh (default telnet)");
-            o.WriteLine("  --host      bind host (default 0.0.0.0)");
+            o.WriteLine("  --host      bind host (default 127.0.0.1)");
             o.WriteLine("  --port      bind port (default gateway port)");
+            o.WriteLine("  --allow-unauthenticated  allow non-loopback telnet bind");
             o.WriteLine("  --once      bind, accept readiness, stop");
             return 0;
         }
 
         var f = ParseFlags(args);
         var proto = f.GetValueOrDefault("protocol", "telnet");
-        var host = f.GetValueOrDefault("host", TerminalDefaults.BindAll);
+        // Default loopback for fail-closed telnet; 0.0.0.0 needs --allow-unauthenticated.
+        var host = f.GetValueOrDefault("host", "127.0.0.1");
         // Explicit --port wins (including 0 = ephemeral). Default only when flag omitted.
         var port = f.ContainsKey("port")
             ? int.Parse(f["port"])
@@ -261,7 +263,10 @@ public static class Root
             return 0;
         }
 
-        var telnet = new TelnetGateway();
+        var telnet = new TelnetGateway
+        {
+            AllowUnauthenticated = f.ContainsKey("allow-unauthenticated"),
+        };
         try
         {
             telnet.StartAsync(host, port).GetAwaiter().GetResult();

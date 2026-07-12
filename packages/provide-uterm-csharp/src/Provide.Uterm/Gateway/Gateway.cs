@@ -20,10 +20,18 @@ public sealed class TelnetGateway : IAsyncDisposable
     private Task? _acceptLoop;
     public Func<TcpClient, CancellationToken, Task>? OnAccept { get; set; }
 
+    /// <summary>
+    /// When false (default), only loopback binds are allowed — telnet is
+    /// plaintext/unauthenticated (matches Go/Python fail-closed gate).
+    /// </summary>
+    public bool AllowUnauthenticated { get; set; }
+
     public int Port { get; private set; }
 
     public Task StartAsync(string host = TerminalDefaults.BindAll, int port = 0, CancellationToken cancellationToken = default)
     {
+        GatewayBindPolicy.RequireUnauthenticatedAllowed(host, AllowUnauthenticated);
+
         if (port == 0)
         {
             port = TerminalDefaults.GatewayTelnetPort;
