@@ -20,21 +20,24 @@ def _json(value: object) -> str:
     return json.dumps(value, separators=(",", ":"), ensure_ascii=False)
 
 
-def _decode_string_tuple(raw: str, *, target_id: str, field: str) -> tuple[str, ...]:
+def _load_json(raw: object, *, target_id: str, field: str) -> object:
+    if not isinstance(raw, str):
+        raise ControlPlaneDataError(f"graphical target {target_id!r} has invalid {field}: stored value is not text")
     try:
-        decoded: object = json.loads(raw)
-    except json.JSONDecodeError as exc:
+        return json.loads(raw)
+    except (json.JSONDecodeError, UnicodeDecodeError, TypeError) as exc:
         raise ControlPlaneDataError(f"graphical target {target_id!r} has invalid {field}: malformed JSON") from exc
+
+
+def _decode_string_tuple(raw: object, *, target_id: str, field: str) -> tuple[str, ...]:
+    decoded = _load_json(raw, target_id=target_id, field=field)
     if not isinstance(decoded, list) or not all(isinstance(value, str) for value in decoded):
         raise ControlPlaneDataError(f"graphical target {target_id!r} has invalid {field}: expected a list of strings")
     return tuple(decoded)
 
 
-def _decode_labels(raw: str, *, target_id: str) -> tuple[tuple[str, str], ...]:
-    try:
-        decoded: object = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise ControlPlaneDataError(f"graphical target {target_id!r} has invalid audit_labels: malformed JSON") from exc
+def _decode_labels(raw: object, *, target_id: str) -> tuple[tuple[str, str], ...]:
+    decoded = _load_json(raw, target_id=target_id, field="audit_labels")
     if not isinstance(decoded, list):
         raise ControlPlaneDataError(f"graphical target {target_id!r} has invalid audit_labels: expected label pairs")
     labels: list[tuple[str, str]] = []

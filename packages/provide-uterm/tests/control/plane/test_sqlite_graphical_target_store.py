@@ -152,10 +152,12 @@ async def test_sqlite_graphical_target_store_uses_explicit_columns_across_schema
     ("field", "corrupt_value"),
     [
         ("allowed_vm_patterns", "{"),
+        ("allowed_vm_patterns", b"[\xff]"),
         ("allowed_vm_patterns", '{"pattern":"prod-*"}'),
         ("allowed_vm_patterns", "[1]"),
         ("allowed_cidrs", '"203.0.113.0/24"'),
         ("audit_labels", "{"),
+        ("audit_labels", b"[[\xff]]"),
         ("audit_labels", '"owner"'),
         ("audit_labels", '["owner"]'),
         ("audit_labels", '[["owner"]]'),
@@ -163,7 +165,7 @@ async def test_sqlite_graphical_target_store_uses_explicit_columns_across_schema
     ],
 )
 async def test_sqlite_graphical_target_store_wraps_corrupt_json_data(
-    tmp_path: Path, field: str, corrupt_value: str
+    tmp_path: Path, field: str, corrupt_value: object
 ) -> None:
     plane = SqliteControlPlane(ControlPlaneConfig(database_url=str(tmp_path / "cp.db")))
     await plane.migrate()
