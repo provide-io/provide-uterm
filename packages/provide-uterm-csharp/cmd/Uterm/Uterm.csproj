@@ -9,6 +9,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- Ship as lowercase `uterm` (matches Go/Python CLI names). -->
+    <AssemblyName>uterm</AssemblyName>
   </PropertyGroup>
 
 </Project>
