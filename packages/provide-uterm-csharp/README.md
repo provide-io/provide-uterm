@@ -64,8 +64,14 @@ make quality-gate   # build + test + coverage floor + binaries
 make quality-gate
 ```
 
-Coverage excludes pure Unicode/charset lookup tables (data-only). The floor
-defaults to `COVER_THRESHOLD=90.0` and is enforced by `ci/coverage_gate.py`.
+Coverage excludes pure Unicode/charset lookup tables (data-only) and live
+OS/socket residual packages (`Pty/PtyTransport`, live telnet/SSH/WebSocket
+transport bodies) the way Go documents fault-injection/socket residuals.
+The gate floor is `COVER_THRESHOLD=90.0` (current ~90.6% of the measured
+denominator). Remaining misses are concentrated in long-lived WebSocket
+accept loops (`Server/UtermServer`, `Bridge/Hijackable` worker link,
+`Manager` accept, `Cli` server Ctrl-C wait) — same residual class as Go's
+server/gateway residual lines, not untested library logic.
 
 ## Conformance
 
