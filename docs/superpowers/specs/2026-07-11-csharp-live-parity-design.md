@@ -12,9 +12,9 @@ The C# implementation is self-contained and requires only its .NET runtime and e
 
 C# connects to and controls remote graphical sessions. It does not launch or host QEMU, libvirt, or litevirt VMs. QEMU may be used only as a real RFB test fixture. VM lifecycle and hosting remain the responsibility of litevirt or another remote hypervisor.
 
-**In scope for this program:** PTY/process, sockets/WebSocket foundation, telnet client+gateway, SSH client+gateway, RFB client (raw TCP fixture first), GUI REST + lease gating, **ushell (in-terminal REPL/connector + commands)**, shared live harness, layered quality gates, external MCP consumer proofs.
+**In scope for this program:** PTY/process, sockets/WebSocket foundation, telnet client+gateway, SSH client+gateway, RFB client (raw TCP fixture first), GUI REST + lease gating, **ushell (in-terminal REPL/connector + commands)**, **embedded multi-client session/proxy API (Workstream 8)**, shared live harness, layered quality gates, external MCP consumer proofs.
 
-**Out of scope:** C# MCP server/binary; embedding QEMU/litevirt/Python/Go; full tunnel multiplex / DeckMux UI / recording product parity unless a follow-on design is accepted; claiming parity from coverage % or unit tests alone; **embedding a Python eval/exec sandbox in C#** (same deliberate non-port as Go — see Workstream 7).
+**Out of scope:** C# MCP server/binary; embedding QEMU/litevirt/Python/Go; full tunnel multiplex / DeckMux UI / recording product parity unless a follow-on design is accepted; claiming parity from coverage % or unit tests alone; **embedding a Python eval/exec sandbox in C#** (same deliberate non-port as Go — see Workstream 7); **Trade Wars / TWX domain logic** (lives in host adapters, not uterm).
 
 ## Current State (baseline)
 
@@ -29,6 +29,7 @@ C# connects to and controls remote graphical sessions. It does not launch or hos
 | GUI control | partial | Memory + RFB attach; lease-gated screenshot/input REST |
 | REST session/hijack | partial production | Health, sessions, hijack, WS present |
 | **Ushell** | **dispatcher landed (PR9)** | `Shell/` CommandDispatcher + commands (Go oracle). **No** `UshellConnector` / session wiring yet (PR10). |
+| **Embedded session / proxy** | **core landed (WS8)** | `Embed/` hub + session + intercept outcomes + in-process clients + `MemoryUpstream`. Telnet **policy hooks** present; full IAC engine still partial. |
 | Offline codec conformance (Layer A) | production | `vectors.json` / `ConformanceVectorsTests` |
 | Live harness (Layer B) | scaffolded | `conformance/live/` schema + sample scenario |
 | Coverage residuals | active | Live PTY/transports/SSH gateway/RFB residual exclusions |
@@ -197,6 +198,30 @@ Protocol message types and FastAPI↔CF backend contract: `docs/protocol-matrix.
 | Approval prompt UX | — | — | — | — | Y | — |
 | DeckMux UI (presence bar, overlays, menu) | — | — | — | — | Y | — |
 | Terminal themes / settings | — | — | — | — | Y | — |
+
+### 11. Embedded multi-client session / proxy core (Workstream 8)
+
+In-process API for protocol-aware hosts (e.g. TWX30 adapters). **Not** fleet fan-out and **not** browser TermHub — see Workstream 8.
+
+| Feature | Py | Go | C# | Rust | TS | Bun |
+|---------|:--:|:--:|:--:|:----:|:--:|:---:|
+| Package / module | Y (`embed/`) | Y (`embed/`) | Y (`Embed/`) | — | — | — |
+| `CreateSession` / hub registry | Y | Y | Y | — | — | — |
+| Dual-direction byte pipeline | Y | Y | Y | — | — | — |
+| Intercept outcomes pass/replace/consume/defer/inject | Y | Y | Y | — | — | — |
+| Re-entrant-safe ordered sends | Y | Y (`SendFromInterceptor`) | Y (`AsyncLocal` gate) | — | — | — |
+| App-byte events + wire diagnostic events | Y | Y | Y | — | — | — |
+| Pluggable telnet **policy** hooks | Y | Y | Y | — | — | — |
+| Full telnet IAC engine on embed path | S (use transports) | S (use transports) | S (use transports) | — | — | — |
+| Transparent 8-bit app pipes (no UTF-8 assume) | Y | Y | Y | — | — | — |
+| In-process client attach (no loopback) | Y | Y | Y | — | — | — |
+| Client metadata + tag filters (selective fan-out) | Y | Y | Y | — | — | — |
+| Per-client bounded queue / drop-oldest / disconnect | Y | Y | Y | — | — | — |
+| Replace upstream; keep clients | Y | Y | Y | — | — | — |
+| Session-scoped services bag | Y | Y | Y | — | — | — |
+| Lifecycle events (connect…shutdown) | Y | Y | Y | — | — | — |
+| Deterministic `MemoryUpstream` test pipe | Y | Y | Y | — | — | — |
+| Named TWX modes (deaf/lerker/…) as product types | — | — | — | — | — | — |
 
 ### How to use this matrix
 
@@ -427,6 +452,45 @@ Do not invent language-specific command sets; black-box scenarios stay shared.
 
 **Completion (C#):** checklist §7.6 green; connector black-box in Layer B; residual policy only for true network arms of fetch/cast if needed.
 
+### 8. Embedded multi-client session / proxy core
+
+**Goal:** first-class in-process API so hosts (TWX30, other protocol-aware proxies) do not shell out to the CLI or open loopback HTTP/WS.
+
+```csharp
+IUtermSession session = await hub.CreateSessionAsync(options);
+session.ApplicationDataReceived += HandleGameBytes;
+await session.SendToUpstreamAsync(bytes);
+await session.SendToClientsAsync(bytes, filter);
+```
+
+| Location | Status |
+|----------|--------|
+| **Py** | `packages/provide-uterm/src/provide/uterm/embed/` |
+| **Go** | `packages/provide-uterm-go/embed/` |
+| **C#** | `packages/provide-uterm-csharp/.../Embed/` |
+
+#### 8.1 Checklist (all languages — flip when green)
+
+- [x] Hub `CreateSession` + session registry
+- [x] Upstream pipe abstraction + `MemoryUpstream` test transport
+- [x] In-process client attach + `Receive` fan-out queues
+- [x] Client metadata + tag/predicate filters (host maps deaf/lerker/… → tags)
+- [x] Interceptor pipeline: pass / replace / consume / defer / inject
+- [x] Re-entrant-safe ordering (C# gate; Go `SendFromInterceptor`; Py depth)
+- [x] Application-byte events + wire diagnostic events
+- [x] Telnet **policy** interface (TTYPE/NAWS/option answers)
+- [ ] Full telnet IAC state machine composed onto embed upstream (wrap existing transports)
+- [x] Replace-upstream reconnect keeping clients
+- [x] Backpressure policies (drop-oldest / drop-newest / disconnect); upstream never waits on spectators
+- [x] Session-scoped services dictionary
+- [x] Lifecycle: created → connecting → negotiated → connected → upstream lost → reconnecting → client attached → shutdown
+- [x] Unit tests (ordering, intercept, fan-out, reconnect)
+- [ ] Layer B / host-adapter golden scenarios (TWX thin adapter out of tree)
+
+**Non-goals inside uterm:** script engines, TWX DB, named game modes, Avalonia UI chrome.
+
+**Oracle:** C# is the primary embed consumer (desktop hosts); Py/Go stay API-parity for cross-language proofs. Domain adapters stay outside this monorepo.
+
 ## Security Requirements
 
 ### Threat model (summary)
@@ -440,6 +504,8 @@ Do not invent language-specific command sets; black-box scenarios stay shared.
 | GUI input | Confused deputy | Active hijack lease required |
 | Ushell fetch/cast | SSRF / unbounded download | http(s) only; size/time limits aligned with Go |
 | Ushell storage | Path traversal | Bound root; reject `..` escapes |
+| Embed interceptors | Unbounded re-entry / queue growth | Serial pipeline gate; per-client queue caps; drop policies |
+| Embed clients | Slow spectator stalls game | Upstream never blocked by client queues |
 | Logs/artifacts | Secret leakage | Redaction at logger + harness writer; synthetic creds in CI |
 | DoS | Task/lease retention | Bounded cancel/disconnect |
 
@@ -498,7 +564,8 @@ Test-first slices: add Layer B expectation (fail) → implement → green. Unit 
 6. **SSH gateway parity** — FxSsh listen → drive landed; residual/hardening open.
 7. **RFB client + GUI against real RFB fixture** — client + attach partial; fixture suite open.
 8. **Ushell connector + commands** — port Go shell package to C# (Workstream 7); `py` stub like Go.
-9. **External MCP 6a then 6b; expand OS matrix**
+9. **Embedded session/proxy core** — Workstream 8 (Py/Go/C#); host adapters thin.
+10. **External MCP 6a then 6b; expand OS matrix**
 
 Each phase leaves a working system and adds its scenarios to **required CI for that phase** before the next starts.
 
@@ -590,8 +657,18 @@ Each phase leaves a working system and adds its scenarios to **required CI for t
 - Deps: PR9
 - Exit: connector black-box scenarios; wire as session connector type where server already lists shell sessions
 
-### PR11 — MCP 6a (terminal) Linux
-### PR12 — MCP 6b (GUI) + three-OS expansion
+### PR11 — Embedded session/proxy core *(landed — core)*
+- Files: Py `embed/`, Go `embed/`, C# `Embed/` (+ tests); design matrix §11 / Workstream 8
+- Deps: none hard
+- Exit: create/attach/intercept/fan-out/replace-upstream unit tests green in all three languages
+
+### PR12 — Embed + real Telnet/SSH upstream composition
+- Files: wrap `TelnetTransport` / `IConnectionTransport` as `IUpstreamPipe` with IAC strip + policy
+- Deps: PR11
+- Exit: live telnet fixture through embed session
+
+### PR13 — MCP 6a (terminal) Linux
+### PR14 — MCP 6b (GUI) + three-OS expansion
 
 ---
 
@@ -602,3 +679,5 @@ Each phase leaves a working system and adds its scenarios to **required CI for t
 *Updated 2026-07-12: PR9 landed — C# `Shell/` dispatcher + commands (Go oracle); connector (PR10) still open.*
 
 *Updated 2026-07-12: Platform multi-language feature matrix (terminal core, control channel, hub/hijack, transports, DeckMux, tunnel, GUI/RFB, ushell summary, auth/MCP, frontend) with Py/Go/C#/Rust/TS/Bun columns — same style as Workstream 7.*
+
+*Updated 2026-07-12: Workstream 8 embedded multi-client session/proxy core landed in Py/Go/C#; matrix §11 + PR11.*
