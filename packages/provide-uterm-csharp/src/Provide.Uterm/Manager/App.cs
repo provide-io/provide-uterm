@@ -330,6 +330,8 @@ public static class ManagerProgram
     /// <summary>Test hook for the interactive manager wait loop.</summary>
     internal static Action WaitForCancel { get; set; } = DefaultWaitCancel;
 
+    /// <summary>Production SIGINT wait — excluded from coverage (not unit-testable).</summary>
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
     private static void DefaultWaitCancel()
     {
         using var cts = new CancellationTokenSource();

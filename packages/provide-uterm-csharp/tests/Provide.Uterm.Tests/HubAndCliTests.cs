@@ -5,7 +5,6 @@
 
 using Provide.Uterm.Cli;
 using Provide.Uterm.Hub;
-using Provide.Uterm.Mcp;
 using Provide.Uterm.ServerAuth;
 
 namespace Provide.Uterm.Tests;
@@ -29,17 +28,6 @@ public class HubAndCliTests
         }
     }
 
-    [Fact]
-    public void Mcp_Registers_All_Tools()
-    {
-        var srv = new McpServer();
-        foreach (var name in McpServer.AllToolNames)
-        {
-            Assert.Contains(name, srv.ToolNames);
-        }
-
-        Assert.True(McpServer.AllToolNames.Length >= 21);
-    }
 
     [Fact]
     public async Task Hub_Lease_Acquire_Heartbeat_Release()

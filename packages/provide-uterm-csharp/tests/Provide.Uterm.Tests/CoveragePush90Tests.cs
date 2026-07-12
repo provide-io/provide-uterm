@@ -14,7 +14,6 @@ using Provide.Uterm.ControlChannel;
 using Provide.Uterm.Fanout;
 using Provide.Uterm.Gateway;
 using Provide.Uterm.Manager;
-using Provide.Uterm.Mcp;
 using Provide.Uterm.ServerAuth;
 using Provide.Uterm.ServerConfig;
 using Provide.Uterm.TermSession;
@@ -131,39 +130,6 @@ public class CoveragePush90Tests
         Assert.NotEmpty(alias.Feed("z"));
     }
 
-    [Fact]
-    public async Task Mcp_HandleRpc_ViaReflection()
-    {
-        var mcp = new McpServer();
-        var method = typeof(McpServer).GetMethod("HandleRpcAsync", BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.NotNull(method);
-
-        async Task<Dictionary<string, object?>> Rpc(string json)
-        {
-            using var doc = JsonDocument.Parse(json);
-            var task = (Task<Dictionary<string, object?>>)method!.Invoke(mcp, new object[] { doc.RootElement, CancellationToken.None })!;
-            return await task;
-        }
-
-        var init = await Rpc("""{"jsonrpc":"2.0","id":1,"method":"initialize"}""");
-        Assert.Equal("2.0", init["jsonrpc"]?.ToString());
-        Assert.NotNull(init["result"]);
-
-        var note = await Rpc("""{"jsonrpc":"2.0","id":2,"method":"notifications/initialized"}""");
-        Assert.Empty(note);
-
-        var list = await Rpc("""{"jsonrpc":"2.0","id":3,"method":"tools/list"}""");
-        Assert.NotNull(list["result"]);
-
-        var call = await Rpc("""{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"session_create","arguments":{"session_id":"s1","display_name":"D","lease_s":10,"flag":true,"off":false,"f":1.5}}}""");
-        Assert.NotNull(call["result"]);
-
-        var unknown = await Rpc("""{"jsonrpc":"2.0","id":5,"method":"nope"}""");
-        Assert.NotNull(unknown["error"]);
-
-        var noArgs = await Rpc("""{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"fanout_send"}}""");
-        Assert.NotNull(noArgs["result"]);
-    }
 
     [Fact]
     public async Task ManagerServer_Auth_Stop_Delete_NotFound()

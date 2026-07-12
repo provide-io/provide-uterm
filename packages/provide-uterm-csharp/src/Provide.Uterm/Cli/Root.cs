@@ -194,9 +194,22 @@ public static class Root
         o.WriteLine($"proxy listening on http://{opts.Bind}:{opts.Port}{opts.Path} → {opts.Transport}://{opts.Host}:{opts.BbsPort}");
         if (f.ContainsKey("once"))
         {
-            // Build proves the real handler graph without blocking forever.
-            using var app = ProxyCommand.Build(opts, new[] { $"http://127.0.0.1:{opts.Port}" });
-            o.WriteLine("proxy ready");
+            // Start the real Kestrel bind, hit /health, then stop (same pattern as server --once).
+            var urls = new[] { $"http://127.0.0.1:{opts.Port}" };
+            using var app = ProxyCommand.Build(opts, urls);
+            app.StartAsync().GetAwaiter().GetResult();
+            try
+            {
+                using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+                var body = http.GetStringAsync($"http://127.0.0.1:{opts.Port}/health").GetAwaiter().GetResult();
+                o.WriteLine("proxy ready");
+                o.WriteLine("proxy health: " + body.Trim());
+            }
+            finally
+            {
+                app.StopAsync().GetAwaiter().GetResult();
+            }
+
             return 0;
         }
 
@@ -565,6 +578,8 @@ public static class Root
 
     private static void WaitCancel() => WaitForCancel();
 
+    /// <summary>Production SIGINT wait — excluded from coverage (not unit-testable).</summary>
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
     private static void DefaultWaitCancel()
     {
         var tcs = new TaskCompletionSource();

@@ -77,10 +77,4 @@ public class SmokeSurfaceTests
         Assert.Equal(0, code);
     }
 
-    [Fact]
-    public void McpHost_Help_ExitsZero()
-    {
-        var code = Provide.Uterm.Mcp.McpHost.Run(new[] { "--help" });
-        Assert.Equal(0, code);
-    }
 }

@@ -18,7 +18,6 @@ using Provide.Uterm.Render;
 using Provide.Uterm.ServerAuth;
 using Provide.Uterm.Shell;
 using Provide.Uterm.Session;
-using Provide.Uterm.Mcp;
 using RBuf = Provide.Uterm.Render.RenderBuffer;
 
 namespace Provide.Uterm.Tests;
@@ -393,33 +392,6 @@ public class ModuleSurfaceTests
         Assert.True(filtered.Has("viewer"));
     }
 
-    [Fact]
-    public async Task Mcp_CallTools_WithoutClient()
-    {
-        var mcp = new McpServer();
-        var unknown = await mcp.CallAsync("no_such_tool");
-        Assert.True(unknown.ContainsKey("error") || unknown.ContainsKey("ok") || unknown.Count > 0);
-
-        // Register custom tool
-        mcp.Register(new McpTool
-        {
-            Name = "echo",
-            Description = "echo",
-            Handler = (args, _) => Task.FromResult(new Dictionary<string, object?> { ["ok"] = true, ["args"] = args }),
-        });
-        var res = await mcp.CallAsync("echo", new Dictionary<string, object?> { ["x"] = 1 });
-        Assert.Equal(true, res["ok"]);
-
-        // Built-in tools should return structured errors without client
-        foreach (var name in new[] { "session_list", "session_info", "hijack_status" })
-        {
-            if (mcp.ToolNames.Contains(name))
-            {
-                var r = await mcp.CallAsync(name, new Dictionary<string, object?> { ["session_id"] = "x", ["worker_id"] = "w" });
-                Assert.NotNull(r);
-            }
-        }
-    }
 
     [Fact]
     public void Expect_Session_Helpers()

@@ -8,7 +8,6 @@ using System.Net.Sockets;
 using System.Text;
 using Provide.Uterm.Cli;
 using Provide.Uterm.Client;
-using Provide.Uterm.Mcp;
 using Provide.Uterm.Server;
 using Provide.Uterm.ServerAuth;
 using Provide.Uterm.ServerConfig;
@@ -247,17 +246,6 @@ public class TermSessionCliServerTests
         }
     }
 
-    [Fact]
-    public void Mcp_ToolCount_And_List()
-    {
-        var srv = new McpServer();
-        Assert.True(McpServer.AllToolNames.Length >= 21);
-        Assert.Equal(McpServer.AllToolNames.Length, srv.ToolNames.Count);
-        var tools = srv.ListTools();
-        Assert.Equal(tools.Count, srv.ToolNames.Count);
-        Assert.Equal(tools.Select(t => t.Name).OrderBy(n => n, StringComparer.Ordinal),
-            tools.Select(t => t.Name)); // already ordered
-    }
 
     [Fact]
     public void Tunnel_AllChannels_RoundTrip()
