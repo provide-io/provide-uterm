@@ -192,6 +192,18 @@ class TestWsRoutesResume:
         hellos = [m for m in runtime._sent if m.get("type") == "hello"]
         assert len(hellos) == 0
 
+    async def test_resume_disabled_kill_switch(self, runtime: _MockRuntime, store: SqliteStateStore) -> None:
+        """resume_enabled=False → early return; no hello even with a valid token."""
+        store.create_resume_token("tok-off", "w1", "admin", 300)
+        runtime.config.resume_enabled = False  # type: ignore[attr-defined]
+        ws = _MockWs()
+        raw = frame_json("resume", token="tok-off")
+        await handle_socket_message(runtime, ws, raw, is_worker=False)
+        hellos = [m for m in runtime._sent if m.get("type") == "hello"]
+        assert hellos == []
+        # Token left intact (handler never consumed it)
+        assert store.get_resume_token("tok-off") is not None
+
     async def test_resume_empty_token_ignored(self, runtime: _MockRuntime) -> None:
         """Empty token → silently ignored."""
         ws = _MockWs()
