@@ -15,7 +15,7 @@ type SessionTokenKey struct {
 }
 
 // State is the shared mutable control-plane state. Port of
-// control.plane.memory.transaction.MemoryState. The five tables are keyed
+// control.plane.memory.transaction.MemoryState. The six tables are keyed
 // exactly as the Python dicts; audit_head is tracked separately (non-durable)
 // and is not part of transaction snapshots.
 type State struct {
@@ -41,7 +41,7 @@ func newState() *State {
 	}
 }
 
-// copyTables returns a copy of the five tables (not audit_head). Port of
+// copyTables returns a copy of the six tables (not audit_head). Port of
 // control.plane.memory.transaction._copy_state, which likewise omits
 // audit_head from transaction snapshots.
 func (s *State) copyTables() *State {

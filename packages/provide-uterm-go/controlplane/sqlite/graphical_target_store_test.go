@@ -119,6 +119,40 @@ func TestGraphicalTargetStoreStableRedactedDataErrors(t *testing.T) {
 	}
 }
 
+func TestGraphicalTargetStoreRejectsInvalidUTF8TextWithoutPayloadLeakage(t *testing.T) {
+	ctx := context.Background()
+	for _, field := range []string{"allowed_vm_patterns", "allowed_cidrs", "audit_labels"} {
+		t.Run(field, func(t *testing.T) {
+			e, path := newPlaneWithPath(t)
+			tx, _ := e.Begin(ctx)
+			if err := e.GraphicalTargetStore(tx).Put(ctx, graphicalTarget("invalid-utf8", "dns:///safe:443")); err != nil {
+				t.Fatal(err)
+			}
+			if err := tx.Commit(ctx); err != nil {
+				t.Fatal(err)
+			}
+			raw := openRaw(t, path)
+			_, err := raw.Exec("UPDATE cp_graphical_targets SET " + field + " = CAST(X'5B22FF225D' AS TEXT) WHERE target_id = 'invalid-utf8'")
+			_ = raw.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			readTx, _ := e.Begin(ctx)
+			_, err = e.GraphicalTargetStore(readTx).Get(ctx, "invalid-utf8")
+			_ = readTx.Rollback(ctx)
+			if err == nil || !cp.IsDataError(err) {
+				t.Fatalf("error = %T %v, want DataError", err, err)
+			}
+			if want := "graphical target \"invalid-utf8\" has invalid " + field + ": stored text is not valid UTF-8"; err.Error() != want {
+				t.Fatalf("error = %q, want %q", err, want)
+			}
+			if strings.Contains(err.Error(), "�") || strings.Contains(err.Error(), "FF") {
+				t.Fatalf("error leaked payload: %q", err)
+			}
+		})
+	}
+}
+
 type graphicalForeignTx struct{}
 
 func (graphicalForeignTx) Commit(context.Context) error   { return nil }
