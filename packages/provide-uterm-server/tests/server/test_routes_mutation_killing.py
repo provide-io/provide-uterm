@@ -2197,7 +2197,7 @@ class TestApiKeysRoutes:
             with pytest.raises(HTTPException) as exc:
                 await revoke(req, "ghost")
         assert exc.value.status_code == 404
-        assert exc.value.detail == "unknown key: ghost"
+        assert exc.value.detail == "API key not found"
         store.revoke.assert_called_once_with("ghost")
         audit.assert_not_called()
 

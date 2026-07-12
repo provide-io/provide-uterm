@@ -19,12 +19,13 @@ class ApiKey:
     key_id: str  # First 16 hex chars of key hash
     key_hash: str  # SHA-256 hex digest of the full key
     name: str  # Human-readable label
-    tenant_id: str | None = None  # Tenant securely inherited from the issuing principal.
     scopes: frozenset[str] = frozenset()  # Route validation should enforce non-empty role scopes
     created_at: float = field(default_factory=time.time)
     expires_at: float | None = None  # None = never expires
     last_used_at: float | None = None
     revoked: bool = False
+    # Appended to preserve the public positional constructor used by embedders.
+    tenant_id: str | None = None
 
 
 class ApiKeyStore:
@@ -83,6 +84,18 @@ class ApiKeyStore:
     def list_keys(self) -> list[ApiKey]:
         """List all keys (never exposes the raw key or full hash)."""
         return list(self._keys.values())
+
+    def list_keys_for_tenant(self, tenant_id: str) -> list[ApiKey]:
+        """List only records owned by one tenant; system records stay hidden."""
+        return [record for record in self._keys.values() if record.tenant_id == tenant_id]
+
+    def revoke_for_tenant(self, key_id: str, tenant_id: str) -> bool:
+        """Atomically verify tenant ownership and revoke without a TOCTOU gap."""
+        record = self._keys.get(key_id)
+        if record is None or record.tenant_id != tenant_id:
+            return False
+        record.revoked = True
+        return True
 
 
 def _hash_key(raw_key: str) -> str:

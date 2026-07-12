@@ -30,7 +30,9 @@ class TestApiKeyRoutes:
         config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
         config.auth.api_keys_enabled = True
         app = create_server_app(config)
-        return TestClient(app)
+        client = TestClient(app)
+        client.headers["x-uterm-tenant"] = "tenant-default"
+        return client
 
     @pytest.fixture()
     def disabled_client(self) -> TestClient:
@@ -117,6 +119,28 @@ class TestApiKeyRoutes:
         for item in data:
             assert "key" not in item
             assert "key_hash" not in item
+
+    def test_two_tenant_admins_cannot_list_or_revoke_each_others_keys(self, admin_client: TestClient) -> None:
+        tenant_a = {"x-uterm-tenant": "tenant-a"}
+        tenant_b = {"x-uterm-tenant": "tenant-b"}
+        key_a = admin_client.post("/api/keys", headers=tenant_a, json={"name": "private-a", "scopes": ["admin"]}).json()
+        key_b = admin_client.post("/api/keys", headers=tenant_b, json={"name": "private-b", "scopes": ["admin"]}).json()
+
+        listed_a = admin_client.get("/api/keys", headers=tenant_a).json()
+        assert [item["name"] for item in listed_a] == ["private-a"]
+        foreign = admin_client.delete(f"/api/keys/{key_b['key_id']}", headers=tenant_a)
+        missing = admin_client.delete("/api/keys/not-found", headers=tenant_a)
+        assert foreign.status_code == missing.status_code == 404
+        assert foreign.json() == missing.json()
+        assert "private-b" not in foreign.text
+        assert admin_client.delete(f"/api/keys/{key_a['key_id']}", headers=tenant_a).status_code == 200
+
+    def test_tenantless_admin_cannot_manage_public_api_keys(self, admin_client: TestClient) -> None:
+        tenantless = TestClient(admin_client.app)
+
+        assert tenantless.post("/api/keys", json={"name": "x", "scopes": ["admin"]}).status_code == 403
+        assert tenantless.get("/api/keys").status_code == 403
+        assert tenantless.delete("/api/keys/anything").status_code == 403
 
     def test_list_keys_disabled(self, disabled_client: TestClient) -> None:
         resp = disabled_client.get("/api/keys")

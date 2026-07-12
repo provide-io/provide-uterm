@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from provide.uterm.server.authorization import AuthorizationService
 
 _ALLOWED_ROLE_SCOPES = frozenset({"viewer", "operator", "admin"})
+_MISSING_TENANT = object()
 
 
 def _principal(request: Request) -> Principal:
@@ -35,6 +36,16 @@ def _source_ip(request: Request) -> str:
     return str(getattr(request.client, "host", "unknown")) if request.client else "unknown"
 
 
+def _tenant_scope(principal: Principal) -> str | object:
+    """Return tenant scope; tolerate old test/embedder principal doubles only."""
+    tenant_id = getattr(principal, "tenant_id", _MISSING_TENANT)
+    if tenant_id is _MISSING_TENANT:
+        return _MISSING_TENANT
+    if not isinstance(tenant_id, str):
+        raise HTTPException(status_code=403, detail="tenant identity required for API key management")
+    return tenant_id
+
+
 def create_api_keys_router() -> APIRouter:
     """Return a sub-router for ``/api/keys`` endpoints."""
     router = APIRouter()
@@ -48,6 +59,7 @@ def create_api_keys_router() -> APIRouter:
         authz = _authz(request)
         if not await authz.is_admin(principal):
             raise HTTPException(status_code=403, detail="admin role required")
+        tenant_id = _tenant_scope(principal)
         cfg = request.app.state.uterm_config
         if not cfg.auth.api_keys_enabled:
             raise HTTPException(status_code=403, detail="API key management is disabled")
@@ -75,8 +87,8 @@ def create_api_keys_router() -> APIRouter:
             if expires_in_s < 60:
                 raise HTTPException(status_code=422, detail="expires_in_s must be >= 60")
         create_kwargs: dict[str, Any] = {"scopes": scopes, "expires_in_s": expires_in_s}
-        if hasattr(principal, "tenant_id"):
-            create_kwargs["tenant_id"] = principal.tenant_id
+        if tenant_id is not _MISSING_TENANT:
+            create_kwargs["tenant_id"] = tenant_id
         raw_key, record = store.create(name, **create_kwargs)
         audit_event(
             "api_key.create",
@@ -99,10 +111,12 @@ def create_api_keys_router() -> APIRouter:
         authz = _authz(request)
         if not await authz.is_admin(principal):
             raise HTTPException(status_code=403, detail="admin role required")
+        tenant_id = _tenant_scope(principal)
         cfg = request.app.state.uterm_config
         if not cfg.auth.api_keys_enabled:
             raise HTTPException(status_code=403, detail="API key management is disabled")
         store = request.app.state.uterm_api_key_store
+        keys = store.list_keys() if tenant_id is _MISSING_TENANT else store.list_keys_for_tenant(tenant_id)
         return [
             {
                 "key_id": k.key_id,
@@ -113,7 +127,7 @@ def create_api_keys_router() -> APIRouter:
                 "last_used_at": k.last_used_at,
                 "revoked": k.revoked,
             }
-            for k in store.list_keys()
+            for k in keys
         ]
 
     @router.delete("/keys/{key_id}")
@@ -122,12 +136,14 @@ def create_api_keys_router() -> APIRouter:
         authz = _authz(request)
         if not await authz.is_admin(principal):
             raise HTTPException(status_code=403, detail="admin role required")
+        tenant_id = _tenant_scope(principal)
         cfg = request.app.state.uterm_config
         if not cfg.auth.api_keys_enabled:
             raise HTTPException(status_code=403, detail="API key management is disabled")
         store = request.app.state.uterm_api_key_store
-        if not store.revoke(key_id):
-            raise HTTPException(status_code=404, detail=f"unknown key: {key_id}")
+        revoked = store.revoke(key_id) if tenant_id is _MISSING_TENANT else store.revoke_for_tenant(key_id, tenant_id)
+        if not revoked:
+            raise HTTPException(status_code=404, detail="API key not found")
         audit_event(
             "api_key.revoke",
             principal=principal.subject_id,
