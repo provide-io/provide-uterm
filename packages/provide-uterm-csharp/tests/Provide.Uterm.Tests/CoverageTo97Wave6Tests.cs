@@ -53,12 +53,9 @@ public class CoverageTo97Wave6Tests : IDisposable
         using var o = new StringWriter();
         using var e = new StringWriter();
 
-        // listen without --once (hits WaitCancel then stop)
+        // listen without --once (hits WaitCancel then stop) — needs WS_URL
         Assert.Equal(0, Root.Execute(
-            new[] { "listen", "--protocol", "telnet", "--host", "127.0.0.1", "--port", FreePort().ToString() },
-            o, e));
-        Assert.Equal(0, Root.Execute(
-            new[] { "listen", "--protocol", "ssh", "--host", "127.0.0.1", "--port", FreePort().ToString() },
+            new[] { "listen", "ws://127.0.0.1:9/ws", "--host", "127.0.0.1", "--port", FreePort().ToString() },
             o, e));
 
         // share / inspect without --once

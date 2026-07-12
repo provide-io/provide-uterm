@@ -55,7 +55,7 @@ public class RealCliTests
         using var e = new StringWriter();
         var port = FreePort();
         var code = Root.Execute(
-            new[] { "listen", "--protocol", "telnet", "--host", "127.0.0.1", "--port", port.ToString(), "--once" },
+            new[] { "listen", "ws://127.0.0.1:9/ws", "--host", "127.0.0.1", "--port", port.ToString(), "--once" },
             o,
             e);
         Assert.Equal(0, code);
