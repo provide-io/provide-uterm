@@ -20,6 +20,8 @@ from provide.uterm.server.config_schema import (
     AuthConfig,
     ControlPlaneConfig,
     GovernanceConfig,
+    GraphicalConfig,
+    GraphicalTargetDefinition,
     PamConfig,
     ProfileStoreConfig,
     RecordingConfig,
@@ -51,6 +53,8 @@ __all__ = [
     "AuthConfig",
     "ControlPlaneConfig",
     "GovernanceConfig",
+    "GraphicalConfig",
+    "GraphicalTargetDefinition",
     "InputMode",
     "PamConfig",
     "ProfileStoreConfig",
@@ -105,6 +109,8 @@ ServerModel: TypeAlias = (
     | SessionRuntimeStatus
     | UtermServerConfig
     | GovernanceConfig
+    | GraphicalConfig
+    | GraphicalTargetDefinition
 )
 
 

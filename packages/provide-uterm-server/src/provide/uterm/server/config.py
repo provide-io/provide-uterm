@@ -14,6 +14,7 @@ from pydantic import ValidationError
 
 from provide.uterm.server.config_schema import UtermServerConfig
 from provide.uterm.server.models import validation_error_message
+from provide.uterm.server.secrets import SecretReference
 
 _TABLE_SECTIONS = frozenset(
     {
@@ -27,6 +28,7 @@ _TABLE_SECTIONS = frozenset(
         "webhooks",
         "pam",
         "control_plane",
+        "graphical",
     }
 )
 
@@ -46,7 +48,7 @@ def default_server_config() -> UtermServerConfig:
     return UtermServerConfig()
 
 
-def config_from_mapping(data: dict[str, Any]) -> UtermServerConfig:
+def config_from_mapping(data: dict[str, Any], *, config_dir: Path | None = None) -> UtermServerConfig:
     """Build a validated config object from a plain mapping."""
     normalized = dict(data)
     for section in _TABLE_SECTIONS:
@@ -56,6 +58,22 @@ def config_from_mapping(data: dict[str, Any]) -> UtermServerConfig:
     sessions = normalized.get("sessions")
     if isinstance(sessions, list):
         normalized["sessions"] = [entry for entry in sessions if isinstance(entry, dict)]
+    targets = normalized.get("graphical_targets")
+    if isinstance(targets, list) and config_dir is not None:
+        secret_fields = ("ca_secret_ref", "client_cert_secret_ref", "client_key_secret_ref")
+        normalized["graphical_targets"] = [
+            {
+                **entry,
+                **{
+                    field: SecretReference.parse(entry[field], base_dir=config_dir)
+                    for field in secret_fields
+                    if entry.get(field) is not None
+                },
+            }
+            if isinstance(entry, dict)
+            else entry
+            for entry in targets
+        ]
     try:
         merged = _deep_merge(default_server_config().model_dump(mode="python"), normalized)
         return UtermServerConfig.model_validate(merged)
@@ -69,7 +87,7 @@ def load_server_config(path: str | Path | None = None) -> UtermServerConfig:
         return default_server_config()
     cfg_path = Path(path)
     data = tomllib.loads(cfg_path.read_text(encoding="utf-8"))
-    config = config_from_mapping(data)
+    config = config_from_mapping(data, config_dir=cfg_path.parent)
     if not config.recording.directory.is_absolute():
         config.recording.directory = (cfg_path.parent / config.recording.directory).resolve()
     return config

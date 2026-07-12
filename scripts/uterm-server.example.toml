@@ -19,6 +19,26 @@ assets_path = "/_terminal"
 enabled_by_default = false
 directory = ".uterm-recordings"
 
+[graphical]
+# Raw/dynamic graphical endpoints are development-only and disabled by default.
+allow_dynamic_targets = false
+
+# Static graphical targets persist secret references only. Relative file:
+# references resolve from this TOML file's directory when a connection opens.
+# [[graphical_targets]]
+# target_id = "prod-vnc"
+# endpoint = "dns:///graphical.internal:443"
+# tls_mode = "mtls"
+# ca_secret_ref = "file:secrets/ca.pem"  # pragma: allowlist secret
+# client_cert_secret_ref = "env:UTERM_GRAPHICAL_CLIENT_CERT"  # pragma: allowlist secret
+# client_key_secret_ref = "file:secrets/client.key"  # pragma: allowlist secret
+# expected_server_name = "graphical.internal"
+# allowed_vm_patterns = ["prod-*"]
+# minimum_role = "operator"
+# connect_timeout_s = 10.0
+# handshake_timeout_s = 10.0
+# allowed_cidrs = ["10.0.0.0/8"]
+
 # [control_plane]
 # backend = "memory"            # "memory" (default) or "sqlite"
 # database_url = "~/.uterm/control_plane.db"  # required when backend = "sqlite"
