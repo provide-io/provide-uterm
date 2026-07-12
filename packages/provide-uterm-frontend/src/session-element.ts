@@ -283,6 +283,8 @@ type ValidatedHelloFrame = {
   hijacked_by_me?: boolean | null;
   input_mode?: string | null;
   resume_token?: string | null;
+  /** True when the browser successfully reclaimed a prior session via resume token. */
+  resumed?: boolean | null;
   role?: string | null;
   worker_online?: boolean | null;
 };
@@ -315,7 +317,14 @@ function optionalString(value: Record<string, unknown>, key: string): boolean {
 
 function validateHelloFrame(value: unknown): ValidatedHelloFrame | null {
   if (!isRecord(value) || value.type !== "hello") return null;
-  for (const key of ["can_hijack", "hijacked", "hijacked_by_me", "worker_online", "hijack_step_supported"]) {
+  for (const key of [
+    "can_hijack",
+    "hijacked",
+    "hijacked_by_me",
+    "worker_online",
+    "hijack_step_supported",
+    "resumed",
+  ]) {
     if (!optionalBoolean(value, key)) return null;
   }
   for (const key of ["input_mode", "role", "hijack_control", "resume_token"]) {
@@ -372,6 +381,8 @@ export class UtermSessionElement extends LitElement {
   private _fitAddon: FitAddonInstance | null = null;
   private _ro: ResizeObserver | null = null;
   private _activityFlashTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Clears the brief "Resumed" status after a successful resume-token reclaim. */
+  private _resumeFlashTimer: number | null = null;
 
   static override styles = [hijackStyles];
 
@@ -637,7 +648,20 @@ export class UtermSessionElement extends LitElement {
           state.resumeToken = msg.resume_token;
           saveResumeToken(state, msg.resume_token);
         }
-        this._updateStatus();
+        // Session reclaimed after browser reconnect (CF resume token) — brief chrome.
+        if (msg.resumed === true) {
+          this._handlers.setStatus("live", "Resumed");
+          if (this._resumeFlashTimer !== null) {
+            window.clearTimeout(this._resumeFlashTimer);
+          }
+          this._resumeFlashTimer = window.setTimeout(() => {
+            this._resumeFlashTimer = null;
+            this._updateStatus();
+            this.requestUpdate();
+          }, 2500);
+        } else {
+          this._updateStatus();
+        }
         this.requestUpdate();
         break;
       }

@@ -225,6 +225,8 @@ async def _handle_presence_message(runtime: RuntimeProtocol, ws: CFWebSocket, fr
 
 async def _handle_resume(runtime: RuntimeProtocol, ws: CFWebSocket, frame: dict[str, Any]) -> None:
     """Handle a browser resume request using a previously issued token."""
+    if not bool(getattr(runtime.config, "resume_enabled", True)):
+        return
     old_token = str(frame.get("token", ""))
     if not old_token:
         return

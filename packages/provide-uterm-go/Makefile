@@ -57,13 +57,16 @@ race:
 #   - cmd/ mains and demo programs (validated by build-binaries / manual demos)
 #   - litevirt_* VNC glue (live gRPC/WebSocket residual; tracker/rfb are unit-tested)
 cover:
-	@$(GO) test -coverprofile=coverage.raw -covermode=atomic ./... > /dev/null
+	@rm -f coverage.raw coverage.out
+	@$(GO) test -coverprofile=coverage.raw -covermode=atomic ./...
+	@test -s coverage.raw || { echo "cover: empty coverage.raw"; exit 1; }
 	@head -1 coverage.raw > coverage.out
-	@grep -vE '(/cmd/|litevirt_ai\.go|litevirt_human\.go)' coverage.raw | tail -n +2 >> coverage.out || true
+	@grep -E '^(mode:|.*\.go:)' coverage.raw | grep -vE '(/cmd/|litevirt_ai\.go|litevirt_human\.go)' | grep -v '^mode:' >> coverage.out || true
 	@total=$$($(GO) tool cover -func=coverage.out | awk '/^total:/ {gsub("%","",$$3); print $$3}'); \
-	echo "total coverage: $$total% (threshold $(COVER_THRESHOLD)%)"; \
+	echo "total coverage: $${total:-0}% (threshold $(COVER_THRESHOLD)%)"; \
+	if [ -z "$$total" ]; then echo "cover: could not parse total"; exit 1; fi; \
 	awk -v t="$$total" -v min="$(COVER_THRESHOLD)" 'BEGIN { exit (t+0 < min+0) ? 1 : 0 }' || \
-	  { echo "coverage below threshold"; $(GO) tool cover -func=coverage.out | grep -v '100.0%'; exit 1; }
+	  { echo "coverage below threshold"; $(GO) tool cover -func=coverage.out | grep -v '100.0%' | head -40; exit 1; }
 
 vuln:
 	$(GO) run golang.org/x/vuln/cmd/govulncheck@latest ./...
