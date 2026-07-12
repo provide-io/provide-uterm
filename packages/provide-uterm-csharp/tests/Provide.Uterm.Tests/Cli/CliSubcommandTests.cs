@@ -50,8 +50,12 @@ public class CliSubcommandTests
     public void Proxy_Run_ReportsBind()
     {
         using var o = new StringWriter();
-        var code = Root.Execute(new[] { "proxy", "--host", "127.0.0.1", "--port", "18765" }, o, TextWriter.Null);
+        var code = Root.Execute(
+            new[] { "proxy", "127.0.0.1", "23", "--port", "18765", "--once", "--bind", "127.0.0.1" },
+            o,
+            TextWriter.Null);
         Assert.Equal(0, code);
         Assert.Contains("18765", o.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("stub", o.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 }

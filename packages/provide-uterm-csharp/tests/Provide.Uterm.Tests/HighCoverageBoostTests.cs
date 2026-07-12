@@ -994,12 +994,15 @@ public class HighCoverageBoostTests
     {
         using var o = new StringWriter();
         using var e = new StringWriter();
-        Assert.Equal(0, Root.Execute(["proxy", "--host", "127.0.0.1", "--port", "9"], o, e));
-        Assert.Contains("127.0.0.1:9", o.ToString(), StringComparison.Ordinal);
+        Assert.Equal(0, Root.Execute(
+            ["proxy", "127.0.0.1", "23", "--bind", "127.0.0.1", "--port", "18709", "--once"], o, e));
+        Assert.Contains("127.0.0.1:18709", o.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("stub", o.ToString(), StringComparison.OrdinalIgnoreCase);
 
         using var o2 = new StringWriter();
-        Assert.Equal(0, Root.Execute(["proxy", "--host=0.0.0.0", "--port=8", "extra"], o2, o2));
-        Assert.Contains("0.0.0.0:8", o2.ToString(), StringComparison.Ordinal);
+        Assert.Equal(0, Root.Execute(
+            ["proxy", "example.com", "2323", "--bind=0.0.0.0", "--port=18708", "--once"], o2, o2));
+        Assert.Contains("0.0.0.0:18708", o2.ToString(), StringComparison.Ordinal);
 
         using var o3 = new StringWriter();
         Assert.Equal(0, Root.Execute(["-V"], o3, o3));

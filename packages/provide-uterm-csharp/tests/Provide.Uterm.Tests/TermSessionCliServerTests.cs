@@ -158,11 +158,43 @@ public class TermSessionCliServerTests
         Assert.Equal(1, Root.Execute(new[] { "nope" }, new StringWriter(), e));
         Assert.Contains("unknown", e.ToString(), StringComparison.Ordinal);
 
-        // Non-help stubs return 0 without starting long-running servers
-        foreach (var cmd in new[] { "proxy", "listen", "share", "tunnel", "inspect", "watch", "audit" })
+        // Real subcommands with --once / help / required args (no long-running block).
+        using (var sw = new StringWriter())
         {
-            using var sw = new StringWriter();
-            Assert.Equal(0, Root.Execute(new[] { cmd }, sw, sw));
+            Assert.Equal(0, Root.Execute(new[] { "proxy", "127.0.0.1", "23", "--port", "18700", "--once", "--bind", "127.0.0.1" }, sw, sw));
+            Assert.DoesNotContain("stub", sw.ToString(), StringComparison.OrdinalIgnoreCase);
+        }
+
+        using (var sw = new StringWriter())
+        {
+            Assert.Equal(0, Root.Execute(new[] { "listen", "--once", "--host", "127.0.0.1", "--port", "0" }, sw, sw));
+        }
+
+        using (var sw = new StringWriter())
+        {
+            Assert.Equal(0, Root.Execute(new[] { "share", "--once", "--command", "true" }, sw, sw));
+        }
+
+        using (var sw = new StringWriter())
+        {
+            // missing required --url → non-zero
+            Assert.Equal(1, Root.Execute(new[] { "tunnel" }, sw, sw));
+        }
+
+        using (var sw = new StringWriter())
+        {
+            Assert.Equal(1, Root.Execute(new[] { "inspect" }, sw, sw)); // missing --upstream
+        }
+
+        using (var sw = new StringWriter())
+        {
+            // watch against down server may fail; help is covered above
+            Assert.Equal(0, Root.Execute(new[] { "watch", "--help" }, sw, sw));
+        }
+
+        using (var sw = new StringWriter())
+        {
+            Assert.Equal(1, Root.Execute(new[] { "audit" }, sw, sw)); // needs verify PATH
         }
 
         Assert.Equal(0, Root.ExecuteAsync(new[] { "--help" }).GetAwaiter().GetResult());

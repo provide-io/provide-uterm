@@ -107,8 +107,8 @@ public sealed class TelnetGateway : IAsyncDisposable
 }
 
 /// <summary>
-/// SSH gateway listener stub that binds a TCP accept loop. Full SSH handshake
-/// is delegated to SSH.NET when a handler is attached.
+/// SSH gateway TCP accept loop. Callers attach <see cref="OnAccept"/> to run
+/// SSH.NET handshakes (same layering as Go gateway/ssh.go).
 /// </summary>
 public sealed class SshGateway : IAsyncDisposable
 {
