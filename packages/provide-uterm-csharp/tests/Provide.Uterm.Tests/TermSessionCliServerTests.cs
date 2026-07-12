@@ -166,7 +166,7 @@ public class TermSessionCliServerTests
 
         using (var sw = new StringWriter())
         {
-            Assert.Equal(0, Root.Execute(new[] { "listen", "--once", "--host", "127.0.0.1", "--port", "0" }, sw, sw));
+            Assert.Equal(0, Root.Execute(new[] { "listen", "ws://127.0.0.1:9/ws", "--once", "--host", "127.0.0.1", "--port", "0" }, sw, sw));
         }
 
         using (var sw = new StringWriter())

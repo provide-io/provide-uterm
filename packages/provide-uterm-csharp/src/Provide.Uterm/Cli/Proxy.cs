@@ -28,7 +28,10 @@ public static class ProxyCommand
         public string Bind { get; init; } = TerminalDefaults.BindAll;
         public int Port { get; init; } = TerminalDefaults.ProxyPort;
         public string Path { get; init; } = TerminalDefaults.ProxyWsPath;
+        /// <summary>telnet | ssh | websocket</summary>
         public string Transport { get; init; } = "telnet";
+        /// <summary>Upstream WSS/WS URL when Transport is websocket.</summary>
+        public string? UpstreamWsUrl { get; init; }
     }
 
     /// <summary>Build the ASP.NET app for the proxy. Exposed for in-process tests.</summary>
@@ -95,14 +98,28 @@ public static class ProxyCommand
 
     internal static async Task BridgeAsync(WebSocket ws, Options opts, CancellationToken ct)
     {
-        IConnectionTransport tr = opts.Transport.Equals("ssh", StringComparison.OrdinalIgnoreCase)
-            ? new SshTransport()
-            : new TelnetTransport();
-
+        IConnectionTransport tr;
         var connectOpts = new ConnectOptions();
-        if (opts.Transport.Equals("ssh", StringComparison.OrdinalIgnoreCase))
+        var transport = opts.Transport.ToLowerInvariant();
+        if (transport is "websocket" or "ws" or "wss")
         {
+            tr = new WebSocketTransport();
+            var url = opts.UpstreamWsUrl;
+            if (string.IsNullOrEmpty(url))
+            {
+                url = $"wss://{opts.Host}:{opts.BbsPort}";
+            }
+
+            connectOpts.Ws = new WsOptions { Url = url, SendBinary = false };
+        }
+        else if (transport == "ssh")
+        {
+            tr = new SshTransport();
             connectOpts.Ssh = new SshOptions { InsecureSkipHostKeyVerify = true };
+        }
+        else
+        {
+            tr = new TelnetTransport();
         }
 
         try

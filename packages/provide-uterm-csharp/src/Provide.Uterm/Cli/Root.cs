@@ -84,8 +84,8 @@ public static class Root
         w.WriteLine("  uterm [command] [options]");
         w.WriteLine();
         w.WriteLine("Available Commands:");
-        w.WriteLine("  proxy     browser WS → remote telnet/SSH");
-        w.WriteLine("  listen    Start a gateway telnet/SSH listener");
+        w.WriteLine("  proxy     browser WS → remote telnet/SSH/websocket");
+        w.WriteLine("  listen    telnet client → remote WS terminal (gateway)");
         w.WriteLine("  share     Share a local process over a tunnel");
         w.WriteLine("  tunnel    Tunnel client (connect)");
         w.WriteLine("  inspect   HTTP inspect proxy");
@@ -152,33 +152,64 @@ public static class Root
     {
         if (args.Any(a => a is "-h" or "--help"))
         {
-            o.WriteLine("uterm proxy HOST PORT — browser WS → remote telnet/SSH");
+            o.WriteLine("uterm proxy HOST PORT — browser WS → remote telnet/SSH/websocket");
             o.WriteLine("  --port / -p   local listen port (default 8765)");
             o.WriteLine("  --bind        bind address (default 0.0.0.0)");
             o.WriteLine("  --path        WebSocket path (default /ws/terminal)");
-            o.WriteLine("  --transport   telnet|ssh (default telnet)");
-            o.WriteLine("  --once        start, print bind info, exit (for tests)");
+            o.WriteLine("  --transport   telnet|ssh|websocket (default telnet)");
+            o.WriteLine("  --url         upstream ws(s):// URL (required for --transport websocket)");
+            o.WriteLine("  --once        start, hit /health, stop");
             return 0;
         }
 
         var f = ParseFlags(args);
-        if (!f.TryGetValue("_0", out var host) || !f.TryGetValue("_1", out var portStr))
-        {
-            e.WriteLine("error: proxy requires HOST PORT");
-            return 1;
-        }
-
-        if (!int.TryParse(portStr, out var bbsPort))
-        {
-            e.WriteLine($"error: PORT must be an integer: {portStr}");
-            return 1;
-        }
-
         var transport = f.GetValueOrDefault("transport", "telnet");
-        if (transport is not ("telnet" or "ssh"))
+        if (transport is not ("telnet" or "ssh" or "websocket" or "ws" or "wss"))
         {
-            e.WriteLine($"error: --transport must be telnet or ssh, got {transport}");
+            e.WriteLine($"error: --transport must be telnet, ssh, or websocket, got {transport}");
             return 1;
+        }
+
+        string host;
+        int bbsPort;
+        string? upstreamWs = f.GetValueOrDefault("url");
+        if (transport is "websocket" or "ws" or "wss")
+        {
+            // Allow: proxy --transport websocket --url wss://...  (HOST PORT optional placeholders)
+            if (string.IsNullOrEmpty(upstreamWs))
+            {
+                // Or: proxy wss://host/path  as single positional
+                if (f.TryGetValue("_0", out var posUrl) &&
+                    (posUrl.StartsWith("ws://", StringComparison.OrdinalIgnoreCase) ||
+                     posUrl.StartsWith("wss://", StringComparison.OrdinalIgnoreCase)))
+                {
+                    upstreamWs = posUrl;
+                }
+                else
+                {
+                    e.WriteLine("error: websocket proxy requires --url wss://... (or pass URL as HOST)");
+                    return 1;
+                }
+            }
+
+            var uri = new Uri(upstreamWs);
+            host = uri.Host;
+            bbsPort = uri.IsDefaultPort ? (uri.Scheme == "wss" ? 443 : 80) : uri.Port;
+            transport = "websocket";
+        }
+        else
+        {
+            if (!f.TryGetValue("_0", out host!) || !f.TryGetValue("_1", out var portStr))
+            {
+                e.WriteLine("error: proxy requires HOST PORT");
+                return 1;
+            }
+
+            if (!int.TryParse(portStr, out bbsPort))
+            {
+                e.WriteLine($"error: PORT must be an integer: {portStr}");
+                return 1;
+            }
         }
 
         var opts = new ProxyCommand.Options
@@ -189,9 +220,13 @@ public static class Root
             Port = int.Parse(f.GetValueOrDefault("port", TerminalDefaults.ProxyPort.ToString())),
             Path = f.GetValueOrDefault("path", TerminalDefaults.ProxyWsPath),
             Transport = transport,
+            UpstreamWsUrl = upstreamWs,
         };
 
-        o.WriteLine($"proxy listening on http://{opts.Bind}:{opts.Port}{opts.Path} → {opts.Transport}://{opts.Host}:{opts.BbsPort}");
+        var target = transport == "websocket"
+            ? opts.UpstreamWsUrl
+            : $"{opts.Transport}://{opts.Host}:{opts.BbsPort}";
+        o.WriteLine($"proxy listening on http://{opts.Bind}:{opts.Port}{opts.Path} → {target}");
         if (f.ContainsKey("once"))
         {
             // Start the real Kestrel bind, hit /health, then stop (same pattern as server --once).
@@ -237,57 +272,66 @@ public static class Root
     {
         if (args.Any(a => a is "-h" or "--help"))
         {
-            o.WriteLine("uterm listen — gateway telnet/SSH listener");
-            o.WriteLine("  --protocol  telnet|ssh (default telnet)");
-            o.WriteLine("  --host      bind host (default 127.0.0.1)");
-            o.WriteLine("  --port      bind port (default gateway port)");
+            o.WriteLine("uterm listen WS_URL — telnet client → remote WS terminal (matches Go/Python)");
+            o.WriteLine("  WS_URL    upstream terminal WebSocket (ws:// or wss://)");
+            o.WriteLine("  --host    bind host (default 127.0.0.1)");
+            o.WriteLine("  --port    telnet listen port (default gateway port; 0 = ephemeral)");
+            o.WriteLine("  --protocol  telnet|ssh (default telnet; ssh is accept-only stub)");
             o.WriteLine("  --allow-unauthenticated  allow non-loopback telnet bind");
-            o.WriteLine("  --once      bind, accept readiness, stop");
+            o.WriteLine("  --once    bind, print ready, stop (no accept)");
             return 0;
         }
 
         var f = ParseFlags(args);
+        // Positional WS_URL (Go: ExactArgs(1)); also accept --url for tests.
+        string? wsUrl = null;
+        if (f.TryGetValue("_0", out var pos0) &&
+            (pos0.StartsWith("ws://", StringComparison.OrdinalIgnoreCase) ||
+             pos0.StartsWith("wss://", StringComparison.OrdinalIgnoreCase)))
+        {
+            wsUrl = pos0;
+        }
+        else if (f.TryGetValue("url", out var urlFlag) && !string.IsNullOrEmpty(urlFlag))
+        {
+            wsUrl = urlFlag;
+        }
+
+        if (string.IsNullOrEmpty(wsUrl))
+        {
+            e.WriteLine("error: listen requires WS_URL (e.g. wss://host/path/ws/terminal)");
+            return 1;
+        }
+
         var proto = f.GetValueOrDefault("protocol", "telnet");
-        // Default loopback for fail-closed telnet; 0.0.0.0 needs --allow-unauthenticated.
         var host = f.GetValueOrDefault("host", "127.0.0.1");
-        // Explicit --port wins (including 0 = ephemeral). Default only when flag omitted.
         var port = f.ContainsKey("port")
             ? int.Parse(f["port"])
             : (proto.Equals("ssh", StringComparison.OrdinalIgnoreCase)
                 ? TerminalDefaults.GatewaySshPort
                 : TerminalDefaults.GatewayTelnetPort);
+
         if (proto.Equals("ssh", StringComparison.OrdinalIgnoreCase))
         {
-            var gw = new SshGateway();
-            try
-            {
-                gw.StartAsync(host, port).GetAwaiter().GetResult();
-                o.WriteLine($"listen: ssh gateway on {host}:{gw.Port}");
-                if (!f.ContainsKey("once"))
-                {
-                    WaitCancel();
-                }
-            }
-            finally
-            {
-                gw.StopAsync().GetAwaiter().GetResult();
-            }
-
-            return 0;
+            e.WriteLine("error: ssh gateway pump is not yet wired; use --protocol telnet");
+            return 1;
         }
 
         var telnet = new TelnetGateway
         {
             AllowUnauthenticated = f.ContainsKey("allow-unauthenticated"),
+            OnAccept = (client, ct) => GatewayDrive.RunAsync(client, wsUrl, ct),
         };
         try
         {
             telnet.StartAsync(host, port).GetAwaiter().GetResult();
-            o.WriteLine($"listen: telnet gateway on {host}:{telnet.Port}");
-            if (!f.ContainsKey("once"))
+            o.WriteLine($"listen: telnet gateway on {host}:{telnet.Port} → {wsUrl}");
+            if (f.ContainsKey("once"))
             {
-                WaitCancel();
+                o.WriteLine("listen ready");
+                return 0;
             }
+
+            WaitCancel();
         }
         finally
         {
