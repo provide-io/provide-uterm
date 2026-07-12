@@ -12,30 +12,30 @@ The C# implementation is self-contained and requires only its .NET runtime and e
 
 C# connects to and controls remote graphical sessions. It does not launch or host QEMU, libvirt, or litevirt VMs. QEMU may be used only as a real RFB test fixture. VM lifecycle and hosting remain the responsibility of litevirt or another remote hypervisor.
 
-**In scope for this program:** PTY/process, sockets/WebSocket foundation, telnet client+gateway, SSH client+gateway, RFB client (raw TCP fixture first), GUI REST + lease gating, shared live harness, layered quality gates, external MCP consumer proofs.
+**In scope for this program:** PTY/process, sockets/WebSocket foundation, telnet client+gateway, SSH client+gateway, RFB client (raw TCP fixture first), GUI REST + lease gating, **ushell (in-terminal REPL/connector + commands)**, shared live harness, layered quality gates, external MCP consumer proofs.
 
-**Out of scope:** C# MCP server/binary; embedding QEMU/litevirt/Python/Go; full tunnel multiplex / DeckMux UI / recording product parity unless a follow-on design is accepted; claiming parity from coverage % or unit tests alone.
+**Out of scope:** C# MCP server/binary; embedding QEMU/litevirt/Python/Go; full tunnel multiplex / DeckMux UI / recording product parity unless a follow-on design is accepted; claiming parity from coverage % or unit tests alone; **embedding a Python eval/exec sandbox in C#** (same deliberate non-port as Go — see Workstream 7).
 
 ## Current State (baseline)
 
 | Workstream | C# status | Notes |
 |---|---|---|
-| PTY / process | stub / non-PTY | Process pipes; native open throws; no ConPTY |
-| Socket / WebSocket | partial | Loops exist; fragment reassembly / hard limits incomplete |
+| PTY / process | partial | Process pipes default; native Unix openpty+posix_spawn opt-in (`PreferNativePty` / `UTERM_NATIVE_PTY=1`); no ConPTY |
+| Socket / WebSocket | partial | Fragment reassembly + max size; further foundation work remains |
 | Telnet client/gateway | partial | Minimal IAC; gateway drive exists; full negotiator missing |
-| SSH client | partial → host-key fixed in Phase 2 slice | SSH.NET; known_hosts verification required |
-| SSH gateway | missing / CLI rejected | Accept-only; pump not wired |
-| RFB client | missing | Tracker raw blit only |
-| GUI control | stub → REST + memory attach in Phase 5 prep | Memory session; no litevirt |
+| SSH client | partial | SSH.NET + real known_hosts matching (secure by default) |
+| SSH gateway | partial | FxSsh listen → `GatewayDrive` wired; residual coverage |
+| RFB client | partial | Security None + Raw client; tracker + attach `mode=rfb` |
+| GUI control | partial | Memory + RFB attach; lease-gated screenshot/input REST |
 | REST session/hijack | partial production | Health, sessions, hijack, WS present |
-| GUI REST | missing → added (memory attach) | Go oracle for path shapes |
+| **Ushell** | **stub only** | `Shell/ShellBasics.cs` = LineBuffer + ANSI output helpers only. **No** `UshellConnector`, dispatcher, or command suite. Go has full port under `packages/provide-uterm-go/shell` (~4k LOC incl. tests). |
 | Offline codec conformance (Layer A) | production | `vectors.json` / `ConformanceVectorsTests` |
-| Live harness (Layer B) | missing → scaffolded | Greenfield under `conformance/live/` |
-| Coverage residuals | active | PTY + live transports excluded from 97% floor |
-| Mutation (C#) | missing | Introduce Stryker perimeter later; not a live-path blocker |
-| Monorepo CI (C#) | missing → ubuntu `csharp-quality` | Local `make quality-gate` exists |
+| Live harness (Layer B) | scaffolded | `conformance/live/` schema + sample scenario |
+| Coverage residuals | active | Live PTY/transports/SSH gateway/RFB residual exclusions |
+| Mutation (C#) | missing | Stryker perimeter later |
+| Monorepo CI (C#) | ubuntu `csharp-quality` | Local `make quality-gate` exists |
 
-**Oracle language per surface:** Python owns codec vectors; Go owns real PTY, SSH known_hosts client, SSH/telnet gateways, GUI REST paths; Python server does **not** implement `/gui/*` today (`gui_rest` capability: `go|csharp`).
+**Oracle language per surface:** Python owns codec vectors and the **Python** `py` sandbox; **Go owns the portable ushell command model** (dispatcher, help/kv/fetch/storage/render/cast, connector lifecycle) and is the C# oracle for ushell; Go owns real PTY, SSH known_hosts, SSH/telnet gateways, GUI REST; Python server does **not** implement `/gui/*` today (`gui_rest` capability: `go|csharp`).
 
 ## Architecture
 
@@ -132,6 +132,39 @@ No C# MCP binary.
 - **6a Terminal MCP:** sessions + hijack against C# (Linux job first).
 - **6b GUI MCP:** blocked on Workstream 5 REST + RFB/memory attach; capability `gui_rest: go|csharp`.
 
+### 7. Ushell (in-terminal REPL + connector)
+
+Port the **Go** ushell package (`packages/provide-uterm-go/shell`) to C# so standalone C# can host the same in-session shell connector and command surface as Go/Python (observable parity).
+
+**Already in C# (partial):** `Shell/ShellBasics.cs` — `LineBuffer` keystroke protocol + ANSI output/format helpers (linebuffer + output surface only).
+
+**Missing in C# (required for parity):**
+
+| Surface | Go reference | C# target |
+|---|---|---|
+| Types / `Result` | `types.go` | Shared result frames |
+| Context / interfaces | `context.go` | Storage, session list hooks |
+| Command dispatcher | `dispatcher.go` | Case-insensitive routing, exact error/usage strings |
+| help / clear / sessions / env | `help.go`, dispatcher | Same names + help text |
+| kv | `cmd_kv.go` | In-memory / bound store |
+| fetch | `cmd_fetch.go` | HttpClient; http/https only |
+| storage | `cmd_storage.go` | Bound filesystem policy |
+| render | `cmd_render.go` | Image → ANSI frames via existing render port |
+| cast | `cmd_cast.go` | Asciicast v2 fetch + replay frames |
+| HTTP helpers | `http.go` | Shared fetch client |
+| Frame builders | `frame.go` | Term / WorkerHello |
+| **UshellConnector** | `connector.go` | SessionConnector lifecycle: input, snapshots, analysis, flow control, modes, animation streaming, welcome frames |
+
+**`py` command policy (match Go, not Python implementation identity):**
+
+- Python: restricted eval/exec sandbox (`commands/py.py` + `_sandbox.py`).
+- Go: **stub** — empty arg → `usage: py <expr>`; otherwise `py: unavailable in the Go build (Python sandbox not ported)` (`cmd_py.go`).
+- C#: **same stub strings and routing** so black-box scenarios agree with Go. Do **not** embed CPython or ship a C# “Python-like” REPL. Capability tag if needed: `ushell.py: python` vs `ushell.py: stub` (go|csharp).
+
+**Oracle:** Go for all portable commands and connector I/O; Python only for codec/ANSI where Layer A already applies. Parity scenarios: help text, kv round-trip, fetch against httptest fixture, cast replay event sequence, connector echo/dispatch, flow-pause backpressure, snapshot shape.
+
+**Completion:** unit tests ported from Go shell tests; connector black-box scenario in Layer B; residual policy only for true network arms of fetch/cast if needed.
+
 ## Security Requirements
 
 ### Threat model (summary)
@@ -143,6 +176,8 @@ No C# MCP binary.
 | WS endpoints | Oversized frames / origin abuse | Message-size limits; origin/auth checks |
 | RFB peer | Alloc bombs | Max w/h + checked arithmetic before decode |
 | GUI input | Confused deputy | Active hijack lease required |
+| Ushell fetch/cast | SSRF / unbounded download | http(s) only; size/time limits aligned with Go |
+| Ushell storage | Path traversal | Bound root; reject `..` escapes |
 | Logs/artifacts | Secret leakage | Redaction at logger + harness writer; synthetic creds in CI |
 | DoS | Task/lease retention | Bounded cancel/disconnect |
 
@@ -193,14 +228,15 @@ Test-first slices: add Layer B expectation (fail) → implement → green. Unit 
 
 ## Delivery Sequence
 
-1. **Harness + contracts + CI scaffold** — Layer B schema, sample scenario, ubuntu csharp-quality, contract appendix (this doc), residual policy documented.
-2. **SSH host-key + security fixes** — real known_hosts; proxy not insecure by default; unit tests for deny/match/mismatch/insecure.
-3. **GUI REST (memory attach)** — hub `GraphicalSession`, Go-compatible routes, client methods, lease denial tests (enables MCP 6b prep).
-4. **PTY/process + socket foundation** — Unix then ConPTY sub-phases; limit table scenarios.
-5. **Telnet + WebSocket parity**
-6. **SSH gateway parity**
-7. **RFB client + GUI against real RFB fixture**
-8. **External MCP 6a then 6b; expand OS matrix**
+1. **Harness + contracts + CI scaffold** — Layer B schema, sample scenario, ubuntu csharp-quality, contract appendix (this doc), residual policy documented. *(landed)*
+2. **SSH host-key + security fixes** — real known_hosts; proxy not insecure by default. *(landed)*
+3. **GUI REST (memory attach)** — hub `GraphicalSession`, Go-compatible routes. *(landed; RFB attach also partial)*
+4. **PTY/process + socket foundation** — Unix native opt-in landed; ConPTY still open; limit table scenarios.
+5. **Telnet + WebSocket parity** — WS fragment/max partial; full telnet IAC open.
+6. **SSH gateway parity** — FxSsh listen → drive landed; residual/hardening open.
+7. **RFB client + GUI against real RFB fixture** — client + attach partial; fixture suite open.
+8. **Ushell connector + commands** — port Go shell package to C# (Workstream 7); `py` stub like Go.
+9. **External MCP 6a then 6b; expand OS matrix**
 
 Each phase leaves a working system and adds its scenarios to **required CI for that phase** before the next starts.
 
@@ -215,6 +251,8 @@ Each phase leaves a working system and adds its scenarios to **required CI for t
 | Litevirt dual-stream | Not C# v1 | Product boundary; Go retains path |
 | PTY oracle | Go | Python is not a real PTY reference |
 | SSH host-key | Fail closed + known_hosts | Matches Go security posture |
+| Ushell oracle | Go portable model | C# must match Go commands/connector; not Python layout |
+| Ushell `py` | Stub like Go | No embedded Python sandbox in C# |
 | CI growth | Ubuntu first | Avoid 15-cell matrix from day zero |
 | Coverage vs live | Separate gates | Avoid dishonest residual or broken floor |
 | Mutation | Deferred perimeter tool | Do not block live transport on Stryker absence |
@@ -228,6 +266,7 @@ Each phase leaves a working system and adds its scenarios to **required CI for t
 | Implement C# MCP | Duplication | Non-goal |
 | Coverage alone as parity | False confidence | Explicit non-goal |
 | Leave SSH path-presence check | False security | Critical defect |
+| Embed Python in C# for `py` | Sidecar / runtime bloat | Match Go stub; capability-tag vs Python |
 
 ## Risks
 
@@ -236,6 +275,7 @@ Each phase leaves a working system and adds its scenarios to **required CI for t
 | Multi-OS flake | Capability tags; OS-specialized jobs; quarantine policy |
 | Three-language drift | Shared scenarios + single oracle per surface |
 | ConPTY semantic gaps | Explicit Windows scenarios + tags |
+| Ushell command string drift | Port Go help/error strings; golden tests |
 | Coverlet vs live code | Separate harness gate |
 | Secret leaks in artifacts | Hash-by-default; redaction CI check |
 
@@ -244,6 +284,7 @@ Each phase leaves a working system and adds its scenarios to **required CI for t
 1. Should C# ever implement litevirt gRPC attach, or remain raw-RFB + memory only?
 2. Preferred Stryker perimeter file list for phase-2 pure logic?
 3. When Windows/macOS become **required** merge gates vs nightly?
+4. Should ushell land before or after ConPTY (independent — can parallelize)?
 
 ## Non-Goals
 
@@ -252,7 +293,8 @@ Each phase leaves a working system and adds its scenarios to **required CI for t
 - embedding QEMU, litevirt, Python, or Go in the C# distribution;
 - claiming parity from coverage percentage or unit tests alone;
 - accepting permanent silent skips for platform-specific live behavior;
-- C# litevirt dual-stream unless a follow-on design is accepted.
+- C# litevirt dual-stream unless a follow-on design is accepted;
+- embedding a Python eval/exec sandbox in C# (ushell `py` is a Go-compatible stub).
 
 ## PR Plan
 
@@ -271,17 +313,26 @@ Each phase leaves a working system and adds its scenarios to **required CI for t
 - Deps: none hard
 - Exit: attach/screenshot/click/type/key/drag with lease gating
 
-### PR4 — PTY foundation (Unix)
-- Deps: Layer B scenarios for resize/exit
-- Exit: native PTY open; residual exclusion plan for ConPTY next
-
+### PR4 — PTY foundation (Unix) *(partially landed — opt-in native)*
 ### PR5 — ConPTY + socket limits
 ### PR6 — Telnet full negotiation + WS foundation
-### PR7 — SSH gateway pump
-### PR8 — RFB client Raw + deterministic fixture
-### PR9 — MCP 6a (terminal) Linux
-### PR10 — MCP 6b (GUI) + three-OS expansion
+### PR7 — SSH gateway pump *(partially landed — FxSsh)*
+### PR8 — RFB client Raw + deterministic fixture *(partially landed)*
+### PR9 — Ushell linebuffer/output already partial; **dispatcher + commands**
+- Files: expand `Shell/` from Go `shell/` (types, dispatcher, help, kv, fetch, storage, render, cast, py stub, http, frame)
+- Deps: existing render/ANSI surfaces
+- Exit: Go-aligned unit tests for each command; exact help/error strings
+
+### PR10 — UshellConnector lifecycle
+- Files: connector input/snapshot/analysis/flow/modes/welcome frames
+- Deps: PR9
+- Exit: connector black-box scenarios; wire as session connector type where server already lists shell sessions
+
+### PR11 — MCP 6a (terminal) Linux
+### PR12 — MCP 6b (GUI) + three-OS expansion
 
 ---
 
 *Revised after multi-agent design review (architecture, parity gap, security/CI). Review notes: `docs/superpowers/specs/2026-07-11-csharp-live-parity-design.REVIEW.md`.*
+
+*Updated 2026-07-12: Workstream 7 ushell — Go has full port; C# only ShellBasics; `py` stub policy matches Go.*
