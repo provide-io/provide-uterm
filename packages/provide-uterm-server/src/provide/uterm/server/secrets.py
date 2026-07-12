@@ -11,7 +11,7 @@ import re
 import stat
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from pydantic_core import core_schema
 
@@ -73,17 +73,9 @@ class SecretReference:
 
     def _resolve_file(self, max_bytes: int) -> bytes:
         path = Path(self.locator)
-        if not path.is_absolute():
-            if self.base_dir is None:
-                raise SecretResolutionError("relative file secret has no config directory")
-            path = self.base_dir / path
-        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
-        try:
-            descriptor = os.open(path, flags)
-        except OSError as exc:
-            if path.is_symlink():
-                raise SecretResolutionError("file secret may not use symbolic links") from exc
-            raise SecretResolutionError("file secret is unavailable") from exc
+        if not path.is_absolute() and self.base_dir is None:
+            raise SecretResolutionError("relative file secret has no config directory")
+        descriptor = self._open_file(path)
         try:
             metadata = os.fstat(descriptor)
             if not stat.S_ISREG(metadata.st_mode):
@@ -108,6 +100,42 @@ class SecretReference:
             return result
         finally:
             os.close(descriptor)
+
+    def _open_file(self, path: Path) -> int:
+        """Walk path components by descriptor so no symlink is ever followed."""
+        nofollow = getattr(os, "O_NOFOLLOW", 0)
+        common_flags = getattr(os, "O_CLOEXEC", 0) | nofollow
+        if path.is_absolute():
+            anchor, parts = Path(path.anchor), path.parts[1:]
+        else:
+            anchor, parts = cast("Path", self.base_dir), path.parts
+        directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | common_flags
+        descriptors: list[int] = []
+        try:
+            current = os.open(anchor, directory_flags)
+            descriptors.append(current)
+            if not parts:
+                return os.dup(current)
+            for part in parts[:-1]:
+                current = self._open_component(part, directory_flags, current)
+                descriptors.append(current)
+            return self._open_component(parts[-1], os.O_RDONLY | common_flags, current)
+        finally:
+            for opened in reversed(descriptors):
+                os.close(opened)
+
+    @staticmethod
+    def _open_component(component: str, flags: int, directory_fd: int) -> int:
+        try:
+            return os.open(component, flags, dir_fd=directory_fd)
+        except OSError as exc:
+            try:
+                metadata = os.stat(component, dir_fd=directory_fd, follow_symlinks=False)
+            except OSError:
+                metadata = None
+            if metadata is not None and stat.S_ISLNK(metadata.st_mode):
+                raise SecretResolutionError("file secret may not use symbolic links") from exc
+            raise SecretResolutionError("file secret is unavailable") from exc
 
     @classmethod
     def __get_pydantic_core_schema__(cls, _source: Any, _handler: Any) -> core_schema.CoreSchema:
