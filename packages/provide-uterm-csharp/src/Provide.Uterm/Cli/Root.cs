@@ -158,6 +158,10 @@ public static class Root
             o.WriteLine("  --path        WebSocket path (default /ws/terminal)");
             o.WriteLine("  --transport   telnet|ssh|websocket (default telnet)");
             o.WriteLine("  --url         upstream ws(s):// URL (required for --transport websocket)");
+            o.WriteLine("  --ssh-user    SSH username (required for --transport ssh)");
+            o.WriteLine("  --ssh-password  SSH password");
+            o.WriteLine("  --known-hosts path to OpenSSH known_hosts (repeatable / required unless insecure)");
+            o.WriteLine("  --insecure-ssh  skip host-key verification (explicit opt-in only)");
             o.WriteLine("  --once        start, hit /health, stop");
             return 0;
         }
@@ -212,6 +216,35 @@ public static class Root
             }
         }
 
+        var knownHosts = new List<string>();
+        if (f.TryGetValue("known-hosts", out var kh) && !string.IsNullOrEmpty(kh))
+        {
+            knownHosts.Add(kh);
+        }
+
+        // Support repeated --known-hosts via space-separated list
+        if (f.TryGetValue("known-hosts-list", out var khList) && !string.IsNullOrEmpty(khList))
+        {
+            knownHosts.AddRange(khList.Split(':', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        }
+
+        if (transport == "ssh")
+        {
+            var sshUser = f.GetValueOrDefault("ssh-user", "");
+            if (string.IsNullOrEmpty(sshUser))
+            {
+                e.WriteLine("error: --transport ssh requires --ssh-user");
+                return 1;
+            }
+
+            var insecure = f.ContainsKey("insecure-ssh");
+            if (!insecure && knownHosts.Count == 0)
+            {
+                e.WriteLine("error: --transport ssh requires --known-hosts PATH or --insecure-ssh");
+                return 1;
+            }
+        }
+
         var opts = new ProxyCommand.Options
         {
             Host = host,
@@ -221,6 +254,10 @@ public static class Root
             Path = f.GetValueOrDefault("path", TerminalDefaults.ProxyWsPath),
             Transport = transport,
             UpstreamWsUrl = upstreamWs,
+            SshUser = f.GetValueOrDefault("ssh-user", ""),
+            SshPassword = f.GetValueOrDefault("ssh-password", ""),
+            KnownHostsFiles = knownHosts,
+            InsecureSkipHostKeyVerify = f.ContainsKey("insecure-ssh"),
         };
 
         var target = transport == "websocket"

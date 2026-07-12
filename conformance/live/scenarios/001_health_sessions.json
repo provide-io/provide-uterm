@@ -1,0 +1,20 @@
+{
+  "id": "001_health_sessions",
+  "title": "Health and session list",
+  "timeout_ms": 15000,
+  "capabilities": [],
+  "setup": {
+    "server": "uterm-server",
+    "auth": "dev_token"
+  },
+  "actions": [
+    { "type": "http_get", "path": "/api/health", "expect_status": 200 },
+    { "type": "http_get", "path": "/api/sessions", "expect_status": 200, "auth": true }
+  ],
+  "expect": {
+    "health.status": "ok",
+    "health.service": "uterm-server",
+    "sessions.min_count": 0
+  },
+  "cleanup": ["stop_server"]
+}

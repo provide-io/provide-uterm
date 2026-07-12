@@ -196,6 +196,46 @@ public sealed class HijackClient : IDisposable
     public Task<Dictionary<string, object?>> HealthAsync(CancellationToken ct = default) =>
         RequestObjectAsync(HttpMethod.Get, "/api/health", null, ct);
 
+    /// <summary>Attach a graphical session (C# v1: mode=memory fixture; RFB later).</summary>
+    public Task<Dictionary<string, object?>> GuiAttachAsync(
+        string workerId,
+        IReadOnlyDictionary<string, object?>? body = null,
+        CancellationToken ct = default) =>
+        RequestObjectAsync(HttpMethod.Post, Wp(workerId) + "/gui/attach",
+            body is null
+                ? new Dictionary<string, object?> { ["mode"] = "memory" }
+                : new Dictionary<string, object?>(body), ct);
+
+    public Task<Dictionary<string, object?>> GuiScreenshotAsync(
+        string workerId, string hijackId, CancellationToken ct = default) =>
+        RequestObjectAsync(HttpMethod.Get, Hp(workerId, hijackId) + "/gui/screenshot", null, ct);
+
+    public Task<Dictionary<string, object?>> GuiClickAsync(
+        string workerId, string hijackId, int x, int y, string button = "left", CancellationToken ct = default) =>
+        RequestObjectAsync(HttpMethod.Post, Hp(workerId, hijackId) + "/gui/click",
+            new Dictionary<string, object?> { ["x"] = x, ["y"] = y, ["button"] = button }, ct);
+
+    public Task<Dictionary<string, object?>> GuiTypeAsync(
+        string workerId, string hijackId, string text, CancellationToken ct = default) =>
+        RequestObjectAsync(HttpMethod.Post, Hp(workerId, hijackId) + "/gui/type",
+            new Dictionary<string, object?> { ["text"] = text }, ct);
+
+    public Task<Dictionary<string, object?>> GuiKeyAsync(
+        string workerId, string hijackId, string keyName, CancellationToken ct = default) =>
+        RequestObjectAsync(HttpMethod.Post, Hp(workerId, hijackId) + "/gui/key",
+            new Dictionary<string, object?> { ["key_name"] = keyName }, ct);
+
+    public Task<Dictionary<string, object?>> GuiDragAsync(
+        string workerId, string hijackId, int startX, int startY, int endX, int endY, CancellationToken ct = default) =>
+        RequestObjectAsync(HttpMethod.Post, Hp(workerId, hijackId) + "/gui/drag",
+            new Dictionary<string, object?>
+            {
+                ["start_x"] = startX,
+                ["start_y"] = startY,
+                ["end_x"] = endX,
+                ["end_y"] = endY,
+            }, ct);
+
     public Task<Dictionary<string, object?>> Health(CancellationToken ct = default) => HealthAsync(ct);
 
     public async Task<Dictionary<string, object?>> ListSessionsAsync(CancellationToken ct = default)

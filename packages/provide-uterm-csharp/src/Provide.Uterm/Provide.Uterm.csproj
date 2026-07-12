@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>Provide.Uterm</RootNamespace>
-    <Description>provide-uterm C# port — terminal session platform (hub, server, client, CLI, MCP, manager).</Description>
+    <Description>provide-uterm C# port — terminal session platform (hub, server, client, CLI, manager). MCP is not shipped.</Description>
   </PropertyGroup>
 
   <ItemGroup>

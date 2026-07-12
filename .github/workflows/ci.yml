@@ -68,6 +68,19 @@ jobs:
       # Cloudflare worker / Durable Object test suite.
       - run: uv run pytest -q packages/provide-uterm-cloudflare/tests
 
+  # C# port quality gate (ubuntu-first; OS-specialized PTY/ConPTY jobs land later).
+  # Single source of truth: packages/provide-uterm-csharp/Makefile quality-gate.
+  csharp-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9  # v4.3.1
+        with:
+          dotnet-version: "10.0.x"
+      # Build, conformance vectors, full test suite, coverlet floor, ship binaries.
+      - run: make -C packages/provide-uterm-csharp quality-gate
+
   go-quality:
     runs-on: ubuntu-latest
     timeout-minutes: 30

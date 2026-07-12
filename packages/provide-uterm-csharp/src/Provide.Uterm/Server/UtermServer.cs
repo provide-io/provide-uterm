@@ -37,7 +37,7 @@ public sealed class ServerDeps
 /// <summary>
 /// ASP.NET Core Minimal API host for health, sessions, hijack REST, and browser WS.
 /// </summary>
-public sealed class UtermServer : IAsyncDisposable
+public sealed partial class UtermServer : IAsyncDisposable
 {
     private static readonly Regex SafeId = new(@"^[A-Za-z0-9._-]+$", RegexOptions.Compiled);
     private static readonly Regex HijackIdPattern = new(@"^[A-Za-z0-9._-]{1,128}$", RegexOptions.Compiled);
@@ -232,6 +232,14 @@ public sealed class UtermServer : IAsyncDisposable
         app.MapGet("/worker/{workerId}/hijack/{hijackId}/events", HandleHijackEvents);
         app.MapPost("/worker/{workerId}/input_mode", HandleInputMode);
         app.MapPost("/worker/{workerId}/disconnect_worker", HandleDisconnectWorker);
+
+        // GUI REST (Go-compatible paths; memory attach for deterministic fixtures)
+        app.MapPost("/worker/{workerId}/gui/attach", HandleGuiAttach);
+        app.MapGet("/worker/{workerId}/hijack/{hijackId}/gui/screenshot", HandleGuiScreenshot);
+        app.MapPost("/worker/{workerId}/hijack/{hijackId}/gui/click", HandleGuiClick);
+        app.MapPost("/worker/{workerId}/hijack/{hijackId}/gui/type", HandleGuiType);
+        app.MapPost("/worker/{workerId}/hijack/{hijackId}/gui/key", HandleGuiKey);
+        app.MapPost("/worker/{workerId}/hijack/{hijackId}/gui/drag", HandleGuiDrag);
 
         // Browser / worker WebSockets with DLE/STX control channel
         app.Map("/ws/browser/{workerId}", HandleBrowserWs);

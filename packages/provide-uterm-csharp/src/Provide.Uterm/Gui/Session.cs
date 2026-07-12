@@ -8,15 +8,39 @@ namespace Provide.Uterm.Gui;
 /// <summary>RGBA pixel framebuffer (portable, no System.Drawing dependency).</summary>
 public sealed class RgbaImage
 {
+    /// <summary>Hard cap on a single dimension (hostile ServerInit protection).</summary>
+    public const int MaxDimension = 8192;
+
     public int Width { get; }
     public int Height { get; }
     public byte[] Pixels { get; }
 
     public RgbaImage(int width, int height, byte[]? pixels = null)
     {
+        if (width <= 0 || height <= 0 || width > MaxDimension || height > MaxDimension)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(width),
+                $"invalid framebuffer dimensions: {width}x{height} (max {MaxDimension})");
+        }
+
+        var expected = checked(width * height * 4);
         Width = width;
         Height = height;
-        Pixels = pixels ?? new byte[width * height * 4];
+        if (pixels is null)
+        {
+            Pixels = new byte[expected];
+        }
+        else
+        {
+            if (pixels.Length != expected)
+            {
+                throw new ArgumentException(
+                    $"pixel buffer length {pixels.Length} does not match {width}x{height} RGBA ({expected})");
+            }
+
+            Pixels = pixels;
+        }
     }
 
     public RgbaImage Clone() => new(Width, Height, (byte[])Pixels.Clone());

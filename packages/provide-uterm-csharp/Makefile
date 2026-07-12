@@ -14,6 +14,8 @@ DOTNET ?= dotnet
 #   - CtrlMsg CanonicalJson FallbackScientific: only when R→sci round-trip fails.
 #   - Live OS transports (Pty/Telnet/Ssh/WebSocket) excluded from denominator
 #     entirely (unit tests cannot drive real PTY/SSH handshakes fully).
+# Residual policy: drop an exclusion only when a dedicated OS/harness job
+# exercises that path; conformance/live Layer B is a separate gate (not coverlet).
 # MCP is not part of the C# port (operator de-scope); sources and binary removed.
 COVER_THRESHOLD ?= 97.0
 CONFIGURATION ?= Release
