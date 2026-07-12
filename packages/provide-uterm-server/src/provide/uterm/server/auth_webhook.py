@@ -272,5 +272,5 @@ class WebhookIdentityProvider(IdentityProvider):
                 detail={"url": self.url, "on_failure": self.on_failure, "error": str(exc)},
             )
             if self.on_failure == "viewer":
-                return Principal(subject_id="anonymous", roles=frozenset({"viewer"}), scopes=frozenset())
+                return Principal.anonymous()
             return None

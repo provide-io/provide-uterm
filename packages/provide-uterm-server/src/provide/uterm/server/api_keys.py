@@ -19,6 +19,7 @@ class ApiKey:
     key_id: str  # First 16 hex chars of key hash
     key_hash: str  # SHA-256 hex digest of the full key
     name: str  # Human-readable label
+    tenant_id: str | None = None  # Tenant securely inherited from the issuing principal.
     scopes: frozenset[str] = frozenset()  # Route validation should enforce non-empty role scopes
     created_at: float = field(default_factory=time.time)
     expires_at: float | None = None  # None = never expires
@@ -38,6 +39,7 @@ class ApiKeyStore:
         *,
         scopes: frozenset[str] = frozenset(),
         expires_in_s: int | None = None,
+        tenant_id: str | None = None,
     ) -> tuple[str, ApiKey]:
         """Create a new API key. Returns ``(raw_key, api_key_record)``.
 
@@ -51,6 +53,7 @@ class ApiKeyStore:
             key_id=key_id,
             key_hash=key_hash,
             name=name,
+            tenant_id=tenant_id,
             scopes=scopes,
             expires_at=expires_at,
         )

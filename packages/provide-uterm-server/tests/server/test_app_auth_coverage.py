@@ -79,6 +79,7 @@ class TestAuthDependencyBranches:
         with patch("provide.uterm.tunnel.token_hash.verify_token", side_effect=[False, True]):
             await dep(conn)
         assert conn.state.uterm_principal.subject_id == "share:sess1:viewer"
+        assert conn.state.uterm_principal.tenant_id is None
 
     async def test_share_control_cookie_sets_operator_principal(self) -> None:
         app, _ = _make_app(tunnel=TunnelConfig(token_transport="cookie"))
@@ -98,6 +99,7 @@ class TestAuthDependencyBranches:
         with patch("provide.uterm.tunnel.token_hash.verify_token", side_effect=[True]):
             await dep(conn)
         assert conn.state.uterm_principal.subject_id == "share:sess2:operator"
+        assert conn.state.uterm_principal.tenant_id is None
 
     async def test_tunnel_ws_worker_token_validates(self) -> None:
         app, _ = _make_app()
@@ -121,6 +123,7 @@ class TestAuthDependencyBranches:
         with patch("provide.uterm.tunnel.token_hash.verify_token", return_value=True):
             await dep(conn)
         assert conn.state.uterm_principal.subject_id == "worker"
+        assert conn.state.uterm_principal.tenant_id is None
 
     async def test_share_cookie_ip_binding_mismatch_falls_back_to_http_auth(self) -> None:
         from provide.uterm.tunnel.token_hash import hash_token
@@ -254,6 +257,7 @@ class TestAuthDependencyBranches:
         )
         await dep(conn_worker)
         assert conn_worker.state.uterm_principal.subject_id == "worker"
+        assert conn_worker.state.uterm_principal.tenant_id is None
 
         from fastapi import WebSocketException
 
@@ -375,6 +379,7 @@ class TestRemainingFactoryCoverage:
         )
         await dep(conn_global)
         assert conn_global.state.uterm_principal.subject_id == "worker"
+        assert conn_global.state.uterm_principal.tenant_id is None
 
         app.state.uterm_tunnel_tokens["w-ipbad"] = {
             "worker_token_hash": "h",

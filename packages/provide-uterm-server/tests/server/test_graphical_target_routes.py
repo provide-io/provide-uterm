@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import FastAPI
@@ -132,6 +132,44 @@ def test_get_conceals_missing_target_and_validates_path() -> None:
 
     assert client.get("/api/graphical-targets/missing").status_code == 404
     assert client.get("/api/graphical-targets/bad!id").status_code == 422
+
+
+@pytest.mark.parametrize("operation", ["list", "get", "create", "update"])
+def test_faulty_registry_cross_tenant_results_are_concealed_and_not_serialized(operation: str) -> None:
+    client, registry = _client(Principal(subject_id="alice", tenant_id="tenant-a", roles=frozenset({"operator"})))
+    from provide.uterm.server.config_schema_graphical import GraphicalTargetDefinition
+
+    foreign = GraphicalTargetDefinition(**_payload(), tenant_id="tenant-b", audit_labels={"secret": "foreign-data"})
+    getattr(registry, operation).return_value = [foreign] if operation == "list" else foreign
+
+    if operation == "list":
+        response = client.get("/api/graphical-targets")
+    elif operation == "get":
+        response = client.get("/api/graphical-targets/desktop")
+    elif operation == "create":
+        response = client.post("/api/graphical-targets", json=_payload())
+    else:
+        response = client.put("/api/graphical-targets/desktop", json=_payload())
+
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "graphical_target_not_found"
+    assert "foreign-data" not in response.text
+
+
+def test_faulty_registry_mismatch_audit_contains_no_object_data() -> None:
+    client, registry = _client(Principal(subject_id="alice", tenant_id="tenant-a", roles=frozenset({"viewer"})))
+    from provide.uterm.server.config_schema_graphical import GraphicalTargetDefinition
+
+    registry.get.return_value = GraphicalTargetDefinition(
+        **_payload(), tenant_id="tenant-b", audit_labels={"secret": "foreign-data"}
+    )
+    with patch("provide.uterm.server.routes.graphical_targets.audit_event") as audit:
+        response = client.get("/api/graphical-targets/desktop")
+
+    assert response.status_code == 404
+    _, kwargs = audit.call_args
+    assert kwargs["detail"] == {"expected_tenant_id": "tenant-a"}
+    assert "foreign-data" not in repr(audit.call_args)
 
 
 def test_update_rejects_mismatched_id_and_invalid_definition() -> None:

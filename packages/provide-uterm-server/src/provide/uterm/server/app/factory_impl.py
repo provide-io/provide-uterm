@@ -210,7 +210,7 @@ def create_server_app(
 
             resolved = await idp.resolve_principal(cast("Request | WebSocket", connection))
             if resolved is None:
-                return Principal(subject_id="anonymous", roles=frozenset({"viewer"}), scopes=frozenset())
+                return Principal.anonymous()
             return resolved
 
         share_principal = resolve_tunnel_share_principal(connection, config=config, patterns=_SHARE_SESSION_PATTERNS)
@@ -237,9 +237,7 @@ def create_server_app(
         ):
             token = extract_bearer_token(connection.headers)
             if secrets.compare_digest(token or "", config.auth.worker_bearer_token or ""):
-                connection.state.uterm_principal = Principal(
-                    subject_id="worker", roles=frozenset({"admin"}), scopes=frozenset({"*"})
-                )
+                connection.state.uterm_principal = Principal.system_worker()
                 return
         if connection.scope.get("type") == "websocket":
             principal = await _resolve_configured_principal(connection)
@@ -277,7 +275,7 @@ def create_server_app(
             else:
                 principal = await idp.resolve_principal(ws)
                 if principal is None:
-                    principal = Principal(subject_id="anonymous", roles=frozenset({"viewer"}), scopes=frozenset())
+                    principal = Principal.anonymous()
         session = await registry.get_definition(worker_id) if registry is not None else None
         if session is None:
             # No registered SessionDefinition (worker connected ad-hoc). There

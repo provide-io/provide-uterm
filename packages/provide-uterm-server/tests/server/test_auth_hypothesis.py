@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import pytest
-from hypothesis import given
+from hypothesis import assume, given
 from hypothesis import strategies as st
 
 from provide.uterm.server.app.auth import (
@@ -17,6 +17,18 @@ from provide.uterm.server.app.auth import (
     _is_low_entropy_bearer,
     _is_low_entropy_hmac_secret,
     _is_placeholder_auth_value,
+)
+from provide.uterm.server.auth import LocalIdentityProvider
+from provide.uterm.server.authorization import AuthorizationService
+from provide.uterm.server.bridge.identity import Principal, canonical_tenant_id
+from provide.uterm.server.config_schema import AuthConfig
+
+_SAFE_FIRST = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+_SAFE_REST = _SAFE_FIRST + "_.-"
+_safe_tenant_ids = st.builds(
+    lambda first, rest: first + rest,
+    st.sampled_from(tuple(_SAFE_FIRST)),
+    st.text(alphabet=_SAFE_REST, max_size=127),
 )
 
 
@@ -92,3 +104,42 @@ def test_low_entropy_hmac_true_for_short_hs256_secret(value: str) -> None:
 @given(st.text(alphabet=" \t\n\r", max_size=10))
 def test_low_entropy_hmac_empty_or_whitespace_is_false(value: str) -> None:
     assert _is_low_entropy_hmac_secret(value, ("HS256",)) is False
+
+
+@given(_safe_tenant_ids)
+def test_canonical_tenant_accepts_safe_ids_without_normalizing(value: str) -> None:
+    assert canonical_tenant_id(value) == value
+
+
+@given(
+    st.one_of(
+        st.text(alphabet="\x00\n\r\t", min_size=1),
+        st.text(alphabet="租戶é😀", min_size=1),
+        st.text(alphabet="a", min_size=129, max_size=140),
+        st.sampled_from(["", "-tenant", ".tenant", " tenant", "tenant "]),
+    )
+)
+def test_canonical_tenant_rejects_controls_unicode_and_boundaries(value: str) -> None:
+    with pytest.raises(ValueError, match="tenant_id"):
+        canonical_tenant_id(value)
+
+
+@given(header_tenant=_safe_tenant_ids, cookie_tenant=_safe_tenant_ids)
+def test_header_tenant_precedence_property(header_tenant: str, cookie_tenant: str) -> None:
+    principal = LocalIdentityProvider(AuthConfig(mode="header"))._principal_from_header_auth(
+        {"x-uterm-principal": "user", "x-uterm-tenant": header_tenant},
+        {"uterm_tenant": cookie_tenant},
+    )
+    assert principal.tenant_id == header_tenant
+
+
+@given(principal_tenant=_safe_tenant_ids, target_tenant=_safe_tenant_ids)
+@pytest.mark.asyncio
+async def test_graphical_attach_cross_tenant_denial_property(principal_tenant: str, target_tenant: str) -> None:
+    assume(principal_tenant != target_tenant)
+    principal = Principal(
+        subject_id="admin",
+        tenant_id=principal_tenant,
+        roles=frozenset({"admin"}),
+    )
+    assert await AuthorizationService().can_attach_graphical_session(principal, target_tenant) is False

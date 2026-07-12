@@ -10,6 +10,7 @@ mutmut skips the Pydantic-decorated validators.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlparse
@@ -62,6 +63,7 @@ class AuthConfig(ServerBaseModel):
     jwt_tenant_claim: str = "tenant_id"
     tenant_header: str = "x-uterm-tenant"
     tenant_cookie: str = "uterm_tenant"
+    dev_tenant_id: str = "development"
     worker_bearer_token: str | None = None
     api_keys_enabled: bool = False
     header_mode_acknowledged: bool = False
@@ -115,6 +117,34 @@ class AuthConfig(ServerBaseModel):
     # this True to restore the legacy behavior of honoring the principal's role
     # claim for unregistered workers.
     allow_adhoc_browser_observers: bool = False
+
+    @field_validator("jwt_tenant_claim")
+    @classmethod
+    def _validate_tenant_claim_name(cls, value: str) -> str:
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.:-]{0,127}", value):
+            raise ValueError("jwt_tenant_claim must be a safe non-empty claim name")
+        return value
+
+    @field_validator("tenant_header")
+    @classmethod
+    def _validate_tenant_header_name(cls, value: str) -> str:
+        if not re.fullmatch(r"[A-Za-z0-9!#$%&'*+.^_`|~-]+", value):
+            raise ValueError("tenant_header must be a valid HTTP header name")
+        return value.lower()
+
+    @field_validator("tenant_cookie")
+    @classmethod
+    def _validate_tenant_cookie_name(cls, value: str) -> str:
+        if not re.fullmatch(r"[A-Za-z0-9!#$%&'*+.^_`|~-]+", value):
+            raise ValueError("tenant_cookie must be a valid cookie name")
+        return value
+
+    @field_validator("dev_tenant_id")
+    @classmethod
+    def _validate_dev_tenant_id(cls, value: str) -> str:
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", value):
+            raise ValueError("dev_tenant_id must be a safe tenant identifier")
+        return value
 
     @model_validator(mode="after")
     def _validate_proxy_secret(self) -> AuthConfig:

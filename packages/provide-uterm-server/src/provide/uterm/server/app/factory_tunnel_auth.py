@@ -92,7 +92,7 @@ def resolve_tunnel_share_principal(
         connection.state.uterm_share_token = str(provided)
         connection.state.uterm_share_role = "operator"
         logger.info("tunnel_token_validated session_id=%s token_type=control source_ip=%s", session_id, source_ip)
-        return Principal(
+        return Principal.session_share(
             subject_id=f"share:{session_id}:operator",
             roles=frozenset({"admin"}),
             scopes=frozenset({"*"}),
@@ -106,7 +106,7 @@ def resolve_tunnel_share_principal(
         connection.state.uterm_share_token = str(provided)
         connection.state.uterm_share_role = "viewer"
         logger.info("tunnel_token_validated session_id=%s token_type=share source_ip=%s", session_id, source_ip)
-        return Principal(
+        return Principal.session_share(
             subject_id=f"share:{session_id}:viewer",
             roles=frozenset({"viewer"}),
             scopes=frozenset({"session.read"}),
@@ -140,7 +140,7 @@ def resolve_tunnel_ws_worker_principal(
         config.auth.worker_bearer_token,
     ):
         connection.state.uterm_worker_token = provided
-        return Principal(subject_id="worker", roles=frozenset({"admin"}), scopes=frozenset({"*"}))
+        return Principal.system_worker()
 
     app = connection.scope.get("app")
     token_map = getattr(getattr(app, "state", object()), "uterm_tunnel_tokens", {})
@@ -171,7 +171,7 @@ def resolve_tunnel_ws_worker_principal(
     if verify_token(str(provided), str(token_state.get("worker_token_hash", ""))):
         connection.state.uterm_worker_token = str(provided)
         logger.info("tunnel_worker_token_validated session_id=%s source_ip=%s", worker_id, source_ip)
-        return Principal(subject_id="worker", roles=frozenset({"admin"}), scopes=frozenset({"*"}))
+        return Principal.system_worker()
 
     logger.info("tunnel_worker_token_validation_failed session_id=%s source_ip=%s", worker_id, source_ip)
     return None
