@@ -19,13 +19,14 @@ import (
 var tableSections = []string{
 	"server", "auth", "ui", "recording", "profiles",
 	"security", "tunnel", "webhooks", "pam", "control_plane",
+	"graphical",
 }
 
 // knownTopLevel lists every accepted top-level key (extra="forbid" parity).
 var knownTopLevel = map[string]struct{}{
 	"environment": {}, "server": {}, "auth": {}, "control_plane": {}, "ui": {},
 	"recording": {}, "profiles": {}, "security": {}, "tunnel": {}, "webhooks": {},
-	"pam": {}, "governance": {}, "audit": {}, "sessions": {},
+	"pam": {}, "governance": {}, "audit": {}, "graphical": {}, "graphical_targets": {}, "sessions": {},
 	"session_idle_timeout_s": {}, "session_retention_s": {}, "browser_rate_limit_per_sec": {},
 	"worker_frame_on_invalid": {}, "max_connections_per_principal": {}, "max_workers": {},
 }
@@ -140,6 +141,7 @@ func ConfigFromMapping(data map[string]any) (*UtermServerConfig, error) {
 		{"ui", &cfg.UI}, {"recording", &cfg.Recording}, {"profiles", &cfg.Profiles},
 		{"security", &cfg.Security}, {"tunnel", &cfg.Tunnel}, {"webhooks", &cfg.Webhooks},
 		{"pam", &cfg.Pam}, {"governance", &cfg.Governance}, {"audit", &cfg.Audit},
+		{"graphical", &cfg.Graphical},
 	}
 	for _, st := range sectionTargets {
 		if err := decodeSection(st.dst, data[st.key]); err != nil {
@@ -151,6 +153,9 @@ func ConfigFromMapping(data map[string]any) (*UtermServerConfig, error) {
 		return nil, err
 	}
 	if err := applySessions(cfg, data); err != nil {
+		return nil, err
+	}
+	if err := applyGraphicalTargets(cfg, data); err != nil {
 		return nil, err
 	}
 
@@ -221,7 +226,48 @@ func applySessions(cfg *UtermServerConfig, data map[string]any) error {
 	return nil
 }
 
+func applyGraphicalTargets(cfg *UtermServerConfig, data map[string]any) error {
+	raw, present := data["graphical_targets"]
+	if !present {
+		return nil
+	}
+	list, ok := raw.([]any)
+	if !ok {
+		return fmt.Errorf("graphical_targets must be a list of tables")
+	}
+	out := make([]GraphicalTargetDefinition, 0, len(list))
+	seen := map[string]bool{}
+	for _, entry := range list {
+		m, ok := entry.(map[string]any)
+		if !ok {
+			return fmt.Errorf("graphical_targets must be a list of tables")
+		}
+		target := defaultGraphicalTarget()
+		if err := decodeSection(&target, m); err != nil {
+			return err
+		}
+		if err := target.validate(); err != nil {
+			return err
+		}
+		if seen[target.TargetID] {
+			return fmt.Errorf("duplicate graphical target_id")
+		}
+		seen[target.TargetID] = true
+		out = append(out, target)
+	}
+	cfg.GraphicalTargets = out
+	return nil
+}
+
 func runValidators(cfg *UtermServerConfig) error {
+	var err error
+	cfg.Graphical.DynamicAllowedCIDRs, err = canonicalCIDRs(cfg.Graphical.DynamicAllowedCIDRs)
+	if err != nil {
+		return err
+	}
+	if cfg.Graphical.AllowDynamicTargets && cfg.Environment != "dev" {
+		return fmt.Errorf("graphical.allow_dynamic_targets is only permitted in dev")
+	}
 	if err := validateAuth(&cfg.Auth); err != nil {
 		return err
 	}
