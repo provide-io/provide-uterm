@@ -20,6 +20,9 @@ lifecycle (`log_start` → `snapshot`… → `log_stop`).
 
 Legacy root [terminal.cast](terminal.cast) is refreshed from the **Python** matrix cast.
 
+**Contract + diagrams:** [docs/operations/recording-store-parity.md](../../docs/operations/recording-store-parity.md)
+(lifecycle sequence, cross-language map, query rules).
+
 ### Re-record the matrix
 
 From the repo root (requires `asciinema`, `go`, `dotnet`):
