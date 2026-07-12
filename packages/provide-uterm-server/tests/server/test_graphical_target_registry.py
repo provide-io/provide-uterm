@@ -369,3 +369,171 @@ async def test_registry_close_failure_can_retry_and_closed_operations_fail() -> 
     assert plane.close.await_count == 2
     with pytest.raises(GraphicalTargetClosedError, match="graphical target registry is closed"):
         await registry.list(SYSTEM)
+
+
+async def test_concurrent_close_calls_share_one_successful_attempt() -> None:
+    close_started = asyncio.Event()
+    release_close = asyncio.Event()
+    plane = AsyncMock()
+
+    async def close_plane() -> None:
+        close_started.set()
+        await release_close.wait()
+
+    plane.close.side_effect = close_plane
+    registry = GraphicalTargetRegistry((), plane, owns_control_plane=True)
+    first = asyncio.create_task(registry.close())
+    await close_started.wait()
+    second = asyncio.create_task(registry.close())
+    await asyncio.sleep(0)
+    release_close.set()
+
+    await asyncio.gather(first, second)
+    plane.close.assert_awaited_once()
+
+
+async def test_concurrent_failed_close_waiters_share_failure_and_later_retry() -> None:
+    close_started = asyncio.Event()
+    release_close = asyncio.Event()
+    failure = RuntimeError("close failed")
+    plane = AsyncMock()
+    attempts = 0
+
+    async def fail_close() -> None:
+        nonlocal attempts
+        attempts += 1
+        if attempts > 1:
+            return
+        close_started.set()
+        await release_close.wait()
+        raise failure
+
+    plane.close.side_effect = fail_close
+    registry = GraphicalTargetRegistry((), plane, owns_control_plane=True)
+    first = asyncio.create_task(registry.close())
+    await close_started.wait()
+    second = asyncio.create_task(registry.close())
+    await asyncio.sleep(0)
+    release_close.set()
+
+    results = await asyncio.gather(first, second, return_exceptions=True)
+    assert results == [failure, failure]
+    assert plane.close.await_count == 1
+    await registry.close()
+    assert plane.close.await_count == 2
+
+
+async def test_close_rejects_new_operations_and_waits_for_active_transaction() -> None:
+    operation_started = asyncio.Event()
+    release_operation = asyncio.Event()
+    events: list[str] = []
+    transaction = AsyncMock()
+    store = AsyncMock()
+    plane = MagicMock()
+    plane.begin = AsyncMock(return_value=transaction)
+    plane.graphical_target_store.return_value = store
+
+    async def close_plane() -> None:
+        events.append("close")
+
+    plane.close = AsyncMock(side_effect=close_plane)
+    registry = GraphicalTargetRegistry((), cast("Any", plane), owns_control_plane=True)
+
+    async def active_operation(_store: object) -> str:
+        operation_started.set()
+        await release_operation.wait()
+        events.append("operation")
+        return "done"
+
+    operation = asyncio.create_task(registry._run_tx(active_operation))
+    await operation_started.wait()
+    closing = asyncio.create_task(registry.close())
+    await asyncio.sleep(0)
+    with pytest.raises(GraphicalTargetClosedError, match="graphical target registry is closing"):
+        await registry.list(SYSTEM)
+    plane.close.assert_not_awaited()
+    release_operation.set()
+
+    assert await operation == "done"
+    await closing
+    assert events == ["operation", "close"]
+    transaction.commit.assert_awaited_once()
+
+
+async def test_cancelled_active_operation_releases_close_waiter() -> None:
+    operation_started = asyncio.Event()
+    transaction = AsyncMock()
+    plane = MagicMock()
+    plane.begin = AsyncMock(return_value=transaction)
+    plane.graphical_target_store.return_value = object()
+    plane.close = AsyncMock()
+    registry = GraphicalTargetRegistry((), cast("Any", plane), owns_control_plane=True)
+
+    async def active_operation(_store: object) -> None:
+        operation_started.set()
+        await asyncio.Event().wait()
+
+    operation = asyncio.create_task(registry._run_tx(active_operation))
+    await operation_started.wait()
+    closing = asyncio.create_task(registry.close())
+    await asyncio.sleep(0)
+    operation.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await operation
+    await closing
+    transaction.rollback.assert_awaited_once()
+    plane.close.assert_awaited_once()
+
+
+async def test_active_lease_release_keeps_other_operation_active() -> None:
+    registry = GraphicalTargetRegistry((), AsyncMock())
+    both_started = asyncio.Event()
+    releases = [asyncio.Event(), asyncio.Event()]
+    started = 0
+
+    async def leased(index: int) -> None:
+        nonlocal started
+        async with registry._active_operation():
+            started += 1
+            if started == 2:
+                both_started.set()
+            await releases[index].wait()
+
+    tasks = [asyncio.create_task(leased(index)) for index in range(2)]
+    await both_started.wait()
+    releases[0].set()
+    await tasks[0]
+    assert registry._active_operations == 1
+    releases[1].set()
+    await tasks[1]
+    assert registry._active_operations == 0
+
+
+async def test_cancelled_close_while_draining_is_retryable() -> None:
+    operation_started = asyncio.Event()
+    release_operation = asyncio.Event()
+    transaction = AsyncMock()
+    plane = MagicMock()
+    plane.begin = AsyncMock(return_value=transaction)
+    plane.graphical_target_store.return_value = object()
+    plane.close = AsyncMock()
+    registry = GraphicalTargetRegistry((), cast("Any", plane), owns_control_plane=True)
+
+    async def active_operation(_store: object) -> None:
+        operation_started.set()
+        await release_operation.wait()
+
+    operation = asyncio.create_task(registry._run_tx(active_operation))
+    await operation_started.wait()
+    first_close = asyncio.create_task(registry.close())
+    await asyncio.sleep(0)
+    first_close.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await first_close
+
+    retry = asyncio.create_task(registry.close())
+    await asyncio.sleep(0)
+    release_operation.set()
+    await operation
+    await asyncio.wait_for(retry, timeout=1)
+    plane.close.assert_awaited_once()
