@@ -15,6 +15,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -125,14 +126,14 @@ func TestRunInspectProxiesAndInspects(t *testing.T) {
 }
 
 func TestInspectInterceptDrop(t *testing.T) {
-	targetHit := false
+	var hit atomic.Bool
 	targetPort := originServer(t, func(w http.ResponseWriter, r *http.Request) {
-		targetHit = true
+		hit.Store(true)
 		_, _ = io.WriteString(w, "should-not-reach")
 	})
 
-	// The tunnel server drops the first intercepted request by replying with an
-	// http_action{drop} carrying the http_req's id.
+	// The tunnel server drops every intercepted request by replying with an
+	// http_action{drop} carrying the http_req's id (loop so retries work).
 	f := newFakeTunnelServer(t, func(ctx context.Context, c *websocket.Conn) {
 		for {
 			_, raw, err := c.Read(ctx)
@@ -156,7 +157,8 @@ func TestInspectInterceptDrop(t *testing.T) {
 	}
 	defer func() { _ = client.Close() }()
 
-	gate := tunnelclient.NewInterceptGate(30, "forward")
+	// Short timeout + retry: same race class as TestInspectInterceptModify.
+	gate := tunnelclient.NewInterceptGate(2, "forward")
 	gate.SetEnabled(true)
 	sess := &inspectSession{client: client, gate: gate, targetPort: targetPort, errw: io.Discard}
 
@@ -167,16 +169,19 @@ func TestInspectInterceptDrop(t *testing.T) {
 	proxyPort := ln.Addr().(*net.TCPAddr).Port
 	go func() { _ = sess.serve(ctx, ln) }()
 
-	resp := getWithRetry(t, proxyPort, "/secret")
-	if resp.status != http.StatusBadGateway {
-		t.Fatalf("dropped request status = %d, want 502", resp.status)
+	deadline := time.Now().Add(8 * time.Second)
+	var last httpResult
+	for time.Now().Before(deadline) {
+		last = tryGet(proxyPort, "/secret")
+		if last.status == http.StatusBadGateway && strings.Contains(last.body, "dropped by interceptor") {
+			if hit.Load() {
+				t.Fatal("origin must not be reached for a dropped request")
+			}
+			return
+		}
+		time.Sleep(25 * time.Millisecond)
 	}
-	if !strings.Contains(resp.body, "dropped by interceptor") {
-		t.Fatalf("drop body = %q", resp.body)
-	}
-	if targetHit {
-		t.Fatal("origin must not be reached for a dropped request")
-	}
+	t.Fatalf("drop never applied: status=%d body=%q targetHit=%v", last.status, last.body, hit.Load())
 }
 
 func TestInspectBadGateway(t *testing.T) {
