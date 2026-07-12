@@ -18,7 +18,7 @@ DOTNET ?= dotnet
 COVER_THRESHOLD ?= 97.0
 CONFIGURATION ?= Release
 
-.PHONY: build test cover build-binaries quality-gate interop-test conformance-test prove-wss
+.PHONY: build test cover build-binaries quality-gate interop-test conformance-test
 
 build:
 	$(DOTNET) build -c $(CONFIGURATION)
@@ -62,8 +62,3 @@ interop-test:
 	  echo "uv not found; interop-test skipped"; \
 	fi
 
-# Live WSS connect proof via shipped WebSocketTransport (not part of quality-gate).
-# Usage: make prove-wss URL=wss://host/path
-URL ?= wss://proving.warp.undef.games/r/warp/u/genesis/ws/terminal
-prove-wss:
-	$(DOTNET) run -c $(CONFIGURATION) --project ci/ProveWss/ProveWss.csproj -- $(URL)
