@@ -495,3 +495,26 @@ async def test_scripted_telnet_subneg_disconnect() -> None:
     assert up.sent_wire
     await up.disconnect()
     assert await up.receive() == b""
+
+
+@pytest.mark.asyncio
+async def test_scripted_telnet_empty_policy_reply() -> None:
+    from provide.uterm.embed.telnet_upstream import ScriptedTelnetUpstream
+
+    class EmptyPolicy:
+        terminal_type = "ANSI"
+        window_size = (80, 25)
+
+        def on_option(self, command: int, option: int) -> bytes:
+            return b""
+
+        def on_subnegotiation(self, option: int, body: bytes) -> bytes:
+            return b""
+
+    up = ScriptedTelnetUpstream(EmptyPolicy())  # type: ignore[arg-type]
+    await up.connect()
+    await up.push_wire(bytes((255, 253, 0)))
+    await up.push_wire(b"X")
+    assert await up.receive() == b"X"
+    assert up.sent_wire == []
+    await up.disconnect()
