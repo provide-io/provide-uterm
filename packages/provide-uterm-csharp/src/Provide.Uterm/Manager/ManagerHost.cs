@@ -44,15 +44,10 @@ public static class ManagerHost
         Console.Out.WriteLine($"uterm-manager ready on http://{cfg.Host}:{cfg.Port}");
         Console.Out.WriteLine($"swarm: {mgr.GetSwarmStatus()["agents"]} agents");
         // Keep process alive until Ctrl-C when launched interactively without --once.
+        // Tests set ManagerProgram.WaitForCancel to a no-op.
         if (!args.Contains("--once"))
         {
-            var tcs = new TaskCompletionSource();
-            Console.CancelKeyPress += (_, ev) =>
-            {
-                ev.Cancel = true;
-                tcs.TrySetResult();
-            };
-            tcs.Task.GetAwaiter().GetResult();
+            ManagerProgram.WaitForCancel();
         }
 
         return 0;

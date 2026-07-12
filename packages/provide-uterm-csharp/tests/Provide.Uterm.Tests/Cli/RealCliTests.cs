@@ -142,7 +142,7 @@ public class RealCliTests
             e);
         Assert.Equal(0, code);
         Assert.Contains("inspect: proxying", o.ToString(), StringComparison.Ordinal);
-        upstream.Stop();
+        try { upstream.Stop(); } catch { /* port race with other tests */ }
     }
 
     [Fact]

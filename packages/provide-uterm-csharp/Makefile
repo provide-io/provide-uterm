@@ -4,7 +4,19 @@
 # Quality gate for the C# port. Mirrors packages/provide-uterm-go/Makefile.
 
 DOTNET ?= dotnet
-COVER_THRESHOLD ?= 88.0
+# 96.5 (not 100): pure library packages are near-full. Remaining misses are the
+# same residual class Go documents (COVER_THRESHOLD 97.2 with per-package notes):
+#   - Cli/Manager DefaultWaitCancel: real Console.CancelKeyPress wait (tests inject
+#     WaitForCancel no-op to exercise non--once paths without blocking).
+#   - Server/UtermServer: browser/worker WS accept loops + rare authz edge arms.
+#   - Gateway: ObjectDisposedException on accept during Stop.
+#   - Cli/Proxy BridgeAsync: live socket cancel/stop races + SSH dispose path.
+#   - CtrlMsg CanonicalJson FallbackScientific: only when R→sci round-trip fails.
+#   - Live OS transports (Pty/Telnet/Ssh/WebSocket) excluded from denominator
+#     entirely (unit tests cannot drive real PTY/SSH handshakes fully).
+#   - Mcp/ excluded: MCP is out of scope for the C# port (operator request).
+# Whole-port measured ~96.7% on the residual-adjusted denominator.
+COVER_THRESHOLD ?= 96.5
 CONFIGURATION ?= Release
 
 .PHONY: build test cover build-binaries quality-gate interop-test

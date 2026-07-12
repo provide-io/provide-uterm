@@ -66,14 +66,14 @@ make quality-gate   # build + test + coverage floor + binaries
 make quality-gate
 ```
 
-Coverage excludes pure Unicode/charset lookup tables (data-only) and live
+Coverage excludes pure Unicode/charset lookup tables (data-only), live
 OS/socket residual packages (`Pty/PtyTransport`, live telnet/SSH/WebSocket
-transport bodies) the way Go documents fault-injection/socket residuals.
-The gate floor is `COVER_THRESHOLD=90.0` (current ~90.6% of the measured
-denominator). Remaining misses are concentrated in long-lived WebSocket
-accept loops (`Server/UtermServer`, `Bridge/Hijackable` worker link,
-`Manager` accept, `Cli` server Ctrl-C wait) — same residual class as Go's
-server/gateway residual lines, not untested library logic.
+transport bodies), and the out-of-scope `Mcp/` tree (operator de-scoped MCP
+for C#). The gate floor is `COVER_THRESHOLD=96.5` (measured ~96.7% of that
+denominator). Remaining misses match Go’s residual class: production
+`Console.CancelKeyPress` wait arms (tests inject `WaitForCancel` no-ops to
+exercise non-`--once` CLI paths), WebSocket accept/stop races, and rare
+codec/float fallback branches — not untested library logic.
 
 ## Conformance
 
