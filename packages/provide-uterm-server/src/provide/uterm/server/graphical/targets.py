@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from contextlib import suppress
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, TypeVar
 
@@ -17,7 +17,8 @@ from provide.uterm.control.plane.graphical_target import GraphicalTargetRecord
 from provide.uterm.server.config_schema_graphical import GraphicalTargetDefinition
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    import builtins
+    from collections.abc import AsyncIterator, Awaitable, Callable
 
     from provide.uterm.control.plane import ControlPlane
     from provide.uterm.control.plane.graphical_target import GraphicalTargetStore
@@ -97,20 +98,31 @@ class GraphicalTargetRegistry:
         self._control_plane = control_plane
         self._owns_control_plane = owns_control_plane
         self._closed = False
+        self._closing = False
+        self._active_operations = 0
+        self._lifecycle = asyncio.Condition()
+        self._close_generation = 0
+        self._close_outcomes: dict[int, BaseException | None] = {}
 
     async def get(self, scope: GraphicalTargetScope, target_id: str) -> GraphicalTargetDefinition | None:
-        self._ensure_open()
+        async with self._active_operation():
+            return await self._get(scope, target_id)
+
+    async def _get(self, scope: GraphicalTargetScope, target_id: str) -> GraphicalTargetDefinition | None:
         static = self._static.get(target_id)
         if static is not None:
             return static if scope.permits(static.tenant_id) else None
-        record = await self.get_runtime_record(scope, target_id)
+        record = await self._get_runtime_record(scope, target_id)
         if record is None:
             return None
         return self._from_record(record)
 
     async def list(self, scope: GraphicalTargetScope) -> list[GraphicalTargetDefinition]:
-        self._ensure_open()
-        records = await self._run_tx(lambda store: store.list_graphical_targets())
+        async with self._active_operation():
+            return await self._list_targets(scope)
+
+    async def _list_targets(self, scope: GraphicalTargetScope) -> builtins.list[GraphicalTargetDefinition]:
+        records = await self._run_tx_unleased(lambda store: store.list_graphical_targets())
         merged = {
             record.target_id: self._from_record(record) for record in records if record.target_id not in self._static
         }
@@ -125,7 +137,14 @@ class GraphicalTargetRegistry:
         scope: GraphicalTargetScope,
         target: GraphicalTargetDefinition,
     ) -> GraphicalTargetDefinition:
-        self._ensure_open()
+        async with self._active_operation():
+            return await self._create(scope, target)
+
+    async def _create(
+        self,
+        scope: GraphicalTargetScope,
+        target: GraphicalTargetDefinition,
+    ) -> GraphicalTargetDefinition:
         self._require_scope(scope, target.tenant_id)
         if target.target_id in self._static:
             raise GraphicalTargetAlreadyExistsError("graphical target already exists")
@@ -135,7 +154,7 @@ class GraphicalTargetRegistry:
                 raise GraphicalTargetAlreadyExistsError("graphical target already exists")
             await store.put_graphical_target(self._to_record(target))
 
-        await self._run_tx(create_record)
+        await self._run_tx_unleased(create_record)
         return target
 
     async def update(
@@ -143,7 +162,14 @@ class GraphicalTargetRegistry:
         scope: GraphicalTargetScope,
         target: GraphicalTargetDefinition,
     ) -> GraphicalTargetDefinition:
-        self._ensure_open()
+        async with self._active_operation():
+            return await self._update(scope, target)
+
+    async def _update(
+        self,
+        scope: GraphicalTargetScope,
+        target: GraphicalTargetDefinition,
+    ) -> GraphicalTargetDefinition:
         self._require_scope(scope, target.tenant_id)
         if target.target_id in self._static:
             raise GraphicalTargetImmutableError("static graphical target is immutable")
@@ -155,11 +181,14 @@ class GraphicalTargetRegistry:
             self._require_scope(scope, current.tenant_id)
             await store.put_graphical_target(self._to_record(target, created_at=current.created_at))
 
-        await self._run_tx(update_record)
+        await self._run_tx_unleased(update_record)
         return target
 
     async def delete(self, scope: GraphicalTargetScope, target_id: str) -> None:
-        self._ensure_open()
+        async with self._active_operation():
+            await self._delete(scope, target_id)
+
+    async def _delete(self, scope: GraphicalTargetScope, target_id: str) -> None:
         static = self._static.get(target_id)
         if static is not None:
             self._require_scope(scope, static.tenant_id)
@@ -172,26 +201,60 @@ class GraphicalTargetRegistry:
             self._require_scope(scope, current.tenant_id)
             await store.delete_graphical_target(target_id)
 
-        await self._run_tx(delete_record)
+        await self._run_tx_unleased(delete_record)
 
     async def get_runtime_record(
         self,
         scope: GraphicalTargetScope,
         target_id: str,
     ) -> GraphicalTargetRecord | None:
-        self._ensure_open()
-        record = await self._run_tx(lambda store: store.get_graphical_target(target_id))
+        async with self._active_operation():
+            return await self._get_runtime_record(scope, target_id)
+
+    async def _get_runtime_record(
+        self,
+        scope: GraphicalTargetScope,
+        target_id: str,
+    ) -> GraphicalTargetRecord | None:
+        record = await self._run_tx_unleased(lambda store: store.get_graphical_target(target_id))
         return record if record is None or scope.permits(record.tenant_id) else None
 
     async def close(self) -> None:
-        if self._closed:
-            return
-        if self._owns_control_plane:
-            await self._control_plane.close()
-        self._closed = True
+        async with self._lifecycle:
+            if self._closed:
+                return
+            if self._closing:
+                generation = self._close_generation
+                await self._lifecycle.wait_for(lambda: generation in self._close_outcomes)
+                outcome = self._close_outcomes[generation]
+                if outcome is not None:
+                    raise outcome
+                return
+            self._closing = True
+            self._close_generation += 1
+            generation = self._close_generation
+        try:
+            async with self._lifecycle:
+                await self._lifecycle.wait_for(lambda: self._active_operations == 0)
+            if self._owns_control_plane:
+                await self._control_plane.close()
+        except BaseException as exc:
+            async with self._lifecycle:
+                self._closing = False
+                self._close_outcomes[generation] = exc
+                self._lifecycle.notify_all()
+            raise
+        async with self._lifecycle:
+            self._closed = True
+            self._closing = False
+            self._close_outcomes[generation] = None
+            self._lifecycle.notify_all()
 
     async def _run_tx(self, operation: Callable[[GraphicalTargetStore], Awaitable[_T]]) -> _T:
-        self._ensure_open()
+        async with self._active_operation():
+            return await self._run_tx_unleased(operation)
+
+    async def _run_tx_unleased(self, operation: Callable[[GraphicalTargetStore], Awaitable[_T]]) -> _T:
         for attempt in range(_MAX_CONFLICT_ATTEMPTS):
             transaction: Transaction | None = None
             try:
@@ -222,9 +285,21 @@ class GraphicalTargetRegistry:
         except BaseException:
             pass
 
-    def _ensure_open(self) -> None:
-        if self._closed:
-            raise GraphicalTargetClosedError("graphical target registry is closed")
+    @asynccontextmanager
+    async def _active_operation(self) -> AsyncIterator[None]:
+        async with self._lifecycle:
+            if self._closing:
+                raise GraphicalTargetClosedError("graphical target registry is closing")
+            if self._closed:
+                raise GraphicalTargetClosedError("graphical target registry is closed")
+            self._active_operations += 1
+        try:
+            yield
+        finally:
+            async with self._lifecycle:
+                self._active_operations -= 1
+                if self._active_operations == 0:
+                    self._lifecycle.notify_all()
 
     @staticmethod
     def _require_scope(scope: GraphicalTargetScope, tenant_id: str | None) -> None:
