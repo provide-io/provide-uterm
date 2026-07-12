@@ -74,6 +74,10 @@ public sealed class AuthorizationService
         };
     }
 
+    /// <summary>Read session recording meta/entries/download (capability + session read).</summary>
+    public bool CanReadRecording(Principal p, SessionDefinition session) =>
+        CanReadSession(p, session) && HasCapability(p, "session.recording.read");
+
     public bool CanCreateSession(Principal p) => HasCapability(p, "session.control.create");
 
     public bool CanMutateSession(Principal p, SessionDefinition session, string action)

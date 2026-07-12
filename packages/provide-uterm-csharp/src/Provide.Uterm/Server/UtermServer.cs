@@ -17,6 +17,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Provide.Uterm.ControlChannel;
 using Provide.Uterm.Hub;
+using Provide.Uterm.Recording;
 using Provide.Uterm.ServerAuth;
 using Provide.Uterm.ServerConfig;
 
@@ -32,6 +33,8 @@ public sealed class ServerDeps
     public required ISessionRegistry Registry { get; init; }
     public string Version { get; init; } = "0.0.0-dev";
     public IClock? Clock { get; init; }
+    /// <summary>Backs /api/sessions/{id}/recording routes. Defaults to <see cref="NullStore"/>.</summary>
+    public IRecordingStore? Recording { get; init; }
 }
 
 /// <summary>
@@ -49,6 +52,7 @@ public sealed partial class UtermServer : IAsyncDisposable
 
     private readonly ServerDeps _deps;
     private readonly IClock _clock;
+    private readonly IRecordingStore _recording;
     private readonly double _startTime;
     private volatile bool _ready;
     private WebApplication? _app;
@@ -58,6 +62,7 @@ public sealed partial class UtermServer : IAsyncDisposable
     {
         _deps = deps;
         _clock = deps.Clock ?? new RealClock();
+        _recording = deps.Recording ?? new NullStore();
         _startTime = _clock.Wall();
     }
 
@@ -221,6 +226,12 @@ public sealed partial class UtermServer : IAsyncDisposable
             _deps.Registry.Delete(sessionId);
             return Results.Json(new { ok = true }, JsonOpts);
         });
+
+        // Thin recording surface (Python/Go parity): annotate + meta/entries/download
+        app.MapPost("/api/sessions/{sessionId}/annotate", HandleAnnotateSession);
+        app.MapGet("/api/sessions/{sessionId}/recording", HandleRecordingMeta);
+        app.MapGet("/api/sessions/{sessionId}/recording/entries", HandleRecordingEntries);
+        app.MapGet("/api/sessions/{sessionId}/recording/download", HandleRecordingDownload);
 
         // Hijack REST surface
         app.MapPost("/worker/{workerId}/hijack/acquire", HandleHijackAcquire);
@@ -888,7 +899,17 @@ public static class ServerFactory
             Registry = registry,
             Version = version,
             Clock = clock,
+            Recording = BuildRecordingStore(cfg),
         });
         return (server, devToken);
     }
+
+    /// <summary>Select recording store from config (local JSONL / memory / null).</summary>
+    public static IRecordingStore BuildRecordingStore(UtermServerConfig cfg) =>
+        cfg.Recording.StoreType.ToLowerInvariant() switch
+        {
+            "local" => new LocalFileStore(cfg.Recording.Directory),
+            "memory" => new InMemoryStore(),
+            _ => new NullStore(),
+        };
 }

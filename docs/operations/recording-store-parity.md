@@ -17,7 +17,7 @@ compliance recording is [ard-session-audit-compliance-recording.md](../ard-sessi
 | Query semantics (`limit` / `offset` / event filter) | **Yes** | `limit=0` → default **200**, clamp **1..500** |
 | Stores LocalFile / InMemory / Null | **Yes** | Same roles |
 | Public method names / async style | **No** | Idiomatic per language |
-| Full HTTP/server recording surface | **Python-led** | Go/C# ship the library store first |
+| Full HTTP/server recording surface | **Yes (thin)** | annotate + meta / entries / download on all three |
 
 Python is the **behavioral source of truth**. Go and C# match that behavior with
 idiomatic surfaces (sync+error, `Task`/`Async`).
@@ -180,6 +180,36 @@ uv run python -m scripts.demos.record_recording_matrix
 
 See [demo/recording/README.md](../../demo/recording/README.md).
 
+## Thin HTTP surface (multi-language)
+
+Same four routes on Python FastAPI, Go `server`, and C# `UtermServer`:
+
+| Method | Path | Capability |
+|--------|------|------------|
+| `POST` | `/api/sessions/{id}/annotate` | `session.control.update` |
+| `GET` | `/api/sessions/{id}/recording` | `session.recording.read` |
+| `GET` | `/api/sessions/{id}/recording/entries` | `session.recording.read` |
+| `GET` | `/api/sessions/{id}/recording/download` | `session.recording.read` (+ path confinement under `recording.directory`) |
+
+| Language | Registration | Store dep |
+|----------|--------------|-----------|
+| Python | `routes/sessions.py` | session registry / logger → store |
+| Go | `server/server_recording.go` + annotate in `routes_sessions_control.go` | `Deps.Recording` |
+| C# | `UtermServer.Recording.cs` | `ServerDeps.Recording` / `ServerFactory.BuildRecordingStore` |
+
+### HTTP demos (in-process server)
+
+```bash
+# Go
+(cd packages/provide-uterm-go && go run ./cmd/demo-recording-http)
+
+# C#
+dotnet run --project packages/provide-uterm-csharp/cmd/RecordingHttpDemo -c Release
+```
+
+These seed a `LocalFileStore`, bind loopback, and hit annotate + meta/entries/download
+(the same contract as `scripts/demos/record_recording.py` without the browser stack).
+
 ## Full-stack vs library
 
 ```mermaid
@@ -190,6 +220,10 @@ flowchart TB
     API --> UI
   end
 
+  subgraph thin [Thin HTTP — all languages]
+    HAPI[annotate + meta/entries/download]
+  end
+
   subgraph lib [Portable library — multi-lang matrix]
     PY[Python store]
     GO[Go store]
@@ -197,6 +231,9 @@ flowchart TB
   end
 
   full -->|uses| PY
+  thin --> PY
+  thin --> GO
+  thin --> CS
   lib --> PY
   lib --> GO
   lib --> CS
@@ -204,6 +241,8 @@ flowchart TB
 
 - **Full stack** (browser MP4, hijack, replay UI): Python server scripts under
   `scripts/demos/record_recording.py`.
+- **Thin HTTP**: Go/C# demos above + unit tests (`server_recording_test.go`,
+  `ServerRecordingHttpTests.cs`).
 - **Cross-language parity** of the **store**: library demos + unit tests in each
   language.
 
@@ -212,3 +251,4 @@ flowchart TB
 - [Recording data handling](./recording-data-handling.md) — operators, PII, retention
 - [ARD: Session audit recording](../ard-session-audit-compliance-recording.md) — goals / as-built notes
 - [Architecture](../ARCHITECTURE.md) — system overview
+- [tradewars.space xterm → WSS](./tradewars-xterm-wss-architecture.md) — public browser edge vs local TWX doors
