@@ -138,6 +138,48 @@ def test_file_redacts_unsupported_dir_fd_error(tmp_path: Path, monkeypatch: pyte
     assert "sensitive-name" not in str(exc.value)
 
 
+def test_file_redacts_unsupported_anchor_open(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    reference = SecretReference.parse("file:anchor-secret", base_dir=tmp_path)
+    real_open = secrets_module.os.open
+
+    def unsupported_anchor(path: object, flags: int, *, dir_fd: int | None = None) -> int:
+        if dir_fd is None:
+            raise TypeError("anchor-secret platform failure")
+        return real_open(path, flags, dir_fd=dir_fd)
+
+    monkeypatch.setattr(secrets_module.os, "open", unsupported_anchor)
+    monkeypatch.setattr(secrets_module.os, "supports_dir_fd", os.supports_dir_fd | {unsupported_anchor})
+    with pytest.raises(SecretResolutionError) as exc:
+        reference.resolve()
+    assert str(exc.value) == "secure file secrets are unsupported on this platform"
+    assert "anchor-secret" not in str(exc.value)
+
+
+def test_file_redacts_unsupported_fallback_stat(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    reference = SecretReference.parse("file:stat-secret", base_dir=tmp_path)
+    real_open = secrets_module.os.open
+    real_stat = secrets_module.os.stat
+
+    def missing_open(path: object, flags: int, *, dir_fd: int | None = None) -> int:
+        if dir_fd is not None:
+            raise FileNotFoundError("stat-secret missing")
+        return real_open(path, flags)
+
+    def unsupported_stat(path: object, *, dir_fd: int | None = None, follow_symlinks: bool = True) -> os.stat_result:
+        if dir_fd is not None:
+            raise NotImplementedError("stat-secret platform failure")
+        return real_stat(path, follow_symlinks=follow_symlinks)
+
+    monkeypatch.setattr(secrets_module.os, "open", missing_open)
+    monkeypatch.setattr(secrets_module.os, "stat", unsupported_stat)
+    monkeypatch.setattr(secrets_module.os, "supports_dir_fd", os.supports_dir_fd | {missing_open, unsupported_stat})
+    monkeypatch.setattr(secrets_module.os, "supports_follow_symlinks", os.supports_follow_symlinks | {unsupported_stat})
+    with pytest.raises(SecretResolutionError) as exc:
+        reference.resolve()
+    assert str(exc.value) == "secure file secrets are unsupported on this platform"
+    assert "stat-secret" not in str(exc.value)
+
+
 def test_env_reference_works_without_file_primitives(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PORTABLE_SECRET", "portable")
     monkeypatch.delattr(secrets_module.os, "O_NOFOLLOW")

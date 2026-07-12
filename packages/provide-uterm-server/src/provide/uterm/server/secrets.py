@@ -17,6 +17,7 @@ from pydantic_core import core_schema
 
 MAX_SECRET_BYTES = 1024 * 1024
 _ENV_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_UNSUPPORTED_FILE_ERROR = "secure file secrets are unsupported on this platform"
 
 
 class SecretResolutionError(RuntimeError):
@@ -107,9 +108,16 @@ class SecretReference:
 
     def _open_file(self, path: Path) -> int:
         """Walk path components by descriptor so no symlink is ever followed."""
-        required = ("O_NOFOLLOW", "O_DIRECTORY", "geteuid")
-        if os.name != "posix" or any(not hasattr(os, name) for name in required) or os.open not in os.supports_dir_fd:
-            raise SecretResolutionError("secure file secrets are unsupported on this platform")
+        required = ("O_NOFOLLOW", "O_DIRECTORY", "geteuid", "supports_dir_fd", "supports_follow_symlinks")
+        unavailable = (
+            os.name != "posix"
+            or any(not hasattr(os, name) for name in required)
+            or os.open not in os.supports_dir_fd
+            or os.stat not in os.supports_dir_fd
+            or os.stat not in os.supports_follow_symlinks
+        )
+        if unavailable:
+            raise SecretResolutionError(_UNSUPPORTED_FILE_ERROR)
         common_flags = getattr(os, "O_CLOEXEC", 0) | os.O_NOFOLLOW
         if path.is_absolute():
             anchor, parts = Path(path.anchor), path.parts[1:]
@@ -118,7 +126,10 @@ class SecretReference:
         directory_flags = os.O_RDONLY | os.O_DIRECTORY | common_flags
         descriptors: list[int] = []
         try:
-            current = os.open(anchor, directory_flags)
+            try:
+                current = os.open(anchor, directory_flags)
+            except (NotImplementedError, TypeError) as exc:
+                raise SecretResolutionError(_UNSUPPORTED_FILE_ERROR) from exc
             descriptors.append(current)
             if not parts:
                 return os.dup(current)
@@ -135,10 +146,12 @@ class SecretReference:
         try:
             return os.open(component, flags, dir_fd=directory_fd)
         except (NotImplementedError, TypeError) as exc:
-            raise SecretResolutionError("secure file secrets are unsupported on this platform") from exc
+            raise SecretResolutionError(_UNSUPPORTED_FILE_ERROR) from exc
         except OSError as exc:
             try:
                 metadata = os.stat(component, dir_fd=directory_fd, follow_symlinks=False)
+            except (NotImplementedError, TypeError) as unsupported:
+                raise SecretResolutionError(_UNSUPPORTED_FILE_ERROR) from unsupported
             except OSError:
                 metadata = None
             if metadata is not None and stat.S_ISLNK(metadata.st_mode):
