@@ -40,7 +40,7 @@ DEFAULT_PALETTE: list[int] = [
     196,  # bright red
     46,  # bright green
     226,  # bright yellow
-    51,  # bright blue
+    39,  # bright blue (was 51 = (0,255,255) cyan — a mislabel; 39 = (0,175,255))
     201,  # bright magenta
     87,  # bright cyan
     231,  # bright white
@@ -117,6 +117,20 @@ def _map_index(code: int) -> int | None:
     return None
 
 
+def _is_foreground(code: int) -> bool:
+    return 30 <= code <= 37 or 90 <= code <= 97
+
+
+def _brighten_fg_index(idx: int) -> int:
+    """A bold foreground selects its BRIGHT palette entry (idx 0-7 -> 8-15).
+
+    Standard DOS/BBS and default xterm (drawBoldTextInBrightColors) semantics:
+    ``\\x1b[1;31m`` is bright red, not dim red. Already-bright indices (8-15)
+    are left alone so bold on a 90-97 code does not run off the 16-color range.
+    """
+    return idx + 8 if idx < 8 else idx
+
+
 def _convert_sgr_256(match: re.Match[str], palette: list[int]) -> str:
     seq = match.group(1)
     if seq == "":
@@ -124,6 +138,7 @@ def _convert_sgr_256(match: re.Match[str], palette: list[int]) -> str:
     parts = seq.split(";")
     if "38" in parts or "48" in parts:
         return match.group(0)
+    bold = "1" in parts
     new_parts = []
     for p in parts:
         if not p:
@@ -133,8 +148,11 @@ def _convert_sgr_256(match: re.Match[str], palette: list[int]) -> str:
         if idx is None:
             new_parts.append(str(code))
             continue
+        fg = _is_foreground(code)
+        if fg and bold:
+            idx = _brighten_fg_index(idx)
         color = palette[idx]
-        if 30 <= code <= 37 or 90 <= code <= 97:
+        if fg:
             new_parts.append(f"38;5;{color}")
         else:
             new_parts.append(f"48;5;{color}")
@@ -161,6 +179,7 @@ def _convert_sgr_tc(match: re.Match[str], rgb_palette: list[tuple[int, int, int]
     parts = seq.split(";")
     if "38" in parts or "48" in parts:
         return match.group(0)
+    bold = "1" in parts
     new_parts = []
     for p in parts:
         if not p:
@@ -170,8 +189,11 @@ def _convert_sgr_tc(match: re.Match[str], rgb_palette: list[tuple[int, int, int]
         if idx is None:
             new_parts.append(str(code))
             continue
+        fg = _is_foreground(code)
+        if fg and bold:
+            idx = _brighten_fg_index(idx)
         r, g, b = rgb_palette[idx]
-        if 30 <= code <= 37 or 90 <= code <= 97:
+        if fg:
             new_parts.append(f"38;2;{r};{g};{b}")
         else:
             new_parts.append(f"48;2;{r};{g};{b}")
