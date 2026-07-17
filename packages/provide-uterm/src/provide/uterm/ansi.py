@@ -47,13 +47,15 @@ DEFAULT_PALETTE: list[int] = [
 ]
 
 # Direct RGB tuples for the 16 base BBS colors (truecolor output)
+# Base red/blue/magenta lifted for WCAG AA (4.5:1) on the #0a0a0a terminal
+# background (2026-07-16); bright variants (indices 9/12/13) unchanged.
 DEFAULT_RGB: list[tuple[int, int, int]] = [
     (0, 0, 0),  # black
-    (215, 0, 0),  # red
+    (235, 77, 77),  # red
     (0, 175, 0),  # green
     (215, 175, 0),  # yellow/brown
-    (0, 95, 255),  # blue
-    (175, 0, 175),  # magenta
+    (64, 128, 255),  # blue
+    (224, 48, 224),  # magenta
     (0, 175, 175),  # cyan
     (208, 208, 208),  # white
     (128, 128, 128),  # bright black / gray
