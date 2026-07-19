@@ -260,8 +260,9 @@ public sealed partial class UtermServer : IAsyncDisposable
         app.MapDelete("/api/graphical-targets/{targetId}", HandleDeleteGraphicalTarget);
 
         // Browser / worker WebSockets with DLE/STX control channel
-        app.Map("/ws/browser/{workerId}", HandleBrowserWs);
-        app.Map("/ws/worker/{workerId}", HandleWorkerWs);
+        // Path shape matches Python/Go: terminal channel is /term on the worker id.
+        app.Map("/ws/browser/{workerId}/term", HandleBrowserWs);
+        app.Map("/ws/worker/{workerId}/term", HandleWorkerWs);
     }
 
     private SessionStatus EnrichStatus(SessionStatus st)

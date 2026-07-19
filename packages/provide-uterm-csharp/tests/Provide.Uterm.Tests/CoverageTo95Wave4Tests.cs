@@ -339,7 +339,7 @@ public class CoverageTo95Wave4Tests
             ws.Options.SetRequestHeader("Authorization", "Bearer " + token);
             try
             {
-                await ws.ConnectAsync(new Uri($"ws://127.0.0.1:{port}/ws/browser/not%2Fvalid"), CancellationToken.None);
+                await ws.ConnectAsync(new Uri($"ws://127.0.0.1:{port}/ws/browser/not%2Fvalid/term"), CancellationToken.None);
             }
             catch
             {

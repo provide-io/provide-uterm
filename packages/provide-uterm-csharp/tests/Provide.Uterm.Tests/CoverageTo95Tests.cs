@@ -635,9 +635,9 @@ public class CoverageTo95Tests
             using (var http = new HttpClient())
             {
                 Assert.Equal(HttpStatusCode.BadRequest,
-                    (await http.GetAsync($"{baseUrl}/ws/browser/demo")).StatusCode);
+                    (await http.GetAsync($"{baseUrl}/ws/browser/demo/term")).StatusCode);
                 Assert.Equal(HttpStatusCode.BadRequest,
-                    (await http.GetAsync($"{baseUrl}/ws/worker/demo")).StatusCode);
+                    (await http.GetAsync($"{baseUrl}/ws/worker/demo/term")).StatusCode);
             }
 
             // invalid worker id
@@ -655,7 +655,7 @@ public class CoverageTo95Tests
             using (var ws = new ClientWebSocket())
             {
                 ws.Options.SetRequestHeader("Authorization", "Bearer " + token);
-                await ws.ConnectAsync(new Uri($"ws://127.0.0.1:{port}/ws/browser/demo"), CancellationToken.None);
+                await ws.ConnectAsync(new Uri($"ws://127.0.0.1:{port}/ws/browser/demo/term"), CancellationToken.None);
                 var buf = new byte[8192];
                 var hello = await ws.ReceiveAsync(buf, CancellationToken.None);
                 var helloText = Encoding.UTF8.GetString(buf, 0, hello.Count);
@@ -691,7 +691,7 @@ public class CoverageTo95Tests
             {
                 try
                 {
-                    await ws401.ConnectAsync(new Uri($"ws://127.0.0.1:{port}/ws/worker/demo"), CancellationToken.None);
+                    await ws401.ConnectAsync(new Uri($"ws://127.0.0.1:{port}/ws/worker/demo/term"), CancellationToken.None);
                     Assert.Fail("expected 401");
                 }
                 catch (WebSocketException)
@@ -708,7 +708,7 @@ public class CoverageTo95Tests
             using (var ws = new ClientWebSocket())
             {
                 ws.Options.SetRequestHeader("Authorization", "Bearer " + workerTok);
-                await ws.ConnectAsync(new Uri($"ws://127.0.0.1:{port}/ws/worker/w2"), CancellationToken.None);
+                await ws.ConnectAsync(new Uri($"ws://127.0.0.1:{port}/ws/worker/w2/term"), CancellationToken.None);
                 var ctrl = ControlChannelCodec.EncodeControlFrame(new Dictionary<string, object?>
                 {
                     ["type"] = "snapshot",
@@ -743,7 +743,7 @@ public class CoverageTo95Tests
                 ws.Options.SetRequestHeader("Authorization", "Bearer " + token);
                 try
                 {
-                    await ws.ConnectAsync(new Uri($"ws://127.0.0.1:{port}/ws/browser/priv"), CancellationToken.None);
+                    await ws.ConnectAsync(new Uri($"ws://127.0.0.1:{port}/ws/browser/priv/term"), CancellationToken.None);
                     if (ws.State == WebSocketState.Open)
                     {
                         try

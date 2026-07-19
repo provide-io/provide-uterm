@@ -692,7 +692,7 @@ public class CoverageTo97Wave5Tests
         {
             ws.Options.SetRequestHeader("Authorization", "Bearer " + adminTok);
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-            await ws.ConnectAsync(new Uri($"ws://127.0.0.1:{port}/ws/browser/pub"), cts.Token);
+            await ws.ConnectAsync(new Uri($"ws://127.0.0.1:{port}/ws/browser/pub/term"), cts.Token);
             var hello = new byte[4096];
             await ws.ReceiveAsync(hello, cts.Token);
             var ctrl = Encoding.UTF8.GetBytes(
@@ -706,7 +706,7 @@ public class CoverageTo97Wave5Tests
         using (var ws = new ClientWebSocket())
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-            await ws.ConnectAsync(new Uri($"ws://127.0.0.1:{port}/ws/worker/pub"), cts.Token);
+            await ws.ConnectAsync(new Uri($"ws://127.0.0.1:{port}/ws/worker/pub/term"), cts.Token);
             await ws.SendAsync(Encoding.UTF8.GetBytes("term-data"), WebSocketMessageType.Text, true, cts.Token);
             var ctrl = Encoding.UTF8.GetBytes(
                 ControlChannelCodec.EncodeControlFrame(new Dictionary<string, object?> { ["type"] = "snapshot" }));
@@ -715,7 +715,7 @@ public class CoverageTo97Wave5Tests
         }
 
         // non-websocket request to ws path
-        var notWs = await http.GetAsync("/ws/browser/pub");
+        var notWs = await http.GetAsync("/ws/browser/pub/term");
         Assert.Equal(HttpStatusCode.BadRequest, notWs.StatusCode);
     }
 
