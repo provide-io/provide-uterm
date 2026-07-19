@@ -212,6 +212,8 @@ class HelloFrame(_FrameBase):
     hijack_step_supported: bool | None = None
     capabilities: dict[str, Any] | None = None
     resume_supported: bool | None = None
+    mcp_supported: bool = False
+    vnc_supported: bool = False
     resume_token: str | None = None
     resumed: bool | None = None
     protocol_version: int | None = None

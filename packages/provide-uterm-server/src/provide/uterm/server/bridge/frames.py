@@ -131,6 +131,8 @@ class HelloFrame(TypedDict, total=False):
     hijack_step_supported: bool
     capabilities: dict[str, object]
     resume_supported: bool
+    mcp_supported: bool
+    vnc_supported: bool
     resume_token: str | None
     resumed: bool
     protocol_version: int
@@ -265,6 +267,8 @@ def make_hello_frame(**payload: Any) -> HelloFrame:
     # Hello-frame payloads accept arbitrary capability flags that aren't
     # part of the Pydantic schema (``HelloFrame`` uses extra="ignore"),
     # so route through the loose TypedDict path and just stamp ``type``.
+    payload.setdefault("mcp_supported", True)
+    payload.setdefault("vnc_supported", False)
     return cast("HelloFrame", {"type": "hello", **payload})
 
 
