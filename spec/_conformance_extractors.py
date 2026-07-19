@@ -72,6 +72,72 @@ CATEGORY_SOURCES: dict[str, dict[str, list[dict[str, object]]]] = {
             {"dir": "packages/provide-uterm-csharp/src/Provide.Uterm/Emulator", "type": "TerminalEmulator"},
         ],
     },
+    # Graphical-target model + tenant-scoped registry:
+    #   provide.uterm.server.graphical_targets (Python)
+    #   <-> packages/provide-uterm-go/graphical (Go)
+    #   <-> Provide.Uterm/Server/GraphicalTargets.cs (C#, all types in one file).
+    # The Python/C# names (GraphicalTargetDefinition, GraphicalTargetScope,
+    # InMemoryGraphicalTargetRegistry) collapse to graphical.Definition/Scope/
+    # InMemoryRegistry in Go, so the type NAMES are required: false in the spec;
+    # the method surface (get/list/create/update/delete/add_static, public_copy,
+    # permits, parse_rfb_endpoint) is parity-enforced. The single C# type source
+    # is enough because _csharp_type_methods scans the whole file GraphicalTargetDefinition
+    # lives in, which is every graphical type (registry, scope, parsing helper).
+    "graphical": {
+        "python": [
+            {
+                "file": "packages/provide-uterm-server/src/provide/uterm/server/graphical_targets.py",
+                "class": "GraphicalTargetDefinition",
+            },
+            {
+                "file": "packages/provide-uterm-server/src/provide/uterm/server/graphical_targets.py",
+                "class": "InMemoryGraphicalTargetRegistry",
+            },
+            {
+                "file": "packages/provide-uterm-server/src/provide/uterm/server/graphical_targets.py",
+                "class": "GraphicalTargetScope",
+            },
+            {
+                "file": "packages/provide-uterm-server/src/provide/uterm/server/graphical_targets.py",
+                "module_functions": True,
+            },
+        ],
+        "go": [
+            {"dir": "packages/provide-uterm-go/graphical", "type": "Definition"},
+            {"dir": "packages/provide-uterm-go/graphical", "type": "InMemoryRegistry"},
+            {"dir": "packages/provide-uterm-go/graphical", "type": "Scope"},
+            {"dir": "packages/provide-uterm-go/graphical", "top_level_functions": True},
+        ],
+        "csharp": [
+            {"dir": "packages/provide-uterm-csharp/src/Provide.Uterm/Server", "type": "GraphicalTargetDefinition"},
+        ],
+    },
+    # Tenant-scoped auth surface: the API-key store's tenant methods + the
+    # resolved Principal. provide.uterm.server.api_keys + bridge.identity
+    # (Python) <-> packages/provide-uterm-go/serverauth (Go) <->
+    # Provide.Uterm/ServerAuth (C#). Principal.tenant_id / ApiKeyRecord.TenantId
+    # are DATA FIELDS (not methods) and the tenant/name regex is a CONSTANT, so
+    # neither is method-extractable here -- those are covered by the wire-parity
+    # grep table, not this spec. canonical_tenant_id is a public module function
+    # in Python/Go but only a private per-file helper in C#, so it is
+    # required: false.
+    "tenant": {
+        "python": [
+            {"file": "packages/provide-uterm-server/src/provide/uterm/server/api_keys.py", "class": "ApiKeyStore"},
+            {"file": "packages/provide-uterm-server/src/provide/uterm/server/api_keys.py", "module_functions": True},
+            {"file": "packages/provide-uterm-server/src/provide/uterm/server/bridge/identity.py", "class": "Principal"},
+        ],
+        "go": [
+            {"dir": "packages/provide-uterm-go/serverauth", "type": "ApiKeyStore"},
+            {"dir": "packages/provide-uterm-go/serverauth", "type": "Principal"},
+            {"dir": "packages/provide-uterm-go/serverauth", "top_level_functions": True},
+        ],
+        "csharp": [
+            {"dir": "packages/provide-uterm-csharp/src/Provide.Uterm/ServerAuth", "type": "ApiKeyStore"},
+            {"dir": "packages/provide-uterm-csharp/src/Provide.Uterm/ServerAuth", "type": "Principal"},
+            {"dir": "packages/provide-uterm-csharp/src/Provide.Uterm/ServerAuth", "top_level_functions": True},
+        ],
+    },
 }
 
 
@@ -196,9 +262,12 @@ def _csharp_type_methods(dir_path: Path, type_name: str) -> set[str]:
     only (same convention as Go).
     """
     type_pattern = re.compile(rf"\b(?:public\s+)?(?:sealed\s+|abstract\s+|static\s+)*class\s+{re.escape(type_name)}\b")
-    # public [async] [static] ReturnType MethodName(
+    # public [async] [static] ReturnType MethodName(  -- ReturnType is either a
+    # normal token sequence or a tuple type "(string Host, int Port)".
     method_pattern = re.compile(
-        r"^\s*public\s+(?:async\s+)?(?:static\s+)?(?:[\w.<>\[\]?,]+\s+)+([A-Z]\w*)\s*\(",
+        r"^\s*public\s+(?:async\s+)?(?:static\s+)?"
+        r"(?:\([^)]*\)\s+|(?:[\w.<>\[\]?,]+\s+)+)"
+        r"([A-Z]\w*)\s*\(",
         re.MULTILINE,
     )
     names: set[str] = set()

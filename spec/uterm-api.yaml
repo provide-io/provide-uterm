@@ -211,3 +211,125 @@ api:
         Both languages expose the raw-output tail, but the names diverge
         (Python: get_raw_tail; Go: RawTail, not GetRawTail), so this is an
         accepted naming difference rather than an enforced parity symbol.
+  # provide.uterm.server.graphical_targets (Python) <->
+  # packages/provide-uterm-go/graphical (Go) <->
+  # Provide.Uterm/Server/GraphicalTargets.cs (C#). The tenant-scoped graphical-
+  # console model + registry: a GraphicalTargetDefinition (memory/rfb) held in
+  # an InMemoryGraphicalTargetRegistry that gates every read/write by a
+  # GraphicalTargetScope derived from the authenticated principal's tenant. The
+  # wire shape (snake_case JSON keys, error codes, endpoint parsing) is parity-
+  # guaranteed across all three ports.
+  graphical:
+    - name: GraphicalTargetDefinition
+      kind: type
+      required: false
+      note: >-
+        The console-definition model. Python/C# name it
+        GraphicalTargetDefinition; Go collapses it to graphical.Definition.
+        Accepted naming difference -- the method surface (public_copy) is
+        enforced below instead of the type name.
+    - name: InMemoryGraphicalTargetRegistry
+      kind: type
+      required: false
+      note: >-
+        The tenant-scoped registry. Python/C# name it
+        InMemoryGraphicalTargetRegistry; Go names it graphical.InMemoryRegistry.
+        Accepted naming difference -- the CRUD method surface is enforced below.
+    - name: GraphicalTargetScope
+      kind: type
+      required: false
+      note: >-
+        The tenant-isolation capability. Python/C# name it GraphicalTargetScope;
+        Go names it graphical.Scope (and C# implements it as a readonly struct,
+        which the class-only C# extractor does not scan). Accepted difference --
+        permits is enforced below.
+    - name: public_copy
+      kind: function
+      required: true
+      note: >-
+        Strip every secret from a definition before it crosses the REST
+        boundary (Python: public_copy; Go/C#: PublicCopy).
+    - name: parse_rfb_endpoint
+      kind: function
+      required: true
+      note: >-
+        Parse/normalize an rfb endpoint (host:port | rfb://host:port | dns:///
+        prefix). Python module function; Go top-level func; C# static
+        GraphicalTargetParsing.ParseRfbEndpoint.
+    - name: permits
+      kind: function
+      required: true
+      note: "scope check: does this tenant/system scope permit a target's tenant"
+    - name: is_valid
+      kind: function
+      required: false
+      note: >-
+        Scope validity check (exactly one of system/tenant). A method in Go
+        (Scope.IsValid) but a PROPERTY in Python (@property is_valid) and C#
+        (bool IsValid => ...). The C# extractor matches methods only, so this is
+        required: false rather than a false miss. The behavior is identical in
+        all three.
+    - name: get
+      kind: function
+      required: true
+      note: "registry: fetch one tenant-permitted target (Python get; Go/C# Get)"
+    - name: list
+      kind: function
+      required: true
+      note: "registry: list tenant-permitted targets (Python list; Go/C# List)"
+    - name: create
+      kind: function
+      required: true
+    - name: update
+      kind: function
+      required: true
+    - name: delete
+      kind: function
+      required: true
+    - name: add_static
+      kind: function
+      required: true
+      note: "seed an immutable system target (Python add_static; Go/C# AddStatic)"
+  # provide.uterm.server.api_keys + bridge.identity (Python) <->
+  # packages/provide-uterm-go/serverauth (Go) <-> Provide.Uterm/ServerAuth (C#).
+  # The tenant-scoped API-key store methods + the resolved Principal. Note:
+  # Principal.tenant_id / ApiKeyRecord.TenantId are DATA FIELDS and the tenant-
+  # id validation regex is a CONSTANT -- neither is method-extractable, so their
+  # cross-language parity is verified by the wire-contract grep audit, not this
+  # method-level spec.
+  tenant:
+    - name: Principal
+      kind: type
+      required: true
+      note: >-
+        Resolved browser/API principal, named Principal in all three ports. Its
+        tenant_id/TenantID field carries the multi-tenancy scope (verified via
+        wire parity, not method extraction).
+    - name: ApiKeyStore
+      kind: type
+      required: true
+      note: "in-memory API-key registry, named ApiKeyStore in all three ports"
+    - name: create_for_tenant
+      kind: function
+      required: true
+      note: >-
+        Mint an API key bound to a validated canonical tenant id (Python
+        create_for_tenant; Go/C# CreateForTenant).
+    - name: list_keys_for_tenant
+      kind: function
+      required: true
+      note: "list a tenant's non-revoked keys (Python list_keys_for_tenant; Go/C# ListKeysForTenant)"
+    - name: revoke_for_tenant
+      kind: function
+      required: true
+      note: "revoke a key only if it belongs to the tenant (Python revoke_for_tenant; Go/C# RevokeForTenant)"
+    - name: canonical_tenant_id
+      kind: function
+      required: false
+      note: >-
+        Trim/validate a tenant id against the shared regex, returning None for
+        blank/invalid. A public module function in Python (api_keys) and a
+        public top-level func in Go (serverauth.CanonicalTenantID), but only a
+        PRIVATE per-file helper in C# (ApiKeys.cs / LocalIdentity.cs), so it is
+        required: false rather than a false miss. Identical behavior in all
+        three.
