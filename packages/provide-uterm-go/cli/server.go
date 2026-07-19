@@ -118,6 +118,9 @@ func buildServer(ctx context.Context, configPath, host string, port int, fronten
 		BrowserRateLimitPerSec:     cfg.BrowserRateLimitPerSec,
 		MaxConnectionsPerPrincipal: cfg.MaxConnectionsPerPrincipal,
 		MaxWorkers:                 cfg.MaxWorkers,
+		// Match Python create_server_app: mint resume tokens on browser connect.
+		ResumeStore: hub.NewInMemoryResumeStore(clock, nil),
+		ResumeTTLS:  300,
 		// Wire the real StreamRedactor as the output-redaction seam. It stays
 		// dormant until an OutputPolicyGate yields rules (none by default, matching
 		// the Python NoOp-gate default), so live output is unchanged unless a gate

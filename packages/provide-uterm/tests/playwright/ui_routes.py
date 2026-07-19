@@ -33,7 +33,7 @@ def _resolve_script() -> str:
         return "src/hijack.ts"
 
 
-def test_page_html(worker_id: str, *, heartbeat_ms: int = 500) -> str:
+def widget_test_page_html(worker_id: str, *, heartbeat_ms: int = 500) -> str:
     script_path = _resolve_script()
     return (
         "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
@@ -66,7 +66,7 @@ def install_multi_backend_routes(page: Page, frontend_dir: Path | None = None) -
         # .../test-page/{worker_id}
         parts = url.rstrip("/").split("/test-page/")
         worker_id = parts[-1].split("?")[0] if len(parts) > 1 else "unknown"
-        route.fulfill(status=200, content_type="text/html", body=test_page_html(worker_id))
+        route.fulfill(status=200, content_type="text/html", body=widget_test_page_html(worker_id))
 
     def on_ui(route: Route) -> None:
         url = route.request.url

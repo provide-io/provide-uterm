@@ -322,7 +322,21 @@ def create_server_app(
     # build here (memory + sqlite) implement it; cast for the resume backend.
     resume_store = ControlPlaneResumeStore(cast("_ControlPlaneResumeBackend", control_plane))
 
-    _hub_class = hub_class if hub_class is not None else TermHub
+    # Default production hub includes DeckMux collaborative presence (mixin).
+    # Callers may still pass hub_class=TermHub to opt out, or a custom subclass.
+    if hub_class is None:
+        from provide.uterm.deckmux import DeckMuxMixin
+
+        class _DefaultTermHub(DeckMuxMixin, TermHub):
+            """Reference server hub with DeckMux presence routing enabled."""
+
+            def __init__(self, **kwargs: object) -> None:
+                super().__init__(**kwargs)  # type: ignore[arg-type]
+                self._deckmux_init()
+
+        _hub_class: type[TermHub] = _DefaultTermHub
+    else:
+        _hub_class = hub_class
     hub = _hub_class(
         resolve_browser_role=_resolve_browser_role,
         on_metric=_inc_metric,

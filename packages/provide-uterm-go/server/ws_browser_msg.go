@@ -32,6 +32,8 @@ func (s *Server) dispatchBrowserMessage(ctx context.Context, conn *websocket.Con
 		_ = s.deps.Hub.RequestSnapshot(ctx, workerID)
 	case "heartbeat":
 		s.browserHeartbeat(ctx, conn, workerID, bc)
+	case "resume":
+		s.browserResume(ctx, conn, workerID, bc, role, msg)
 	case "ping":
 		s.writeFrame(ctx, conn, frames.PongFrame{Type: frames.TypePong, TS: frames.Ptr(s.clock.Wall())})
 	case "presence_update", "queued_input", "control_request":
@@ -39,10 +41,48 @@ func (s *Server) dispatchBrowserMessage(ctx context.Context, conn *websocket.Con
 	case "fanout_send":
 		s.browserFanoutSend(ctx, conn, bc, msg)
 	default:
-		// Unhandled types (resume, http_*) are dropped in this interop-subset
-		// port.
+		// Unhandled types (http_*) are dropped in this interop-subset port.
 	}
 	return owned
+}
+
+// browserResume consumes a single-use resume token and reissues hello with
+// resumed=true + a fresh token. Port of browser_handlers._handle_resume
+// (hijack reclaim omitted — covered by dedicated hijack suite).
+func (s *Server) browserResume(ctx context.Context, conn *websocket.Conn, workerID string, bc *browserConn, role string, msg map[string]any) {
+	store := s.deps.Hub.ResumeStore()
+	if store == nil {
+		return
+	}
+	oldTok, _ := msg["token"].(string)
+	if oldTok == "" {
+		return
+	}
+	session, err := store.Get(ctx, oldTok)
+	if err != nil || session == nil || session.WorkerID != workerID {
+		return
+	}
+	consumed, err := store.Consume(ctx, oldTok)
+	if err != nil || consumed == nil {
+		return
+	}
+	// Mint a replacement token by re-registering resume metadata for this socket.
+	// RegisterBrowser already holds this connection; Create alone is enough.
+	newTok, err := store.Create(ctx, workerID, role, 300)
+	if err != nil || newTok == "" {
+		return
+	}
+	state := s.deps.Hub.RegisterBrowserStateSnapshot(workerID, bc)
+	if state == nil {
+		state = map[string]any{}
+	}
+	state["resume_token"] = newTok
+	hello := s.buildHelloFrame(workerID, role, role == "admin", state)
+	hello.Resumed = frames.Ptr(true)
+	hello.ResumeSupported = frames.Ptr(true)
+	hello.ResumeToken = frames.Ptr(newTok)
+	s.writeFrame(ctx, conn, hello)
+	_ = s.deps.Hub.BroadcastHijackState(ctx, workerID)
 }
 
 // browserInput forwards keystrokes to the worker through the input-approval

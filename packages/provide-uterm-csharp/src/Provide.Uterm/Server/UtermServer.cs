@@ -59,12 +59,24 @@ public sealed partial class UtermServer : IAsyncDisposable
     private WebApplication? _app;
     private Task? _runTask;
 
+    // In-process resume tokens (Python ControlPlaneResumeStore / Go InMemoryResumeStore).
+    private readonly ConcurrentDictionary<string, (string WorkerId, string Role, double ExpiresAt)> _resumeTokens = new();
+    // DeckMux-lite: per-worker presence by browser connection.
+    private readonly ConcurrentDictionary<string, ConcurrentDictionary<object, string>> _presence = new();
+
     public UtermServer(ServerDeps deps)
     {
         _deps = deps;
         _clock = deps.Clock ?? new RealClock();
         _recording = deps.Recording ?? new NullStore();
         _startTime = _clock.Wall();
+    }
+
+    private string MintResumeToken(string workerId, string role)
+    {
+        var tok = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
+        _resumeTokens[tok] = (workerId, role, _clock.Monotonic() + 300);
+        return tok;
     }
 
     public string? BaseAddress { get; private set; }
@@ -580,6 +592,7 @@ public sealed partial class UtermServer : IAsyncDisposable
         static string StateStr(IReadOnlyDictionary<string, object?> d, string key, string fallback) =>
             d.TryGetValue(key, out var v) && v is string s && !string.IsNullOrEmpty(s) ? s : fallback;
 
+        var resumeToken = MintResumeToken(workerId, role);
         // Capability defaults match spec/behavior.json hello_defaults.csharp.
         var hello = ControlChannelCodec.EncodeControlFrame(new Dictionary<string, object?>
         {
@@ -602,6 +615,8 @@ public sealed partial class UtermServer : IAsyncDisposable
             },
             ["mcp_supported"] = false,
             ["vnc_supported"] = true,
+            ["resume_supported"] = true,
+            ["resume_token"] = resumeToken,
         });
         await conn.SendTextAsync(hello, ctx.RequestAborted).ConfigureAwait(false);
         // Per-browser owner="me"/"other" — required for second-browser tests.
@@ -609,6 +624,15 @@ public sealed partial class UtermServer : IAsyncDisposable
         await conn.SendTextAsync(
             ControlChannelCodec.EncodeControlFrame(hijackState),
             ctx.RequestAborted).ConfigureAwait(false);
+
+        // DeckMux-lite: presence_sync on join (Python DeckMuxMixin / Go deckOnConnect).
+        var presence = _presence.GetOrAdd(workerId, _ => new ConcurrentDictionary<object, string>());
+        var userId = "u-" + conn.GetHashCode().ToString("x");
+        presence[conn] = userId;
+        await conn.SendTextAsync(
+            ControlChannelCodec.EncodeControlFrame(BuildPresenceSync(workerId, presence)),
+            ctx.RequestAborted).ConfigureAwait(false);
+        // Existing browsers learn about the newcomer via presence_update broadcasts later.
 
         var buffer = new byte[8192];
         try
@@ -624,6 +648,27 @@ public sealed partial class UtermServer : IAsyncDisposable
         finally
         {
             _deps.Hub.Conn.CleanupBrowser(workerId, conn);
+            if (_presence.TryGetValue(workerId, out var pmap))
+            {
+                pmap.TryRemove(conn, out var leftId);
+                try
+                {
+                    await _deps.Hub.Conn.BroadcastToBrowsersAsync(
+                        workerId,
+                        new Dictionary<string, object?>
+                        {
+                            ["type"] = "presence_leave",
+                            ["user_id"] = leftId,
+                            ["ts"] = _clock.Wall(),
+                        },
+                        CancellationToken.None).ConfigureAwait(false);
+                }
+                catch
+                {
+                    // best-effort
+                }
+            }
+
             // Fan out released state when the owner drops, matching Python/Go cleanup.
             try
             {
@@ -641,6 +686,34 @@ public sealed partial class UtermServer : IAsyncDisposable
                     .ConfigureAwait(false);
             }
         }
+    }
+
+    private Dictionary<string, object?> BuildPresenceSync(
+        string workerId, ConcurrentDictionary<object, string> presence)
+    {
+        var users = new List<object>();
+        foreach (var kv in presence)
+        {
+            users.Add(new Dictionary<string, object?>
+            {
+                ["user_id"] = kv.Value,
+                ["display_name"] = kv.Value,
+                ["initials"] = kv.Value.Length >= 2 ? kv.Value[^2..].ToUpperInvariant() : "??",
+                ["color"] = "#4a9eff",
+            });
+        }
+
+        return new Dictionary<string, object?>
+        {
+            ["type"] = "presence_sync",
+            ["users"] = users,
+            ["config"] = new Dictionary<string, object?>(),
+            ["owner_id"] = users.Count > 0
+                ? ((Dictionary<string, object?>)users[0])["user_id"]
+                : null,
+            ["worker_id"] = workerId,
+            ["ts"] = _clock.Wall(),
+        };
     }
 
     private async Task HandleBrowserMessage(
@@ -766,6 +839,65 @@ public sealed partial class UtermServer : IAsyncDisposable
                                 await _deps.Hub.BroadcastHijackStateAsync(workerId, ct)
                                     .ConfigureAwait(false);
                             }
+                        }
+
+                        break;
+                    }
+                    case "resume":
+                    {
+                        var oldTok = ctrl.Control.TryGetValue("token", out var tokObj)
+                            ? tokObj?.ToString() ?? ""
+                            : "";
+                        if (string.IsNullOrEmpty(oldTok)
+                            || !_resumeTokens.TryRemove(oldTok, out var rec)
+                            || rec.WorkerId != workerId
+                            || rec.ExpiresAt < _clock.Monotonic())
+                        {
+                            break;
+                        }
+
+                        var newTok = MintResumeToken(workerId, role);
+                        var stSnap = _deps.Hub.Conn.RegisterBrowser(workerId, conn, role);
+                        await conn.SendTextAsync(
+                            ControlChannelCodec.EncodeControlFrame(new Dictionary<string, object?>
+                            {
+                                ["type"] = "hello",
+                                ["role"] = role,
+                                ["worker_id"] = workerId,
+                                ["ts"] = _clock.Wall(),
+                                ["can_hijack"] = role is "admin",
+                                ["hijacked"] = stSnap.TryGetValue("is_hijacked", out var ih) && ih is true,
+                                ["hijacked_by_me"] = stSnap.TryGetValue("hijacked_by_me", out var hbm) && hbm is true,
+                                ["worker_online"] = stSnap.TryGetValue("worker_online", out var wo) && wo is true,
+                                ["input_mode"] = stSnap.TryGetValue("input_mode", out var im) && im is string ims
+                                    ? ims
+                                    : InputModes.Hijack,
+                                ["resume_supported"] = true,
+                                ["resume_token"] = newTok,
+                                ["resumed"] = true,
+                                ["hijack_control"] = "ws",
+                                ["hijack_step_supported"] = true,
+                                ["mcp_supported"] = false,
+                                ["vnc_supported"] = true,
+                            }),
+                            ct).ConfigureAwait(false);
+                        await _deps.Hub.BroadcastHijackStateAsync(workerId, ct).ConfigureAwait(false);
+                        break;
+                    }
+                    case "presence_update":
+                    {
+                        // Fan-out presence_update to all browsers (DeckMux HandleMessage subset).
+                        if (_presence.TryGetValue(workerId, out var pmap)
+                            && pmap.TryGetValue(conn, out var uid))
+                        {
+                            var upd = new Dictionary<string, object?>(ctrl.Control)
+                            {
+                                ["type"] = "presence_update",
+                                ["user_id"] = uid,
+                                ["ts"] = _clock.Wall(),
+                            };
+                            await _deps.Hub.Conn.BroadcastToBrowsersAsync(workerId, upd, ct)
+                                .ConfigureAwait(false);
                         }
 
                         break;
