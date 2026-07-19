@@ -31,7 +31,7 @@ build:
 # Serialize + batch test hosts. Ubuntu CI hits glibc free()/malloc crashes after
 # ~300–400 tests in one process (native PTY/SSH residual). Fresh process per batch.
 # Filters use class-name prefixes from --list-tests (no catch-all ~Term/~Coverage).
-TEST_BATCH_1 := FullyQualifiedName~AnsiColors|FullyQualifiedName~ChannelsLineEditor|FullyQualifiedName~Conformance|FullyQualifiedName~CtrlMsg|FullyQualifiedName~Defaults|FullyQualifiedName~Filters|FullyQualifiedName~Frames|FullyQualifiedName~Redaction|FullyQualifiedName~Sanitizer|FullyQualifiedName~Screen|FullyQualifiedName~Vt|FullyQualifiedName~DeckMux|FullyQualifiedName~ServerRecordingHttp|FullyQualifiedName~ControlChannel
+TEST_BATCH_1 := FullyQualifiedName~AnsiColors|FullyQualifiedName~ChannelsLineEditor|FullyQualifiedName~Conformance|FullyQualifiedName~CtrlMsg|FullyQualifiedName~Defaults|FullyQualifiedName~Filters|FullyQualifiedName~Frames|FullyQualifiedName~Policy|FullyQualifiedName~StrictPolicy|FullyQualifiedName~Redaction|FullyQualifiedName~Sanitizer|FullyQualifiedName~Screen|FullyQualifiedName~Vt|FullyQualifiedName~DeckMux|FullyQualifiedName~ServerRecordingHttp|FullyQualifiedName~ControlChannel
 TEST_BATCH_2 := FullyQualifiedName~Hub|FullyQualifiedName~ServerIntegration|FullyQualifiedName~ServerConfig|FullyQualifiedName~ClientDefaults|FullyQualifiedName~Session|FullyQualifiedName~TermSession|FullyQualifiedName~ModuleSurface|FullyQualifiedName~SmokeSurface|FullyQualifiedName~MoreSurface
 # Native-heavy classes get their own process (batch 3 crashed Ubuntu after ~18
 # tests when Cli+Pty+Gateway shared one host).

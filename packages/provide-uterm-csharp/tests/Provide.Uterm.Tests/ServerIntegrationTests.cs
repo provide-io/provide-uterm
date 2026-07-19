@@ -5,9 +5,11 @@
 
 using System.Net;
 using System.Net.Sockets;
+using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using Provide.Uterm.Client;
+using Provide.Uterm.ControlChannel;
 using Provide.Uterm.Hub;
 using Provide.Uterm.Server;
 using Provide.Uterm.ServerAuth;
@@ -138,6 +140,46 @@ public class ServerIntegrationTests
             resp.EnsureSuccessStatusCode();
             var body = await resp.Content.ReadAsStringAsync();
             Assert.Contains("ok", body, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task BrowserHello_IncludesCapabilityDefaults()
+    {
+        // Production browser hello must stamp mcp_supported/vnc_supported
+        // (spec/behavior.json hello_defaults.csharp).
+        var (server, baseUrl, token) = await StartServerAsync();
+        await using (server)
+        {
+            using var ws = new ClientWebSocket();
+            ws.Options.SetRequestHeader("Authorization", "Bearer " + token);
+            var uri = new Uri(baseUrl.Replace("http://", "ws://", StringComparison.Ordinal) + "/ws/browser/demo");
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await ws.ConnectAsync(uri, cts.Token);
+
+            var buf = new byte[65536];
+            var result = await ws.ReceiveAsync(buf, cts.Token);
+            Assert.Equal(WebSocketMessageType.Text, result.MessageType);
+            var text = Encoding.UTF8.GetString(buf, 0, result.Count);
+
+            // Hello is DLE/STX framed control; extract JSON payload.
+            var dec = new ControlFrameDecoder();
+            Dictionary<string, object?>? hello = null;
+            foreach (var chunk in dec.Feed(text))
+            {
+                if (chunk is ControlChunk ctrl && ctrl.Control.TryGetValue("type", out var ty)
+                    && ty?.ToString() == "hello")
+                {
+                    hello = ctrl.Control;
+                    break;
+                }
+            }
+
+            Assert.NotNull(hello);
+            Assert.True(hello!.TryGetValue("mcp_supported", out var mcp));
+            Assert.True(hello.TryGetValue("vnc_supported", out var vnc));
+            Assert.False(Convert.ToBoolean(mcp));
+            Assert.True(Convert.ToBoolean(vnc));
         }
     }
 

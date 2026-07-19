@@ -12,34 +12,64 @@ Run with::
 
 from __future__ import annotations
 
+import asyncio
 import json
+import threading
 import uuid
+from pathlib import Path
 
 import httpx
 import pytest
 from playwright.sync_api import Page
 
-from .backend_server import WORKER_BEARER, backend_name, spawn_backend_server
+from provide.uterm.control_channel import ControlChunk, ControlFrameDecoder
+
+from .backend_server import WORKER_BEARER, BackendServer, backend_name, spawn_backend_server
 
 pytestmark = pytest.mark.playwright
 
+_VECTORS = json.loads(
+    (Path(__file__).resolve().parents[4] / "spec" / "behavior_vectors.json").read_text(encoding="utf-8")
+)
+_HELLO_DEFAULTS = _VECTORS["hello_defaults"]
+
+
+def _hello_defaults_for_backend() -> dict[str, bool]:
+    b = backend_name()
+    if b == "go":
+        return _HELLO_DEFAULTS["go"]
+    if b == "csharp":
+        return _HELLO_DEFAULTS["csharp"]
+    return _HELLO_DEFAULTS["python_fastapi"]
+
+
+def _browser_ws_path(worker_id: str) -> str:
+    if backend_name() == "csharp":
+        return f"/ws/browser/{worker_id}"
+    return f"/ws/browser/{worker_id}/term"
+
+
+def _worker_ws_path(worker_id: str) -> str:
+    if backend_name() == "csharp":
+        return f"/ws/worker/{worker_id}"
+    return f"/ws/worker/{worker_id}/term"
+
 
 @pytest.fixture(scope="module")
-def multi_backend_url() -> str:
-    with spawn_backend_server() as url:
-        yield url
+def multi_backend() -> BackendServer:
+    with spawn_backend_server() as srv:
+        yield srv
 
 
-def test_backend_accepts_tcp(multi_backend_url: str) -> None:
-    """Server process is listening (backend-agnostic smoke)."""
-    assert multi_backend_url.startswith("http://127.0.0.1:")
+def test_backend_accepts_tcp(multi_backend: BackendServer) -> None:
+    assert multi_backend.base_url.startswith("http://127.0.0.1:")
+    assert multi_backend.jwt
 
 
-def test_health_or_root_reachable(multi_backend_url: str) -> None:
-    """At least one well-known HTTP surface answers without 5xx."""
-    paths = ("/api/health", "/health", "/readyz", "/")
+def test_health_or_root_reachable(multi_backend: BackendServer) -> None:
+    paths = ("/api/health", "/health", "/readyz", "/healthz", "/")
     last_status = None
-    with httpx.Client(base_url=multi_backend_url, timeout=5.0) as client:
+    with httpx.Client(base_url=multi_backend.base_url, timeout=5.0) as client:
         for path in paths:
             try:
                 r = client.get(path)
@@ -51,17 +81,11 @@ def test_health_or_root_reachable(multi_backend_url: str) -> None:
     pytest.fail(f"no healthy path for {backend_name()} last={last_status}")
 
 
-def test_worker_websocket_connects(multi_backend_url: str) -> None:
-    """Worker term WS is accepted — same path across languages."""
-    import asyncio
-    import threading
-
+def test_worker_websocket_connects(multi_backend: BackendServer) -> None:
     import websockets
 
     worker_id = f"mb-{uuid.uuid4().hex[:8]}"
-    # C# maps /ws/worker/{id}; Python/Go use /ws/worker/{id}/term.
-    suffix = f"/ws/worker/{worker_id}" if backend_name() == "csharp" else f"/ws/worker/{worker_id}/term"
-    ws_url = multi_backend_url.replace("http://", "ws://") + suffix
+    ws_url = multi_backend.base_url.replace("http://", "ws://") + _worker_ws_path(worker_id)
     errors: list[BaseException] = []
 
     async def _run() -> None:
@@ -82,26 +106,64 @@ def test_worker_websocket_connects(multi_backend_url: str) -> None:
     assert not errors, errors[0]
 
 
-def test_browser_page_route_hello_surface(page: Page, multi_backend_url: str) -> None:
-    """page.route serves test HTML while backend is a clean subprocess."""
+def test_browser_hello_capability_wire_parity(multi_backend: BackendServer) -> None:
+    """Dial browser WS with JWT; assert hello capability defaults from contract."""
+    import websockets
+
+    # Use configured public session "demo" so Go/C# registry CanReadSession passes.
+    worker_id = "demo"
+    ws_url = multi_backend.base_url.replace("http://", "ws://") + _browser_ws_path(worker_id)
+    expected = _hello_defaults_for_backend()
+    result: dict[str, object] = {}
+    errors: list[BaseException] = []
+
+    async def _run() -> None:
+        headers = {"Authorization": f"Bearer {multi_backend.jwt}"}
+        async with websockets.connect(ws_url, open_timeout=10, additional_headers=headers) as ws:
+            raw = await asyncio.wait_for(ws.recv(), timeout=8)
+            text = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else raw
+            dec = ControlFrameDecoder()
+            for chunk in dec.feed(text):
+                if isinstance(chunk, ControlChunk) and chunk.control.get("type") == "hello":
+                    result["hello"] = chunk.control
+                    return
+            result["raw"] = text[:200]
+
+    def _thread() -> None:
+        try:
+            asyncio.run(_run())
+        except BaseException as exc:
+            errors.append(exc)
+
+    t = threading.Thread(target=_thread, daemon=True)
+    t.start()
+    t.join(timeout=20)
+    assert not t.is_alive(), "browser hello dial hung"
+    assert not errors, errors[0]
+    hello = result.get("hello")
+    assert isinstance(hello, dict), f"no hello frame; got {result!r}"
+    assert "mcp_supported" in hello, f"mcp_supported missing: {hello}"
+    assert "vnc_supported" in hello, f"vnc_supported missing: {hello}"
+    assert bool(hello["mcp_supported"]) is expected["mcp_supported"], hello
+    assert bool(hello["vnc_supported"]) is expected["vnc_supported"], hello
+
+
+def test_browser_page_route_receives_hello(page: Page, multi_backend: BackendServer) -> None:
+    """Browser page.route path: JWT via query/header is not available in raw WS from page.
+
+    Proves page.route isolation still works by serving HTML that fetches /api/health
+    (no soft-fail on WS). Hello capability wire is covered by
+    test_browser_hello_capability_wire_parity above.
+    """
     worker_id = f"br-{uuid.uuid4().hex[:8]}"
+    health_url = multi_backend.base_url + "/api/health"
     html = f"""<!DOCTYPE html><html><body>
     <pre id="out">pending</pre>
     <script>
     (async () => {{
       try {{
-        const ws = new WebSocket({json.dumps(multi_backend_url.replace("http://", "ws://") + f"/ws/browser/{worker_id}/term")});
-        ws.binaryType = "arraybuffer";
-        const timer = setTimeout(() => {{ document.getElementById("out").textContent = "timeout"; }}, 8000);
-        ws.onmessage = (ev) => {{
-          let text = typeof ev.data === "string" ? ev.data : new TextDecoder().decode(ev.data);
-          // control frames may be DLE/STX wrapped; still mark connected
-          document.getElementById("out").textContent = "ws_ok:" + text.slice(0, 80);
-          clearTimeout(timer);
-          ws.close();
-        }};
-        ws.onerror = () => {{ document.getElementById("out").textContent = "ws_err"; }};
-        ws.onopen = () => {{ document.getElementById("out").textContent = "ws_open"; }};
+        const r = await fetch({json.dumps(health_url)});
+        document.getElementById("out").textContent = "http_ok:" + r.status;
       }} catch (e) {{
         document.getElementById("out").textContent = "ex:" + e;
       }}
@@ -112,15 +174,14 @@ def test_browser_page_route_hello_surface(page: Page, multi_backend_url: str) ->
         f"**/mb-test/{worker_id}",
         lambda route: route.fulfill(body=html, content_type="text/html"),
     )
-    page.goto(f"{multi_backend_url}/mb-test/{worker_id}", wait_until="domcontentloaded")
+    page.goto(f"{multi_backend.base_url}/mb-test/{worker_id}", wait_until="domcontentloaded")
     page.wait_for_function(
         "() => { const t = document.getElementById('out')?.textContent || ''; "
-        "return t.startsWith('ws_ok') || t === 'ws_open' || t.startsWith('ws_err'); }",
-        timeout=15000,
+        "return t.startsWith('http_ok:') || t.startsWith('ex:'); }",
+        timeout=10000,
     )
     text = page.locator("#out").text_content() or ""
-    # Connection attempt must leave the pending state; prefer success.
-    assert text != "pending"
-    assert not text.startswith("ex:")
-    # Soft success: open or message is enough; hard fail only on timeout
-    assert text != "timeout"
+    assert text.startswith("http_ok:"), f"page.route backend unreachable: {text!r}"
+    # health may be 200 or 401 depending on backend auth — not 5xx / network fail
+    status = int(text.split(":", 1)[1])
+    assert status < 500, text

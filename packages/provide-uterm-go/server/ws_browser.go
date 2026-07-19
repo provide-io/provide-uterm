@@ -124,6 +124,9 @@ func (s *Server) browserHandshake(ctx context.Context, conn *websocket.Conn, wor
 func (s *Server) buildHelloFrame(workerID, role string, canHijack bool, state map[string]any) frames.HelloFrame {
 	resumeSupported := s.deps.Hub.ResumeStore() != nil
 	inputMode := stringField(state, "input_mode")
+	// Capability defaults match spec/behavior.json hello_defaults.go
+	// (mcp_supported=true, vnc_supported=true) — same stamp as Python
+	// make_hello_frame for mcp; Go advertises VNC because the VNC package ships.
 	hf := frames.HelloFrame{
 		Type:                frames.TypeHello,
 		WorkerID:            frames.Ptr(workerID),
@@ -137,6 +140,8 @@ func (s *Server) buildHelloFrame(workerID, role string, canHijack bool, state ma
 		HijackStepSupported: frames.Ptr(true),
 		Capabilities:        map[string]any{"hijack_control": "ws", "hijack_step_supported": true},
 		ResumeSupported:     frames.Ptr(resumeSupported),
+		McpSupported:        frames.Ptr(true),
+		VncSupported:        frames.Ptr(true),
 		ProtocolVersion:     frames.Ptr(bridge.CurrentProtocolVersion),
 		Protocol: map[string]int{
 			"selected":   bridge.PreferredProtocolVersion,

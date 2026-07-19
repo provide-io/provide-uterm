@@ -313,7 +313,18 @@ public class ModuleSurfaceTests
             accepted.TrySetResult();
             return Task.CompletedTask;
         };
-        await telnet.StartAsync("127.0.0.1", 0);
+        // Bind OS-ephemeral ports explicitly — StartAsync(port:0) maps to fixed
+        // Gateway*Port defaults which collide under parallel CI hosts.
+        static int FreePort()
+        {
+            var l = new TcpListener(IPAddress.Loopback, 0);
+            l.Start();
+            var p = ((IPEndPoint)l.LocalEndpoint).Port;
+            l.Stop();
+            return p;
+        }
+
+        await telnet.StartAsync("127.0.0.1", FreePort());
         Assert.True(telnet.Port > 0);
         using (var c = new TcpClient())
         {
@@ -324,7 +335,7 @@ public class ModuleSurfaceTests
         await telnet.StopAsync();
 
         await using var ssh = new SshGateway();
-        await ssh.StartAsync("127.0.0.1", 0);
+        await ssh.StartAsync("127.0.0.1", FreePort());
         Assert.True(ssh.Port > 0);
         await ssh.StopAsync();
     }

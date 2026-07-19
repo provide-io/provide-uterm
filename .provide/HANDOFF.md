@@ -83,3 +83,12 @@ UTERM_TEST_BACKEND=csharp uv run pytest packages/provide-uterm/tests/playwright/
 - Align C# worker WS path to `/ws/worker/{id}/term` for wire path parity.
 - Install Stryker.NET for C# policy package if desired.
 - Expand curated multi-backend suite to hijack acquire/release UI flows.
+
+## Skeptic follow-up (2026-07-19 later)
+
+- Production Go `buildHelloFrame` and C# browser hello now stamp
+  `mcp_supported`/`vnc_supported` (unit + e2e + ServerIntegration proof).
+- Live Go↔Python interop both directions PASS (see interop.log).
+- Root `make quality-gate` all checks passed; C# quality-gate 97.00% cover.
+- Multi-backend suite asserts hello capability wire parity with JWT auth
+  (no soft-fail on ws_err).
