@@ -128,10 +128,20 @@ func MakeHijackStateFrame(hijacked bool, owner *string, leaseExpiresAt *float64,
 	}
 }
 
-// MakeHelloFrame mirrors make_hello_frame(): it stamps the type literal;
-// the caller sets whichever capability fields apply.
+// MakeHelloFrame mirrors the type stamp of make_hello_frame(); callers set
+// capability fields. Prefer MakeHelloFrameWithDefaults for server hellos.
 func MakeHelloFrame() HelloFrame {
 	return HelloFrame{Type: TypeHello}
+}
+
+// MakeHelloFrameWithDefaults applies Go defaults from spec/behavior.json:
+// mcp_supported=true, vnc_supported=true.
+func MakeHelloFrameWithDefaults() HelloFrame {
+	mcp, vnc := true, true
+	h := MakeHelloFrame()
+	h.McpSupported = &mcp
+	h.VncSupported = &vnc
+	return h
 }
 
 // NewIdentityFrame builds an IdentityFrame for subject with the Pydantic

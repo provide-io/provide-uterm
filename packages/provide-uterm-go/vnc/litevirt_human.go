@@ -15,7 +15,6 @@ import (
 	pb "github.com/litevirt/litevirt/gen/litevirt/v1"
 )
 
-
 // wsReader adapts a WebSocket connection to an io.Reader
 type wsReader struct {
 	ctx  context.Context

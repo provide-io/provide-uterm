@@ -43,7 +43,16 @@ from pathlib import Path
 # Perimeter: pure-function packages already at ~100% statement coverage with
 # real boundary/arithmetic logic. Keep this list short so a full run stays a
 # couple of minutes. Extend deliberately, one well-covered package at a time.
-PERIMETER = ("sanitizer", "colors", "filters", "lineeditor", "redaction", "channels", "frames")
+PERIMETER = (
+    "sanitizer",
+    "colors",
+    "filters",
+    "lineeditor",
+    "redaction",
+    "channels",
+    "frames",
+    "policy",  # StrictPolicyEngine — cross-language behavior contract
+)
 
 # Pinned like golangci-lint/govulncheck in the Makefile: invoked via `go run`
 # so the version is reproducible without a go.mod tool dependency.

@@ -142,6 +142,10 @@ func TestMakeHelloFrame(t *testing.T) {
 	if got := MakeHelloFrame(); !reflect.DeepEqual(got, HelloFrame{Type: TypeHello}) {
 		t.Fatalf("got %#v", got)
 	}
+	def := MakeHelloFrameWithDefaults()
+	if def.McpSupported == nil || !*def.McpSupported || def.VncSupported == nil || !*def.VncSupported {
+		t.Fatalf("defaults: %#v", def)
+	}
 }
 
 func TestNewIdentityFrame(t *testing.T) {

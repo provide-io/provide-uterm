@@ -202,6 +202,8 @@ public sealed class HelloFrame : IFrame
     public bool? HijackStepSupported { get; set; }
     public Dictionary<string, object?>? Capabilities { get; set; }
     public bool? ResumeSupported { get; set; }
+    public bool? McpSupported { get; set; }
+    public bool? VncSupported { get; set; }
     public string? ResumeToken { get; set; }
     public bool? Resumed { get; set; }
     public int? ProtocolVersion { get; set; }

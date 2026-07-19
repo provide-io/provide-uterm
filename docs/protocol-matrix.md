@@ -8,6 +8,8 @@ This matrix defines the backend capability contract consumed by `hijack.js`.
 |---|---|---|
 | `hello.hijack_control` | `ws` | `rest` |
 | `hello.hijack_step_supported` | `true` | `true` |
+| `hello.mcp_supported` | `true` | `false` |
+| `hello.vnc_supported` | `false` | `false` |
 | WS frame `hijack_request` | supported | rejected (`use_rest_hijack_api`) |
 | WS frame `hijack_release` | supported | rejected (`use_rest_hijack_api`) |
 | WS frame `hijack_step` | supported | rejected (`use_rest_hijack_api`) |
