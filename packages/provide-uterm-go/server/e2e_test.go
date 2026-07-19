@@ -196,6 +196,9 @@ func TestE2EWorkerBrowserFlow(t *testing.T) {
 	if hello["role"] != "admin" || hello["can_hijack"] != true {
 		t.Fatalf("hello frame: %v", hello)
 	}
+	if hello["mcp_supported"] != true || hello["vnc_supported"] != true {
+		t.Fatalf("hello capability defaults missing: %v", hello)
+	}
 
 	// Wait for the worker to be registered before emitting output.
 	waitUntil(t, 5*time.Second, func() bool {

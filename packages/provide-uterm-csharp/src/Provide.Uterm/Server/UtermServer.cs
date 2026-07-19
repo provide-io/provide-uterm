@@ -559,6 +559,8 @@ public sealed partial class UtermServer : IAsyncDisposable
         using var ws = await ctx.WebSockets.AcceptWebSocketAsync().ConfigureAwait(false);
         var conn = new BrowserWsConn(ws);
         var state = _deps.Hub.Conn.RegisterBrowser(workerId, conn, role);
+        // Capability defaults match spec/behavior.json hello_defaults.csharp
+        // (mcp_supported=false — MCP not shipped; vnc_supported=true).
         var hello = ControlChannelCodec.EncodeControlFrame(new Dictionary<string, object?>
         {
             ["type"] = "hello",
@@ -566,6 +568,8 @@ public sealed partial class UtermServer : IAsyncDisposable
             ["worker_id"] = workerId,
             ["state"] = state,
             ["ts"] = _clock.Wall(),
+            ["mcp_supported"] = false,
+            ["vnc_supported"] = true,
         });
         await conn.SendTextAsync(hello, ctx.RequestAborted).ConfigureAwait(false);
 

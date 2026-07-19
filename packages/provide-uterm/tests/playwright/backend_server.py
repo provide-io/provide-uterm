@@ -18,10 +18,20 @@ import tempfile
 import time
 from collections.abc import Generator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 FRONTEND_DIR = REPO_ROOT / "packages" / "provide-uterm-server" / "src" / "provide" / "uterm" / "server" / "frontend"
+
+WORKER_BEARER = "parity-test-worker-token"
+
+
+@dataclass(frozen=True)
+class BackendServer:
+    base_url: str
+    jwt: str
+    token_path: Path
 
 
 def _free_port() -> int:
@@ -32,8 +42,6 @@ def _free_port() -> int:
 
 def _write_config(port: int) -> Path:
     base = f"http://127.0.0.1:{port}"
-    # dev_token is the local-safe default used by interop tests.
-    # Fixed worker bearer so multi-backend tests can attach a fake worker.
     content = f"""
 [server]
 host = "127.0.0.1"
@@ -42,20 +50,24 @@ public_base_url = "{base}"
 
 [auth]
 mode = "dev_token"
-worker_bearer_token = "parity-test-worker-token"
+worker_bearer_token = "{WORKER_BEARER}"
 
 [ui]
 app_path = "/app"
 assets_path = "/ui"
+
+[[sessions]]
+session_id = "demo"
+display_name = "Demo"
+connector_type = "shell"
+visibility = "public"
+owner = "dev-user"
 """
     fd, name = tempfile.mkstemp(suffix=".toml")
     os.close(fd)
     path = Path(name)
     path.write_text(content, encoding="utf-8")
     return path
-
-
-WORKER_BEARER = "parity-test-worker-token"
 
 
 def backend_name() -> str:
@@ -89,8 +101,6 @@ def build_server_cmd(config_path: Path) -> list[str]:
         ]
     if backend != "python":
         raise ValueError(f"unknown UTERM_TEST_BACKEND={backend!r}")
-    # Module entrypoint is already the server (no "server" subcommand).
-    # Prefer the project venv interpreter when pytest is run under uv.
     return [
         sys.executable,
         "-m",
@@ -100,15 +110,27 @@ def build_server_cmd(config_path: Path) -> list[str]:
     ]
 
 
+def _wait_for_token(path: Path, deadline: float) -> str:
+    while time.monotonic() < deadline:
+        if path.is_file() and path.stat().st_size > 0:
+            token = path.read_text(encoding="utf-8").strip()
+            if token:
+                return token
+        time.sleep(0.05)
+    raise RuntimeError(f"dev token not written to {path} within deadline")
+
+
 @contextmanager
-def spawn_backend_server() -> Generator[str, None, None]:
-    """Yield ``base_url`` for a live server subprocess."""
+def spawn_backend_server() -> Generator[BackendServer, None, None]:
+    """Yield a live server with base URL + minted JWT for browser WS auth."""
     port = _free_port()
     config_path = _write_config(port)
+    token_path = Path(tempfile.mkstemp(prefix="uterm-dev-token-", suffix=".jwt")[1])
+    token_path.write_text("", encoding="utf-8")
     cmd = build_server_cmd(config_path)
     env = os.environ.copy()
     env["UTERM_TEST_MODE"] = "1"
-    # Header auth is loopback-only; force acknowledgement for tests.
+    env["UTERM_DEV_TOKEN_PATH"] = str(token_path)
     env.setdefault("UTERM_HEADER_MODE_ACK", "1")
     proc = subprocess.Popen(
         cmd,
@@ -133,7 +155,8 @@ def spawn_backend_server() -> Generator[str, None, None]:
                     break
             except OSError:
                 time.sleep(0.1)
-        yield base_url
+        jwt = _wait_for_token(token_path, deadline)
+        yield BackendServer(base_url=base_url, jwt=jwt, token_path=token_path)
     finally:
         proc.terminate()
         try:
@@ -141,7 +164,8 @@ def spawn_backend_server() -> Generator[str, None, None]:
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.wait(timeout=3)
-        try:
-            config_path.unlink(missing_ok=True)
-        except OSError:
-            pass
+        for p in (config_path, token_path):
+            try:
+                p.unlink(missing_ok=True)
+            except OSError:
+                pass
