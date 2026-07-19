@@ -24,6 +24,20 @@ from provide.uterm.control_channel import encode_control_frame
 from provide.uterm.server.bridge.hub import TermHub
 
 
+@pytest.fixture(scope="session")
+def browser_type_launch_args(browser_type_launch_args: dict) -> dict:
+    """Allow loopback WebSocket from Chromium under multi-backend e2e.
+
+    Chromium Local Network Access checks can block ``ws://127.0.0.1`` from
+    pages also on loopback when running under Playwright, which breaks
+    UTERM_TEST_BACKEND=go|csharp hijack suites.
+    """
+    args = list(browser_type_launch_args.get("args") or [])
+    args.append("--disable-features=LocalNetworkAccessChecks,BlockInsecurePrivateNetworkRequests")
+    args.append("--allow-insecure-localhost")
+    return {**browser_type_launch_args, "args": args}
+
+
 def pytest_collection_modifyitems(items: list) -> None:
     """Mark all PT playwright tests and move ALL playwright-marked tests to the end.
 

@@ -156,11 +156,13 @@ public sealed class MessageRouter
         }
     }
 
+    // Wire field is "hijacked" (Python/Go/schema + frontend validateHijackStateFrame).
+    // Not "is_hijacked" — that name is only used on internal hub state dicts.
     private static Dictionary<string, object?> MakeHijackState(bool isHijacked, string? owner, double? leaseExpiresAt, string inputMode) =>
         new()
         {
             ["type"] = "hijack_state",
-            ["is_hijacked"] = isHijacked,
+            ["hijacked"] = isHijacked,
             ["owner"] = owner,
             ["lease_expires_at"] = leaseExpiresAt,
             ["input_mode"] = inputMode,

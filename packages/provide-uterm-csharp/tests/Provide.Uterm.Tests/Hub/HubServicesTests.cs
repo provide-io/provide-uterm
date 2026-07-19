@@ -132,7 +132,7 @@ public class HubServicesTests
         Assert.Equal("already_hijacked", reason2);
 
         var st = hub.Router.HijackStateMsgFor("w1", null);
-        Assert.Equal(true, st["is_hijacked"]);
+        Assert.Equal(true, st["hijacked"]);
 
         clock.SetMonotonic(1000);
         var (browserExpired, restExpired) = hub.CleanupExpiredHijack("w1");

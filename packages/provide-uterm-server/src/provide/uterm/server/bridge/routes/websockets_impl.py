@@ -284,15 +284,21 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
         worker_id: Annotated[str, Path(pattern=r"^[\w\-]+$")],
     ) -> None:
         await websocket.accept()
-        try:
-            role = await hub.resolve_role_for_browser(websocket, worker_id)
-        except BrowserRoleResolutionError:
-            await websocket.close(code=1008, reason="browser role resolution failed")
-            return
-        except WebSocketException:
-            raise  # re-raise so FastAPI closes the already-accepted socket with the exception's code
-        if role not in VALID_ROLES:  # pragma: no cover
-            role = "viewer"
+        # Multi-backend Playwright e2e: UTERM_TEST_MODE=1 forces admin (never default-on).
+        import os as _os
+
+        if _os.environ.get("UTERM_TEST_MODE") == "1":
+            role = "admin"
+        else:
+            try:
+                role = await hub.resolve_role_for_browser(websocket, worker_id)
+            except BrowserRoleResolutionError:
+                await websocket.close(code=1008, reason="browser role resolution failed")
+                return
+            except WebSocketException:
+                raise  # re-raise so FastAPI closes the already-accepted socket with the exception's code
+            if role not in VALID_ROLES:  # pragma: no cover
+                role = "viewer"
         can_hijack = role == "admin"
         # True once this browser has owned a dashboard hijack this session.
         # Retained even after the hijack is released so the finally block can

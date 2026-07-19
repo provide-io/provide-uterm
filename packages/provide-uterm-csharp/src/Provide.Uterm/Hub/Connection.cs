@@ -159,12 +159,59 @@ public sealed class ConnectionManager
         }
     }
 
-    public Task BroadcastHijackStateAsync(string workerId, CancellationToken ct = default)
+    public async Task BroadcastHijackStateAsync(string workerId, CancellationToken ct = default)
     {
-        _ = ct;
-        // In-memory: browsers are notified via WS layer when wired; hub stores state.
-        _ = _hub.Router.HijackStateMsgFor(workerId, null);
-        return Task.CompletedTask;
+        List<(object Ws, Dictionary<string, object?> Msg)> fanout = new();
+        lock (_hub.SharedLock)
+        {
+            var st = _hub.Registry.Get(workerId);
+            if (st is null) return;
+            foreach (var kv in st.Browsers)
+            {
+                fanout.Add((kv.Key, _hub.Router.HijackStateMsgFor(workerId, kv.Key)));
+            }
+        }
+
+        foreach (var (wsObj, msg) in fanout)
+        {
+            if (wsObj is not IWorkerWs browser) continue;
+            try
+            {
+                var encoded = ControlChannelCodec.EncodeControlFrame(msg);
+                await browser.SendTextAsync(encoded, ct).ConfigureAwait(false);
+            }
+            catch
+            {
+                // drop failed sockets; cleanup happens on next receive error
+            }
+        }
+    }
+
+    /// <summary>Fan-out one control payload to every browser on the worker (worker_connected etc.).</summary>
+    public async Task BroadcastToBrowsersAsync(
+        string workerId, Dictionary<string, object?> msg, CancellationToken ct = default)
+    {
+        List<object> browsers = new();
+        lock (_hub.SharedLock)
+        {
+            var st = _hub.Registry.Get(workerId);
+            if (st is null) return;
+            browsers.AddRange(st.Browsers.Keys);
+        }
+
+        var encoded = ControlChannelCodec.EncodeControlFrame(msg);
+        foreach (var wsObj in browsers)
+        {
+            if (wsObj is not IWorkerWs browser) continue;
+            try
+            {
+                await browser.SendTextAsync(encoded, ct).ConfigureAwait(false);
+            }
+            catch
+            {
+                // drop failed sockets
+            }
+        }
     }
 
     /// <summary>Send terminal bytes / control to REST hijack path target worker.</summary>
