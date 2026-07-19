@@ -208,7 +208,7 @@ class TestApiKeyRoutes:
         from provide.uterm.server.models import AuthConfig
 
         store = ApiKeyStore()
-        raw_key, _record = store.create("scoped", scopes=frozenset({"operator"}))
+        raw_key, _record = store.create_for_tenant("acme", "scoped", scopes=frozenset({"operator"}))
         auth = AuthConfig(api_keys_enabled=True, mode="dev_token")
         principal = _principal_from_api_key({"x-api-key": raw_key}, auth, store)
         assert principal is not None

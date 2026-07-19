@@ -25,7 +25,7 @@ Role = str
 Capability = str
 
 ROLE_CAPABILITIES: dict[Role, frozenset[Capability]] = {
-    "viewer": frozenset({"session.read", "session.recording.read"}),
+    "viewer": frozenset({"session.read", "session.recording.read", "graphical.target.read"}),
     "operator": frozenset(
         {
             "session.read",
@@ -35,6 +35,9 @@ ROLE_CAPABILITIES: dict[Role, frozenset[Capability]] = {
             "session.control.mode",
             "session.control.clear",
             "session.control.update",
+            "graphical.target.read",
+            "graphical.target.manage",
+            "graphical.session.attach",
         }
     ),
     "admin": frozenset(
@@ -48,6 +51,9 @@ ROLE_CAPABILITIES: dict[Role, frozenset[Capability]] = {
             "session.control.update",
             "session.control.delete",
             "session.control.hijack",
+            "graphical.target.read",
+            "graphical.target.manage",
+            "graphical.session.attach",
         }
     ),
 }

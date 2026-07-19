@@ -48,8 +48,13 @@ class AuthConfig(ServerBaseModel):
     mode: str = "jwt"
     principal_header: str = "x-uterm-principal"
     role_header: str = "x-uterm-role"
+    # Header/cookie/claim carrying the caller's tenant id for multi-tenancy.
+    # The resolved tenant is validated against the tenant pattern and fails
+    # closed (see ``server.auth``); it is never trusted from a request body.
+    tenant_header: str = "x-uterm-tenant"
     principal_cookie: str = "uterm_principal"
     role_cookie: str = "uterm_role"
+    tenant_cookie: str = "uterm_tenant"
     surface_cookie: str = "uterm_surface"
     token_cookie: str = "uterm_token"  # noqa: S105
     jwt_issuer: str = "provide-uterm"
@@ -60,6 +65,7 @@ class AuthConfig(ServerBaseModel):
     clock_skew_seconds: int = 15
     jwt_roles_claim: str = "roles"
     jwt_scopes_claim: str = "scope"
+    jwt_tenant_claim: str = "tenant_id"
     worker_bearer_token: str | None = None
     api_keys_enabled: bool = False
     header_mode_acknowledged: bool = False

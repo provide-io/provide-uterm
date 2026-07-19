@@ -19,6 +19,11 @@ class Principal:
     """Resolved browser or API principal."""
 
     subject_id: str
+    # Multi-tenancy scope resolved from the authenticated identity (header,
+    # JWT claim, or API-key record). ``None`` means no tenant (anonymous, or an
+    # identity that carried no valid tenant). It is NEVER taken from
+    # client-supplied request bodies.
+    tenant_id: str | None = None
     roles: frozenset[str] = frozenset()
     scopes: frozenset[str] = frozenset()
     claims: dict[str, Any] = field(default_factory=dict)

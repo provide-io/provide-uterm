@@ -60,6 +60,7 @@ def setup_dev_idp(
     token_path: Path | None = None,
     subject: str = "dev-user",
     roles: tuple[str, ...] = ("admin",),
+    tenant: str | None = None,
     ttl_s: int = DEV_TOKEN_TTL_S,
 ) -> str:
     """Configure ``auth`` for ``dev_token`` mode and return the issued JWT.
@@ -100,18 +101,18 @@ def setup_dev_idp(
         auth.worker_bearer_token = secrets.token_urlsafe(32)
 
     now = int(time.time())
-    token = jwt.encode(
-        {
-            "sub": subject,
-            "iss": auth.jwt_issuer,
-            "aud": auth.jwt_audience,
-            "iat": now,
-            "exp": now + ttl_s,
-            auth.jwt_roles_claim: list(roles),
-        },
-        secret,
-        algorithm="HS256",
-    )
+    claims: dict[str, object] = {
+        "sub": subject,
+        "iss": auth.jwt_issuer,
+        "aud": auth.jwt_audience,
+        "iat": now,
+        "exp": now + ttl_s,
+        auth.jwt_roles_claim: list(roles),
+    }
+    # Optionally scope the dev user to a tenant (mirrors DevIdp.Options.Tenant).
+    if tenant and tenant.strip():
+        claims[auth.jwt_tenant_claim] = tenant
+    token = jwt.encode(claims, secret, algorithm="HS256")
 
     path = _resolved_token_path(token_path)
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
