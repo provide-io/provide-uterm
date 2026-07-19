@@ -380,12 +380,16 @@ source_paths = [
     "src/provide/uterm/server/bridge/hub/polling_service.py",
     # Pydantic frame schemas — single source of truth for wire format.
     "src/provide/uterm/bridge/schemas.py",
+    # Cross-language role/lease policy (spec/behavior.json).
+    "src/provide/uterm/bridge/policy.py",
     # HijackCoordinator (moved to core in #15) — lease state machine.
     "src/provide/uterm/bridge/coordinator.py",
     # DeckMux presence service — split out of DeckMuxMixin in #6 follow-up.
     "src/provide/uterm/deckmux/_service.py",
 ]
 pytest_add_cli_args_test_selection = [
+    "packages/provide-uterm/tests/bridge/test_behavior_policy.py",
+    "packages/provide-uterm/tests/bridge/test_generated_parity.py",
     "packages/provide-uterm/tests/shell/test_shell_render.py",
     "packages/provide-uterm/tests/deckmux/test_presence.py",
     "packages/provide-uterm/tests/deckmux/test_hub_mixin.py",

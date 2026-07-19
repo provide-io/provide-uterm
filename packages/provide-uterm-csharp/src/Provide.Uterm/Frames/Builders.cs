@@ -73,7 +73,16 @@ public static class FrameBuilders
             InputMode = inputMode,
         };
 
+    /// <summary>Type stamp only (matches Python/Go golden builders).</summary>
     public static HelloFrame MakeHelloFrame() => new() { Type = FrameTypeNames.Hello };
+
+    /// <summary>C# hello defaults from spec/behavior.json (mcp=false, vnc=true).</summary>
+    public static HelloFrame MakeHelloFrameWithDefaults() => new()
+    {
+        Type = FrameTypeNames.Hello,
+        McpSupported = false,
+        VncSupported = true,
+    };
 
     public static IdentityFrame NewIdentityFrame(string subject) =>
         new()

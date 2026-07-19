@@ -233,6 +233,8 @@ type HelloFrame struct {
 	HijackStepSupported *bool          `json:"hijack_step_supported,omitzero"`
 	Capabilities        map[string]any `json:"capabilities,omitzero"`
 	ResumeSupported     *bool          `json:"resume_supported,omitzero"`
+	McpSupported        *bool          `json:"mcp_supported,omitzero"`
+	VncSupported        *bool          `json:"vnc_supported,omitzero"`
 	ResumeToken         *string        `json:"resume_token,omitzero"`
 	Resumed             *bool          `json:"resumed,omitzero"`
 	ProtocolVersion     *int           `json:"protocol_version,omitzero"`

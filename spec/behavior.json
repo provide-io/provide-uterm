@@ -1,20 +1,56 @@
 {
-  "version": "1.0",
+  "version": "1.1",
   "capabilities": {
-    "mcp": { "description": "Supports AI/MCP integration" },
-    "vnc": { "description": "Supports VNC/Graphical sessions" },
-    "resume": { "description": "Supports session resumption" }
+    "mcp": {
+      "description": "Supports AI/MCP integration",
+      "hello_field": "mcp_supported"
+    },
+    "vnc": {
+      "description": "Supports VNC/Graphical sessions",
+      "hello_field": "vnc_supported"
+    },
+    "resume": {
+      "description": "Supports session resumption",
+      "hello_field": "resume_supported"
+    }
+  },
+  "hello_defaults": {
+    "python_fastapi": {
+      "mcp_supported": true,
+      "vnc_supported": false
+    },
+    "go": {
+      "mcp_supported": true,
+      "vnc_supported": true
+    },
+    "csharp": {
+      "mcp_supported": false,
+      "vnc_supported": true
+    }
+  },
+  "roles": {
+    "viewer": { "rank": 0 },
+    "operator": { "rank": 1 },
+    "admin": { "rank": 2 }
   },
   "operations": {
+    "input_inject": {
+      "minimum_role": "operator",
+      "preconditions": ["lease_owned"],
+      "error_codes": {
+        "forbidden_role": "forbidden: insufficient role",
+        "forbidden_lease": "forbidden: no active lease"
+      }
+    },
     "hijack_step": {
       "minimum_role": "operator",
-      "preconditions": [
-        "session_active",
-        "lease_owned"
-      ],
+      "preconditions": ["session_active", "lease_owned"],
       "error_codes": {
-        "403": "Forbidden - Insufficient Role",
-        "409": "Conflict - Lease Owned By Another"
+        "forbidden_role": "forbidden: insufficient role",
+        "forbidden_lease": "forbidden: no active lease",
+        "forbidden_session": "forbidden: session inactive",
+        "http_403": "Forbidden - Insufficient Role",
+        "http_409": "Conflict - Lease Owned By Another"
       }
     },
     "hijack_release": {
@@ -22,6 +58,16 @@
       "idempotent": true,
       "preconditions": [],
       "error_codes": {}
+    },
+    "hijack_acquire": {
+      "minimum_role": "operator",
+      "preconditions": ["session_active"],
+      "error_codes": {
+        "forbidden_role": "forbidden: insufficient role",
+        "forbidden_session": "forbidden: session inactive",
+        "http_403": "Forbidden - Insufficient Role",
+        "http_409": "Conflict - Lease Owned By Another"
+      }
     }
   }
 }
