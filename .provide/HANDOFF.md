@@ -61,3 +61,23 @@ See `screenshots/backend-proof/heavy/summary.json`.
    (hijack is the full heavy surface that shared hub APIs support today).
 3. Full root `make quality-gate` should still run in CI before release.
 4. In-process python path (no MULTI_BACKEND) remains for normal PT CI speed.
+
+## DeckMux/resume multi-backend (2026-07-19 session 2)
+
+### Production wiring
+- Python `create_server_app`: default hub is DeckMuxMixin + TermHub
+- Go CLI: `InMemoryResumeStore` on TermHub; browser `resume` handler reissues hello
+- C#: resume tokens + presence_sync/update/leave on browser WS
+
+### Suite
+`test_multi_backend_deckmux_resume.py` — 6 tests × python/go/csharp (all green)
+
+### quality-gate
+`make quality-gate` — all checks passed after this work.
+
+### Still residual
+- Full Python Playwright deckmux HTML suite (`test_deckmux_e2e_*`) still uses
+  in-process DeckMuxTermHub + `/deckmux-broadcast` helper (not multi-backend).
+- Full `test_resume.py` still in-process with InMemoryResumeStore fixture.
+- C# DeckMux is a production-path subset (not full pin/control-transfer port).
+- C# mutation tooling still absent.
