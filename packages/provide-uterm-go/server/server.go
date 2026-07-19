@@ -21,6 +21,7 @@ import (
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/deckmux"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/fanout"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/graphical"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/recording"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverauth"
@@ -61,6 +62,9 @@ type Deps struct {
 	TunnelStore tunnel.Store
 	// APIKeys backs the /api/keys routes. nil → routes report keys disabled.
 	APIKeys *serverauth.ApiKeyStore
+	// GraphicalTargets backs the /api/graphical-targets routes. nil → a fresh
+	// empty in-memory registry (matching the C# ServerDeps default).
+	GraphicalTargets graphical.Registry
 	// Profiles backs the /api/profiles routes. nil → those routes are 503.
 	Profiles ProfileStore
 	// Webhooks backs the session-webhook routes. nil → 503.
@@ -159,6 +163,9 @@ func New(deps Deps) (*Server, error) {
 	if deps.Recording == nil {
 		deps.Recording = recording.NullStore{}
 	}
+	if deps.GraphicalTargets == nil {
+		deps.GraphicalTargets = graphical.NewInMemoryRegistry()
+	}
 
 	s := &Server{
 		deps:      deps,
@@ -199,6 +206,7 @@ func (s *Server) buildHandler() http.Handler {
 	s.registerSessionRoutes(mux)
 	s.registerApprovalRoutes(mux)
 	s.registerAPIKeyRoutes(mux)
+	s.registerGraphicalTargetRoutes(mux)
 	s.registerProfileRoutes(mux)
 	s.registerTunnelRoutes(mux)
 	s.registerSSERoutes(mux)

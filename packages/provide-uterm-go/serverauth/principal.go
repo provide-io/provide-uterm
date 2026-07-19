@@ -63,7 +63,12 @@ func (s Set) Sorted() []string {
 // Principal ports bridge.identity.Principal — a resolved browser or API
 // principal.
 type Principal struct {
-	SubjectID   string
+	SubjectID string
+	// TenantID is the multi-tenancy scope resolved from the authenticated
+	// identity (header, JWT claim, or API-key record). Nil means no tenant
+	// (anonymous, or an identity that carried no valid tenant). It is NEVER
+	// taken from client-supplied request bodies.
+	TenantID    *string
 	Roles       Set
 	Scopes      Set
 	Claims      map[string]any

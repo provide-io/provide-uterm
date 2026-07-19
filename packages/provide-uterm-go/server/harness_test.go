@@ -33,8 +33,13 @@ func (fakeAuth) Authenticate(_ context.Context, req *serverauth.Request) (*serve
 	if role == "" {
 		role = "viewer"
 	}
+	var tenant *string
+	if tv := req.Header("x-tenant"); tv != "" {
+		tenant = &tv
+	}
 	return &serverauth.Principal{
 		SubjectID: subject,
+		TenantID:  tenant,
 		Roles:     serverauth.NewSet(role),
 		Scopes:    serverauth.NewSet("*"),
 	}, nil

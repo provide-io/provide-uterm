@@ -46,7 +46,10 @@ type DevIDPOptions struct {
 	TokenPath string
 	Subject   string
 	Roles     []string
-	TTLS      int
+	// Tenant, when non-empty, is minted as the JWT tenant claim so the dev user
+	// carries a tenant scope (mirrors DevIdp.Options.Tenant).
+	Tenant string
+	TTLS   int
 }
 
 // SetupDevIDP ports dev_idp.setup_dev_idp: generate a fresh HS256 secret,
@@ -89,6 +92,9 @@ func SetupDevIDP(auth *serverconfig.AuthConfig, opts DevIDPOptions) (string, err
 		"iat":              now,
 		"exp":              now + int64(ttl),
 		auth.JWTRolesClaim: roles,
+	}
+	if strings.TrimSpace(opts.Tenant) != "" {
+		claims[auth.JWTTenantClaim] = opts.Tenant
 	}
 	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
 	if err != nil {
