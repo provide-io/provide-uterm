@@ -447,6 +447,11 @@
           "default": null,
           "title": "Input Mode"
         },
+        "mcp_supported": {
+          "default": false,
+          "title": "Mcp Supported",
+          "type": "boolean"
+        },
         "protocol": {
           "anyOf": [
             {
@@ -538,6 +543,11 @@
           "const": "hello",
           "title": "Type",
           "type": "string"
+        },
+        "vnc_supported": {
+          "default": false,
+          "title": "Vnc Supported",
+          "type": "boolean"
         },
         "worker_id": {
           "anyOf": [

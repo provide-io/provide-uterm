@@ -105,6 +105,7 @@ export type HijackStepSupported = boolean | null;
 export type Hijacked1 = boolean | null;
 export type HijackedByMe = boolean | null;
 export type InputMode1 = string | null;
+export type McpSupported = boolean;
 export type Protocol = {
   [k: string]: number;
 } | null;
@@ -115,6 +116,7 @@ export type Resumed = boolean | null;
 export type Role = string | null;
 export type Ts15 = number | null;
 export type Type16 = "hello";
+export type VncSupported = boolean;
 export type WorkerId2 = string | null;
 export type WorkerOnline = boolean | null;
 export type PlayerId = number | null;
@@ -322,6 +324,7 @@ export interface HelloFrame {
   hijacked?: Hijacked1;
   hijacked_by_me?: HijackedByMe;
   input_mode?: InputMode1;
+  mcp_supported?: McpSupported;
   protocol?: Protocol;
   protocol_version?: ProtocolVersion;
   resume_supported?: ResumeSupported;
@@ -330,6 +333,7 @@ export interface HelloFrame {
   role?: Role;
   ts?: Ts15;
   type: Type16;
+  vnc_supported?: VncSupported;
   worker_id?: WorkerId2;
   worker_online?: WorkerOnline;
 }
