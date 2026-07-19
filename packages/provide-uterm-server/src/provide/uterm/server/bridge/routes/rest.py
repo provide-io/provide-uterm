@@ -80,6 +80,7 @@ from provide.uterm.server.bridge.rest_helpers import (
     build_hijack_snapshot_response,
     extract_prompt_id,
 )
+from provide.uterm.server.bridge.routes.rest_gui import register_gui_routes
 from provide.uterm.server.bridge.routes.rest_workerctl import register_workerctl_routes
 
 
@@ -508,3 +509,7 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
     # ``rest_workerctl`` module; register them on the same router so the public
     # surface (a single ``register_rest_routes`` call) is unchanged.
     register_workerctl_routes(hub, router)
+    # GUI (graphical console) routes live in the sibling ``rest_gui`` module;
+    # register them here so ``/gui/`` screenshot + input endpoints share the
+    # single ``register_rest_routes`` public surface.
+    register_gui_routes(hub, router)
