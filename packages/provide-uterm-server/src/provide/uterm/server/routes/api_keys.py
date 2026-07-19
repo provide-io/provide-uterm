@@ -69,26 +69,32 @@ def create_api_keys_router() -> APIRouter:
                 status_code=422,
                 detail=("invalid role scopes: " + ", ".join(invalid_scopes) + " (allowed: admin, operator, viewer)"),
             )
+        if "tenant_id" in payload:
+            raise HTTPException(status_code=422, detail="tenant_id is server-assigned and cannot be supplied")
         expires_in_s = payload.get("expires_in_s")
         if expires_in_s is not None:
             expires_in_s = int(expires_in_s)
             if expires_in_s < 60:
                 raise HTTPException(status_code=422, detail="expires_in_s must be >= 60")
-        raw_key, record = store.create(
-            name,
-            scopes=scopes,
-            expires_in_s=expires_in_s,
-        )
+        # Tenant is derived from the authenticated principal, never client input:
+        # a tenant-scoped admin mints keys bound to their own tenant (isolated);
+        # a system admin (no tenant) mints tenant-less system keys.
+        tenant = principal.tenant_id
+        if tenant:
+            raw_key, record = store.create_for_tenant(tenant, name, scopes=scopes, expires_in_s=expires_in_s)
+        else:
+            raw_key, record = store.create(name, scopes=scopes, expires_in_s=expires_in_s)
         audit_event(
             "api_key.create",
             principal=principal.subject_id,
             source_ip=_source_ip(request),
-            detail={"key_id": record.key_id, "name": name},
+            detail={"key_id": record.key_id, "name": name, "tenant_id": record.tenant_id},
         )
         return {
             "key": raw_key,
             "key_id": record.key_id,
             "name": record.name,
+            "tenant_id": record.tenant_id,
             "scopes": sorted(record.scopes),
             "created_at": record.created_at,
             "expires_at": record.expires_at,
@@ -104,17 +110,22 @@ def create_api_keys_router() -> APIRouter:
         if not cfg.auth.api_keys_enabled:
             raise HTTPException(status_code=403, detail="API key management is disabled")
         store = request.app.state.uterm_api_key_store
+        # A tenant admin sees only their tenant's (non-revoked) keys; a system
+        # admin sees every key.
+        tenant = principal.tenant_id
+        keys = store.list_keys_for_tenant(tenant) if tenant else store.list_keys()
         return [
             {
                 "key_id": k.key_id,
                 "name": k.name,
+                "tenant_id": k.tenant_id,
                 "scopes": sorted(k.scopes),
                 "created_at": k.created_at,
                 "expires_at": k.expires_at,
                 "last_used_at": k.last_used_at,
                 "revoked": k.revoked,
             }
-            for k in store.list_keys()
+            for k in keys
         ]
 
     @router.delete("/keys/{key_id}")
@@ -127,7 +138,11 @@ def create_api_keys_router() -> APIRouter:
         if not cfg.auth.api_keys_enabled:
             raise HTTPException(status_code=403, detail="API key management is disabled")
         store = request.app.state.uterm_api_key_store
-        if not store.revoke(key_id):
+        # A tenant admin can revoke only keys owned by their tenant; a system
+        # admin can revoke any key.
+        tenant = principal.tenant_id
+        revoked = store.revoke_for_tenant(key_id, tenant) if tenant else store.revoke(key_id)
+        if not revoked:
             raise HTTPException(status_code=404, detail=f"unknown key: {key_id}")
         audit_event(
             "api_key.revoke",

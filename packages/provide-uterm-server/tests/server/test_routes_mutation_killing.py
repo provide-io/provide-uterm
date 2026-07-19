@@ -1852,6 +1852,7 @@ class TestApiKeysRoutes:
         *,
         key_id: str = "kid-1",
         name: str = "deploy",
+        tenant_id: str = "",
         scopes: Any = frozenset({"admin", "viewer"}),
         created_at: float = 100.0,
         expires_at: float | None = 200.0,
@@ -1861,6 +1862,7 @@ class TestApiKeysRoutes:
         return SimpleNamespace(
             key_id=key_id,
             name=name,
+            tenant_id=tenant_id,
             scopes=scopes,
             created_at=created_at,
             expires_at=expires_at,
@@ -1927,7 +1929,10 @@ class TestApiKeysRoutes:
         record = self._record(key_id="kid-9", name="deploy", scopes=frozenset({"admin", "viewer"}))
         store.create = MagicMock(return_value=("raw-secret", record))
         req = self._state(
-            authz=authz, principal=SimpleNamespace(subject_id="alice"), store=store, client_host="5.6.7.8"
+            authz=authz,
+            principal=SimpleNamespace(subject_id="alice", tenant_id=None),
+            store=store,
+            client_host="5.6.7.8",
         )
         with patch("provide.uterm.server.routes.api_keys.audit_event") as audit:
             out = await create(req, {"name": "  deploy  ", "scopes": ["admin", "viewer"], "expires_in_s": 3600})
@@ -1935,18 +1940,59 @@ class TestApiKeysRoutes:
             "key": "raw-secret",
             "key_id": "kid-9",
             "name": "deploy",
+            "tenant_id": "",
             "scopes": ["admin", "viewer"],
             "created_at": 100.0,
             "expires_at": 200.0,
         }
         authz.is_admin.assert_awaited_once_with(req.state.uterm_principal)
         store.create.assert_called_once_with("deploy", scopes=frozenset({"admin", "viewer"}), expires_in_s=3600)
+        store.create_for_tenant.assert_not_called()
         audit.assert_called_once_with(
             "api_key.create",
             principal="alice",
             source_ip="5.6.7.8",
-            detail={"key_id": "kid-9", "name": "deploy"},
+            detail={"key_id": "kid-9", "name": "deploy", "tenant_id": ""},
         )
+
+    async def test_create_tenant_scoped_binds_to_principal_tenant(self) -> None:
+        # A tenant-scoped admin mints keys via create_for_tenant, bound to their
+        # own tenant — never the untenanted create().
+        create = _endpoint(self._router(), self._KEYS, "POST")
+        authz = MagicMock()
+        authz.is_admin = AsyncMock(return_value=True)
+        store = MagicMock()
+        record = self._record(key_id="kid-t", name="deploy", tenant_id="acme")
+        store.create_for_tenant = MagicMock(return_value=("raw-t", record))
+        req = self._state(authz=authz, principal=SimpleNamespace(subject_id="alice", tenant_id="acme"), store=store)
+        with patch("provide.uterm.server.routes.api_keys.audit_event") as audit:
+            out = await create(req, {"name": "deploy", "scopes": ["admin"], "expires_in_s": 3600})
+        assert out["tenant_id"] == "acme"
+        store.create_for_tenant.assert_called_once_with(
+            "acme", "deploy", scopes=frozenset({"admin"}), expires_in_s=3600
+        )
+        store.create.assert_not_called()
+        audit.assert_called_once_with(
+            "api_key.create",
+            principal="alice",
+            source_ip="1.2.3.4",
+            detail={"key_id": "kid-t", "name": "deploy", "tenant_id": "acme"},
+        )
+
+    async def test_create_rejects_client_supplied_tenant_id_422(self) -> None:
+        create = _endpoint(self._router(), self._KEYS, "POST")
+        authz = MagicMock()
+        authz.is_admin = AsyncMock(return_value=True)
+        store = MagicMock()
+        store.create = MagicMock()
+        store.create_for_tenant = MagicMock()
+        req = self._state(authz=authz, principal=SimpleNamespace(subject_id="a", tenant_id=None), store=store)
+        with pytest.raises(HTTPException) as exc:
+            await create(req, {"name": "k", "scopes": ["admin"], "tenant_id": "acme"})
+        assert exc.value.status_code == 422
+        assert exc.value.detail == "tenant_id is server-assigned and cannot be supplied"
+        store.create.assert_not_called()
+        store.create_for_tenant.assert_not_called()
 
     async def test_create_expires_none_passes_through(self) -> None:
         create = _endpoint(self._router(), self._KEYS, "POST")
@@ -1955,7 +2001,7 @@ class TestApiKeysRoutes:
         store = MagicMock()
         record = self._record(expires_at=None)
         store.create = MagicMock(return_value=("raw", record))
-        req = self._state(authz=authz, principal=SimpleNamespace(subject_id="bob"), store=store)
+        req = self._state(authz=authz, principal=SimpleNamespace(subject_id="bob", tenant_id=None), store=store)
         with patch("provide.uterm.server.routes.api_keys.audit_event"):
             out = await create(req, {"name": "k", "scopes": ["admin"]})
         store.create.assert_called_once_with("k", scopes=frozenset({"admin"}), expires_in_s=None)
@@ -2071,7 +2117,7 @@ class TestApiKeysRoutes:
         authz.is_admin = AsyncMock(return_value=True)
         store = MagicMock()
         store.create = MagicMock(return_value=("raw", self._record()))
-        req = self._state(authz=authz, principal=SimpleNamespace(subject_id="x"), store=store)
+        req = self._state(authz=authz, principal=SimpleNamespace(subject_id="x", tenant_id=None), store=store)
         with patch("provide.uterm.server.routes.api_keys.audit_event"):
             await create(req, {"name": "k", "scopes": ["admin"], "expires_in_s": 60})
         store.create.assert_called_once_with("k", scopes=frozenset({"admin"}), expires_in_s=60)
@@ -2105,12 +2151,13 @@ class TestApiKeysRoutes:
                 ),
             ]
         )
-        req = self._state(authz=authz, principal=object(), store=store)
+        req = self._state(authz=authz, principal=SimpleNamespace(tenant_id=None), store=store)
         out = await list_keys(req)
         assert out == [
             {
                 "key_id": "a",
                 "name": "one",
+                "tenant_id": "",
                 "scopes": ["admin", "viewer"],
                 "created_at": 1.0,
                 "expires_at": 2.0,
@@ -2120,6 +2167,7 @@ class TestApiKeysRoutes:
             {
                 "key_id": "b",
                 "name": "two",
+                "tenant_id": "",
                 "scopes": [],
                 "created_at": 4.0,
                 "expires_at": None,
@@ -2128,6 +2176,21 @@ class TestApiKeysRoutes:
             },
         ]
         store.list_keys.assert_called_once_with()
+        store.list_keys_for_tenant.assert_not_called()
+
+    async def test_list_tenant_scoped_uses_for_tenant(self) -> None:
+        # A tenant admin lists only their tenant's keys via list_keys_for_tenant.
+        list_keys = _endpoint(self._router(), self._KEYS, "GET")
+        authz = MagicMock()
+        authz.is_admin = AsyncMock(return_value=True)
+        store = MagicMock()
+        store.list_keys_for_tenant = MagicMock(return_value=[self._record(key_id="a", tenant_id="acme")])
+        req = self._state(authz=authz, principal=SimpleNamespace(tenant_id="acme"), store=store)
+        out = await list_keys(req)
+        assert [row["key_id"] for row in out] == ["a"]
+        assert out[0]["tenant_id"] == "acme"
+        store.list_keys_for_tenant.assert_called_once_with("acme")
+        store.list_keys.assert_not_called()
 
     async def test_list_empty(self) -> None:
         list_keys = _endpoint(self._router(), self._KEYS, "GET")
@@ -2135,7 +2198,7 @@ class TestApiKeysRoutes:
         authz.is_admin = AsyncMock(return_value=True)
         store = MagicMock()
         store.list_keys = MagicMock(return_value=[])
-        req = self._state(authz=authz, principal=object(), store=store)
+        req = self._state(authz=authz, principal=SimpleNamespace(tenant_id=None), store=store)
         assert await list_keys(req) == []
 
     async def test_list_not_admin_403_short_circuits(self) -> None:
@@ -2173,12 +2236,16 @@ class TestApiKeysRoutes:
         store = MagicMock()
         store.revoke = MagicMock(return_value=True)
         req = self._state(
-            authz=authz, principal=SimpleNamespace(subject_id="carol"), store=store, client_host="2.2.2.2"
+            authz=authz,
+            principal=SimpleNamespace(subject_id="carol", tenant_id=None),
+            store=store,
+            client_host="2.2.2.2",
         )
         with patch("provide.uterm.server.routes.api_keys.audit_event") as audit:
             out = await revoke(req, "kid-7")
         assert out == {"ok": True, "key_id": "kid-7"}
         store.revoke.assert_called_once_with("kid-7")
+        store.revoke_for_tenant.assert_not_called()
         audit.assert_called_once_with(
             "api_key.revoke",
             principal="carol",
@@ -2186,13 +2253,30 @@ class TestApiKeysRoutes:
             detail={"key_id": "kid-7"},
         )
 
+    async def test_revoke_tenant_scoped_uses_for_tenant(self) -> None:
+        # A tenant admin revokes only via revoke_for_tenant, scoped to their
+        # tenant; a key owned by another tenant reads back as unknown (404).
+        revoke = _endpoint(self._router(), self._KEY, "DELETE")
+        authz = MagicMock()
+        authz.is_admin = AsyncMock(return_value=True)
+        store = MagicMock()
+        store.revoke_for_tenant = MagicMock(return_value=False)
+        req = self._state(authz=authz, principal=SimpleNamespace(subject_id="e", tenant_id="acme"), store=store)
+        with patch("provide.uterm.server.routes.api_keys.audit_event") as audit:
+            with pytest.raises(HTTPException) as exc:
+                await revoke(req, "other-tenant-key")
+        assert exc.value.status_code == 404
+        store.revoke_for_tenant.assert_called_once_with("other-tenant-key", "acme")
+        store.revoke.assert_not_called()
+        audit.assert_not_called()
+
     async def test_revoke_unknown_key_404_no_audit(self) -> None:
         revoke = _endpoint(self._router(), self._KEY, "DELETE")
         authz = MagicMock()
         authz.is_admin = AsyncMock(return_value=True)
         store = MagicMock()
         store.revoke = MagicMock(return_value=False)
-        req = self._state(authz=authz, principal=SimpleNamespace(subject_id="d"), store=store)
+        req = self._state(authz=authz, principal=SimpleNamespace(subject_id="d", tenant_id=None), store=store)
         with patch("provide.uterm.server.routes.api_keys.audit_event") as audit:
             with pytest.raises(HTTPException) as exc:
                 await revoke(req, "ghost")
