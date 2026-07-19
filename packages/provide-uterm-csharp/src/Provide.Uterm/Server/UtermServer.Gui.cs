@@ -64,6 +64,12 @@ public sealed partial class UtermServer
 
                 session = client;
             }
+            else if (protocol == GraphicalTargetConstants.ProtocolLitevirt)
+            {
+                // litevirt targets are a canonical protocol, but this C# port ships
+                // no litevirt (gRPC) client — attach is not supported here.
+                return DetailError(501, "graphical protocol not supported: litevirt");
+            }
             else
             {
                 return DetailError(501, "graphical protocol not supported: " + protocol);

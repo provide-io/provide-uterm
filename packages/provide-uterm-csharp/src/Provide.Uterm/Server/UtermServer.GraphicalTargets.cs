@@ -273,6 +273,7 @@ public sealed partial class UtermServer
             target.ClientKeySecretRef = GetString(body, "client_key_secret_ref", null);
             target.Width = GetInt(body, "width", 640);
             target.Height = GetInt(body, "height", 480);
+            target.Config = ParseConfigObject(body);
             target.TenantId = "";
 
             if (body.TryGetValue("tenant_id", out var tenantRaw))
@@ -315,6 +316,32 @@ public sealed partial class UtermServer
         }
 
         return raw.GetString() ?? "";
+    }
+
+    // Parse the optional protocol-specific "config" object into a plain map.
+    // Absent or JSON null → empty dict. A present non-object value is a shape error.
+    private static Dictionary<string, object?> ParseConfigObject(Dictionary<string, JsonElement> body)
+    {
+        if (!body.TryGetValue("config", out var raw) || raw.ValueKind == JsonValueKind.Null)
+        {
+            return new Dictionary<string, object?>();
+        }
+
+        if (raw.ValueKind != JsonValueKind.Object)
+        {
+            throw new GraphicalTargetException(GraphicalTargetErrorCode.Invalid, "config must be an object");
+        }
+
+        // Store the values as detached JsonElements; System.Text.Json serializes
+        // them back to their original JSON shape on the wire. Keeping them opaque
+        // avoids a bespoke (and mostly-unreachable) type converter.
+        var map = new Dictionary<string, object?>();
+        foreach (var prop in raw.EnumerateObject())
+        {
+            map[prop.Name] = prop.Value.Clone();
+        }
+
+        return map;
     }
 
     private static int GetInt(Dictionary<string, JsonElement> body, string key, int fallback)

@@ -125,6 +125,9 @@ public sealed class GraphicalTargetDefinition
     public int Width { get; set; } = 640;
     public int Height { get; set; } = 480;
     public bool IsStatic { get; set; }
+
+    // Generic protocol-specific parameters (TOML [graphical_targets.config]).
+    public Dictionary<string, object?> Config { get; set; } = new();
 }
 
 /// <summary>Top-level server configuration model matching server.toml shape.</summary>

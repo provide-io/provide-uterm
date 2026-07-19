@@ -11,11 +11,13 @@ public static class GraphicalTargetConstants
 {
     public const string ProtocolMemory = "memory";
     public const string ProtocolRfb = "rfb";
+    public const string ProtocolLitevirt = "litevirt";
 
     public static readonly HashSet<string> SupportedProtocols = new(StringComparer.OrdinalIgnoreCase)
     {
         ProtocolMemory,
         ProtocolRfb,
+        ProtocolLitevirt,
     };
 
     public const string ErrorInvalidPayload = "graphical_target_invalid";
@@ -50,6 +52,7 @@ public static class GraphicalTargetModels
         "client_key_secret_ref",
         "is_system",
         "is_static",
+        "config",
     };
 }
 
@@ -69,6 +72,10 @@ public sealed class GraphicalTargetDefinition
     public string? CaSecretRef { get; set; }
     public string? ClientCertSecretRef { get; set; }
     public string? ClientKeySecretRef { get; set; }
+
+    // Generic per-target, protocol-specific parameters (JSON key "config").
+    // Carries e.g. litevirt vm_name. NOT a secret — kept in Clone AND PublicCopy.
+    public Dictionary<string, object?> Config { get; set; } = new();
 
     public string? CreatedBy { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
@@ -90,6 +97,7 @@ public sealed class GraphicalTargetDefinition
         CaSecretRef = CaSecretRef,
         ClientCertSecretRef = ClientCertSecretRef,
         ClientKeySecretRef = ClientKeySecretRef,
+        Config = new Dictionary<string, object?>(Config),
         CreatedBy = CreatedBy,
         CreatedAt = CreatedAt,
         UpdatedBy = UpdatedBy,
@@ -123,6 +131,13 @@ public sealed class GraphicalTargetDefinition
         if (protocol == GraphicalTargetConstants.ProtocolRfb)
         {
             var parsed = GraphicalTargetParsing.ParseRfbEndpoint(Endpoint);
+            Endpoint = $"{parsed.Host}:{parsed.Port}";
+        }
+        else if (protocol == GraphicalTargetConstants.ProtocolLitevirt)
+        {
+            // A litevirt endpoint is a plain host:port gRPC target (no rfb:// scheme).
+            // Require it non-empty and shaped like host:port, but do not impose a scheme.
+            var parsed = GraphicalTargetParsing.ParseLitevirtEndpoint(Endpoint);
             Endpoint = $"{parsed.Host}:{parsed.Port}";
         }
 
@@ -447,6 +462,39 @@ public static class GraphicalTargetParsing
         if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) || string.IsNullOrWhiteSpace(uri.Host))
         {
             throw new GraphicalTargetException(GraphicalTargetErrorCode.Invalid, "invalid endpoint; expected host:port or rfb://host:port");
+        }
+
+        if (uri.Port < 1 || uri.Port > 65535)
+        {
+            throw new GraphicalTargetException(GraphicalTargetErrorCode.Invalid, "invalid endpoint port");
+        }
+
+        return (uri.Host, uri.Port);
+    }
+
+    /// <summary>
+    /// Validate a litevirt gRPC endpoint. Unlike rfb this carries no scheme —
+    /// it is a plain host:port target (optionally prefixed with dns:///). We
+    /// require it non-empty and shaped like host:port with a valid port.
+    /// </summary>
+    public static (string Host, int Port) ParseLitevirtEndpoint(string? rawEndpoint)
+    {
+        if (string.IsNullOrWhiteSpace(rawEndpoint))
+        {
+            throw new GraphicalTargetException(GraphicalTargetErrorCode.Invalid, "endpoint is required for protocol litevirt");
+        }
+
+        var endpoint = rawEndpoint.Trim();
+        if (endpoint.StartsWith("dns:///", StringComparison.OrdinalIgnoreCase))
+        {
+            endpoint = endpoint[7..];
+        }
+
+        // Reuse a scheme wrapper purely to lean on Uri's host:port parsing; the
+        // scheme is discarded (litevirt endpoints have no wire scheme).
+        if (!Uri.TryCreate("grpc://" + endpoint, UriKind.Absolute, out var uri) || string.IsNullOrWhiteSpace(uri.Host))
+        {
+            throw new GraphicalTargetException(GraphicalTargetErrorCode.Invalid, "invalid endpoint; expected host:port");
         }
 
         if (uri.Port < 1 || uri.Port > 65535)
