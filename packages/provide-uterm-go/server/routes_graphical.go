@@ -289,6 +289,9 @@ func parseGraphicalTargetBody(body map[string]any) (target *graphical.Definition
 	if t.Height, err = getIntField(body, "height", 480); err != nil {
 		return nil, false, false, err
 	}
+	if t.Config, err = getConfigField(body); err != nil {
+		return nil, false, false, err
+	}
 
 	if raw, present := body["tenant_id"]; present {
 		hasTenant = true
@@ -324,6 +327,20 @@ func getStringPtrField(body map[string]any, key string) (*string, error) {
 		return nil, &graphical.Error{Code: graphical.CodeInvalid, Message: key + " must be a string"}
 	}
 	return &sv, nil
+}
+
+// getConfigField ports ParseConfigObject: the optional protocol-specific
+// "config" object. Absent/null → empty map; a present non-object → shape error.
+func getConfigField(body map[string]any) (map[string]any, error) {
+	raw, ok := body["config"]
+	if !ok || raw == nil {
+		return map[string]any{}, nil
+	}
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return nil, &graphical.Error{Code: graphical.CodeInvalid, Message: "config must be an object"}
+	}
+	return m, nil
 }
 
 // getIntField ports GetInt: number or numeric string; else error.
@@ -411,15 +428,16 @@ func toGraphicalDefinition(target serverconfig.GraphicalTargetConfig) (*graphica
 	if protocol == "" {
 		protocol = graphical.ProtocolRfb
 	}
-	if protocol != graphical.ProtocolMemory && protocol != graphical.ProtocolRfb {
+	if protocol != graphical.ProtocolMemory && protocol != graphical.ProtocolRfb &&
+		protocol != graphical.ProtocolLitevirt {
 		return nil, &graphical.Error{Code: graphical.CodeInvalid, Message: "unsupported graphical target protocol: " + target.Protocol}
 	}
 
 	endpoint := strings.TrimSpace(target.TargetAddress)
-	if protocol == graphical.ProtocolRfb && endpoint == "" {
+	if protocol != graphical.ProtocolMemory && endpoint == "" {
 		return nil, &graphical.Error{
 			Code:    graphical.CodeInvalid,
-			Message: "graphical target requires target_address for rfb protocol: " + target.TargetID,
+			Message: "graphical target requires target_address for " + protocol + " protocol: " + target.TargetID,
 		}
 	}
 
@@ -429,8 +447,16 @@ func toGraphicalDefinition(target serverconfig.GraphicalTargetConfig) (*graphica
 	}
 
 	var endpointPtr *string
-	if protocol == graphical.ProtocolRfb {
+	switch protocol {
+	case graphical.ProtocolRfb:
 		host, port, err := graphical.ParseRfbEndpoint(&endpoint)
+		if err != nil {
+			return nil, err
+		}
+		ep := host + ":" + strconv.Itoa(port)
+		endpointPtr = &ep
+	case graphical.ProtocolLitevirt:
+		host, port, err := graphical.ParseLitevirtEndpoint(&endpoint)
 		if err != nil {
 			return nil, err
 		}
@@ -451,10 +477,26 @@ func toGraphicalDefinition(target serverconfig.GraphicalTargetConfig) (*graphica
 		Endpoint:    endpointPtr,
 		Width:       clampDimension(target.Width, 640),
 		Height:      clampDimension(target.Height, 480),
+		Config:      seedConfig(target),
 		IsSystem:    true,
 		IsStatic:    true,
 	}
 	return def, nil
+}
+
+// seedConfig builds the target Config from the config-file [graphical_targets.config]
+// table, folding the legacy top-level vm_name field in as config["vm_name"] when
+// the config table did not already set it (Go-only convenience so litevirt can be
+// seeded from either the top-level vm_name or config.vm_name).
+func seedConfig(target serverconfig.GraphicalTargetConfig) map[string]any {
+	out := map[string]any{}
+	for k, v := range target.Config {
+		out[k] = v
+	}
+	if _, present := out["vm_name"]; !present && target.VMName != nil {
+		out["vm_name"] = *target.VMName
+	}
+	return out
 }
 
 // clampDimension ports the width/height <=0 → default, >8192 → 8192 clamp used
