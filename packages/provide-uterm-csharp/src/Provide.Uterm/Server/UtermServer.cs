@@ -948,9 +948,9 @@ public static class ServerFactory
         }
 
         var endpoint = target.TargetAddress.Trim();
-        if (protocol == GraphicalTargetConstants.ProtocolRfb && string.IsNullOrWhiteSpace(endpoint))
+        if (protocol != GraphicalTargetConstants.ProtocolMemory && string.IsNullOrWhiteSpace(endpoint))
         {
-            throw new ArgumentException($"graphical target requires target_address for rfb protocol: {target.TargetId}");
+            throw new ArgumentException($"graphical target requires target_address for {protocol} protocol: {target.TargetId}");
         }
 
         var targetId = target.TargetId.Trim();
@@ -964,6 +964,12 @@ public static class ServerFactory
             var (host, port) = GraphicalTargetParsing.ParseRfbEndpoint(endpoint);
             endpoint = $"{host}:{port}";
         }
+        else if (protocol == GraphicalTargetConstants.ProtocolLitevirt)
+        {
+            // Plain host:port gRPC target — validated, no rfb:// scheme imposed.
+            var (host, port) = GraphicalTargetParsing.ParseLitevirtEndpoint(endpoint);
+            endpoint = $"{host}:{port}";
+        }
 
         return new Provide.Uterm.Server.GraphicalTargetDefinition
         {
@@ -974,6 +980,7 @@ public static class ServerFactory
             Endpoint = protocol == GraphicalTargetConstants.ProtocolMemory ? null : endpoint,
             Width = target.Width <= 0 ? 640 : target.Width > 8192 ? 8192 : target.Width,
             Height = target.Height <= 0 ? 480 : target.Height > 8192 ? 8192 : target.Height,
+            Config = new Dictionary<string, object?>(target.Config),
             IsSystem = true,
             IsStatic = true,
             CreatedBy = null,

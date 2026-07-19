@@ -488,6 +488,106 @@ public class GraphicalTargetsRestTests
     }
 
     [Fact]
+    public void Definition_Litevirt_Validate_RequiresEndpoint()
+    {
+        // litevirt is a supported canonical protocol; endpoint is required + normalized.
+        var ok = new Def { TargetId = "vm", Protocol = "LITEVIRT", Endpoint = "dns:///10.0.0.5:7443", Width = 8, Height = 8 };
+        ok.Validate();
+        Assert.Equal("litevirt", ok.Protocol);
+        Assert.Equal("10.0.0.5:7443", ok.Endpoint);
+
+        // Missing endpoint → Invalid.
+        var missing = Assert.Throws<GraphicalTargetException>(() =>
+            new Def { TargetId = "vm", Protocol = "litevirt", Endpoint = null, Width = 8, Height = 8 }.Validate());
+        Assert.Equal(GraphicalTargetErrorCode.Invalid, missing.Code);
+
+        // Endpoint without a port → Invalid.
+        var noPort = Assert.Throws<GraphicalTargetException>(() =>
+            new Def { TargetId = "vm", Protocol = "litevirt", Endpoint = "hostonly", Width = 8, Height = 8 }.Validate());
+        Assert.Equal(GraphicalTargetErrorCode.Invalid, noPort.Code);
+    }
+
+    [Fact]
+    public void ParseLitevirtEndpoint_Branches()
+    {
+        Assert.Equal(("h", 7443), GraphicalTargetParsing.ParseLitevirtEndpoint("h:7443"));
+        Assert.Equal(("h", 7443), GraphicalTargetParsing.ParseLitevirtEndpoint("dns:///h:7443"));
+        foreach (var bad in new[] { "", "   ", "hostonly", "h:0", "h:99999" })
+        {
+            var ex = Assert.Throws<GraphicalTargetException>(() => GraphicalTargetParsing.ParseLitevirtEndpoint(bad));
+            Assert.Equal(GraphicalTargetErrorCode.Invalid, ex.Code);
+        }
+    }
+
+    [Fact]
+    public void Definition_Config_Survives_Clone_And_PublicCopy()
+    {
+        var d = new Def { TargetId = "vm", Protocol = "memory" };
+        d.Config["vm_name"] = "web-1";
+
+        var clone = d.Clone();
+        Assert.Equal("web-1", clone.Config["vm_name"]);
+        // Deep copy: mutating the clone's map does not touch the original.
+        clone.Config["vm_name"] = "changed";
+        Assert.Equal("web-1", d.Config["vm_name"]);
+
+        // Config is NOT a secret — PublicCopy keeps it.
+        var pub = d.PublicCopy();
+        Assert.Equal("web-1", pub.Config["vm_name"]);
+    }
+
+    [Fact]
+    public async Task Rest_Config_RoundTrips_Through_Create_Get()
+    {
+        await using var h = await Harness.StartAsync();
+        using var client = h.Client();
+
+        var create = await client.PostRawAsync("/api/graphical-targets",
+            "{\"protocol\":\"memory\",\"width\":16,\"height\":16," +
+            "\"config\":{\"vm_name\":\"web-1\",\"replicas\":3,\"tls\":true}}");
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        var created = await ReadJson(create);
+        var id = created.GetProperty("target_id").GetString()!;
+
+        // config present in the create response and not stripped.
+        var cfgCreate = created.GetProperty("config");
+        Assert.Equal("web-1", cfgCreate.GetProperty("vm_name").GetString());
+        Assert.Equal(3, cfgCreate.GetProperty("replicas").GetInt32());
+        Assert.True(cfgCreate.GetProperty("tls").GetBoolean());
+
+        // config present again on GET.
+        var get = await client.GetAsync($"/api/graphical-targets/{id}");
+        var gotCfg = (await ReadJson(get)).GetProperty("config");
+        Assert.Equal("web-1", gotCfg.GetProperty("vm_name").GetString());
+    }
+
+    [Fact]
+    public async Task Rest_Config_NonObject_Is_422()
+    {
+        await using var h = await Harness.StartAsync();
+        using var client = h.Client();
+        Assert.Equal(422, (int)(await client.PostRawAsync("/api/graphical-targets",
+            "{\"protocol\":\"memory\",\"width\":4,\"height\":4,\"config\":\"nope\"}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Rest_Litevirt_Create_And_Validation()
+    {
+        await using var h = await Harness.StartAsync();
+        using var client = h.Client();
+
+        // litevirt with an endpoint → 201.
+        var ok = await client.PostAsync("/api/graphical-targets",
+            Json(new { protocol = "litevirt", endpoint = "10.0.0.5:7443", width = 8, height = 8 }));
+        Assert.Equal(HttpStatusCode.Created, ok.StatusCode);
+        Assert.Equal("litevirt", (await ReadJson(ok)).GetProperty("protocol").GetString());
+
+        // litevirt without an endpoint → 422.
+        Assert.Equal(422, (int)(await client.PostAsync("/api/graphical-targets",
+            Json(new { protocol = "litevirt", width = 8, height = 8 }))).StatusCode);
+    }
+
+    [Fact]
     public void Registry_Update_Invalid_Definition()
     {
         var reg = new InMemoryGraphicalTargetRegistry();

@@ -255,6 +255,26 @@ public class GuiRestAndPngTests
         Assert.Throws<ArgumentException>(() => new RgbaImage(2, 2, new byte[3]));
     }
 
+    [Fact]
+    public async Task Gui_Attach_Litevirt_Returns_501()
+    {
+        // litevirt is a canonical protocol, but this C# port ships no litevirt
+        // client → attach must fail closed with 501 (not supported).
+        var (server, baseUrl, token, graphicalTargets) = await StartServerAsync();
+        await using (server)
+        {
+            using var client = HijackClient.WithBearer(baseUrl, token);
+            var targetId = CreateGraphicalTarget(
+                graphicalTargets,
+                protocol: "litevirt",
+                endpoint: "10.0.0.5:7443");
+
+            var notSupported = await Assert.ThrowsAsync<ApiException>(() =>
+                client.GuiAttachAsync("demo", new Dictionary<string, object?> { ["target_id"] = targetId }));
+            Assert.Equal(501, notSupported.StatusCode);
+        }
+    }
+
     private static int FreePort()
     {
         var l = new TcpListener(IPAddress.Loopback, 0);

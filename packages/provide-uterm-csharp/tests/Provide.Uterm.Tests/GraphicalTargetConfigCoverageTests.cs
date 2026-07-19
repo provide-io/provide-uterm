@@ -128,5 +128,40 @@ public class GraphicalTargetConfigCoverageTests
             enabled = true
             """);
         Assert.Throws<ArgumentException>(() => ServerFactory.CreateFromConfig(rfbNoAddress));
+
+        // litevirt without a target_address is rejected the same way rfb is.
+        var litevirtNoAddress = LoadToml("""
+            [[graphical_targets]]
+            target_id = "bad-lv"
+            protocol = "litevirt"
+            enabled = true
+            """);
+        Assert.Throws<ArgumentException>(() => ServerFactory.CreateFromConfig(litevirtNoAddress));
+    }
+
+    [Fact]
+    public void Toml_Litevirt_With_Config_Parses_And_Seeds()
+    {
+        var cfg = LoadToml("""
+            [[graphical_targets]]
+            target_id = "vm-lv"
+            tenant_id = "acme"
+            protocol = "litevirt"
+            target_address = "10.0.0.5:7443"
+            enabled = true
+
+            [graphical_targets.config]
+            vm_name = "web-1"
+            replicas = 3
+            """);
+
+        var t = Assert.Single(cfg.GraphicalTargets);
+        Assert.Equal("litevirt", t.Protocol);
+        Assert.Equal("web-1", t.Config["vm_name"]);
+        Assert.Equal(3L, t.Config["replicas"]);
+
+        // Production seeding path validates litevirt endpoint + threads config.
+        var (server, _) = ServerFactory.CreateFromConfig(cfg);
+        Assert.NotNull(server);
     }
 }

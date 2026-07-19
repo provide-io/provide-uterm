@@ -124,6 +124,11 @@ public static class ConfigLoader
                     IsStatic = t.TryGetValue("is_static", out var isStatic) && isStatic is bool bs && bs,
                 };
 
+                if (t.TryGetValue("config", out var cfgObj) && cfgObj is TomlTable cfgTable)
+                {
+                    def.Config = cfgTable.ToDictionary(kv => kv.Key, kv => (object?)kv.Value);
+                }
+
                 cfg.GraphicalTargets.Add(def);
             }
         }
