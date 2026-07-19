@@ -1,0 +1,27 @@
+{
+  "version": "1.0",
+  "capabilities": {
+    "mcp": { "description": "Supports AI/MCP integration" },
+    "vnc": { "description": "Supports VNC/Graphical sessions" },
+    "resume": { "description": "Supports session resumption" }
+  },
+  "operations": {
+    "hijack_step": {
+      "minimum_role": "operator",
+      "preconditions": [
+        "session_active",
+        "lease_owned"
+      ],
+      "error_codes": {
+        "403": "Forbidden - Insufficient Role",
+        "409": "Conflict - Lease Owned By Another"
+      }
+    },
+    "hijack_release": {
+      "minimum_role": "operator",
+      "idempotent": true,
+      "preconditions": [],
+      "error_codes": {}
+    }
+  }
+}
