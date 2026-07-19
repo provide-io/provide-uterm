@@ -38,7 +38,6 @@ Tests load the **same** golden vectors (not placeholder asserts).
   launcher; sets `UTERM_TEST_MODE=1` only on children.
 - `test_multi_backend_parity.py` — curated suite (health/TCP, worker WS with
   bearer, `page.route` browser smoke).
-- C# worker path residual: `/ws/worker/{id}` (no `/term` suffix) — suite adapts.
 
 ### Mutation / property
 - Go gremlins perimeter adds **`policy`** (100% cover, 4 killed, 0 survivors).
@@ -92,3 +91,5 @@ UTERM_TEST_BACKEND=csharp uv run pytest packages/provide-uterm/tests/playwright/
 - Root `make quality-gate` all checks passed; C# quality-gate 97.00% cover.
 - Multi-backend suite asserts hello capability wire parity with JWT auth
   (no soft-fail on ws_err).
+
+- C# browser/worker WS paths aligned to `/ws/{browser|worker}/{id}/term` (Python/Go).

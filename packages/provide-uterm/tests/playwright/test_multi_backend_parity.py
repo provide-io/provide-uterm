@@ -44,14 +44,12 @@ def _hello_defaults_for_backend() -> dict[str, bool]:
 
 
 def _browser_ws_path(worker_id: str) -> str:
-    if backend_name() == "csharp":
-        return f"/ws/browser/{worker_id}"
+    """Canonical browser terminal WS path (Python / Go / C#)."""
     return f"/ws/browser/{worker_id}/term"
 
 
 def _worker_ws_path(worker_id: str) -> str:
-    if backend_name() == "csharp":
-        return f"/ws/worker/{worker_id}"
+    """Canonical worker terminal WS path (Python / Go / C#)."""
     return f"/ws/worker/{worker_id}/term"
 
 

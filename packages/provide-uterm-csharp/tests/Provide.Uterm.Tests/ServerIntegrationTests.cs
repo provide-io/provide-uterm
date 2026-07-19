@@ -153,7 +153,7 @@ public class ServerIntegrationTests
         {
             using var ws = new ClientWebSocket();
             ws.Options.SetRequestHeader("Authorization", "Bearer " + token);
-            var uri = new Uri(baseUrl.Replace("http://", "ws://", StringComparison.Ordinal) + "/ws/browser/demo");
+            var uri = new Uri(baseUrl.Replace("http://", "ws://", StringComparison.Ordinal) + "/ws/browser/demo/term");
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             await ws.ConnectAsync(uri, cts.Token);
 
