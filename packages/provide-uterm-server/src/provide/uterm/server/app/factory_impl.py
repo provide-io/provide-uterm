@@ -66,6 +66,7 @@ from provide.uterm.server.auth import (
 )
 from provide.uterm.server.bridge.hub import ControlPlaneResumeStore, EventBus, ResumeSession, TermHub
 from provide.uterm.server.bridge.identity import Principal
+from provide.uterm.server.graphical_routes import seed_graphical_targets
 from provide.uterm.server.policy import SessionPolicyResolver
 from provide.uterm.server.profiles import FileProfileStore
 from provide.uterm.server.registry import SessionRegistry
@@ -365,6 +366,10 @@ def create_server_app(
         default_visibility=config.security.default_session_visibility,
     )
     profile_store = FileProfileStore(config.profiles.directory)
+    # Seed the tenant-scoped graphical-target registry from config. Enabled
+    # targets become immutable system/static entries; an invalid target
+    # (bad protocol/endpoint) fails startup here rather than at first request.
+    graphical_targets = seed_graphical_targets(config)
 
     @asynccontextmanager
     async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -482,6 +487,7 @@ def create_server_app(
     app.state.uterm_tunnel_tokens = tunnel_tokens
     app.state.uterm_tunnel_invites = tunnel_invites
     app.state.uterm_api_key_store = api_key_store
+    app.state.uterm_graphical_targets = graphical_targets
     app.state.uterm_idp = idp
     app.state.uterm_startup_time = time.time()
 

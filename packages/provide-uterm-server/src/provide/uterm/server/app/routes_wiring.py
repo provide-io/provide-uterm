@@ -14,6 +14,7 @@ from fastapi import Depends
 from fastapi import Request as FastAPIRequest
 from starlette.staticfiles import StaticFiles
 
+from provide.uterm.server.graphical_routes import create_graphical_router
 from provide.uterm.server.routes.api import create_api_router
 from provide.uterm.server.routes.approvals import create_approvals_router
 from provide.uterm.server.routes.health import create_health_router
@@ -55,6 +56,9 @@ def install_routers(
     app.include_router(create_api_router(), dependencies=[Depends(require_authenticated)])
     app.include_router(create_profiles_router(), dependencies=[Depends(require_authenticated)])
     app.include_router(create_approvals_router(), dependencies=[Depends(require_authenticated)])
+    # Graphical-target CRUD is gated by capability + tenant scope inside each
+    # handler; require_authenticated ensures a resolved principal is present.
+    app.include_router(create_graphical_router(), dependencies=[Depends(require_authenticated)])
     app.include_router(
         create_page_router(),
         prefix=config.ui.app_path,
