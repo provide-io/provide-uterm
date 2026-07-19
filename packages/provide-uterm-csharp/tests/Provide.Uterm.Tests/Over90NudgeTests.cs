@@ -110,10 +110,11 @@ public class Over90NudgeTests
     public async Task ApiKey_Viewer_Operator_Admin_Scopes()
     {
         var keys = new ApiKeyStore();
-        var (viewerRaw, _) = keys.Create("v", StringSet.Of("viewer"));
-        var (opRaw, _) = keys.Create("o", StringSet.Of("operator"));
-        var (adminRaw, _) = keys.Create("a", StringSet.Of("admin"));
-        var (unknownRaw, _) = keys.Create("u", StringSet.Of("other"));
+        var tenant = "tenantA";
+        var (viewerRaw, _) = keys.Create("v", StringSet.Of("viewer"), tenantId: tenant);
+        var (opRaw, _) = keys.Create("o", StringSet.Of("operator"), tenantId: tenant);
+        var (adminRaw, _) = keys.Create("a", StringSet.Of("admin"), tenantId: tenant);
+        var (unknownRaw, _) = keys.Create("u", StringSet.Of("other"), tenantId: tenant);
 
         var cfg = new AuthConfig { Mode = "dev_token", ApiKeysEnabled = true };
         var idp = new LocalIdentityProvider(cfg, keys);

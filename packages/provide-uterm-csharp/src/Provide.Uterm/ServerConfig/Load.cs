@@ -100,6 +100,33 @@ public static class ConfigLoader
                 cfg.Sessions.Add(def);
             }
         }
+
+        if (root.TryGetValue("graphical_targets", out var gtObj) && gtObj is TomlTableArray targets)
+        {
+            cfg.GraphicalTargets = new List<GraphicalTargetDefinition>();
+            foreach (var item in targets)
+            {
+                if (item is not TomlTable t) continue;
+                var def = new GraphicalTargetDefinition
+                {
+                    TargetId = t.TryGetValue("target_id", out var tid) && tid is string sTid && !string.IsNullOrWhiteSpace(sTid)
+                        ? sTid
+                        : "gt-" + Guid.NewGuid().ToString("N")[..12],
+                    TenantId = t.TryGetValue("tenant_id", out var tenant) && tenant is string sTenant ? sTenant : "",
+                    Protocol = t.TryGetValue("protocol", out var p) && p is string sProto ? sProto : "rfb",
+                    TargetAddress = t.TryGetValue("target_address", out var ta) && ta is string sTa ? sTa : "",
+                    VmName = t.TryGetValue("vm_name", out var vm) && vm is string sVm ? sVm : null,
+                    Name = t.TryGetValue("name", out var n) && n is string sN ? sN : "",
+                    Description = t.TryGetValue("description", out var d) && d is string sD ? sD : null,
+                    Enabled = !(t.TryGetValue("enabled", out var e) && e is bool be) || be,
+                    Width = t.TryGetValue("width", out var w) ? ToInt(w, 640) : 640,
+                    Height = t.TryGetValue("height", out var h) ? ToInt(h, 480) : 480,
+                    IsStatic = t.TryGetValue("is_static", out var isStatic) && isStatic is bool bs && bs,
+                };
+
+                cfg.GraphicalTargets.Add(def);
+            }
+        }
     }
 
     private static void ApplyServer(ServerBindConfig s, TomlTable t)
@@ -119,7 +146,9 @@ public static class ConfigLoader
     {
         if (t.TryGetValue("mode", out var m) && m is string ms) a.Mode = ms;
         if (t.TryGetValue("principal_header", out var ph) && ph is string phs) a.PrincipalHeader = phs;
+        if (t.TryGetValue("tenant_header", out var tnh) && tnh is string tnhs) a.TenantHeader = tnhs;
         if (t.TryGetValue("role_header", out var rh) && rh is string rhs) a.RoleHeader = rhs;
+        if (t.TryGetValue("tenant_cookie", out var tc) && tc is string tcs) a.TenantCookie = tcs;
         if (t.TryGetValue("jwt_issuer", out var ji) && ji is string jis) a.JwtIssuer = jis;
         if (t.TryGetValue("jwt_audience", out var ja) && ja is string jas) a.JwtAudience = jas;
         if (t.TryGetValue("jwt_public_key_pem", out var pem) && pem is string pems) a.JwtPublicKeyPem = pems;
@@ -127,6 +156,7 @@ public static class ConfigLoader
         if (t.TryGetValue("worker_bearer_token", out var wt) && wt is string wts) a.WorkerBearerToken = wts;
         if (t.TryGetValue("api_keys_enabled", out var apiKeysEn) && apiKeysEn is bool apiKeysEnB) a.ApiKeysEnabled = apiKeysEnB;
         if (t.TryGetValue("header_mode_acknowledged", out var hma) && hma is bool hmab) a.HeaderModeAcknowledged = hmab;
+        if (t.TryGetValue("jwt_tenant_claim", out var tcl) && tcl is string tcls) a.JWTTenantClaim = tcls;
         if (t.TryGetValue("clock_skew_seconds", out var cs)) a.ClockSkewSeconds = ToInt(cs, a.ClockSkewSeconds);
         if (t.TryGetValue("trusted_proxy_ips", out var tpi) && tpi is TomlArray arr)
         {

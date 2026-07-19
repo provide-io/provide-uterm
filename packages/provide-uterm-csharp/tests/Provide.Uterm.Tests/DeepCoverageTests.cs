@@ -353,7 +353,7 @@ public class DeepCoverageTests
         var path = Path.Combine(Path.GetTempPath(), "li-" + Guid.NewGuid().ToString("N"));
         var token = DevIdp.Setup(cfg, new DevIdp.Options { TokenPath = path, Subject = "dev", Roles = new[] { "admin" } });
         var keys = new ApiKeyStore();
-        var (raw, _) = keys.Create("k1", StringSet.Of("session.read"));
+        var (raw, _) = keys.Create("k1", StringSet.Of("session.read"), tenantId: "tenantA");
         var idp = new LocalIdentityProvider(cfg, keys);
 
         var p1 = await idp.AuthenticateAsync(new AuthRequest

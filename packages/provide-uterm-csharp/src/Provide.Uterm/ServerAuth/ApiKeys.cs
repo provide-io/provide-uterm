@@ -4,6 +4,7 @@
 //
 
 using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 using System.Text;
 
 namespace Provide.Uterm.ServerAuth;
@@ -12,6 +13,7 @@ public sealed class ApiKeyRecord
 {
     public required string KeyId { get; set; }
     public required string KeyHash { get; set; }
+    public required string TenantId { get; set; }
     public required string Name { get; set; }
     public StringSet Scopes { get; set; } = new();
     public double CreatedAt { get; set; }
@@ -23,6 +25,7 @@ public sealed class ApiKeyRecord
 /// <summary>In-memory API key registry with timing-safe validation.</summary>
 public sealed class ApiKeyStore
 {
+    private static readonly Regex TenantPattern = new(@"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$", RegexOptions.Compiled);
     private readonly object _gate = new();
     private readonly Dictionary<string, ApiKeyRecord> _keys = new();
     private Func<double> _now = () => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0;
@@ -35,8 +38,18 @@ public sealed class ApiKeyStore
         return Convert.ToHexString(digest).ToLowerInvariant();
     }
 
-    public (string RawKey, ApiKeyRecord Record) Create(string name, StringSet? scopes = null, int? expiresInS = null)
+    public (string RawKey, ApiKeyRecord Record) Create(
+        string name,
+        StringSet? scopes = null,
+        int? expiresInS = null,
+        string tenantId = "")
     {
+        var tenant = CanonicalTenantId(tenantId);
+        if (tenant is null)
+        {
+            throw new ArgumentException("tenant_id is required and must match ^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$");
+        }
+
         var raw = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
             .TrimEnd('=').Replace('+', '-').Replace('/', '_');
         var keyHash = HashKey(raw);
@@ -46,6 +59,7 @@ public sealed class ApiKeyStore
             KeyId = keyHash[..16],
             KeyHash = keyHash,
             Name = name,
+            TenantId = tenant,
             Scopes = scopes ?? new StringSet(),
             CreatedAt = _now(),
             ExpiresAt = expiresAt,
@@ -53,6 +67,13 @@ public sealed class ApiKeyStore
         lock (_gate) _keys[record.KeyId] = record;
         return (raw, record);
     }
+
+    public (string RawKey, ApiKeyRecord Record) CreateForTenant(
+        string tenantId,
+        string name,
+        StringSet? scopes = null,
+        int? expiresInS = null
+    ) => Create(name, scopes, expiresInS, tenantId);
 
     public ApiKeyRecord? Validate(string rawKey)
     {
@@ -78,6 +99,46 @@ public sealed class ApiKeyStore
         return null;
     }
 
+    public IReadOnlyList<ApiKeyRecord> ListKeysForTenant(string tenantId)
+    {
+        var tenant = CanonicalTenantId(tenantId);
+        if (tenant is null) return Array.Empty<ApiKeyRecord>();
+        lock (_gate)
+        {
+            var outList = new List<ApiKeyRecord>();
+            foreach (var record in _keys.Values)
+            {
+                if (!record.Revoked && record.TenantId == tenant)
+                {
+                    outList.Add(record);
+                }
+            }
+
+            return outList;
+        }
+    }
+
+    public bool RevokeForTenant(string keyId, string tenantId)
+    {
+        var tenant = CanonicalTenantId(tenantId);
+        if (tenant is null) return false;
+        lock (_gate)
+        {
+            if (!_keys.TryGetValue(keyId, out var rec)) return false;
+            if (rec.TenantId != tenant) return false;
+            rec.Revoked = true;
+            return true;
+        }
+    }
+
+    public IReadOnlyList<ApiKeyRecord> ListKeys()
+    {
+        lock (_gate)
+        {
+            return _keys.Values.ToList();
+        }
+    }
+
     public bool Revoke(string keyId)
     {
         lock (_gate)
@@ -86,5 +147,16 @@ public sealed class ApiKeyStore
             rec.Revoked = true;
             return true;
         }
+    }
+
+    private static string? CanonicalTenantId(string tenantId)
+    {
+        tenantId = tenantId?.Trim();
+        if (string.IsNullOrEmpty(tenantId))
+        {
+            return null;
+        }
+
+        return TenantPattern.IsMatch(tenantId) ? tenantId : null;
     }
 }

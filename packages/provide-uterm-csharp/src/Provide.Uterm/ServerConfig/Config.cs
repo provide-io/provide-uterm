@@ -13,7 +13,9 @@ public sealed class AuthConfig
     public string Mode { get; set; } = "jwt";
     public string PrincipalHeader { get; set; } = "x-uterm-principal";
     public string RoleHeader { get; set; } = "x-uterm-role";
+    public string TenantHeader { get; set; } = "x-uterm-tenant";
     public string PrincipalCookie { get; set; } = "uterm_principal";
+    public string TenantCookie { get; set; } = "uterm_tenant";
     public string RoleCookie { get; set; } = "uterm_role";
     public string SurfaceCookie { get; set; } = "uterm_surface";
     public string TokenCookie { get; set; } = "uterm_token";
@@ -25,6 +27,7 @@ public sealed class AuthConfig
     public int ClockSkewSeconds { get; set; } = 15;
     public string JwtRolesClaim { get; set; } = "roles";
     public string JwtScopesClaim { get; set; } = "scope";
+    public string JWTTenantClaim { get; set; } = "tenant_id";
     public string? WorkerBearerToken { get; set; }
     public bool ApiKeysEnabled { get; set; }
     public bool HeaderModeAcknowledged { get; set; }
@@ -109,6 +112,21 @@ public sealed class SessionDefinition
     public Dictionary<string, object?> Config { get; set; } = new();
 }
 
+public sealed class GraphicalTargetDefinition
+{
+    public string TargetId { get; set; } = "";
+    public string TenantId { get; set; } = "";
+    public string Protocol { get; set; } = "rfb";
+    public string TargetAddress { get; set; } = "";
+    public string? VmName { get; set; }
+    public string Name { get; set; } = "";
+    public string? Description { get; set; }
+    public bool Enabled { get; set; } = true;
+    public int Width { get; set; } = 640;
+    public int Height { get; set; } = 480;
+    public bool IsStatic { get; set; }
+}
+
 /// <summary>Top-level server configuration model matching server.toml shape.</summary>
 public sealed class UtermServerConfig
 {
@@ -121,6 +139,7 @@ public sealed class UtermServerConfig
     public SecurityConfig Security { get; set; } = new();
     public TunnelConfig Tunnel { get; set; } = new();
     public List<SessionDefinition> Sessions { get; set; } = new();
+    public List<GraphicalTargetDefinition> GraphicalTargets { get; set; } = new();
     public int SessionIdleTimeoutS { get; set; }
     public int SessionRetentionS { get; set; }
     public double BrowserRateLimitPerSec { get; set; } = 300;

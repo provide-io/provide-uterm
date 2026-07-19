@@ -64,10 +64,15 @@ public class HubAndCliTests
         var admin = new Principal { SubjectId = "a", Roles = StringSet.Of("admin"), Scopes = StringSet.Of("*") };
         Assert.True(authz.IsAdmin(admin));
         Assert.True(authz.HasCapability(admin, "session.control.hijack"));
+        Assert.True(authz.HasCapability(admin, "graphical.target.read"));
+        Assert.True(authz.HasCapability(admin, "graphical.target.manage"));
+        Assert.True(authz.HasCapability(admin, "graphical.session.attach"));
 
         var viewer = new Principal { SubjectId = "v", Roles = StringSet.Of("viewer") };
         Assert.False(authz.HasCapability(viewer, "session.control.hijack"));
         Assert.True(authz.HasCapability(viewer, "session.read"));
+        Assert.True(authz.HasCapability(viewer, "graphical.target.read"));
+        Assert.False(authz.HasCapability(viewer, "graphical.target.manage"));
     }
 
     [Fact]

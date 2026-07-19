@@ -39,16 +39,15 @@ public class GuiRestAndPngTests
     [Fact]
     public async Task Gui_Attach_Screenshot_Input_RequiresLease()
     {
-        var (server, baseUrl, token) = await StartServerAsync();
+        var (server, baseUrl, token, graphicalTargets) = await StartServerAsync();
         await using (server)
         {
             using var client = HijackClient.WithBearer(baseUrl, token);
+            var targetId = CreateGraphicalTarget(graphicalTargets);
 
             var attach = await client.GuiAttachAsync("demo", new Dictionary<string, object?>
             {
-                ["mode"] = "memory",
-                ["width"] = 32,
-                ["height"] = 24,
+                ["target_id"] = targetId,
             });
             Assert.True(attach.TryGetValue("ok", out var aok) && aok is true);
 
@@ -89,25 +88,26 @@ public class GuiRestAndPngTests
     }
 
     [Fact]
-    public async Task Gui_Attach_UnsupportedMode_Is501()
+    public async Task Gui_Attach_UsesTargetId()
     {
-        var (server, baseUrl, token) = await StartServerAsync();
+        var (server, baseUrl, token, graphicalTargets) = await StartServerAsync();
         await using (server)
         {
             using var client = HijackClient.WithBearer(baseUrl, token);
-            var ex = await Assert.ThrowsAsync<ApiException>(() =>
-                client.GuiAttachAsync("demo", new Dictionary<string, object?>
-                {
-                    ["mode"] = "litevirt",
-                }));
-            Assert.Equal(501, ex.StatusCode);
+            var targetId = CreateGraphicalTarget(graphicalTargets);
+            var ok = await client.GuiAttachAsync("demo", new Dictionary<string, object?>
+            {
+                ["mode"] = "litevirt",
+                ["target_id"] = targetId,
+            });
+            Assert.True(ok.TryGetValue("ok", out var okValue) && okValue is true);
         }
     }
 
     [Fact]
     public async Task Gui_Attach_Rfb_RequiresTarget_And_FailsClosedOnConnect()
     {
-        var (server, baseUrl, token) = await StartServerAsync();
+        var (server, baseUrl, token, graphicalTargets) = await StartServerAsync();
         await using (server)
         {
             using var client = HijackClient.WithBearer(baseUrl, token);
@@ -118,78 +118,114 @@ public class GuiRestAndPngTests
                 }));
             Assert.Equal(422, missing.StatusCode);
 
-            var badAddr = await Assert.ThrowsAsync<ApiException>(() =>
-                client.GuiAttachAsync("demo", new Dictionary<string, object?>
-                {
-                    ["mode"] = "rfb",
-                    ["target_address"] = "not-a-host-port",
-                }));
-            Assert.Equal(422, badAddr.StatusCode);
+            var closed = FreePort();
+            var targetId = CreateGraphicalTarget(
+                graphicalTargets,
+                protocol: "rfb",
+                endpoint: $"127.0.0.1:{closed}");
 
             // Closed port → 502
-            var closed = FreePort();
             var fail = await Assert.ThrowsAsync<ApiException>(() =>
                 client.GuiAttachAsync("demo", new Dictionary<string, object?>
                 {
-                    ["mode"] = "rfb",
-                    ["target_address"] = $"127.0.0.1:{closed}",
+                    ["target_id"] = targetId,
                 }));
             Assert.Equal(502, fail.StatusCode);
-
-            // rfb:// scheme accepted by parser then fails connect
-            var fail2 = await Assert.ThrowsAsync<ApiException>(() =>
-                client.GuiAttachAsync("demo", new Dictionary<string, object?>
-                {
-                    ["mode"] = "rfb",
-                    ["target_address"] = $"rfb://127.0.0.1:{closed}",
-                }));
-            Assert.Equal(502, fail2.StatusCode);
         }
     }
 
     [Fact]
-    public async Task Gui_Attach_EmptyMode_InfersFromTarget()
+    public async Task Gui_Attach_TargetId_And_InvalidTargetId()
     {
-        var (server, baseUrl, token) = await StartServerAsync();
+        var (server, baseUrl, token, graphicalTargets) = await StartServerAsync();
         await using (server)
         {
             using var client = HijackClient.WithBearer(baseUrl, token);
+            var targetId = CreateGraphicalTarget(
+                graphicalTargets,
+                width: 8,
+                height: 8);
             var ok = await client.GuiAttachAsync("demo", new Dictionary<string, object?>
             {
-                ["mode"] = "",
-                ["target_address"] = "memory",
-                ["width"] = 8,
-                ["height"] = 8,
+                ["target_id"] = targetId,
             });
             Assert.True(ok.TryGetValue("ok", out var a) && a is true);
 
-            var bad = await Assert.ThrowsAsync<ApiException>(() =>
+            var missing = await Assert.ThrowsAsync<ApiException>(() =>
                 client.GuiAttachAsync("demo", new Dictionary<string, object?>
                 {
-                    ["mode"] = "",
-                    ["target_address"] = "grpc://litevirt:50051",
+                    ["target_id"] = "non-existent",
                 }));
-            Assert.Equal(501, bad.StatusCode);
+            Assert.Equal(404, missing.StatusCode);
 
-            var huge = await Assert.ThrowsAsync<ApiException>(() =>
-                client.GuiAttachAsync("demo", new Dictionary<string, object?>
-                {
-                    ["mode"] = "memory",
-                    ["width"] = RgbaImage.MaxDimension + 1,
-                    ["height"] = 1,
-                }));
-            Assert.Equal(422, huge.StatusCode);
+            var hugeTarget = await Assert.ThrowsAsync<ApiException>(() =>
+                client.Post(
+                    "/api/graphical-targets",
+                    new Dictionary<string, object?>
+                    {
+                        ["protocol"] = "memory",
+                        ["width"] = 100_000,
+                        ["height"] = 1,
+                    }));
+            Assert.Equal(422, hugeTarget.StatusCode);
+        }
+    }
+
+    [Fact]
+    public async Task Gui_Attach_Rejects_Bad_WorkerId()
+    {
+        var (server, baseUrl, token, _) = await StartServerAsync();
+        await using (server)
+        {
+            // Raw request: the typed client validates worker_id before sending, so
+            // we hit the server route directly to exercise its SafeId guard.
+            using var raw = new HttpClient { BaseAddress = new Uri(baseUrl) };
+            raw.DefaultRequestHeaders.Add("Authorization", "Bearer " + token);
+            var resp = await raw.PostAsync("/worker/bad%20worker/gui/attach",
+                new StringContent("{\"target_id\":\"x\"}", System.Text.Encoding.UTF8, "application/json"));
+            Assert.Equal(422, (int)resp.StatusCode);
+        }
+    }
+
+    [Fact]
+    public async Task Gui_Attach_Denied_Without_Attach_Capability()
+    {
+        // Viewer lacks graphical.session.attach → 403.
+        var (server, baseUrl, token, graphicalTargets) = await StartServerAsync(roles: new[] { "viewer" });
+        await using (server)
+        {
+            using var client = HijackClient.WithBearer(baseUrl, token);
+            var targetId = CreateGraphicalTarget(graphicalTargets);
+            var denied = await Assert.ThrowsAsync<ApiException>(() =>
+                client.GuiAttachAsync("demo", new Dictionary<string, object?> { ["target_id"] = targetId }));
+            Assert.Equal(403, denied.StatusCode);
+        }
+    }
+
+    [Fact]
+    public async Task Gui_Attach_Denied_Without_Tenant_Scope()
+    {
+        // Admin with no tenant claim: capability + hijack pass, but tenant scope
+        // cannot be resolved → 403 graphical target access denied.
+        var (server, baseUrl, token, graphicalTargets) = await StartServerAsync(tenant: null);
+        await using (server)
+        {
+            using var client = HijackClient.WithBearer(baseUrl, token);
+            var denied = await Assert.ThrowsAsync<ApiException>(() =>
+                client.GuiAttachAsync("demo", new Dictionary<string, object?> { ["target_id"] = "gt-any" }));
+            Assert.Equal(403, denied.StatusCode);
         }
     }
 
     [Fact]
     public async Task Gui_KeyVariants_And_Buttons()
     {
-        var (server, baseUrl, token) = await StartServerAsync();
+        var (server, baseUrl, token, graphicalTargets) = await StartServerAsync();
         await using (server)
         {
             using var client = HijackClient.WithBearer(baseUrl, token);
-            await client.GuiAttachAsync("demo");
+            var targetId = CreateGraphicalTarget(graphicalTargets);
+            await client.GuiAttachAsync("demo", new Dictionary<string, object?> { ["target_id"] = targetId });
             var acq = await client.AcquireAsync("demo");
             var hid = acq["hijack_id"]!.ToString()!;
             foreach (var k in new[] { "Tab", "Esc", "Backspace", "Up", "Down", "Left", "Right", "Unknown" })
@@ -228,7 +264,38 @@ public class GuiRestAndPngTests
         return port;
     }
 
-    private static async Task<(UtermServer Server, string BaseUrl, string Token)> StartServerAsync()
+    private const string TestTenant = "acme";
+
+    private static string CreateGraphicalTarget(
+        InMemoryGraphicalTargetRegistry graphicalTargets,
+        string protocol = "memory",
+        string? endpoint = null,
+        int width = 32,
+        int height = 24)
+    {
+        var targetId = "gt-" + Guid.NewGuid().ToString("N")[..12];
+        var target = new Provide.Uterm.Server.GraphicalTargetDefinition
+        {
+            TargetId = targetId,
+            TenantId = TestTenant,
+            DisplayName = targetId,
+            Protocol = protocol,
+            Endpoint = endpoint,
+            Width = width,
+            Height = height,
+            Secret = null,
+            IsSystem = false,
+            CreatedBy = "test",
+            UpdatedBy = "test",
+        };
+        Assert.True(GraphicalTargetScope.TryForTenant(TestTenant, out var scope));
+        graphicalTargets.Create(scope, target);
+        return targetId;
+    }
+
+    private static async Task<(UtermServer Server, string BaseUrl, string Token, InMemoryGraphicalTargetRegistry GraphicalTargets)> StartServerAsync(
+        string[]? roles = null,
+        string? tenant = TestTenant)
     {
         var port = FreePort();
         var cfg = UtermServerConfig.Default();
@@ -249,7 +316,8 @@ public class GuiRestAndPngTests
         {
             TokenPath = Path.Combine(Path.GetTempPath(), "uterm-gui-token-" + Guid.NewGuid().ToString("N")),
             Subject = "dev-user",
-            Roles = new[] { "admin" },
+            Roles = roles ?? new[] { "admin" },
+            Tenant = tenant,
         });
 
         var apiKeys = new ApiKeyStore();
@@ -260,6 +328,7 @@ public class GuiRestAndPngTests
         hub.Conn.RegisterWorker("demo", new TestEchoWorker());
 
         var registry = new InMemorySessionRegistry(cfg.Sessions);
+        var graphicalTargets = new InMemoryGraphicalTargetRegistry();
         var server = new UtermServer(new ServerDeps
         {
             Hub = hub,
@@ -267,12 +336,13 @@ public class GuiRestAndPngTests
             Authz = authz,
             Config = cfg,
             Registry = registry,
+            GraphicalTargets = graphicalTargets,
             Version = "test",
             Clock = clock,
         });
         server.Build(new[] { $"http://127.0.0.1:{port}" });
         await server.StartAsync();
-        return (server, $"http://127.0.0.1:{port}", token);
+        return (server, $"http://127.0.0.1:{port}", token, graphicalTargets);
     }
 
     private sealed class TestEchoWorker : IWorkerWs

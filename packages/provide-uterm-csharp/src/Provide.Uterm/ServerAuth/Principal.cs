@@ -28,6 +28,7 @@ public sealed class StringSet : HashSet<string>
 public sealed class Principal
 {
     public required string SubjectId { get; set; }
+    public string? TenantId { get; set; }
     public StringSet Roles { get; set; } = new();
     public StringSet Scopes { get; set; } = new();
     public Dictionary<string, object?> Claims { get; set; } = new();

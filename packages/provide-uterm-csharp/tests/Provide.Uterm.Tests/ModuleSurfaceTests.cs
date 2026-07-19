@@ -377,9 +377,10 @@ public class ModuleSurfaceTests
     public void ServerAuth_ApiKeys_Roles_Principal()
     {
         var store = new ApiKeyStore();
-        var (raw, record) = store.Create("user1", StringSet.Of("session.read"), expiresInS: 3600);
+        var (raw, record) = store.Create("user1", StringSet.Of("session.read"), 3600, "t1");
         Assert.False(string.IsNullOrEmpty(raw));
         Assert.Equal("user1", record.Name);
+        Assert.Equal("t1", record.TenantId);
         Assert.NotNull(store.Validate(raw));
         Assert.Null(store.Validate("missing"));
         Assert.False(string.IsNullOrEmpty(ApiKeyStore.HashKey(raw)));

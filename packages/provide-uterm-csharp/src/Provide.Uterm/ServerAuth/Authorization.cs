@@ -12,16 +12,25 @@ public sealed class AuthorizationService
 {
     public static readonly IReadOnlyDictionary<string, StringSet> RoleCapabilities = new Dictionary<string, StringSet>
     {
-        ["viewer"] = StringSet.Of("session.read", "session.recording.read"),
+        ["viewer"] = StringSet.Of(
+            "session.read",
+            "session.recording.read",
+            "graphical.target.read"),
         ["operator"] = StringSet.Of(
             "session.read", "session.recording.read",
             "session.control.create", "session.control.connect",
-            "session.control.mode", "session.control.clear", "session.control.update"),
+            "session.control.mode", "session.control.clear", "session.control.update",
+            "graphical.target.read",
+            "graphical.target.manage",
+            "graphical.session.attach"),
         ["admin"] = StringSet.Of(
             "session.read", "session.recording.read",
             "session.control.create", "session.control.connect",
             "session.control.mode", "session.control.clear", "session.control.update",
-            "session.control.delete", "session.control.hijack"),
+            "session.control.delete", "session.control.hijack",
+            "graphical.target.read",
+            "graphical.target.manage",
+            "graphical.session.attach"),
     };
 
     public StringSet CapabilitiesFor(Principal p)
