@@ -25,7 +25,7 @@ var tableSections = []string{
 var knownTopLevel = map[string]struct{}{
 	"environment": {}, "server": {}, "auth": {}, "control_plane": {}, "ui": {},
 	"recording": {}, "profiles": {}, "security": {}, "tunnel": {}, "webhooks": {},
-	"pam": {}, "governance": {}, "audit": {}, "sessions": {},
+	"pam": {}, "governance": {}, "audit": {}, "sessions": {}, "graphical_targets": {},
 	"session_idle_timeout_s": {}, "session_retention_s": {}, "browser_rate_limit_per_sec": {},
 	"worker_frame_on_invalid": {}, "max_connections_per_principal": {}, "max_workers": {},
 }
@@ -153,6 +153,9 @@ func ConfigFromMapping(data map[string]any) (*UtermServerConfig, error) {
 	if err := applySessions(cfg, data); err != nil {
 		return nil, err
 	}
+	if err := applyGraphicalTargets(cfg, data); err != nil {
+		return nil, err
+	}
 
 	// Post-decode normalizers (Pydantic model/field validators).
 	normalizeUI(&cfg.UI)
@@ -219,6 +222,61 @@ func applySessions(cfg *UtermServerConfig, data map[string]any) error {
 	}
 	cfg.Sessions = out
 	return nil
+}
+
+// applyGraphicalTargets parses the [[graphical_targets]] array. It mirrors the
+// C# ConfigLoader graphical_targets branch: unknown/missing keys take their
+// defaults, enabled defaults to true, dimensions default to 640x480, and a
+// blank target_id is left blank (SeedGraphicalTargets assigns one). Non-table
+// entries are skipped.
+func applyGraphicalTargets(cfg *UtermServerConfig, data map[string]any) error {
+	raw, present := data["graphical_targets"]
+	if !present {
+		return nil
+	}
+	list, ok := raw.([]any)
+	if !ok {
+		return fmt.Errorf("graphical_targets must be a list of tables")
+	}
+	out := []GraphicalTargetConfig{}
+	for _, entry := range list {
+		m, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		gt := GraphicalTargetConfig{
+			TargetID:      asString(m["target_id"]),
+			TenantID:      asString(m["tenant_id"]),
+			Protocol:      strOr(m["protocol"], "rfb"),
+			TargetAddress: asString(m["target_address"]),
+			VMName:        optString(m["vm_name"]),
+			Name:          asString(m["name"]),
+			Description:   optString(m["description"]),
+			Enabled:       boolOr(m, "enabled", true),
+			Width:         intOr(m, "width", 640),
+			Height:        intOr(m, "height", 480),
+			IsStatic:      boolOr(m, "is_static", false),
+		}
+		out = append(out, gt)
+	}
+	cfg.GraphicalTargets = out
+	return nil
+}
+
+func boolOr(m map[string]any, key string, def bool) bool {
+	if v, ok := m[key]; ok {
+		if b, ok := v.(bool); ok {
+			return b
+		}
+	}
+	return def
+}
+
+func intOr(m map[string]any, key string, def int) int {
+	if v, ok := asInt(m[key]); ok {
+		return v
+	}
+	return def
 }
 
 func runValidators(cfg *UtermServerConfig) error {

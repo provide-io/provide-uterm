@@ -11,15 +11,23 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"sync"
 	"time"
 )
 
+// errInvalidTenant is returned by the tenant-scoped key operations when the
+// supplied tenant id is empty or fails the tenant pattern.
+var errInvalidTenant = errors.New("tenant_id is required and must match ^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+
 // ApiKey ports api_keys.ApiKey — a single API key record; the raw key is never
 // stored.
 type ApiKey struct {
-	KeyID      string
-	KeyHash    string
+	KeyID   string
+	KeyHash string
+	// TenantID scopes the key to a single tenant. Flat Create leaves it empty
+	// (legacy, non-tenant keys); CreateForTenant sets a validated canonical id.
+	TenantID   string
 	Name       string
 	Scopes     Set
 	CreatedAt  float64
@@ -111,6 +119,57 @@ func (s *ApiKeyStore) Validate(rawKey string) *ApiKey {
 		}
 	}
 	return nil
+}
+
+// CreateForTenant ports ApiKeyStore.CreateForTenant / Create(tenantId=...): mint
+// a key bound to a validated canonical tenant id. An empty or malformed tenant
+// id is rejected with an error (the C# Create throws ArgumentException).
+func (s *ApiKeyStore) CreateForTenant(tenantID, name string, scopes Set, expiresInS *int) (string, *ApiKey, error) {
+	tenant := CanonicalTenantID(tenantID)
+	if tenant == nil {
+		return "", nil, errInvalidTenant
+	}
+	rawKey, record := s.Create(name, scopes, expiresInS)
+	s.mu.Lock()
+	record.TenantID = *tenant
+	s.mu.Unlock()
+	return rawKey, record, nil
+}
+
+// ListKeysForTenant ports ApiKeyStore.ListKeysForTenant: the non-revoked keys
+// owned by the given tenant. An invalid tenant id yields an empty slice.
+func (s *ApiKeyStore) ListKeysForTenant(tenantID string) []*ApiKey {
+	tenant := CanonicalTenantID(tenantID)
+	if tenant == nil {
+		return []*ApiKey{}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := []*ApiKey{}
+	for _, record := range s.keys {
+		if !record.Revoked && record.TenantID == *tenant {
+			out = append(out, record)
+		}
+	}
+	return out
+}
+
+// RevokeForTenant ports ApiKeyStore.RevokeForTenant: revoke only when the key
+// belongs to the given tenant. Returns false for an invalid tenant, an unknown
+// key, or a cross-tenant key.
+func (s *ApiKeyStore) RevokeForTenant(keyID, tenantID string) bool {
+	tenant := CanonicalTenantID(tenantID)
+	if tenant == nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	record, ok := s.keys[keyID]
+	if !ok || record.TenantID != *tenant {
+		return false
+	}
+	record.Revoked = true
+	return true
 }
 
 // Revoke ports ApiKeyStore.revoke: returns true if the key existed.

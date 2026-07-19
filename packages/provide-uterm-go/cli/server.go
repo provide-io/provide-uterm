@@ -135,19 +135,26 @@ func buildServer(ctx context.Context, configPath, host string, port int, fronten
 
 	registry := NewSessionRegistry(cfg)
 
+	graphicalTargets, err := server.SeedGraphicalTargets(cfg)
+	if err != nil {
+		_ = engine.Close(ctx)
+		return nil, err
+	}
+
 	srv, err := server.New(server.Deps{
-		Hub:         h,
-		Auth:        auth,
-		Authz:       serverauth.NewAuthorizationService(),
-		Config:      cfg,
-		Registry:    registry,
-		APIKeys:     apiKeys,
-		Metrics:     metrics,
-		Clock:       clock,
-		Version:     Version,
-		Logger:      logger,
-		Recording:   buildRecordingStore(cfg),
-		FrontendDir: frontendDir,
+		Hub:              h,
+		Auth:             auth,
+		Authz:            serverauth.NewAuthorizationService(),
+		Config:           cfg,
+		Registry:         registry,
+		APIKeys:          apiKeys,
+		GraphicalTargets: graphicalTargets,
+		Metrics:          metrics,
+		Clock:            clock,
+		Version:          Version,
+		Logger:           logger,
+		Recording:        buildRecordingStore(cfg),
+		FrontendDir:      frontendDir,
 	})
 	if err != nil {
 		_ = engine.Close(ctx)

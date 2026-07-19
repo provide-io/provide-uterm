@@ -37,8 +37,10 @@ type AuthConfig struct {
 	Mode                   string   `json:"mode" toml:"mode"`
 	PrincipalHeader        string   `json:"principal_header" toml:"principal_header"`
 	RoleHeader             string   `json:"role_header" toml:"role_header"`
+	TenantHeader           string   `json:"tenant_header" toml:"tenant_header"`
 	PrincipalCookie        string   `json:"principal_cookie" toml:"principal_cookie"`
 	RoleCookie             string   `json:"role_cookie" toml:"role_cookie"`
+	TenantCookie           string   `json:"tenant_cookie" toml:"tenant_cookie"`
 	SurfaceCookie          string   `json:"surface_cookie" toml:"surface_cookie"`
 	TokenCookie            string   `json:"token_cookie" toml:"token_cookie"`
 	JWTIssuer              string   `json:"jwt_issuer" toml:"jwt_issuer"`
@@ -49,6 +51,7 @@ type AuthConfig struct {
 	ClockSkewSeconds       int      `json:"clock_skew_seconds" toml:"clock_skew_seconds"`
 	JWTRolesClaim          string   `json:"jwt_roles_claim" toml:"jwt_roles_claim"`
 	JWTScopesClaim         string   `json:"jwt_scopes_claim" toml:"jwt_scopes_claim"`
+	JWTTenantClaim         string   `json:"jwt_tenant_claim" toml:"jwt_tenant_claim"`
 	WorkerBearerToken      *string  `json:"worker_bearer_token" toml:"worker_bearer_token"`
 	APIKeysEnabled         bool     `json:"api_keys_enabled" toml:"api_keys_enabled"`
 	HeaderModeAcknowledged bool     `json:"header_mode_acknowledged" toml:"header_mode_acknowledged"`
@@ -77,8 +80,10 @@ func defaultAuthConfig() AuthConfig {
 		Mode:                            "jwt",
 		PrincipalHeader:                 "x-uterm-principal",
 		RoleHeader:                      "x-uterm-role",
+		TenantHeader:                    "x-uterm-tenant",
 		PrincipalCookie:                 "uterm_principal",
 		RoleCookie:                      "uterm_role",
+		TenantCookie:                    "uterm_tenant",
 		SurfaceCookie:                   "uterm_surface",
 		TokenCookie:                     "uterm_token",
 		JWTIssuer:                       "provide-uterm",
@@ -87,6 +92,7 @@ func defaultAuthConfig() AuthConfig {
 		ClockSkewSeconds:                15,
 		JWTRolesClaim:                   "roles",
 		JWTScopesClaim:                  "scope",
+		JWTTenantClaim:                  "tenant_id",
 		TrustedProxyIPs:                 []string{},
 		IdentityProvider:                "local",
 		DelegateRoles:                   true,
@@ -282,6 +288,23 @@ func defaultGovernanceConfig() GovernanceConfig {
 	}
 }
 
+// GraphicalTargetConfig ports the C# ServerConfig.GraphicalTargetDefinition —
+// the config-file shape of a seeded graphical target (mirrors the
+// [[graphical_targets]] table). Note: min_role was intentionally dropped.
+type GraphicalTargetConfig struct {
+	TargetID      string  `json:"target_id" toml:"target_id"`
+	TenantID      string  `json:"tenant_id" toml:"tenant_id"`
+	Protocol      string  `json:"protocol" toml:"protocol"`
+	TargetAddress string  `json:"target_address" toml:"target_address"`
+	VMName        *string `json:"vm_name" toml:"vm_name"`
+	Name          string  `json:"name" toml:"name"`
+	Description   *string `json:"description" toml:"description"`
+	Enabled       bool    `json:"enabled" toml:"enabled"`
+	Width         int     `json:"width" toml:"width"`
+	Height        int     `json:"height" toml:"height"`
+	IsStatic      bool    `json:"is_static" toml:"is_static"`
+}
+
 // UtermServerConfig ports config_schema.UtermServerConfig, the top-level model.
 type UtermServerConfig struct {
 	Environment  string              `json:"environment" toml:"environment"`
@@ -298,6 +321,9 @@ type UtermServerConfig struct {
 	Governance   GovernanceConfig    `json:"governance" toml:"governance"`
 	Audit        AuditConfig         `json:"audit" toml:"audit"`
 	Sessions     []SessionDefinition `json:"sessions" toml:"sessions"`
+
+	// GraphicalTargets are seeded as immutable system targets at boot.
+	GraphicalTargets []GraphicalTargetConfig `json:"graphical_targets" toml:"graphical_targets"`
 
 	SessionIdleTimeoutS        int     `json:"session_idle_timeout_s" toml:"session_idle_timeout_s"`
 	SessionRetentionS          int     `json:"session_retention_s" toml:"session_retention_s"`

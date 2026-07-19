@@ -14,17 +14,26 @@ import (
 // RoleCapabilities ports authorization.ROLE_CAPABILITIES — the RBAC map of
 // role → granted capability set.
 var RoleCapabilities = map[string]Set{
-	"viewer": NewSet("session.read", "session.recording.read"),
+	"viewer": NewSet(
+		"session.read", "session.recording.read",
+		"graphical.target.read",
+	),
 	"operator": NewSet(
 		"session.read", "session.recording.read",
 		"session.control.create", "session.control.connect",
 		"session.control.mode", "session.control.clear", "session.control.update",
+		"graphical.target.read",
+		"graphical.target.manage",
+		"graphical.session.attach",
 	),
 	"admin": NewSet(
 		"session.read", "session.recording.read",
 		"session.control.create", "session.control.connect",
 		"session.control.mode", "session.control.clear", "session.control.update",
 		"session.control.delete", "session.control.hijack",
+		"graphical.target.read",
+		"graphical.target.manage",
+		"graphical.session.attach",
 	),
 }
 

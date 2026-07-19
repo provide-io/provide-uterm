@@ -72,7 +72,10 @@ func TestApiKeyScopeRoleMapping(t *testing.T) {
 	}
 	for _, tc := range cases {
 		store := NewApiKeyStore()
-		raw, _ := store.Create("k", tc.scopes, nil)
+		raw, _, err := store.CreateForTenant("acme", "k", tc.scopes, nil)
+		if err != nil {
+			t.Fatalf("CreateForTenant: %v", err)
+		}
 		idp := NewLocalIdentityProvider(cfg, store)
 		p := idp.PrincipalFromAPIKey(&Request{Headers: map[string]string{"x-api-key": raw}})
 		if tc.wantNil {
@@ -84,12 +87,18 @@ func TestApiKeyScopeRoleMapping(t *testing.T) {
 		if p == nil || !p.Roles.Has(tc.wantRole) || !p.Scopes.Has("*") {
 			t.Errorf("scopes %v: got %+v, want role %q", tc.scopes.Sorted(), p, tc.wantRole)
 		}
+		if p != nil && (p.TenantID == nil || *p.TenantID != "acme") {
+			t.Errorf("scopes %v: tenant not propagated: %+v", tc.scopes.Sorted(), p.TenantID)
+		}
 	}
 }
 
 func TestApiKeyDisabledAndPrecedence(t *testing.T) {
 	store := NewApiKeyStore()
-	raw, _ := store.Create("k", NewSet("admin"), nil)
+	raw, _, err := store.CreateForTenant("acme", "k", NewSet("admin"), nil)
+	if err != nil {
+		t.Fatalf("CreateForTenant: %v", err)
+	}
 
 	disabled := &serverconfig.AuthConfig{APIKeysEnabled: false, Mode: "dev_token"}
 	idp := NewLocalIdentityProvider(disabled, store)
