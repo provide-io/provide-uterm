@@ -212,6 +212,18 @@ def create_server_app(
                 return Principal(subject_id="anonymous", roles=frozenset({"viewer"}), scopes=frozenset())
             return resolved
 
+        # Multi-backend Playwright e2e (UTERM_TEST_MODE=1): mint admin principal
+        # for WebSocket so browser pages need no JWT cookie — matches Go/C#
+        # TEST_MODE admin on /ws/browser/*/term. Never default-on; production
+        # servers must not set this env.
+        if connection.scope.get("type") == "websocket" and os.environ.get("UTERM_TEST_MODE") == "1":
+            connection.state.uterm_principal = Principal(
+                subject_id="test-admin",
+                roles=frozenset({"admin"}),
+                scopes=frozenset({"*"}),
+            )
+            return
+
         share_principal = resolve_tunnel_share_principal(connection, config=config, patterns=_SHARE_SESSION_PATTERNS)
         if share_principal is not None:
             connection.state.uterm_principal = share_principal

@@ -8,6 +8,7 @@ package server
 import (
 	"context"
 	"net/http"
+	"os"
 
 	"github.com/coder/websocket"
 
@@ -52,13 +53,33 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+	bg := context.Background()
+	// UTERM_TEST_MODE=1: multi-backend Playwright e2e — open admin browser for any worker_id.
+	// Never default-on; production servers must not set this env.
+	if os.Getenv("UTERM_TEST_MODE") == "1" {
+		principal := &serverauth.Principal{SubjectID: "test-admin", Roles: serverauth.NewSet("admin")}
+		bc := &browserConn{wsBase: wsBase{conn: conn}, principal: principal}
+		role, canHijack := "admin", true
+		state, err := s.deps.Hub.RegisterBrowser(bg, workerID, bc, role, true)
+		if err != nil {
+			_ = conn.Close(websocket.StatusPolicyViolation, "browser registration rejected")
+			return
+		}
+		s.deps.Hub.State.TouchActivity(workerID)
+		if !s.browserHandshake(bg, conn, workerID, bc, role, canHijack, state) {
+			s.browserCleanup(bg, workerID, bc, false)
+			return
+		}
+		owned := s.browserRecvLoop(r.Context(), conn, workerID, bc, role, canHijack)
+		s.browserCleanup(bg, workerID, bc, owned)
+		return
+	}
 	principal := s.resolvePrincipal(r)
 	if isAnonymous(principal) {
 		s.deps.Hub.Metric("auth_failures_ws_total", 1)
 		_ = conn.Close(websocket.StatusPolicyViolation, "authentication required")
 		return
 	}
-	bg := context.Background()
 	role := s.resolveBrowserRole(bg, principal, workerID)
 	if role == "" {
 		_ = conn.Close(websocket.StatusPolicyViolation, "insufficient privileges")

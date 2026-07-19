@@ -544,35 +544,71 @@ public sealed partial class UtermServer : IAsyncDisposable
             return;
         }
 
-        var p = await Authenticate(ctx).ConfigureAwait(false);
-        var role = "viewer";
-        if (_deps.Registry.TryGetDefinition(workerId, out var def))
+        // UTERM_TEST_MODE=1: multi-backend Playwright e2e — admin for any worker_id.
+        var testMode = string.Equals(
+            Environment.GetEnvironmentVariable("UTERM_TEST_MODE"), "1", StringComparison.Ordinal);
+        Principal p;
+        string role;
+        if (testMode)
         {
-            if (!_deps.Authz.CanReadSession(p, def))
+            p = new Principal { SubjectId = "test-admin", Roles = StringSet.Of("admin") };
+            role = "admin";
+        }
+        else
+        {
+            p = await Authenticate(ctx).ConfigureAwait(false);
+            role = "viewer";
+            if (_deps.Registry.TryGetDefinition(workerId, out var def))
             {
-                ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
-                return;
-            }
+                if (!_deps.Authz.CanReadSession(p, def))
+                {
+                    ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
+                    return;
+                }
 
-            role = _deps.Authz.ResolveBrowserRole(p, def);
+                role = _deps.Authz.ResolveBrowserRole(p, def);
+            }
         }
 
         using var ws = await ctx.WebSockets.AcceptWebSocketAsync().ConfigureAwait(false);
         var conn = new BrowserWsConn(ws);
+        // Match Python/Go: register, then hello from registry state + immediate hijack_state.
         var state = _deps.Hub.Conn.RegisterBrowser(workerId, conn, role);
-        // Capability defaults match spec/behavior.json hello_defaults.csharp
-        // (mcp_supported=false — MCP not shipped; vnc_supported=true).
+        var canHijack = role is "admin";
+        static bool StateBool(IReadOnlyDictionary<string, object?> d, string key) =>
+            d.TryGetValue(key, out var v) && v is true;
+        static string StateStr(IReadOnlyDictionary<string, object?> d, string key, string fallback) =>
+            d.TryGetValue(key, out var v) && v is string s && !string.IsNullOrEmpty(s) ? s : fallback;
+
+        // Capability defaults match spec/behavior.json hello_defaults.csharp.
         var hello = ControlChannelCodec.EncodeControlFrame(new Dictionary<string, object?>
         {
             ["type"] = "hello",
             ["role"] = role,
             ["worker_id"] = workerId,
-            ["state"] = state,
             ["ts"] = _clock.Wall(),
+            ["can_hijack"] = canHijack,
+            // RegisterBrowser uses is_hijacked (hub internal); wire hello uses hijacked.
+            ["hijacked"] = StateBool(state, "is_hijacked"),
+            ["hijacked_by_me"] = StateBool(state, "hijacked_by_me"),
+            ["worker_online"] = StateBool(state, "worker_online"),
+            ["input_mode"] = StateStr(state, "input_mode", InputModes.Hijack),
+            ["hijack_control"] = "ws",
+            ["hijack_step_supported"] = true,
+            ["capabilities"] = new Dictionary<string, object?>
+            {
+                ["hijack_control"] = "ws",
+                ["hijack_step_supported"] = true,
+            },
             ["mcp_supported"] = false,
             ["vnc_supported"] = true,
         });
         await conn.SendTextAsync(hello, ctx.RequestAborted).ConfigureAwait(false);
+        // Per-browser owner="me"/"other" — required for second-browser tests.
+        var hijackState = _deps.Hub.Router.HijackStateMsgFor(workerId, conn);
+        await conn.SendTextAsync(
+            ControlChannelCodec.EncodeControlFrame(hijackState),
+            ctx.RequestAborted).ConfigureAwait(false);
 
         var buffer = new byte[8192];
         try
@@ -582,12 +618,23 @@ public sealed partial class UtermServer : IAsyncDisposable
                 var result = await ws.ReceiveAsync(buffer, ctx.RequestAborted).ConfigureAwait(false);
                 if (result.MessageType == WebSocketMessageType.Close) break;
                 var text = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                await HandleBrowserMessage(workerId, conn, text, ctx.RequestAborted).ConfigureAwait(false);
+                await HandleBrowserMessage(workerId, conn, role, text, ctx.RequestAborted).ConfigureAwait(false);
             }
         }
         finally
         {
             _deps.Hub.Conn.CleanupBrowser(workerId, conn);
+            // Fan out released state when the owner drops, matching Python/Go cleanup.
+            try
+            {
+                await _deps.Hub.BroadcastHijackStateAsync(workerId, CancellationToken.None)
+                    .ConfigureAwait(false);
+            }
+            catch
+            {
+                // best-effort on disconnect
+            }
+
             if (ws.State == WebSocketState.Open)
             {
                 await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye", CancellationToken.None)
@@ -596,18 +643,151 @@ public sealed partial class UtermServer : IAsyncDisposable
         }
     }
 
-    private async Task HandleBrowserMessage(string workerId, BrowserWsConn conn, string text, CancellationToken ct)
+    private async Task HandleBrowserMessage(
+        string workerId, BrowserWsConn conn, string role, string text, CancellationToken ct)
     {
         if (ControlChannelCodec.IsControlFrame(text))
         {
-            // Control frames from browser (resize, hijack acquire, etc.)
+            var dec = new ControlFrameDecoder();
+            foreach (var chunk in dec.Feed(text))
+            {
+                if (chunk is not ControlChunk ctrl) continue;
+                var mtype = ctrl.Control.TryGetValue("type", out var t) ? t?.ToString() : null;
+                switch (mtype)
+                {
+                    case "hijack_request":
+                        if (role != "admin")
+                        {
+                            await conn.SendTextAsync(
+                                ControlChannelCodec.EncodeControlFrame(new Dictionary<string, object?>
+                                {
+                                    ["type"] = "error",
+                                    ["message"] = "Hijack requires admin role.",
+                                }),
+                                ct).ConfigureAwait(false);
+                            break;
+                        }
+
+                        // Pause worker (same control frame as Python/Go dashboard hijack).
+                        _ = await _deps.Hub.Conn.SendWorkerAsync(
+                            workerId,
+                            new Dictionary<string, object?>
+                            {
+                                ["type"] = "control",
+                                ["action"] = "pause",
+                                ["source"] = "dashboard",
+                                ["ts"] = _clock.Wall(),
+                            },
+                            ct).ConfigureAwait(false);
+
+                        var (ok, reason) = _deps.Hub.Lease.TryAcquireWs(workerId, conn);
+                        if (!ok)
+                        {
+                            if (reason != "already_hijacked")
+                            {
+                                _ = await _deps.Hub.Conn.SendWorkerAsync(
+                                    workerId,
+                                    new Dictionary<string, object?>
+                                    {
+                                        ["type"] = "control",
+                                        ["action"] = "resume",
+                                        ["source"] = "dashboard",
+                                        ["ts"] = _clock.Wall(),
+                                    },
+                                    ct).ConfigureAwait(false);
+                            }
+
+                            await conn.SendTextAsync(
+                                ControlChannelCodec.EncodeControlFrame(new Dictionary<string, object?>
+                                {
+                                    ["type"] = "error",
+                                    ["message"] = reason == "already_hijacked"
+                                        ? "Session already hijacked."
+                                        : "Hijack failed: " + reason,
+                                }),
+                                ct).ConfigureAwait(false);
+                            break;
+                        }
+
+                        await _deps.Hub.BroadcastHijackStateAsync(workerId, ct).ConfigureAwait(false);
+                        break;
+                    case "hijack_release":
+                        var (released, restActive) = _deps.Hub.Lease.TryReleaseWs(workerId, conn);
+                        if (released && !restActive)
+                        {
+                            _ = await _deps.Hub.Conn.SendWorkerAsync(
+                                workerId,
+                                new Dictionary<string, object?>
+                                {
+                                    ["type"] = "control",
+                                    ["action"] = "resume",
+                                    ["source"] = "dashboard",
+                                    ["ts"] = _clock.Wall(),
+                                },
+                                ct).ConfigureAwait(false);
+                        }
+
+                        await _deps.Hub.BroadcastHijackStateAsync(workerId, ct).ConfigureAwait(false);
+                        break;
+                    case "hijack_step":
+                        _ = await _deps.Hub.Conn.SendWorkerAsync(
+                            workerId,
+                            new Dictionary<string, object?>
+                            {
+                                ["type"] = "control",
+                                ["action"] = "step",
+                                ["source"] = "dashboard",
+                                ["ts"] = _clock.Wall(),
+                            },
+                            ct).ConfigureAwait(false);
+                        break;
+                    case "snapshot_req":
+                        break;
+                    case "heartbeat":
+                    {
+                        // Touch dashboard lease only if this browser owns it (Python touch_if_owner).
+                        var st = _deps.Hub.Registry.Get(workerId);
+                        if (st is not null
+                            && _deps.Hub.State.IsDashboardHijackActive(st)
+                            && ReferenceEquals(st.HijackOwner, conn))
+                        {
+                            var exp = _deps.Hub.Lease.TouchOwner(workerId);
+                            if (exp is not null)
+                            {
+                                await conn.SendTextAsync(
+                                    ControlChannelCodec.EncodeControlFrame(new Dictionary<string, object?>
+                                    {
+                                        ["type"] = "heartbeat_ack",
+                                        ["lease_expires_at"] = _clock.Wall()
+                                            + (exp.Value - _clock.Monotonic()),
+                                        ["ts"] = _clock.Wall(),
+                                    }),
+                                    ct).ConfigureAwait(false);
+                                await _deps.Hub.BroadcastHijackStateAsync(workerId, ct)
+                                    .ConfigureAwait(false);
+                            }
+                        }
+
+                        break;
+                    }
+                    case "ping":
+                        await conn.SendTextAsync(
+                            ControlChannelCodec.EncodeControlFrame(new Dictionary<string, object?>
+                            {
+                                ["type"] = "pong",
+                                ["ts"] = _clock.Wall(),
+                            }),
+                            ct).ConfigureAwait(false);
+                        break;
+                }
+            }
+
             return;
         }
 
         if (_deps.Hub.Lease.PrepareBrowserInput(workerId, conn))
         {
             await _deps.Hub.Conn.SendRestInputAsync(workerId, "", text, ct).ConfigureAwait(false);
-            // Prefer worker raw send when no REST hijack
             var st = _deps.Hub.Registry.Get(workerId);
             if (st?.WorkerWs is not null)
             {
@@ -650,6 +830,17 @@ public sealed partial class UtermServer : IAsyncDisposable
             mem.MarkWorker(workerId, true, false, InputModes.Hijack);
         }
 
+        // Notify already-connected browsers (Python/Go worker_connected fan-out).
+        await _deps.Hub.Conn.BroadcastToBrowsersAsync(
+            workerId,
+            new Dictionary<string, object?>
+            {
+                ["type"] = "worker_connected",
+                ["worker_id"] = workerId,
+                ["ts"] = _clock.Wall(),
+            },
+            CancellationToken.None).ConfigureAwait(false);
+
         var buffer = new byte[16384];
         try
         {
@@ -670,10 +861,35 @@ public sealed partial class UtermServer : IAsyncDisposable
         }
         finally
         {
-            _deps.Hub.Conn.DeregisterWorker(workerId, conn);
+            var (shouldBroadcast, wasHijacked) = _deps.Hub.Conn.DeregisterWorker(workerId, conn);
             if (_deps.Registry is InMemorySessionRegistry mem2)
             {
                 mem2.MarkWorker(workerId, false, false, InputModes.Hijack);
+            }
+
+            if (shouldBroadcast)
+            {
+                try
+                {
+                    await _deps.Hub.Conn.BroadcastToBrowsersAsync(
+                        workerId,
+                        new Dictionary<string, object?>
+                        {
+                            ["type"] = "worker_disconnected",
+                            ["worker_id"] = workerId,
+                            ["ts"] = _clock.Wall(),
+                        },
+                        CancellationToken.None).ConfigureAwait(false);
+                    if (wasHijacked)
+                    {
+                        await _deps.Hub.BroadcastHijackStateAsync(workerId, CancellationToken.None)
+                            .ConfigureAwait(false);
+                    }
+                }
+                catch
+                {
+                    // best-effort on worker teardown
+                }
             }
         }
     }

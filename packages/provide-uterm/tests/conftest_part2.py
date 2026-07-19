@@ -132,8 +132,12 @@ class WorkerController:
         from provide.uterm.control_channel import ControlChunk, ControlFrameDecoder, DataChunk, encode_control_frame
 
         ws_url = self._base_url.replace("http://", "ws://") + f"/ws/worker/{self._worker_id}/term"
+        headers: dict[str, str] = {}
+        bearer = _os.environ.get("UTERM_TEST_WORKER_BEARER", "").strip()
+        if bearer:
+            headers["Authorization"] = f"Bearer {bearer}"
         try:
-            async with websockets.connect(ws_url) as ws:
+            async with websockets.connect(ws_url, additional_headers=headers or None) as ws:
                 self._connected.set()
                 snapshot_msg = {
                     "type": "snapshot",

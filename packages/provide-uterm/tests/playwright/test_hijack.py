@@ -44,6 +44,17 @@ def _uid() -> str:
 
 def _navigate(page: Page, base_url: str, worker_id: str) -> None:
     """Navigate *page* to the test widget page for *worker_id*."""
+    import os
+
+    # Multi-backend: serve test HTML + /ui via page.route (production servers
+    # do not ship /test-page; UI assets may also be route-fulfilled).
+    if os.environ.get("UTERM_MULTI_BACKEND") or os.environ.get("UTERM_TEST_BACKEND", "python") in (
+        "go",
+        "csharp",
+    ):
+        from .ui_routes import install_multi_backend_routes
+
+        install_multi_backend_routes(page)
     page.goto(f"{base_url}/test-page/{worker_id}", wait_until="domcontentloaded")
 
 
@@ -391,7 +402,7 @@ class TestTwoBrowsers:
             ctx2 = browser.new_context()  # type: ignore[attr-defined]
             page2 = ctx2.new_page()
             try:
-                page2.goto(f"{base_url}/test-page/{worker_id}", wait_until="domcontentloaded")
+                _navigate(page2, base_url, worker_id)
                 page2.wait_for_function("window.__deepQuery('#statustext')?.textContent === 'Hijacked (other)'")
                 assert page2.locator("#statustext").text_content() == "Hijacked (other)", (
                     "Second browser should see 'Hijacked (other)'"
@@ -420,7 +431,7 @@ class TestTwoBrowsers:
             ctx2 = browser.new_context()  # type: ignore[attr-defined]
             page2 = ctx2.new_page()
             try:
-                page2.goto(f"{base_url}/test-page/{worker_id}", wait_until="domcontentloaded")
+                _navigate(page2, base_url, worker_id)
                 page2.wait_for_function("window.__deepQuery('#statustext')?.textContent === 'Hijacked (other)'")
 
                 # Browser 1 releases
@@ -450,7 +461,7 @@ class TestTwoBrowsers:
             ctx2 = browser.new_context()  # type: ignore[attr-defined]
             page2 = ctx2.new_page()
             try:
-                page2.goto(f"{base_url}/test-page/{worker_id}", wait_until="domcontentloaded")
+                _navigate(page2, base_url, worker_id)
                 page2.wait_for_function("window.__deepQuery('#statustext')?.textContent === 'Hijacked (other)'")
 
                 _release_btn(page).click()

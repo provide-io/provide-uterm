@@ -206,15 +206,31 @@ async def live_hub() -> AsyncGenerator[tuple[TermHub, str], None]:
 
 
 @pytest.fixture(scope="session")
-def hijack_server() -> Generator[tuple[str, TermHub], None, None]:
-    """Session-scoped sync fixture: TermHub + static UI server for Playwright tests.
+def hijack_server() -> Generator[tuple[str, object], None, None]:
+    """Session-scoped server for Playwright hijack tests.
 
-    Yields ``(base_url, hub)``.
+    Yields ``(base_url, hub_or_none)``.
 
-    Also exposes ``GET /test-page/{worker_id}`` — a minimal HTML page that
-    mounts the ProvideHijack widget with ``heartbeatInterval: 500`` so heartbeat
-    tests complete quickly.
+    * Default (no ``UTERM_TEST_BACKEND`` / ``python``): in-process FastAPI
+      TermHub with ``/test-page`` + ``/ui`` (historic, fast CI).
+    * ``UTERM_TEST_BACKEND=go|csharp`` (or ``python`` with
+      ``UTERM_MULTI_BACKEND=1``): real language server subprocess under
+      ``UTERM_TEST_MODE=1``. Test HTML/UI assets are page.route'd (see
+      ``playwright/ui_routes.py``).
     """
+    import os
+
+    multi = os.environ.get("UTERM_MULTI_BACKEND", "").strip() in ("1", "true", "yes")
+    backend = os.environ.get("UTERM_TEST_BACKEND", "python").strip().lower() or "python"
+    if multi or backend in ("go", "csharp"):
+        os.environ["UTERM_TEST_BACKEND"] = backend if backend in ("python", "go", "csharp") else "python"
+        from .playwright.backend_server import WORKER_BEARER, spawn_backend_server
+
+        os.environ["UTERM_TEST_WORKER_BEARER"] = WORKER_BEARER
+        with spawn_backend_server() as srv:
+            yield srv.base_url, None
+        return
+
     from starlette.staticfiles import StaticFiles
 
     hub = TermHub(
@@ -229,20 +245,11 @@ def hijack_server() -> Generator[tuple[str, TermHub], None, None]:
 
     @app.get("/test-page/{worker_id}", response_class=HTMLResponse)
     async def test_page(worker_id: str) -> str:
-        # The hijack UI is now a <uterm-session> web component (scoped shadow-DOM
-        # styles, so no external CSS link needed). Mount it via the public
-        # config/connect() API: config must be set BEFORE the element connects
-        # (connectedCallback reads this.config), so create → config → append →
-        # connect. heartbeatInterval=500 ms keeps heartbeat tests fast.
         from provide.uterm.server.ui import _resolve_vanilla_asset
 
         script_path = _resolve_vanilla_asset("src/hijack.ts")
         return (
             "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
-            # Shadow-piercing query helper for tests (the UI lives in the
-            # <uterm-session> shadow root; raw document.querySelector can't reach
-            # it). Embedded in the page so it is available to *every* browser
-            # context that loads this fixture, including second-browser tests.
             "<script>"
             "window.__deepQuery=(sel)=>{const s=(r)=>{const d=r.querySelector(sel);if(d)return d;"
             "for(const e of r.querySelectorAll('*')){if(e.shadowRoot){const f=s(e.shadowRoot);if(f)return f;}}return null;};"

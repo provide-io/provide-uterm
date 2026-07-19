@@ -2,94 +2,62 @@
 
 ## Status (2026-07-19)
 
-Cross-language behavioral contract is **load-bearing** with shared goldens and
-tri-language consumers. Multi-backend Playwright curated suite green for
-`UTERM_TEST_BACKEND=python|go|csharp`. Dirty mid-flight Playwright WIP was
-**restored** (not finished as-is) and replaced with a clean curated suite.
+Cross-language behavioral contract is load-bearing. **Full heavy Playwright
+hijack suite is green 20/20 on python, go, and csharp** under multi-backend
+subprocess mode, with per-test screen recordings.
 
-## What shipped
+## What shipped (this session — heavy suite)
 
-### Contract + goldens
-- `spec/behavior.json` v1.1 — ops: `input_inject`, `hijack_step`,
-  `hijack_release`, `hijack_acquire`; role ranks; hello defaults per language;
-  stable `forbidden_*` error strings.
-- `spec/behavior_vectors.json` — 48 parametrized policy cases + hello defaults.
-- `scripts/generate_behavior_vectors.py` (also via `generate_parity_tests.py`)
-  regenerates and copies vectors to Go/C#/Python test trees.
+### Multi-backend heavy hijack
+- `hijack_server` dual mode (`conftest_part1.py`):
+  - default python → in-process TermHub (historic CI)
+  - `UTERM_TEST_BACKEND=go|csharp` or `UTERM_MULTI_BACKEND=1` → real subprocess
+    via `backend_server.py` + page.route HTML/UI (`ui_routes.py`)
+- WorkerController sends `UTERM_TEST_WORKER_BEARER` when set
+- Chromium Local Network Access flags for loopback WS
+- `_navigate` installs multi-backend routes for second browser contexts
 
-### Policy engines (same semantics)
-| Language | Path |
-|----------|------|
-| Python | `packages/provide-uterm/src/provide/uterm/bridge/policy.py` |
-| Go | `packages/provide-uterm-go/policy` (+ `vnc` type aliases) |
-| C# | `packages/provide-uterm-csharp/src/Provide.Uterm/Policy/StrictPolicyEngine.cs` |
+### C# production hijack WS (not test special-cases)
+- Real `BroadcastHijackStateAsync` fan-out to browsers
+- Wire field **`hijacked`** (was wrong `is_hijacked` — frontend dropped frames)
+- Browser handshake: accurate hello from registry state + immediate `hijack_state`
+- Heartbeat touch + `heartbeat_ack` when dashboard owner
+- `worker_connected` / `worker_disconnected` browser fan-out
+- Pause/resume/step control to worker on acquire/release/step
 
-Tests load the **same** golden vectors (not placeholder asserts).
+### Python TEST_MODE alignment
+- `UTERM_TEST_MODE=1`: browser WS mint admin principal in
+  `_require_authenticated` (factory_impl) — matches Go/C# admin without JWT
+- Role forced admin after accept in `ws_browser_term`
 
-### Hello capabilities
-- Python: already had `mcp_supported` / `vnc_supported` on `HelloFrame`.
-- Go: fields on `HelloFrame`; `MakeHelloFrameWithDefaults()` → mcp=true, vnc=true.
-- C#: fields on `HelloFrame` + mapper; `MakeHelloFrame()` → mcp=false, vnc=true.
-- Defaults documented in `spec/behavior.json` `hello_defaults` and
-  `docs/protocol-matrix.md`.
+## Proof matrix (heavy)
 
-### Multi-backend Playwright
-- `packages/provide-uterm/tests/playwright/backend_server.py` — subprocess
-  launcher; sets `UTERM_TEST_MODE=1` only on children.
-- `test_multi_backend_parity.py` — curated suite (health/TCP, worker WS with
-  bearer, `page.route` browser smoke).
+| Backend | Suite | Result | Artifacts |
+|---------|-------|--------|-----------|
+| python | `test_hijack.py` ×20 | **20 passed** ~20s | 20 webm + 20 png under `screenshots/backend-proof/heavy/python/` |
+| go | same | **20 passed** ~19s | `…/heavy/go/` |
+| csharp | same | **20 passed** ~29s | `…/heavy/csharp/` |
 
-### Mutation / property
-- Go gremlins perimeter adds **`policy`** (100% cover, 4 killed, 0 survivors).
-- Python mutmut `source_paths` includes `bridge/policy.py`.
-- Hypothesis property tests on Python policy; Go `testing/quick` on hello
-  capability JSON round-trip.
-- **C# residual:** no Stryker/mutation gate in-tree; compensated with golden
-  vector matrix + `[Theory]` cases. Documented residual.
-
-## Proofs run (scratch logs)
-Implementer scratch: goal harness `{SCRATCH}`:
-- `phase0-git-status.log`, capability unit smoke
-- `conformance-tri.log` — Py/Go/C# policy vectors
-- `property-fuzz.log` — hypothesis
-- `mutation-go.log` — Go mutation gate passed (policy included)
-- `mutation-python.log` — policy.py mutmut
-- `pw-python.log`, `pw-go.log`, `pw-csharp.log` — multi-backend curated suite
-- `interop.log` — Go interop skipped when PyJWT missing in bare `uterm` path
-  (dev residual; multi-backend python subprocess via `uv run` works)
-
-## Verification commands
 ```bash
-uv run python scripts/generate_behavior_vectors.py
-uv run pytest packages/provide-uterm/tests/bridge/test_behavior_policy.py --no-cov
-cd packages/provide-uterm-go && go test ./policy/ ./frames/ ./vnc/ && make mutation-gate
-dotnet test packages/provide-uterm-csharp --filter FullyQualifiedName~StrictPolicyEngine
-UTERM_TEST_BACKEND=python uv run pytest packages/provide-uterm/tests/playwright/test_multi_backend_parity.py -m playwright --no-cov
-UTERM_TEST_BACKEND=go     uv run pytest packages/provide-uterm/tests/playwright/test_multi_backend_parity.py -m playwright --no-cov
-UTERM_TEST_BACKEND=csharp uv run pytest packages/provide-uterm/tests/playwright/test_multi_backend_parity.py -m playwright --no-cov
+for be in python go csharp; do
+  UTERM_TEST_BACKEND=$be UTERM_TEST_MODE=1 UTERM_MULTI_BACKEND=1 \
+    uv run pytest packages/provide-uterm/tests/playwright/test_hijack.py \
+      -m playwright --no-cov --video=on --screenshot=on \
+      --output=packages/provide-uterm/tests/playwright/screenshots/backend-proof/heavy/$be
+done
 ```
 
+See `screenshots/backend-proof/heavy/summary.json`.
+
+## Earlier parity (still load-bearing)
+- `spec/behavior.json` + `behavior_vectors.json` + policy engines (Py/Go/C#)
+- Hello `mcp_supported` / `vnc_supported` on production builders
+- Canonical WS paths `/ws/{browser|worker}/{id}/term` (C# aligned)
+- Curated `test_multi_backend_parity.py`
+
 ## Residuals
-1. C# mutation tooling not installed — property/vector coverage only.
-2. Go live interop may skip if `uterm` entrypoint lacks PyJWT; use project
-   `uv run` env for full interop.
-3. Full root `make quality-gate` + whole-module C# cover floor should be run
-   in CI; local session ran targeted gates + multi-backend suite.
-4. API docs scripts (`generate_api_docs.*`) remain; C# xmldocmd still stubbed
-   (non-goal residual).
-
-## Next session (optional)
-- Align C# worker WS path to `/ws/worker/{id}/term` for wire path parity.
-- Install Stryker.NET for C# policy package if desired.
-- Expand curated multi-backend suite to hijack acquire/release UI flows.
-
-## Skeptic follow-up (2026-07-19 later)
-
-- Production Go `buildHelloFrame` and C# browser hello now stamp
-  `mcp_supported`/`vnc_supported` (unit + e2e + ServerIntegration proof).
-- Live Go↔Python interop both directions PASS (see interop.log).
-- Root `make quality-gate` all checks passed; C# quality-gate 97.00% cover.
-- Multi-backend suite asserts hello capability wire parity with JWT auth
-  (no soft-fail on ws_err).
-
-- C# browser/worker WS paths aligned to `/ws/{browser|worker}/{id}/term` (Python/Go).
+1. C# mutation tooling not installed — vector/property coverage only.
+2. Deckmux/resume/color heavy multi-backend expansion not in this suite
+   (hijack is the full heavy surface that shared hub APIs support today).
+3. Full root `make quality-gate` should still run in CI before release.
+4. In-process python path (no MULTI_BACKEND) remains for normal PT CI speed.
