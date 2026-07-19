@@ -22,6 +22,7 @@ public static class DevIdp
         public string? TokenPath { get; set; }
         public string Subject { get; set; } = "dev-user";
         public string[] Roles { get; set; } = { "admin" };
+        public string? Tenant { get; set; }
         public int TtlS { get; set; } = DevTokenTtlS;
     }
 
@@ -51,6 +52,10 @@ public static class DevIdp
         foreach (var role in options.Roles)
         {
             claims.Add(new Claim(auth.JwtRolesClaim, role));
+        }
+        if (!string.IsNullOrWhiteSpace(options.Tenant))
+        {
+            claims.Add(new Claim(auth.JWTTenantClaim, options.Tenant));
         }
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));

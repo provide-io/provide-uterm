@@ -166,6 +166,9 @@ public class ClientDefaultsAuthConfigTests
         var def = ConfigLoader.Load(null);
         Assert.Equal("dev_token", def.Auth.Mode);
         Assert.False(string.IsNullOrEmpty(def.Server.PublicBaseUrl));
+        Assert.Equal("x-uterm-tenant", def.Auth.TenantHeader);
+        Assert.Equal("uterm_tenant", def.Auth.TenantCookie);
+        Assert.Equal("tenant_id", def.Auth.JWTTenantClaim);
 
         Assert.Throws<FileNotFoundException>(() => ConfigLoader.Load("/no/such/server.toml"));
 
@@ -190,6 +193,9 @@ public class ClientDefaultsAuthConfigTests
                 mode = "jwt"
                 jwt_issuer = "iss"
                 jwt_audience = "aud"
+                tenant_header = "x-t"
+                tenant_cookie = "tc"
+                jwt_tenant_claim = "tenant"
                 api_keys_enabled = true
                 trusted_proxy_ips = ["127.0.0.1"]
                 jwt_algorithms = ["HS256", "RS256"]
@@ -216,6 +222,9 @@ public class ClientDefaultsAuthConfigTests
             Assert.Equal(50, cfg.MaxWorkers);
             Assert.Equal(9999, cfg.Server.Port);
             Assert.Equal("jwt", cfg.Auth.Mode);
+            Assert.Equal("x-t", cfg.Auth.TenantHeader);
+            Assert.Equal("tc", cfg.Auth.TenantCookie);
+            Assert.Equal("tenant", cfg.Auth.JWTTenantClaim);
             Assert.True(cfg.Auth.ApiKeysEnabled);
             Assert.Equal("memory", cfg.ControlPlane.Backend);
             Assert.True(cfg.Security.MetricsRequireAuth);

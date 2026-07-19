@@ -31,6 +31,7 @@ public sealed class ServerDeps
     public required AuthorizationService Authz { get; init; }
     public required UtermServerConfig Config { get; init; }
     public required ISessionRegistry Registry { get; init; }
+    public IGraphicalTargetRegistry GraphicalTargets { get; init; } = new InMemoryGraphicalTargetRegistry();
     public string Version { get; init; } = "0.0.0-dev";
     public IClock? Clock { get; init; }
     /// <summary>Backs /api/sessions/{id}/recording routes. Defaults to <see cref="NullStore"/>.</summary>
@@ -251,6 +252,12 @@ public sealed partial class UtermServer : IAsyncDisposable
         app.MapPost("/worker/{workerId}/hijack/{hijackId}/gui/type", HandleGuiType);
         app.MapPost("/worker/{workerId}/hijack/{hijackId}/gui/key", HandleGuiKey);
         app.MapPost("/worker/{workerId}/hijack/{hijackId}/gui/drag", HandleGuiDrag);
+
+        app.MapGet("/api/graphical-targets", (Delegate)HandleListGraphicalTargets);
+        app.MapGet("/api/graphical-targets/{targetId}", HandleGetGraphicalTarget);
+        app.MapPost("/api/graphical-targets", (Delegate)HandleCreateGraphicalTarget);
+        app.MapPut("/api/graphical-targets/{targetId}", HandleUpdateGraphicalTarget);
+        app.MapDelete("/api/graphical-targets/{targetId}", HandleDeleteGraphicalTarget);
 
         // Browser / worker WebSockets with DLE/STX control channel
         app.Map("/ws/browser/{workerId}", HandleBrowserWs);
@@ -890,6 +897,7 @@ public static class ServerFactory
             BrowserRateLimitPerSec = cfg.BrowserRateLimitPerSec,
         });
         var registry = new InMemorySessionRegistry(cfg.Sessions);
+        var graphicalTargets = SeedGraphicalTargets(cfg);
         var server = new UtermServer(new ServerDeps
         {
             Hub = hub,
@@ -897,6 +905,7 @@ public static class ServerFactory
             Authz = authz,
             Config = cfg,
             Registry = registry,
+            GraphicalTargets = graphicalTargets,
             Version = version,
             Clock = clock,
             Recording = BuildRecordingStore(cfg),
@@ -912,4 +921,63 @@ public static class ServerFactory
             "memory" => new InMemoryStore(),
             _ => new NullStore(),
         };
+
+    private static IGraphicalTargetRegistry SeedGraphicalTargets(UtermServerConfig cfg)
+    {
+        var registry = new InMemoryGraphicalTargetRegistry();
+        foreach (var target in cfg.GraphicalTargets)
+        {
+            if (!target.Enabled)
+            {
+                continue;
+            }
+
+            var entry = ToGraphicalTargetDefinition(target);
+            registry.AddStatic(entry);
+        }
+
+        return registry;
+    }
+
+    private static Provide.Uterm.Server.GraphicalTargetDefinition ToGraphicalTargetDefinition(ServerConfig.GraphicalTargetDefinition target)
+    {
+        var protocol = (target.Protocol ?? GraphicalTargetConstants.ProtocolRfb).Trim().ToLowerInvariant();
+        if (!GraphicalTargetConstants.SupportedProtocols.Contains(protocol))
+        {
+            throw new ArgumentException("unsupported graphical target protocol: " + target.Protocol);
+        }
+
+        var endpoint = target.TargetAddress.Trim();
+        if (protocol == GraphicalTargetConstants.ProtocolRfb && string.IsNullOrWhiteSpace(endpoint))
+        {
+            throw new ArgumentException($"graphical target requires target_address for rfb protocol: {target.TargetId}");
+        }
+
+        var targetId = target.TargetId.Trim();
+        if (string.IsNullOrWhiteSpace(targetId))
+        {
+            targetId = "gt-" + Guid.NewGuid().ToString("N")[..12];
+        }
+
+        if (protocol == GraphicalTargetConstants.ProtocolRfb)
+        {
+            var (host, port) = GraphicalTargetParsing.ParseRfbEndpoint(endpoint);
+            endpoint = $"{host}:{port}";
+        }
+
+        return new Provide.Uterm.Server.GraphicalTargetDefinition
+        {
+            TargetId = targetId,
+            TenantId = target.TenantId.Trim(),
+            DisplayName = string.IsNullOrWhiteSpace(target.Name) ? targetId : target.Name,
+            Protocol = protocol,
+            Endpoint = protocol == GraphicalTargetConstants.ProtocolMemory ? null : endpoint,
+            Width = target.Width <= 0 ? 640 : target.Width > 8192 ? 8192 : target.Width,
+            Height = target.Height <= 0 ? 480 : target.Height > 8192 ? 8192 : target.Height,
+            IsSystem = true,
+            IsStatic = true,
+            CreatedBy = null,
+            CreatedAt = DateTimeOffset.UtcNow,
+        };
+    }
 }

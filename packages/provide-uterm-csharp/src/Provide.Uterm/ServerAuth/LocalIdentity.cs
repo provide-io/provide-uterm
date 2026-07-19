@@ -5,6 +5,7 @@
 
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Text.RegularExpressions;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
 using Provide.Uterm.ServerConfig;
@@ -16,6 +17,7 @@ namespace Provide.Uterm.ServerAuth;
 /// </summary>
 public sealed class LocalIdentityProvider : IAuthenticator
 {
+    private static readonly Regex TenantPattern = new(@"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$", RegexOptions.Compiled);
     private readonly AuthConfig _auth;
     private readonly ApiKeyStore? _apiKeys;
 
@@ -90,11 +92,19 @@ public sealed class LocalIdentityProvider : IAuthenticator
             req.Cookie(_auth.PrincipalCookie),
             "anonymous");
         var roleRaw = FirstNonEmpty(req.Header(_auth.RoleHeader), req.Cookie(_auth.RoleCookie), "");
+        var rawTenant = FirstNonEmpty(req.Header(_auth.TenantHeader), req.Cookie(_auth.TenantCookie));
+        var tenant = CanonicalTenantId(rawTenant);
+        if (!string.IsNullOrWhiteSpace(rawTenant) && tenant is null)
+        {
+            return Principal.Anonymous();
+        }
+
         return new Principal
         {
             SubjectId = principal,
             Roles = AuthRoles.FilterKnownRoles(new[] { roleRaw }),
             Scopes = new StringSet(),
+            TenantId = tenant,
         };
     }
 
@@ -105,6 +115,9 @@ public sealed class LocalIdentityProvider : IAuthenticator
         if (rawKey.Length == 0) return null;
         var record = _apiKeys.Validate(rawKey);
         if (record is null) return null;
+        if (string.IsNullOrWhiteSpace(record.TenantId)) return null;
+        var tenant = CanonicalTenantId(record.TenantId);
+        if (tenant is null) return null;
 
         StringSet roles;
         StringSet scopes;
@@ -133,6 +146,7 @@ public sealed class LocalIdentityProvider : IAuthenticator
             SubjectId = "apikey:" + record.KeyId,
             Roles = roles,
             Scopes = scopes,
+            TenantId = tenant,
             Claims = new Dictionary<string, object?> { ["key_id"] = record.KeyId, ["key_name"] = record.Name },
         };
     }
@@ -159,7 +173,7 @@ public sealed class LocalIdentityProvider : IAuthenticator
             ValidAlgorithms = _auth.JwtAlgorithms,
         };
 
-        var principal = handler.ValidateToken(token, parameters, out _);
+        var principal = handler.ValidateToken(token, parameters, out var validatedToken);
         var subject = principal.FindFirst("sub")?.Value
                       ?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value
                       ?? "";
@@ -167,6 +181,20 @@ public sealed class LocalIdentityProvider : IAuthenticator
         if (subject.Length == 0)
         {
             throw new SecurityTokenException("sub claim is required");
+        }
+
+        var rawTenant = principal.FindFirst(_auth.JWTTenantClaim)?.Value?.Trim();
+        if (rawTenant is null
+            && validatedToken is JwtSecurityToken decodedJwt
+            && decodedJwt.Payload.TryGetValue(_auth.JWTTenantClaim, out var fromPayload)
+            && fromPayload is not null)
+        {
+            rawTenant = fromPayload.ToString();
+        }
+        var tenant = CanonicalTenantId(rawTenant);
+        if (!string.IsNullOrWhiteSpace(rawTenant) && tenant is null)
+        {
+            throw new SecurityTokenException("invalid tenant_id claim");
         }
 
         var roles = new List<string>();
@@ -192,6 +220,7 @@ public sealed class LocalIdentityProvider : IAuthenticator
             SubjectId = subject,
             Roles = AuthRoles.FilterKnownRoles(roles),
             Scopes = scopes,
+            TenantId = tenant,
         };
     }
 
@@ -203,5 +232,21 @@ public sealed class LocalIdentityProvider : IAuthenticator
         }
 
         return "";
+    }
+
+    private static string? CanonicalTenantId(string? tenant)
+    {
+        var value = tenant?.Trim();
+        if (string.IsNullOrEmpty(value))
+        {
+            return null;
+        }
+
+        if (!TenantPattern.IsMatch(value))
+        {
+            return null;
+        }
+
+        return value;
     }
 }

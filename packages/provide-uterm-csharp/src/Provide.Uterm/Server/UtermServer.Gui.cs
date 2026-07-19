@@ -16,42 +16,42 @@ public sealed partial class UtermServer
     {
         if (!SafeId.IsMatch(workerId)) return DetailError(422, "invalid worker_id");
         var p = await Authenticate(ctx).ConfigureAwait(false);
-        if (!AuthorizeHub(p, workerId, "session.control.mode", out var err)) return err!;
+        if (!_deps.Authz.HasCapability(p, "graphical.session.attach"))
+        {
+            return DetailError(403, "insufficient privileges");
+        }
+
+        if (!AuthorizeHub(p, workerId, "session.control.hijack", out var err)) return err!;
 
         var body = await ReadJson(ctx).ConfigureAwait(false);
-        // Explicit mode wins; empty mode falls back to target_address inference (Go-style attach body).
-        var mode = body.ContainsKey("mode") ? Str(body, "mode") : "memory";
-        if (string.IsNullOrEmpty(mode))
+        var targetId = Str(body, "target_id");
+        if (string.IsNullOrWhiteSpace(targetId))
         {
-            var target = Str(body, "target_address");
-            mode = string.IsNullOrEmpty(target) ||
-                   target.Equals("memory", StringComparison.OrdinalIgnoreCase)
-                ? "memory"
-                : "unsupported";
+            return DetailError(422, "target_id is required for gui attach");
         }
 
         IGraphicalSession session;
         try
         {
-            if (mode.Equals("memory", StringComparison.OrdinalIgnoreCase))
+            if (!GraphicalTargetScope.TryForTenant(p.TenantId ?? string.Empty, out var scope))
             {
-                var width = Int(body, "width", 640);
-                var height = Int(body, "height", 480);
-                session = new MemoryGraphicalSession(width, height);
+                return DetailError(403, "graphical target access denied");
             }
-            else if (mode.Equals("rfb", StringComparison.OrdinalIgnoreCase))
+
+            var target = _deps.GraphicalTargets.Get(scope, targetId);
+            if (target is null)
             {
-                var target = Str(body, "target_address");
-                if (string.IsNullOrEmpty(target))
-                {
-                    return DetailError(422, "rfb attach requires target_address host:port");
-                }
+                return DetailError(404, "target not found");
+            }
 
-                if (!TryParseHostPort(target, out var rfbHost, out var rfbPort))
-                {
-                    return DetailError(422, "invalid target_address; expected host:port");
-                }
-
+            var protocol = target.Protocol.Trim().ToLowerInvariant();
+            if (protocol == GraphicalTargetConstants.ProtocolMemory)
+            {
+                session = new MemoryGraphicalSession(Math.Max(1, target.Width), Math.Max(1, target.Height));
+            }
+            else if (protocol == GraphicalTargetConstants.ProtocolRfb)
+            {
+                var (rfbHost, rfbPort) = GraphicalTargetParsing.ParseRfbEndpoint(target.Endpoint);
                 var client = new Vnc.RfbClient();
                 try
                 {
@@ -66,7 +66,7 @@ public sealed partial class UtermServer
             }
             else
             {
-                return DetailError(501, "gui attach mode not supported: " + mode + " (use mode=memory|rfb)");
+                return DetailError(501, "graphical protocol not supported: " + protocol);
             }
 
             var st = _deps.Hub.Registry.Get(workerId)
@@ -81,28 +81,16 @@ public sealed partial class UtermServer
         {
             return DetailError(422, ex.Message);
         }
-
-        return Results.Json(new { ok = true }, JsonOpts);
-    }
-
-    private static bool TryParseHostPort(string target, out string host, out int port)
-    {
-        host = "";
-        port = 0;
-        // strip optional rfb://
-        if (target.StartsWith("rfb://", StringComparison.OrdinalIgnoreCase))
+        catch (GraphicalTargetException ex)
         {
-            target = target["rfb://".Length..];
+            return GraphicalRouteError(ex);
+        }
+        catch (Exception ex)
+        {
+            return DetailError(500, "attach failed: " + ex.Message);
         }
 
-        var idx = target.LastIndexOf(':');
-        if (idx <= 0 || idx == target.Length - 1)
-        {
-            return false;
-        }
-
-        host = target[..idx];
-        return int.TryParse(target[(idx + 1)..], out port) && port > 0 && port < 65536;
+        return Results.Json(new { ok = true, target_id = targetId }, JsonOpts);
     }
 
     private async Task<IResult> HandleGuiScreenshot(HttpContext ctx, string workerId, string hijackId)

@@ -32,6 +32,7 @@ public class ServerConfigTests
             [server]
             host = "0.0.0.0"
             port = 9999
+            allowed_origins = ["http://x"]
 
             [auth]
             mode = "jwt"
@@ -42,6 +43,9 @@ public class ServerConfigTests
             Assert.Equal("0.0.0.0", cfg.Server.Host);
             Assert.Equal(9999, cfg.Server.Port);
             Assert.Equal("jwt", cfg.Auth.Mode);
+            Assert.Equal("x-uterm-tenant", cfg.Auth.TenantHeader);
+            Assert.Equal("uterm_tenant", cfg.Auth.TenantCookie);
+            Assert.Equal("tenant_id", cfg.Auth.JWTTenantClaim);
         }
         finally
         {

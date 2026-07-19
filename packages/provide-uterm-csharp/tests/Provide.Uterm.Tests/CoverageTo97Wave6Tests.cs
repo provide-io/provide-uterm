@@ -146,12 +146,12 @@ public class CoverageTo97Wave6Tests : IDisposable
         var store = new ApiKeyStore();
         var now = 1000.0;
         store.SetClock(() => now);
-        var (raw, rec) = store.Create("k", expiresInS: 10);
+        var (raw, rec) = store.Create("k", expiresInS: 10, tenantId: "tenantA");
         Assert.NotNull(store.Validate(raw));
         now = 2000; // expired
         Assert.Null(store.Validate(raw));
         Assert.False(store.Revoke("missing"));
-        var (raw2, rec2) = store.Create("k2");
+        var (raw2, rec2) = store.Create("k2", tenantId: "tenantA");
         Assert.True(store.Revoke(rec2.KeyId));
         Assert.Null(store.Validate(raw2));
         // wrong key
