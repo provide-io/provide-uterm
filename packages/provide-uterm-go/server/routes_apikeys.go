@@ -83,6 +83,10 @@ func (s *Server) handleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
 			"invalid role scopes: "+strings.Join(invalid, ", ")+" (allowed: admin, operator, viewer)")
 		return
 	}
+	if _, ok := body["tenant_id"]; ok {
+		detailError(w, http.StatusUnprocessableEntity, "tenant_id is server-assigned and cannot be supplied")
+		return
+	}
 	var expiresIn *int
 	if raw, present := floatField(body, "expires_in_s"); present {
 		if raw < 60 {
@@ -92,28 +96,63 @@ func (s *Server) handleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		v := int(raw)
 		expiresIn = &v
 	}
-	rawKey, record := s.deps.APIKeys.Create(name, scopeSet, expiresIn)
-	s.audit(r, "api_key.create", map[string]any{"key_id": record.KeyID, "name": name})
+	// Tenant is derived from the authenticated principal, never client input: a
+	// tenant-scoped admin mints keys bound to their own tenant (isolated); a
+	// system admin (no tenant) mints tenant-less system keys.
+	tenant := principalTenant(r)
+	var rawKey string
+	var record *serverauth.ApiKey
+	if tenant != "" {
+		key, rec, err := s.deps.APIKeys.CreateForTenant(tenant, name, scopeSet, expiresIn)
+		if err != nil {
+			detailError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+		rawKey, record = key, rec
+	} else {
+		rawKey, record = s.deps.APIKeys.Create(name, scopeSet, expiresIn)
+	}
+	s.audit(r, "api_key.create", map[string]any{"key_id": record.KeyID, "name": name, "tenant_id": record.TenantID})
 	writeJSON(w, http.StatusOK, map[string]any{
 		"key":        rawKey,
 		"key_id":     record.KeyID,
 		"name":       record.Name,
+		"tenant_id":  record.TenantID,
 		"scopes":     record.Scopes.Sorted(),
 		"created_at": record.CreatedAt,
 		"expires_at": record.ExpiresAt,
 	})
 }
 
+// principalTenant returns the authenticated principal's tenant id, or "" for a
+// system (untenanted) principal.
+func principalTenant(r *http.Request) string {
+	p := principalOf(r)
+	if p != nil && p.TenantID != nil {
+		return *p.TenantID
+	}
+	return ""
+}
+
 func (s *Server) handleListAPIKeys(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAPIKeyAdmin(w, r) {
 		return
 	}
-	keys := s.deps.APIKeys.ListKeys()
+	// A tenant admin sees only their tenant's (non-revoked) keys; a system admin
+	// sees every key.
+	tenant := principalTenant(r)
+	var keys []*serverauth.ApiKey
+	if tenant != "" {
+		keys = s.deps.APIKeys.ListKeysForTenant(tenant)
+	} else {
+		keys = s.deps.APIKeys.ListKeys()
+	}
 	out := make([]map[string]any, 0, len(keys))
 	for _, k := range keys {
 		out = append(out, map[string]any{
 			"key_id":       k.KeyID,
 			"name":         k.Name,
+			"tenant_id":    k.TenantID,
 			"scopes":       k.Scopes.Sorted(),
 			"created_at":   k.CreatedAt,
 			"expires_at":   k.ExpiresAt,
@@ -129,7 +168,16 @@ func (s *Server) handleRevokeAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	keyID := r.PathValue("key_id")
-	if !s.deps.APIKeys.Revoke(keyID) {
+	// A tenant admin can revoke only keys owned by their tenant (a cross-tenant
+	// key reads back as unknown); a system admin can revoke any key.
+	tenant := principalTenant(r)
+	var revoked bool
+	if tenant != "" {
+		revoked = s.deps.APIKeys.RevokeForTenant(keyID, tenant)
+	} else {
+		revoked = s.deps.APIKeys.Revoke(keyID)
+	}
+	if !revoked {
 		detailError(w, http.StatusNotFound, "unknown key: "+keyID)
 		return
 	}
