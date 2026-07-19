@@ -257,6 +257,9 @@ func applyGraphicalTargets(cfg *UtermServerConfig, data map[string]any) error {
 			Height:        intOr(m, "height", 480),
 			IsStatic:      boolOr(m, "is_static", false),
 		}
+		if cfgTable, ok := m["config"].(map[string]any); ok {
+			gt.Config = cfgTable
+		}
 		out = append(out, gt)
 	}
 	cfg.GraphicalTargets = out

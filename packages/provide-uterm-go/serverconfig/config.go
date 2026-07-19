@@ -303,6 +303,10 @@ type GraphicalTargetConfig struct {
 	Width         int     `json:"width" toml:"width"`
 	Height        int     `json:"height" toml:"height"`
 	IsStatic      bool    `json:"is_static" toml:"is_static"`
+
+	// Config carries protocol-specific parameters (TOML [graphical_targets.config]),
+	// e.g. the litevirt vm_name. Seeded verbatim into the target's Config map.
+	Config map[string]any `json:"config" toml:"config"`
 }
 
 // UtermServerConfig ports config_schema.UtermServerConfig, the top-level model.

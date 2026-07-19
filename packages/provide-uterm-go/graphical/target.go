@@ -25,8 +25,9 @@ import (
 
 // Protocol constants (GraphicalTargetConstants.Protocol*).
 const (
-	ProtocolMemory = "memory"
-	ProtocolRfb    = "rfb"
+	ProtocolMemory   = "memory"
+	ProtocolRfb      = "rfb"
+	ProtocolLitevirt = "litevirt"
 )
 
 // Error code strings surfaced in the REST {"detail":{"code":...}} envelope
@@ -44,7 +45,7 @@ const (
 )
 
 // supportedProtocols mirrors GraphicalTargetConstants.SupportedProtocols.
-var supportedProtocols = map[string]struct{}{ProtocolMemory: {}, ProtocolRfb: {}}
+var supportedProtocols = map[string]struct{}{ProtocolMemory: {}, ProtocolRfb: {}, ProtocolLitevirt: {}}
 
 // namePattern ports GraphicalTargetModels.GraphicalNamePattern (also the tenant
 // name pattern). secretRefPattern ports GraphicalTargetModels.SecretRefPattern.
@@ -59,7 +60,7 @@ var PayloadKeys = map[string]struct{}{
 	"tenant_id": {}, "target_id": {}, "display_name": {}, "protocol": {},
 	"endpoint": {}, "secret": {}, "width": {}, "height": {},
 	"ca_secret_ref": {}, "client_cert_secret_ref": {}, "client_key_secret_ref": {},
-	"is_system": {}, "is_static": {},
+	"is_system": {}, "is_static": {}, "config": {},
 }
 
 // ErrorCode ports GraphicalTargetErrorCode.
@@ -90,29 +91,34 @@ func newError(code ErrorCode, msg string) *Error { return &Error{Code: code, Mes
 // Definition ports GraphicalTargetDefinition. Nullable fields are pointers so
 // their JSON is omitted when unset (System.Text.Json WhenWritingNull parity).
 type Definition struct {
-	TargetID            string     `json:"target_id"`
-	TenantID            string     `json:"tenant_id"`
-	DisplayName         string     `json:"display_name"`
-	Protocol            string     `json:"protocol"`
-	Endpoint            *string    `json:"endpoint,omitempty"`
-	Secret              *string    `json:"secret,omitempty"`
-	Width               int        `json:"width"`
-	Height              int        `json:"height"`
-	IsSystem            bool       `json:"is_system"`
-	IsStatic            bool       `json:"is_static"`
-	CaSecretRef         *string    `json:"ca_secret_ref,omitempty"`
-	ClientCertSecretRef *string    `json:"client_cert_secret_ref,omitempty"`
-	ClientKeySecretRef  *string    `json:"client_key_secret_ref,omitempty"`
-	CreatedBy           *string    `json:"created_by,omitempty"`
-	CreatedAt           time.Time  `json:"created_at"`
-	UpdatedBy           *string    `json:"updated_by,omitempty"`
-	UpdatedAt           *time.Time `json:"updated_at,omitempty"`
+	TargetID            string  `json:"target_id"`
+	TenantID            string  `json:"tenant_id"`
+	DisplayName         string  `json:"display_name"`
+	Protocol            string  `json:"protocol"`
+	Endpoint            *string `json:"endpoint,omitempty"`
+	Secret              *string `json:"secret,omitempty"`
+	Width               int     `json:"width"`
+	Height              int     `json:"height"`
+	IsSystem            bool    `json:"is_system"`
+	IsStatic            bool    `json:"is_static"`
+	CaSecretRef         *string `json:"ca_secret_ref,omitempty"`
+	ClientCertSecretRef *string `json:"client_cert_secret_ref,omitempty"`
+	ClientKeySecretRef  *string `json:"client_key_secret_ref,omitempty"`
+	// Config carries generic per-target, protocol-specific parameters (JSON key
+	// "config") — e.g. the litevirt vm_name. It is NOT a secret, so it survives
+	// both Clone and PublicCopy. Empty is omitted from the wire (Go's nullable
+	// convention) where C# emits {}; a documented cosmetic deviation.
+	Config    map[string]any `json:"config,omitempty"`
+	CreatedBy *string        `json:"created_by,omitempty"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedBy *string        `json:"updated_by,omitempty"`
+	UpdatedAt *time.Time     `json:"updated_at,omitempty"`
 }
 
 // NewDefinition returns a definition with the same defaults as the C# model
 // (rfb protocol, 640x480).
 func NewDefinition() *Definition {
-	return &Definition{Protocol: ProtocolRfb, Width: 640, Height: 480}
+	return &Definition{Protocol: ProtocolRfb, Width: 640, Height: 480, Config: map[string]any{}}
 }
 
 // Clone ports GraphicalTargetDefinition.Clone — a deep copy. Pointer fields are
@@ -125,11 +131,23 @@ func (d *Definition) Clone() *Definition {
 	c.ClientCertSecretRef = clonePtr(d.ClientCertSecretRef)
 	c.ClientKeySecretRef = clonePtr(d.ClientKeySecretRef)
 	c.CreatedBy = clonePtr(d.CreatedBy)
+	c.Config = cloneConfig(d.Config)
 	if d.UpdatedAt != nil {
 		t := *d.UpdatedAt
 		c.UpdatedAt = &t
 	}
 	return &c
+}
+
+// cloneConfig copies the protocol-specific config map so a stored value never
+// aliases a caller's copy (mirrors C# new Dictionary<>(Config)). A nil source
+// yields an empty (non-nil) map.
+func cloneConfig(src map[string]any) map[string]any {
+	out := make(map[string]any, len(src))
+	for k, v := range src {
+		out[k] = v
+	}
+	return out
 }
 
 // PublicCopy ports GraphicalTargetDefinition.PublicCopy — a clone with every
@@ -156,8 +174,17 @@ func (d *Definition) Validate() error {
 	}
 	d.Protocol = protocol
 
-	if protocol == ProtocolRfb {
+	switch protocol {
+	case ProtocolRfb:
 		host, port, err := ParseRfbEndpoint(d.Endpoint)
+		if err != nil {
+			return err
+		}
+		ep := fmt.Sprintf("%s:%d", host, port)
+		d.Endpoint = &ep
+	case ProtocolLitevirt:
+		// A litevirt endpoint is a plain host:port gRPC target (no rfb:// scheme).
+		host, port, err := ParseLitevirtEndpoint(d.Endpoint)
 		if err != nil {
 			return err
 		}
@@ -210,6 +237,41 @@ func ParseRfbEndpoint(rawEndpoint *string) (string, int, error) {
 	u, err := url.Parse(endpoint)
 	if err != nil || u.Hostname() == "" {
 		return "", 0, newError(CodeInvalid, "invalid endpoint; expected host:port or rfb://host:port")
+	}
+
+	portStr := u.Port()
+	if portStr == "" {
+		return "", 0, newError(CodeInvalid, "invalid endpoint port")
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil || port < 1 || port > 65535 {
+		return "", 0, newError(CodeInvalid, "invalid endpoint port")
+	}
+	return u.Hostname(), port, nil
+}
+
+// ParseLitevirtEndpoint ports GraphicalTargetParsing.ParseLitevirtEndpoint.
+// Unlike rfb, a litevirt gRPC endpoint carries no wire scheme — it is a plain
+// host:port target (optionally prefixed with dns:///). Require it non-empty and
+// shaped like host:port with a valid 1..65535 port; the scheme wrapper is used
+// only to lean on net/url's host:port parsing and is discarded.
+func ParseLitevirtEndpoint(rawEndpoint *string) (string, int, error) {
+	raw := ""
+	if rawEndpoint != nil {
+		raw = *rawEndpoint
+	}
+	if strings.TrimSpace(raw) == "" {
+		return "", 0, newError(CodeInvalid, "endpoint is required for protocol litevirt")
+	}
+
+	endpoint := strings.TrimSpace(raw)
+	if strings.HasPrefix(strings.ToLower(endpoint), "dns:///") {
+		endpoint = endpoint[len("dns:///"):]
+	}
+
+	u, err := url.Parse("grpc://" + endpoint)
+	if err != nil || u.Hostname() == "" {
+		return "", 0, newError(CodeInvalid, "invalid endpoint; expected host:port")
 	}
 
 	portStr := u.Port()

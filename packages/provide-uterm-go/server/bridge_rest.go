@@ -12,7 +12,9 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/graphical"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/gui"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/vnc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -262,44 +264,118 @@ func (s *Server) handleHijackEvents(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleGUIAttach is the canonical registry-backed, tenant-isolated graphical
+// attach. Port of C# UtermServer.Gui.cs HandleGuiAttach. The legacy path that
+// dialed a litevirt gRPC target straight from the request body (no registry, no
+// tenant isolation) is retired: attach now gates on the graphical.session.attach
+// capability + session.control.hijack, reads only {target_id}, resolves the
+// target through the tenant-scoped registry, and dispatches on its protocol.
 func (s *Server) handleGUIAttach(w http.ResponseWriter, r *http.Request) {
 	workerID, _, ok := bridgeParams(w, r, false)
 	if !ok {
 		return
 	}
-	if !s.authorizeHubRoute(w, r, workerID, hubMode) {
+	// Gate 1: the graphical.session.attach capability (RBAC), independent of the
+	// per-session hijack grant below.
+	p := principalOf(r)
+	if !s.deps.Authz.HasCapability(p, "graphical.session.attach") {
+		detailError(w, http.StatusForbidden, "insufficient privileges")
 		return
 	}
-	body, _ := decodeJSONBody(r)
-	target := stringField(body, "target_address")
-	vmName := stringField(body, "vm_name")
+	// Gate 2: session.control.hijack on this worker's session.
+	if !s.authorizeHubRoute(w, r, workerID, hubHijack) {
+		return
+	}
 
-	cc, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	body, _ := decodeJSONBody(r)
+	targetID := strings.TrimSpace(stringField(body, "target_id"))
+	if targetID == "" {
+		detailError(w, http.StatusUnprocessableEntity, "target_id is required for gui attach")
+		return
+	}
+
+	// Tenant scope is derived from the authenticated principal, never client input.
+	tenant := ""
+	if p != nil && p.TenantID != nil {
+		tenant = *p.TenantID
+	}
+	scope, scopeOK := graphical.ScopeForTenant(tenant)
+	if !scopeOK {
+		detailError(w, http.StatusForbidden, "graphical target access denied")
+		return
+	}
+
+	target, err := s.deps.GraphicalTargets.Get(scope, targetID)
+	if err != nil {
+		graphicalRouteError(w, err)
+		return
+	}
+	if target == nil {
+		detailError(w, http.StatusNotFound, "target not found")
+		return
+	}
+
+	session, ready := s.buildGraphicalSession(w, r, target)
+	if !ready {
+		return
+	}
+
+	st := s.deps.Hub.Registry.SetDefault(workerID, hub.NewWorkerTermState())
+	st.GraphicalSession = session
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "target_id": targetID})
+}
+
+// buildGraphicalSession dispatches on the target protocol, returning the live
+// session or writing the error response and returning ready=false. memory and
+// litevirt are wired; rfb is 501 (this Go port ships no RFB GraphicalSession
+// client — a documented gap mirroring C#'s 501 for litevirt).
+func (s *Server) buildGraphicalSession(
+	w http.ResponseWriter, r *http.Request, target *graphical.Definition,
+) (gui.GraphicalSession, bool) {
+	protocol := strings.ToLower(strings.TrimSpace(target.Protocol))
+	switch protocol {
+	case graphical.ProtocolMemory:
+		return gui.NewMemoryGraphicalSession(target.Width, target.Height), true
+	case graphical.ProtocolLitevirt:
+		return s.buildLitevirtSession(w, r, target)
+	default:
+		// rfb + anything else: unsupported in this port.
+		detailError(w, http.StatusNotImplemented, "graphical protocol not supported: "+protocol)
+		return nil, false
+	}
+}
+
+// buildLitevirtSession dials the target's gRPC endpoint and starts the headless
+// AI VNC client, now driven entirely from the registry-backed target (endpoint +
+// config.vm_name) rather than from client-supplied request fields.
+func (s *Server) buildLitevirtSession(
+	w http.ResponseWriter, r *http.Request, target *graphical.Definition,
+) (gui.GraphicalSession, bool) {
+	endpoint := ""
+	if target.Endpoint != nil {
+		endpoint = *target.Endpoint
+	}
+	vmName := ""
+	if v, ok := target.Config["vm_name"].(string); ok {
+		vmName = v
+	}
+
+	cc, err := grpc.NewClient(endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		detailError(w, http.StatusInternalServerError, err.Error())
-		return
+		return nil, false
 	}
-
 	client, err := vnc.NewLitevirtAIClient(r.Context(), cc, vmName)
 	if err != nil {
 		detailError(w, http.StatusInternalServerError, err.Error())
-		return
+		return nil, false
 	}
-
-	st, err := s.deps.Hub.Registry.Require(workerID)
-	if err != nil {
-		detailError(w, http.StatusNotFound, "worker not found")
-		return
-	}
-	st.GraphicalSession = client
-
 	go func() {
 		if err := client.RunHandshakeAndLoop(); err != nil {
 			s.logger.Warn("gui loop exited", "error", err)
 		}
 	}()
-
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	return client, true
 }
 
 func (s *Server) handleHijackGUIScreenshot(w http.ResponseWriter, r *http.Request) {
