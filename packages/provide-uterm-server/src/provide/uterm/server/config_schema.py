@@ -457,6 +457,9 @@ class GraphicalTargetConfig(ServerBaseModel):
     width: int = 640
     height: int = 480
     is_static: bool = False
+    # Generic protocol-specific parameters (``[graphical_targets.config]``),
+    # e.g. the litevirt ``vm_name``. Folded into the seeded definition's config.
+    config: dict[str, object] = Field(default_factory=dict)
 
 
 class UtermServerConfig(ServerBaseModel):
