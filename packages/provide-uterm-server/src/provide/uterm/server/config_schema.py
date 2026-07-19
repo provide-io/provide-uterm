@@ -436,6 +436,29 @@ class GovernanceConfig(ServerBaseModel):
         return self
 
 
+class GraphicalTargetConfig(ServerBaseModel):
+    """Config-file shape of a seeded graphical target (``[[graphical_targets]]``).
+
+    Mirrors the C# ``ServerConfig.GraphicalTargetDefinition`` / Go
+    ``GraphicalTargetConfig``. Seeded targets are always registered as immutable
+    system/static entries at boot (``is_static`` here is informational). Note:
+    ``min_role`` was intentionally dropped in the canonical — access is
+    capability + tenant scope only.
+    """
+
+    target_id: str = ""
+    tenant_id: str = ""
+    protocol: str = "rfb"
+    target_address: str = ""
+    vm_name: str | None = None
+    name: str = ""
+    description: str | None = None
+    enabled: bool = True
+    width: int = 640
+    height: int = 480
+    is_static: bool = False
+
+
 class UtermServerConfig(ServerBaseModel):
     """Top-level application config for the standalone server."""
 
@@ -467,6 +490,8 @@ class UtermServerConfig(ServerBaseModel):
             )
         ]
     )
+    # Graphical targets seeded as immutable system/static entries at boot.
+    graphical_targets: list[GraphicalTargetConfig] = Field(default_factory=list)
     session_idle_timeout_s: int = 0
     session_retention_s: int = 0
     browser_rate_limit_per_sec: float = 300

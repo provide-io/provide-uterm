@@ -28,7 +28,7 @@ from provide.uterm.server.bridge.identity import Principal
 from provide.uterm.server.dev_idp import setup_dev_idp
 from provide.uterm.server.models import AuthConfig
 
-_TEST_KEY = "uterm-test-secret-32-byte-minimum-key"
+_TEST_KEY = "uterm-test-secret-32-byte-minimum-key"  # pragma: allowlist secret
 
 
 def _jwt_auth_config(key: str = _TEST_KEY) -> AuthConfig:
@@ -38,7 +38,7 @@ def _jwt_auth_config(key: str = _TEST_KEY) -> AuthConfig:
         jwt_algorithms=["HS256"],
         jwt_issuer="provide-uterm",
         jwt_audience="provide-uterm-server",
-        worker_bearer_token="worker-secret-token-32-chars-long-x",
+        worker_bearer_token="worker-secret-token-32-chars-long-x",  # pragma: allowlist secret
     )
 
 
@@ -192,7 +192,9 @@ class TestApiKeyTenantResolution:
 class TestHeaderTenantResolution:
     @staticmethod
     def _auth() -> AuthConfig:
-        return AuthConfig(mode="header", worker_bearer_token="worker-secret-token-32-chars-long-x")
+        return AuthConfig(
+            mode="header", worker_bearer_token="worker-secret-token-32-chars-long-x"
+        )  # pragma: allowlist secret
 
     def test_valid_tenant_header(self) -> None:
         p = _principal_from_header_auth(
