@@ -106,6 +106,61 @@ func TestAPIKeys(t *testing.T) {
 	}
 }
 
+// adminTenantHeaders is an admin principal scoped to a single tenant.
+func adminTenantHeaders(tenant string) map[string]string {
+	return map[string]string{"X-Subject": "admin1", "X-Role": "admin", "X-Tenant": tenant}
+}
+
+func TestAPIKeysTenantScoped(t *testing.T) {
+	ts := newTestServer(t, nil)
+	acme := adminTenantHeaders("acme")
+	beta := adminTenantHeaders("beta")
+
+	// A tenant admin mints a key bound to their own tenant.
+	rec := ts.do("POST", "/api/keys", `{"name":"acme-k","scopes":["viewer"]}`, acme)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("tenant create: %d %s", rec.Code, rec.Body.String())
+	}
+	created := decode(t, rec.Body.Bytes())
+	if created["tenant_id"] != "acme" {
+		t.Fatalf("expected tenant_id acme, got %v", created["tenant_id"])
+	}
+	acmeKeyID, _ := created["key_id"].(string)
+
+	// A client-supplied tenant_id in the body is rejected.
+	if rec := ts.do("POST", "/api/keys", `{"name":"x","scopes":["viewer"],"tenant_id":"acme"}`, acme); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422 for client tenant_id, got %d", rec.Code)
+	}
+
+	// A different tenant's key.
+	if rec := ts.do("POST", "/api/keys", `{"name":"beta-k","scopes":["viewer"]}`, beta); rec.Code != http.StatusOK {
+		t.Fatalf("beta create: %d", rec.Code)
+	}
+
+	// A tenant admin lists only their own tenant's keys.
+	acmeList := decodeArray(t, ts.do("GET", "/api/keys", "", acme).Body.Bytes())
+	if len(acmeList) != 1 {
+		t.Fatalf("acme list = %v", acmeList)
+	}
+	if row, _ := acmeList[0].(map[string]any); row["name"] != "acme-k" || row["tenant_id"] != "acme" {
+		t.Fatalf("acme list row = %v", acmeList[0])
+	}
+
+	// A cross-tenant revoke reads back as unknown (404); the owner can revoke.
+	if rec := ts.do("DELETE", "/api/keys/"+acmeKeyID, "", beta); rec.Code != http.StatusNotFound {
+		t.Fatalf("cross-tenant revoke = %d", rec.Code)
+	}
+	if rec := ts.do("DELETE", "/api/keys/"+acmeKeyID, "", acme); rec.Code != http.StatusOK {
+		t.Fatalf("owner revoke = %d", rec.Code)
+	}
+
+	// A system admin (no tenant) sees every tenant's keys.
+	sysList := decodeArray(t, ts.do("GET", "/api/keys", "", adminHeaders()).Body.Bytes())
+	if len(sysList) != 2 {
+		t.Fatalf("system admin list = %d keys, want 2", len(sysList))
+	}
+}
+
 func TestProfiles(t *testing.T) {
 	dir := t.TempDir()
 	store := serverconfig.NewFileProfileStore(dir)
