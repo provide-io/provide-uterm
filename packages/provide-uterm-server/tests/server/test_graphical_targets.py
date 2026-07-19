@@ -16,11 +16,13 @@ from datetime import UTC, datetime
 import pytest
 
 from provide.uterm.server.graphical_targets import (
+    PROTOCOL_LITEVIRT,
     PROTOCOL_MEMORY,
     PROTOCOL_RFB,
     GraphicalTargetDefinition,
     GraphicalTargetError,
     GraphicalTargetErrorCode,
+    parse_litevirt_endpoint,
     parse_rfb_endpoint,
     scope_for_tenant,
     system_scope,
@@ -92,6 +94,49 @@ class TestParseRfbEndpoint:
 
 
 # ---------------------------------------------------------------------------
+# parse_litevirt_endpoint (plain host:port, no rfb:// scheme)
+# ---------------------------------------------------------------------------
+
+
+class TestParseLitevirtEndpoint:
+    def test_none_is_required(self) -> None:
+        with pytest.raises(GraphicalTargetError) as exc:
+            parse_litevirt_endpoint(None)
+        assert exc.value.code is GraphicalTargetErrorCode.INVALID
+        assert "required" in exc.value.message
+
+    def test_blank_is_required(self) -> None:
+        with pytest.raises(GraphicalTargetError):
+            parse_litevirt_endpoint("   ")
+
+    def test_host_port(self) -> None:
+        assert parse_litevirt_endpoint("vm.local:9000") == ("vm.local", 9000)
+
+    def test_dns_prefix_stripped(self) -> None:
+        assert parse_litevirt_endpoint("dns:///vm.local:9001") == ("vm.local", 9001)
+
+    def test_empty_host_rejected(self) -> None:
+        with pytest.raises(GraphicalTargetError) as exc:
+            parse_litevirt_endpoint(":9000")
+        assert "expected host:port" in exc.value.message
+
+    def test_missing_port_rejected(self) -> None:
+        with pytest.raises(GraphicalTargetError) as exc:
+            parse_litevirt_endpoint("hostonly")
+        assert exc.value.message == "invalid endpoint port"
+
+    def test_port_out_of_range_high(self) -> None:
+        with pytest.raises(GraphicalTargetError) as exc:
+            parse_litevirt_endpoint("host:99999")
+        assert exc.value.message == "invalid endpoint port"
+
+    def test_port_zero_rejected(self) -> None:
+        with pytest.raises(GraphicalTargetError) as exc:
+            parse_litevirt_endpoint("host:0")
+        assert exc.value.message == "invalid endpoint port"
+
+
+# ---------------------------------------------------------------------------
 # GraphicalTargetDefinition.validate
 # ---------------------------------------------------------------------------
 
@@ -108,6 +153,12 @@ class TestValidate:
         d.validate()
         assert d.protocol == "rfb"
         assert d.endpoint == "vm.local:5900"
+
+    def test_litevirt_normalizes_endpoint(self) -> None:
+        d = _def(protocol="LITEVIRT", endpoint="vm.local:9000")
+        d.validate()
+        assert d.protocol == "litevirt"
+        assert d.endpoint == "vm.local:9000"
 
     def test_bad_target_id(self) -> None:
         d = _def(target_id="bad id!")
@@ -190,6 +241,24 @@ class TestSerialization:
         c.display_name = "changed"
         assert d.display_name != "changed"
 
+    def test_clone_config_is_independent(self) -> None:
+        d = _def(config={"vm_name": "web01"})
+        c = d.clone()
+        c.config["vm_name"] = "db01"
+        assert d.config["vm_name"] == "web01"
+
+    def test_public_copy_retains_config(self) -> None:
+        # config is NOT a secret — it survives the REST boundary.
+        d = _def(config={"vm_name": "web01"})
+        assert d.public_copy().config == {"vm_name": "web01"}
+
+    def test_wire_dict_omits_empty_config(self) -> None:
+        assert "config" not in _def(protocol="memory").to_wire_dict()
+
+    def test_wire_dict_includes_config(self) -> None:
+        d = _def(protocol="litevirt", endpoint="vm:9000", config={"vm_name": "web01"})
+        assert d.to_wire_dict()["config"] == {"vm_name": "web01"}
+
     def test_wire_dict_omits_none_optionals(self) -> None:
         d = _def(protocol="memory", endpoint=None)
         wire = d.to_wire_dict()
@@ -268,3 +337,4 @@ class TestScope:
 def test_protocol_constants() -> None:
     assert PROTOCOL_MEMORY == "memory"
     assert PROTOCOL_RFB == "rfb"
+    assert PROTOCOL_LITEVIRT == "litevirt"

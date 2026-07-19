@@ -36,12 +36,14 @@ from provide.uterm.server.graphical_targets import (
     ERR_TENANT_MANAGED,
     ERR_UNAVAILABLE,
     PAYLOAD_KEYS,
+    PROTOCOL_LITEVIRT,
     PROTOCOL_RFB,
     SUPPORTED_PROTOCOLS,
     GraphicalTargetDefinition,
     GraphicalTargetError,
     GraphicalTargetErrorCode,
     InMemoryGraphicalTargetRegistry,
+    parse_litevirt_endpoint,
     parse_rfb_endpoint,
     scope_for_tenant,
 )
@@ -162,6 +164,9 @@ def _parse_body(body: dict[str, Any]) -> tuple[GraphicalTargetDefinition, bool, 
     target.client_key_secret_ref = _get_string(body, "client_key_secret_ref", None)
     target.width = _get_int(body, "width", 640)
     target.height = _get_int(body, "height", 480)
+    raw_config = body.get("config")
+    if isinstance(raw_config, dict):
+        target.config = dict(raw_config)
     target.tenant_id = ""
 
     has_tenant = "tenant_id" in body
@@ -319,10 +324,10 @@ def _config_to_definition(target: GraphicalTargetConfig) -> GraphicalTargetDefin
         )
 
     endpoint = target.target_address.strip()
-    if protocol == PROTOCOL_RFB and not endpoint:
+    if protocol in (PROTOCOL_RFB, PROTOCOL_LITEVIRT) and not endpoint:
         raise GraphicalTargetError(
             GraphicalTargetErrorCode.INVALID,
-            f"graphical target requires target_address for rfb protocol: {target.target_id}",
+            f"graphical target requires target_address for {protocol} protocol: {target.target_id}",
         )
 
     target_id = target.target_id.strip() or _generate_target_id()
@@ -331,6 +336,15 @@ def _config_to_definition(target: GraphicalTargetConfig) -> GraphicalTargetDefin
     if protocol == PROTOCOL_RFB:
         host, port = parse_rfb_endpoint(endpoint)
         endpoint_value = f"{host}:{port}"
+    elif protocol == PROTOCOL_LITEVIRT:
+        host, port = parse_litevirt_endpoint(endpoint)
+        endpoint_value = f"{host}:{port}"
+
+    # Fold the top-level vm_name convenience field into config["vm_name"]
+    # (mirrors Go's seedConfig); an explicit config table still wins.
+    config = dict(target.config)
+    if target.vm_name and "vm_name" not in config:
+        config["vm_name"] = target.vm_name
 
     display = target.name if target.name.strip() else target_id
 
@@ -344,6 +358,7 @@ def _config_to_definition(target: GraphicalTargetConfig) -> GraphicalTargetDefin
         height=_clamp_dimension(target.height, 480),
         is_system=True,
         is_static=True,
+        config=config,
     )
 
 

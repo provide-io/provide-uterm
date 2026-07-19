@@ -17,6 +17,7 @@ from provide.uterm.server.graphical_routes import (
     _get_int,
     _get_string,
     _map_route_error,
+    _parse_body,
     _principal,
     seed_graphical_targets,
 )
@@ -102,6 +103,29 @@ class TestSeed:
         d = _config_to_definition(GraphicalTargetConfig(target_id="gt-x", protocol="", target_address="vm:1"))
         assert d.protocol == "rfb"
 
+    def test_config_to_definition_litevirt_folds_vm_name(self) -> None:
+        target = GraphicalTargetConfig(
+            target_id="gt-lv", tenant_id="acme", protocol="litevirt", target_address="vm:9000", vm_name="web01"
+        )
+        d = _config_to_definition(target)
+        assert d.protocol == "litevirt"
+        assert d.endpoint == "vm:9000"
+        assert d.config == {"vm_name": "web01"}
+
+    def test_config_to_definition_litevirt_explicit_config_wins(self) -> None:
+        target = GraphicalTargetConfig(
+            target_id="gt-lv",
+            protocol="litevirt",
+            target_address="vm:9000",
+            vm_name="ignored",
+            config={"vm_name": "explicit"},
+        )
+        assert _config_to_definition(target).config == {"vm_name": "explicit"}
+
+    def test_config_to_definition_litevirt_requires_address(self) -> None:
+        with pytest.raises(GraphicalTargetError, match="requires target_address"):
+            _config_to_definition(GraphicalTargetConfig(target_id="gt-x", protocol="litevirt", target_address=""))
+
     def test_seed_invalid_target_fails(self) -> None:
         cfg = default_server_config()
         cfg.graphical_targets = [
@@ -148,6 +172,20 @@ class TestBodyHelpers:
     def test_get_int_float_rejected(self) -> None:
         with pytest.raises(GraphicalTargetError, match="k must be an integer"):
             _get_int({"k": 1.5}, "k", 42)
+
+
+class TestParseBodyConfig:
+    def test_config_dict_read(self) -> None:
+        target, _, _ = _parse_body({"target_id": "gt-1", "config": {"vm_name": "web01"}})
+        assert target.config == {"vm_name": "web01"}
+
+    def test_config_non_dict_ignored(self) -> None:
+        target, _, _ = _parse_body({"target_id": "gt-1", "config": "nope"})
+        assert target.config == {}
+
+    def test_config_absent_defaults_empty(self) -> None:
+        target, _, _ = _parse_body({"target_id": "gt-1"})
+        assert target.config == {}
 
 
 def test_principal_missing_raises_500() -> None:

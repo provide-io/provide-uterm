@@ -35,7 +35,8 @@ if TYPE_CHECKING:
 
 PROTOCOL_MEMORY = "memory"
 PROTOCOL_RFB = "rfb"
-SUPPORTED_PROTOCOLS = frozenset({PROTOCOL_MEMORY, PROTOCOL_RFB})
+PROTOCOL_LITEVIRT = "litevirt"
+SUPPORTED_PROTOCOLS = frozenset({PROTOCOL_MEMORY, PROTOCOL_RFB, PROTOCOL_LITEVIRT})
 
 # Error code strings surfaced in the REST ``{"detail":{"code":...}}`` envelope.
 ERR_INVALID_PAYLOAD = "graphical_target_invalid"
@@ -69,6 +70,7 @@ PAYLOAD_KEYS = frozenset(
         "client_key_secret_ref",
         "is_system",
         "is_static",
+        "config",
     }
 )
 
@@ -123,10 +125,13 @@ class GraphicalTargetDefinition:
     created_at: datetime = field(default_factory=_utcnow)
     updated_by: str | None = None
     updated_at: datetime | None = None
+    # Generic per-target, protocol-specific parameters (e.g. the litevirt
+    # ``vm_name``). NOT a secret, so it survives ``public_copy``.
+    config: dict[str, object] = field(default_factory=dict)
 
     def clone(self) -> GraphicalTargetDefinition:
-        """Return a deep copy (dataclass fields are immutable scalars)."""
-        return replace(self)
+        """Return a deep copy; the ``config`` map is copied so it never aliases."""
+        return replace(self, config=dict(self.config))
 
     def public_copy(self) -> GraphicalTargetDefinition:
         """Return a clone with every secret stripped for the REST boundary."""
@@ -166,6 +171,8 @@ class GraphicalTargetDefinition:
             data["updated_by"] = self.updated_by
         if self.updated_at is not None:
             data["updated_at"] = self.updated_at.isoformat()
+        if self.config:
+            data["config"] = dict(self.config)
         return data
 
     def validate(self) -> None:
@@ -180,6 +187,9 @@ class GraphicalTargetDefinition:
 
         if protocol == PROTOCOL_RFB:
             host, port = parse_rfb_endpoint(self.endpoint)
+            self.endpoint = f"{host}:{port}"
+        elif protocol == PROTOCOL_LITEVIRT:
+            host, port = parse_litevirt_endpoint(self.endpoint)
             self.endpoint = f"{host}:{port}"
 
         if self.width < 1 or self.width > 8192:
@@ -221,6 +231,36 @@ def parse_rfb_endpoint(raw_endpoint: str | None) -> tuple[str, int]:
         raise GraphicalTargetError(
             GraphicalTargetErrorCode.INVALID, "invalid endpoint; expected host:port or rfb://host:port"
         )
+
+    try:
+        port = parsed.port
+    except ValueError:
+        raise GraphicalTargetError(GraphicalTargetErrorCode.INVALID, "invalid endpoint port") from None
+    if port is None or port < 1 or port > 65535:
+        raise GraphicalTargetError(GraphicalTargetErrorCode.INVALID, "invalid endpoint port")
+
+    return parsed.hostname, port
+
+
+def parse_litevirt_endpoint(raw_endpoint: str | None) -> tuple[str, int]:
+    """Parse a litevirt gRPC endpoint (a plain ``host:port``, no wire scheme).
+
+    Unlike rfb, a litevirt endpoint carries no ``rfb://`` scheme; a ``dns:///``
+    prefix is still stripped. Ports the C# ``GraphicalTargetParsing.
+    ParseLitevirtEndpoint`` / Go ``ParseLitevirtEndpoint`` rules.
+    """
+    raw = raw_endpoint or ""
+    if not raw.strip():
+        raise GraphicalTargetError(GraphicalTargetErrorCode.INVALID, "endpoint is required for protocol litevirt")
+
+    endpoint = raw.strip()
+    if endpoint.lower().startswith("dns:///"):
+        endpoint = endpoint[len("dns:///") :]
+
+    # Wrap in a throwaway scheme purely to lean on urlparse's host:port parsing.
+    parsed = urlparse("grpc://" + endpoint)
+    if not parsed.hostname:
+        raise GraphicalTargetError(GraphicalTargetErrorCode.INVALID, "invalid endpoint; expected host:port")
 
     try:
         port = parsed.port
