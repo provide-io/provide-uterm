@@ -16,6 +16,7 @@ from provide.uterm.server.bridge.rest_helpers import MAX_EXPECT_REGEX_LEN
 
 if TYPE_CHECKING:
     from provide.uterm.bridge.contracts import InputMode
+    from provide.uterm.server.gui_session import GraphicalSession
 
 
 def _safe_int(val: Any, default: int, *, min_val: int | None = None) -> int:
@@ -161,6 +162,12 @@ class WorkerTermState:
     # non-input messages are dropped because the existing ``uterm share``
     # bridge loop writes PTY data directly. See ``hub.send_worker``.
     is_tunnel_worker: bool = False
+    # Attached graphical console session (set by ``POST /worker/{id}/gui/attach``).
+    # ``None`` until a graphical target is attached; thereafter the live
+    # :class:`~provide.uterm.server.gui_session.GraphicalSession` used by the
+    # ``/gui/`` screenshot + input routes. Mirrors the C# canonical's
+    # ``WorkerTermState.GraphicalSession``.
+    graphical_session: GraphicalSession | None = None
 
     @property
     def lease(self) -> HijackLease:

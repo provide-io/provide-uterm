@@ -25,13 +25,16 @@ if TYPE_CHECKING:
     from provide.uterm.server.registry import SessionRegistry
 
 # Regexes matching the hub-router REST paths that require capability checks.
+# GUI routes are gated exactly like their terminal siblings: ``gui/attach`` and
+# the pointer/key input routes (``gui/click|type|key|drag``) mutate the session
+# (``session.control.hijack``); ``gui/screenshot`` only reads it (``session.read``).
 HUB_WRITE_PATH = re.compile(
     r"^/worker/(?P<session_id>[\w\-]+)/"
-    r"(?:hijack/(?:acquire|[\w\-]+/(?:send|step|heartbeat|release)))$"
+    r"(?:hijack/(?:acquire|[\w\-]+/(?:send|step|heartbeat|release|gui/(?:click|type|key|drag)))|gui/attach)$"
 )
 HUB_MODE_PATH = re.compile(r"^/worker/(?P<session_id>[\w\-]+)/input_mode$")
 HUB_ADMIN_PATH = re.compile(r"^/worker/(?P<session_id>[\w\-]+)/disconnect_worker$")
-HUB_READ_PATH = re.compile(r"^/worker/(?P<session_id>[\w\-]+)/hijack/[\w\-]+/(?:snapshot|events)$")
+HUB_READ_PATH = re.compile(r"^/worker/(?P<session_id>[\w\-]+)/hijack/[\w\-]+/(?:snapshot|events|gui/screenshot)$")
 
 
 def build_require_hub_route_authz(
