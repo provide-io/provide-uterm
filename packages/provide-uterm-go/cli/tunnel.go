@@ -142,6 +142,11 @@ func handleTunnelConn(ctx context.Context, conn net.Conn, client *tunnelclient.C
 	var wg sync.WaitGroup
 	wg.Add(2)
 
+	go func() {
+		<-ctx.Done()
+		_ = conn.Close()
+	}()
+
 	// local TCP → WS (ChannelTCP frames, EOF on close)
 	go func() {
 		defer wg.Done()
