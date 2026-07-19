@@ -159,6 +159,49 @@ class TestApiKeyRoutes:
         # Verify key no longer validates
         assert store.validate(raw_key) is None
 
+    # Multi-tenancy: tenant-scoped admins are isolated from each other
+
+    _ACME = {"x-uterm-role": "admin", "x-uterm-tenant": "acme"}
+    _BETA = {"x-uterm-role": "admin", "x-uterm-tenant": "beta"}
+
+    def test_create_key_tenant_scoped(self, admin_client: TestClient) -> None:
+        resp = admin_client.post("/api/keys", json={"name": "acme-key", "scopes": ["viewer"]}, headers=self._ACME)
+        assert resp.status_code == 200
+        assert resp.json()["tenant_id"] == "acme"
+
+    def test_create_key_rejects_client_tenant_id(self, admin_client: TestClient) -> None:
+        resp = admin_client.post(
+            "/api/keys",
+            json={"name": "k", "scopes": ["viewer"], "tenant_id": "acme"},
+            headers=self._ACME,
+        )
+        assert resp.status_code == 422
+        assert "server-assigned" in resp.json()["detail"]
+
+    def test_tenant_admin_lists_only_own_tenant_keys(self, admin_client: TestClient) -> None:
+        admin_client.post("/api/keys", json={"name": "acme-k", "scopes": ["viewer"]}, headers=self._ACME)
+        admin_client.post("/api/keys", json={"name": "beta-k", "scopes": ["viewer"]}, headers=self._BETA)
+        acme_keys = admin_client.get("/api/keys", headers=self._ACME).json()
+        assert [k["name"] for k in acme_keys] == ["acme-k"]
+        assert acme_keys[0]["tenant_id"] == "acme"
+
+    def test_tenant_admin_cannot_revoke_other_tenants_key(self, admin_client: TestClient) -> None:
+        created = admin_client.post(
+            "/api/keys", json={"name": "acme-k", "scopes": ["viewer"]}, headers=self._ACME
+        ).json()
+        # beta admin cannot see or revoke acme's key -> 404
+        resp = admin_client.delete(f"/api/keys/{created['key_id']}", headers=self._BETA)
+        assert resp.status_code == 404
+        # acme admin can revoke its own key
+        assert admin_client.delete(f"/api/keys/{created['key_id']}", headers=self._ACME).status_code == 200
+
+    def test_system_admin_sees_all_tenants_keys(self, admin_client: TestClient) -> None:
+        admin_client.post("/api/keys", json={"name": "acme-k", "scopes": ["viewer"]}, headers=self._ACME)
+        admin_client.post("/api/keys", json={"name": "beta-k", "scopes": ["viewer"]}, headers=self._BETA)
+        # No tenant header -> system admin -> sees every key.
+        names = {k["name"] for k in admin_client.get("/api/keys").json()}
+        assert names == {"acme-k", "beta-k"}
+
     # Auth: viewer role cannot manage keys
 
     def test_viewer_cannot_create_keys(self) -> None:
