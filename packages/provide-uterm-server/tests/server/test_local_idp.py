@@ -33,7 +33,7 @@ async def test_local_idp_resolve_api_key_principal_short_circuits() -> None:
     from provide.uterm.server.api_keys import ApiKeyStore
 
     store = ApiKeyStore()
-    raw_key, _record = store.create("admin-key", scopes=frozenset({"admin"}))
+    raw_key, _record = store.create_for_tenant("acme", "admin-key", scopes=frozenset({"admin"}))
     auth = AuthConfig(api_keys_enabled=True, mode="dev_token")
     idp = LocalIdentityProvider(auth, api_key_store=store)
 

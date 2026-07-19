@@ -149,7 +149,7 @@ class TestApiKeyAuthIntegration:
         config.auth.api_keys_enabled = True
         app = create_server_app(config)
         store = app.state.uterm_api_key_store
-        raw_key, _record = store.create("integration-test", scopes=frozenset({"admin"}))
+        raw_key, _record = store.create_for_tenant("acme", "integration-test", scopes=frozenset({"admin"}))
         with TestClient(app) as client:
             yield client, raw_key
 
@@ -210,7 +210,7 @@ class TestApiKeyPrincipalRoles:
         from provide.uterm.server.models import AuthConfig
 
         store = ApiKeyStore()
-        raw_key, _record = store.create("admin-key")  # no scopes
+        raw_key, _record = store.create_for_tenant("acme", "admin-key")  # valid tenant, no scopes
         auth = AuthConfig(api_keys_enabled=True, mode="dev_token")
         principal = _principal_from_api_key({"x-api-key": raw_key}, auth, store)
         # An empty-scope key used to silently authenticate as admin; now it is
@@ -222,18 +222,19 @@ class TestApiKeyPrincipalRoles:
         from provide.uterm.server.models import AuthConfig
 
         store = ApiKeyStore()
-        raw_key, _record = store.create("admin-key", scopes=frozenset({"admin"}))
+        raw_key, _record = store.create_for_tenant("acme", "admin-key", scopes=frozenset({"admin"}))
         auth = AuthConfig(api_keys_enabled=True, mode="dev_token")
         principal = _principal_from_api_key({"x-api-key": raw_key}, auth, store)
         assert principal is not None
         assert "admin" in principal.roles
+        assert principal.tenant_id == "acme"
 
     def test_operator_scope_gets_operator(self) -> None:
         from provide.uterm.server.auth import _principal_from_api_key
         from provide.uterm.server.models import AuthConfig
 
         store = ApiKeyStore()
-        raw_key, _record = store.create("op-key", scopes=frozenset({"operator"}))
+        raw_key, _record = store.create_for_tenant("acme", "op-key", scopes=frozenset({"operator"}))
         auth = AuthConfig(api_keys_enabled=True, mode="dev_token")
         principal = _principal_from_api_key({"x-api-key": raw_key}, auth, store)
         assert principal is not None
@@ -252,7 +253,7 @@ class TestApiKeyPrincipalRoles:
         from provide.uterm.server.models import AuthConfig
 
         store = ApiKeyStore()
-        raw_key, _record = store.create("read-key", scopes=frozenset({"session.read"}))
+        raw_key, _record = store.create_for_tenant("acme", "read-key", scopes=frozenset({"session.read"}))
         auth = AuthConfig(api_keys_enabled=True, mode="dev_token")
         principal = _principal_from_api_key({"x-api-key": raw_key}, auth, store)
         assert principal is None
@@ -263,7 +264,7 @@ class TestApiKeyPrincipalRoles:
         from provide.uterm.server.models import AuthConfig
 
         store = ApiKeyStore()
-        raw_key, _record = store.create("typo-key", scopes=frozenset({"administrator"}))
+        raw_key, _record = store.create_for_tenant("acme", "typo-key", scopes=frozenset({"administrator"}))
         auth = AuthConfig(api_keys_enabled=True, mode="dev_token")
         principal = _principal_from_api_key({"x-api-key": raw_key}, auth, store)
         assert principal is None
@@ -275,7 +276,7 @@ class TestApiKeyPrincipalRoles:
         from provide.uterm.server.models import AuthConfig
 
         store = ApiKeyStore()
-        raw_key, _record = store.create("viewer-key", scopes=frozenset({"viewer"}))
+        raw_key, _record = store.create_for_tenant("acme", "viewer-key", scopes=frozenset({"viewer"}))
         auth = AuthConfig(api_keys_enabled=True, mode="dev_token")
         principal = _principal_from_api_key({"x-api-key": raw_key}, auth, store)
         assert principal is not None
@@ -318,7 +319,7 @@ class TestApiKeyPrincipalRoles:
         store_a = ApiKeyStore()
         store_b = ApiKeyStore()
         # Finding #3: a key must have a recognised role scope to authenticate.
-        raw_key_a, _ = store_a.create("app-a-key", scopes=frozenset({"admin"}))
+        raw_key_a, _ = store_a.create_for_tenant("acme", "app-a-key", scopes=frozenset({"admin"}))
         auth = AuthConfig(api_keys_enabled=True, mode="dev_token")
         # Key from store_a validates under store_a
         assert _principal_from_api_key({"x-api-key": raw_key_a}, auth, store_a) is not None

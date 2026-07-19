@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from provide.telemetry import get_logger
+from provide.uterm.server.api_keys import canonical_tenant_id
 from provide.uterm.server.audit import audit_event
 from provide.uterm.server.auth_roles import (
     _DEFAULT_ROLE,  # noqa: F401  # re-exported for legacy server.auth import surface
@@ -266,8 +267,14 @@ class LocalIdentityProvider(IdentityProvider):
         subject = str(claims.get("sub", "")).strip()
         if not subject:
             raise ValueError("sub claim is required")
+        raw_tenant_claim = claims.get(self.auth.jwt_tenant_claim)
+        raw_tenant = "" if raw_tenant_claim is None else str(raw_tenant_claim).strip()
+        tenant = canonical_tenant_id(raw_tenant)
+        if raw_tenant and tenant is None:
+            raise ValueError("invalid tenant_id claim")
         return Principal(
             subject_id=subject,
+            tenant_id=tenant,
             roles=self._roles_from_claims(claims),
             scopes=self._scopes_from_claims(claims),
             claims=claims,
@@ -284,7 +291,12 @@ class LocalIdentityProvider(IdentityProvider):
         )
         role_raw = headers.get(self.auth.role_header) or self._cookie_value(cookies, self.auth.role_cookie) or ""
         roles = _filter_known_roles([role_raw])
-        return Principal(subject_id=str(principal), roles=roles, scopes=frozenset())
+        raw_tenant = headers.get(self.auth.tenant_header) or self._cookie_value(cookies, self.auth.tenant_cookie) or ""
+        tenant = canonical_tenant_id(raw_tenant)
+        # A supplied-but-invalid tenant fails closed to the anonymous principal.
+        if raw_tenant.strip() and tenant is None:
+            return self._anonymous_principal()
+        return Principal(subject_id=str(principal), tenant_id=tenant, roles=roles, scopes=frozenset())
 
     def _principal_from_api_key(self, headers: Any) -> Principal | None:
         if not self.auth.api_keys_enabled:
@@ -298,6 +310,20 @@ class LocalIdentityProvider(IdentityProvider):
         if record is None:
             logger.warning("api_key_auth_failed key_id=unknown")
             audit_event("auth.failure", detail={"method": "api_key"})
+            return None
+        # Multi-tenancy: a key must carry a valid tenant. Legacy tenant-less keys
+        # (flat ``create``) and keys with a malformed tenant fail closed so the
+        # request is treated as unauthenticated.
+        tenant = canonical_tenant_id(record.tenant_id)
+        if tenant is None:
+            logger.warning(
+                "api_key_auth_failed key_id=%s reason=missing_or_invalid_tenant",
+                record.key_id,
+            )
+            audit_event(
+                "auth.failure",
+                detail={"method": "api_key", "key_id": record.key_id, "reason": "missing_or_invalid_tenant"},
+            )
             return None
         # Finding #3: explicit scope→role mapping.  Empty scopes OR scopes that
         # do not contain a recognised role keyword (admin/operator/viewer) used
@@ -334,6 +360,7 @@ class LocalIdentityProvider(IdentityProvider):
         audit_event("auth.success", principal=record.key_id, detail={"method": "api_key"})
         return Principal(
             subject_id=f"apikey:{record.key_id}",
+            tenant_id=tenant,
             roles=roles,
             scopes=scopes,
             claims={"key_id": record.key_id, "key_name": record.name},
