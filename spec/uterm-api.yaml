@@ -214,7 +214,8 @@ api:
   # provide.uterm.server.graphical_targets (Python) <->
   # packages/provide-uterm-go/graphical (Go) <->
   # Provide.Uterm/Server/GraphicalTargets.cs (C#). The tenant-scoped graphical-
-  # console model + registry: a GraphicalTargetDefinition (memory/rfb) held in
+  # console model + registry: a GraphicalTargetDefinition (memory/rfb/litevirt,
+  # protocol-pluggable via a generic per-target config map) held in
   # an InMemoryGraphicalTargetRegistry that gates every read/write by a
   # GraphicalTargetScope derived from the authenticated principal's tenant. The
   # wire shape (snake_case JSON keys, error codes, endpoint parsing) is parity-
@@ -256,6 +257,16 @@ api:
         Parse/normalize an rfb endpoint (host:port | rfb://host:port | dns:///
         prefix). Python module function; Go top-level func; C# static
         GraphicalTargetParsing.ParseRfbEndpoint.
+    - name: parse_litevirt_endpoint
+      kind: function
+      required: true
+      note: >-
+        Parse/normalize a litevirt gRPC endpoint (a plain host:port, no wire
+        scheme; dns:/// prefix stripped). Backs the protocol-pluggable registry
+        attach: a litevirt VM is a graphical target with protocol=litevirt and
+        its vm_name carried in the generic per-target config map. Python module
+        function parse_litevirt_endpoint; Go top-level func ParseLitevirtEndpoint;
+        C# static GraphicalTargetParsing.ParseLitevirtEndpoint.
     - name: permits
       kind: function
       required: true
