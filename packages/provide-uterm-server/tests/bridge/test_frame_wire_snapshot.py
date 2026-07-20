@@ -172,16 +172,23 @@ class TestLooseFrames:
             future_capability_flag=True,
             capabilities={"hijack_step": True},
         )
+        # Capability defaults from spec/behavior.json hello_defaults.python_fastapi.
         assert out == {
             "type": "hello",
             "worker_id": "w1",
             "can_hijack": True,
             "future_capability_flag": True,
             "capabilities": {"hijack_step": True},
+            "mcp_supported": True,
+            "vnc_supported": False,
         }
 
     def test_hello_frame_minimal(self) -> None:
-        assert make_hello_frame() == {"type": "hello"}
+        assert make_hello_frame() == {
+            "type": "hello",
+            "mcp_supported": True,
+            "vnc_supported": False,
+        }
 
     def test_coerce_worker_status_frame_stamps_type_and_ts(self) -> None:
         out = coerce_worker_status_frame({"foo": 1, "ts": 2.0})

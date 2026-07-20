@@ -78,10 +78,14 @@ def build_server_cmd(config_path: Path) -> list[str]:
     backend = backend_name()
     frontend = str(FRONTEND_DIR)
     if backend == "go":
+        # Must run inside the Go module (go.mod lives under packages/provide-uterm-go).
+        # `go run path/to/main.go` from repo root cannot resolve module imports.
         return [
             "go",
             "run",
-            str(REPO_ROOT / "packages/provide-uterm-go/cmd/uterm/main.go"),
+            "-C",
+            str(REPO_ROOT / "packages/provide-uterm-go"),
+            "./cmd/uterm",
             "server",
             "--config",
             str(config_path),

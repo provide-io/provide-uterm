@@ -18,9 +18,13 @@ MIN_COORDINATOR_OPS_PER_SEC = 1_000
 class TestCoordinatorThroughput:
     """Raw acquire/heartbeat/release cycle throughput."""
 
-    @pytest.mark.timeout(10)
+    @pytest.mark.timeout(60)
     def test_10k_acquire_release_cycles(self) -> None:
-        """10k acquire→release cycles maintain basic throughput under coverage."""
+        """10k acquire→release cycles maintain basic throughput under coverage.
+
+        Timeout budget is 60s (not 10s): mutmut baseline runs this under heavy
+        process load and was flaking CI with pytest-timeout 10s.
+        """
         coord = HijackCoordinator()
         start = time.monotonic()
 

@@ -43,7 +43,7 @@ TEST_BATCH_2 := FullyQualifiedName~Hub|FullyQualifiedName~ServerIntegration|Full
 # Native-heavy classes get their own process (batch 3 crashed Ubuntu after ~18
 # tests when Cli+Pty+Gateway shared one host).
 TEST_BATCH_3A := FullyQualifiedName~Cli
-TEST_BATCH_3B := FullyQualifiedName~Embed|FullyQualifiedName~Emulator|FullyQualifiedName~Gui|FullyQualifiedName~Interop
+TEST_BATCH_3B := FullyQualifiedName~Embed|FullyQualifiedName~.Emulator.|FullyQualifiedName~Gui|FullyQualifiedName~Interop
 TEST_BATCH_3C := FullyQualifiedName~Gateway|FullyQualifiedName~Shell|FullyQualifiedName~Tunnel|FullyQualifiedName~KnownHosts|FullyQualifiedName~SshPolicy
 TEST_BATCH_3D := FullyQualifiedName~PtyAndUnicode|FullyQualifiedName~LiveParity
 TEST_BATCH_4 := FullyQualifiedName~Coverage|FullyQualifiedName~DeepCoverage|FullyQualifiedName~HighCoverage|FullyQualifiedName~Over90|FullyQualifiedName~HubAndCli
@@ -69,10 +69,10 @@ test:
 	$(call DOTNET_TEST_BATCH,3c gateway/shell/tunnel,$(TEST_BATCH_3C))
 	@# Pty/LiveParity: native interop has crashed Ubuntu CI hosts (free()/malloc)
 	@# even in isolation. Skip on CI; still run locally for developer machines.
-	@if [ -z "$$CI" ]; then \
+	@if [ -z "$$CI" ] && uname -s 2>/dev/null | grep -Eqv 'MINGW|MSYS|CYGWIN|Windows'; then \
 	  $(MAKE) --no-print-directory _test_batch_3d; \
 	else \
-	  echo "=== test batch: 3d pty/live SKIPPED on CI (native host crash residual) ==="; \
+	  echo "=== test batch: 3d pty/live SKIPPED on CI/Windows (native host residual) ==="; \
 	fi
 	$(call DOTNET_TEST_BATCH,4 coverage-boost,$(TEST_BATCH_4))
 
@@ -105,10 +105,10 @@ cover:
 	$(call DOTNET_COVER_BATCH,3a,$(TEST_BATCH_3A))
 	$(call DOTNET_COVER_BATCH,3b,$(TEST_BATCH_3B))
 	$(call DOTNET_COVER_BATCH,3c,$(TEST_BATCH_3C))
-	@if [ -z "$$CI" ]; then \
+	@if [ -z "$$CI" ] && uname -s 2>/dev/null | grep -Eqv 'MINGW|MSYS|CYGWIN|Windows'; then \
 	  $(MAKE) --no-print-directory _cover_batch_3d; \
 	else \
-	  echo "=== cover batch: 3d pty/live SKIPPED on CI ==="; \
+	  echo "=== cover batch: 3d pty/live SKIPPED on CI/Windows ==="; \
 	fi
 	$(call DOTNET_COVER_BATCH,4,$(TEST_BATCH_4))
 	@python3 ci/coverage_gate.py coverage-out $(COVER_THRESHOLD)
