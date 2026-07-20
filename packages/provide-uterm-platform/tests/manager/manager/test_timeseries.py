@@ -171,17 +171,21 @@ class TestTimeseriesManager:
     @pytest.mark.asyncio
     async def test_loop_writes_startup(self, tmp_path):
         mgr = TimeseriesManager(lambda: _make_status(), timeseries_dir=str(tmp_path), interval_s=1)
-        # Run loop for a tiny bit then cancel
+        # Run loop until the startup sample lands (busy CI can exceed 0.1s).
         import asyncio
 
         task = asyncio.create_task(mgr.loop())
-        await asyncio.sleep(0.1)
-        task.cancel()
-        with pytest.raises(asyncio.CancelledError):
-            await task
-        assert mgr.samples_count >= 1
-        rows = mgr.read_tail(10)
-        assert any(r.get("reason") == "startup" for r in rows)
+        try:
+            deadline = asyncio.get_running_loop().time() + 3.0
+            while mgr.samples_count < 1 and asyncio.get_running_loop().time() < deadline:
+                await asyncio.sleep(0.05)
+            assert mgr.samples_count >= 1
+            rows = mgr.read_tail(10)
+            assert any(r.get("reason") == "startup" for r in rows)
+        finally:
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
 
 
 class TestTrimToLatestEpoch:
