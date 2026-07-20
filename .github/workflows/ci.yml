@@ -440,20 +440,20 @@ jobs:
           -m "playwright and not slow"
           --no-cov -q --tb=line
           -k "not nyan and not plasma and not telnet"
-      # Surfaces with hard product gaps on go/csharp (inspect needs /tunnel WS;
-      # terminal proxy is Python fastapi_utils only). Dual-mode python multi-backend
-      # inspect runs when UTERM_MULTI_BACKEND=1; go/csharp skip with reason strings.
+      # Inspect + terminal-proxy: Python in-process harnesses (not multi-backend
+      # subprocess). go/csharp skip with explicit product-gap reasons. No
+      # UTERM_MULTI_BACKEND=1 here — avoids extra session servers after core/extras.
       - name: Inspect + terminal-proxy Playwright
         env:
           UTERM_TEST_BACKEND: ${{ matrix.backend }}
           UTERM_TEST_MODE: "1"
-          UTERM_MULTI_BACKEND: "1"
         run: >
           uv run pytest
           packages/provide-uterm/tests/playwright/test_inspect_e2e.py
           packages/provide-uterm/tests/playwright/test_terminal_proxy.py
           -m "playwright and not slow"
           --no-cov -q --tb=line
+          --timeout=60
 
   compliance:
     runs-on: ubuntu-latest
