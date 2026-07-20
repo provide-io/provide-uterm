@@ -95,3 +95,18 @@ See `screenshots/backend-proof/heavy/summary.json`.
 
 Also: Go TEST_MODE deck disconnect leave; Go `mustInt(json.Number)` for WS
 presence_update; Python TEST_MODE connection-scoped DeckMux principal.
+
+## CI matrix + color multi-backend + C# mutation expand (2026-07-20)
+
+### CI (`.github/workflows/ci.yml`)
+- `multi-backend-playwright` matrix: python|go|csharp — hijack+deckmux+resume+static color
+- `csharp-mutation-gate` job: `make -C packages/provide-uterm-csharp mutation-gate`
+
+### Color multi-backend
+- Dual-mode `color_server`; `color-test` HTML via `ui_routes`
+- C# worker term/snapshot fan-out to browsers (required for ANSI pipeline)
+- Static palettes 5/5 ×3 backends green
+
+### C# mutation perimeter
+- Policy, DeckMux, Colors/Sgr, Filters, Sanitizer, Redaction
+- 13 mutants: 12 killed + 1 documented equivalent

@@ -49,6 +49,15 @@ def _uid() -> str:
     return str(int(time.time() * 1000) % 100000)
 
 
+def _color_navigate(page: Page, color_server: str, worker_id: str) -> None:
+    """Open color-test page; multi-backend serves HTML via page.route."""
+    from .ui_routes import install_multi_backend_routes, multi_backend_env
+
+    if multi_backend_env():
+        install_multi_backend_routes(page)
+    page.goto(f"{color_server}/color-test/{worker_id}", wait_until="domcontentloaded")
+
+
 def _screenshot(page: Page, name: str) -> None:
     SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
     page.screenshot(path=str(SCREENSHOTS_DIR / name), full_page=True)
@@ -66,7 +75,7 @@ class TestColorPalette16:
         worker_id = f"color16-{_uid()}"
         worker = ColorWorker(color_server, worker_id, build_16_color_palette()).start()
         try:
-            page.goto(f"{color_server}/color-test/{worker_id}", wait_until="domcontentloaded")
+            _color_navigate(page, color_server, worker_id)
             wait_for_color_data(page)
             assert_has_colored_spans(page)
             _screenshot(page, "16-color-palette.png")
@@ -81,7 +90,7 @@ class TestColorPalette256:
         worker_id = f"color256-{_uid()}"
         worker = ColorWorker(color_server, worker_id, build_256_color_palette()).start()
         try:
-            page.goto(f"{color_server}/color-test/{worker_id}", wait_until="domcontentloaded")
+            _color_navigate(page, color_server, worker_id)
             wait_for_color_data(page)
             assert_has_colored_spans(page)
             _screenshot(page, "256-color-palette.png")
@@ -96,7 +105,7 @@ class TestColorPaletteTruecolor:
         worker_id = f"truecolor-{_uid()}"
         worker = ColorWorker(color_server, worker_id, build_truecolor_palette()).start()
         try:
-            page.goto(f"{color_server}/color-test/{worker_id}", wait_until="domcontentloaded")
+            _color_navigate(page, color_server, worker_id)
             wait_for_color_data(page)
             assert_has_colored_spans(page)
             _screenshot(page, "truecolor-palette.png")
@@ -111,7 +120,7 @@ class TestAnsiArt:
         worker_id = f"ansiart-{_uid()}"
         worker = ColorWorker(color_server, worker_id, build_ansi_art()).start()
         try:
-            page.goto(f"{color_server}/color-test/{worker_id}", wait_until="domcontentloaded")
+            _color_navigate(page, color_server, worker_id)
             wait_for_color_data(page)
             assert_has_colored_spans(page)
             _screenshot(page, "ansi-art.png")
@@ -127,7 +136,7 @@ class TestColorPaletteCombined:
         palette = build_16_color_palette() + build_256_color_palette() + build_truecolor_palette() + build_ansi_art()
         worker = ColorWorker(color_server, worker_id, palette).start()
         try:
-            page.goto(f"{color_server}/color-test/{worker_id}", wait_until="domcontentloaded")
+            _color_navigate(page, color_server, worker_id)
             wait_for_color_data(page)
             assert_has_colored_spans(page)
             _screenshot(page, "combined-color-palette.png")
@@ -150,7 +159,7 @@ class TestAnsiAnimation:
         worker = AnimatedWorker(color_server, worker_id, frames, fps=8).start()
 
         try:
-            page.goto(f"{color_server}/color-test/{worker_id}", wait_until="domcontentloaded")
+            _color_navigate(page, color_server, worker_id)
             wait_for_color_data(page)
             assert_has_colored_spans(page)
 
@@ -184,7 +193,7 @@ class TestGifToAnsi:
         worker = AnimatedWorker(color_server, worker_id, frames, fps=fps).start()
 
         try:
-            page.goto(f"{color_server}/color-test/{worker_id}", wait_until="domcontentloaded")
+            _color_navigate(page, color_server, worker_id)
             wait_for_color_data(page)
             assert_has_colored_spans(page)
 
@@ -208,7 +217,7 @@ class TestGifToAnsi:
         worker = AnimatedWorker(color_server, worker_id, frames, fps=fps).start()
 
         try:
-            page.goto(f"{color_server}/color-test/{worker_id}", wait_until="domcontentloaded")
+            _color_navigate(page, color_server, worker_id)
             wait_for_color_data(page)
             assert_has_colored_spans(page)
             SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -227,7 +236,7 @@ class TestGifToAnsi:
         worker = AnimatedWorker(color_server, worker_id, frames, fps=fps).start()
 
         try:
-            page.goto(f"{color_server}/color-test/{worker_id}", wait_until="domcontentloaded")
+            _color_navigate(page, color_server, worker_id)
             wait_for_color_data(page)
             assert_has_colored_spans(page)
             SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)

@@ -182,8 +182,15 @@ def install_multi_backend_routes(page: Page, frontend_dir: Path | None = None) -
             body=path.read_bytes(),
         )
 
+    def on_color_page(route: Route) -> None:
+        url = route.request.url
+        parts = url.rstrip("/").split("/color-test/")
+        worker_id = parts[-1].split("?")[0] if len(parts) > 1 else "unknown"
+        route.fulfill(status=200, content_type="text/html", body=color_test_page_html(worker_id))
+
     page.route("**/test-page/**", on_test_page)
     page.route("**/deckmux-test/**", on_deckmux_page)
+    page.route("**/color-test/**", on_color_page)
     page.route("**/ui/**", on_ui)
 
 
@@ -194,3 +201,79 @@ def multi_backend_env() -> bool:
     multi = os.environ.get("UTERM_MULTI_BACKEND", "").strip().lower() in ("1", "true", "yes")
     backend = os.environ.get("UTERM_TEST_BACKEND", "python").strip().lower() or "python"
     return multi or backend in ("go", "csharp")
+
+
+def color_test_page_html(worker_id: str) -> str:
+    """xterm.js color test page — same contract as playwright/conftest._color_test_html."""
+    xterm = "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0"
+    fit = "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0"
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Color Palette Test</title>
+  <link rel="stylesheet" href="{xterm}/css/xterm.css">
+  <style>
+    * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+    html, body {{ width: 100%; height: 100vh; background: #0b0f14; }}
+    #term {{ width: 100%; height: 100%; }}
+  </style>
+</head>
+<body>
+<div id="term"></div>
+<script src="{xterm}/lib/xterm.js"></script>
+<script src="{fit}/lib/addon-fit.js"></script>
+<script>
+(function() {{
+  var DLE = "\\x10", STX = "\\x02";
+  var term = new Terminal({{ rows: 40, cols: 120, convertEol: false }});
+  term.open(document.getElementById("term"));
+  var fitAddon = new FitAddon.FitAddon();
+  term.loadAddon(fitAddon);
+  try {{ fitAddon.fit(); }} catch(e) {{}}
+  window._term = term;
+  window._colorDataReceived = false;
+
+  var proto = location.protocol === "https:" ? "wss:" : "ws:";
+  var wsUrl = proto + "//" + location.host + "/ws/browser/{worker_id}/term";
+  var ws = new WebSocket(wsUrl);
+
+  ws.onmessage = function(event) {{
+    var raw = event.data;
+    var pos = 0;
+    while (pos < raw.length) {{
+      if (raw[pos] === DLE && pos + 1 < raw.length && raw[pos+1] === STX) {{
+        var lenHex = raw.substring(pos + 2, pos + 10);
+        var jsonLen = parseInt(lenHex, 16);
+        var jsonStart = pos + 11;
+        var jsonStr = raw.substring(jsonStart, jsonStart + jsonLen);
+        try {{
+          var msg = JSON.parse(jsonStr);
+          if (msg.type === "term" && msg.data) {{
+            term.write(msg.data);
+            window._colorDataReceived = true;
+          }} else if (msg.type === "snapshot" && msg.screen) {{
+            term.write(msg.screen.replace(/\\n/g, "\\r\\n"));
+            window._colorDataReceived = true;
+          }}
+        }} catch(e) {{}}
+        pos = jsonStart + jsonLen;
+      }} else {{
+        var next = raw.indexOf(DLE, pos + 1);
+        if (next === -1) next = raw.length;
+        var chunk = raw.substring(pos, next);
+        if (chunk) {{
+          term.write(chunk);
+          window._colorDataReceived = true;
+        }}
+        pos = next;
+      }}
+    }}
+  }};
+
+  ws.onopen = function() {{ window._wsConnected = true; }};
+  ws.onerror = function(e) {{ console.error("WS error", e); }};
+}})();
+</script>
+</body>
+</html>"""

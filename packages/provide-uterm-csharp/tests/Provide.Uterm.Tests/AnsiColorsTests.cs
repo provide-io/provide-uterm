@@ -118,6 +118,15 @@ public class AnsiColorsTests
     }
 
     [Fact]
+    public void Sgr_RewriteParams_TruncatedTruecolor_LeftIntact()
+    {
+        // Bounds check (i+4 < n) must fail: incomplete 38;2;r sequence is not rewritten.
+        var incomplete = "38;2;255";
+        var rewritten = Sgr.RewriteParams(incomplete, ColorMode.Mode16);
+        Assert.Equal("\x1b[38;2;255m", rewritten);
+    }
+
+    [Fact]
     public void Sgr_RewriteParams_Empty()
     {
         Assert.Equal("\x1b[m", Sgr.RewriteParams("", ColorMode.Mode16));
