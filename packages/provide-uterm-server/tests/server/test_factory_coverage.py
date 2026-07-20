@@ -51,6 +51,22 @@ async def test_factory_threads_max_workers_to_hub() -> None:
         await app.state.uterm_hub.shutdown()
 
 
+@pytest.mark.asyncio
+async def test_factory_uses_explicit_hub_class() -> None:
+    """hub_class=... takes the factory else-branch (not the default DeckMux hub)."""
+    from provide.uterm.server.bridge.hub import TermHub
+
+    class _CustomHub(TermHub):
+        """Minimal subclass so isinstance proves the override path ran."""
+
+    config = default_server_config()
+    app = create_server_app(config, hub_class=_CustomHub, api_only=True)
+    try:
+        assert isinstance(app.state.uterm_hub, _CustomHub)
+    finally:
+        await app.state.uterm_hub.shutdown()
+
+
 def test_factory_uses_webhook_recording_store() -> None:
     """recording.store_type='webhook' with a webhook_url selects WebhookRecordingStore."""
     config = default_server_config()

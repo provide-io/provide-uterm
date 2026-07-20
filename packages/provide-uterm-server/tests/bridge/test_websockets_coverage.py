@@ -17,6 +17,7 @@ import time
 from typing import Any
 from unittest.mock import AsyncMock
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -296,3 +297,30 @@ def test_deckmux_messages_without_handler_are_ignored() -> None:
             browser.send_json({"type": "snapshot_req"})
             msg = worker.receive_json()
             assert msg["type"] == "snapshot_req"
+
+
+def test_browser_term_test_mode_forces_admin_and_skips_deckmux_principal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """UTERM_TEST_MODE=1: force admin role + DeckMux connect/disconnect with
+    principal=None (multi-tab Playwright identity isolation)."""
+    monkeypatch.setenv("UTERM_TEST_MODE", "1")
+    # Resolver would yield viewer; TEST_MODE must override to admin.
+    app, hub = _make_app(role="viewer")
+    connect_mock = AsyncMock(return_value=None)
+    disconnect_mock = AsyncMock()
+    hub.deckmux_on_browser_connect = connect_mock  # type: ignore[attr-defined]
+    hub.deckmux_on_browser_disconnect = disconnect_mock  # type: ignore[attr-defined]
+
+    with TestClient(app) as client, connect_test_ws(client, "/ws/browser/bot1/term") as browser:
+        hello, _ = _read_initial_browser_messages(browser)
+        # admin hello advertises can_hijack / elevated role surface.
+        assert hello["type"] == "hello"
+        assert connect_mock.await_count >= 1
+        # principal kw must be omitted/None so each tab gets a fresh DeckMux id.
+        call_kwargs = connect_mock.await_args.kwargs if connect_mock.await_args else {}
+        assert call_kwargs.get("principal") is None
+
+    assert disconnect_mock.await_count >= 1
+    disc_kwargs = disconnect_mock.await_args.kwargs if disconnect_mock.await_args else {}
+    assert disc_kwargs.get("principal") is None

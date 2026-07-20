@@ -43,6 +43,11 @@ EXCLUDE_SUBSTR = (
 )
 
 
+def _normalize_path(name: str) -> str:
+    """Coverlet on Windows emits backslashes; residual substrings use '/'."""
+    return name.replace("\\", "/")
+
+
 def _excluded(name: str) -> bool:
     return any(e in name for e in EXCLUDE_SUBSTR)
 
@@ -58,7 +63,7 @@ def _merge_hits(results: Path) -> tuple[dict[tuple[str, str], int], list[Path]]:
         # Local coverlet output only — not untrusted network XML.
         root = ET.parse(path).getroot()  # noqa: S314
         for cls in root.findall(".//class"):
-            fname = cls.attrib.get("filename") or ""
+            fname = _normalize_path(cls.attrib.get("filename") or "")
             cname = cls.attrib.get("name") or ""
             if _excluded(fname + " " + cname):
                 continue
