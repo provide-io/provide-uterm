@@ -262,3 +262,8 @@ Wired to existing binary `/tunnel/{id}` WS. `MemoryTunnelStore` gained
 ### Residual (Phase 4 optional)
 - C# COVER_THRESHOLD raise only with dual-OS ≥0.2pt headroom
 - Optional mutation perimeter growth / full SPA hosting on Go/C#
+
+### Dual-OS cover (tip f4420386)
+- After control-plane REST, Windows first failed at **97.89%** vs 97.9 floor.
+- Headroom tests landed: Ubuntu **98.06%**, Windows **98.00%** (both green).
+- COVER_THRESHOLD stays **97.9** (Windows headroom 0.10pt < 0.2pt raise rule).
