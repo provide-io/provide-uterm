@@ -18,7 +18,7 @@ from playwright.sync_api import Page, expect
 from provide.uterm.fastapi_utils import WsTerminalProxy, mount_terminal_ui
 from provide.uterm.transports.telnet_server import _build_telnet_handshake
 
-from .backend_server import skip_unless_python_inprocess_surface
+from .backend_server import backend_name
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -46,18 +46,24 @@ class _EchoTelnetHandler(socketserver.BaseRequestHandler):
             self.request.sendall(data)
 
 
+def _skip_terminal_proxy_product_gap() -> None:
+    """WsTerminalProxy + mount_terminal_ui live only in Python fastapi_utils."""
+    name = backend_name()
+    if name in ("go", "csharp"):
+        pytest.skip(
+            f"terminal proxy e2e requires Python fastapi_utils.WsTerminalProxy "
+            f"(no Go/C# mount_terminal_ui equivalent; UTERM_TEST_BACKEND={name})"
+        )
+
+
 @pytest.fixture(autouse=True)
-def _skip_non_python_multi_backend() -> None:
-    skip_unless_python_inprocess_surface(
-        reason="terminal proxy e2e is python fastapi_utils + telnet echo (python-only)"
-    )
+def _skip_non_python_terminal_proxy() -> None:
+    _skip_terminal_proxy_product_gap()
 
 
 @pytest.fixture(scope="session")
 def terminal_proxy_server() -> Generator[tuple[str, list[bytes]], None, None]:
-    skip_unless_python_inprocess_surface(
-        reason="terminal proxy e2e is python fastapi_utils + telnet echo (python-only)"
-    )
+    _skip_terminal_proxy_product_gap()
     received_chunks: list[bytes] = []
     telnet_server = _ThreadedEchoServer(("127.0.0.1", 0), received_chunks)
     telnet_thread = threading.Thread(target=telnet_server.serve_forever, daemon=True)

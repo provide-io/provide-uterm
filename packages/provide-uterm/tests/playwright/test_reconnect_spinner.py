@@ -26,7 +26,6 @@ instance is exposed as ``window._widget``; the onData callback as
 from __future__ import annotations
 
 import importlib.resources
-import json
 import threading
 import time
 import uuid
@@ -40,7 +39,7 @@ from playwright.sync_api import Page
 
 from provide.uterm.server.bridge.hub import TermHub
 
-from .backend_server import skip_unless_python_inprocess_surface
+from .ui_routes import install_multi_backend_routes, multi_backend_env, spinner_mock_page_html
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -50,45 +49,33 @@ def _uid() -> str:
     return uuid.uuid4().hex[:8]
 
 
-@pytest.fixture(autouse=True)
-def _skip_non_python_multi_backend() -> None:
-    skip_unless_python_inprocess_surface(
-        reason="reconnect spinner uses mock-xterm in-process TermHub page (python-only)"
-    )
-
-
 # ---------------------------------------------------------------------------
-# Session-scoped server with mock-Terminal page
+# Session-scoped server with mock-Terminal page (dual-mode)
 # ---------------------------------------------------------------------------
-
-_MOCK_TERMINAL_JS = """
-<script>
-// Mock xterm Terminal — records writes so tests can inspect them.
-window._termWrites = [];
-window.Terminal = class MockTerminal {
-  constructor(opts) { this._onDataCb = null; }
-  open(el) {}
-  focus() {}
-  write(data) { window._termWrites.push(data); }
-  reset() { window._termWrites.push('\x00RESET\x00'); }
-  loadAddon(addon) {}
-  onData(cb) { this._onDataCb = cb; window._onDataCb = cb; }
-  dispose() {}
-};
-// Widget accesses window.FitAddon.FitAddon as the constructor
-window.FitAddon = { FitAddon: class MockFitAddon { fit() {} } };
-</script>
-"""
 
 
 @pytest.fixture(scope="session")
-def spinner_server() -> Generator[tuple[str, TermHub], None, None]:
-    """Session-scoped server whose test page injects a mock xterm Terminal."""
+def spinner_server() -> Generator[tuple[str, TermHub | None], None, None]:
+    """Session-scoped server whose test page injects a mock xterm Terminal.
+
+    Dual-mode (same contract as hijack_server):
+    * default python → in-process TermHub + /test-page
+    * UTERM_MULTI_BACKEND / go / csharp → real subprocess; mock page via page.route
+    """
+    import os
+
+    if multi_backend_env():
+        backend = os.environ.get("UTERM_TEST_BACKEND", "python").strip().lower() or "python"
+        os.environ["UTERM_TEST_BACKEND"] = backend if backend in ("python", "go", "csharp") else "python"
+        from .backend_server import WORKER_BEARER, spawn_backend_server
+
+        os.environ["UTERM_TEST_WORKER_BEARER"] = WORKER_BEARER
+        with spawn_backend_server() as srv:
+            yield srv.base_url, None
+        return
+
     from starlette.staticfiles import StaticFiles
 
-    skip_unless_python_inprocess_surface(
-        reason="reconnect spinner uses mock-xterm in-process TermHub page (python-only)"
-    )
     hub = TermHub(resolve_browser_role=lambda _ws, _worker_id: "admin")
     app = FastAPI()
     app.include_router(hub.create_router())
@@ -98,33 +85,7 @@ def spinner_server() -> Generator[tuple[str, TermHub], None, None]:
 
     @app.get("/test-page/{worker_id}", response_class=HTMLResponse)
     async def test_page(worker_id: str) -> str:
-        from provide.uterm.server.ui import _resolve_vanilla_asset
-
-        script_path = _resolve_vanilla_asset("src/hijack.ts")
-        return (
-            "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
-            "<style>*{margin:0;padding:0;box-sizing:border-box}"
-            "html,body{width:100%;height:100dvh;background:#0b0f14}"
-            "#app,uterm-session{display:block;width:100%;height:100%}</style></head>"
-            "<body><div id='app'></div>"
-            f"{_MOCK_TERMINAL_JS}"
-            "<script type='module'>"
-            f"import '/ui/{script_path}';"
-            "customElements.whenDefined('uterm-session').then(() => {"
-            "  const w = document.createElement('uterm-session');"
-            "  w.id = 'app-root';"
-            f"  w.config = {{workerId:{json.dumps(worker_id)},heartbeatInterval:500}};"
-            "  document.getElementById('app').appendChild(w);"
-            "  w.connect();"
-            "  window._widget = w;"
-            "  window.__hijackTestHooks = {"
-            "    startReconnectAnim: () => window.__testHooks_startReconnectAnim(w._hijackState),"
-            "    stopReconnectAnim: () => window.__testHooks_stopReconnectAnim(w._hijackState),"
-            "  };"
-            "});"
-            "</script>"
-            "</body></html>"
-        )
+        return spinner_mock_page_html(worker_id)
 
     config = uvicorn.Config(app, host="127.0.0.1", port=0, log_level="critical")
     server = uvicorn.Server(config)
@@ -156,6 +117,8 @@ def _status(page: Page) -> str:
 
 
 def _navigate(page: Page, base_url: str, worker_id: str) -> None:
+    if multi_backend_env():
+        install_multi_backend_routes(page, spinner_mock=True)
     page.goto(f"{base_url}/test-page/{worker_id}", wait_until="domcontentloaded")
 
 
@@ -196,7 +159,7 @@ def _force_close_ws(page: Page) -> None:
 
 class TestNudgeReconnect:
     @pytest.mark.playwright
-    def test_keypress_cancels_backoff_timer(self, page: Page, spinner_server: tuple[str, TermHub]) -> None:
+    def test_keypress_cancels_backoff_timer(self, page: Page, spinner_server: tuple[str, TermHub | None]) -> None:
         """A keypress during backoff sets _reconnectTimer to null immediately."""
         base_url, _ = spinner_server
         worker_id = f"nudge-timer-{_uid()}"
@@ -219,7 +182,9 @@ class TestNudgeReconnect:
         assert timer_after is None, "_nudgeReconnect must clear the backoff timer"
 
     @pytest.mark.playwright
-    def test_reconnect_completes_fast_after_keypress(self, page: Page, spinner_server: tuple[str, TermHub]) -> None:
+    def test_reconnect_completes_fast_after_keypress(
+        self, page: Page, spinner_server: tuple[str, TermHub | None]
+    ) -> None:
         """Widget WS enters OPEN state in well under 1 s (the first backoff delay) after a keypress."""
         base_url, _ = spinner_server
         worker_id = f"nudge-speed-{_uid()}"
@@ -244,7 +209,7 @@ class TestNudgeReconnect:
 
 class TestSpinnerAnim:
     @pytest.mark.playwright
-    def test_spinner_writes_braille_ansi_frames(self, page: Page, spinner_server: tuple[str, TermHub]) -> None:
+    def test_spinner_writes_braille_ansi_frames(self, page: Page, spinner_server: tuple[str, TermHub | None]) -> None:
         """_startReconnectAnim writes DECSC/DECRC save-restore sequences with braille frames."""
         base_url, _ = spinner_server
         worker_id = f"spin-ansi-{_uid()}"
@@ -282,7 +247,9 @@ class TestSpinnerAnim:
             assert fw.endswith("\x1b8"), f"expected DECRC suffix in: {fw!r}"
 
     @pytest.mark.playwright
-    def test_spinner_stop_writes_erase_and_clears_timer(self, page: Page, spinner_server: tuple[str, TermHub]) -> None:
+    def test_spinner_stop_writes_erase_and_clears_timer(
+        self, page: Page, spinner_server: tuple[str, TermHub | None]
+    ) -> None:
         """_stopReconnectAnim clears the interval and writes the space-erase sequence."""
         base_url, _ = spinner_server
         worker_id = f"spin-stop-{_uid()}"
@@ -320,7 +287,7 @@ class TestSpinnerAnim:
 
     @pytest.mark.playwright
     def test_spinner_fires_on_keypress_and_stops_on_reconnect(
-        self, page: Page, spinner_server: tuple[str, TermHub]
+        self, page: Page, spinner_server: tuple[str, TermHub | None]
     ) -> None:
         """Integration: keypress during backoff starts spinner; after reconnect it stops."""
         base_url, _ = spinner_server

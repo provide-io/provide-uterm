@@ -147,10 +147,62 @@ ws.onerror=function(e){{console.error("WS error",e);}};
 }})();</script></body></html>"""
 
 
-def install_multi_backend_routes(page: Page, frontend_dir: Path | None = None) -> None:
+def spinner_mock_page_html(worker_id: str, *, heartbeat_ms: int = 500) -> str:
+    """Mock-xterm reconnect/spinner test page (exposes window._widget / _termWrites)."""
+    script_path = _resolve_script()
+    mock_js = """
+<script>
+window._termWrites = [];
+window.Terminal = class MockTerminal {
+  constructor(opts) { this._onDataCb = null; }
+  open(el) {}
+  focus() {}
+  write(data) { window._termWrites.push(data); }
+  reset() { window._termWrites.push('\\x00RESET\\x00'); }
+  loadAddon(addon) {}
+  onData(cb) { this._onDataCb = cb; window._onDataCb = cb; }
+  dispose() {}
+};
+window.FitAddon = { FitAddon: class MockFitAddon { fit() {} } };
+</script>
+"""
+    return (
+        "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
+        f"<script>{_DEEP_QUERY}</script>"
+        "<style>*{margin:0;padding:0;box-sizing:border-box}"
+        "html,body{width:100%;height:100dvh;background:#0b0f14}"
+        "#app,uterm-session{display:block;width:100%;height:100%}</style></head>"
+        "<body><div id='app'></div>"
+        f"{mock_js}"
+        "<script type='module'>"
+        f"import '/ui/{script_path}';"
+        "customElements.whenDefined('uterm-session').then(() => {"
+        "  const w = document.createElement('uterm-session');"
+        "  w.id = 'app-root';"
+        f"  w.config = {{workerId:{json.dumps(worker_id)},heartbeatInterval:{heartbeat_ms}}};"
+        "  document.getElementById('app').appendChild(w);"
+        "  w.connect();"
+        "  window._widget = w;"
+        "  window.__hijackTestHooks = {"
+        "    startReconnectAnim: () => window.__testHooks_startReconnectAnim(w._hijackState),"
+        "    stopReconnectAnim: () => window.__testHooks_stopReconnectAnim(w._hijackState),"
+        "  };"
+        "});"
+        "</script>"
+        "</body></html>"
+    )
+
+
+def install_multi_backend_routes(
+    page: Page,
+    frontend_dir: Path | None = None,
+    *,
+    spinner_mock: bool = False,
+) -> None:
     """Serve /test-page/*, /deckmux-test/*, and /ui/* from the test runner.
 
     Idempotent per Page: re-entry after rapid refresh / multi-tab chaos is a no-op.
+    When *spinner_mock* is true, /test-page uses the mock-xterm reconnect harness.
     """
     if getattr(page, "_uterm_mb_routes", False):
         return
@@ -160,7 +212,8 @@ def install_multi_backend_routes(page: Page, frontend_dir: Path | None = None) -
         url = route.request.url
         parts = url.rstrip("/").split("/test-page/")
         worker_id = parts[-1].split("?")[0] if len(parts) > 1 else "unknown"
-        route.fulfill(status=200, content_type="text/html", body=widget_test_page_html(worker_id))
+        html = spinner_mock_page_html(worker_id) if spinner_mock else widget_test_page_html(worker_id)
+        route.fulfill(status=200, content_type="text/html", body=html)
 
     def on_deckmux_page(route: Route) -> None:
         url = route.request.url
