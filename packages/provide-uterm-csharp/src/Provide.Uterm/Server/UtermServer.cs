@@ -16,6 +16,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Provide.Uterm.ControlChannel;
+using Provide.Uterm.DeckMux;
 using Provide.Uterm.Hub;
 using Provide.Uterm.Recording;
 using Provide.Uterm.ServerAuth;
@@ -61,8 +62,7 @@ public sealed partial class UtermServer : IAsyncDisposable
 
     // In-process resume tokens (Python ControlPlaneResumeStore / Go InMemoryResumeStore).
     private readonly ConcurrentDictionary<string, (string WorkerId, string Role, double ExpiresAt)> _resumeTokens = new();
-    // DeckMux-lite: per-worker presence by browser connection.
-    private readonly ConcurrentDictionary<string, ConcurrentDictionary<object, string>> _presence = new();
+    private readonly DeckMuxPresence _deckMux;
 
     public UtermServer(ServerDeps deps)
     {
@@ -70,6 +70,15 @@ public sealed partial class UtermServer : IAsyncDisposable
         _clock = deps.Clock ?? new RealClock();
         _recording = deps.Recording ?? new NullStore();
         _startTime = _clock.Wall();
+        _deckMux = new DeckMuxPresence(new HubDeckMuxBroadcaster(_deps.Hub));
+    }
+
+    private sealed class HubDeckMuxBroadcaster : IDeckMuxBroadcaster
+    {
+        private readonly TermHub _hub;
+        public HubDeckMuxBroadcaster(TermHub hub) => _hub = hub;
+        public Task BroadcastAsync(string workerId, Dictionary<string, object?> msg, CancellationToken ct = default) =>
+            _hub.Conn.BroadcastToBrowsersAsync(workerId, msg, ct);
     }
 
     private string MintResumeToken(string workerId, string role)
@@ -625,14 +634,12 @@ public sealed partial class UtermServer : IAsyncDisposable
             ControlChannelCodec.EncodeControlFrame(hijackState),
             ctx.RequestAborted).ConfigureAwait(false);
 
-        // DeckMux-lite: presence_sync on join (Python DeckMuxMixin / Go deckOnConnect).
-        var presence = _presence.GetOrAdd(workerId, _ => new ConcurrentDictionary<object, string>());
-        var userId = "u-" + conn.GetHashCode().ToString("x");
-        presence[conn] = userId;
+        // DeckMux: presence_sync on join (+ fan-out when others present).
+        var presenceSync = await _deckMux.OnBrowserConnectAsync(workerId, conn, role, ctx.RequestAborted)
+            .ConfigureAwait(false);
         await conn.SendTextAsync(
-            ControlChannelCodec.EncodeControlFrame(BuildPresenceSync(workerId, presence)),
+            ControlChannelCodec.EncodeControlFrame(presenceSync),
             ctx.RequestAborted).ConfigureAwait(false);
-        // Existing browsers learn about the newcomer via presence_update broadcasts later.
 
         var buffer = new byte[8192];
         try
@@ -648,25 +655,14 @@ public sealed partial class UtermServer : IAsyncDisposable
         finally
         {
             _deps.Hub.Conn.CleanupBrowser(workerId, conn);
-            if (_presence.TryGetValue(workerId, out var pmap))
+            try
             {
-                pmap.TryRemove(conn, out var leftId);
-                try
-                {
-                    await _deps.Hub.Conn.BroadcastToBrowsersAsync(
-                        workerId,
-                        new Dictionary<string, object?>
-                        {
-                            ["type"] = "presence_leave",
-                            ["user_id"] = leftId,
-                            ["ts"] = _clock.Wall(),
-                        },
-                        CancellationToken.None).ConfigureAwait(false);
-                }
-                catch
-                {
-                    // best-effort
-                }
+                await _deckMux.OnBrowserDisconnectAsync(workerId, conn, CancellationToken.None)
+                    .ConfigureAwait(false);
+            }
+            catch
+            {
+                // best-effort
             }
 
             // Fan out released state when the owner drops, matching Python/Go cleanup.
@@ -686,34 +682,6 @@ public sealed partial class UtermServer : IAsyncDisposable
                     .ConfigureAwait(false);
             }
         }
-    }
-
-    private Dictionary<string, object?> BuildPresenceSync(
-        string workerId, ConcurrentDictionary<object, string> presence)
-    {
-        var users = new List<object>();
-        foreach (var kv in presence)
-        {
-            users.Add(new Dictionary<string, object?>
-            {
-                ["user_id"] = kv.Value,
-                ["display_name"] = kv.Value,
-                ["initials"] = kv.Value.Length >= 2 ? kv.Value[^2..].ToUpperInvariant() : "??",
-                ["color"] = "#4a9eff",
-            });
-        }
-
-        return new Dictionary<string, object?>
-        {
-            ["type"] = "presence_sync",
-            ["users"] = users,
-            ["config"] = new Dictionary<string, object?>(),
-            ["owner_id"] = users.Count > 0
-                ? ((Dictionary<string, object?>)users[0])["user_id"]
-                : null,
-            ["worker_id"] = workerId,
-            ["ts"] = _clock.Wall(),
-        };
     }
 
     private async Task HandleBrowserMessage(
@@ -885,23 +853,11 @@ public sealed partial class UtermServer : IAsyncDisposable
                         break;
                     }
                     case "presence_update":
-                    {
-                        // Fan-out presence_update to all browsers (DeckMux HandleMessage subset).
-                        if (_presence.TryGetValue(workerId, out var pmap)
-                            && pmap.TryGetValue(conn, out var uid))
-                        {
-                            var upd = new Dictionary<string, object?>(ctrl.Control)
-                            {
-                                ["type"] = "presence_update",
-                                ["user_id"] = uid,
-                                ["ts"] = _clock.Wall(),
-                            };
-                            await _deps.Hub.Conn.BroadcastToBrowsersAsync(workerId, upd, ct)
-                                .ConfigureAwait(false);
-                        }
-
+                    case "control_request":
+                    case "queued_input":
+                        await _deckMux.HandleMessageAsync(workerId, conn, ctrl.Control, ct)
+                            .ConfigureAwait(false);
                         break;
-                    }
                     case "ping":
                         await conn.SendTextAsync(
                             ControlChannelCodec.EncodeControlFrame(new Dictionary<string, object?>

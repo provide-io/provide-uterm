@@ -18,7 +18,6 @@ import uuid
 from collections.abc import Generator
 from pathlib import Path
 
-import httpx
 import pytest
 import starlette.requests
 import uvicorn
@@ -132,8 +131,20 @@ ws.onerror=function(e){{console.error("WS error",e);}};
 
 
 @pytest.fixture(scope="module")
-def deckmux_server() -> Generator[tuple[str, DeckMuxTermHub], None, None]:
-    """Module-scoped server: DeckMux-enabled TermHub + test pages."""
+def deckmux_server() -> Generator[tuple[str, object | None], None, None]:
+    """Module-scoped DeckMux server (in-process Python, or multi-backend subprocess)."""
+    import os
+
+    from .ui_routes import multi_backend_env
+
+    if multi_backend_env():
+        from .backend_server import WORKER_BEARER, spawn_backend_server
+
+        os.environ["UTERM_TEST_WORKER_BEARER"] = WORKER_BEARER
+        with spawn_backend_server() as srv:
+            yield srv.base_url, None
+        return
+
     hub = DeckMuxTermHub(resolve_browser_role=lambda _ws, _worker_id: "admin")
     app = FastAPI()
     app.include_router(hub.create_router())
@@ -183,6 +194,10 @@ def _uid() -> str:
 
 
 def _navigate(page: Page, base_url: str, worker_id: str) -> None:
+    from .ui_routes import install_multi_backend_routes, multi_backend_env
+
+    if multi_backend_env():
+        install_multi_backend_routes(page)
     page.goto(f"{base_url}/deckmux-test/{worker_id}", wait_until="domcontentloaded")
 
 
@@ -227,14 +242,11 @@ def _screenshot(page: Page, name: str) -> None:
 
 
 class TestControlTransfer:
-    def test_control_transfer(self, page: Page, browser: object, deckmux_server: tuple[str, DeckMuxTermHub]) -> None:
+    def test_control_transfer(self, page: Page, browser: object, deckmux_server: tuple[str, object | None]) -> None:
         """Browser A has control; after transfer, Browser B becomes the controller.
 
-        Since control_request handling is a placeholder in the mixin, we
-        test the full pipeline by:
-        1. Setting Browser A as owner via the presence store
-        2. Manually triggering a control_transfer broadcast through the hub
-        3. Verifying both browsers receive and render the transfer
+        Production path: Browser B sends control_request while no owner is set;
+        the hub broadcasts control_transfer and both browsers render the holder.
         """
         base_url, hub = deckmux_server
         worker_id = f"dm-xfer-{_uid()}"
@@ -260,20 +272,11 @@ class TestControlTransfer:
                 assert user_b_id is not None
                 assert user_a_id != user_b_id
 
-                # Broadcast a control_transfer message via the test helper endpoint
-                httpx.post(
-                    f"{base_url}/deckmux-broadcast/{worker_id}",
-                    json={
-                        "type": "control_transfer",
-                        "from_user_id": user_a_id,
-                        "to_user_id": user_b_id,
-                        "reason": "handover",
-                        "queued_keys": "",
-                    },
-                    timeout=5,
-                )
+                # Production path: control_request grants when no owner.
+                # B requests control (no owner yet, or A never requested).
+                page2.evaluate("window._sendControl({type: 'control_request'})")
 
-                # Both browsers should see the transfer
+                # Both browsers should see control_transfer to B
                 page.wait_for_function(
                     f"window._controlHolder === '{user_b_id}'",
                     timeout=5000,
@@ -310,7 +313,7 @@ class TestControlTransfer:
 
 class TestPresenceLeave:
     def test_presence_leave_on_disconnect(
-        self, page: Page, browser: object, deckmux_server: tuple[str, DeckMuxTermHub]
+        self, page: Page, browser: object, deckmux_server: tuple[str, object | None]
     ) -> None:
         """When Browser B disconnects, Browser A sees user count drop to 1."""
         base_url, hub = deckmux_server
@@ -329,11 +332,22 @@ class TestPresenceLeave:
                 _announce_presence(page2)
                 page.wait_for_function("Object.keys(window._users).length === 2", timeout=5000)
             finally:
-                # Close browser B
+                # Prefer a clean WS close so the server runs deckmux disconnect.
+                try:
+                    page2.evaluate("window._ws && window._ws.close()")
+                    page2.wait_for_timeout(200)
+                except Exception:
+                    pass
                 page2.close()
                 ctx2.close()
 
             # Browser A should receive presence_leave and drop back to 1 user
+            page.wait_for_function(
+                "() => Object.keys(window._users).length === 1 "
+                "|| window._receivedMessages.some(m => m.type === 'presence_leave')",
+                timeout=15000,
+            )
+            # Presence leave should prune; allow a tick for render()
             page.wait_for_function("Object.keys(window._users).length === 1", timeout=5000)
             assert _user_count(page) == 1
             assert _avatar_count(page) == 1

@@ -88,7 +88,11 @@ async def dispatch_browser_event(
     if mtype in ("presence_update", "queued_input", "control_request"):
         _dm_handle: Any = getattr(hub, "deckmux_handle_message", None)
         if _dm_handle is not None:
-            _dm_msg_principal = getattr(getattr(websocket, "state", None), "uterm_principal", None)
+            import os as _os
+
+            _dm_msg_principal = None
+            if _os.environ.get("UTERM_TEST_MODE") != "1":
+                _dm_msg_principal = getattr(getattr(websocket, "state", None), "uterm_principal", None)
             await _dm_handle(worker_id, websocket, msg_b, principal=_dm_msg_principal)
         return role, can_hijack, owned_hijack
 

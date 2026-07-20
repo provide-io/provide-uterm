@@ -369,6 +369,17 @@ func mustInt(v any) int {
 		return int(n)
 	case float32:
 		return int(n)
+	case json.Number:
+		// controlchannel.Decoder uses UseNumber(); browser WS payloads land
+		// here as json.Number rather than float64.
+		i, err := n.Int64()
+		if err == nil {
+			return int(i)
+		}
+		f, err := n.Float64()
+		if err == nil {
+			return int(f)
+		}
 	}
 	return 0
 }

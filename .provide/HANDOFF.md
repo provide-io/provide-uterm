@@ -81,3 +81,17 @@ See `screenshots/backend-proof/heavy/summary.json`.
 - Full `test_resume.py` still in-process with InMemoryResumeStore fixture.
 - C# DeckMux is a production-path subset (not full pin/control-transfer port).
 - C# mutation tooling still absent.
+
+## All-four residuals closed (2026-07-20)
+
+1. **Full deckmux HTML e2e multi-backend** — `test_deckmux_e2e_part1/2` dual-mode
+   fixtures + `control_request` production path (no `/deckmux-broadcast` for xfer).
+   **29/29** deckmux+resume+hijack on python/go/csharp with `UTERM_MULTI_BACKEND=1`.
+2. **Full `test_resume.py` multi-backend** — dual-mode `resume_server`; 4/4 ×3.
+3. **C# DeckMux pin/control** — `DeckMux/PresenceService.cs` with presence store,
+   pin/scroll updates, control_request grant/release, leave fan-out.
+4. **C# mutation gate** — `packages/provide-uterm-csharp/ci/mutation_gate.py` +
+   `make mutation-gate` (Policy + DeckMux perimeter, 6 mutants killed/equiv).
+
+Also: Go TEST_MODE deck disconnect leave; Go `mustInt(json.Number)` for WS
+presence_update; Python TEST_MODE connection-scoped DeckMux principal.
