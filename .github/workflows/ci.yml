@@ -440,13 +440,13 @@ jobs:
           -m "playwright and not slow"
           --no-cov -q --tb=line
           -k "not nyan and not plasma and not telnet"
-      # Inspect + terminal-proxy: Python in-process harnesses (not multi-backend
-      # subprocess). go/csharp skip with explicit product-gap reasons. No
-      # UTERM_MULTI_BACKEND=1 here — avoids extra session servers after core/extras.
+      # Inspect: dual-mode real /tunnel on all backends. Terminal-proxy: Python-only
+      # (explicit product-gap skip on go/csharp). MULTI_BACKEND for inspect tunnel path.
       - name: Inspect + terminal-proxy Playwright
         env:
           UTERM_TEST_BACKEND: ${{ matrix.backend }}
           UTERM_TEST_MODE: "1"
+          UTERM_MULTI_BACKEND: "1"
         run: >
           uv run pytest
           packages/provide-uterm/tests/playwright/test_inspect_e2e.py
