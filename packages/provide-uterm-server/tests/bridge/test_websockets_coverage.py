@@ -302,15 +302,17 @@ def test_deckmux_messages_without_handler_are_ignored() -> None:
 def test_browser_term_test_mode_forces_admin_and_skips_deckmux_principal(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """UTERM_TEST_MODE=1: force admin role + DeckMux connect/disconnect with
-    principal=None (multi-tab Playwright identity isolation)."""
+    """UTERM_TEST_MODE=1: force admin role + DeckMux connect/disconnect/message
+    with principal=None (multi-tab Playwright identity isolation)."""
     monkeypatch.setenv("UTERM_TEST_MODE", "1")
     # Resolver would yield viewer; TEST_MODE must override to admin.
     app, hub = _make_app(role="viewer")
     connect_mock = AsyncMock(return_value=None)
     disconnect_mock = AsyncMock()
+    handle_mock = AsyncMock()
     hub.deckmux_on_browser_connect = connect_mock  # type: ignore[attr-defined]
     hub.deckmux_on_browser_disconnect = disconnect_mock  # type: ignore[attr-defined]
+    hub.deckmux_handle_message = handle_mock  # type: ignore[attr-defined]
 
     with TestClient(app) as client, connect_test_ws(client, "/ws/browser/bot1/term") as browser:
         hello, _ = _read_initial_browser_messages(browser)
@@ -320,6 +322,20 @@ def test_browser_term_test_mode_forces_admin_and_skips_deckmux_principal(
         # principal kw must be omitted/None so each tab gets a fresh DeckMux id.
         call_kwargs = connect_mock.await_args.kwargs if connect_mock.await_args else {}
         assert call_kwargs.get("principal") is None
+
+        with connect_test_ws(client, "/ws/worker/bot1/term") as worker:
+            _read_worker_connected(browser)
+            _read_worker_snapshot_req(worker)
+            # websockets_browser.py:94->96 false branch (TEST_MODE skips principal).
+            browser.send_json({"type": "presence_update", "cursor": {"x": 1, "y": 2}})
+            # Pump the browser receive loop so the presence frame is dispatched.
+            browser.send_json({"type": "snapshot_req"})
+            msg = worker.receive_json()
+            assert msg["type"] == "snapshot_req"
+
+        assert handle_mock.await_count >= 1
+        msg_kwargs = handle_mock.await_args.kwargs if handle_mock.await_args else {}
+        assert msg_kwargs.get("principal") is None
 
     assert disconnect_mock.await_count >= 1
     disc_kwargs = disconnect_mock.await_args.kwargs if disconnect_mock.await_args else {}
