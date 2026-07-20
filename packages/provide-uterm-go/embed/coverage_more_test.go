@@ -11,6 +11,7 @@ import (
 	"errors"
 	"io"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -47,10 +48,10 @@ func TestHubSessionIDsAndLifecycle(t *testing.T) {
 		t.Fatalf("Lifecycle = %v want Created", s1.Lifecycle())
 	}
 
-	var appCalls, cliCalls, wireCalls int
-	s1.OnApplicationData(func(ByteDirection, []byte, string) { appCalls++ })
-	s1.OnClientData(func([]byte, string) { cliCalls++ })
-	s1.OnWire(func(WireEventKind, []byte, string) { wireCalls++ })
+	var appCalls, cliCalls, wireCalls atomic.Int32
+	s1.OnApplicationData(func(ByteDirection, []byte, string) { appCalls.Add(1) })
+	s1.OnClientData(func([]byte, string) { cliCalls.Add(1) })
+	s1.OnWire(func(WireEventKind, []byte, string) { wireCalls.Add(1) })
 
 	up := NewMemoryUpstream()
 	if err := s1.ConnectUpstream(context.Background(), up); err != nil {
@@ -75,8 +76,8 @@ func TestHubSessionIDsAndLifecycle(t *testing.T) {
 	if err := s1.SendToUpstream(ctx, []byte("IN")); err != nil {
 		t.Fatal(err)
 	}
-	if cliCalls != 1 {
-		t.Fatalf("OnClientData calls = %d", cliCalls)
+	if cliCalls.Load() != 1 {
+		t.Fatalf("OnClientData calls = %d", cliCalls.Load())
 	}
 	if err := up.PushFromRemote([]byte("OUT")); err != nil {
 		t.Fatal(err)
@@ -85,12 +86,12 @@ func TestHubSessionIDsAndLifecycle(t *testing.T) {
 	if err != nil || !bytes.Equal(got, []byte("OUT")) {
 		t.Fatalf("receive %q err %v", got, err)
 	}
-	if appCalls != 1 {
-		t.Fatalf("OnApplicationData calls = %d", appCalls)
+	if appCalls.Load() != 1 {
+		t.Fatalf("OnApplicationData calls = %d", appCalls.Load())
 	}
 	s1.RaiseWire(WireDiagnostic, []byte{1}, "diag")
-	if wireCalls != 1 {
-		t.Fatalf("OnWire calls = %d", wireCalls)
+	if wireCalls.Load() != 1 {
+		t.Fatalf("OnWire calls = %d", wireCalls.Load())
 	}
 	_ = s2.Close(ctx)
 	_ = s1.Close(ctx)
@@ -518,8 +519,14 @@ func TestFlushDeferredError(t *testing.T) {
 	ctx := context.Background()
 	si.setNextUp(Defer())
 	_ = up.PushFromRemote([]byte("LATER"))
+	// Wait for defer queue to fill, then stop the upstream reader before
+	// swapping the interceptor (avoids a data race with processUpstreamLocked).
 	time.Sleep(20 * time.Millisecond)
+	up.CompleteRemote()
+	time.Sleep(20 * time.Millisecond)
+	s.mu.Lock()
 	s.inter = errInterceptor{upErr: errors.New("boom")}
+	s.mu.Unlock()
 	if err := s.FlushDeferred(ctx); err == nil {
 		t.Fatal("expected deferred error")
 	}
