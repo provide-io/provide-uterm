@@ -128,7 +128,6 @@ presence_update; Python TEST_MODE connection-scoped DeckMux principal.
 ### Product-gap skips (go/csharp)
 | Module | reason |
 |--------|--------|
-| inspect e2e | no `/tunnel/{id}` binary WS (go) / no inspect+tunnel (csharp) |
 | terminal proxy | Python `fastapi_utils.WsTerminalProxy` only |
 
 ## Phase 5 — Server cov includes `cli` + `fastapi_utils` (2026-07-20)
@@ -183,12 +182,16 @@ done
 |---------|--------|-----|--------|
 | reconnect spinner | dual-mode (in-process + multi-backend) | multi-backend subprocess + mock-xterm page.route | same |
 | browser control channel | frontend FastAPI harness (backend-independent) | same harness on matrix | same harness |
-| inspect e2e | in-process TermHub + `/tunnel` (product path) | **skip** — no `/tunnel/{id}` binary WS | **skip** — no inspect page/tunnel |
+| inspect e2e | dual-mode + real `/tunnel` | **`/tunnel/{id}` binary WS** + inspect UI | **`/tunnel/{id}` + `/app/inspect`** |
 | terminal proxy | in-process fastapi_utils + telnet | **skip** — no mount_terminal_ui | **skip** — same |
 
-CI (`multi-backend-playwright`): reconnect + control-channel on all matrix cells;
-inspect + terminal-proxy step on all cells with explicit product-gap skip reasons
-(never empty pass).
+### Inspect/tunnel server parity (2026-07-20)
+- **Go:** `server/ws_tunnel.go` — `WS /tunnel/{id}` binary protocol, CHANNEL_HTTP
+  fan-out to browsers, TunnelSender for reverse path; `registerTunnelWS` on mux.
+- **C#:** `UtermServer.Tunnel.cs` — same tunnel WS + `GET /app/inspect/{id}`
+  bootstrap HTML; marks `IsTunnelWorker`.
+- Playwright `test_inspect_e2e` dual-mode: multi-backend uses real subprocess
+  tunnel + page.route SPA; **5/5 × python/go/csharp** under `UTERM_MULTI_BACKEND=1`.
 
 ## Residual closeout Phase 3 — C# cover Wave10 (2026-07-20)
 
