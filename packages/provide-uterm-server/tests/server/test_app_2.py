@@ -32,11 +32,29 @@ class TestOnResumeCallback:
         config.sessions = []  # no auto-start — keeps tests deterministic
         return create_server_app(config)
 
+    def _recv_type(self, ws: Any, want: str, *, max_frames: int = 12) -> dict:
+        """Receive frames until one with type==want (skip presence_*/noise)."""
+        for _ in range(max_frames):
+            frame = ws.receive_json()
+            if frame.get("type") == want:
+                return frame
+        raise AssertionError(f"did not receive frame type={want!r}")
+
     def _read_hello_and_state(self, ws: Any) -> dict:
-        hello = ws.receive_json()
-        assert hello["type"] == "hello"
-        hs = ws.receive_json()
-        assert hs["type"] == "hijack_state"
+        """Drain control frames until hello + hijack_state (presence_sync may interleave)."""
+        hello: dict | None = None
+        saw_hijack_state = False
+        for _ in range(12):
+            frame = ws.receive_json()
+            ftype = frame.get("type")
+            if ftype == "hello" and hello is None:
+                hello = frame
+            elif ftype == "hijack_state":
+                saw_hijack_state = True
+            if hello is not None and saw_hijack_state:
+                return hello
+        assert hello is not None, "did not receive hello frame"
+        assert saw_hijack_state, "did not receive hijack_state frame"
         return hello
 
     def test_on_resume_rejects_resume_when_session_deleted(self) -> None:
@@ -60,7 +78,7 @@ class TestOnResumeCallback:
                 ws.send_json({"type": "resume", "token": token})
                 # on_resume returns False (session gone) → resume silently ignored
                 ws.send_json({"type": "ping"})
-                pong = ws.receive_json()
+                pong = self._recv_type(ws, "pong")
                 assert pong["type"] == "pong"
 
     def test_on_resume_allows_resume_when_session_exists(self) -> None:
@@ -79,7 +97,7 @@ class TestOnResumeCallback:
             with connect_test_ws(client, "/ws/browser/perm-sess/term") as ws:
                 self._read_hello_and_state(ws)
                 ws.send_json({"type": "resume", "token": token})
-                resumed = ws.receive_json()
+                resumed = self._recv_type(ws, "hello")
                 assert resumed["type"] == "hello"
                 assert resumed["resumed"] is True
 
@@ -127,7 +145,7 @@ class TestOnResumeCallback:
                 self._read_hello_and_state(ws)
                 ws.send_json({"type": "resume", "token": token})
                 ws.send_json({"type": "ping"})
-                pong = ws.receive_json()
+                pong = self._recv_type(ws, "pong")
                 assert pong["type"] == "pong"  # no "resumed" hello — token rejected
 
     def test_create_server_app_uses_memory_control_plane_by_default(self) -> None:
@@ -183,7 +201,7 @@ class TestOnResumeCallback:
             with connect_test_ws(client, "/ws/browser/sqlite-sess/term") as ws:
                 self._read_hello_and_state(ws)
                 ws.send_json({"type": "resume", "token": token})
-                resumed = ws.receive_json()
+                resumed = self._recv_type(ws, "hello")
                 assert resumed["type"] == "hello"
                 assert resumed["resumed"] is True
 
@@ -213,7 +231,7 @@ class TestOnResumeCallback:
             with connect_test_ws(client, "/ws/browser/sqlite-proof/term") as ws:
                 self._read_hello_and_state(ws)
                 ws.send_json({"type": "resume", "token": first_token})
-                resumed = ws.receive_json()
+                resumed = self._recv_type(ws, "hello")
                 assert resumed["type"] == "hello"
                 assert resumed["resumed"] is True
                 second_token = resumed["resume_token"]

@@ -15,7 +15,12 @@ public class PtyAndUnicodeTests
     [Fact]
     public async Task PtyTransport_LocalShell_RoundTrip()
     {
-        // Local PTY against /bin/sh — exercises Connect/Send/Receive/Disconnect.
+        // Local PTY against /bin/sh — Unix-only (Windows CI has no /bin/sh; ConPTY residual).
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
         await using var _ = new AsyncDisposable(async () => { });
         var pty = new PtyTransport("/bin/sh");
         try
@@ -42,7 +47,8 @@ public class PtyAndUnicodeTests
             await pty.DisconnectAsync();
             Assert.False(pty.IsConnected());
         }
-        catch (Exception ex) when (ex is PlatformNotSupportedException or InvalidOperationException or IOException or DllNotFoundException)
+        catch (Exception ex) when (ex is PlatformNotSupportedException or InvalidOperationException or IOException
+            or DllNotFoundException or System.ComponentModel.Win32Exception)
         {
             // Some CI hosts lack PTY; treat as soft skip by asserting transport constructed.
             Assert.NotNull(pty);

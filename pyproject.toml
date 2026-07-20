@@ -451,6 +451,7 @@ pytest_add_cli_args_test_selection = [
     "packages/provide-uterm/tests/detection/test_saver.py",
     "packages/provide-uterm/tests/detection/test_buffer.py",
     "packages/provide-uterm/tests/detection/test_flow.py",
+    "packages/provide-uterm/tests/detection/test_flow_cache_mutmut.py",
     "packages/provide-uterm/tests/test_io.py",
     "packages/provide-uterm/tests/test_io_mutations.py",
     "packages/provide-uterm/tests/test_io_mutations_2.py",
