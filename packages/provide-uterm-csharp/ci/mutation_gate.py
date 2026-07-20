@@ -9,9 +9,11 @@ Mirrors the Go ``ci/mutation_gate.py`` bar: every applied mutant on the
 perimeter must be KILLED by the filtered test suite, unless documented in
 ``mutation_equivalents.toml``.
 
-Perimeter (deliberately small, 100%-covered pure logic):
+Perimeter (deliberately small pure-logic surfaces with branchy ``&&``/``||``):
   * Policy/StrictPolicyEngine.cs
-  * DeckMux/PresenceService.cs (store update + control grant/release)
+  * DeckMux/PresenceService.cs
+  * Colors/Sgr.cs
+  * Filters/Filters.cs (when it has boolean ops)
 
 Stdlib only (Python >= 3.11 for tomllib). Requires ``dotnet`` on PATH.
 """
@@ -34,6 +36,10 @@ TEST_PROJECT = MODULE_ROOT / "tests" / "Provide.Uterm.Tests" / "Provide.Uterm.Te
 PERIMETER = (
     SRC / "Policy" / "StrictPolicyEngine.cs",
     SRC / "DeckMux" / "PresenceService.cs",
+    SRC / "Colors" / "Sgr.cs",
+    SRC / "Filters" / "Filters.cs",
+    SRC / "Sanitizer" / "Sanitizer.cs",
+    SRC / "Redaction" / "Redaction.cs",
 )
 
 # Operator flips that exercise real branch logic. Boolean literal flips in
@@ -119,8 +125,14 @@ def apply_mutant(m: Mutant) -> str:
 
 
 def run_tests() -> bool:
-    # Focused tests for perimeter (Policy + DeckMux).
-    filt = "FullyQualifiedName~StrictPolicy|FullyQualifiedName~Policy|FullyQualifiedName~DeckMux"
+    # Focused tests for perimeter (Policy + DeckMux + Colors/Sgr + Filters + Sanitizer + Redaction).
+    filt = (
+        "FullyQualifiedName~StrictPolicy|FullyQualifiedName~Policy|"
+        "FullyQualifiedName~DeckMux|FullyQualifiedName~PresenceService|"
+        "FullyQualifiedName~Sgr|FullyQualifiedName~AnsiColors|"
+        "FullyQualifiedName~Filters|FullyQualifiedName~Sanitizer|"
+        "FullyQualifiedName~Redaction"
+    )
     cmd = [
         "dotnet",
         "test",
@@ -130,6 +142,7 @@ def run_tests() -> bool:
         "--nologo",
         "-v",
         "q",
+        "--no-build",
         "--filter",
         filt,
         "--",
@@ -157,6 +170,19 @@ def main() -> int:
     if args.max_mutants > 0:
         all_mutants = all_mutants[: args.max_mutants]
 
+    # Build once so --no-build per mutant is valid.
+    build = subprocess.run(  # nosec
+        ["dotnet", "build", str(TEST_PROJECT), "-c", "Release", "--nologo", "-v", "q"],
+        cwd=MODULE_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if build.returncode != 0:
+        print(build.stdout[-2000:], file=sys.stderr)
+        print(build.stderr[-2000:], file=sys.stderr)
+        print("FAIL: dotnet build for mutation gate", file=sys.stderr)
+        return 2
+
     print(f"C# mutation gate: {len(all_mutants)} mutants across {len(PERIMETER)} files")
     lived: list[Mutant] = []
     killed = 0
@@ -170,9 +196,61 @@ def main() -> int:
         backup = m.path.read_text(encoding="utf-8")
         try:
             m.path.write_text(mutated, encoding="utf-8")
-            dead = run_tests()
+            # Rebuild the mutated library so --no-build tests see the mutant.
+            rebuild = subprocess.run(  # nosec
+                [
+                    "dotnet",
+                    "build",
+                    str(MODULE_ROOT / "src" / "Provide.Uterm" / "Provide.Uterm.csproj"),
+                    "-c",
+                    "Release",
+                    "--nologo",
+                    "-v",
+                    "q",
+                ],
+                cwd=MODULE_ROOT,
+                capture_output=True,
+                text=True,
+            )
+            if rebuild.returncode != 0:
+                # Mutant did not compile → treat as killed (not viable).
+                dead = True
+            else:
+                # Rebuild test host so it picks up the mutated library.
+                tbuild = subprocess.run(  # nosec
+                    [
+                        "dotnet",
+                        "build",
+                        str(TEST_PROJECT),
+                        "-c",
+                        "Release",
+                        "--nologo",
+                        "-v",
+                        "q",
+                    ],
+                    cwd=MODULE_ROOT,
+                    capture_output=True,
+                    text=True,
+                )
+                dead = tbuild.returncode != 0 or run_tests()
         finally:
             m.path.write_text(backup, encoding="utf-8")
+            # Restore a clean build for the next mutant.
+            subprocess.run(  # nosec
+                [
+                    "dotnet",
+                    "build",
+                    str(TEST_PROJECT),
+                    "-c",
+                    "Release",
+                    "--nologo",
+                    "-v",
+                    "q",
+                ],
+                cwd=MODULE_ROOT,
+                capture_output=True,
+                text=True,
+            )
 
         if dead:
             killed += 1

@@ -939,12 +939,36 @@ public sealed partial class UtermServer : IAsyncDisposable
                 var text = Encoding.UTF8.GetString(buffer, 0, result.Count);
                 if (ControlChannelCodec.IsControlFrame(text))
                 {
-                    // Worker control (snapshot, hello) — store snapshot if present
+                    // Fan-out snapshot/control to browsers (color e2e + resume paths).
+                    var dec = new ControlFrameDecoder();
+                    foreach (var chunk in dec.Feed(text))
+                    {
+                        if (chunk is not ControlChunk ctrl) continue;
+                        var mtype = ctrl.Control.TryGetValue("type", out var t) ? t?.ToString() : null;
+                        if (mtype == "snapshot")
+                        {
+                            _deps.Hub.Conn.UpdateLastSnapshot(workerId, ctrl.Control);
+                        }
+
+                        await _deps.Hub.Conn.BroadcastToBrowsersAsync(workerId, ctrl.Control, ctx.RequestAborted)
+                            .ConfigureAwait(false);
+                    }
+
                     continue;
                 }
 
+                // Raw terminal bytes → term control frames for every browser (Python/Go).
                 _deps.Hub.AppendEventData(workerId, "term", new Dictionary<string, object?> { ["data"] = text });
                 _deps.Hub.State.TouchActivity(workerId);
+                await _deps.Hub.Conn.BroadcastToBrowsersAsync(
+                    workerId,
+                    new Dictionary<string, object?>
+                    {
+                        ["type"] = "term",
+                        ["data"] = text,
+                        ["ts"] = _clock.Wall(),
+                    },
+                    ctx.RequestAborted).ConfigureAwait(false);
             }
         }
         finally

@@ -200,11 +200,17 @@ class ColorWorker:
             loop.close()
 
     async def _connect(self) -> None:
+        import os
+
         import websockets
 
         ws_url = self._base_url.replace("http://", "ws://") + f"/ws/worker/{self._worker_id}/term"
+        headers: dict[str, str] = {}
+        bearer = os.environ.get("UTERM_TEST_WORKER_BEARER", "").strip()
+        if bearer:
+            headers["Authorization"] = f"Bearer {bearer}"
         try:
-            async with websockets.connect(ws_url) as ws:
+            async with websockets.connect(ws_url, additional_headers=headers or None) as ws:
                 self._connected.set()
                 snapshot = {
                     "type": "snapshot",
@@ -272,11 +278,17 @@ class AnimatedWorker:
             loop.close()
 
     async def _connect(self) -> None:
+        import os
+
         import websockets
 
         ws_url = self._base_url.replace("http://", "ws://") + f"/ws/worker/{self._worker_id}/term"
+        headers: dict[str, str] = {}
+        bearer = os.environ.get("UTERM_TEST_WORKER_BEARER", "").strip()
+        if bearer:
+            headers["Authorization"] = f"Bearer {bearer}"
         try:
-            async with websockets.connect(ws_url) as ws:
+            async with websockets.connect(ws_url, additional_headers=headers or None) as ws:
                 self._connected.set()
                 snapshot = {
                     "type": "snapshot",
@@ -394,7 +406,19 @@ def _color_test_html(worker_id: str) -> str:
 
 @pytest.fixture(scope="module")
 def color_server() -> Generator[str, None, None]:
-    """Module-scoped server with TermHub and xterm.js color test page."""
+    """Module-scoped color server (in-process Python, or multi-backend subprocess)."""
+    import os
+
+    from .ui_routes import multi_backend_env
+
+    if multi_backend_env():
+        from .backend_server import WORKER_BEARER, spawn_backend_server
+
+        os.environ["UTERM_TEST_WORKER_BEARER"] = WORKER_BEARER
+        with spawn_backend_server() as srv:
+            yield srv.base_url
+        return
+
     hub = TermHub(resolve_browser_role=lambda _ws, _worker_id: "admin")
     app = FastAPI()
     app.include_router(hub.create_router())
