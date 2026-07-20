@@ -68,8 +68,10 @@ jobs:
       # Cloudflare worker / Durable Object test suite.
       - run: uv run pytest -q packages/provide-uterm-cloudflare/tests
 
-  # C# port quality gate (ubuntu-first; OS-specialized PTY/ConPTY jobs land later).
-  # Single source of truth: packages/provide-uterm-csharp/Makefile quality-gate.
+  # C# port quality gate. Single source of truth:
+  # packages/provide-uterm-csharp/Makefile quality-gate.
+  # Ubuntu remains the primary gate; Windows proves the .NET port on Win32
+  # (paths, .exe publish names, ConPTY residual skips under CI=true).
   csharp-quality:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -80,6 +82,43 @@ jobs:
           dotnet-version: "10.0.x"
       # Build, conformance vectors, full test suite, coverlet floor, ship binaries.
       - run: make -C packages/provide-uterm-csharp quality-gate
+
+  csharp-quality-windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        # Git Bash so the Makefile (posix shell + make macros) runs unchanged.
+        shell: bash
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9  # v4.3.1
+        with:
+          dotnet-version: "10.0.x"
+      # coverage_gate.py + mutation_gate.py need Python (tomllib).
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.11"
+      # Windows images do not ship GNU make by default.
+      - name: Install make
+        shell: powershell
+        run: choco install make --yes --no-progress
+      # Same quality-gate as Ubuntu; PYTHON=python for setup-python on Windows.
+      # CI=true skips PtyAndUnicode/LiveParity native interop batch (same as Linux).
+      - name: C# quality gate (Windows)
+        working-directory: packages/provide-uterm-csharp
+        env:
+          PYTHON: python
+          CI: "true"
+        run: make quality-gate
+      # Mutation perimeter (Policy/DeckMux/Sgr/Filters) — proves the gate scripts
+      # on Windows paths + python launcher, not only Ubuntu.
+      - name: C# mutation gate (Windows)
+        working-directory: packages/provide-uterm-csharp
+        env:
+          PYTHON: python
+          CI: "true"
+        run: make mutation-gate
 
   go-quality:
     runs-on: ubuntu-latest

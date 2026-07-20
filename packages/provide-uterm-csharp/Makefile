@@ -118,8 +118,17 @@ build-binaries:
 	@# Guard: lowercase ship names (uterm / uterm-manager). On case-insensitive
 	@# macOS APFS, `test ! -e bin/Uterm` is false when bin/uterm exists, so we
 	@# check the directory listing for exact spellings instead.
-	@test -x bin/uterm -a -x bin/uterm-manager
-	@ls -1 bin | grep -E '^(Uterm|Uterm\.Manager|Uterm\.Mcp)$$' && \
+	@# Windows publish emits uterm.exe / uterm-manager.exe.
+	@if [ -x bin/uterm ] && [ -x bin/uterm-manager ]; then \
+	  :; \
+	elif [ -f bin/uterm.exe ] && [ -f bin/uterm-manager.exe ]; then \
+	  :; \
+	else \
+	  echo "error: missing uterm / uterm-manager ship binaries under bin/"; \
+	  ls -la bin || true; \
+	  exit 1; \
+	fi
+	@ls -1 bin | grep -E '^(Uterm|Uterm\.Manager|Uterm\.Mcp)(\.exe)?$$' && \
 	  { echo "error: unexpected PascalCase/MCP binary in bin/"; exit 1; } || true
 	@echo "uterm + uterm-manager binaries under bin/ (lowercase; MCP not shipped)"
 
