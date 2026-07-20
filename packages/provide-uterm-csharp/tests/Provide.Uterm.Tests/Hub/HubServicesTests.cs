@@ -167,6 +167,32 @@ public class HubServicesTests
     }
 
     [Fact]
+    public void Conn_DeregisterWorker_ClearsHijackOwner()
+    {
+        // Worker crash must drop dashboard hijack so reconnect is not "Hijacked (you)".
+        var clock = new ManualClock(1);
+        clock.SetMonotonic(1);
+        var hub = NewHub(clock);
+        var worker = new FakeWorker();
+        hub.Conn.RegisterWorker("w1", worker);
+        var browser = new object();
+        hub.Conn.RegisterBrowser("w1", browser, "operator");
+        var st = hub.Registry.Get("w1")!;
+        st.HijackOwner = browser;
+        st.HijackOwnerExpiresAt = 9999;
+        Assert.True(hub.State.IsHijacked(st));
+
+        var (should, wasH) = hub.Conn.DeregisterWorker("w1", worker);
+        Assert.True(should);
+        Assert.True(wasH);
+        Assert.Null(st.HijackOwner);
+        Assert.Null(st.HijackOwnerExpiresAt);
+        Assert.Null(st.HijackSession);
+        Assert.Null(st.HijackPending);
+        Assert.False(hub.State.IsHijacked(st));
+    }
+
+    [Fact]
     public void Limiter_And_TokenBucket()
     {
         var clock = new ManualClock(0);

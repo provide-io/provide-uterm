@@ -65,8 +65,14 @@ public sealed class ConnectionManager
                 return (false, false);
             }
 
-            var wasHijacked = _hub.State.IsHijacked(st);
+            // Match Go/Python: drop hijack leases when the worker dies so
+            // reconnect does not leave browsers stuck in "Hijacked (you)".
+            var wasHijacked = st.HijackSession is not null || st.HijackOwner is not null;
             st.WorkerWs = null;
+            st.HijackSession = null;
+            st.HijackOwner = null;
+            st.HijackOwnerExpiresAt = null;
+            st.HijackPending = null;
             return (true, wasHijacked);
         }
     }
