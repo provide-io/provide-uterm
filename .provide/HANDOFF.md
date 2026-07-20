@@ -195,7 +195,17 @@ CI (`multi-backend-playwright`): reconnect + control-channel on all matrix cells
 inspect + terminal-proxy step on all cells with explicit product-gap skip reasons
 (never empty pass).
 
+## Residual closeout Phase 3 — C# cover Wave10 (2026-07-20)
+
+- Added `CoverageTo99Wave10Tests` (lease throw/cancel, DeckMux coerce/AsDict/
+  surrogate JSON, audit head/hash mismatch, FileIo secure open, AcquireError
+  default arm, channel hello decode catch).
+- Measured local cover **98.09%** (11077/11293) vs prior ~98.03%.
+- **COVER_THRESHOLD remains 97.9** — dual-OS ≥0.2pt headroom not yet available
+  for a 98.0 raise (Windows baseline ~97.96; need both jobs ≥98.2 for 98.0).
+  No residual-exclusion inflation.
+
 ### Residual closeout remaining
-3. C# cover floor toward ~99 (dual-OS headroom)
 4. Grow mutation perimeters (Python/Go/C#)
 5. C# DeckMux pin/control-transfer full parity (if still subset)
+3b. Revisit C# floor toward 98.5–99 once dual-OS CI shows headroom
