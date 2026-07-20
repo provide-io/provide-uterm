@@ -205,7 +205,16 @@ inspect + terminal-proxy step on all cells with explicit product-gap skip reason
   for a 98.0 raise (Windows baseline ~97.96; need both jobs ≥98.2 for 98.0).
   No residual-exclusion inflation.
 
+## Residual closeout Phase 4 — Mutation perimeter growth (2026-07-20)
+
+| Lang | New module | Result |
+|------|------------|--------|
+| Python | `filters.py` (IAC/escape consume) | 46/46 killed; test_filters pins read(1) + CSI 0x40..0x7E bounds |
+| Go | `fileio` | 16 killed, 0 lived (gate total 233 killed + 4 equiv) |
+| C# | `Channels/Channels.cs` | 8 new boolean mutants; ChannelsMutationKillTests; 1 documented equiv (ParseChannelHello empty/or) |
+
+All three mutation CI jobs green with strictly larger perimeter than post-ratchet baseline.
+
 ### Residual closeout remaining
-4. Grow mutation perimeters (Python/Go/C#)
 5. C# DeckMux pin/control-transfer full parity (if still subset)
 3b. Revisit C# floor toward 98.5–99 once dual-OS CI shows headroom

@@ -41,6 +41,7 @@ PERIMETER = (
     SRC / "Sanitizer" / "Sanitizer.cs",
     SRC / "Redaction" / "Redaction.cs",
     SRC / "Auth" / "Auth.cs",  # authorized_keys + option parse boolean ops
+    SRC / "Channels" / "Channels.cs",  # hello/grant boolean negotiation arms
 )
 
 # Operator flips that exercise real branch logic. Boolean literal flips in
@@ -132,7 +133,7 @@ def run_tests() -> bool:
         "FullyQualifiedName~DeckMux|FullyQualifiedName~PresenceService|"
         "FullyQualifiedName~Sgr|FullyQualifiedName~AnsiColors|"
         "FullyQualifiedName~Filters|FullyQualifiedName~Sanitizer|"
-        "FullyQualifiedName~Redaction|FullyQualifiedName~Auth"
+        "FullyQualifiedName~Redaction|FullyQualifiedName~Auth|FullyQualifiedName~Channels"
     )
     cmd = [
         "dotnet",
