@@ -61,6 +61,28 @@ async def _run_lifespan_one_tick(app: Any) -> None:
 
 
 class TestAuthDependencyBranches:
+    async def test_test_mode_ws_mints_admin_principal(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """UTERM_TEST_MODE=1 mints admin principal for WebSocket (Playwright e2e)."""
+        monkeypatch.setenv("UTERM_TEST_MODE", "1")
+        app, _ = _make_app()
+        dep = _auth_dep(app)
+        conn = HTTPConnection(
+            {
+                "type": "websocket",
+                "path": "/ws/browser/w1/term",
+                "headers": [],
+                "query_string": b"",
+                "app": app,
+                "client": ("testclient", 1234),
+                "state": {},
+            }
+        )
+        await dep(conn)
+        principal = conn.state.uterm_principal
+        assert principal.subject_id == "test-admin"
+        assert "admin" in principal.roles
+        assert "*" in principal.scopes
+
     async def test_share_cookie_transport_sets_viewer_principal(self) -> None:
         app, _ = _make_app(tunnel=TunnelConfig(token_transport="cookie"))
         app.state.uterm_tunnel_tokens["sess1"] = {"share_token_hash": "x", "control_token_hash": "y"}
