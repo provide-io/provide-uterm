@@ -21,6 +21,7 @@ using Provide.Uterm.Hub;
 using Provide.Uterm.Recording;
 using Provide.Uterm.ServerAuth;
 using Provide.Uterm.ServerConfig;
+using Provide.Uterm.Tunnel;
 
 namespace Provide.Uterm.Server;
 
@@ -37,6 +38,12 @@ public sealed class ServerDeps
     public IClock? Clock { get; init; }
     /// <summary>Backs /api/sessions/{id}/recording routes. Defaults to <see cref="NullStore"/>.</summary>
     public IRecordingStore? Recording { get; init; }
+    /// <summary>Session webhooks (register/list/delete). Default constructed when null.</summary>
+    public WebhookManager? Webhooks { get; init; }
+    /// <summary>Fan-out controller. Lazy-built against Hub when null.</summary>
+    public Fanout.Controller? Fanout { get; init; }
+    /// <summary>Tunnel token/invite store for /api/tunnels host lifecycle.</summary>
+    public Tunnel.MemoryTunnelStore? TunnelStore { get; init; }
 }
 
 /// <summary>
@@ -254,6 +261,13 @@ public sealed partial class UtermServer : IAsyncDisposable
         app.MapGet("/api/sessions/{sessionId}/recording", HandleRecordingMeta);
         app.MapGet("/api/sessions/{sessionId}/recording/entries", HandleRecordingEntries);
         app.MapGet("/api/sessions/{sessionId}/recording/download", HandleRecordingDownload);
+
+        // Session lifecycle control plane (Go routes_sessions_control)
+        MapSessionControlRoutes(app);
+        // Session webhooks (Go routes_webhooks)
+        MapWebhookRoutes(app);
+        // Fan-out groups (Go routes_fanout)
+        MapFanoutRoutes(app);
 
         // Hijack REST surface
         app.MapPost("/worker/{workerId}/hijack/acquire", HandleHijackAcquire);
@@ -1233,6 +1247,8 @@ public static class ServerFactory
         });
         var registry = new InMemorySessionRegistry(cfg.Sessions);
         var graphicalTargets = SeedGraphicalTargets(cfg);
+        var tunnelStore = new Tunnel.MemoryTunnelStore();
+        var webhooks = new WebhookManager(allowLoopbackDestinations: true);
         var server = new UtermServer(new ServerDeps
         {
             Hub = hub,
@@ -1244,6 +1260,8 @@ public static class ServerFactory
             Version = version,
             Clock = clock,
             Recording = BuildRecordingStore(cfg),
+            Webhooks = webhooks,
+            TunnelStore = tunnelStore,
         });
         return (server, devToken);
     }

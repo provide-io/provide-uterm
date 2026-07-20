@@ -32,9 +32,17 @@ public sealed class SessionItem
 public interface ISessionRegistry
 {
     bool TryGetDefinition(string sessionId, out SessionDefinition definition);
+    bool TryGetStatus(string sessionId, out SessionStatus status);
     IReadOnlyList<SessionItem> ListWithDefinitions();
     SessionDefinition Upsert(SessionDefinition def);
     bool Delete(string sessionId);
+    /// <summary>Lifecycle: created/disconnected → running.</summary>
+    SessionStatus? StartSession(string sessionId);
+    /// <summary>Lifecycle: running → disconnected.</summary>
+    SessionStatus? StopSession(string sessionId);
+    SessionStatus? RestartSession(string sessionId);
+    SessionStatus? ClearSession(string sessionId);
+    SessionStatus? SetMode(string sessionId, string inputMode);
 }
 
 /// <summary>In-memory session registry seeded from config sessions.</summary>
@@ -69,6 +77,21 @@ public sealed class InMemorySessionRegistry : ISessionRegistry
         }
     }
 
+    public bool TryGetStatus(string sessionId, out SessionStatus status)
+    {
+        lock (_gate)
+        {
+            if (_status.TryGetValue(sessionId, out var st))
+            {
+                status = st;
+                return true;
+            }
+
+            status = null!;
+            return false;
+        }
+    }
+
     public IReadOnlyList<SessionItem> ListWithDefinitions()
     {
         lock (_gate)
@@ -80,6 +103,77 @@ public sealed class InMemorySessionRegistry : ISessionRegistry
             }).ToList();
         }
     }
+
+    public SessionStatus? StartSession(string sessionId)
+    {
+        lock (_gate)
+        {
+            if (!_status.TryGetValue(sessionId, out var st)) return null;
+            st.LifecycleState = "running";
+            st.WorkerOnline = true;
+            return CloneStatus(st);
+        }
+    }
+
+    public SessionStatus? StopSession(string sessionId)
+    {
+        lock (_gate)
+        {
+            if (!_status.TryGetValue(sessionId, out var st)) return null;
+            st.LifecycleState = "disconnected";
+            st.WorkerOnline = false;
+            st.IsHijacked = false;
+            return CloneStatus(st);
+        }
+    }
+
+    public SessionStatus? RestartSession(string sessionId)
+    {
+        lock (_gate)
+        {
+            if (!_status.TryGetValue(sessionId, out var st)) return null;
+            st.LifecycleState = "running";
+            st.WorkerOnline = true;
+            st.IsHijacked = false;
+            return CloneStatus(st);
+        }
+    }
+
+    public SessionStatus? ClearSession(string sessionId)
+    {
+        lock (_gate)
+        {
+            if (!_status.TryGetValue(sessionId, out var st)) return null;
+            // Clear does not stop the session; marks a soft reset.
+            st.IsHijacked = false;
+            return CloneStatus(st);
+        }
+    }
+
+    public SessionStatus? SetMode(string sessionId, string inputMode)
+    {
+        lock (_gate)
+        {
+            if (!_status.TryGetValue(sessionId, out var st)) return null;
+            st.InputMode = inputMode;
+            return CloneStatus(st);
+        }
+    }
+
+    private static SessionStatus CloneStatus(SessionStatus st) => new()
+    {
+        SessionId = st.SessionId,
+        DisplayName = st.DisplayName,
+        ConnectorType = st.ConnectorType,
+        Visibility = st.Visibility,
+        LifecycleState = st.LifecycleState,
+        CreatedAt = st.CreatedAt,
+        Owner = st.Owner,
+        Tags = st.Tags.ToList(),
+        WorkerOnline = st.WorkerOnline,
+        IsHijacked = st.IsHijacked,
+        InputMode = st.InputMode,
+    };
 
     public SessionDefinition Upsert(SessionDefinition def)
     {
