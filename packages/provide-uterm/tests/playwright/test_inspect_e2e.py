@@ -30,16 +30,28 @@ from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.tunnel.fastapi_routes import register_tunnel_routes
 from provide.uterm.tunnel.protocol import CHANNEL_HTTP, encode_frame
 
-from .backend_server import skip_unless_python_inprocess_surface
+from .backend_server import backend_name
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
 
+def _skip_inspect_product_gap() -> None:
+    """Skip backends without tunnel binary WS + inspect page production surface."""
+    name = backend_name()
+    if name == "go":
+        pytest.skip(
+            "Go server has /app/inspect (auth) but no /tunnel/{id} binary WS handler — "
+            "inspect HTTP e2e needs tunnel frames"
+        )
+    if name == "csharp":
+        pytest.skip("C# server lacks /app/inspect page and /tunnel/{id} worker WS — hard product gap")
+
+
 @pytest.fixture(autouse=True)
-def _skip_non_python_multi_backend() -> None:
-    skip_unless_python_inprocess_surface(reason="inspect e2e uses in-process TermHub + tunnel routes (python-only)")
+def _skip_non_supported_inspect_backend() -> None:
+    _skip_inspect_product_gap()
 
 
 def _inspect_page_html(session_id: str, assets_path: str) -> str:
@@ -56,10 +68,16 @@ def _inspect_page_html(session_id: str, assets_path: str) -> str:
 
 @pytest.fixture(scope="session")
 def inspect_server():
-    """Session-scoped server with TermHub + tunnel routes + custom inspect page."""
+    """Session-scoped inspect surface (Python tunnel harness).
+
+    In-process TermHub + ``/tunnel`` + ``/app/inspect`` is the production Python
+    inspect path under test. Go/C# skip via ``_skip_inspect_product_gap`` (no
+    binary tunnel WS / no inspect page).
+    """
     import importlib.resources
 
-    skip_unless_python_inprocess_surface(reason="inspect e2e uses in-process TermHub + tunnel routes (python-only)")
+    _skip_inspect_product_gap()
+
     hub = TermHub(resolve_browser_role=lambda _ws, _wid: "admin")
     app = FastAPI()
     app.include_router(

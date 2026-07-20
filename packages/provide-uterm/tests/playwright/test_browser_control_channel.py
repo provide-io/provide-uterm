@@ -33,12 +33,8 @@ from starlette.staticfiles import StaticFiles
 
 from provide.uterm.control_channel import encode_control_frame
 
-from .backend_server import skip_unless_python_inprocess_surface
-
-
-@pytest.fixture(autouse=True)
-def _skip_non_python_multi_backend() -> None:
-    skip_unless_python_inprocess_surface(reason="control-channel decoder harness is python FastAPI-only")
+# Frontend-only harness: always runs (independent of UTERM_TEST_BACKEND).
+# Exercises ProvideTerminal control-frame stripping used by every language server.
 
 
 @pytest.fixture(scope="module")
@@ -50,8 +46,10 @@ def terminal_decoder_server() -> Generator[str, None, None]:
         ``/ws/term-test``.
       * ``/ws/term-test`` — emits a framed control frame, then raw terminal
         bytes, then closes. Lets the test inspect what the widget renders.
+
+    Backend-independent: spins its own FastAPI WS emitter so multi-backend
+    matrix cells still exercise the shared frontend decoder.
     """
-    skip_unless_python_inprocess_surface(reason="control-channel decoder harness is python FastAPI-only")
     app = FastAPI()
 
     frontend_path = importlib.resources.files("provide.uterm.server") / "frontend"

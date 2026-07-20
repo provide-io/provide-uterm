@@ -182,8 +182,20 @@ done
 # → 7 passed each backend
 ```
 
+## Residual closeout Phase 2 — Dual-mode surfaces (2026-07-20)
+
+| Surface | python | go | csharp |
+|---------|--------|-----|--------|
+| reconnect spinner | dual-mode (in-process + multi-backend) | multi-backend subprocess + mock-xterm page.route | same |
+| browser control channel | frontend FastAPI harness (backend-independent) | same harness on matrix | same harness |
+| inspect e2e | in-process TermHub + `/tunnel` (product path) | **skip** — no `/tunnel/{id}` binary WS | **skip** — no inspect page/tunnel |
+| terminal proxy | in-process fastapi_utils + telnet | **skip** — no mount_terminal_ui | **skip** — same |
+
+CI (`multi-backend-playwright`): reconnect + control-channel on all matrix cells;
+inspect + terminal-proxy step on all cells with explicit product-gap skip reasons
+(never empty pass).
+
 ### Residual closeout remaining
-2. Dual-mode inspect / reconnect / control-channel / terminal-proxy (go/csharp)
 3. C# cover floor toward ~99 (dual-OS headroom)
 4. Grow mutation perimeters (Python/Go/C#)
 5. C# DeckMux pin/control-transfer full parity (if still subset)
