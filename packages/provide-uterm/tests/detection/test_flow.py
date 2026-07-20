@@ -417,6 +417,30 @@ def test_flow_engine_position_tie_keeps_earliest_step() -> None:
     assert step.next_action == "0\r"
 
 
+def test_detect_prompt_reuses_cached_detector(login_ruleset: RuleSet) -> None:
+    """Cache hit must return the same PromptDetector instance (kills cache no-ops).
+
+    Mutants that force a miss every call (``get(key) → None``, ``get(None)``, or
+    store ``None`` instead of the detector) still produce correct matches on a
+    single call, so only identity-of-cached-detector assertions pin the cache.
+    """
+    engine = FlowEngine(login_ruleset)
+    snap = engine._snapshot("Enter your name:", None)
+    ids = ["login.name"]
+    key = tuple(ids)
+
+    first = engine._detect_prompt(snap, ids)
+    assert first is not None
+    assert key in engine._detector_cache
+    cached = engine._detector_cache[key]
+    assert cached is not None
+
+    second = engine._detect_prompt(snap, ids)
+    assert second is not None
+    # Same detector object on the second lookup — not a rebuild.
+    assert engine._detector_cache[key] is cached
+
+
 def test_flow_engine_ranks_by_position_not_step_index() -> None:
     """Tail-most uses the match POSITION, not the step index: an earlier step
     whose prompt is further down the screen beats a later step higher up."""

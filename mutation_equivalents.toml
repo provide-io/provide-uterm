@@ -48,6 +48,51 @@ The public signature keeps the same limit/offset/event parameters as the real st
 for RecordingStore compatibility, but those parameters are intentionally ignored. \
 Changing the default limit from 200 to 201 cannot change any runtime result."""
 
+[[equivalent]]
+mutant = "provide.uterm.recording.xǁNullRecordingStoreǁget_entries__mutmut_2"
+reason = """\
+NullRecordingStore.get_entries body is `_ = (session_id, limit, offset, event); return []`. \
+Replacing the unused-args bind with `_ = None` does not change the returned empty list \
+or any observable store state — pure no-op equivalence."""
+
+[[equivalent]]
+mutant = "provide.uterm.recording.xǁNullRecordingStoreǁstart_session__mutmut_1"
+reason = """\
+NullRecordingStore.start_session is a pure no-op: `_ = (session_id, metadata); return`. \
+Mutating the discarded bind to `_ = None` cannot change any caller-visible behaviour."""
+
+[[equivalent]]
+mutant = "provide.uterm.recording.xǁNullRecordingStoreǁappend_events__mutmut_1"
+reason = """\
+NullRecordingStore.append_events discards writes (`_ = (session_id, events); return`). \
+`_ = None` is observationally identical — no state, no return value, no side effect."""
+
+[[equivalent]]
+mutant = "provide.uterm.recording.xǁNullRecordingStoreǁend_session__mutmut_1"
+reason = """\
+NullRecordingStore.end_session is a pure no-op (`_ = session_id; return`). \
+Mutating the discarded bind to `_ = None` is behaviorally equivalent."""
+
+[[equivalent]]
+mutant = "provide.uterm.recording.xǁNullRecordingStoreǁget_path__mutmut_1"
+reason = """\
+NullRecordingStore.get_path always returns None after discarding session_id. \
+`_ = session_id` → `_ = None` cannot change the None return."""
+
+[[equivalent]]
+mutant = "provide.uterm.recording.xǁInMemoryRecordingStoreǁget_path__mutmut_1"
+reason = """\
+InMemoryRecordingStore has no local file path; get_path always returns None after \
+`_ = session_id`. Replacing that discard with `_ = None` is behaviorally equivalent."""
+
+[[equivalent]]
+mutant = "provide.uterm.recording.xǁLocalFileRecordingStoreǁget_entries__mutmut_8"
+reason = """\
+`skip = 0 if offset is None else max(0, offset)` → `skip = 1 if offset is None ...`. \
+When offset is None the body takes the tail branch (`if offset is not None:` is false) \
+and never reads `skip`. When offset is not None the ternary uses the else arm \
+`max(0, offset)` unchanged. The mutated then-arm is dead — equivalent."""
+
 # --- connection.py / connection_hijack.py (ConnectionManager) -------------
 # The hijack-clearing-lifecycle bodies (disconnect_worker / _event_bus_close /
 # force_release_hijack) were split into connection_hijack.py as module-level
