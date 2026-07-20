@@ -23,14 +23,17 @@ DOTNET ?= dotnet
 # RfbClient (live RFB TCP). Embed/TelnetUpstream live TCP residual (scripted IAC tested).
 # Opt into native PTY via PreferNativePty / UTERM_NATIVE_PTY=1.
 # MCP is not part of the C# port (operator de-scope); sources and binary removed.
-# 97.9 floors residual rare arms after Wave8/9 harness coverage (UtermServer
+# 97.9 floors residual rare arms after Wave8–10 harness coverage (UtermServer
 # UTERM_TEST_MODE/non-admin/already_hijacked/no_worker WS paths, pure models,
-# limiter eviction, etc.). Remaining miss class (~223 lines): Embed Session
-# cancel/dispose races, UtermServer disconnect catch/CloseAsync, Gui RFB attach
-# catch arms, live TransportSession/Shell/TunnelClient/Drive races, CanonicalJson
+# limiter eviction, Wave10 lease cancel/throw, DeckMux coerce/JSON, audit head
+# mismatch, etc.). Local macOS after Wave10 ~98.09% (11077/11293). Remaining
+# miss class (~216 lines): Embed Session cancel/dispose races, UtermServer
+# disconnect catch/CloseAsync, Gui RFB attach catch arms, live
+# TransportSession/Shell/TunnelClient/Drive races, CanonicalJson
 # FallbackScientific, dual-OS FileIo SetUnixFileMode arms (Ubuntu ~98.02%,
-# Windows ~97.96% on the same denominator). Pure library batches still track
-# ~99%+. Raise toward 99 when residual arms get harnesses.
+# Windows ~97.96% baseline; Wave10 pure arms should lift both slightly).
+# Pure library batches still track ~99%+. Raise COVER_THRESHOLD only with
+# ≥0.2pt headroom on BOTH csharp-quality and csharp-quality-windows.
 COVER_THRESHOLD ?= 97.9
 CONFIGURATION ?= Release
 
