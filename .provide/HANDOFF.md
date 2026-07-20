@@ -110,3 +110,21 @@ presence_update; Python TEST_MODE connection-scoped DeckMux principal.
 ### C# mutation perimeter
 - Policy, DeckMux, Colors/Sgr, Filters, Sanitizer, Redaction
 - 13 mutants: 12 killed + 1 documented equivalent
+
+## Phase 4 — Multi-backend Playwright surface expansion (2026-07-20)
+
+### CI matrix additions (`multi-backend-playwright`)
+- **All backends:** `test_chaos_browser.py`, `test_chaos_browser_2.py` (hijack_server dual-mode + multi-backend `/test-page` routes)
+- **Python-only (explicit skip on go/csharp):** `test_reconnect_spinner.py`, `test_inspect_e2e.py`, `test_browser_control_channel.py`, `test_terminal_proxy.py` via `skip_unless_python_inprocess_surface()` — never empty-pass as go/csharp.
+
+### Helpers
+- `backend_server.skip_unless_python_inprocess_surface` for matrix-safe skips
+- Chaos `_navigate` installs `install_multi_backend_routes` when multi-backend env is set
+
+### Intentional skips
+| Module | go/csharp |
+|--------|-----------|
+| inspect e2e | skip — in-process TermHub + tunnel |
+| reconnect spinner | skip — mock-xterm TermHub page |
+| browser control channel | skip — python FastAPI harness |
+| terminal proxy | skip — fastapi_utils + telnet echo |
