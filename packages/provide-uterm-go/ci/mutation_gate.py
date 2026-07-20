@@ -53,6 +53,7 @@ PERIMETER = (
     "frames",
     "policy",  # StrictPolicyEngine — cross-language behavior contract
     "defaults",  # TerminalDefaults pure constants/helpers at 100% cover
+    "fileio",  # SecureOpenAppend modes + palette/ans pure helpers
 )
 
 # Pinned like golangci-lint/govulncheck in the Makefile: invoked via `go run`

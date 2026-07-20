@@ -22,3 +22,14 @@ skips a pure comment line the same way as ||, but both paths still end in \
 parse-throw→continue for '#' lines without a valid keytype token, so ResolveAsync \
 returns null either way for comment-only files. \
 """
+
+[[equivalent]]
+file = "Channels/Channels.cs"
+package = "Provide.Uterm"
+line = 125
+mutator = "or_and"
+reason = """\
+ParseChannelHello early exit: IsNullOrEmpty(raw) || !IsControlFrame(raw). \
+Flipping to && still returns null for empty and non-frame inputs because \
+DecodeFrames yields no ControlChunk hello — observationally equivalent. \
+"""
