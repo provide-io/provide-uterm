@@ -49,8 +49,14 @@ CLI subcommands (real, not stubs): `proxy`, `listen`, `share`, `tunnel`,
 `inspect`, `watch`, `audit`, `server`.
 
 - `uterm listen WS_URL` — local telnet → remote terminal WebSocket (uwarp-compatible)
+- `uterm proxy HOST PORT` — local browser WS → remote telnet/SSH (wire parity with
+  Python `WsTerminalProxy`; **not** the FastAPI `mount_terminal_ui` embed helper)
 - `uterm proxy --transport websocket --url wss://…` — local browser WS → remote WSS
 - `proxy --once` starts Kestrel, hits `/health`, then stops
+
+> **Terminal UI proxy embed** (`mount_terminal_ui` / library-mounted
+> `WsTerminalProxy` router) is **Python FastAPI only** (permanent de-scope).
+> C# operators use `uterm proxy` for the same browser WS → upstream path.
 
 ## Build & run
 

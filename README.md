@@ -79,6 +79,10 @@ app = FastAPI()
 mount_terminal_ui(app)  # serves at /terminal
 ```
 
+> FastAPI `mount_terminal_ui` / `WsTerminalProxy` is a **Python embedding helper**.
+> Go and C# ship the same wire path via `uterm proxy` (permanent de-scope of the
+> FastAPI mount in those ports — not the multi-backend hub).
+
 ### Run the reference server
 
 ```bash

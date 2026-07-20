@@ -77,9 +77,13 @@ def backend_name() -> str:
 def skip_unless_python_inprocess_surface(*, reason: str | None = None) -> None:
     """Skip go/csharp multi-backend matrix cells for Python-only in-process suites.
 
-    Surfaces that spin their own FastAPI+TermHub (inspect, reconnect spinner,
-    terminal proxy, control-channel decoder) are not Go/C# servers — claiming
-    them under UTERM_TEST_BACKEND=go would be an empty pass.
+    Surfaces that spin their own FastAPI+TermHub (reconnect spinner,
+    control-channel decoder) are not Go/C# servers — claiming them under
+    UTERM_TEST_BACKEND=go would be an empty pass.
+
+    Terminal-proxy embed (``mount_terminal_ui`` / ``WsTerminalProxy``) is a
+    permanent Python-only product surface; Go/C# use ``uterm proxy`` CLI for
+    the same WS→telnet wire path (see HANDOFF permanent de-scope).
     """
     import pytest
 
