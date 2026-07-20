@@ -30,9 +30,16 @@ from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.tunnel.fastapi_routes import register_tunnel_routes
 from provide.uterm.tunnel.protocol import CHANNEL_HTTP, encode_frame
 
+from .backend_server import skip_unless_python_inprocess_surface
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _skip_non_python_multi_backend() -> None:
+    skip_unless_python_inprocess_surface(reason="inspect e2e uses in-process TermHub + tunnel routes (python-only)")
 
 
 def _inspect_page_html(session_id: str, assets_path: str) -> str:
@@ -52,6 +59,7 @@ def inspect_server():
     """Session-scoped server with TermHub + tunnel routes + custom inspect page."""
     import importlib.resources
 
+    skip_unless_python_inprocess_surface(reason="inspect e2e uses in-process TermHub + tunnel routes (python-only)")
     hub = TermHub(resolve_browser_role=lambda _ws, _wid: "admin")
     app = FastAPI()
     app.include_router(

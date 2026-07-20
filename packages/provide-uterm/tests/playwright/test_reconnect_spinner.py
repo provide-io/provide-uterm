@@ -40,12 +40,21 @@ from playwright.sync_api import Page
 
 from provide.uterm.server.bridge.hub import TermHub
 
+from .backend_server import skip_unless_python_inprocess_surface
+
 if TYPE_CHECKING:
     from collections.abc import Generator
 
 
 def _uid() -> str:
     return uuid.uuid4().hex[:8]
+
+
+@pytest.fixture(autouse=True)
+def _skip_non_python_multi_backend() -> None:
+    skip_unless_python_inprocess_surface(
+        reason="reconnect spinner uses mock-xterm in-process TermHub page (python-only)"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -77,6 +86,9 @@ def spinner_server() -> Generator[tuple[str, TermHub], None, None]:
     """Session-scoped server whose test page injects a mock xterm Terminal."""
     from starlette.staticfiles import StaticFiles
 
+    skip_unless_python_inprocess_surface(
+        reason="reconnect spinner uses mock-xterm in-process TermHub page (python-only)"
+    )
     hub = TermHub(resolve_browser_role=lambda _ws, _worker_id: "admin")
     app = FastAPI()
     app.include_router(hub.create_router())

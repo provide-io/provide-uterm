@@ -18,6 +18,8 @@ from playwright.sync_api import Page, expect
 from provide.uterm.fastapi_utils import WsTerminalProxy, mount_terminal_ui
 from provide.uterm.transports.telnet_server import _build_telnet_handshake
 
+from .backend_server import skip_unless_python_inprocess_surface
+
 if TYPE_CHECKING:
     from collections.abc import Generator
 
@@ -44,8 +46,18 @@ class _EchoTelnetHandler(socketserver.BaseRequestHandler):
             self.request.sendall(data)
 
 
+@pytest.fixture(autouse=True)
+def _skip_non_python_multi_backend() -> None:
+    skip_unless_python_inprocess_surface(
+        reason="terminal proxy e2e is python fastapi_utils + telnet echo (python-only)"
+    )
+
+
 @pytest.fixture(scope="session")
 def terminal_proxy_server() -> Generator[tuple[str, list[bytes]], None, None]:
+    skip_unless_python_inprocess_surface(
+        reason="terminal proxy e2e is python fastapi_utils + telnet echo (python-only)"
+    )
     received_chunks: list[bytes] = []
     telnet_server = _ThreadedEchoServer(("127.0.0.1", 0), received_chunks)
     telnet_thread = threading.Thread(target=telnet_server.serve_forever, daemon=True)

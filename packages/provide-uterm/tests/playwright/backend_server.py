@@ -74,6 +74,20 @@ def backend_name() -> str:
     return os.environ.get("UTERM_TEST_BACKEND", "python").strip().lower() or "python"
 
 
+def skip_unless_python_inprocess_surface(*, reason: str | None = None) -> None:
+    """Skip go/csharp multi-backend matrix cells for Python-only in-process suites.
+
+    Surfaces that spin their own FastAPI+TermHub (inspect, reconnect spinner,
+    terminal proxy, control-channel decoder) are not Go/C# servers — claiming
+    them under UTERM_TEST_BACKEND=go would be an empty pass.
+    """
+    import pytest
+
+    name = backend_name()
+    if name in ("go", "csharp"):
+        pytest.skip(reason or f"python-only in-process playwright surface (UTERM_TEST_BACKEND={name})")
+
+
 def build_server_cmd(config_path: Path) -> list[str]:
     backend = backend_name()
     frontend = str(FRONTEND_DIR)

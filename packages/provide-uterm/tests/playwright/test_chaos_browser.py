@@ -23,6 +23,11 @@ def _uid() -> str:
 
 
 def _navigate(page: Page, base_url: str, worker_id: str) -> None:
+    # Multi-backend subprocess servers do not ship /test-page; fulfill via page.route.
+    from .ui_routes import install_multi_backend_routes, multi_backend_env
+
+    if multi_backend_env():
+        install_multi_backend_routes(page)
     page.goto(f"{base_url}/test-page/{worker_id}", wait_until="domcontentloaded")
 
 
