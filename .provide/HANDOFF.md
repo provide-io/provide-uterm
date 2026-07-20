@@ -155,3 +155,9 @@ presence_update; Python TEST_MODE connection-scoped DeckMux principal.
 - **Go:** COVER_THRESHOLD 97.5 → **97.8** (measured ~98.0%, ≥0.2pt headroom).
 - **C#:** floor remains **97.9** with dual-OS headroom (Ubuntu ~98.02 / Windows ~97.96);
   further raise blocked without dual-OS combined artifact or more Windows-side harnesses.
+
+### Multi-backend intentional chaos skips
+Under `UTERM_MULTI_BACKEND=1`, skip flaky heavy races (worker connect load):
+crash-during-hijack, ping-pong, three-browser-churn, rapid-refresh-10x.
+Still exercised in-process (default python PT). Stable chaos_2 tests (tab
+background, network throttle, WS close race) remain on multi-backend matrix.
