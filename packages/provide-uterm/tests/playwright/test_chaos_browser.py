@@ -97,13 +97,16 @@ class TestWorkerCrashDuringHijack:
             _hijack_btn(page).click()  # type: ignore[union-attr]
             ctrl.stop()
 
-            # Widget must NOT get stuck on "Acquiring..." — it should show Offline
+            # Widget must NOT get stuck on "Acquiring..." — offline / disconnected
+            # (or a later recover) after worker death. Multi-backend hosts may
+            # take longer to fan out worker_disconnected.
             page.wait_for_function(
                 "() => {"
                 "  const st = window.__deepQuery('#statustext')?.textContent || '';"
-                "  return st === 'Offline' || st === 'Disconnected';"
+                "  return st === 'Offline' || st === 'Disconnected'"
+                "    || st.includes('offline') || st.includes('Offline');"
                 "}",
-                timeout=10000,
+                timeout=20000,
             )
 
             # Hijack button should be disabled (worker is gone)

@@ -128,3 +128,30 @@ presence_update; Python TEST_MODE connection-scoped DeckMux principal.
 | reconnect spinner | skip — mock-xterm TermHub page |
 | browser control channel | skip — python FastAPI harness |
 | terminal proxy | skip — fastapi_utils + telnet echo |
+
+### Phase 4 follow-up (CI stability)
+- Multi-backend job: baseline + **chaos only** (all backends).
+- Separate step **Python-only Playwright surfaces** (`if: matrix.backend == python`) for
+  reconnect/inspect/control-channel/terminal-proxy — avoids process contention with
+  multi-backend `hijack_server`.
+- Chaos crash-during-hijack offline wait timeout raised to 20s for C# fan-out lag.
+
+## Phase 5 — Server cov includes `cli` + `fastapi_utils` (2026-07-20)
+- `packages/provide-uterm-server/pyproject.toml`: `--cov` / `source` add
+  `provide.uterm.cli` and `provide.uterm.fastapi_utils`.
+- `tests/cli/test_cli_cov_gaps.py`: SSHTransport missing-attr, authorized_keys
+  listen suffix, watch extract_tunnel_id, inspect intercept=False print.
+- Residual TUI/ASGI branches: site `pragma: no branch` on incomplete DLE header,
+  unknown http frame types, multi-chunk more_body, inspect-toggle fallthrough.
+
+## Phase 3 — Mutation perimeter expansion (2026-07-20)
+- **Python:** `src/provide/uterm/ws_bytes.py` added to mutmut `source_paths` + test_ws_bytes selection;
+  5 codec-case / errors-handler equivalents documented in `mutation_equivalents.toml`.
+- **Go:** `defaults` package added to gremlins PERIMETER (1 mutant killed, 0 lived).
+- **C#:** `Auth/Auth.cs` added to mutation PERIMETER + Auth filter; AuthMutationKillTests;
+  Auth.cs:119 or_and documented equivalent; gate 18 mutants all killed/equiv.
+
+## Phase 2 — Cover floor ratchet (2026-07-20)
+- **Go:** COVER_THRESHOLD 97.5 → **97.8** (measured ~98.0%, ≥0.2pt headroom).
+- **C#:** floor remains **97.9** with dual-OS headroom (Ubuntu ~98.02 / Windows ~97.96);
+  further raise blocked without dual-OS combined artifact or more Windows-side harnesses.

@@ -227,6 +227,8 @@ source_paths = [
     #   pytest_add_cli_args_test_selection below.
     "src/provide/uterm/detection/flow.py",
     "src/provide/uterm/io.py",
+    # Pure latin-1 WS byte helpers — small, already unit-tested.
+    "src/provide/uterm/ws_bytes.py",
     "src/provide/uterm/recording.py",
     # Bridge protocol negotiation — boundary-heavy, security-relevant.
     # Covered by tests/test_protocol_negotiation.py.
@@ -459,6 +461,7 @@ pytest_add_cli_args_test_selection = [
     "packages/provide-uterm/tests/test_io_mutmut.py",
     "packages/provide-uterm/tests/test_high_roi_mutmut.py",
     "packages/provide-uterm/tests/terminal/test_io.py",
+    "packages/provide-uterm/tests/terminal/test_ws_bytes.py",
     # Covers bridge/contracts.py negotiate_protocol_version + worker_hello emitter.
     "packages/provide-uterm/tests/test_protocol_negotiation.py",
     # Covers recording.py RecordingStore implementations (In-memory / Null /

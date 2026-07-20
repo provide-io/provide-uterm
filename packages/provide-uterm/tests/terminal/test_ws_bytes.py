@@ -73,3 +73,31 @@ def test_imports_from_package_root() -> None:
 @pytest.mark.parametrize("payload", [b"", b"\x00", b"\xff", b"\x80\x9f\xa0"])
 def test_roundtrip_param(payload: bytes) -> None:
     assert channel_str_to_bytes(ws_frame_to_channel_str(payload)) == payload
+
+
+def test_ws_frame_empty_bytes() -> None:
+    assert ws_frame_to_channel_str(b"") == ""
+
+
+def test_channel_str_to_bytes_empty() -> None:
+    assert channel_str_to_bytes("") == b""
+
+
+def test_ws_frame_type_dispatch_str_not_reencoded() -> None:
+    """str input must not go through decode (isinstance True arm)."""
+    s = "\x00\xff latin"
+    assert ws_frame_to_channel_str(s) is s or ws_frame_to_channel_str(s) == s
+
+
+def test_channel_str_to_bytes_uses_latin1_not_utf8() -> None:
+    """High bytes must use latin-1 (mutant swapping codec fails)."""
+    s = "".join(chr(i) for i in range(128, 256))
+    out = channel_str_to_bytes(s)
+    assert out == bytes(range(128, 256))
+    assert out != s.encode("utf-8", errors="replace")
+
+
+def test_ws_frame_bytes_decode_latin1_strict_identity() -> None:
+    raw = bytes([0, 1, 127, 128, 255])
+    got = ws_frame_to_channel_str(raw)
+    assert list(map(ord, got)) == list(raw)

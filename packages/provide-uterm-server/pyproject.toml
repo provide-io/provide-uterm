@@ -104,6 +104,8 @@ addopts = [
     "--cov=provide.uterm.server",
     "--cov=provide.uterm.tunnel",
     "--cov=provide.uterm.gateway",
+    "--cov=provide.uterm.cli",
+    "--cov=provide.uterm.fastapi_utils",
     "--cov-branch",
     "--cov-report=term-missing",
     "--cov-fail-under=100",
@@ -115,6 +117,8 @@ source = [
     "provide.uterm.server",
     "provide.uterm.tunnel",
     "provide.uterm.gateway",
+    "provide.uterm.cli",
+    "provide.uterm.fastapi_utils",
 ]
 omit = ["tests/*"]
 branch = true
