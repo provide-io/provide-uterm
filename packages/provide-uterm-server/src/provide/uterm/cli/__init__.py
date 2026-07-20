@@ -253,7 +253,8 @@ async def _run_listen(
     except KeyboardInterrupt:  # pragma: no cover
         pass
     finally:
-        for srv in servers:
+        # servers is non-empty here (empty case returned above).
+        for srv in servers:  # pragma: no branch
             srv.close()
 
 
