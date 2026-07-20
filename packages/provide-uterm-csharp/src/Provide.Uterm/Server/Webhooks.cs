@@ -67,7 +67,16 @@ public sealed class WebhookManager
             throw new ArgumentException("pattern exceeds max length 200");
         }
 
-        _ = new Regex(pattern, RegexOptions.Compiled, TimeSpan.FromSeconds(1));
+        try
+        {
+            _ = new Regex(pattern, RegexOptions.Compiled, TimeSpan.FromSeconds(1));
+        }
+        catch (Exception ex)
+        {
+            // RegexParseException derives from ArgumentException on .NET; wrap so
+            // callers always see ArgumentException (API parity with URL validation).
+            throw new ArgumentException("invalid pattern: " + ex.Message, ex);
+        }
     }
 
     public WebhookConfig Register(
