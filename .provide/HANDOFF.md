@@ -156,8 +156,34 @@ presence_update; Python TEST_MODE connection-scoped DeckMux principal.
 - **C#:** floor remains **97.9** with dual-OS headroom (Ubuntu ~98.02 / Windows ~97.96);
   further raise blocked without dual-OS combined artifact or more Windows-side harnesses.
 
-### Multi-backend intentional chaos skips
-Under `UTERM_MULTI_BACKEND=1`, skip flaky heavy races (worker connect load):
-crash-during-hijack, ping-pong, three-browser-churn, rapid-refresh-10x.
-Still exercised in-process (default python PT). Stable chaos_2 tests (tab
-background, network throttle, WS close race) remain on multi-backend matrix.
+## Residual closeout Phase 1 — Multi-backend chaos stabilized (2026-07-20)
+
+**No multi-backend chaos skips remain.** All 7 chaos tests run and pass on
+python / go / csharp under `UTERM_MULTI_BACKEND=1` (7/7 × 3).
+
+### Root causes fixed
+1. **WorkerController** (`conftest_part2.py`): multi-backend connect timeout 20s,
+   connect retries, `_ready` only after first snapshot (hub marks worker online
+   before browser asserts Connected).
+2. **Idempotent `install_multi_backend_routes`**: safe under rapid-refresh /
+   multi-tab chaos (`page._uterm_mb_routes`).
+3. **C# `DeregisterWorker`**: clear hijack owner/session/pending on worker death
+   (parity with Go/Python). Previously reconnect after crash-during-hijack left
+   browsers stuck on **Hijacked (you)** instead of **Connected (watching)**.
+
+### Proof
+```bash
+for be in python go csharp; do
+  UTERM_TEST_BACKEND=$be UTERM_TEST_MODE=1 UTERM_MULTI_BACKEND=1 \
+    uv run pytest packages/provide-uterm/tests/playwright/test_chaos_browser.py \
+      packages/provide-uterm/tests/playwright/test_chaos_browser_2.py \
+      -m playwright --no-cov -q
+done
+# → 7 passed each backend
+```
+
+### Residual closeout remaining
+2. Dual-mode inspect / reconnect / control-channel / terminal-proxy (go/csharp)
+3. C# cover floor toward ~99 (dual-OS headroom)
+4. Grow mutation perimeters (Python/Go/C#)
+5. C# DeckMux pin/control-transfer full parity (if still subset)

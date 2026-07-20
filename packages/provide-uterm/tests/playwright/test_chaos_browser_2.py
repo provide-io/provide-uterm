@@ -159,8 +159,6 @@ class TestRapidPageRefresh:
         hijack_server: tuple[str, object],
     ) -> None:
         """10 rapid reloads after hijack; widget reaches stable state, no orphaned WS."""
-        if multi_backend_env():
-            pytest.skip("rapid refresh flaky under multi-backend worker connect races")
         base_url, _ = hijack_server
         wid = f"refresh-{_uid()}"
         ctrl = WorkerController(base_url, wid).start()

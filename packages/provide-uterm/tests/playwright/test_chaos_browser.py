@@ -23,14 +23,9 @@ def _uid() -> str:
     return uuid.uuid4().hex[:8]
 
 
-def _skip_flaky_multi_backend() -> None:
-    """Heavy crash/churn/pong races are flaky under multi-backend worker connect load."""
-    if multi_backend_env():
-        pytest.skip("chaos crash/churn/pong flaky under multi-backend worker connect races")
-
-
 def _navigate(page: Page, base_url: str, worker_id: str) -> None:
     # Multi-backend subprocess servers do not ship /test-page; fulfill via page.route.
+    # Idempotent route install — safe across multi-page / rapid-refresh chaos.
     if multi_backend_env():
         install_multi_backend_routes(page)
     page.goto(f"{base_url}/test-page/{worker_id}", wait_until="domcontentloaded")
@@ -90,7 +85,6 @@ class TestWorkerCrashDuringHijack:
         hijack_server: tuple[str, object],
     ) -> None:
         """Browser clicks Hijack at the moment worker disconnects; widget recovers to Offline."""
-        _skip_flaky_multi_backend()
         base_url, _ = hijack_server
         wid = f"crash-{_uid()}"
         ctrl = WorkerController(base_url, wid).start()
@@ -146,7 +140,6 @@ class TestRapidHijackPingPong:
         hijack_server: tuple[str, object],
     ) -> None:
         """Two browsers trade hijack 3 times; all inputs delivered in order."""
-        _skip_flaky_multi_backend()
         base_url, _ = hijack_server
         wid = f"pong-{_uid()}"
         ctrl = WorkerController(base_url, wid).start()
@@ -228,7 +221,6 @@ class TestThreeBrowserChurn:
         hijack_server: tuple[str, object],
     ) -> None:
         """3 browsers: A hijacks, C disconnects mid-session, A+B remain consistent."""
-        _skip_flaky_multi_backend()
         base_url, _ = hijack_server
         wid = f"churn-{_uid()}"
         ctrl = WorkerController(base_url, wid).start()

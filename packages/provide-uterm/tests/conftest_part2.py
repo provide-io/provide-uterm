@@ -108,14 +108,30 @@ class WorkerController:
         self._base_url = base_url
         self._worker_id = worker_id
         self._connected = threading.Event()
+        self._ready = threading.Event()  # set after first snapshot sent
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+        self._connect_error: str | None = None
+
+    def _connect_timeout_s(self) -> float:
+        # Multi-backend / go / csharp subprocess hubs need longer than in-process TermHub.
+        multi = _os.environ.get("UTERM_MULTI_BACKEND", "").strip().lower() in ("1", "true", "yes")
+        backend = _os.environ.get("UTERM_TEST_BACKEND", "python").strip().lower() or "python"
+        if multi or backend in ("go", "csharp"):
+            return 20.0
+        return 5.0
 
     def start(self) -> WorkerController:
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
-        if not self._connected.wait(timeout=5.0):
-            raise RuntimeError(f"WorkerController: worker {self._worker_id!r} did not connect within 5 s")
+        timeout = self._connect_timeout_s()
+        # Wait until TCP+WS is up AND initial snapshot has been sent so the hub
+        # marks the worker online before the browser asserts Connected.
+        if not self._ready.wait(timeout=timeout):
+            err = self._connect_error or "timeout"
+            raise RuntimeError(
+                f"WorkerController: worker {self._worker_id!r} did not connect within {timeout:.0f} s ({err})"
+            )
         return self
 
     def _run(self) -> None:
@@ -136,38 +152,53 @@ class WorkerController:
         bearer = _os.environ.get("UTERM_TEST_WORKER_BEARER", "").strip()
         if bearer:
             headers["Authorization"] = f"Bearer {bearer}"
-        try:
-            async with websockets.connect(ws_url, additional_headers=headers or None) as ws:
-                self._connected.set()
-                snapshot_msg = {
-                    "type": "snapshot",
-                    "screen": f"E2E test worker: {self._worker_id}",
-                    "cursor": {"x": 0, "y": 0},
-                    "cols": 80,
-                    "rows": 25,
-                    "screen_hash": "e2e-hash",
-                    "cursor_at_end": True,
-                    "has_trailing_space": False,
-                    "prompt_detected": {"prompt_id": "test_prompt"},
-                    "ts": time.time(),
-                }
-                await ws.send(encode_control_frame(snapshot_msg))
-                decoder = ControlFrameDecoder()
-                while not self._stop.is_set():
-                    try:
-                        raw = await asyncio.wait_for(ws.recv(), timeout=0.1)
-                        for chunk in decoder.feed(raw):
-                            if isinstance(chunk, ControlChunk):
-                                self.received.append(chunk.control)
-                            elif isinstance(chunk, DataChunk) and chunk.data:
-                                # Hub encodes "input" messages as raw data frames
-                                self.received.append({"type": "input", "data": chunk.data})
-                    except TimeoutError:
-                        continue
-                    except Exception:
-                        break
-        except Exception:
-            self._connected.set()  # unblock callers even on connection failure
+
+        deadline = time.monotonic() + self._connect_timeout_s()
+        attempt = 0
+        last_err: BaseException | None = None
+        while time.monotonic() < deadline and not self._stop.is_set():
+            attempt += 1
+            try:
+                async with websockets.connect(ws_url, additional_headers=headers or None, open_timeout=5) as ws:
+                    self._connected.set()
+                    snapshot_msg = {
+                        "type": "snapshot",
+                        "screen": f"E2E test worker: {self._worker_id}",
+                        "cursor": {"x": 0, "y": 0},
+                        "cols": 80,
+                        "rows": 25,
+                        "screen_hash": "e2e-hash",
+                        "cursor_at_end": True,
+                        "has_trailing_space": False,
+                        "prompt_detected": {"prompt_id": "test_prompt"},
+                        "ts": time.time(),
+                    }
+                    await ws.send(encode_control_frame(snapshot_msg))
+                    self._ready.set()
+                    decoder = ControlFrameDecoder()
+                    while not self._stop.is_set():
+                        try:
+                            raw = await asyncio.wait_for(ws.recv(), timeout=0.1)
+                            for chunk in decoder.feed(raw):
+                                if isinstance(chunk, ControlChunk):
+                                    self.received.append(chunk.control)
+                                elif isinstance(chunk, DataChunk) and chunk.data:
+                                    # Hub encodes "input" messages as raw data frames
+                                    self.received.append({"type": "input", "data": chunk.data})
+                        except TimeoutError:
+                            continue
+                        except Exception:
+                            break
+                    return
+            except Exception as exc:
+                last_err = exc
+                self._connect_error = f"attempt {attempt}: {type(exc).__name__}: {exc}"
+                await asyncio.sleep(min(0.25 * attempt, 1.5))
+        if last_err is not None:
+            self._connect_error = f"{type(last_err).__name__}: {last_err}"
+        # Unblock waiters so start() can raise with context.
+        self._connected.set()
+        self._ready.set()
 
     def wait_for(self, predicate: Any, timeout: float = 5.0) -> dict[str, Any] | None:
         """Return the first received message matching *predicate*, or None on timeout."""

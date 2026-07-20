@@ -148,7 +148,12 @@ ws.onerror=function(e){{console.error("WS error",e);}};
 
 
 def install_multi_backend_routes(page: Page, frontend_dir: Path | None = None) -> None:
-    """Serve /test-page/*, /deckmux-test/*, and /ui/* from the test runner."""
+    """Serve /test-page/*, /deckmux-test/*, and /ui/* from the test runner.
+
+    Idempotent per Page: re-entry after rapid refresh / multi-tab chaos is a no-op.
+    """
+    if getattr(page, "_uterm_mb_routes", False):
+        return
     fe = frontend_dir or FRONTEND_DIR
 
     def on_test_page(route: Route) -> None:
@@ -192,6 +197,7 @@ def install_multi_backend_routes(page: Page, frontend_dir: Path | None = None) -
     page.route("**/deckmux-test/**", on_deckmux_page)
     page.route("**/color-test/**", on_color_page)
     page.route("**/ui/**", on_ui)
+    page._uterm_mb_routes = True
 
 
 def multi_backend_env() -> bool:
