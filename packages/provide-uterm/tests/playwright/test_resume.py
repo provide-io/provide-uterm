@@ -160,13 +160,14 @@ class TestResumeTokenInHello:
         worker_id = f"pw-resume-{_uid()}"
         _resume_navigate(page, base_url, worker_id)
 
-        # Wait for status to move past "Connecting…"
+        # Wait for hello→sessionStorage, not merely status leaving "Connecting…".
+        # onopen sets status to "Waking…" before the hello frame arrives, so a
+        # status-only wait races and flakes under multi-backend (esp. csharp cold path).
         page.wait_for_function(
-            "window.__deepQuery('#statustext')?.textContent !== 'Connecting…'",
-            timeout=5000,
+            f"sessionStorage.getItem('uterm_resume_{worker_id}') !== null",
+            timeout=15000,
         )
 
-        # Check that the resume token was stored in sessionStorage
         token = page.evaluate(f"sessionStorage.getItem('uterm_resume_{worker_id}')")
         assert token is not None
         assert len(token) > 10
@@ -180,8 +181,8 @@ class TestResumeTokenInHello:
         _resume_navigate(page, base_url, worker_id)
 
         page.wait_for_function(
-            "window.__deepQuery('#statustext')?.textContent !== 'Connecting…'",
-            timeout=5000,
+            f"sessionStorage.getItem('uterm_resume_{worker_id}') !== null",
+            timeout=15000,
         )
 
         token1 = page.evaluate(f"sessionStorage.getItem('uterm_resume_{worker_id}')")
