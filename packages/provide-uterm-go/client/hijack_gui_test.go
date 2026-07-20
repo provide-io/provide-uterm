@@ -35,8 +35,23 @@ func TestHijackClientGUIMethods(t *testing.T) {
 	if _, err := c.GUIDrag(ctx, "w1", "h1", 0, 0, 5, 5); err != nil {
 		t.Fatal(err)
 	}
-	// invalid ids
+	// invalid worker ids
 	if _, err := c.GUIScreenshot(ctx, "bad!", "h1"); err == nil {
 		t.Fatal("expected bad worker id error")
+	}
+	// invalid hijack ids hit the remaining error arms of Click/Type/Key/Drag
+	for _, fn := range []struct {
+		name string
+		call func() error
+	}{
+		{"GUIClick", func() error { _, err := c.GUIClick(ctx, "w1", "bad!", 0, 0, "left"); return err }},
+		{"GUIType", func() error { _, err := c.GUIType(ctx, "w1", "../x", "t"); return err }},
+		{"GUIKey", func() error { _, err := c.GUIKey(ctx, "w1", "..", "Enter"); return err }},
+		{"GUIDrag", func() error { _, err := c.GUIDrag(ctx, "w1", "a/b", 0, 0, 1, 1); return err }},
+		{"GUIScreenshot hijack", func() error { _, err := c.GUIScreenshot(ctx, "w1", "bad!"); return err }},
+	} {
+		if err := fn.call(); err == nil {
+			t.Fatalf("%s: expected invalid hijack id error", fn.name)
+		}
 	}
 }

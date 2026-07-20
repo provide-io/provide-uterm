@@ -15,8 +15,9 @@ GOLANGCI_LINT ?= golangci-lint
 # test cannot trigger):
 #   - manager (~94%): syscall-failure branches (rename/write/MkdirAll errors,
 #     log rotation) in the monitor loop's reconciliation.
-#   - server (~96%): frame-encoder/deckmux internal-error log arms; handshake
-#     mid-write races; OS/socket-level Serve() failure branches.
+#   - server (~95%): frame-encoder/deckmux internal-error log arms; handshake
+#     mid-write races; OS/socket-level Serve() failure branches; residual WS
+#     resume/deckmux paths.
 #   - gateway (~99%): a handful of crypto/rand and channel-accept error arms.
 #   - cli (~98%): external-constructor failures (telemetry/engine wiring),
 #     os.Hostname()/json.Marshal(fixed map) failure arms.
@@ -25,10 +26,11 @@ GOLANGCI_LINT ?= golangci-lint
 #     /etc/passwd read failures, and a few accept-vs-Stop/queue-drain races
 #     that only manifest under adversarial scheduling.
 # transports/client/controlplane-sqlite/hub carry only syscall/driver/
-# JSON-encode guards the Python originals also exclude. Whole-module ~97.4%
-# before litevirt VNC glue; cover profile filters litevirt_ai/human + cmd/
-# (see cover target). Floor 96.5 after that residual.
-COVER_THRESHOLD ?= 96.5
+# JSON-encode guards the Python originals also exclude. Whole-module ~98.0%
+# after browser resume/deck + timeseries/swarm strip + no-worker REST paths;
+# cover profile filters litevirt_ai/human + cmd/ (see cover target). Floor
+# 97.5 leaves ~0.5pt headroom.
+COVER_THRESHOLD ?= 97.5
 
 # Driver for the mutation gate (stdlib-only Python >= 3.11; tomllib + json).
 PYTHON ?= python3

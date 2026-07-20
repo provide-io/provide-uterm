@@ -6,6 +6,7 @@
 package deckmux
 
 import (
+	"encoding/json"
 	"reflect"
 	"strings"
 	"testing"
@@ -369,6 +370,11 @@ func TestCoercionHelpers(t *testing.T) {
 	if mustInt(5) != 5 || mustInt(int32(5)) != 5 || mustInt(int64(5)) != 5 ||
 		mustInt(5.0) != 5 || mustInt(float32(5)) != 5 || mustInt("x") != 0 {
 		t.Error("mustInt")
+	}
+	// controlchannel UseNumber() path: integer, float, and invalid tokens.
+	if mustInt(json.Number("42")) != 42 || mustInt(json.Number("3.9")) != 3 ||
+		mustInt(json.Number("not-a-number")) != 0 {
+		t.Error("mustInt json.Number")
 	}
 	if asFloat(1.5) != 1.5 || asFloat(float32(2)) != 2 || asFloat(3) != 3 ||
 		asFloat(int64(4)) != 4 || asFloat("x") != 0 {

@@ -46,3 +46,15 @@ func TestConfigDefaultPrincipalOverride(t *testing.T) {
 		t.Fatalf("New with explicit principal failed: %v", err)
 	}
 }
+
+// TestNewWithClientOptions covers EntityPrefix + Headers option wiring.
+func TestNewWithClientOptions(t *testing.T) {
+	srv, err := New(Config{
+		BaseURL:      "http://x",
+		EntityPrefix: "/agent",
+		Headers:      map[string]string{"X-Uterm-Role": "operator", "X-Uterm-Subject": "bob"},
+	})
+	if err != nil || srv == nil {
+		t.Fatalf("New with options: %v", err)
+	}
+}

@@ -72,11 +72,13 @@ make quality-gate
 
 Coverage excludes pure Unicode/charset lookup tables (data-only) and live
 OS/socket residual packages (`Pty/PtyTransport`, live telnet/SSH/WebSocket
-transport bodies). The gate floor is `COVER_THRESHOLD=97.0` (Go-comparable;
-Go uses 97.2 with documented residuals). Remaining misses match Go’s residual
-class: production `Console.CancelKeyPress` wait arms (tests inject
-`WaitForCancel` no-ops), WebSocket accept/stop races, and rare codec/float
-fallback branches — not untested library logic.
+transport bodies, Proxy/Gateway accept races — see `ci/coverage_gate.py`).
+The gate floor is `COVER_THRESHOLD=98.0` (measured ~98.0% after residual
+exclusions). Remaining misses match Go’s residual class: production
+`Console.CancelKeyPress` wait arms (tests inject `WaitForCancel` no-ops),
+Embed/session cancel races, RFB attach catch arms, Windows-only
+`SetUnixFileMode` PlatformNotSupported, and rare codec/float fallbacks —
+not untested pure library logic.
 
 ## Conformance
 

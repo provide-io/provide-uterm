@@ -6,6 +6,7 @@
 package bridge
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 )
@@ -28,6 +29,11 @@ func TestSafeInt(t *testing.T) {
 		{"string bad", "nope", 8, 0, 8},
 		{"unsupported type", []int{1}, 6, 0, 6},
 		{"below min", 2, 5, 3, 5},
+		// controlchannel.UseNumber() path: integer and float json.Number,
+		// plus a non-numeric token that falls through to def.
+		{"json.Number int", json.Number("42"), 0, 0, 42},
+		{"json.Number float", json.Number("3.9"), 0, 0, 3},
+		{"json.Number bad", json.Number("nope"), 9, 0, 9},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
