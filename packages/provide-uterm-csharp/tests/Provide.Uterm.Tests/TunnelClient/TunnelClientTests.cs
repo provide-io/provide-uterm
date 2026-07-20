@@ -92,10 +92,32 @@ public class TunnelClientTests
     [Fact]
     public async Task PtyShare_StartsAndStops()
     {
-        await using var share = new PtyShareSession("true");
+        var cmd = OperatingSystem.IsWindows() ? "cmd /c exit 0" : "true";
+        await using var share = new PtyShareSession(cmd);
         await share.StartAsync();
         // Process may exit quickly; Start must not throw.
         await share.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task PtyShare_AbsoluteAndMultiToken_Launch()
+    {
+        // Absolute path branch (Unix) / multi-token (Windows cmd).
+        if (OperatingSystem.IsWindows())
+        {
+            await using var s = new PtyShareSession("cmd /c echo hi");
+            await s.StartAsync();
+            await s.DisposeAsync();
+        }
+        else
+        {
+            await using var s = new PtyShareSession("/bin/echo");
+            await s.StartAsync();
+            await s.DisposeAsync();
+            await using var multi = new PtyShareSession("echo hello-share");
+            await multi.StartAsync();
+            await multi.DisposeAsync();
+        }
     }
 
     private static int FreePort()

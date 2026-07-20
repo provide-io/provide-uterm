@@ -114,4 +114,99 @@ public sealed class PresenceServiceTests
         await d.OnBrowserDisconnectAsync("w1", b);
         Assert.Contains(hub.Sent, s => s.Msg["type"]?.ToString() == "presence_leave");
     }
+
+    [Fact]
+    public async Task PresenceUpdate_AllFields_AndStoreHelpers()
+    {
+        var hub = new CapturingBroadcaster();
+        var d = new DeckPresence(hub);
+        var ws = new object();
+        _ = await d.OnBrowserConnectAsync("w1", ws, "admin");
+        hub.Sent.Clear();
+
+        await d.HandleMessageAsync(
+            "w1",
+            ws,
+            new Dictionary<string, object?>
+            {
+                ["type"] = "presence_update",
+                ["scroll_line"] = 1L,
+                ["total_lines"] = 99.0,
+                ["typing"] = true,
+                ["cols"] = 120,
+                ["rows"] = 40,
+                ["selection"] = new Dictionary<string, object?> { ["start"] = 0, ["end"] = 2 },
+                ["pin"] = new Dictionary<string, object?> { ["line"] = 5 },
+                ["scroll_range"] = new Dictionary<string, object?> { ["from"] = 0, ["to"] = 10 },
+            });
+        Assert.NotEmpty(hub.Sent);
+
+        // Control denied when another owner holds it.
+        var ws2 = new object();
+        _ = await d.OnBrowserConnectAsync("w1", ws2, "viewer");
+        await d.HandleMessageAsync("w1", ws, new Dictionary<string, object?> { ["type"] = "control_request" });
+        hub.Sent.Clear();
+        await d.HandleMessageAsync("w1", ws2, new Dictionary<string, object?> { ["type"] = "control_request" });
+        Assert.Empty(hub.Sent); // other owner → ignore
+
+        // Disconnect unknown conn is a no-op.
+        await d.OnBrowserDisconnectAsync("w1", new object());
+
+        // ResolveOrBind preferred id reuse.
+        var id1 = d.ResolveOrBindUserId(ws);
+        var id2 = d.ResolveOrBindUserId(ws, "ignored");
+        Assert.Equal(id1, id2);
+
+        var store = d.GetStore("w1");
+        Assert.True(store.TryGet(id1, out var user));
+        Assert.NotNull(user);
+        store.SetOwner(id1);
+        Assert.NotNull(store.GetOwner());
+        store.ClearOwner();
+        Assert.Null(store.GetOwner());
+
+        // Update unknown user → not ok.
+        var (u, ok) = store.Update("nope", new Dictionary<string, object?> { ["typing"] = true });
+        Assert.False(ok);
+        Assert.Null(u);
+
+        // JsonElement coercion paths (AsDict / CoerceInt).
+        using var doc = System.Text.Json.JsonDocument.Parse(
+            """{"line": 7, "label": "x", "flag": true, "n": null, "d": 1.5}""");
+        var je = doc.RootElement;
+        var (u2, ok2) = store.Update(id1, new Dictionary<string, object?>
+        {
+            ["scroll_line"] = System.Text.Json.JsonSerializer.SerializeToElement(3),
+            ["pin"] = je,
+            ["queued_keys"] = "abc",
+        });
+        Assert.True(ok2);
+        Assert.NotNull(u2);
+        Assert.Equal(3, u2!.ScrollLine);
+        Assert.Equal("abc", u2.QueuedKeys);
+
+        var (removed, wasRemoved) = store.Remove("missing");
+        Assert.False(wasRemoved);
+        Assert.Null(removed);
+
+        // Sync payload with custom config.
+        var sync = store.GetSyncPayload(new Dictionary<string, object?> { ["auto_transfer_idle_s"] = 5 });
+        Assert.Equal("presence_sync", sync["type"]);
+        Assert.NotNull(sync["config"]);
+    }
+
+    [Fact]
+    public async Task PresenceUpdate_UnknownUser_NoBroadcast()
+    {
+        var hub = new CapturingBroadcaster();
+        var d = new DeckPresence(hub);
+        // Message before connect → ResolveOrBind creates id but store has no user yet → Update fails.
+        var orphan = new object();
+        hub.Sent.Clear();
+        await d.HandleMessageAsync(
+            "w-orphan",
+            orphan,
+            new Dictionary<string, object?> { ["type"] = "presence_update", ["scroll_line"] = 1 });
+        Assert.Empty(hub.Sent);
+    }
 }

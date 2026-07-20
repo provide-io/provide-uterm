@@ -273,15 +273,35 @@ public sealed class PtyShareSession : IAsyncDisposable
 
     public async Task StartAsync(Client? tunnel = null, CancellationToken ct = default)
     {
-        // Prefer PATH lookup for bare commands (true, sh, echo); absolute paths as-is.
-        var file = Command;
-        var args = "";
-        if (!Command.Contains(' ') && !Command.StartsWith('/'))
+        // Portable launch:
+        // - "cmd /c exit 0" / multi-token → FileName + Arguments
+        // - absolute/relative path → as-is
+        // - bare name on Unix → /usr/bin/env (PATH lookup for true/sh/echo)
+        // - bare name on Windows → PATH via ProcessStartInfo.FileName
+        string file;
+        string args;
+        if (Command.Contains(' ', StringComparison.Ordinal))
         {
-            file = Command; // ProcessStartInfo resolves PATH when UseShellExecute=false on Unix via full path
-            // Resolve via /usr/bin/env for portability across macOS/Linux.
-            args = Command;
+            var parts = Command.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+            file = parts[0];
+            args = parts.Length > 1 ? parts[1] : "";
+        }
+        else if (Path.IsPathRooted(Command)
+                 || Command.Contains('/', StringComparison.Ordinal)
+                 || Command.Contains('\\', StringComparison.Ordinal))
+        {
+            file = Command;
+            args = "";
+        }
+        else if (OperatingSystem.IsWindows())
+        {
+            file = Command;
+            args = "";
+        }
+        else
+        {
             file = "/usr/bin/env";
+            args = Command;
         }
 
         var psi = new System.Diagnostics.ProcessStartInfo

@@ -171,7 +171,9 @@ public class TermSessionCliServerTests
 
         using (var sw = new StringWriter())
         {
-            Assert.Equal(0, Root.Execute(new[] { "share", "--once", "--command", "true" }, sw, sw));
+            // Portable no-op process: Unix `true`, Windows `cmd /c exit 0`.
+            var noop = OperatingSystem.IsWindows() ? "cmd /c exit 0" : "true";
+            Assert.Equal(0, Root.Execute(new[] { "share", "--once", "--command", noop }, sw, sw));
         }
 
         using (var sw = new StringWriter())
