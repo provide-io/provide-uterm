@@ -19,10 +19,11 @@ import (
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/frames"
 )
 
-// registerWSRoutes wires the worker + browser WebSocket endpoints.
+// registerWSRoutes wires the worker + browser + tunnel WebSocket endpoints.
 func (s *Server) registerWSRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/ws/worker/{worker_id}/term", s.handleWorkerWS)
 	mux.HandleFunc("/ws/browser/{worker_id}/term", s.handleBrowserWS)
+	s.registerTunnelWS(mux)
 }
 
 // bearerToken extracts the token from an "Authorization: Bearer <t>" header.

@@ -284,6 +284,8 @@ public sealed partial class UtermServer : IAsyncDisposable
         // Path shape matches Python/Go: terminal channel is /term on the worker id.
         app.Map("/ws/browser/{workerId}/term", HandleBrowserWs);
         app.Map("/ws/worker/{workerId}/term", HandleWorkerWs);
+        // Binary tunnel + inspect page (Python register_tunnel_routes + inspect_page_html).
+        MapTunnelRoutes(app);
     }
 
     private SessionStatus EnrichStatus(SessionStatus st)
