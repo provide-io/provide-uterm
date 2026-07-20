@@ -47,12 +47,18 @@ class _EchoTelnetHandler(socketserver.BaseRequestHandler):
 
 
 def _skip_terminal_proxy_product_gap() -> None:
-    """WsTerminalProxy + mount_terminal_ui live only in Python fastapi_utils."""
+    """Permanent de-scope: FastAPI mount_terminal_ui embed is Python-only.
+
+    Go/C# already ship wire-equivalent ``uterm proxy`` CLI (WS → telnet/SSH).
+    This suite exercises the FastAPI embedding helper + static terminal page,
+    not the multi-backend hub contract.
+    """
     name = backend_name()
     if name in ("go", "csharp"):
         pytest.skip(
-            f"terminal proxy e2e requires Python fastapi_utils.WsTerminalProxy "
-            f"(no Go/C# mount_terminal_ui equivalent; UTERM_TEST_BACKEND={name})"
+            f"permanent de-scope: FastAPI mount_terminal_ui/WsTerminalProxy embed is "
+            f"Python-only; Go/C# wire proxy is `uterm proxy` CLI "
+            f"(UTERM_TEST_BACKEND={name})"
         )
 
 

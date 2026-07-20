@@ -225,3 +225,40 @@ grant/release, and leave fan-out — **subset residual cleared**.
 
 ### Residual closeout remaining
 3b. Revisit C# cover floor toward 98.5–99 once dual-OS CI shows ≥0.2pt headroom
+
+## Server parity phases 1→3 (2026-07-20)
+
+### Phase 1 — Terminal proxy **permanent de-scope**
+- FastAPI `mount_terminal_ui` / library-mounted `WsTerminalProxy` remains **Python-only**.
+- Go/C# already ship wire-equivalent **`uterm proxy` CLI** (unit/interop tested).
+- Multi-backend skip reason is permanent de-scope language (never empty pass).
+- Documented in root README, `packages/provide-uterm-go/README.md`,
+  `packages/provide-uterm-csharp/README.md`, and `test_terminal_proxy.py`.
+
+### Phase 2 — C# control-plane REST
+| Surface | Routes |
+|---------|--------|
+| Session control | `POST .../connect|disconnect|restart|mode|clear|analyze`, `GET .../snapshot|events` |
+| Webhooks | `POST/GET/DELETE /api/sessions/{id}/webhooks[/{wid}]` |
+| Fan-out | `POST/GET/DELETE /api/fanout/groups`, `.../send`, `.../grants` |
+
+Proof: `ServerControlPlaneRestTests` (4 facts) against live Kestrel.
+
+### Phase 3 — C# tunnel host REST
+| Route | Role |
+|-------|------|
+| `POST /api/tunnels` | mint session + worker/share/control tokens + invites |
+| `GET /api/tunnels` | owner/admin metadata list (no token secrets) |
+| `POST /api/tunnels/{id}/tokens/rotate` | rotate tokens + re-issue invites |
+| `DELETE /api/tunnels/{id}/tokens` | revoke |
+| `GET /s/{id}?invite=` | consume invite → cookie + 302 share page |
+
+Wired to existing binary `/tunnel/{id}` WS. `MemoryTunnelStore` gained
+`IssueInvites` / `ConsumeInviteValue` / `DeleteToken` / `ListTokens`.
+
+### Explicit non-goal (unchanged)
+- **C# MCP** — not shipped; README de-scope holds.
+
+### Residual (Phase 4 optional)
+- C# COVER_THRESHOLD raise only with dual-OS ≥0.2pt headroom
+- Optional mutation perimeter growth / full SPA hosting on Go/C#

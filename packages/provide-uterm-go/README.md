@@ -86,6 +86,9 @@ capture, http-proxy + intercept), `watch` (TUI), and `audit` all run. `uterm
 server` accepts the same TOML config, serves the same REST/WS routes, and
 speaks the same wire protocol as the Python server (proven by an in-process
 e2e test running a real Go worker ↔ hub ↔ browser).
+> **Terminal UI proxy embed** (`mount_terminal_ui` / FastAPI `WsTerminalProxy` router mount) is **Python-only** (permanent de-scope).
+> Go operators use `uterm proxy` for the browser WS → telnet/SSH wire path.
+
 
 ## Dependencies
 
