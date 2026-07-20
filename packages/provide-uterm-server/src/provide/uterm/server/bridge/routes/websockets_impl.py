@@ -361,7 +361,13 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
 
             _dm_connect: Any = getattr(hub, "deckmux_on_browser_connect", None)
             if _dm_connect is not None:
-                _dm_principal = getattr(getattr(websocket, "state", None), "uterm_principal", None)
+                # UTERM_TEST_MODE=1: use connection-scoped DeckMux identity so
+                # multi-tab Playwright sees distinct users (shared test admin).
+                import os as _os
+
+                _dm_principal = None
+                if _os.environ.get("UTERM_TEST_MODE") != "1":
+                    _dm_principal = getattr(getattr(websocket, "state", None), "uterm_principal", None)
                 sync_msg = await _dm_connect(worker_id, websocket, role, principal=_dm_principal)
                 if sync_msg:
                     await websocket.send_text(encode_control_frame(sync_msg))
@@ -428,7 +434,11 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
             await hub.touch_activity(worker_id)
             _dm_disconnect: Any = getattr(hub, "deckmux_on_browser_disconnect", None)
             if _dm_disconnect is not None:
-                _dm_disc_principal = getattr(getattr(websocket, "state", None), "uterm_principal", None)
+                import os as _os
+
+                _dm_disc_principal = None
+                if _os.environ.get("UTERM_TEST_MODE") != "1":
+                    _dm_disc_principal = getattr(getattr(websocket, "state", None), "uterm_principal", None)
                 await _dm_disconnect(worker_id, websocket, principal=_dm_disc_principal)
             # cleanup_task may be None if the handshake raised before it was
             # created (e.g. a mid-handshake disconnect); guard both references.

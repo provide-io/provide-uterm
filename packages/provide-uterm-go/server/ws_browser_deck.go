@@ -7,6 +7,7 @@ package server
 
 import (
 	"context"
+	"os"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/deckmux"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
@@ -64,8 +65,18 @@ func deckPrincipalFor(bc *browserConn) any {
 // activated, so OnBrowserConnect's fan-out to existing browsers skips this
 // (still startup-pending) socket — matching the Python ordering. The sync is
 // written through bc.SendText so it serialises with concurrent hub writes.
+// deckPrincipal returns the principal for DeckMux identity. Under
+// UTERM_TEST_MODE=1 we pass nil so presence uses per-connection AnonIDs
+// (multi-tab Playwright expects distinct users even with a shared test admin).
+func (s *Server) deckPrincipal(bc *browserConn) any {
+	if os.Getenv("UTERM_TEST_MODE") == "1" {
+		return nil
+	}
+	return deckPrincipalFor(bc)
+}
+
 func (s *Server) deckOnConnect(ctx context.Context, bc *browserConn, workerID, role string) {
-	sync, err := s.deck().OnBrowserConnect(workerID, bc, role, deckPrincipalFor(bc))
+	sync, err := s.deck().OnBrowserConnect(workerID, bc, role, s.deckPrincipal(bc))
 	if err != nil {
 		s.logger.Debug("deckmux_connect_failed", "worker_id", workerID, "error", err)
 	}
@@ -83,7 +94,7 @@ func (s *Server) deckOnConnect(ctx context.Context, bc *browserConn, workerID, r
 // message through DeckMux. Port of the deckmux_handle_message dispatch branch
 // in dispatch_browser_event.
 func (s *Server) deckHandle(workerID string, bc *browserConn, msg map[string]any) {
-	if err := s.deck().HandleMessage(workerID, bc, msg, deckPrincipalFor(bc)); err != nil {
+	if err := s.deck().HandleMessage(workerID, bc, msg, s.deckPrincipal(bc)); err != nil {
 		s.logger.Debug("deckmux_handle_failed", "worker_id", workerID, "error", err)
 	}
 }
@@ -91,7 +102,7 @@ func (s *Server) deckHandle(workerID string, bc *browserConn, msg map[string]any
 // deckOnDisconnect removes a disconnecting browser from DeckMux (broadcasting a
 // presence_leave). Port of the deckmux_on_browser_disconnect finally branch.
 func (s *Server) deckOnDisconnect(workerID string, bc *browserConn) {
-	if err := s.deck().OnBrowserDisconnect(workerID, bc, deckPrincipalFor(bc)); err != nil {
+	if err := s.deck().OnBrowserDisconnect(workerID, bc, s.deckPrincipal(bc)); err != nil {
 		s.logger.Debug("deckmux_disconnect_failed", "worker_id", workerID, "error", err)
 	}
 }

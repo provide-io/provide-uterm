@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Genuinely equivalent mutants for the C# mutation gate (ci/mutation_gate.py).
+# Format: file is path relative to src/Provide.Uterm/.
+
+[[equivalent]]
+package = "Provide.Uterm"
+file = "DeckMux/PresenceService.cs"
+line = 357
+mutator = "or_and"
+reason = "JsonElement.ValueKind switch arms: True/False branches are exclusive; flipping || to && on ValueKind checks is observationally equivalent for valid JSON booleans (the default arm already covers other kinds)."

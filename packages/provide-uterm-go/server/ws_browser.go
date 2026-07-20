@@ -67,10 +67,13 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 		}
 		s.deps.Hub.State.TouchActivity(workerID)
 		if !s.browserHandshake(bg, conn, workerID, bc, role, canHijack, state) {
+			s.deckOnDisconnect(workerID, bc)
 			s.browserCleanup(bg, workerID, bc, false)
 			return
 		}
 		owned := s.browserRecvLoop(r.Context(), conn, workerID, bc, role, canHijack)
+		// Same ordering as the production path below: DeckMux leave before hub cleanup.
+		s.deckOnDisconnect(workerID, bc)
 		s.browserCleanup(bg, workerID, bc, owned)
 		return
 	}

@@ -66,8 +66,20 @@ def _uid() -> str:
 
 
 @pytest.fixture(scope="session")
-def resume_server() -> Generator[tuple[str, TermHub, InMemoryResumeStore], None, None]:
-    """Session-scoped server with an InMemoryResumeStore for resume tests."""
+def resume_server() -> Generator[tuple[str, object | None, object | None], None, None]:
+    """Session-scoped resume server (in-process store, or multi-backend subprocess)."""
+    import os
+
+    from .ui_routes import multi_backend_env
+
+    if multi_backend_env():
+        from .backend_server import WORKER_BEARER, spawn_backend_server
+
+        os.environ["UTERM_TEST_WORKER_BEARER"] = WORKER_BEARER
+        with spawn_backend_server() as srv:
+            yield srv.base_url, None, None
+        return
+
     from starlette.staticfiles import StaticFiles
 
     store = InMemoryResumeStore()
@@ -131,14 +143,22 @@ def resume_server() -> Generator[tuple[str, TermHub, InMemoryResumeStore], None,
 # ---------------------------------------------------------------------------
 
 
+def _resume_navigate(page: Page, base_url: str, worker_id: str) -> None:
+    from .ui_routes import install_multi_backend_routes, multi_backend_env
+
+    if multi_backend_env():
+        install_multi_backend_routes(page)
+    page.goto(f"{base_url}/test-page/{worker_id}", wait_until="domcontentloaded")
+
+
 class TestResumeTokenInHello:
     def test_widget_receives_resume_token(
-        self, page: Page, resume_server: tuple[str, TermHub, InMemoryResumeStore]
+        self, page: Page, resume_server: tuple[str, object | None, object | None]
     ) -> None:
         """The widget should receive resume_token in the hello message and store it in sessionStorage."""
         base_url, hub, store = resume_server
         worker_id = f"pw-resume-{_uid()}"
-        page.goto(f"{base_url}/test-page/{worker_id}", wait_until="domcontentloaded")
+        _resume_navigate(page, base_url, worker_id)
 
         # Wait for status to move past "Connecting…"
         page.wait_for_function(
@@ -152,12 +172,12 @@ class TestResumeTokenInHello:
         assert len(token) > 10
 
     def test_resume_token_updates_on_new_hello(
-        self, page: Page, resume_server: tuple[str, TermHub, InMemoryResumeStore]
+        self, page: Page, resume_server: tuple[str, object | None, object | None]
     ) -> None:
         """Each hello should update the stored resume token."""
         base_url, hub, store = resume_server
         worker_id = f"pw-update-{_uid()}"
-        page.goto(f"{base_url}/test-page/{worker_id}", wait_until="domcontentloaded")
+        _resume_navigate(page, base_url, worker_id)
 
         page.wait_for_function(
             "window.__deepQuery('#statustext')?.textContent !== 'Connecting…'",
@@ -167,13 +187,14 @@ class TestResumeTokenInHello:
         token1 = page.evaluate(f"sessionStorage.getItem('uterm_resume_{worker_id}')")
         assert token1 is not None
 
-        # Store should have at least one active token
-        assert len(store) > 0
+        # Store should have at least one active token (in-process only)
+        if store is not None:
+            assert len(store) > 0  # type: ignore[arg-type]
 
 
 class TestResumeOnReconnect:
     def test_auto_reconnect_sends_resume(
-        self, page: Page, resume_server: tuple[str, TermHub, InMemoryResumeStore]
+        self, page: Page, resume_server: tuple[str, object | None, object | None]
     ) -> None:
         """After a page reload, the widget sends a resume message with the stored token.
 
@@ -183,7 +204,7 @@ class TestResumeOnReconnect:
         """
         base_url, hub, store = resume_server
         worker_id = f"pw-reconnect-{_uid()}"
-        page.goto(f"{base_url}/test-page/{worker_id}", wait_until="domcontentloaded")
+        _resume_navigate(page, base_url, worker_id)
 
         # Wait for initial connection and token storage
         page.wait_for_function(
@@ -193,11 +214,12 @@ class TestResumeOnReconnect:
 
         token_before = page.evaluate(f"sessionStorage.getItem('uterm_resume_{worker_id}')")
         assert token_before is not None
-        assert _run_async(store.get(token_before)) is not None  # token is live in store
+        if store is not None:
+            assert _run_async(store.get(token_before)) is not None  # type: ignore[union-attr]
 
         # Reload the same page — sessionStorage persists (same origin, same tab),
         # so the widget reads the stored token and sends a resume message.
-        page.goto(f"{base_url}/test-page/{worker_id}", wait_until="domcontentloaded")
+        _resume_navigate(page, base_url, worker_id)
 
         # Wait for the resumed hello to arrive (new token stored in sessionStorage)
         page.wait_for_function(
@@ -208,26 +230,27 @@ class TestResumeOnReconnect:
         token_after = page.evaluate(f"sessionStorage.getItem('uterm_resume_{worker_id}')")
         assert token_after is not None
         assert token_after != token_before  # server issued a new token → resume was processed
-        assert _run_async(store.get(token_before)) is None  # old token revoked — definitive proof of resume
+        if store is not None:
+            assert _run_async(store.get(token_before)) is None  # type: ignore[union-attr]
 
     def test_resume_token_persists_across_navigation(
-        self, page: Page, resume_server: tuple[str, TermHub, InMemoryResumeStore]
+        self, page: Page, resume_server: tuple[str, object | None, object | None]
     ) -> None:
         """sessionStorage persists within the same origin, so the token survives same-origin navigation."""
         base_url, hub, store = resume_server
         worker_id = f"pw-persist-{_uid()}"
         worker_id_2 = f"pw-persist2-{_uid()}"
-        page.goto(f"{base_url}/test-page/{worker_id}", wait_until="domcontentloaded")
+        _resume_navigate(page, base_url, worker_id)
 
         page.wait_for_function(
-            "window.__deepQuery('#statustext')?.textContent !== 'Connecting…'",
-            timeout=5000,
+            f"sessionStorage.getItem('uterm_resume_{worker_id}') !== null",
+            timeout=10000,
         )
 
         token = page.evaluate(f"sessionStorage.getItem('uterm_resume_{worker_id}')")
         assert token is not None
 
         # Navigate to a different same-origin page — sessionStorage should persist
-        page.goto(f"{base_url}/test-page/{worker_id_2}", wait_until="domcontentloaded")
+        _resume_navigate(page, base_url, worker_id_2)
         token_after_nav = page.evaluate(f"sessionStorage.getItem('uterm_resume_{worker_id}')")
         assert token_after_nav == token

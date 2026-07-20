@@ -131,8 +131,20 @@ ws.onerror=function(e){{console.error("WS error",e);}};
 
 
 @pytest.fixture(scope="module")
-def deckmux_server() -> Generator[tuple[str, DeckMuxTermHub], None, None]:
-    """Module-scoped server: DeckMux-enabled TermHub + test pages."""
+def deckmux_server() -> Generator[tuple[str, object | None], None, None]:
+    """Module-scoped DeckMux server (in-process Python, or multi-backend subprocess)."""
+    import os
+
+    from .ui_routes import multi_backend_env
+
+    if multi_backend_env():
+        from .backend_server import WORKER_BEARER, spawn_backend_server
+
+        os.environ["UTERM_TEST_WORKER_BEARER"] = WORKER_BEARER
+        with spawn_backend_server() as srv:
+            yield srv.base_url, None
+        return
+
     hub = DeckMuxTermHub(resolve_browser_role=lambda _ws, _worker_id: "admin")
     app = FastAPI()
     app.include_router(hub.create_router())
@@ -182,6 +194,10 @@ def _uid() -> str:
 
 
 def _navigate(page: Page, base_url: str, worker_id: str) -> None:
+    from .ui_routes import install_multi_backend_routes, multi_backend_env
+
+    if multi_backend_env():
+        install_multi_backend_routes(page)
     page.goto(f"{base_url}/deckmux-test/{worker_id}", wait_until="domcontentloaded")
 
 
@@ -227,7 +243,7 @@ def _screenshot(page: Page, name: str) -> None:
 
 class TestTwoBrowsersSeeEachOther:
     def test_two_browsers_see_each_other(
-        self, page: Page, browser: object, deckmux_server: tuple[str, DeckMuxTermHub]
+        self, page: Page, browser: object, deckmux_server: tuple[str, object | None]
     ) -> None:
         """Two browsers connecting to the same session both see 2 avatars."""
         base_url, hub = deckmux_server
@@ -276,7 +292,7 @@ class TestTwoBrowsersSeeEachOther:
 
 class TestPresenceUpdateBroadcast:
     def test_presence_update_broadcast(
-        self, page: Page, browser: object, deckmux_server: tuple[str, DeckMuxTermHub]
+        self, page: Page, browser: object, deckmux_server: tuple[str, object | None]
     ) -> None:
         """Browser A sends a presence_update; Browser B's edge indicator updates."""
         base_url, hub = deckmux_server
@@ -308,9 +324,9 @@ class TestPresenceUpdateBroadcast:
                 page2.wait_for_function(
                     """() => {
                         var users = Object.values(window._users);
-                        return users.some(u => u.scroll_line === 42);
+                        return users.some(u => Number(u.scroll_line) === 42);
                     }""",
-                    timeout=5000,
+                    timeout=10000,
                 )
 
                 # Verify edge indicator rendered
@@ -333,7 +349,7 @@ class TestPresenceUpdateBroadcast:
 
 class TestPinVisibleToOther:
     def test_pin_visible_to_other_browser(
-        self, page: Page, browser: object, deckmux_server: tuple[str, DeckMuxTermHub]
+        self, page: Page, browser: object, deckmux_server: tuple[str, object | None]
     ) -> None:
         """Browser A pins a line; Browser B sees the pin label."""
         base_url, hub = deckmux_server

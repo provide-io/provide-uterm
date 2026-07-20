@@ -23,7 +23,7 @@ DOTNET ?= dotnet
 COVER_THRESHOLD ?= 97.0
 CONFIGURATION ?= Release
 
-.PHONY: build test cover build-binaries quality-gate interop-test conformance-test
+.PHONY: build test cover build-binaries quality-gate interop-test conformance-test mutation-gate
 
 build:
 	$(DOTNET) build -c $(CONFIGURATION)
@@ -76,6 +76,12 @@ _test_batch_3d:
 # AC3: byte-exact Python differential driver (mirrors Go conformance/conformance_test.go).
 conformance-test:
 	$(DOTNET) test -c $(CONFIGURATION) --filter "FullyQualifiedName~ConformanceVectors" -v n
+
+# Mutation gate (Policy + DeckMux presence). Mirrors Go packages/provide-uterm-go
+# mutation-gate / Python mutmut perimeter. Requires python3 + dotnet.
+PYTHON ?= python3
+mutation-gate:
+	$(PYTHON) ci/mutation_gate.py
 
 define DOTNET_COVER_BATCH
 	@echo "=== cover batch: $(1) ==="
