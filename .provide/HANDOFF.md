@@ -79,8 +79,8 @@ See `screenshots/backend-proof/heavy/summary.json`.
 - Full Python Playwright deckmux HTML suite (`test_deckmux_e2e_*`) still uses
   in-process DeckMuxTermHub + `/deckmux-broadcast` helper (not multi-backend).
 - Full `test_resume.py` still in-process with InMemoryResumeStore fixture.
-- C# DeckMux is a production-path subset (not full pin/control-transfer port).
-- C# mutation tooling still absent.
+- C# DeckMux pin/control-transfer: **cleared** (see Phase 5 residual closeout).
+- C# mutation tooling: **cleared** (mutation_gate + expanded perimeter).
 
 ## All-four residuals closed (2026-07-20)
 
