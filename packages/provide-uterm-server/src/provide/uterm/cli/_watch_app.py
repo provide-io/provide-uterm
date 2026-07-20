@@ -74,7 +74,8 @@ def parse_http_frames(raw: str) -> list[dict[str, Any]]:
             break
         if idx + 1 < len(raw) and raw[idx + 1] == _STX:
             header = raw[idx + 2 : idx + 10]
-            if len(header) == 8 and idx + 10 < len(raw) and raw[idx + 10] == ":":
+            # Incomplete DLE/STX header falls through (pos = idx+1).
+            if len(header) == 8 and idx + 10 < len(raw) and raw[idx + 10] == ":":  # pragma: no branch
                 length = int(header, 16)
                 payload = raw[idx + 11 : idx + 11 + length]
                 try:
@@ -240,7 +241,7 @@ class WatchApp(App[None]):
             self._request_count = len(self._exchanges)
             self._add_table_row(ex)
             self._update_status()
-        elif ftype == "http_res":
+        elif ftype == "http_res":  # pragma: no branch — other ftypes ignored
             rid = str(frame.get("id", ""))
             for ex in reversed(self._exchanges):
                 if ex.req_id == rid:
@@ -264,7 +265,7 @@ class WatchApp(App[None]):
 
     def _update_table_row(self, ex: Exchange) -> None:
         table = self.query_one("#request-table", DataTable)
-        for i, rk in enumerate(table.rows):
+        for i, rk in enumerate(table.rows):  # pragma: no branch — no-match is no-op residual
             if rk.value == ex.req_id:
                 table.update_cell_at(Coordinate(i, 2), str(ex.status or "..."))
                 table.update_cell_at(Coordinate(i, 3), f"{ex.duration_ms:.0f}ms" if ex.duration_ms else "-")

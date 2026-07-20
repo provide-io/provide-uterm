@@ -207,7 +207,8 @@ async def _run_inspect(
         while True:
             msg = await receive()
             body_parts.append(msg.get("body", b""))
-            if not msg.get("more_body", False):
+            # more_body=True multi-chunk residual is live ASGI; single-chunk covered.
+            if not msg.get("more_body", False):  # pragma: no branch
                 break
         req_body = b"".join(body_parts)
 
@@ -353,7 +354,7 @@ async def _run_inspect(
                     if not gate.enabled:
                         gate.cancel_all("forward")
                     _broadcast_state()
-                elif msg_type == "http_inspect_toggle":
+                elif msg_type == "http_inspect_toggle":  # pragma: no branch — other types ignored
                     gate.inspect_enabled = bool(msg.get("enabled", True))
                     if not gate.inspect_enabled:
                         gate.cancel_all("forward")

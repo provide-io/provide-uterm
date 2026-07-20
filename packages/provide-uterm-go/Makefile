@@ -30,7 +30,8 @@ GOLANGCI_LINT ?= golangci-lint
 # after browser resume/deck + timeseries/swarm strip + no-worker REST paths;
 # cover profile filters litevirt_ai/human + cmd/ (see cover target). Floor
 # 97.5 leaves ~0.5pt headroom.
-COVER_THRESHOLD ?= 97.5
+# Measured ~98.0% after GUI/MCP/embed residual waves; keep 0.2pt dual-runner headroom.
+COVER_THRESHOLD ?= 97.8
 
 # Driver for the mutation gate (stdlib-only Python >= 3.11; tomllib + json).
 PYTHON ?= python3

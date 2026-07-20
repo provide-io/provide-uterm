@@ -10,3 +10,15 @@ file = "DeckMux/PresenceService.cs"
 line = 357
 mutator = "or_and"
 reason = "JsonElement.ValueKind switch arms: True/False branches are exclusive; flipping || to && on ValueKind checks is observationally equivalent for valid JSON booleans (the default arm already covers other kinds)."
+
+[[equivalent]]
+file = "Auth/Auth.cs"
+package = "Provide.Uterm"
+line = 119
+mutator = "or_and"
+reason = """\
+Empty-line / comment skip: (Length==0 || StartsWith('#')). Flipping to && never \
+skips a pure comment line the same way as ||, but both paths still end in \
+parse-throw→continue for '#' lines without a valid keytype token, so ResolveAsync \
+returns null either way for comment-only files. \
+"""

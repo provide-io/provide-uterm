@@ -726,3 +726,37 @@ reason = "`if len(self._buffer) > 32768:` -> `>= 32768`, guarding `self._buffer 
 [[equivalent]]
 mutant = "provide.uterm.pty.connector.xǁPTYConnectorǁhandle_input__mutmut_11"
 reason = "data.encode('utf-8'->'UTF-8'); case-insensitive codec lookup normalizes 'UTF-8'->'utf-8', identical bytes written to the PTY master for every input. Verified: 'hi'.encode('UTF-8') == b'hi'. Unobservable."
+
+[[equivalent]]
+mutant = "provide.uterm.ws_bytes.x_channel_str_to_bytes__mutmut_6"
+reason = """\
+Codec-name case flip: data.encode(\"latin-1\") -> encode(\"LATIN-1\"). \
+Python codec registry is case-insensitive, so latin-1 and LATIN-1 are the same codec. \
+"""
+
+[[equivalent]]
+mutant = "provide.uterm.ws_bytes.x_ws_frame_to_channel_str__mutmut_4"
+reason = """\
+errors= argument deleted on latin-1 decode. latin-1 maps every byte 0-255, so \
+errors= never fires for any byte sequence; default and strict are observationally \
+identical for this codec. \
+"""
+
+[[equivalent]]
+mutant = "provide.uterm.ws_bytes.x_ws_frame_to_channel_str__mutmut_6"
+reason = """\
+Codec-name case flip: raw.decode(\"latin-1\") -> decode(\"LATIN-1\"). Case-insensitive codec registry. \
+"""
+
+[[equivalent]]
+mutant = "provide.uterm.ws_bytes.x_ws_frame_to_channel_str__mutmut_7"
+reason = """\
+errors=\"strict\" mutated to invalid name. latin-1 never raises UnicodeDecodeError for any \
+byte, so the error handler is never consulted — behavior is identical. \
+"""
+
+[[equivalent]]
+mutant = "provide.uterm.ws_bytes.x_ws_frame_to_channel_str__mutmut_8"
+reason = """\
+errors=\"strict\" -> \"STRICT\". Error handler names are case-normalized / latin-1 never errors. \
+"""
