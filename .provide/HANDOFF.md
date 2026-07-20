@@ -114,27 +114,22 @@ presence_update; Python TEST_MODE connection-scoped DeckMux principal.
 ## Phase 4 — Multi-backend Playwright surface expansion (2026-07-20)
 
 ### CI matrix additions (`multi-backend-playwright`)
-- **All backends:** `test_chaos_browser.py`, `test_chaos_browser_2.py` (hijack_server dual-mode + multi-backend `/test-page` routes)
-- **Python-only (explicit skip on go/csharp):** `test_reconnect_spinner.py`, `test_inspect_e2e.py`, `test_browser_control_channel.py`, `test_terminal_proxy.py` via `skip_unless_python_inprocess_surface()` — never empty-pass as go/csharp.
+- **Core step (all backends):** hijack, chaos, deckmux e2e, resume
+- **Extras step (all backends):** color, parity, deckmux-resume, dual-mode reconnect,
+  frontend control-channel decoder
+- **Inspect + terminal-proxy step:** python runs full harness; go/csharp explicit
+  product-gap skips (never empty pass)
 
 ### Helpers
-- `backend_server.skip_unless_python_inprocess_surface` for matrix-safe skips
+- `backend_server.skip` reasons for hard product gaps only
 - Chaos `_navigate` installs `install_multi_backend_routes` when multi-backend env is set
+- `spawn_backend_server` logs stderr to a temp file (not undrained PIPE — was CI hang)
 
-### Intentional skips
-| Module | go/csharp |
-|--------|-----------|
-| inspect e2e | skip — in-process TermHub + tunnel |
-| reconnect spinner | skip — mock-xterm TermHub page |
-| browser control channel | skip — python FastAPI harness |
-| terminal proxy | skip — fastapi_utils + telnet echo |
-
-### Phase 4 follow-up (CI stability)
-- Multi-backend job: baseline + **chaos only** (all backends).
-- Separate step **Python-only Playwright surfaces** (`if: matrix.backend == python`) for
-  reconnect/inspect/control-channel/terminal-proxy — avoids process contention with
-  multi-backend `hijack_server`.
-- Chaos crash-during-hijack offline wait timeout raised to 20s for C# fan-out lag.
+### Product-gap skips (go/csharp)
+| Module | reason |
+|--------|--------|
+| inspect e2e | no `/tunnel/{id}` binary WS (go) / no inspect+tunnel (csharp) |
+| terminal proxy | Python `fastapi_utils.WsTerminalProxy` only |
 
 ## Phase 5 — Server cov includes `cli` + `fastapi_utils` (2026-07-20)
 - `packages/provide-uterm-server/pyproject.toml`: `--cov` / `source` add
