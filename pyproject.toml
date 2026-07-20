@@ -555,7 +555,9 @@ pytest_add_cli_args_test_selection = [
     # HijackCoordinator (bridge/coordinator.py) — dedicated unit + stress suites
     # were never wired in (file sat at ~31% under pytest selection).
     "packages/provide-uterm/tests/bridge/test_coordinator_units.py",
-    "packages/provide-uterm/tests/bridge/test_coordinator_stress.py",
+    # Stress throughput is not a mutant killer; under mutmut baseline load it
+    # flakes (ops/s floor). Keep file in normal pytest; exclude from mutmut stats.
+    # "packages/provide-uterm/tests/bridge/test_coordinator_stress.py",
     # PollingCoordinator (hub/polling_service.py) — snapshot-polling kill suites
     # (never wired in; file sat at ~21% under pytest selection). The coverage suite is a
     # real-hub integration pass; test_polling_kill.py is a deterministic

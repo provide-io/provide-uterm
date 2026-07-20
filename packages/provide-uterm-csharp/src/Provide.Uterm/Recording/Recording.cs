@@ -283,20 +283,33 @@ public sealed class LocalFileStore : IRecordingStore, IDisposable
         }
 
         var all = new List<Event>();
-        await foreach (var line in File.ReadLinesAsync(path))
+        // FileShare.ReadWrite: writers keep the append handle open for the session
+        // lifetime; Windows exclusive locks reject File.ReadLinesAsync (share=None).
+        await using (var fs = new FileStream(
+                         path,
+                         FileMode.Open,
+                         FileAccess.Read,
+                         FileShare.ReadWrite | FileShare.Delete,
+                         bufferSize: 4096,
+                         useAsync: true))
+        using (var reader = new StreamReader(fs, Encoding.UTF8))
         {
-            if (string.IsNullOrWhiteSpace(line))
+            string? line;
+            while ((line = await reader.ReadLineAsync().ConfigureAwait(false)) is not null)
             {
-                continue;
-            }
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    continue;
+                }
 
-            var dict = JsonSerializer.Deserialize<Dictionary<string, object?>>(line);
-            if (dict is null)
-            {
-                continue;
-            }
+                var dict = JsonSerializer.Deserialize<Dictionary<string, object?>>(line);
+                if (dict is null)
+                {
+                    continue;
+                }
 
-            all.Add(new Event(dict));
+                all.Add(new Event(dict));
+            }
         }
 
         IEnumerable<Event> filtered = all;
