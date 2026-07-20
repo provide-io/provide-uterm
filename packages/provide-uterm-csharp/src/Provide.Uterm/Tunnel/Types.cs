@@ -91,9 +91,20 @@ public static class TunnelTokens
 
     public static bool InviteMatchesTokenHash(Invite? invite, string tokenHash) =>
         invite is not null && VerifyToken(invite.TunnelToken, tokenHash);
+
+    /// <summary>
+    /// URL-safe base64 (no padding) bearer from 32 bytes of crypto RNG.
+    /// Shape matches Python secrets.token_urlsafe(32) / Go GenerateToken.
+    /// </summary>
+    public static string GenerateToken()
+    {
+        var bytes = new byte[32];
+        RandomNumberGenerator.Fill(bytes);
+        return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    }
 }
 
-/// <summary>In-memory tunnel token store.</summary>
+/// <summary>In-memory tunnel token store (Go MemStore parity).</summary>
 public sealed class MemoryTunnelStore
 {
     private readonly object _lock = new();
@@ -116,6 +127,22 @@ public sealed class MemoryTunnelStore
         }
     }
 
+    public void DeleteToken(string tunnelId)
+    {
+        lock (_lock)
+        {
+            _tokens.Remove(tunnelId);
+        }
+    }
+
+    public IReadOnlyDictionary<string, TokenRecord> ListTokens()
+    {
+        lock (_lock)
+        {
+            return new Dictionary<string, TokenRecord>(_tokens);
+        }
+    }
+
     public void PutInvite(string inviteHash, Invite invite)
     {
         lock (_lock)
@@ -124,11 +151,120 @@ public sealed class MemoryTunnelStore
         }
     }
 
+    /// <summary>Pop invite by storage key (tests / low-level). Single-use.</summary>
     public Invite? ConsumeInvite(string inviteHash)
     {
         lock (_lock)
         {
             return _invites.Remove(inviteHash, out var inv) ? inv : null;
+        }
+    }
+
+    /// <summary>
+    /// Mint single-use viewer + operator invites. Returns plain invite values
+    /// (stored under HashToken). Port of Go MemStore.IssueInvites.
+    /// </summary>
+    public (string ShareInvite, string ControlInvite) IssueInvites(
+        string sessionId,
+        string shareToken,
+        string controlToken,
+        double tunnelExpiresAt,
+        double now,
+        string? issuedIp)
+    {
+        var inviteExpiresAt = now + TunnelConstants.InviteTtlS;
+        if (tunnelExpiresAt < inviteExpiresAt)
+        {
+            inviteExpiresAt = tunnelExpiresAt;
+        }
+
+        var shareInvite = TunnelTokens.GenerateToken();
+        var controlInvite = TunnelTokens.GenerateToken();
+        lock (_lock)
+        {
+            _invites[TunnelTokens.HashToken(shareInvite)] = new Invite
+            {
+                SessionId = sessionId,
+                Role = TunnelRole.Viewer,
+                TunnelToken = shareToken,
+                ExpiresAt = inviteExpiresAt,
+                IssuedIp = issuedIp,
+            };
+            _invites[TunnelTokens.HashToken(controlInvite)] = new Invite
+            {
+                SessionId = sessionId,
+                Role = TunnelRole.Operator,
+                TunnelToken = controlToken,
+                ExpiresAt = inviteExpiresAt,
+                IssuedIp = issuedIp,
+            };
+        }
+
+        return (shareInvite, controlInvite);
+    }
+
+    /// <summary>
+    /// Consume a one-time invite plain value for <paramref name="sessionId"/>.
+    /// Port of Go MemStore.ConsumeInvite (burns invite even on validation fail).
+    /// </summary>
+    public Invite? ConsumeInviteValue(string invite, string sessionId, double now)
+    {
+        var inviteValue = (invite ?? "").Trim();
+        if (inviteValue.Length == 0)
+        {
+            return null;
+        }
+
+        var hash = TunnelTokens.HashToken(inviteValue);
+        Invite? rec;
+        lock (_lock)
+        {
+            if (!_invites.Remove(hash, out rec))
+            {
+                return null;
+            }
+        }
+
+        if (now > rec.ExpiresAt)
+        {
+            return null;
+        }
+
+        if (!string.Equals(rec.SessionId, sessionId, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        if (rec.Role is not (TunnelRole.Viewer or TunnelRole.Operator))
+        {
+            return null;
+        }
+
+        var token = (rec.TunnelToken ?? "").Trim();
+        if (token.Length == 0)
+        {
+            return null;
+        }
+
+        return new Invite
+        {
+            SessionId = sessionId,
+            Role = rec.Role,
+            TunnelToken = token,
+            ExpiresAt = rec.ExpiresAt,
+            IssuedIp = rec.IssuedIp,
+        };
+    }
+
+    public void DiscardInvitesForSession(string sessionId)
+    {
+        lock (_lock)
+        {
+            var keys = _invites.Where(kv => kv.Value.SessionId == sessionId).Select(kv => kv.Key).ToList();
+            foreach (var k in keys)
+            {
+                _invites.Remove(k);
+            }
         }
     }
 }

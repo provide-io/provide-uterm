@@ -147,6 +147,80 @@ public sealed class Controller
     }
 
     /// <summary>
+    /// Broadcast input to all workers in a group (simplified parallel path).
+    /// Port of Go Controller.Send — returns per-worker ok without full output collect.
+    /// </summary>
+    public async Task<Result> SendAsync(
+        string groupId,
+        string data,
+        string principal,
+        int quiesceMs = 0,
+        int maxResponseMs = 0,
+        CancellationToken ct = default)
+    {
+        var group = AuthorizedGroup(groupId, principal);
+        var sendId = _newId();
+        var sentAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0;
+        var result = new Result
+        {
+            GroupId = groupId,
+            SendId = sendId,
+            Command = data,
+            SentAt = sentAt,
+        };
+        if (group is null)
+        {
+            return result;
+        }
+
+        _ = quiesceMs;
+        _ = maxResponseMs;
+        var frame = new Dictionary<string, object?>
+        {
+            ["type"] = "input",
+            ["data"] = data,
+            ["ts"] = sentAt,
+        };
+        foreach (var wid in group.WorkerIds)
+        {
+            var ok = false;
+            if (_hub is not null)
+            {
+                try
+                {
+                    ok = await _hub.SendWorkerAsync(wid, frame, ct).ConfigureAwait(false);
+                    await _hub.BroadcastAsync(wid, new Dictionary<string, object?>
+                    {
+                        ["type"] = "fanout_input",
+                        ["group_id"] = group.GroupId,
+                        ["send_id"] = sendId,
+                        ["command"] = data,
+                        ["from_principal"] = principal,
+                    }, ct).ConfigureAwait(false);
+                }
+                catch
+                {
+                    ok = false;
+                }
+            }
+
+            result.Results.Add(new SessionResult
+            {
+                WorkerId = wid,
+                Ok = ok,
+                OutputDelta = "",
+                ElapsedMs = 0,
+            });
+            if (!ok)
+            {
+                result.FailedSessions.Add(wid);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Flag divergence across collected session outputs for a group send.
     /// </summary>
     public Result FlagDivergence(Result result, Group group)

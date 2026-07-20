@@ -10,17 +10,290 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Provide.Uterm.ControlChannel;
 using Provide.Uterm.Hub;
+using Provide.Uterm.ServerConfig;
+using Provide.Uterm.Tunnel;
 using Provide.Uterm.TunnelClient;
 
 namespace Provide.Uterm.Server;
 
-/// <summary>Binary tunnel WS + HTTP inspect page (Python tunnel/fastapi_routes + inspect_page_html).</summary>
+/// <summary>
+/// Binary tunnel WS + inspect page + tunnel host REST lifecycle
+/// (Python routes/tunnels.py + Go routes_tunnels_full.go).
+/// </summary>
 public sealed partial class UtermServer
 {
     private void MapTunnelRoutes(WebApplication app)
     {
         app.Map("/tunnel/{workerId}", HandleTunnelWs);
         app.MapGet("/app/inspect/{sessionId}", HandleInspectPage);
+        // Host lifecycle REST (create/list/rotate/revoke + share consumer).
+        app.MapPost("/api/tunnels", (Delegate)HandleCreateTunnel);
+        app.MapGet("/api/tunnels", (Delegate)HandleListTunnels);
+        app.MapDelete("/api/tunnels/{tunnelId}/tokens", (Delegate)HandleRevokeTunnelTokens);
+        app.MapPost("/api/tunnels/{tunnelId}/tokens/rotate", (Delegate)HandleRotateTunnelTokens);
+        app.MapGet("/s/{sessionId}", (Delegate)HandleShareConsumer);
+    }
+
+    private MemoryTunnelStore EnsureTunnelStore() =>
+        _deps.TunnelStore ?? (_lazyTunnelStore ??= new MemoryTunnelStore());
+
+    private MemoryTunnelStore? _lazyTunnelStore;
+
+    private string TunnelBaseUrl(HttpContext ctx)
+    {
+        var pub = _deps.Config.Server.PublicBaseUrl;
+        if (!string.IsNullOrWhiteSpace(pub))
+        {
+            return pub.TrimEnd('/');
+        }
+
+        var scheme = ctx.Request.Scheme;
+        var host = ctx.Request.Host.Value ?? "127.0.0.1";
+        return $"{scheme}://{host}";
+    }
+
+    private static string WsBaseUrl(string httpBase) =>
+        httpBase.Replace("https://", "wss://", StringComparison.OrdinalIgnoreCase)
+            .Replace("http://", "ws://", StringComparison.OrdinalIgnoreCase);
+
+    private static string TunnelSharePage(string tunnelType) =>
+        tunnelType == "http" ? "inspect" : "session";
+
+    private async Task<IResult> HandleCreateTunnel(HttpContext ctx)
+    {
+        var p = await Authenticate(ctx).ConfigureAwait(false);
+        if (!_deps.Authz.CanCreateSession(p))
+        {
+            return DetailError(403, "insufficient privileges");
+        }
+
+        var body = await ReadJson(ctx).ConfigureAwait(false);
+        var tunnelType = Str(body, "tunnel_type", "terminal").Trim();
+        if (string.IsNullOrEmpty(tunnelType)) tunnelType = "terminal";
+        var displayName = Str(body, "display_name", "tunnel").Trim();
+        if (string.IsNullOrEmpty(displayName)) displayName = "tunnel";
+        var tunnelId = "tunnel-" + Guid.NewGuid().ToString("N")[..12];
+
+        var workerToken = TunnelTokens.GenerateToken();
+        var shareToken = TunnelTokens.GenerateToken();
+        var controlToken = TunnelTokens.GenerateToken();
+
+        var tunnelCfg = _deps.Config.Tunnel;
+        var requestedTtl = tunnelCfg.TokenTtlS;
+        if (body.TryGetValue("ttl_s", out var ttlEl) && ttlEl.ValueKind == JsonValueKind.Number)
+        {
+            requestedTtl = (int)ttlEl.GetDouble();
+        }
+
+        var ttlS = Math.Clamp(requestedTtl, 60, Math.Max(60, tunnelCfg.TokenTtlS * 24));
+        var now = _clock.Wall();
+        var expiresAt = now + ttlS;
+        string? issuedIp = null;
+        if (tunnelCfg.IpBinding)
+        {
+            issuedIp = ctx.Connection.RemoteIpAddress?.ToString();
+        }
+
+        _deps.Registry.Upsert(new SessionDefinition
+        {
+            SessionId = tunnelId,
+            DisplayName = displayName,
+            ConnectorType = "websocket",
+            Visibility = "private",
+            Owner = p.SubjectId,
+        });
+
+        var store = EnsureTunnelStore();
+        store.PutToken(tunnelId, new TokenRecord
+        {
+            WorkerTokenHash = TunnelTokens.HashToken(workerToken),
+            ShareTokenHash = TunnelTokens.HashToken(shareToken),
+            ControlTokenHash = TunnelTokens.HashToken(controlToken),
+            CreatedAt = now,
+            ExpiresAt = expiresAt,
+            IssuedIp = issuedIp,
+            TunnelType = tunnelType,
+            SharePage = TunnelSharePage(tunnelType),
+        });
+        var (shareInvite, controlInvite) = store.IssueInvites(
+            tunnelId, shareToken, controlToken, expiresAt, now, issuedIp);
+
+        var baseUrl = TunnelBaseUrl(ctx);
+        return Results.Json(new
+        {
+            tunnel_id = tunnelId,
+            display_name = displayName,
+            tunnel_type = tunnelType,
+            ws_endpoint = WsBaseUrl(baseUrl) + "/tunnel/" + tunnelId,
+            worker_token = workerToken,
+            share_url = baseUrl + "/s/" + tunnelId + "?invite=" + shareInvite,
+            control_url = baseUrl + "/s/" + tunnelId + "?invite=" + controlInvite,
+            expires_at = expiresAt,
+        }, JsonOpts);
+    }
+
+    private async Task<IResult> HandleListTunnels(HttpContext ctx)
+    {
+        var p = await Authenticate(ctx).ConfigureAwait(false);
+        var isAdmin = _deps.Authz.IsAdmin(p);
+        var store = EnsureTunnelStore();
+        var outList = new List<object>();
+        foreach (var (id, rec) in store.ListTokens())
+        {
+            if (!isAdmin)
+            {
+                if (!_deps.Registry.TryGetDefinition(id, out var def) || !_deps.Authz.IsOwner(p, def))
+                {
+                    continue;
+                }
+            }
+
+            outList.Add(new
+            {
+                tunnel_id = id,
+                tunnel_type = rec.TunnelType,
+                share_page = rec.SharePage,
+                created_at = rec.CreatedAt,
+                expires_at = rec.ExpiresAt,
+            });
+        }
+
+        return Results.Json(outList, JsonOpts);
+    }
+
+    private async Task<IResult> HandleRevokeTunnelTokens(HttpContext ctx, string tunnelId)
+    {
+        var p = await Authenticate(ctx).ConfigureAwait(false);
+        if (_deps.Registry.TryGetDefinition(tunnelId, out var def) &&
+            !(_deps.Authz.IsAdmin(p) || _deps.Authz.IsOwner(p, def)))
+        {
+            return DetailError(403, "insufficient privileges");
+        }
+
+        var store = EnsureTunnelStore();
+        store.DeleteToken(tunnelId);
+        store.DiscardInvitesForSession(tunnelId);
+        return Results.Json(new { ok = true, session_id = tunnelId }, JsonOpts);
+    }
+
+    private async Task<IResult> HandleRotateTunnelTokens(HttpContext ctx, string tunnelId)
+    {
+        var p = await Authenticate(ctx).ConfigureAwait(false);
+        if (!_deps.Registry.TryGetDefinition(tunnelId, out var def))
+        {
+            return DetailError(404, "unknown session: " + tunnelId);
+        }
+
+        if (!(_deps.Authz.IsAdmin(p) || _deps.Authz.IsOwner(p, def)))
+        {
+            return DetailError(403, "insufficient privileges");
+        }
+
+        var store = EnsureTunnelStore();
+        var old = store.GetToken(tunnelId);
+        if (old is null)
+        {
+            return DetailError(404, "no tunnel tokens for " + tunnelId);
+        }
+
+        var tunnelCfg = _deps.Config.Tunnel;
+        var ttlS = tunnelCfg.TokenTtlS;
+        var now = _clock.Wall();
+        var expiresAt = now + ttlS;
+        var workerToken = TunnelTokens.GenerateToken();
+        var shareToken = TunnelTokens.GenerateToken();
+        var controlToken = TunnelTokens.GenerateToken();
+        string? issuedIp = null;
+        if (tunnelCfg.IpBinding)
+        {
+            issuedIp = ctx.Connection.RemoteIpAddress?.ToString();
+        }
+
+        var tunnelType = string.IsNullOrEmpty(old.TunnelType) ? "terminal" : old.TunnelType;
+        store.PutToken(tunnelId, new TokenRecord
+        {
+            WorkerTokenHash = TunnelTokens.HashToken(workerToken),
+            ShareTokenHash = TunnelTokens.HashToken(shareToken),
+            ControlTokenHash = TunnelTokens.HashToken(controlToken),
+            CreatedAt = now,
+            ExpiresAt = expiresAt,
+            IssuedIp = issuedIp,
+            TunnelType = tunnelType,
+            SharePage = TunnelSharePage(tunnelType),
+        });
+        store.DiscardInvitesForSession(tunnelId);
+        var (shareInvite, controlInvite) = store.IssueInvites(
+            tunnelId, shareToken, controlToken, expiresAt, now, issuedIp);
+        var baseUrl = TunnelBaseUrl(ctx);
+        return Results.Json(new
+        {
+            tunnel_id = tunnelId,
+            ws_endpoint = WsBaseUrl(baseUrl) + "/tunnel/" + tunnelId,
+            worker_token = workerToken,
+            share_url = baseUrl + "/s/" + tunnelId + "?invite=" + shareInvite,
+            control_url = baseUrl + "/s/" + tunnelId + "?invite=" + controlInvite,
+            expires_at = expiresAt,
+        }, JsonOpts);
+    }
+
+    private IResult HandleShareConsumer(HttpContext ctx, string sessionId)
+    {
+        if (!SafeId.IsMatch(sessionId))
+        {
+            return DetailError(422, "invalid session_id");
+        }
+
+        var store = EnsureTunnelStore();
+        var entry = store.GetToken(sessionId);
+        var inviteValue = ctx.Request.Query["invite"].ToString();
+        Invite? invite = null;
+        if (!string.IsNullOrEmpty(inviteValue))
+        {
+            invite = store.ConsumeInviteValue(inviteValue, sessionId, _clock.Wall());
+            if (invite is null)
+            {
+                return DetailError(403, "invalid or expired invite");
+            }
+
+            if (entry is not null)
+            {
+                var tokenHash = invite.Role == TunnelRole.Operator
+                    ? entry.ControlTokenHash
+                    : entry.ShareTokenHash;
+                if (!TunnelTokens.InviteMatchesTokenHash(invite, tokenHash))
+                {
+                    return DetailError(403, "stale invite");
+                }
+            }
+        }
+
+        var page = entry?.SharePage;
+        if (string.IsNullOrEmpty(page)) page = "session";
+        if (invite is not null && invite.Role == TunnelRole.Operator)
+        {
+            page = "operator";
+        }
+
+        var appPath = string.IsNullOrWhiteSpace(_deps.Config.Ui.AppPath) ? "/app" : _deps.Config.Ui.AppPath.TrimEnd('/');
+        var target = appPath + "/" + page + "/" + sessionId;
+        if (invite is not null)
+        {
+            var cookieOpts = new CookieOptions
+            {
+                Path = "/",
+                HttpOnly = true,
+                Secure = _deps.Config.Tunnel.CookieSecure,
+                SameSite = _deps.Config.Tunnel.CookieSamesite.ToLowerInvariant() switch
+                {
+                    "strict" => SameSiteMode.Strict,
+                    "none" => SameSiteMode.None,
+                    _ => SameSiteMode.Lax,
+                },
+            };
+            ctx.Response.Cookies.Append("uterm_tunnel_" + sessionId, invite.TunnelToken, cookieOpts);
+        }
+
+        return Results.Redirect(target);
     }
 
     /// <summary>Minimal inspect bootstrap HTML (React main is loaded when assets exist).</summary>
