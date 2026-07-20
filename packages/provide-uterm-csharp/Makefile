@@ -23,13 +23,15 @@ DOTNET ?= dotnet
 # RfbClient (live RFB TCP). Embed/TelnetUpstream live TCP residual (scripted IAC tested).
 # Opt into native PTY via PreferNativePty / UTERM_NATIVE_PTY=1.
 # MCP is not part of the C# port (operator de-scope); sources and binary removed.
-# 96.8 floors residual rare arms (UtermServer non-admin/already-hijacked races,
-# Windows-only PtyShare branch on non-Windows hosts, CanonicalJson FallbackScientific
-# call site, SetUnixFileMode PlatformNotSupported arms). Ubuntu coverlet sits
-# ~96.94%; Windows ~96.87% after residual exclusions (same denominator once
-# coverage_gate normalizes backslash paths). Pure library batches still track
-# ~99%+. Raise when residual arms get dedicated multi-socket harness coverage.
-COVER_THRESHOLD ?= 96.8
+# 98.0 floors residual rare arms after Wave8/9 harness coverage (UtermServer
+# UTERM_TEST_MODE/non-admin/already_hijacked/no_worker WS paths, pure models,
+# limiter eviction, etc.). Remaining miss class (~226 lines): Embed Session
+# cancel/dispose races, UtermServer disconnect catch/CloseAsync, Gui RFB attach
+# catch arms, live TransportSession/Shell/TunnelClient/Drive races, CanonicalJson
+# FallbackScientific, Windows-only FileIo PlatformNotSupported, Hangul NFC
+# residual. Ubuntu coverlet sits ~98.0% after residual exclusions. Pure library
+# batches still track ~99%+. Raise toward 99 when more residual arms get harnesses.
+COVER_THRESHOLD ?= 98.0
 CONFIGURATION ?= Release
 
 .PHONY: build test cover build-binaries quality-gate interop-test conformance-test mutation-gate

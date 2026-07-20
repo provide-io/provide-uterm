@@ -406,7 +406,8 @@ jobs:
       - name: Prebuild C# server
         if: matrix.backend == 'csharp'
         run: dotnet build packages/provide-uterm-csharp/cmd/Uterm/Uterm.csproj -c Release
-      # Heavy multi-backend suite (hijack + deckmux + resume + static color palettes).
+      # Heavy multi-backend suite: hijack, deckmux, resume, palettes, plus curated
+      # wire/API parity and deckmux+resume cross-backend modules (all angles).
       - name: Multi-backend Playwright (${{ matrix.backend }})
         env:
           UTERM_TEST_BACKEND: ${{ matrix.backend }}
@@ -419,6 +420,8 @@ jobs:
           packages/provide-uterm/tests/playwright/test_deckmux_e2e_part2.py
           packages/provide-uterm/tests/playwright/test_resume.py
           packages/provide-uterm/tests/playwright/test_color_palette.py
+          packages/provide-uterm/tests/playwright/test_multi_backend_parity.py
+          packages/provide-uterm/tests/playwright/test_multi_backend_deckmux_resume.py
           -m "playwright and not slow"
           --no-cov -q --tb=line
           -k "not nyan and not plasma and not telnet"

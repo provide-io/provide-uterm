@@ -21,9 +21,8 @@ import (
 func TestManagerToolsSwarmStatusTelemetryGuard(t *testing.T) {
 	m := testManager(t, nil)
 	tools := NewManagerTools(m)
-	// Exercises the !includeTelemetry && len(fields)>0 guard. The inner strip
-	// loop is unreachable because GetSwarmStatus().toMap() JSON-round-trips the
-	// agents into []any (never []*AgentStatus), so nothing is actually stripped.
+	// Exercises the !includeTelemetry && len(fields)>0 guard. Strip itself is
+	// covered in TestSwarmStatusStripsTelemetryFields (handles []any from toMap).
 	tools.AgentTelemetryFields = map[string]struct{}{"error_message": {}}
 	a := newAgentStatus("agent_001")
 	a.ErrorMessage = strPtr("boom")

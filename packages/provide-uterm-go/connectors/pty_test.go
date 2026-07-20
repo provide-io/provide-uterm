@@ -57,6 +57,25 @@ func TestPTYTransportEcho(t *testing.T) {
 	}
 }
 
+// TestTakeRemnantLockedPartial covers the partial-drain arm of takeRemnantLocked
+// (remnant larger than maxBytes).
+func TestTakeRemnantLockedPartial(t *testing.T) {
+	tr := NewPTYTransport([]string{"true"})
+	tr.remnant = []byte("abcdef")
+	got := tr.takeRemnantLocked(2)
+	if string(got) != "ab" {
+		t.Fatalf("partial = %q", got)
+	}
+	if string(tr.remnant) != "cdef" {
+		t.Fatalf("left = %q", tr.remnant)
+	}
+	// maxBytes <= 0 returns the whole remnant.
+	got = tr.takeRemnantLocked(0)
+	if string(got) != "cdef" || tr.remnant != nil {
+		t.Fatalf("maxBytes<=0 got=%q left=%q", got, tr.remnant)
+	}
+}
+
 // TestPTYTransportRemnant exercises the oversized-message remnant path.
 func TestPTYTransportRemnant(t *testing.T) {
 	ctx := context.Background()

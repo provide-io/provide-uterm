@@ -6,6 +6,7 @@
 package hub
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -69,6 +70,16 @@ func TestCoerceFloat(t *testing.T) {
 	mustEqual(t, coerceFloat(int64(4), 0), 4.0, "int64")
 	mustEqual(t, coerceFloat("x", 9), 9.0, "default for non-numeric")
 	mustEqual(t, coerceFloat(nil, 7), 7.0, "default for nil")
+	// controlchannel UseNumber path
+	mustEqual(t, coerceFloat(json.Number("2.5"), 0), 2.5, "json.Number")
+	mustEqual(t, coerceFloat(json.Number("nope"), 8), 8.0, "bad json.Number")
+}
+
+// TestFrameToMapEncodeError covers the EncodeFrame failure arm.
+func TestFrameToMapEncodeError(t *testing.T) {
+	if _, err := frameToMap(42); err == nil {
+		t.Fatal("frameToMap(42) should fail")
+	}
 }
 
 func TestCoerceSeq(t *testing.T) {

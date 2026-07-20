@@ -28,22 +28,51 @@ func NewManagerTools(m *AgentManager) *ManagerTools { return &ManagerTools{M: m}
 
 // SwarmStatus returns the current swarm status, optionally stripping per-agent
 // telemetry fields.
+//
+// GetSwarmStatus().toMap() JSON-round-trips agents into []any of map[string]any
+// (never []*AgentStatus), so the strip path walks that shape. A typed
+// []*AgentStatus branch is kept for callers that inject a raw status map.
 func (t *ManagerTools) SwarmStatus(includeTelemetry bool) map[string]any {
 	data := t.M.GetSwarmStatus().toMap()
 	if !includeTelemetry && len(t.AgentTelemetryFields) > 0 {
-		if agents, ok := data["agents"].([]*AgentStatus); ok {
-			rows := make([]map[string]any, 0, len(agents))
-			for _, a := range agents {
-				row := a.toMap()
-				for f := range t.AgentTelemetryFields {
-					delete(row, f)
-				}
-				rows = append(rows, row)
-			}
-			data["agents"] = rows
-		}
+		stripAgentsTelemetry(data, t.AgentTelemetryFields)
 	}
 	return data
+}
+
+// stripAgentsTelemetry removes the named fields from each agent row in data.
+// Accepts both the toMap() []any shape and a typed []*AgentStatus slice.
+func stripAgentsTelemetry(data map[string]any, fields map[string]struct{}) {
+	switch agents := data["agents"].(type) {
+	case []*AgentStatus:
+		rows := make([]map[string]any, 0, len(agents))
+		for _, a := range agents {
+			row := a.toMap()
+			for f := range fields {
+				delete(row, f)
+			}
+			rows = append(rows, row)
+		}
+		data["agents"] = rows
+	case []any:
+		rows := make([]any, 0, len(agents))
+		for _, item := range agents {
+			row, ok := item.(map[string]any)
+			if !ok {
+				rows = append(rows, item)
+				continue
+			}
+			cp := make(map[string]any, len(row))
+			for k, v := range row {
+				cp[k] = v
+			}
+			for f := range fields {
+				delete(cp, f)
+			}
+			rows = append(rows, cp)
+		}
+		data["agents"] = rows
+	}
 }
 
 // SwarmSpawnBatch starts a staggered batch spawn, mirroring swarm_spawn_batch

@@ -56,6 +56,20 @@ func TestInetAton(t *testing.T) {
 			t.Errorf("inetAton(%q) should fail", in)
 		}
 	}
+	// Overflow / out-of-range arms for 2/3/4-part forms.
+	overflow := []string{
+		"256.1",      // vals[0] > 0xff in 2-part
+		"1.16777216", // vals[1] > 0xffffff in 2-part
+		"1.2.65536",  // vals[2] > 0xffff in 3-part
+		"1.256.1",    // vals[1] > 0xff in 3-part
+		"1.2.3.256",  // vals[3] > 0xff in 4-part
+		"4294967296", // single-part n > 0xffffffff
+	}
+	for _, in := range overflow {
+		if _, ok := inetAton(in); ok {
+			t.Errorf("inetAton(%q) should reject overflow", in)
+		}
+	}
 }
 
 func TestAllowPrivateHostsToggle(t *testing.T) {
