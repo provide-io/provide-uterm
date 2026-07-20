@@ -150,12 +150,16 @@ def spawn_backend_server() -> Generator[BackendServer, None, None]:
     env["UTERM_TEST_MODE"] = "1"
     env["UTERM_DEV_TOKEN_PATH"] = str(token_path)
     env.setdefault("UTERM_HEADER_MODE_ACK", "1")
+    # Never use PIPE without a reader: a chatty server fills the OS pipe buffer
+    # and the child blocks on write → WebSocket handshakes hang mid-suite (CI).
+    err_path = Path(tempfile.mkstemp(prefix="uterm-backend-", suffix=".stderr")[1])
+    err_fh = err_path.open("wb")
     proc = subprocess.Popen(
         cmd,
         cwd=str(REPO_ROOT),
         env=env,
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
+        stderr=err_fh,
     )
     base_url = f"http://127.0.0.1:{port}"
     deadline = time.monotonic() + 45.0
@@ -163,10 +167,12 @@ def spawn_backend_server() -> Generator[BackendServer, None, None]:
         while True:
             if time.monotonic() > deadline:
                 proc.terminate()
-                err = (proc.stderr.read() if proc.stderr else b"")[:2000]
+                err_fh.flush()
+                err = err_path.read_bytes()[:2000]
                 raise RuntimeError(f"backend {backend_name()!r} failed to start within 45s: {err!r}")
             if proc.poll() is not None:
-                err = (proc.stderr.read() if proc.stderr else b"")[:2000]
+                err_fh.flush()
+                err = err_path.read_bytes()[:2000]
                 raise RuntimeError(f"backend {backend_name()!r} exited {proc.returncode}: {err!r}")
             try:
                 with socket.create_connection(("127.0.0.1", port), timeout=0.15):
@@ -182,7 +188,11 @@ def spawn_backend_server() -> Generator[BackendServer, None, None]:
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.wait(timeout=3)
-        for p in (config_path, token_path):
+        try:
+            err_fh.close()
+        except OSError:
+            pass
+        for p in (config_path, token_path, err_path):
             try:
                 p.unlink(missing_ok=True)
             except OSError:

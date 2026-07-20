@@ -108,7 +108,8 @@ class WorkerController:
         self._base_url = base_url
         self._worker_id = worker_id
         self._connected = threading.Event()
-        self._ready = threading.Event()  # set after first snapshot sent
+        self._ready = threading.Event()  # set only after first snapshot sent
+        self._done = threading.Event()  # set when connect loop exits (ok or fail)
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._connect_error: str | None = None
@@ -128,6 +129,9 @@ class WorkerController:
         # Wait until TCP+WS is up AND initial snapshot has been sent so the hub
         # marks the worker online before the browser asserts Connected.
         if not self._ready.wait(timeout=timeout):
+            # Stop the background retry loop so failed starts do not pile up
+            # handshake attempts and starve later tests on the same hub.
+            self.stop()
             err = self._connect_error or "timeout"
             raise RuntimeError(
                 f"WorkerController: worker {self._worker_id!r} did not connect within {timeout:.0f} s ({err})"
@@ -140,6 +144,7 @@ class WorkerController:
         try:
             loop.run_until_complete(self._connect())
         finally:
+            self._done.set()
             loop.close()
 
     async def _connect(self) -> None:
@@ -159,7 +164,12 @@ class WorkerController:
         while time.monotonic() < deadline and not self._stop.is_set():
             attempt += 1
             try:
-                async with websockets.connect(ws_url, additional_headers=headers or None, open_timeout=5) as ws:
+                async with websockets.connect(
+                    ws_url,
+                    additional_headers=headers or None,
+                    open_timeout=3,
+                    close_timeout=1,
+                ) as ws:
                     self._connected.set()
                     snapshot_msg = {
                         "type": "snapshot",
@@ -193,12 +203,11 @@ class WorkerController:
             except Exception as exc:
                 last_err = exc
                 self._connect_error = f"attempt {attempt}: {type(exc).__name__}: {exc}"
-                await asyncio.sleep(min(0.25 * attempt, 1.5))
+                # Cap backoff so retries stay inside the connect deadline.
+                await asyncio.sleep(min(0.2 * attempt, 0.8))
         if last_err is not None:
             self._connect_error = f"{type(last_err).__name__}: {last_err}"
-        # Unblock waiters so start() can raise with context.
-        self._connected.set()
-        self._ready.set()
+        # Never set _ready on failure — start() must time out / raise, not succeed.
 
     def wait_for(self, predicate: Any, timeout: float = 5.0) -> dict[str, Any] | None:
         """Return the first received message matching *predicate*, or None on timeout."""
@@ -214,6 +223,7 @@ class WorkerController:
         self._stop.set()
         if self._thread:
             self._thread.join(timeout=3.0)
+            self._thread = None
 
 
 class _ThreadedEchoServer(socketserver.ThreadingTCPServer):
