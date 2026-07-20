@@ -215,6 +215,15 @@ inspect + terminal-proxy step on all cells with explicit product-gap skip reason
 
 All three mutation CI jobs green with strictly larger perimeter than post-ratchet baseline.
 
+## Residual closeout Phase 5 — C# DeckMux pin/control parity (2026-07-20)
+
+Verified multi-backend csharp green for full deckmux HTML e2e:
+- `test_pin_visible_to_other_browser`
+- `test_control_transfer` (control_request grant fan-out)
+- presence sync/update/leave + multi_backend_deckmux_resume (6)
+
+`PresenceService.cs` already implements pin/scroll updates, control_request
+grant/release, and leave fan-out — **subset residual cleared**.
+
 ### Residual closeout remaining
-5. C# DeckMux pin/control-transfer full parity (if still subset)
-3b. Revisit C# floor toward 98.5–99 once dual-OS CI shows headroom
+3b. Revisit C# cover floor toward 98.5–99 once dual-OS CI shows ≥0.2pt headroom
