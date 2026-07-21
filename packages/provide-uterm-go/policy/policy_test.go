@@ -14,16 +14,16 @@ import (
 
 func TestCanInject(t *testing.T) {
 	p := &Strict{}
-	if err := p.CanInject("session123", "lease456", "viewer"); err == nil {
+	if err := p.CanInject("session123", "lease456", "bob", "viewer"); err == nil {
 		t.Fatal("expected error for viewer role, got nil")
 	}
-	if err := p.CanInject("session123", "lease456", "operator"); err != nil {
+	if err := p.CanInject("session123", "lease456", "bob", "operator"); err != nil {
 		t.Fatalf("operator with lease: %v", err)
 	}
-	if err := p.CanInject("session123", "", "operator"); err == nil {
+	if err := p.CanInject("session123", "", "bob", "operator"); err == nil {
 		t.Fatal("expected error for empty lease")
 	}
-	if err := p.CanInject("session123", "lease456", "admin"); err != nil {
+	if err := p.CanInject("session123", "lease456", "bob", "admin"); err != nil {
 		t.Fatalf("admin with lease: %v", err)
 	}
 }
