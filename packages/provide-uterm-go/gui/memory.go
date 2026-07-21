@@ -72,3 +72,7 @@ func (m *MemoryGraphicalSession) InjectKey(keySym uint32, down bool) error {
 	_ = down
 	return nil
 }
+
+func (s *MemoryGraphicalSession) Close() error {
+	return nil
+}

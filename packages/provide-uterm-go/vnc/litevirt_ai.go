@@ -210,3 +210,7 @@ func (c *LitevirtAIClient) RunHandshakeAndLoop() error {
 		}
 	}
 }
+
+func (c *LitevirtAIClient) Close() error {
+	return nil
+}

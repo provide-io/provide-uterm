@@ -85,6 +85,11 @@ func (r *WorkerRegistry) Pop(workerID string) *WorkerTermState {
 	if !ok {
 		return nil
 	}
+	if st.GraphicalSession != nil {
+		if closer, isCloser := st.GraphicalSession.(interface{ Close() error }); isCloser {
+			closer.Close()
+		}
+	}
 	delete(r.workers, workerID)
 	return st
 }
@@ -93,8 +98,14 @@ func (r *WorkerRegistry) Pop(workerID string) *WorkerTermState {
 func (r *WorkerRegistry) Discard(workerID string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if _, ok := r.workers[workerID]; !ok {
+	st, ok := r.workers[workerID]
+	if !ok {
 		return false
+	}
+	if st.GraphicalSession != nil {
+		if closer, isCloser := st.GraphicalSession.(interface{ Close() error }); isCloser {
+			closer.Close()
+		}
 	}
 	delete(r.workers, workerID)
 	return true
