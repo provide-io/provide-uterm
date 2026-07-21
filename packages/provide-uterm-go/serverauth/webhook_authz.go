@@ -324,13 +324,13 @@ func NewAuthorizationServiceFromConfig(cfg *serverconfig.UtermServerConfig) *Aut
 		return NewAuthorizationService()
 	}
 	g := cfg.Governance
-	hmacKey := strPtr(g.AuthzWebhookSecret)
+	hmacKey := derefStr(g.AuthzWebhookSecret)
 	timeout := g.AuthzWebhookTimeoutS
 	p := NewWebhookAuthorizationProvider(*g.AuthzWebhookURL, hmacKey, timeout)
 	return NewAuthorizationServiceWith(p)
 }
 
-func strPtr(p *string) string {
+func derefStr(p *string) string {
 	if p == nil {
 		return ""
 	}
