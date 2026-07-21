@@ -87,3 +87,26 @@ uv run pytest packages/provide-uterm/tests/e2e/test_docker_vnc_lab.py -m docker 
 | `RFB_PORT` | `5900` | Plain (unencrypted) listen port |
 | `RFB_SSL_PORT` | `5901` | TLS / VeNCrypt / ANONTLS listen port |
 | `VNC_PASSWORD` | _(empty)_ | Shared password for both ports; empty = `-nopw` |
+
+## First-party provide-uterm VNC console
+
+The lab is the proof backend for the **uterm** VNC web console (not bare noVNC):
+
+```bash
+# Lab
+docker build -t uterm-test-vnc -f docker/vnc-lab/Dockerfile docker/vnc-lab
+docker run --rm -d --name uterm-test-vnc --shm-size 256m -p 5900:5900 -p 5901:5901 uterm-test-vnc
+
+# Server with seeded graphical targets (see scripts/uterm-server.vnc-lab.example.toml)
+uv run uterm server --config scripts/uterm-server.vnc-lab.example.toml
+
+# Full proof (plain×2 + TLS + denied + uterm UI screenshot)
+uv run python scripts/prove_uterm_vnc_console.py --runs 2
+```
+
+Browser page (after hijack acquire):  
+`http://127.0.0.1:8780/_terminal/vnc.html?worker_id=vnc-shell&hijack_id=…&target_id=lab-vnc-plain`
+
+Wire path: binary WebSocket  
+`/worker/{id}/hijack/{hijack_id}/gui/vnc?target_id=…`  
+Server dials RFB upstream (plain or TLS with `tls` / `tls_insecure` in target config).

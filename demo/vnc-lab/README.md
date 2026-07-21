@@ -44,3 +44,19 @@ docker cp uterm-test-vnc-demo:/tmp/desk.png ./desktop.png
 ```
 
 See also `docker/vnc-lab/README.md` and `scripts/prove_vnc_lab.py`.
+
+## First-party uterm VNC console (preferred)
+
+The external noVNC + websockify path above is a **contrast** demo only.
+The product path is provide-uterm’s own page + human VNC relay:
+
+| File | What it shows |
+|------|----------------|
+| `screenshots/uterm-vnc-console.png` | **provide-uterm** `vnc.html` Connected to lab Chromium on example.com |
+
+```bash
+uv run python scripts/prove_uterm_vnc_console.py --runs 2
+# artifacts under $SCRATCH / --evidence-dir (connect logs, TLS, denied, screenshot)
+```
+
+See `.provide/goals/uterm-vnc-web-console.md` and `scripts/uterm-server.vnc-lab.example.toml`.

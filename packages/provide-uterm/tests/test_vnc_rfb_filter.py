@@ -87,19 +87,44 @@ def test_bad_security_type() -> None:
         )
 
 
-def test_cut_text_too_large() -> None:
-    # handshake + type 6 + padding3 + length
+def test_cut_text_too_large_is_dropped_not_fatal() -> None:
+    # handshake + type 6 + padding3 + length + oversized body + a later key
+    # (proves the filter continues after dropping the cut-text).
     length = (1 << 20) + 1
-    body = _handshake() + bytes([6]) + bytes(3) + struct.pack("!I", length)
+    pad = b"x" * length
+    key = bytes([4]) + bytes(7)
+    body = _handshake() + bytes([6]) + bytes(3) + struct.pack("!I", length) + pad + key
     src = io.BytesIO(body)
     dst = io.BytesIO()
-    with pytest.raises(ValueError, match="too large"):
-        filter_rfb_client_input(
-            dst,
-            src,
-            can_inject=lambda *_a: True,
-            session_id="s",
-            lease_id="l",
-            principal_id="p",
-            principal_role="admin",
-        )
+    filter_rfb_client_input(
+        dst,
+        src,
+        can_inject=lambda *_a: True,
+        session_id="s",
+        lease_id="l",
+        principal_id="p",
+        principal_role="admin",
+    )
+    # Handshake only + key event (cut-text dropped).
+    assert len(dst.getvalue()) == 14 + 8
+
+
+def test_cut_text_extended_clipboard_high_bit() -> None:
+    """noVNC extended clipboard: high bit of length is a flag, not part of size."""
+    text = b"flags"  # 5-byte extended payload
+    # High bit set + payload length 5.
+    length_field = 0x80000000 | len(text)
+    body = _handshake() + bytes([6]) + bytes(3) + struct.pack("!I", length_field) + text
+    src = io.BytesIO(body)
+    dst = io.BytesIO()
+    filter_rfb_client_input(
+        dst,
+        src,
+        can_inject=lambda *_a: True,
+        session_id="s",
+        lease_id="l",
+        principal_id="p",
+        principal_role="admin",
+    )
+    # Handshake (14) + type + header(7) + payload(5)
+    assert len(dst.getvalue()) == 14 + 1 + 7 + 5

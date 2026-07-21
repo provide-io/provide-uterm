@@ -221,9 +221,11 @@ async def _run_ws_relay(
     relay_w: BinaryIO | None = None
     try:
         browser_sock.setblocking(False)
+        # Unbuffered: RFB banners must cross the socketpair without waiting for
+        # a full stdio buffer or peer EOF (live VNC leaves the TCP session open).
         # socket.makefile has no closefd=; sockets closed in finally below.
-        relay_r = relay_sock.makefile("rb")
-        relay_w = relay_sock.makefile("wb")
+        relay_r = relay_sock.makefile("rb", buffering=0)
+        relay_w = relay_sock.makefile("wb", buffering=0)
 
         relay_done = threading.Event()
         relay_error: list[BaseException] = []
