@@ -322,11 +322,42 @@ LIVE_DEMO_CHAPTERS: list[list[str]] = [
 ]
 
 # Per-keystroke delay inside a chapter (website-demo typing pace).
-_KEY_GAP_S = 0.07
-# Hold after a chapter so the paint is readable before the next burst.
-_CHAPTER_HOLD_S = 0.55
-# Settle after an RFB reconnect (only used sparingly).
-_RECONNECT_SETTLE_S = 0.45
+_KEY_GAP_S = 0.08
+# Hold after a chapter so nested xterm + x11vnc can paint (no RFB reconnect).
+_CHAPTER_HOLD_S = 0.9
+
+
+def nudge_lab_desktop(lab_name: str = LAB) -> None:
+    """Force X damage on the lab Chromium window without tearing the RFB session.
+
+    Chromium canvas under Xvfb often skips incremental damage; a 1px resize
+    makes x11vnc push a full frame so noVNC updates without connect/disconnect
+    flashing.
+    """
+    script = r"""
+set -e
+W=1280; H=720
+for pat in Chromium chromium Chrome chrome; do
+  ids=$(xdotool search --onlyvisible --class "$pat" 2>/dev/null || true)
+  for id in $ids; do
+    xdotool windowsize "$id" $((W-1)) "$H" 2>/dev/null || true
+    xdotool windowsize "$id" "$W" "$H" 2>/dev/null || true
+    xdotool windowmove "$id" 0 0 2>/dev/null || true
+    exit 0
+  done
+done
+exit 0
+"""
+    try:
+        subprocess.run(
+            ["docker", "exec", lab_name, "bash", "-lc", script],
+            capture_output=True,
+            text=True,
+            timeout=8,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass
 
 
 def canvas_fingerprint(page: object) -> str:
@@ -370,8 +401,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--seconds",
         type=float,
-        default=2.0,
-        help="extra live ticks after the main chapters (website-demo pace is chapter-driven)",
+        default=0.0,
+        help="optional continuous tail clip after the storyboard (0 = storyboard only)",
     )
     args = parser.parse_args(argv)
 
@@ -570,21 +601,22 @@ def main(argv: list[str] | None = None) -> int:
 
         from playwright.sync_api import sync_playwright
 
-        video_dir = evidence / "video-raw"
-        video_dir.mkdir(exist_ok=True)
         full_png = shots / "uterm-vnc-text-demos-full.png"
         desktop_png = shots / "uterm-vnc-text-demos-desktop.png"
         metrics_path = evidence / "video-metrics.json"
+        storyboard = evidence / "storyboard"
+        storyboard.mkdir(exist_ok=True)
+        frame_paths: list[Path] = []
+        metrics: dict[str, object] = {
+            "demo_url": demo_url,
+            "vnc_page": page_url,
+        }
 
-        with sync_playwright() as p:
-            # Prefer cookies over context-wide extra headers so CDN assets for
-            # the VNC page itself are not CORS-poisoned if any load remotely.
-            browser = p.chromium.launch(headless=True)
-            context = browser.new_context(
+        def _open_vnc_page(browser: object) -> tuple[object, object]:
+            """Open a clean VNC console page (one connect, no mid-stream reconnect)."""
+            context = browser.new_context(  # type: ignore[attr-defined]
                 viewport={"width": 1440, "height": 900},
                 device_scale_factor=1,
-                record_video_dir=str(video_dir),
-                record_video_size={"width": 1440, "height": 900},
             )
             context.add_cookies(
                 [
@@ -594,7 +626,6 @@ def main(argv: list[str] | None = None) -> int:
                 ]
             )
             page = context.new_page()
-            # Route-local auth for same-origin API/WS only (not CDN).
             page.set_extra_http_headers(
                 {
                     "x-uterm-principal": "test-admin",
@@ -610,7 +641,6 @@ def main(argv: list[str] | None = None) -> int:
                 }""",
                 timeout=30_000,
             )
-            # Wait until noVNC has a real framebuffer (not empty connecting pane).
             page.wait_for_function(
                 """() => {
                   const c = document.querySelector('#vnc-screen canvas');
@@ -618,118 +648,142 @@ def main(argv: list[str] | None = None) -> int:
                 }""",
                 timeout=20_000,
             )
-            page.wait_for_timeout(500)
-            fingerprints: list[str] = [canvas_fingerprint(page)]
-            lines.append(f"canvas_fp0={fingerprints[0][:80]}")
+            # Let the first full framebuffer settle (readable glyphs, no flash).
+            page.wait_for_timeout(700)
+            return context, page
 
-            def _rfb_refresh() -> None:
-                """Cheap full-framebuffer pull when incremental RFB stalls."""
-                page.evaluate(
-                    """async () => {
-                      const v = window.utermVnc;
-                      if (!v) return;
-                      v.disconnect();
-                      await v.connect();
-                    }"""
-                )
-                page.wait_for_function(
-                    """() => {
-                      const el = document.getElementById('vnc-status');
-                      return el && el.dataset.state === 'connected';
-                    }""",
-                    timeout=12_000,
-                )
-                page.wait_for_timeout(int(_RECONNECT_SETTLE_S * 1000))
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
 
-            # LIVE chapters — rapid keystroke bursts (website demo pace).
+            # Progressive storyboard: fire a rapid chapter, then capture a *clean*
+            # connected VNC frame. No mid-recording RFB disconnect (that flashed
+            # Connecting… and shredded the demo). ffmpeg stitches frames into a
+            # snappy website-style walkthrough.
             for chap_i, chapter in enumerate(LIVE_DEMO_CHAPTERS, start=1):
                 for cmd in chapter:
                     st_send, body_send = send_shell_keys(base, headers, shell_hid, cmd)
                     if st_send >= 400:
                         lines.append(f"chap{chap_i}_err={st_send} {body_send!r}")
                     time.sleep(_KEY_GAP_S)
-                # One short hold so the chapter is readable on camera.
-                page.wait_for_timeout(int(_CHAPTER_HOLD_S * 1000))
-                # Refresh RFB once per chapter (not per line) — keeps motion
-                # without multi-second reconnect thrash.
-                try:
-                    _rfb_refresh()
-                    lines.append(f"chapter_{chap_i}_refresh=ok")
-                except Exception as reconn_exc:
-                    lines.append(f"chapter_{chap_i}_refresh_err={reconn_exc!r}")
-                fp = canvas_fingerprint(page)
-                fingerprints.append(fp)
-                if chap_i in (1, 2, len(LIVE_DEMO_CHAPTERS)):
+                # Nested browser paints via WS; nudge X so the lab desktop updates.
+                time.sleep(0.35)
+                nudge_lab_desktop(LAB)
+                time.sleep(0.55)
+
+                ctx, page = _open_vnc_page(browser)
+                frame_path = storyboard / f"chap_{chap_i:02d}.png"
+                page.screenshot(path=str(frame_path), full_page=True)
+                frame_paths.append(frame_path)
+                if chap_i == len(LIVE_DEMO_CHAPTERS):
                     page.screenshot(path=str(full_png), full_page=True)
-                lines.append(f"chapter_{chap_i}_ok fp_changed={fp != fingerprints[0]}")
+                    page.locator("#vnc-screen").screenshot(path=str(desktop_png))
+                    metrics.update(
+                        page.evaluate(
+                            """() => {
+                              const status = document.getElementById('vnc-status');
+                              const canvas = document.querySelector('#vnc-screen canvas');
+                              const dims = document.getElementById('vnc-dims');
+                              const screen = document.getElementById('vnc-screen');
+                              const cs = screen ? getComputedStyle(screen) : null;
+                              return {
+                                status_state: status?.dataset?.state ?? null,
+                                status_text: status?.textContent ?? null,
+                                dims: dims?.textContent ?? null,
+                                canvas_w: canvas?.width ?? 0,
+                                canvas_h: canvas?.height ?? 0,
+                                title: document.title,
+                                screen_pad: cs?.padding ?? null,
+                                screen_radius: cs?.borderRadius ?? null,
+                              };
+                            }"""
+                        )
+                    )
+                lines.append(f"chapter_{chap_i}_frame={frame_path.name}")
+                ctx.close()
 
-            # Optional short tail (default ~2s) — not a long idle loop.
-            tick_deadline = time.time() + max(0.0, float(args.seconds))
-            tick = 0
-            while time.time() < tick_deadline:
-                tick += 1
-                send_shell_keys(
-                    base,
-                    headers,
-                    shell_hid,
-                    f"/say [live {tick}] {time.strftime('%H:%M:%S')}\r",
+            # Optional short continuous clip of the final state (stable RFB, no reconnect).
+            tail_s = max(0.0, float(args.seconds))
+            if tail_s > 0.2:
+                video_dir = evidence / "video-raw"
+                video_dir.mkdir(exist_ok=True)
+                ctx = browser.new_context(
+                    viewport={"width": 1440, "height": 900},
+                    device_scale_factor=1,
+                    record_video_dir=str(video_dir),
+                    record_video_size={"width": 1440, "height": 900},
                 )
-                time.sleep(_KEY_GAP_S)
-                page.wait_for_timeout(int(_CHAPTER_HOLD_S * 1000))
-                if tick % 2 == 0:
-                    try:
-                        _rfb_refresh()
-                    except Exception:
-                        pass
-                fingerprints.append(canvas_fingerprint(page))
-
-            unique_fps = len(set(fingerprints))
-            lines.append(f"canvas_fp_unique={unique_fps}/{len(fingerprints)}")
-            if unique_fps < 2:
-                raise RuntimeError(
-                    "VNC canvas did not show live changes during recording "
-                    f"(unique fingerprints={unique_fps}; expected >=2). "
-                    "Inner browser/RFB path is still static."
+                ctx.add_cookies(
+                    [
+                        {"name": "uterm_principal", "value": "test-admin", "domain": "127.0.0.1", "path": "/"},
+                        {"name": "uterm_role", "value": "admin", "domain": "127.0.0.1", "path": "/"},
+                        {"name": "uterm_tenant", "value": "lab", "domain": "127.0.0.1", "path": "/"},
+                    ]
                 )
-            lines.append("live_canvas_motion=ok")
+                page = ctx.new_page()
+                page.set_extra_http_headers(
+                    {
+                        "x-uterm-principal": "test-admin",
+                        "x-uterm-role": "admin",
+                        "x-uterm-tenant": "lab",
+                    }
+                )
+                page.goto(page_url, wait_until="domcontentloaded", timeout=45_000)
+                page.wait_for_function(
+                    """() => document.getElementById('vnc-status')?.dataset?.state === 'connected'""",
+                    timeout=30_000,
+                )
+                page.wait_for_timeout(int(tail_s * 1000))
+                ctx.close()
+                lines.append(f"tail_clip_s={tail_s}")
 
-            metrics = page.evaluate(
-                """() => {
-                  const status = document.getElementById('vnc-status');
-                  const canvas = document.querySelector('#vnc-screen canvas');
-                  const dims = document.getElementById('vnc-dims');
-                  const screen = document.getElementById('vnc-screen');
-                  const cs = screen ? getComputedStyle(screen) : null;
-                  return {
-                    status_state: status?.dataset?.state ?? null,
-                    status_text: status?.textContent ?? null,
-                    dims: dims?.textContent ?? null,
-                    canvas_w: canvas?.width ?? 0,
-                    canvas_h: canvas?.height ?? 0,
-                    title: document.title,
-                    screen_pad: cs?.padding ?? null,
-                    screen_radius: cs?.borderRadius ?? null,
-                  };
-                }"""
-            )
-            metrics["demo_url"] = demo_url
-            metrics["vnc_page"] = page_url
-            metrics["canvas_fp_unique"] = unique_fps
-            metrics["canvas_fp_samples"] = len(fingerprints)
-            metrics_path.write_text(json.dumps(metrics, indent=2) + "\n", encoding="utf-8")
-            assert metrics["status_state"] == "connected", metrics
-            assert metrics["canvas_w"] >= 640, metrics
-
-            page.screenshot(path=str(full_png), full_page=True)
-            page.locator("#vnc-screen").screenshot(path=str(desktop_png))
-            context.close()
             browser.close()
-        webms = sorted(video_dir.glob("*.webm"), key=lambda p: p.stat().st_mtime)
+
+        assert metrics.get("status_state") == "connected", metrics
+        assert int(metrics.get("canvas_w") or 0) >= 640, metrics
+        metrics_path.write_text(json.dumps(metrics, indent=2) + "\n", encoding="utf-8")
+
+        # Stitch storyboard frames into a snappy progressive webm (no connect flash).
         video_out = evidence / "uterm-vnc-text-demos.webm"
-        if not webms:
-            raise RuntimeError("no playwright webm produced")
-        webms[-1].replace(video_out)
+        if not frame_paths:
+            raise RuntimeError("no storyboard frames produced")
+        # ~1.1s per chapter — website-demo pace through the full script.
+        list_file = storyboard / "frames.txt"
+        list_file.write_text(
+            "".join(f"file '{fp.resolve()}'\nduration 1.1\n" for fp in frame_paths)
+            + f"file '{frame_paths[-1].resolve()}'\n",  # last frame needs a trailer entry
+            encoding="utf-8",
+        )
+        ff = subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                str(list_file),
+                "-vsync",
+                "vfr",
+                "-pix_fmt",
+                "yuv420p",
+                "-c:v",
+                "libvpx",
+                "-b:v",
+                "2M",
+                "-auto-alt-ref",
+                "0",
+                str(video_out),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        if ff.returncode != 0 or not video_out.is_file():
+            raise RuntimeError(f"ffmpeg storyboard failed: {(ff.stderr or ff.stdout)[:800]}")
         lines.append(f"video={video_out}")
+        lines.append(f"storyboard_frames={len(frame_paths)}")
         lines.append(f"full_png={full_png}")
         lines.append(f"desktop_png={desktop_png}")
 

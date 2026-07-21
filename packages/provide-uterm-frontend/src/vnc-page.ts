@@ -181,12 +181,20 @@ export class VncConsolePage {
       };
       const rfb = new RfbClass(this.screenEl, url, options);
       rfb.viewOnly = this.params.viewOnly;
-      // Fit remote desktop into the panel; clip if needed (no nested "picture frame").
+      // Fit desktop into the host; noVNC owns canvas CSS size (do not CSS-stretch
+      // the canvas — that double-scales and destroys terminal text).
       rfb.scaleViewport = true;
-      rfb.clipViewport = true;
+      rfb.clipViewport = false;
       rfb.resizeSession = false;
-      // Same as .vnc-screen so letterbox bars (if any) blend into the panel body.
+      // Match .vnc-screen so any residual letterbox blends into the panel.
       rfb.background = "#0b0f14";
+      // Prefer quality over compression thrash for readable terminal glyphs.
+      try {
+        (rfb as { qualityLevel?: number }).qualityLevel = 9;
+        (rfb as { compressionLevel?: number }).compressionLevel = 2;
+      } catch {
+        // older noVNC stubs in tests may not expose these
+      }
 
       rfb.addEventListener("connect", () => {
         this.setStatus("connected", `Connected · ${this.params.targetId}`);

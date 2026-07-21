@@ -117,6 +117,8 @@ describe("VncConsolePage", () => {
       clipViewport = false;
       resizeSession = false;
       background = "";
+      qualityLevel = 6;
+      compressionLevel = 2;
       private listeners = new Map<string, Array<(ev: Event) => void>>();
       constructor(target: HTMLElement, url: string) {
         constructed.push({ url, target });
