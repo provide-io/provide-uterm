@@ -34,9 +34,8 @@ EXCLUDE_SUBSTR = (
     "Transports/WebSocketTransport.cs",
     "Gateway/SshWsGateway.cs",  # live FxSsh accept + channel pump residual
     "Vnc/RfbClient.cs",  # live RFB TCP client residual (unit-tested encode + handshake smoke)
-    "Vnc/WsBinaryStreams.cs",  # ASP.NET WebSocket binary adapters (pump unit-tested via HumanRelay)
-    "Server/UtermServer.HumanVnc.cs",  # live browser WS upgrade + RFB dial residual (HumanRelay pure path covered)
     "Server/UtermServer.Mcp.cs",  # StreamJsonRpc MCP WebSocket accept residual (tools surface unit-tested elsewhere)
+    # Human VNC: UtermServer.HumanVnc.cs + WsBinaryStreams covered by HumanVncRouteTests (WS + factory).
     "Embed/TelnetUpstream.cs",  # live TCP telnet residual (IAC+policy unit-tested via ScriptedTelnetUpstream)
     # Live bridge / gateway residual (Makefile COVER notes: BridgeAsync races,
     # ObjectDisposedException on accept during Stop). Unit tests hit pure helpers;

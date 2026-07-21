@@ -45,7 +45,14 @@ public sealed partial class UtermServer
             return;
         }
 
-        var p = await Authenticate(ctx).ConfigureAwait(false);
+        // Go authenticated middleware parity: anonymous → 401 before capability check.
+        var (p, authErr) = await RequireAuthenticated(ctx).ConfigureAwait(false);
+        if (authErr is not null)
+        {
+            await authErr.ExecuteAsync(ctx).ConfigureAwait(false);
+            return;
+        }
+
         if (!AuthorizeHub(p, workerId, "session.control.hijack", out err))
         {
             await err!.ExecuteAsync(ctx).ConfigureAwait(false);
