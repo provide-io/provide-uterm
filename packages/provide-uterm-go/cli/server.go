@@ -137,6 +137,8 @@ func buildServer(ctx context.Context, configPath, host string, port int, fronten
 	}
 
 	registry := NewSessionRegistry(cfg)
+	// Long-poll events/watch uses the same EventBus as SSE.
+	registry.SetEventBus(bus)
 
 	graphicalTargets, err := server.SeedGraphicalTargets(cfg)
 	if err != nil {

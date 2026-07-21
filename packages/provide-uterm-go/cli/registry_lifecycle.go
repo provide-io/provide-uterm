@@ -204,15 +204,120 @@ func (r *SessionRegistryImpl) Events(_ context.Context, id string, limit int) ([
 	return events, nil
 }
 
-// WatchSessionEvents long-polls for events. With no event source, it returns an
-// immediate empty batch.
-func (r *SessionRegistryImpl) WatchSessionEvents(_ context.Context, id string, _ server.WatchParams) (map[string]any, error) {
+// WatchSessionEvents long-polls the hub EventBus for session events (Python
+// watch_session_events / C# EventBus.WatchAsync). Without a bus, falls back to
+// the connector event ring (or empty) without waiting.
+func (r *SessionRegistryImpl) WatchSessionEvents(ctx context.Context, id string, p server.WatchParams) (map[string]any, error) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-	if _, ok := r.entries[id]; !ok {
+	e, ok := r.entries[id]
+	if !ok {
+		r.mu.Unlock()
 		return nil, server.ErrSessionNotFound
 	}
-	return map[string]any{"events": []map[string]any{}, "timed_out": true}, nil
+	bus := r.eventBus
+	conn := e.conn
+	r.mu.Unlock()
+
+	timeoutMS := p.TimeoutMS
+	if timeoutMS <= 0 {
+		timeoutMS = 5000
+	}
+	if timeoutMS < 100 {
+		timeoutMS = 100
+	}
+	if timeoutMS > 30000 {
+		timeoutMS = 30000
+	}
+	maxEvents := p.MaxEvents
+	if maxEvents <= 0 {
+		maxEvents = 50
+	}
+	if maxEvents > 200 {
+		maxEvents = 200
+	}
+
+	if bus == nil {
+		// No EventBus: return recent connector ring immediately (no long-poll).
+		events := []map[string]any{}
+		if conn != nil {
+			events = conn.Events()
+			if len(events) > maxEvents {
+				events = events[len(events)-maxEvents:]
+			}
+		}
+		return map[string]any{
+			"session_id":    id,
+			"events":        events,
+			"dropped_count": 0,
+			"timed_out":     len(events) == 0,
+		}, nil
+	}
+
+	var pattern *string
+	if p.Pattern != "" {
+		pat := p.Pattern
+		pattern = &pat
+	}
+	sub, cancel, err := bus.Watch(id, p.EventTypes, pattern)
+	if err != nil {
+		return nil, err
+	}
+	defer cancel()
+
+	collected := make([]map[string]any, 0, maxEvents)
+	// Bootstrap from connector ring so a live shell without a WS worker still
+	// surfaces recent output on the first watch.
+	if conn != nil {
+		for _, ev := range conn.Events() {
+			collected = append(collected, ev)
+			if len(collected) >= maxEvents {
+				return map[string]any{
+					"session_id":    id,
+					"events":        collected,
+					"dropped_count": 0,
+					"timed_out":     false,
+				}, nil
+			}
+		}
+	}
+	timedOut := false
+	deadline := time.Now().Add(time.Duration(timeoutMS) * time.Millisecond)
+	for len(collected) < maxEvents {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			timedOut = true
+			break
+		}
+		timer := time.NewTimer(remaining)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		case evt, open := <-sub.Queue:
+			timer.Stop()
+			if !open || evt == nil {
+				// worker-disconnected sentinel or closed queue
+				return map[string]any{
+					"session_id":    id,
+					"events":        collected,
+					"dropped_count": sub.Dropped(),
+					"timed_out":     false,
+				}, nil
+			}
+			collected = append(collected, evt)
+		case <-timer.C:
+			timedOut = true
+		}
+		if timedOut {
+			break
+		}
+	}
+	return map[string]any{
+		"session_id":    id,
+		"events":        collected,
+		"dropped_count": sub.Dropped(),
+		"timed_out":     timedOut,
+	}, nil
 }
 
 // AnnotateSession records an operator annotation, returning (ts, seq). A session

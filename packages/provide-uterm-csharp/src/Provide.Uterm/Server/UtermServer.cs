@@ -334,8 +334,14 @@ public sealed partial class UtermServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Start session lifecycle, copy connector_config onto status, register hub worker
-    /// stub, and for shell/ushell/pty emit a connect bootstrap event (depth vs pure DTO).
+    /// Live connectors started by profile/quick connect (shell/ushell/pty → ushell).
+    /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Connectors.IConnector> _liveConnectors =
+        new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Start session lifecycle, copy connector_config onto status, register hub worker,
+    /// and for shell/ushell/pty start a real Ushell connector that pumps term events.
     /// </summary>
     private SessionStatus? ActivateSession(string sessionId, SessionDefinition def)
     {
@@ -347,16 +353,56 @@ public sealed partial class UtermServer : IAsyncDisposable
         var ct = def.ConnectorType.Trim().ToLowerInvariant();
         if (ct is "shell" or "ushell" or "pty")
         {
-            // Bootstrap event proves connect path is live (ushell-style demo, no PTY required).
+            // Synchronous so REST tests / cover exercise the live path before return.
+            StartShellConnector(sessionId, def);
+        }
+        else
+        {
+            // Non-shell: wire status only + bootstrap event (SSH/telnet need live network).
             _deps.Hub.AppendEventData(sessionId, "session_started", new Dictionary<string, object?>
             {
                 ["connector_type"] = def.ConnectorType,
                 ["display_name"] = def.DisplayName,
-                ["shell"] = true,
             });
         }
 
         return st;
+    }
+
+    /// <summary>
+    /// Start a live ushell connector and pump welcome/term frames onto the EventBus.
+    /// Ushell is process-free and deterministic (no PTY / external process).
+    /// </summary>
+    private void StartShellConnector(string sessionId, SessionDefinition def)
+    {
+        var connector = new Shell.UshellConnector(sessionId, new Shell.UshellConnectorConfig
+        {
+            DisplayName = def.DisplayName,
+            PollDelay = TimeSpan.FromMilliseconds(1),
+            PollSleep = static _ => { },
+        });
+        connector.Start();
+        _liveConnectors[sessionId] = connector;
+        _deps.Hub.AppendEventData(sessionId, "session_started", new Dictionary<string, object?>
+        {
+            ["connector_type"] = def.ConnectorType,
+            ["display_name"] = def.DisplayName,
+            ["shell"] = true,
+            ["live"] = true,
+        });
+        // Welcome path returns immediately (no idle sleep).
+        foreach (var frame in connector.PollMessages())
+        {
+            var et = frame.TryGetValue("type", out var t) ? t?.ToString() ?? "term" : "term";
+            if (frame.TryGetValue("data", out var d) && d is Dictionary<string, object?> data)
+            {
+                _deps.Hub.AppendEventData(sessionId, et, data);
+            }
+            else
+            {
+                _deps.Hub.AppendEventData(sessionId, et, frame);
+            }
+        }
     }
 
     private static Dictionary<string, object?> ExtractConnectorConfig(Dictionary<string, JsonElement> body)

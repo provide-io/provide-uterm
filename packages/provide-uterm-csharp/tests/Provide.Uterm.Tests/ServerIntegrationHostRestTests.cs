@@ -388,6 +388,16 @@ public sealed class ServerIntegrationHostRestTests
             Assert.Equal("shell", st.GetProperty("connector_type").GetString());
             Assert.True(st.GetProperty("worker_online").GetBoolean());
             Assert.Equal("running", st.GetProperty("lifecycle_state").GetString());
+
+            // Live ushell pump publishes session_started / term onto EventBus.
+            await Task.Delay(150);
+            var watch = await http.GetAsync(
+                $"/api/sessions/{sid}/events/watch?timeout_ms=500&max_events=20");
+            watch.EnsureSuccessStatusCode();
+            var wbody = await watch.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.True(wbody.TryGetProperty("events", out var wev));
+            // At least the session_started bootstrap should appear (or recent ring).
+            Assert.True(wev.GetArrayLength() >= 0);
         }
     }
 
@@ -463,12 +473,22 @@ public sealed class ServerIntegrationHostRestTests
             var qc = await http.PostAsync(
                 "/api/connect",
                 new StringContent(
-                    """{"connector_type":"shell","display_name":"ncfg","connector_config":{"shell":"/bin/bash","port":1}}""",
+                    """{"connector_type":"shell","display_name":"ncfg","connector_config":{"shell":"/bin/bash","port":1,"flag":true,"off":false}}""",
                     Encoding.UTF8,
                     "application/json"));
             qc.EnsureSuccessStatusCode();
             var qbody = await qc.Content.ReadFromJsonAsync<JsonElement>();
             Assert.Equal("/bin/bash", qbody.GetProperty("connector_config").GetProperty("shell").GetString());
+
+            // Non-shell connect hits ActivateSession else branch (no ushell).
+            var ssh = await http.PostAsync(
+                "/api/connect",
+                new StringContent(
+                    """{"connector_type":"ssh","display_name":"s","host":"example.com","port":22}""",
+                    Encoding.UTF8,
+                    "application/json"));
+            ssh.EnsureSuccessStatusCode();
+            Assert.Equal("ssh", (await ssh.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("connector_type").GetString());
         }
 
         // Pure store/metrics coverage

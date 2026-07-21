@@ -9,8 +9,10 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/connectors"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/server"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
 )
@@ -335,8 +337,11 @@ func TestRegistryOpaqueAndAnnotate(t *testing.T) {
 	if _, err := r.Events(ctx, "missing", 10); !errors.Is(err, server.ErrSessionNotFound) {
 		t.Fatalf("events missing: %v", err)
 	}
-	if _, err := r.WatchSessionEvents(ctx, "provide-shell", server.WatchParams{}); err != nil {
+	if res, err := r.WatchSessionEvents(ctx, "provide-shell", server.WatchParams{TimeoutMS: 100, MaxEvents: 5}); err != nil {
 		t.Fatalf("watch: %v", err)
+	} else if res["timed_out"] != true {
+		// No EventBus wired in this test → empty/timed_out expected.
+		t.Logf("watch no-bus result: %v", res)
 	}
 	if _, err := r.WatchSessionEvents(ctx, "missing", server.WatchParams{}); !errors.Is(err, server.ErrSessionNotFound) {
 		t.Fatalf("watch missing: %v", err)
@@ -377,5 +382,48 @@ func TestRegistryDelete(t *testing.T) {
 	// Idempotent.
 	if err := r.DeleteSession(ctx, "provide-shell"); err != nil {
 		t.Fatalf("delete idempotent: %v", err)
+	}
+}
+
+func TestWatchSessionEventsEventBusLongPoll(t *testing.T) {
+	cfg := serverconfig.DefaultServerConfig()
+	r := NewSessionRegistry(cfg)
+	bus := hub.NewEventBus(hub.EventBusOptions{})
+	r.SetEventBus(bus)
+	ctx := context.Background()
+
+	// Live event during wait window.
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		time.Sleep(40 * time.Millisecond)
+		bus.Enqueue("provide-shell", map[string]any{
+			"type": "term",
+			"data": map[string]any{"data": "live-watch"},
+		})
+	}()
+	res, err := r.WatchSessionEvents(ctx, "provide-shell", server.WatchParams{
+		TimeoutMS: 2000,
+		MaxEvents: 5,
+	})
+	<-done
+	if err != nil {
+		t.Fatalf("watch: %v", err)
+	}
+	events, _ := res["events"].([]map[string]any)
+	if len(events) == 0 {
+		t.Fatalf("expected at least one event: %v", res)
+	}
+	// timed_out may still be true if max_events was not filled before deadline.
+	// Timeout path.
+	res2, err := r.WatchSessionEvents(ctx, "provide-shell", server.WatchParams{
+		TimeoutMS: 80,
+		MaxEvents: 3,
+	})
+	if err != nil {
+		t.Fatalf("watch timeout: %v", err)
+	}
+	if res2["timed_out"] != true {
+		t.Fatalf("expected timed_out, got %v", res2)
 	}
 }

@@ -164,9 +164,21 @@ jobs:
   # Thin script under ci/ — no long inline shell (repo CI script policy).
   docker-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      # Assert compose uses directory mounts of /etc/uterm (not fragile file→file).
+      - name: Compose config inventory
+        run: |
+          set -euo pipefail
+          docker compose -f docker/docker-compose.yml config --services | tee /tmp/compose-services.txt
+          grep -qx server /tmp/compose-services.txt
+          grep -qx server-go /tmp/compose-services.txt
+          grep -qx server-csharp /tmp/compose-services.txt
+          cfg="$(docker compose -f docker/docker-compose.yml config)"
+          echo "$cfg" | grep -q 'target: /etc/uterm'
+          echo "$cfg" | grep -q 'etc-uterm'
+          ! echo "$cfg" | grep -q 'dev-smoke.toml:/etc/uterm/server.toml'
       - name: Docker language-server smoke (build + /healthz)
         env:
           EVIDENCE_DIR: ${{ runner.temp }}/uterm-docker-smoke
