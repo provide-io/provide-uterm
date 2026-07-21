@@ -34,4 +34,5 @@ uv run python -m scripts.demos.reel
 | [DeckMux Presence](deckmux/README.md) | Multiple operators share a session with live cursors | `deckmux/` |
 | [Fleet Management](fleet/README.md) | Workers self-register; broadcast deploy to the whole fleet | `fleet/` |
 | [Fan-out Broadcast](fanout/README.md) | Send one command to many sessions, collect all responses | `fanout/` |
+| [VNC Lab](vnc-lab/README.md) | Docker VNC desktop + Chromium; noVNC web console to example.com | `vnc-lab/` |
 | [Terminal Grid](demo_grid/README.md) | 9 live terminals in a 3x3 grid, all running simultaneously | `demo_grid/` |

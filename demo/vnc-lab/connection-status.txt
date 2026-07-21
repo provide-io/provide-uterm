@@ -1,0 +1,6 @@
+status=Connected (unencrypted) to 29cae3dd4f3c:99
+title=29cae3dd4f3c:99 - noVNC
+canvas=1280x720
+url=http://127.0.0.1:6080/vnc.html?autoconnect=true
+vnc_upstream=127.0.0.1:5901 (uterm-test-vnc-demo)
+demo_url=https://example.com
