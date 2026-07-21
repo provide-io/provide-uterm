@@ -240,52 +240,109 @@ def http_json(method: str, url: str, *, headers: dict[str, str], body: dict | No
         return exc.code, parsed
 
 
-def drive_text_demos(base: str, headers: dict[str, str], *, session: str = SHELL_SESSION) -> list[str]:
-    """Inject live text demo activity into a shell session via REST hijack/send.
-
-    The hosted ``shell`` connector is an in-memory interactive reference
-    (slash commands + plain chat lines) — not a real PTY. Drive it with
-    ``/say`` / plain text so the transcript paints readable demo content.
-    """
+def acquire_shell(base: str, headers: dict[str, str], *, session: str = SHELL_SESSION) -> tuple[str | None, list[str]]:
+    """Acquire a REST hijack lease on the reference shell session."""
     log: list[str] = []
     status, payload = http_json(
         "POST",
         f"{base}/worker/{session}/hijack/acquire",
         headers=headers,
-        body={"owner": "demo-driver", "lease_s": 180},
+        body={"owner": "demo-driver", "lease_s": 300},
     )
     if status != 200 or not isinstance(payload, dict):
         log.append(f"acquire_{session}=status_{status} body={payload!r}")
-        return log
+        return None, log
     hid = str(payload["hijack_id"])
     log.append(f"acquire_{session}={hid}")
-    commands = [
+    return hid, log
+
+
+def send_shell_keys(
+    base: str,
+    headers: dict[str, str],
+    hid: str,
+    keys: str,
+    *,
+    session: str = SHELL_SESSION,
+) -> tuple[int, object]:
+    return http_json(
+        "POST",
+        f"{base}/worker/{session}/hijack/{hid}/send",
+        headers=headers,
+        body={"keys": keys, "timeout_ms": 1500},
+    )
+
+
+def seed_shell_banner(base: str, headers: dict[str, str], hid: str) -> list[str]:
+    """Minimal seed so nested browser has *something* on first paint."""
+    log: list[str] = []
+    for cmd in (
         "/clear\r",
         "/nick demo\r",
-        "/say ════════════════════════════════════════\r",
-        "/say   provide-uterm · text-based shell demo\r",
-        "/say ════════════════════════════════════════\r",
-        "/say [demo] live transcript via hijack/send\r",
-        "/say whoami → demo operator (reference shell)\r",
-        "/say pwd    → hosted connector session\r",
-        "/say RAINBOW shell output · uterm fan-out\r",
-        "/status\r",
-        "/shell\r",
-        "/say ── live session stream ─────────────────\r",
-        "plain chat: nested browser watches this stream\r",
-    ]
-    for cmd in commands:
-        st, body = http_json(
-            "POST",
-            f"{base}/worker/{session}/hijack/{hid}/send",
-            headers=headers,
-            body={"keys": cmd, "timeout_ms": 1500},
-        )
+        "/say provide-uterm · nested browser demo starting…\r",
+        "/say (live stream will paint below)\r",
+    ):
+        st, body = send_shell_keys(base, headers, hid, cmd)
         if st >= 400:
-            log.append(f"send_err={st} {body!r}")
-        time.sleep(0.12)
-    log.append(f"drove_{session}=ok")
+            log.append(f"seed_err={st} {body!r}")
+        time.sleep(0.08)
+    log.append("seed_ok")
     return log
+
+
+# Progressive beats driven *while* the VNC page is recording so the inner
+# browser visibly changes (not a 20s freeze of one snapshot).
+LIVE_DEMO_BEATS: list[str] = [
+    "/clear\r",
+    "/say ════════════════════════════════════════\r",
+    "/say   provide-uterm · text-based shell demo\r",
+    "/say ════════════════════════════════════════\r",
+    "/say [1/8] whoami → demo operator (reference shell)\r",
+    "/say [2/8] pwd    → hosted connector session\r",
+    "/say [3/8] RAINBOW shell output · uterm fan-out\r",
+    "/status\r",
+    "/shell\r",
+    "/say [4/8] ── live session stream ─────────────────\r",
+    "/say [5/8] nested Chromium is watching via /ws/browser\r",
+    "/say [6/8] RFB relay paints every snapshot update\r",
+    "plain chat: host.docker.internal → lab browser\r",
+    "/say [7/8] >>> you are watching this shell via VNC <<<\r",
+    "/say [8/8] ready · ticks continue below\r",
+]
+
+
+def canvas_fingerprint(page: object) -> str:
+    """Fingerprint the noVNC canvas (toDataURL — robust against partial damage)."""
+    return str(
+        page.evaluate(  # type: ignore[attr-defined]
+            """() => {
+              const c = document.querySelector('#vnc-screen canvas');
+              if (!(c instanceof HTMLCanvasElement) || c.width < 8 || c.height < 8) return 'no-canvas';
+              // Downscale via a scratch canvas so the hash stays small/fast.
+              const w = 64, h = 36;
+              const off = document.createElement('canvas');
+              off.width = w; off.height = h;
+              const octx = off.getContext('2d');
+              if (!octx) return 'no-ctx';
+              octx.drawImage(c, 0, 0, w, h);
+              const data = octx.getImageData(0, 0, w, h).data;
+              let sum = 0;
+              for (let i = 0; i < data.length; i += 4) {
+                sum = (sum * 33 + data[i] + data[i+1] * 3 + data[i+2] * 7) >>> 0;
+              }
+              // Also sample a few mid-frame pixels for quick diffs.
+              const ctx = c.getContext('2d', { willReadFrequently: true });
+              const samples = [];
+              if (ctx) {
+                for (const [fx, fy] of [[0.3,0.35],[0.5,0.45],[0.7,0.55],[0.4,0.65]]) {
+                  const d = ctx.getImageData(Math.floor(c.width*fx), Math.floor(c.height*fy), 1, 1).data;
+                  samples.push(`${d[0]},${d[1]},${d[2]}`);
+                }
+              }
+              return `${c.width}x${c.height}:${sum.toString(16)}:${samples.join(';')}`;
+            }"""
+        )
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -377,64 +434,15 @@ def main(argv: list[str] | None = None) -> int:
         if not connected:
             raise RuntimeError(f"session {SHELL_SESSION} never reached connected state")
 
-        # Drive text demos *before* the lab browser attaches so the hub's
-        # last_snapshot already has paint, and so the nested terminal.html
-        # receives an initial control snapshot (not an empty loading state).
-        drive_log = drive_text_demos(base, headers, session=SHELL_SESSION)
-        lines.extend(drive_log)
-        shell_hid: str | None = None
-        for entry in drive_log:
-            # Success lines look like: acquire_provide-shell=<uuid>
-            if entry.startswith(f"acquire_{SHELL_SESSION}=") and "status_" not in entry and " body=" not in entry:
-                shell_hid = entry.split("=", 1)[1].strip()
-                break
+        # Seed a short banner first (not the full demo) so nested terminal has
+        # content on attach; progressive beats run *during* VNC recording.
+        shell_hid, acq_log = acquire_shell(base, headers, session=SHELL_SESSION)
+        lines.extend(acq_log)
         lines.append(f"shell_lease={shell_hid}")
         if not shell_hid:
-            raise RuntimeError(f"failed to acquire shell lease: {drive_log}")
-        for cmd in (
-            "/say >>> nested browser is watching this shell via uterm VNC <<<\r",
-            "/say ready for text demos\r",
-        ):
-            http_json(
-                "POST",
-                f"{base}/worker/{SHELL_SESSION}/hijack/{shell_hid}/send",
-                headers=headers,
-                body={"keys": cmd, "timeout_ms": 1200},
-            )
-        time.sleep(0.8)
-        # Assert the shell really painted (REST snapshot) before opening nested UI.
-        snap_ok = False
-        snap_text = ""
-        markers = (
-            "text-based shell demo",
-            "provide-uterm",
-            "RAINBOW",
-            "nested browser is watching",
-            "live session stream",
-        )
-        for _ in range(20):
-            st, snap = http_json(
-                "GET",
-                f"{base}/worker/{SHELL_SESSION}/hijack/{shell_hid}/snapshot",
-                headers=headers,
-            )
-            if st == 200 and isinstance(snap, dict):
-                inner = snap.get("snapshot") if isinstance(snap.get("snapshot"), dict) else snap
-                snap_text = str(
-                    (inner or {}).get("screen")  # type: ignore[union-attr]
-                    or (inner or {}).get("text")  # type: ignore[union-attr]
-                    or snap.get("screen")
-                    or ""
-                )
-                if any(m in snap_text for m in markers):
-                    snap_ok = True
-                    break
-            time.sleep(0.25)
-        lines.append(f"shell_snapshot_ok={snap_ok} len={len(snap_text)}")
-        if not snap_ok:
-            raise RuntimeError(
-                f"shell snapshot missing demo text after drive (len={len(snap_text)} head={snap_text[:200]!r})"
-            )
+            raise RuntimeError(f"failed to acquire shell lease: {acq_log}")
+        lines.extend(seed_shell_banner(base, headers, shell_hid))
+        time.sleep(0.4)
 
         # Lab Chromium opens the text terminal on *first* launch (no example.com).
         plain_port, tls_port = start_lab_with_demo_url(
@@ -462,7 +470,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         lines.append("chrome_on_text_demo=ok")
         # Nested terminal: assets + WS + initial snapshot paint.
-        time.sleep(5.0)
+        time.sleep(4.0)
 
         # Prove host-side terminal.html paints (same assets the lab loads).
         # Do NOT set x-uterm-* as context-wide extra_http_headers: Playwright
@@ -481,16 +489,15 @@ def main(argv: list[str] | None = None) -> int:
                   const loading = document.querySelector('[id^="loadingScreen-"]');
                   if (!loading) return false;
                   if (loading.style.display !== 'none') return false;
-                  // Prefer real paint: xterm rows or buffer text.
                   const rows = document.querySelectorAll('.xterm-rows > div');
                   if (rows.length > 0) {
                     const t = Array.from(rows).map(r => r.textContent || '').join('\\n');
-                    if (t.trim().length > 20) return true;
+                    if (t.trim().length > 10) return true;
                   }
                   const term = window.demoTerminal;
                   if (term && typeof term.getBufferText === 'function') {
                     const b = term.getBufferText(80) || '';
-                    return b.trim().length > 20;
+                    return b.trim().length > 10;
                   }
                   return false;
                 }""",
@@ -510,14 +517,13 @@ def main(argv: list[str] | None = None) -> int:
             lines.append(f"host_terminal_buffer={str(buf)[:240]!r}")
             buf_s = str(buf)
             host_markers = (
-                "text-based shell demo",
                 "provide-uterm",
                 "nested browser",
-                "RAINBOW",
-                "live session stream",
+                "live stream",
                 "Transcript",
                 "Provide Shell Demo",
                 "demo:",
+                "demo starting",
             )
             if not buf_s or not any(m in buf_s for m in host_markers):
                 raise RuntimeError(f"host terminal.html did not paint demo text: {buf!r}")
@@ -548,17 +554,14 @@ def main(argv: list[str] | None = None) -> int:
         metrics_path = evidence / "video-metrics.json"
 
         with sync_playwright() as p:
+            # Prefer cookies over context-wide extra headers so CDN assets for
+            # the VNC page itself are not CORS-poisoned if any load remotely.
             browser = p.chromium.launch(headless=True)
             context = browser.new_context(
                 viewport={"width": 1440, "height": 900},
-                device_scale_factor=2,
+                device_scale_factor=1,
                 record_video_dir=str(video_dir),
                 record_video_size={"width": 1440, "height": 900},
-                extra_http_headers={
-                    "x-uterm-principal": "test-admin",
-                    "x-uterm-role": "admin",
-                    "x-uterm-tenant": "lab",
-                },
             )
             context.add_cookies(
                 [
@@ -568,6 +571,14 @@ def main(argv: list[str] | None = None) -> int:
                 ]
             )
             page = context.new_page()
+            # Route-local auth for same-origin API/WS only (not CDN).
+            page.set_extra_http_headers(
+                {
+                    "x-uterm-principal": "test-admin",
+                    "x-uterm-role": "admin",
+                    "x-uterm-tenant": "lab",
+                }
+            )
             page.goto(page_url, wait_until="domcontentloaded", timeout=45_000)
             page.wait_for_function(
                 """() => {
@@ -576,33 +587,103 @@ def main(argv: list[str] | None = None) -> int:
                 }""",
                 timeout=30_000,
             )
-            # Nested Chromium + first-party terminal should already have snapshot
-            # paint; give RFB a moment to push the desktop frame.
-            page.wait_for_timeout(4000)
+            # Wait until noVNC has a real framebuffer (not empty connecting pane).
+            page.wait_for_function(
+                """() => {
+                  const c = document.querySelector('#vnc-screen canvas');
+                  return c instanceof HTMLCanvasElement && c.width >= 640 && c.height >= 400;
+                }""",
+                timeout=20_000,
+            )
+            page.wait_for_timeout(1500)
+            fingerprints: list[str] = [canvas_fingerprint(page)]
+            lines.append(f"canvas_fp0={fingerprints[0][:80]}")
 
-            stop_at = time.time() + max(10.0, float(args.seconds))
-            tick = 0
-            while time.time() < stop_at:
-                tick += 1
-                if shell_hid:
-                    http_json(
-                        "POST",
-                        f"{base}/worker/{SHELL_SESSION}/hijack/{shell_hid}/send",
-                        headers=headers,
-                        body={
-                            "keys": (f"/say [tick {tick}] {time.strftime('%H:%M:%S')} · provide-uterm text demo\r"),
-                            "timeout_ms": 1200,
-                        },
-                    )
+            # LIVE progressive demos — each beat must change the nested terminal
+            # *while* Playwright is recording the VNC console.
+            for beat_i, beat in enumerate(LIVE_DEMO_BEATS, start=1):
+                st_send, body_send = send_shell_keys(base, headers, shell_hid, beat)
+                if st_send >= 400:
+                    lines.append(f"beat_err_{beat_i}={st_send} {body_send!r}")
+                # Hold long enough for: worker snapshot → hub fanout → nested
+                # xterm paint → x11vnc full-frame (-fs 1) → noVNC → Playwright.
                 page.wait_for_timeout(1800)
-                if tick in (2, 5, 8):
+                # Incremental RFB from Chromium canvas is flaky under Xvfb; pull a
+                # fresh framebuffer every other beat so the video shows each step.
+                if beat_i % 2 == 0:
+                    try:
+                        page.evaluate(
+                            """async () => {
+                              const v = window.utermVnc;
+                              if (!v) return 'no-utermVnc';
+                              v.disconnect();
+                              await v.connect();
+                              return 'reconnected';
+                            }"""
+                        )
+                        page.wait_for_function(
+                            """() => {
+                              const el = document.getElementById('vnc-status');
+                              return el && el.dataset.state === 'connected';
+                            }""",
+                            timeout=15_000,
+                        )
+                        page.wait_for_timeout(900)
+                        lines.append(f"rfb_reconnect_beat_{beat_i}=ok")
+                    except Exception as reconn_exc:
+                        lines.append(f"rfb_reconnect_beat_{beat_i}_err={reconn_exc!r}")
+                # Nudge the pointer so the recording is not a pure still.
+                try:
+                    box = page.locator("#vnc-screen").bounding_box()
+                    if box:
+                        page.mouse.move(
+                            box["x"] + box["width"] * (0.25 + 0.05 * (beat_i % 8)),
+                            box["y"] + box["height"] * (0.35 + 0.03 * (beat_i % 5)),
+                        )
+                        if beat_i % 3 == 0:
+                            page.mouse.click(
+                                box["x"] + box["width"] * 0.5,
+                                box["y"] + box["height"] * 0.5,
+                            )
+                except Exception as mouse_exc:
+                    lines.append(f"mouse_nudge_err={mouse_exc!r}")
+                fp = canvas_fingerprint(page)
+                fingerprints.append(fp)
+                if beat_i in (3, 8, 12, len(LIVE_DEMO_BEATS)):
                     page.screenshot(path=str(full_png), full_page=True)
+                lines.append(f"beat_{beat_i}_ok fp_changed={fp != fingerprints[0]}")
+
+            # Extra live ticks so the tail of the video keeps moving.
+            tick_deadline = time.time() + max(4.0, float(args.seconds) * 0.35)
+            tick = 0
+            while time.time() < tick_deadline:
+                tick += 1
+                send_shell_keys(
+                    base,
+                    headers,
+                    shell_hid,
+                    f"/say [live {tick}] {time.strftime('%H:%M:%S')} · nested browser fan-out\r",
+                )
+                page.wait_for_timeout(1200)
+                fingerprints.append(canvas_fingerprint(page))
+
+            unique_fps = len(set(fingerprints))
+            lines.append(f"canvas_fp_unique={unique_fps}/{len(fingerprints)}")
+            if unique_fps < 3:
+                raise RuntimeError(
+                    "VNC canvas did not show live changes during recording "
+                    f"(unique fingerprints={unique_fps}; expected >=3). "
+                    "Inner browser/RFB path is still static."
+                )
+            lines.append("live_canvas_motion=ok")
 
             metrics = page.evaluate(
                 """() => {
                   const status = document.getElementById('vnc-status');
                   const canvas = document.querySelector('#vnc-screen canvas');
                   const dims = document.getElementById('vnc-dims');
+                  const screen = document.getElementById('vnc-screen');
+                  const cs = screen ? getComputedStyle(screen) : null;
                   return {
                     status_state: status?.dataset?.state ?? null,
                     status_text: status?.textContent ?? null,
@@ -610,11 +691,15 @@ def main(argv: list[str] | None = None) -> int:
                     canvas_w: canvas?.width ?? 0,
                     canvas_h: canvas?.height ?? 0,
                     title: document.title,
+                    screen_pad: cs?.padding ?? null,
+                    screen_radius: cs?.borderRadius ?? null,
                   };
                 }"""
             )
             metrics["demo_url"] = demo_url
             metrics["vnc_page"] = page_url
+            metrics["canvas_fp_unique"] = unique_fps
+            metrics["canvas_fp_samples"] = len(fingerprints)
             metrics_path.write_text(json.dumps(metrics, indent=2) + "\n", encoding="utf-8")
             assert metrics["status_state"] == "connected", metrics
             assert metrics["canvas_w"] >= 640, metrics

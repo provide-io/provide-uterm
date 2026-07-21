@@ -97,6 +97,7 @@ describe("VncConsolePage", () => {
           class {
             viewOnly = false;
             scaleViewport = false;
+            clipViewport = false;
             resizeSession = false;
             background = "";
             addEventListener(): void {}
@@ -113,6 +114,7 @@ describe("VncConsolePage", () => {
     class FakeRFB {
       viewOnly = false;
       scaleViewport = false;
+      clipViewport = false;
       resizeSession = false;
       background = "";
       private listeners = new Map<string, Array<(ev: Event) => void>>();

@@ -1,19 +1,43 @@
 evidence=/Volumes/data/pyv/provide-uterm/demo/vnc-lab
-demo_url=http://host.docker.internal:60599/_terminal/terminal.html?worker_id=provide-shell&role=browser
-server_ready=http://127.0.0.1:60599
+demo_url=http://host.docker.internal:49412/_terminal/terminal.html?worker_id=provide-shell&role=browser
+server_ready=http://127.0.0.1:49412
 shell_connected=True
-acquire_provide-shell=573658d7-9396-4ac8-bdcd-d6f5686fc103
-drove_provide-shell=ok
-shell_lease=573658d7-9396-4ac8-bdcd-d6f5686fc103
-shell_snapshot_ok=True len=875
+acquire_provide-shell=b193ffd5-8457-40ee-842c-3b3d3de41261
+shell_lease=b193ffd5-8457-40ee-842c-3b3d3de41261
+seed_ok
 lab_plain=25900 lab_tls=25901
 lab_rfb=ok
-chrome_args='/usr/lib/chromium/chromium --show-component-extension-options --enable-gpu-rasterization --no-default-browser-check --disable-pings --media-router=0 --disable-dev-shm-usage --enable-remote-extensions --load-extension= http://host.docker.internal:60599/_terminal/terminal.html?worker_id=provide-shell&role=browser --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-software-rasterizer --no-first-run --no-default-browser-check --disable-session-crashed-bubble --disable-infobars --window-siz'
+chrome_args='/usr/lib/chromium/chromium --show-component-extension-options --enable-gpu-rasterization --no-default-browser-check --disable-pings --media-router=0 --disable-dev-shm-usage --enable-remote-extensions --load-extension= http://host.docker.internal:49412/_terminal/terminal.html?worker_id=provide-shell&role=browser --no-sandbox --test-type --disable-gpu --disable-gpu-compositing --disable-dev-shm-usage --no-first-run --no-default-browser-check --disable-session-crashed-bubble --disable-infobars --hi'
 chrome_on_text_demo=ok
 host_terminal_buffer='[Provide Shell Demo (provide-shell)]\n------------------------------------------------------------\nMode: Exclusive hijack\nControl: Paused for hijack\nHelp: /help /mode open|hijack /clear /nick /say /status /shell /reset\nMessage appended.\nTran'
 host_terminal_paint=ok
-vnc_hijack=f8ac5644-5ab2-4c2b-bcc4-90448ef163ef
-vnc_page=http://127.0.0.1:60599/_terminal/vnc.html?worker_id=vnc-shell&hijack_id=f8ac5644-5ab2-4c2b-bcc4-90448ef163ef&target_id=lab-vnc-plain
+vnc_hijack=918ce49d-17bc-4325-b9dd-817f65ae7d6b
+vnc_page=http://127.0.0.1:49412/_terminal/vnc.html?worker_id=vnc-shell&hijack_id=918ce49d-17bc-4325-b9dd-817f65ae7d6b&target_id=lab-vnc-plain
+canvas_fp0=1280x720:51491129:16,16,18;10,10,10;10,10,10;10,10,10
+beat_1_ok fp_changed=False
+rfb_reconnect_beat_2=ok
+beat_2_ok fp_changed=True
+beat_3_ok fp_changed=True
+rfb_reconnect_beat_4=ok
+beat_4_ok fp_changed=True
+beat_5_ok fp_changed=True
+rfb_reconnect_beat_6=ok
+beat_6_ok fp_changed=True
+beat_7_ok fp_changed=True
+rfb_reconnect_beat_8=ok
+beat_8_ok fp_changed=True
+beat_9_ok fp_changed=True
+rfb_reconnect_beat_10=ok
+beat_10_ok fp_changed=True
+beat_11_ok fp_changed=True
+rfb_reconnect_beat_12=ok
+beat_12_ok fp_changed=True
+beat_13_ok fp_changed=True
+rfb_reconnect_beat_14=ok
+beat_14_ok fp_changed=True
+beat_15_ok fp_changed=True
+canvas_fp_unique=8/20
+live_canvas_motion=ok
 video=/Volumes/data/pyv/provide-uterm/demo/vnc-lab/uterm-vnc-text-demos.webm
 full_png=/Volumes/data/pyv/provide-uterm/demo/vnc-lab/screenshots/uterm-vnc-text-demos-full.png
 desktop_png=/Volumes/data/pyv/provide-uterm/demo/vnc-lab/screenshots/uterm-vnc-text-demos-desktop.png

@@ -17,10 +17,11 @@
   --warn: #fbbf24;
   --glow: rgba(49, 196, 141, 0.22);
   /* Outer page inset — keep chrome off the window edge */
-  --page-pad: 32px;
-  --panel-gap: 24px;
-  --sidebar-w: 300px;
-  --viewport-inset: 16px;
+  --page-pad: 20px;
+  --panel-gap: 16px;
+  --sidebar-w: 280px;
+  /* Flush RFB into the panel — nested inset + second rounded border looked broken. */
+  --viewport-inset: 0px;
 }
 
 html,
@@ -300,8 +301,8 @@ button:disabled {
 }
 
 /*
- * Desktop host: inset the RFB surface so the framebuffer is not hard against
- * the panel chrome (fixes "edges of the view are too small").
+ * Desktop host: RFB fills the widget body edge-to-edge under the chrome bar.
+ * No second nested border/radius — that read as a broken double frame.
  */
 .vnc-screen {
   flex: 1;
@@ -309,49 +310,52 @@ button:disabled {
   width: 100%;
   margin: 0;
   padding: var(--viewport-inset);
-  background: #070a0f;
+  background: #0b0f14;
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  border-radius: 0 0 17px 17px;
 }
 
-/* noVNC host container fills the inset area */
+/* noVNC host: fill, no extra chrome */
 .vnc-screen > div {
   width: 100% !important;
   height: 100% !important;
   display: flex !important;
   align-items: center;
   justify-content: center;
-  background: #05070a !important;
-  border-radius: 10px;
-  border: 1px solid rgba(33, 50, 71, 0.9);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
-  overflow: hidden;
+  background: #0b0f14 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 .vnc-screen canvas {
-  max-width: 100%;
-  max-height: 100%;
-  border-radius: 0;
-  box-shadow: none;
+  /* scaleViewport sizes the canvas; keep it centered without a second frame */
+  display: block;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  outline: none;
 }
 
 @media (max-width: 1100px) {
   :root {
-    --page-pad: 20px;
-    --panel-gap: 16px;
-    --sidebar-w: 260px;
-    --viewport-inset: 12px;
+    --page-pad: 16px;
+    --panel-gap: 12px;
+    --sidebar-w: 250px;
   }
 }
 
 @media (max-width: 900px) {
   :root {
-    --page-pad: 16px;
-    --panel-gap: 14px;
-    --viewport-inset: 12px;
+    --page-pad: 12px;
+    --panel-gap: 12px;
   }
 
   .page {
@@ -360,10 +364,11 @@ button:disabled {
   }
 
   .widget-panel {
-    min-height: 52dvh;
+    min-height: 56dvh;
   }
 
   .vnc-screen {
-    min-height: 48dvh;
+    min-height: 50dvh;
+    border-radius: 0 0 17px 17px;
   }
 }

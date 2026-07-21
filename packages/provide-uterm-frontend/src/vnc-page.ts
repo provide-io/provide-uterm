@@ -38,6 +38,7 @@ export const NOVNC_RFB_MODULE = "@novnc/novnc";
 type RfbInstance = {
   viewOnly: boolean;
   scaleViewport: boolean;
+  clipViewport: boolean;
   resizeSession: boolean;
   background: string;
   addEventListener: (type: string, listener: (ev: Event) => void) => void;
@@ -180,9 +181,11 @@ export class VncConsolePage {
       };
       const rfb = new RfbClass(this.screenEl, url, options);
       rfb.viewOnly = this.params.viewOnly;
+      // Fit remote desktop into the panel; clip if needed (no nested "picture frame").
       rfb.scaleViewport = true;
+      rfb.clipViewport = true;
       rfb.resizeSession = false;
-      // Match product chrome (not pure black letterbox).
+      // Same as .vnc-screen so letterbox bars (if any) blend into the panel body.
       rfb.background = "#0b0f14";
 
       rfb.addEventListener("connect", () => {
