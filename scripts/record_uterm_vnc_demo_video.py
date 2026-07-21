@@ -11,7 +11,7 @@ End-to-end proof (not mocked)::
   2. Start uterm-test-vnc lab with Chromium pointed at the host's
      ``/_terminal/terminal.html`` text console (and a second tab/window path)
   3. Drive live shell output (text-based demos) into the session
-  4. Open host Playwright on first-party ``vnc.html`` and record webm + stills
+  4. Open host Playwright on first-party ``vnc.html`` and record MP4 + stills
 
 Usage (repo root)::
 
@@ -51,6 +51,48 @@ _HOST_FROM_DOCKER = "host.docker.internal"
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
+
+
+def _assert_video_not_black(video: Path, *, min_luma: float = 24.0) -> None:
+    """Raise if the encoded video's first frames decode to a black/near-black image.
+
+    Guards against shipping a "black video" — measures mean luma (YAVG, 0-255)
+    of the first few decoded frames via ffmpeg's ``signalstats`` filter. The
+    readable dark console UI sits around YAVG ~32-44; a genuinely black frame in
+    limited-range yuv420p floors at YAVG 16 (not 0), so the threshold sits
+    between the two.
+    """
+    probe = subprocess.run(
+        [
+            "ffprobe",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            f"movie={video},signalstats",
+            "-show_entries",
+            "frame_tags=lavfi.signalstats.YAVG",
+            "-of",
+            "csv=p=0",
+            "-read_intervals",
+            "%+#3",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    values = [float(v) for v in probe.stdout.split() if v.strip()]
+    if not values:
+        raise RuntimeError(f"could not measure luma of {video.name}: {probe.stderr[:400]}")
+    peak = max(values)
+    if peak < min_luma:
+        raise RuntimeError(
+            f"encoded video {video.name} decodes to a black frame "
+            f"(peak YAVG {peak:.1f} < {min_luma}); check the ffmpeg pipeline"
+        )
 
 
 def _evidence_dir(explicit: str | None) -> Path:
@@ -742,8 +784,11 @@ def main(argv: list[str] | None = None) -> int:
         assert int(metrics.get("canvas_w") or 0) >= 640, metrics
         metrics_path.write_text(json.dumps(metrics, indent=2) + "\n", encoding="utf-8")
 
-        # Stitch storyboard frames into a snappy progressive webm (no connect flash).
-        video_out = evidence / "uterm-vnc-text-demos.webm"
+        # Stitch storyboard frames into a snappy progressive clip (no connect flash).
+        # Deliverable is H.264 MP4: VP8/WebM does not decode in macOS QuickTime/
+        # Preview (renders black), so the demo must ship as MP4 like every other
+        # recorder (see scripts/demos/ffmpeg.py::ffmpeg_to_mp4).
+        video_out = evidence / "uterm-vnc-text-demos.mp4"
         if not frame_paths:
             raise RuntimeError("no storyboard frames produced")
         # ~1.1s per chapter — website-demo pace through the full script.
@@ -763,16 +808,20 @@ def main(argv: list[str] | None = None) -> int:
                 "0",
                 "-i",
                 str(list_file),
-                "-vsync",
-                "vfr",
+                "-fps_mode",
+                "cfr",
+                "-r",
+                "25",
                 "-pix_fmt",
                 "yuv420p",
                 "-c:v",
-                "libvpx",
-                "-b:v",
-                "2M",
-                "-auto-alt-ref",
-                "0",
+                "libx264",
+                "-crf",
+                "20",
+                "-preset",
+                "medium",
+                "-movflags",
+                "+faststart",
                 str(video_out),
             ],
             capture_output=True,
@@ -782,12 +831,15 @@ def main(argv: list[str] | None = None) -> int:
         )
         if ff.returncode != 0 or not video_out.is_file():
             raise RuntimeError(f"ffmpeg storyboard failed: {(ff.stderr or ff.stdout)[:800]}")
+        # Fail loudly if the encoded video decodes to a black/near-black frame —
+        # catches a broken pipeline before it ships as a "black video".
+        _assert_video_not_black(video_out)
         lines.append(f"video={video_out}")
         lines.append(f"storyboard_frames={len(frame_paths)}")
         lines.append(f"full_png={full_png}")
         lines.append(f"desktop_png={desktop_png}")
 
-        # Publish into demo/vnc-lab (png committed; webm may be gitignored).
+        # Publish into demo/vnc-lab (png committed; mp4 may be gitignored).
         demo = root / "demo" / "vnc-lab"
         demo_shots = demo / "screenshots"
         demo_shots.mkdir(parents=True, exist_ok=True)
@@ -797,7 +849,7 @@ def main(argv: list[str] | None = None) -> int:
             (full_png, "uterm-vnc-console.png"),
         ):
             (demo_shots / name).write_bytes(src.read_bytes())
-        (demo / "uterm-vnc-text-demos.webm").write_bytes(video_out.read_bytes())
+        (demo / "uterm-vnc-text-demos.mp4").write_bytes(video_out.read_bytes())
         (demo / "video-metrics.json").write_text(metrics_path.read_text(encoding="utf-8"), encoding="utf-8")
         lines.append("published=demo/vnc-lab/")
 
