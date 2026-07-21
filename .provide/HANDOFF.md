@@ -281,45 +281,67 @@ Wired to existing binary `/tunnel/{id}` WS. `MemoryTunnelStore` gained
 docker compose -f docker/docker-compose.yml up --build
 ```
 
-See `docker/README.md`. Packaging ≠ full API parity — residual surface table below.
+See `docker/README.md`.
 
-## Remaining surface gaps (updated this goal)
+## Parity matrix (Python / Go / C#) — 2026-07-21
+
+Canonical cross-language support matrix. **yes** = shipped and exercised;
+**partial** = route or shell present with noted depth gap; **de-scope** /
+**never** = permanent non-goal.
+
+### Runtime & multi-backend
 
 | Surface | Python | Go | C# |
 |---------|--------|----|-----|
 | Hub / hijack / DeckMux / multi-backend e2e | yes | yes | yes |
-| Binary `/tunnel` + inspect | yes | yes | yes |
-| Session control REST | yes | yes | yes |
+| Binary `/tunnel` + inspect UI | yes | yes | yes |
+| Session control REST (start/stop/mode/…) | yes | yes | yes |
 | Webhooks / fan-out REST | yes | yes | yes |
-| Tunnel host REST create/rotate/share | yes | yes | yes |
-| Profiles CRUD + connect | yes | yes | **yes** |
-| API keys | yes | yes | **yes** |
-| Approvals list/approve/reject | yes | yes | **yes** |
-| Metrics + Prometheus | yes | yes | **yes** |
-| Security posture | yes | yes | **yes** |
-| SSE event stream / events/watch | yes | yes | **yes** (watch is short-poll shell) |
-| Session PATCH / bulk DELETE | yes | yes | **yes** |
-| Quick connect `POST /api/connect` | yes | yes | **yes** |
-| SPA UI hosting | yes | yes (baked `/frontend` + `--frontend-dir`) | **yes** (baked `/app/frontend` + `UTERM_FRONTEND_DIR`) |
-| Events watch long-poll | yes | route (impl depth varies) | **yes** (EventBus long-poll) |
-| Profile/quick connect shell depth | yes | yes | **yes** (connector_config + session_started) |
-| FastAPI `mount_terminal_ui` embed | yes | de-scope (`uterm proxy`) | de-scope (`uterm proxy`) |
-| MCP / `uterm-mcp` | yes | yes | **never** |
+| Tunnel host REST (create/rotate/share) | yes | yes | yes |
 
-Proof: `ServerIntegrationHostRestTests` + `ci/docker_language_smoke.sh` + Docker images.
+### Host REST residual set (closed)
 
-### Docker / residual closeout (2026-07-21)
+| Surface | Python | Go | C# |
+|---------|--------|----|-----|
+| Profiles CRUD | yes | yes | yes |
+| Profile connect (`POST …/profiles/{id}/connect`) | yes | yes | yes — `connector_config` + session start |
+| Quick connect `POST /api/connect` | yes | yes | yes — nested `connector_config` + shell bootstrap |
+| API keys CRUD/revoke | yes | yes | yes |
+| Approvals list/approve/reject | yes | yes | yes |
+| Metrics JSON + Prometheus | yes | yes | yes |
+| Security posture | yes | yes | yes |
+| Session PATCH / bulk DELETE | yes | yes | yes |
+| SSE `…/events/stream` (live + heartbeat) | yes | yes (EventBus) | yes (EventBus) |
+| Long-poll `…/events/watch` | yes | partial — route; registry watch stub depth varies | yes (EventBus long-poll) |
 
-- Images: `provide-uterm-server:local`, `provide-uterm-server-go:local`,
-  `provide-uterm-server-csharp:local` (compose tags python as
-  `provide-uterm-server-python:local`).
-- Config path (all three): `/etc/uterm/server.toml`. Compose mounts
-  **`docker/etc-uterm/` directory** (not file→file bind).
-- CI: `docker-smoke` job in `.github/workflows/ci.yml` runs
-  `ci/docker_language_smoke.sh` (build + `/healthz` for python/go/csharp).
-- C# `EventBus` + real `events/watch` long-poll + live SSE fan-out.
-- C#/Go SPA Vite assets baked into language images.
-- Python wheels include `frontend/vite-manifest.json` (package-data-safe copy of
-  `.vite/manifest.json` via `scripts/publish-frontend-manifest.mjs`).
-- Cover floors: C# **97.9** dual-OS / Go **97.8** — raise only with ≥0.2pt
-  headroom (see implementer `cover-headroom.txt` when measured).
+### UI / packaging / ops
+
+| Surface | Python | Go | C# |
+|---------|--------|----|-----|
+| SPA / static frontend | yes (baked in image + wheel) | yes (baked `/frontend` + `--frontend-dir`) | yes (baked `/app/frontend` + `UTERM_FRONTEND_DIR`) |
+| Language-server Docker image | yes `Dockerfile.server` :27780 | yes `Dockerfile.go` :27781 | yes `Dockerfile.csharp` :27782 |
+| Compose service + `/etc/uterm` dir mount | yes `server` | yes `server-go` | yes `server-csharp` |
+| CI docker health smoke | yes (`ci/docker_language_smoke.sh` + `docker-smoke` job) | yes | yes |
+| Cover floor (quality gate) | 100% branch+line (core) | 97.8 | 97.9 dual-OS |
+
+### Permanent non-goals
+
+| Surface | Python | Go | C# |
+|---------|--------|----|-----|
+| FastAPI `mount_terminal_ui` / library terminal-proxy | yes | de-scope (`uterm proxy`) | de-scope (`uterm proxy`) |
+| MCP / `uterm-mcp` | yes | yes | **never** (operator de-scope) |
+| Cloudflare Worker (full) | yes (separate image) | de-scope | de-scope |
+
+### Proof
+
+- Live C#: `ServerIntegrationHostRestTests` + `EventBusTests`
+- Docker: `ci/docker_language_smoke.sh` → `/healthz` `{"status":"ok"}` on 27780/27781/27782
+- Compose config path: `/etc/uterm/server.toml` via **`docker/etc-uterm/`** directory mount
+- Python wheels: `frontend/vite-manifest.json` (package-data-safe; `scripts/publish-frontend-manifest.mjs`)
+- Cover: C# measured **97.91%** @ floor 97.9 (no raise — <0.2pt dual-OS headroom)
+
+### Notes / remaining depth (not open “gaps” for the residual goal)
+
+1. **Go `events/watch`:** route exists; registry implementation may still return empty/timed_out shells in places — C# EventBus is the closed residual bar.
+2. **Connect depth:** shell/demo + `connector_config` wire shapes; not every Python connector type (telnet/SSH/GUI live start).
+3. **Cover floor raise:** optional follow-on when dual-OS headroom ≥0.2pt.

@@ -2,7 +2,7 @@
 
 **Status:** complete  
 **Out of scope:** **C# MCP** (permanent)  
-**Head:** see `main` tip after docker + REST parity commits
+**Head:** `main` @ residual closeout (`f9fd3159` and later)
 
 ## Objective
 
@@ -11,14 +11,17 @@
 
 ## Docker (phase D)
 
-- [x] `docker/Dockerfile.go` + `docker/Dockerfile.csharp`
+- [x] `docker/Dockerfile.go` + `docker/Dockerfile.csharp` (+ SPA bake)
 - [x] `docker/docker-compose.yml` services `server` / `server-go` / `server-csharp` / `cf`
-- [x] `docker/README.md`
-- [x] Prove images build and `/healthz` → `{"status":"ok"}` on 27780/27781/27782 with mounted `docker/dev-smoke.toml` (JWT smoke config; directory mount of `/etc/uterm`)
+- [x] Directory mounts `docker/etc-uterm` → `/etc/uterm`
+- [x] `ci/docker_language_smoke.sh` + CI `docker-smoke` job
+- [x] `/healthz` → `{"status":"ok"}` on 27780 / 27781 / 27782
 
 ## Surface parity (phase S)
 
-1–7 closed (profiles, keys, approvals, metrics/posture, events/watch, session patch/bulk + connect, SPA shell). See HANDOFF residual table. Dual-OS cover floor raise remains optional follow-on.
+Closed: profiles, keys, approvals, metrics/posture, EventBus watch/SSE, session
+patch/bulk + connect depth, SPA bake. **Canonical matrix:** `.provide/HANDOFF.md`
+§ “Parity matrix (Python / Go / C#)”.
 
 ## Permanent non-goals
 
