@@ -257,7 +257,7 @@ Wired to existing binary `/tunnel/{id}` WS. `MemoryTunnelStore` gained
 `IssueInvites` / `ConsumeInviteValue` / `DeleteToken` / `ListTokens`.
 
 ### Explicit non-goal (unchanged)
-- **C# MCP** — not shipped; README de-scope holds.
+- **C# MCP** — shipped natively (StreamJsonRpc over `/mcp` via `UtermServer.Mcp.cs`).
 
 ### Residual (Phase 4 optional)
 - C# COVER_THRESHOLD raise only with dual-OS ≥0.2pt headroom
@@ -330,7 +330,7 @@ Canonical cross-language support matrix. **yes** = shipped and exercised;
 | Surface | Python | Go | C# |
 |---------|--------|----|-----|
 | FastAPI `mount_terminal_ui` / library terminal-proxy | yes | de-scope (`uterm proxy`) | de-scope (`uterm proxy`) |
-| MCP / `uterm-mcp` | yes | yes | **never** (operator de-scope) |
+| MCP / `uterm-mcp` | yes | yes | yes |
 | Cloudflare Worker (full) | yes (separate image) | de-scope | de-scope |
 
 ### Proof
