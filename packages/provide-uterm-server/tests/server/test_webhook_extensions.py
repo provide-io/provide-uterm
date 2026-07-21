@@ -123,7 +123,10 @@ async def test_webhook_authz_provider_checks() -> None:
 @respx.mock
 async def test_webhook_authz_provider_sends_configured_secret_header() -> None:
     url = "https://fleet.example.com/authz"
-    provider = WebhookAuthorizationProvider(url=url, secret="shhh")
+    # This test asserts the *request* is signed with the secret; response-signature
+    # verification (required by default when a secret is set) is exercised
+    # separately in test_idp_contract_harden.py, so disable it here.
+    provider = WebhookAuthorizationProvider(url=url, secret="shhh", require_signed_response=False)
 
     principal = MagicMock()
     principal.subject_id = "alice"

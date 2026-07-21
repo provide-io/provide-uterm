@@ -56,6 +56,9 @@ class TestReadViteManifest:
         manifest_mock.read_text.return_value = json.dumps(manifest_data)
         frontend_mock = mock.MagicMock()
         vite_mock = mock.MagicMock()
+        # Production checks frontend/"vite-manifest.json" first (this vite_mock);
+        # mark it absent so the .vite/manifest.json fallback (manifest_mock) loads.
+        vite_mock.is_file.return_value = False
         vite_mock.__truediv__ = lambda self, name: manifest_mock
         frontend_mock.__truediv__ = lambda self, name: vite_mock
 
