@@ -5,6 +5,7 @@
 
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
@@ -173,8 +174,9 @@ public sealed class LocalIdentityProvider : IAuthenticator
     public Principal PrincipalFromJwtToken(string token)
     {
         var handler = new JwtSecurityTokenHandler();
-        var keyBytes = Encoding.UTF8.GetBytes(_auth.JwtPublicKeyPem ?? "");
-        if (keyBytes.Length == 0)
+        var hasJwks = !string.IsNullOrWhiteSpace(_auth.JwtJwksUrl);
+        var hasPemOrSecret = !string.IsNullOrEmpty(_auth.JwtPublicKeyPem);
+        if (!hasJwks && !hasPemOrSecret)
         {
             throw new SecurityTokenException("jwt_public_key_pem or jwt_jwks_url must be configured in jwt mode");
         }
@@ -186,10 +188,11 @@ public sealed class LocalIdentityProvider : IAuthenticator
             ValidateAudience = true,
             ValidAudience = _auth.JwtAudience,
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(keyBytes),
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromSeconds(Math.Max(0, _auth.ClockSkewSeconds)),
             ValidAlgorithms = _auth.JwtAlgorithms,
+            // JWKS first (production CF Access), else RSA public PEM, else HS* shared secret.
+            IssuerSigningKeyResolver = (_, _, kid, _) => ResolveSigningKeys(kid),
         };
 
         var principal = handler.ValidateToken(token, parameters, out var validatedToken);
@@ -241,6 +244,49 @@ public sealed class LocalIdentityProvider : IAuthenticator
             Scopes = scopes,
             TenantId = tenant,
         };
+    }
+
+    /// <summary>
+    /// Resolve issuer signing keys: JWKS URL takes precedence, else PEM → RSA public key,
+    /// else non-PEM <see cref="AuthConfig.JwtPublicKeyPem"/> as HS* shared secret (DevIdp).
+    /// </summary>
+    private IEnumerable<SecurityKey> ResolveSigningKeys(string? kid)
+    {
+        if (!string.IsNullOrWhiteSpace(_auth.JwtJwksUrl))
+        {
+            return new SecurityKey[] { Jwks.ResolveKey(_auth.JwtJwksUrl, kid) };
+        }
+
+        var material = _auth.JwtPublicKeyPem ?? "";
+        if (material.Length == 0)
+        {
+            throw new SecurityTokenException("jwt_public_key_pem or jwt_jwks_url must be configured in jwt mode");
+        }
+
+        if (LooksLikePem(material))
+        {
+            return new SecurityKey[] { CreateRsaKeyFromPem(material) };
+        }
+
+        return new SecurityKey[] { new SymmetricSecurityKey(Encoding.UTF8.GetBytes(material)) };
+    }
+
+    private static bool LooksLikePem(string material) =>
+        material.Contains("-----BEGIN ", StringComparison.Ordinal);
+
+    private static RsaSecurityKey CreateRsaKeyFromPem(string pem)
+    {
+        var rsa = RSA.Create();
+        try
+        {
+            rsa.ImportFromPem(pem);
+            return new RsaSecurityKey(rsa);
+        }
+        catch (Exception ex)
+        {
+            rsa.Dispose();
+            throw new SecurityTokenException("failed to parse jwt_public_key_pem as RSA public key", ex);
+        }
     }
 
     /// <summary>

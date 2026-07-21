@@ -180,14 +180,14 @@ class TestLooseFrames:
             "future_capability_flag": True,
             "capabilities": {"hijack_step": True},
             "mcp_supported": True,
-            "vnc_supported": False,
+            "vnc_supported": True,
         }
 
     def test_hello_frame_minimal(self) -> None:
         assert make_hello_frame() == {
             "type": "hello",
             "mcp_supported": True,
-            "vnc_supported": False,
+            "vnc_supported": True,
         }
 
     def test_coerce_worker_status_frame_stamps_type_and_ts(self) -> None:

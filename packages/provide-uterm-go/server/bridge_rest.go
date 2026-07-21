@@ -8,13 +8,11 @@ package server
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/base64"
 	"fmt"
 	"image"
 	"image/png"
 	"io"
-	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -24,9 +22,6 @@ import (
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/gui"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/vnc"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 // registerBridgeRESTRoutes wires the REST hijack + worker-control routes (the
@@ -48,6 +43,8 @@ func (s *Server) registerBridgeRESTRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /worker/{worker_id}/hijack/{hijack_id}/gui/type", s.authenticated(s.handleHijackGUIType))
 	mux.HandleFunc("POST /worker/{worker_id}/hijack/{hijack_id}/gui/key", s.authenticated(s.handleHijackGUIKey))
 	mux.HandleFunc("POST /worker/{worker_id}/hijack/{hijack_id}/gui/drag", s.authenticated(s.handleHijackGUIDrag))
+	// Browser human-relay WebSocket (ServeHumanRelay) — upgrade after authz gate.
+	mux.HandleFunc("GET /worker/{worker_id}/hijack/{hijack_id}/gui/vnc", s.authenticated(s.handleHumanVnc))
 
 	s.registerWorkerCtlRoutes(mux)
 }
@@ -367,69 +364,8 @@ func (s *Server) buildGraphicalSession(
 func (s *Server) buildLitevirtSession(
 	w http.ResponseWriter, r *http.Request, target *graphical.Definition,
 ) (gui.GraphicalSession, io.Closer, context.CancelFunc, bool) {
-	endpoint := ""
-	if target.Endpoint != nil {
-		endpoint = *target.Endpoint
-	}
-	vmName := ""
-	if v, ok := target.Config["vm_name"].(string); ok {
-		vmName = v
-	}
-
-	host, _, err := net.SplitHostPort(endpoint)
-	if err != nil {
-		host = endpoint
-	}
-	// Reuse the connector EgressGuard (not an ad-hoc IsPrivate check).
-	// Metadata / cloud-IMDS addresses are ALWAYS blocked; private/loopback/
-	// link-local ranges follow security.block_private_connector_targets so
-	// internal litevirt endpoints remain reachable when that flag is off.
-	guard := s.egress
-	if guard == nil {
-		guard = NewEgressGuard(nil, nil)
-	}
-	blockPrivate := false
-	if s.cfg != nil {
-		blockPrivate = s.cfg.Security.BlockPrivateConnectorTargets
-	}
-	if err := guard.AssertConnectorTargetAllowed(r.Context(), host, blockPrivate); err != nil {
-		detailError(w, http.StatusForbidden, "invalid endpoint: "+err.Error())
-		return nil, nil, nil, false
-	}
-
-	// TLS by default. Plaintext is only allowed for loopback endpoints when
-	// the target config explicitly sets insecure_no_tls=true (local tests /
-	// dev litevirt only — never for remote hosts).
-	var dialOpts grpc.DialOption
-	insecureNoTLS := false
-	if v, ok := target.Config["insecure_no_tls"].(bool); ok {
-		insecureNoTLS = v
-	}
-	if insecureNoTLS {
-		if err := AssertIPAllowed(host, false); err != nil {
-			// host may be a name — resolve and require every IP is loopback.
-			ips, lerr := net.LookupIP(host)
-			if lerr != nil || len(ips) == 0 {
-				detailError(w, http.StatusForbidden, "insecure_no_tls requires resolvable loopback endpoint")
-				return nil, nil, nil, false
-			}
-			for _, ip := range ips {
-				if !ip.IsLoopback() {
-					detailError(w, http.StatusForbidden, "insecure_no_tls only allowed for loopback endpoints")
-					return nil, nil, nil, false
-				}
-			}
-		} else if ip := net.ParseIP(strings.Trim(host, "[]")); ip == nil || !ip.IsLoopback() {
-			detailError(w, http.StatusForbidden, "insecure_no_tls only allowed for loopback endpoints")
-			return nil, nil, nil, false
-		}
-		dialOpts = grpc.WithTransportCredentials(insecure.NewCredentials())
-	} else {
-		dialOpts = grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{}))
-	}
-	cc, err := grpc.NewClient(endpoint, dialOpts)
-	if err != nil {
-		detailError(w, http.StatusInternalServerError, err.Error())
+	cc, vmName, ok := s.dialLitevirtTarget(w, r, target)
+	if !ok {
 		return nil, nil, nil, false
 	}
 

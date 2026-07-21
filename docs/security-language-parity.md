@@ -17,7 +17,7 @@ graphical human-relay**.
 | **Authz decision webhook** (signed response when secret set) | Y | N/A (DO policy different) | **Y** (`WebhookAuthorizationProvider`) | **Y** (`WebhookAuthorizationProvider`) | Wired via `governance.authz_webhook_url` |
 | IdP webhook + signed response | Y | N/A | Y | Y (IdP URL config) | Distinct from authz webhook |
 | SPA CDN xterm **SRI** | Y (UI config) | Y (Worker SPA shell) | Y (`UI.XtermCDNIntegrity`) | **Y** (fallback shell when `Ui.XtermCdnIntegrity` set) | Self-hosted `index.html` is same-origin; SRI applies to CDN tags only |
-| Human VNC relay input filter (RFB gate) | **Y** (`provide.uterm.vnc.filter_rfb_client_input`) | N | **Y** (`filterRFBInput` / `ServeHumanRelay`) | **Y** (`RfbInputFilter.FilterClientInput`) | Shared filter semantics; full browser→litevirt WS route remains Go-hosted product surface |
+| Human VNC relay (WS + RFB input filter) | **Y** (filter + WS route) | N | **Y** (`ServeHumanRelay` + mounted `/gui/vnc`) | **Y** (`HumanRelay` + `/gui/vnc`, RFB TCP) | Path: `WS /worker/{id}/hijack/{hid}/gui/vnc`; inject fail-closed |
 | GUI inject principal-bound (`acquired_by`) | Y | N/A | Y | Y | Cross-language |
 | Hijack `pending` blocks WS acquire | Y | N/A (REST hijack) | Y | Y | Cross-language |
 
@@ -25,13 +25,15 @@ graphical human-relay**.
 
 1. **CF Access email header on Go/C#** — Do **not** trust `Cf-Access-Authenticated-User-Email`. That header is client-forgeable without Access in front. Correct pattern: accept only cryptographically verified JWT material (`Authorization: Bearer`, `CF-Access-JWT-Assertion`, or `CF_Authorization` cookie). Regression: spoofed Access email must not change `subject_id`.
 
-2. **Human VNC full route** — Go hosts the production browser→litevirt WebSocket human-relay path (`ServeHumanRelay`). Python and C# implement the same **RFB client→server input filter** (handshake pass-through; Key/Pointer/CutText gated on `CanInject`; null policy fails closed) for embedding and parity tests. Wiring a second production relay HTTP route on FastAPI/C# is optional product work, not a security gap.
+2. **Self-hosted SPA without CDN** — When the frontend is baked under `/assets` or `index.html`, Subresource Integrity for third-party CDNs is N/A. Configure CDN + integrity only when loading remote xterm.
 
-3. **Self-hosted SPA without CDN** — When the frontend is baked under `/assets` or `index.html`, Subresource Integrity for third-party CDNs is N/A. Configure CDN + integrity only when loading remote xterm.
+3. **Litevirt gRPC on Python/C#** — Go dials litevirt `ProxyVNC` for human relay; C# dials RFB TCP targets; Python ships the stream relay + authz-gated WS route (backend dial may 501 for litevirt until a gRPC client is added).
 
 ## How to enable optional surfaces
 
 ### CF Access verified JWT (Go / C#)
+
+Full worked example: `scripts/uterm-server.cf-access.example.toml`.
 
 ```toml
 [auth]
@@ -44,6 +46,8 @@ jwt_default_role = "viewer"
 ```
 
 Token source order (first wins): Bearer → `CF-Access-JWT-Assertion` → `CF_Authorization` cookie → `uterm_token` cookie.
+
+C# validates RS256 via JWKS (`JwtJwksUrl` / team-domain auto-fill) or RSA public PEM; HS256 remains for `dev_token` only.
 
 ### Authz webhook (Python / Go / C#)
 
@@ -68,18 +72,22 @@ fit_addon_cdn_integrity = "sha384-…"
 
 Used when `UTERM_FRONTEND_DIR` is unset; baked `index.html` is served as-is.
 
-### Human VNC RFB input filter
+### Human VNC relay
 
-- **Python**: `from provide.uterm.vnc import filter_rfb_client_input`
-- **C#**: `Provide.Uterm.Vnc.RfbInputFilter.FilterClientInput`
-- **Go**: `vnc.filterRFBInput` (used by `ServeHumanRelay`)
+```text
+WS /worker/{worker_id}/hijack/{hijack_id}/gui/vnc?target_id=<graphical_target>
+```
 
-Null / missing inject callback drops KeyEvent, PointerEvent, and ClientCutText (fail closed). Non-input client messages always pass through after the None-security handshake.
+- **Python**: `filter_rfb_client_input` / `run_human_relay_streams`; FastAPI WS route (authz + lease ownership; optional `vnc_upstream_factory`)
+- **C#**: `RfbInputFilter` + `HumanRelay`; ASP.NET WS route (RFB TCP dial)
+- **Go**: `vnc.ServeHumanRelay` (litevirt ProxyVNC) mounted on the same path
+
+Null / missing inject callback drops KeyEvent, PointerEvent, and ClientCutText (fail closed). Non-input client messages always pass through after the None-security handshake. Inject requires operator/admin + owned hijack lease.
 
 ## Verification
 
 Security regressions for these surfaces live in:
 
-- Python: `test_gui_principal_bind.py`, `test_vnc_rfb_filter.py`, CF auth/webhook/SPA tests, lease pending
-- Go: `serverauth` CF Access JWT + `webhook_authz_test.go`, GUI attach/ops, lease pending, vnc filter, UI SRI
-- C#: `CfAccessJwtTests`, `WebhookAuthorizationTests`, `RfbInputFilterTests`, `EgressGuardTests`, GUI inject principal-bind, shell SRI unit tests
+- Python: `test_gui_principal_bind.py`, `test_vnc_rfb_filter.py`, `test_vnc_human_relay.py`, `test_ws_gui_vnc.py`, CF auth/webhook/SPA tests, lease pending
+- Go: `serverauth` CF Access JWT + `webhook_authz_test.go`, GUI attach/ops/vnc route, lease pending, vnc filter, UI SRI
+- C#: `CfAccessJwtTests`, `JwksJwtTests`, `WebhookAuthorizationTests`, `RfbInputFilterTests`, `HumanRelayTests`, GUI inject principal-bind, shell SRI

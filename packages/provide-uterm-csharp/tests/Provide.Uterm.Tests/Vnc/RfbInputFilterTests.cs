@@ -63,14 +63,8 @@ public class RfbInputFilterTests
     [Fact]
     public void CutText_Too_Large_Throws()
     {
-        var hs = Handshake();
-        var header = new byte[8];
-        header[0] = 6;
-        BinaryPrimitives.WriteUInt32BigEndian(header.AsSpan(4), (uint)(RfbInputFilter.MaxCutText + 1));
-        // layout: type(1) + pad(3) + len(4) = 8 total after type... filter reads type then 7 more
-        // rebuild properly:
         var body = new List<byte>();
-        body.AddRange(hs);
+        body.AddRange(Handshake());
         body.Add(6);
         body.Add(0);
         body.Add(0);
@@ -82,5 +76,80 @@ public class RfbInputFilterTests
         using var dst = new MemoryStream();
         Assert.Throws<InvalidOperationException>(() =>
             RfbInputFilter.FilterClientInput(dst, src, static (_, _, _, _) => true, "s", "l", "p", "admin"));
+    }
+
+    [Fact]
+    public void Non_Inject_Messages_Always_Pass()
+    {
+        // SetPixelFormat (0) + 19 payload, SetEncodings (2) with 1 encoding, FBU request (3).
+        var body = new List<byte>();
+        body.AddRange(Handshake());
+        body.Add(0);
+        body.AddRange(new byte[19]);
+        body.Add(2);
+        body.Add(0); // pad
+        body.Add(0);
+        body.Add(1); // num encodings = 1
+        body.AddRange(new byte[4]);
+        body.Add(3);
+        body.AddRange(new byte[9]);
+        using var src = new MemoryStream(body.ToArray());
+        using var dst = new MemoryStream();
+        RfbInputFilter.FilterClientInput(dst, src, null, "s", "", "p", "viewer");
+        Assert.Equal(body.Count, dst.Length);
+    }
+
+    [Fact]
+    public void Pointer_And_CutText_Gated_By_CanInject()
+    {
+        var body = new List<byte>();
+        body.AddRange(Handshake());
+        body.Add(5); // PointerEvent
+        body.AddRange(new byte[5]);
+        body.Add(6); // ClientCutText empty
+        body.Add(0);
+        body.Add(0);
+        body.Add(0);
+        body.AddRange(new byte[4]); // length 0
+
+        using var deniedSrc = new MemoryStream(body.ToArray());
+        using var deniedDst = new MemoryStream();
+        RfbInputFilter.FilterClientInput(deniedDst, deniedSrc, static (_, _, _, _) => false, "s", "l", "p", "viewer");
+        Assert.Equal(14, deniedDst.Length);
+
+        using var allowedSrc = new MemoryStream(body.ToArray());
+        using var allowedDst = new MemoryStream();
+        RfbInputFilter.FilterClientInput(allowedDst, allowedSrc, static (_, _, _, _) => true, "s", "l", "p", "admin");
+        Assert.Equal(body.Count, allowedDst.Length);
+    }
+
+    [Fact]
+    public void Unknown_Message_Type_Throws()
+    {
+        var body = Handshake().Concat(new byte[] { 99 }).ToArray();
+        using var src = new MemoryStream(body);
+        using var dst = new MemoryStream();
+        Assert.Throws<InvalidOperationException>(() =>
+            RfbInputFilter.FilterClientInput(dst, src, null, "s", "l", "p", "admin"));
+    }
+
+    [Fact]
+    public void CutText_With_Payload_Forwarded_When_Allowed()
+    {
+        var payload = new byte[] { (byte)'h', (byte)'i' };
+        var body = new List<byte>();
+        body.AddRange(Handshake());
+        body.Add(6);
+        body.Add(0);
+        body.Add(0);
+        body.Add(0);
+        var lenBuf = new byte[4];
+        BinaryPrimitives.WriteUInt32BigEndian(lenBuf, (uint)payload.Length);
+        body.AddRange(lenBuf);
+        body.AddRange(payload);
+        using var src = new MemoryStream(body.ToArray());
+        using var dst = new MemoryStream();
+        RfbInputFilter.FilterClientInput(dst, src, static (_, _, _, _) => true, "s", "l", "p", "admin");
+        Assert.Equal(body.Count, dst.Length);
     }
 }
