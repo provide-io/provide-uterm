@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Protocol, cast, runtime_checkable
 import httpx
 
 from provide.uterm.server.egress import assert_webhook_target_allowed
-from provide.uterm.server.webhook_signing import build_webhook_signature
+from provide.uterm.server.webhook_signing import build_webhook_signature, verify_webhook_signature
 
 if TYPE_CHECKING:
     from provide.uterm.server.auth import Principal
@@ -194,10 +194,22 @@ class LocalAuthorizationProvider:
 class WebhookAuthorizationProvider:
     """Authorization provider that delegates decisions to an external webhook."""
 
-    def __init__(self, url: str, secret: str | None = None, timeout_s: float = 2.0):
+    def __init__(
+        self,
+        url: str,
+        secret: str | None = None,
+        timeout_s: float = 2.0,
+        *,
+        require_signed_response: bool = True,
+    ):
         self.url = url
         self.secret = secret
         self.timeout = timeout_s
+        # Parity with webhook IdP: when a shared secret is configured, require a
+        # signed response by default so a MITM cannot mint {"allow": true}.
+        # When no secret is configured, signed-response verification is skipped
+        # (callers should set a secret in production).
+        self.require_signed_response = require_signed_response and bool((secret or "").strip())
         # Reuse one client across calls so HTTP keep-alive / connection pooling
         # survives between authorization checks. Constructing it here opens no
         # sockets — httpx.AsyncClient connects lazily on the first request.
@@ -215,6 +227,16 @@ class WebhookAuthorizationProvider:
             headers["X-Uterm-Signature"] = build_webhook_signature(self.secret, body, ts)
         return headers
 
+    def _response_signature_ok(self, resp: httpx.Response) -> bool:
+        if not self.require_signed_response:
+            return True
+        return verify_webhook_signature(
+            self.secret,
+            resp.content,
+            resp.headers.get("X-Uterm-Signature") or resp.headers.get("x-uterm-signature"),
+            resp.headers.get("X-Uterm-Timestamp") or resp.headers.get("x-uterm-timestamp"),
+        )
+
     async def _check(self, principal: Principal, action: str, **context: Any) -> bool:
         payload = {
             "principal": {
@@ -231,6 +253,8 @@ class WebhookAuthorizationProvider:
             await assert_webhook_target_allowed(self.url)
             resp = await self._client.post(self.url, content=body, headers=self._signed_headers(body))
             if resp.status_code == 200:
+                if not self._response_signature_ok(resp):
+                    return False
                 return bool(resp.json().get("allow", False))
             return False
         except Exception:
@@ -244,7 +268,7 @@ class WebhookAuthorizationProvider:
         try:
             await assert_webhook_target_allowed(self.url)
             resp = await self._client.post(self.url, content=body, headers=self._signed_headers(body))
-            if resp.status_code == 200:
+            if resp.status_code == 200 and self._response_signature_ok(resp):
                 return frozenset(resp.json().get("capabilities", []))
         except Exception:
             pass

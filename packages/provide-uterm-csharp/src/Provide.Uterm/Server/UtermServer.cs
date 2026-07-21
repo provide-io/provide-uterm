@@ -768,7 +768,7 @@ public sealed partial class UtermServer : IAsyncDisposable
                 ["hijack_control"] = "ws",
                 ["hijack_step_supported"] = true,
             },
-            ["mcp_supported"] = true,
+            ["mcp_supported"] = false, // spec/behavior.json hello_defaults.csharp
             ["vnc_supported"] = true,
             ["resume_supported"] = true,
             ["resume_token"] = resumeToken,
@@ -991,7 +991,7 @@ public sealed partial class UtermServer : IAsyncDisposable
                                 ["resumed"] = true,
                                 ["hijack_control"] = "ws",
                                 ["hijack_step_supported"] = true,
-                                ["mcp_supported"] = true,
+                                ["mcp_supported"] = false, // spec/behavior.json hello_defaults.csharp
                                 ["vnc_supported"] = true,
                             }),
                             ct).ConfigureAwait(false);

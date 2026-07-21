@@ -90,6 +90,19 @@ func TestTryAcquireWsAlreadyHijackedViaRest(t *testing.T) {
 	mustTrue(t, st.HijackOwner == nil, "owner not set")
 }
 
+func TestTryAcquireWsBlockedByPendingRest(t *testing.T) {
+	// REST two-phase reserve must block dashboard WS dual-ownership.
+	f := makeManager(t, 45)
+	st := makeState()
+	pending := "h-pending"
+	st.HijackPending = &pending
+	f.registry.Put("w1", st)
+	ok, reason := f.mgr.TryAcquireWs("w1", newBrowser("b"))
+	mustFalse(t, ok, "ok")
+	mustEqual(t, reason, "already_hijacked", "reason")
+	mustTrue(t, st.HijackOwner == nil, "owner not set during pending")
+}
+
 func TestTryAcquireWsExpiredDashboardDoesNotBlock(t *testing.T) {
 	f := makeManager(t, 45)
 	st := makeState()

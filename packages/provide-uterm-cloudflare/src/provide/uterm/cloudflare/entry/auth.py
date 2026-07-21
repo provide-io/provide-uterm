@@ -53,32 +53,17 @@ async def _decode_jwt_principal(request: object, config: CloudflareConfig) -> ob
 
     Returns ``None`` in ``none``/``dev`` mode (open access — no enforcement).
 
-    In ``jwt`` mode, accepts every auth path the middleware already trusts:
+    In ``jwt`` mode, identity comes **only** from a cryptographically verified
+    app JWT (bearer or cookie). Unsigned CF Access identity headers
+    (``Cf-Access-Authenticated-User-Email``) are **not** trusted here: clients
+    can set them on any request, and JWT-only deployments (no Access edge
+    stripping headers) would otherwise allow ownership spoofing.
 
-    * ``Cf-Access-Authenticated-User-Email`` → synthesized Principal with
-      the email as subject_id (role: ``viewer``) — CF Access already
-      validated the end-user identity upstream.
-    * App JWT bearer/cookie → ``decode_jwt`` (handles public_key_pem AND
-      jwks_url via Web Crypto).
-
-    Previously this function only decoded app JWTs, which meant a request
-    authenticated by CF Access Service Auth passed ``_require_jwt`` but
-    then collapsed to ``principal=None`` downstream — bulk delete and
-    ownerless session creation were executed as if the caller were anonymous.
+    When CF Access is the identity plane, mint an app JWT (or verify Access
+    JWT via ``CF_Authorization``) so ownership uses the same verified subject.
     """
     if config.jwt.mode in {"none", "dev"}:  # ty:ignore[unresolved-attribute]
         return None
-    # CF Access authenticated user
-    email = _read_header(
-        request,
-        "cf-access-authenticated-user-email",
-        "Cf-Access-Authenticated-User-Email",
-    )
-    if email:
-        from provide.uterm.cloudflare.auth.jwt import Principal as _Principal
-
-        principal: object = _Principal(subject_id=email, roles=("viewer",))
-        return principal
     token = extract_bearer_or_cookie(request)
     if not token:
         return None
@@ -108,23 +93,12 @@ def _read_header(request: object, *names: str) -> str:
 async def _resolve_principal_id(request: object, config: CloudflareConfig) -> str:
     """Extract principal subject_id on a pre-authenticated request.
 
-    Supports every path the auth layer already accepts:
+    Identity is taken only from a verified app JWT (bearer/cookie). Unsigned
+    CF Access email headers are ignored — same threat model as
+    :func:`_decode_jwt_principal`.
 
-    * CF Access authenticated user → ``Cf-Access-Authenticated-User-Email``
-    * App JWT bearer/cookie        → ``decode_jwt`` (handles both
-      ``public_key_pem`` AND ``jwks_url``; the previous implementation used
-      sync PyJWT with ``public_key_pem`` only, silently degrading every
-      JWKS-based deployment to ``anonymous`` ownership on profile CRUD.)
-
-    Returns ``"anonymous"`` only when none of those produce an identity.
+    Returns ``"anonymous"`` when no verified JWT subject is available.
     """
-    email = _read_header(
-        request,
-        "cf-access-authenticated-user-email",
-        "Cf-Access-Authenticated-User-Email",
-    )
-    if email:
-        return email
     token = extract_bearer_or_cookie(request)
     if not token:
         return "anonymous"

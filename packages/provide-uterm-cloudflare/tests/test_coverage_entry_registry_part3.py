@@ -191,13 +191,11 @@ async def test_decode_jwt_principal_bad_token_returns_none() -> None:
     assert result is None
 
 
-async def test_decode_jwt_principal_cf_access_email_returns_viewer_principal() -> None:
-    """CF Access authenticated-user-email maps to a viewer-role Principal.
+async def test_decode_jwt_principal_cf_access_email_not_trusted() -> None:
+    """Unsigned CF Access email header must not mint a principal (ownership spoof).
 
-    Regression guard for the service-token/CF-Access principal-collapse
-    bug: before this fix, _decode_jwt_principal returned None for a CF
-    Access authenticated request, and downstream handlers treated that as
-    anonymous open-access.
+    JWT-only deployments do not strip client-supplied Access headers; trusting
+    them allowed any authenticated viewer to impersonate another subject.
     """
     from provide.uterm.cloudflare.config import CloudflareConfig, JwtConfig
     from provide.uterm.cloudflare.entry.auth import _decode_jwt_principal
@@ -211,9 +209,7 @@ async def test_decode_jwt_principal_cf_access_email_returns_viewer_principal() -
         )
     )
     result = await _decode_jwt_principal(req, cfg)
-    assert result is not None
-    assert result.subject_id == "alice@example.com"
-    assert "viewer" in result.roles
+    assert result is None
 
 
 async def test_decode_jwt_principal_cf_access_service_token_header_returns_none() -> None:

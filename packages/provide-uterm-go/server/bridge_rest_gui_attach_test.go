@@ -14,7 +14,6 @@ import (
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/graphical"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
-	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/vnc"
 
 	pb "github.com/litevirt/litevirt/gen/litevirt/v1"
 )
@@ -42,13 +41,46 @@ func memoryTarget(id, tenant string) *graphical.Definition {
 	}
 }
 
-// fakeLitevirtServer implements just enough of the LiteVirt gRPC service to let a
-// ProxyVNC bidi stream be established (it blocks on Recv, sending nothing).
+// fakeLitevirtServer implements enough of ProxyVNC for a successful RFB 3.8
+// handshake (ServerInit with tiny framebuffer) then idles on Recv.
 type fakeLitevirtServer struct {
 	pb.UnimplementedLiteVirtServer
 }
 
 func (fakeLitevirtServer) ProxyVNC(stream grpc.BidiStreamingServer[pb.VNCData, pb.VNCData]) error {
+	// ProtocolVersion
+	if err := stream.Send(&pb.VNCData{Data: []byte("RFB 003.008\n")}); err != nil {
+		return err
+	}
+	// Client version
+	if _, err := stream.Recv(); err != nil {
+		return err
+	}
+	// Security types: 1 type = None (1)
+	if err := stream.Send(&pb.VNCData{Data: []byte{1, 1}}); err != nil {
+		return err
+	}
+	// Client security choice
+	if _, err := stream.Recv(); err != nil {
+		return err
+	}
+	// SecurityResult OK
+	if err := stream.Send(&pb.VNCData{Data: []byte{0, 0, 0, 0}}); err != nil {
+		return err
+	}
+	// ClientInit
+	if _, err := stream.Recv(); err != nil {
+		return err
+	}
+	// ServerInit: 64x48, 32bpp-ish padding, name len 0
+	init := make([]byte, 24)
+	init[0], init[1] = 0, 64 // width
+	init[2], init[3] = 0, 48 // height
+	// name length already 0
+	if err := stream.Send(&pb.VNCData{Data: init}); err != nil {
+		return err
+	}
+	// Client may send SetPixelFormat + encodings + FBU request; drain forever.
 	for {
 		if _, err := stream.Recv(); err != nil {
 			return err
@@ -94,7 +126,8 @@ func TestGUIAttachLitevirtRegistryDriven(t *testing.T) {
 	tgt := &graphical.Definition{
 		TargetID: "gt-lv", TenantID: "acme", Protocol: graphical.ProtocolLitevirt,
 		Endpoint: strPtrLocal(addr), Width: 64, Height: 48,
-		Config: map[string]any{"vm_name": "vm1"},
+		// Local plaintext mock: TLS-off only on loopback (production uses TLS).
+		Config: map[string]any{"vm_name": "vm1", "insecure_no_tls": true},
 	}
 	ts := attachTestServer(t, tgt)
 	ts.setupWorker(t, "w1")
@@ -107,8 +140,24 @@ func TestGUIAttachLitevirtRegistryDriven(t *testing.T) {
 	if st == nil {
 		t.Fatalf("worker state missing")
 	}
-	if _, ok := st.GraphicalSession.(*vnc.LitevirtAIClient); !ok {
-		t.Fatalf("expected litevirt session, got %T", st.GraphicalSession)
+	// Production stores GraphicalSessionManager wrapping the litevirt client.
+	if _, ok := st.GraphicalSession.(*GraphicalSessionManager); !ok {
+		t.Fatalf("expected GraphicalSessionManager, got %T", st.GraphicalSession)
+	}
+}
+
+func TestGUIAttachLitevirtMetadataEndpointBlocked(t *testing.T) {
+	// Cloud-metadata endpoints must be rejected even when block_private is off.
+	tgt := &graphical.Definition{
+		TargetID: "gt-meta", TenantID: "acme", Protocol: graphical.ProtocolLitevirt,
+		Endpoint: strPtrLocal("169.254.169.254:443"), Width: 64, Height: 48,
+		Config: map[string]any{"vm_name": "vm1"},
+	}
+	ts := attachTestServer(t, tgt)
+	ts.setupWorker(t, "w1")
+	rec := ts.do("POST", "/worker/w1/gui/attach", `{"target_id":"gt-meta"}`, tenantHeaders("admin", "acme"))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("metadata attach = %d %s (want 403)", rec.Code, rec.Body.String())
 	}
 }
 

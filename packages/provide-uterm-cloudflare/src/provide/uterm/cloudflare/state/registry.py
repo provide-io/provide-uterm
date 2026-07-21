@@ -134,10 +134,35 @@ async def delete_kv_session(env: Any, worker_id: str) -> None:
         logger.debug("kv delete %s failed: %s", key, exc)
 
 
-async def list_kv_sessions(env: Any) -> list[dict[str, Any]]:
-    """Return all session entries from the KV registry.
+# Fields that must never appear on the public fleet list API (tokens, hashes,
+# invite secrets). Internal KV may still store them for tunnel bootstrap.
+_LIST_REDACT_KEYS = frozenset(
+    {
+        "share_invite_token",
+        "control_invite_token",
+        "share_token",
+        "control_token",
+        "worker_token",
+        "worker_token_hash",
+        "share_token_hash",
+        "control_token_hash",
+        "share_invite_hash",
+        "control_invite_hash",
+    }
+)
 
-    Returns an empty list if the KV binding is not configured.
+
+def _public_session_row(entry: dict[str, Any]) -> dict[str, Any]:
+    """Project a KV session document to a public list/get DTO."""
+    return {k: v for k, v in entry.items() if k not in _LIST_REDACT_KEYS}
+
+
+async def list_kv_sessions(env: Any) -> list[dict[str, Any]]:
+    """Return all session entries from the KV registry (public fields only).
+
+    Returns an empty list if the KV binding is not configured. Token material
+    and invite secrets are stripped so fleet listing cannot leak long-lived
+    tunnel credentials during the invite window.
     """
     kv = getattr(env, "SESSION_REGISTRY", None)
     if kv is None:
@@ -157,7 +182,9 @@ async def list_kv_sessions(env: Any) -> list[dict[str, Any]]:
         try:
             raw = await kv.get(key_name)
             if raw:
-                sessions.append(json.loads(raw))
+                entry = json.loads(raw)
+                if isinstance(entry, dict):
+                    sessions.append(_public_session_row(entry))
         except Exception as exc:
             logger.debug("kv get %s failed: %s", key_name, exc)
     return sessions

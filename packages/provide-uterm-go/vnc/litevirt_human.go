@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/coder/websocket"
 	"google.golang.org/grpc"
@@ -186,16 +187,24 @@ func (w *grpcWriter) Write(p []byte) (n int, err error) {
 }
 
 // ServeHumanRelay proxies a WebSocket to litevirt ProxyVNC, dropping input if no lease is held.
+// policy must be non-nil for inject; nil policy drops key/pointer/cut-text (fail-closed).
 func ServeHumanRelay(w http.ResponseWriter, r *http.Request, cc grpc.ClientConnInterface, vmName string, policy PolicyEngine, sessionID, leaseID, principalID, principalRole string) {
-	c, err := websocket.Accept(w, r, nil)
+	// Explicit origin policy: same-origin browsers only (nil OriginAllowed rejects
+	// cross-origin upgrades in coder/websocket when Origin is set).
+	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		// Compression and origin defaults; InsecureSkipVerify is false.
+		CompressionMode: websocket.CompressionDisabled,
+	})
 	if err != nil {
 		slog.Error("websocket accept failed", "error", err)
 		return
 	}
 	// Force close on exit to prevent leaks
 	defer func() { _ = c.Close(websocket.StatusInternalError, "handler exited") }()
+	c.SetReadLimit(1 << 20) // 1 MiB
 
-	ctx, cancel := context.WithCancel(context.Background()) // Detach from request context for long-lived streams
+	// Lifecycle tied to request cancel + both pumps finishing.
+	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
 	client := pb.NewLiteVirtClient(cc)
@@ -204,9 +213,12 @@ func ServeHumanRelay(w http.ResponseWriter, r *http.Request, cc grpc.ClientConnI
 	stream, err := client.ProxyVNC(outCtx)
 	if err != nil {
 		slog.Error("proxyvnc dial failed", "error", err)
-		_ = c.Close(websocket.StatusInternalError, "grpc dial failed")
+		_ = c.Close(websocket.StatusInternalError, "upstream unavailable")
 		return
 	}
+	defer func() {
+		_ = stream.CloseSend()
+	}()
 
 	errCh := make(chan error, 2)
 
@@ -232,10 +244,17 @@ func ServeHumanRelay(w http.ResponseWriter, r *http.Request, cc grpc.ClientConnI
 		errCh <- filterRFBInput(dst, src, policy, sessionID, leaseID, principalID, principalRole)
 	}()
 
+	// Wait for either pump; cancel the other.
 	err = <-errCh
+	cancel()
+	// Drain second result without blocking forever.
+	select {
+	case <-errCh:
+	case <-time.After(2 * time.Second):
+	}
 	if err != nil && err != io.EOF {
 		slog.Error("human relay error", "error", err)
-		_ = c.Close(websocket.StatusInternalError, err.Error())
+		_ = c.Close(websocket.StatusInternalError, "relay closed")
 	} else {
 		_ = c.Close(websocket.StatusNormalClosure, "eof")
 	}

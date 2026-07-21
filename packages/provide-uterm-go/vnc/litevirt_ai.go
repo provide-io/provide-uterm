@@ -14,6 +14,15 @@ import (
 	pb "github.com/litevirt/litevirt/gen/litevirt/v1"
 )
 
+// MaxRFBDimension caps ServerInit framebuffer size (matches gui.MaxDimension / C#).
+const MaxRFBDimension = 8192
+
+// maxRFBNameLen bounds the ServerInit desktop-name field.
+const maxRFBNameLen = 4096
+
+// maxRFBCutText bounds ServerCutText / ClientCutText payloads.
+const maxRFBCutText = 1 << 20 // 1 MiB
+
 // LitevirtAIClient is the Headless AI Client (Stream B) for litevirt.
 type LitevirtAIClient struct {
 	trackerMu sync.Mutex
@@ -21,6 +30,11 @@ type LitevirtAIClient struct {
 
 	streamMu sync.Mutex
 	stream   grpc.BidiStreamingClient[pb.VNCData, pb.VNCData]
+
+	// ready is closed once RFB handshake + ServerInit complete successfully.
+	ready     chan struct{}
+	readyOnce sync.Once
+	readyErr  error
 }
 
 func NewLitevirtAIClient(ctx context.Context, cc grpc.ClientConnInterface, vmName string) (*LitevirtAIClient, error) {
@@ -35,7 +49,25 @@ func NewLitevirtAIClient(ctx context.Context, cc grpc.ClientConnInterface, vmNam
 	return &LitevirtAIClient{
 		tracker: NewFramebufferTracker(1920, 1080), // Default bounds, will be resized on ServerInit
 		stream:  stream,
+		ready:   make(chan struct{}),
 	}, nil
+}
+
+// WaitReady blocks until RFB handshake completes or the context is cancelled.
+func (c *LitevirtAIClient) WaitReady(ctx context.Context) error {
+	select {
+	case <-c.ready:
+		return c.readyErr
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (c *LitevirtAIClient) markReady(err error) {
+	c.readyOnce.Do(func() {
+		c.readyErr = err
+		close(c.ready)
+	})
 }
 
 func (c *LitevirtAIClient) Screenshot() (image.Image, error) {
@@ -85,12 +117,24 @@ func (r *grpcReader) Read(p []byte) (n int, err error) {
 }
 
 func (c *LitevirtAIClient) RunHandshakeAndLoop() error {
+	err := c.runHandshakeAndLoop()
+	if err != nil {
+		c.markReady(err)
+	}
+	return err
+}
+
+func (c *LitevirtAIClient) runHandshakeAndLoop() error {
 	r := &grpcReader{stream: c.stream}
 
 	// 1. ProtocolVersion
 	var ver [12]byte
 	if _, err := io.ReadFull(r, ver[:]); err != nil {
 		return err
+	}
+	// Accept RFB 003.00x family only.
+	if string(ver[:4]) != "RFB " {
+		return fmt.Errorf("unsupported RFB version: %q", string(ver[:]))
 	}
 
 	c.streamMu.Lock()
@@ -111,6 +155,9 @@ func (c *LitevirtAIClient) RunHandshakeAndLoop() error {
 			return fmt.Errorf("connection failed, could not read reason length")
 		}
 		l := binary.BigEndian.Uint32(reasonLen[:])
+		if l > maxRFBNameLen {
+			return fmt.Errorf("connection failed: reason too long")
+		}
 		reason := make([]byte, l)
 		if _, err := io.ReadFull(r, reason); err != nil {
 			return fmt.Errorf("connection failed, could not read reason string")
@@ -165,9 +212,15 @@ func (c *LitevirtAIClient) RunHandshakeAndLoop() error {
 	}
 	width := binary.BigEndian.Uint16(serverInit[0:2])
 	height := binary.BigEndian.Uint16(serverInit[2:4])
+	if width == 0 || height == 0 || int(width) > MaxRFBDimension || int(height) > MaxRFBDimension {
+		return fmt.Errorf("invalid framebuffer dimensions: %dx%d", width, height)
+	}
 
-	// Skip name length and name
+	// Skip name length and name (bounded)
 	nameLen := binary.BigEndian.Uint32(serverInit[20:24])
+	if nameLen > maxRFBNameLen {
+		return fmt.Errorf("desktop name too long: %d", nameLen)
+	}
 	if _, err := io.CopyN(io.Discard, r, int64(nameLen)); err != nil {
 		return err
 	}
@@ -175,6 +228,7 @@ func (c *LitevirtAIClient) RunHandshakeAndLoop() error {
 	c.trackerMu.Lock()
 	c.tracker = NewFramebufferTracker(int(width), int(height))
 	c.trackerMu.Unlock()
+	c.markReady(nil)
 
 	// 5. SetPixelFormat (RGBA 32-bit) & SetEncodings (Raw = 0)
 	pfMsg := make([]byte, 20)
@@ -251,6 +305,9 @@ func (c *LitevirtAIClient) RunHandshakeAndLoop() error {
 				if rw == 0 || rh == 0 || rx+rw > int(width) || ry+rh > int(height) {
 					return fmt.Errorf("invalid rectangle bounds")
 				}
+				if rw > MaxRFBDimension || rh > MaxRFBDimension {
+					return fmt.Errorf("rectangle too large")
+				}
 
 				pixels := make([]byte, rw*rh*4)
 				if _, err := io.ReadFull(r, pixels); err != nil {
@@ -261,7 +318,9 @@ func (c *LitevirtAIClient) RunHandshakeAndLoop() error {
 				t := c.tracker
 				c.trackerMu.Unlock()
 				if t != nil {
-					_ = t.ApplyRawUpdate(rx, ry, rw, rh, pixels)
+					if err := t.ApplyRawUpdate(rx, ry, rw, rh, pixels); err != nil {
+						return err
+					}
 				}
 			}
 
@@ -290,6 +349,9 @@ func (c *LitevirtAIClient) RunHandshakeAndLoop() error {
 				return err
 			}
 			length := binary.BigEndian.Uint32(header[3:7])
+			if length > maxRFBCutText {
+				return fmt.Errorf("ServerCutText too large: %d", length)
+			}
 			if _, err := io.CopyN(io.Discard, r, int64(length)); err != nil {
 				return err
 			}

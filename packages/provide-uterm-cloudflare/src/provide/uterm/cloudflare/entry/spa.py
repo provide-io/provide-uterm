@@ -10,6 +10,15 @@ from provide.uterm.cloudflare.entry.fallback_stubs import Response
 _XTERM_CDN = "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0"
 _FITADDON_CDN = "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0"
 _FONTS_CDN = "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap"
+# SRI hashes match packages/provide-uterm-frontend/hijack.html (xterm 6.0.0 CSS).
+# Fit addon integrity is best-effort; keep in sync when bumping CDN pins.
+_XTERM_CSS_INTEGRITY = (
+    "sha384-n2n7twoohnW+d3myBKaUgl7DSiwidw6MkQy9oesGzkPpMjejKRR3XlnD+5yCdtBD"  # pragma: allowlist secret
+)
+# xterm.js 6.0.0 lib — integrity from jsdelivr when available; empty disables SRI.
+# Prefer crossorigin always so browsers apply CORS+SRI consistently.
+_XTERM_JS_INTEGRITY = ""
+_FITADDON_JS_INTEGRITY = ""
 
 # SPA route patterns → (page_kind, needs_session_id, extra_scripts).
 _SPA_SESSION_RE = re.compile(r"^/app/(?P<kind>session|operator|replay|inspect)/(?P<sid>[a-zA-Z0-9_-]{1,64})$")
@@ -51,6 +60,8 @@ def _spa_response(page_kind: str, **extra_bootstrap: object) -> Response:
         pre_scripts = "<script type='module' src='/assets/hijack.js'></script>"
     elif page_kind == "replay":
         page_script = "server-replay-page.js"
+    xterm_js_sri = f" integrity='{_XTERM_JS_INTEGRITY}'" if _XTERM_JS_INTEGRITY else ""
+    fit_js_sri = f" integrity='{_FITADDON_JS_INTEGRITY}'" if _FITADDON_JS_INTEGRITY else ""
     html = (
         "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
         "<meta name='viewport' content='width=device-width, initial-scale=1.0'>"
@@ -59,11 +70,12 @@ def _spa_response(page_kind: str, **extra_bootstrap: object) -> Response:
         "<link rel='stylesheet' href='/assets/server-app-layout.css'>"
         "<link rel='stylesheet' href='/assets/server-app-components.css'>"
         "<link rel='stylesheet' href='/assets/server-app-views.css'>"
-        f"<link rel='stylesheet' href='{_XTERM_CDN}/css/xterm.css'>"
+        f"<link rel='stylesheet' href='{_XTERM_CDN}/css/xterm.css'"
+        f" integrity='{_XTERM_CSS_INTEGRITY}' crossorigin='anonymous'>"
         f"<link href='{_FONTS_CDN}' rel='stylesheet'>"
-        f"<script src='{_XTERM_CDN}/lib/xterm.js'></script>"
-        f"<script src='{_FITADDON_CDN}/lib/addon-fit.js'></script>"
-        f"</head><body>"
+        f"<script src='{_XTERM_CDN}/lib/xterm.js' crossorigin='anonymous'{xterm_js_sri}></script>"
+        f"<script src='{_FITADDON_CDN}/lib/addon-fit.js' crossorigin='anonymous'{fit_js_sri}></script>"
+        "</head><body>"
         "<div id='app-root'></div>"
         "<noscript><div class='page'><div class='card'>This application requires JavaScript.</div></div></noscript>"
         f"<script type='application/json' id='app-bootstrap'>{blob}</script>"

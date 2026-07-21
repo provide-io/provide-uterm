@@ -124,6 +124,13 @@ async def route_http(runtime: RuntimeProtocol, request: object) -> object:
         guard = await _check_session_visibility(runtime, request)
         if guard is not None:
             return guard
+        # Installing/deleting webhooks is a mutation: read visibility alone must
+        # not allow attaching an outbound terminal-exfil sink on public sessions.
+        if method in _STATE_CHANGING_METHODS:
+            from provide.uterm.cloudflare.api.http_routes._session import _can_mutate_session
+
+            if not await _can_mutate_session(runtime, request):
+                return json_response({"error": "forbidden"}, status=403)
         return await route_webhooks(runtime, request, path, url, method, webhook_match.group(1), webhook_match.group(2))
 
     recording_match = _RECORDING_ROUTE_RE.match(path)

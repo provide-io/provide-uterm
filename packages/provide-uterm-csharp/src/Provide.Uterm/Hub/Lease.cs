@@ -181,7 +181,9 @@ public sealed class HijackLeaseManager
                 return (false, "no_worker");
             }
 
-            if (_hub.IsDashboardHijackActive(st) || _hub.HasValidRestLease(st))
+            // HijackPending: REST two-phase reserve — treat as already taken so
+            // the dashboard WS cannot dual-own during the pause I/O window.
+            if (_hub.IsDashboardHijackActive(st) || _hub.HasValidRestLease(st) || st.HijackPending is not null)
             {
                 return (false, "already_hijacked");
             }

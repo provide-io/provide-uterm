@@ -15,36 +15,61 @@ public sealed partial class UtermServer
 {
     private void MapMcpRoutes(WebApplication app)
     {
-        // Expose MCP tools natively via WebSockets
+        // MCP over WebSocket — requires authenticated principal (Bearer header only;
+        // query-string tokens are rejected to avoid log/Referer leakage).
+        // Hello still advertises mcp_supported per behavior.json (csharp=false) on
+        // the browser path; this endpoint remains available for local tooling but
+        // is gated the same way as other privileged surfaces.
         app.Map("/mcp", async (HttpContext ctx) =>
         {
-            if (ctx.WebSockets.IsWebSocketRequest)
-            {
-                using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
-                var token = ctx.Request.Query["token"].ToString();
-                
-                // If no token in query, try Auth header
-                if (string.IsNullOrEmpty(token) && ctx.Request.Headers.TryGetValue("Authorization", out var authHeader))
-                {
-                    var val = authHeader.ToString();
-                    if (val.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-                    {
-                        token = val["Bearer ".Length..].Trim();
-                    }
-                }
-
-                var baseUrl = _deps.Config.Server.PublicBaseUrl ?? $"http://127.0.0.1:{_deps.Config.Server.Port}";
-                var client = string.IsNullOrEmpty(token) ? new HijackClient(baseUrl) : HijackClient.WithBearer(baseUrl, token);
-                var target = new McpToolsTarget(client);
-                
-                using var rpc = new JsonRpc(new StreamJsonRpc.WebSocketMessageHandler(ws, new SystemTextJsonFormatter()), target);
-                rpc.StartListening();
-                await rpc.Completion;
-            }
-            else
+            if (!string.IsNullOrEmpty(ctx.Request.Query["token"].ToString()))
             {
                 ctx.Response.StatusCode = 400;
+                await ctx.Response.WriteAsync("token query parameter is not allowed; use Authorization: Bearer").ConfigureAwait(false);
+                return;
             }
+
+            if (!ctx.WebSockets.IsWebSocketRequest)
+            {
+                ctx.Response.StatusCode = 400;
+                return;
+            }
+
+            var (principal, authErr) = await RequireAuthenticated(ctx).ConfigureAwait(false);
+            if (authErr is not null)
+            {
+                await authErr.ExecuteAsync(ctx).ConfigureAwait(false);
+                return;
+            }
+
+            // Operator+ required (viewer cannot drive MCP hijack tools).
+            var role = principal.Roles.Contains("admin") ? "admin"
+                : principal.Roles.Contains("operator") ? "operator" : "viewer";
+            if (role is "viewer")
+            {
+                ctx.Response.StatusCode = 403;
+                await ctx.Response.WriteAsync("insufficient privileges").ConfigureAwait(false);
+                return;
+            }
+
+            var token = "";
+            if (ctx.Request.Headers.TryGetValue("Authorization", out var authHeader))
+            {
+                var val = authHeader.ToString();
+                if (val.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                {
+                    token = val["Bearer ".Length..].Trim();
+                }
+            }
+
+            using var ws = await ctx.WebSockets.AcceptWebSocketAsync().ConfigureAwait(false);
+            var baseUrl = _deps.Config.Server.PublicBaseUrl ?? $"http://127.0.0.1:{_deps.Config.Server.Port}";
+            var client = string.IsNullOrEmpty(token) ? new HijackClient(baseUrl) : HijackClient.WithBearer(baseUrl, token);
+            var target = new McpToolsTarget(client);
+
+            using var rpc = new JsonRpc(new StreamJsonRpc.WebSocketMessageHandler(ws, new SystemTextJsonFormatter()), target);
+            rpc.StartListening();
+            await rpc.Completion.ConfigureAwait(false);
         });
     }
 }

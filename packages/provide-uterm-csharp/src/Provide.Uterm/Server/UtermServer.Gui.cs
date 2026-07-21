@@ -52,6 +52,20 @@ public sealed partial class UtermServer
             else if (protocol == GraphicalTargetConstants.ProtocolRfb)
             {
                 var (rfbHost, rfbPort) = GraphicalTargetParsing.ParseRfbEndpoint(target.Endpoint);
+                try
+                {
+                    // Connector-grade egress: cloud-metadata always blocked.
+                    // Private/loopback follows block_private_connector_targets so
+                    // internal RFB targets remain usable when the flag is off.
+                    var blockPrivate = _deps.Config.Security.BlockPrivateConnectorTargets;
+                    EgressGuard.AssertConnectorTargetAllowedAsync(rfbHost, blockPrivate, ctx.RequestAborted)
+                        .GetAwaiter().GetResult();
+                }
+                catch (Exception ex)
+                {
+                    return DetailError(403, "invalid endpoint: " + ex.Message);
+                }
+
                 var client = new Vnc.RfbClient();
                 try
                 {
@@ -60,6 +74,12 @@ public sealed partial class UtermServer
                 catch (Exception ex)
                 {
                     return DetailError(502, "rfb connect failed: " + ex.Message);
+                }
+
+                // Dispose any previous graphical session before replace.
+                if (_deps.Hub.Registry.Get(workerId) is { GraphicalSession: IDisposable prev })
+                {
+                    try { prev.Dispose(); } catch { /* best-effort */ }
                 }
 
                 session = client;
