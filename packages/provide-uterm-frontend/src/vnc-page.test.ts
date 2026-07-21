@@ -74,8 +74,9 @@ describe("VncConsolePage", () => {
     document.body.innerHTML = `
       <div id="vnc-status" data-state="idle">Ready</div>
       <div id="vnc-detail"></div>
+      <div id="vnc-dims">—</div>
       <div id="vnc-screen"></div>
-      <button id="vnc-connect"></button>
+      <button id="vnc-connect" class="primary"></button>
       <button id="vnc-disconnect" disabled></button>
     `;
   }

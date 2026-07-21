@@ -52,11 +52,24 @@ The product path is provide-uterm’s own page + human VNC relay:
 
 | File | What it shows |
 |------|----------------|
-| `screenshots/uterm-vnc-console.png` | **provide-uterm** `vnc.html` Connected to lab Chromium on example.com |
+| `screenshots/uterm-vnc-console.png` | Full product chrome: brand, status, CTAs, remote desktop |
+| `screenshots/uterm-vnc-aesthetic-full.png` | Hi-DPI aesthetic capture (same page) |
+| `screenshots/uterm-vnc-aesthetic-desktop.png` | Desktop crop — example.com inside the relay canvas |
+
+### Aesthetic / integration markers (asserted by capture script)
+
+- Eyebrow brand **provide-uterm** + mark (matches hijack palette)
+- Primary Connect CTA (accent green, same language as hijack console)
+- Status chip **Connected · lab-vnc-plain** with live pulse
+- Viewport chrome: **REMOTE DESKTOP** + live `1280×720 · lab-vnc-plain`
+- Real RFB framebuffer (example.com Chromium in the lab), not a mock
 
 ```bash
+# Functional proof (2× plain + TLS + denied + screenshot)
 uv run python scripts/prove_uterm_vnc_console.py --runs 2
-# artifacts under $SCRATCH / --evidence-dir (connect logs, TLS, denied, screenshot)
+
+# Aesthetic / integration pack (full page + desktop crop + webm)
+uv run python scripts/capture_uterm_vnc_aesthetic.py
 ```
 
 See `.provide/goals/uterm-vnc-web-console.md` and `scripts/uterm-server.vnc-lab.example.toml`.
