@@ -477,6 +477,29 @@ async def test_webhook_authz_benign_host_posts(monkeypatch: pytest.MonkeyPatch) 
     assert route.called
 
 
+@pytest.mark.asyncio
+@respx.mock
+async def test_webhook_authz_rejects_unsigned_when_secret_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    """With a shared secret, unsigned authz responses must fail closed."""
+    from unittest.mock import MagicMock
+
+    from provide.uterm.server import egress as egress_mod
+    from provide.uterm.server.authorization import WebhookAuthorizationProvider
+
+    url = "https://authz.example.com/check"
+    monkeypatch.setattr(egress_mod, "_resolve_cached", AsyncMock(return_value=("93.184.216.34",)))
+    respx.post(url).mock(return_value=Response(200, json={"allow": True}))  # no signature headers
+
+    provider = WebhookAuthorizationProvider(url=url, secret="shared-authz-secret-32bytes!!")  # pragma: allowlist secret
+    principal = MagicMock()
+    principal.subject_id = "alice"
+    principal.roles = ["admin"]
+    principal.scopes = ["*"]
+    principal.claims = {}
+
+    assert await provider._check(principal, "session.read") is False
+
+
 # ---------------------------------------------------------------------------
 # Fix 1b: WebhookOutputPolicyGate fails CLOSED to default_rules()
 # ---------------------------------------------------------------------------

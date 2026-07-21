@@ -368,6 +368,22 @@ async def test_more_branches_for_coverage() -> None:
 
 
 @pytest.mark.asyncio
+async def test_detach_client_marks_handle_and_eof() -> None:
+    hub = EmbedHub()
+    session = await hub.create_session()
+    up = MemoryUpstream()
+    await session.connect_upstream(up)
+    handle = await session.attach_client(ClientMetadata(client_id="c1"))
+    assert handle.is_attached is True
+    await session.detach_client("c1")
+    assert handle.is_attached is False
+    # Detach is idempotent; re-attach works under same id.
+    handle2 = await session.attach_client(ClientMetadata(client_id="c1"))
+    assert handle2.is_attached is True
+    await session.aclose()
+    assert handle2.is_attached is False
+
+
 async def test_upstream_lost_and_backpressure() -> None:
     hub = EmbedHub()
     session = await hub.create_session()

@@ -138,6 +138,17 @@ func TestHijackGUIOpsAuthDenied(t *testing.T) {
 	}
 }
 
+func TestHijackGUIClickDeniedForNonOwnerAdmin(t *testing.T) {
+	// Another admin must not inject via a hijack_id they did not acquire.
+	ts, hid := guiOpsServer(t) // acquired by acme-admin
+	// Second principal with admin role but different subject.
+	other := tenantHeaders("admin", "acme")
+	other["X-Subject"] = "other-admin"
+	if rec := ts.do("POST", "/worker/w1/hijack/"+hid+"/gui/click", `{"x":1,"y":2,"button":"left"}`, other); rec.Code != http.StatusForbidden {
+		t.Fatalf("non-owner admin click: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestHijackGUIBadWorkerID(t *testing.T) {
 	ts := newTestServer(t, nil)
 	// Invalid path segment → bridgeParams fails (422).
