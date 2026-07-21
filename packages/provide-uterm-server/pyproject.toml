@@ -68,11 +68,12 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "provide.uterm" = ["py.typed"]
-# Explicit .vite/* — setuptools recursive globs omit leading-dot dirs, so the
-# Vite app manifest (frontend/.vite/manifest.json) would not enter the wheel.
+# vite-manifest.json is the package-data-safe copy of .vite/manifest.json
+# (setuptools recursive globs omit leading-dot dirs). Both patterns kept.
 "provide.uterm.server" = [
     "frontend/**",
     "frontend/**/*",
+    "frontend/vite-manifest.json",
     "frontend/.vite/*",
     "frontend/.vite/**/*",
 ]

@@ -9,4 +9,5 @@ const frontendDir = resolve("packages/provide-uterm-server/src/provide/uterm/ser
 await Promise.all([
   rm(resolve(frontendDir, "assets"), { recursive: true, force: true }),
   rm(resolve(frontendDir, ".vite"), { recursive: true, force: true }),
+  rm(resolve(frontendDir, "vite-manifest.json"), { force: true }),
 ]);

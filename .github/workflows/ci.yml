@@ -160,6 +160,25 @@ jobs:
       # meet the client package's 100% coverage gate on its own.
       - run: uv run pytest packages/provide-uterm-client/tests/test_go_server_interop.py -m go_interop --no-cov
 
+  # Build each language-server image and curl /healthz (directory-mounted smoke config).
+  # Thin script under ci/ — no long inline shell (repo CI script policy).
+  docker-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      - name: Docker language-server smoke (build + /healthz)
+        env:
+          EVIDENCE_DIR: ${{ runner.temp }}/uterm-docker-smoke
+        run: bash ci/docker_language_smoke.sh
+      - name: Upload smoke evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: docker-language-smoke
+          path: ${{ runner.temp }}/uterm-docker-smoke/**
+          if-no-files-found: ignore
+
   annotation-quality:
     runs-on: ubuntu-latest
     strategy:

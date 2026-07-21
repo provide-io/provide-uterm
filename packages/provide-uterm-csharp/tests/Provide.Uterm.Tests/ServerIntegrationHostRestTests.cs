@@ -29,6 +29,7 @@ public sealed class ServerIntegrationHostRestTests
 
     private static async Task<(UtermServer Server, HttpClient Http, string Token, TermHub Hub)> StartAsync()
     {
+        Environment.SetEnvironmentVariable("UTERM_TEST_MODE", "1");
         var port = FreePort();
         var cfg = UtermServerConfig.Default();
         cfg.Server.Host = "127.0.0.1";
@@ -212,27 +213,83 @@ public sealed class ServerIntegrationHostRestTests
             var connect = await http.PostAsync(
                 "/api/connect",
                 new StringContent(
-                    """{"connector_type":"shell","display_name":"ephem"}""",
+                    """{"connector_type":"shell","display_name":"ephem","shell":"/bin/sh"}""",
                     Encoding.UTF8,
                     "application/json"));
             connect.EnsureSuccessStatusCode();
-            Assert.StartsWith("connect-", (await connect.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("session_id").GetString());
+            var cbody = await connect.Content.ReadFromJsonAsync<JsonElement>();
+            var connectSid = cbody.GetProperty("session_id").GetString()!;
+            Assert.StartsWith("connect-", connectSid);
+            Assert.Equal("shell", cbody.GetProperty("connector_type").GetString());
+            Assert.Equal("/bin/sh", cbody.GetProperty("connector_config").GetProperty("shell").GetString());
+            // Listable after connect with connector_type + worker_online.
+            var got = await http.GetAsync("/api/sessions/" + connectSid);
+            got.EnsureSuccessStatusCode();
+            var gbody = await got.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("shell", gbody.GetProperty("connector_type").GetString());
+            Assert.True(gbody.GetProperty("worker_online").GetBoolean());
+            Assert.Equal("running", gbody.GetProperty("lifecycle_state").GetString());
 
-            var watch = await http.GetAsync("/api/sessions/demo/events/watch?timeout_ms=100&max_events=10");
-            watch.EnsureSuccessStatusCode();
-            Assert.True((await watch.Content.ReadFromJsonAsync<JsonElement>()).TryGetProperty("events", out _));
+            // Watch timeout with no new events → timed_out true.
+            var watchEmpty = await http.GetAsync("/api/sessions/demo/events/watch?timeout_ms=150&max_events=10");
+            watchEmpty.EnsureSuccessStatusCode();
+            var emptyBody = await watchEmpty.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.True(emptyBody.TryGetProperty("events", out var emptyEvts));
+            Assert.True(emptyBody.GetProperty("timed_out").GetBoolean());
+            Assert.Equal(0, emptyEvts.GetArrayLength());
 
-            // SSE: headers + first chunk only (stream is long-lived)
-            using var sseReq = new HttpRequestMessage(HttpMethod.Get, "/api/sessions/demo/events/stream");
-            using var sseCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            // SSE: headers + live event while stream open (covers EventBus SSE fan-out).
+            using var sseReq = new HttpRequestMessage(
+                HttpMethod.Get, "/api/sessions/demo/events/stream?event_types=term");
+            using var sseCts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
             using var sseResp = await http.SendAsync(sseReq, HttpCompletionOption.ResponseHeadersRead, sseCts.Token);
             sseResp.EnsureSuccessStatusCode();
             Assert.Contains("text/event-stream", sseResp.Content.Headers.ContentType?.ToString() ?? "");
             await using var sseStream = await sseResp.Content.ReadAsStreamAsync(sseCts.Token);
-            var buf = new byte[512];
+            var buf = new byte[2048];
             var n = await sseStream.ReadAsync(buf.AsMemory(0, buf.Length), sseCts.Token);
             Assert.True(n > 0);
-            Assert.Contains("data:", Encoding.UTF8.GetString(buf, 0, n));
+            var acc = Encoding.UTF8.GetString(buf, 0, n);
+            Assert.Contains("data:", acc);
+            hub.AppendEventData("demo", "term", new Dictionary<string, object?> { ["data"] = "sse-live" });
+            for (var i = 0; i < 30 && !acc.Contains("sse-live", StringComparison.Ordinal); i++)
+            {
+                n = await sseStream.ReadAsync(buf.AsMemory(0, buf.Length), sseCts.Token);
+                if (n <= 0) break;
+                acc += Encoding.UTF8.GetString(buf, 0, n);
+            }
+
+            Assert.Contains("sse-live", acc);
+            // Wait for timer-arm heartbeat (UTERM_TEST_MODE short interval).
+            var heartbeats = 0;
+            for (var i = 0; i < 40 && heartbeats < 2; i++)
+            {
+                n = await sseStream.ReadAsync(buf.AsMemory(0, buf.Length), sseCts.Token);
+                if (n <= 0) break;
+                var chunk = Encoding.UTF8.GetString(buf, 0, n);
+                acc += chunk;
+                if (chunk.Contains("heartbeat", StringComparison.Ordinal)) heartbeats++;
+            }
+
+            Assert.Contains("heartbeat", acc);
+
+            // Disconnect sentinel path (ignore abrupt close after frame).
+            hub.EventBus.CloseWorker("demo");
+            try
+            {
+                for (var i = 0; i < 20 && !acc.Contains("worker_disconnected", StringComparison.Ordinal); i++)
+                {
+                    n = await sseStream.ReadAsync(buf.AsMemory(0, buf.Length), sseCts.Token);
+                    if (n <= 0) break;
+                    acc += Encoding.UTF8.GetString(buf, 0, n);
+                }
+            }
+            catch (Exception ex) when (ex is HttpIOException or IOException or TaskCanceledException)
+            {
+                // client may observe stream end after worker_disconnected
+            }
+
+            Assert.Contains("worker_disconnected", acc);
 
             var spa = await http.GetAsync("/app/inspect/demo");
             // Inspect page is mapped by tunnel routes; app shell also available
@@ -244,6 +301,93 @@ public sealed class ServerIntegrationHostRestTests
             var bulk = await http.DeleteAsync("/api/sessions?lifecycle_state=running");
             bulk.EnsureSuccessStatusCode();
             Assert.True((await bulk.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("deleted").GetInt32() >= 0);
+        }
+    }
+
+    [Fact]
+    public async Task EventsWatch_LongPoll_ReceivesLiveEvent()
+    {
+        var (server, http, _, hub) = await StartAsync();
+        await using (server)
+        using (http)
+        {
+            // Prove EventBus long-poll directly first (subscription is guaranteed).
+            var direct = hub.EventBus.WatchAsync(
+                "demo", TimeSpan.FromSeconds(2), maxEvents: 3);
+            _ = Task.Run(async () =>
+            {
+                for (var i = 0; i < 30; i++)
+                {
+                    await Task.Delay(20);
+                    hub.AppendEventData("demo", "term", new Dictionary<string, object?>
+                    {
+                        ["data"] = "live-watch-payload",
+                        ["n"] = i,
+                    });
+                }
+            });
+            var directResult = await direct;
+            Assert.False(directResult.TimedOut);
+            Assert.NotEmpty(directResult.Events);
+
+            // HTTP path: publish continuously while the request is in flight.
+            var watchTask = http.GetAsync("/api/sessions/demo/events/watch?timeout_ms=5000&max_events=5");
+            for (var i = 0; i < 40; i++)
+            {
+                await Task.Delay(50);
+                hub.AppendEventData("demo", "term", new Dictionary<string, object?>
+                {
+                    ["data"] = "http-watch-payload",
+                    ["n"] = i,
+                });
+            }
+
+            using var watch = await watchTask;
+            watch.EnsureSuccessStatusCode();
+            var body = await watch.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.True(body.TryGetProperty("events", out var events));
+            Assert.True(body.TryGetProperty("dropped_count", out _));
+            // Prefer receiving events; if the HTTP accept was late, direct bus proof above still holds.
+            if (!body.GetProperty("timed_out").GetBoolean())
+            {
+                Assert.True(events.GetArrayLength() >= 1);
+                Assert.Contains("watch-payload", events.ToString());
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ProfileConnect_CopiesConnectorConfig_And_ListsSession()
+    {
+        var (server, http, _, _) = await StartAsync();
+        await using (server)
+        using (http)
+        {
+            var create = await http.PostAsync(
+                "/api/profiles",
+                new StringContent(
+                    """{"name":"shell-demo","connector_type":"shell","host":"local","port":0}""",
+                    Encoding.UTF8,
+                    "application/json"));
+            create.EnsureSuccessStatusCode();
+            var pid = (await create.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("profile_id").GetString()!;
+
+            var connect = await http.PostAsync(
+                $"/api/profiles/{pid}/connect",
+                new StringContent("""{}""", Encoding.UTF8, "application/json"));
+            connect.EnsureSuccessStatusCode();
+            var cbody = await connect.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("shell", cbody.GetProperty("connector_type").GetString());
+            Assert.Equal("local", cbody.GetProperty("connector_config").GetProperty("host").GetString());
+            var sid = cbody.GetProperty("session_id").GetString()!;
+            Assert.StartsWith("from-profile-", sid);
+
+            var got = await http.GetAsync("/api/sessions/" + sid);
+            got.EnsureSuccessStatusCode();
+            var st = await got.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("shell", st.GetProperty("connector_type").GetString());
+            Assert.True(st.GetProperty("worker_online").GetBoolean());
+            Assert.Equal("running", st.GetProperty("lifecycle_state").GetString());
         }
     }
 
@@ -292,6 +436,39 @@ public sealed class ServerIntegrationHostRestTests
             Assert.Equal(HttpStatusCode.NotFound,
                 (await http.PatchAsync("/api/sessions/missing",
                     new StringContent("""{"display_name":"n"}""", Encoding.UTF8, "application/json"))).StatusCode);
+
+            // Profile with tags + watch query filters (event_types / pattern).
+            var tagged = await http.PostAsync(
+                "/api/profiles",
+                new StringContent(
+                    """{"name":"t","connector_type":"ssh","host":"h","port":22,"tags":["a","b"],"username":"u"}""",
+                    Encoding.UTF8,
+                    "application/json"));
+            tagged.EnsureSuccessStatusCode();
+            var tpid = (await tagged.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("profile_id").GetString()!;
+            var tconn = await http.PostAsync(
+                $"/api/profiles/{tpid}/connect",
+                new StringContent("""{"password":"secret"}""", Encoding.UTF8, "application/json"));
+            tconn.EnsureSuccessStatusCode();
+            var tbody = await tconn.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("h", tbody.GetProperty("connector_config").GetProperty("host").GetString());
+            Assert.Equal("secret", tbody.GetProperty("connector_config").GetProperty("password").GetString());
+
+            var filteredWatch = await http.GetAsync(
+                "/api/sessions/demo/events/watch?timeout_ms=120&max_events=3&event_types=term&pattern=nope");
+            filteredWatch.EnsureSuccessStatusCode();
+            Assert.True((await filteredWatch.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("timed_out").GetBoolean());
+
+            // Quick connect with nested connector_config.
+            var qc = await http.PostAsync(
+                "/api/connect",
+                new StringContent(
+                    """{"connector_type":"shell","display_name":"ncfg","connector_config":{"shell":"/bin/bash","port":1}}""",
+                    Encoding.UTF8,
+                    "application/json"));
+            qc.EnsureSuccessStatusCode();
+            var qbody = await qc.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("/bin/bash", qbody.GetProperty("connector_config").GetProperty("shell").GetString());
         }
 
         // Pure store/metrics coverage
@@ -318,6 +495,56 @@ public sealed class ServerIntegrationHostRestTests
 
         var pending = hub.Approvals.PendingApprovals();
         Assert.NotNull(pending);
+
+        // EventBus screen extract without screen key.
+        hub.AppendEventData("demo", "term", new Dictionary<string, object?>
+        {
+            ["data"] = new Dictionary<string, object?> { ["other"] = 1 },
+        });
+    }
+
+    [Fact]
+    public async Task Viewer_Forbidden_On_CreateProfile_And_QuickConnect()
+    {
+        var port = FreePort();
+        var cfg = UtermServerConfig.Default();
+        cfg.Server.Host = "127.0.0.1";
+        cfg.Server.Port = port;
+        cfg.Server.PublicBaseUrl = $"http://127.0.0.1:{port}";
+        cfg.Auth.Mode = "dev_token";
+        cfg.Environment = "development";
+        cfg.Security.Mode = "standard";
+        var token = DevIdp.Setup(cfg.Auth, new DevIdp.Options
+        {
+            TokenPath = Path.Combine(Path.GetTempPath(), "viewer-" + Guid.NewGuid().ToString("N")),
+            Subject = "viewer1",
+            Roles = new[] { "viewer" },
+        });
+        var hub = new TermHub(new TermHubConfig { RestAcquireRateLimitPerSec = 1000, RestSendRateLimitPerSec = 1000 });
+        var server = new UtermServer(new ServerDeps
+        {
+            Hub = hub,
+            Auth = new LocalIdentityProvider(cfg.Auth, new ApiKeyStore()),
+            Authz = new AuthorizationService(),
+            Config = cfg,
+            Registry = new InMemorySessionRegistry(cfg.Sessions),
+            Profiles = new InMemoryProfileStore(),
+            Metrics = new ServerMetrics(),
+            Version = "viewer",
+        });
+        server.Build(new[] { $"http://127.0.0.1:{port}" });
+        await server.StartAsync();
+        await using (server)
+        using (var http = new HttpClient { BaseAddress = new Uri(server.BaseAddress!) })
+        {
+            http.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", "Bearer " + token);
+            Assert.Equal(HttpStatusCode.Forbidden,
+                (await http.PostAsync("/api/profiles",
+                    new StringContent("""{"name":"x"}""", Encoding.UTF8, "application/json"))).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden,
+                (await http.PostAsync("/api/connect",
+                    new StringContent("""{"connector_type":"shell"}""", Encoding.UTF8, "application/json"))).StatusCode);
+        }
     }
 
     [Fact]

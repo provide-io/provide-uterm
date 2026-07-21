@@ -300,22 +300,26 @@ See `docker/README.md`. Packaging ≠ full API parity — residual surface table
 | SSE event stream / events/watch | yes | yes | **yes** (watch is short-poll shell) |
 | Session PATCH / bulk DELETE | yes | yes | **yes** |
 | Quick connect `POST /api/connect` | yes | yes | **yes** |
-| SPA UI hosting | yes | yes (`--frontend-dir`) | **yes** (shell or `UTERM_FRONTEND_DIR`) |
+| SPA UI hosting | yes | yes (baked `/frontend` + `--frontend-dir`) | **yes** (baked `/app/frontend` + `UTERM_FRONTEND_DIR`) |
+| Events watch long-poll | yes | route (impl depth varies) | **yes** (EventBus long-poll) |
+| Profile/quick connect shell depth | yes | yes | **yes** (connector_config + session_started) |
 | FastAPI `mount_terminal_ui` embed | yes | de-scope (`uterm proxy`) | de-scope (`uterm proxy`) |
 | MCP / `uterm-mcp` | yes | yes | **never** |
 
-Proof: `ServerIntegrationHostRestTests` + Docker images `provide-uterm-server-{python,go,csharp}`.
+Proof: `ServerIntegrationHostRestTests` + `ci/docker_language_smoke.sh` + Docker images.
 
-### Docker health proof (2026-07-20)
+### Docker / residual closeout (2026-07-21)
 
 - Images: `provide-uterm-server:local`, `provide-uterm-server-go:local`,
-  `provide-uterm-server-csharp:local` (compose also tags python as
+  `provide-uterm-server-csharp:local` (compose tags python as
   `provide-uterm-server-python:local`).
-- Config path (all three): `/etc/uterm/server.toml` (fail-closed JWT placeholders
-  baked in; smoke via `docker/dev-smoke.toml` directory-mounted at `/etc/uterm`).
-- Live curl (mounted smoke JWT config, host ports 27780/27781/27782):
-  `/healthz` → HTTP 200 `{"status":"ok"}` for Python, Go, and C#.
-- Python image notes: system strip check is depth-1 only (avoid false-positive
-  on `packaging-*/WHEEL`); Vite `.vite/manifest.json` is force-copied into the
-  venv after `uv sync` (setuptools package-data drops leading-dot dirs).
-- Compose services: `server`, `server-go`, `server-csharp`, `cf`.
+- Config path (all three): `/etc/uterm/server.toml`. Compose mounts
+  **`docker/etc-uterm/` directory** (not file→file bind).
+- CI: `docker-smoke` job in `.github/workflows/ci.yml` runs
+  `ci/docker_language_smoke.sh` (build + `/healthz` for python/go/csharp).
+- C# `EventBus` + real `events/watch` long-poll + live SSE fan-out.
+- C#/Go SPA Vite assets baked into language images.
+- Python wheels include `frontend/vite-manifest.json` (package-data-safe copy of
+  `.vite/manifest.json` via `scripts/publish-frontend-manifest.mjs`).
+- Cover floors: C# **97.9** dual-OS / Go **97.8** — raise only with ≥0.2pt
+  headroom (see implementer `cover-headroom.txt` when measured).
