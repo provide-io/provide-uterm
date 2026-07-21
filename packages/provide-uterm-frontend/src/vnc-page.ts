@@ -81,6 +81,7 @@ export class VncConsolePage {
   private readonly statusEl: HTMLElement;
   private readonly detailEl: HTMLElement;
   private readonly screenEl: HTMLElement;
+  private readonly dimsEl: HTMLElement | null;
   private readonly connectBtn: HTMLButtonElement;
   private readonly disconnectBtn: HTMLButtonElement;
   private rfb: RfbInstance | null = null;
@@ -98,6 +99,7 @@ export class VncConsolePage {
     this.statusEl = requireEl(root, "#vnc-status");
     this.detailEl = requireEl(root, "#vnc-detail");
     this.screenEl = requireEl(root, "#vnc-screen");
+    this.dimsEl = root.querySelector<HTMLElement>("#vnc-dims");
     this.connectBtn = requireEl(root, "#vnc-connect") as HTMLButtonElement;
     this.disconnectBtn = requireEl(root, "#vnc-disconnect") as HTMLButtonElement;
 
@@ -136,6 +138,21 @@ export class VncConsolePage {
     this.detailEl.textContent = this.describeParams();
   }
 
+  private setDims(text: string): void {
+    if (this.dimsEl) {
+      this.dimsEl.textContent = text;
+    }
+  }
+
+  private refreshCanvasDims(): void {
+    const canvas = this.screenEl.querySelector("canvas");
+    if (canvas instanceof HTMLCanvasElement && canvas.width > 0 && canvas.height > 0) {
+      this.setDims(`${canvas.width}×${canvas.height} · ${this.params.targetId || "desktop"}`);
+      return;
+    }
+    this.setDims(this.params.targetId ? `target ${this.params.targetId}` : "—");
+  }
+
   async connect(): Promise<void> {
     if (this.connecting) return;
     if (this.rfb) {
@@ -165,10 +182,14 @@ export class VncConsolePage {
       rfb.viewOnly = this.params.viewOnly;
       rfb.scaleViewport = true;
       rfb.resizeSession = false;
-      rfb.background = "#000000";
+      // Match product chrome (not pure black letterbox).
+      rfb.background = "#0b0f14";
 
       rfb.addEventListener("connect", () => {
         this.setStatus("connected", `Connected · ${this.params.targetId}`);
+        // Canvas dims land shortly after ServerInit / first paint.
+        window.setTimeout(() => this.refreshCanvasDims(), 200);
+        window.setTimeout(() => this.refreshCanvasDims(), 1200);
       });
       rfb.addEventListener("disconnect", (ev: Event) => {
         const detail = (ev as CustomEvent<{ clean?: boolean; code?: number }>).detail;
@@ -184,12 +205,14 @@ export class VncConsolePage {
         this.rfb = null;
         this.connectBtn.disabled = false;
         this.disconnectBtn.disabled = true;
+        this.setDims("—");
       });
       rfb.addEventListener("securityfailure", () => {
         this.setStatus("error", "RFB security failure");
       });
 
       this.rfb = rfb;
+      this.setDims("negotiating…");
     } catch (err) {
       this.setStatus("error", `Failed to start RFB client: ${String(err)}`);
       this.connectBtn.disabled = false;

@@ -1,0 +1,12 @@
+{
+  "status_state": "connected",
+  "status_text": "Connected \u00b7 lab-vnc-plain",
+  "eyebrow": "provide-uterm",
+  "has_brand_mark": true,
+  "chrome_title": "Remote desktop",
+  "dims": "1280\u00d7720 \u00b7 lab-vnc-plain",
+  "canvas_w": 1280,
+  "canvas_h": 720,
+  "has_primary_cta": true,
+  "title": "provide-uterm \u00b7 VNC"
+}
