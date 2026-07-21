@@ -16,6 +16,11 @@
   --danger: #f97352;
   --warn: #fbbf24;
   --glow: rgba(49, 196, 141, 0.22);
+  /* Outer page inset — keep chrome off the window edge */
+  --page-pad: 32px;
+  --panel-gap: 24px;
+  --sidebar-w: 300px;
+  --viewport-inset: 16px;
 }
 
 html,
@@ -34,43 +39,43 @@ body {
   display: flex;
   align-items: stretch;
   justify-content: center;
-  padding: 18px;
+  padding: var(--page-pad);
 }
 
 .page {
-  width: min(1440px, 100%);
-  min-height: calc(100dvh - 36px);
+  width: min(1520px, 100%);
+  min-height: calc(100dvh - (var(--page-pad) * 2));
   display: grid;
-  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  gap: var(--panel-gap);
 }
 
 .panel {
   background: linear-gradient(180deg, rgba(24, 34, 49, 0.96), rgba(18, 25, 35, 0.96));
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 18px;
   box-shadow: 0 22px 48px rgba(0, 0, 0, 0.32);
 }
 
 .sidebar {
-  padding: 20px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
+  min-height: 0;
 }
 
 .brand-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .brand-mark {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background:
-    linear-gradient(145deg, rgba(49, 196, 141, 0.95), rgba(14, 165, 233, 0.75));
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: linear-gradient(145deg, rgba(49, 196, 141, 0.95), rgba(14, 165, 233, 0.75));
   box-shadow: 0 0 0 1px rgba(49, 196, 141, 0.35), 0 8px 20px var(--glow);
   flex: 0 0 auto;
 }
@@ -84,7 +89,7 @@ body {
 }
 
 h1 {
-  font-size: 24px;
+  font-size: 22px;
   line-height: 1.15;
   margin-top: 4px;
   letter-spacing: -0.02em;
@@ -96,16 +101,11 @@ h1 {
   font-size: 13px;
 }
 
-.lede strong {
-  color: var(--text);
-  font-weight: 600;
-}
-
 .control-group {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 14px;
+  padding: 14px 16px;
   border: 1px solid rgba(33, 50, 71, 0.85);
   border-radius: 12px;
   background: rgba(11, 15, 20, 0.46);
@@ -122,7 +122,7 @@ h1 {
 .btn-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: 10px;
 }
 
 button {
@@ -149,16 +149,6 @@ button.primary {
 
 button.primary:hover:not(:disabled) {
   filter: brightness(1.05);
-}
-
-button.secondary {
-  background: transparent;
-  color: var(--text);
-}
-
-button.secondary:hover:not(:disabled) {
-  border-color: rgba(49, 196, 141, 0.55);
-  background: var(--accent-dim);
 }
 
 button.danger {
@@ -195,7 +185,6 @@ button:disabled {
   border-radius: 50%;
   background: var(--muted);
   flex: 0 0 auto;
-  box-shadow: 0 0 0 0 transparent;
 }
 
 .status-chip[data-state="connecting"] {
@@ -279,7 +268,7 @@ button:disabled {
 
 .widget-panel {
   padding: 0;
-  min-height: 520px;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -290,9 +279,10 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 14px;
+  padding: 12px 18px;
   border-bottom: 1px solid var(--border);
   background: rgba(11, 15, 20, 0.55);
+  flex: 0 0 auto;
 }
 
 .viewport-chrome .title {
@@ -309,13 +299,17 @@ button:disabled {
   opacity: 0.85;
 }
 
+/*
+ * Desktop host: inset the RFB surface so the framebuffer is not hard against
+ * the panel chrome (fixes "edges of the view are too small").
+ */
 .vnc-screen {
   flex: 1;
-  min-height: 460px;
+  min-height: 0;
   width: 100%;
-  background:
-    radial-gradient(circle at center, rgba(24, 34, 49, 0.5), #05070a 70%),
-    #000;
+  margin: 0;
+  padding: var(--viewport-inset);
+  background: #070a0f;
   position: relative;
   display: flex;
   align-items: center;
@@ -323,42 +317,53 @@ button:disabled {
   overflow: hidden;
 }
 
-/* noVNC mounts a container + canvas; fill the panel cleanly */
+/* noVNC host container fills the inset area */
 .vnc-screen > div {
   width: 100% !important;
   height: 100% !important;
   display: flex !important;
   align-items: center;
   justify-content: center;
-  background: transparent !important;
+  background: #05070a !important;
+  border-radius: 10px;
+  border: 1px solid rgba(33, 50, 71, 0.9);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
 }
 
 .vnc-screen canvas {
   max-width: 100%;
   max-height: 100%;
   border-radius: 0;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  box-shadow: none;
 }
 
-.vnc-screen::after {
-  content: "";
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  border-radius: 0 0 15px 15px;
-  box-shadow: inset 0 0 0 1px rgba(49, 196, 141, 0.06);
+@media (max-width: 1100px) {
+  :root {
+    --page-pad: 20px;
+    --panel-gap: 16px;
+    --sidebar-w: 260px;
+    --viewport-inset: 12px;
+  }
 }
 
-@media (max-width: 960px) {
+@media (max-width: 900px) {
+  :root {
+    --page-pad: 16px;
+    --panel-gap: 14px;
+    --viewport-inset: 12px;
+  }
+
   .page {
     grid-template-columns: 1fr;
+    min-height: auto;
   }
 
   .widget-panel {
-    min-height: 420px;
+    min-height: 52dvh;
   }
 
   .vnc-screen {
-    min-height: 360px;
+    min-height: 48dvh;
   }
 }
