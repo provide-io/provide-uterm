@@ -191,7 +191,8 @@ public sealed partial class UtermServer : IAsyncDisposable
 
         app.MapGet("/api/sessions", async (HttpContext ctx) =>
         {
-            var p = await Authenticate(ctx).ConfigureAwait(false);
+            var (p, err) = await RequireAuthenticated(ctx).ConfigureAwait(false);
+            if (err is not null) return err;
             var items = _deps.Registry.ListWithDefinitions()
                 .Where(it => it.Definition is not null && it.Status is not null && _deps.Authz.CanReadSession(p, it.Definition!))
                 .Select(it => EnrichStatus(it.Status!))
@@ -201,7 +202,8 @@ public sealed partial class UtermServer : IAsyncDisposable
 
         app.MapGet("/api/sessions/{sessionId}", async (HttpContext ctx, string sessionId) =>
         {
-            var p = await Authenticate(ctx).ConfigureAwait(false);
+            var (p, err) = await RequireAuthenticated(ctx).ConfigureAwait(false);
+            if (err is not null) return err;
             if (!_deps.Registry.TryGetDefinition(sessionId, out var def))
             {
                 return DetailError(404, "unknown session: " + sessionId);
@@ -1165,6 +1167,20 @@ public sealed partial class UtermServer : IAsyncDisposable
         }
 
         return await _deps.Auth.AuthenticateAsync(req, ctx.RequestAborted).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Go/Python <c>require_authenticated</c> parity: anonymous principal → 401.
+    /// </summary>
+    private async Task<(Principal Principal, IResult? Error)> RequireAuthenticated(HttpContext ctx)
+    {
+        var p = await Authenticate(ctx).ConfigureAwait(false);
+        if (string.Equals(p.SubjectId, "anonymous", StringComparison.Ordinal))
+        {
+            return (p, DetailError(401, "authentication required"));
+        }
+
+        return (p, null);
     }
 
     private bool AuthorizeHub(Principal p, string workerId, string capability, out IResult? error)
