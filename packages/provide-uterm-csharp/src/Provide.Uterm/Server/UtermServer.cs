@@ -307,6 +307,8 @@ public sealed partial class UtermServer : IAsyncDisposable
         app.MapPost("/api/graphical-targets", (Delegate)HandleCreateGraphicalTarget);
         app.MapPut("/api/graphical-targets/{targetId}", HandleUpdateGraphicalTarget);
         app.MapDelete("/api/graphical-targets/{targetId}", HandleDeleteGraphicalTarget);
+        
+        MapMcpRoutes(app);
 
         // Browser / worker WebSockets with DLE/STX control channel
         // Path shape matches Python/Go: terminal channel is /term on the worker id.
@@ -766,7 +768,7 @@ public sealed partial class UtermServer : IAsyncDisposable
                 ["hijack_control"] = "ws",
                 ["hijack_step_supported"] = true,
             },
-            ["mcp_supported"] = false,
+            ["mcp_supported"] = true,
             ["vnc_supported"] = true,
             ["resume_supported"] = true,
             ["resume_token"] = resumeToken,
@@ -989,7 +991,7 @@ public sealed partial class UtermServer : IAsyncDisposable
                                 ["resumed"] = true,
                                 ["hijack_control"] = "ws",
                                 ["hijack_step_supported"] = true,
-                                ["mcp_supported"] = false,
+                                ["mcp_supported"] = true,
                                 ["vnc_supported"] = true,
                             }),
                             ct).ConfigureAwait(false);

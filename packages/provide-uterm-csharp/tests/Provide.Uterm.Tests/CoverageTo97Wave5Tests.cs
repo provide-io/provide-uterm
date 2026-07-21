@@ -766,12 +766,14 @@ public class CoverageTo97Wave5Tests
         Assert.Equal(1, Root.Execute(new[] { "proxy", "h", "1", "--transport", "ftp" }, o, e));
         Assert.Equal(0, Root.Execute(new[] { "proxy", "-h" }, o, e));
         Assert.Equal(0, Root.Execute(new[] { "proxy", "127.0.0.1", "23", "--port", FreePort().ToString(), "--once" }, o, e));
-        Assert.Equal(0, Root.Execute(new[] { "listen", "ws://127.0.0.1:9/ws", "--host", "127.0.0.1", "--port", "0", "--once" }, o, e));
-        Assert.Equal(0, Root.Execute(new[] { "listen", "ws://127.0.0.1:9/ws", "--protocol", "ssh", "--host", "127.0.0.1", "--port", "0", "--once" }, o, e));
+        var cL = Root.Execute(new[] { "listen", "ws://127.0.0.1:9/ws", "--host", "127.0.0.1", "--port", FreePort().ToString(), "--once" }, o, e);
+        if (cL != 0) throw new Exception("Listen failed: " + e.ToString());
+        Assert.Equal(0, cL);
+        Assert.Equal(0, Root.Execute(new[] { "listen", "ws://127.0.0.1:9/ws", "--protocol", "ssh", "--host", "127.0.0.1", "--port", FreePort().ToString(), "--once" }, o, e));
         Assert.Equal(0, Root.Execute(new[] { "share", "--command", "true", "--once" }, o, e));
         Assert.Equal(1, Root.Execute(new[] { "tunnel" }, o, e));
         Assert.Equal(1, Root.Execute(new[] { "inspect" }, o, e));
-        Assert.Equal(0, Root.Execute(new[] { "inspect", "--upstream", "http://127.0.0.1:9", "--host", "127.0.0.1", "--port", "0", "--once" }, o, e));
+        Assert.Equal(0, Root.Execute(new[] { "inspect", "--upstream", "http://127.0.0.1:9", "--host", "127.0.0.1", "--port", FreePort().ToString(), "--once" }, o, e));
         Assert.Equal(0, Root.Execute(new[] { "audit", "-h" }, o, e));
         Assert.Equal(0, Root.Execute(new[] { "server", "-h" }, o, e));
         Assert.Equal(0, Root.Execute(new[] { "server", "--host", "127.0.0.1", "--port", FreePort().ToString(), "--once" }, o, e));
