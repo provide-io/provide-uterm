@@ -241,7 +241,12 @@ def http_json(method: str, url: str, *, headers: dict[str, str], body: dict | No
 
 
 def drive_text_demos(base: str, headers: dict[str, str], *, session: str = SHELL_SESSION) -> list[str]:
-    """Inject live text demo activity into a shell session via REST hijack/send."""
+    """Inject live text demo activity into a shell session via REST hijack/send.
+
+    The hosted ``shell`` connector is an in-memory interactive reference
+    (slash commands + plain chat lines) — not a real PTY. Drive it with
+    ``/say`` / plain text so the transcript paints readable demo content.
+    """
     log: list[str] = []
     status, payload = http_json(
         "POST",
@@ -255,24 +260,19 @@ def drive_text_demos(base: str, headers: dict[str, str], *, session: str = SHELL
     hid = str(payload["hijack_id"])
     log.append(f"acquire_{session}={hid}")
     commands = [
-        "clear\r",
-        "echo '════════════════════════════════════════'\r",
-        "echo '  provide-uterm · text-based shell demo'\r",
-        "echo '════════════════════════════════════════'\r",
-        "echo\r",
-        "printf '\\033[1;36m[demo]\\033[0m whoami → ' && whoami\r",
-        "printf '\\033[1;32m[demo]\\033[0m pwd    → ' && pwd\r",
-        "echo\r",
-        "echo -e '\\033[38;5;196mR\\033[38;5;202mA\\033[38;5;208mI\\033[38;5;214mN\\033[38;5;220mB\\033[38;5;226mO\\033[38;5;190mW\\033[0m shell output'\r",
-        "echo\r",
-        "ls -la | head -12\r",
-        "echo\r",
-        "echo -e '\\033[1;35m[demo]\\033[0m date → ' && date\r",
-        "echo -e '\\033[1;33m[demo]\\033[0m uname → ' && uname -a | cut -c1-72\r",
-        "echo\r",
-        "for i in 1 2 3 4 5 6 7 8; do printf '\\033[38;5;%sm█\\033[0m' $((160+i*4)); done; echo\r",
-        "echo\r",
-        "echo '── live session stream ─────────────────'\r",
+        "/clear\r",
+        "/nick demo\r",
+        "/say ════════════════════════════════════════\r",
+        "/say   provide-uterm · text-based shell demo\r",
+        "/say ════════════════════════════════════════\r",
+        "/say [demo] live transcript via hijack/send\r",
+        "/say whoami → demo operator (reference shell)\r",
+        "/say pwd    → hosted connector session\r",
+        "/say RAINBOW shell output · uterm fan-out\r",
+        "/status\r",
+        "/shell\r",
+        "/say ── live session stream ─────────────────\r",
+        "plain chat: nested browser watches this stream\r",
     ]
     for cmd in commands:
         st, body = http_json(
@@ -283,7 +283,7 @@ def drive_text_demos(base: str, headers: dict[str, str], *, session: str = SHELL
         )
         if st >= 400:
             log.append(f"send_err={st} {body!r}")
-        time.sleep(0.15)
+        time.sleep(0.12)
     log.append(f"drove_{session}=ok")
     return log
 
@@ -364,6 +364,78 @@ def main(argv: list[str] | None = None) -> int:
         prove.wait_http(f"{base}/readyz", timeout=60.0)
         lines.append(f"server_ready={base}")
 
+        # auto_start workers connect a beat after /readyz; wait until the
+        # shell session reports connected before hijack/acquire.
+        connected = False
+        for _ in range(80):
+            st, body = http_json("GET", f"{base}/api/sessions/{SHELL_SESSION}", headers=headers)
+            if st == 200 and isinstance(body, dict) and body.get("connected"):
+                connected = True
+                break
+            time.sleep(0.15)
+        lines.append(f"shell_connected={connected}")
+        if not connected:
+            raise RuntimeError(f"session {SHELL_SESSION} never reached connected state")
+
+        # Drive text demos *before* the lab browser attaches so the hub's
+        # last_snapshot already has paint, and so the nested terminal.html
+        # receives an initial control snapshot (not an empty loading state).
+        drive_log = drive_text_demos(base, headers, session=SHELL_SESSION)
+        lines.extend(drive_log)
+        shell_hid: str | None = None
+        for entry in drive_log:
+            # Success lines look like: acquire_provide-shell=<uuid>
+            if entry.startswith(f"acquire_{SHELL_SESSION}=") and "status_" not in entry and " body=" not in entry:
+                shell_hid = entry.split("=", 1)[1].strip()
+                break
+        lines.append(f"shell_lease={shell_hid}")
+        if not shell_hid:
+            raise RuntimeError(f"failed to acquire shell lease: {drive_log}")
+        for cmd in (
+            "/say >>> nested browser is watching this shell via uterm VNC <<<\r",
+            "/say ready for text demos\r",
+        ):
+            http_json(
+                "POST",
+                f"{base}/worker/{SHELL_SESSION}/hijack/{shell_hid}/send",
+                headers=headers,
+                body={"keys": cmd, "timeout_ms": 1200},
+            )
+        time.sleep(0.8)
+        # Assert the shell really painted (REST snapshot) before opening nested UI.
+        snap_ok = False
+        snap_text = ""
+        markers = (
+            "text-based shell demo",
+            "provide-uterm",
+            "RAINBOW",
+            "nested browser is watching",
+            "live session stream",
+        )
+        for _ in range(20):
+            st, snap = http_json(
+                "GET",
+                f"{base}/worker/{SHELL_SESSION}/hijack/{shell_hid}/snapshot",
+                headers=headers,
+            )
+            if st == 200 and isinstance(snap, dict):
+                inner = snap.get("snapshot") if isinstance(snap.get("snapshot"), dict) else snap
+                snap_text = str(
+                    (inner or {}).get("screen")  # type: ignore[union-attr]
+                    or (inner or {}).get("text")  # type: ignore[union-attr]
+                    or snap.get("screen")
+                    or ""
+                )
+                if any(m in snap_text for m in markers):
+                    snap_ok = True
+                    break
+            time.sleep(0.25)
+        lines.append(f"shell_snapshot_ok={snap_ok} len={len(snap_text)}")
+        if not snap_ok:
+            raise RuntimeError(
+                f"shell snapshot missing demo text after drive (len={len(snap_text)} head={snap_text[:200]!r})"
+            )
+
         # Lab Chromium opens the text terminal on *first* launch (no example.com).
         plain_port, tls_port = start_lab_with_demo_url(
             name=LAB,
@@ -389,31 +461,69 @@ def main(argv: list[str] | None = None) -> int:
                 f"(expected terminal.html / provide-shell); args={chrome_args[:400]!r}"
             )
         lines.append("chrome_on_text_demo=ok")
-        # Nested terminal WS attach before key inject.
-        time.sleep(4.0)
+        # Nested terminal: assets + WS + initial snapshot paint.
+        time.sleep(5.0)
 
-        # Drive live text demos into provide-shell while the nested browser watches.
-        drive_log = drive_text_demos(base, headers, session=SHELL_SESSION)
-        lines.extend(drive_log)
-        shell_hid: str | None = None
-        for entry in drive_log:
-            if entry.startswith(f"acquire_{SHELL_SESSION}="):
-                shell_hid = entry.split("=", 1)[1]
-        lines.append(f"shell_lease={shell_hid}")
-        if shell_hid:
-            for cmd in (
-                "echo\r",
-                "echo '>>> nested browser is watching this shell via uterm VNC <<<'\r",
-                "echo\r",
-                "printf '\\033[1;32mready\\033[0m for text demos\\n'\r",
-            ):
-                http_json(
-                    "POST",
-                    f"{base}/worker/{SHELL_SESSION}/hijack/{shell_hid}/send",
-                    headers=headers,
-                    body={"keys": cmd, "timeout_ms": 1200},
-                )
-            time.sleep(1.0)
+        # Prove host-side terminal.html paints (same assets the lab loads).
+        # Do NOT set x-uterm-* as context-wide extra_http_headers: Playwright
+        # attaches them to every request, including CDN xterm.js, and CDNs
+        # reject the CORS preflight. UTERM_TEST_MODE already mints WS admin.
+        from playwright.sync_api import sync_playwright as _sync_pw
+
+        term_url = f"{base}/_terminal/terminal.html?worker_id={SHELL_SESSION}&role=browser"
+        with _sync_pw() as _p:
+            _b = _p.chromium.launch(headless=True)
+            _c = _b.new_context()
+            _pg = _c.new_page()
+            _pg.goto(term_url, wait_until="domcontentloaded", timeout=30_000)
+            _pg.wait_for_function(
+                """() => {
+                  const loading = document.querySelector('[id^="loadingScreen-"]');
+                  if (!loading) return false;
+                  if (loading.style.display !== 'none') return false;
+                  // Prefer real paint: xterm rows or buffer text.
+                  const rows = document.querySelectorAll('.xterm-rows > div');
+                  if (rows.length > 0) {
+                    const t = Array.from(rows).map(r => r.textContent || '').join('\\n');
+                    if (t.trim().length > 20) return true;
+                  }
+                  const term = window.demoTerminal;
+                  if (term && typeof term.getBufferText === 'function') {
+                    const b = term.getBufferText(80) || '';
+                    return b.trim().length > 20;
+                  }
+                  return false;
+                }""",
+                timeout=25_000,
+            )
+            buf = _pg.evaluate(
+                """() => {
+                  const t = window.demoTerminal;
+                  if (t && typeof t.getBufferText === 'function') {
+                    const b = t.getBufferText(80);
+                    if (b && b.trim()) return b;
+                  }
+                  const rows = document.querySelectorAll('.xterm-rows > div');
+                  return Array.from(rows).map(r => r.textContent || '').join('\\n');
+                }"""
+            )
+            lines.append(f"host_terminal_buffer={str(buf)[:240]!r}")
+            buf_s = str(buf)
+            host_markers = (
+                "text-based shell demo",
+                "provide-uterm",
+                "nested browser",
+                "RAINBOW",
+                "live session stream",
+                "Transcript",
+                "Provide Shell Demo",
+                "demo:",
+            )
+            if not buf_s or not any(m in buf_s for m in host_markers):
+                raise RuntimeError(f"host terminal.html did not paint demo text: {buf!r}")
+            lines.append("host_terminal_paint=ok")
+            _c.close()
+            _b.close()
 
         # VNC lease must be owned by test-admin (UTERM_TEST_MODE WS subject).
         st, vnc_lease = http_json(
@@ -466,8 +576,9 @@ def main(argv: list[str] | None = None) -> int:
                 }""",
                 timeout=30_000,
             )
-            # Wait for remote Chromium + terminal paint.
-            page.wait_for_timeout(3500)
+            # Nested Chromium + first-party terminal should already have snapshot
+            # paint; give RFB a moment to push the desktop frame.
+            page.wait_for_timeout(4000)
 
             stop_at = time.time() + max(10.0, float(args.seconds))
             tick = 0
@@ -479,10 +590,7 @@ def main(argv: list[str] | None = None) -> int:
                         f"{base}/worker/{SHELL_SESSION}/hijack/{shell_hid}/send",
                         headers=headers,
                         body={
-                            "keys": (
-                                f"echo -e '\\033[1;36m[tick {tick}]\\033[0m "
-                                f"$(date +%H:%M:%S) · provide-uterm text demo'\r"
-                            ),
+                            "keys": (f"/say [tick {tick}] {time.strftime('%H:%M:%S')} · provide-uterm text demo\r"),
                             "timeout_ms": 1200,
                         },
                     )

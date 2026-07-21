@@ -79,6 +79,8 @@ export class TerminalElement extends LitElement {
   private settings: TerminalSettings = { ...DEFAULTS };
   private resizeObserver: ResizeObserver | null = null;
   private _firstDataWritten = false;
+  /** Bytes received before xterm was constructed (WS can open in connect() before firstUpdated). */
+  private _pendingWrites: string[] = [];
 
   private ws: WebSocket | null = null;
   private reconnectEnabled = false;
@@ -362,9 +364,24 @@ export class TerminalElement extends LitElement {
     this.term.focus();
     this.term.onData((data) => this.handleTerminalInput(data));
 
-    this._firstDataWritten = false;
-    const loading = this.q<HTMLElement>("loadingScreen");
-    loading.style.removeProperty("display");
+    // Flush any WS frames that arrived while xterm was not yet ready. Do not
+    // re-show the loading overlay if we already painted (or buffered) data.
+    if (this._pendingWrites.length > 0 || this._firstDataWritten) {
+      const pending = this._pendingWrites;
+      this._pendingWrites = [];
+      for (const chunk of pending) {
+        this.term.write(chunk);
+      }
+      if (pending.length > 0 || this._firstDataWritten) {
+        this._firstDataWritten = true;
+        const loading = this.q<HTMLElement>("loadingScreen");
+        loading.style.display = "none";
+      }
+    } else {
+      this._firstDataWritten = false;
+      const loading = this.q<HTMLElement>("loadingScreen");
+      loading.style.removeProperty("display");
+    }
 
     this.updateStatus(this.connected);
   }
@@ -388,7 +405,10 @@ export class TerminalElement extends LitElement {
 
   private handleTerminalInput(data: string): void {
     if (!data || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    this.ws.send(data);
+    // Encode as a control-channel data frame (type=input). Plain text without
+    // DLE is wire-identical to encodeDataFrame, but framing keeps mixed
+    // streams correct when keys contain DLE.
+    this.ws.send(encodeWsFrame({ type: "input", data }));
     this.dispatchEvent(new CustomEvent("uterm-data", { detail: data }));
   }
 
@@ -447,6 +467,15 @@ export class TerminalElement extends LitElement {
       if (this.ws !== ws) return;
       this.connected = true;
       this.updateStatus(true);
+      // Parity with uterm-session / browser role: hub may deliver the current
+      // screen only as a control ``snapshot`` (and on connect often already
+      // has one). Request one so a quiet shell still paints and clears the
+      // loading overlay instead of staying on "Initializing…".
+      try {
+        ws.send(encodeWsFrame({ type: "snapshot_req" }));
+      } catch {
+        // Best-effort; reconnect path will retry.
+      }
     };
     ws.onmessage = (event) => {
       const payload = typeof event.data === "string" ? event.data : "";
@@ -462,7 +491,26 @@ export class TerminalElement extends LitElement {
         return;
       }
       for (const frame of frames) {
-        if (frame.type === "data") this.writeData(frame.data);
+        // Data chunks are the common path for live term fan-out (server encodes
+        // type=term as terminal data). Control frames carry hello/hijack_state
+        // and also snapshot (and any type=term still sent as control JSON).
+        if (frame.type === "data") {
+          this.writeData(frame.data);
+          continue;
+        }
+        const msg = frame.control;
+        const mtype = typeof msg.type === "string" ? msg.type : "";
+        if (mtype === "term") {
+          const data = typeof msg.data === "string" ? msg.data : "";
+          if (data) this.writeData(data);
+        } else if (mtype === "snapshot") {
+          const screen = typeof msg.screen === "string" ? msg.screen : "";
+          // Soft reset + home, then paint screen (same as session-element).
+          this.writeData("\x1b[!p\x1b[2J\x1b[H");
+          this.writeData(screen.replace(/\n/g, "\r\n"));
+        }
+        // hello / hijack_state / presence / etc. — intentionally ignored here;
+        // this widget is terminal-only (no chrome).
       }
     };
     ws.onclose = () => {
@@ -498,7 +546,12 @@ export class TerminalElement extends LitElement {
       if (loading) loading.style.display = "none";
       this._firstDataWritten = true;
     }
-    this.term?.write(data);
+    if (this.term === null) {
+      // connect() may open the WS before firstUpdated builds xterm; buffer.
+      this._pendingWrites.push(data);
+      return;
+    }
+    this.term.write(data);
   }
 
   public getBufferText(maxLines = 200): string {
@@ -511,7 +564,7 @@ export class TerminalElement extends LitElement {
       const line = active.getLine(i)?.translateToString(true) ?? "";
       if (line.trim()) lines.push(line);
     }
-    return lines.join("\\n");
+    return lines.join("\n");
   }
 
   public focusTerminal(): void {
