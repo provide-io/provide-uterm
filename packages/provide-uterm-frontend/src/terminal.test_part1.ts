@@ -824,6 +824,61 @@ describe("ProvideTerminal control-channel framing", () => {
     // The fallback path writes the raw payload so the screen doesn't go blank.
     expect(xterm.written.join("")).toContain("\x10X");
   });
+
+  it("requests a snapshot on open (browser-role parity)", async () => {
+    await makeTerminal({ wsUrl: "/ws/browser/w/term" });
+    const ws = getWs();
+    ws.open();
+    const req = ws.sent.find((s) => s.includes("snapshot_req"));
+    expect(req).toBeTruthy();
+    expect(req).toContain("snapshot_req");
+  });
+
+  it("writes control snapshot frames to xterm and clears loading", async () => {
+    const { container } = await makeTerminal({ wsUrl: "/ws/browser/w/term" });
+    const ws = getWs();
+    ws.open();
+    const xterm = getXterm();
+    xterm.written = [];
+
+    const controlJson = JSON.stringify({ type: "snapshot", screen: "line1\nline2" });
+    const lenHex = new TextEncoder().encode(controlJson).byteLength.toString(16).padStart(8, "0");
+    ws.triggerMessage(`\x10\x02${lenHex}:${controlJson}`);
+
+    const joined = xterm.written.join("");
+    expect(joined).toContain("line1\r\nline2");
+    expect(joined).not.toContain('"type"');
+    const loading = container.querySelector<HTMLElement>(`[id^="loadingScreen-"]`)!;
+    expect(loading.style.display).toBe("none");
+  });
+
+  it("writes control term frames to xterm", async () => {
+    await makeTerminal({ wsUrl: "/ws/browser/w/term" });
+    const ws = getWs();
+    ws.open();
+    const xterm = getXterm();
+    xterm.written = [];
+
+    const controlJson = JSON.stringify({ type: "term", data: "from-control-term" });
+    const lenHex = new TextEncoder().encode(controlJson).byteLength.toString(16).padStart(8, "0");
+    ws.triggerMessage(`\x10\x02${lenHex}:${controlJson}`);
+
+    expect(xterm.written.join("")).toBe("from-control-term");
+  });
+
+  it("ignores hello control frames (no xterm bleed)", async () => {
+    await makeTerminal({ wsUrl: "/ws/browser/w/term" });
+    const ws = getWs();
+    ws.open();
+    const xterm = getXterm();
+    xterm.written = [];
+
+    const controlJson = JSON.stringify({ type: "hello", worker_online: true, can_hijack: true });
+    const lenHex = new TextEncoder().encode(controlJson).byteLength.toString(16).padStart(8, "0");
+    ws.triggerMessage(`\x10\x02${lenHex}:${controlJson}`);
+
+    expect(xterm.written.join("")).toBe("");
+  });
 });
 
 describe("ProvideTerminal settings (continued)", () => {

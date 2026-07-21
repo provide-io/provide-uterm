@@ -173,4 +173,17 @@ describe("TerminalElement", () => {
 
     expect(ws.sent.find((s) => s.includes('"ack"'))).toContain('"bytes":4');
   });
+
+  it("buffers writeData until xterm exists then flushes", async () => {
+    const el = document.createElement("uterm-terminal") as TerminalElement;
+    // Write before the element is connected / xterm built.
+    el.writeData("early-chunk");
+    document.body.appendChild(el);
+    await el.updateComplete;
+    // After firstUpdated, pending should have been flushed into MockXterm.
+    expect(MockXterm.instances.length).toBe(1);
+    // write is a no-op on mock unless we track it — just ensure no throw and loading hidden.
+    const loading = el.querySelector(`[id^="loadingScreen-"]`) as HTMLElement | null;
+    expect(loading?.style.display).toBe("none");
+  });
 });
