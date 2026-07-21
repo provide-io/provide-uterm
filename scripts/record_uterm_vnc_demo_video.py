@@ -53,6 +53,17 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
+def _parse_floats(text: str) -> list[float]:
+    """Extract all floats from ffprobe CSV output (tolerates commas/blank lines)."""
+    out: list[float] = []
+    for tok in text.replace(",", " ").split():
+        try:
+            out.append(float(tok))
+        except ValueError:
+            continue
+    return out
+
+
 def _assert_video_not_black(video: Path, *, min_luma: float = 24.0) -> None:
     """Raise if the encoded video's first frames decode to a black/near-black image.
 
@@ -84,7 +95,7 @@ def _assert_video_not_black(video: Path, *, min_luma: float = 24.0) -> None:
         timeout=60,
         check=False,
     )
-    values = [float(v) for v in probe.stdout.split() if v.strip()]
+    values = _parse_floats(probe.stdout)
     if not values:
         raise RuntimeError(f"could not measure luma of {video.name}: {probe.stderr[:400]}")
     peak = max(values)
