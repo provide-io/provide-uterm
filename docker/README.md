@@ -14,6 +14,7 @@ product line.
 | `server-go` | `Dockerfile.go` | **27781** | Go `uterm server` (SPA at `/frontend`) |
 | `server-csharp` | `Dockerfile.csharp` | **27782** | C# `uterm server` (SPA at `/app/frontend`; **no MCP**) |
 | `cf` | `Dockerfile.cf` | **27788** | Cloudflare Worker |
+| `vnc-lab` | `vnc-lab/Dockerfile` | **5900** | Lab-only Xvfb + x11vnc + Chromium (see `docker/vnc-lab/`) |
 
 ```bash
 # All language servers + CF
