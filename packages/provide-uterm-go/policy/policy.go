@@ -18,7 +18,7 @@ const (
 
 // Engine gates privileged input / control ops.
 type Engine interface {
-	CanInject(sessionID, leaseID, principalRole string) error
+	CanInject(sessionID, leaseID, principalID, principalRole string) error
 	CanPerform(op, role string, leaseOwned, sessionActive bool) error
 }
 
@@ -69,7 +69,7 @@ func (p *Strict) CanPerform(op, role string, leaseOwned, sessionActive bool) err
 }
 
 // CanInject is the RFB/human-relay entrypoint (input_inject op).
-func (p *Strict) CanInject(sessionID, leaseID, principalRole string) error {
+func (p *Strict) CanInject(sessionID, leaseID, principalID, principalRole string) error {
 	_ = sessionID
 	return p.CanPerform("input_inject", principalRole, leaseID != "", true)
 }

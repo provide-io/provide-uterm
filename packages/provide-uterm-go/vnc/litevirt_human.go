@@ -38,7 +38,7 @@ func (r *wsReader) Read(p []byte) (n int, err error) {
 // filterRFBInput reads RFB Client-to-Server messages from src.
 // If a message is a KeyEvent (4) or PointerEvent (5), it checks the lease.
 // Allowed messages are written to dst.
-func filterRFBInput(dst io.Writer, src io.Reader, policy PolicyEngine, sessionID, leaseID, principalRole string) error {
+func filterRFBInput(dst io.Writer, src io.Reader, policy PolicyEngine, sessionID, leaseID, principalID, principalRole string) error {
 	// 1. Handshake: Protocol Version (12 bytes)
 	if _, err := io.CopyN(dst, src, 12); err != nil {
 		return err
@@ -110,7 +110,7 @@ func filterRFBInput(dst io.Writer, src io.Reader, policy PolicyEngine, sessionID
 				return err
 			}
 
-			if policy == nil || policy.CanInject(sessionID, leaseID, principalRole) == nil {
+			if policy != nil && policy.CanInject(sessionID, leaseID, principalID, principalRole) == nil {
 				if _, err := dst.Write(msgType[:]); err != nil {
 					return err
 				}
@@ -125,7 +125,7 @@ func filterRFBInput(dst io.Writer, src io.Reader, policy PolicyEngine, sessionID
 				return err
 			}
 
-			if policy == nil || policy.CanInject(sessionID, leaseID, principalRole) == nil {
+			if policy != nil && policy.CanInject(sessionID, leaseID, principalID, principalRole) == nil {
 				if _, err := dst.Write(msgType[:]); err != nil {
 					return err
 				}
@@ -152,7 +152,7 @@ func filterRFBInput(dst io.Writer, src io.Reader, policy PolicyEngine, sessionID
 				}
 			}
 
-			if policy == nil || policy.CanInject(sessionID, leaseID, principalRole) == nil {
+			if policy != nil && policy.CanInject(sessionID, leaseID, principalID, principalRole) == nil {
 				if _, err := dst.Write(msgType[:]); err != nil {
 					return err
 				}
@@ -186,7 +186,7 @@ func (w *grpcWriter) Write(p []byte) (n int, err error) {
 }
 
 // ServeHumanRelay proxies a WebSocket to litevirt ProxyVNC, dropping input if no lease is held.
-func ServeHumanRelay(w http.ResponseWriter, r *http.Request, cc grpc.ClientConnInterface, vmName string, policy PolicyEngine, sessionID, leaseID, principalRole string) {
+func ServeHumanRelay(w http.ResponseWriter, r *http.Request, cc grpc.ClientConnInterface, vmName string, policy PolicyEngine, sessionID, leaseID, principalID, principalRole string) {
 	c, err := websocket.Accept(w, r, nil)
 	if err != nil {
 		slog.Error("websocket accept failed", "error", err)
@@ -229,7 +229,7 @@ func ServeHumanRelay(w http.ResponseWriter, r *http.Request, cc grpc.ClientConnI
 	go func() {
 		src := &wsReader{ctx: ctx, conn: c}
 		dst := &grpcWriter{stream: stream}
-		errCh <- filterRFBInput(dst, src, policy, sessionID, leaseID, principalRole)
+		errCh <- filterRFBInput(dst, src, policy, sessionID, leaseID, principalID, principalRole)
 	}()
 
 	err = <-errCh
