@@ -2,6 +2,11 @@
 
 This matrix defines the backend capability contract consumed by `hijack.js`.
 
+**Security controls that differ by language** (authz webhooks, CF Access, SPA SRI,
+human VNC relay) are documented in
+[`docs/security-language-parity.md`](./security-language-parity.md) — that doc is
+the scope/de-scope source of truth for multi-language security parity.
+
 ## Hijack control
 
 | Capability | FastAPI backend | Cloudflare backend |
@@ -10,6 +15,7 @@ This matrix defines the backend capability contract consumed by `hijack.js`.
 | `hello.hijack_step_supported` | `true` | `true` |
 | `hello.mcp_supported` | `true` | `false` |
 | `hello.vnc_supported` | `false` | `false` |
+| Human VNC relay (browser RFB proxy) | n/a | n/a |
 | WS frame `hijack_request` | supported | rejected (`use_rest_hijack_api`) |
 | WS frame `hijack_release` | supported | rejected (`use_rest_hijack_api`) |
 | WS frame `hijack_step` | supported | rejected (`use_rest_hijack_api`) |

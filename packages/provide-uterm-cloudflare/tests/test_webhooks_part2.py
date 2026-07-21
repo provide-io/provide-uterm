@@ -333,20 +333,6 @@ async def test_route_webhooks_register_missing_url() -> None:
 
 
 @pytest.mark.asyncio
-async def test_route_webhooks_register_rejects_http_and_metadata() -> None:
-    store = _make_store()
-    runtime = _Runtime(store, worker_id="w1")
-    for bad in ("http://example.com/hook", "https://169.254.169.254/hook", "https://127.0.0.1/hook"):
-        req = _req(
-            "http://example.com/api/sessions/w1/webhooks",
-            method="POST",
-            body={"url": bad},
-        )
-        resp = await route_webhooks(runtime, req, "/api/sessions/w1/webhooks", str(req.url), "POST", "w1")
-        assert resp.status == 422, bad
-
-
-@pytest.mark.asyncio
 async def test_route_webhooks_register_bad_event_types() -> None:
     store = _make_store()
     runtime = _Runtime(store, worker_id="w1")

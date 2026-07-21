@@ -47,8 +47,14 @@ case "${mode}" in
     exit 0
     ;;
   ty)
+    # Informational only — never fail the gate. Empty SOFT_PACKAGES must not
+    # trip `set -u` on "${SOFT_PACKAGES[@]}" (bash unbound-variable).
     rc=0
-    for pkg in "${STRICT_PACKAGES[@]}" "${SOFT_PACKAGES[@]}"; do
+    packages=("${STRICT_PACKAGES[@]}")
+    if [ "${#SOFT_PACKAGES[@]}" -gt 0 ]; then
+      packages+=("${SOFT_PACKAGES[@]}")
+    fi
+    for pkg in "${packages[@]}"; do
       echo "::group::ty ${pkg}"
       uv run ty check "${pkg}" || rc=$?
       echo "::endgroup::"

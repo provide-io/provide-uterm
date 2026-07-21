@@ -63,6 +63,12 @@ public sealed class UiConfig
 {
     public string AppPath { get; set; } = "/app";
     public string AssetsPath { get; set; } = "/_terminal";
+    /// <summary>Optional jsDelivr (or other) base for xterm CSS/JS when no frontend dir is baked.</summary>
+    public string? XtermCdn { get; set; }
+    /// <summary>SRI hash for xterm.css (sha384-…); empty disables integrity.</summary>
+    public string? XtermCdnIntegrity { get; set; }
+    public string? FitAddonCdn { get; set; }
+    public string? FitAddonCdnIntegrity { get; set; }
 }
 
 public sealed class RecordingConfig
