@@ -20,13 +20,13 @@ set -euo pipefail
 STRICT_PACKAGES=(
   "packages/provide-uterm/src/"
   "packages/provide-uterm-cloudflare/src/"
-)
-
-SOFT_PACKAGES=(
   "packages/provide-uterm-annotation/src/"
   "packages/provide-uterm-server/src/"
   "packages/provide-uterm-client/src/"
   "packages/provide-uterm-platform/src/"
+)
+
+SOFT_PACKAGES=(
 )
 
 mode="${1:-mypy}"

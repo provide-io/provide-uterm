@@ -14,7 +14,7 @@ def _has_vite_manifest(frontend_root: object) -> bool:
     # Prefer package-data-safe vite-manifest.json (setuptools omits .vite/).
     if (frontend_root / "vite-manifest.json").is_file():  # type: ignore[operator]
         return True
-    return (frontend_root / ".vite" / "manifest.json").is_file()  # type: ignore[operator]
+    return bool((frontend_root / ".vite" / "manifest.json").is_file())  # type: ignore[operator]
 
 
 def _validate_frontend_assets() -> None:
