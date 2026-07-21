@@ -7,25 +7,27 @@ package server
 
 import (
 	"bytes"
+	"context"
+	"crypto/tls"
 	"encoding/base64"
+	"fmt"
 	"image"
 	"image/png"
+	"io"
 	"net"
 	"net/http"
-	"crypto/tls"
-	"io"
-	"context"
-	"fmt"
-	"sync"
-	"google.golang.org/grpc/credentials"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/graphical"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/gui"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/vnc"
 	"google.golang.org/grpc"
-	)
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
+)
 
 // registerBridgeRESTRoutes wires the REST hijack + worker-control routes (the
 // surface the Go client.HijackClient targets). Port of bridge/routes/rest.py +
@@ -378,19 +380,54 @@ func (s *Server) buildLitevirtSession(
 	if err != nil {
 		host = endpoint
 	}
-	ips, err := net.LookupIP(host)
-	if err != nil {
-		detailError(w, http.StatusBadRequest, "failed to resolve endpoint")
+	// Reuse the connector EgressGuard (not an ad-hoc IsPrivate check).
+	// Metadata / cloud-IMDS addresses are ALWAYS blocked; private/loopback/
+	// link-local ranges follow security.block_private_connector_targets so
+	// internal litevirt endpoints remain reachable when that flag is off.
+	guard := s.egress
+	if guard == nil {
+		guard = NewEgressGuard(nil, nil)
+	}
+	blockPrivate := false
+	if s.cfg != nil {
+		blockPrivate = s.cfg.Security.BlockPrivateConnectorTargets
+	}
+	if err := guard.AssertConnectorTargetAllowed(r.Context(), host, blockPrivate); err != nil {
+		detailError(w, http.StatusForbidden, "invalid endpoint: "+err.Error())
 		return nil, nil, nil, false
 	}
-	for _, ip := range ips {
-		if ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() {
-			detailError(w, http.StatusForbidden, "invalid endpoint IP")
+
+	// TLS by default. Plaintext is only allowed for loopback endpoints when
+	// the target config explicitly sets insecure_no_tls=true (local tests /
+	// dev litevirt only — never for remote hosts).
+	var dialOpts grpc.DialOption
+	insecureNoTLS := false
+	if v, ok := target.Config["insecure_no_tls"].(bool); ok {
+		insecureNoTLS = v
+	}
+	if insecureNoTLS {
+		if err := AssertIPAllowed(host, false); err != nil {
+			// host may be a name — resolve and require every IP is loopback.
+			ips, lerr := net.LookupIP(host)
+			if lerr != nil || len(ips) == 0 {
+				detailError(w, http.StatusForbidden, "insecure_no_tls requires resolvable loopback endpoint")
+				return nil, nil, nil, false
+			}
+			for _, ip := range ips {
+				if !ip.IsLoopback() {
+					detailError(w, http.StatusForbidden, "insecure_no_tls only allowed for loopback endpoints")
+					return nil, nil, nil, false
+				}
+			}
+		} else if ip := net.ParseIP(strings.Trim(host, "[]")); ip == nil || !ip.IsLoopback() {
+			detailError(w, http.StatusForbidden, "insecure_no_tls only allowed for loopback endpoints")
 			return nil, nil, nil, false
 		}
+		dialOpts = grpc.WithTransportCredentials(insecure.NewCredentials())
+	} else {
+		dialOpts = grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{}))
 	}
-
-	cc, err := grpc.NewClient(endpoint, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{})))
+	cc, err := grpc.NewClient(endpoint, dialOpts)
 	if err != nil {
 		detailError(w, http.StatusInternalServerError, err.Error())
 		return nil, nil, nil, false
@@ -400,16 +437,36 @@ func (s *Server) buildLitevirtSession(
 	client, err := vnc.NewLitevirtAIClient(ctx, cc, vmName)
 	if err != nil {
 		cancel()
-		cc.Close()
+		_ = cc.Close()
 		detailError(w, http.StatusInternalServerError, err.Error())
 		return nil, nil, nil, false
 	}
+	done := make(chan error, 1)
 	go func() {
-		defer cancel()
-		defer cc.Close()
-		if err := client.RunHandshakeAndLoop(); err != nil {
+		done <- client.RunHandshakeAndLoop()
+	}()
+	// Wait for RFB ServerInit readiness (or early failure) before returning ok.
+	readyCtx, readyCancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer readyCancel()
+	if err := client.WaitReady(readyCtx); err != nil {
+		cancel()
+		_ = cc.Close()
+		// Drain the loop goroutine.
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+		}
+		detailError(w, http.StatusBadGateway, "gui handshake failed: "+err.Error())
+		return nil, nil, nil, false
+	}
+	// Keep the loop running; cancel closes the stream. Connection close is
+	// owned by GraphicalSessionManager via the returned closer.
+	go func() {
+		err := <-done
+		if err != nil {
 			s.logger.Warn("gui loop exited", "error", err)
 		}
+		cancel()
 	}()
 	return client, cc, cancel, true
 }
@@ -439,7 +496,10 @@ func (s *Server) handleHijackGUIScreenshot(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	var buf bytes.Buffer
-	_ = png.Encode(&buf, img)
+	if err := png.Encode(&buf, img); err != nil {
+		bridgeError(w, http.StatusInternalServerError, "screenshot encode failed")
+		return
+	}
 	freshExpires := s.deps.Hub.GetFreshHijackExpiry(workerID, hijackID, hs.LeaseExpiresAt)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":               true,
@@ -457,6 +517,13 @@ func (s *Server) requireGraphicalSession(w http.ResponseWriter, r *http.Request,
 	hs, _ := s.deps.Hub.GetRestSession(r.Context(), workerID, hijackID)
 	if hs == nil {
 		bridgeError(w, http.StatusNotFound, "Invalid or expired hijack session.")
+		return nil, false
+	}
+	// Bind inject to the principal that acquired the lease (AcquiredBy),
+	// not merely a non-empty hijack_id capability or display Owner string.
+	p := principalOf(r)
+	if p == nil || hs.AcquiredBy == nil || *hs.AcquiredBy != p.SubjectID {
+		bridgeError(w, http.StatusForbidden, "hijack lease not owned by caller")
 		return nil, false
 	}
 	st, err := s.deps.Hub.Registry.Require(workerID)
@@ -482,12 +549,15 @@ func (s *Server) handleHijackGUIClick(w http.ResponseWriter, r *http.Request) {
 	button := stringField(body, "button")
 	var mask uint8
 	switch button {
-	case "left":
+	case "left", "":
 		mask = 1
 	case "middle":
 		mask = 2
 	case "right":
 		mask = 4
+	default:
+		detailError(w, http.StatusUnprocessableEntity, "invalid button: must be left, middle, or right")
+		return
 	}
 	if err := sess.InjectPointer(x, y, mask); err != nil {
 		bridgeError(w, http.StatusInternalServerError, err.Error())

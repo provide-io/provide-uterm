@@ -110,13 +110,27 @@ class MemoryUpstream:
 
 
 class ClientHandle:
+    """Per-client receive handle. ``is_attached`` is cleared on detach/session close."""
+
+    __slots__ = ("_closed", "_queue", "client_id", "is_attached", "metadata")
+
     def __init__(self, client_id: str, meta: ClientMetadata, queue: asyncio.Queue[bytes]) -> None:
         self.client_id = client_id
         self.metadata = meta
         self._queue = queue
         self.is_attached = True
+        self._closed = False
+
+    def _mark_detached(self) -> None:
+        self.is_attached = False
+        self._closed = True
+        # Unblock any waiter with empty EOF sentinel.
+        with contextlib.suppress(asyncio.QueueFull):
+            self._queue.put_nowait(b"")
 
     async def receive(self) -> bytes:
+        if self._closed and self._queue.empty():
+            return b""
         return await self._queue.get()
 
 
@@ -145,7 +159,8 @@ class EmbedSession:
         self.services["telnet_policy"] = self._telnet
         self.lifecycle = SessionLifecycle.CREATED
         self._upstream: UpstreamPipe | None = None
-        self._clients: dict[str, tuple[ClientMetadata, asyncio.Queue[bytes]]] = {}
+        # client_id → (meta, queue, handle)
+        self._clients: dict[str, tuple[ClientMetadata, asyncio.Queue[bytes], ClientHandle]] = {}
         self._deferred: list[_Deferred] = []
         self._lock = asyncio.Lock()
         self._reader_task: asyncio.Task[None] | None = None
@@ -224,9 +239,21 @@ class EmbedSession:
                 raise RuntimeError(f"client already attached: {meta.client_id}")
             cap = max(1, meta.queue_capacity)
             q: asyncio.Queue[bytes] = asyncio.Queue(maxsize=cap)
-            self._clients[meta.client_id] = (meta, q)
-            self._set_life(SessionLifecycle.CLIENT_ATTACHED, meta.client_id)
-            return ClientHandle(meta.client_id, meta, q)
+            handle = ClientHandle(meta.client_id, meta, q)
+            self._clients[meta.client_id] = (meta, q, handle)
+            # CLIENT_ATTACHED is an event detail, not a durable phase — keep CONNECTED.
+            for cb in self._on_life:
+                cb(SessionLifecycle.CLIENT_ATTACHED, meta.client_id)
+            return handle
+
+    async def detach_client(self, client_id: str) -> None:
+        """Idempotently detach a client and mark its handle closed."""
+        async with self._lock:
+            slot = self._clients.pop(client_id, None)
+            if slot is None:
+                return
+            _meta, _q, handle = slot
+            handle._mark_detached()
 
     async def send_to_upstream(self, data: bytes) -> None:
         payload = bytes(data)
@@ -264,7 +291,10 @@ class EmbedSession:
             self._reader_task = None
             old_up = self._upstream
             self._upstream = None
+            handles = [slot[2] for slot in self._clients.values()]
             self._clients.clear()
+        for handle in handles:
+            handle._mark_detached()
         if old_task is not None:
             old_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -357,13 +387,15 @@ class EmbedSession:
 
     def _deliver(self, data: bytes, filter_: ClientFilter) -> None:
         drop: list[str] = []
-        for cid, (meta, q) in list(self._clients.items()):
+        for cid, (meta, q, _handle) in list(self._clients.items()):
             if not filter_.matches(meta):
                 continue
             if not self._try_enqueue(meta, q, data) and meta.backpressure is BackpressurePolicy.DISCONNECT:
                 drop.append(cid)
         for cid in drop:
-            self._clients.pop(cid, None)
+            slot = self._clients.pop(cid, None)
+            if slot is not None:
+                slot[2]._mark_detached()
 
     @staticmethod
     def _try_enqueue(meta: ClientMetadata, q: asyncio.Queue[bytes], data: bytes) -> bool:

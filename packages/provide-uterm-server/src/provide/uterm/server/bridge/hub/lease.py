@@ -314,7 +314,13 @@ class HijackLeaseManager:
                 st = self._registry._workers.get(worker_id)
                 if st is None or st.worker_ws is None:
                     return False, "no_worker"
-                if self._hub.is_dashboard_hijack_active(st) or self._hub.has_valid_rest_lease(st):
+                # hijack_pending: REST two-phase reserve — treat as already taken
+                # so dashboard WS cannot dual-own during the pause I/O window.
+                if (
+                    self._hub.is_dashboard_hijack_active(st)
+                    or self._hub.has_valid_rest_lease(st)
+                    or st.hijack_pending is not None
+                ):
                     return False, "already_hijacked"
                 ttl = self._dashboard_hijack_lease_s
                 st.hijack_owner = ws

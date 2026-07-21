@@ -140,8 +140,8 @@ async def test_resolve_principal_id_valid_token() -> None:
     assert result == "alice"
 
 
-async def test_resolve_principal_id_cf_access_email_header() -> None:
-    """CF Access authenticated-user-email header resolves to the user's email."""
+async def test_resolve_principal_id_cf_access_email_header_ignored() -> None:
+    """Unsigned CF Access email header must not set principal id (no JWT)."""
     req = SimpleNamespace(
         headers=SimpleNamespace(
             get=lambda k, d=None: "alice@example.com" if k.lower() == "cf-access-authenticated-user-email" else d
@@ -150,4 +150,4 @@ async def test_resolve_principal_id_cf_access_email_header() -> None:
 
     result = await _resolve_principal_id(req, _jwt_config())
 
-    assert result == "alice@example.com"
+    assert result == "anonymous"

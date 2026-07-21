@@ -74,7 +74,7 @@ func TestFilterRFBInput_Basic(t *testing.T) {
 	in := bytes.NewBuffer([]byte("RFB 003.008\n")) // Handshake version
 	out := &bytes.Buffer{}
 
-	_ = filterRFBInput(out, in, nil, "s1", "l1", "admin")
+	_ = filterRFBInput(out, in, nil, "s1", "l1", "p1", "admin")
 
 	w := &grpcWriter{stream: &mockStream{}}
 	w.Write([]byte("test"))
@@ -84,14 +84,14 @@ func TestLitevirtAIClient_ErrorPaths(t *testing.T) {
 	// this panics inside grpc, catch it or skip
 	// _, err := NewLitevirtAIClient(context.Background(), nil, "vm1")
 
-	client := &LitevirtAIClient{stream: &mockStream{recvErr: io.EOF}}
+	client := &LitevirtAIClient{stream: &mockStream{recvErr: io.EOF}, ready: make(chan struct{})}
 	_ = client.RunHandshakeAndLoop()
 }
 
 func TestServeHumanRelay_Errors(t *testing.T) {
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("GET", "/", nil)
-	ServeHumanRelay(w, r, nil, "vm1", nil, "s1", "l1", "admin")
+	ServeHumanRelay(w, r, nil, "vm1", nil, "s1", "l1", "p1", "admin")
 }
 
 func TestFilterRFBInput_More(t *testing.T) {
@@ -118,6 +118,6 @@ func TestFilterRFBInput_More(t *testing.T) {
 		in.Write(payload)
 		
 		out := &bytes.Buffer{}
-		_ = filterRFBInput(out, in, nil, "s1", "l1", "admin")
+		_ = filterRFBInput(out, in, nil, "s1", "l1", "p1", "admin")
 	}
 }

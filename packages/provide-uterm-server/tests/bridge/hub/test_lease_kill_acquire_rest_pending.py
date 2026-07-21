@@ -111,6 +111,27 @@ class TestLockReleasedDuringPause:
         assert st.hijack_pending is None
 
 
+class TestReservationBlocksWsAcquire:
+    """REST hijack_pending must block dashboard WS acquire (dual-ownership race)."""
+
+    async def test_pending_blocks_ws_acquire(self) -> None:
+        mgr, registry, _hub, _ = _make_manager()
+        st, started, release = await _blocking_send_state()
+        registry.put("w1", st)
+
+        task = asyncio.create_task(mgr.try_acquire_rest("w1", owner="op", lease_s=60, hijack_id="h", now=1.0))
+        await asyncio.wait_for(started.wait(), timeout=1.0)
+        assert st.hijack_pending == "h"
+
+        ok, reason = await mgr.try_acquire_ws("w1", AsyncMock())
+        assert ok is False
+        assert reason == "already_hijacked"
+        assert st.hijack_owner is None
+
+        release.set()
+        assert await asyncio.wait_for(task, timeout=1.0) == (True, None)
+
+
 class TestReservationBlocksConcurrent:
     """A live reservation makes a concurrent acquire fail with ``already_hijacked``."""
 

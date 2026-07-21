@@ -113,7 +113,9 @@ func (lm *HijackLeaseManager) TryAcquireWs(workerID string, ws BrowserConn) (boo
 		lm.lock.Unlock()
 		return false, "no_worker"
 	}
-	if lm.hub.IsDashboardHijackActive(st) || lm.hub.HasValidRESTLease(st) {
+	// HijackPending: REST two-phase reserve — treat as already taken so the
+	// dashboard WS cannot dual-own during the pause I/O window.
+	if lm.hub.IsDashboardHijackActive(st) || lm.hub.HasValidRESTLease(st) || st.HijackPending != nil {
 		lm.lock.Unlock()
 		return false, "already_hijacked"
 	}

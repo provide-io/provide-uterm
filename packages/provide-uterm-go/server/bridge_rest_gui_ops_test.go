@@ -51,11 +51,15 @@ func TestHijackGUIClickButtons(t *testing.T) {
 	ts, hid := guiOpsServer(t)
 	hdr := tenantHeaders("admin", "acme")
 	base := "/worker/w1/hijack/" + hid + "/gui/click"
-	for _, btn := range []string{"left", "middle", "right", "other"} {
+	for _, btn := range []string{"left", "middle", "right"} {
 		rec := ts.do("POST", base, `{"x":5,"y":6,"button":"`+btn+`"}`, hdr)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("click %s: %d %s", btn, rec.Code, rec.Body.String())
 		}
+	}
+	// Unknown button must 422 (not silently become a release).
+	if rec := ts.do("POST", base, `{"x":5,"y":6,"button":"other"}`, hdr); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("click other: want 422, got %d %s", rec.Code, rec.Body.String())
 	}
 }
 

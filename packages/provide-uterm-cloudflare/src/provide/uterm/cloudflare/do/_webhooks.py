@@ -46,6 +46,53 @@ if TYPE_CHECKING:
 # Injected at module level in tests to avoid CF-only js.fetch dependency.
 _outbound_fetch: Any = None
 
+# Literal hosts / prefixes rejected as webhook destinations (SSRF floor).
+_BLOCKED_WEBHOOK_HOSTS = frozenset(
+    {
+        "localhost",
+        "metadata.google.internal",
+        "metadata",
+    }
+)
+_BLOCKED_WEBHOOK_PREFIXES = (
+    "127.",
+    "10.",
+    "192.168.",
+    "169.254.",
+    "0.",
+    "100.64.",
+    "100.100.100.",
+)
+
+
+def _validate_webhook_url(url: str) -> str | None:
+    """Return an error message if *url* is not an allowed webhook destination.
+
+    Requires ``https://`` and rejects obvious loopback / link-local / private
+    / cloud-metadata hostnames. Full DNS-based egress is enforced server-side
+    on FastAPI; CF edge applies this lightweight preflight only.
+    """
+    from urllib.parse import urlparse
+
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return "url is not a valid URL"
+    if parsed.scheme.lower() != "https":
+        return "url must use https"
+    host = (parsed.hostname or "").lower().strip("[]")
+    if not host:
+        return "url host is required"
+    if host in _BLOCKED_WEBHOOK_HOSTS:
+        return "url host is not allowed"
+    if host.startswith(_BLOCKED_WEBHOOK_PREFIXES):
+        return "url host is not allowed"
+    # IPv6 link-local / ULA
+    if host == "::1" or host.startswith(("fe80:", "fc", "fd")):
+        return "url host is not allowed"
+    return None
+
+
 # Cap the admin-supplied webhook screen-match pattern. fire_webhooks runs
 # re.search(pattern, screen) on every snapshot; an unbounded or pathological
 # pattern could burn the Durable Object's 50ms CPU budget. Bounding the length
@@ -167,6 +214,10 @@ async def route_webhooks(
         hook_url = payload.get("url")
         if not hook_url or not isinstance(hook_url, str):
             return json_response({"error": "url is required"}, status=422)
+        # HTTPS only; reject obvious SSRF destinations (metadata / loopback / private).
+        url_err = _validate_webhook_url(hook_url)
+        if url_err is not None:
+            return json_response({"error": url_err}, status=422)
         event_types = payload.get("event_types")
         if event_types is not None and not isinstance(event_types, list):
             return json_response({"error": "event_types must be a list"}, status=422)
