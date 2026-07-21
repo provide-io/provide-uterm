@@ -174,12 +174,11 @@ An operator can:
 
 ## Deviations
 
-- Pinned `@novnc/novnc@1.4.0` (1.6 TLA breaks Vite/rolldown bundle).
+- `@novnc/novnc@^1.7.0` (latest; native ESM `core/rfb.js` — 1.6 CJS+TLA failed Vite).
 - RFB streams use unbuffered makefile + flush-per-chunk (buffered stdio stalled ProtocolVersion).
 - ClientCutText: high-bit extended clipboard + drop oversized instead of killing relay.
 - Browser WS auth for header-mode lab uses cookies (JS WebSocket cannot set custom headers).
 
-- Pinned `@novnc/novnc@1.4.0` (1.6 TLA breaks Vite/rolldown bundle).
 - RFB streams use unbuffered makefile + flush-per-chunk (buffered stdio stalled ProtocolVersion).
 - ClientCutText: high-bit extended clipboard + drop oversized instead of killing relay.
 - Browser WS auth for header-mode lab uses cookies (JS WebSocket cannot set custom headers).

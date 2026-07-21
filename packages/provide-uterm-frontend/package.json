@@ -11,7 +11,7 @@
     "fix": "biome check --write --unsafe src/"
   },
   "dependencies": {
-    "@novnc/novnc": "^1.4.0",
+    "@novnc/novnc": "^1.7.0",
     "lit": "^3.3.3"
   },
   "devDependencies": {

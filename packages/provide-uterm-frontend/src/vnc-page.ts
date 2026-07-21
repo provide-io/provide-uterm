@@ -33,7 +33,7 @@ export {
 } from "./vnc-url.js";
 
 /** Import path of the real RFB client (asserted by structural tests). */
-export const NOVNC_RFB_MODULE = "@novnc/novnc/lib/rfb.js";
+export const NOVNC_RFB_MODULE = "@novnc/novnc";
 
 type RfbInstance = {
   viewOnly: boolean;
@@ -70,9 +70,10 @@ export function resolveRfbConstructor(mod: unknown): RfbConstructor {
 
 async function loadRfbClass(): Promise<RfbConstructor> {
   // Real noVNC client — not a local RFB reimplementation.
-  // Dynamic import keeps the heavy CJS graph out of unit-test imports of
-  // pure helpers (see vnc-url.ts); Vite still bundles this into the page chunk.
-  const mod = await import("@novnc/novnc/lib/rfb.js");
+  // Dynamic import keeps the heavy graph out of unit-test imports of pure
+  // helpers (see vnc-url.ts); Vite still bundles this into the page chunk.
+  // Package export is ESM core/rfb.js as of @novnc/novnc@1.7.
+  const mod = await import("@novnc/novnc");
   return resolveRfbConstructor(mod);
 }
 

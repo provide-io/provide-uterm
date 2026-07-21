@@ -59,5 +59,5 @@ def test_source_vnc_page_exists_in_frontend_package() -> None:
     assert url_ts.is_file()
     src = ts.read_text(encoding="utf-8")
     url_src = url_ts.read_text(encoding="utf-8")
-    assert "@novnc/novnc/lib/rfb.js" in src
+    assert "@novnc/novnc" in src
     assert "gui/vnc" in url_src

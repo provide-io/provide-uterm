@@ -52,6 +52,8 @@ def test_vnc_console_assets_and_script_exist() -> None:
     assert (fe / "src" / "vnc-url.ts").is_file()
     pkg = (fe / "package.json").read_text(encoding="utf-8")
     assert "@novnc/novnc" in pkg
+    # Stay on current noVNC major/minor line (1.7+ ESM core export).
+    assert '"@novnc/novnc": "^1.7' in pkg or '"@novnc/novnc": "1.7' in pkg
     # Dial module present in server package.
     dial = _REPO_ROOT / "packages" / "provide-uterm-server" / "src" / "provide" / "uterm" / "server" / "vnc_upstream.py"
     assert dial.is_file()
