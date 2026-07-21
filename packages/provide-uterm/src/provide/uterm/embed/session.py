@@ -174,14 +174,20 @@ class EmbedSession:
 
     async def connect_upstream(self, upstream: UpstreamPipe) -> None:
         async with self._lock:
+            original_state = self.lifecycle
             self._set_life(SessionLifecycle.CONNECTING)
-            await upstream.connect()
+            try:
+                await upstream.connect()
+            except Exception:
+                self._set_life(original_state)
+                raise
             self._upstream = upstream
             self._start_reader()
             self._set_life(SessionLifecycle.CONNECTED)
 
     async def replace_upstream(self, upstream: UpstreamPipe) -> None:
         async with self._lock:
+            original_state = self.lifecycle
             self._set_life(SessionLifecycle.RECONNECTING)
             old_task = self._reader_task
             self._reader_task = None
@@ -195,7 +201,11 @@ class EmbedSession:
                 await old_up.disconnect()
         async with self._lock:
             self._set_life(SessionLifecycle.CONNECTING)
-            await upstream.connect()
+            try:
+                await upstream.connect()
+            except Exception:
+                self._set_life(original_state)
+                raise
             self._upstream = upstream
             self._start_reader()
             self._set_life(SessionLifecycle.CONNECTED)
