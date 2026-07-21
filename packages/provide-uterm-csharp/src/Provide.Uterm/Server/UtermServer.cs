@@ -44,6 +44,14 @@ public sealed class ServerDeps
     public Fanout.Controller? Fanout { get; init; }
     /// <summary>Tunnel token/invite store for /api/tunnels host lifecycle.</summary>
     public Tunnel.MemoryTunnelStore? TunnelStore { get; init; }
+    /// <summary>Connection profiles store.</summary>
+    public IProfileStore? Profiles { get; init; }
+    /// <summary>Server metrics counters.</summary>
+    public ServerMetrics? Metrics { get; init; }
+    /// <summary>API key registry (admin /api/keys).</summary>
+    public ApiKeyStore? ApiKeys { get; init; }
+    /// <summary>Optional path to built frontend assets (SPA hosting).</summary>
+    public string? FrontendDir { get; init; }
 }
 
 /// <summary>
@@ -268,6 +276,10 @@ public sealed partial class UtermServer : IAsyncDisposable
         MapWebhookRoutes(app);
         // Fan-out groups (Go routes_fanout)
         MapFanoutRoutes(app);
+        // Host REST residual: profiles, keys, approvals, metrics, posture, sessions extras
+        MapHostRestRoutes(app);
+        // SPA / static UI (Python frontend-dir parity)
+        MapStaticUi(app);
 
         // Hijack REST surface
         app.MapPost("/worker/{workerId}/hijack/acquire", HandleHijackAcquire);
@@ -1249,6 +1261,15 @@ public static class ServerFactory
         var graphicalTargets = SeedGraphicalTargets(cfg);
         var tunnelStore = new Tunnel.MemoryTunnelStore();
         var webhooks = new WebhookManager(allowLoopbackDestinations: true);
+        var profiles = new InMemoryProfileStore();
+        var metrics = new ServerMetrics();
+        // Default enable API keys for hosted server (tests can disable).
+        if (!cfg.Auth.ApiKeysEnabled)
+        {
+            cfg.Auth.ApiKeysEnabled = true;
+        }
+
+        var frontendDir = Environment.GetEnvironmentVariable("UTERM_FRONTEND_DIR");
         var server = new UtermServer(new ServerDeps
         {
             Hub = hub,
@@ -1262,6 +1283,10 @@ public static class ServerFactory
             Recording = BuildRecordingStore(cfg),
             Webhooks = webhooks,
             TunnelStore = tunnelStore,
+            Profiles = profiles,
+            Metrics = metrics,
+            ApiKeys = apiKeys,
+            FrontendDir = string.IsNullOrWhiteSpace(frontendDir) ? null : frontendDir,
         });
         return (server, devToken);
     }

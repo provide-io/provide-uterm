@@ -44,10 +44,13 @@ public sealed class ApiKeyStore
         int? expiresInS = null,
         string tenantId = "")
     {
-        var tenant = CanonicalTenantId(tenantId);
+        // Empty tenant → system-scoped key (Go Create without tenant).
+        var tenant = string.IsNullOrWhiteSpace(tenantId)
+            ? ""
+            : CanonicalTenantId(tenantId);
         if (tenant is null)
         {
-            throw new ArgumentException("tenant_id is required and must match ^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$");
+            throw new ArgumentException("tenant_id must match ^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$");
         }
 
         var raw = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
@@ -143,7 +146,7 @@ public sealed class ApiKeyStore
     {
         lock (_gate)
         {
-            if (!_keys.TryGetValue(keyId, out var rec)) return false;
+            if (!_keys.TryGetValue(keyId, out var rec) || rec.Revoked) return false;
             rec.Revoked = true;
             return true;
         }

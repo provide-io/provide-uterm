@@ -267,3 +267,41 @@ Wired to existing binary `/tunnel/{id}` WS. `MemoryTunnelStore` gained
 - After control-plane REST, Windows first failed at **97.89%** vs 97.9 floor.
 - Headroom tests landed: Ubuntu **98.06%**, Windows **98.00%** (both green).
 - COVER_THRESHOLD stays **97.9** (Windows headroom 0.10pt < 0.2pt raise rule).
+
+## Docker: one image per language server (2026-07-20)
+
+| Service | Dockerfile | Host port |
+|---------|------------|-----------|
+| `server` (Python) | `docker/Dockerfile.server` | 27780 |
+| `server-go` | `docker/Dockerfile.go` | 27781 |
+| `server-csharp` | `docker/Dockerfile.csharp` | 27782 |
+| `cf` | `docker/Dockerfile.cf` | 27788 |
+
+```bash
+docker compose -f docker/docker-compose.yml up --build
+```
+
+See `docker/README.md`. Packaging ≠ full API parity — residual surface table below.
+
+## Remaining surface gaps (updated this goal)
+
+| Surface | Python | Go | C# |
+|---------|--------|----|-----|
+| Hub / hijack / DeckMux / multi-backend e2e | yes | yes | yes |
+| Binary `/tunnel` + inspect | yes | yes | yes |
+| Session control REST | yes | yes | yes |
+| Webhooks / fan-out REST | yes | yes | yes |
+| Tunnel host REST create/rotate/share | yes | yes | yes |
+| Profiles CRUD + connect | yes | yes | **yes** |
+| API keys | yes | yes | **yes** |
+| Approvals list/approve/reject | yes | yes | **yes** |
+| Metrics + Prometheus | yes | yes | **yes** |
+| Security posture | yes | yes | **yes** |
+| SSE event stream / events/watch | yes | yes | **yes** (watch is short-poll shell) |
+| Session PATCH / bulk DELETE | yes | yes | **yes** |
+| Quick connect `POST /api/connect` | yes | yes | **yes** |
+| SPA UI hosting | yes | yes (`--frontend-dir`) | **yes** (shell or `UTERM_FRONTEND_DIR`) |
+| FastAPI `mount_terminal_ui` embed | yes | de-scope (`uterm proxy`) | de-scope (`uterm proxy`) |
+| MCP / `uterm-mcp` | yes | yes | **never** |
+
+Proof: `ServerIntegrationHostRestTests` + Docker images `provide-uterm-server-{python,go,csharp}`.

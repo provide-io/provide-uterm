@@ -1,0 +1,50 @@
+#
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# provide-uterm — C# language server image (.NET 10)
+#
+# Build (from repo root):
+#   docker build -f docker/Dockerfile.csharp -t provide-uterm-server-csharp .
+#
+# Run (fails closed until a real config is mounted — same as Dockerfile.server):
+#   docker run --rm -p 27782:27780 provide-uterm-server-csharp
+#   docker run --rm -p 27782:27780 \
+#     -v /path/to/my.toml:/config/server.toml:ro \
+#     provide-uterm-server-csharp
+#
+# MCP is not shipped for C# (operator de-scope). Server + CLI only.
+#
+
+ARG SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0
+ARG RUNTIME_IMAGE=mcr.microsoft.com/dotnet/aspnet:10.0
+
+# ---- build -----------------------------------------------------------------
+FROM ${SDK_IMAGE} AS build
+
+WORKDIR /src
+
+COPY packages/provide-uterm-csharp/ ./
+RUN dotnet publish cmd/Uterm/Uterm.csproj -c Release -o /app/publish \
+    /p:UseAppHost=true
+
+# ---- runtime ---------------------------------------------------------------
+FROM ${RUNTIME_IMAGE} AS runtime
+
+WORKDIR /app
+
+RUN groupadd --system uterm \
+    && useradd --system --gid uterm --home-dir /app --shell /usr/sbin/nologin uterm
+
+COPY --from=build /app/publish /app
+COPY docker/server.toml /etc/uterm/server.toml
+
+RUN mkdir -p /etc/uterm \
+    && chown -R uterm:uterm /app /etc/uterm
+
+EXPOSE 27780
+USER uterm
+
+ENV ASPNETCORE_URLS=http://0.0.0.0:27780
+
+ENTRYPOINT ["./uterm", "server", "--config", "/etc/uterm/server.toml", "--host", "0.0.0.0", "--port", "27780"]
