@@ -52,6 +52,14 @@ type AuthConfig struct {
 	JWTRolesClaim          string   `json:"jwt_roles_claim" toml:"jwt_roles_claim"`
 	JWTScopesClaim         string   `json:"jwt_scopes_claim" toml:"jwt_scopes_claim"`
 	JWTTenantClaim         string   `json:"jwt_tenant_claim" toml:"jwt_tenant_claim"`
+	// JwtDefaultRole is applied when a verified JWT carries no known roles
+	// claim (typical for Cloudflare Access JWTs). Filtered to viewer/operator/admin.
+	JwtDefaultRole string `json:"jwt_default_role" toml:"jwt_default_role"`
+	// CfAccessTeamDomain, when set, auto-fills empty JWTJWKSURL and JWTIssuer
+	// with the Cloudflare Access team endpoints for that domain.
+	// Identity is NEVER taken from Cf-Access-Authenticated-User-Email; only
+	// CF-Access-JWT-Assertion / CF_Authorization JWT material is accepted.
+	CfAccessTeamDomain     string   `json:"cf_access_team_domain" toml:"cf_access_team_domain"`
 	WorkerBearerToken      *string  `json:"worker_bearer_token" toml:"worker_bearer_token"`
 	APIKeysEnabled         bool     `json:"api_keys_enabled" toml:"api_keys_enabled"`
 	HeaderModeAcknowledged bool     `json:"header_mode_acknowledged" toml:"header_mode_acknowledged"`

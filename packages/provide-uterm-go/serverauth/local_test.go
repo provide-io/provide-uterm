@@ -256,3 +256,150 @@ func TestFilterKnownRolesCaseFolds(t *testing.T) {
 		}
 	}
 }
+
+// TestJWTFromCFAccessJWTAssertionHeader: CF-Access-JWT-Assertion supplies
+// verifiable JWT material (HS256 test key) and maps subject — never via the
+// unsigned email header.
+func TestJWTFromCFAccessJWTAssertionHeader(t *testing.T) {
+	idp := NewLocalIdentityProvider(jwtAuthConfig(), nil)
+	token := makeToken(t, "cf-user@example.com", []string{"operator"}, 600)
+
+	p, err := idp.Authenticate(context.Background(), &Request{
+		Headers: map[string]string{"CF-Access-JWT-Assertion": token},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.SubjectID != "cf-user@example.com" || !p.Roles.Has("operator") {
+		t.Errorf("CF-Access-JWT-Assertion principal wrong: %+v", p)
+	}
+
+	// Case-insensitive header name (HTTP canonical form).
+	p2, err := idp.Authenticate(context.Background(), &Request{
+		Headers: map[string]string{"cf-access-jwt-assertion": token},
+	})
+	if err != nil || p2.SubjectID != "cf-user@example.com" {
+		t.Errorf("case-insensitive CF-Access-JWT-Assertion: %v %+v", err, p2)
+	}
+}
+
+func TestJWTFromCFAuthorizationCookie(t *testing.T) {
+	idp := NewLocalIdentityProvider(jwtAuthConfig(), nil)
+	token := makeToken(t, "cookie-cf-user", []string{"admin"}, 600)
+
+	p, err := idp.Authenticate(context.Background(), &Request{
+		Cookies: map[string]string{"CF_Authorization": token},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.SubjectID != "cookie-cf-user" || !p.Roles.Has("admin") {
+		t.Errorf("CF_Authorization cookie principal wrong: %+v", p)
+	}
+}
+
+// TestCFAccessEmailHeaderAloneDoesNotAuthenticate: spoofable Access email
+// must not mint identity in jwt mode.
+func TestCFAccessEmailHeaderAloneDoesNotAuthenticate(t *testing.T) {
+	idp := NewLocalIdentityProvider(jwtAuthConfig(), nil)
+	p, err := idp.Authenticate(context.Background(), &Request{
+		Headers: map[string]string{
+			"Cf-Access-Authenticated-User-Email": "spoofed@evil.example",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.SubjectID != "anonymous" {
+		t.Errorf("email header alone authenticated as %q", p.SubjectID)
+	}
+}
+
+func TestJWTTokenSourcePrecedence(t *testing.T) {
+	idp := NewLocalIdentityProvider(jwtAuthConfig(), nil)
+	bearer := makeToken(t, "from-bearer", []string{"admin"}, 600)
+	cfHdr := makeToken(t, "from-cf-hdr", []string{"admin"}, 600)
+	cfCookie := makeToken(t, "from-cf-cookie", []string{"admin"}, 600)
+	appCookie := makeToken(t, "from-app-cookie", []string{"admin"}, 600)
+
+	// Bearer wins over CF-Access-JWT-Assertion.
+	p, err := idp.Authenticate(context.Background(), &Request{
+		Headers: map[string]string{
+			"authorization":           "Bearer " + bearer,
+			"CF-Access-JWT-Assertion": cfHdr,
+		},
+		Cookies: map[string]string{
+			"CF_Authorization": cfCookie,
+			"uterm_token":      appCookie,
+		},
+	})
+	if err != nil || p.SubjectID != "from-bearer" {
+		t.Errorf("bearer precedence: %v %+v", err, p)
+	}
+
+	// CF-Access-JWT-Assertion wins over CF_Authorization cookie.
+	p, err = idp.Authenticate(context.Background(), &Request{
+		Headers: map[string]string{"CF-Access-JWT-Assertion": cfHdr},
+		Cookies: map[string]string{
+			"CF_Authorization": cfCookie,
+			"uterm_token":      appCookie,
+		},
+	})
+	if err != nil || p.SubjectID != "from-cf-hdr" {
+		t.Errorf("CF-Access-JWT-Assertion precedence: %v %+v", err, p)
+	}
+
+	// CF_Authorization wins over Auth.TokenCookie.
+	p, err = idp.Authenticate(context.Background(), &Request{
+		Cookies: map[string]string{
+			"CF_Authorization": cfCookie,
+			"uterm_token":      appCookie,
+		},
+	})
+	if err != nil || p.SubjectID != "from-cf-cookie" {
+		t.Errorf("CF_Authorization precedence: %v %+v", err, p)
+	}
+}
+
+func TestJWTDefaultRoleWhenNoRolesClaim(t *testing.T) {
+	cfg := jwtAuthConfig()
+	cfg.JwtDefaultRole = "operator"
+	idp := NewLocalIdentityProvider(cfg, nil)
+
+	now := time.Now().Unix()
+	// No roles claim — CF Access style.
+	tok, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"sub": "user@example.com", "iss": "provide-uterm", "aud": "provide-uterm-server",
+		"iat": now, "exp": now + 600,
+	}).SignedString([]byte(testKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := idp.PrincipalFromJWTToken(tok)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.SubjectID != "user@example.com" || !p.Roles.Has("operator") || len(p.Roles) != 1 {
+		t.Errorf("jwt_default_role not applied: %+v roles=%v", p, p.Roles.Sorted())
+	}
+
+	// Explicit roles claim still wins — default must not replace claim roles.
+	tok2 := makeToken(t, "u2", []string{"admin"}, 600)
+	p2, err := idp.PrincipalFromJWTToken(tok2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !p2.Roles.Has("admin") || len(p2.Roles) != 1 {
+		t.Errorf("default should not override claim roles: %v", p2.Roles.Sorted())
+	}
+}
+
+func TestJWTDefaultRoleUnknownFallsBackToViewer(t *testing.T) {
+	cfg := jwtAuthConfig()
+	cfg.JwtDefaultRole = "superuser" // not in known roles
+	idp := NewLocalIdentityProvider(cfg, nil)
+	r := idp.rolesFromClaims(jwt.MapClaims{})
+	if !r.Has("viewer") || len(r) != 1 {
+		t.Errorf("unknown jwt_default_role should filter to viewer, got %v", r.Sorted())
+	}
+}

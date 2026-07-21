@@ -85,6 +85,11 @@ public static class ConfigLoader
             if (sec.TryGetValue("default_session_visibility", out var dsv) && dsv is string dss) cfg.Security.DefaultSessionVisibility = dss;
         }
 
+        if (root.TryGetValue("governance", out var govObj) && govObj is TomlTable gov)
+        {
+            ApplyGovernance(cfg.Governance, gov);
+        }
+
         if (root.TryGetValue("sessions", out var sessObj) && sessObj is TomlTableArray sessions)
         {
             cfg.Sessions = new List<SessionDefinition>();
@@ -172,6 +177,48 @@ public static class ConfigLoader
         {
             a.JwtAlgorithms = aarr.OfType<string>().ToList();
         }
+
+        if (t.TryGetValue("jwt_default_role", out var jdr) && jdr is string jdrs) a.JwtDefaultRole = jdrs;
+        if (t.TryGetValue("cf_access_team_domain", out var team) && team is string teams) a.CfAccessTeamDomain = teams;
+        ApplyCfAccessTeamDomain(a);
+    }
+
+    /// <summary>
+    /// Fills empty JwtJwksUrl / JwtIssuer from a Cloudflare Access team domain.
+    /// Explicit operator values always win. Default JwtIssuer "provide-uterm" is
+    /// non-empty, so operators must clear jwt_issuer for team-domain issuer fill
+    /// (same as Go).
+    /// </summary>
+    internal static void ApplyCfAccessTeamDomain(AuthConfig a)
+    {
+        var team = (a.CfAccessTeamDomain ?? "").Trim();
+        if (team.Length == 0) return;
+
+        if (team.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            team = team["https://".Length..];
+        else if (team.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            team = team["http://".Length..];
+
+        var slash = team.IndexOf('/');
+        if (slash >= 0) team = team[..slash];
+        if (team.EndsWith(".cloudflareaccess.com", StringComparison.OrdinalIgnoreCase))
+            team = team[..^".cloudflareaccess.com".Length];
+
+        team = team.Trim();
+        if (team.Length == 0) return;
+
+        if (string.IsNullOrWhiteSpace(a.JwtJwksUrl))
+            a.JwtJwksUrl = $"https://{team}.cloudflareaccess.com/cdn-cgi/access/certs";
+
+        if (string.IsNullOrWhiteSpace(a.JwtIssuer))
+            a.JwtIssuer = $"https://{team}.cloudflareaccess.com";
+    }
+
+    private static void ApplyGovernance(GovernanceConfig g, TomlTable t)
+    {
+        if (t.TryGetValue("authz_webhook_url", out var url) && url is string urls) g.AuthzWebhookUrl = urls;
+        if (t.TryGetValue("authz_webhook_secret", out var secret) && secret is string secrets) g.AuthzWebhookSecret = secrets;
+        if (t.TryGetValue("authz_webhook_timeout_s", out var timeout)) g.AuthzWebhookTimeoutS = ToDouble(timeout, g.AuthzWebhookTimeoutS);
     }
 
     private static int ToInt(object? v, int fallback) => v switch
@@ -180,6 +227,15 @@ public static class ConfigLoader
         int i => i,
         double d => (int)d,
         string s when int.TryParse(s, out var n) => n,
+        _ => fallback,
+    };
+
+    private static double ToDouble(object? v, double fallback) => v switch
+    {
+        double d => d,
+        long l => l,
+        int i => i,
+        string s when double.TryParse(s, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var n) => n,
         _ => fallback,
     };
 }

@@ -62,10 +62,7 @@ func (p *LocalIdentityProvider) Authenticate(_ context.Context, req *Request) (*
 		return nil, fmt.Errorf("unknown auth mode: %q", mode)
 	}
 
-	token := ExtractBearerToken(req)
-	if token == "" {
-		token = req.Cookie(p.Auth.TokenCookie)
-	}
+	token := p.extractJWTToken(req)
 	if token == "" {
 		return AnonymousPrincipal(), nil
 	}
@@ -75,6 +72,32 @@ func (p *LocalIdentityProvider) Authenticate(_ context.Context, req *Request) (*
 		return AnonymousPrincipal(), nil
 	}
 	return principal, nil
+}
+
+// extractJWTToken resolves JWT material for jwt mode. Order (first wins):
+//  1. Authorization: Bearer
+//  2. CF-Access-JWT-Assertion header (Cloudflare Access edge assertion)
+//  3. CF_Authorization cookie (Access browser session)
+//  4. Auth.TokenCookie (app token cookie, default uterm_token)
+//
+// Cf-Access-Authenticated-User-Email is intentionally NOT consulted — it is
+// client-forgeable without Access in front and must never mint identity.
+func (p *LocalIdentityProvider) extractJWTToken(req *Request) string {
+	if token := ExtractBearerToken(req); token != "" {
+		return token
+	}
+	if token := strings.TrimSpace(req.Header("CF-Access-JWT-Assertion")); token != "" {
+		return token
+	}
+	if token := req.Cookie("CF_Authorization"); token != "" {
+		return token
+	}
+	if p.Auth != nil {
+		if token := req.Cookie(p.Auth.TokenCookie); token != "" {
+			return token
+		}
+	}
+	return ""
 }
 
 // ExtractBearerToken ports auth.extract_bearer_token: parse "Bearer <token>"
@@ -234,6 +257,24 @@ func (p *LocalIdentityProvider) rolesFromClaims(claims jwt.MapClaims) Set {
 			if s != "" {
 				pieces = append(pieces, strings.ToLower(s))
 			}
+		}
+	}
+	// Prefer claim roles when any known role is present. When the claim is
+	// empty or only unknown values (typical Cloudflare Access JWTs have no
+	// roles claim), apply JwtDefaultRole if configured, else FilterKnownRoles
+	// falls back to viewer.
+	known := NewSet()
+	for _, r := range pieces {
+		if knownRoles.Has(r) {
+			known[r] = struct{}{}
+		}
+	}
+	if len(known) > 0 {
+		return known
+	}
+	if p.Auth != nil {
+		if dr := strings.TrimSpace(p.Auth.JwtDefaultRole); dr != "" {
+			return FilterKnownRoles([]string{dr})
 		}
 	}
 	return FilterKnownRoles(pieces)
