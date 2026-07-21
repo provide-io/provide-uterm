@@ -305,36 +305,32 @@ button:disabled {
 }
 
 /*
- * RFB stage is a true 16:9 box. scaleViewport then fills it edge-to-edge —
- * no black letterbox bars inside the remote desktop pane.
+ * RFB host: full panel body, no nested frame. noVNC's scaleViewport owns
+ * canvas sizing — do NOT force canvas width/height 100% (that double-scales
+ * and shreds terminal glyph metrics into spaced-out garbage).
  */
 .vnc-screen {
-  /* Prefer full panel width; shrink if height is the limiter. */
-  width: 100%;
-  max-width: 100%;
-  aspect-ratio: 16 / 9;
   flex: 1 1 auto;
   min-height: 0;
-  max-height: 100%;
-  margin: auto 0;
+  width: 100%;
+  margin: 0;
   padding: var(--viewport-inset);
   background: #0b0f14;
   position: relative;
   display: flex;
-  align-items: stretch;
-  justify-content: stretch;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
   border-radius: 0 0 17px 17px;
 }
 
-/* noVNC host + canvas: fill the 16:9 stage completely */
+/* noVNC root fills the host; canvas size stays under RFB control */
 .vnc-screen > div {
   width: 100% !important;
   height: 100% !important;
-  flex: 1 1 auto;
   display: flex !important;
-  align-items: stretch;
-  justify-content: stretch;
+  align-items: center;
+  justify-content: center;
   background: #0b0f14 !important;
   border: 0 !important;
   border-radius: 0 !important;
@@ -345,13 +341,13 @@ button:disabled {
 }
 
 .vnc-screen canvas {
-  display: block !important;
-  width: 100% !important;
-  height: 100% !important;
+  /* Let noVNC set pixel + CSS size via scaleViewport (crisp glyphs). */
+  display: block;
   border: 0 !important;
   border-radius: 0 !important;
   box-shadow: none !important;
   outline: none;
+  image-rendering: auto;
 }
 
 @media (max-width: 1100px) {
