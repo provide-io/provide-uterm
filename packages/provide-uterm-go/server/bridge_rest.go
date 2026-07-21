@@ -8,8 +8,16 @@ package server
 import (
 	"bytes"
 	"encoding/base64"
+	"image"
 	"image/png"
+	"net"
 	"net/http"
+	"crypto/tls"
+	"io"
+	"context"
+	"fmt"
+	"sync"
+	"google.golang.org/grpc/credentials"
 	"strings"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/graphical"
@@ -17,8 +25,7 @@ import (
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/vnc"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-)
+	)
 
 // registerBridgeRESTRoutes wires the REST hijack + worker-control routes (the
 // surface the Go client.HijackClient targets). Port of bridge/routes/rest.py +
@@ -315,13 +322,20 @@ func (s *Server) handleGUIAttach(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session, ready := s.buildGraphicalSession(w, r, target)
+	session, closer, cancel, ready := s.buildGraphicalSession(w, r, target)
 	if !ready {
 		return
 	}
 
 	st := s.deps.Hub.Registry.SetDefault(workerID, hub.NewWorkerTermState())
-	st.GraphicalSession = session
+	var mgr *GraphicalSessionManager
+	if m, ok := st.GraphicalSession.(*GraphicalSessionManager); ok {
+		mgr = m
+	} else {
+		mgr = NewGraphicalSessionManager()
+		st.GraphicalSession = mgr
+	}
+	mgr.Replace(session, closer, cancel)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "target_id": targetID})
 }
 
@@ -331,17 +345,17 @@ func (s *Server) handleGUIAttach(w http.ResponseWriter, r *http.Request) {
 // client — a documented gap mirroring C#'s 501 for litevirt).
 func (s *Server) buildGraphicalSession(
 	w http.ResponseWriter, r *http.Request, target *graphical.Definition,
-) (gui.GraphicalSession, bool) {
+) (gui.GraphicalSession, io.Closer, context.CancelFunc, bool) {
 	protocol := strings.ToLower(strings.TrimSpace(target.Protocol))
 	switch protocol {
 	case graphical.ProtocolMemory:
-		return gui.NewMemoryGraphicalSession(target.Width, target.Height), true
+		return gui.NewMemoryGraphicalSession(target.Width, target.Height), nil, nil, true
 	case graphical.ProtocolLitevirt:
 		return s.buildLitevirtSession(w, r, target)
 	default:
 		// rfb + anything else: unsupported in this port.
 		detailError(w, http.StatusNotImplemented, "graphical protocol not supported: "+protocol)
-		return nil, false
+		return nil, nil, nil, false
 	}
 }
 
@@ -350,7 +364,7 @@ func (s *Server) buildGraphicalSession(
 // config.vm_name) rather than from client-supplied request fields.
 func (s *Server) buildLitevirtSession(
 	w http.ResponseWriter, r *http.Request, target *graphical.Definition,
-) (gui.GraphicalSession, bool) {
+) (gui.GraphicalSession, io.Closer, context.CancelFunc, bool) {
 	endpoint := ""
 	if target.Endpoint != nil {
 		endpoint = *target.Endpoint
@@ -360,22 +374,44 @@ func (s *Server) buildLitevirtSession(
 		vmName = v
 	}
 
-	cc, err := grpc.NewClient(endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	host, _, err := net.SplitHostPort(endpoint)
 	if err != nil {
-		detailError(w, http.StatusInternalServerError, err.Error())
-		return nil, false
+		host = endpoint
 	}
-	client, err := vnc.NewLitevirtAIClient(r.Context(), cc, vmName)
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		detailError(w, http.StatusBadRequest, "failed to resolve endpoint")
+		return nil, nil, nil, false
+	}
+	for _, ip := range ips {
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() {
+			detailError(w, http.StatusForbidden, "invalid endpoint IP")
+			return nil, nil, nil, false
+		}
+	}
+
+	cc, err := grpc.NewClient(endpoint, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{})))
 	if err != nil {
 		detailError(w, http.StatusInternalServerError, err.Error())
-		return nil, false
+		return nil, nil, nil, false
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	client, err := vnc.NewLitevirtAIClient(ctx, cc, vmName)
+	if err != nil {
+		cancel()
+		cc.Close()
+		detailError(w, http.StatusInternalServerError, err.Error())
+		return nil, nil, nil, false
 	}
 	go func() {
+		defer cancel()
+		defer cc.Close()
 		if err := client.RunHandshakeAndLoop(); err != nil {
 			s.logger.Warn("gui loop exited", "error", err)
 		}
 	}()
-	return client, true
+	return client, cc, cancel, true
 }
 
 func (s *Server) handleHijackGUIScreenshot(w http.ResponseWriter, r *http.Request) {
@@ -453,8 +489,14 @@ func (s *Server) handleHijackGUIClick(w http.ResponseWriter, r *http.Request) {
 	case "right":
 		mask = 4
 	}
-	_ = sess.InjectPointer(x, y, mask)
-	_ = sess.InjectPointer(x, y, 0)
+	if err := sess.InjectPointer(x, y, mask); err != nil {
+		bridgeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := sess.InjectPointer(x, y, 0); err != nil {
+		bridgeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
@@ -471,8 +513,14 @@ func (s *Server) handleHijackGUIType(w http.ResponseWriter, r *http.Request) {
 	text := stringField(body, "text")
 	for _, r := range text {
 		// Basic uint32 translation for standard ASCII
-		_ = sess.InjectKey(uint32(r), true)
-		_ = sess.InjectKey(uint32(r), false)
+		if err := sess.InjectKey(uint32(r), true); err != nil {
+			bridgeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if err := sess.InjectKey(uint32(r), false); err != nil {
+			bridgeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
@@ -509,8 +557,14 @@ func (s *Server) handleHijackGUIKey(w http.ResponseWriter, r *http.Request) {
 	default:
 		sym = 0
 	}
-	_ = sess.InjectKey(sym, true)
-	_ = sess.InjectKey(sym, false)
+	if err := sess.InjectKey(sym, true); err != nil {
+		bridgeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := sess.InjectKey(sym, false); err != nil {
+		bridgeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
@@ -528,8 +582,91 @@ func (s *Server) handleHijackGUIDrag(w http.ResponseWriter, r *http.Request) {
 	startY := intField(body, "start_y", 0)
 	endX := intField(body, "end_x", 0)
 	endY := intField(body, "end_y", 0)
-	_ = sess.InjectPointer(startX, startY, 1)
-	_ = sess.InjectPointer(endX, endY, 1)
-	_ = sess.InjectPointer(endX, endY, 0)
+	if err := sess.InjectPointer(startX, startY, 1); err != nil {
+		bridgeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := sess.InjectPointer(endX, endY, 1); err != nil {
+		bridgeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := sess.InjectPointer(endX, endY, 0); err != nil {
+		bridgeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+type GraphicalSessionManager struct {
+	mu     sync.RWMutex
+	sess   gui.GraphicalSession
+	closer io.Closer
+	cancel context.CancelFunc
+}
+
+func NewGraphicalSessionManager() *GraphicalSessionManager {
+	return &GraphicalSessionManager{}
+}
+
+func (m *GraphicalSessionManager) Attach(sess gui.GraphicalSession, closer io.Closer, cancel context.CancelFunc) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.sess = sess
+	m.closer = closer
+	m.cancel = cancel
+}
+
+func (m *GraphicalSessionManager) Replace(sess gui.GraphicalSession, closer io.Closer, cancel context.CancelFunc) {
+	m.Close()
+	m.Attach(sess, closer, cancel)
+}
+
+func (m *GraphicalSessionManager) Detach() {
+	m.Close()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.sess = nil
+	m.closer = nil
+	m.cancel = nil
+}
+
+func (m *GraphicalSessionManager) Close() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.cancel != nil {
+		m.cancel()
+		m.cancel = nil
+	}
+	if m.closer != nil {
+		m.closer.Close()
+		m.closer = nil
+	}
+	return nil
+}
+
+func (m *GraphicalSessionManager) Screenshot() (image.Image, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.sess == nil {
+		return nil, fmt.Errorf("no graphical session")
+	}
+	return m.sess.Screenshot()
+}
+
+func (m *GraphicalSessionManager) InjectPointer(x, y int, buttonMask uint8) error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.sess == nil {
+		return fmt.Errorf("no graphical session")
+	}
+	return m.sess.InjectPointer(x, y, buttonMask)
+}
+
+func (m *GraphicalSessionManager) InjectKey(keySym uint32, down bool) error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.sess == nil {
+		return fmt.Errorf("no graphical session")
+	}
+	return m.sess.InjectKey(keySym, down)
 }

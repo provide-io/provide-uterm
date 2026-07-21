@@ -21,3 +21,7 @@ func TestGraphicalSessionInterface(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func (m *mockSession) Close() error {
+	return nil
+}

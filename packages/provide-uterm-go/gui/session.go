@@ -12,4 +12,5 @@ type GraphicalSession interface {
 	// InjectKey sends a key press or release event.
 	// keySym is the X11 keysym value of the key. down is true for press, false for release.
 	InjectKey(keySym uint32, down bool) error
+	Close() error
 }
