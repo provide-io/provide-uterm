@@ -168,11 +168,14 @@ describe("VncConsolePage", () => {
   it("source imports real noVNC RFB module path (not a reimplementation)", () => {
     const src = readFileSync(join(_here, "vnc-page.ts"), "utf8");
     expect(src).toContain(NOVNC_RFB_MODULE);
-    expect(src).toMatch(/import\(.*@novnc\/novnc\/lib\/rfb\.js/);
+    expect(src).toMatch(/import\(["']@novnc\/novnc["']\)/);
     const pkg = JSON.parse(readFileSync(join(_here, "..", "package.json"), "utf8")) as {
       dependencies?: Record<string, string>;
     };
     expect(pkg.dependencies?.["@novnc/novnc"]).toBeTruthy();
+    // Prefer latest line (1.7+ ships native ESM core/).
+    const ver = pkg.dependencies?.["@novnc/novnc"] ?? "";
+    expect(ver).toMatch(/\^?1\.(?:[7-9]|\d{2,})\./);
   });
 
   it("resolveRfbConstructor unwraps nested default exports", () => {
