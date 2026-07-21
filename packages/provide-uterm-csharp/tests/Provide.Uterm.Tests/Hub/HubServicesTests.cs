@@ -167,6 +167,24 @@ public class HubServicesTests
     }
 
     [Fact]
+    public void Lease_TryAcquireWs_BlockedByHijackPending()
+    {
+        // REST two-phase reserve must block dashboard WS dual-ownership (H1).
+        var clock = new ManualClock(1);
+        clock.SetMonotonic(1);
+        var hub = NewHub(clock);
+        var worker = new FakeWorker();
+        hub.Conn.RegisterWorker("w1", worker);
+        var st = hub.Registry.Get("w1")!;
+        st.HijackPending = "pending-h1";
+
+        var (ok, reason) = hub.Lease.TryAcquireWs("w1", new object());
+        Assert.False(ok);
+        Assert.Equal("already_hijacked", reason);
+        Assert.Null(st.HijackOwner);
+    }
+
+    [Fact]
     public void Conn_DeregisterWorker_ClearsHijackOwner()
     {
         // Worker crash must drop dashboard hijack so reconnect is not "Hijacked (you)".

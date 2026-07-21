@@ -443,8 +443,37 @@ func (s *Session) AttachClient(meta ClientMetadata) (*ClientHandle, error) {
 	}
 	slot := &clientSlot{meta: meta, ch: make(chan []byte, capN), cap: capN}
 	s.clients[meta.ClientID] = slot
-	s.setLife(LifecycleClientAttached, meta.ClientID)
-	return &ClientHandle{slot: slot, id: meta.ClientID}, nil
+	// Event detail only — durable phase stays Connected when upstream is live.
+	if s.onLife != nil {
+		s.onLife(LifecycleClientAttached, meta.ClientID)
+	}
+	h := &ClientHandle{slot: slot, id: meta.ClientID}
+	h.attached.Store(true)
+	return h, nil
+}
+
+// DetachClient idempotently removes a client and marks its handle closed.
+func (s *Session) DetachClient(clientID string) {
+	s.mu.Lock()
+	slot, ok := s.clients[clientID]
+	if ok {
+		delete(s.clients, clientID)
+	}
+	s.mu.Unlock()
+	if !ok {
+		return
+	}
+	slot.closed.Store(true)
+	// Non-blocking drain wake: close channel so Receive returns client closed.
+	// Only close once.
+	select {
+	default:
+		// may already be closed by session Close
+		func() {
+			defer func() { _ = recover() }()
+			close(slot.ch)
+		}()
+	}
 }
 
 // SendToUpstream runs client→upstream pipeline (host/script origin).
@@ -675,8 +704,9 @@ func (c *clientSlot) tryEnqueue(data []byte) bool {
 
 // ClientHandle is an in-process client attachment.
 type ClientHandle struct {
-	slot *clientSlot
-	id   string
+	slot     *clientSlot
+	id       string
+	attached atomic.Bool
 }
 
 // ClientID returns the id.
@@ -685,13 +715,28 @@ func (h *ClientHandle) ClientID() string { return h.id }
 // Meta returns client metadata.
 func (h *ClientHandle) Meta() ClientMetadata { return h.slot.meta }
 
+// IsAttached reports whether the client is still registered on the session.
+func (h *ClientHandle) IsAttached() bool {
+	return h.attached.Load() && !h.slot.closed.Load()
+}
+
+// markDetached clears the attached flag (called on detach/session close).
+func (h *ClientHandle) markDetached() {
+	h.attached.Store(false)
+	h.slot.closed.Store(true)
+}
+
 // Receive waits for the next fan-out chunk.
 func (h *ClientHandle) Receive(ctx context.Context) ([]byte, error) {
+	if h.slot.closed.Load() || !h.attached.Load() {
+		return nil, errors.New("client closed")
+	}
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case b, ok := <-h.slot.ch:
 		if !ok {
+			h.markDetached()
 			return nil, errors.New("client closed")
 		}
 		return b, nil

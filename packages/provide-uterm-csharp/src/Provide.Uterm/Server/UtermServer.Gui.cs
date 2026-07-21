@@ -157,8 +157,13 @@ public sealed partial class UtermServer
             "left" => 1,
             "middle" => 2,
             "right" => 4,
-            _ => 1,
+            _ => 0,
         };
+        if (mask == 0)
+        {
+            return DetailError(422, "invalid button: must be left, middle, or right");
+        }
+
         sess!.InjectPointer(x, y, mask);
         sess.InjectPointer(x, y, 0);
         return Results.Json(new { ok = true }, JsonOpts);
@@ -224,9 +229,16 @@ public sealed partial class UtermServer
         var p = await Authenticate(ctx).ConfigureAwait(false);
         if (!AuthorizeHub(p, workerId, "session.control.hijack", out err)) return (null, err);
 
-        if (_deps.Hub.GetRestSession(workerId, hijackId) is null)
+        var hs = _deps.Hub.GetRestSession(workerId, hijackId);
+        if (hs is null)
         {
             return (null, BridgeError(404, "Invalid or expired hijack session."));
+        }
+
+        // Principal-bound inject: must match AcquiredBy, not just hijack_id.
+        if (hs.AcquiredBy is not null && hs.AcquiredBy != p.SubjectId)
+        {
+            return (null, BridgeError(403, "hijack lease not owned by caller"));
         }
 
         var gui = _deps.Hub.Registry.Get(workerId)?.GraphicalSession;

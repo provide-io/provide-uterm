@@ -118,3 +118,19 @@ func TestBridgeParamValidation(t *testing.T) {
 		t.Fatalf("snapshot nodef: %d", rec.Code)
 	}
 }
+
+func TestWebhookRegisterViewerDeniedAndMetadataURL(t *testing.T) {
+	ts := newTestServer(t, nil)
+	ts.reg.add("pub", "admin1", "public")
+	// Viewer cannot install webhooks (gatedSession session.control.update).
+	if rec := ts.do("POST", "/api/sessions/pub/webhooks", `{"url":"https://example.com/h"}`, viewerHeaders()); rec.Code != http.StatusForbidden {
+		t.Fatalf("viewer webhook: %d %s", rec.Code, rec.Body.String())
+	}
+	// Admin with metadata URL rejected by ValidateURL / egress.
+	if rec := ts.do("POST", "/api/sessions/pub/webhooks", `{"url":"https://169.254.169.254/h"}`, adminHeaders()); rec.Code != http.StatusUnprocessableEntity && rec.Code != http.StatusForbidden && rec.Code != http.StatusBadRequest {
+		// Accept any non-200 fail-closed; 422 preferred.
+		if rec.Code == http.StatusOK || rec.Code == http.StatusCreated {
+			t.Fatalf("metadata webhook allowed: %d %s", rec.Code, rec.Body.String())
+		}
+	}
+}
