@@ -43,14 +43,13 @@ step "codegen-frames"     uv run python scripts/codegen_frames.py --check
 step "spdx-headers"       uv run python scripts/check_spdx_headers.py
 step "event-literals"     uv run python scripts/check_event_literals.py
 step "bare-json-ws-sends" uv run python scripts/check_bare_json_ws_sends.py
-step "ruff-format"        uv run ruff format --check packages/provide-uterm/src packages/provide-uterm/tests scripts
-step "ruff-check"         uv run ruff check packages/provide-uterm/src packages/provide-uterm/tests scripts
+step "ruff-format"        uv run ruff format --check packages/*/src packages/*/tests scripts
+step "ruff-check"         uv run ruff check packages/*/src packages/*/tests scripts
 step "mypy (strict)"      ci/typecheck.sh mypy
-# mypy-soft and ty are informational: ci/typecheck.sh exits 0 for them, so they
-# surface warnings here without gating — mirroring CI exactly.
-step "mypy (soft)"        ci/typecheck.sh mypy-soft
+# ty is informational: ci/typecheck.sh exits 0 for it, so it
+# surfaces warnings here without gating — mirroring CI exactly.
 step "ty (informational)" ci/typecheck.sh ty
-step "bandit"             uv run bandit -r packages/provide-uterm/src/ -ll
+step "bandit"             uv run bandit -r packages/*/src/ -ll
 step "xenon"              uv run xenon --max-absolute D --max-modules D --max-average A packages/provide-uterm/src/
 step "vulture"            uv run vulture packages/provide-uterm/src/ packages/provide-uterm/tests/ --ignore-names "since,password,kw,exc_type,tb,interval_s,pubkey_blob,username"
 step "pip-audit"          uv run python -m pip_audit --local

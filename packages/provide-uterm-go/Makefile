@@ -28,7 +28,7 @@ GOLANGCI_LINT ?= golangci-lint
 # transports/client/controlplane-sqlite/hub carry only syscall/driver/
 # JSON-encode guards the Python originals also exclude. Whole-module ~98.0%
 # after browser resume/deck + timeseries/swarm strip + no-worker REST paths;
-# cover profile filters litevirt_ai/human + cmd/ (see cover target). Floor
+# cover profile filters cmd/ (see cover target). Floor
 # 97.5 leaves ~0.5pt headroom.
 # Measured ~98.0% after GUI/MCP/embed residual waves; keep 0.2pt dual-runner headroom.
 COVER_THRESHOLD ?= 97.8
@@ -58,13 +58,12 @@ race:
 
 # Cover libraries only. Denominator filters:
 #   - cmd/ mains and demo programs (validated by build-binaries / manual demos)
-#   - litevirt_* VNC glue (live gRPC/WebSocket residual; tracker/rfb are unit-tested)
 cover:
 	@rm -f coverage.raw coverage.out
 	@$(GO) test -coverprofile=coverage.raw -covermode=atomic ./...
 	@test -s coverage.raw || { echo "cover: empty coverage.raw"; exit 1; }
 	@head -1 coverage.raw > coverage.out
-	@grep -E '^(mode:|.*\.go:)' coverage.raw | grep -vE '(/cmd/|litevirt_ai\.go|litevirt_human\.go)' | grep -v '^mode:' >> coverage.out || true
+	@grep -E '^(mode:|.*\.go:)' coverage.raw | grep -vE '(/cmd/)' | grep -v '^mode:' >> coverage.out || true
 	@total=$$($(GO) tool cover -func=coverage.out | awk '/^total:/ {gsub("%","",$$3); print $$3}'); \
 	echo "total coverage: $${total:-0}% (threshold $(COVER_THRESHOLD)%)"; \
 	if [ -z "$$total" ]; then echo "cover: could not parse total"; exit 1; fi; \
