@@ -318,7 +318,8 @@ Canonical cross-language support matrix. **yes** = shipped and exercised;
 
 | Surface | Python | Go | C# |
 |---------|--------|----|-----|
-| SPA / static frontend | yes (baked in image + wheel) | yes (baked `/frontend` + `--frontend-dir`) | yes (baked `/app/frontend` + `UTERM_FRONTEND_DIR`) |
+| SPA / static frontend (auth required) | yes (baked in image + wheel) | yes (baked `/frontend` + `--frontend-dir`) | yes (baked `/app/frontend` + `UTERM_FRONTEND_DIR`; `/app` requires auth) |
+| Unauthenticated `/api/sessions` | 401 | 401 | 401 (`RequireAuthenticated`) |
 | Language-server Docker image | yes `Dockerfile.server` :27780 | yes `Dockerfile.go` :27781 | yes `Dockerfile.csharp` :27782 |
 | Compose service + `/etc/uterm` dir mount | yes `server` | yes `server-go` | yes `server-csharp` |
 | CI docker health smoke | yes (`ci/docker_language_smoke.sh` + `docker-smoke` job) | yes | yes |

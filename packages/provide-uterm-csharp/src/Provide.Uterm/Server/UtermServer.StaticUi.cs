@@ -11,6 +11,7 @@ namespace Provide.Uterm.Server;
 
 /// <summary>
 /// Static SPA/UI hosting for share/inspect/app pages (Python/Go frontend-dir parity).
+/// App HTML routes require authentication (Go <c>authenticated</c> page handlers).
 /// </summary>
 public sealed partial class UtermServer
 {
@@ -21,8 +22,10 @@ public sealed partial class UtermServer
         if (string.IsNullOrWhiteSpace(frontendDir) || !Directory.Exists(frontendDir))
         {
             // Minimal operator shell so inspect/share do not 404 when assets missing.
-            app.MapGet("/app/{**path}", (HttpContext ctx) =>
+            app.MapGet("/app/{**path}", async (HttpContext ctx) =>
             {
+                var (_, err) = await RequireAuthenticated(ctx).ConfigureAwait(false);
+                if (err is not null) return err;
                 var path = ctx.Request.RouteValues["path"]?.ToString() ?? "";
                 var html =
                     "<!DOCTYPE html><html><head><meta charset=\"utf-8\">" +
@@ -40,13 +43,18 @@ public sealed partial class UtermServer
         var assets = string.IsNullOrWhiteSpace(ui.AssetsPath) ? "/ui" : ui.AssetsPath.TrimEnd('/');
         var appPath = string.IsNullOrWhiteSpace(ui.AppPath) ? "/app" : ui.AppPath.TrimEnd('/');
         var provider = new PhysicalFileProvider(Path.GetFullPath(frontendDir));
+        // Static assets under AssetsPath remain public (same as Go static mount pattern);
+        // HTML app routes require a principal.
         app.UseStaticFiles(new StaticFileOptions
         {
             FileProvider = provider,
             RequestPath = assets,
         });
-        app.MapGet(appPath + "/{**path}", (HttpContext ctx) =>
+        app.MapGet(appPath + "/{**path}", async (HttpContext ctx) =>
         {
+            var (_, err) = await RequireAuthenticated(ctx).ConfigureAwait(false);
+            if (err is not null) return err;
+
             var index = Path.Combine(frontendDir, "index.html");
             if (File.Exists(index))
             {

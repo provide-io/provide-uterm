@@ -524,6 +524,25 @@ public sealed class ServerIntegrationHostRestTests
     }
 
     [Fact]
+    public async Task Unauthenticated_Sessions_And_App_Return_401()
+    {
+        var (server, http, _, _) = await StartAsync();
+        await using (server)
+        {
+            // Client without Authorization header
+            using var anon = new HttpClient { BaseAddress = new Uri(server.BaseAddress!) };
+            Assert.Equal(HttpStatusCode.Unauthorized, (await anon.GetAsync("/api/sessions")).StatusCode);
+            Assert.Equal(HttpStatusCode.Unauthorized, (await anon.GetAsync("/app/session/demo")).StatusCode);
+            // Authenticated still works
+            using (http)
+            {
+                Assert.Equal(HttpStatusCode.OK, (await http.GetAsync("/api/sessions")).StatusCode);
+                Assert.Equal(HttpStatusCode.OK, (await http.GetAsync("/app/session/demo")).StatusCode);
+            }
+        }
+    }
+
+    [Fact]
     public async Task Viewer_Forbidden_On_CreateProfile_And_QuickConnect()
     {
         var port = FreePort();
