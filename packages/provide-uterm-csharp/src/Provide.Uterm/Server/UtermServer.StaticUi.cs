@@ -27,14 +27,7 @@ public sealed partial class UtermServer
                 var (_, err) = await RequireAuthenticated(ctx).ConfigureAwait(false);
                 if (err is not null) return err;
                 var path = ctx.Request.RouteValues["path"]?.ToString() ?? "";
-                var html =
-                    "<!DOCTYPE html><html><head><meta charset=\"utf-8\">" +
-                    "<title>provide-uterm</title></head><body>" +
-                    "<div id=\"app-root\" data-uterm-shell=\"1\">provide-uterm app shell</div>" +
-                    "<script id=\"app-bootstrap\" type=\"application/json\">" +
-                    "{\"page_kind\":\"app\",\"path\":" + System.Text.Json.JsonSerializer.Serialize(path) + "}" +
-                    "</script></body></html>";
-                return Results.Content(html, "text/html; charset=utf-8");
+                return Results.Content(BuildFallbackShellHtml(path), "text/html; charset=utf-8");
             });
             return;
         }
@@ -68,9 +61,52 @@ public sealed partial class UtermServer
                 return Results.File(term, "text/html; charset=utf-8");
             }
 
-            return Results.Content(
-                "<!DOCTYPE html><html><body><div id=\"app-root\">uterm</div></body></html>",
-                "text/html; charset=utf-8");
+            return Results.Content(BuildFallbackShellHtml(""), "text/html; charset=utf-8");
         });
+    }
+
+    /// <summary>
+    /// Minimal operator shell when no frontend dir is baked. Optional CDN xterm
+    /// tags include SRI (integrity + crossorigin) when configured — parity with
+    /// Go/Python UI and the CF SPA shell.
+    /// </summary>
+    internal string BuildFallbackShellHtml(string path)
+    {
+        var ui = _deps.Config.Ui;
+        var xtermCss = "";
+        var xtermJs = "";
+        var fitJs = "";
+        if (!string.IsNullOrWhiteSpace(ui.XtermCdn))
+        {
+            var baseUrl = ui.XtermCdn.TrimEnd('/');
+            // CSS SRI only — do not reuse the CSS hash on the JS tag.
+            var cssSri = string.IsNullOrWhiteSpace(ui.XtermCdnIntegrity)
+                ? ""
+                : $" integrity=\"{System.Net.WebUtility.HtmlEncode(ui.XtermCdnIntegrity)}\" crossorigin=\"anonymous\"";
+            xtermCss = $"<link rel=\"stylesheet\" href=\"{System.Net.WebUtility.HtmlEncode(baseUrl)}/css/xterm.css\"{cssSri}>";
+            xtermJs =
+                $"<script src=\"{System.Net.WebUtility.HtmlEncode(baseUrl)}/lib/xterm.js\" crossorigin=\"anonymous\"></script>";
+        }
+
+        if (!string.IsNullOrWhiteSpace(ui.FitAddonCdn))
+        {
+            var fitBase = ui.FitAddonCdn.TrimEnd('/');
+            var fitSri = string.IsNullOrWhiteSpace(ui.FitAddonCdnIntegrity)
+                ? " crossorigin=\"anonymous\""
+                : $" integrity=\"{System.Net.WebUtility.HtmlEncode(ui.FitAddonCdnIntegrity)}\" crossorigin=\"anonymous\"";
+            fitJs = $"<script src=\"{System.Net.WebUtility.HtmlEncode(fitBase)}/lib/addon-fit.js\"{fitSri}></script>";
+        }
+
+        return
+            "<!DOCTYPE html><html><head><meta charset=\"utf-8\">" +
+            "<title>provide-uterm</title>" +
+            xtermCss +
+            xtermJs +
+            fitJs +
+            "</head><body>" +
+            "<div id=\"app-root\" data-uterm-shell=\"1\">provide-uterm app shell</div>" +
+            "<script id=\"app-bootstrap\" type=\"application/json\">" +
+            "{\"page_kind\":\"app\",\"path\":" + System.Text.Json.JsonSerializer.Serialize(path) + "}" +
+            "</script></body></html>";
     }
 }

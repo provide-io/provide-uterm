@@ -6,11 +6,14 @@
 
 from __future__ import annotations
 
+import sqlite3
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 from provide.uterm.cloudflare.api.http_routes._dispatch import route_http
+from provide.uterm.cloudflare.do._webhooks import route_webhooks
+from provide.uterm.cloudflare.state.store import SqliteStateStore
 
 
 class _Resp:
@@ -52,3 +55,27 @@ async def test_public_session_viewer_cannot_register_webhook(monkeypatch: pytest
     resp = await route_http(runtime, req)
     status = getattr(resp, "status", None) or getattr(resp, "status_code", None)
     assert status == 403
+
+
+@pytest.mark.asyncio
+async def test_route_webhooks_register_rejects_http_and_metadata() -> None:
+    """URL filter rejects http/metadata/loopback at registration."""
+    conn = sqlite3.connect(":memory:")
+    store = SqliteStateStore(conn.execute)
+    store.migrate()
+
+    class _Runtime:
+        def __init__(self) -> None:
+            self.store = store
+            self.worker_id = "w1"
+            self.env = None
+
+        async def request_json(self, _req: object) -> dict:
+            return self._body  # type: ignore[attr-defined]
+
+    runtime = _Runtime()
+    for bad in ("http://example.com/hook", "https://169.254.169.254/hook", "https://127.0.0.1/hook"):
+        runtime._body = {"url": bad}
+        req = SimpleNamespace(method="POST", url="https://x/api/sessions/w1/webhooks")
+        resp = await route_webhooks(runtime, req, "/api/sessions/w1/webhooks", str(req.url), "POST", "w1")
+        assert getattr(resp, "status", None) == 422, bad

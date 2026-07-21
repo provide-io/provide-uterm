@@ -149,7 +149,7 @@ func buildServer(ctx context.Context, configPath, host string, port int, fronten
 	srv, err := server.New(server.Deps{
 		Hub:              h,
 		Auth:             auth,
-		Authz:            serverauth.NewAuthorizationService(),
+		Authz:            serverauth.NewAuthorizationServiceFromConfig(cfg),
 		Config:           cfg,
 		Registry:         registry,
 		APIKeys:          apiKeys,
