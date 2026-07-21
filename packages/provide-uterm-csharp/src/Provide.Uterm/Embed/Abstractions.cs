@@ -150,6 +150,8 @@ public interface IUtermSession : IAsyncDisposable
     Task SendToUpstreamAsync(ReadOnlyMemory<byte> data, CancellationToken cancellationToken = default);
     Task SendToClientsAsync(ReadOnlyMemory<byte> data, ClientFilter? filter = null, CancellationToken cancellationToken = default);
     Task<IClientHandle> AttachClientAsync(ClientAttachOptions options, CancellationToken cancellationToken = default);
+    /// <summary>Idempotently detach a client; its handle becomes unattached (EOF on receive).</summary>
+    Task DetachClientAsync(string clientId, CancellationToken cancellationToken = default);
     Task FlushDeferredAsync(CancellationToken cancellationToken = default);
     Task RaiseWireEventAsync(WireEventKind kind, ReadOnlyMemory<byte> data, string detail = "", CancellationToken cancellationToken = default);
     Task MarkNegotiatedAsync(CancellationToken cancellationToken = default);

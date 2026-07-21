@@ -39,7 +39,7 @@ public class GuiRestAndPngTests
     [Fact]
     public async Task Gui_Attach_Screenshot_Input_RequiresLease()
     {
-        var (server, baseUrl, token, graphicalTargets) = await StartServerAsync();
+        var (server, baseUrl, token, graphicalTargets, _) = await StartServerAsync();
         await using (server)
         {
             using var client = HijackClient.WithBearer(baseUrl, token);
@@ -90,7 +90,7 @@ public class GuiRestAndPngTests
     [Fact]
     public async Task Gui_Attach_UsesTargetId()
     {
-        var (server, baseUrl, token, graphicalTargets) = await StartServerAsync();
+        var (server, baseUrl, token, graphicalTargets, _) = await StartServerAsync();
         await using (server)
         {
             using var client = HijackClient.WithBearer(baseUrl, token);
@@ -107,7 +107,7 @@ public class GuiRestAndPngTests
     [Fact]
     public async Task Gui_Attach_Rfb_RequiresTarget_And_FailsClosedOnConnect()
     {
-        var (server, baseUrl, token, graphicalTargets) = await StartServerAsync();
+        var (server, baseUrl, token, graphicalTargets, _) = await StartServerAsync();
         await using (server)
         {
             using var client = HijackClient.WithBearer(baseUrl, token);
@@ -137,7 +137,7 @@ public class GuiRestAndPngTests
     [Fact]
     public async Task Gui_Attach_TargetId_And_InvalidTargetId()
     {
-        var (server, baseUrl, token, graphicalTargets) = await StartServerAsync();
+        var (server, baseUrl, token, graphicalTargets, _) = await StartServerAsync();
         await using (server)
         {
             using var client = HijackClient.WithBearer(baseUrl, token);
@@ -174,7 +174,7 @@ public class GuiRestAndPngTests
     [Fact]
     public async Task Gui_Attach_Rejects_Bad_WorkerId()
     {
-        var (server, baseUrl, token, _) = await StartServerAsync();
+        var (server, baseUrl, token, _, _) = await StartServerAsync();
         await using (server)
         {
             // Raw request: the typed client validates worker_id before sending, so
@@ -188,10 +188,31 @@ public class GuiRestAndPngTests
     }
 
     [Fact]
+    public async Task Gui_Inject_Denied_When_AcquiredBy_Mismatch()
+    {
+        // M1: hijack_id alone is insufficient; AcquiredBy must match principal.
+        var (server, baseUrl, token, graphicalTargets, hub) = await StartServerAsync();
+        await using (server)
+        {
+            using var client = HijackClient.WithBearer(baseUrl, token);
+            var targetId = CreateGraphicalTarget(graphicalTargets);
+            _ = await client.GuiAttachAsync("demo", new Dictionary<string, object?> { ["target_id"] = targetId });
+            var acq = await client.AcquireAsync("demo", owner: "operator", leaseS: 60);
+            var hid = acq["hijack_id"]?.ToString()!;
+            var st = hub.Registry.Get("demo")!;
+            Assert.NotNull(st.HijackSession);
+            st.HijackSession!.AcquiredBy = "someone-else";
+            var denied = await Assert.ThrowsAsync<ApiException>(() =>
+                client.GuiClickAsync("demo", hid, 1, 1));
+            Assert.Equal(403, denied.StatusCode);
+        }
+    }
+
+    [Fact]
     public async Task Gui_Attach_Denied_Without_Attach_Capability()
     {
         // Viewer lacks graphical.session.attach → 403.
-        var (server, baseUrl, token, graphicalTargets) = await StartServerAsync(roles: new[] { "viewer" });
+        var (server, baseUrl, token, graphicalTargets, _) = await StartServerAsync(roles: new[] { "viewer" });
         await using (server)
         {
             using var client = HijackClient.WithBearer(baseUrl, token);
@@ -207,7 +228,7 @@ public class GuiRestAndPngTests
     {
         // Admin with no tenant claim: capability + hijack pass, but tenant scope
         // cannot be resolved → 403 graphical target access denied.
-        var (server, baseUrl, token, graphicalTargets) = await StartServerAsync(tenant: null);
+        var (server, baseUrl, token, graphicalTargets, _) = await StartServerAsync(tenant: null);
         await using (server)
         {
             using var client = HijackClient.WithBearer(baseUrl, token);
@@ -220,7 +241,7 @@ public class GuiRestAndPngTests
     [Fact]
     public async Task Gui_KeyVariants_And_Buttons()
     {
-        var (server, baseUrl, token, graphicalTargets) = await StartServerAsync();
+        var (server, baseUrl, token, graphicalTargets, _) = await StartServerAsync();
         await using (server)
         {
             using var client = HijackClient.WithBearer(baseUrl, token);
@@ -236,7 +257,10 @@ public class GuiRestAndPngTests
 
             await client.GuiClickAsync("demo", hid, 0, 0, "middle");
             await client.GuiClickAsync("demo", hid, 0, 0, "right");
-            await client.GuiClickAsync("demo", hid, 0, 0, "other");
+            // Unknown button must 422 (not silently become left-click).
+            var badBtn = await Assert.ThrowsAsync<ApiException>(() =>
+                client.GuiClickAsync("demo", hid, 0, 0, "other"));
+            Assert.Equal(422, badBtn.StatusCode);
             var shot = await client.GuiScreenshotAsync("demo", hid);
             Assert.True(shot.TryGetValue("ok", out var s) && s is true);
         }
@@ -260,7 +284,7 @@ public class GuiRestAndPngTests
     {
         // litevirt is a canonical protocol, but this C# port ships no litevirt
         // client → attach must fail closed with 501 (not supported).
-        var (server, baseUrl, token, graphicalTargets) = await StartServerAsync();
+        var (server, baseUrl, token, graphicalTargets, _) = await StartServerAsync();
         await using (server)
         {
             using var client = HijackClient.WithBearer(baseUrl, token);
@@ -313,7 +337,7 @@ public class GuiRestAndPngTests
         return targetId;
     }
 
-    private static async Task<(UtermServer Server, string BaseUrl, string Token, InMemoryGraphicalTargetRegistry GraphicalTargets)> StartServerAsync(
+    private static async Task<(UtermServer Server, string BaseUrl, string Token, InMemoryGraphicalTargetRegistry GraphicalTargets, TermHub Hub)> StartServerAsync(
         string[]? roles = null,
         string? tenant = TestTenant)
     {
@@ -362,7 +386,7 @@ public class GuiRestAndPngTests
         });
         server.Build(new[] { $"http://127.0.0.1:{port}" });
         await server.StartAsync();
-        return (server, $"http://127.0.0.1:{port}", token, graphicalTargets);
+        return (server, $"http://127.0.0.1:{port}", token, graphicalTargets, hub);
     }
 
     private sealed class TestEchoWorker : IWorkerWs

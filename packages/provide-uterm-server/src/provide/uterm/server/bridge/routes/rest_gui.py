@@ -179,13 +179,16 @@ def register_gui_routes(hub: TermHub, router: APIRouter) -> None:
         worker_id: str = Path(pattern=r"^[\w\-]+$"),
         hijack_id: str = Path(pattern=r"^[0-9a-f\-]{1,64}$"),
     ) -> Any:
-        gui = await _require_graphical_session(hub, worker_id, hijack_id)
+        gui = await _require_graphical_session(hub, request, worker_id, hijack_id)
         if isinstance(gui, JSONResponse):
             return gui
         body = await _read_json_object(request)
+        button = _str_field(body, "button", "left")
+        if button not in _BUTTON_MASKS:
+            return JSONResponse({"error": "invalid button: must be left, middle, or right"}, status_code=422)
         x = _int_field(body, "x")
         y = _int_field(body, "y")
-        mask = _BUTTON_MASKS.get(_str_field(body, "button", "left"), 1)
+        mask = _BUTTON_MASKS[button]
         gui.inject_pointer(x, y, mask)
         gui.inject_pointer(x, y, 0)
         return {"ok": True}
@@ -196,7 +199,7 @@ def register_gui_routes(hub: TermHub, router: APIRouter) -> None:
         worker_id: str = Path(pattern=r"^[\w\-]+$"),
         hijack_id: str = Path(pattern=r"^[0-9a-f\-]{1,64}$"),
     ) -> Any:
-        gui = await _require_graphical_session(hub, worker_id, hijack_id)
+        gui = await _require_graphical_session(hub, request, worker_id, hijack_id)
         if isinstance(gui, JSONResponse):
             return gui
         body = await _read_json_object(request)
@@ -211,7 +214,7 @@ def register_gui_routes(hub: TermHub, router: APIRouter) -> None:
         worker_id: str = Path(pattern=r"^[\w\-]+$"),
         hijack_id: str = Path(pattern=r"^[0-9a-f\-]{1,64}$"),
     ) -> Any:
-        gui = await _require_graphical_session(hub, worker_id, hijack_id)
+        gui = await _require_graphical_session(hub, request, worker_id, hijack_id)
         if isinstance(gui, JSONResponse):
             return gui
         body = await _read_json_object(request)
@@ -226,7 +229,7 @@ def register_gui_routes(hub: TermHub, router: APIRouter) -> None:
         worker_id: str = Path(pattern=r"^[\w\-]+$"),
         hijack_id: str = Path(pattern=r"^[0-9a-f\-]{1,64}$"),
     ) -> Any:
-        gui = await _require_graphical_session(hub, worker_id, hijack_id)
+        gui = await _require_graphical_session(hub, request, worker_id, hijack_id)
         if isinstance(gui, JSONResponse):
             return gui
         body = await _read_json_object(request)
@@ -246,14 +249,23 @@ def _graphical_session(hub: TermHub, worker_id: str) -> GraphicalSession | None:
     return st.graphical_session if st is not None else None
 
 
-async def _require_graphical_session(hub: TermHub, worker_id: str, hijack_id: str) -> GraphicalSession | JSONResponse:
+async def _require_graphical_session(
+    hub: TermHub, request: Request, worker_id: str, hijack_id: str
+) -> GraphicalSession | JSONResponse:
     """Resolve the graphical session behind an active hijack, else an error response.
 
-    Mirrors the C# ``RequireGraphicalSessionAsync`` helper: a missing hijack
-    lease or an unattached graphical session both yield a 404.
+    Inject is principal-bound: the caller must match ``acquired_by`` on the
+    lease (not merely possess the hijack_id). Missing lease/session → 404;
+    ownership mismatch → 403.
     """
-    if await hub.get_rest_session(worker_id, hijack_id) is None:
+    from provide.uterm.server.bridge.routes.rest import _principal_subject
+
+    hs = await hub.get_rest_session(worker_id, hijack_id)
+    if hs is None:
         return JSONResponse({"error": "Invalid or expired hijack session."}, status_code=404)
+    requester = _principal_subject(request)
+    if hs.acquired_by is not None and requester != hs.acquired_by:
+        return JSONResponse({"error": "hijack lease not owned by caller"}, status_code=403)
     gui = _graphical_session(hub, worker_id)
     if gui is None:
         return JSONResponse({"error": "No graphical session attached."}, status_code=404)

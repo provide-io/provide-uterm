@@ -288,3 +288,38 @@ func TestUpstreamLostAndDupClient(t *testing.T) {
 	}
 	_ = s.Close(context.Background())
 }
+
+func TestDetachClientMarksHandle(t *testing.T) {
+	h := NewHub()
+	s, err := h.CreateSession(Options{SessionID: "detach"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	up := NewMemoryUpstream()
+	if err := s.ConnectUpstream(context.Background(), up); err != nil {
+		t.Fatal(err)
+	}
+	handle, err := s.AttachClient(ClientMetadata{ClientID: "c1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !handle.IsAttached() {
+		t.Fatal("expected attached")
+	}
+	s.DetachClient("c1")
+	if handle.IsAttached() {
+		t.Fatal("expected detached")
+	}
+	// re-attach ok
+	h2, err := s.AttachClient(ClientMetadata{ClientID: "c1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !h2.IsAttached() {
+		t.Fatal("re-attach")
+	}
+	_ = s.Close(context.Background())
+	if h2.IsAttached() {
+		t.Fatal("closed session should detach")
+	}
+}

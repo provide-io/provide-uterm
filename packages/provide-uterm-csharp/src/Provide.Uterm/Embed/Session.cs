@@ -186,12 +186,29 @@ internal sealed class UtermSession : IUtermSession
 
             var slot = new ClientSlot(meta);
             _clients[meta.ClientId] = slot;
-            SetLifecycle(SessionLifecycle.ClientAttached, meta.ClientId);
+            // Event only — do not overwrite durable CONNECTED with ClientAttached.
+            LifecycleChanged?.Invoke(this, new SessionLifecycleEventArgs
+            {
+                Phase = SessionLifecycle.ClientAttached,
+                Detail = meta.ClientId,
+            });
             handle = slot.Handle;
             return Task.CompletedTask;
         }, cancellationToken).ConfigureAwait(false);
         return handle!;
     }
+
+    public Task DetachClientAsync(string clientId, CancellationToken cancellationToken = default) =>
+        WithGateAsync(() =>
+        {
+            if (_clients.Remove(clientId, out var slot))
+            {
+                slot.Handle.MarkDetached();
+                slot.Complete();
+            }
+
+            return Task.CompletedTask;
+        }, cancellationToken);
 
     public Task FlushDeferredAsync(CancellationToken cancellationToken = default) =>
         WithGateAsync(async () =>
@@ -243,6 +260,7 @@ internal sealed class UtermSession : IUtermSession
             _upstream = null;
             foreach (var c in _clients.Values)
             {
+                c.Handle.MarkDetached();
                 c.Complete();
             }
 
@@ -556,18 +574,36 @@ internal sealed class UtermSession : IUtermSession
     private sealed class ClientHandle : IClientHandle
     {
         private readonly ClientSlot _slot;
+        private volatile bool _attached = true;
 
         public ClientHandle(ClientSlot slot) => _slot = slot;
 
         public string ClientId => _slot.Metadata.ClientId;
         public ClientMetadata Metadata => _slot.Metadata;
-        public bool IsAttached => true;
+        public bool IsAttached => _attached;
 
-        public Task<byte[]> ReceiveAsync(CancellationToken cancellationToken = default) =>
-            _slot.ReceiveAsync(cancellationToken);
+        internal void MarkDetached() => _attached = false;
+
+        public async Task<byte[]> ReceiveAsync(CancellationToken cancellationToken = default)
+        {
+            if (!_attached)
+            {
+                return Array.Empty<byte>();
+            }
+
+            try
+            {
+                return await _slot.ReceiveAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (ChannelClosedException)
+            {
+                return Array.Empty<byte>();
+            }
+        }
 
         public ValueTask DisposeAsync()
         {
+            MarkDetached();
             _slot.Complete();
             return ValueTask.CompletedTask;
         }
