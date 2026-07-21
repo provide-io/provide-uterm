@@ -45,12 +45,13 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
         chromium \
-        fluxbox \
         fonts-liberation \
         openssl \
         procps \
+        x11-xserver-utils \
         x11vnc \
         xauth \
+        xdotool \
         xterm \
         xvfb \
     && rm -rf /var/lib/apt/lists/*

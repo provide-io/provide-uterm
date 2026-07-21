@@ -62,8 +62,11 @@ if [[ ! -S "/tmp/.X11-unix/X${DISPLAY_NUM}" ]]; then
   exit 1
 fi
 
-echo "vnc-lab: starting fluxbox"
-fluxbox >/dev/null 2>&1 &
+# No window manager. A WM (fluxbox toolbar / decorations) left black margins
+# around Chromium and made the nested desktop look padded. Chromium is
+# launched fullscreen against raw Xvfb so the RFB framebuffer is edge-to-edge.
+echo "vnc-lab: no window manager (Chromium owns the full framebuffer)"
+xsetroot -solid "#0b0f14" 2>/dev/null || true
 
 # Shared auth args for both listeners.
 AUTH_ARGS=()
@@ -176,12 +179,18 @@ fi
 
 echo "browser_resolved_binary=${CHROME_BIN}" >> "${NAV_LOG}"
 
-# Docker-friendly Chromium under Xvfb:
+# Docker-friendly Chromium under raw Xvfb (no WM):
 # - no sandbox / test-type (suppresses the --no-sandbox infobar)
-# - leave the software rasterizer ENABLED so xterm.js canvas repaints hit X11
-# - no ANGLE/SwiftShader stack (it often fails to damage X for x11vnc)
-# - maximized fills the 1280×720 framebuffer (no floating window letterbox)
+# - software rasterizer left ON so xterm.js canvas repaints hit X11
+# - explicit window size/position + xdotool pin to 0,0 so the nested browser
+#   owns the full RFB framebuffer (no top/side black margins)
 export LIBGL_ALWAYS_SOFTWARE=1
+# Parse geometry WxH for window size (default 1280x720).
+_geom_wh="${GEOMETRY%%x*}"
+_rest="${GEOMETRY#*x}"
+_geom_h="${_rest%%x*}"
+_geom_w="${_geom_wh:-1280}"
+_geom_h="${_geom_h:-720}"
 "${CHROME_BIN}" \
   --no-sandbox \
   --test-type \
@@ -193,8 +202,7 @@ export LIBGL_ALWAYS_SOFTWARE=1
   --disable-session-crashed-bubble \
   --disable-infobars \
   --hide-crash-restore-bubble \
-  --start-maximized \
-  --window-size=1280,720 \
+  --window-size="${_geom_w},${_geom_h}" \
   --window-position=0,0 \
   "${DEMO_URL}" \
   >>"${LOG_DIR}/chromium.log" 2>&1 &
@@ -212,6 +220,36 @@ if ! kill -0 "${CHROME_PID}" 2>/dev/null; then
   exit 1
 fi
 echo "browser_nav_status=running" >> "${NAV_LOG}"
+
+# Pin every Chromium window to the full framebuffer. Without a WM, Chromium
+# often maps with a top offset; xdotool forces edge-to-edge (no black margins).
+_pinned=0
+for _ in $(seq 1 50); do
+  # Class names vary: Chromium / chromium / Google-chrome / Chrome
+  for _pat in Chromium chromium Chrome chrome; do
+    if xdotool search --onlyvisible --class "${_pat}" \
+        windowmove 0 0 windowsize "${_geom_w}" "${_geom_h}" 2>/dev/null; then
+      _pinned=1
+    fi
+  done
+  # Fallback: any window whose name contains Terminal / provide / chrom
+  if [[ "${_pinned}" -eq 0 ]]; then
+    if xdotool search --onlyvisible --name '.*' windowmove 0 0 \
+        windowsize "${_geom_w}" "${_geom_h}" 2>/dev/null; then
+      _pinned=1
+    fi
+  fi
+  if [[ "${_pinned}" -eq 1 ]]; then
+    echo "browser_geometry=${_geom_w}x${_geom_h}+0+0" >> "${NAV_LOG}"
+    break
+  fi
+  sleep 0.15
+done
+if [[ "${_pinned}" -eq 0 ]]; then
+  echo "browser_geometry=unpinned" >> "${NAV_LOG}"
+  echo "vnc-lab: warning: could not xdotool-pin Chromium window" >&2
+fi
+
 echo "vnc-lab: browser navigated to ${DEMO_URL} (pid ${CHROME_PID})"
 
 # Keep the container alive while Xvfb (and children) run.

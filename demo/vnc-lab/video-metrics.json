@@ -7,8 +7,8 @@
   "title": "provide-uterm \u00b7 VNC",
   "screen_pad": "0px",
   "screen_radius": "0px 0px 17px 17px",
-  "demo_url": "http://host.docker.internal:49412/_terminal/terminal.html?worker_id=provide-shell&role=browser",
-  "vnc_page": "http://127.0.0.1:49412/_terminal/vnc.html?worker_id=vnc-shell&hijack_id=918ce49d-17bc-4325-b9dd-817f65ae7d6b&target_id=lab-vnc-plain",
-  "canvas_fp_unique": 8,
-  "canvas_fp_samples": 20
+  "demo_url": "http://host.docker.internal:56308/_terminal/terminal.html?worker_id=provide-shell&role=browser",
+  "vnc_page": "http://127.0.0.1:56308/_terminal/vnc.html?worker_id=vnc-shell&hijack_id=8058d569-2d17-44b7-8842-d53f2084ee92&target_id=lab-vnc-plain",
+  "canvas_fp_unique": 6,
+  "canvas_fp_samples": 7
 }

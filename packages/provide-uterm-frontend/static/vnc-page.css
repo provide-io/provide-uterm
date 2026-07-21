@@ -16,11 +16,11 @@
   --danger: #f97352;
   --warn: #fbbf24;
   --glow: rgba(49, 196, 141, 0.22);
-  /* Outer page inset — keep chrome off the window edge */
-  --page-pad: 20px;
-  --panel-gap: 16px;
-  --sidebar-w: 280px;
-  /* Flush RFB into the panel — nested inset + second rounded border looked broken. */
+  /* Tight page chrome so the desktop panel can claim max space. */
+  --page-pad: 12px;
+  --panel-gap: 12px;
+  --sidebar-w: 250px;
+  /* Flush RFB into the panel — no nested inset / double frame. */
   --viewport-inset: 0px;
 }
 
@@ -45,10 +45,14 @@ body {
 
 .page {
   width: min(1520px, 100%);
+  /* Lock height so the desktop panel can size a true 16:9 RFB stage. */
+  height: calc(100dvh - (var(--page-pad) * 2));
   min-height: calc(100dvh - (var(--page-pad) * 2));
+  max-height: calc(100dvh - (var(--page-pad) * 2));
   display: grid;
   grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
   gap: var(--panel-gap);
+  align-items: stretch;
 }
 
 .panel {
@@ -280,7 +284,7 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 18px;
+  padding: 8px 14px;
   border-bottom: 1px solid var(--border);
   background: rgba(11, 15, 20, 0.55);
   flex: 0 0 auto;
@@ -301,31 +305,36 @@ button:disabled {
 }
 
 /*
- * Desktop host: RFB fills the widget body edge-to-edge under the chrome bar.
- * No second nested border/radius — that read as a broken double frame.
+ * RFB stage is a true 16:9 box. scaleViewport then fills it edge-to-edge —
+ * no black letterbox bars inside the remote desktop pane.
  */
 .vnc-screen {
-  flex: 1;
-  min-height: 0;
+  /* Prefer full panel width; shrink if height is the limiter. */
   width: 100%;
-  margin: 0;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 100%;
+  margin: auto 0;
   padding: var(--viewport-inset);
   background: #0b0f14;
   position: relative;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
+  justify-content: stretch;
   overflow: hidden;
   border-radius: 0 0 17px 17px;
 }
 
-/* noVNC host: fill, no extra chrome */
+/* noVNC host + canvas: fill the 16:9 stage completely */
 .vnc-screen > div {
   width: 100% !important;
   height: 100% !important;
+  flex: 1 1 auto;
   display: flex !important;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
+  justify-content: stretch;
   background: #0b0f14 !important;
   border: 0 !important;
   border-radius: 0 !important;
@@ -336,8 +345,9 @@ button:disabled {
 }
 
 .vnc-screen canvas {
-  /* scaleViewport sizes the canvas; keep it centered without a second frame */
-  display: block;
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
   border: 0 !important;
   border-radius: 0 !important;
   box-shadow: none !important;
@@ -346,16 +356,16 @@ button:disabled {
 
 @media (max-width: 1100px) {
   :root {
-    --page-pad: 16px;
-    --panel-gap: 12px;
-    --sidebar-w: 250px;
+    --page-pad: 10px;
+    --panel-gap: 10px;
+    --sidebar-w: 230px;
   }
 }
 
 @media (max-width: 900px) {
   :root {
-    --page-pad: 12px;
-    --panel-gap: 12px;
+    --page-pad: 10px;
+    --panel-gap: 10px;
   }
 
   .page {
