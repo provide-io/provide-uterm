@@ -5,6 +5,6 @@
   "canvas_w": 1280,
   "canvas_h": 720,
   "title": "provide-uterm \u00b7 VNC",
-  "demo_url": "http://host.docker.internal:65020/_terminal/terminal.html?worker_id=provide-shell&role=browser",
-  "vnc_page": "http://127.0.0.1:65020/_terminal/vnc.html?worker_id=vnc-shell&hijack_id=193cb851-a4ce-48d7-8fd0-54341850c68a&target_id=lab-vnc-plain"
+  "demo_url": "http://host.docker.internal:54460/_terminal/terminal.html?worker_id=provide-shell&role=browser",
+  "vnc_page": "http://127.0.0.1:54460/_terminal/vnc.html?worker_id=vnc-shell&hijack_id=4fc1d106-031a-4e2b-9815-908184107c00&target_id=lab-vnc-plain"
 }
