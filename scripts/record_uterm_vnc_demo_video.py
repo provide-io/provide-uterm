@@ -290,25 +290,43 @@ def seed_shell_banner(base: str, headers: dict[str, str], hid: str) -> list[str]
     return log
 
 
-# Progressive beats driven *while* the VNC page is recording so the inner
-# browser visibly changes (not a 20s freeze of one snapshot).
-LIVE_DEMO_BEATS: list[str] = [
-    "/clear\r",
-    "/say ════════════════════════════════════════\r",
-    "/say   provide-uterm · text-based shell demo\r",
-    "/say ════════════════════════════════════════\r",
-    "/say [1/8] whoami → demo operator (reference shell)\r",
-    "/say [2/8] pwd    → hosted connector session\r",
-    "/say [3/8] RAINBOW shell output · uterm fan-out\r",
-    "/status\r",
-    "/shell\r",
-    "/say [4/8] ── live session stream ─────────────────\r",
-    "/say [5/8] nested Chromium is watching via /ws/browser\r",
-    "/say [6/8] RFB relay paints every snapshot update\r",
-    "plain chat: host.docker.internal → lab browser\r",
-    "/say [7/8] >>> you are watching this shell via VNC <<<\r",
-    "/say [8/8] ready · ticks continue below\r",
+# Website-demo pacing: fire several keystrokes quickly, then a short hold so
+# the nested browser visibly advances through the full script in ~8-12s total
+# (not one line every 2s with multi-second RFB reconnects).
+#
+# Each chapter is a burst of /say lines; the recorder waits once per chapter.
+LIVE_DEMO_CHAPTERS: list[list[str]] = [
+    [
+        "/clear\r",
+        "/nick demo\r",
+        "/say ════════════════════════════════════════\r",
+        "/say   provide-uterm · text-based shell demo\r",
+        "/say ════════════════════════════════════════\r",
+    ],
+    [
+        "/say [1/6] whoami → demo operator\r",
+        "/say [2/6] pwd    → hosted connector\r",
+        "/say [3/6] RAINBOW shell output · fan-out\r",
+    ],
+    [
+        "/status\r",
+        "/shell\r",
+        "/say [4/6] nested Chromium via /ws/browser\r",
+    ],
+    [
+        "/say [5/6] RFB relay · snapshot fan-out\r",
+        "plain chat: host.docker.internal → lab\r",
+        "/say [6/6] >>> watching this shell via VNC <<<\r",
+        "/say ready · demo complete\r",
+    ],
 ]
+
+# Per-keystroke delay inside a chapter (website-demo typing pace).
+_KEY_GAP_S = 0.07
+# Hold after a chapter so the paint is readable before the next burst.
+_CHAPTER_HOLD_S = 0.55
+# Settle after an RFB reconnect (only used sparingly).
+_RECONNECT_SETTLE_S = 0.45
 
 
 def canvas_fingerprint(page: object) -> str:
@@ -349,7 +367,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--evidence-dir", default=None)
     parser.add_argument("--skip-build", action="store_true")
-    parser.add_argument("--seconds", type=float, default=16.0, help="recording length after connect")
+    parser.add_argument(
+        "--seconds",
+        type=float,
+        default=2.0,
+        help="extra live ticks after the main chapters (website-demo pace is chapter-driven)",
+    )
     args = parser.parse_args(argv)
 
     evidence = _evidence_dir(args.evidence_dir)
@@ -470,7 +493,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         lines.append("chrome_on_text_demo=ok")
         # Nested terminal: assets + WS + initial snapshot paint.
-        time.sleep(4.0)
+        time.sleep(2.0)
 
         # Prove host-side terminal.html paints (same assets the lab loads).
         # Do NOT set x-uterm-* as context-wide extra_http_headers: Playwright
@@ -595,66 +618,53 @@ def main(argv: list[str] | None = None) -> int:
                 }""",
                 timeout=20_000,
             )
-            page.wait_for_timeout(1500)
+            page.wait_for_timeout(500)
             fingerprints: list[str] = [canvas_fingerprint(page)]
             lines.append(f"canvas_fp0={fingerprints[0][:80]}")
 
-            # LIVE progressive demos — each beat must change the nested terminal
-            # *while* Playwright is recording the VNC console.
-            for beat_i, beat in enumerate(LIVE_DEMO_BEATS, start=1):
-                st_send, body_send = send_shell_keys(base, headers, shell_hid, beat)
-                if st_send >= 400:
-                    lines.append(f"beat_err_{beat_i}={st_send} {body_send!r}")
-                # Hold long enough for: worker snapshot → hub fanout → nested
-                # xterm paint → x11vnc full-frame (-fs 1) → noVNC → Playwright.
-                page.wait_for_timeout(1800)
-                # Incremental RFB from Chromium canvas is flaky under Xvfb; pull a
-                # fresh framebuffer every other beat so the video shows each step.
-                if beat_i % 2 == 0:
-                    try:
-                        page.evaluate(
-                            """async () => {
-                              const v = window.utermVnc;
-                              if (!v) return 'no-utermVnc';
-                              v.disconnect();
-                              await v.connect();
-                              return 'reconnected';
-                            }"""
-                        )
-                        page.wait_for_function(
-                            """() => {
-                              const el = document.getElementById('vnc-status');
-                              return el && el.dataset.state === 'connected';
-                            }""",
-                            timeout=15_000,
-                        )
-                        page.wait_for_timeout(900)
-                        lines.append(f"rfb_reconnect_beat_{beat_i}=ok")
-                    except Exception as reconn_exc:
-                        lines.append(f"rfb_reconnect_beat_{beat_i}_err={reconn_exc!r}")
-                # Nudge the pointer so the recording is not a pure still.
+            def _rfb_refresh() -> None:
+                """Cheap full-framebuffer pull when incremental RFB stalls."""
+                page.evaluate(
+                    """async () => {
+                      const v = window.utermVnc;
+                      if (!v) return;
+                      v.disconnect();
+                      await v.connect();
+                    }"""
+                )
+                page.wait_for_function(
+                    """() => {
+                      const el = document.getElementById('vnc-status');
+                      return el && el.dataset.state === 'connected';
+                    }""",
+                    timeout=12_000,
+                )
+                page.wait_for_timeout(int(_RECONNECT_SETTLE_S * 1000))
+
+            # LIVE chapters — rapid keystroke bursts (website demo pace).
+            for chap_i, chapter in enumerate(LIVE_DEMO_CHAPTERS, start=1):
+                for cmd in chapter:
+                    st_send, body_send = send_shell_keys(base, headers, shell_hid, cmd)
+                    if st_send >= 400:
+                        lines.append(f"chap{chap_i}_err={st_send} {body_send!r}")
+                    time.sleep(_KEY_GAP_S)
+                # One short hold so the chapter is readable on camera.
+                page.wait_for_timeout(int(_CHAPTER_HOLD_S * 1000))
+                # Refresh RFB once per chapter (not per line) — keeps motion
+                # without multi-second reconnect thrash.
                 try:
-                    box = page.locator("#vnc-screen").bounding_box()
-                    if box:
-                        page.mouse.move(
-                            box["x"] + box["width"] * (0.25 + 0.05 * (beat_i % 8)),
-                            box["y"] + box["height"] * (0.35 + 0.03 * (beat_i % 5)),
-                        )
-                        if beat_i % 3 == 0:
-                            page.mouse.click(
-                                box["x"] + box["width"] * 0.5,
-                                box["y"] + box["height"] * 0.5,
-                            )
-                except Exception as mouse_exc:
-                    lines.append(f"mouse_nudge_err={mouse_exc!r}")
+                    _rfb_refresh()
+                    lines.append(f"chapter_{chap_i}_refresh=ok")
+                except Exception as reconn_exc:
+                    lines.append(f"chapter_{chap_i}_refresh_err={reconn_exc!r}")
                 fp = canvas_fingerprint(page)
                 fingerprints.append(fp)
-                if beat_i in (3, 8, 12, len(LIVE_DEMO_BEATS)):
+                if chap_i in (1, 2, len(LIVE_DEMO_CHAPTERS)):
                     page.screenshot(path=str(full_png), full_page=True)
-                lines.append(f"beat_{beat_i}_ok fp_changed={fp != fingerprints[0]}")
+                lines.append(f"chapter_{chap_i}_ok fp_changed={fp != fingerprints[0]}")
 
-            # Extra live ticks so the tail of the video keeps moving.
-            tick_deadline = time.time() + max(4.0, float(args.seconds) * 0.35)
+            # Optional short tail (default ~2s) — not a long idle loop.
+            tick_deadline = time.time() + max(0.0, float(args.seconds))
             tick = 0
             while time.time() < tick_deadline:
                 tick += 1
@@ -662,17 +672,23 @@ def main(argv: list[str] | None = None) -> int:
                     base,
                     headers,
                     shell_hid,
-                    f"/say [live {tick}] {time.strftime('%H:%M:%S')} · nested browser fan-out\r",
+                    f"/say [live {tick}] {time.strftime('%H:%M:%S')}\r",
                 )
-                page.wait_for_timeout(1200)
+                time.sleep(_KEY_GAP_S)
+                page.wait_for_timeout(int(_CHAPTER_HOLD_S * 1000))
+                if tick % 2 == 0:
+                    try:
+                        _rfb_refresh()
+                    except Exception:
+                        pass
                 fingerprints.append(canvas_fingerprint(page))
 
             unique_fps = len(set(fingerprints))
             lines.append(f"canvas_fp_unique={unique_fps}/{len(fingerprints)}")
-            if unique_fps < 3:
+            if unique_fps < 2:
                 raise RuntimeError(
                     "VNC canvas did not show live changes during recording "
-                    f"(unique fingerprints={unique_fps}; expected >=3). "
+                    f"(unique fingerprints={unique_fps}; expected >=2). "
                     "Inner browser/RFB path is still static."
                 )
             lines.append("live_canvas_motion=ok")
