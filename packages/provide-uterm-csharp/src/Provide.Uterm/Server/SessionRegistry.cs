@@ -43,6 +43,10 @@ public interface ISessionRegistry
     SessionStatus? RestartSession(string sessionId);
     SessionStatus? ClearSession(string sessionId);
     SessionStatus? SetMode(string sessionId, string inputMode);
+    /// <summary>Partial update of definition + status display fields.</summary>
+    SessionStatus? PatchSession(string sessionId, string? displayName, string? visibility, IReadOnlyList<string>? tags);
+    /// <summary>Admin bulk delete by lifecycle state (optional).</summary>
+    int BulkDelete(string? lifecycleState);
 }
 
 /// <summary>In-memory session registry seeded from config sessions.</summary>
@@ -157,6 +161,56 @@ public sealed class InMemorySessionRegistry : ISessionRegistry
             if (!_status.TryGetValue(sessionId, out var st)) return null;
             st.InputMode = inputMode;
             return CloneStatus(st);
+        }
+    }
+
+    public SessionStatus? PatchSession(
+        string sessionId, string? displayName, string? visibility, IReadOnlyList<string>? tags)
+    {
+        lock (_gate)
+        {
+            if (!_defs.TryGetValue(sessionId, out var def) || !_status.TryGetValue(sessionId, out var st))
+            {
+                return null;
+            }
+
+            if (displayName is not null)
+            {
+                def.DisplayName = displayName;
+                st.DisplayName = displayName;
+            }
+
+            if (visibility is not null)
+            {
+                def.Visibility = visibility;
+                st.Visibility = visibility;
+            }
+
+            if (tags is not null)
+            {
+                def.Tags = tags.ToList();
+                st.Tags = tags.ToList();
+            }
+
+            return CloneStatus(st);
+        }
+    }
+
+    public int BulkDelete(string? lifecycleState)
+    {
+        lock (_gate)
+        {
+            var ids = _status
+                .Where(kv => lifecycleState is null || kv.Value.LifecycleState == lifecycleState)
+                .Select(kv => kv.Key)
+                .ToList();
+            foreach (var id in ids)
+            {
+                _status.Remove(id);
+                _defs.Remove(id);
+            }
+
+            return ids.Count;
         }
     }
 

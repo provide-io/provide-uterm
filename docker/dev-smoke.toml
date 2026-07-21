@@ -1,0 +1,22 @@
+#
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Local Docker smoke config (dev_token). Mount over /etc/uterm/server.toml.
+#
+
+[server]
+host = "0.0.0.0"
+port = 27780
+public_base_url = "http://127.0.0.1:27780"
+
+[auth]
+mode = "dev_token"
+worker_bearer_token = "docker-dev-worker"
+
+[[sessions]]
+session_id = "demo"
+display_name = "Demo"
+connector_type = "shell"
+visibility = "public"
+owner = "dev-user"

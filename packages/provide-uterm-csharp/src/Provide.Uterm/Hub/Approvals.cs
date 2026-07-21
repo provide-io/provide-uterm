@@ -51,6 +51,15 @@ public sealed class InMemoryApprovalStore
         lock (_gate) return _requests.TryGetValue(requestId, out var r) ? r : null;
     }
 
+    /// <summary>Pending approvals (admin list). Port of Go Approvals.PendingApprovals.</summary>
+    public IReadOnlyList<ApprovalRequest> PendingApprovals()
+    {
+        lock (_gate)
+        {
+            return _requests.Values.Where(r => r.Status == ApprovalStatus.Pending).ToList();
+        }
+    }
+
     public void Resolve(string requestId, ApprovalStatus status)
     {
         lock (_gate)
