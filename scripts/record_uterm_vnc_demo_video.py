@@ -169,7 +169,19 @@ tls_insecure = true
     path.write_text(body, encoding="utf-8")
 
 
-def start_lab_with_demo_url(*, name: str, demo_url: str) -> tuple[int, int]:
+# Fixed host ports so the uterm server can start *before* the lab (Chromium
+# must open the text demo URL on first launch — mid-run browser kill is flaky).
+LAB_HOST_PLAIN = 25900
+LAB_HOST_TLS = 25901
+
+
+def start_lab_with_demo_url(
+    *,
+    name: str,
+    demo_url: str,
+    host_plain: int = LAB_HOST_PLAIN,
+    host_tls: int = LAB_HOST_TLS,
+) -> tuple[int, int]:
     """Start lab container; Chromium opens *demo_url* (host uterm text console)."""
     vnc_lab._remove_container(name)
     result = subprocess.run(
@@ -183,9 +195,9 @@ def start_lab_with_demo_url(*, name: str, demo_url: str) -> tuple[int, int]:
             vnc_lab.DEFAULT_SHM,
             "--add-host=host.docker.internal:host-gateway",
             "-p",
-            f"0:{vnc_lab.RFB_PLAIN_PORT}",
+            f"{host_plain}:{vnc_lab.RFB_PLAIN_PORT}",
             "-p",
-            f"0:{vnc_lab.RFB_SSL_PORT}",
+            f"{host_tls}:{vnc_lab.RFB_SSL_PORT}",
             "-e",
             f"DEMO_URL={demo_url}",
             vnc_lab.IMAGE_NAME,
@@ -197,7 +209,19 @@ def start_lab_with_demo_url(*, name: str, demo_url: str) -> tuple[int, int]:
     )
     if result.returncode != 0:
         raise RuntimeError(f"docker run failed: {result.stderr.strip()[:500]}")
-    return vnc_lab._mapped_port(name, vnc_lab.RFB_PLAIN_PORT), vnc_lab._mapped_port(name, vnc_lab.RFB_SSL_PORT)
+    return host_plain, host_tls
+
+
+def lab_chrome_args(name: str) -> str:
+    """Return lab Chromium command lines (for verifying DEMO_URL stuck)."""
+    result = subprocess.run(
+        ["docker", "exec", name, "bash", "-lc", "ps -C chromium -o args= 2>/dev/null | tr '\\n' '|'"],
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    )
+    return (result.stdout or "").strip()
 
 
 def http_json(method: str, url: str, *, headers: dict[str, str], body: dict | None = None) -> tuple[int, object]:
@@ -284,53 +308,16 @@ def main(argv: list[str] | None = None) -> int:
     if not args.skip_build:
         vnc_lab.build_image(root=root, log_path=evidence / "lab-build.log")
 
-    # --- uterm server (reachable from Docker via host.docker.internal) ---
+    # --- Order matters: server first, then lab Chromium with DEMO_URL=text demo ---
+    # Fixed RFB publish ports so graphical_targets are known before docker run.
     host_bind = "0.0.0.0"
-    port = _free_port()
-    # Lab RFB ports unknown until container starts — write config in two phases:
-    # start lab first with placeholder, then rewrite? Better: start lab after
-    # we know we need host port for DEMO_URL; RFB host ports from lab after start.
-    # Order: start lab with example.com first, then server, then restart chromium?
-    # Cleaner: start lab after server, DEMO_URL points at host terminal.
-
-    # Start a temporary lab only after server is up. Server needs RFB ports for
-    # graphical_targets — so start lab first, then server, DEMO_URL already set.
-    # Chicken/egg: DEMO_URL needs server port; graphical_targets need lab ports.
-    # Resolution: start lab with DEMO_URL; start server with mapped RFB ports.
-
-    # Phase 1: free ports reserved? Start server on fixed free port first without
-    # graphical targets... but we need them for VNC. Start lab first:
-    plain_probe = _free_port()  # unused; real mapping comes from docker
-    del plain_probe
-
-    # Start lab with DEMO_URL to host terminal (server not up yet — chromium retries).
-    # Actually chromium launches once at entrypoint. So server must be up first.
-    # Start server with loopback RFB that isn't ready yet → VNC dial fails until lab up.
-    # Sequence:
-    #  1. Start empty placeholder? No.
-    #  2. Start lab with DEMO_URL=about:blank, then server, then docker exec chromium.
-    #  3. Or: start lab, get RFB ports, start server, docker exec kill chromium + relaunch.
-
-    # Use approach 3 via entrypoint re-run of browser:
-    # docker exec env DEMO_URL=... bash -c 'pkill chromium; chromium ...'
-
-    # Simpler approach used here:
-    #  1. Start lab with DEMO_URL pointing at host (server will be ready within ~2s of chrome start)
-    #  2. Start server immediately after docker run returns (before chrome finishes booting X)
-    # Xvfb+fluxbox takes several seconds before chromium — enough to start server.
-
-    # Pre-choose server port. Lab boots with a stable public page first so the
-    # container does not exit when host demos are not yet listening (entrypoint
-    # fails if Chromium exits early). We navigate to the text demo after.
-    server_port = port
+    server_port = _free_port()
+    plain_port, tls_port = LAB_HOST_PLAIN, LAB_HOST_TLS
     demo_url = (
         f"http://{_HOST_FROM_DOCKER}:{server_port}/_terminal/terminal.html?worker_id={SHELL_SESSION}&role=browser"
     )
     lines.append(f"demo_url={demo_url}")
 
-    # Stable boot URL (always reachable) — switch to demo_url after server is up.
-    plain_port, tls_port = start_lab_with_demo_url(name=LAB, demo_url="https://example.com")
-    lines.append(f"lab_plain={plain_port} lab_tls={tls_port}")
     cfg = evidence / "server.toml"
     write_demo_server_config(
         cfg,
@@ -342,7 +329,6 @@ def main(argv: list[str] | None = None) -> int:
 
     # TEST_MODE so lab browser WS auth succeeds without cookies.
     env = {**os.environ, "UTERM_TEST_MODE": "1", "UTERM_API_ONLY": "0"}
-    # Patch start_server to pass env — call uvicorn path via prove with env.
     log_path = evidence / "server.log"
     cmd = [
         str(root / ".venv" / "bin" / "uterm"),
@@ -377,78 +363,57 @@ def main(argv: list[str] | None = None) -> int:
     try:
         prove.wait_http(f"{base}/readyz", timeout=60.0)
         lines.append(f"server_ready={base}")
+
+        # Lab Chromium opens the text terminal on *first* launch (no example.com).
+        plain_port, tls_port = start_lab_with_demo_url(
+            name=LAB,
+            demo_url=demo_url,
+            host_plain=LAB_HOST_PLAIN,
+            host_tls=LAB_HOST_TLS,
+        )
+        lines.append(f"lab_plain={plain_port} lab_tls={tls_port}")
         vnc_lab.wait_rfb("127.0.0.1", plain_port, retries=80, delay=0.5)
         lines.append("lab_rfb=ok")
 
-        # Navigate lab Chromium to host text demos.
-        # Never match free-text patterns that include this shell's argv (self-kill).
-        # `killall chromium` matches the process name only.
-        nav_script = (
-            "set +e; "
-            "killall chromium 2>/dev/null; "
-            "killall chrome 2>/dev/null; "
-            "sleep 1; "
-            "BIN=/usr/lib/chromium/chromium; "
-            "echo bin=$BIN; "
-            "export DISPLAY=:99; "
-            f"nohup $BIN --no-sandbox --disable-gpu --disable-dev-shm-usage "
-            f"--no-first-run --window-size=1280,720 --window-position=0,0 "
-            f"{demo_url!r} >>/var/log/vnc-lab/chrome-relaunch.log 2>&1 & "
-            "echo relaunched_pid=$!; "
-            "sleep 2; "
-            "ps -C chromium -o pid,args= 2>/dev/null | head -5; "
-            "echo done"
-        )
-        relaunch = subprocess.run(
-            ["docker", "exec", LAB, "bash", "-lc", nav_script],
-            capture_output=True,
-            text=True,
-            timeout=45,
-            check=False,
-        )
-        lines.append(
-            f"chrome_relaunch_rc={relaunch.returncode} "
-            f"out={relaunch.stdout.strip()[:400]!r} "
-            f"err={relaunch.stderr.strip()[:200]!r}"
-        )
-        vnc_lab.wait_rfb("127.0.0.1", plain_port, retries=30, delay=0.3)
+        # Wait for Chromium; assert it is on the text demo URL (not example.com).
+        chrome_args = ""
+        for _ in range(40):
+            time.sleep(0.5)
+            chrome_args = lab_chrome_args(LAB)
+            if "terminal.html" in chrome_args or "provide-shell" in chrome_args:
+                break
+        lines.append(f"chrome_args={chrome_args[:500]!r}")
+        if "terminal.html" not in chrome_args and "provide-shell" not in chrome_args:
+            raise RuntimeError(
+                "lab Chromium is not on the text demo URL "
+                f"(expected terminal.html / provide-shell); args={chrome_args[:400]!r}"
+            )
+        lines.append("chrome_on_text_demo=ok")
+        # Nested terminal WS attach before key inject.
         time.sleep(4.0)
 
-        # Drive text demos into the shell the lab browser is watching.
+        # Drive live text demos into provide-shell while the nested browser watches.
         drive_log = drive_text_demos(base, headers, session=SHELL_SESSION)
         lines.extend(drive_log)
-        shell_hid_held: str | None = None
+        shell_hid: str | None = None
         for entry in drive_log:
-            if entry.startswith("acquire_provide-shell="):
-                shell_hid_held = entry.split("=", 1)[1]
-                if len(shell_hid_held) == 8:
-                    # only prefix logged — re-acquire not needed if we store full id
-                    shell_hid_held = None
-        # Keep full hijack id by re-reading last successful acquire inside drive —
-        # re-drive is skipped; store full id from a dedicated acquire after chrome up.
-        st, shell_payload = http_json(
-            "POST",
-            f"{base}/worker/{SHELL_SESSION}/hijack/acquire",
-            headers=headers,
-            body={"owner": "demo-driver", "lease_s": 300},
-        )
-        if st == 200 and isinstance(shell_payload, dict):
-            shell_hid_held = str(shell_payload["hijack_id"])
-            # Extra banner now that browser is up
+            if entry.startswith(f"acquire_{SHELL_SESSION}="):
+                shell_hid = entry.split("=", 1)[1]
+        lines.append(f"shell_lease={shell_hid}")
+        if shell_hid:
             for cmd in (
                 "echo\r",
-                "echo '>>> browser is watching this shell via uterm VNC <<<'\r",
+                "echo '>>> nested browser is watching this shell via uterm VNC <<<'\r",
                 "echo\r",
+                "printf '\\033[1;32mready\\033[0m for text demos\\n'\r",
             ):
                 http_json(
                     "POST",
-                    f"{base}/worker/{SHELL_SESSION}/hijack/{shell_hid_held}/send",
+                    f"{base}/worker/{SHELL_SESSION}/hijack/{shell_hid}/send",
                     headers=headers,
                     body={"keys": cmd, "timeout_ms": 1200},
                 )
-        lines.append(f"shell_hid_held={shell_hid_held}")
-        shell_hid = shell_hid_held
-        lines.append(f"shell_lease={shell_hid}")
+            time.sleep(1.0)
 
         # VNC lease must be owned by test-admin (UTERM_TEST_MODE WS subject).
         st, vnc_lease = http_json(
