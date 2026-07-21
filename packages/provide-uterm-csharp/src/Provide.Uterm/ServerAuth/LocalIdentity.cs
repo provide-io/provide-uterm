@@ -51,12 +51,7 @@ public sealed class LocalIdentityProvider : IAuthenticator
         if (mode is "jwt" or "dev_token")
         {
             // dev_token is mutated to jwt by SetupDevIdp; if still present, treat as jwt.
-            var token = ExtractBearerToken(request);
-            if (string.IsNullOrEmpty(token))
-            {
-                token = request.Cookie(_auth.TokenCookie);
-            }
-
+            var token = ExtractJwtToken(request);
             if (string.IsNullOrEmpty(token))
             {
                 return Task.FromResult(Principal.Anonymous());
@@ -73,6 +68,30 @@ public sealed class LocalIdentityProvider : IAuthenticator
         }
 
         throw new InvalidOperationException($"unknown auth mode: \"{mode}\"");
+    }
+
+    /// <summary>
+    /// Resolve JWT material for jwt mode. Order (first wins):
+    /// 1. Authorization: Bearer
+    /// 2. CF-Access-JWT-Assertion header (Cloudflare Access edge assertion)
+    /// 3. CF_Authorization cookie (Access browser session)
+    /// 4. Auth.TokenCookie (app token cookie, default uterm_token)
+    ///
+    /// Cf-Access-Authenticated-User-Email is intentionally NOT consulted — it is
+    /// client-forgeable without Access in front and must never mint identity.
+    /// </summary>
+    public string ExtractJwtToken(AuthRequest req)
+    {
+        var bearer = ExtractBearerToken(req);
+        if (bearer.Length > 0) return bearer;
+
+        var cfAssertion = req.Header("CF-Access-JWT-Assertion").Trim();
+        if (cfAssertion.Length > 0) return cfAssertion;
+
+        var cfCookie = req.Cookie("CF_Authorization");
+        if (cfCookie.Length > 0) return cfCookie;
+
+        return req.Cookie(_auth.TokenCookie);
     }
 
     public static string ExtractBearerToken(AuthRequest req)
@@ -218,10 +237,36 @@ public sealed class LocalIdentityProvider : IAuthenticator
         return new Principal
         {
             SubjectId = subject,
-            Roles = AuthRoles.FilterKnownRoles(roles),
+            Roles = RolesFromClaimList(roles),
             Scopes = scopes,
             TenantId = tenant,
         };
+    }
+
+    /// <summary>
+    /// Prefer claim roles when any known role is present. When the claim is empty or
+    /// only unknown values (typical Cloudflare Access JWTs have no roles claim), apply
+    /// <see cref="AuthConfig.JwtDefaultRole"/> if configured, else viewer fallback.
+    /// </summary>
+    internal StringSet RolesFromClaimList(IEnumerable<string> roles)
+    {
+        var known = new StringSet();
+        foreach (var role in roles)
+        {
+            var r = role.Trim().ToLowerInvariant();
+            if (r.Length == 0) continue;
+            if (AuthRoles.KnownRoles.Has(r)) known.Add(r);
+        }
+
+        if (known.Count > 0) return known;
+
+        var dr = (_auth.JwtDefaultRole ?? "").Trim();
+        if (dr.Length > 0)
+        {
+            return AuthRoles.FilterKnownRoles(new[] { dr });
+        }
+
+        return AuthRoles.FilterKnownRoles(Array.Empty<string>());
     }
 
     private static string FirstNonEmpty(params string[] values)

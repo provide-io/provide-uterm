@@ -1380,7 +1380,7 @@ public static class ServerFactory
         }
 
         var auth = new LocalIdentityProvider(cfg.Auth, apiKeys);
-        var authz = new AuthorizationService();
+        var authz = AuthorizationService.FromConfig(cfg);
         var clock = new RealClock();
         var hub = new TermHub(new TermHubConfig
         {

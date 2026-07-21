@@ -74,6 +74,48 @@ func TestValidateAuthBranches(t *testing.T) {
 	}
 }
 
+func TestCfAccessTeamDomainAutoFill(t *testing.T) {
+	a := defaultAuthConfig()
+	a.CfAccessTeamDomain = "myteam"
+	a.JWTIssuer = "" // empty so auto-fill applies
+	a.JWTJWKSURL = nil
+	if err := validateAuth(&a); err != nil {
+		t.Fatalf("validateAuth: %v", err)
+	}
+	wantJWKS := "https://myteam.cloudflareaccess.com/cdn-cgi/access/certs"
+	wantIss := "https://myteam.cloudflareaccess.com"
+	if a.JWTJWKSURL == nil || *a.JWTJWKSURL != wantJWKS {
+		t.Errorf("jwks = %v, want %q", a.JWTJWKSURL, wantJWKS)
+	}
+	if a.JWTIssuer != wantIss {
+		t.Errorf("issuer = %q, want %q", a.JWTIssuer, wantIss)
+	}
+
+	// Explicit values win.
+	a2 := defaultAuthConfig()
+	a2.CfAccessTeamDomain = "myteam"
+	a2.JWTIssuer = "https://custom.example"
+	explicit := "https://custom.example/jwks"
+	a2.JWTJWKSURL = &explicit
+	if err := validateAuth(&a2); err != nil {
+		t.Fatalf("validateAuth explicit: %v", err)
+	}
+	if a2.JWTIssuer != "https://custom.example" || *a2.JWTJWKSURL != explicit {
+		t.Errorf("explicit values overridden: iss=%q jwks=%v", a2.JWTIssuer, a2.JWTJWKSURL)
+	}
+
+	// Scheme/path stripped from team domain.
+	a3 := defaultAuthConfig()
+	a3.CfAccessTeamDomain = "https://other.cloudflareaccess.com/"
+	a3.JWTIssuer = ""
+	if err := validateAuth(&a3); err != nil {
+		t.Fatalf("validateAuth scheme: %v", err)
+	}
+	if a3.JWTIssuer != "https://other.cloudflareaccess.com" {
+		t.Errorf("scheme strip issuer = %q", a3.JWTIssuer)
+	}
+}
+
 func TestValidateMiscSections(t *testing.T) {
 	if err := validateAudit(&AuditConfig{ChainEnabled: true}); err == nil {
 		t.Errorf("audit chain without file accepted")

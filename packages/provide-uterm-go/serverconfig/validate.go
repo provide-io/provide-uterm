@@ -88,8 +88,36 @@ func inSet(v string, options ...string) bool {
 	return false
 }
 
+// applyCfAccessTeamDomain fills empty JWTJWKSURL / JWTIssuer from a Cloudflare
+// Access team domain. Explicit operator values always win.
+func applyCfAccessTeamDomain(a *AuthConfig) {
+	team := strings.TrimSpace(a.CfAccessTeamDomain)
+	if team == "" {
+		return
+	}
+	// Strip accidental scheme/path so "https://myteam.cloudflareaccess.com" also works.
+	team = strings.TrimPrefix(team, "https://")
+	team = strings.TrimPrefix(team, "http://")
+	if i := strings.Index(team, "/"); i >= 0 {
+		team = team[:i]
+	}
+	team = strings.TrimSuffix(team, ".cloudflareaccess.com")
+	team = strings.TrimSpace(team)
+	if team == "" {
+		return
+	}
+	if strings.TrimSpace(ptrOr(a.JWTJWKSURL)) == "" {
+		u := fmt.Sprintf("https://%s.cloudflareaccess.com/cdn-cgi/access/certs", team)
+		a.JWTJWKSURL = &u
+	}
+	if strings.TrimSpace(a.JWTIssuer) == "" {
+		a.JWTIssuer = fmt.Sprintf("https://%s.cloudflareaccess.com", team)
+	}
+}
+
 // validateAuth ports the AuthConfig model_validators.
 func validateAuth(a *AuthConfig) error {
+	applyCfAccessTeamDomain(a)
 	if !inSet(a.IdentityProvider, "local", "webhook") {
 		return literalError("auth.identity_provider", "local", "webhook")
 	}

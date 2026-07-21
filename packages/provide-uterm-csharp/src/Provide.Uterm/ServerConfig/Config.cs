@@ -28,6 +28,18 @@ public sealed class AuthConfig
     public string JwtRolesClaim { get; set; } = "roles";
     public string JwtScopesClaim { get; set; } = "scope";
     public string JWTTenantClaim { get; set; } = "tenant_id";
+    /// <summary>
+    /// Applied when a verified JWT carries no known roles (typical Cloudflare Access
+    /// assertions). Filtered to viewer/operator/admin; unknown values fall back to viewer.
+    /// </summary>
+    public string? JwtDefaultRole { get; set; }
+    /// <summary>
+    /// When set, auto-fills empty <see cref="JwtJwksUrl"/> / <see cref="JwtIssuer"/> for
+    /// Cloudflare Access team domain. JWT material still comes only from verified token
+    /// sources (Bearer / CF-Access-JWT-Assertion / CF_Authorization) — never the spoofable
+    /// Cf-Access-Authenticated-User-Email header.
+    /// </summary>
+    public string? CfAccessTeamDomain { get; set; }
     public string? WorkerBearerToken { get; set; }
     public bool ApiKeysEnabled { get; set; }
     public bool HeaderModeAcknowledged { get; set; }
@@ -106,6 +118,14 @@ public sealed class TunnelConfig
     public bool IpBinding { get; set; }
 }
 
+/// <summary>Governance section — external policy/authz webhooks (Go GovernanceConfig subset).</summary>
+public sealed class GovernanceConfig
+{
+    public string? AuthzWebhookUrl { get; set; }
+    public string? AuthzWebhookSecret { get; set; }
+    public double AuthzWebhookTimeoutS { get; set; } = 2.0;
+}
+
 /// <summary>Session definition from config or control plane.</summary>
 public sealed class SessionDefinition
 {
@@ -147,6 +167,7 @@ public sealed class UtermServerConfig
     public RecordingConfig Recording { get; set; } = new();
     public SecurityConfig Security { get; set; } = new();
     public TunnelConfig Tunnel { get; set; } = new();
+    public GovernanceConfig Governance { get; set; } = new();
     public List<SessionDefinition> Sessions { get; set; } = new();
     public List<GraphicalTargetDefinition> GraphicalTargets { get; set; } = new();
     public int SessionIdleTimeoutS { get; set; }
