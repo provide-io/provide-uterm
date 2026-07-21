@@ -10,10 +10,10 @@
 # Run (fails closed until configured):
 #   docker run --rm -p 27780:27780 provide-uterm-server
 #
-# The bundled /config/server.toml intentionally contains rejected auth
+# The bundled /etc/uterm/server.toml intentionally contains rejected auth
 # placeholders so the image fails closed until configured. Mount a real config:
 #   docker run --rm -p 27780:27780 \
-#     -v /path/to/my.toml:/config/server.toml:ro \
+#     -v /path/to/my.toml:/etc/uterm/server.toml:ro \
 #     provide-uterm-server
 #
 # The server binds on 0.0.0.0:27780 inside the container.
@@ -119,6 +119,31 @@ COPY --from=frontend-build /src/${FRONTEND_DIR}/ ${FRONTEND_DIR}/
 # escaped UV_FROZEN (unpinned/hash-unverified); pyte is now in uv.lock.
 RUN uv sync --frozen --no-dev --no-editable --package provide-uterm-server --extra all
 
+# setuptools package-data globs historically drop leading-dot dirs; ensure the
+# Vite manifest is present under the installed package regardless. Path must
+# match FRONTEND_DIR (ARG above) — keep in sync when that ARG changes.
+RUN /app/.venv/bin/python - <<'PY'
+from pathlib import Path
+import shutil
+import provide.uterm.server as s
+
+src = Path("packages/provide-uterm-server/src/provide/uterm/server/frontend/.vite")
+if not src.is_dir():
+    raise SystemExit(f"frontend .vite missing at {src.resolve()}")
+dst = Path(s.__file__).resolve().parent / "frontend" / ".vite"
+dst.mkdir(parents=True, exist_ok=True)
+for item in src.iterdir():
+    target = dst / item.name
+    if item.is_dir():
+        shutil.copytree(item, target, dirs_exist_ok=True)
+    else:
+        shutil.copy2(item, target)
+manifest = dst / "manifest.json"
+if not manifest.is_file():
+    raise SystemExit(f"manifest not installed at {manifest}")
+print(f"installed vite assets under {dst}")
+PY
+
 # Strip build backends from the runtime venv. uv resolves the build deps
 # (pip / setuptools / wheel / jaraco.* / etc.) into the env to build the
 # --no-editable workspace wheels, but they are NOT needed to RUN the server and
@@ -150,7 +175,8 @@ RUN apt-get update \
 # carries none of this), making the system build tooling dead weight that Trivy
 # flags (wheel CVE-2026-24049, vendored jaraco.context CVE-2026-23949). Remove it
 # so the runtime image carries only runtime-required packages. The strip verifies
-# itself: the build fails if any matching dist-info survives.
+# itself at site-packages depth 1 only — nested METADATA files named WHEEL (e.g.
+# packaging-*.dist-info/WHEEL) are PEP 427 metadata, not the wheel package.
 RUN rm -rf /usr/local/lib/python3.11/site-packages/setuptools* \
            /usr/local/lib/python3.11/site-packages/pkg_resources* \
            /usr/local/lib/python3.11/site-packages/_distutils_hack* \
@@ -158,7 +184,7 @@ RUN rm -rf /usr/local/lib/python3.11/site-packages/setuptools* \
            /usr/local/lib/python3.11/site-packages/wheel* \
            /usr/local/lib/python3.11/site-packages/pip* \
            /usr/local/bin/pip* /usr/local/bin/wheel* \
-    && ! find /usr/local/lib/python3.11/site-packages \
+    && ! find /usr/local/lib/python3.11/site-packages -mindepth 1 -maxdepth 1 \
          \( -iname 'setuptools*' -o -iname 'wheel*' -o -iname 'jaraco*' -o -iname 'pip*' \) \
          -print | grep -q .
 

@@ -305,3 +305,17 @@ See `docker/README.md`. Packaging ≠ full API parity — residual surface table
 | MCP / `uterm-mcp` | yes | yes | **never** |
 
 Proof: `ServerIntegrationHostRestTests` + Docker images `provide-uterm-server-{python,go,csharp}`.
+
+### Docker health proof (2026-07-20)
+
+- Images: `provide-uterm-server:local`, `provide-uterm-server-go:local`,
+  `provide-uterm-server-csharp:local` (compose also tags python as
+  `provide-uterm-server-python:local`).
+- Config path (all three): `/etc/uterm/server.toml` (fail-closed JWT placeholders
+  baked in; smoke via `docker/dev-smoke.toml` directory-mounted at `/etc/uterm`).
+- Live curl (mounted smoke JWT config, host ports 27780/27781/27782):
+  `/healthz` → HTTP 200 `{"status":"ok"}` for Python, Go, and C#.
+- Python image notes: system strip check is depth-1 only (avoid false-positive
+  on `packaging-*/WHEEL`); Vite `.vite/manifest.json` is force-copied into the
+  venv after `uv sync` (setuptools package-data drops leading-dot dirs).
+- Compose services: `server`, `server-go`, `server-csharp`, `cf`.

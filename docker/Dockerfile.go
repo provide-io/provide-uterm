@@ -10,7 +10,7 @@
 # Run (fails closed until a real config is mounted — same as Dockerfile.server):
 #   docker run --rm -p 27781:27780 provide-uterm-server-go
 #   docker run --rm -p 27781:27780 \
-#     -v /path/to/my.toml:/config/server.toml:ro \
+#     -v /path/to/my.toml:/etc/uterm/server.toml:ro \
 #     provide-uterm-server-go
 #
 # Wire-compatible with the Python reference server on the multi-backend contract.

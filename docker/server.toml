@@ -4,7 +4,7 @@
 #
 # Default Docker config: production-shaped JWT auth with deliberate
 # placeholders. The server rejects these values at startup so the image fails
-# closed until a real /config/server.toml is mounted.
+# closed until a real /etc/uterm/server.toml is mounted.
 #
 
 [server]

@@ -23,13 +23,18 @@ docker compose -f docker/docker-compose.yml up --build
 docker compose -f docker/docker-compose.yml up --build server-go
 ```
 
-Default `/config/server.toml` is **fail-closed** (JWT placeholders). Mount a
-real config for local/dev:
+Default `/etc/uterm/server.toml` is **fail-closed** (JWT placeholders). Compose
+mounts `docker/dev-smoke.toml` (throwaway smoke JWT public key + 32-char worker
+bearer) so Python/Go/C# all boot on `0.0.0.0` — Python refuses `dev_token` on
+non-loopback binds. Prefer a **directory** mount of `/etc/uterm` if Docker Desktop
+rejects file-on-file binds:
 
 ```bash
-docker run --rm -p 27781:27780 \
-  -v "$PWD/scripts/uterm-server.example.toml:/config/server.toml:ro" \
-  provide-uterm-server-go:local
+mkdir -p /tmp/uterm-etc && cp docker/dev-smoke.toml /tmp/uterm-etc/server.toml
+docker run --rm -p 27780:27780 \
+  -v /tmp/uterm-etc:/etc/uterm:ro \
+  provide-uterm-server:local
+# curl http://127.0.0.1:27780/healthz  →  {"status":"ok"}
 ```
 
 ## Surface parity (not packaging)
