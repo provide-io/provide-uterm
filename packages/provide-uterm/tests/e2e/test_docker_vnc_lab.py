@@ -66,9 +66,20 @@ def test_dockerfile_and_entrypoint_exist() -> None:
     text = (lab / "Dockerfile").read_text(encoding="utf-8")
     assert "x11vnc" in text or "tigervnc" in text
     assert "chromium" in text.lower() or "firefox" in text.lower()
+    assert "5900" in text and "5901" in text
     entry = (lab / "entrypoint.sh").read_text(encoding="utf-8")
     assert "DEMO_URL" in entry
     assert "browser-nav.log" in entry
+    # Dual-mode: plain + TLS/VeNCrypt/ANONTLS, multi-version negotiation.
+    assert "RFB_SSL_PORT" in entry
+    assert "-ssl" in entry
+    assert "vencrypt" in entry
+    assert "anontls" in entry
+    # Must not pin a single RFB revision on the live x11vnc command lines.
+    x11_invocations = [ln for ln in entry.splitlines() if "x11vnc" in ln and not ln.lstrip().startswith("#")]
+    assert x11_invocations, "expected x11vnc invocations in entrypoint"
+    joined = "\n".join(x11_invocations)
+    assert "-rfbversion" not in joined
 
 
 def test_rfb_handshake_helper_rejects_non_rfb() -> None:
@@ -120,6 +131,13 @@ def test_vnc_lab_rfb_and_browser_navigation(
         connect = (evidence / f"vnc-connect{suffix}.log").read_text(encoding="utf-8")
         assert "rfb_handshake=ok" in connect
         assert "RFB " in connect
+        assert "transport=plain" in connect
+        assert "modes_proven=plain,tls" in connect
+        assert "rfb_versions_proven=3.3,3.7,3.8" in connect
+        ssl_connect = (evidence / f"vnc-connect-ssl{suffix}.log").read_text(encoding="utf-8")
+        assert "rfb_handshake=ok" in ssl_connect
+        assert "tls_version=" in ssl_connect
+        assert "transport=tls(" in ssl_connect
         browser = (evidence / f"browser-nav{suffix}.log").read_text(encoding="utf-8")
         assert _DEMO_URL in browser
         assert "browser_nav_url=" in browser

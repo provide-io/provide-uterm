@@ -28,6 +28,7 @@ import argparse
 import os
 import shutil
 import socket
+import ssl
 import subprocess
 import sys
 import time
@@ -36,11 +37,16 @@ from pathlib import Path
 IMAGE_NAME = "uterm-test-vnc"
 CONTAINER_NAME = "uterm-test-vnc-prove"
 DEMO_URL = "https://example.com"
-RFB_CONTAINER_PORT = 5900
+RFB_PLAIN_PORT = 5900
+RFB_SSL_PORT = 5901
 DEFAULT_SHM = "256m"
 
-# RFB 3.8 protocol version string (12 bytes including newline)
-_RFB_VERSION = b"RFB 003.008\n"
+# RFB protocol version strings (12 bytes including newline)
+_RFB_VERSION_38 = b"RFB 003.008\n"
+_RFB_VERSION_37 = b"RFB 003.007\n"
+_RFB_VERSION_33 = b"RFB 003.003\n"
+# Back-compat alias used by tests/callers
+_RFB_VERSION = _RFB_VERSION_38
 
 
 def _repo_root() -> Path:
@@ -100,8 +106,21 @@ def _remove_container(name: str) -> None:
     _run(["docker", "rm", "-f", name], timeout=60, check=False)
 
 
-def start_container(*, name: str, demo_url: str) -> int:
-    """Start the lab container; return host-mapped RFB port."""
+def _mapped_port(name: str, container_port: int) -> int:
+    port_result = _run(
+        ["docker", "port", name, str(container_port)],
+        timeout=15,
+        check=False,
+    )
+    if port_result.returncode != 0 or not port_result.stdout.strip():
+        raise RuntimeError(f"docker port {container_port} failed: {port_result.stderr.strip()[:300]}")
+    # e.g. "0.0.0.0:32768" or ":::32768"
+    port_line = port_result.stdout.strip().splitlines()[-1]
+    return int(port_line.rsplit(":", 1)[-1])
+
+
+def start_container(*, name: str, demo_url: str) -> tuple[int, int]:
+    """Start the lab container; return (plain_host_port, ssl_host_port)."""
     _remove_container(name)
     result = _run(
         [
@@ -113,7 +132,9 @@ def start_container(*, name: str, demo_url: str) -> int:
             "--shm-size",
             DEFAULT_SHM,
             "-p",
-            f"0:{RFB_CONTAINER_PORT}",
+            f"0:{RFB_PLAIN_PORT}",
+            "-p",
+            f"0:{RFB_SSL_PORT}",
             "-e",
             f"DEMO_URL={demo_url}",
             IMAGE_NAME,
@@ -124,59 +145,68 @@ def start_container(*, name: str, demo_url: str) -> int:
     if result.returncode != 0:
         raise RuntimeError(f"docker run failed: {result.stderr.strip()[:500]}")
 
-    port_result = _run(
-        ["docker", "port", name, str(RFB_CONTAINER_PORT)],
-        timeout=15,
-        check=False,
-    )
-    if port_result.returncode != 0 or not port_result.stdout.strip():
-        raise RuntimeError(f"docker port failed: {port_result.stderr.strip()[:300]}")
-    # e.g. "0.0.0.0:32768" or ":::32768"
-    port_line = port_result.stdout.strip().splitlines()[-1]
-    return int(port_line.rsplit(":", 1)[-1])
+    return _mapped_port(name, RFB_PLAIN_PORT), _mapped_port(name, RFB_SSL_PORT)
 
 
-def rfb_handshake(host: str, port: int, *, timeout: float = 5.0) -> str:
+def rfb_handshake(
+    host: str,
+    port: int,
+    *,
+    timeout: float = 5.0,
+    client_version: bytes | None = None,
+    sock: socket.socket | ssl.SSLSocket | None = None,
+    transport: str = "plain",
+) -> str:
     """Complete a real RFB version + security-type exchange; return summary.
 
     Speaks enough of RFB 3.3/3.8 to prove the peer is a VNC server, not merely
     that TCP is open. Stops after SecurityResult (or after the RFB 3.3 security
     type is accepted).
+
+    If *sock* is provided it is used as the already-connected transport (e.g.
+    TLS-wrapped). The caller retains ownership and must close it.
     """
-    with socket.create_connection((host, port), timeout=timeout) as sock:
+    owns_sock = sock is None
+    if sock is None:
+        sock = socket.create_connection((host, port), timeout=timeout)
+    try:
         sock.settimeout(timeout)
         server_version = sock.recv(12)
         if len(server_version) != 12 or not server_version.startswith(b"RFB "):
             raise RuntimeError(f"invalid RFB ProtocolVersion from server: {server_version!r}")
-        # Echo the server's major/minor when possible so x11vnc stays happy;
-        # fall back to 3.8 if the banner is unexpected.
-        if server_version[0:4] == b"RFB " and server_version.endswith(b"\n"):
-            client_version = server_version
+        # Prefer an explicit client version (compat matrix); else echo server;
+        # fall back to 3.8.
+        if client_version is not None:
+            chosen = client_version
+        elif server_version[0:4] == b"RFB " and server_version.endswith(b"\n"):
+            chosen = server_version
         else:
-            client_version = _RFB_VERSION
-        sock.sendall(client_version)
+            chosen = _RFB_VERSION_38
+        sock.sendall(chosen)
 
         lines = [
-            f"rfb_connect=ok host={host} port={port}",
+            f"rfb_connect=ok host={host} port={port} transport={transport}",
             f"server_protocol_version={server_version!r}",
-            f"client_protocol_version={client_version!r}",
+            f"client_protocol_version={chosen!r}",
         ]
 
         # Parse "RFB 003.008\n" → minor 8. RFB 3.3 uses a 4-byte security type;
-        # 3.7+ uses U8 count + type list.
+        # 3.7+ uses U8 count + type list. After we pick a client version, the
+        # subsequent security negotiation follows that client's rules.
         try:
-            minor = int(server_version[8:11])
+            client_minor = int(chosen[8:11])
         except ValueError:
-            minor = 8
+            client_minor = 8
 
-        if minor <= 3:
+        if client_minor <= 3:
             sec_raw = _recv_exact(sock, 4)
             sec_type = int.from_bytes(sec_raw, "big")
             lines.append(f"security_type_rfb33={sec_type}")
             if sec_type == 0:
                 raise RuntimeError("RFB server rejected connection (sec type 0)")
-            if sec_type != 1:
-                raise RuntimeError(f"lab VNC must use Security None (1); got {sec_type}")
+            # None (1) is the lab default; VNC Auth (2) is also acceptable if set.
+            if sec_type not in (1, 2):
+                raise RuntimeError(f"unexpected RFB 3.3 security type: {sec_type}")
             lines.append("rfb_handshake=ok")
             return "\n".join(lines) + "\n"
 
@@ -204,9 +234,12 @@ def rfb_handshake(host: str, port: int, *, timeout: float = 5.0) -> str:
             raise RuntimeError(f"RFB SecurityResult not OK: {result!r}")
         lines.append("rfb_handshake=ok")
         return "\n".join(lines) + "\n"
+    finally:
+        if owns_sock and sock is not None:
+            sock.close()
 
 
-def _recv_exact(sock: socket.socket, n: int) -> bytes:
+def _recv_exact(sock: socket.socket | ssl.SSLSocket, n: int) -> bytes:
     buf = bytearray()
     while len(buf) < n:
         chunk = sock.recv(n - len(buf))
@@ -216,21 +249,53 @@ def _recv_exact(sock: socket.socket, n: int) -> bytes:
     return bytes(buf)
 
 
+def rfb_handshake_tls(host: str, port: int, *, timeout: float = 5.0) -> str:
+    """TLS-first encrypted path (x11vnc -ssl): wrap TCP, then RFB handshake."""
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    # Prefer modern TLS but allow down to 1.2 for older VNC stacks.
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+    raw = socket.create_connection((host, port), timeout=timeout)
+    try:
+        tls = ctx.wrap_socket(raw, server_hostname=host)
+    except Exception:
+        raw.close()
+        raise
+    try:
+        tls_ver = tls.version() or "unknown"
+        summary = rfb_handshake(
+            host,
+            port,
+            timeout=timeout,
+            sock=tls,
+            transport=f"tls({tls_ver})",
+        )
+        return f"tls_version={tls_ver}\n{summary}"
+    finally:
+        tls.close()
+
+
 def wait_rfb(
     host: str,
     port: int,
     *,
     retries: int = 60,
     delay: float = 0.5,
+    tls: bool = False,
+    client_version: bytes | None = None,
 ) -> str:
     last_err: Exception | None = None
     for _attempt in range(retries):
         try:
-            return rfb_handshake(host, port)
-        except (OSError, RuntimeError) as exc:
+            if tls:
+                return rfb_handshake_tls(host, port)
+            return rfb_handshake(host, port, client_version=client_version)
+        except (OSError, RuntimeError, ssl.SSLError) as exc:
             last_err = exc
             time.sleep(delay)
-    raise RuntimeError(f"RFB handshake failed after {retries} tries: {last_err}")
+    kind = "TLS RFB" if tls else "plain RFB"
+    raise RuntimeError(f"{kind} handshake failed after {retries} tries: {last_err}")
 
 
 def collect_navigation_evidence(name: str, demo_url: str) -> str:
@@ -260,13 +325,19 @@ def collect_navigation_evidence(name: str, demo_url: str) -> str:
         check=False,
     )
     chunks.append("--- vnc-ready ---")
-    chunks.append(ready.stdout.strip() if ready.returncode == 0 else "(missing)")
+    ready_text = ready.stdout.strip() if ready.returncode == 0 else "(missing)"
+    chunks.append(ready_text)
 
     text = "\n".join(chunks) + "\n"
     if demo_url not in text:
         raise RuntimeError(f"navigation evidence missing demo URL {demo_url!r} in container logs/ps")
     if "browser_nav_url=" not in text:
         raise RuntimeError("browser-nav.log missing browser_nav_url= marker")
+    # Dual-mode readiness markers from the entrypoint.
+    if "rfb_plain_port=" not in ready_text or "rfb_ssl_port=" not in ready_text:
+        raise RuntimeError("vnc-ready missing dual-port markers (plain + ssl)")
+    if "vencrypt" not in ready_text.lower() and "ssl" not in ready_text.lower():
+        raise RuntimeError("vnc-ready missing encrypted mode markers")
     # Require a chromium-ish process still related to the URL or binary.
     lower = text.lower()
     if "chromium" not in lower and "chrome" not in lower:
@@ -300,11 +371,53 @@ def prove_once(
         )
 
     try:
-        port = start_container(name=container_name, demo_url=demo_url)
-        summary = wait_rfb("127.0.0.1", port)
-        connect_log.write_text(summary, encoding="utf-8")
-        if "rfb_handshake=ok" not in summary:
-            raise RuntimeError("RFB handshake summary missing rfb_handshake=ok")
+        plain_port, ssl_port = start_container(name=container_name, demo_url=demo_url)
+
+        # --- Unencrypted path (classic RFB) ---
+        plain = wait_rfb("127.0.0.1", plain_port, tls=False)
+        if "rfb_handshake=ok" not in plain:
+            raise RuntimeError("plain RFB handshake missing rfb_handshake=ok")
+
+        # Version-compat matrix on the plain port: client 3.3, 3.7, 3.8.
+        compat_chunks: list[str] = ["=== plain RFB (unencrypted) ===", plain.rstrip(), ""]
+        for label, ver in (
+            ("client_3.8", _RFB_VERSION_38),
+            ("client_3.7", _RFB_VERSION_37),
+            ("client_3.3", _RFB_VERSION_33),
+        ):
+            # Fresh TCP each time — one handshake per connection.
+            chunk = wait_rfb(
+                "127.0.0.1",
+                plain_port,
+                retries=10,
+                delay=0.3,
+                tls=False,
+                client_version=ver,
+            )
+            if "rfb_handshake=ok" not in chunk:
+                raise RuntimeError(f"plain RFB {label} failed")
+            compat_chunks.append(f"=== plain {label} ===")
+            compat_chunks.append(chunk.rstrip())
+            compat_chunks.append("")
+
+        # --- Encrypted path (TLS-first x11vnc -ssl; VeNCrypt/ANONTLS also enabled) ---
+        encrypted = wait_rfb("127.0.0.1", ssl_port, tls=True)
+        if "rfb_handshake=ok" not in encrypted:
+            raise RuntimeError("TLS RFB handshake missing rfb_handshake=ok")
+        if "tls_version=" not in encrypted:
+            raise RuntimeError("TLS RFB handshake missing tls_version=")
+        compat_chunks.append("=== tls RFB (encrypted) ===")
+        compat_chunks.append(encrypted.rstrip())
+        compat_chunks.append("")
+        compat_chunks.append(f"plain_host_port={plain_port}")
+        compat_chunks.append(f"ssl_host_port={ssl_port}")
+        compat_chunks.append("modes_proven=plain,tls")
+        compat_chunks.append("rfb_versions_proven=3.3,3.7,3.8")
+
+        connect_log.write_text("\n".join(compat_chunks) + "\n", encoding="utf-8")
+        # Dedicated SSL log for dual-run evidence naming.
+        ssl_log = evidence_dir / f"vnc-connect-ssl{suffix}.log"
+        ssl_log.write_text(encrypted, encoding="utf-8")
 
         # Allow Chromium a moment to start after RFB is already up.
         time.sleep(2.0)

@@ -2,7 +2,16 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Start Xvfb + fluxbox + x11vnc, then launch Chromium at DEMO_URL.
+# Start Xvfb + fluxbox + dual x11vnc listeners, then launch Chromium at DEMO_URL.
+#
+# Dual RFB listeners (same X display — max client compatibility):
+#   RFB_PORT     (default 5900) — classic unencrypted RFB (Security None / VNC Auth)
+#   RFB_SSL_PORT (default 5901) — TLS-encrypted RFB with VeNCrypt + ANONTLS (x11vnc -ssl)
+#
+# Protocol: LibVNCServer negotiates RFB 3.3 / 3.7 / 3.8 with the usual encodings
+# (raw, copyrect, hextile, zlib, tight, zrle, …). We leave version selection to
+# the client handshake rather than pinning a single protocol revision.
+#
 # Writes navigation evidence under /var/log/vnc-lab/ for proof scripts.
 #
 set -euo pipefail
@@ -10,6 +19,9 @@ set -euo pipefail
 DEMO_URL="${DEMO_URL:-https://example.com}"
 GEOMETRY="${GEOMETRY:-1280x720x24}"
 RFB_PORT="${RFB_PORT:-5900}"
+RFB_SSL_PORT="${RFB_SSL_PORT:-5901}"
+# Optional shared VNC password for both listeners. Empty = -nopw (lab default).
+VNC_PASSWORD="${VNC_PASSWORD:-}"
 DISPLAY_NUM="${DISPLAY#:}"
 DISPLAY_NUM="${DISPLAY_NUM:-99}"
 export DISPLAY=":${DISPLAY_NUM}"
@@ -18,6 +30,7 @@ LOG_DIR=/var/log/vnc-lab
 mkdir -p "${LOG_DIR}"
 NAV_LOG="${LOG_DIR}/browser-nav.log"
 READY_FILE="${LOG_DIR}/vnc-ready"
+PASS_FILE="${LOG_DIR}/vnc.passwd"
 rm -f "${READY_FILE}"
 
 cleanup() {
@@ -51,36 +64,85 @@ fi
 
 echo "vnc-lab: starting fluxbox"
 fluxbox >/dev/null 2>&1 &
-FLUX_PID=$!
 
-echo "vnc-lab: starting x11vnc on 0.0.0.0:${RFB_PORT}"
-# -nopw: lab fixture (no auth). -forever/-shared: keep accepting clients.
+# Shared auth args for both listeners.
+AUTH_ARGS=()
+if [[ -n "${VNC_PASSWORD}" ]]; then
+  # -storepasswd writes a binary rfbauth file; -passwdfile is plain text first line.
+  printf '%s\n' "${VNC_PASSWORD}" > "${PASS_FILE}"
+  chmod 600 "${PASS_FILE}"
+  AUTH_ARGS=(-passwdfile "${PASS_FILE}")
+  echo "vnc-lab: VNC password auth enabled (both ports)"
+else
+  AUTH_ARGS=(-nopw)
+  echo "vnc-lab: VNC auth disabled (-nopw; lab default)"
+fi
+
+# Common compatibility flags (clients negotiate RFB 3.3–3.8; no pinned revision).
+# -shared: multiple concurrent viewers
+# -forever: re-accept after client disconnect
+# -xkb: better keyboard mapping across clients
+# -ncache 0: avoid client-side pixel cache quirks with older viewers
+COMMON_ARGS=(
+  -display "${DISPLAY}"
+  -listen 0.0.0.0
+  -forever
+  -shared
+  -xkb
+  -ncache 0
+  "${AUTH_ARGS[@]}"
+)
+
+echo "vnc-lab: starting plain (unencrypted) x11vnc on 0.0.0.0:${RFB_PORT}"
 x11vnc \
-  -display "${DISPLAY}" \
+  "${COMMON_ARGS[@]}" \
   -rfbport "${RFB_PORT}" \
-  -listen 0.0.0.0 \
-  -nopw \
-  -forever \
-  -shared \
-  -xkb \
-  -ncache 0 \
   -bg \
-  -o "${LOG_DIR}/x11vnc.log"
+  -o "${LOG_DIR}/x11vnc-plain.log"
 
-# Confirm RFB is accepting connections before advertising ready.
-for _ in $(seq 1 50); do
-  if grep -qE 'PORT=[0-9]+|Listening for VNC connections' "${LOG_DIR}/x11vnc.log" 2>/dev/null; then
-    break
-  fi
-  # Also accept "The VNC desktop is" which x11vnc prints when bound.
-  if grep -qiE 'vnc desktop|listening' "${LOG_DIR}/x11vnc.log" 2>/dev/null; then
-    break
-  fi
-  sleep 0.1
-done
+echo "vnc-lab: starting TLS/VeNCrypt/ANONTLS x11vnc on 0.0.0.0:${RFB_SSL_PORT}"
+# -ssl SAVE: generate+persist self-signed cert (lab-only)
+# -vencrypt support: VeNCrypt (modern TLS VNC) alongside x11vnc SSL
+# -anontls support: older vino-style TLS security type
+x11vnc \
+  "${COMMON_ARGS[@]}" \
+  -rfbport "${RFB_SSL_PORT}" \
+  -ssl SAVE \
+  -vencrypt support \
+  -anontls support \
+  -bg \
+  -o "${LOG_DIR}/x11vnc-ssl.log"
 
-date -u +%Y-%m-%dT%H:%M:%SZ > "${READY_FILE}"
-echo "vnc-lab: RFB ready on port ${RFB_PORT}"
+wait_listener_log() {
+  local log=$1
+  local label=$2
+  for _ in $(seq 1 80); do
+    if grep -qE 'PORT=[0-9]+|Listening for VNC connections|The VNC desktop is' "${log}" 2>/dev/null; then
+      return 0
+    fi
+    if grep -qiE 'vnc desktop|listening|sslport=' "${log}" 2>/dev/null; then
+      return 0
+    fi
+    sleep 0.1
+  done
+  echo "vnc-lab: ${label} listener did not become ready; log:" >&2
+  cat "${log}" >&2 || true
+  return 1
+}
+
+wait_listener_log "${LOG_DIR}/x11vnc-plain.log" "plain" || exit 1
+wait_listener_log "${LOG_DIR}/x11vnc-ssl.log" "ssl" || exit 1
+
+{
+  date -u +%Y-%m-%dT%H:%M:%SZ
+  echo "rfb_plain_port=${RFB_PORT}"
+  echo "rfb_ssl_port=${RFB_SSL_PORT}"
+  echo "rfb_auth=$([ -n "${VNC_PASSWORD}" ] && echo password || echo none)"
+  echo "rfb_modes=plain,ssl,vencrypt,anontls"
+  echo "rfb_versions=negotiated_3.3_3.7_3.8"
+} > "${READY_FILE}"
+
+echo "vnc-lab: RFB ready plain=:${RFB_PORT} ssl=:${RFB_SSL_PORT} (VeNCrypt+ANONTLS)"
 
 # Record navigation intent + launch Chromium (graphical, not --headless).
 {
