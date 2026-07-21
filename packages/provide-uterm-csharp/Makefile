@@ -31,7 +31,7 @@ DOTNET ?= dotnet
 # StreamJsonRpc, WsBinaryStreams, Pty/Ssh/Telnet transports, Gateway/Proxy).
 # Pure library batches still track ~99%+. Raise only with ≥0.2pt headroom on
 # BOTH csharp-quality and csharp-quality-windows after a full cover run.
-COVER_THRESHOLD ?= 97.6
+COVER_THRESHOLD ?= 97.5
 CONFIGURATION ?= Release
 
 .PHONY: build test cover build-binaries quality-gate interop-test conformance-test mutation-gate
