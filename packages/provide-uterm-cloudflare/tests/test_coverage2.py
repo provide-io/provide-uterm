@@ -297,3 +297,44 @@ class TestRegistryErrorPaths:
         result = await list_kv_sessions(env)
         # get failed → entry skipped → empty result
         assert result == []
+
+    async def test_list_kv_sessions_redacts_token_material(self) -> None:
+        """Fleet list must never return invite/token secrets from KV."""
+        store: dict[str, str] = {}
+        raw = {
+            "session_id": "w1",
+            "owner": "alice",
+            "visibility": "public",
+            "share_invite_token": "PLAIN_SHARE",  # pragma: allowlist secret
+            "control_invite_token": "PLAIN_CONTROL",  # pragma: allowlist secret
+            "worker_token_hash": "hash1",
+            "share_token_hash": "hash2",
+            "connected": True,
+        }
+
+        async def put(key: str, value: str, **_kw: object) -> None:
+            store[key] = value
+
+        async def get(key: str) -> str | None:
+            return store.get(key)
+
+        async def list_keys(*, prefix: str = "") -> SimpleNamespace:
+            return SimpleNamespace(keys=[{"name": "session:w1"}])
+
+        async def delete(key: str) -> None:
+            store.pop(key, None)
+
+        await put("session:w1", json.dumps(raw))
+        env = SimpleNamespace(SESSION_REGISTRY=SimpleNamespace(put=put, get=get, list=list_keys, delete=delete))
+        result = await list_kv_sessions(env)
+        assert len(result) == 1
+        row = result[0]
+        assert row["session_id"] == "w1"
+        assert row["owner"] == "alice"
+        for secret_key in (
+            "share_invite_token",
+            "control_invite_token",
+            "worker_token_hash",
+            "share_token_hash",
+        ):
+            assert secret_key not in row
