@@ -14,10 +14,25 @@
 #     provide-uterm-server-csharp
 #
 # MCP is not shipped for C# (operator de-scope). Server + CLI only.
+# Browser SPA is baked at /app/frontend (same Vite build as Python image).
 #
 
 ARG SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0
 ARG RUNTIME_IMAGE=mcr.microsoft.com/dotnet/aspnet:10.0
+ARG NODE_IMAGE=node:20-slim
+
+# ---- frontend-build: same Vite artifacts as Dockerfile.server ---------------
+FROM ${NODE_IMAGE} AS frontend-build
+
+WORKDIR /src
+COPY package.json package-lock.json ./
+COPY packages/provide-uterm-frontend/package.json packages/provide-uterm-frontend/package.json
+COPY packages/provide-uterm-app/package.json packages/provide-uterm-app/package.json
+RUN npm ci
+COPY scripts/ scripts/
+COPY packages/provide-uterm-frontend/ packages/provide-uterm-frontend/
+COPY packages/provide-uterm-app/ packages/provide-uterm-app/
+RUN npm run build:frontend
 
 # ---- build -----------------------------------------------------------------
 FROM ${SDK_IMAGE} AS build
@@ -37,6 +52,10 @@ RUN groupadd --system uterm \
     && useradd --system --gid uterm --home-dir /app --shell /usr/sbin/nologin uterm
 
 COPY --from=build /app/publish /app
+# Baked SPA/static assets (hijack.html, terminal.html, assets/, vite-manifest.json)
+COPY --from=frontend-build \
+    /src/packages/provide-uterm-server/src/provide/uterm/server/frontend/ \
+    /app/frontend/
 COPY docker/server.toml /etc/uterm/server.toml
 
 RUN mkdir -p /etc/uterm \
@@ -45,6 +64,7 @@ RUN mkdir -p /etc/uterm \
 EXPOSE 27780
 USER uterm
 
-ENV ASPNETCORE_URLS=http://0.0.0.0:27780
+ENV ASPNETCORE_URLS=http://0.0.0.0:27780 \
+    UTERM_FRONTEND_DIR=/app/frontend
 
 ENTRYPOINT ["./uterm", "server", "--config", "/etc/uterm/server.toml", "--host", "0.0.0.0", "--port", "27780"]

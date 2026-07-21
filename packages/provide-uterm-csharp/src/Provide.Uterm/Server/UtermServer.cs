@@ -319,12 +319,80 @@ public sealed partial class UtermServer : IAsyncDisposable
         var hubSt = _deps.Hub.Registry.Get(st.SessionId);
         if (hubSt is not null)
         {
-            st.WorkerOnline = hubSt.WorkerWs is not null;
+            // Keep registry WorkerOnline for REST-activated shell sessions without a WS.
+            st.WorkerOnline = st.WorkerOnline || hubSt.WorkerWs is not null;
             st.IsHijacked = _deps.Hub.State.IsHijacked(hubSt);
             st.InputMode = hubSt.InputMode;
         }
 
+        if (_deps.Registry.TryGetDefinition(st.SessionId, out var def) && def.Config.Count > 0)
+        {
+            st.ConnectorConfig = new Dictionary<string, object?>(def.Config);
+        }
+
         return st;
+    }
+
+    /// <summary>
+    /// Start session lifecycle, copy connector_config onto status, register hub worker
+    /// stub, and for shell/ushell/pty emit a connect bootstrap event (depth vs pure DTO).
+    /// </summary>
+    private SessionStatus? ActivateSession(string sessionId, SessionDefinition def)
+    {
+        var st = _deps.Registry.StartSession(sessionId);
+        if (st is null) return null;
+        st.ConnectorConfig = new Dictionary<string, object?>(def.Config);
+        // Ensure hub worker state so ring-buffer events attach to a real worker id.
+        _deps.Hub.Registry.SetDefault(sessionId, new Hub.WorkerTermState());
+        var ct = def.ConnectorType.Trim().ToLowerInvariant();
+        if (ct is "shell" or "ushell" or "pty")
+        {
+            // Bootstrap event proves connect path is live (ushell-style demo, no PTY required).
+            _deps.Hub.AppendEventData(sessionId, "session_started", new Dictionary<string, object?>
+            {
+                ["connector_type"] = def.ConnectorType,
+                ["display_name"] = def.DisplayName,
+                ["shell"] = true,
+            });
+        }
+
+        return st;
+    }
+
+    private static Dictionary<string, object?> ExtractConnectorConfig(Dictionary<string, JsonElement> body)
+    {
+        var cfg = new Dictionary<string, object?>(StringComparer.Ordinal);
+        foreach (var key in new[] { "host", "username", "password", "shell", "url", "command" })
+        {
+            if (body.TryGetValue(key, out var el) && el.ValueKind == JsonValueKind.String)
+            {
+                var s = el.GetString();
+                if (!string.IsNullOrEmpty(s)) cfg[key] = s;
+            }
+        }
+
+        if (body.TryGetValue("port", out var portEl) && portEl.ValueKind == JsonValueKind.Number)
+        {
+            cfg["port"] = portEl.GetInt32();
+        }
+
+        // Nested connector_config object (Go-shaped clients)
+        if (body.TryGetValue("connector_config", out var nested) && nested.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var prop in nested.EnumerateObject())
+            {
+                cfg[prop.Name] = prop.Value.ValueKind switch
+                {
+                    JsonValueKind.String => prop.Value.GetString(),
+                    JsonValueKind.Number => prop.Value.TryGetInt32(out var i) ? i : prop.Value.GetDouble(),
+                    JsonValueKind.True => true,
+                    JsonValueKind.False => false,
+                    _ => prop.Value.ToString(),
+                };
+            }
+        }
+
+        return cfg;
     }
 
     private IResult HandleHealth()

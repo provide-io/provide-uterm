@@ -14,9 +14,24 @@
 #     provide-uterm-server-go
 #
 # Wire-compatible with the Python reference server on the multi-backend contract.
+# Browser SPA is baked at /frontend (same Vite build as Python image).
 #
 
 ARG GO_IMAGE=golang:1.26-bookworm
+ARG NODE_IMAGE=node:20-slim
+
+# ---- frontend-build --------------------------------------------------------
+FROM ${NODE_IMAGE} AS frontend-build
+
+WORKDIR /src
+COPY package.json package-lock.json ./
+COPY packages/provide-uterm-frontend/package.json packages/provide-uterm-frontend/package.json
+COPY packages/provide-uterm-app/package.json packages/provide-uterm-app/package.json
+RUN npm ci
+COPY scripts/ scripts/
+COPY packages/provide-uterm-frontend/ packages/provide-uterm-frontend/
+COPY packages/provide-uterm-app/ packages/provide-uterm-app/
+RUN npm run build:frontend
 
 # ---- build -----------------------------------------------------------------
 FROM ${GO_IMAGE} AS build
@@ -34,6 +49,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/uterm .
 FROM gcr.io/distroless/static-debian12:nonroot
 
 COPY --from=build /out/uterm /uterm
+COPY --from=frontend-build \
+    /src/packages/provide-uterm-server/src/provide/uterm/server/frontend/ \
+    /frontend/
 # Fail-closed placeholder config (JWT placeholders rejected until replaced).
 # Prefer mounting a real file at /etc/uterm/server.toml (directory mount works
 # more reliably across Docker Desktop share roots than file-on-file binds).
@@ -42,4 +60,4 @@ COPY docker/server.toml /etc/uterm/server.toml
 EXPOSE 27780
 USER nonroot:nonroot
 
-ENTRYPOINT ["/uterm", "server", "--config", "/etc/uterm/server.toml", "--host", "0.0.0.0", "--port", "27780"]
+ENTRYPOINT ["/uterm", "server", "--config", "/etc/uterm/server.toml", "--frontend-dir", "/frontend", "--host", "0.0.0.0", "--port", "27780"]

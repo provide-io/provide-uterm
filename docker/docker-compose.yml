@@ -15,9 +15,9 @@
 #   CF worker dev:   http://localhost:27788  (service: cf)
 #
 # Default image config is fail-closed (JWT placeholders under /etc/uterm/server.toml).
-# Compose mounts docker/dev-smoke.toml (JWT smoke key + worker bearer) so all three
-# language servers boot on 0.0.0.0. Prefer directory mounts of /etc/uterm when
-# Docker Desktop file-on-file binds fail with OCI "not a directory".
+# Compose mounts docker/etc-uterm/ (directory) containing server.toml — directory
+# mounts are reliable across Docker Desktop; file→file binds often fail with
+# OCI "not a directory".
 #
 
 services:
@@ -30,7 +30,7 @@ services:
     ports:
       - "27780:27780"
     volumes:
-      - ./dev-smoke.toml:/etc/uterm/server.toml:ro
+      - ./etc-uterm:/etc/uterm:ro
 
   server-go:
     build:
@@ -40,7 +40,7 @@ services:
     ports:
       - "27781:27780"
     volumes:
-      - ./dev-smoke.toml:/etc/uterm/server.toml:ro
+      - ./etc-uterm:/etc/uterm:ro
 
   server-csharp:
     build:
@@ -50,7 +50,7 @@ services:
     ports:
       - "27782:27780"
     volumes:
-      - ./dev-smoke.toml:/etc/uterm/server.toml:ro
+      - ./etc-uterm:/etc/uterm:ro
 
   cf:
     build:

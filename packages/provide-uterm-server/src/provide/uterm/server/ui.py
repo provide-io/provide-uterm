@@ -67,8 +67,14 @@ def _read_vite_manifest() -> dict[str, Any] | None:
         return _vite_manifest
     _vite_manifest_loaded = True
     try:
-        manifest_path = importlib.resources.files("provide.uterm.server") / "frontend" / ".vite" / "manifest.json"
-        if manifest_path.is_file():
+        frontend = importlib.resources.files("provide.uterm.server") / "frontend"
+        # package-data-safe path first (setuptools drops leading-dot .vite/)
+        candidates = (
+            frontend / "vite-manifest.json",
+            frontend / ".vite" / "manifest.json",
+        )
+        manifest_path = next((p for p in candidates if p.is_file()), None)
+        if manifest_path is not None:
             raw = manifest_path.read_text(encoding="utf-8")
             _vite_manifest = json.loads(raw)
             logger.info("vite_manifest loaded entries=%d", len(_vite_manifest or {}))

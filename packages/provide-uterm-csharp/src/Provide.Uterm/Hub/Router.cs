@@ -32,9 +32,11 @@ public sealed class MessageRouter
         lock (_hub.SharedLock)
         {
             var st = _hub.Registry.Get(workerId);
+            Dictionary<string, object?> evt;
             if (st is null)
             {
-                return new Dictionary<string, object?>
+                // Still fan-out so REST watch/SSE work for sessions not yet WS-attached.
+                evt = new Dictionary<string, object?>
                 {
                     ["seq"] = 0,
                     ["ts"] = _hub.Clock.Wall(),
@@ -42,26 +44,30 @@ public sealed class MessageRouter
                     ["data"] = payload,
                 };
             }
+            else
+            {
+                st.EventSeq++;
+                evt = new Dictionary<string, object?>
+                {
+                    ["seq"] = st.EventSeq,
+                    ["ts"] = _hub.Clock.Wall(),
+                    ["type"] = eventType,
+                    ["data"] = payload,
+                };
+                st.Events.Add(evt);
+                if (st.Events.Count > _eventDequeMaxlen)
+                {
+                    st.Events.RemoveRange(0, st.Events.Count - _eventDequeMaxlen);
+                }
 
-            st.EventSeq++;
-            var evt = new Dictionary<string, object?>
-            {
-                ["seq"] = st.EventSeq,
-                ["ts"] = _hub.Clock.Wall(),
-                ["type"] = eventType,
-                ["data"] = payload,
-            };
-            st.Events.Add(evt);
-            if (st.Events.Count > _eventDequeMaxlen)
-            {
-                st.Events.RemoveRange(0, st.Events.Count - _eventDequeMaxlen);
+                if (st.Events.Count > 0 && st.Events[0].TryGetValue("seq", out var minSeq) && minSeq is int minI)
+                {
+                    st.MinEventSeq = minI;
+                }
             }
 
-            if (st.Events.Count > 0 && st.Events[0].TryGetValue("seq", out var minSeq) && minSeq is int minI)
-            {
-                st.MinEventSeq = minI;
-            }
-
+            // Fan-out to live watchers (EventBus long-poll / SSE).
+            _hub.EventBus.Enqueue(workerId, new Dictionary<string, object?>(evt));
             return evt;
         }
     }

@@ -21,6 +21,8 @@ public sealed class SessionStatus
     public bool WorkerOnline { get; set; }
     public bool IsHijacked { get; set; }
     public string InputMode { get; set; } = "hijack";
+    /// <summary>Connector config used at connect time (Go connector_config wire field).</summary>
+    public Dictionary<string, object?> ConnectorConfig { get; set; } = new();
 }
 
 public sealed class SessionItem
@@ -227,6 +229,7 @@ public sealed class InMemorySessionRegistry : ISessionRegistry
         WorkerOnline = st.WorkerOnline,
         IsHijacked = st.IsHijacked,
         InputMode = st.InputMode,
+        ConnectorConfig = new Dictionary<string, object?>(st.ConnectorConfig),
     };
 
     public SessionDefinition Upsert(SessionDefinition def)

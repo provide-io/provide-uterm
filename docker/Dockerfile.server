@@ -60,7 +60,8 @@ COPY packages/provide-uterm-frontend/ packages/provide-uterm-frontend/
 COPY packages/provide-uterm-app/ packages/provide-uterm-app/
 
 # Compile widgets (tsc + copy) and the app bundle (vite build). Output lands in
-# ${FRONTEND_DIR} (the server package dir) under /src.
+# ${FRONTEND_DIR} (the server package dir) under /src. Also publishes
+# vite-manifest.json (package-data-safe; setuptools omits .vite/).
 RUN npm run build:frontend
 
 # ---- builder stage: resolve + install into a uv-managed venv ----------------

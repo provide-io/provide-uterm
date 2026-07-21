@@ -181,10 +181,25 @@ public sealed partial class UtermServer
         var p = await Authenticate(ctx).ConfigureAwait(false);
         var profile = EnsureProfiles().GetProfile(profileId);
         if (profile is null) return DetailError(404, "unknown profile: " + profileId);
-        if (!CanReadProfile(_deps.Authz, p, profile)) return DetailError(403, "insufficient privileges");
-        // Wire parity: mint a session from the profile and start it.
+        if (!CanReadProfile(_deps.Authz, p, profile) || !_deps.Authz.CanCreateSession(p))
+        {
+            return DetailError(403, "insufficient privileges");
+        }
+
+        var body = await ReadJson(ctx).ConfigureAwait(false);
+        // Wire parity with Go handleConnectProfile: fold profile fields into connector_config.
+        var connectorConfig = new Dictionary<string, object?>(StringComparer.Ordinal);
+        if (!string.IsNullOrWhiteSpace(profile.Host)) connectorConfig["host"] = profile.Host;
+        if (profile.Port is > 0) connectorConfig["port"] = profile.Port.Value;
+        if (!string.IsNullOrWhiteSpace(profile.Username)) connectorConfig["username"] = profile.Username;
+        var password = Str(body, "password");
+        if (!string.IsNullOrEmpty(password))
+        {
+            connectorConfig["password"] = password; // pragma: allowlist secret
+        }
+
         var sid = "from-profile-" + Guid.NewGuid().ToString("N")[..10];
-        _deps.Registry.Upsert(new SessionDefinition
+        var def = new SessionDefinition
         {
             SessionId = sid,
             DisplayName = profile.Name,
@@ -192,14 +207,18 @@ public sealed partial class UtermServer
             Visibility = profile.Visibility,
             Owner = p.SubjectId,
             Tags = profile.Tags.ToList(),
-        });
-        var st = _deps.Registry.StartSession(sid);
+            Config = connectorConfig,
+        };
+        _deps.Registry.Upsert(def);
+        var st = ActivateSession(sid, def);
         EnsureMetrics().Inc("profile_connect_total");
         return Results.Json(new
         {
             ok = true,
             session_id = sid,
             profile_id = profileId,
+            connector_type = profile.ConnectorType,
+            connector_config = connectorConfig,
             status = st is null ? null : EnrichStatus(st),
         }, JsonOpts);
     }
@@ -480,28 +499,76 @@ public sealed partial class UtermServer
         ctx.Response.Headers["X-Accel-Buffering"] = "no";
         await ctx.Response.StartAsync().ConfigureAwait(false);
 
-        // Snapshot recent events then heartbeat until cancel (wire parity with SSE shell).
-        var events = _deps.Hub.Router.GetRecentEvents(sessionId, 50);
-        foreach (var evt in events)
+        IReadOnlyCollection<string>? eventTypes = null;
+        var et = ctx.Request.Query["event_types"].ToString();
+        if (!string.IsNullOrWhiteSpace(et))
         {
-            var json = JsonSerializer.Serialize(evt, JsonOpts);
-            await ctx.Response.WriteAsync("data: " + json + "\n\n", ctx.RequestAborted).ConfigureAwait(false);
-            await ctx.Response.Body.FlushAsync(ctx.RequestAborted).ConfigureAwait(false);
+            eventTypes = et.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         }
 
+        string? pattern = NullIfEmpty(ctx.Request.Query["pattern"].ToString());
+        var (sub, unsub) = _deps.Hub.EventBus.Watch(sessionId, eventTypes, pattern);
         try
         {
+            // Snapshot recent ring buffer first (matches Python stream bootstrap).
+            foreach (var evt in _deps.Hub.Router.GetRecentEvents(sessionId, 50))
+            {
+                var json = JsonSerializer.Serialize(evt, JsonOpts);
+                await ctx.Response.WriteAsync("data: " + json + "\n\n", ctx.RequestAborted).ConfigureAwait(false);
+                await ctx.Response.Body.FlushAsync(ctx.RequestAborted).ConfigureAwait(false);
+            }
+
+            // Immediate heartbeat so clients/tests see a first chunk without waiting 15s.
+            await ctx.Response.WriteAsync("data: {\"type\":\"heartbeat\"}\n\n", ctx.RequestAborted)
+                .ConfigureAwait(false);
+            await ctx.Response.Body.FlushAsync(ctx.RequestAborted).ConfigureAwait(false);
+
+            // UTERM_TEST_MODE shortens heartbeats so live tests can hit the timer arm.
+            var beat = string.Equals(
+                Environment.GetEnvironmentVariable("UTERM_TEST_MODE"), "1", StringComparison.Ordinal)
+                ? TimeSpan.FromMilliseconds(80)
+                : TimeSpan.FromSeconds(15);
             while (!ctx.RequestAborted.IsCancellationRequested)
             {
-                await ctx.Response.WriteAsync("data: {\"type\":\"heartbeat\"}\n\n", ctx.RequestAborted)
-                    .ConfigureAwait(false);
-                await ctx.Response.Body.FlushAsync(ctx.RequestAborted).ConfigureAwait(false);
-                await Task.Delay(TimeSpan.FromSeconds(15), ctx.RequestAborted).ConfigureAwait(false);
+                using var beatCts = CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted);
+                beatCts.CancelAfter(beat);
+                try
+                {
+                    while (await sub.Channel.Reader.WaitToReadAsync(beatCts.Token).ConfigureAwait(false))
+                    {
+                        while (sub.Channel.Reader.TryRead(out var item))
+                        {
+                            if (item is null)
+                            {
+                                await ctx.Response.WriteAsync(
+                                    "data: {\"type\":\"worker_disconnected\"}\n\n",
+                                    ctx.RequestAborted).ConfigureAwait(false);
+                                await ctx.Response.Body.FlushAsync(ctx.RequestAborted).ConfigureAwait(false);
+                                return;
+                            }
+
+                            var json = JsonSerializer.Serialize(item, JsonOpts);
+                            await ctx.Response.WriteAsync("data: " + json + "\n\n", ctx.RequestAborted)
+                                .ConfigureAwait(false);
+                            await ctx.Response.Body.FlushAsync(ctx.RequestAborted).ConfigureAwait(false);
+                        }
+                    }
+                }
+                catch (OperationCanceledException) when (!ctx.RequestAborted.IsCancellationRequested)
+                {
+                    await ctx.Response.WriteAsync("data: {\"type\":\"heartbeat\"}\n\n", ctx.RequestAborted)
+                        .ConfigureAwait(false);
+                    await ctx.Response.Body.FlushAsync(ctx.RequestAborted).ConfigureAwait(false);
+                }
             }
         }
         catch (OperationCanceledException)
         {
             // client gone
+        }
+        finally
+        {
+            unsub();
         }
     }
 
@@ -522,14 +589,30 @@ public sealed partial class UtermServer
             maxEvents = Math.Clamp(me, 1, 200);
         }
 
-        // Simple watch: return recent events immediately (no long-poll bus yet).
-        var events = _deps.Hub.Router.GetRecentEvents(sessionId, maxEvents);
-        await Task.Delay(Math.Min(timeoutMs, 50)).ConfigureAwait(false);
+        IReadOnlyCollection<string>? eventTypes = null;
+        var et = ctx.Request.Query["event_types"].ToString();
+        if (!string.IsNullOrWhiteSpace(et))
+        {
+            eventTypes = et.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        }
+
+        string? pattern = NullIfEmpty(ctx.Request.Query["pattern"].ToString());
+
+        // Real long-poll on EventBus (Python watch_session_events / Go shape).
+        var result = await _deps.Hub.EventBus.WatchAsync(
+            sessionId,
+            TimeSpan.FromMilliseconds(timeoutMs),
+            maxEvents,
+            eventTypes,
+            pattern,
+            ctx.RequestAborted).ConfigureAwait(false);
+
         return Results.Json(new
         {
             session_id = sessionId,
-            events,
-            timed_out = events.Count == 0,
+            events = result.Events,
+            dropped_count = result.DroppedCount,
+            timed_out = result.TimedOut,
         }, JsonOpts);
     }
 
@@ -549,20 +632,25 @@ public sealed partial class UtermServer
             ? connectorType
             : Str(body, "display_name");
         var sid = "connect-" + Guid.NewGuid().ToString("N")[..12];
-        _deps.Registry.Upsert(new SessionDefinition
+        var connectorConfig = ExtractConnectorConfig(body);
+        var def = new SessionDefinition
         {
             SessionId = sid,
             DisplayName = displayName,
             ConnectorType = connectorType,
             Visibility = "private",
             Owner = p.SubjectId,
-        });
-        var st = _deps.Registry.StartSession(sid);
+            Config = connectorConfig,
+        };
+        _deps.Registry.Upsert(def);
+        var st = ActivateSession(sid, def);
         EnsureMetrics().Inc("quick_connect_total");
         return Results.Json(new
         {
             ok = true,
             session_id = sid,
+            connector_type = connectorType,
+            connector_config = connectorConfig,
             status = st is null ? null : EnrichStatus(st),
         }, JsonOpts);
     }

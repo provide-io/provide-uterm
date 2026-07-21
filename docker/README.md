@@ -10,9 +10,9 @@ product line.
 
 | Service | Dockerfile | Host port | Notes |
 |---------|------------|-----------|-------|
-| `server` | `Dockerfile.server` | **27780** | Python FastAPI reference |
-| `server-go` | `Dockerfile.go` | **27781** | Go `uterm server` |
-| `server-csharp` | `Dockerfile.csharp` | **27782** | C# `uterm server` (no MCP) |
+| `server` | `Dockerfile.server` | **27780** | Python FastAPI reference (SPA baked) |
+| `server-go` | `Dockerfile.go` | **27781** | Go `uterm server` (SPA at `/frontend`) |
+| `server-csharp` | `Dockerfile.csharp` | **27782** | C# `uterm server` (SPA at `/app/frontend`; **no MCP**) |
 | `cf` | `Dockerfile.cf` | **27788** | Cloudflare Worker |
 
 ```bash
@@ -21,16 +21,19 @@ docker compose -f docker/docker-compose.yml up --build
 
 # One language only
 docker compose -f docker/docker-compose.yml up --build server-go
+
+# CI/local health smoke (build + curl /healthz)
+bash ci/docker_language_smoke.sh
 ```
 
-Default `/etc/uterm/server.toml` is **fail-closed** (JWT placeholders). Compose
-mounts `docker/dev-smoke.toml` (throwaway smoke JWT public key + 32-char worker
-bearer) so Python/Go/C# all boot on `0.0.0.0` — Python refuses `dev_token` on
-non-loopback binds. Prefer a **directory** mount of `/etc/uterm` if Docker Desktop
-rejects file-on-file binds:
+Compose mounts **`docker/etc-uterm/`** as a **directory** at `/etc/uterm` (contains
+`server.toml` from the JWT smoke config). Prefer directory mounts over
+file-on-file binds — Docker Desktop often fails the latter with OCI
+"not a directory".
 
 ```bash
-mkdir -p /tmp/uterm-etc && cp docker/dev-smoke.toml /tmp/uterm-etc/server.toml
+# Manual directory mount
+mkdir -p /tmp/uterm-etc && cp docker/etc-uterm/server.toml /tmp/uterm-etc/
 docker run --rm -p 27780:27780 \
   -v /tmp/uterm-etc:/etc/uterm:ro \
   provide-uterm-server:local
@@ -40,5 +43,4 @@ docker run --rm -p 27780:27780 \
 ## Surface parity (not packaging)
 
 Containers make each language runnable the same way. **API/behavior gaps** are
-tracked in `.provide/HANDOFF.md` (C# REST residual vs Go, UI hosting, etc.).
-MCP remains **out of scope for C#**.
+tracked in `.provide/HANDOFF.md`. MCP remains **out of scope for C#**.

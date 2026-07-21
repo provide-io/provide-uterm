@@ -38,6 +38,8 @@ public sealed class TermHub : ILeaseHub
     public MessageRouter Router { get; }
     public ConnectionManager Conn { get; }
     public PresenceManager Presence { get; }
+    /// <summary>Live event fanout for SSE/watch long-poll (Python/Go EventBus).</summary>
+    public EventBus EventBus { get; }
 
     internal object SharedLock { get; } = new();
     internal IClock Clock { get; }
@@ -76,6 +78,7 @@ public sealed class TermHub : ILeaseHub
             this,
             Clock);
 
+        EventBus = new EventBus(onMetric: config.OnMetric);
         Router = new MessageRouter(this, config.EventDequeMaxlen <= 0 ? 2000 : config.EventDequeMaxlen);
         Conn = new ConnectionManager(this);
         Presence = new PresenceManager(this);
