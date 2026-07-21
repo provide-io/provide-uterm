@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import contextvars
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -148,7 +149,7 @@ class EmbedSession:
         self._deferred: list[_Deferred] = []
         self._lock = asyncio.Lock()
         self._reader_task: asyncio.Task[None] | None = None
-        self._pipeline_depth = 0
+        self._pipeline_depth: contextvars.ContextVar[int] = contextvars.ContextVar("pipeline_depth", default=0)
         self._on_app: list[Callable[[ByteDirection, bytes, str | None], None]] = []
         self._on_client: list[Callable[[bytes, str | None], None]] = []
         self._on_wire: list[Callable[[WireEventKind, bytes, str], None]] = []
@@ -220,7 +221,7 @@ class EmbedSession:
     async def send_to_upstream(self, data: bytes) -> None:
         payload = bytes(data)
         # Re-entrant from interceptor while lock is held (pipeline_depth > 0).
-        if self._pipeline_depth > 0:
+        if self._pipeline_depth.get() > 0:
             await self._process_client(payload, None)
             return
         async with self._lock:
@@ -288,16 +289,16 @@ class EmbedSession:
         self._reader_task = asyncio.create_task(_loop())
 
     async def _process_upstream(self, data: bytes, *, from_defer: bool = False) -> None:
-        self._pipeline_depth += 1
+        token = self._pipeline_depth.set(self._pipeline_depth.get() + 1)
         try:
             ctx = InterceptContext(self, ByteDirection.UPSTREAM_TO_APP, data)
             result = await self._interceptor.on_upstream(ctx)
             await self._apply(result, data, ByteDirection.UPSTREAM_TO_APP, None, from_defer)
         finally:
-            self._pipeline_depth -= 1
+            self._pipeline_depth.reset(token)
 
     async def _process_client(self, data: bytes, client_id: str | None) -> None:
-        self._pipeline_depth += 1
+        token = self._pipeline_depth.set(self._pipeline_depth.get() + 1)
         try:
             for cb in self._on_client:
                 cb(data, client_id)
@@ -305,7 +306,7 @@ class EmbedSession:
             result = await self._interceptor.on_client(ctx)
             await self._apply(result, data, ByteDirection.CLIENT_TO_UPSTREAM, client_id, False)
         finally:
-            self._pipeline_depth -= 1
+            self._pipeline_depth.reset(token)
 
     async def _apply(
         self,
