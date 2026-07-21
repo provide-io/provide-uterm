@@ -14,8 +14,8 @@ the scope/de-scope source of truth for multi-language security parity.
 | `hello.hijack_control` | `ws` | `rest` |
 | `hello.hijack_step_supported` | `true` | `true` |
 | `hello.mcp_supported` | `true` | `false` |
-| `hello.vnc_supported` | `false` | `false` |
-| Human VNC relay (browser RFB proxy) | n/a | n/a |
+| `hello.vnc_supported` | `true` | `false` |
+| Human VNC relay (browser RFB proxy) | `WS …/hijack/{id}/gui/vnc` (authz + RFB filter; upstream dial optional) | n/a |
 | WS frame `hijack_request` | supported | rejected (`use_rest_hijack_api`) |
 | WS frame `hijack_release` | supported | rejected (`use_rest_hijack_api`) |
 | WS frame `hijack_step` | supported | rejected (`use_rest_hijack_api`) |

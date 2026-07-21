@@ -10,7 +10,7 @@
     },
     "python_fastapi": {
       "mcp_supported": true,
-      "vnc_supported": false
+      "vnc_supported": true
     }
   },
   "policy_cases": [

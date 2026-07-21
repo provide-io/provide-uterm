@@ -1,0 +1,95 @@
+#
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Cloudflare Access + optional external authz webhook — production-shaped
+# example for self-hosted Python FastAPI, Go, and C# servers.
+#
+# Prerequisites:
+#   1. Cloudflare Zero Trust → Access → Application protecting this origin
+#   2. Application AUD tag (JWT audience) copied below
+#   3. Team domain (subdomain of *.cloudflareaccess.com)
+#
+# Token material accepted (first wins) on Go/C#:
+#   Authorization: Bearer <jwt>
+#   CF-Access-JWT-Assertion: <jwt>     # edge-injected Access assertion
+#   Cookie CF_Authorization=<jwt>      # browser Access session
+#   Cookie uterm_token=<jwt>           # app token cookie
+#
+# NEVER trust Cf-Access-Authenticated-User-Email as identity — it is
+# client-forgeable without Access in front. Only verified JWT signatures count.
+#
+# Human VNC relay (browser binary RFB WebSocket):
+#   WS /worker/{worker_id}/hijack/{hijack_id}/gui/vnc?target_id=<graphical_target>
+#   Inject is gated by operator/admin role + owned hijack lease (fail closed).
+#
+
+[server]
+host = "127.0.0.1"
+port = 8780
+public_base_url = "https://uterm.example.com"
+title = "provide-uterm (Cloudflare Access)"
+
+[auth]
+mode = "jwt"
+
+# Team domain auto-fills empty jwt_jwks_url + jwt_issuer for Access certs.
+# Clear jwt_issuer (empty string) so auto-fill applies; default "provide-uterm"
+# would block issuer fill.
+cf_access_team_domain = "myteam"
+jwt_issuer = ""
+jwt_audience = "REPLACE_WITH_ACCESS_APPLICATION_AUD"
+jwt_algorithms = ["RS256"]
+# Access JWTs typically lack uterm roles — map authenticated users to a role.
+jwt_default_role = "viewer"
+clock_skew_seconds = 15
+jwt_roles_claim = "roles"
+jwt_scopes_claim = "scope"
+# jwt_jwks_url is optional when cf_access_team_domain is set:
+# https://myteam.cloudflareaccess.com/cdn-cgi/access/certs
+
+# Required for hosted runtime workers so /ws/worker/... can authenticate.
+worker_bearer_token = "REPLACE_WITH_RUNTIME_WORKER_JWT"
+
+[governance]
+# Optional external policy engine (Python / Go / C#). When secret is set,
+# responses MUST carry X-Uterm-Timestamp + X-Uterm-Signature (HMAC-SHA256
+# over timestamp + "." + body). Unsigned allow is rejected (fail closed).
+# authz_webhook_url = "https://policy.example.com/authz"
+# authz_webhook_secret = "REPLACE_WITH_SHARED_HMAC_SECRET"  # pragma: allowlist secret
+# authz_webhook_timeout_s = 2.0
+
+[ui]
+app_path = "/app"
+assets_path = "/_terminal"
+# When serving a CDN-backed fallback shell (no baked frontend), set SRI hashes:
+# xterm_cdn = "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0"
+# xterm_cdn_integrity = "sha384-…"
+# fit_addon_cdn = "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0"
+# fit_addon_cdn_integrity = "sha384-…"
+
+[recording]
+enabled_by_default = false
+directory = ".uterm-recordings"
+
+[security]
+# Block private/loopback connector + RFB/litevirt dials (SSRF). Set false only
+# for lab networks that intentionally target internal VNC endpoints.
+block_private_connector_targets = true
+
+# Optional: seed a graphical target for human VNC relay (RFB or litevirt).
+# [[graphical_targets]]
+# target_id = "lab-vnc"
+# protocol = "rfb"          # C#: TCP RFB; Go: prefer litevirt for ProxyVNC
+# endpoint = "vnc.lab.example.com:5900"
+# width = 1024
+# height = 768
+
+[[sessions]]
+session_id = "provide-shell"
+display_name = "Provide Shell"
+connector_type = "shell"
+input_mode = "open"
+auto_start = true
+visibility = "operator"
+tags = ["demo", "access"]

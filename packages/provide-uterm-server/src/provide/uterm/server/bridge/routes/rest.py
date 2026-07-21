@@ -82,6 +82,7 @@ from provide.uterm.server.bridge.rest_helpers import (
 )
 from provide.uterm.server.bridge.routes.rest_gui import register_gui_routes
 from provide.uterm.server.bridge.routes.rest_workerctl import register_workerctl_routes
+from provide.uterm.server.bridge.routes.ws_gui_vnc import register_gui_vnc_ws_routes
 
 
 def _mono_to_wall(mono_ts: float) -> float:
@@ -513,3 +514,5 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
     # register them here so ``/gui/`` screenshot + input endpoints share the
     # single ``register_rest_routes`` public surface.
     register_gui_routes(hub, router)
+    # Human VNC WebSocket relay (authz + optional upstream duplex factory).
+    register_gui_vnc_ws_routes(hub, router)

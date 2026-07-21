@@ -17,7 +17,7 @@
   "hello_defaults": {
     "python_fastapi": {
       "mcp_supported": true,
-      "vnc_supported": false
+      "vnc_supported": true
     },
     "go": {
       "mcp_supported": true,

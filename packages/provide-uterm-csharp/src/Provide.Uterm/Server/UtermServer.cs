@@ -301,6 +301,8 @@ public sealed partial class UtermServer : IAsyncDisposable
         app.MapPost("/worker/{workerId}/hijack/{hijackId}/gui/type", HandleGuiType);
         app.MapPost("/worker/{workerId}/hijack/{hijackId}/gui/key", HandleGuiKey);
         app.MapPost("/worker/{workerId}/hijack/{hijackId}/gui/drag", HandleGuiDrag);
+        // Human VNC WebSocket relay (RFB input filter + lease policy)
+        MapHumanVncRoutes(app);
 
         app.MapGet("/api/graphical-targets", (Delegate)HandleListGraphicalTargets);
         app.MapGet("/api/graphical-targets/{targetId}", HandleGetGraphicalTarget);

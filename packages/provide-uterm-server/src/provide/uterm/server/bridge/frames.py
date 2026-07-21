@@ -268,7 +268,7 @@ def make_hello_frame(**payload: Any) -> HelloFrame:
     # part of the Pydantic schema (``HelloFrame`` uses extra="ignore"),
     # so route through the loose TypedDict path and just stamp ``type``.
     payload.setdefault("mcp_supported", True)
-    payload.setdefault("vnc_supported", False)
+    payload.setdefault("vnc_supported", True)
     return cast("HelloFrame", {"type": "hello", **payload})
 
 

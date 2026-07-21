@@ -6,10 +6,20 @@ title = "provide-uterm-server"
 
 [auth]
 # Local/dev profile (header-compatible and no JWT requirements).
-mode = "dev"
+# Prefer mode = "dev_token" on current servers; legacy "dev" may be rejected.
+mode = "dev_token"
 principal_header = "x-uterm-principal"
 role_header = "x-uterm-role"
-# For production, prefer scripts/uterm-server.jwt.example.toml
+# Production JWT / Cloudflare Access:
+#   scripts/uterm-server.jwt.example.toml
+#   scripts/uterm-server.cf-access.example.toml
+
+# Optional external authz (Python/Go/C#). When secret is set, webhook responses
+# must be HMAC-signed (X-Uterm-Timestamp + X-Uterm-Signature).
+# [governance]
+# authz_webhook_url = "https://policy.example.com/authz"
+# authz_webhook_secret = "REPLACE_WITH_SHARED_HMAC_SECRET"  # pragma: allowlist secret
+# authz_webhook_timeout_s = 2.0
 
 [ui]
 app_path = "/app"

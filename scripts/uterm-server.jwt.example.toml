@@ -20,9 +20,21 @@ jwt_algorithms = ["RS256"]
 clock_skew_seconds = 15
 jwt_roles_claim = "roles"
 jwt_scopes_claim = "scope"
+# Optional default role when a verified JWT has no known roles claim
+# (typical for Cloudflare Access assertions). Filtered to viewer/operator/admin.
+# jwt_default_role = "viewer"
+# Cloudflare Access shortcut (Go/C#): fills empty jwt_jwks_url + jwt_issuer.
+# Prefer scripts/uterm-server.cf-access.example.toml for a full Access profile.
+# cf_access_team_domain = "myteam"
 # Required for hosted runtime workers so /ws/worker/... can authenticate.
 # Generate a dedicated service token with admin role for the runtime process.
 worker_bearer_token = "REPLACE_WITH_RUNTIME_WORKER_JWT"
+
+# Optional external authorization decisions (signed when secret is set).
+# [governance]
+# authz_webhook_url = "https://policy.example.com/authz"
+# authz_webhook_secret = "REPLACE_WITH_SHARED_HMAC_SECRET"  # pragma: allowlist secret
+# authz_webhook_timeout_s = 2.0
 
 [ui]
 app_path = "/app"
