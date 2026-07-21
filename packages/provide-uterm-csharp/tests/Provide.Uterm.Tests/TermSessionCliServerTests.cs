@@ -166,7 +166,7 @@ public class TermSessionCliServerTests
 
         using (var sw = new StringWriter())
         {
-            Assert.Equal(0, Root.Execute(new[] { "listen", "ws://127.0.0.1:9/ws", "--once", "--host", "127.0.0.1", "--port", "0" }, sw, sw));
+            Assert.Equal(0, Root.Execute(new[] { "listen", "ws://127.0.0.1:9/ws", "--once", "--host", "127.0.0.1", "--port", FreePort().ToString() }, sw, sw));
         }
 
         using (var sw = new StringWriter())
@@ -291,4 +291,13 @@ public class TermSessionCliServerTests
         Assert.Equal((byte)'Q', br2.ReadByte());
     }
 
+
+    private static int FreePort()
+    {
+        var probe = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        probe.Start();
+        var p = ((System.Net.IPEndPoint)probe.LocalEndpoint).Port;
+        probe.Stop();
+        return p;
+    }
 }

@@ -124,17 +124,21 @@ public sealed class HijackClient : IDisposable
         HeartbeatAsync(workerId, hijackId, DefaultLeaseS, ct);
 
     public Task<Dictionary<string, object?>> SendAsync(
-        string workerId, string hijackId, string keys, CancellationToken ct = default) =>
-        RequestObjectAsync(HttpMethod.Post, Hp(workerId, hijackId) + "/send",
-            new Dictionary<string, object?>
-            {
-                ["keys"] = keys,
-                ["timeout_ms"] = 2000,
-                ["poll_interval_ms"] = 120,
-            }, ct);
+        string workerId, string hijackId, string keys, string? expectPromptId = null, string? expectRegex = null, int timeoutMs = 2000, int pollIntervalMs = 120, CancellationToken ct = default)
+    {
+        var body = new Dictionary<string, object?>
+        {
+            ["keys"] = keys,
+            ["timeout_ms"] = timeoutMs,
+            ["poll_interval_ms"] = pollIntervalMs,
+        };
+        if (expectPromptId != null) body["expect_prompt_id"] = expectPromptId;
+        if (expectRegex != null) body["expect_regex"] = expectRegex;
+        return RequestObjectAsync(HttpMethod.Post, Hp(workerId, hijackId) + "/send", body, ct);
+    }
 
-    public Task<Dictionary<string, object?>> Send(string workerId, string hijackId, string keys, CancellationToken ct = default) =>
-        SendAsync(workerId, hijackId, keys, ct);
+    public Task<Dictionary<string, object?>> Send(string workerId, string hijackId, string keys, string? expectPromptId = null, string? expectRegex = null, int timeoutMs = 2000, int pollIntervalMs = 120, CancellationToken ct = default) =>
+        SendAsync(workerId, hijackId, keys, expectPromptId, expectRegex, timeoutMs, pollIntervalMs, ct);
 
     public Task<Dictionary<string, object?>> StepAsync(string workerId, string hijackId, int steps = 1, CancellationToken ct = default) =>
         RequestObjectAsync(HttpMethod.Post, Hp(workerId, hijackId) + "/step",

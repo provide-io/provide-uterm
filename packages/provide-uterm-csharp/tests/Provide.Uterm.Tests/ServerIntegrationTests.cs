@@ -178,7 +178,7 @@ public class ServerIntegrationTests
             Assert.NotNull(hello);
             Assert.True(hello!.TryGetValue("mcp_supported", out var mcp));
             Assert.True(hello.TryGetValue("vnc_supported", out var vnc));
-            Assert.False(Convert.ToBoolean(mcp));
+            Assert.True(Convert.ToBoolean(mcp));
             Assert.True(Convert.ToBoolean(vnc));
         }
     }

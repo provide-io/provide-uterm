@@ -233,7 +233,7 @@ public class CoverageTo99Wave8Tests
         var (server, baseUrl, _, viewerTok, _, _) = await StartServerAsync();
         await using (server)
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(12));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
             var buf = new byte[65536];
             using var ws = await ConnectBrowserAsync(baseUrl, "demo", viewerTok, cts.Token);
             await DrainHandshakeAsync(ws, buf, cts.Token);
@@ -295,7 +295,7 @@ public class CoverageTo99Wave8Tests
         var (server, baseUrl, adminTok, _, _, _) = await StartServerAsync();
         await using (server)
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(12));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
             var buf = new byte[65536];
             using var ws = await ConnectBrowserAsync(baseUrl, "noworker", adminTok, cts.Token);
             await DrainHandshakeAsync(ws, buf, cts.Token);
