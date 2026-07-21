@@ -1,8 +1,8 @@
 # Goal — Language containers + remaining server surface parity
 
-**Status:** in progress (Docker images landed; surface backlog open)  
+**Status:** complete  
 **Out of scope:** **C# MCP** (permanent)  
-**Head:** see `main` tip after docker commits
+**Head:** see `main` tip after docker + REST parity commits
 
 ## Objective
 
@@ -14,20 +14,11 @@
 - [x] `docker/Dockerfile.go` + `docker/Dockerfile.csharp`
 - [x] `docker/docker-compose.yml` services `server` / `server-go` / `server-csharp` / `cf`
 - [x] `docker/README.md`
-- [ ] Prove images build (`docker build` / compose) and `/healthz` responds with mounted dev config
+- [x] Prove images build and `/healthz` → `{"status":"ok"}` on 27780/27781/27782 with mounted `docker/dev-smoke.toml` (JWT smoke config; directory mount of `/etc/uterm`)
 
-## Surface parity (phase S) — sequential
+## Surface parity (phase S)
 
-1. C# **profiles** CRUD + connect  
-2. C# **API keys**  
-3. C# **approvals**  
-4. C# **metrics** + security-posture  
-5. C# **events/stream** + **events/watch**  
-6. C# session **PATCH** + bulk DELETE + **POST /api/connect**  
-7. Optional: SPA static hosting on Go/C# (fewer page.routes)  
-8. Optional: dual-OS cover floor raise with ≥0.2pt headroom  
-
-Each step: real tests + csharp-quality green + HANDOFF table update. No empty multi-backend passes.
+1–7 closed (profiles, keys, approvals, metrics/posture, events/watch, session patch/bulk + connect, SPA shell). See HANDOFF residual table. Dual-OS cover floor raise remains optional follow-on.
 
 ## Permanent non-goals
 

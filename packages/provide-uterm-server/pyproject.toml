@@ -68,9 +68,13 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "provide.uterm" = ["py.typed"]
+# Explicit .vite/* — setuptools recursive globs omit leading-dot dirs, so the
+# Vite app manifest (frontend/.vite/manifest.json) would not enter the wheel.
 "provide.uterm.server" = [
     "frontend/**",
     "frontend/**/*",
+    "frontend/.vite/*",
+    "frontend/.vite/**/*",
 ]
 
 [tool.pytest.ini_options]

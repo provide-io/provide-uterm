@@ -2,17 +2,37 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Local Docker smoke config (dev_token). Mount over /etc/uterm/server.toml.
+# Local Docker smoke config. Mount over /etc/uterm/server.toml (prefer a
+# directory mount of /etc/uterm). Uses JWT with a throwaway smoke public key —
+# Python refuses auth.mode=dev_token on host=0.0.0.0 (non-loopback). /healthz
+# is unauthenticated; this config only needs to pass startup validation.
 #
 
 [server]
 host = "0.0.0.0"
 port = 27780
 public_base_url = "http://127.0.0.1:27780"
+title = "provide-uterm (Docker smoke)"
 
 [auth]
-mode = "dev_token"
-worker_bearer_token = "docker-dev-worker"
+mode = "jwt"
+require_jwt_in_production = true
+jwt_issuer = "provide-uterm"
+jwt_audience = "provide-uterm-server"
+# Throwaway smoke RSA public key (no private key in-tree; not for production).
+jwt_public_key_pem = """
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArRhyHMRDmV2ruvDba67S
+u86RzwWgwkCumDIR/pHeHnsNuUXxufjgsK+Z9aYPgIsdCF+UEGHK4RFUk1fpBKGM
+5m73OkksfeG83KPFmI5CZYJtSn9BkXh/o9+jeq7OuEs+OE2JmXRM5p+DKFexppVV
+SuiYojWgN+bUrpUYvwCnbY23sWytnS6+GlkIXXzB+qrkpSmPUro8r9oYhdGS7GBw
+xO0u5G+2kJ2LptWvV8B1cOrECSsgrrSFvh9ZHREj7jjc92edSOYe4tiuzdmEGP7b
+owv1g8aKeMcahW1HJXJRfEE/VXQIM5DvadGwrnAEE3oRYaPK8LYAhbdCnXHLg7jv
+GQIDAQAB
+-----END PUBLIC KEY-----
+"""
+jwt_algorithms = ["RS256"]
+worker_bearer_token = "docker-smoke-worker-token-min-32-chars"
 
 [[sessions]]
 session_id = "demo"

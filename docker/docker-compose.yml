@@ -15,9 +15,9 @@
 #   CF worker dev:   http://localhost:27788  (service: cf)
 #
 # Default image config is fail-closed (JWT placeholders under /etc/uterm/server.toml).
-# For local multi-language smoke with dev_token, mount docker/dev-smoke.toml:
-#   volumes:
-#     - ./dev-smoke.toml:/etc/uterm/server.toml:ro
+# Compose mounts docker/dev-smoke.toml (JWT smoke key + worker bearer) so all three
+# language servers boot on 0.0.0.0. Prefer directory mounts of /etc/uterm when
+# Docker Desktop file-on-file binds fail with OCI "not a directory".
 #
 
 services:
