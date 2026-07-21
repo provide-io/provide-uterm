@@ -31,13 +31,9 @@ if str(_SCRIPTS) not in sys.path:
 
 import prove_vnc_lab as vnc_lab
 
-pytestmark = [
-    pytest.mark.docker,
-    pytest.mark.skipif(shutil.which("docker") is None, reason="Docker not available"),
-]
-
 _DEMO_URL = "https://example.com"
 _CONTAINER = "uterm-test-vnc-pytest"
+_docker_missing = shutil.which("docker") is None
 
 
 def _evidence_dir(tmp_path: Path) -> Path:
@@ -54,6 +50,8 @@ def _evidence_dir(tmp_path: Path) -> Path:
 @pytest.fixture(scope="module")
 def vnc_lab_image() -> str:
     """Build the lab image once per module (committed Dockerfile)."""
+    if _docker_missing:
+        pytest.skip("Docker not available")
     log = _REPO_ROOT / ".pytest_cache" / "vnc-image-build-pytest.log"
     log.parent.mkdir(parents=True, exist_ok=True)
     vnc_lab.build_image(root=_REPO_ROOT, log_path=log)
@@ -75,8 +73,8 @@ def test_dockerfile_and_entrypoint_exist() -> None:
 
 def test_rfb_handshake_helper_rejects_non_rfb() -> None:
     """Unit-level: handshake parser rejects garbage (no Docker required)."""
-    # Drive the real function against a local non-RFB listener via socket pair
-    # is awkward; instead open a short-lived TCP server that sends junk.
+    # Drive the real shipped rfb_handshake against a short-lived TCP peer that
+    # speaks HTTP instead of RFB — proves the parser, not a reimplementation.
     import socket
     import threading
 
@@ -99,6 +97,8 @@ def test_rfb_handshake_helper_rejects_non_rfb() -> None:
         vnc_lab.rfb_handshake("127.0.0.1", port, timeout=2.0)
 
 
+@pytest.mark.docker
+@pytest.mark.skipif(_docker_missing, reason="Docker not available")
 def test_vnc_lab_rfb_and_browser_navigation(
     vnc_lab_image: str,
     tmp_path: Path,
