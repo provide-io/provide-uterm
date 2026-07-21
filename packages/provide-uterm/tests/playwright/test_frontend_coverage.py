@@ -88,7 +88,7 @@ class TestFrontendV8Coverage:
 
         from provide.uterm.server.ui import _resolve_vanilla_asset
 
-        terminal_asset = _resolve_vanilla_asset("src/terminal.ts")
+        terminal_asset = _resolve_vanilla_asset("terminal.html")
         scripts = _stop_precise_coverage(session)
         covered, total = _covered_bytes_for_script(session, scripts, terminal_asset)
         session.detach()
@@ -124,7 +124,7 @@ class TestFrontendV8Coverage:
 
         from provide.uterm.server.ui import _resolve_vanilla_asset
 
-        hijack_asset = _resolve_vanilla_asset("src/hijack.ts")
+        hijack_asset = _resolve_vanilla_asset("hijack.html")
         scripts = _stop_precise_coverage(session)
         covered, total = _covered_bytes_for_script(session, scripts, hijack_asset)
         session.detach()

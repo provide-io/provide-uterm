@@ -73,7 +73,13 @@ def _hub(*, rest_session: Any = "MISSING", worker_state: WorkerTermState | None 
     if worker_state is not None:
         registry.put(WID, worker_state)
     hub = SimpleNamespace()
-    session = SimpleNamespace(lease_expires_at=time.monotonic() + 60) if rest_session == "MISSING" else rest_session
+    # Real HijackSessions carry acquired_by (None for legacy/unauthenticated
+    # leases); _require_graphical_session reads it for principal-bound inject.
+    session = (
+        SimpleNamespace(lease_expires_at=time.monotonic() + 60, acquired_by=None)
+        if rest_session == "MISSING"
+        else rest_session
+    )
     hub.get_rest_session = AsyncMock(return_value=session)
     hub.registry = registry
     return hub
@@ -296,13 +302,13 @@ class TestClick:
         idx = ((2 * 20) + 3) * 4
         assert sess.screenshot().pixels[idx] == 255
 
-    async def test_unknown_button_defaults_left(self) -> None:
-        hub, sess = _attached_hub()
+    async def test_unknown_button_rejected(self) -> None:
+        # Unknown buttons are rejected (not silently coerced to left).
+        hub, _sess = _attached_hub()
         ep = _endpoint(hub, CLICK)
         resp = await ep(_FakeRequest(body={"x": 1, "y": 1, "button": "wheel"}), WID, HID)
-        assert resp == {"ok": True}
-        idx = ((1 * 20) + 1) * 4
-        assert sess.screenshot().pixels[idx] == 255
+        assert _status(resp) == 422
+        assert "invalid button" in _body(resp)["error"]
 
     async def test_middle_button_is_noop_on_framebuffer(self) -> None:
         # Middle (mask 2) has no bit-0 set → MemoryGraphicalSession ignores it.

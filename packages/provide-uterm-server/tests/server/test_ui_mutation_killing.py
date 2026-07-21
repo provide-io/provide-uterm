@@ -109,6 +109,9 @@ class TestReadViteManifestMutationKilling:
         manifest_mock.is_file.return_value = True
         manifest_mock.read_text = mock_read_text
         vite_mock = mock.MagicMock()
+        # frontend/"vite-manifest.json" is checked first; mark absent so the
+        # .vite/manifest.json fallback (manifest_mock) is the one read.
+        vite_mock.is_file.return_value = False
         vite_mock.__truediv__ = lambda self, n: manifest_mock
         frontend_mock = mock.MagicMock()
         frontend_mock.__truediv__ = lambda self, n: vite_mock
@@ -129,6 +132,9 @@ class TestReadViteManifestMutationKilling:
         manifest_mock.is_file.return_value = True
         manifest_mock.read_text.return_value = json.dumps(manifest_data)
         vite_mock = mock.MagicMock()
+        # frontend/"vite-manifest.json" is checked first; mark absent so the
+        # .vite/manifest.json fallback (manifest_mock) is the one parsed.
+        vite_mock.is_file.return_value = False
         vite_mock.__truediv__ = lambda self, n: manifest_mock
         frontend_mock = mock.MagicMock()
         frontend_mock.__truediv__ = lambda self, n: vite_mock
