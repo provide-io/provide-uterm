@@ -83,6 +83,11 @@ fi
 # -forever: re-accept after client disconnect
 # -xkb: better keyboard mapping across clients
 # -ncache 0: avoid client-side pixel cache quirks with older viewers
+# -noxdamage: Chromium/canvas often skips XDAMAGE events
+# -fs 1: force a full-screen RFB refresh every second so nested xterm.js
+#        canvas repaints actually reach viewers (incremental damage is flaky)
+# -nonap: don't sleep between polls
+# -wait/-defer: short poll latency
 COMMON_ARGS=(
   -display "${DISPLAY}"
   -listen 0.0.0.0
@@ -90,6 +95,11 @@ COMMON_ARGS=(
   -shared
   -xkb
   -ncache 0
+  -noxdamage
+  -fs 1
+  -nonap
+  -wait 5
+  -defer 5
   "${AUTH_ARGS[@]}"
 )
 
@@ -166,16 +176,24 @@ fi
 
 echo "browser_resolved_binary=${CHROME_BIN}" >> "${NAV_LOG}"
 
-# Docker-friendly Chromium flags: no sandbox (container), small shm, no GPU.
+# Docker-friendly Chromium under Xvfb:
+# - no sandbox / test-type (suppresses the --no-sandbox infobar)
+# - leave the software rasterizer ENABLED so xterm.js canvas repaints hit X11
+# - no ANGLE/SwiftShader stack (it often fails to damage X for x11vnc)
+# - maximized fills the 1280×720 framebuffer (no floating window letterbox)
+export LIBGL_ALWAYS_SOFTWARE=1
 "${CHROME_BIN}" \
   --no-sandbox \
+  --test-type \
   --disable-gpu \
+  --disable-gpu-compositing \
   --disable-dev-shm-usage \
-  --disable-software-rasterizer \
   --no-first-run \
   --no-default-browser-check \
   --disable-session-crashed-bubble \
   --disable-infobars \
+  --hide-crash-restore-bubble \
+  --start-maximized \
   --window-size=1280,720 \
   --window-position=0,0 \
   "${DEMO_URL}" \
