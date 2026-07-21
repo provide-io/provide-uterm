@@ -414,3 +414,60 @@ async def test_upstream_lost_and_backpressure() -> None:
     assert b"\x09" in up2.sent
     await session.aclose()
     await s2.aclose()
+
+
+class _BoomUpstream(MemoryUpstream):
+    """Upstream whose connect() fails, to exercise rollback paths."""
+
+    async def connect(self) -> None:
+        raise RuntimeError("connect boom")
+
+
+@pytest.mark.asyncio
+async def test_receive_returns_eof_when_closed_and_drained() -> None:
+    hub = EmbedHub()
+    session = await hub.create_session(session_id="eof")
+    await session.connect_upstream(MemoryUpstream())
+    handle = await session.attach_client(ClientMetadata(client_id="c"))
+    await session.detach_client("c")  # enqueues the b"" EOF sentinel
+    assert await handle.receive() == b""  # drains the sentinel
+    assert await handle.receive() == b""  # closed + empty queue → EOF path
+
+
+@pytest.mark.asyncio
+async def test_connect_upstream_rolls_back_lifecycle_on_failure() -> None:
+    hub = EmbedHub()
+    session = await hub.create_session(session_id="cf")
+    before = session.lifecycle
+    with pytest.raises(RuntimeError, match="connect boom"):
+        await session.connect_upstream(_BoomUpstream())
+    assert session.lifecycle == before
+
+
+@pytest.mark.asyncio
+async def test_replace_upstream_rolls_back_lifecycle_on_failure() -> None:
+    hub = EmbedHub()
+    session = await hub.create_session(session_id="rf")
+    await session.connect_upstream(MemoryUpstream())
+    before = session.lifecycle
+    with pytest.raises(RuntimeError, match="connect boom"):
+        await session.replace_upstream(_BoomUpstream())
+    assert session.lifecycle == before
+
+
+@pytest.mark.asyncio
+async def test_attach_client_fires_lifecycle_callback() -> None:
+    hub = EmbedHub()
+    session = await hub.create_session(session_id="lc")
+    await session.connect_upstream(MemoryUpstream())
+    events: list[tuple[SessionLifecycle, str]] = []
+    session.on_lifecycle(lambda phase, detail: events.append((phase, detail)))
+    await session.attach_client(ClientMetadata(client_id="watched"))
+    assert (SessionLifecycle.CLIENT_ATTACHED, "watched") in events
+
+
+@pytest.mark.asyncio
+async def test_detach_unknown_client_is_noop() -> None:
+    hub = EmbedHub()
+    session = await hub.create_session(session_id="dg")
+    await session.detach_client("ghost")  # no such client → idempotent return

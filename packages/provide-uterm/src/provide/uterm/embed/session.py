@@ -393,9 +393,10 @@ class EmbedSession:
             if not self._try_enqueue(meta, q, data) and meta.backpressure is BackpressurePolicy.DISCONNECT:
                 drop.append(cid)
         for cid in drop:
-            slot = self._clients.pop(cid, None)
-            if slot is not None:
-                slot[2]._mark_detached()
+            # cid came from self._clients above and nothing mutates it in between,
+            # so the entry is always present.
+            _meta, _queue, handle = self._clients.pop(cid)
+            handle._mark_detached()
 
     @staticmethod
     def _try_enqueue(meta: ClientMetadata, q: asyncio.Queue[bytes], data: bytes) -> bool:

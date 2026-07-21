@@ -260,3 +260,125 @@ def test_socketpair_bidirectional_relay() -> None:
         for s in (browser_c, browser_s, upstream_c, upstream_s):
             with suppress(OSError):
                 s.close()
+
+
+class _NoFlushWriter:
+    """Write-only stream with no flush() and no fileno() (BytesIO has both)."""
+
+    def __init__(self) -> None:
+        self.buf = bytearray()
+
+    def write(self, data: bytes) -> int:
+        self.buf.extend(data)
+        return len(data)
+
+
+class _FakeFdStream:
+    """Stream that reports a fileno so _unblock_fd_stream acts on its close()."""
+
+    def __init__(self, data: bytes = b"", *, close: object = "default") -> None:
+        self._buf = io.BytesIO(data)
+        if close != "default":
+            self.close = close  # type: ignore[assignment]
+
+    def fileno(self) -> int:
+        return 3  # any int; _unblock_fd_stream only checks fileno() exists
+
+    def read(self, n: int) -> bytes:
+        return self._buf.read(n)
+
+    def write(self, data: bytes) -> int:
+        return len(data)
+
+
+class _RaisingReader:
+    def __init__(self, exc: BaseException) -> None:
+        self._exc = exc
+
+    def read(self, _n: int) -> bytes:
+        raise self._exc
+
+
+def test_streams_without_flush_are_relayed() -> None:
+    # Neither write side exposes flush(): exercises the "flush not callable" paths.
+    browser_w = _NoFlushWriter()
+    upstream_w = _NoFlushWriter()
+    run_human_relay_streams(
+        io.BytesIO(_handshake()),
+        browser_w,  # type: ignore[arg-type]
+        io.BytesIO(b"FRAME"),
+        upstream_w,  # type: ignore[arg-type]
+        can_inject=None,
+        session_id="s",
+        lease_id="l",
+        principal_id="p",
+        principal_role="operator",
+    )
+    assert bytes(browser_w.buf) == b"FRAME"
+    assert bytes(upstream_w.buf) == _handshake()
+
+
+def test_pump_read_oserror_is_logged_not_fatal() -> None:
+    # A shutdown-race read error (OSError) is logged and swallowed.
+    run_human_relay_streams(
+        io.BytesIO(_handshake()),
+        io.BytesIO(),
+        _RaisingReader(OSError("pipe closed")),  # type: ignore[arg-type]
+        io.BytesIO(),
+        can_inject=None,
+        session_id="s",
+        lease_id="l",
+        principal_id="p",
+        principal_role="operator",
+    )
+
+
+def test_pump_read_fatal_error_is_reraised() -> None:
+    # A non-OSError pump failure propagates after the relay unwinds.
+    import pytest
+
+    with pytest.raises(RuntimeError, match="boom"):
+        run_human_relay_streams(
+            io.BytesIO(_handshake()),
+            io.BytesIO(),
+            _RaisingReader(RuntimeError("boom")),  # type: ignore[arg-type]
+            io.BytesIO(),
+            can_inject=None,
+            session_id="s",
+            lease_id="l",
+            principal_id="p",
+            principal_role="operator",
+        )
+
+
+def test_unblock_fd_close_oserror_swallowed() -> None:
+    def _raise() -> None:
+        raise OSError("already closed")
+
+    browser_w = _FakeFdStream(close=_raise)
+    run_human_relay_streams(
+        io.BytesIO(_handshake()),
+        browser_w,  # type: ignore[arg-type]
+        io.BytesIO(),
+        io.BytesIO(),
+        can_inject=None,
+        session_id="s",
+        lease_id="l",
+        principal_id="p",
+        principal_role="operator",
+    )
+
+
+def test_unblock_fd_close_not_callable_is_skipped() -> None:
+    browser_w = _FakeFdStream(close=None)
+    run_human_relay_streams(
+        io.BytesIO(_handshake()),
+        browser_w,  # type: ignore[arg-type]
+        io.BytesIO(),
+        io.BytesIO(),
+        can_inject=None,
+        session_id="s",
+        lease_id="l",
+        principal_id="p",
+        principal_role="operator",
+    )
