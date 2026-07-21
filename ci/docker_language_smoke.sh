@@ -106,13 +106,13 @@ done
 docker compose -f docker/docker-compose.yml config --services \
   | tee "${EVIDENCE_DIR}/compose-services.txt"
 
-# Assert compose uses directory mounts (not file→file server.toml only).
-if docker compose -f docker/docker-compose.yml config 2>/dev/null \
-  | grep -E 'source:.*dev-smoke\.toml' >/dev/null; then
-  echo "WARN: compose still references file-bind dev-smoke.toml" >&2
+# Assert compose uses directory mounts (not fragile file→file server.toml binds).
+compose_cfg="$(docker compose -f docker/docker-compose.yml config 2>/dev/null || true)"
+if echo "${compose_cfg}" | grep -E 'dev-smoke\.toml:.*/etc/uterm/server\.toml' >/dev/null; then
+  echo "FAIL: compose still file-binds dev-smoke.toml onto /etc/uterm/server.toml" >&2
+  exit 1
 fi
-if ! docker compose -f docker/docker-compose.yml config 2>/dev/null \
-  | grep -E 'etc-uterm|/etc/uterm' >/dev/null; then
+if ! echo "${compose_cfg}" | grep -E 'etc-uterm|target: /etc/uterm' >/dev/null; then
   echo "FAIL: compose config missing /etc/uterm directory mount" >&2
   exit 1
 fi

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/connectors"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/server"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
 )
@@ -51,6 +52,8 @@ type SessionRegistryImpl struct {
 	// policy at the CreateSession chokepoint (port of assert_session_egress_allowed).
 	egress       *server.EgressGuard
 	blockPrivate bool
+	// eventBus is the hub EventBus for long-poll events/watch (optional).
+	eventBus *hub.EventBus
 }
 
 var _ server.SessionRegistry = (*SessionRegistryImpl)(nil)
@@ -72,6 +75,21 @@ func NewSessionRegistry(cfg *serverconfig.UtermServerConfig) *SessionRegistryImp
 		r.seed(def)
 	}
 	return r
+}
+
+// SetEventBus wires the hub EventBus so WatchSessionEvents can long-poll.
+// Safe to call once after NewSessionRegistry (server boot).
+func (r *SessionRegistryImpl) SetEventBus(bus *hub.EventBus) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.eventBus = bus
+}
+
+// EventBus returns the wired EventBus, or nil.
+func (r *SessionRegistryImpl) EventBus() *hub.EventBus {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.eventBus
 }
 
 // seed inserts a definition as a fresh entry (waiting, per-def input mode).

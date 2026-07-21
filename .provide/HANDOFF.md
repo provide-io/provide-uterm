@@ -304,15 +304,15 @@ Canonical cross-language support matrix. **yes** = shipped and exercised;
 | Surface | Python | Go | C# |
 |---------|--------|----|-----|
 | Profiles CRUD | yes | yes | yes |
-| Profile connect (`POST …/profiles/{id}/connect`) | yes | yes | yes — `connector_config` + session start |
-| Quick connect `POST /api/connect` | yes | yes | yes — nested `connector_config` + shell bootstrap |
+| Profile connect (`POST …/profiles/{id}/connect`) | yes | yes (real connector via `defaultConnect`) | yes — `connector_config` + live ushell/PTY pump |
+| Quick connect `POST /api/connect` | yes | yes | yes — nested `connector_config` + live ushell/PTY |
 | API keys CRUD/revoke | yes | yes | yes |
 | Approvals list/approve/reject | yes | yes | yes |
 | Metrics JSON + Prometheus | yes | yes | yes |
 | Security posture | yes | yes | yes |
 | Session PATCH / bulk DELETE | yes | yes | yes |
 | SSE `…/events/stream` (live + heartbeat) | yes | yes (EventBus) | yes (EventBus) |
-| Long-poll `…/events/watch` | yes | partial — route; registry watch stub depth varies | yes (EventBus long-poll) |
+| Long-poll `…/events/watch` | yes | yes (EventBus long-poll + connector ring bootstrap) | yes (EventBus long-poll) |
 
 ### UI / packaging / ops
 
@@ -340,8 +340,8 @@ Canonical cross-language support matrix. **yes** = shipped and exercised;
 - Python wheels: `frontend/vite-manifest.json` (package-data-safe; `scripts/publish-frontend-manifest.mjs`)
 - Cover: C# measured **97.91%** @ floor 97.9 (no raise — <0.2pt dual-OS headroom)
 
-### Notes / remaining depth (not open “gaps” for the residual goal)
+### Notes / remaining depth
 
-1. **Go `events/watch`:** route exists; registry implementation may still return empty/timed_out shells in places — C# EventBus is the closed residual bar.
-2. **Connect depth:** shell/demo + `connector_config` wire shapes; not every Python connector type (telnet/SSH/GUI live start).
-3. **Cover floor raise:** optional follow-on when dual-OS headroom ≥0.2pt.
+1. **Connect depth:** shell/ushell/pty live start (Go: real connectors package; C#: ushell + optional PTY). Telnet/SSH/GUI still need network targets — not every Python connector type.
+2. **Cover floor raise:** C# 97.9 / Go 97.8 — raise only with ≥0.2pt dual-OS headroom.
+3. **Trivy:** Python + CF + **Go + C#** images in `container-scan.yml`.

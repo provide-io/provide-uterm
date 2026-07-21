@@ -18,6 +18,9 @@ on:
       - "packages/provide-uterm/**"
       - "packages/provide-uterm-server/**"
       - "packages/provide-uterm-platform/**"
+      - "packages/provide-uterm-go/**"
+      - "packages/provide-uterm-csharp/**"
+      - "ci/build_*.sh"
       - ".github/workflows/container-scan.yml"
   pull_request:
     branches:
@@ -25,6 +28,9 @@ on:
       - "rc/**"
     paths:
       - "docker/**"
+      - "packages/provide-uterm-go/**"
+      - "packages/provide-uterm-csharp/**"
+      - "ci/build_*.sh"
       - ".github/workflows/container-scan.yml"
   schedule:
     # Weekly run so newly-disclosed CVEs against an unchanged base image
@@ -118,6 +124,72 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         with:
           image-ref: provide-uterm-cf:scan
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 1
+
+  trivy-go:
+    name: Trivy image scan (go server)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      - name: Build Go server image
+        run: ci/build_go_image.sh provide-uterm-server-go:scan
+      - name: Trivy scan (SARIF)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          image-ref: provide-uterm-server-go:scan
+          format: sarif
+          output: trivy-results-go.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 0
+      - name: Upload SARIF to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e  # v4.36.2
+        with:
+          sarif_file: trivy-results-go.sarif
+          category: trivy-go
+      - name: Trivy gate (fail on HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          image-ref: provide-uterm-server-go:scan
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 1
+
+  trivy-csharp:
+    name: Trivy image scan (csharp server)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      - name: Build C# server image
+        run: ci/build_csharp_image.sh provide-uterm-server-csharp:scan
+      - name: Trivy scan (SARIF)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          image-ref: provide-uterm-server-csharp:scan
+          format: sarif
+          output: trivy-results-csharp.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 0
+      - name: Upload SARIF to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e  # v4.36.2
+        with:
+          sarif_file: trivy-results-csharp.sarif
+          category: trivy-csharp
+      - name: Trivy gate (fail on HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          image-ref: provide-uterm-server-csharp:scan
           format: table
           severity: HIGH,CRITICAL
           ignore-unfixed: true
