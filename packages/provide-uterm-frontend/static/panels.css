@@ -1,0 +1,224 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * Recursive VNC + terminal tiling ("nautilus panels"). Shares the console theme.
+ */
+:root {
+  --bg: #0b0f14;
+  --panel: #121923;
+  --panel-2: #182231;
+  --text: #d7e4f3;
+  --muted: #8ea2b8;
+  --accent: #31c48d;
+  --accent-dim: rgba(49, 196, 141, 0.14);
+  --border: #213247;
+  --danger: #f97352;
+  --gap: 8px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Fira Code", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.panels-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  padding: var(--gap);
+  gap: var(--gap);
+}
+
+.panels-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(24, 34, 49, 0.96), rgba(18, 25, 35, 0.96));
+  flex: 0 0 auto;
+}
+
+.brand-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: linear-gradient(145deg, rgba(49, 196, 141, 0.95), rgba(14, 165, 233, 0.75));
+  box-shadow: 0 0 18px rgba(49, 196, 141, 0.35);
+}
+
+.eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.panels-topbar h1 {
+  margin: 2px 0 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.pane-count {
+  font-size: 12px;
+  color: var(--muted);
+}
+.pane-count b {
+  color: var(--text);
+}
+
+.topbar-btn {
+  font: inherit;
+  font-size: 13px;
+  color: #04110b;
+  background: linear-gradient(145deg, var(--accent), #0ea5e9);
+  border: none;
+  border-radius: 9px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-weight: 700;
+}
+.topbar-btn:hover {
+  filter: brightness(1.08);
+}
+
+.panels-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+/* Recursive split containers. */
+.split {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  gap: var(--gap);
+}
+.split-row {
+  flex-direction: row;
+}
+.split-col {
+  flex-direction: column;
+}
+.split-cell {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* A live pane: VNC canvas or terminal, with a slim chrome bar. */
+.pane {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--panel);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+.pane[data-state="connected"] {
+  border-color: rgba(49, 196, 141, 0.5);
+}
+.pane[data-state="error"] {
+  border-color: rgba(249, 115, 82, 0.6);
+}
+
+.pane-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: rgba(11, 15, 20, 0.6);
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+  font-size: 11px;
+}
+.pane-kind {
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+}
+.pane-term .pane-kind {
+  color: #7dd3fc;
+}
+.pane-badge {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pane-spacer {
+  flex: 1 1 auto;
+}
+.pane-btn {
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 7px;
+  cursor: pointer;
+}
+.pane-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.pane-screen {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  overflow: hidden;
+}
+/* noVNC owns canvas sizing; never CSS-stretch it (double-scale shreds glyphs). */
+.pane-screen > div {
+  width: 100% !important;
+  height: 100% !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pane-term .pane-screen {
+  align-items: stretch;
+  justify-content: stretch;
+}
+.pane-term uterm-terminal {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
