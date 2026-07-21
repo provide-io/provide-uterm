@@ -22,17 +22,19 @@ browser navigated to `https://example.com`.
 ## Reproduce
 
 ```bash
-# 1) Lab container (RFB on host :5901)
+# 1) Lab container — plain RFB :5900 + encrypted TLS/VeNCrypt :5901
 docker build -t uterm-test-vnc -f docker/vnc-lab/Dockerfile docker/vnc-lab
 docker run --rm -d --name uterm-test-vnc-demo --shm-size=256m \
-  -p 5901:5900 -e DEMO_URL=https://example.com uterm-test-vnc
+  -p 5900:5900 -p 5901:5901 \
+  -e DEMO_URL=https://example.com uterm-test-vnc
 
-# 2) Optional RFB proof
+# 2) RFB proof (plain 3.3/3.7/3.8 + TLS handshake + browser nav)
 uv run python scripts/prove_vnc_lab.py --skip-build --runs 1
 
-# 3) Web console (noVNC + websockify) — example:
-#    websockify --web=/path/to/noVNC 6080 127.0.0.1:5901
+# 3) Web console (noVNC + websockify) against the *plain* port:
+#    websockify --web=/path/to/noVNC 6080 127.0.0.1:5900
 #    open http://127.0.0.1:6080/vnc.html?autoconnect=true&resize=scale
+# Encrypted viewers use host:5901 (accept lab self-signed cert).
 
 # 4) Desktop grab from inside the lab
 docker exec uterm-test-vnc-demo bash -c \
