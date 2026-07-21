@@ -70,6 +70,25 @@ uv run python scripts/prove_uterm_vnc_console.py --runs 2
 
 # Aesthetic / integration pack (full page + desktop crop + webm)
 uv run python scripts/capture_uterm_vnc_aesthetic.py
+
+# Nested proof: first-party VNC console → lab Chromium → text-based uterm terminal demo
+uv run python scripts/record_uterm_vnc_demo_video.py --seconds 16
 ```
+
+### Nested video (text demos inside VNC)
+
+| File | What it shows |
+|------|----------------|
+| `uterm-vnc-text-demos.webm` | **~20s** recording of provide-uterm VNC chrome with remote Chromium open on `/_terminal/terminal.html?worker_id=provide-shell` |
+| `screenshots/uterm-vnc-text-demos-full.png` | Still of the same stack (Connected · lab-vnc-plain + nested terminal UI) |
+| `screenshots/uterm-vnc-text-demos-desktop.png` | Desktop crop |
+| `video-metrics.json` | Asserted canvas size, status, demo URL |
+
+Stack under test:
+
+1. Host Playwright records **first-party** `vnc.html`
+2. Lab RFB desktop runs Chromium at the host’s text console  
+   `http://host.docker.internal:<port>/_terminal/terminal.html?worker_id=provide-shell&role=browser`
+3. Host injects live shell demo keystrokes into `provide-shell` while recording
 
 See `.provide/goals/uterm-vnc-web-console.md` and `scripts/uterm-server.vnc-lab.example.toml`.
