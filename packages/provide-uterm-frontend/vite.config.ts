@@ -11,8 +11,10 @@ export default defineConfig({
       input: {
         hijack_script: resolve(__dirname, 'src/hijack.ts'),
         terminal_script: resolve(__dirname, 'src/terminal.ts'),
+        vnc_script: resolve(__dirname, 'src/vnc-page.ts'),
         hijack: resolve(__dirname, 'hijack.html'),
-        terminal: resolve(__dirname, 'terminal.html')
+        terminal: resolve(__dirname, 'terminal.html'),
+        vnc: resolve(__dirname, 'vnc.html')
       }
     }
   }

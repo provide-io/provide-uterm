@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>provide-uterm VNC</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="static/vnc-page.css">
+</head>
+<body>
+  <div class="page">
+    <aside class="panel sidebar">
+      <div>
+        <div class="eyebrow">Graphical console</div>
+        <h1>VNC session</h1>
+      </div>
+      <p>
+        First-party RFB client (noVNC) over provide-uterm’s human VNC relay —
+        binary WebSocket to
+        <code>/worker/…/hijack/…/gui/vnc?target_id=…</code>.
+      </p>
+      <div class="control-group">
+        <div id="vnc-status" class="status-chip" data-state="idle">Ready</div>
+        <div class="small" id="vnc-detail">
+          Pass <code>worker_id</code>, <code>hijack_id</code>, and
+          <code>target_id</code> as query params.
+        </div>
+      </div>
+      <div class="control-group">
+        <button type="button" id="vnc-connect">Connect</button>
+        <button type="button" id="vnc-disconnect" class="danger" disabled>Disconnect</button>
+      </div>
+      <div class="control-group">
+        <div class="small">Query params</div>
+        <ul class="param-list">
+          <li><code>worker_id</code> — session / worker id</li>
+          <li><code>hijack_id</code> — REST hijack lease id</li>
+          <li><code>target_id</code> — graphical target id</li>
+          <li><code>view_only=1</code> — optional; block pointer/keyboard</li>
+        </ul>
+      </div>
+    </aside>
+    <main class="panel widget-panel">
+      <div id="vnc-screen" class="vnc-screen" aria-label="Remote desktop"></div>
+    </main>
+  </div>
+  <script type="module" src="src/vnc-page.ts"></script>
+</body>
+</html>

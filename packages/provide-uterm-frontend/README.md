@@ -12,6 +12,7 @@ Browser UI for the [provide-uterm](../../README.md) platform. Vanilla TypeScript
 | Inspect | `/app/inspect/{id}` | HTTP traffic inspection with intercept |
 | Connect | `/app/connect` | Quick-connect to new sessions |
 | Replay | `/app/replay/{id}` | Session replay viewer |
+| VNC console | `/_terminal/vnc.html` | First-party RFB client (noVNC) via human VNC relay |
 
 ## Components
 
@@ -19,6 +20,7 @@ Browser UI for the [provide-uterm](../../README.md) platform. Vanilla TypeScript
 |-----------|---------|
 | `hijack.ts` | HijackWidget — xterm.js terminal with hijack controls |
 | `terminal.ts` | Terminal rendering and page wiring |
+| `vnc-page.ts` / `vnc-url.ts` | VNC console page + binary WS URL helpers |
 | `app/widgets/hijack-widget-host.ts` | Hosts the hijack widget and wires control-transfer events |
 | `app/deckmux/` | DeckMux overlay — avatar bar, edge indicators, control transfer |
 

@@ -1,0 +1,184 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg: #0b0f14;
+  --panel: #121923;
+  --panel-2: #182231;
+  --text: #d7e4f3;
+  --muted: #8ea2b8;
+  --accent: #31c48d;
+  --border: #213247;
+  --danger: #f97352;
+  --warn: #fbbf24;
+}
+
+html,
+body {
+  width: 100%;
+  min-height: 100dvh;
+  background:
+    radial-gradient(circle at top right, rgba(49, 196, 141, 0.08), transparent 30%),
+    radial-gradient(circle at bottom left, rgba(14, 165, 233, 0.08), transparent 28%),
+    var(--bg);
+  color: var(--text);
+  font-family: "Fira Code", monospace;
+}
+
+body {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: 18px;
+}
+
+.page {
+  width: min(1400px, 100%);
+  min-height: calc(100dvh - 36px);
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  gap: 18px;
+}
+
+.panel {
+  background: linear-gradient(180deg, rgba(24, 34, 49, 0.96), rgba(18, 25, 35, 0.96));
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.32);
+}
+
+.sidebar {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.eyebrow {
+  color: var(--accent);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+h1 {
+  font-size: 24px;
+  line-height: 1.15;
+  margin-top: 6px;
+}
+
+p,
+.small {
+  color: var(--muted);
+  line-height: 1.5;
+  font-size: 13px;
+}
+
+code {
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+button {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+button.danger {
+  border-color: rgba(249, 115, 82, 0.45);
+  color: var(--danger);
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.2);
+  font-size: 13px;
+}
+
+.status-chip[data-state="connecting"] {
+  border-color: rgba(251, 191, 36, 0.5);
+  color: var(--warn);
+}
+
+.status-chip[data-state="connected"] {
+  border-color: rgba(49, 196, 141, 0.55);
+  color: var(--accent);
+}
+
+.status-chip[data-state="denied"],
+.status-chip[data-state="error"],
+.status-chip[data-state="unavailable"] {
+  border-color: rgba(249, 115, 82, 0.55);
+  color: var(--danger);
+}
+
+.param-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.widget-panel {
+  padding: 12px;
+  min-height: 480px;
+  display: flex;
+  flex-direction: column;
+}
+
+.vnc-screen {
+  flex: 1;
+  min-height: 420px;
+  width: 100%;
+  background: #000;
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+}
+
+.vnc-screen > div {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.vnc-screen canvas {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+@media (max-width: 900px) {
+  .page {
+    grid-template-columns: 1fr;
+  }
+}

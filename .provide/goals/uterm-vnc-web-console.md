@@ -137,20 +137,20 @@ An operator can:
 - Protocol matrix: mark human VNC browser path as shipped for Python frontend.
 
 ## Task checklist
-- [ ] Design endpoint/TLS config shape for RFB graphical targets (plain + TLS);
+- [x] Design endpoint/TLS config shape for RFB graphical targets (plain + TLS);
       document in example TOML; unit-test parser/dial config.
-- [ ] Implement Python `vnc_upstream_factory` + dial (plain); wire in app factory;
+- [x] Implement Python `vnc_upstream_factory` + dial (plain); wire in app factory;
       e2e against lab `:5900` through `/gui/vnc` (no browser yet).
-- [ ] Extend dial for TLS/lab cert mode; prove against lab `:5901`.
-- [ ] Add frontend VNC page (HTML/TS/CSS + noVNC dependency) connecting binary WS
+- [x] Extend dial for TLS/lab cert mode; prove against lab `:5901`.
+- [x] Add frontend VNC page (HTML/TS/CSS + noVNC dependency) connecting binary WS
       to `/gui/vnc`; local unit/vitest smoke for URL/build.
-- [ ] Wire SPA bake/serve path so server image or dev server hosts `vnc.html`
+- [x] Wire SPA bake/serve path so server image or dev server hosts `vnc.html`
       like terminal/hijack.
-- [ ] Add `scripts/prove_uterm_vnc_console.py` + docker-marked e2e: lab + server +
+- [x] Add `scripts/prove_uterm_vnc_console.py` + docker-marked e2e: lab + server +
       page; two successive runs; `{SCRATCH}` logs + screenshot.
-- [ ] Capture uterm-console screenshot (and optional video); place under
+- [x] Capture uterm-console screenshot (and optional video); place under
       `demo/vnc-lab/screenshots/` (git rules for media) + scratch.
-- [ ] Docs + protocol-matrix / HANDOFF note; ensure quality-gate relevant tests green.
+- [x] Docs + protocol-matrix / HANDOFF note; ensure quality-gate relevant tests green.
 
 ## Suggested phased PR stack (optional)
 1. **PR1** — RFB upstream dial (plain) + config + tests (no UI).
@@ -173,7 +173,16 @@ An operator can:
 - Do **not** regress authz fail-closed behavior of `/gui/vnc`.
 
 ## Deviations
-(append terse bullets only when execution diverges from this plan)
+
+- Pinned `@novnc/novnc@1.4.0` (1.6 TLA breaks Vite/rolldown bundle).
+- RFB streams use unbuffered makefile + flush-per-chunk (buffered stdio stalled ProtocolVersion).
+- ClientCutText: high-bit extended clipboard + drop oversized instead of killing relay.
+- Browser WS auth for header-mode lab uses cookies (JS WebSocket cannot set custom headers).
+
+- Pinned `@novnc/novnc@1.4.0` (1.6 TLA breaks Vite/rolldown bundle).
+- RFB streams use unbuffered makefile + flush-per-chunk (buffered stdio stalled ProtocolVersion).
+- ClientCutText: high-bit extended clipboard + drop oversized instead of killing relay.
+- Browser WS auth for header-mode lab uses cookies (JS WebSocket cannot set custom headers).
 
 ## How to launch this goal
 Paste or reference this file when starting goal mode, for example:

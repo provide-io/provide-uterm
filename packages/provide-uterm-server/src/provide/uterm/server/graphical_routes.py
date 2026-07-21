@@ -332,19 +332,26 @@ def _config_to_definition(target: GraphicalTargetConfig) -> GraphicalTargetDefin
 
     target_id = target.target_id.strip() or _generate_target_id()
 
-    endpoint_value: str | None = None
-    if protocol == PROTOCOL_RFB:
-        host, port = parse_rfb_endpoint(endpoint)
-        endpoint_value = f"{host}:{port}"
-    elif protocol == PROTOCOL_LITEVIRT:
-        host, port = parse_litevirt_endpoint(endpoint)
-        endpoint_value = f"{host}:{port}"
-
     # Fold the top-level vm_name convenience field into config["vm_name"]
     # (mirrors Go's seedConfig); an explicit config table still wins.
     config = dict(target.config)
     if target.vm_name and "vm_name" not in config:
         config["vm_name"] = target.vm_name
+
+    endpoint_value: str | None = None
+    if protocol == PROTOCOL_RFB:
+        # rfbs:// is a dial-time TLS hint (not a wire-scheme on the definition).
+        # Normalize to host:port and record tls=true unless the operator already
+        # set it under [graphical_targets.config].
+        parse_endpoint = endpoint
+        if parse_endpoint.lower().startswith("rfbs://"):
+            config.setdefault("tls", True)
+            parse_endpoint = "rfb://" + parse_endpoint[len("rfbs://") :]
+        host, port = parse_rfb_endpoint(parse_endpoint)
+        endpoint_value = f"{host}:{port}"
+    elif protocol == PROTOCOL_LITEVIRT:
+        host, port = parse_litevirt_endpoint(endpoint)
+        endpoint_value = f"{host}:{port}"
 
     display = target.name if target.name.strip() else target_id
 

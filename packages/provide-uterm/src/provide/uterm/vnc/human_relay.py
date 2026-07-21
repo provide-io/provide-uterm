@@ -13,7 +13,6 @@ inject messages) — same semantics as the Go ``ServeHumanRelay`` path.
 from __future__ import annotations
 
 import io
-import shutil
 import threading
 from typing import BinaryIO
 
@@ -54,7 +53,9 @@ def run_human_relay_streams(
 ) -> None:
     """Relay RFB between browser and upstream streams until either side EOFs.
 
-    * Upstream → browser: raw byte pump (``shutil.copyfileobj``).
+    * Upstream → browser: chunked byte pump with flush-per-write (live RFB
+      peers send data without EOF; buffered makefiles must be opened with
+      ``buffering=0`` at the socket boundary).
     * Browser → upstream: :func:`filter_rfb_client_input` (handshake pass-through;
       inject types gated). ``can_inject is None`` fails closed.
 
@@ -65,11 +66,19 @@ def run_human_relay_streams(
     pump_errors: list[BaseException] = []
 
     def _pump_upstream() -> None:
+        # Chunked read + flush-per-write: live RFB peers send ProtocolVersion
+        # then wait (no EOF). shutil.copyfileobj alone can leave makefile
+        # write buffers unflushed until the upstream closes, so the browser
+        # never sees the banner. Flush after every successful write.
         try:
-            shutil.copyfileobj(upstream_r, browser_w, length=_PUMP_CHUNK)
-            flush = getattr(browser_w, "flush", None)
-            if callable(flush):
-                flush()
+            while True:
+                chunk = upstream_r.read(_PUMP_CHUNK)
+                if not chunk:
+                    break
+                browser_w.write(chunk)
+                flush = getattr(browser_w, "flush", None)
+                if callable(flush):
+                    flush()
         except BaseException as exc:
             pump_errors.append(exc)
             logger.debug("vnc_upstream_pump_error error=%s", exc)

@@ -20,7 +20,7 @@ def _has_vite_manifest(frontend_root: object) -> bool:
 def _validate_frontend_assets() -> None:
     frontend_root = importlib.resources.files("provide.uterm.server") / "frontend"
     # Require the Vite manifest (React app) and standalone HTML pages.
-    required = ("hijack.html", "terminal.html")
+    required = ("hijack.html", "terminal.html", "vnc.html")
     missing = [name for name in required if not (frontend_root / name).is_file()]
     if not _has_vite_manifest(frontend_root):
         missing.append("vite-manifest.json (or .vite/manifest.json)")

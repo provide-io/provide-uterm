@@ -88,9 +88,21 @@ def filter_rfb_client_input(
         elif t == _CLIENT_CUT_TEXT:
             header = _read_exact(src, 7)
             length = struct.unpack("!I", header[3:7])[0]
-            if length > MAX_CUT_TEXT:
-                raise ValueError("ClientCutText too large")
-            payload = _read_exact(src, length) if length else b""
+            # RFB extended clipboard sets the high bit of the length field; the
+            # remaining 31 bits are the real payload size (noVNC uses this).
+            payload_len = length & 0x7FFFFFFF
+            if payload_len > MAX_CUT_TEXT:
+                # Oversized / hostile cut-text: drain what we can and drop the
+                # message so the display session stays up (raising would tear
+                # down the human relay and black the framebuffer).
+                remaining = payload_len
+                while remaining > 0:
+                    chunk = src.read(min(remaining, 65_536))
+                    if not chunk:
+                        return
+                    remaining -= len(chunk)
+                continue
+            payload = _read_exact(src, payload_len) if payload_len else b""
             if _allowed(can_inject, session_id, lease_id, principal_id, principal_role):
                 dst.write(msg_type)
                 dst.write(header)

@@ -1,0 +1,74 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Lab-only server config for the first-party VNC console proof path.
+# Pair with docker/vnc-lab (uterm-test-vnc) published on host ports 5900/5901.
+#
+#   docker run --rm -d --name uterm-test-vnc --shm-size 256m \
+#     -p 5900:5900 -p 5901:5901 uterm-test-vnc
+#   uv run uterm server --config scripts/uterm-server.vnc-lab.example.toml
+#   open http://127.0.0.1:8780/_terminal/vnc.html?worker_id=vnc-shell&hijack_id=…&target_id=lab-vnc-plain
+#
+# RFB dial options under [graphical_targets.config]:
+#   tls = true           # TLS-first wrap (lab :5901)
+#   tls_insecure = true  # lab self-signed only — default verify is ON
+#   connect_timeout_s = 5
+# Endpoint form rfbs://host:port also sets tls=true at seed time.
+
+[server]
+host = "127.0.0.1"
+port = 8780
+public_base_url = "http://127.0.0.1:8780"
+title = "provide-uterm VNC lab"
+
+[auth]
+mode = "header"
+header_mode_acknowledged = true
+principal_header = "x-uterm-principal"
+role_header = "x-uterm-role"
+# Worker WS auth for the local shell connector.
+worker_bearer_token = "vnc-lab-worker-bearer-token-32chars"
+
+[ui]
+app_path = "/app"
+assets_path = "/_terminal"
+
+[recording]
+enabled_by_default = false
+directory = ".uterm-recordings-vnc-lab"
+
+[security]
+# Lab RFB peers are loopback; keep connector SSRF guard off for local demos.
+block_private_connector_targets = false
+
+[[sessions]]
+session_id = "vnc-shell"
+display_name = "VNC lab shell"
+connector_type = "shell"
+input_mode = "hijack"
+auto_start = true
+tags = ["vnc-lab"]
+
+[[graphical_targets]]
+target_id = "lab-vnc-plain"
+tenant_id = "lab"
+protocol = "rfb"
+target_address = "127.0.0.1:5900"
+name = "VNC Lab Plain"
+enabled = true
+width = 1280
+height = 720
+
+[[graphical_targets]]
+target_id = "lab-vnc-tls"
+tenant_id = "lab"
+protocol = "rfb"
+target_address = "127.0.0.1:5901"
+name = "VNC Lab TLS"
+enabled = true
+width = 1280
+height = 720
+
+[graphical_targets.config]
+tls = true
+tls_insecure = true

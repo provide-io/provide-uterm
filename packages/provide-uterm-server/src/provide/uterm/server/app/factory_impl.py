@@ -70,6 +70,7 @@ from provide.uterm.server.graphical_routes import seed_graphical_targets
 from provide.uterm.server.policy import SessionPolicyResolver
 from provide.uterm.server.profiles import FileProfileStore
 from provide.uterm.server.registry import SessionRegistry
+from provide.uterm.server.vnc_upstream import attach_vnc_upstream_factory
 from provide.uterm.server.webhooks import WebhookManager
 
 if TYPE_CHECKING:
@@ -396,6 +397,9 @@ def create_server_app(
     # targets become immutable system/static entries; an invalid target
     # (bad protocol/endpoint) fails startup here rather than at first request.
     graphical_targets = seed_graphical_targets(config)
+    # Wire the production RFB dial factory so /gui/vnc can open plain/TLS
+    # upstreams for seeded targets (tests may still override hub.vnc_upstream_factory).
+    attach_vnc_upstream_factory(hub, graphical_targets)
 
     @asynccontextmanager
     async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:

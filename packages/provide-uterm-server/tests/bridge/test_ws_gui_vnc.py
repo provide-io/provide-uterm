@@ -152,3 +152,84 @@ def test_ws_policy_reject_missing_session() -> None:
     client = _client(rest_session=None, principal=_principal(subject="alice"))
     code = _connect_close_code(client)
     assert code == 1008
+
+
+def test_ws_policy_reject_unauthenticated() -> None:
+    hs = SimpleNamespace(hijack_id=HID, acquired_by="alice")
+    client = _client(rest_session=hs, principal=None)
+    code = _connect_close_code(client)
+    assert code == 1008
+
+
+def test_ws_upstream_factory_relays_bytes() -> None:
+    """When factory returns streams, binary WS path relays RFB-like bytes."""
+    import io
+    import threading
+
+    # Upstream pretends to be a VNC server: send ProtocolVersion once read.
+    class _UpstreamR(io.RawIOBase):
+        def __init__(self) -> None:
+            self._data = b"RFB 003.008\n"
+            self._pos = 0
+            self._closed_ev = threading.Event()
+
+        def read(self, size: int = -1) -> bytes:  # type: ignore[override]
+            if self._closed_ev.is_set():
+                return b""
+            if self._pos >= len(self._data):
+                # Block until peer closes (relay pump ends).
+                self._closed_ev.wait(timeout=2.0)
+                return b""
+            end = len(self._data) if size < 0 else min(len(self._data), self._pos + size)
+            chunk = self._data[self._pos : end]
+            self._pos = end
+            return chunk
+
+        def close(self) -> None:
+            self._closed_ev.set()
+            super().close()
+
+        def readable(self) -> bool:
+            return True
+
+    class _UpstreamW(io.RawIOBase):
+        def __init__(self) -> None:
+            self.buf = bytearray()
+
+        def write(self, b: bytes) -> int:  # type: ignore[override]
+            self.buf.extend(b)
+            return len(b)
+
+        def writable(self) -> bool:
+            return True
+
+        def flush(self) -> None:
+            return None
+
+    up_r = _UpstreamR()
+    up_w = _UpstreamW()
+
+    def factory(_wid: str, target_id: str | None) -> tuple[Any, Any] | None:
+        assert target_id == "lab-vnc"
+        return (up_r, up_w)  # type: ignore[return-value]
+
+    hub = SimpleNamespace()
+    hub.get_rest_session = AsyncMock(return_value=SimpleNamespace(hijack_id=HID, acquired_by="alice"))
+    hub.vnc_upstream_factory = factory
+
+    app = FastAPI()
+    router = APIRouter()
+    register_gui_vnc_ws_routes(hub, router)
+    app.include_router(router)
+    client = TestClient(_PrincipalASGI(app, _principal(subject="alice")))
+
+    with client.websocket_connect(PATH + "?target_id=lab-vnc") as ws:
+        # First server→client chunk should be the RFB version banner.
+        msg = ws.receive_bytes()
+        assert msg.startswith(b"RFB ")
+        ws.send_bytes(b"RFB 003.008\n")
+        # Give relay a moment to pump browser→upstream.
+        import time
+
+        time.sleep(0.15)
+    assert b"RFB 003.008\n" in bytes(up_w.buf)
