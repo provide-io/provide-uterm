@@ -78,6 +78,101 @@ async function loadRfbClass(): Promise<RfbConstructor> {
   return resolveRfbConstructor(mod);
 }
 
+export interface VncAttachHandle {
+  disconnect(): void;
+}
+
+export interface VncAttachOptions {
+  RfbClass?: RfbConstructor | null;
+  onStatus?: (state: VncStatusState, message: string) => void;
+  onDims?: (text: string) => void;
+}
+
+/**
+ * Attach a live noVNC RFB session into *screenEl* for the given params.
+ *
+ * A lean, embeddable alternative to {@link VncConsolePage} for hosts that manage
+ * their own chrome (e.g. the tiling panels page) — no required element IDs, one
+ * RFB per call. Returns a handle whose ``disconnect()`` tears the session down.
+ */
+export function attachVnc(
+  screenEl: HTMLElement,
+  params: VncPageParams,
+  opts: VncAttachOptions = {},
+): VncAttachHandle {
+  const status = opts.onStatus ?? (() => {});
+  const dims = opts.onDims ?? (() => {});
+  let rfb: RfbInstance | null = null;
+  let disposed = false;
+
+  const refreshDims = (): void => {
+    const canvas = screenEl.querySelector("canvas");
+    if (canvas instanceof HTMLCanvasElement && canvas.width > 0) {
+      dims(`${canvas.width}×${canvas.height}`);
+    }
+  };
+
+  let url: string;
+  try {
+    url = buildVncWsUrl(params);
+  } catch (err) {
+    status("error", String(err));
+    return { disconnect: () => {} };
+  }
+
+  status("connecting", "Connecting…");
+  screenEl.replaceChildren();
+
+  const start = async (): Promise<void> => {
+    try {
+      const RfbClass = opts.RfbClass ?? (await loadRfbClass());
+      if (disposed) return;
+      const inst = new RfbClass(screenEl, url, { wsProtocols: [] });
+      inst.viewOnly = params.viewOnly;
+      inst.scaleViewport = true;
+      inst.clipViewport = false;
+      inst.resizeSession = false;
+      inst.background = "#0b0f14";
+      try {
+        (inst as { qualityLevel?: number }).qualityLevel = 9;
+        (inst as { compressionLevel?: number }).compressionLevel = 2;
+      } catch {
+        // older noVNC stubs may not expose these
+      }
+      inst.addEventListener("connect", () => {
+        status("connected", `Connected · ${params.targetId}`);
+        window.setTimeout(refreshDims, 200);
+        window.setTimeout(refreshDims, 1200);
+      });
+      inst.addEventListener("disconnect", (ev: Event) => {
+        const detail = (ev as CustomEvent<{ clean?: boolean; code?: number }>).detail;
+        const info = statusFromCloseCode(detail?.code);
+        status(info.state, detail?.clean && detail?.code === undefined ? "Disconnected" : info.message);
+        rfb = null;
+      });
+      inst.addEventListener("securityfailure", () => status("error", "RFB security failure"));
+      rfb = inst;
+    } catch (err) {
+      status("error", `Failed to start RFB client: ${String(err)}`);
+    }
+  };
+  void start();
+
+  return {
+    disconnect(): void {
+      disposed = true;
+      if (rfb) {
+        try {
+          rfb.disconnect();
+        } catch {
+          // ignore
+        }
+        rfb = null;
+      }
+    },
+  };
+}
+
 export class VncConsolePage {
   private readonly statusEl: HTMLElement;
   private readonly detailEl: HTMLElement;
