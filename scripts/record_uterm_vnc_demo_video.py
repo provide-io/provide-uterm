@@ -40,6 +40,10 @@ import prove_uterm_vnc_console as prove  # noqa: E402
 import prove_vnc_lab as vnc_lab  # noqa: E402
 
 LAB = "uterm-vnc-demo-video"
+# Lab Xvfb/Chromium geometry. Aspect (1280:936 ≈ 1.368) matches the console's
+# remote-desktop panel at the 1440x900 recording viewport so the RFB desktop
+# fills the panel without letterbox bands.
+LAB_GEOMETRY = "1280x936x24"
 SHELL_SESSION = "provide-shell"
 VNC_WORKER = prove.SERVER_SESSION
 TARGET = prove.TARGET_PLAIN
@@ -253,6 +257,12 @@ def start_lab_with_demo_url(
             f"{host_tls}:{vnc_lab.RFB_SSL_PORT}",
             "-e",
             f"DEMO_URL={demo_url}",
+            # Match the lab desktop aspect to the console's remote-desktop panel
+            # (~1152x843 at the 1440x900 recording viewport) so noVNC's
+            # aspect-preserving scale fills the panel edge to edge — no black
+            # letterbox bands above/below the desktop.
+            "-e",
+            f"GEOMETRY={LAB_GEOMETRY}",
             vnc_lab.IMAGE_NAME,
         ],
         capture_output=True,
@@ -348,6 +358,9 @@ def seed_shell_banner(base: str, headers: dict[str, str], hid: str) -> list[str]
 # (not one line every 2s with multi-second RFB reconnects).
 #
 # Each chapter is a burst of /say lines; the recorder waits once per chapter.
+# One step per chapter: each chapter drives its lines, then a fresh RFB grab
+# screenshots the settled frame, so the storyboard reveals the demo one beat at
+# a time (more frames = a longer, finer-grained walkthrough).
 LIVE_DEMO_CHAPTERS: list[list[str]] = [
     [
         "/clear\r",
@@ -356,11 +369,9 @@ LIVE_DEMO_CHAPTERS: list[list[str]] = [
         "/say   provide-uterm · text-based shell demo\r",
         "/say ════════════════════════════════════════\r",
     ],
-    [
-        "/say [1/6] whoami → demo operator\r",
-        "/say [2/6] pwd    → hosted connector\r",
-        "/say [3/6] RAINBOW shell output · fan-out\r",
-    ],
+    ["/say [1/6] whoami → demo operator\r"],
+    ["/say [2/6] pwd    → hosted connector\r"],
+    ["/say [3/6] RAINBOW shell output · fan-out\r"],
     [
         "/status\r",
         "/shell\r",
@@ -369,6 +380,8 @@ LIVE_DEMO_CHAPTERS: list[list[str]] = [
     [
         "/say [5/6] RFB relay · snapshot fan-out\r",
         "plain chat: host.docker.internal → lab\r",
+    ],
+    [
         "/say [6/6] >>> watching this shell via VNC <<<\r",
         "/say ready · demo complete\r",
     ],
@@ -738,6 +751,8 @@ def main(argv: list[str] | None = None) -> int:
                               const dims = document.getElementById('vnc-dims');
                               const screen = document.getElementById('vnc-screen');
                               const cs = screen ? getComputedStyle(screen) : null;
+                              const sr = screen ? screen.getBoundingClientRect() : null;
+                              const cr = canvas ? canvas.getBoundingClientRect() : null;
                               return {
                                 status_state: status?.dataset?.state ?? null,
                                 status_text: status?.textContent ?? null,
@@ -747,6 +762,8 @@ def main(argv: list[str] | None = None) -> int:
                                 title: document.title,
                                 screen_pad: cs?.padding ?? null,
                                 screen_radius: cs?.borderRadius ?? null,
+                                screen_box: sr ? [Math.round(sr.width), Math.round(sr.height)] : null,
+                                canvas_box: cr ? [Math.round(cr.width), Math.round(cr.height)] : null,
                               };
                             }"""
                         )
@@ -805,7 +822,7 @@ def main(argv: list[str] | None = None) -> int:
         # ~1.1s per chapter — website-demo pace through the full script.
         list_file = storyboard / "frames.txt"
         list_file.write_text(
-            "".join(f"file '{fp.resolve()}'\nduration 1.1\n" for fp in frame_paths)
+            "".join(f"file '{fp.resolve()}'\nduration 2.0\n" for fp in frame_paths)
             + f"file '{frame_paths[-1].resolve()}'\n",  # last frame needs a trailer entry
             encoding="utf-8",
         )
