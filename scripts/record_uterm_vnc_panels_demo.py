@@ -110,7 +110,10 @@ def main(argv: list[str] | None = None) -> int:
         vnc_pool = ",".join(
             f"{w}~{h}~{t}" for w, h, t in zip(nested.NEST_LEASE_WORKERS, hids, nested.NEST_TARGETS, strict=True)
         )
-        panels_url = f"{base_url}/_terminal/panels.html?vnc={vnc_pool}&term={base.SHELL_SESSION}~browser"
+        # No `term` pool: every pane (including the terminal leaves) renders as a
+        # VNC-of-terminal, so all panes show the live colour/cat demo and shrink
+        # via noVNC's scale-viewport as the nautilus spirals inward.
+        panels_url = f"{base_url}/_terminal/panels.html?vnc={vnc_pool}"
         lines.append(f"panels_url={panels_url}")
 
         from playwright.sync_api import sync_playwright

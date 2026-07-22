@@ -163,18 +163,19 @@ export class PanelsPage {
     el.append(bar, host);
     const src = this.nextTerm();
     const badge = bar.querySelector<HTMLElement>(".pane-badge");
-    let widget: { connect?: () => void } | null = null;
     if (src) {
+      // uterm-terminal's own ResizeObserver shrinks the font (min 6px) to keep
+      // ~80 columns fitting, so as the nautilus panes get smaller the text
+      // scales down and the whole transcript stays visible — no CSS transform
+      // (which breaks xterm's canvas measurement).
       const w = document.createElement("uterm-terminal") as unknown as {
         config: Record<string, unknown>;
         connect?: () => void;
       };
       w.config = { wsUrl: `/ws/${src.role}/${src.workerId}/term`, title: src.workerId };
       host.appendChild(w as unknown as HTMLElement);
-      widget = w;
       if (badge) badge.textContent = src.workerId;
-      // Element self-loads settings on connectedCallback; open the socket next tick.
-      window.setTimeout(() => widget?.connect?.(), 0);
+      window.setTimeout(() => w.connect?.(), 0);
     } else if (badge) {
       badge.textContent = "no term source";
     }
@@ -208,7 +209,12 @@ export class PanelsPage {
   private paneFor(leaf: Leaf): HTMLElement {
     let mounted = this.panes.get(leaf.id);
     if (!mounted) {
-      mounted = leaf.pane === "vnc" ? this.mountVnc(leaf) : this.mountTerminal(leaf);
+      // A terminal leaf with no terminal source but a VNC pool available renders
+      // as a VNC-of-terminal (noVNC scale-viewport shrinks the desktop, so its
+      // font shrinks with the pane) — used when every pane should show the same
+      // live terminal through the relay.
+      const asVnc = leaf.pane === "vnc" || (this.termPool.length === 0 && this.vncPool.length > 0);
+      mounted = asVnc ? this.mountVnc(leaf) : this.mountTerminal(leaf);
       this.panes.set(leaf.id, mounted);
     }
     return mounted.el;

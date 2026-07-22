@@ -213,6 +213,8 @@ body {
   align-items: center;
   justify-content: center;
 }
+/* uterm-terminal fills the pane; its own fit logic shrinks the font to keep
+   ~80 columns visible as the pane gets smaller. */
 .pane-term .pane-screen {
   align-items: stretch;
   justify-content: stretch;
