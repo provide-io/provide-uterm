@@ -4,28 +4,7 @@
 //
 
 import type { RecordingEntryView, SessionSummary } from "./types";
-
-interface RawSessionStatus {
-  session_id: string;
-  display_name: string;
-  connector_type: string;
-  lifecycle_state: string;
-  input_mode: string;
-  connected: boolean;
-  auto_start: boolean;
-  tags: string[];
-  recording_enabled: boolean;
-  recording_available: boolean;
-  owner: string | null;
-  visibility: string;
-  last_error: string | null;
-}
-
-interface RawRecordingEntry {
-  ts?: number;
-  event?: string;
-  data?: Record<string, unknown>;
-}
+import type { RawSessionStatus, RawRecordingEntry } from "./validators";
 
 function normalizeMode(value: string): "open" | "hijack" {
   return value === "hijack" ? "hijack" : "open";
