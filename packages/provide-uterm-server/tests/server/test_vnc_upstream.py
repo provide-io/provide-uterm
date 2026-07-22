@@ -265,3 +265,119 @@ def test_ssl_context_secure_requires_verify() -> None:
     ctx = _ssl_context(tls_insecure=False)
     assert ctx.verify_mode == ssl.CERT_REQUIRED
     assert ctx.check_hostname is True
+
+
+import provide.uterm.server.vnc_upstream as _vnc_upstream_mod
+
+
+def test_dial_config_bool_int_and_false_string() -> None:
+    # int truthy → _as_bool int/float path; "off" → false-string path.
+    dial = dial_config_from_target(
+        GraphicalTargetDefinition(
+            target_id="t", protocol="rfb", endpoint="h:5900", config={"tls": 1, "tls_insecure": "off"}
+        )
+    )
+    assert dial is not None
+    assert dial.tls is True
+    assert dial.tls_insecure is False
+
+
+def test_dial_config_timeout_invalid_and_nonpositive() -> None:
+    bad = dial_config_from_target(
+        GraphicalTargetDefinition(target_id="t", protocol="rfb", endpoint="h:5900", config={"connect_timeout_s": "abc"})
+    )
+    assert bad is not None
+    assert bad.connect_timeout_s == DEFAULT_CONNECT_TIMEOUT_S
+    neg = dial_config_from_target(
+        GraphicalTargetDefinition(target_id="t", protocol="rfb", endpoint="h:5900", config={"connect_timeout_s": -3})
+    )
+    assert neg is not None
+    assert neg.connect_timeout_s == DEFAULT_CONNECT_TIMEOUT_S
+
+
+class _BadMakefileSock:
+    def __init__(self) -> None:
+        self.closed = False
+
+    def settimeout(self, _v: object) -> None:
+        pass
+
+    def makefile(self, *_a: object, **_k: object) -> Any:
+        raise OSError("makefile boom")
+
+    def close(self) -> None:
+        self.closed = True
+
+
+def _plain_dial() -> RfbDialConfig:
+    d = dial_config_from_target(GraphicalTargetDefinition(target_id="t", protocol="rfb", endpoint="h:5900"))
+    assert d is not None
+    return d
+
+
+def test_open_rfb_upstream_closes_raw_on_failure() -> None:
+    sock = _BadMakefileSock()
+    with pytest.raises(OSError, match="makefile boom"):
+        open_rfb_upstream(_plain_dial(), create_connection=lambda *_a: sock)  # type: ignore[arg-type]
+    assert sock.closed  # plain path: raw is not None → raw.close()
+
+
+def test_open_rfb_upstream_closes_wrapped_socket_on_tls_failure(monkeypatch: Any) -> None:
+    bad = _BadMakefileSock()
+    fake_ctx = SimpleNamespace(wrap_socket=lambda _raw, server_hostname=None: bad)
+    monkeypatch.setattr(_vnc_upstream_mod, "_ssl_context", lambda *, tls_insecure: fake_ctx)
+    dial = dial_config_from_target(
+        GraphicalTargetDefinition(target_id="t", protocol="rfb", endpoint="h:5901", config={"tls": True})
+    )
+    assert dial is not None
+    with pytest.raises(OSError, match="makefile boom"):
+        open_rfb_upstream(dial, create_connection=lambda *_a: object())  # type: ignore[arg-type]
+    assert bad.closed  # tls path: raw set None → sock.close()
+
+
+def test_resolve_rfb_target_swallows_lookup_error() -> None:
+    reg = MagicMock()
+    reg.get.side_effect = RuntimeError("lookup boom")
+    assert resolve_rfb_target(reg, "tid") is None
+
+
+def test_factory_returns_none_on_tls_error(monkeypatch: Any) -> None:
+    reg = InMemoryGraphicalTargetRegistry()
+    reg.add_static(GraphicalTargetDefinition(target_id="t", protocol="rfb", endpoint="h:5901", config={"tls": True}))
+
+    def _boom(_dial: object, *, create_connection: object = None) -> Any:
+        raise ssl.SSLError("tls handshake boom")
+
+    monkeypatch.setattr(_vnc_upstream_mod, "open_rfb_upstream", _boom)
+    factory = make_vnc_upstream_factory(reg)
+    assert factory("worker", "t") is None
+
+
+def test_dial_config_unrecognized_bool_string_uses_default() -> None:
+    # A string in neither the true nor false set falls through to the default.
+    dial = dial_config_from_target(
+        GraphicalTargetDefinition(target_id="t", protocol="rfb", endpoint="h:5900", config={"tls": "maybe"})
+    )
+    assert dial is not None
+    assert dial.tls is False
+
+
+def test_factory_returns_none_on_plain_dial_error(monkeypatch: Any) -> None:
+    reg = InMemoryGraphicalTargetRegistry()
+    reg.add_static(GraphicalTargetDefinition(target_id="t", protocol="rfb", endpoint="h:5900"))
+
+    def _boom(_dial: object, *, create_connection: object = None) -> Any:
+        raise OSError("connection refused")
+
+    monkeypatch.setattr(_vnc_upstream_mod, "open_rfb_upstream", _boom)
+    factory = make_vnc_upstream_factory(reg)
+    assert factory("worker", "t") is None
+
+
+def test_dial_config_non_scalar_bool_value_uses_default() -> None:
+    # A non-None/bool/number/str value (e.g. a list) falls through to the default.
+    dial = dial_config_from_target(
+        GraphicalTargetDefinition(target_id="t", protocol="rfb", endpoint="h:5900", config={"tls": ["weird"]})
+    )
+    assert dial is not None
+    assert dial.tls is False

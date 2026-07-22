@@ -214,17 +214,19 @@ def make_vnc_upstream_factory(
             return None
         try:
             streams = open_rfb_upstream(dial, create_connection=create_connection)
-        except OSError as exc:
+        except ssl.SSLError as exc:
+            # ssl.SSLError subclasses OSError, so this must precede the OSError
+            # handler or TLS failures would be misreported as generic dial errors.
             logger.warning(
-                "vnc_upstream_dial_failed target_id=%s endpoint=%s error=%s",
+                "vnc_upstream_tls_failed target_id=%s endpoint=%s error=%s",
                 dial.target_id,
                 dial.endpoint_label(),
                 exc,
             )
             return None
-        except ssl.SSLError as exc:
+        except OSError as exc:
             logger.warning(
-                "vnc_upstream_tls_failed target_id=%s endpoint=%s error=%s",
+                "vnc_upstream_dial_failed target_id=%s endpoint=%s error=%s",
                 dial.target_id,
                 dial.endpoint_label(),
                 exc,
