@@ -27,7 +27,7 @@ import threading
 from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, BinaryIO
+from typing import TYPE_CHECKING, Any, BinaryIO, cast
 
 try:
     from fastapi import APIRouter, Path, Query, WebSocket, WebSocketDisconnect
@@ -226,8 +226,9 @@ async def _run_ws_relay(
         # Unbuffered: RFB banners must cross the socketpair without waiting for
         # a full stdio buffer or peer EOF (live VNC leaves the TCP session open).
         # socket.makefile has no closefd=; sockets closed in finally below.
-        relay_r = relay_sock.makefile("rb", buffering=0)
-        relay_w = relay_sock.makefile("wb", buffering=0)
+        # SocketIO satisfies the binary-stream protocol; cast to the declared type.
+        relay_r = cast("BinaryIO", relay_sock.makefile("rb", buffering=0))
+        relay_w = cast("BinaryIO", relay_sock.makefile("wb", buffering=0))
 
         relay_done = threading.Event()
         relay_error: list[BaseException] = []

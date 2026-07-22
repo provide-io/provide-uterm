@@ -23,7 +23,7 @@ from __future__ import annotations
 import socket
 import ssl
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, BinaryIO
+from typing import TYPE_CHECKING, Any, BinaryIO, cast
 
 from provide.telemetry import get_logger
 from provide.uterm.server.graphical_targets import (
@@ -153,25 +153,29 @@ def open_rfb_upstream(
     connect = create_connection or socket.create_connection
     raw = connect((dial.host, dial.port), dial.connect_timeout_s)
     sock: socket.socket | ssl.SSLSocket = raw
+    # On error, close whatever still owns the fd: the raw socket until TLS wrap
+    # transfers ownership to the SSL socket, then None (closing sock suffices).
+    owned: socket.socket | None = raw
     try:
         if dial.tls:
             ctx = _ssl_context(tls_insecure=dial.tls_insecure)
             # server_hostname required for SNI / verify when hostname is a name;
             # for IP + insecure lab mode, pass host anyway (check_hostname off).
             sock = ctx.wrap_socket(raw, server_hostname=dial.host)
-            raw = None  # ownership transferred
+            owned = None  # ownership transferred to sock
         sock.settimeout(None)
         # Unbuffered binary makefiles: RFB peers send ProtocolVersion then wait
         # (no EOF). Default buffered makefile("rb") can block a large read until
         # the buffer fills, stalling the human relay until the peer closes.
         # makefile has no closefd=; close both stream ends in the relay finally.
-        upstream_r = sock.makefile("rb", buffering=0)
-        upstream_w = sock.makefile("wb", buffering=0)
+        # SocketIO satisfies the binary-stream protocol; cast to the declared type.
+        upstream_r = cast("BinaryIO", sock.makefile("rb", buffering=0))
+        upstream_w = cast("BinaryIO", sock.makefile("wb", buffering=0))
         # makefile() keeps a ref on the socket object.
         return upstream_r, upstream_w
     except Exception:
-        if raw is not None:
-            raw.close()
+        if owned is not None:
+            owned.close()
         else:
             sock.close()
         raise
