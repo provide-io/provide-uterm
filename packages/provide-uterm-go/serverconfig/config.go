@@ -34,24 +34,24 @@ var ServerBuiltinConnectorTypes = map[string]struct{}{
 // AuthConfig ports config_schema.AuthConfig. Pointer string fields model the
 // Python “str | None“ (a nil pointer is Python None; TOML absence keeps nil).
 type AuthConfig struct {
-	Mode                   string   `json:"mode" toml:"mode"`
-	PrincipalHeader        string   `json:"principal_header" toml:"principal_header"`
-	RoleHeader             string   `json:"role_header" toml:"role_header"`
-	TenantHeader           string   `json:"tenant_header" toml:"tenant_header"`
-	PrincipalCookie        string   `json:"principal_cookie" toml:"principal_cookie"`
-	RoleCookie             string   `json:"role_cookie" toml:"role_cookie"`
-	TenantCookie           string   `json:"tenant_cookie" toml:"tenant_cookie"`
-	SurfaceCookie          string   `json:"surface_cookie" toml:"surface_cookie"`
-	TokenCookie            string   `json:"token_cookie" toml:"token_cookie"`
-	JWTIssuer              string   `json:"jwt_issuer" toml:"jwt_issuer"`
-	JWTAudience            string   `json:"jwt_audience" toml:"jwt_audience"`
-	JWTJWKSURL             *string  `json:"jwt_jwks_url" toml:"jwt_jwks_url"`
-	JWTPublicKeyPEM        *string  `json:"jwt_public_key_pem" toml:"jwt_public_key_pem"`
-	JWTAlgorithms          []string `json:"jwt_algorithms" toml:"jwt_algorithms"`
-	ClockSkewSeconds       int      `json:"clock_skew_seconds" toml:"clock_skew_seconds"`
-	JWTRolesClaim          string   `json:"jwt_roles_claim" toml:"jwt_roles_claim"`
-	JWTScopesClaim         string   `json:"jwt_scopes_claim" toml:"jwt_scopes_claim"`
-	JWTTenantClaim         string   `json:"jwt_tenant_claim" toml:"jwt_tenant_claim"`
+	Mode             string   `json:"mode" toml:"mode"`
+	PrincipalHeader  string   `json:"principal_header" toml:"principal_header"`
+	RoleHeader       string   `json:"role_header" toml:"role_header"`
+	TenantHeader     string   `json:"tenant_header" toml:"tenant_header"`
+	PrincipalCookie  string   `json:"principal_cookie" toml:"principal_cookie"`
+	RoleCookie       string   `json:"role_cookie" toml:"role_cookie"`
+	TenantCookie     string   `json:"tenant_cookie" toml:"tenant_cookie"`
+	SurfaceCookie    string   `json:"surface_cookie" toml:"surface_cookie"`
+	TokenCookie      string   `json:"token_cookie" toml:"token_cookie"`
+	JWTIssuer        string   `json:"jwt_issuer" toml:"jwt_issuer"`
+	JWTAudience      string   `json:"jwt_audience" toml:"jwt_audience"`
+	JWTJWKSURL       *string  `json:"jwt_jwks_url" toml:"jwt_jwks_url"`
+	JWTPublicKeyPEM  *string  `json:"jwt_public_key_pem" toml:"jwt_public_key_pem"`
+	JWTAlgorithms    []string `json:"jwt_algorithms" toml:"jwt_algorithms"`
+	ClockSkewSeconds int      `json:"clock_skew_seconds" toml:"clock_skew_seconds"`
+	JWTRolesClaim    string   `json:"jwt_roles_claim" toml:"jwt_roles_claim"`
+	JWTScopesClaim   string   `json:"jwt_scopes_claim" toml:"jwt_scopes_claim"`
+	JWTTenantClaim   string   `json:"jwt_tenant_claim" toml:"jwt_tenant_claim"`
 	// JwtDefaultRole is applied when a verified JWT carries no known roles
 	// claim (typical for Cloudflare Access JWTs). Filtered to viewer/operator/admin.
 	JwtDefaultRole string `json:"jwt_default_role" toml:"jwt_default_role"`

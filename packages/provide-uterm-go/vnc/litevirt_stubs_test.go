@@ -6,8 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"google.golang.org/grpc"
 	pb "github.com/litevirt/litevirt/gen/litevirt/v1"
+	"google.golang.org/grpc"
 )
 
 type mockStream struct {
@@ -98,7 +98,7 @@ func TestFilterRFBInput_More(t *testing.T) {
 	// Test various message types
 	for _, msgType := range []byte{0, 2, 3, 4, 5, 6, 99} {
 		in := bytes.NewBuffer(append([]byte("RFB 003.008\n"), 1, 1, 0))
-		
+
 		// Add specific payload based on msgType to not EOF early
 		payload := []byte{msgType}
 		switch msgType {
@@ -116,7 +116,7 @@ func TestFilterRFBInput_More(t *testing.T) {
 			payload = append(payload, 0, 0, 0, 0, 0, 0, 0) // length 0
 		}
 		in.Write(payload)
-		
+
 		out := &bytes.Buffer{}
 		_ = filterRFBInput(out, in, nil, "s1", "l1", "p1", "admin")
 	}
