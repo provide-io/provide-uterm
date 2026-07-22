@@ -88,48 +88,69 @@ def _rainbow_frames() -> list[Any]:
     return out
 
 
-def _cat_frames() -> list[Any]:
-    """Cat face with green eyes: pupils slide side to side, with a mid-loop blink.
-
-    Every frame differs (moving pupils) so PIL keeps all 16 — smooth motion, not
-    a collapsed near-static GIF.
+def _cat_piano_frames() -> list[Any]:
+    """A cat playing a piano: paws bounce on the keys (which light up), the head
+    bobs and blinks, and eighth-notes drift up. Drawn with ImageDraw for crisp
+    shapes; every frame differs so mpv plays it smoothly.
     """
     import math
 
-    from PIL import Image
+    from PIL import Image, ImageDraw
 
     w, h, n = _SCENE_W, _SCENE_H, _SCENE_FRAMES
-    cx, base_cy = w // 2, h // 2 + 8
+    fur, fur_lit = (120, 90, 64), (140, 105, 74)
+    n_keys = 10
+    kw = w / n_keys
+    kb_top = h - 46
     out: list[Any] = []
     for f in range(n):
-        img = Image.new("RGB", (w, h), (18, 18, 28))
-        px = img.load()
-        cy = base_cy + round(7 * math.sin(2 * math.pi * f / n))  # whole head bobs
-        for x in range(w):
-            for y in range(h):
-                if (x - cx) ** 2 + ((y - cy) * 1.2) ** 2 < 60**2:
-                    px[x, y] = (95, 72, 52)
-        for x in range(cx - 55, cx - 15):
-            for y in range(cy - 70, cy - 30):
-                if (x - (cx - 55)) < (y - (cy - 70)) < (x - (cx - 55)) + 18:
-                    px[x, y] = (95, 72, 52)
-        for x in range(cx + 15, cx + 55):
-            for y in range(cy - 70, cy - 30):
-                if ((cx + 55) - x) < (y - (cy - 70)) < ((cx + 55) - x) + 18:
-                    px[x, y] = (95, 72, 52)
-        blink = f % n in (7, 8)  # eyes shut mid-loop
-        pupil_dx = round(3 * math.sin(2 * math.pi * f / n))  # pupils track left↔right
-        for ex in (cx - 22, cx + 22):
-            for x in range(ex - 8, ex + 8):
-                for y in range(cy - 15, cy + 5):
-                    if blink:
-                        if abs(y - (cy - 5)) <= 1 and abs(x - ex) < 7:
-                            px[x, y] = (70, 225, 95)
-                        continue
-                    if (x - ex) ** 2 + (y - (cy - 5)) ** 2 < 8**2:
-                        px[x, y] = (70, 225, 95)
-                    if (x - (ex + pupil_dx)) ** 2 + (y - (cy - 5)) ** 2 < 3**2:
-                        px[x, y] = (12, 20, 14)  # dark pupil
+        img = Image.new("RGB", (w, h), (22, 20, 34))
+        d = ImageDraw.Draw(img)
+        # Hands alternate; each paw hovers over a key that shifts slightly.
+        left_down = (f // 2) % 2 == 0
+        left_key, right_key = 2 + (f // 4) % 2, 6 + (f // 4) % 2
+        # White keys (pressed one lights up + dips).
+        for i in range(n_keys):
+            x0 = i * kw
+            pressed = (i == left_key and left_down) or (i == right_key and not left_down)
+            col = (255, 238, 130) if pressed else (236, 236, 242)
+            d.rectangle([x0, kb_top + (3 if pressed else 0), x0 + kw - 2, h], fill=col, outline=(70, 70, 82))
+        # Black keys (standard sharps pattern, skipping the E-F / B-C gaps).
+        for i in range(n_keys - 1):
+            if i % 7 in (0, 1, 3, 4, 5):
+                bx = (i + 1) * kw - kw * 0.3
+                d.rectangle([bx, kb_top, bx + kw * 0.6, kb_top + 26], fill=(24, 22, 30))
+        # Cat, seated above the keys, bobbing to the beat.
+        cx = w // 2
+        bob = round(3 * math.sin(2 * math.pi * f / n))
+        hy, hr = kb_top - 58 + bob, 30
+        d.ellipse([cx - 26, hy + hr - 16, cx + 26, kb_top + 4], fill=fur)  # body
+        d.polygon([(cx - hr + 6, hy - hr + 8), (cx - hr - 3, hy - hr - 20), (cx - 7, hy - hr + 4)], fill=fur)  # ear
+        d.polygon([(cx + hr - 6, hy - hr + 8), (cx + hr + 3, hy - hr - 20), (cx + 7, hy - hr + 4)], fill=fur)  # ear
+        d.ellipse([cx - hr, hy - hr, cx + hr, hy + hr], fill=fur)  # head
+        blink = f % n == 7
+        for ex in (cx - 12, cx + 12):
+            if blink:
+                d.line([ex - 6, hy - 3, ex + 6, hy - 3], fill=(70, 210, 100), width=2)
+            else:
+                d.ellipse([ex - 6, hy - 8, ex + 6, hy + 3], fill=(80, 230, 110))
+                d.ellipse([ex - 2, hy - 4, ex + 2, hy + 1], fill=(15, 15, 20))
+        d.polygon([(cx - 3, hy + 8), (cx + 3, hy + 8), (cx, hy + 12)], fill=(230, 150, 160))  # nose
+        # Arms + paws reaching to the two keys (the pressing paw dips down).
+        for key, down in ((left_key, left_down), (right_key, not left_down)):
+            px = key * kw + kw / 2
+            py = kb_top - 2 - (0 if down else 12)
+            d.line([cx, hy + hr - 6, px, py], fill=fur, width=8)
+            d.ellipse([px - 8, py - 8, px + 8, py + 8], fill=fur_lit)
+        # Eighth-notes drifting up and looping.
+        for k in range(3):
+            phase = (f + k * 5) % n
+            nx = cx + (k - 1) * 46 + round(6 * math.sin(phase))
+            ny = hy - 34 - phase * 5
+            note = (150, 210, 255)
+            d.ellipse([nx - 4, ny - 3, nx + 4, ny + 3], fill=note)
+            d.line([nx + 4, ny, nx + 4, ny - 14], fill=note, width=2)
+            d.line([nx + 4, ny - 14, nx + 10, ny - 10], fill=note, width=2)
         out.append(img)
     return out
 
@@ -159,7 +180,7 @@ def _generate_scenes(out_dir: Path) -> None:
     """Write three distinct *animated* GIF scenes mpv loops in each lab."""
     out_dir.mkdir(parents=True, exist_ok=True)
     _save_gif(_rainbow_frames(), out_dir / "rainbow.gif")
-    _save_gif(_cat_frames(), out_dir / "cat.gif")
+    _save_gif(_cat_piano_frames(), out_dir / "cat.gif")
     _save_gif(_matrix_frames(), out_dir / "matrix.gif")
 
 
