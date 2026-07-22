@@ -233,3 +233,97 @@ def test_ws_upstream_factory_relays_bytes() -> None:
 
         time.sleep(0.15)
     assert b"RFB 003.008\n" in bytes(up_w.buf)
+
+
+def _relay_hub(factory: Any) -> Any:
+    hub = SimpleNamespace()
+    hub.get_rest_session = AsyncMock(return_value=SimpleNamespace(hijack_id=HID, acquired_by="alice"))
+    hub.vnc_upstream_factory = factory
+    return hub
+
+
+def _relay_client(hub: Any) -> TestClient:
+    app = FastAPI()
+    router = APIRouter()
+    register_gui_vnc_ws_routes(hub, router)
+    app.include_router(router)
+    return TestClient(_PrincipalASGI(app, _principal(subject="alice")))
+
+
+def test_ws_relay_handles_text_empty_and_inject_messages() -> None:
+    """Text frames are re-encoded, empty frames skipped, inject frames gated."""
+    import io
+    import threading
+
+    class _UpstreamR(io.RawIOBase):
+        def __init__(self) -> None:
+            self._data = b"RFB 003.008\n"
+            self._pos = 0
+            self._ev = threading.Event()
+
+        def read(self, size: int = -1) -> bytes:  # type: ignore[override]
+            if self._ev.is_set():
+                return b""
+            if self._pos >= len(self._data):
+                self._ev.wait(timeout=2.0)
+                return b""
+            end = len(self._data) if size < 0 else min(len(self._data), self._pos + size)
+            chunk = self._data[self._pos : end]
+            self._pos = end
+            return chunk
+
+        def close(self) -> None:
+            self._ev.set()
+            super().close()
+
+        def readable(self) -> bool:
+            return True
+
+    class _UpstreamW(io.RawIOBase):
+        def __init__(self) -> None:
+            self.buf = bytearray()
+
+        def write(self, b: bytes) -> int:  # type: ignore[override]
+            self.buf.extend(b)
+            return len(b)
+
+        def writable(self) -> bool:
+            return True
+
+        def flush(self) -> None:
+            return None
+
+    up_r, up_w = _UpstreamR(), _UpstreamW()
+    client = _relay_client(_relay_hub(lambda _w, _t: (up_r, up_w)))  # type: ignore[arg-type]
+    with client.websocket_connect(PATH + "?target_id=lab-vnc") as ws:
+        assert ws.receive_bytes().startswith(b"RFB ")
+        ws.send_text("RFB 003.008\n")  # text frame (ProtocolVersion) → re-encoded
+        ws.send_bytes(b"")  # empty frame → skipped
+        ws.send_bytes(bytes([1]))  # security type None
+        ws.send_bytes(bytes([1]))  # ClientInit
+        ws.send_bytes(bytes([4]) + bytes(7))  # KeyEvent → routed through inject gate
+        import time
+
+        time.sleep(0.2)
+    assert b"RFB 003.008\n" in bytes(up_w.buf)
+
+
+def test_ws_factory_error_closes_connection() -> None:
+    """A factory that raises is treated as upstream-unavailable (clean close)."""
+
+    def _boom(_w: str, _t: str | None) -> Any:
+        raise RuntimeError("dial exploded")
+
+    client = _relay_client(_relay_hub(_boom))
+    code = _connect_close_code(client, PATH + "?target_id=lab-vnc")
+    assert code is not None
+
+
+def test_ws_no_factory_configured_closes() -> None:
+    """No upstream factory on the hub → upstream unavailable → clean close."""
+    hub = SimpleNamespace()
+    hub.get_rest_session = AsyncMock(return_value=SimpleNamespace(hijack_id=HID, acquired_by="alice"))
+    # deliberately no vnc_upstream_factory attribute
+    client = _relay_client(hub)
+    code = _connect_close_code(client, PATH + "?target_id=lab-vnc")
+    assert code is not None

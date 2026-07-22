@@ -37,6 +37,9 @@ class TestReadViteManifest:
             vite_mock = mock.MagicMock()
             manifest_mock = mock.MagicMock()
             manifest_mock.is_file.return_value = False
+            # Both candidate paths (vite-manifest.json and .vite/manifest.json)
+            # must be absent to reach the "no manifest" branch, not the read-error path.
+            vite_mock.is_file.return_value = False
             vite_mock.__truediv__ = lambda self, name: manifest_mock
             frontend_mock.__truediv__ = lambda self, name: vite_mock
             mock_files.return_value = mock.MagicMock(__truediv__=lambda self, name: frontend_mock)
