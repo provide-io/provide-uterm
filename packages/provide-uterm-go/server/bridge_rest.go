@@ -623,12 +623,12 @@ func (m *GraphicalSessionManager) Attach(sess gui.GraphicalSession, closer io.Cl
 }
 
 func (m *GraphicalSessionManager) Replace(sess gui.GraphicalSession, closer io.Closer, cancel context.CancelFunc) {
-	m.Close()
+	_ = m.Close()
 	m.Attach(sess, closer, cancel)
 }
 
 func (m *GraphicalSessionManager) Detach() {
-	m.Close()
+	_ = m.Close()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.sess = nil
@@ -644,7 +644,7 @@ func (m *GraphicalSessionManager) Close() error {
 		m.cancel = nil
 	}
 	if m.closer != nil {
-		m.closer.Close()
+		_ = m.closer.Close()
 		m.closer = nil
 	}
 	return nil

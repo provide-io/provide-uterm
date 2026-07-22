@@ -465,15 +465,11 @@ func (s *Session) DetachClient(clientID string) {
 	}
 	slot.closed.Store(true)
 	// Non-blocking drain wake: close channel so Receive returns client closed.
-	// Only close once.
-	select {
-	default:
-		// may already be closed by session Close
-		func() {
-			defer func() { _ = recover() }()
-			close(slot.ch)
-		}()
-	}
+	// Only close once; may already be closed by session Close.
+	func() {
+		defer func() { _ = recover() }()
+		close(slot.ch)
+	}()
 }
 
 // SendToUpstream runs client→upstream pipeline (host/script origin).

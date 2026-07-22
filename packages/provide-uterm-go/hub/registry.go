@@ -87,7 +87,7 @@ func (r *WorkerRegistry) Pop(workerID string) *WorkerTermState {
 	}
 	if st.GraphicalSession != nil {
 		if closer, isCloser := st.GraphicalSession.(interface{ Close() error }); isCloser {
-			closer.Close()
+			_ = closer.Close()
 		}
 	}
 	delete(r.workers, workerID)
@@ -104,7 +104,7 @@ func (r *WorkerRegistry) Discard(workerID string) bool {
 	}
 	if st.GraphicalSession != nil {
 		if closer, isCloser := st.GraphicalSession.(interface{ Close() error }); isCloser {
-			closer.Close()
+			_ = closer.Close()
 		}
 	}
 	delete(r.workers, workerID)
