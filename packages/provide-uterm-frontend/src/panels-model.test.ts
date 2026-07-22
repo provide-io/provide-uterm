@@ -106,11 +106,12 @@ describe("panels-model", () => {
     const s2 = nautilusAdd(base, mk, 2);
     expect(s0.dir).toBe("row");
     expect(s1.dir).toBe("col");
-    // step 0/1 keep existing layout leading; step 2/3 flip it trailing
+    // Existing layout always recedes into the golden-minor cell (spirals in);
+    // the fresh unit takes the major and its side rotates each pair of steps.
     expect(s0.first).toBe(base);
+    expect(s0.ratio).toBeLessThan(0.5);
     expect(s2.second).toBe(base);
-    expect(s0.ratio).toBeGreaterThan(0.5);
-    expect(s2.ratio).toBeLessThan(0.5);
+    expect(s2.ratio).toBeGreaterThan(0.5);
   });
 
   it("makeIdGen yields unique monotonic ids", () => {

@@ -38,7 +38,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--evidence-dir", default=None)
     parser.add_argument("--skip-build", action="store_true")
-    parser.add_argument("--splits", type=int, default=3, help="how many times to spiral-split")
+    parser.add_argument("--splits", type=int, default=5, help="how many times to spiral-split (nautilus)")
     args = parser.parse_args(argv)
 
     evidence = base._evidence_dir(args.evidence_dir)
@@ -117,7 +117,7 @@ def main(argv: list[str] | None = None) -> int:
 
         raw_dir = evidence / "panels-video-raw"
         raw_dir.mkdir(exist_ok=True)
-        full_png = shots / "uterm-vnc-panels-full.png"
+        full_png = shots / "uterm-vnc-fractal-full.png"
         live_webm: Path | None = None
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
@@ -147,11 +147,12 @@ def main(argv: list[str] | None = None) -> int:
                 timeout=40_000,
             )
             page.wait_for_timeout(2500)
-            # Spiral a few fresh VNC+terminal units (the nautilus fractal).
+            # Spiral fresh VNC+terminal units inward — each click shrinks the
+            # existing layout into the golden-minor corner (the nautilus fractal).
             for _ in range(max(0, int(args.splits))):
                 page.click("#panels-nautilus")
-                page.wait_for_timeout(2500)
-            page.wait_for_timeout(3000)
+                page.wait_for_timeout(3000)
+            page.wait_for_timeout(4000)
             page.screenshot(path=str(full_png), full_page=True)
             metrics.update(
                 page.evaluate(
@@ -173,7 +174,7 @@ def main(argv: list[str] | None = None) -> int:
         if int(metrics.get("panes", 0) or 0) < 2:
             raise RuntimeError(f"panels never rendered: {metrics}")
 
-        video_out = evidence / "uterm-vnc-panels-demo.mp4"
+        video_out = evidence / "uterm-vnc-fractal.mp4"
         if live_webm and live_webm.is_file():
             nested._encode_mp4(live_webm, video_out)
             base._assert_video_not_black(video_out)
@@ -181,9 +182,9 @@ def main(argv: list[str] | None = None) -> int:
 
         demo = root / "demo" / "vnc-lab"
         (demo / "screenshots").mkdir(parents=True, exist_ok=True)
-        (demo / "screenshots" / "uterm-vnc-panels-full.png").write_bytes(full_png.read_bytes())
+        (demo / "screenshots" / "uterm-vnc-fractal-full.png").write_bytes(full_png.read_bytes())
         if video_out.is_file():
-            (demo / "uterm-vnc-panels-demo.mp4").write_bytes(video_out.read_bytes())
+            (demo / "uterm-vnc-fractal.mp4").write_bytes(video_out.read_bytes())
         (evidence / "panels-summary.log").write_text("\n".join(lines) + "\npanels_proof=ok\n", encoding="utf-8")
         print("\n".join(lines))
         return 0
