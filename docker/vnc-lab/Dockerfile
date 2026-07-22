@@ -46,6 +46,7 @@ RUN apt-get update \
         ca-certificates \
         chromium \
         fonts-liberation \
+        mpv \
         openssl \
         procps \
         x11-xserver-utils \

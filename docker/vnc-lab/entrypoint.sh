@@ -191,6 +191,67 @@ _rest="${GEOMETRY#*x}"
 _geom_h="${_rest%%x*}"
 _geom_w="${_geom_wh:-1280}"
 _geom_h="${_geom_h:-720}"
+
+# --- Scene mode: play an animated clip natively instead of Chromium. ----------
+# Chromium's web-content compositor does not continuously present animation
+# frames to the Xvfb framebuffer (proven: a CSS/rAF animation never reaches
+# x11vnc), so a VNC mirror of a nested browser freezes on the first paint. mpv
+# blits each decoded frame to X whole, so x11vnc streams clean motion to an
+# already-connected viewer — no per-cell tearing like a software terminal.
+# Enabled when SCENE_MEDIA points at an animated file (docker cp'd after boot).
+if [[ -n "${SCENE_MEDIA:-}" ]]; then
+  echo "browser_binary=mpv-scene" >> "${NAV_LOG}"
+  echo "scene_media=${SCENE_MEDIA}" >> "${NAV_LOG}"
+  # The media file is copied in shortly after boot; wait for it to land.
+  for _ in $(seq 1 100); do
+    [ -s "${SCENE_MEDIA}" ] && break
+    sleep 0.1
+  done
+  # Software X11 output (no GPU under Xvfb); loop forever, fill the framebuffer,
+  # no UI/OSD/input. --keepaspect=no stretches the clip edge-to-edge.
+  mpv \
+    --vo=x11 \
+    --loop-file=inf \
+    --no-audio \
+    --no-config \
+    --really-quiet \
+    --no-input-default-bindings \
+    --no-input-terminal \
+    --no-osc \
+    --no-border \
+    --cursor-autohide=always \
+    --geometry="${_geom_w}x${_geom_h}+0+0" \
+    --autofit="${_geom_w}x${_geom_h}" \
+    --keepaspect=no \
+    "${SCENE_MEDIA}" \
+    >>"${LOG_DIR}/chromium.log" 2>&1 &
+  CHROME_PID=$!
+  echo "browser_pid=${CHROME_PID}" >> "${NAV_LOG}"
+  echo "browser_nav_status=running" >> "${NAV_LOG}"
+  sleep 2
+  if ! kill -0 "${CHROME_PID}" 2>/dev/null; then
+    echo "browser_nav_status=exited_early" >> "${NAV_LOG}"
+    echo "vnc-lab: scene mpv exited early; see ${LOG_DIR}/chromium.log" >&2
+    cat "${LOG_DIR}/chromium.log" >&2 || true
+    exit 1
+  fi
+  # Pin the mpv window edge-to-edge (best-effort).
+  for _ in $(seq 1 40); do
+    if xdotool search --onlyvisible --class mpv windowmove 0 0 windowsize "${_geom_w}" "${_geom_h}" 2>/dev/null; then
+      break
+    fi
+    sleep 0.15
+  done
+  echo "vnc-lab: scene player running ${SCENE_MEDIA} (pid ${CHROME_PID})"
+  wait "${XVFB_PID}"
+  exit 0
+fi
+
+# Anti-throttle flags: without a window manager Chromium treats the sole Xvfb
+# window as occluded/backgrounded and throttles the renderer, so an
+# xterm.js canvas driven by live WebSocket frames stops repainting — x11vnc then
+# sees no pixel change and the VNC mirror freezes. These keep the renderer hot so
+# streamed animation actually paints (and thus streams through RFB → noVNC).
 "${CHROME_BIN}" \
   --no-sandbox \
   --test-type \
@@ -202,6 +263,12 @@ _geom_h="${_geom_h:-720}"
   --disable-session-crashed-bubble \
   --disable-infobars \
   --hide-crash-restore-bubble \
+  --disable-renderer-backgrounding \
+  --disable-backgrounding-occluded-windows \
+  --disable-background-timer-throttling \
+  --disable-features=CalculateNativeWinOcclusion,IntensiveWakeUpThrottling \
+  --disable-frame-rate-limit \
+  --disable-gpu-vsync \
   --window-size="${_geom_w},${_geom_h}" \
   --window-position=0,0 \
   "${DEMO_URL}" \
