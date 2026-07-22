@@ -226,8 +226,8 @@ func TestRealTOMLFilesLoad(t *testing.T) {
 	if example.Server.Host != "127.0.0.1" || example.Server.Port != 8780 {
 		t.Errorf("example server bind wrong: %+v", example.Server)
 	}
-	if example.Auth.Mode != "dev" {
-		t.Errorf("example auth.mode = %q, want dev (string, accepted at config layer)", example.Auth.Mode)
+	if example.Auth.Mode != "dev_token" {
+		t.Errorf("example auth.mode = %q, want dev_token (string, accepted at config layer)", example.Auth.Mode)
 	}
 	if len(example.Sessions) != 3 {
 		t.Fatalf("example sessions len = %d, want 3", len(example.Sessions))
