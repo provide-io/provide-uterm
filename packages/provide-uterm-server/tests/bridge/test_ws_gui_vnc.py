@@ -377,3 +377,18 @@ def test_ws_relay_logs_error_on_bad_security_type() -> None:
         msg = ws.receive()
         assert isinstance(msg, dict)
         assert msg.get("type") == "websocket.close"
+
+
+def test_ws_relay_thread_finishes_without_error() -> None:
+    """A full client handshake lets the filter EOF out of its message loop
+    cleanly, so the relay thread records no error — covers the no-error branch."""
+    up_r, up_w = _FakeUpstreamR(block_on_eof=False), _FakeUpstreamW()
+    client = _relay_client(_relay_hub(lambda _w, _t: (up_r, up_w)))  # type: ignore[arg-type]
+    with client.websocket_connect(PATH + "?target_id=lab-vnc") as ws:
+        assert ws.receive_bytes().startswith(b"RFB ")
+        # ProtocolVersion(12) + security-type None(1) + ClientInit(1): the filter
+        # gets past the handshake into its message loop. The upstream EOFs (it does
+        # not block), half-closing the relay socket, so the filter reads a clean
+        # boundary EOF and returns without error — relay_error stays empty.
+        ws.send_bytes(b"RFB 003.008\n" + bytes([1]) + bytes([1]))
+        time.sleep(0.6)
