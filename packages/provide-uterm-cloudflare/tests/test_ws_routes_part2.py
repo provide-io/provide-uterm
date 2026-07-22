@@ -71,6 +71,15 @@ class _Runtime:
     def _socket_role(self, ws: object) -> str:
         return self._socket_roles.get(self.ws_key(ws), "browser")
 
+    def _all_live_sockets(self) -> list:
+        try:
+            all_ws = list(self.ctx.getWebSockets())
+        except Exception:
+            all_ws = []
+        if not all_ws:
+            all_ws = list(self.browser_sockets.values())
+        return all_ws
+
 
 class _Ws:
     def __init__(self) -> None:

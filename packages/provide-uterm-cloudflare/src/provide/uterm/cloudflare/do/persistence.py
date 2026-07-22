@@ -18,6 +18,18 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def schedule_alarm(ctx: Any, wall_seconds: float) -> None:
+    """Schedule a Durable Object alarm at *wall_seconds* (wall-clock epoch).
+
+    Guards against a ``ctx`` whose ``storage`` is absent or lacks a callable
+    ``setAlarm`` (e.g. local pywrangler dev), in which case scheduling is a
+    no-op. The alarm time is passed in milliseconds, as the CF runtime expects.
+    """
+    _s = getattr(ctx, "storage", None)
+    if _s is not None and callable(getattr(_s, "setAlarm", None)):
+        _s.setAlarm(int(wall_seconds * 1000))
+
+
 def persist_lease(
     store: Any,
     ctx: Any,
@@ -47,9 +59,7 @@ def persist_lease(
             lease_expires_at=wall_expires,
         )
     )
-    _s = getattr(ctx, "storage", None)
-    if _s is not None and callable(getattr(_s, "setAlarm", None)):
-        _s.setAlarm(int(wall_expires * 1000))
+    schedule_alarm(ctx, wall_expires)
 
 
 def clear_lease(store: Any, worker_id: str) -> None:
