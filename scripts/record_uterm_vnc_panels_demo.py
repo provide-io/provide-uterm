@@ -5,14 +5,15 @@
 #
 """Record the recursive "nautilus" tiling panels page with distinct live scenes.
 
-Each of the three lab RFB targets natively plays a *different* animated scene (a
-rainbow gradient, a blinking cat, matrix rain) via mpv, which blits whole decoded
-frames to Xvfb — so x11vnc streams clean, tear-free motion to the already
-connected noVNC pane. (A nested Chromium never presents animation frames to Xvfb
-at all, and a software terminal tears mid-draw; mpv avoids both.) The nautilus
-panes fan out across the three targets, so the tiling shows multiple *distinct*
-VNC feeds that actually animate. Panes shrink as the spiral winds inward via
-noVNC's scale-viewport.
+The full nesting on show is **VNC → browser → terminal → pixelated ANSI scene**:
+each of the three lab RFB targets is a Chromium viewing a *different* ushell
+session's ``terminal.html``, and each session ``render``s its GIF (a rainbow
+gradient, the keyboard cat, matrix rain) as looping truecolor ANSI. xterm.js
+repaints each streamed frame and — unlike a raw canvas — presents it to Xvfb, so
+x11vnc captures the motion; the relay's update-driver then streams it on to the
+noVNC panes. The nautilus panes fan out across the three targets, so the tiling
+shows multiple *distinct* nested feeds that actually animate. Panes shrink as the
+spiral winds inward via noVNC's scale-viewport.
 
 Usage (repo root)::
 
@@ -40,18 +41,17 @@ import prove_vnc_lab as vnc_lab  # noqa: E402
 import record_uterm_vnc_demo_video as base  # noqa: E402
 import record_uterm_vnc_nested_demo as nested  # noqa: E402
 
-# (id, display label, scene GIF filename). One per lab target so each VNC pane
-# shows a visibly different *animated* scene; mpv loops the GIF natively in the
-# lab, so the panes actually play.
+# (ushell session id, display label, scene GIF filename). One per lab target so
+# each VNC pane shows a visibly different *animated* scene, rendered as looping
+# ANSI in that session's terminal.
 SCENES = [
     ("scene-rainbow", "Rainbow", "rainbow.gif"),
     ("scene-cat", "Cat", "cat.gif"),
     ("scene-matrix", "Matrix", "matrix.gif"),
 ]
 
-# Animated-GIF geometry. mpv decodes the GIF and blits whole frames to X, so the
-# per-frame duration (≈14 fps) drives smooth, tear-free playback; mpv scales the
-# clip up to the lab framebuffer.
+# Animated-GIF geometry. The GIF sources the frames the ushell `render` command
+# turns into looping ANSI (its per-frame duration sets the playback cadence).
 _SCENE_W, _SCENE_H = 320, 180
 _SCENE_FRAMES = 16
 _SCENE_DURATION_MS = 70
@@ -59,8 +59,8 @@ _SCENE_DURATION_MS = 70
 # The "cat" scene plays the real keyboard-cat GIF the non-VNC shell_render sample
 # renders (fetched host-side at record time; falls back to a drawn cat offline).
 _KEYBOARD_CAT_URL = "https://media.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif"
-# Letterbox target aspect ≈ the lab framebuffer (1280x936) so mpv's edge-to-edge
-# stretch doesn't distort the square source clip.
+# Letterbox the square source clip onto a ~4:3 canvas so the cat keeps its aspect
+# when `render` samples it down to the terminal's character grid.
 _CAT_CANVAS = (512, 374)
 
 
@@ -98,7 +98,7 @@ def _rainbow_frames() -> list[Any]:
 def _cat_piano_frames() -> list[Any]:
     """A cat playing a piano: paws bounce on the keys (which light up), the head
     bobs and blinks, and eighth-notes drift up. Drawn with ImageDraw for crisp
-    shapes; every frame differs so mpv plays it smoothly.
+    shapes; every frame differs so it renders as a lively ANSI loop.
     """
     import math
 
@@ -220,7 +220,7 @@ def _fetch_keyboard_cat_gif(out_path: Path) -> bool:
 
 
 def _generate_scenes(out_dir: Path) -> None:
-    """Write three distinct *animated* GIF scenes mpv loops in each lab."""
+    """Write three distinct *animated* GIF scenes the ushell render turns to ANSI."""
     out_dir.mkdir(parents=True, exist_ok=True)
     _save_gif(_rainbow_frames(), out_dir / "rainbow.gif")
     if not _fetch_keyboard_cat_gif(out_dir / "cat.gif"):
@@ -229,13 +229,25 @@ def _generate_scenes(out_dir: Path) -> None:
 
 
 def _write_panels_config(path: Path, *, host: str, port: int) -> None:
-    """Server config: N VNC-lease workers + N graphical (RFB) targets.
+    """Server config: N ushell scene sessions + N VNC-lease workers + N RFB targets.
 
-    The scenes are played natively inside each lab (see ``_start_scene_lab``), so
-    the server only needs the lease workers the panes hijack and the RFB targets
-    (the lab containers) it relays to — no ushell scene sessions.
+    Each scene is a ushell session that ``render``s its GIF as looping ANSI; a lab
+    Chromium views that session's ``terminal.html``, and the panes mirror the lab
+    over VNC — so the tiling is VNC → browser → terminal → the pixelated scene.
     """
     blocks: list[str] = []
+    for sid, label, _fname in SCENES:
+        blocks.append(
+            f"""
+[[sessions]]
+session_id = "{sid}"
+display_name = "{label}"
+connector_type = "ushell"
+input_mode = "hijack"
+auto_start = true
+tags = ["scene"]
+"""
+        )
     for wk in nested.NEST_LEASE_WORKERS:
         blocks.append(
             f"""
@@ -295,53 +307,26 @@ block_private_connector_targets = false
     path.write_text(body, encoding="utf-8")
 
 
-def _start_scene_lab(*, name: str, host_plain: int, gif_path: Path) -> None:
-    """Start one lab container that plays *gif_path* natively via mpv.
+def _drive_render(base_url: str, headers: dict[str, str], session: str, gif_path: Path) -> None:
+    """Render *gif_path* as looping truecolor ANSI into the ushell *session*.
 
-    ``SCENE_MEDIA`` flips the entrypoint into scene mode (mpv loop) instead of
-    launching Chromium. The clip is ``docker cp``-ed into ``/scene`` after boot
-    rather than bind-mounted, because host scratchpad/evidence paths are not
-    always shareable with the Docker VM; the entrypoint waits for it to land.
+    ushell reports ``input_mode=open`` on hello, so switch it to hijack, acquire a
+    lease, and feed ``render --loop``. A snapshot request afterwards re-caches the
+    rendered screen so a browser connecting later opens straight onto the scene.
+    xterm.js repaints each streamed frame (and, unlike a raw canvas, presents it to
+    Xvfb), so the lab's terminal — and the VNC mirror of it — actually animates.
     """
-    vnc_lab._remove_container(name)
-    result = subprocess.run(
-        [
-            "docker",
-            "run",
-            "-d",
-            "--name",
-            name,
-            "--shm-size",
-            vnc_lab.DEFAULT_SHM,
-            "--add-host=host.docker.internal:host-gateway",
-            "-p",
-            f"{host_plain}:{vnc_lab.RFB_PLAIN_PORT}",
-            "-e",
-            "SCENE_MEDIA=/scene/scene.gif",
-            "-e",
-            f"GEOMETRY={nested.LAB_GEOMETRY}",
-            vnc_lab.IMAGE_NAME,
-        ],
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=False,
+    base.http_json("POST", f"{base_url}/worker/{session}/input_mode", headers=headers, body={"input_mode": "hijack"})
+    hid = nested._acquire_lease(base_url, headers, session)
+    base.send_shell_keys(
+        base_url,
+        headers,
+        hid,
+        f"render --loop --cols 96 --rows 30 file://{gif_path.resolve()}\r",
+        session=session,
     )
-    if result.returncode != 0:
-        raise RuntimeError(f"docker run {name} failed: {result.stderr.strip()[:400]}")
-    # Create /scene and copy the clip in (docker cp needs no host file-sharing).
-    subprocess.run(
-        ["docker", "exec", name, "mkdir", "-p", "/scene"], capture_output=True, text=True, timeout=30, check=False
-    )
-    cp = subprocess.run(
-        ["docker", "cp", str(gif_path.resolve()), f"{name}:/scene/scene.gif"],
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=False,
-    )
-    if cp.returncode != 0:
-        raise RuntimeError(f"docker cp scene clip to {name} failed: {cp.stderr.strip()[:400]}")
+    time.sleep(0.4)
+    base.http_json("GET", f"{base_url}/worker/{session}/hijack/{hid}/snapshot", headers=headers)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -391,10 +376,28 @@ def main(argv: list[str] | None = None) -> int:
         base.prove.wait_http(f"{base_url}/readyz", timeout=60.0)
         lines.append(f"server_ready={base_url}")
 
-        # Each lab natively plays a *different* scene (rainbow / cat / matrix) via
-        # mpv, so the VNC panes are visibly distinct AND animate cleanly.
-        for (name, port), gif_path in zip(zip(lab_names, nested.NEST_PORTS, strict=True), gif_paths, strict=True):
-            _start_scene_lab(name=name, host_plain=port, gif_path=gif_path)
+        # Render each scene's GIF as looping ANSI into its ushell session.
+        for (sid, _label, _fname), gif_path in zip(SCENES, gif_paths, strict=True):
+            for _ in range(80):
+                st, body = base.http_json("GET", f"{base_url}/api/sessions/{sid}", headers=headers)
+                if st == 200 and isinstance(body, dict) and body.get("connected"):
+                    break
+                time.sleep(0.15)
+            else:
+                raise RuntimeError(f"scene session {sid} never connected")
+            _drive_render(base_url, headers, sid, gif_path)
+        time.sleep(1.5)
+        lines.append("scenes_rendered=ok")
+
+        # Each lab is a Chromium viewing a *different* scene's terminal.html, so the
+        # tiling shows VNC → browser → terminal → the distinct pixelated ANSI scene.
+        for (name, port), (sid, _label, _fname) in zip(
+            zip(lab_names, nested.NEST_PORTS, strict=True), SCENES, strict=True
+        ):
+            demo_url = (
+                f"http://{base._HOST_FROM_DOCKER}:{server_port}/_terminal/terminal.html?worker_id={sid}&role=browser"
+            )
+            nested._start_nested_lab(name=name, demo_url=demo_url, host_plain=port)
             if not nested._wait_lab_rfb(name):
                 raise RuntimeError(f"lab {name} RFB never ready")
         lines.append("scene_labs_ready=ok")
