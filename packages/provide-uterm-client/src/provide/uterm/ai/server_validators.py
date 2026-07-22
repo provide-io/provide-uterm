@@ -233,12 +233,9 @@ def _clean_snapshot(
         When set, trim the ``screen`` text to the last *N* lines.
     """
     if output == "raw":
-        if tail_lines is not None and tail_lines > 0:
-            screen = snapshot.get("screen", "")
-            lines = screen.splitlines()
-            if len(lines) > tail_lines:
-                return {**snapshot, "screen": "\n".join(lines[-tail_lines:])}
-        return snapshot
+        screen = snapshot.get("screen", "")
+        trimmed = _trim_tail(screen, tail_lines)
+        return {**snapshot, "screen": trimmed} if trimmed != screen else snapshot
     screen = _trim_tail(strip_ansi(snapshot.get("screen", "")), tail_lines)
     if output == "text":
         return {"screen": screen}
