@@ -76,6 +76,10 @@ class UshellConnector(_SessionConnector):
         # the DO stops forwarding to congested browsers (the CF SessionRuntime sends
         # flow_pause/flow_resume via handle_control). Distinct from hijack pause.
         self._flow_paused = False
+        # Most recent full-screen frame (e.g. a `render`/`cast` scene). A fresh
+        # viewer's snapshot shows this instead of a bare prompt, so late joiners
+        # and RFB/browser mirrors still see the rendered output.
+        self._last_screen = ""
 
     # ------------------------------------------------------------------
     # SessionConnector lifecycle
@@ -139,6 +143,8 @@ class UshellConnector(_SessionConnector):
             else:
                 frames.extend(term(s) for s in result)
 
+        if frames:
+            self._last_screen = frames[-1]["data"]
         return frames
 
     async def _stream_animation(self, result: AnimatedResult) -> None:
@@ -148,6 +154,7 @@ class UshellConnector(_SessionConnector):
             while True:
                 for frame in result.frames:
                     await asyncio.sleep(delay)
+                    self._last_screen = frame
                     self._pending_frames.append(term(frame))
                 if not result.loop:
                     break
@@ -177,7 +184,9 @@ class UshellConnector(_SessionConnector):
 
     async def get_snapshot(self) -> dict[str, Any]:
         current = self._buf.current_line()
-        screen = f"ushell {self._session_id}\r\n{PROMPT}{current}"
+        # A rendered scene (last full-screen frame) wins over the bare prompt so a
+        # freshly-connecting viewer/mirror sees the picture, not just `ushell …>`.
+        screen = self._last_screen or f"ushell {self._session_id}\r\n{PROMPT}{current}"
         return {
             "type": "snapshot",
             "screen": screen,

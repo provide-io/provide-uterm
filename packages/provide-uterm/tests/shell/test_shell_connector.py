@@ -158,6 +158,27 @@ async def test_get_snapshot_cursor_updates_with_input():
     assert snap["cursor"]["x"] == len(PROMPT) + 5
 
 
+async def test_get_snapshot_reflects_last_command_output():
+    # After a command runs, the snapshot must show that output (the last
+    # full-screen frame), not the bare prompt — otherwise a browser/RFB viewer
+    # connecting after a `render` scene sees only `ushell …>` (the hub caches
+    # this snapshot as last_snapshot for late joiners).
+    conn = UshellConnector("s1")
+    await conn.start()
+    await conn.handle_input("help\r")
+    snap = await conn.get_snapshot()
+    assert "ushell commands" in snap["screen"]
+
+
+async def test_get_snapshot_falls_back_to_prompt_before_any_output():
+    # A fresh session that has produced no full-screen frame shows the prompt.
+    conn = UshellConnector("fresh-session")
+    await conn.start()
+    snap = await conn.get_snapshot()
+    assert "fresh-session" in snap["screen"]
+    assert snap["screen"].endswith(PROMPT)
+
+
 # ---------------------------------------------------------------------------
 # get_analysis
 # ---------------------------------------------------------------------------
