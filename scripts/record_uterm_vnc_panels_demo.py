@@ -239,11 +239,13 @@ def _write_panels_config(path: Path, *, host: str, port: int) -> None:
     for sid, label, _fname in SCENES:
         blocks.append(
             f"""
+# ushell always reports open mode on hello (its connector hardcodes it), so this
+# is open here; _drive_render POSTs /input_mode to switch to hijack per render.
 [[sessions]]
 session_id = "{sid}"
 display_name = "{label}"
 connector_type = "ushell"
-input_mode = "hijack"
+input_mode = "open"
 auto_start = true
 tags = ["scene"]
 """
@@ -316,16 +318,23 @@ def _drive_render(base_url: str, headers: dict[str, str], session: str, gif_path
     xterm.js repaints each streamed frame (and, unlike a raw canvas, presents it to
     Xvfb), so the lab's terminal — and the VNC mirror of it — actually animates.
     """
-    base.http_json("POST", f"{base_url}/worker/{session}/input_mode", headers=headers, body={"input_mode": "hijack"})
+    st, body = base.http_json(
+        "POST", f"{base_url}/worker/{session}/input_mode", headers=headers, body={"input_mode": "hijack"}
+    )
+    if st >= 400:
+        raise RuntimeError(f"input_mode switch failed for {session}: {st} {body!r}")
     hid = nested._acquire_lease(base_url, headers, session)
-    base.send_shell_keys(
+    st, body = base.send_shell_keys(
         base_url,
         headers,
         hid,
-        f"render --loop --cols 96 --rows 30 file://{gif_path.resolve()}\r",
+        f"render --loop --cols 96 --rows 30 {gif_path.resolve().as_uri()}\r",
         session=session,
     )
+    if st >= 400:
+        raise RuntimeError(f"render send failed for {session}: {st} {body!r}")
     time.sleep(0.4)
+    # Best-effort re-cache (a late-connecting browser re-renders regardless).
     base.http_json("GET", f"{base_url}/worker/{session}/hijack/{hid}/snapshot", headers=headers)
 
 
