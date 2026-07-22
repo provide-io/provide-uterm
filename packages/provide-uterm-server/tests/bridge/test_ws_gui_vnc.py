@@ -35,6 +35,14 @@ def test_principal_role_name_picks_highest() -> None:
     assert principal_role_name(p) == "admin"
 
 
+def test_principal_role_name_ignores_non_improving_role() -> None:
+    # Ordered roles (a list, not a hash-ordered set) so a lower-rank role
+    # deterministically follows a higher one — exercises the "rank not greater"
+    # loop branch regardless of PYTHONHASHSEED.
+    p = SimpleNamespace(subject_id="x", roles=["admin", "viewer", "operator"])
+    assert principal_role_name(p) == "admin"
+
+
 def test_authz_requires_principal() -> None:
     assert check_vnc_relay_authz(principal=None, hijack_session=object(), hijack_id=HID) == "authentication required"
 
