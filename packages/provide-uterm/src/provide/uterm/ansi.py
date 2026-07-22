@@ -151,7 +151,17 @@ def _brighten_fg_index(idx: int) -> int:
     return idx + 8 if idx < 8 else idx
 
 
-def _convert_sgr_256(match: re.Match[str], palette: list[int]) -> str:
+def _convert_sgr(
+    match: re.Match[str],
+    emit_fg: Callable[[int], str],
+    emit_bg: Callable[[int], str],
+) -> str:
+    """Shared SGR 16-color walk; *emit_fg*/*emit_bg* render one palette index.
+
+    The parsing, bold handling and non-color pass-through are identical for the
+    256-color and truecolor upgrades — only the final ``38;…`` / ``48;…`` emit
+    format differs, which the caller supplies as closures over its palette.
+    """
     seq = match.group(1)
     if seq == "":
         return match.group(0)
@@ -171,66 +181,23 @@ def _convert_sgr_256(match: re.Match[str], palette: list[int]) -> str:
         fg = _is_foreground(code)
         if fg and bold:
             idx = _brighten_fg_index(idx)
-        color = palette[idx]
         if fg:
-            new_parts.append(f"38;5;{color}")
+            new_parts.append(emit_fg(idx))
         else:
-            new_parts.append(f"48;5;{color}")
+            new_parts.append(emit_bg(idx))
     if not new_parts:
         return match.group(0)
     return f"\x1b[{';'.join(new_parts)}m"
 
 
-def _convert_tokens_256(text: str, palette: list[int]) -> str:
+def _convert_tokens(text: str, emit: Callable[[str, int], str]) -> str:
+    """Shared {P#}/{T#} token walk; *emit* renders one (kind, palette index)."""
+
     def repl(m: re.Match[str]) -> str:
         kind = m.group(1)
         raw = int(m.group(2))
         idx = raw % 16
-        color = palette[idx]
-        return f"{{{'F' if kind == 'P' else 'B'}{color}}}"
-
-    return _TOKEN_RE.sub(repl, text)
-
-
-def _convert_sgr_tc(match: re.Match[str], rgb_palette: list[tuple[int, int, int]]) -> str:
-    seq = match.group(1)
-    if seq == "":
-        return match.group(0)
-    parts = seq.split(";")
-    if "38" in parts or "48" in parts:
-        return match.group(0)
-    bold = "1" in parts
-    new_parts = []
-    for p in parts:
-        if not p:
-            continue
-        code = int(p)
-        idx = _map_index(code)
-        if idx is None:
-            new_parts.append(str(code))
-            continue
-        fg = _is_foreground(code)
-        if fg and bold:
-            idx = _brighten_fg_index(idx)
-        r, g, b = rgb_palette[idx]
-        if fg:
-            new_parts.append(f"38;2;{r};{g};{b}")
-        else:
-            new_parts.append(f"48;2;{r};{g};{b}")
-    if not new_parts:
-        return match.group(0)
-    return f"\x1b[{';'.join(new_parts)}m"
-
-
-def _convert_tokens_tc(text: str, rgb_palette: list[tuple[int, int, int]]) -> str:
-    def repl(m: re.Match[str]) -> str:
-        kind = m.group(1)
-        raw = int(m.group(2))
-        idx = raw % 16
-        r, g, b = rgb_palette[idx]
-        if kind == "P":
-            return f"\x1b[38;2;{r};{g};{b}m"
-        return f"\x1b[48;2;{r};{g};{b}m"
+        return emit(kind, idx)
 
     return _TOKEN_RE.sub(repl, text)
 
@@ -297,8 +264,18 @@ def upgrade_to_256(text: str, palette: list[int] | None = None) -> str:
         Text with 16-color codes replaced by ``38;5;N`` / ``48;5;N`` equivalents.
     """
     pal = DEFAULT_PALETTE if palette is None else palette
-    text = _convert_tokens_256(text, pal)
-    return _SGR_RE.sub(lambda m: _convert_sgr_256(m, pal), text)
+
+    def emit_token(kind: str, idx: int) -> str:
+        return f"{{{'F' if kind == 'P' else 'B'}{pal[idx]}}}"
+
+    def emit_fg(idx: int) -> str:
+        return f"38;5;{pal[idx]}"
+
+    def emit_bg(idx: int) -> str:
+        return f"48;5;{pal[idx]}"
+
+    text = _convert_tokens(text, emit_token)
+    return _SGR_RE.sub(lambda m: _convert_sgr(m, emit_fg, emit_bg), text)
 
 
 def upgrade_to_truecolor(text: str, palette: list[int] | None = None) -> str:
@@ -314,8 +291,23 @@ def upgrade_to_truecolor(text: str, palette: list[int] | None = None) -> str:
     """
     pal = DEFAULT_PALETTE if palette is None else palette
     rgb_palette = _palette_to_rgb(pal)
-    text = _convert_tokens_tc(text, rgb_palette)
-    return _SGR_RE.sub(lambda m: _convert_sgr_tc(m, rgb_palette), text)
+
+    def emit_token(kind: str, idx: int) -> str:
+        r, g, b = rgb_palette[idx]
+        if kind == "P":
+            return f"\x1b[38;2;{r};{g};{b}m"
+        return f"\x1b[48;2;{r};{g};{b}m"
+
+    def emit_fg(idx: int) -> str:
+        r, g, b = rgb_palette[idx]
+        return f"38;2;{r};{g};{b}"
+
+    def emit_bg(idx: int) -> str:
+        r, g, b = rgb_palette[idx]
+        return f"48;2;{r};{g};{b}"
+
+    text = _convert_tokens(text, emit_token)
+    return _SGR_RE.sub(lambda m: _convert_sgr(m, emit_fg, emit_bg), text)
 
 
 def normalize_colors(text: str) -> str:

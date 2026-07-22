@@ -149,36 +149,9 @@ class TerminalEmulator:
         """
         # Local import keeps the render module out of the import-time
         # graph for callers that only need plain-text snapshots.
-        from provide.uterm.render.buffer import ANSI_RESET, style_to_sgr
+        from provide.uterm.render.buffer import render_cell_rows
 
-        rows_out: list[str] = []
-        buffer = self._screen.buffer
-        for y in range(self.rows):
-            row: dict[int, Any] = buffer.get(y, {})
-            parts: list[str] = []
-            last_style: tuple[str, str, bool, bool, bool, bool] | None = None
-            for x in range(self.cols):
-                cell = row.get(x)
-                if cell is None:
-                    char = " "
-                    style = ("default", "default", False, False, False, False)
-                else:
-                    style = (
-                        cell.fg or "default",
-                        cell.bg or "default",
-                        bool(cell.bold),
-                        bool(getattr(cell, "underscore", False)),
-                        bool(getattr(cell, "reverse", False)),
-                        bool(getattr(cell, "blink", False)),
-                    )
-                    char = cell.data or " "
-                if style != last_style:
-                    parts.append(style_to_sgr(*style))
-                    last_style = style
-                parts.append(char)
-            parts.append(ANSI_RESET)
-            rows_out.append("".join(parts))
-        return "\n".join(rows_out)
+        return "\n".join(render_cell_rows(self._screen.buffer, self.cols, self.rows))
 
     def reset(self) -> None:
         """Reset terminal to its initial state."""

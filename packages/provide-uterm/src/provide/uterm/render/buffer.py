@@ -84,6 +84,50 @@ BG_CODES: dict[str, int] = {
 
 
 # ---------------------------------------------------------------------------
+# Shared per-cell SGR render loop
+# ---------------------------------------------------------------------------
+
+
+def render_cell_rows(buffer: Any, cols: int, rows: int) -> list[str]:
+    """Render a pyte per-cell style *buffer* to ANSI-styled row strings.
+
+    Walks the ``rows`` x ``cols`` grid, emitting an SGR escape sequence
+    whenever the style changes between adjacent cells. Each row ends with
+    ``ANSI_RESET`` so a downstream consumer starts from a clean state.
+
+    Shared by :meth:`AnsiBuffer.render_lines` and
+    ``TerminalEmulator.ansi_screen``.
+    """
+    lines: list[str] = []
+    for y in range(rows):
+        row: dict[int, Any] = buffer.get(y, {})
+        line_parts: list[str] = []
+        last_style: tuple[str, str, bool, bool, bool, bool] | None = None
+        for x in range(cols):
+            cell = row.get(x)
+            if cell is None:
+                char = " "
+                style = ("default", "default", False, False, False, False)
+            else:
+                fg = cell.fg or "default"
+                bg = cell.bg or "default"
+                bold = bool(cell.bold)
+                underscore = bool(getattr(cell, "underscore", False))
+                reverse = bool(getattr(cell, "reverse", False))
+                blink = bool(getattr(cell, "blink", False))
+                style = (fg, bg, bold, underscore, reverse, blink)
+                char = cell.data or " "
+
+            if style != last_style:
+                line_parts.append(style_to_sgr(*style))
+                last_style = style
+            line_parts.append(char)
+        line_parts.append(ANSI_RESET)
+        lines.append("".join(line_parts))
+    return lines
+
+
+# ---------------------------------------------------------------------------
 # AnsiBuffer — pyte Screen + Stream wrapper
 # ---------------------------------------------------------------------------
 
@@ -112,34 +156,7 @@ class AnsiBuffer:
         self._stream.feed(text)
 
     def render_lines(self, width: int, height: int) -> list[str]:
-        lines: list[str] = []
-        buffer = self._screen.buffer
-        for y in range(height):
-            row: dict[int, Any] = buffer.get(y, {})
-            line_parts: list[str] = []
-            last_style: tuple[str, str, bool, bool, bool, bool] | None = None
-            for x in range(width):
-                cell = row.get(x)
-                if cell is None:
-                    char = " "
-                    style = ("default", "default", False, False, False, False)
-                else:
-                    fg = cell.fg or "default"
-                    bg = cell.bg or "default"
-                    bold = bool(cell.bold)
-                    underscore = bool(getattr(cell, "underscore", False))
-                    reverse = bool(getattr(cell, "reverse", False))
-                    blink = bool(getattr(cell, "blink", False))
-                    style = (fg, bg, bold, underscore, reverse, blink)
-                    char = cell.data or " "
-
-                if style != last_style:
-                    line_parts.append(style_to_sgr(*style))
-                    last_style = style
-                line_parts.append(char)
-            line_parts.append(ANSI_RESET)
-            lines.append("".join(line_parts))
-        return lines
+        return render_cell_rows(self._screen.buffer, width, height)
 
 
 # ---------------------------------------------------------------------------
