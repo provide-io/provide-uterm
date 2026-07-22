@@ -41,7 +41,7 @@ def filter_rfb_client_input(
     principal_id: str,
     principal_role: str,
     dst_lock: AbstractContextManager[Any] | None = None,
-    on_handshake_done: Callable[[], None] | None = None,
+    on_client_ready: Callable[[], None] | None = None,
 ) -> None:
     """Copy RFB client messages from *src* to *dst*, gating inject types.
 
@@ -51,8 +51,12 @@ def filter_rfb_client_input(
     :func:`run_human_relay_streams` that injects periodic
     ``FramebufferUpdateRequest`` frames — never interleaves mid-message.
 
-    *on_handshake_done*, if given, is invoked once ClientInit has been forwarded
-    (so a driver can wait for the handshake before injecting into *dst*).
+    *on_client_ready*, if given, is invoked once the client's FIRST
+    ``FramebufferUpdateRequest`` has been forwarded. By then the client's
+    ``SetPixelFormat`` + ``SetEncodings`` (which precede that request) are already
+    upstream, so a driver that starts injecting requests won't race ahead of the
+    client's pixel format — otherwise the server may answer the driver's request
+    in its native format and the client renders those frames with swapped colours.
 
     Raises ``ValueError`` on unsupported security type or unknown message type.
     Raises ``EOFError`` on short read.
@@ -74,9 +78,8 @@ def filter_rfb_client_input(
 
     # 3. ClientInit (1 byte)
     emit(_read_exact(src, 1))
-    if on_handshake_done is not None:
-        on_handshake_done()
 
+    client_ready_fired = False
     while True:
         try:
             msg_type = _read_exact(src, 1)
@@ -92,6 +95,9 @@ def filter_rfb_client_input(
             emit(msg_type + header + body)
         elif t == _FRAMEBUFFER_UPDATE_REQUEST:
             emit(msg_type + _read_exact(src, 9))
+            if on_client_ready is not None and not client_ready_fired:
+                client_ready_fired = True
+                on_client_ready()
         elif t == _KEY_EVENT:
             payload = _read_exact(src, 7)
             if _allowed(can_inject, session_id, lease_id, principal_id, principal_role):
