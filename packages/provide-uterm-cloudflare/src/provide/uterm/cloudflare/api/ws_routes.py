@@ -205,12 +205,7 @@ async def _handle_presence_message(runtime: RuntimeProtocol, ws: CFWebSocket, fr
         return
 
     # presence_update / queued_input: relay to all other browsers.
-    try:
-        all_ws = list(runtime.ctx.getWebSockets())  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
-    except Exception:
-        all_ws = []
-    if not all_ws:
-        all_ws = list(runtime.browser_sockets.values())  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
+    all_ws = runtime._all_live_sockets()  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
     for other_ws in all_ws:
         if runtime._socket_role(other_ws) != "browser":  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
             continue

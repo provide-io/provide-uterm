@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from provide.uterm.cloudflare.do._webhooks import fire_webhooks
     from provide.uterm.cloudflare.do.persistence import clear_lease as _clear_lease
     from provide.uterm.cloudflare.do.persistence import persist_lease as _persist_lease
+    from provide.uterm.cloudflare.do.persistence import schedule_alarm
     from provide.uterm.cloudflare.state.registry import KV_REFRESH_S, update_kv_session
     from provide.uterm.cloudflare.state.store import LeaseRecord
 else:
@@ -37,6 +38,7 @@ else:
         from provide.uterm.cloudflare.do._webhooks import fire_webhooks
         from provide.uterm.cloudflare.do.persistence import clear_lease as _clear_lease
         from provide.uterm.cloudflare.do.persistence import persist_lease as _persist_lease
+        from provide.uterm.cloudflare.do.persistence import schedule_alarm
         from provide.uterm.cloudflare.state.registry import KV_REFRESH_S, update_kv_session
         from provide.uterm.cloudflare.state.store import LeaseRecord
     except Exception:  # pragma: no cover
@@ -45,6 +47,7 @@ else:
         from do._webhooks import fire_webhooks
         from do.persistence import clear_lease as _clear_lease
         from do.persistence import persist_lease as _persist_lease
+        from do.persistence import schedule_alarm
         from state.registry import KV_REFRESH_S, update_kv_session
         from state.store import LeaseRecord
 
@@ -248,16 +251,24 @@ class _SessionRuntimeIoMixin:
         await self.send_ws(self.worker_ws, {"type": "input", "data": data, "ts": time.time()})
         return True
 
-    async def broadcast_to_browsers(self, payload: dict[str, Any]) -> None:
-        # After CF hibernation, in-memory dicts are reset. Use ctx.getWebSockets()
-        # to enumerate all live sockets. In local pywrangler dev, ctx.getWebSockets()
-        # returns [] (no hibernation state) — fall back to the in-memory dict when empty.
+    def _all_live_sockets(self) -> list[Any]:
+        """Enumerate all live WebSockets, resilient to CF hibernation.
+
+        After CF hibernation, in-memory dicts are reset, so ``ctx.getWebSockets()``
+        is the source of truth. In local pywrangler dev it returns ``[]`` (no
+        hibernation state) or is unavailable — fall back to the in-memory
+        ``browser_sockets`` dict in that case.
+        """
         try:
             all_ws = list(self.ctx.getWebSockets())
         except Exception:
             all_ws = []
         if not all_ws:
             all_ws = list(self.browser_sockets.values())
+        return all_ws
+
+    async def broadcast_to_browsers(self, payload: dict[str, Any]) -> None:
+        all_ws = self._all_live_sockets()
         frame_type = str(payload.get("type") or "")
         for ws in all_ws:
             if self._socket_role(ws) != "browser":
@@ -422,13 +433,11 @@ class _SessionRuntimeIoMixin:
                 hijacked=self.hijack.session is not None,
                 input_mode=self.input_mode,
             )
-            if (_s := getattr(self.ctx, "storage", None)) is not None and callable(getattr(_s, "setAlarm", None)):
-                _s.setAlarm(int((wall_now + KV_REFRESH_S) * 1000))
+            schedule_alarm(self.ctx, wall_now + KV_REFRESH_S)
         elif self.hijack.session is not None:
-            if (_s := getattr(self.ctx, "storage", None)) is not None and callable(getattr(_s, "setAlarm", None)):
-                # ``self.hijack.session.lease_expires_at`` is a non-None float
-                # (the surrounding branch already gated on ``session is not
-                # None``), so ``_mono_to_wall`` cannot return None here.
-                lease_wall = _mono_to_wall(self.hijack.session.lease_expires_at)
-                assert lease_wall is not None
-                _s.setAlarm(int(lease_wall * 1000))
+            # ``self.hijack.session.lease_expires_at`` is a non-None float
+            # (the surrounding branch already gated on ``session is not
+            # None``), so ``_mono_to_wall`` cannot return None here.
+            lease_wall = _mono_to_wall(self.hijack.session.lease_expires_at)
+            assert lease_wall is not None
+            schedule_alarm(self.ctx, lease_wall)
