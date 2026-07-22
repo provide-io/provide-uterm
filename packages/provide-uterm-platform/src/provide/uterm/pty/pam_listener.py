@@ -180,7 +180,7 @@ class PamNotifyListener:
             raw = sock.getsockopt(_socket.SOL_SOCKET, so_peercred, struct.calcsize("3i"))
             _pid, uid, _gid = struct.unpack("3i", raw)
             return int(uid)
-        except (OSError, struct.error, Exception):
+        except Exception:
             return None
 
     async def _handle_connection(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
