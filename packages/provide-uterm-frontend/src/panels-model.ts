@@ -123,16 +123,20 @@ export function closeLeaf(node: Node, leafId: string): Node | null {
  * (right → bottom → left → top …), producing the nautilus tiling.
  */
 export function nautilusAdd(node: Node, mkId: IdGen, step: number): Split {
+  // Inward nautilus: each fresh VNC+terminal unit takes the golden-MAJOR cell
+  // while the whole existing layout recurses into the golden-minor, and the
+  // fresh side rotates through right → bottom → left → top. So the newest unit
+  // is always the biggest and older panes spiral progressively smaller toward a
+  // corner — a visibly self-similar (fractal) golden spiral.
   const dir: SplitDir = step % 2 === 0 ? "row" : "col";
-  // Existing layout keeps the larger cell; a fresh unit takes the smaller.
-  const existingLeading = step % 4 < 2;
+  const freshLeading = step % 4 >= 2;
   const fresh = unit(mkId, dir === "row" ? "col" : "row");
   return {
     kind: "split",
     id: mkId(),
     dir,
-    ratio: existingLeading ? GOLDEN : 1 - GOLDEN,
-    first: existingLeading ? node : fresh,
-    second: existingLeading ? fresh : node,
+    ratio: freshLeading ? GOLDEN : 1 - GOLDEN,
+    first: freshLeading ? fresh : node,
+    second: freshLeading ? node : fresh,
   };
 }
