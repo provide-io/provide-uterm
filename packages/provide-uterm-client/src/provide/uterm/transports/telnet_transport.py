@@ -12,28 +12,39 @@ from typing import TYPE_CHECKING, Any
 
 from provide.telemetry import get_logger
 
+from provide.uterm.transports._telnet_const import (
+    DO,
+    DONT,
+    IAC,
+    OPT_BINARY,
+    OPT_ECHO,
+    OPT_NAWS,
+    OPT_SGA_OPT,
+    OPT_TTYPE,
+    SB,
+    SE,
+    TTYPE_IS,
+    WILL,
+    WONT,
+)
+
+# Re-exported for callers that import these names from this module; they are
+# part of this module's public surface but are not referenced internally.
+from provide.uterm.transports._telnet_const import (
+    ECHO as ECHO,
+)
+from provide.uterm.transports._telnet_const import (
+    NAWS as NAWS,
+)
+from provide.uterm.transports._telnet_const import (
+    SGA as SGA,
+)
 from provide.uterm.transports.base import ConnectionTransport
 
 if TYPE_CHECKING:
     from asyncio import StreamReader, StreamWriter
 
 logger = get_logger(__name__)
-# ---------------------------------------------------------------------------
-# Telnet protocol constants (local copies to avoid circular imports)
-# ---------------------------------------------------------------------------
-
-IAC: int = 255
-WILL: int = 251
-WONT: int = 252
-DO: int = 253
-DONT: int = 254
-SB: int = 250
-SE: int = 240
-ECHO: int = 1
-SGA: int = 3
-NAWS: int = 31
-OPT_TTYPE: int = 24
-TTYPE_IS: int = 0
 
 # Default connection timeout in seconds
 _DEFAULT_CONNECT_TIMEOUT_S: float = 30.0
@@ -43,12 +54,6 @@ _DEFAULT_CONNECT_TIMEOUT_S: float = 30.0
 # otherwise grow _rx_buf without bound (memory-exhaustion DoS). 256 KiB is far
 # above any legitimate telnet subnegotiation.
 _MAX_RX_BUF_BYTES: int = 256 * 1024
-
-# Telnet option codes
-OPT_BINARY: int = 0
-OPT_ECHO: int = ECHO
-OPT_SGA_OPT: int = SGA
-OPT_NAWS: int = NAWS
 
 
 class TelnetTransport(ConnectionTransport):

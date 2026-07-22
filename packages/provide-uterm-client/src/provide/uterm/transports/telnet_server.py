@@ -19,19 +19,18 @@ from typing import Any
 from provide.telemetry import get_logger
 from provide.uterm.defaults import TerminalDefaults
 
-logger = get_logger(__name__)
-# ---------------------------------------------------------------------------
-# Telnet protocol constants (subset used for server handshake)
-# ---------------------------------------------------------------------------
+from provide.uterm.transports._telnet_const import (
+    DO,
+    DONT,
+    ECHO,
+    IAC,
+    LINEMODE,
+    NAWS,
+    SGA,
+    WILL,
+)
 
-IAC: int = 255
-WILL: int = 251
-DO: int = 253
-DONT: int = 254
-ECHO: int = 1
-SGA: int = 3
-NAWS: int = 31
-LINEMODE: int = 34
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Type alias
