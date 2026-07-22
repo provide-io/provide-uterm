@@ -11,9 +11,11 @@ Nil / missing inject fn fails closed (drops inject messages).
 
 from __future__ import annotations
 
+import contextlib
 import struct
 from collections.abc import Callable
-from typing import BinaryIO
+from contextlib import AbstractContextManager
+from typing import Any, BinaryIO
 
 # Client message types (RFB 3.8)
 _SET_PIXEL_FORMAT = 0
@@ -38,23 +40,42 @@ def filter_rfb_client_input(
     lease_id: str,
     principal_id: str,
     principal_role: str,
+    dst_lock: AbstractContextManager[Any] | None = None,
+    on_handshake_done: Callable[[], None] | None = None,
 ) -> None:
     """Copy RFB client messages from *src* to *dst*, gating inject types.
+
+    Each RFB message is written to *dst* in a single ``write`` guarded by
+    *dst_lock* (a no-op context when ``None``). This keeps writes atomic so a
+    concurrent writer of *dst* — e.g. the update-driver thread in
+    :func:`run_human_relay_streams` that injects periodic
+    ``FramebufferUpdateRequest`` frames — never interleaves mid-message.
+
+    *on_handshake_done*, if given, is invoked once ClientInit has been forwarded
+    (so a driver can wait for the handshake before injecting into *dst*).
 
     Raises ``ValueError`` on unsupported security type or unknown message type.
     Raises ``EOFError`` on short read.
     """
+    guard: AbstractContextManager[Any] = dst_lock if dst_lock is not None else contextlib.nullcontext()
+
+    def emit(data: bytes) -> None:
+        with guard:
+            dst.write(data)
+
     # 1. ProtocolVersion (12 bytes)
-    _copy_exact(dst, src, 12)
+    emit(_read_exact(src, 12))
 
     # 2. Security type (1 byte) — only None (1)
     sec = _read_exact(src, 1)
     if sec[0] != 1:
         raise ValueError(f"unsupported security type {sec[0]}")
-    dst.write(sec)
+    emit(sec)
 
     # 3. ClientInit (1 byte)
-    _copy_exact(dst, src, 1)
+    emit(_read_exact(src, 1))
+    if on_handshake_done is not None:
+        on_handshake_done()
 
     while True:
         try:
@@ -63,28 +84,22 @@ def filter_rfb_client_input(
             return
         t = msg_type[0]
         if t == _SET_PIXEL_FORMAT:
-            dst.write(msg_type)
-            _copy_exact(dst, src, 19)
+            emit(msg_type + _read_exact(src, 19))
         elif t == _SET_ENCODINGS:
             header = _read_exact(src, 3)
             num = struct.unpack("!H", header[1:3])[0]
-            dst.write(msg_type)
-            dst.write(header)
-            if num > 0:
-                _copy_exact(dst, src, num * 4)
+            body = _read_exact(src, num * 4) if num > 0 else b""
+            emit(msg_type + header + body)
         elif t == _FRAMEBUFFER_UPDATE_REQUEST:
-            dst.write(msg_type)
-            _copy_exact(dst, src, 9)
+            emit(msg_type + _read_exact(src, 9))
         elif t == _KEY_EVENT:
             payload = _read_exact(src, 7)
             if _allowed(can_inject, session_id, lease_id, principal_id, principal_role):
-                dst.write(msg_type)
-                dst.write(payload)
+                emit(msg_type + payload)
         elif t == _POINTER_EVENT:
             payload = _read_exact(src, 5)
             if _allowed(can_inject, session_id, lease_id, principal_id, principal_role):
-                dst.write(msg_type)
-                dst.write(payload)
+                emit(msg_type + payload)
         elif t == _CLIENT_CUT_TEXT:
             header = _read_exact(src, 7)
             length = struct.unpack("!I", header[3:7])[0]
@@ -104,10 +119,7 @@ def filter_rfb_client_input(
                 continue
             payload = _read_exact(src, payload_len) if payload_len else b""
             if _allowed(can_inject, session_id, lease_id, principal_id, principal_role):
-                dst.write(msg_type)
-                dst.write(header)
-                if payload:
-                    dst.write(payload)
+                emit(msg_type + header + payload)
         else:
             raise ValueError(f"unknown RFB client message type: {t}")
 
@@ -129,7 +141,3 @@ def _read_exact(src: BinaryIO, n: int) -> bytes:
     if buf is None or len(buf) < n:
         raise EOFError(f"short read: want {n}, got {0 if buf is None else len(buf)}")
     return buf
-
-
-def _copy_exact(dst: BinaryIO, src: BinaryIO, n: int) -> None:
-    dst.write(_read_exact(src, n))

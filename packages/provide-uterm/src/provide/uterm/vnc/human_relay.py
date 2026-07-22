@@ -13,6 +13,7 @@ inject messages) — same semantics as the Go ``ServeHumanRelay`` path.
 from __future__ import annotations
 
 import io
+import struct
 import threading
 from typing import TYPE_CHECKING, BinaryIO
 
@@ -26,6 +27,16 @@ logger = get_logger(__name__)
 
 _PUMP_CHUNK = 65_536
 _JOIN_TIMEOUT_S = 5.0
+
+# Default cadence for the update-driver (see run_human_relay_streams'
+# drive_update_interval_s). ~25 requests/s keeps motion smooth without flooding
+# the upstream; x11vnc coalesces to actual damage so idle screens stay cheap.
+DEFAULT_UPDATE_DRIVE_INTERVAL_S = 0.04
+# Incremental FramebufferUpdateRequest for the whole surface (u16 max w/h; the
+# RFB server clamps to the real framebuffer). Injected to keep an animating
+# upstream streaming to clients (e.g. noVNC) that only ever send one full request.
+_DRIVE_FBUR = struct.pack(">BBHHHH", 3, 1, 0, 0, 0xFFFF, 0xFFFF)
+_DRIVE_HANDSHAKE_WAIT_S = 10.0
 
 
 def _unblock_fd_stream(stream: BinaryIO) -> None:
@@ -54,6 +65,7 @@ def run_human_relay_streams(
     principal_id: str,
     principal_role: str,
     on_upstream_eof: Callable[[], None] | None = None,
+    drive_update_interval_s: float | None = None,
 ) -> None:
     """Relay RFB between browser and upstream streams until either side EOFs.
 
@@ -62,6 +74,14 @@ def run_human_relay_streams(
       ``buffering=0`` at the socket boundary).
     * Browser → upstream: :func:`filter_rfb_client_input` (handshake pass-through;
       inject types gated). ``can_inject is None`` fails closed.
+
+    *drive_update_interval_s*, if set (> 0), starts an update-driver thread that
+    injects an incremental ``FramebufferUpdateRequest`` upstream every interval
+    once the handshake completes. This keeps an animating upstream streaming to
+    clients that request only one full update and then go silent (noVNC does
+    exactly this — without the driver the mirror freezes on frame 1). The driver
+    and the browser→upstream filter share a write lock so their writes to
+    ``upstream_w`` never interleave mid-message.
 
     Runs the upstream pump on a daemon thread so both directions progress
     concurrently (socketpair / live sockets). Safe with sequential ``BytesIO``
@@ -104,8 +124,38 @@ def run_human_relay_streams(
                     # Callback must never kill the pump thread.
                     logger.debug("vnc_upstream_eof_callback_error error=%s", cb_exc)
 
+    write_lock = threading.Lock()
+    handshake_done = threading.Event()
+    stop_driver = threading.Event()
+    drive = drive_update_interval_s is not None and drive_update_interval_s > 0
+
+    def _drive_updates(interval: float) -> None:
+        # Wait for the handshake (ClientInit forwarded) so the injected requests
+        # land after ServerInit; then poll the upstream for changes on a timer.
+        if not handshake_done.wait(timeout=_DRIVE_HANDSHAKE_WAIT_S):
+            return
+        while not stop_driver.is_set():
+            try:
+                # upstream_w is unbuffered (buffering=0), so the write lands
+                # without an explicit flush — same contract the filter relies on.
+                with write_lock:
+                    upstream_w.write(_DRIVE_FBUR)
+            except BaseException as exc:  # upstream closed / shutdown race
+                logger.debug("vnc_update_driver_stopped error=%s", exc)
+                return
+            stop_driver.wait(interval)
+
     pump = threading.Thread(target=_pump_upstream, name="vnc-human-relay-upstream", daemon=True)
     pump.start()
+    driver: threading.Thread | None = None
+    if drive:
+        driver = threading.Thread(
+            target=_drive_updates,
+            args=(float(drive_update_interval_s),),  # type: ignore[arg-type]
+            name="vnc-human-relay-driver",
+            daemon=True,
+        )
+        driver.start()
     try:
         filter_rfb_client_input(
             upstream_w,
@@ -115,11 +165,18 @@ def run_human_relay_streams(
             lease_id=lease_id,
             principal_id=principal_id,
             principal_role=principal_role,
+            dst_lock=write_lock,
+            on_handshake_done=handshake_done.set,
         )
-        flush_up = getattr(upstream_w, "flush", None)
-        if callable(flush_up):
-            flush_up()
+        with write_lock:
+            flush_up = getattr(upstream_w, "flush", None)
+            if callable(flush_up):
+                flush_up()
     finally:
+        # Stop the driver first so it can't write to a stream we're tearing down.
+        stop_driver.set()
+        if driver is not None:
+            driver.join(timeout=_JOIN_TIMEOUT_S)
         # Unblock a stuck FD-backed pump without clobbering BytesIO fixtures.
         _unblock_fd_stream(upstream_r)
         _unblock_fd_stream(browser_w)

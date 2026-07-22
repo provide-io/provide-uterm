@@ -36,7 +36,7 @@ except ImportError as _e:  # pragma: no cover
 
 from provide.telemetry import get_logger
 from provide.uterm.bridge.policy import can_inject
-from provide.uterm.vnc import run_human_relay_streams
+from provide.uterm.vnc import DEFAULT_UPDATE_DRIVE_INTERVAL_S, run_human_relay_streams
 
 if TYPE_CHECKING:
     from provide.uterm.server.bridge.hub import TermHub
@@ -255,6 +255,10 @@ async def _run_ws_relay(
                     principal_id=auth.principal_id,
                     principal_role=auth.principal_role,
                     on_upstream_eof=_on_upstream_eof,
+                    # Drive periodic framebuffer-update requests upstream: noVNC
+                    # sends one full request then goes silent, so without this the
+                    # mirror freezes on frame 1 against a request-driven RFB server.
+                    drive_update_interval_s=DEFAULT_UPDATE_DRIVE_INTERVAL_S,
                 )
             except BaseException as exc:
                 relay_error.append(exc)
