@@ -119,8 +119,10 @@ def _policy_can_inject(sid: str, lid: str, _pid: str, role: str) -> bool:
 
 
 def _close_quietly(obj: Any) -> None:
+    # obj can be None: relay_r/relay_w stay None if setblocking/makefile raises
+    # before they are assigned, so the non-callable branch is genuinely reached.
     close = getattr(obj, "close", None)
-    if callable(close):  # pragma: no branch - close is always callable on real streams
+    if callable(close):
         with suppress(OSError):
             close()
 
@@ -230,6 +232,12 @@ async def _run_ws_relay(
         relay_done = threading.Event()
         relay_error: list[BaseException] = []
 
+        def _on_upstream_eof() -> None:
+            # Upstream (VNC server) closed: half-close the relay socket so the
+            # browser-facing _relay_to_ws pump sees EOF and the endpoint tears
+            # the whole relay down, instead of hanging on an idle browser.
+            _shutdown_quietly(relay_sock, socket.SHUT_WR)
+
         def _run_relay() -> None:
             try:
                 br, bw = relay_r, relay_w
@@ -245,6 +253,7 @@ async def _run_ws_relay(
                     lease_id=auth.lease_id,
                     principal_id=auth.principal_id,
                     principal_role=auth.principal_role,
+                    on_upstream_eof=_on_upstream_eof,
                 )
             except BaseException as exc:
                 relay_error.append(exc)
@@ -257,12 +266,12 @@ async def _run_ws_relay(
 
         loop = asyncio.get_running_loop()
 
-        # The two byte-pump loops below run as gathered tasks. Their live-IO exit
-        # paths (peer disconnect → the caught socket/WS errors; upstream EOF →
-        # break) fire during real relay operation, but a normal test-client close
-        # cancels the tasks (CancelledError, not the caught set), so these exact
-        # lines are exercised end-to-end, not by the unit harness. Excluded from
-        # the line gate rather than faked.
+        # The two byte-pump loops below run as separate tasks; whichever finishes
+        # first cancels the other (see the asyncio.wait below). The caught
+        # socket/WS error exit paths fire on a real peer disconnect but not under
+        # the unit harness (a test-client close raises CancelledError, not the
+        # caught set), so those except lines are excluded from the line gate
+        # rather than faked; the upstream-EOF break is exercised directly.
         async def _ws_to_relay() -> None:
             try:
                 while True:
@@ -272,8 +281,17 @@ async def _run_ws_relay(
                     data = message.get("bytes")
                     if data is None:
                         text = message.get("text")
-                        if text is not None:  # pragma: no branch - frames carry bytes or text
-                            data = text.encode("latin-1", errors="replace")
+                        if text is None:  # pragma: no cover - frames carry bytes or text
+                            continue
+                        try:
+                            data = text.encode("latin-1")
+                        except UnicodeEncodeError:
+                            # RFB is a binary protocol; a text frame with a code
+                            # point > 255 cannot map to bytes without corruption.
+                            # Drop it rather than forward a silently-mangled
+                            # (errors='replace') payload that desyncs upstream.
+                            logger.warning("gui_vnc_text_frame_undecodable worker_id=%s", worker_id)
+                            continue
                     if not data:
                         continue
                     await loop.sock_sendall(browser_sock, data)
@@ -286,21 +304,37 @@ async def _run_ws_relay(
             try:
                 while True:
                     chunk = await loop.sock_recv(browser_sock, 65_536)
-                    if not chunk:  # pragma: no cover - live relay exit (upstream EOF)
+                    if not chunk:
                         break
                     await websocket.send_bytes(chunk)
             except (WebSocketDisconnect, ConnectionError, OSError):  # pragma: no cover - live relay exit
                 return
 
+        ws_task = asyncio.ensure_future(_ws_to_relay())
+        relay_task = asyncio.ensure_future(_relay_to_ws())
         try:
-            await asyncio.gather(_ws_to_relay(), _relay_to_ws())
+            # Whichever pump finishes first (browser disconnect, upstream EOF, or a
+            # caught IO error) ends the relay. Without the teardown below an
+            # upstream EOF while the browser sits idle would leave _ws_to_relay
+            # blocked in websocket.receive() forever, hanging the coroutine and
+            # leaking the socketpair until the browser eventually disconnects.
+            await asyncio.wait({ws_task, relay_task}, return_when=asyncio.FIRST_COMPLETED)
         finally:
+            # Unblock the still-waiting pump WITHOUT cancelling it: shutting
+            # browser_sock makes _relay_to_ws's sock_recv return EOF, and closing
+            # the websocket makes _ws_to_relay's receive() return a disconnect.
+            # Cancelling a task parked in starlette's receive() instead would
+            # corrupt the ASGI receive stream and cancel the whole endpoint.
             _shutdown_quietly(browser_sock)
+            await _close_ws(websocket, code=_CLOSE_NORMAL, reason="eof")
+            await asyncio.gather(ws_task, relay_task, return_exceptions=True)
+            # By now both pumps have returned, so the relay thread is winding
+            # down (its filter/pump saw the EOFs above) — these waits are prompt
+            # and don't stall the event loop.
             relay_done.wait(timeout=5.0)
             thr.join(timeout=2.0)
             if relay_error:
                 logger.warning("gui_vnc_relay_error worker_id=%s error=%s", worker_id, relay_error[0])
-            await _close_ws(websocket, code=_CLOSE_NORMAL, reason="eof")
     finally:
         _close_quietly(browser_sock)
         _close_quietly(relay_sock)
