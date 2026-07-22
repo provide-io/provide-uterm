@@ -327,3 +327,43 @@ def test_ws_no_factory_configured_closes() -> None:
     client = _relay_client(hub)
     code = _connect_close_code(client, PATH + "?target_id=lab-vnc")
     assert code is not None
+
+
+def test_ws_relay_with_explicit_upstream_factory() -> None:
+    """upstream_factory passed to the route (not via hub) is used directly."""
+    import io
+
+    class _R(io.RawIOBase):
+        def __init__(self) -> None:
+            self._c = [b"RFB 003.008\n"]
+
+        def read(self, _s: int = -1) -> bytes:  # type: ignore[override]
+            return self._c.pop(0) if self._c else b""
+
+        def readable(self) -> bool:
+            return True
+
+    class _W(io.RawIOBase):
+        def __init__(self) -> None:
+            self.buf = bytearray()
+
+        def write(self, b: bytes) -> int:  # type: ignore[override]
+            self.buf.extend(b)
+            return len(b)
+
+        def writable(self) -> bool:
+            return True
+
+        def flush(self) -> None:
+            return None
+
+    hub = SimpleNamespace()
+    hub.get_rest_session = AsyncMock(return_value=SimpleNamespace(hijack_id=HID, acquired_by="alice"))
+    hub.vnc_upstream_factory = None
+    app = FastAPI()
+    router = APIRouter()
+    register_gui_vnc_ws_routes(hub, router, upstream_factory=lambda _w, _t: (_R(), _W()))  # type: ignore[arg-type,return-value]
+    app.include_router(router)
+    client = TestClient(_PrincipalASGI(app, _principal(subject="alice")))
+    with client.websocket_connect(PATH + "?target_id=lab-vnc") as ws:
+        assert ws.receive_bytes().startswith(b"RFB ")
