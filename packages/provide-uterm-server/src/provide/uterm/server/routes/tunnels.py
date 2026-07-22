@@ -178,7 +178,7 @@ def create_tunnels_router() -> APIRouter:
         now = time.time()
         expires_at = now + ttl_s
 
-        src_ip = str(getattr(request.client, "host", "unknown")) if request.client else "unknown"
+        src_ip = source_ip(request)
 
         reg = registry(request)
         base = cfg.server.public_base_url or str(request.base_url).rstrip("/")
@@ -257,7 +257,7 @@ def create_tunnels_router() -> APIRouter:
         )
         audit_event(
             "tunnel.create",
-            principal=principal(request).subject_id,
+            principal=p.subject_id,
             session_id=tunnel_id,
             source_ip=src_ip,
             detail={"tunnel_type": tunnel_type, "ttl_s": ttl_s},
@@ -295,7 +295,7 @@ def create_tunnels_router() -> APIRouter:
         get_logger(__name__).info("tunnel_token_revoked session_id=%s found=%s", tunnel_id, removed is not None)
         audit_event(
             "tunnel.tokens.revoke",
-            principal=principal(request).subject_id,
+            principal=p.subject_id,
             session_id=tunnel_id,
             source_ip=source_ip(request),
         )
@@ -326,7 +326,7 @@ def create_tunnels_router() -> APIRouter:
         worker_token = secrets.token_urlsafe(32)
         share_token = secrets.token_urlsafe(32)
         control_token = secrets.token_urlsafe(32)
-        src_ip = str(getattr(request.client, "host", "unknown")) if request.client else "unknown"
+        src_ip = source_ip(request)
 
         tunnel_type_r = str(old.get("tunnel_type", "terminal"))
         share_page_r = "inspect" if tunnel_type_r == "http" else "session"
@@ -358,7 +358,7 @@ def create_tunnels_router() -> APIRouter:
         get_logger(__name__).info("tunnel_token_rotated session_id=%s source_ip=%s", tunnel_id, src_ip)
         audit_event(
             "tunnel.tokens.rotate",
-            principal=principal(request).subject_id,
+            principal=p.subject_id,
             session_id=tunnel_id,
             source_ip=src_ip,
         )
