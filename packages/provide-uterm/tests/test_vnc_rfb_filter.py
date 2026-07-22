@@ -213,3 +213,28 @@ def test_unknown_message_type_raises() -> None:
     body = _handshake() + bytes([99])
     with pytest.raises(ValueError, match="unknown RFB client message type"):
         _drive(body)
+
+
+def _fbur() -> bytes:
+    # type 3 (FramebufferUpdateRequest) + incremental + x + y + w + h
+    return struct.pack(">BBHHHH", 3, 1, 0, 0, 0, 0)
+
+
+def test_on_client_ready_fires_once_on_first_request() -> None:
+    """on_client_ready fires on the client's FIRST FBUR, not on later ones."""
+    calls: list[int] = []
+    src = io.BytesIO(_handshake() + _fbur() + _fbur())
+    dst = io.BytesIO()
+    filter_rfb_client_input(
+        dst,
+        src,
+        can_inject=None,
+        session_id="s",
+        lease_id="l",
+        principal_id="p",
+        principal_role="operator",
+        on_client_ready=lambda: calls.append(1),
+    )
+    assert calls == [1]  # fired exactly once despite two requests
+    # both requests still forwarded upstream: handshake(14) + 2 * FBUR(10)
+    assert len(dst.getvalue()) == 14 + 2 * len(_fbur())

@@ -76,9 +76,10 @@ def run_human_relay_streams(
       inject types gated). ``can_inject is None`` fails closed.
 
     *drive_update_interval_s*, if set (> 0), starts an update-driver thread that
-    injects an incremental ``FramebufferUpdateRequest`` upstream every interval
-    once the handshake completes. This keeps an animating upstream streaming to
-    clients that request only one full update and then go silent (noVNC does
+    injects an incremental ``FramebufferUpdateRequest`` upstream every interval,
+    starting once the client has sent its first update request (so the client's
+    pixel format is already upstream). This keeps an animating upstream streaming
+    to clients that request only one full update and then go silent (noVNC does
     exactly this — without the driver the mirror freezes on frame 1). The driver
     and the browser→upstream filter share a write lock so their writes to
     ``upstream_w`` never interleave mid-message.
@@ -125,14 +126,14 @@ def run_human_relay_streams(
                     logger.debug("vnc_upstream_eof_callback_error error=%s", cb_exc)
 
     write_lock = threading.Lock()
-    handshake_done = threading.Event()
+    client_ready = threading.Event()
     stop_driver = threading.Event()
     drive = drive_update_interval_s is not None and drive_update_interval_s > 0
 
     def _drive_updates(interval: float) -> None:
-        # Wait for the handshake (ClientInit forwarded) so the injected requests
-        # land after ServerInit; then poll the upstream for changes on a timer.
-        if not handshake_done.wait(timeout=_DRIVE_HANDSHAKE_WAIT_S):
+        # Wait until the client has sent its first update request (so its
+        # SetPixelFormat/SetEncodings are already upstream), then poll on a timer.
+        if not client_ready.wait(timeout=_DRIVE_HANDSHAKE_WAIT_S):
             return
         while not stop_driver.is_set():
             try:
@@ -166,7 +167,7 @@ def run_human_relay_streams(
             principal_id=principal_id,
             principal_role=principal_role,
             dst_lock=write_lock,
-            on_handshake_done=handshake_done.set,
+            on_client_ready=client_ready.set,
         )
         with write_lock:
             flush_up = getattr(upstream_w, "flush", None)
