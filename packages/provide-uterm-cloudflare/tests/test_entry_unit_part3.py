@@ -40,6 +40,35 @@ def test_read_header_skips_individually_raising_names() -> None:
     assert _read_header(req, "cf-access-client-id", "CF-Access-Client-Id") == "svc.access"
 
 
+def test_read_header_returns_empty_when_headers_access_raises() -> None:
+    """_read_header returns '' when reading ``request.headers`` itself raises (81-82)."""
+    from provide.uterm.cloudflare.entry.auth import _read_header
+
+    class _Req:
+        @property
+        def headers(self) -> object:
+            raise RuntimeError("no headers bridge")
+
+    assert _read_header(_Req(), "X-Any") == ""
+
+
+def test_read_header_skips_empty_value_and_returns_next() -> None:
+    """An empty header value is skipped (88->83 continue) in favour of a later name."""
+    from provide.uterm.cloudflare.entry.auth import _read_header
+
+    headers = {"X-First": "", "X-Second": "value"}
+    req = SimpleNamespace(headers=headers)
+    assert _read_header(req, "X-First", "X-Second") == "value"
+
+
+def test_read_header_returns_empty_when_no_name_matches() -> None:
+    """When no requested name has a value the loop falls through to '' (90)."""
+    from provide.uterm.cloudflare.entry.auth import _read_header
+
+    req = SimpleNamespace(headers={"X-First": ""})
+    assert _read_header(req, "X-First", "X-Missing") == ""
+
+
 async def test_resolve_principal_id_cf_access_service_token_header_is_not_trusted() -> None:
     """Raw CF Access service-token header does not establish principal identity."""
     from provide.uterm.cloudflare.config import CloudflareConfig

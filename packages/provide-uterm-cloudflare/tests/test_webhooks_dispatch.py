@@ -104,3 +104,23 @@ async def test_dispatch_webhook_register_route() -> None:
     assert resp.status == 200
     data = json.loads(resp.body)
     assert "webhook_id" in data
+
+
+@pytest.mark.asyncio
+async def test_dispatch_webhook_list_route_get_skips_mutate_guard() -> None:
+    """Webhook GET (non-state-changing) skips the mutate guard and lists.
+
+    Covers the FALSE branch of ``if method in _STATE_CHANGING_METHODS`` in
+    ``_dispatch.route_http`` (129->134): a GET must fall straight through to
+    ``route_webhooks`` without the ``_can_mutate_session`` check.
+    """
+    store = _make_store()
+    store.save_webhook("wh1", "w1", "https://example.com/hook")
+    runtime = _FullRuntime(store)
+    req = SimpleNamespace(url="http://example.com/api/sessions/w1/webhooks", method="GET", headers={})
+
+    resp = await route_http(runtime, req)  # type: ignore[arg-type]
+
+    assert resp.status == 200
+    data = json.loads(resp.body)
+    assert [wh["webhook_id"] for wh in data["webhooks"]] == ["wh1"]

@@ -83,6 +83,19 @@ async def test_list_kv_sessions_returns_all_connected() -> None:
 
 
 @pytest.mark.asyncio
+async def test_list_kv_sessions_skips_non_dict_entry() -> None:
+    """Branch 186->178: a KV value that parses to a non-dict JSON is skipped."""
+    kv = _make_kv()
+    env = SimpleNamespace(SESSION_REGISTRY=kv)
+    await update_kv_session(env, "w1", connected=True)
+    # A stored value that json-decodes to a list (not a dict) must be ignored,
+    # not appended, and must not abort the scan of the remaining keys.
+    kv._store["session:bogus"] = "[1, 2, 3]"
+    sessions = await list_kv_sessions(env)
+    assert {s["session_id"] for s in sessions} == {"w1"}
+
+
+@pytest.mark.asyncio
 async def test_get_kv_session_returns_none_without_binding() -> None:
     env = SimpleNamespace()
     result = await get_kv_session(env, "w1")
