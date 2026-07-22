@@ -154,6 +154,19 @@ async def test_render_file_url(tmp_path):
     assert "▄" in first_data(result)
 
 
+async def test_render_file_url_with_space(tmp_path):
+    # A path containing whitespace must arrive percent-encoded (render's arg is
+    # whitespace-tokenized); the file:// branch percent-decodes it back.
+    d = make_dispatcher()
+    sub = tmp_path / "My Demos"
+    sub.mkdir()
+    img_file = sub / "test.png"
+    img_file.write_bytes(_make_png_bytes())
+    result = await d.dispatch(f"render {img_file.as_uri()}")
+    assert isinstance(result, list)
+    assert "▄" in first_data(result)
+
+
 async def test_render_bad_url_scheme():
     d = make_dispatcher()
     result = await d.dispatch("render ftp://example.com/image.png")
