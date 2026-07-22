@@ -42,7 +42,6 @@ export function useInspectWs(sessionId: string) {
         frames = controlDecoder.feed(event.data);
       } catch (err) {
         console.warn(`[inspect-ws] malformed control frame: ${err instanceof Error ? err.message : String(err)}`);
-        controlDecoder.reset();
         return;
       }
       for (const frame of frames) {

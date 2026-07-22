@@ -39,7 +39,18 @@ export interface InspectState {
   clear: () => void;
 }
 
-export const useInspectStore = create<InspectState>((set) => ({
+const INITIAL: Pick<
+  InspectState,
+  | "exchanges"
+  | "selected"
+  | "methodFilter"
+  | "urlFilter"
+  | "inspectEnabled"
+  | "interceptEnabled"
+  | "interceptTimeout"
+  | "interceptTimeoutAction"
+  | "wsStatus"
+> = {
   exchanges: [],
   selected: null,
   methodFilter: "",
@@ -49,6 +60,10 @@ export const useInspectStore = create<InspectState>((set) => ({
   interceptTimeout: 30,
   interceptTimeoutAction: "forward",
   wsStatus: "connecting",
+};
+
+export const useInspectStore = create<InspectState>((set) => ({
+  ...INITIAL,
 
   addRequest: (req) =>
     set((s) => ({
@@ -95,16 +110,5 @@ export const useInspectStore = create<InspectState>((set) => ({
   setInspectEnabled: (enabled) => set({ inspectEnabled: enabled }),
   setInterceptEnabled: (enabled) => set({ interceptEnabled: enabled }),
   setWsStatus: (status) => set({ wsStatus: status }),
-  clear: () =>
-    set({
-      exchanges: [],
-      selected: null,
-      methodFilter: "",
-      urlFilter: "",
-      inspectEnabled: true,
-      interceptEnabled: false,
-      interceptTimeout: 30,
-      interceptTimeoutAction: "forward",
-      wsStatus: "connecting",
-    }),
+  clear: () => set({ ...INITIAL }),
 }));
