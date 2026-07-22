@@ -45,9 +45,17 @@ def test_constructor_defaults() -> None:
 
 
 def test_constructor_custom_params() -> None:
-    session = WebSocketSession("ws://h/ws", cols=120, rows=40)
+    session = WebSocketSession(
+        "ws://h/ws",
+        cols=120,
+        rows=40,
+        receive_encoding="utf-8",
+        text_frame_encoding="utf-8",
+    )
     assert session._cols == 120
     assert session._rows == 40
+    assert session._receive_encoding == "utf-8"
+    assert session._transport._text_frame_encoding == "utf-8"
 
 
 def test_constructor_control_frames_off_by_default() -> None:
@@ -171,6 +179,21 @@ async def test_connect_ws_factory_control_frames() -> None:
         session = await connect_ws("wss://bbs.example.com/ws", control_frames=True)
 
         assert session._control_decoder is not None
+        await session.close()
+
+
+async def test_connect_ws_factory_receive_encoding() -> None:
+    with patch("provide.uterm.ws_session.WebSocketTransport") as mock_cls:
+        mock_cls.return_value = _mock_transport()
+
+        session = await connect_ws(
+            "wss://bbs.example.com/ws",
+            receive_encoding="utf-8",
+            text_frame_encoding="utf-8",
+        )
+
+        assert session._receive_encoding == "utf-8"
+        mock_cls.assert_called_once_with(text_frame_encoding="utf-8")
         await session.close()
 
 
