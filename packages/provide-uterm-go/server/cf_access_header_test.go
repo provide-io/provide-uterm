@@ -17,8 +17,8 @@ func TestCFAccessEmailHeaderDoesNotOverrideAuth(t *testing.T) {
 	ts := newTestServer(t, nil)
 	// harness fakeAuth uses X-Subject; spoofed Access email must be ignored.
 	hdr := map[string]string{
-		"X-Subject": "real-user",
-		"X-Role":    "admin",
+		"X-Subject":                          "real-user",
+		"X-Role":                             "admin",
 		"Cf-Access-Authenticated-User-Email": "spoofed@evil.example",
 	}
 	// Authenticated route that echoes principal — health is open; use sessions list.

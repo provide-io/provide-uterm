@@ -266,4 +266,3 @@ func TestSeedGraphicalTargetsLitevirt(t *testing.T) {
 		t.Fatalf("gt-lv2 top-level vm_name not folded: %+v", two)
 	}
 }
-

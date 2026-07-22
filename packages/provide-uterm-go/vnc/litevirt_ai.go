@@ -232,20 +232,20 @@ func (c *LitevirtAIClient) runHandshakeAndLoop() error {
 
 	// 5. SetPixelFormat (RGBA 32-bit) & SetEncodings (Raw = 0)
 	pfMsg := make([]byte, 20)
-	pfMsg[0] = 0 // ClientSetPixelFormat
-	pfMsg[4] = 32 // bits-per-pixel
-	pfMsg[5] = 24 // depth
-	pfMsg[6] = 1  // big-endian flag
-	pfMsg[7] = 1  // true-colour flag
+	pfMsg[0] = 0                                  // ClientSetPixelFormat
+	pfMsg[4] = 32                                 // bits-per-pixel
+	pfMsg[5] = 24                                 // depth
+	pfMsg[6] = 1                                  // big-endian flag
+	pfMsg[7] = 1                                  // true-colour flag
 	binary.BigEndian.PutUint16(pfMsg[8:10], 255)  // red-max
 	binary.BigEndian.PutUint16(pfMsg[10:12], 255) // green-max
 	binary.BigEndian.PutUint16(pfMsg[12:14], 255) // blue-max
-	pfMsg[14] = 24 // red-shift
-	pfMsg[15] = 16 // green-shift
-	pfMsg[16] = 8  // blue-shift
+	pfMsg[14] = 24                                // red-shift
+	pfMsg[15] = 16                                // green-shift
+	pfMsg[16] = 8                                 // blue-shift
 
 	encMsg := make([]byte, 8)
-	encMsg[0] = 2 // ClientSetEncodings
+	encMsg[0] = 2                              // ClientSetEncodings
 	binary.BigEndian.PutUint16(encMsg[2:4], 1) // 1 encoding
 	binary.BigEndian.PutUint32(encMsg[4:8], 0) // Raw = 0
 
