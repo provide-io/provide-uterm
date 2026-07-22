@@ -17,6 +17,7 @@ from typing import Any
 import pytest
 from provide.uterm.cloudflare.do._webhooks import (
     _deliver_webhook,
+    _validate_webhook_url,
     fire_webhooks,
     route_webhooks,
 )
@@ -284,6 +285,32 @@ async def test_fire_webhooks_invalid_pattern_skipped() -> None:
 
     await fire_webhooks(runtime, {"type": "snapshot", "screen": "anything", "seq": 1, "data": {}}, _fetch=mock_fetch)
     assert calls == []
+
+
+# ---------------------------------------------------------------------------
+# _validate_webhook_url
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        # urlparse itself raises on a malformed IPv6 literal → 79-80.
+        ("https://[::1", "url is not a valid URL"),
+        # https scheme but no host → 85.
+        ("https://", "url host is required"),
+        # host is a literal blocked host → 87.
+        ("https://localhost/hook", "url host is not allowed"),
+        # IPv6 loopback / link-local / ULA → 92.
+        ("https://[::1]/hook", "url host is not allowed"),
+        ("https://[fe80::1]/hook", "url host is not allowed"),
+        ("https://[fc00::1]/hook", "url host is not allowed"),
+        ("https://[fd00::1]/hook", "url host is not allowed"),
+    ],
+)
+def test_validate_webhook_url_rejects(url: str, expected: str) -> None:
+    """Preflight rejects malformed, hostless, blocked, and IPv6 private URLs."""
+    assert _validate_webhook_url(url) == expected
 
 
 # ---------------------------------------------------------------------------
