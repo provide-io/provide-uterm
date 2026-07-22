@@ -104,7 +104,7 @@ class HijackClient:
 
     # -- context manager -----------------------------------------------------
 
-    async def __aenter__(self) -> HijackClient:
+    def _make_client(self) -> httpx.AsyncClient:
         kw: dict[str, Any] = {
             "base_url": self._base_url,
             "headers": self._extra_headers,
@@ -112,7 +112,10 @@ class HijackClient:
         }
         if self._transport is not None:
             kw["transport"] = self._transport
-        self._client = httpx.AsyncClient(**kw)
+        return httpx.AsyncClient(**kw)
+
+    async def __aenter__(self) -> HijackClient:
+        self._client = self._make_client()
         self._owns_client = True
         return self
 
@@ -132,14 +135,7 @@ class HijackClient:
         if self._client is not None:
             return self._client
         # Lazy single-request client (caller did not use ``async with``).
-        kw: dict[str, Any] = {
-            "base_url": self._base_url,
-            "headers": self._extra_headers,
-            "timeout": httpx.Timeout(self._timeout),
-        }
-        if self._transport is not None:
-            kw["transport"] = self._transport
-        self._client = httpx.AsyncClient(**kw)
+        self._client = self._make_client()
         self._owns_client = True
         return self._client
 

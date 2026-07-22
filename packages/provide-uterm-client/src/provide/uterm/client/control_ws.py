@@ -39,17 +39,14 @@ class LogicalFrameDecoder:
         self._decoder = ControlFrameDecoder()
 
     def feed(self, raw: str) -> list[dict[str, Any]]:
-        frames: list[dict[str, Any]] = []
-        for event in self._decoder.feed(raw):
-            if isinstance(event, ControlChunk):
-                frames.append(event.control)
-            elif isinstance(event, DataChunk):  # pragma: no branch
-                frames.append({"type": self._data_type(), "data": event.data})
-        return frames
+        return self._map_events(self._decoder.feed(raw))
 
     def finish(self) -> list[dict[str, Any]]:
+        return self._map_events(self._decoder.finish())
+
+    def _map_events(self, events: Any) -> list[dict[str, Any]]:
         frames: list[dict[str, Any]] = []
-        for event in self._decoder.finish():
+        for event in events:
             if isinstance(event, ControlChunk):
                 frames.append(event.control)
             elif isinstance(event, DataChunk):  # pragma: no branch
