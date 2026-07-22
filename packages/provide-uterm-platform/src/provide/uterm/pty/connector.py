@@ -16,6 +16,7 @@ import sys
 import tempfile
 import termios
 import time
+from pathlib import Path
 from typing import Any
 
 from provide.uterm.pty._build import get_capture_lib_path
@@ -164,7 +165,7 @@ class PTYConnector:
         if self._inject:
             # mkdtemp creates a secure directory owned by the current user (mode 0700)
             self._capture_tmpdir = tempfile.mkdtemp(prefix="uterm-cap-")  # nosec B108
-            capture_path = str(__import__("pathlib").Path(self._capture_tmpdir) / "cap.sock")
+            capture_path = str(Path(self._capture_tmpdir) / "cap.sock")
             self._capture_socket = CaptureSocket(capture_path)
             await self._capture_socket.start()
 
@@ -249,6 +250,15 @@ class PTYConnector:
             os._exit(127)
         os._exit(127)  # pragma: no cover - post-execve fallback (unreachable on success)
 
+    def _close_master(self) -> None:
+        """Close the PTY master fd if open and clear the handle (idempotent)."""
+        if self._master_fd is not None:
+            try:
+                os.close(self._master_fd)
+            except OSError:
+                pass
+            self._master_fd = None
+
     async def stop(self) -> None:
         if self._child_pid is not None:
             try:
@@ -260,12 +270,7 @@ class PTYConnector:
             # and do a final blocking wait so no zombie is left behind. A zombie
             # child of the mutmut stats/clean-run phase would be caught by the
             # mutmut fork loop's os.wait() as an unregistered PID → KeyError.
-            if self._master_fd is not None:
-                try:
-                    os.close(self._master_fd)
-                except OSError:
-                    pass
-                self._master_fd = None
+            self._close_master()
             try:
                 pid_reaped, _ = os.waitpid(self._child_pid, os.WNOHANG)
             except ChildProcessError:
@@ -289,12 +294,7 @@ class PTYConnector:
                     pass
             self._child_pid = None
 
-        if self._master_fd is not None:
-            try:
-                os.close(self._master_fd)
-            except OSError:
-                pass
-            self._master_fd = None
+        self._close_master()
 
         if self._capture_socket is not None:
             await self._capture_socket.stop()
