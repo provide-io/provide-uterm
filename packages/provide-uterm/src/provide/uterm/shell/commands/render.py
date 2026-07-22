@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Literal, cast
+from urllib.parse import unquote
 
 from provide.uterm.shell._output import PROMPT, error_msg
 from provide.uterm.shell.commands.types import AnimatedResult
@@ -63,7 +64,9 @@ async def cmd_render(arg: str) -> list[str] | AnimatedResult:
     # Fetch image bytes
     try:
         if url.startswith("file://"):
-            file_path = Path(url[7:])
+            # Percent-decode: the render argument is whitespace-tokenized, so a
+            # path with spaces must arrive as a proper file:// URI (%20-encoded).
+            file_path = Path(unquote(url[7:]))
             if not file_path.is_file():
                 return [error_msg(f"file not found: {file_path}") + PROMPT]
             data = file_path.read_bytes()
