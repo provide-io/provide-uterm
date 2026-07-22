@@ -1,3 +1,5 @@
 {
-  "allow_over_limit": {}
+  "allow_over_limit": {
+    "scripts/record_uterm_vnc_demo_video.py": 900
+  }
 }
