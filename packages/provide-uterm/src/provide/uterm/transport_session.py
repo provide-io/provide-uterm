@@ -53,6 +53,8 @@ class TransportSession:
         send_encoding: Codec used by :meth:`send` to encode outgoing strings
             (``"utf-8"`` by default; telnet uses ``"cp437"``). Encoding always
             uses ``errors="replace"`` so unrepresentable characters never raise.
+        receive_encoding: Codec used by the emulator to decode incoming
+            terminal bytes (``"cp437"`` by default).
     """
 
     def __init__(
@@ -62,13 +64,15 @@ class TransportSession:
         cols: int = 80,
         rows: int = 25,
         send_encoding: str = "utf-8",
+        receive_encoding: str = "cp437",
         control_frames: bool = False,
     ) -> None:
         self._transport = transport
         self._cols = cols
         self._rows = rows
         self._send_encoding = send_encoding
-        self._emulator = TerminalEmulator(cols, rows)
+        self._receive_encoding = receive_encoding
+        self._emulator = TerminalEmulator(cols, rows, receive_encoding=receive_encoding)
         self._read_task: asyncio.Task[None] | None = None
         self._update_event = asyncio.Event()
         self._connected = False

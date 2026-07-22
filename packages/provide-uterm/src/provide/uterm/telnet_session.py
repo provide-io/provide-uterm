@@ -48,6 +48,7 @@ async def connect_telnet(
     rows: int = 25,
     term: str = "ANSI",
     connect_timeout: float = 30.0,
+    receive_encoding: str = "cp437",
     control_frames: bool = False,
 ) -> TelnetSession:
     """Connect to a telnet server and return a Session-protocol-compliant object.
@@ -62,6 +63,8 @@ async def connect_telnet(
         rows: Terminal height (default 25).
         term: Terminal type string (default ``"ANSI"``).
         connect_timeout: TCP connect timeout in seconds.
+        receive_encoding: Codec used to decode incoming terminal bytes.
+            Defaults to CP437 for BBS compatibility.
         control_frames: When ``True``, inline DLE/STX control frames are
             parsed out of the stream and routed to
             ``session.add_control_frame_watch(...)`` instead of appearing as
@@ -77,7 +80,14 @@ async def connect_telnet(
         the emulator internals.
     """
     session = TelnetSession(
-        host, port, cols=cols, rows=rows, term=term, connect_timeout=connect_timeout, control_frames=control_frames
+        host,
+        port,
+        cols=cols,
+        rows=rows,
+        term=term,
+        connect_timeout=connect_timeout,
+        receive_encoding=receive_encoding,
+        control_frames=control_frames,
     )
     await session.connect()
     return session
@@ -105,6 +115,7 @@ class TelnetSession(TransportSession):
         rows: int = 25,
         term: str = "ANSI",
         connect_timeout: float = 30.0,
+        receive_encoding: str = "cp437",
         control_frames: bool = False,
     ) -> None:
         self._host = host
@@ -116,7 +127,14 @@ class TelnetSession(TransportSession):
         self.port = port
         # CP437 send encoding preserves the high-byte / ANSI conventions that
         # BBS servers expect on the wire.
-        super().__init__(TelnetTransport(), cols=cols, rows=rows, send_encoding="cp437", control_frames=control_frames)
+        super().__init__(
+            TelnetTransport(),
+            cols=cols,
+            rows=rows,
+            send_encoding="cp437",
+            receive_encoding=receive_encoding,
+            control_frames=control_frames,
+        )
 
     async def _connect_transport(self) -> None:
         """Open the TCP connection with full IAC negotiation (NAWS/TTYPE)."""
