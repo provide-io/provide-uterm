@@ -52,6 +52,58 @@ def test_bytesio_relay_forwards_upstream_and_filters_key() -> None:
     assert len(upstream_w.getvalue()) == 14 + 8
 
 
+def test_on_upstream_eof_callback_fires_once_drained() -> None:
+    """The upstream-EOF hook fires after the pump drains all upstream bytes."""
+    browser_r = io.BytesIO(_handshake())
+    browser_w = io.BytesIO()
+    upstream_r = io.BytesIO(b"SERVER-FRAME-DATA")
+    upstream_w = io.BytesIO()
+    calls: list[int] = []
+
+    run_human_relay_streams(
+        browser_r,
+        browser_w,
+        upstream_r,
+        upstream_w,
+        can_inject=_policy_allow,
+        session_id="s1",
+        lease_id="lease-1",
+        principal_id="alice",
+        principal_role="operator",
+        on_upstream_eof=lambda: calls.append(1),
+    )
+
+    assert browser_w.getvalue() == b"SERVER-FRAME-DATA"  # fully drained before the hook
+    assert calls == [1]
+
+
+def test_on_upstream_eof_callback_error_is_swallowed() -> None:
+    """A raising upstream-EOF hook is logged, never kills the pump/relay."""
+    browser_r = io.BytesIO(_handshake())
+    browser_w = io.BytesIO()
+    upstream_r = io.BytesIO(b"vid")
+    upstream_w = io.BytesIO()
+
+    def _boom() -> None:
+        raise RuntimeError("teardown hook blew up")
+
+    # Must not raise: the callback error is caught and logged.
+    run_human_relay_streams(
+        browser_r,
+        browser_w,
+        upstream_r,
+        upstream_w,
+        can_inject=_policy_allow,
+        session_id="s1",
+        lease_id="lease-1",
+        principal_id="alice",
+        principal_role="operator",
+        on_upstream_eof=_boom,
+    )
+
+    assert browser_w.getvalue() == b"vid"
+
+
 def test_bytesio_nil_can_inject_fails_closed() -> None:
     browser_r = io.BytesIO(_handshake() + _key_event())
     browser_w = io.BytesIO()

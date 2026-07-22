@@ -14,10 +14,13 @@ from __future__ import annotations
 
 import io
 import threading
-from typing import BinaryIO
+from typing import TYPE_CHECKING, BinaryIO
 
 from provide.telemetry import get_logger
 from provide.uterm.vnc.rfb_filter import CanInjectFn, filter_rfb_client_input
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = get_logger(__name__)
 
@@ -50,6 +53,7 @@ def run_human_relay_streams(
     lease_id: str,
     principal_id: str,
     principal_role: str,
+    on_upstream_eof: Callable[[], None] | None = None,
 ) -> None:
     """Relay RFB between browser and upstream streams until either side EOFs.
 
@@ -62,6 +66,12 @@ def run_human_relay_streams(
     Runs the upstream pump on a daemon thread so both directions progress
     concurrently (socketpair / live sockets). Safe with sequential ``BytesIO``
     fixtures when each side is fully pre-buffered.
+
+    *on_upstream_eof*, if given, is invoked (from the pump thread) once the
+    upstream side is fully drained and EOFs/errors. The owner uses it to tear
+    down the browser side — otherwise the browser→upstream filter stays parked
+    reading an idle browser forever, hanging the relay after the VNC server has
+    already gone away.
     """
     pump_errors: list[BaseException] = []
 
@@ -82,6 +92,17 @@ def run_human_relay_streams(
         except BaseException as exc:
             pump_errors.append(exc)
             logger.debug("vnc_upstream_pump_error error=%s", exc)
+        finally:
+            # Upstream is done (EOF or error): the relay session is over. Signal
+            # the owner so it can tear down the browser side, which is otherwise
+            # parked reading browser input forever when the browser sits idle.
+            # Fires only after the pump has drained all upstream bytes.
+            if on_upstream_eof is not None:
+                try:
+                    on_upstream_eof()
+                except Exception as cb_exc:
+                    # Callback must never kill the pump thread.
+                    logger.debug("vnc_upstream_eof_callback_error error=%s", cb_exc)
 
     pump = threading.Thread(target=_pump_upstream, name="vnc-human-relay-upstream", daemon=True)
     pump.start()

@@ -6,6 +6,9 @@
 
 from __future__ import annotations
 
+import io
+import threading
+import time
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
@@ -16,6 +19,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from provide.uterm.server.bridge.frames import make_hello_frame
 from provide.uterm.server.bridge.routes.ws_gui_vnc import (
+    _close_quietly,
     check_vnc_relay_authz,
     principal_role_name,
     register_gui_vnc_ws_routes,
@@ -24,6 +28,58 @@ from provide.uterm.server.bridge.routes.ws_gui_vnc import (
 WID = "vnc-worker"
 HID = "00000000-0000-0000-0000-0000000000ab"
 PATH = f"/worker/{WID}/hijack/{HID}/gui/vnc"
+
+
+class _FakeUpstreamR(io.RawIOBase):
+    """Fake VNC upstream read stream: emits *data* once, then EOFs.
+
+    ``block_on_eof=True`` (default) makes the post-data read block on an event
+    until :meth:`close` — mimics a live VNC server holding the TCP session open.
+    ``block_on_eof=False`` returns ``b""`` immediately — mimics an upstream
+    hangup so tests can exercise the upstream-EOF relay-teardown path.
+    """
+
+    def __init__(self, data: bytes = b"RFB 003.008\n", *, block_on_eof: bool = True) -> None:
+        self._data = data
+        self._pos = 0
+        self._ev = threading.Event()
+        self._block_on_eof = block_on_eof
+
+    def read(self, size: int = -1) -> bytes:  # type: ignore[override]
+        if self._ev.is_set():
+            return b""
+        if self._pos >= len(self._data):
+            if self._block_on_eof:
+                self._ev.wait(timeout=2.0)
+            return b""
+        end = len(self._data) if size < 0 else min(len(self._data), self._pos + size)
+        chunk = self._data[self._pos : end]
+        self._pos = end
+        return chunk
+
+    def close(self) -> None:
+        self._ev.set()
+        super().close()
+
+    def readable(self) -> bool:
+        return True
+
+
+class _FakeUpstreamW(io.RawIOBase):
+    """Fake VNC upstream write stream: accumulates forwarded bytes in ``.buf``."""
+
+    def __init__(self) -> None:
+        self.buf = bytearray()
+
+    def write(self, b: bytes) -> int:  # type: ignore[override]
+        self.buf.extend(b)
+        return len(b)
+
+    def writable(self) -> bool:
+        return True
+
+    def flush(self) -> None:
+        return None
 
 
 def _principal(*, subject: str = "alice", roles: frozenset[str] | None = None) -> SimpleNamespace:
@@ -171,51 +227,8 @@ def test_ws_policy_reject_unauthenticated() -> None:
 
 def test_ws_upstream_factory_relays_bytes() -> None:
     """When factory returns streams, binary WS path relays RFB-like bytes."""
-    import io
-    import threading
-
-    # Upstream pretends to be a VNC server: send ProtocolVersion once read.
-    class _UpstreamR(io.RawIOBase):
-        def __init__(self) -> None:
-            self._data = b"RFB 003.008\n"
-            self._pos = 0
-            self._closed_ev = threading.Event()
-
-        def read(self, size: int = -1) -> bytes:  # type: ignore[override]
-            if self._closed_ev.is_set():
-                return b""
-            if self._pos >= len(self._data):
-                # Block until peer closes (relay pump ends).
-                self._closed_ev.wait(timeout=2.0)
-                return b""
-            end = len(self._data) if size < 0 else min(len(self._data), self._pos + size)
-            chunk = self._data[self._pos : end]
-            self._pos = end
-            return chunk
-
-        def close(self) -> None:
-            self._closed_ev.set()
-            super().close()
-
-        def readable(self) -> bool:
-            return True
-
-    class _UpstreamW(io.RawIOBase):
-        def __init__(self) -> None:
-            self.buf = bytearray()
-
-        def write(self, b: bytes) -> int:  # type: ignore[override]
-            self.buf.extend(b)
-            return len(b)
-
-        def writable(self) -> bool:
-            return True
-
-        def flush(self) -> None:
-            return None
-
-    up_r = _UpstreamR()
-    up_w = _UpstreamW()
+    up_r = _FakeUpstreamR()
+    up_w = _FakeUpstreamW()
 
     def factory(_wid: str, target_id: str | None) -> tuple[Any, Any] | None:
         assert target_id == "lab-vnc"
@@ -237,8 +250,6 @@ def test_ws_upstream_factory_relays_bytes() -> None:
         assert msg.startswith(b"RFB ")
         ws.send_bytes(b"RFB 003.008\n")
         # Give relay a moment to pump browser→upstream.
-        import time
-
         time.sleep(0.15)
     assert b"RFB 003.008\n" in bytes(up_w.buf)
 
@@ -259,59 +270,16 @@ def _relay_client(hub: Any) -> TestClient:
 
 
 def test_ws_relay_handles_text_empty_and_inject_messages() -> None:
-    """Text frames are re-encoded, empty frames skipped, inject frames gated."""
-    import io
-    import threading
-
-    class _UpstreamR(io.RawIOBase):
-        def __init__(self) -> None:
-            self._data = b"RFB 003.008\n"
-            self._pos = 0
-            self._ev = threading.Event()
-
-        def read(self, size: int = -1) -> bytes:  # type: ignore[override]
-            if self._ev.is_set():
-                return b""
-            if self._pos >= len(self._data):
-                self._ev.wait(timeout=2.0)
-                return b""
-            end = len(self._data) if size < 0 else min(len(self._data), self._pos + size)
-            chunk = self._data[self._pos : end]
-            self._pos = end
-            return chunk
-
-        def close(self) -> None:
-            self._ev.set()
-            super().close()
-
-        def readable(self) -> bool:
-            return True
-
-    class _UpstreamW(io.RawIOBase):
-        def __init__(self) -> None:
-            self.buf = bytearray()
-
-        def write(self, b: bytes) -> int:  # type: ignore[override]
-            self.buf.extend(b)
-            return len(b)
-
-        def writable(self) -> bool:
-            return True
-
-        def flush(self) -> None:
-            return None
-
-    up_r, up_w = _UpstreamR(), _UpstreamW()
+    """Latin-1-safe text frames are encoded, empty frames skipped, inject frames gated."""
+    up_r, up_w = _FakeUpstreamR(), _FakeUpstreamW()
     client = _relay_client(_relay_hub(lambda _w, _t: (up_r, up_w)))  # type: ignore[arg-type]
     with client.websocket_connect(PATH + "?target_id=lab-vnc") as ws:
         assert ws.receive_bytes().startswith(b"RFB ")
-        ws.send_text("RFB 003.008\n")  # text frame (ProtocolVersion) → re-encoded
+        ws.send_text("RFB 003.008\n")  # text frame (ProtocolVersion) → latin-1 encoded losslessly
         ws.send_bytes(b"")  # empty frame → skipped
         ws.send_bytes(bytes([1]))  # security type None
         ws.send_bytes(bytes([1]))  # ClientInit
         ws.send_bytes(bytes([4]) + bytes(7))  # KeyEvent → routed through inject gate
-        import time
-
         time.sleep(0.2)
     assert b"RFB 003.008\n" in bytes(up_w.buf)
 
@@ -339,39 +307,73 @@ def test_ws_no_factory_configured_closes() -> None:
 
 def test_ws_relay_with_explicit_upstream_factory() -> None:
     """upstream_factory passed to the route (not via hub) is used directly."""
-    import io
-
-    class _R(io.RawIOBase):
-        def __init__(self) -> None:
-            self._c = [b"RFB 003.008\n"]
-
-        def read(self, _s: int = -1) -> bytes:  # type: ignore[override]
-            return self._c.pop(0) if self._c else b""
-
-        def readable(self) -> bool:
-            return True
-
-    class _W(io.RawIOBase):
-        def __init__(self) -> None:
-            self.buf = bytearray()
-
-        def write(self, b: bytes) -> int:  # type: ignore[override]
-            self.buf.extend(b)
-            return len(b)
-
-        def writable(self) -> bool:
-            return True
-
-        def flush(self) -> None:
-            return None
-
     hub = SimpleNamespace()
     hub.get_rest_session = AsyncMock(return_value=SimpleNamespace(hijack_id=HID, acquired_by="alice"))
     hub.vnc_upstream_factory = None
     app = FastAPI()
     router = APIRouter()
-    register_gui_vnc_ws_routes(hub, router, upstream_factory=lambda _w, _t: (_R(), _W()))  # type: ignore[arg-type,return-value]
+    register_gui_vnc_ws_routes(
+        hub,
+        router,
+        upstream_factory=lambda _w, _t: (_FakeUpstreamR(block_on_eof=False), _FakeUpstreamW()),  # type: ignore[arg-type,return-value]
+    )
     app.include_router(router)
     client = TestClient(_PrincipalASGI(app, _principal(subject="alice")))
     with client.websocket_connect(PATH + "?target_id=lab-vnc") as ws:
         assert ws.receive_bytes().startswith(b"RFB ")
+
+
+def test_ws_relay_closes_when_upstream_eofs_while_browser_idle() -> None:
+    """Upstream EOF must tear the relay down even if the browser never sends.
+
+    Regression for the uncancelled-gather hang: previously _relay_to_ws broke on
+    upstream EOF while _ws_to_relay stayed blocked in websocket.receive(), so the
+    server never closed the socket. Now the first pump to finish cancels the peer
+    and the server closes with 1000. Pre-fix this test blocks in ws.receive().
+    """
+    up_r, up_w = _FakeUpstreamR(block_on_eof=False), _FakeUpstreamW()
+    client = _relay_client(_relay_hub(lambda _w, _t: (up_r, up_w)))
+    with client.websocket_connect(PATH + "?target_id=lab-vnc") as ws:
+        assert ws.receive_bytes().startswith(b"RFB ")
+        # Browser stays idle. The server must close on upstream EOF, not hang.
+        msg = ws.receive()
+        assert isinstance(msg, dict)
+        assert msg.get("type") == "websocket.close"
+        assert msg.get("code") == 1000
+
+
+def test_ws_relay_drops_undecodable_text_frame() -> None:
+    """A text frame with a code point > 255 is dropped, not lossy ('?') forwarded."""
+    up_r, up_w = _FakeUpstreamR(), _FakeUpstreamW()
+    client = _relay_client(_relay_hub(lambda _w, _t: (up_r, up_w)))
+    with client.websocket_connect(PATH + "?target_id=lab-vnc") as ws:
+        assert ws.receive_bytes().startswith(b"RFB ")
+        ws.send_text("Ā")  # LATIN CAPITAL A WITH MACRON (>255) → undecodable, dropped
+        ws.send_bytes(b"RFB 003.008\n")  # valid ProtocolVersion still relays
+        time.sleep(0.2)
+    forwarded = bytes(up_w.buf)
+    assert b"RFB 003.008\n" in forwarded
+    assert b"?" not in forwarded  # the dropped char was NOT re-encoded to b"?"
+
+
+def test_close_quietly_tolerates_none() -> None:
+    """relay_r/relay_w stay None if setup fails before makefile; close path no-ops.
+
+    Exercises the non-callable branch of _close_quietly (getattr(None, 'close')
+    is None), which the old '# pragma: no branch' wrongly asserted unreachable.
+    """
+    _close_quietly(None)  # must not raise
+
+
+def test_ws_relay_logs_error_on_bad_security_type() -> None:
+    """A relay-thread failure (unsupported RFB security type) is logged, not swallowed."""
+    up_r, up_w = _FakeUpstreamR(), _FakeUpstreamW()
+    client = _relay_client(_relay_hub(lambda _w, _t: (up_r, up_w)))
+    with client.websocket_connect(PATH + "?target_id=lab-vnc") as ws:
+        assert ws.receive_bytes().startswith(b"RFB ")
+        ws.send_bytes(b"RFB 003.008\n")  # 12-byte ProtocolVersion (pass-through)
+        ws.send_bytes(bytes([2]))  # security type 2 (not None=1) → filter raises ValueError
+        # The relay thread errors out; the endpoint records it and closes the WS.
+        msg = ws.receive()
+        assert isinstance(msg, dict)
+        assert msg.get("type") == "websocket.close"
