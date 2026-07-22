@@ -404,21 +404,7 @@ async def kill(agent_id: str, request: Request, manager: AgentManager = Depends(
         return JSONResponse({"error": f"Agent {agent_id} not found"}, status_code=404)
     plugin = get_managed_agent_plugin(request)
     terminal_states = {"error", "stopped", "completed"}
-    if manager.agents[agent_id].state in terminal_states:
-        manager.agent_process_manager.release_agent_account(agent_id)
-        del manager.agents[agent_id]
-        await manager.broadcast_status()
-        return _build_action_response(
-            agent_id,
-            "remove",
-            "manager",
-            applied=True,
-            queued=False,
-            result={"removed": agent_id, "desired_agents": manager.desired_agents},
-            state="removed",
-            plugin=plugin,
-        )
-    if agent_id not in manager.processes:
+    if manager.agents[agent_id].state in terminal_states or agent_id not in manager.processes:
         manager.agent_process_manager.release_agent_account(agent_id)
         del manager.agents[agent_id]
         await manager.broadcast_status()
