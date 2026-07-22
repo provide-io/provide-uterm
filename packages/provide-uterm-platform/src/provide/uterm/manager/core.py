@@ -16,7 +16,13 @@ from typing import TYPE_CHECKING, Any, cast
 from fastapi import WebSocket  # noqa: TC002
 from provide.telemetry import get_logger
 
-from provide.uterm.manager.constants import SAVE_INTERVAL_S, TIMESERIES_INTERVAL_S
+from provide.uterm.manager.constants import (
+    ACTIVE_STATES,
+    RUNNING_STATES,
+    SAVE_INTERVAL_S,
+    TERMINAL_STATES,
+    TIMESERIES_INTERVAL_S,
+)
 from provide.uterm.manager.models import AgentStatusBase, SwarmStatus
 from provide.uterm.manager.timeseries import TimeseriesManager
 
@@ -163,8 +169,7 @@ class AgentManager:
 
     async def prune_dead(self) -> dict[str, Any]:
         """Remove agents in terminal states (stopped/error/completed)."""
-        terminal = {"stopped", "error", "completed"}
-        dead_ids = [bid for bid, b in self.agents.items() if b.state in terminal]
+        dead_ids = [bid for bid, b in self.agents.items() if b.state in TERMINAL_STATES]
         for bid in dead_ids:
             with contextlib.suppress(AttributeError, RuntimeError):
                 self.agent_process_manager.release_agent_account(bid)
@@ -180,7 +185,7 @@ class AgentManager:
         """Pause the swarm and mark active agents as paused."""
         self.swarm_paused = True
         for agent in self.agents.values():
-            if agent.state in {"running", "recovering", "blocked"}:
+            if agent.state in RUNNING_STATES:
                 agent.paused = True
         await self.broadcast_status()
         return {"paused": True, "affected": sum(1 for b in self.agents.values() if b.paused)}
@@ -223,8 +228,7 @@ class AgentManager:
             return
         if self.mcp_clients:
             return
-        active = {"running", "queued", "recovering", "blocked"}
-        if any(b.state in active for b in self.agents.values()):
+        if any(b.state in ACTIVE_STATES for b in self.agents.values()):
             logger.info("auto_shutdown_deferred", reason="active_agents")
             return
         if self._mcp_shutdown_task is not None:
@@ -241,8 +245,7 @@ class AgentManager:
             return
         if self.mcp_clients:
             return
-        active = {"running", "queued", "recovering", "blocked"}
-        if any(b.state in active for b in self.agents.values()):
+        if any(b.state in ACTIVE_STATES for b in self.agents.values()):
             logger.info("auto_shutdown_aborted", reason="active_agents_during_grace")
             return
         logger.info("auto_shutdown_executing")
@@ -274,7 +277,7 @@ class AgentManager:
         agents = list(self.agents.values())
         return SwarmStatus(
             total_agents=len(agents),
-            running=sum(1 for b in agents if b.state in ("running", "recovering", "blocked")),
+            running=sum(1 for b in agents if b.state in RUNNING_STATES),
             completed=sum(1 for b in agents if b.state == "completed"),
             errors=sum(1 for b in agents if b.state in ("error", "disconnected", "blocked")),
             stopped=sum(1 for b in agents if b.state == "stopped"),
