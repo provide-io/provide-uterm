@@ -36,6 +36,21 @@ __all__ = ["DetectorPatternCompileError", "PromptDetector"]
 _DEFAULT_PROMPT_REGION_TAIL_LINES = 12
 
 
+def _match_from_pattern(pattern: dict[str, Any]) -> PromptMatch:
+    """Build a ``PromptMatch`` from a compiled pattern dict.
+
+    Shared by ``_detect_in_text``'s cursor-miss fallback and its positive
+    return so both sites produce byte-for-byte identical matches.
+    """
+    return PromptMatch(
+        prompt_id=pattern["id"],
+        pattern=pattern,
+        input_type=pattern.get("input_type", "multi_key"),
+        eol_pattern=pattern.get("eol_pattern", r"[\r\n]+"),
+        kv_extract=pattern.get("kv_extract"),
+    )
+
+
 class PromptDetector:
     """Intelligent prompt detection with cursor-awareness."""
 
@@ -253,24 +268,10 @@ class PromptDetector:
                 # pyte cursor bookkeeping can be off. Preserve a fallback candidate so
                 # callers can still make progress instead of timing out forever.
                 if cursor_miss_candidates is not None:
-                    cursor_miss_candidates.append(
-                        PromptMatch(
-                            prompt_id=pattern["id"],
-                            pattern=pattern,
-                            input_type=pattern.get("input_type", "multi_key"),
-                            eol_pattern=pattern.get("eol_pattern", r"[\r\n]+"),
-                            kv_extract=pattern.get("kv_extract"),
-                        )
-                    )
+                    cursor_miss_candidates.append(_match_from_pattern(pattern))
                 continue
 
-            return PromptMatch(
-                prompt_id=pattern["id"],
-                pattern=pattern,
-                input_type=pattern.get("input_type", "multi_key"),
-                eol_pattern=pattern.get("eol_pattern", r"[\r\n]+"),
-                kv_extract=pattern.get("kv_extract"),
-            )
+            return _match_from_pattern(pattern)
         return None
 
     def detect_prompt(self, snapshot: dict[str, Any]) -> PromptMatch | None:
