@@ -213,12 +213,7 @@ class SqliteStateStore:
         )
         if not rows:
             return 0
-        row = rows[0]
-        if isinstance(row, dict):
-            return int(row.get("seq") or 0)
-        if hasattr(row, "keys") and hasattr(row, "__getitem__"):
-            return int(row["seq"] if "seq" in row else self._get(row, 0) or 0)
-        return int(self._get(row, 0) or 0)
+        return int(self._row_value(rows[0], "seq", 0) or 0)
 
     def save_snapshot(self, worker_id: str, snapshot: dict[str, Any]) -> None:
         payload = json.dumps(snapshot, ensure_ascii=True)
@@ -283,12 +278,7 @@ class SqliteStateStore:
         )
         if not rows:
             return 0
-        row = rows[0]
-        if isinstance(row, dict):
-            return int(row.get("seq") or 0)
-        if hasattr(row, "keys") and hasattr(row, "__getitem__"):
-            return int(row["seq"] if "seq" in row else self._get(row, 0) or 0)
-        return int(self._get(row, 0) or 0)
+        return int(self._row_value(rows[0], "seq", 0) or 0)
 
     def list_events_since(self, worker_id: str, seq: int, limit: int = 100) -> list[dict[str, Any]]:
         rows = self._rows(

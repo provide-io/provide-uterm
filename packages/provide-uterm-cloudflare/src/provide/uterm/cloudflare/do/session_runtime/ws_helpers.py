@@ -183,7 +183,7 @@ class _WsHelperMixin:
                     "auto_transfer_idle_s": self.config.deckmux_auto_transfer_idle_s,  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
                     "keystroke_queue": self.config.deckmux_keystroke_queue,  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
                 },
-                "ts": __import__("time").time(),
+                "ts": time.time(),
             },
         )
 
