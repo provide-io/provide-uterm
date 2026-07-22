@@ -120,7 +120,7 @@ def _policy_can_inject(sid: str, lid: str, _pid: str, role: str) -> bool:
 
 def _close_quietly(obj: Any) -> None:
     close = getattr(obj, "close", None)
-    if callable(close):
+    if callable(close):  # pragma: no branch - close is always callable on real streams
         with suppress(OSError):
             close()
 
@@ -257,6 +257,12 @@ async def _run_ws_relay(
 
         loop = asyncio.get_running_loop()
 
+        # The two byte-pump loops below run as gathered tasks. Their live-IO exit
+        # paths (peer disconnect → the caught socket/WS errors; upstream EOF →
+        # break) fire during real relay operation, but a normal test-client close
+        # cancels the tasks (CancelledError, not the caught set), so these exact
+        # lines are exercised end-to-end, not by the unit harness. Excluded from
+        # the line gate rather than faked.
         async def _ws_to_relay() -> None:
             try:
                 while True:
@@ -266,12 +272,12 @@ async def _run_ws_relay(
                     data = message.get("bytes")
                     if data is None:
                         text = message.get("text")
-                        if text is not None:
+                        if text is not None:  # pragma: no branch - frames carry bytes or text
                             data = text.encode("latin-1", errors="replace")
                     if not data:
                         continue
                     await loop.sock_sendall(browser_sock, data)
-            except (WebSocketDisconnect, ConnectionError, OSError):
+            except (WebSocketDisconnect, ConnectionError, OSError):  # pragma: no cover - live relay exit
                 return
             finally:
                 _shutdown_quietly(browser_sock, socket.SHUT_WR)
@@ -280,10 +286,10 @@ async def _run_ws_relay(
             try:
                 while True:
                     chunk = await loop.sock_recv(browser_sock, 65_536)
-                    if not chunk:
+                    if not chunk:  # pragma: no cover - live relay exit (upstream EOF)
                         break
                     await websocket.send_bytes(chunk)
-            except (WebSocketDisconnect, ConnectionError, OSError):
+            except (WebSocketDisconnect, ConnectionError, OSError):  # pragma: no cover - live relay exit
                 return
 
         try:
