@@ -50,8 +50,8 @@ func TestLitevirtAIClient_Basic(t *testing.T) {
 		t.Errorf("expected no error from Screenshot")
 	}
 
-	client.InjectPointer(10, 10, 1)
-	client.InjectKey(0x20, true)
+	_ = client.InjectPointer(10, 10, 1)
+	_ = client.InjectKey(0x20, true)
 
 	if len(stream.sendData) != 2 {
 		t.Errorf("expected 2 injected events")
@@ -77,7 +77,7 @@ func TestFilterRFBInput_Basic(t *testing.T) {
 	_ = filterRFBInput(out, in, nil, "s1", "l1", "p1", "admin")
 
 	w := &grpcWriter{stream: &mockStream{}}
-	w.Write([]byte("test"))
+	_, _ = w.Write([]byte("test"))
 }
 
 func TestLitevirtAIClient_ErrorPaths(t *testing.T) {

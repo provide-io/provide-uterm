@@ -11,18 +11,6 @@ import (
 	"testing"
 )
 
-// fakeStream is a minimal bidi stream for RFB handshake unit tests.
-type fakeStream struct {
-	r io.Reader
-	w io.Writer
-}
-
-func (f *fakeStream) Send(m *struct{ Data []byte }) error {
-	// LitevirtAIClient uses pb.VNCData — we re-test via runHandshake helpers.
-	_, err := f.w.Write(m.Data)
-	return err
-}
-
 func TestMaxRFBDimensionConstant(t *testing.T) {
 	if MaxRFBDimension != 8192 {
 		t.Fatalf("MaxRFBDimension=%d", MaxRFBDimension)

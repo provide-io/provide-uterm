@@ -125,7 +125,7 @@ func (w *WebhookAuthorizationProvider) check(p *Principal, action string, extra 
 	if err != nil {
 		return false
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		return false
@@ -178,7 +178,7 @@ func (w *WebhookAuthorizationProvider) CapabilitiesFor(p *Principal) Set {
 	if err != nil {
 		return NewSet()
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil || resp.StatusCode != http.StatusOK || !w.responseSignatureOK(raw, resp.Header) {
 		return NewSet()
@@ -296,7 +296,7 @@ func (w *WebhookAuthorizationProvider) ResolveBrowserRole(p *Principal, session 
 	if err != nil {
 		return "viewer"
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil || resp.StatusCode != http.StatusOK || !w.responseSignatureOK(raw, resp.Header) {
 		return "viewer"
