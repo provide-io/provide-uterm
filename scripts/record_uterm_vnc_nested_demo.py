@@ -49,19 +49,20 @@ NEST_LEASE_WORKERS = [f"nest-vnc-{i}" for i in range(LEVELS)]
 SHELL_SESSION = base.SHELL_SESSION
 LAB_GEOMETRY = base.LAB_GEOMETRY
 
-# Innermost terminal content (seeded before recording so the deepest frame reads).
+# Innermost terminal content (seeded before recording so every pane reads).
+# ANSI escapes ride through /say verbatim (the shell connector doesn't strip
+# them), so the transcript renders in colour — a rainbow bar + a little cat.
+_ESC = "\x1b"
 SEED_LINES = [
     "/clear\r",
     "/nick demo\r",
-    "/say ════════════════════════════════════════\r",
-    "/say   provide-uterm · turtles all the way down\r",
-    "/say ════════════════════════════════════════\r",
-    "/say [1] host VNC console\r",
-    "/say [2] → nested browser\r",
-    "/say [3] → nested browser\r",
-    "/say [4] → nested browser\r",
-    "/say [5] → this live terminal\r",
-    "/say ready · demo complete\r",
+    f"/say {_ESC}[1;35m✦ provide-uterm · colour demo ✦{_ESC}[0m\r",
+    f"/say {_ESC}[41m  {_ESC}[42m  {_ESC}[43m  {_ESC}[44m  {_ESC}[45m  {_ESC}[46m  {_ESC}[0m  rainbow\r",
+    f"/say {_ESC}[33m /\\_/\\ {_ESC}[0m  nautilus cat\r",
+    f"/say {_ESC}[33m( {_ESC}[92mo{_ESC}[33m.{_ESC}[92mo{_ESC}[33m ){_ESC}[0m  purring in every pane\r",
+    f"/say {_ESC}[33m > {_ESC}[91m^{_ESC}[33m < {_ESC}[0m  meow\r",
+    f"/say {_ESC}[36m[1]{_ESC}[0m host VNC  {_ESC}[36m[2]{_ESC}[0m nested  {_ESC}[36m[3]{_ESC}[0m fractal\r",
+    f"/say {_ESC}[32mready · colour demo complete{_ESC}[0m\r",
 ]
 
 
