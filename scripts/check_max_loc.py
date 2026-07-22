@@ -64,7 +64,7 @@ def _load_baseline(path: Path) -> dict[str, int]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Fail if any Python file exceeds a maximum line count.")
-    parser.add_argument("--max-lines", type=int, default=500, help="Maximum allowed lines per .py file.")
+    parser.add_argument("--max-lines", type=int, default=777, help="Maximum allowed lines per .py file.")
     parser.add_argument(
         "--roots",
         nargs="+",

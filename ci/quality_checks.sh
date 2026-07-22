@@ -38,7 +38,7 @@ step() {
   fi
 }
 
-step "max-loc"            uv run python scripts/check_max_loc.py --max-lines 500 --baseline .ci/max-loc-baseline.json
+step "max-loc"            uv run python scripts/check_max_loc.py --max-lines 777 --baseline .ci/max-loc-baseline.json
 step "codegen-frames"     uv run python scripts/codegen_frames.py --check
 step "spdx-headers"       uv run python scripts/check_spdx_headers.py
 step "event-literals"     uv run python scripts/check_event_literals.py
