@@ -17,33 +17,18 @@ from pydantic import ValidationError
 from provide.uterm.server.models import model_dump
 from provide.uterm.server.profiles import ConnectionProfile
 from provide.uterm.server.registry import SessionValidationError
+from provide.uterm.server.routes._helpers import authz as _authz
+from provide.uterm.server.routes._helpers import principal as _principal
+from provide.uterm.server.routes._helpers import registry as _registry
 
 if TYPE_CHECKING:
-    from provide.uterm.server.auth import Principal
-    from provide.uterm.server.authorization import AuthorizationService
     from provide.uterm.server.profiles import FileProfileStore
-    from provide.uterm.server.registry import SessionRegistry
 
 _ProfileId = Annotated[str, Path(pattern=r"^[\w\-]+$")]
 
 
 def _store(request: Request) -> FileProfileStore:
     return cast("FileProfileStore", request.app.state.uterm_profile_store)
-
-
-def _authz(request: Request) -> AuthorizationService:
-    return cast("AuthorizationService", request.app.state.uterm_authz)
-
-
-def _registry(request: Request) -> SessionRegistry:
-    return cast("SessionRegistry", request.app.state.uterm_registry)
-
-
-def _principal(request: Request) -> Principal:
-    principal = getattr(request.state, "uterm_principal", None)
-    if principal is None:
-        raise HTTPException(status_code=500, detail="principal was not resolved")
-    return cast("Principal", principal)
 
 
 def _not_found(profile_id: str) -> HTTPException:
