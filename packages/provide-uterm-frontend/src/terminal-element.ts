@@ -7,14 +7,9 @@ import { LitElement, type PropertyValues, html } from "lit";
 import { property } from "lit/decorators.js";
 import { buildSettingsPanelHtml, DEFAULTS, loadSettings, saveSettings, type TerminalConfig, type TerminalSettings } from "./terminal-settings.js";
 import { applyColors, applyThemeClasses, asThemeName, THEME_DEFAULTS, type ThemeName } from "./terminal-themes.js";
-import { ControlChannelDecoder, encodeWsFrame } from "./hijack-codec.js";
+import { ControlChannelDecoder, encodeWsFrame, utf8ByteLength } from "./hijack-codec.js";
 
 const ACK_THROTTLE_MS = 100;
-const TEXT_ENCODER = new TextEncoder();
-
-function utf8ByteLength(value: string): number {
-  return TEXT_ENCODER.encode(value).byteLength;
-}
 
 interface XtermLine {
   translateToString(trimRight?: boolean): string;
