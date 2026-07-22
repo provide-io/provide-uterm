@@ -324,15 +324,18 @@ def _drive_render(base_url: str, headers: dict[str, str], session: str, gif_path
     if st >= 400:
         raise RuntimeError(f"input_mode switch failed for {session}: {st} {body!r}")
     hid = nested._acquire_lease(base_url, headers, session)
-    st, body = base.send_shell_keys(
-        base_url,
-        headers,
-        hid,
-        f"render --loop --cols 96 --rows 30 {gif_path.resolve().as_uri()}\r",
-        session=session,
-    )
-    if st >= 400:
-        raise RuntimeError(f"render send failed for {session}: {st} {body!r}")
+    render_cmd = f"render --loop --cols 96 --rows 30 {gif_path.resolve().as_uri()}\r"
+    # The send can transiently 4xx right after acquire — a 429 (the REST-send rate
+    # limiter, since scenes drive back-to-back), or a 404/409 while the fresh lease
+    # settles. hijack_send returns before it delivers keys, so none of these reached
+    # the worker: retry a few times so a raise only fires on a persistent failure.
+    for _ in range(5):
+        st, body = base.send_shell_keys(base_url, headers, hid, render_cmd, session=session)
+        if st < 400:
+            break
+        time.sleep(0.3)
+    else:
+        raise RuntimeError(f"render send failed for {session} after retries: {st} {body!r}")
     time.sleep(0.4)
     # Best-effort re-cache (a late-connecting browser re-renders regardless).
     base.http_json("GET", f"{base_url}/worker/{session}/hijack/{hid}/snapshot", headers=headers)
