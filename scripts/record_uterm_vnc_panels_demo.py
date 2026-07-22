@@ -56,6 +56,13 @@ _SCENE_W, _SCENE_H = 320, 180
 _SCENE_FRAMES = 16
 _SCENE_DURATION_MS = 70
 
+# The "cat" scene plays the real keyboard-cat GIF the non-VNC shell_render sample
+# renders (fetched host-side at record time; falls back to a drawn cat offline).
+_KEYBOARD_CAT_URL = "https://media.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif"
+# Letterbox target aspect ≈ the lab framebuffer (1280x936) so mpv's edge-to-edge
+# stretch doesn't distort the square source clip.
+_CAT_CANVAS = (512, 374)
+
 
 def _save_gif(frames: list[Any], path: Path) -> None:
     """Write *frames* as a looping animated GIF at the shared scene cadence."""
@@ -176,11 +183,48 @@ def _matrix_frames() -> list[Any]:
     return out
 
 
+def _fetch_keyboard_cat_gif(out_path: Path) -> bool:
+    """Fetch the real keyboard-cat GIF and letterbox it to the pane aspect.
+
+    Returns True on success. Any network/decode failure returns False so the
+    caller can fall back to the drawn cat (keeps the demo runnable offline).
+    """
+    import io
+    import urllib.request
+
+    try:
+        req = urllib.request.Request(_KEYBOARD_CAT_URL, headers={"User-Agent": "Mozilla/5.0"})  # noqa: S310
+        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310 - fixed https giphy URL
+            data = resp.read()
+    except Exception as exc:  # offline / giphy hiccup → drawn-cat fallback
+        print(f"keyboard-cat fetch failed ({exc}); using drawn cat", file=sys.stderr)
+        return False
+
+    from PIL import Image
+
+    src = Image.open(io.BytesIO(data))
+    cw, ch = _CAT_CANVAS
+    frames: list[Any] = []
+    durations: list[int] = []
+    for i in range(getattr(src, "n_frames", 1)):
+        src.seek(i)
+        frame = src.convert("RGB")
+        fitted = frame.copy()
+        fitted.thumbnail((cw, ch), Image.LANCZOS)  # keep aspect, fit inside canvas
+        canvas = Image.new("RGB", (cw, ch), (0, 0, 0))
+        canvas.paste(fitted, ((cw - fitted.width) // 2, (ch - fitted.height) // 2))
+        frames.append(canvas)
+        durations.append(int(src.info.get("duration", 80) or 80))
+    frames[0].save(out_path, save_all=True, append_images=frames[1:], duration=durations, loop=0, disposal=2)
+    return True
+
+
 def _generate_scenes(out_dir: Path) -> None:
     """Write three distinct *animated* GIF scenes mpv loops in each lab."""
     out_dir.mkdir(parents=True, exist_ok=True)
     _save_gif(_rainbow_frames(), out_dir / "rainbow.gif")
-    _save_gif(_cat_piano_frames(), out_dir / "cat.gif")
+    if not _fetch_keyboard_cat_gif(out_dir / "cat.gif"):
+        _save_gif(_cat_piano_frames(), out_dir / "cat.gif")
     _save_gif(_matrix_frames(), out_dir / "matrix.gif")
 
 
