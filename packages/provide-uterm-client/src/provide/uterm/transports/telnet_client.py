@@ -11,13 +11,9 @@ import contextlib
 
 from provide.telemetry import get_logger
 
+from provide.uterm.transports._telnet_const import DO, DONT, IAC, WILL, WONT
+
 logger = get_logger(__name__)
-# Telnet protocol constants (duplicated here to avoid circular imports)
-IAC: int = 255  # Interpret As Command
-WILL: int = 251  # Will perform option
-WONT: int = 252  # Won't perform option
-DO: int = 253  # Do perform option
-DONT: int = 254  # Don't perform option
 
 
 class TelnetClient:

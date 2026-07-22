@@ -14,6 +14,58 @@ Provides:
   :mod:`~provide.uterm.transports.telnet_server`, re-exported here).
 """
 
+# Telnet protocol constants — re-exported from the dependency-free leaf module.
+from provide.uterm.transports._telnet_const import (
+    DO as DO,
+)
+from provide.uterm.transports._telnet_const import (
+    DONT as DONT,
+)
+from provide.uterm.transports._telnet_const import (
+    ECHO as ECHO,
+)
+from provide.uterm.transports._telnet_const import (
+    IAC as IAC,
+)
+from provide.uterm.transports._telnet_const import (
+    LINEMODE as LINEMODE,
+)
+from provide.uterm.transports._telnet_const import (
+    NAWS as NAWS,
+)
+from provide.uterm.transports._telnet_const import (
+    OPT_BINARY as OPT_BINARY,
+)
+from provide.uterm.transports._telnet_const import (
+    OPT_ECHO as OPT_ECHO,
+)
+from provide.uterm.transports._telnet_const import (
+    OPT_NAWS as OPT_NAWS,
+)
+from provide.uterm.transports._telnet_const import (
+    OPT_SGA_OPT as OPT_SGA_OPT,
+)
+from provide.uterm.transports._telnet_const import (
+    OPT_TTYPE as OPT_TTYPE,
+)
+from provide.uterm.transports._telnet_const import (
+    SB as SB,
+)
+from provide.uterm.transports._telnet_const import (
+    SE as SE,
+)
+from provide.uterm.transports._telnet_const import (
+    SGA as SGA,
+)
+from provide.uterm.transports._telnet_const import (
+    TTYPE_IS as TTYPE_IS,
+)
+from provide.uterm.transports._telnet_const import (
+    WILL as WILL,
+)
+from provide.uterm.transports._telnet_const import (
+    WONT as WONT,
+)
 from provide.uterm.transports.telnet_client import TelnetClient as TelnetClient
 from provide.uterm.transports.telnet_server import (
     start_telnet_server as start_telnet_server,
@@ -21,33 +73,5 @@ from provide.uterm.transports.telnet_server import (
 from provide.uterm.transports.telnet_transport import (
     TelnetTransport as TelnetTransport,
 )
-
-# ---------------------------------------------------------------------------
-# Telnet protocol constants
-# ---------------------------------------------------------------------------
-
-IAC: int = 255  # Interpret As Command
-WILL: int = 251  # Will perform option
-WONT: int = 252  # Won't perform option
-DO: int = 253  # Do perform option
-DONT: int = 254  # Don't perform option
-SB: int = 250  # Sub-negotiation Begin
-SE: int = 240  # Sub-negotiation End
-
-# Telnet options
-ECHO: int = 1  # Echo
-SGA: int = 3  # Suppress Go Ahead
-NAWS: int = 31  # Negotiate About Window Size
-LINEMODE: int = 34  # Linemode
-
-# Terminal type subnegotiation
-OPT_TTYPE: int = 24
-TTYPE_IS: int = 0
-
-# Telnet option codes (aliases for TelnetTransport use)
-OPT_BINARY: int = 0
-OPT_ECHO: int = ECHO
-OPT_SGA_OPT: int = SGA
-OPT_NAWS: int = NAWS
 
 __all__ = ["TelnetClient", "TelnetTransport", "start_telnet_server"]
