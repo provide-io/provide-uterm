@@ -7,32 +7,16 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated, Any, cast
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, HTTPException, Path, Request
 
 from provide.uterm.server.audit import audit_event
-
-if TYPE_CHECKING:
-    from provide.uterm.server.auth import Principal
-    from provide.uterm.server.authorization import AuthorizationService
+from provide.uterm.server.routes._helpers import authz as _authz
+from provide.uterm.server.routes._helpers import principal as _principal
+from provide.uterm.server.routes._helpers import source_ip as _source_ip
 
 _ALLOWED_ROLE_SCOPES = frozenset({"viewer", "operator", "admin"})
-
-
-def _principal(request: Request) -> Principal:
-    principal = getattr(request.state, "uterm_principal", None)
-    if principal is None:
-        raise HTTPException(status_code=500, detail="principal was not resolved")
-    return cast("Principal", principal)
-
-
-def _authz(request: Request) -> AuthorizationService:
-    return cast("AuthorizationService", request.app.state.uterm_authz)
-
-
-def _source_ip(request: Request) -> str:
-    return str(getattr(request.client, "host", "unknown")) if request.client else "unknown"
 
 
 def create_api_keys_router() -> APIRouter:

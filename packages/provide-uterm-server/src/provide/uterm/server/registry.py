@@ -309,24 +309,22 @@ class SessionRegistry:
         if runtime is not None:
             await runtime.stop()
 
-    async def start_session(self, session_id: str) -> SessionRuntimeStatus:
+    async def _locked_runtime(self, session_id: str) -> HostedSessionRuntime:
         async with self._lock:
-            session = self._require_session(session_id)
-            runtime = self._runtime_for(session)
+            return self._runtime_for(self._require_session(session_id))
+
+    async def start_session(self, session_id: str) -> SessionRuntimeStatus:
+        runtime = await self._locked_runtime(session_id)
         await runtime.start()
         return runtime.status()
 
     async def stop_session(self, session_id: str) -> SessionRuntimeStatus:
-        async with self._lock:
-            session = self._require_session(session_id)
-            runtime = self._runtime_for(session)
+        runtime = await self._locked_runtime(session_id)
         await runtime.stop()
         return runtime.status()
 
     async def restart_session(self, session_id: str) -> SessionRuntimeStatus:
-        async with self._lock:
-            session = self._require_session(session_id)
-            runtime = self._runtime_for(session)
+        runtime = await self._locked_runtime(session_id)
         await runtime.restart()
         return runtime.status()
 
@@ -351,9 +349,7 @@ class SessionRegistry:
         return runtime.status()
 
     async def clear_session(self, session_id: str) -> SessionRuntimeStatus:
-        async with self._lock:
-            session = self._require_session(session_id)
-            runtime = self._runtime_for(session)
+        runtime = await self._locked_runtime(session_id)
         await runtime.clear()
         return runtime.status()
 
@@ -368,9 +364,7 @@ class SessionRegistry:
         return runtime.status()
 
     async def analyze_session(self, session_id: str) -> str:
-        async with self._lock:
-            session = self._require_session(session_id)
-            runtime = self._runtime_for(session)
+        runtime = await self._locked_runtime(session_id)
         return await runtime.analyze()
 
     async def last_snapshot(self, session_id: str, recipient: Any = None) -> dict[str, Any] | None:
