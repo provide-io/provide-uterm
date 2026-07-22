@@ -42,3 +42,16 @@ TIMESERIES_RETENTION_S: float = 7.0 * 86400  # 7 days
 # via ManagerConfig.spawn_config_dir) and the resolved config path is contained
 # within it — this is the spawn sandbox.
 CONFIG_DIR_ENV_VAR: str = "UTERM_CONFIG_DIR"
+
+# Agent life-cycle state sets. The ``state`` field on an agent status is a bare
+# string (see manager/models.py AgentStatusBase); these frozensets are the
+# canonical membership tests used across the monitor, core manager, and routes.
+
+# Terminal states: the agent has finished and can be pruned/removed.
+TERMINAL_STATES: frozenset[str] = frozenset({"stopped", "error", "completed"})
+
+# Active states: the agent counts toward the desired-count / keep-alive tally.
+ACTIVE_STATES: frozenset[str] = frozenset({"running", "queued", "recovering", "blocked"})
+
+# Running states: the agent is live (not merely queued) — heartbeat-tracked.
+RUNNING_STATES: frozenset[str] = frozenset({"running", "recovering", "blocked"})

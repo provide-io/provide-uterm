@@ -10,51 +10,21 @@ import asyncio
 import os
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from fastapi import Depends, Request
 from fastapi.responses import JSONResponse
 from provide.telemetry import get_logger
 
-from provide.uterm.manager.constants import CONFIG_DIR_ENV_VAR
+from provide.uterm.manager.constants import CONFIG_DIR_ENV_VAR, TERMINAL_STATES
 from provide.uterm.manager.models import SpawnBatchRequest  # noqa: TC001
-from provide.uterm.manager.routes.agent_ops import _queue_manager_command
+from provide.uterm.manager.routes.agent_ops import _build_action_response, _queue_manager_command
 from provide.uterm.manager.routes.models import get_managed_agent_plugin, require_manager, router
 
 if TYPE_CHECKING:
     from provide.uterm.manager.core import AgentManager
 
 logger = get_logger(__name__)
-
-
-def _build_action_response(
-    agent_id: str,
-    action: str,
-    source: str,
-    *,
-    applied: bool,
-    queued: bool,
-    result: dict[str, Any],
-    state: str,
-    plugin: Any | None = None,
-) -> dict[str, Any]:
-    """Build a standardised action response, delegating to plugin if available."""
-    if plugin is not None:
-        return cast(
-            "dict[str, Any]",
-            plugin.build_action_response(
-                agent_id, action, source, applied=applied, queued=queued, result=result, state=state
-            ),
-        )
-    return {
-        "agent_id": agent_id,
-        "action": action,
-        "source": source,
-        "applied": applied,
-        "queued": queued,
-        "result": result,
-        "state": state,
-    }
 
 
 @router.get("/health")
@@ -340,7 +310,7 @@ async def _respawn_after_restart_exit(
         agent = manager.agents.get(agent_id)
         if agent is None:
             return
-        if agent.state in ("completed", "error", "stopped"):
+        if agent.state in TERMINAL_STATES:
             break
     else:
         logger.warning(

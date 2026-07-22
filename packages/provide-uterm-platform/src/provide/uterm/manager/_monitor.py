@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 from provide.telemetry import get_logger
 
+from provide.uterm.manager.constants import ACTIVE_STATES, RUNNING_STATES, TERMINAL_STATES
 from provide.uterm.manager.ext import EVENT_AGENT_EXITED
 
 if TYPE_CHECKING:
@@ -56,10 +57,9 @@ async def _prune_terminal_agents(
 ) -> tuple[list[tuple[str, subprocess.Popen[bytes]]], list[Any]]:
     """Remove terminal-state agents; return (stop_requests, dead_agents)."""
 
-    terminal_states = {"error", "stopped", "completed"}
     prune_stop_requests: list[tuple[str, subprocess.Popen[bytes]]] = []
     async with pm.manager._state_lock:
-        dead_agents = [b for b in pm.manager.agents.values() if b.state in terminal_states]
+        dead_agents = [b for b in pm.manager.agents.values() if b.state in TERMINAL_STATES]
         for dead in dead_agents:
             with contextlib.suppress(OSError, RuntimeError):
                 pm.release_agent_account(dead.agent_id)
@@ -137,7 +137,7 @@ async def _handle_heartbeat_timeouts(pm: AgentProcessManager) -> None:
     heartbeat_stop_requests: list[tuple[str, subprocess.Popen[bytes]]] = []
     async with pm.manager._state_lock:
         for agent in list(pm.manager.agents.values()):
-            if agent.state in ("running", "recovering", "blocked") and now - agent.last_update_time > heartbeat_timeout:
+            if agent.state in RUNNING_STATES and now - agent.last_update_time > heartbeat_timeout:
                 logger.warning("agent_heartbeat_timeout", agent_id=agent.agent_id, timeout_s=heartbeat_timeout)
                 agent.state = "error"
                 agent.error_message = (
@@ -258,11 +258,9 @@ async def _handle_desired_state(pm: AgentProcessManager) -> None:
     """Enforce the desired agent count: spawn deficits, kill excesses."""
     if pm.manager.desired_agents <= 0 or pm.manager.swarm_paused:
         return
-    active_states = {"running", "queued", "recovering", "blocked"}
-
     prune_stop_requests, dead_agents = await _prune_terminal_agents(pm)
     async with pm.manager._state_lock:
-        active_agents = [b for b in pm.manager.agents.values() if b.state in active_states]
+        active_agents = [b for b in pm.manager.agents.values() if b.state in ACTIVE_STATES]
         deficit = pm.manager.desired_agents - len(active_agents)
 
     if deficit > 0:
