@@ -85,7 +85,7 @@ const _DEFAULT_MAX_CONTROL_BYTES = 1024 * 1024;
 const _DEFAULT_MAX_BUFFER_BYTES = 10 * 1024 * 1024;
 const _DEFAULT_MAX_CONTROL_DEPTH = 32;
 
-function utf8ByteLength(value: string): number {
+export function utf8ByteLength(value: string): number {
   return _TEXT_ENCODER.encode(value).byteLength;
 }
 

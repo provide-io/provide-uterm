@@ -52,6 +52,25 @@ export type RfbConstructor = new (
   options?: Record<string, unknown>,
 ) => RfbInstance;
 
+/** Apply the shared noVNC display settings to a freshly-constructed RFB. */
+function configureRfb(inst: RfbInstance, viewOnly: boolean): void {
+  inst.viewOnly = viewOnly;
+  // Fit desktop into the host; noVNC owns canvas CSS size (do not CSS-stretch
+  // the canvas — that double-scales and destroys terminal text).
+  inst.scaleViewport = true;
+  inst.clipViewport = false;
+  inst.resizeSession = false;
+  // Match .vnc-screen so any residual letterbox blends into the panel.
+  inst.background = "#0b0f14";
+  // Prefer quality over compression thrash for readable terminal glyphs.
+  try {
+    (inst as { qualityLevel?: number }).qualityLevel = 9;
+    (inst as { compressionLevel?: number }).compressionLevel = 2;
+  } catch {
+    // older noVNC stubs in tests may not expose these
+  }
+}
+
 /** Unwrap CJS/ESM default-export nests until we have a constructor. */
 export function resolveRfbConstructor(mod: unknown): RfbConstructor {
   let cur: unknown = mod;
@@ -128,17 +147,7 @@ export function attachVnc(
       const RfbClass = opts.RfbClass ?? (await loadRfbClass());
       if (disposed) return;
       const inst = new RfbClass(screenEl, url, { wsProtocols: [] });
-      inst.viewOnly = params.viewOnly;
-      inst.scaleViewport = true;
-      inst.clipViewport = false;
-      inst.resizeSession = false;
-      inst.background = "#0b0f14";
-      try {
-        (inst as { qualityLevel?: number }).qualityLevel = 9;
-        (inst as { compressionLevel?: number }).compressionLevel = 2;
-      } catch {
-        // older noVNC stubs may not expose these
-      }
+      configureRfb(inst, params.viewOnly);
       inst.addEventListener("connect", () => {
         status("connected", `Connected · ${params.targetId}`);
         window.setTimeout(refreshDims, 200);
@@ -275,21 +284,7 @@ export class VncConsolePage {
         wsProtocols: [],
       };
       const rfb = new RfbClass(this.screenEl, url, options);
-      rfb.viewOnly = this.params.viewOnly;
-      // Fit desktop into the host; noVNC owns canvas CSS size (do not CSS-stretch
-      // the canvas — that double-scales and destroys terminal text).
-      rfb.scaleViewport = true;
-      rfb.clipViewport = false;
-      rfb.resizeSession = false;
-      // Match .vnc-screen so any residual letterbox blends into the panel.
-      rfb.background = "#0b0f14";
-      // Prefer quality over compression thrash for readable terminal glyphs.
-      try {
-        (rfb as { qualityLevel?: number }).qualityLevel = 9;
-        (rfb as { compressionLevel?: number }).compressionLevel = 2;
-      } catch {
-        // older noVNC stubs in tests may not expose these
-      }
+      configureRfb(rfb, this.params.viewOnly);
 
       rfb.addEventListener("connect", () => {
         this.setStatus("connected", `Connected · ${this.params.targetId}`);

@@ -10,7 +10,7 @@
  * out of the main class keeps hijack.ts focused on DOM/event wiring.
  */
 
-import { _RECONNECT_ANIM_FRAMES, encodeWsFrame } from "./hijack-codec.js";
+import { _RECONNECT_ANIM_FRAMES, encodeWsFrame, utf8ByteLength } from "./hijack-codec.js";
 import type { HijackHandlers, HijackState } from "./hijack-state.js";
 
 // Backoff schedule for reconnect attempts (seconds). Final value reused for all
@@ -22,11 +22,6 @@ const RECONNECT_ANIM_INTERVAL_MS = 80;
 // the cumulative bytes received so the DO can size its Tier-A backpressure
 // window (see docs/ard-cloudflare-backpressure.md).
 const ACK_THROTTLE_MS = 100;
-const TEXT_ENCODER = new TextEncoder();
-
-function utf8ByteLength(value: string): number {
-  return TEXT_ENCODER.encode(value).byteLength;
-}
 
 export function resolveWsUrl(state: HijackState): string {
   const { config } = state;

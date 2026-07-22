@@ -50,9 +50,6 @@ export class HijackState {
    */
   serverRole: string | null = null;
 
-  /** One-shot guard so the wss+token audit warning only fires once per state. */
-  _wssTokenWarned = false;
-
   constructor(config: ResolvedConfig, workerId: string, wsDecoder: ControlChannelDecoder) {
     this.config = config;
     this.workerId = workerId;
