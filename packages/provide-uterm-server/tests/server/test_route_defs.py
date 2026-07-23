@@ -122,7 +122,11 @@ def test_registers_selected_route_defs_with_contract_metadata_and_fastapi_405() 
 
     bind_api_routes(router, _capability_handlers(), selected)
 
-    registered = {(route.path, frozenset(route.methods or ()), route.name) for route in router.routes}
+    registered = {
+        (route.path, frozenset(route.methods or ()), route.name)
+        for route in router.routes
+        if isinstance(route, APIRoute) and route.operation_id in {definition.operation for definition in selected}
+    }
     assert registered == {
         ("/api/sessions", frozenset({"GET"}), "sessions.list"),
         ("/api/sessions", frozenset({"POST"}), "sessions.create"),
@@ -131,8 +135,29 @@ def test_registers_selected_route_defs_with_contract_metadata_and_fastapi_405() 
     app = FastAPI()
     app.include_router(router)
     client = TestClient(app)
-    assert client.put("/api/sessions").status_code == 405
+    wrong_method = client.put("/api/sessions")
+    assert wrong_method.status_code == 405
+    assert wrong_method.headers["Allow"] == "GET, POST"
     assert app.openapi()["paths"]["/api/sessions"]["get"]["operationId"] == "sessions.list"
+
+
+def test_fastapi_adapter_registers_every_shared_route_def_once() -> None:
+    router = create_api_router()
+    registered = {
+        (route.operation_id, next(iter(route.methods or ())), route.path)
+        for route in router.routes
+        if isinstance(route, APIRoute) and route.operation_id in {definition.operation for definition in API_ROUTES}
+    }
+
+    assert registered == {(route.operation, route.method.value, route.template) for route in API_ROUTES}
+
+
+def test_fastapi_adapter_keeps_fastapi_only_routes_outside_shared_inventory() -> None:
+    router = create_api_router()
+    shared_operations = {route.operation for route in API_ROUTES}
+
+    assert "metrics" not in shared_operations
+    assert any(isinstance(route, APIRoute) and route.path == "/api/metrics" for route in router.routes)
 
 
 def test_rejects_missing_registry_capability_before_registering_any_selected_route() -> None:
@@ -175,6 +200,24 @@ def test_rejects_path_parameters_outside_the_shared_route_grammar(session_id: st
     assert TestClient(app).get(f"/api/sessions/{session_id}").status_code == 422
 
 
+def test_fastapi_route_def_errors_preserve_404_405_allow_and_422_contract() -> None:
+    router = APIRouter()
+    selected = tuple(route for route in API_ROUTES if route.operation in {"sessions.list", "sessions.get"})
+    bind_api_routes(router, _capability_handlers(), selected)
+    app = FastAPI()
+    app.include_router(router)
+    client = TestClient(app)
+
+    unknown = client.get("/api/sessions/session-1/nope")
+    wrong_method = client.post("/api/sessions/session-1")
+    invalid_parameter = client.get("/api/sessions/not%20valid")
+
+    assert unknown.status_code == 404
+    assert wrong_method.status_code == 405
+    assert wrong_method.headers["Allow"] == "GET"
+    assert invalid_parameter.status_code == 422
+
+
 def test_requires_a_role_authorizer_before_registering_role_protected_route_defs() -> None:
     router = APIRouter()
     selected = (next(route for route in API_ROUTES if route.operation == "sessions.bulk_delete"),)
@@ -213,6 +256,39 @@ def test_rejects_unauthorized_role_protected_route_before_handler_execution() ->
     assert not called
 
 
+@pytest.mark.parametrize(
+    ("role", "expected_status"),
+    [(None, 403), ("viewer", 403), ("operator", 200), ("admin", 200)],
+)
+def test_fastapi_pam_route_def_enforces_declared_roles(role: str | None, expected_status: int) -> None:
+    called = False
+
+    async def pam_handler() -> dict[str, bool]:
+        nonlocal called
+        called = True
+        return {"ok": True}
+
+    def authorize(request: Request, required_roles: tuple[str, ...]) -> bool:
+        assert required_roles == ("operator", "admin")
+        current_role = request.headers.get("X-Test-Role")
+        return current_role in required_roles
+
+    route = next(route for route in API_ROUTES if route.operation == "pam_events.ingest")
+    router = APIRouter()
+    bind_api_routes(
+        router,
+        _capability_handlers() | {route.capability: pam_handler},
+        (route,),
+        role_authorizer=authorize,
+    )
+    app = FastAPI()
+    app.include_router(router)
+    response = TestClient(app).post(route.template, headers={} if role is None else {"X-Test-Role": role})
+
+    assert response.status_code == expected_status
+    assert called is (expected_status == 200)
+
+
 def test_api_router_binds_shared_session_route_defs_once() -> None:
     from provide.uterm.server.routes.sessions import session_capability_handlers
 
@@ -244,7 +320,9 @@ def test_api_router_binds_shared_profile_route_defs_once() -> None:
         route for route in router.routes if isinstance(route, APIRoute) and route.path.startswith("/api/profiles")
     ]
     registered = {
-        (route.operation_id, route.name, route.path, frozenset(route.methods or ())) for route in profile_routes
+        (route.operation_id, route.name, route.path, frozenset(route.methods or ()))
+        for route in profile_routes
+        if route.operation_id is not None
     }
     assert registered == _EXPECTED_PROFILE_ROUTE_CONTRACT
     for _, _, path, methods in _EXPECTED_PROFILE_ROUTE_CONTRACT:
@@ -284,7 +362,11 @@ def test_api_router_binds_shared_webhook_and_sse_route_defs_once() -> None:
         for route in router.routes
         if isinstance(route, APIRoute) and (route.path.endswith("/events/stream") or "/webhooks" in route.path)
     ]
-    registered = {(route.operation_id, route.name, route.path, frozenset(route.methods or ())) for route in routes}
+    registered = {
+        (route.operation_id, route.name, route.path, frozenset(route.methods or ()))
+        for route in routes
+        if route.operation_id is not None
+    }
     assert registered == _EXPECTED_WEBHOOK_SSE_ROUTE_CONTRACT
     for _, _, path, methods in _EXPECTED_WEBHOOK_SSE_ROUTE_CONTRACT:
         assert sum(route.path == path and route.methods == set(methods) for route in routes) == 1

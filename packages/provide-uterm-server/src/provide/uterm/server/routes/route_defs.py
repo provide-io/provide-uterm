@@ -10,8 +10,9 @@ import inspect
 from typing import TYPE_CHECKING
 
 from fastapi import Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
 
-from provide.uterm.api_routes import API_ROUTE_REGISTRY, API_ROUTES, RouteDef
+from provide.uterm.api_routes import API_ROUTE_REGISTRY, API_ROUTES, HttpMethod, RouteDef
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterable, Mapping
@@ -51,6 +52,27 @@ def bind_api_routes(
             name=route.operation,
             operation_id=route.operation,
             dependencies=[Depends(_route_guard(route, role_authorizer))],
+        )
+
+    # Starlette's default 405 response is emitted by the first partial route
+    # match, so a path with separate RouteDef handlers would otherwise expose
+    # only that first method in ``Allow``.  A final catch-all keeps every
+    # operation independently documented while preserving the registry's full
+    # method contract for unsupported methods.
+    for template in {route.template for route in selected}:
+        selected_methods = tuple(route.method for route in selected if route.template == template)
+        if len(selected_methods) < 2:
+            continue
+        allow = ", ".join(method.value for method in sorted(selected_methods, key=lambda method: method.value))
+
+        async def method_not_allowed(_request: Request, *, allow: str = allow) -> JSONResponse:
+            return JSONResponse({"detail": "Method Not Allowed"}, status_code=405, headers={"Allow": allow})
+
+        router.add_api_route(
+            template,
+            method_not_allowed,
+            methods=[method.value for method in HttpMethod],
+            include_in_schema=False,
         )
 
 
