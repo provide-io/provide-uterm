@@ -154,7 +154,9 @@ async def _wait_for_analysis(runtime: RuntimeProtocol, *, timeout_ms: int = 5_00
 
 def _session_status_item(runtime: RuntimeProtocol) -> dict[str, object]:
     """Build a SessionStatus-compatible dict from the current DO state."""
-    connected = runtime.worker_ws is not None
+    connected = runtime.worker_ws is not None or (
+        getattr(runtime, "_ushell", None) is not None and bool(getattr(runtime, "_ushell_started", False))
+    )
     meta = runtime.meta
     return {
         "session_id": runtime.worker_id,
