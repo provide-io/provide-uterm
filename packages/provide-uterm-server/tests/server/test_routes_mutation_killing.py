@@ -823,7 +823,7 @@ class TestPagesRoutes:
 
 
 # ===========================================================================
-# webhooks.py (routes) — create_webhook_router + accessors
+# webhooks.py (routes) — RouteDef capability handlers + accessors
 # ===========================================================================
 
 
@@ -841,13 +841,15 @@ def _wh_cfg(
 
 
 class TestWebhookRoutes:
-    _REG = "/sessions/{session_id}/webhooks"
-    _DEL = "/sessions/{session_id}/webhooks/{webhook_id}"
+    _REG = "/api/sessions/{session_id}/webhooks"
+    _DEL = "/api/sessions/{session_id}/webhooks/{webhook_id}"
 
     def _router(self) -> APIRouter:
-        from provide.uterm.server.routes.webhooks import create_webhook_router
+        from provide.uterm.server.routes.webhooks import register_webhook_routes
 
-        return create_webhook_router()
+        router = APIRouter()
+        register_webhook_routes(router)
+        return router
 
     def _state(self, *, registry=None, authz=None, principal=None, webhooks=None, hub=None) -> MagicMock:
         app_state = {
@@ -2693,11 +2695,13 @@ class TestApprovalsRoutes:
 
 class TestSseRoutes:
     def _router(self) -> APIRouter:
-        from provide.uterm.server.routes.sse import create_sse_router
+        from provide.uterm.server.routes.sse import register_sse_routes
 
-        return create_sse_router()
+        router = APIRouter()
+        register_sse_routes(router)
+        return router
 
-    _PATH = "/sessions/{session_id}/events/stream"
+    _PATH = "/api/sessions/{session_id}/events/stream"
 
     def test_registry_authz_accessors(self) -> None:
         from provide.uterm.server.routes.sse import _authz, _registry
