@@ -8,6 +8,7 @@ import re
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse
 
 from provide.uterm.api_routes import API_ROUTES, RouteDef
 from provide.uterm.server.routes._helpers import authz, principal, registry
@@ -41,21 +42,25 @@ async def authorize_pam_event_roles(request: Request, required_roles: tuple[str,
 def pam_event_capability_handlers() -> dict[str, Callable[..., object]]:
     """Return the FastAPI handler for the shared ``pam_events.ingest`` capability."""
 
-    async def ingest(request: Request) -> dict[str, object]:
+    async def ingest(request: Request):
         try:
             raw = await request.json()
-        except Exception as exc:
-            raise HTTPException(status_code=400, detail={"error": "invalid_json"}) from exc
+        except Exception:
+            return JSONResponse({"error": "invalid_json"}, status_code=400)
         if not isinstance(raw, dict):
-            raise HTTPException(status_code=400, detail={"error": "invalid_json"})
+            return JSONResponse({"error": "invalid_json"}, status_code=400)
         body: dict[str, Any] = raw
 
         event = str(body.get("event") or "")
         if event not in {"open", "close"}:
-            raise HTTPException(status_code=422, detail={"error": "unknown_event", "event": event})
+            return JSONResponse({"error": "unknown_event"}, status_code=422)
         username = str(body.get("username") or "")
         if not username:
-            raise HTTPException(status_code=422, detail={"error": "missing_username"})
+            return JSONResponse({"error": "missing_username"}, status_code=422)
+
+        p = principal(request)
+        if not await authz(request).can_create_session(p):
+            raise HTTPException(status_code=403, detail="insufficient privileges")
 
         tty = str(body.get("tty") or "")
         session_id = f"pam-{username}-{_tty_slug(tty)}"
