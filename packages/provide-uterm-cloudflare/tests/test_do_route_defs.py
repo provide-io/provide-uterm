@@ -1,0 +1,107 @@
+"""RouteDef dispatch coverage for Durable Object HTTP routes."""
+
+from __future__ import annotations
+
+import json
+from types import SimpleNamespace
+from unittest.mock import patch
+
+import pytest
+from provide.uterm.cloudflare.api.http_routes import route_http
+from provide.uterm.cloudflare.bridge.hijack import HijackCoordinator
+
+
+class _Request:
+    def __init__(self, path: str, method: str = "GET", body: dict[str, object] | None = None) -> None:
+        self.url = f"https://example.invalid{path}"
+        self.method = method
+        self.headers: dict[str, str] = {}
+        self._body = json.dumps(body or {})
+
+
+class _Runtime:
+    def __init__(self) -> None:
+        self.worker_id = "session-1"
+        self.meta = {"visibility": "public", "owner": "owner"}
+        self.worker_ws: object | None = object()
+        self.hijack = HijackCoordinator()
+        self.lifecycle_state = "running"
+        self.input_mode = "open"
+        self.last_snapshot = None
+        self.last_analysis = None
+        self.browser_hijack_owner: dict[str, str] = {}
+        self._deleted_at = None
+        self.actions: list[str] = []
+        self.store = SimpleNamespace(
+            list_events_since=lambda *_args: [{"seq": 2, "type": "snapshot"}],
+            current_event_seq=lambda *_args: 2,
+            min_event_seq=lambda *_args: 1,
+            load_session=lambda *_args: None,
+            save_input_mode=lambda *_args: None,
+        )
+
+    async def request_json(self, request: object) -> dict[str, object]:
+        return json.loads(request._body)
+
+    async def browser_role_for_request(self, _request: object) -> str:
+        return "admin"
+
+    async def browser_subject_for_request(self, _request: object) -> str:
+        return "owner"
+
+    async def push_worker_control(self, action: str, *, owner: str, lease_s: int) -> bool:
+        self.actions.append(action)
+        return self.worker_ws is not None
+
+    async def broadcast_hijack_state(self) -> None:
+        return
+
+    async def send_ws(self, _ws: object, _frame: dict[str, object]) -> None:
+        return
+
+
+async def test_do_route_defs_dispatch_connect_disconnect_and_events_watch() -> None:
+    runtime = _Runtime()
+
+    connect = await route_http(runtime, _Request("/api/sessions/session-1/connect", "POST"))
+    disconnect = await route_http(runtime, _Request("/api/sessions/session-1/disconnect", "POST"))
+    watch = await route_http(runtime, _Request("/api/sessions/session-1/events/watch"))
+
+    assert connect.status == 200
+    assert disconnect.status == 200
+    assert json.loads(watch.body) == {
+        "events": [{"seq": 2, "type": "snapshot"}],
+        "dropped_count": 0,
+        "timed_out": False,
+    }
+
+
+async def test_do_route_defs_preserve_registry_404_405_and_422_errors() -> None:
+    runtime = _Runtime()
+
+    unknown = await route_http(runtime, _Request("/api/sessions/session-1/nope"))
+    wrong_method = await route_http(runtime, _Request("/api/sessions/session-1/events/watch", "POST"))
+    invalid_parameter = await route_http(runtime, _Request("/api/sessions/not%20valid/events/watch"))
+
+    assert unknown.status == 404
+    assert json.loads(unknown.body) == {"error": "not_found", "path": "/api/sessions/session-1/nope"}
+    assert wrong_method.status == 405
+    assert wrong_method.headers["Allow"] == "GET"
+    assert invalid_parameter.status == 422
+    assert json.loads(invalid_parameter.body) == {"error": "invalid route parameter"}
+
+
+async def test_do_never_executes_global_route_defs() -> None:
+    response = await route_http(_Runtime(), _Request("/api/connect", "POST"))
+
+    assert response.status == 404
+
+
+def test_do_route_def_capabilities_cover_only_session_routes() -> None:
+    from provide.uterm.cloudflare.api.http_routes import _session
+
+    _session._validate_session_capabilities()
+
+    with patch.dict(_session.SESSION_CAPABILITIES, {}, clear=True):
+        with pytest.raises(ValueError, match="missing route capabilities"):
+            _session._validate_session_capabilities()
