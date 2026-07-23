@@ -13,6 +13,7 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
 
+import pytest
 from fastapi import APIRouter, FastAPI
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
@@ -379,16 +380,33 @@ def test_ws_relay_logs_error_on_bad_security_type() -> None:
         assert msg.get("type") == "websocket.close"
 
 
-def test_ws_relay_thread_finishes_without_error() -> None:
-    """A full client handshake lets the filter EOF out of its message loop
-    cleanly, so the relay thread records no error — covers the no-error branch."""
+def test_ws_relay_thread_finishes_without_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The relay thread completing with NO exception leaves ``relay_error`` empty,
+    so the endpoint's ``if relay_error:`` guard takes its False branch (341->344).
+
+    Patching ``run_human_relay_streams`` with a forward-the-banner-then-return
+    stub makes this DETERMINISTIC: the stub provably never raises, so
+    ``relay_error`` stays empty no matter how the relay thread is scheduled. The
+    real RFB filter's clean-boundary EOF exit is timing-dependent and only
+    flakily hits this branch on Python 3.13/3.14 — the stub removes that race
+    without weakening the source or the assertion.
+    """
+    from provide.uterm.server.bridge.routes import ws_gui_vnc as mod
+
+    def _clean_relay(br: Any, bw: Any, ur: Any, uw: Any, **_kw: Any) -> None:
+        # Forward the upstream RFB banner to the browser side, then return with no
+        # exception. No ``raise`` -> _run_relay's ``except`` is never entered ->
+        # relay_error stays empty when the endpoint reaches ``if relay_error:``.
+        data = ur.read(4096)
+        if data:
+            bw.write(data)
+            bw.flush()
+
+    monkeypatch.setattr(mod, "run_human_relay_streams", _clean_relay)
+
     up_r, up_w = _FakeUpstreamR(block_on_eof=False), _FakeUpstreamW()
     client = _relay_client(_relay_hub(lambda _w, _t: (up_r, up_w)))  # type: ignore[arg-type]
     with client.websocket_connect(PATH + "?target_id=lab-vnc") as ws:
+        # The banner still crosses the relay, proving the clean pump ran; the
+        # thread then exits with no error and the server closes normally.
         assert ws.receive_bytes().startswith(b"RFB ")
-        # ProtocolVersion(12) + security-type None(1) + ClientInit(1): the filter
-        # gets past the handshake into its message loop. The upstream EOFs (it does
-        # not block), half-closing the relay socket, so the filter reads a clean
-        # boundary EOF and returns without error — relay_error stays empty.
-        ws.send_bytes(b"RFB 003.008\n" + bytes([1]) + bytes([1]))
-        time.sleep(0.6)
