@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import pytest
-from provide.uterm.api_routes import HttpMethod, RouteDef, RouteRegistry, RouteScope
+from provide.uterm.api_routes import API_ROUTE_REGISTRY, API_ROUTES, HttpMethod, RouteDef, RouteRegistry, RouteScope
 
 
 def _route(
@@ -122,3 +122,105 @@ def test_blank_operation_or_capability_is_rejected(field: str, value: str) -> No
 
     with pytest.raises(ValueError, match=field):
         RouteRegistry((_route(**route_kwargs),))
+
+
+def test_shared_route_inventory_includes_required_operations() -> None:
+    expected_routes = (
+        ("sessions.list", "GET", "/api/sessions", "global", "sessions.list", ()),
+        ("sessions.create", "POST", "/api/sessions", "global", "sessions.create", ()),
+        ("sessions.bulk_delete", "DELETE", "/api/sessions", "global", "sessions.bulk_delete", ()),
+        ("sessions.get", "GET", "/api/sessions/{session_id}", "session", "sessions.get", ()),
+        ("sessions.update", "PATCH", "/api/sessions/{session_id}", "session", "sessions.update", ()),
+        ("sessions.delete", "DELETE", "/api/sessions/{session_id}", "session", "sessions.delete", ()),
+        ("sessions.connect", "POST", "/api/sessions/{session_id}/connect", "session", "sessions.connect", ()),
+        ("sessions.disconnect", "POST", "/api/sessions/{session_id}/disconnect", "session", "sessions.disconnect", ()),
+        ("sessions.restart", "POST", "/api/sessions/{session_id}/restart", "session", "sessions.restart", ()),
+        ("sessions.set_mode", "POST", "/api/sessions/{session_id}/mode", "session", "sessions.set_mode", ()),
+        ("sessions.clear", "POST", "/api/sessions/{session_id}/clear", "session", "sessions.clear", ()),
+        ("sessions.annotate", "POST", "/api/sessions/{session_id}/annotate", "session", "sessions.annotate", ()),
+        ("sessions.analyze", "POST", "/api/sessions/{session_id}/analyze", "session", "sessions.analyze", ()),
+        ("sessions.snapshot", "GET", "/api/sessions/{session_id}/snapshot", "session", "sessions.snapshot", ()),
+        ("sessions.events", "GET", "/api/sessions/{session_id}/events", "session", "sessions.events", ()),
+        (
+            "sessions.events_watch",
+            "GET",
+            "/api/sessions/{session_id}/events/watch",
+            "session",
+            "sessions.events_watch",
+            (),
+        ),
+        (
+            "sessions.events_stream",
+            "GET",
+            "/api/sessions/{session_id}/events/stream",
+            "session",
+            "sessions.events_stream",
+            (),
+        ),
+        ("sessions.recording", "GET", "/api/sessions/{session_id}/recording", "session", "sessions.recording", ()),
+        (
+            "sessions.recording_entries",
+            "GET",
+            "/api/sessions/{session_id}/recording/entries",
+            "session",
+            "sessions.recording_entries",
+            (),
+        ),
+        (
+            "sessions.recording_download",
+            "GET",
+            "/api/sessions/{session_id}/recording/download",
+            "session",
+            "sessions.recording_download",
+            (),
+        ),
+        (
+            "sessions.webhooks.create",
+            "POST",
+            "/api/sessions/{session_id}/webhooks",
+            "session",
+            "sessions.webhooks.create",
+            (),
+        ),
+        (
+            "sessions.webhooks.list",
+            "GET",
+            "/api/sessions/{session_id}/webhooks",
+            "session",
+            "sessions.webhooks.list",
+            (),
+        ),
+        (
+            "sessions.webhooks.delete",
+            "DELETE",
+            "/api/sessions/{session_id}/webhooks/{webhook_id}",
+            "session",
+            "sessions.webhooks.delete",
+            (),
+        ),
+        ("tunnels.connect", "POST", "/api/connect", "global", "tunnels.connect", ()),
+        ("tunnels.create", "POST", "/api/tunnels", "global", "tunnels.create", ()),
+        ("tunnels.revoke_token", "DELETE", "/api/tunnels/{tunnel_id}/tokens", "global", "tunnels.revoke_token", ()),
+        (
+            "tunnels.rotate_token",
+            "POST",
+            "/api/tunnels/{tunnel_id}/tokens/rotate",
+            "global",
+            "tunnels.rotate_token",
+            (),
+        ),
+        ("pam_events.ingest", "POST", "/api/pam-events", "global", "pam_events.ingest", ("operator", "admin")),
+        ("profiles.list", "GET", "/api/profiles", "global", "profiles.list", ()),
+        ("profiles.create", "POST", "/api/profiles", "global", "profiles.create", ()),
+        ("profiles.get", "GET", "/api/profiles/{profile_id}", "global", "profiles.get", ()),
+        ("profiles.update", "PUT", "/api/profiles/{profile_id}", "global", "profiles.update", ()),
+        ("profiles.delete", "DELETE", "/api/profiles/{profile_id}", "global", "profiles.delete", ()),
+        ("profiles.connect", "POST", "/api/profiles/{profile_id}/connect", "global", "profiles.connect", ()),
+    )
+
+    actual_routes = tuple(
+        (route.operation, route.method.value, route.template, route.scope.value, route.capability, route.roles)
+        for route in API_ROUTE_REGISTRY.routes
+    )
+    assert actual_routes == expected_routes
+    assert API_ROUTE_REGISTRY.routes == API_ROUTES

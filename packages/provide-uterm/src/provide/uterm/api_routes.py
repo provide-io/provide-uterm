@@ -197,3 +197,195 @@ def _compile_template(template: str) -> re.Pattern[str]:
         else:
             parts.append(re.escape(segment))
     return re.compile("^/" + "/".join(parts) + "$")
+
+
+# This is the HTTP/JSON surface shared by the FastAPI and Cloudflare
+# backends.  Runtime-native operational endpoints deliberately do not appear
+# here; adapters use this inventory as their common contract.
+API_ROUTES: tuple[RouteDef, ...] = (
+    RouteDef("sessions.list", HttpMethod.GET, "/api/sessions", RouteScope.GLOBAL, "sessions.list", ()),
+    RouteDef("sessions.create", HttpMethod.POST, "/api/sessions", RouteScope.GLOBAL, "sessions.create", ()),
+    RouteDef("sessions.bulk_delete", HttpMethod.DELETE, "/api/sessions", RouteScope.GLOBAL, "sessions.bulk_delete", ()),
+    RouteDef("sessions.get", HttpMethod.GET, "/api/sessions/{session_id}", RouteScope.SESSION, "sessions.get", ()),
+    RouteDef(
+        "sessions.update", HttpMethod.PATCH, "/api/sessions/{session_id}", RouteScope.SESSION, "sessions.update", ()
+    ),
+    RouteDef(
+        "sessions.delete", HttpMethod.DELETE, "/api/sessions/{session_id}", RouteScope.SESSION, "sessions.delete", ()
+    ),
+    RouteDef(
+        "sessions.connect",
+        HttpMethod.POST,
+        "/api/sessions/{session_id}/connect",
+        RouteScope.SESSION,
+        "sessions.connect",
+        (),
+    ),
+    RouteDef(
+        "sessions.disconnect",
+        HttpMethod.POST,
+        "/api/sessions/{session_id}/disconnect",
+        RouteScope.SESSION,
+        "sessions.disconnect",
+        (),
+    ),
+    RouteDef(
+        "sessions.restart",
+        HttpMethod.POST,
+        "/api/sessions/{session_id}/restart",
+        RouteScope.SESSION,
+        "sessions.restart",
+        (),
+    ),
+    RouteDef(
+        "sessions.set_mode",
+        HttpMethod.POST,
+        "/api/sessions/{session_id}/mode",
+        RouteScope.SESSION,
+        "sessions.set_mode",
+        (),
+    ),
+    RouteDef(
+        "sessions.clear", HttpMethod.POST, "/api/sessions/{session_id}/clear", RouteScope.SESSION, "sessions.clear", ()
+    ),
+    RouteDef(
+        "sessions.annotate",
+        HttpMethod.POST,
+        "/api/sessions/{session_id}/annotate",
+        RouteScope.SESSION,
+        "sessions.annotate",
+        (),
+    ),
+    RouteDef(
+        "sessions.analyze",
+        HttpMethod.POST,
+        "/api/sessions/{session_id}/analyze",
+        RouteScope.SESSION,
+        "sessions.analyze",
+        (),
+    ),
+    RouteDef(
+        "sessions.snapshot",
+        HttpMethod.GET,
+        "/api/sessions/{session_id}/snapshot",
+        RouteScope.SESSION,
+        "sessions.snapshot",
+        (),
+    ),
+    RouteDef(
+        "sessions.events",
+        HttpMethod.GET,
+        "/api/sessions/{session_id}/events",
+        RouteScope.SESSION,
+        "sessions.events",
+        (),
+    ),
+    RouteDef(
+        "sessions.events_watch",
+        HttpMethod.GET,
+        "/api/sessions/{session_id}/events/watch",
+        RouteScope.SESSION,
+        "sessions.events_watch",
+        (),
+    ),
+    RouteDef(
+        "sessions.events_stream",
+        HttpMethod.GET,
+        "/api/sessions/{session_id}/events/stream",
+        RouteScope.SESSION,
+        "sessions.events_stream",
+        (),
+    ),
+    RouteDef(
+        "sessions.recording",
+        HttpMethod.GET,
+        "/api/sessions/{session_id}/recording",
+        RouteScope.SESSION,
+        "sessions.recording",
+        (),
+    ),
+    RouteDef(
+        "sessions.recording_entries",
+        HttpMethod.GET,
+        "/api/sessions/{session_id}/recording/entries",
+        RouteScope.SESSION,
+        "sessions.recording_entries",
+        (),
+    ),
+    RouteDef(
+        "sessions.recording_download",
+        HttpMethod.GET,
+        "/api/sessions/{session_id}/recording/download",
+        RouteScope.SESSION,
+        "sessions.recording_download",
+        (),
+    ),
+    RouteDef(
+        "sessions.webhooks.create",
+        HttpMethod.POST,
+        "/api/sessions/{session_id}/webhooks",
+        RouteScope.SESSION,
+        "sessions.webhooks.create",
+        (),
+    ),
+    RouteDef(
+        "sessions.webhooks.list",
+        HttpMethod.GET,
+        "/api/sessions/{session_id}/webhooks",
+        RouteScope.SESSION,
+        "sessions.webhooks.list",
+        (),
+    ),
+    RouteDef(
+        "sessions.webhooks.delete",
+        HttpMethod.DELETE,
+        "/api/sessions/{session_id}/webhooks/{webhook_id}",
+        RouteScope.SESSION,
+        "sessions.webhooks.delete",
+        (),
+    ),
+    RouteDef("tunnels.connect", HttpMethod.POST, "/api/connect", RouteScope.GLOBAL, "tunnels.connect", ()),
+    RouteDef("tunnels.create", HttpMethod.POST, "/api/tunnels", RouteScope.GLOBAL, "tunnels.create", ()),
+    RouteDef(
+        "tunnels.revoke_token",
+        HttpMethod.DELETE,
+        "/api/tunnels/{tunnel_id}/tokens",
+        RouteScope.GLOBAL,
+        "tunnels.revoke_token",
+        (),
+    ),
+    RouteDef(
+        "tunnels.rotate_token",
+        HttpMethod.POST,
+        "/api/tunnels/{tunnel_id}/tokens/rotate",
+        RouteScope.GLOBAL,
+        "tunnels.rotate_token",
+        (),
+    ),
+    RouteDef(
+        "pam_events.ingest",
+        HttpMethod.POST,
+        "/api/pam-events",
+        RouteScope.GLOBAL,
+        "pam_events.ingest",
+        ("operator", "admin"),
+    ),
+    RouteDef("profiles.list", HttpMethod.GET, "/api/profiles", RouteScope.GLOBAL, "profiles.list", ()),
+    RouteDef("profiles.create", HttpMethod.POST, "/api/profiles", RouteScope.GLOBAL, "profiles.create", ()),
+    RouteDef("profiles.get", HttpMethod.GET, "/api/profiles/{profile_id}", RouteScope.GLOBAL, "profiles.get", ()),
+    RouteDef("profiles.update", HttpMethod.PUT, "/api/profiles/{profile_id}", RouteScope.GLOBAL, "profiles.update", ()),
+    RouteDef(
+        "profiles.delete", HttpMethod.DELETE, "/api/profiles/{profile_id}", RouteScope.GLOBAL, "profiles.delete", ()
+    ),
+    RouteDef(
+        "profiles.connect",
+        HttpMethod.POST,
+        "/api/profiles/{profile_id}/connect",
+        RouteScope.GLOBAL,
+        "profiles.connect",
+        (),
+    ),
+)
+
+
+API_ROUTE_REGISTRY = RouteRegistry(API_ROUTES)
