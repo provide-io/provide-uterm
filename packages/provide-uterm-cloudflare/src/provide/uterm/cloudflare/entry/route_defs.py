@@ -142,7 +142,12 @@ async def dispatch_api_route(request: object, env: object, config: CloudflareCon
         namespace = getattr(env, "SESSION_RUNTIME", None)
         if namespace is None:
             return json_response({"error": "SESSION_RUNTIME binding missing"}, status=500)
-        return await namespace.get(namespace.idFromName(match.params["session_id"])).fetch(request)
+        response = await namespace.get(namespace.idFromName(match.params["session_id"])).fetch(request)
+        if match.route.capability == "sessions.delete" and 200 <= response.status < 300:
+            from provide.uterm.cloudflare.state.registry import delete_kv_session
+
+            await delete_kv_session(env, match.params["session_id"])
+        return response
     return await GLOBAL_CAPABILITIES[match.route.capability](request, env, config, match.params)
 
 

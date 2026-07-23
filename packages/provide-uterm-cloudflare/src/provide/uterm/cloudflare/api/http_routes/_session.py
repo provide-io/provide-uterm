@@ -239,6 +239,11 @@ async def _disconnect(
         getattr(runtime, "env", None),
         runtime.worker_id,
         connected=False,
+        remove_offline=False,
+        hijacked=runtime.hijack.session is not None,
+        input_mode=runtime.input_mode,
+        recording_available=runtime.store.current_event_seq(runtime.worker_id) > 0,
+        meta=runtime.meta,
     )
     return json_response(_session_status_item(runtime))
 

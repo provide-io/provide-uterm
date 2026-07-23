@@ -1,7 +1,7 @@
 """HTTP API request handlers and the route dispatcher.
 
 Exposes the per-route async handlers (``_handle_sessions``,
-``_handle_connect``, ``_handle_session_delete``), the lightweight ``_api_*``
+``_handle_connect``), the lightweight ``_api_*``
 indirection used by the RouteDef capability map, and the top-level
 ``_route_request`` entry point used by ``Default.fetch``.
 """
@@ -139,34 +139,6 @@ async def _handle_connect(request: object, env: object, config: CloudflareConfig
         return json_response({"error": "SESSION_REGISTRY not configured"}, status=500)
     await kv.put(f"session:{session_id}", _json.dumps({**entry, "hijacked": False}))
     return json_response({**entry, "url": f"/app/session/{session_id}"})
-
-
-async def _handle_session_delete(request: object, env: object, sid: str, config: CloudflareConfig) -> Response:
-    """Handle DELETE /api/sessions/{id}."""
-    principal = await _decode_jwt_principal(request, config)
-    if principal is not None:
-        # In JWT mode, verify the caller is the session owner or an admin.
-        # KV is the auth source — a missing row means the session doesn't exist;
-        # fail closed with 404 rather than letting the delete proceed unauthenticated.
-        session_data = await _entry_attr("get_kv_session")(env, sid)
-        if session_data is None:
-            return json_response({"error": "not_found"}, status=404)
-        session_owner = session_data.get("owner")
-        is_admin = "admin" in principal.roles
-        is_owner = session_owner is not None and principal.subject_id == session_owner
-        if not is_admin and not is_owner:
-            return json_response({"error": "forbidden"}, status=403)
-    # Attempt DO cleanup before removing the KV entry so a failed DO cleanup
-    # doesn't orphan a live DO while the session disappears from all API views.
-    namespace = getattr(env, "SESSION_RUNTIME", None)
-    if namespace is not None:
-        try:
-            stub = namespace.get(namespace.idFromName(sid))
-            await stub.fetch(request)
-        except Exception as _exc:
-            return json_response({"error": "do_cleanup_failed", "detail": str(_exc)}, status=500)
-    await _entry_attr("delete_kv_session")(env, sid)
-    return json_response({"ok": True, "session_id": sid, "deleted": True})
 
 
 async def _route_request(request: object, env: object, config: CloudflareConfig) -> Response:
@@ -335,7 +307,6 @@ __all__ = [
     "_api_tunnel_rotate",
     "_api_tunnels",
     "_handle_connect",
-    "_handle_session_delete",
     "_handle_sessions",
     "_route_request",
 ]
