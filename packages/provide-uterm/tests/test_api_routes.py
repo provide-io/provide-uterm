@@ -128,7 +128,7 @@ def test_shared_route_inventory_includes_required_operations() -> None:
     expected_routes = (
         ("sessions.list", "GET", "/api/sessions", "global", "sessions.list", ()),
         ("sessions.create", "POST", "/api/sessions", "global", "sessions.create", ()),
-        ("sessions.bulk_delete", "DELETE", "/api/sessions", "global", "sessions.bulk_delete", ()),
+        ("sessions.bulk_delete", "DELETE", "/api/sessions", "global", "sessions.bulk_delete", ("admin",)),
         ("sessions.get", "GET", "/api/sessions/{session_id}", "session", "sessions.get", ()),
         ("sessions.update", "PATCH", "/api/sessions/{session_id}", "session", "sessions.update", ()),
         ("sessions.delete", "DELETE", "/api/sessions/{session_id}", "session", "sessions.delete", ()),
