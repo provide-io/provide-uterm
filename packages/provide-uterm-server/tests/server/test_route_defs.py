@@ -59,6 +59,25 @@ _EXPECTED_PROFILE_ROUTE_CONTRACT = frozenset(
     }
 )
 
+_EXPECTED_TUNNEL_ROUTE_CONTRACT = frozenset(
+    {
+        ("tunnels.connect", "tunnels.connect", "/api/connect", frozenset({"POST"})),
+        ("tunnels.create", "tunnels.create", "/api/tunnels", frozenset({"POST"})),
+        (
+            "tunnels.revoke_token",
+            "tunnels.revoke_token",
+            "/api/tunnels/{tunnel_id}/tokens",
+            frozenset({"DELETE"}),
+        ),
+        (
+            "tunnels.rotate_token",
+            "tunnels.rotate_token",
+            "/api/tunnels/{tunnel_id}/tokens/rotate",
+            frozenset({"POST"}),
+        ),
+    }
+)
+
 
 async def _handler() -> dict[str, bool]:
     return {"ok": True}
@@ -205,6 +224,38 @@ def test_api_router_binds_shared_profile_route_defs_once() -> None:
         assert sum(route.path == path and route.methods == set(methods) for route in profile_routes) == 1
 
 
+def test_api_router_binds_shared_tunnel_route_defs_once() -> None:
+    from provide.uterm.server.routes.tunnels import tunnel_capability_handlers
+
+    expected_capabilities = {capability for _, capability, _, _ in _EXPECTED_TUNNEL_ROUTE_CONTRACT}
+    assert set(tunnel_capability_handlers()) == expected_capabilities
+
+    router = create_api_router()
+    tunnel_routes = [
+        route
+        for route in router.routes
+        if isinstance(route, APIRoute) and (route.path == "/api/connect" or route.path.startswith("/api/tunnels"))
+    ]
+    registered = {
+        (route.operation_id, route.name, route.path, frozenset(route.methods or ())) for route in tunnel_routes
+    }
+    assert registered == _EXPECTED_TUNNEL_ROUTE_CONTRACT
+    for _, _, path, methods in _EXPECTED_TUNNEL_ROUTE_CONTRACT:
+        assert sum(route.path == path and route.methods == set(methods) for route in tunnel_routes) == 1
+
+
+def test_tunnel_route_adapter_rejects_invalid_tunnel_id() -> None:
+    router = APIRouter()
+    selected = (next(route for route in API_ROUTES if route.operation == "tunnels.revoke_token"),)
+    bind_api_routes(router, _capability_handlers(), selected)
+
+    app = FastAPI()
+    app.include_router(router)
+    response = TestClient(app).delete("/api/tunnels/bad.dot/tokens")
+
+    assert response.status_code == 422
+
+
 async def test_profile_capability_handlers_deny_viewer_create_and_connect() -> None:
     """Profile RouteDef handlers preserve the existing write authorization policy."""
     from provide.uterm.server.routes.profiles import profile_capability_handlers
@@ -233,6 +284,25 @@ async def test_profile_capability_handlers_deny_viewer_create_and_connect() -> N
     assert connect_error.value.status_code == 403
     authorization.can_read_profile.assert_awaited_once_with(principal, profile)
     assert authorization.can_create_session.await_count == 2
+
+
+@pytest.mark.parametrize("capability", ["tunnels.connect", "tunnels.create"])
+async def test_tunnel_capability_handlers_deny_viewer_creation(capability: str) -> None:
+    """Tunnel creation RouteDef handlers preserve the existing write authorization policy."""
+    from provide.uterm.server.routes.tunnels import tunnel_capability_handlers
+
+    handlers = tunnel_capability_handlers()
+    request = SimpleNamespace(
+        state=SimpleNamespace(uterm_principal=SimpleNamespace(subject_id="viewer", roles=frozenset({"viewer"}))),
+        app=SimpleNamespace(state=SimpleNamespace(uterm_authz=MagicMock())),
+    )
+    request.app.state.uterm_authz.can_create_session = AsyncMock(return_value=False)
+
+    with pytest.raises(HTTPException, match="insufficient privileges") as error:
+        await handlers[capability](request, {})
+
+    assert error.value.status_code == 403
+    request.app.state.uterm_authz.can_create_session.assert_awaited_once_with(request.state.uterm_principal)
 
 
 async def test_bulk_delete_role_authorizer_uses_existing_admin_policy() -> None:

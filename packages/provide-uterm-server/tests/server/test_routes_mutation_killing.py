@@ -2867,13 +2867,13 @@ class TestSessionRouteCapabilities:
         assert "sessions.events_watch" in handlers
 
 
-class TestTunnelsRouter:
-    def test_returns_router_with_routes(self) -> None:
-        from provide.uterm.server.routes.tunnels import create_tunnels_router
+class TestTunnelRouteCapabilities:
+    def test_returns_shared_tunnel_capability_handlers(self) -> None:
+        from provide.uterm.server.routes.tunnels import tunnel_capability_handlers
 
-        router = create_tunnels_router()  # mutant `router = None` → AttributeError
-        assert isinstance(router, APIRouter)
-        assert "/connect" in _paths(router)
+        handlers = tunnel_capability_handlers()
+        assert "tunnels.connect" in handlers
+        assert "tunnels.rotate_token" in handlers
 
     def test_scrub_sensitive_masks_only_sensitive_keys(self) -> None:
         from provide.uterm.server.routes.tunnels import _scrub_sensitive
