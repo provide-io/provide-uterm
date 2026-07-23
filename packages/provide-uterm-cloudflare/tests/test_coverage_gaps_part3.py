@@ -164,11 +164,33 @@ class TestEntryDispatchGaps:
         assert resp.status == 404
 
     async def test_share_redirect_with_invite_but_no_runtime_is_not_found(self) -> None:
-        """An invite cannot redeem when the session DO binding is unavailable."""
-        d = _make_dev_default(SESSION_REGISTRY=MagicMock())
+        """An invite cannot fall back to Worker KV when the DO is unavailable."""
+        import json
+
+        from provide.uterm.tunnel.token_hash import hash_token
+
+        kv = SimpleNamespace(
+            get=AsyncMock(
+                return_value=json.dumps(
+                    {
+                        "expires_at": __import__("time").time() + 300,
+                        "share_token_hash": hash_token("share-token"),
+                        "share_invite_hash": hash_token("invite-token"),
+                        "share_invite_token": "share-token",
+                        "share_invite_expires_at": __import__("time").time() + 300,
+                    }
+                )
+            )
+        )
+        d = _make_dev_default(SESSION_REGISTRY=kv)
         req = _req("/s/missing-runtime?invite=abc")
-        resp = await d.fetch(req)
+        with patch(
+            "provide.uterm.cloudflare.api._tunnel_api.resolve_share_context",
+            new=AsyncMock(return_value=None),
+        ):
+            resp = await d.fetch(req)
         assert resp.status == 404
+        kv.get.assert_not_awaited()
 
     async def test_share_redirect_kv_exception_is_not_found(self) -> None:
         """Short-share KV lookup failure must not expose a guessed app URL."""
