@@ -11,7 +11,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from fastapi import APIRouter, FastAPI, Request
+from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
@@ -40,6 +40,22 @@ _EXPECTED_SESSION_ROUTE_CONTRACT = frozenset(
         ("sessions.recording", "sessions.recording"),
         ("sessions.recording_entries", "sessions.recording_entries"),
         ("sessions.recording_download", "sessions.recording_download"),
+    }
+)
+
+_EXPECTED_PROFILE_ROUTE_CONTRACT = frozenset(
+    {
+        ("profiles.list", "profiles.list", "/api/profiles", frozenset({"GET"})),
+        ("profiles.create", "profiles.create", "/api/profiles", frozenset({"POST"})),
+        ("profiles.get", "profiles.get", "/api/profiles/{profile_id}", frozenset({"GET"})),
+        ("profiles.update", "profiles.update", "/api/profiles/{profile_id}", frozenset({"PUT"})),
+        ("profiles.delete", "profiles.delete", "/api/profiles/{profile_id}", frozenset({"DELETE"})),
+        (
+            "profiles.connect",
+            "profiles.connect",
+            "/api/profiles/{profile_id}/connect",
+            frozenset({"POST"}),
+        ),
     }
 )
 
@@ -169,6 +185,54 @@ def test_api_router_binds_shared_session_route_defs_once() -> None:
     assert sum(route.path == "/api/sessions" and route.methods == {"GET"} for route in session_routes) == 1
     assert sum(route.path == "/api/sessions" and route.methods == {"POST"} for route in session_routes) == 1
     assert sum(route.path == "/api/sessions" and route.methods == {"DELETE"} for route in session_routes) == 1
+
+
+def test_api_router_binds_shared_profile_route_defs_once() -> None:
+    from provide.uterm.server.routes.profiles import profile_capability_handlers
+
+    expected_capabilities = {capability for _, capability, _, _ in _EXPECTED_PROFILE_ROUTE_CONTRACT}
+    assert set(profile_capability_handlers()) == expected_capabilities
+
+    router = create_api_router()
+    profile_routes = [
+        route for route in router.routes if isinstance(route, APIRoute) and route.path.startswith("/api/profiles")
+    ]
+    registered = {
+        (route.operation_id, route.name, route.path, frozenset(route.methods or ())) for route in profile_routes
+    }
+    assert registered == _EXPECTED_PROFILE_ROUTE_CONTRACT
+    for _, _, path, methods in _EXPECTED_PROFILE_ROUTE_CONTRACT:
+        assert sum(route.path == path and route.methods == set(methods) for route in profile_routes) == 1
+
+
+async def test_profile_capability_handlers_deny_viewer_create_and_connect() -> None:
+    """Profile RouteDef handlers preserve the existing write authorization policy."""
+    from provide.uterm.server.routes.profiles import profile_capability_handlers
+
+    handlers = profile_capability_handlers()
+    principal = SimpleNamespace(subject_id="viewer", roles=frozenset({"viewer"}))
+    authorization = MagicMock()
+    authorization.can_create_session = AsyncMock(return_value=False)
+    authorization.can_read_profile = AsyncMock(return_value=True)
+    profile = MagicMock()
+    store = MagicMock()
+    store.get_profile = AsyncMock(return_value=profile)
+    request = SimpleNamespace(
+        state=SimpleNamespace(uterm_principal=principal),
+        app=SimpleNamespace(
+            state=SimpleNamespace(uterm_authz=authorization, uterm_profile_store=store, uterm_registry=MagicMock())
+        ),
+    )
+
+    with pytest.raises(HTTPException, match="insufficient privileges") as create_error:
+        await handlers["profiles.create"](request, {})
+    assert create_error.value.status_code == 403
+
+    with pytest.raises(HTTPException, match="insufficient privileges") as connect_error:
+        await handlers["profiles.connect"](request, "shared-profile", {})
+    assert connect_error.value.status_code == 403
+    authorization.can_read_profile.assert_awaited_once_with(principal, profile)
+    assert authorization.can_create_session.await_count == 2
 
 
 async def test_bulk_delete_role_authorizer_uses_existing_admin_policy() -> None:
