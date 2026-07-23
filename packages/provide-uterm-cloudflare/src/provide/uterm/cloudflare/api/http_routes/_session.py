@@ -211,7 +211,9 @@ async def _connect(
     # A Durable Object cannot start an external connector process. Its ushell
     # connector starts only on browser attachment, so neither case is a
     # successful replacement for FastAPI's start_session().
-    if runtime.worker_ws is None:
+    if runtime.worker_ws is None and not (
+        getattr(runtime, "_ushell", None) is not None and bool(getattr(runtime, "_ushell_started", False))
+    ):
         return json_response({"error": "no_worker"}, status=409)
     runtime.lifecycle_state = "running"
     return json_response(_session_status_item(runtime))
@@ -227,6 +229,11 @@ async def _disconnect(
         with contextlib.suppress(Exception):
             worker_ws.close(1001, "disconnect requested")
         runtime.worker_ws = None
+    ushell = getattr(runtime, "_ushell", None)
+    if ushell is not None and bool(getattr(runtime, "_ushell_started", False)):
+        with contextlib.suppress(Exception):
+            await ushell.stop()
+        runtime._ushell_started = False
     runtime.lifecycle_state = "stopped"
     return json_response(_session_status_item(runtime))
 

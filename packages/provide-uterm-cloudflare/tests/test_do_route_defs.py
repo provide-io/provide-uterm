@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from provide.uterm.cloudflare.api.http_routes import route_http
@@ -87,6 +87,34 @@ async def test_connect_does_not_claim_an_unstarted_ushell_is_connected() -> None
 
     assert response.status == 409
     assert json.loads(response.body) == {"error": "no_worker"}
+
+
+async def test_started_ushell_is_connected_and_connect_is_idempotent() -> None:
+    runtime = _Runtime()
+    runtime.worker_ws = None
+    runtime._ushell = SimpleNamespace(stop=AsyncMock())
+    runtime._ushell_started = True
+
+    status = await route_http(runtime, _Request("/api/sessions/session-1"))
+    connect = await route_http(runtime, _Request("/api/sessions/session-1/connect", "POST"))
+
+    assert json.loads(status.body)["connected"] is True
+    assert connect.status == 200
+    assert json.loads(connect.body)["connected"] is True
+
+
+async def test_disconnect_stops_started_ushell_and_reflects_stopped_state() -> None:
+    runtime = _Runtime()
+    runtime.worker_ws = None
+    runtime._ushell = SimpleNamespace(stop=AsyncMock())
+    runtime._ushell_started = True
+
+    response = await route_http(runtime, _Request("/api/sessions/session-1/disconnect", "POST"))
+
+    runtime._ushell.stop.assert_awaited_once_with()
+    assert runtime._ushell_started is False
+    assert runtime.lifecycle_state == "stopped"
+    assert json.loads(response.body)["connected"] is False
 
 
 class _Kv:
