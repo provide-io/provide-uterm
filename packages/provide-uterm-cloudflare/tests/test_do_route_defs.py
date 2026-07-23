@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from provide.uterm.api_routes import API_ROUTES, RouteScope
@@ -205,9 +205,20 @@ async def test_deleted_runtime_alarm_does_not_recreate_fleet_kv_or_reschedule() 
     from provide.uterm.cloudflare.do.session_runtime.io import _SessionRuntimeIoMixin
 
     runtime = _persistent_runtime()
+    set_alarm = Mock()
+    runtime.ctx = SimpleNamespace(storage=SimpleNamespace(setAlarm=set_alarm))
+    runtime.browser_sockets = {"browser": object()}
+    runtime.raw_sockets = {"raw": object()}
+    runtime._ushell = SimpleNamespace(stop=AsyncMock())
+    runtime._ushell_started = True
 
     deleted = await route_http(runtime, _Request("/api/sessions/session-1", "DELETE"))
     assert deleted.status == 200
+    runtime._ushell.stop.assert_awaited_once_with()
+    assert runtime.worker_ws is None
+    assert runtime.browser_sockets == {}
+    assert runtime.raw_sockets == {}
+    assert runtime._ushell_started is False
     # The Worker boundary removes the fleet record after this successful DO
     # response; alarm must not recreate it from stale in-memory socket state.
     runtime.env.SESSION_REGISTRY.values.pop("session:session-1")
@@ -215,6 +226,7 @@ async def test_deleted_runtime_alarm_does_not_recreate_fleet_kv_or_reschedule() 
     await _SessionRuntimeIoMixin.alarm(runtime)
 
     assert "session:session-1" not in runtime.env.SESSION_REGISTRY.values
+    set_alarm.assert_not_called()
 
 
 class _Kv:
