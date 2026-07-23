@@ -74,6 +74,10 @@ GLOBAL_CAPABILITIES: dict[str, GlobalHandler] = {
 
 
 def _validate_global_capabilities() -> None:
+    session_capabilities = {route.capability for route in API_ROUTES if route.scope is RouteScope.SESSION}
+    if session_capabilities & set(GLOBAL_CAPABILITIES):
+        msg = "session RouteDef capability registered in Worker"
+        raise ValueError(msg)
     missing = sorted(
         {route.capability for route in API_ROUTES if route.scope is RouteScope.GLOBAL} - set(GLOBAL_CAPABILITIES)
     )

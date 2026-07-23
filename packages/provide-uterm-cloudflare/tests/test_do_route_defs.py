@@ -262,3 +262,11 @@ def test_do_route_def_capabilities_cover_only_session_routes() -> None:
     with patch.dict(_session.SESSION_CAPABILITIES, {}, clear=True):
         with pytest.raises(ValueError, match="missing route capabilities"):
             _session._validate_session_capabilities()
+
+
+def test_do_route_def_capability_validation_rejects_global_handler() -> None:
+    from provide.uterm.cloudflare.api.http_routes import _session
+
+    with patch.dict(_session.SESSION_CAPABILITIES, {"sessions.list": AsyncMock()}):
+        with pytest.raises(ValueError, match="global RouteDef capability registered in Durable Object"):
+            _session._validate_session_capabilities()

@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from provide.uterm.api_routes import API_ROUTES, RouteScope
 from provide.uterm.cloudflare.config import CloudflareConfig
 
 
@@ -24,24 +25,52 @@ def _config() -> CloudflareConfig:
     return config
 
 
-async def test_session_route_defs_proxy_connect_disconnect_and_events_watch() -> None:
-    """Every session-scoped RouteDef is routed to the named Durable Object."""
+async def test_worker_proxies_every_session_route_def_to_the_named_durable_object() -> None:
+    """Every documented session RouteDef is forwarded unchanged to its Durable Object."""
     from provide.uterm.cloudflare.entry.handlers import _route_request
 
     stub = SimpleNamespace(fetch=AsyncMock(return_value=SimpleNamespace(status=200, body="ok")))
     namespace = SimpleNamespace(idFromName=lambda session_id: f"do:{session_id}", get=lambda _id: stub)
     env = SimpleNamespace(SESSION_RUNTIME=namespace)
 
-    for suffix in ("connect", "disconnect", "events/watch"):
+    session_routes = tuple(route for route in API_ROUTES if route.scope is RouteScope.SESSION)
+    for route in session_routes:
         response = await _route_request(
-            _request(f"/api/sessions/session-1/{suffix}", "POST" if suffix != "events/watch" else "GET"),
+            _request(
+                route.template.replace("{session_id}", "session-1").replace("{webhook_id}", "webhook-1"), route.method
+            ),
             env,
             _config(),
         )
         assert response.status == 200
 
     assert namespace.idFromName("session-1") == "do:session-1"
-    assert stub.fetch.await_count == 3
+    assert stub.fetch.await_count == len(session_routes)
+
+
+async def test_worker_dispatches_every_global_route_def_through_its_declared_capability() -> None:
+    import provide.uterm.cloudflare.entry.route_defs as route_defs
+
+    global_routes = tuple(route for route in API_ROUTES if route.scope is RouteScope.GLOBAL)
+    handlers = {
+        route.capability: AsyncMock(return_value=SimpleNamespace(status=200, body="ok")) for route in global_routes
+    }
+
+    with patch.dict(route_defs.GLOBAL_CAPABILITIES, handlers, clear=True):
+        for route in global_routes:
+            response = await route_defs.dispatch_api_route(
+                _request(
+                    route.template.replace("{tunnel_id}", "tunnel-1").replace("{profile_id}", "profile-1"), route.method
+                ),
+                SimpleNamespace(),
+                _config(),
+                route.template.replace("{tunnel_id}", "tunnel-1").replace("{profile_id}", "profile-1"),
+            )
+            assert response is not None
+            assert response.status == 200
+
+    assert {route.capability for route in global_routes} == set(handlers)
+    assert all(handler.await_count == 1 for handler in handlers.values())
 
 
 async def test_route_def_wrong_method_returns_405_with_allow() -> None:
@@ -51,6 +80,15 @@ async def test_route_def_wrong_method_returns_405_with_allow() -> None:
 
     assert response.status == 405
     assert response.headers["Allow"] == "POST"
+
+
+async def test_unknown_route_def_returns_404() -> None:
+    from provide.uterm.cloudflare.entry.handlers import _route_request
+
+    response = await _route_request(_request("/api/not-a-route"), SimpleNamespace(), _config())
+
+    assert response.status == 404
+    assert json.loads(response.body) == {"error": "not_found", "path": "/api/not-a-route"}
 
 
 async def test_invalid_route_def_parameter_returns_422() -> None:
@@ -72,6 +110,30 @@ async def test_pam_route_def_denies_viewer_before_capability() -> None:
     assert json.loads(response.body)["error"] == "forbidden"
 
 
+@pytest.mark.parametrize(
+    ("roles", "expected_status"),
+    [((), 403), (("viewer",), 403), (("operator",), 200), (("admin",), 200)],
+)
+async def test_worker_pam_route_def_enforces_declared_roles(roles: tuple[str, ...], expected_status: int) -> None:
+    import provide.uterm.cloudflare.entry.route_defs as route_defs
+
+    pam_route = next(route for route in API_ROUTES if route.operation == "pam_events.ingest")
+    handler = AsyncMock(return_value=SimpleNamespace(status=200, body="ok"))
+    principal = SimpleNamespace(subject_id="test", roles=roles)
+    with (
+        patch.object(route_defs, "_require_jwt", new=AsyncMock(return_value=None)),
+        patch("provide.uterm.cloudflare.entry.auth._decode_jwt_principal", new=AsyncMock(return_value=principal)),
+        patch.dict(route_defs.GLOBAL_CAPABILITIES, {pam_route.capability: handler}),
+    ):
+        response = await route_defs.dispatch_api_route(
+            _request(pam_route.template, pam_route.method), SimpleNamespace(), _config(), pam_route.template
+        )
+
+    assert response is not None
+    assert response.status == expected_status
+    assert handler.await_count == (expected_status == 200)
+
+
 def test_worker_route_def_dispatch_replaces_legacy_matchers() -> None:
     import provide.uterm.cloudflare.entry.handlers as handlers
     import provide.uterm.cloudflare.entry.registry as registry
@@ -91,4 +153,13 @@ def test_worker_route_def_capability_validation_rejects_missing_global_handler()
 
     with patch.dict(route_defs.GLOBAL_CAPABILITIES, {}, clear=True):
         with pytest.raises(ValueError, match="missing Worker route capabilities"):
+            route_defs._validate_global_capabilities()
+
+
+def test_worker_route_def_capability_validation_rejects_session_handler_in_global_map() -> None:
+    import provide.uterm.cloudflare.entry.route_defs as route_defs
+
+    session_capability = next(route.capability for route in API_ROUTES if route.scope is RouteScope.SESSION)
+    with patch.dict(route_defs.GLOBAL_CAPABILITIES, {session_capability: AsyncMock()}):
+        with pytest.raises(ValueError, match="session RouteDef capability registered in Worker"):
             route_defs._validate_global_capabilities()
