@@ -48,6 +48,52 @@ async def test_worker_proxies_every_session_route_def_to_the_named_durable_objec
     assert stub.fetch.await_count == len(session_routes)
 
 
+class _RegistryKv:
+    def __init__(self) -> None:
+        self.values = {
+            "session:session-1": json.dumps(
+                {"session_id": "session-1", "worker_token_hash": "credential", "connected": True}
+            )
+        }
+
+    async def delete(self, key: str) -> None:
+        self.values.pop(key, None)
+
+
+async def test_successful_do_session_delete_removes_fleet_registry_and_credentials() -> None:
+    from provide.uterm.cloudflare.entry.route_defs import dispatch_api_route
+
+    kv = _RegistryKv()
+    stub = SimpleNamespace(fetch=AsyncMock(return_value=SimpleNamespace(status=200, body='{"ok":true}')))
+    namespace = SimpleNamespace(idFromName=lambda session_id: f"do:{session_id}", get=lambda _id: stub)
+    env = SimpleNamespace(SESSION_RUNTIME=namespace, SESSION_REGISTRY=kv)
+
+    response = await dispatch_api_route(
+        _request("/api/sessions/session-1", "DELETE"), env, _config(), "/api/sessions/session-1"
+    )
+
+    assert response is not None
+    assert response.status == 200
+    assert "session:session-1" not in kv.values
+
+
+async def test_failed_do_session_delete_keeps_fleet_registry_and_credentials() -> None:
+    from provide.uterm.cloudflare.entry.route_defs import dispatch_api_route
+
+    kv = _RegistryKv()
+    stub = SimpleNamespace(fetch=AsyncMock(return_value=SimpleNamespace(status=409, body='{"error":"failed"}')))
+    namespace = SimpleNamespace(idFromName=lambda session_id: f"do:{session_id}", get=lambda _id: stub)
+    env = SimpleNamespace(SESSION_RUNTIME=namespace, SESSION_REGISTRY=kv)
+
+    response = await dispatch_api_route(
+        _request("/api/sessions/session-1", "DELETE"), env, _config(), "/api/sessions/session-1"
+    )
+
+    assert response is not None
+    assert response.status == 409
+    assert json.loads(kv.values["session:session-1"])["worker_token_hash"] == "credential"
+
+
 async def test_worker_dispatches_every_global_route_def_through_its_declared_capability() -> None:
     import provide.uterm.cloudflare.entry.route_defs as route_defs
 

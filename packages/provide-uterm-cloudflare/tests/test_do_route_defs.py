@@ -178,7 +178,7 @@ async def test_browser_start_transitions_native_ushell_to_running() -> None:
     assert json.loads(runtime.env.SESSION_REGISTRY.values["session:session-1"])["lifecycle_state"] == "running"
 
 
-async def test_native_ushell_disconnect_remains_offline_after_alarm() -> None:
+async def test_native_ushell_disconnect_remains_fleet_listed_offline_after_alarm() -> None:
     from provide.uterm.cloudflare.do.session_runtime.io import _SessionRuntimeIoMixin
     from provide.uterm.cloudflare.do.ushell import on_browser_connected
 
@@ -195,7 +195,10 @@ async def test_native_ushell_disconnect_remains_offline_after_alarm() -> None:
     await route_http(runtime, _Request("/api/sessions/session-1/disconnect", "POST"))
     await _SessionRuntimeIoMixin.alarm(runtime)
 
-    assert "session:session-1" not in runtime.env.SESSION_REGISTRY.values
+    fleet_row = json.loads(runtime.env.SESSION_REGISTRY.values["session:session-1"])
+    assert fleet_row["connected"] is False
+    assert fleet_row["lifecycle_state"] == "stopped"
+    assert fleet_row["owner"] == "owner"
 
 
 class _Kv:

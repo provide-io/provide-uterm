@@ -435,6 +435,17 @@ class _SessionRuntimeIoMixin:
                 meta=self.meta,
             )
             schedule_alarm(self.ctx, wall_now + KV_REFRESH_S)
+        elif self._ushell is not None:
+            await update_kv_session(
+                self.env,
+                self.worker_id,
+                connected=False,
+                hijacked=self.hijack.session is not None,
+                input_mode=self.input_mode,
+                recording_available=self.store.current_event_seq(self.worker_id) > 0,
+                meta=self.meta,
+                remove_offline=False,
+            )
         elif self.hijack.session is not None:
             # ``self.hijack.session.lease_expires_at`` is a non-None float
             # (the surrounding branch already gated on ``session is not

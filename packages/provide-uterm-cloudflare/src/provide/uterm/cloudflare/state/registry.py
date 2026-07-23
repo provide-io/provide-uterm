@@ -31,6 +31,7 @@ async def update_kv_session(
     recording_enabled: bool = True,
     recording_available: bool = False,
     meta: dict[str, Any] | None = None,
+    remove_offline: bool = True,
 ) -> None:
     """Write (or delete) this DO's session entry in the KV registry.
 
@@ -41,7 +42,7 @@ async def update_kv_session(
     if kv is None:
         return
     key = f"{_KV_PREFIX}{worker_id}"
-    if connected is False:
+    if connected is False and remove_offline:
         try:
             await kv.delete(key)
         except Exception as exc:
@@ -56,7 +57,7 @@ async def update_kv_session(
         "display_name": m.get("display_name") or worker_id,
         "created_at": m.get("created_at") or 0.0,
         "connector_type": m.get("connector_type") or "unknown",
-        "lifecycle_state": "running" if connected else str(existing.get("lifecycle_state") or "waiting"),
+        "lifecycle_state": "running" if connected else "stopped",
         "input_mode": input_mode,
         "connected": connected,
         "auto_start": False,
