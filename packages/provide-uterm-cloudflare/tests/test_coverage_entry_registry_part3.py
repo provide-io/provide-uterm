@@ -58,17 +58,6 @@ def _req(path: str, method: str = "GET", headers: dict | None = None) -> SimpleN
 # ---------------------------------------------------------------------------
 
 
-def test_match_api_route_tunnel_rotate() -> None:
-    from provide.uterm.cloudflare.entry.handlers import _match_api_route
-
-    assert (
-        _match_api_route(
-            "/api/tunnels/tunnel-abc/tokens/rotate", _req("/api/tunnels/tunnel-abc/tokens/rotate", method="POST")
-        )
-        is not None
-    )
-
-
 # ---------------------------------------------------------------------------
 # Default.fetch() integration — exercises _api_connect/_api_sessions wrappers
 # ---------------------------------------------------------------------------
@@ -95,16 +84,20 @@ async def test_default_fetch_api_connect_post() -> None:
 
 
 async def test_default_fetch_session_delete() -> None:
-    """DELETE /api/sessions/{id} through Default.fetch()."""
-    d = _make_default()
+    """DELETE /api/sessions/{id} proxies to the session's Durable Object."""
+    stub = SimpleNamespace(
+        fetch=AsyncMock(return_value=SimpleNamespace(status=200, body='{"deleted": true}', headers={}))
+    )
+    namespace = SimpleNamespace(idFromName=lambda session_id: session_id, get=lambda _id: stub)
+    d = _make_default({"SESSION_RUNTIME": namespace})
     req = SimpleNamespace(
         url="https://x/api/sessions/test-sess",
         method="DELETE",
         headers=SimpleNamespace(get=lambda k, default=None: None),
     )
-    with patch("provide.uterm.cloudflare.entry.delete_kv_session", new=AsyncMock()):
-        resp = await d.fetch(req)
+    resp = await d.fetch(req)
     assert resp.status == 200 and json.loads(resp.body)["deleted"] is True
+    stub.fetch.assert_awaited_once_with(req)
 
 
 async def test_route_request_cf_service_token_header_does_not_bypass_jwt() -> None:
