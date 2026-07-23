@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from provide.uterm.api_routes import API_ROUTES, RouteScope
 from provide.uterm.cloudflare.api.http_routes import route_http
 from provide.uterm.cloudflare.bridge.hijack import HijackCoordinator
 from provide.uterm.cloudflare.state.store import SqliteStateStore
@@ -76,6 +77,46 @@ async def test_do_route_defs_dispatch_connect_disconnect_and_events_watch() -> N
         "dropped_count": 0,
         "timed_out": False,
     }
+
+
+async def test_do_dispatches_every_session_route_def_to_its_declared_capability() -> None:
+    from provide.uterm.cloudflare.api.http_routes import _session
+
+    session_routes = tuple(route for route in API_ROUTES if route.scope is RouteScope.SESSION)
+    handlers = {
+        route.capability: AsyncMock(return_value=SimpleNamespace(status=200, body="ok")) for route in session_routes
+    }
+    global_handlers = {
+        route.capability: AsyncMock(return_value=SimpleNamespace(status=500, body="global"))
+        for route in API_ROUTES
+        if route.scope is RouteScope.GLOBAL
+    }
+    runtime = _Runtime()
+
+    with (
+        patch.dict(_session.SESSION_CAPABILITIES, handlers, clear=True),
+        patch.dict("provide.uterm.cloudflare.entry.route_defs.GLOBAL_CAPABILITIES", global_handlers, clear=True),
+    ):
+        for route in session_routes:
+            path = route.template.replace("{session_id}", runtime.worker_id).replace("{webhook_id}", "webhook-1")
+            request = _Request(path, route.method)
+
+            response = await route_http(runtime, request)
+
+            assert response.status == 200
+            handlers[route.capability].assert_awaited_once_with(
+                runtime,
+                request,
+                path,
+                request.url,
+                route,
+                {
+                    "session_id": runtime.worker_id,
+                    **({"webhook_id": "webhook-1"} if "{webhook_id}" in route.template else {}),
+                },
+            )
+
+    assert all(handler.await_count == 0 for handler in global_handlers.values())
 
 
 async def test_connect_does_not_claim_an_unstarted_ushell_is_connected() -> None:

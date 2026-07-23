@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Callable
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -143,13 +144,16 @@ def test_registers_selected_route_defs_with_contract_metadata_and_fastapi_405() 
 
 def test_fastapi_adapter_registers_every_shared_route_def_once() -> None:
     router = create_api_router()
-    registered = {
+    shared_operations = {definition.operation for definition in API_ROUTES}
+    registered = Counter(
         (route.operation_id, next(iter(route.methods or ())), route.path)
         for route in router.routes
-        if isinstance(route, APIRoute) and route.operation_id in {definition.operation for definition in API_ROUTES}
-    }
+        if isinstance(route, APIRoute) and route.operation_id in shared_operations
+    )
 
-    assert registered == {(route.operation, route.method.value, route.template) for route in API_ROUTES}
+    expected = Counter((route.operation, route.method.value, route.template) for route in API_ROUTES)
+    assert registered == expected
+    assert all(count == 1 for count in registered.values())
 
 
 def test_fastapi_adapter_keeps_fastapi_only_routes_outside_shared_inventory() -> None:
