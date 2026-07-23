@@ -163,12 +163,12 @@ class _FetchMixin:
 
             if changed:
                 # SQLite is authoritative and must be updated before returning
-                # a capability; KV remains the cross-DO/API mirror.
+                # a capability. Do not write this older KV snapshot back: a
+                # concurrent revoke/rotate may have changed KV after our read.
                 self.store.save_tunnel_invite_state(
                     self.worker_id,
                     {**session, "_consumed_invite_hashes": consumed_hashes},
                 )
-                await kv.put(f"session:{self.worker_id}", json.dumps(session))
             if matched is None:
                 return Response.json({"error": "not_found"}, status=404)
             page, role, token = matched
