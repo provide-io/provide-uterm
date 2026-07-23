@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from provide.uterm.api_routes import API_ROUTES, RouteDef
+from provide.uterm.server.registry import SessionValidationError
 from provide.uterm.server.routes._helpers import authz, principal, registry
 from provide.uterm.server.routes.route_defs import bind_api_routes
 
@@ -43,6 +44,10 @@ def pam_event_capability_handlers() -> dict[str, Callable[..., object]]:
     """Return the FastAPI handler for the shared ``pam_events.ingest`` capability."""
 
     async def ingest(request: Request):
+        p = principal(request)
+        if not await authz(request).can_create_session(p):
+            raise HTTPException(status_code=403, detail="insufficient privileges")
+
         try:
             raw = await request.json()
         except Exception:
@@ -57,10 +62,6 @@ def pam_event_capability_handlers() -> dict[str, Callable[..., object]]:
         username = str(body.get("username") or "")
         if not username:
             return JSONResponse({"error": "missing_username"}, status_code=422)
-
-        p = principal(request)
-        if not await authz(request).can_create_session(p):
-            raise HTTPException(status_code=403, detail="insufficient privileges")
 
         tty = str(body.get("tty") or "")
         session_id = f"pam-{username}-{_tty_slug(tty)}"
@@ -86,11 +87,13 @@ def pam_event_capability_handlers() -> dict[str, Callable[..., object]]:
         }
         try:
             await registry(request).create_session(payload)
-        except ValueError:
+        except SessionValidationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except ValueError as exc:
             # Cloudflare KV ``put`` overwrites an existing entry; retain its
             # idempotent open-event response when the observer already exists.
             if await registry(request).get_definition(session_id) is None:
-                raise
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
         return {"ok": True, "session_id": session_id, "action": "created"}
 
     return {"pam_events.ingest": ingest}

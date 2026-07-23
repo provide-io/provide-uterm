@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
 
+from provide.uterm.server.registry import SessionValidationError
 from provide.uterm.server.routes.api import create_api_router
 
 
@@ -39,6 +40,7 @@ def _registry() -> MagicMock:
     registry = MagicMock()
     registry.create_session = AsyncMock()
     registry.delete_session = AsyncMock()
+    registry.get_definition = AsyncMock(return_value=None)
     return registry
 
 
@@ -69,6 +71,15 @@ def test_pam_events_rejects_scoped_operator_without_session_create_capability() 
 
     assert response.status_code == 403
     registry.create_session.assert_not_awaited()
+
+
+def test_pam_events_rejects_denied_operator_before_parsing_malformed_json() -> None:
+    response = TestClient(_app_for(_principal("operator"), _registry(), can_create_session=False)).post(
+        "/api/pam-events", content=b"{"
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "insufficient privileges"
 
 
 def test_pam_events_allows_scoped_machine_credential_with_session_create_capability() -> None:
@@ -136,3 +147,40 @@ def test_pam_events_admin_close_matches_cloudflare_contract() -> None:
     assert response.status_code == 200
     assert response.json() == {"ok": True, "session_id": "pam-alice-3", "action": "deleted"}
     registry.delete_session.assert_awaited_once_with("pam-alice-3")
+
+
+def test_pam_events_duplicate_open_remains_idempotent() -> None:
+    registry = _registry()
+    registry.create_session.side_effect = ValueError("session already exists")
+    registry.get_definition.return_value = object()
+
+    response = TestClient(_app_for(_principal("operator"), registry)).post(
+        "/api/pam-events", json={"event": "open", "username": "alice", "tty": "/dev/pts/3"}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True, "session_id": "pam-alice-3", "action": "created"}
+
+
+def test_pam_events_maps_registry_validation_failure_to_422() -> None:
+    registry = _registry()
+    registry.create_session.side_effect = SessionValidationError("invalid session")
+
+    response = TestClient(_app_for(_principal("operator"), registry)).post(
+        "/api/pam-events", json={"event": "open", "username": "alice", "tty": "/dev/pts/3"}
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "invalid session"
+
+
+def test_pam_events_maps_registry_conflict_to_409() -> None:
+    registry = _registry()
+    registry.create_session.side_effect = ValueError("session limit reached: max_sessions=1")
+
+    response = TestClient(_app_for(_principal("operator"), registry)).post(
+        "/api/pam-events", json={"event": "open", "username": "alice", "tty": "/dev/pts/3"}
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "session limit reached: max_sessions=1"
