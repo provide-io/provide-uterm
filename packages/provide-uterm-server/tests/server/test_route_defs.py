@@ -7,12 +7,16 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import APIRouter, FastAPI, Request
+from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from provide.uterm.api_routes import API_ROUTES, HttpMethod, RouteDef, RouteScope
+from provide.uterm.server.routes.api import create_api_router
 from provide.uterm.server.routes.route_defs import bind_api_routes
 
 
@@ -119,3 +123,42 @@ def test_rejects_unauthorized_role_protected_route_before_handler_execution() ->
     app.include_router(router)
     assert TestClient(app).request("DELETE", "/api/sessions", json={}).status_code == 403
     assert not called
+
+
+def test_api_router_binds_shared_session_route_defs_once() -> None:
+    from provide.uterm.server.routes.sessions import session_capability_handlers
+
+    router = create_api_router()
+    session_routes = [
+        route for route in router.routes if isinstance(route, APIRoute) and route.path.startswith("/api/sessions")
+    ]
+    registered = {(route.path, frozenset(route.methods or ()), route.name) for route in session_routes}
+
+    expected = {
+        (route.template, frozenset({route.method.value}), route.operation)
+        for route in API_ROUTES
+        if route.capability in session_capability_handlers()
+    }
+    assert expected <= registered
+    assert sum(route.path == "/api/sessions" and route.methods == {"GET"} for route in session_routes) == 1
+    assert sum(route.path == "/api/sessions" and route.methods == {"POST"} for route in session_routes) == 1
+    assert sum(route.path == "/api/sessions" and route.methods == {"DELETE"} for route in session_routes) == 1
+
+
+async def test_bulk_delete_role_authorizer_uses_existing_admin_policy() -> None:
+    authorization = MagicMock()
+    authorization.is_admin = AsyncMock(return_value=False)
+    app = FastAPI()
+    app.state.uterm_authz = authorization
+
+    @app.middleware("http")
+    async def set_principal(request: Request, call_next: Callable[..., object]) -> object:
+        request.state.uterm_principal = SimpleNamespace(subject_id="viewer", roles=frozenset({"viewer"}))
+        return await call_next(request)
+
+    app.include_router(create_api_router())
+    response = TestClient(app).request("DELETE", "/api/sessions", json={"filter": {}})
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "insufficient role privileges"
+    authorization.is_admin.assert_awaited_once()
