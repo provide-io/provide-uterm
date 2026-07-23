@@ -7,8 +7,8 @@
 mutmut SKIPS every decorated function (the ``@router.get``/``@router.post`` FastAPI
 handlers — see _skip_node_and_children in mutmut/file_mutation.py), so the mutable
 surface of routes/ is the UNDECORATED code: the shared ``_helpers.py`` accessors, the
-per-module ``_registry``/``_authz``/``_principal`` accessors and ``create_*_router``
-bodies, and the NESTED undecorated helpers defined inside ``create_*_router`` (e.g.
+per-module ``_registry``/``_authz``/``_principal`` accessors and route-factory
+bodies, and the NESTED undecorated helpers defined inside route factories (e.g.
 ``_posture_caller_is_privileged``). None of it is async-streaming, so this suite needs
 no SSE/timer mocking — it builds each router with mocked app state, pulls the handler
 endpoints off ``router.routes``, and calls them directly with a mocked Request (no
@@ -1233,9 +1233,12 @@ class TestProfilesRoutes:
     _CONNECT = "/api/profiles/{profile_id}/connect"
 
     def _router(self) -> APIRouter:
-        from provide.uterm.server.routes.profiles import create_profiles_router
+        from provide.uterm.server.routes.api import create_api_router
 
-        return create_profiles_router()
+        api_router = create_api_router()
+        profiles_router = APIRouter()
+        profiles_router.routes.extend(route for route in api_router.routes if route.path.startswith("/api/profiles"))
+        return profiles_router
 
     def _profile(
         self,
@@ -1310,7 +1313,7 @@ class TestProfilesRoutes:
         assert exc.status_code == 404
         assert exc.detail == "unknown profile: ghost"
 
-    # ---- create_profiles_router: structure ----------------------------------
+    # ---- RouteDef-backed profile routes: structure --------------------------
 
     def test_router_is_apirouter_with_all_paths(self) -> None:
         router = self._router()

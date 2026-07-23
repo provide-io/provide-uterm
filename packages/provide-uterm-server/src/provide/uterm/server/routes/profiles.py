@@ -207,10 +207,3 @@ def register_profile_routes(router: APIRouter) -> None:
     profile_router = APIRouter()
     bind_api_routes(profile_router, handlers, selected)
     router.routes.extend(profile_router.routes)
-
-
-def create_profiles_router() -> APIRouter:
-    """Build a standalone RouteDef-bound profiles router for compatibility."""
-    router = APIRouter()
-    register_profile_routes(router)
-    return router
