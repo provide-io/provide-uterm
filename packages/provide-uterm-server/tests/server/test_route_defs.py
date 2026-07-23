@@ -19,6 +19,30 @@ from provide.uterm.api_routes import API_ROUTES, HttpMethod, RouteDef, RouteScop
 from provide.uterm.server.routes.api import create_api_router
 from provide.uterm.server.routes.route_defs import bind_api_routes
 
+_EXPECTED_SESSION_ROUTE_CONTRACT = frozenset(
+    {
+        ("sessions.list", "sessions.list"),
+        ("sessions.create", "sessions.create"),
+        ("sessions.bulk_delete", "sessions.bulk_delete"),
+        ("sessions.get", "sessions.get"),
+        ("sessions.update", "sessions.update"),
+        ("sessions.delete", "sessions.delete"),
+        ("sessions.connect", "sessions.connect"),
+        ("sessions.disconnect", "sessions.disconnect"),
+        ("sessions.restart", "sessions.restart"),
+        ("sessions.set_mode", "sessions.set_mode"),
+        ("sessions.clear", "sessions.clear"),
+        ("sessions.annotate", "sessions.annotate"),
+        ("sessions.analyze", "sessions.analyze"),
+        ("sessions.snapshot", "sessions.snapshot"),
+        ("sessions.events", "sessions.events"),
+        ("sessions.events_watch", "sessions.events_watch"),
+        ("sessions.recording", "sessions.recording"),
+        ("sessions.recording_entries", "sessions.recording_entries"),
+        ("sessions.recording_download", "sessions.recording_download"),
+    }
+)
+
 
 async def _handler() -> dict[str, bool]:
     return {"ok": True}
@@ -128,18 +152,20 @@ def test_rejects_unauthorized_role_protected_route_before_handler_execution() ->
 def test_api_router_binds_shared_session_route_defs_once() -> None:
     from provide.uterm.server.routes.sessions import session_capability_handlers
 
+    expected_operations = {operation for operation, _ in _EXPECTED_SESSION_ROUTE_CONTRACT}
+    expected_capabilities = {capability for _, capability in _EXPECTED_SESSION_ROUTE_CONTRACT}
+    assert set(session_capability_handlers()) == expected_capabilities
+
     router = create_api_router()
     session_routes = [
         route for route in router.routes if isinstance(route, APIRoute) and route.path.startswith("/api/sessions")
     ]
-    registered = {(route.path, frozenset(route.methods or ()), route.name) for route in session_routes}
-
-    expected = {
-        (route.template, frozenset({route.method.value}), route.operation)
-        for route in API_ROUTES
-        if route.capability in session_capability_handlers()
+    registered_operations = {
+        route.operation_id
+        for route in session_routes
+        if route.operation_id is not None and route.operation_id.startswith("sessions.")
     }
-    assert expected <= registered
+    assert registered_operations == expected_operations
     assert sum(route.path == "/api/sessions" and route.methods == {"GET"} for route in session_routes) == 1
     assert sum(route.path == "/api/sessions" and route.methods == {"POST"} for route in session_routes) == 1
     assert sum(route.path == "/api/sessions" and route.methods == {"DELETE"} for route in session_routes) == 1
