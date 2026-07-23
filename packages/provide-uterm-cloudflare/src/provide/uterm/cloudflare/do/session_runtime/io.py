@@ -432,6 +432,7 @@ class _SessionRuntimeIoMixin:
                 connected=True,
                 hijacked=self.hijack.session is not None,
                 input_mode=self.input_mode,
+                meta=self.meta,
             )
             schedule_alarm(self.ctx, wall_now + KV_REFRESH_S)
         elif self.hijack.session is not None:
