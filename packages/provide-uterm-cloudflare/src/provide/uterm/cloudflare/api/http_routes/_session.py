@@ -235,6 +235,11 @@ async def _disconnect(
             await ushell.stop()
         runtime._ushell_started = False
     runtime.lifecycle_state = "stopped"
+    await update_kv_session(
+        getattr(runtime, "env", None),
+        runtime.worker_id,
+        connected=False,
+    )
     return json_response(_session_status_item(runtime))
 
 

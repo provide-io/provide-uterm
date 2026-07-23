@@ -425,7 +425,7 @@ class _SessionRuntimeIoMixin:
             with contextlib.suppress(Exception):
                 await self.push_worker_control("resume", owner="lease_expired", lease_s=0)
             await self.broadcast_hijack_state()
-        if self.worker_ws is not None or self._ushell is not None:
+        if self.worker_ws is not None or (self._ushell is not None and self._ushell_started):
             await update_kv_session(
                 self.env,
                 self.worker_id,

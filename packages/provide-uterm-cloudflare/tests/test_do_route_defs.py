@@ -137,6 +137,26 @@ async def test_browser_start_transitions_native_ushell_to_running() -> None:
     assert json.loads(runtime.env.SESSION_REGISTRY.values["session:session-1"])["lifecycle_state"] == "running"
 
 
+async def test_native_ushell_disconnect_remains_offline_after_alarm() -> None:
+    from provide.uterm.cloudflare.do.session_runtime.io import _SessionRuntimeIoMixin
+    from provide.uterm.cloudflare.do.ushell import on_browser_connected
+
+    runtime = _persistent_runtime()
+    runtime.worker_ws = None
+    runtime._ushell = SimpleNamespace(start=AsyncMock(), stop=AsyncMock(), poll_messages=AsyncMock(return_value=[]))
+    runtime._ushell_started = False
+    runtime.broadcast_worker_frame = AsyncMock()
+    runtime.broadcast_to_browsers = AsyncMock()
+
+    await on_browser_connected(runtime)
+    assert json.loads(runtime.env.SESSION_REGISTRY.values["session:session-1"])["connected"] is True
+
+    await route_http(runtime, _Request("/api/sessions/session-1/disconnect", "POST"))
+    await _SessionRuntimeIoMixin.alarm(runtime)
+
+    assert "session:session-1" not in runtime.env.SESSION_REGISTRY.values
+
+
 class _Kv:
     def __init__(self) -> None:
         self.values: dict[str, str] = {}
