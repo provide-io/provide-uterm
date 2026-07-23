@@ -188,45 +188,42 @@ async def test_consume_tunnel_invite_clears_expired_invite_then_no_match() -> No
 async def test_consume_tunnel_invite_accepts_control_invite() -> None:
     from provide.uterm.cloudflare.api._tunnel_api import consume_tunnel_invite
 
-    session = {
-        "expires_at": time.time() + 3600,
-        "control_token_hash": hash_token("control-tok"),
-        "control_invite_hash": hash_token("control-invite"),
-        "control_invite_token": "control-tok",
-        "control_invite_expires_at": time.time() + 60,
-    }
-    kv = MagicMock()
-    kv.get = AsyncMock(return_value=json.dumps(session))
-    kv.put = AsyncMock()
+    stub = SimpleNamespace(
+        fetch=AsyncMock(
+            return_value=SimpleNamespace(
+                status=200,
+                body=json.dumps({"page": "operator", "role": "operator", "token": "control-tok"}),
+            )
+        )
+    )
+    namespace = SimpleNamespace(idFromName=lambda session_id: f"do:{session_id}", get=lambda _id: stub)
     request = SimpleNamespace(url="https://example.invalid/s/tunnel-abc?invite=control-invite")
-    env = SimpleNamespace(SESSION_REGISTRY=kv)
+    env = SimpleNamespace(SESSION_RUNTIME=namespace)
 
     assert await consume_tunnel_invite(request, env, "tunnel-abc") == ("operator", "operator", "control-tok")
-    stored = json.loads(kv.put.call_args[0][1])
-    assert "control_invite_hash" not in stored
+    internal_request = stub.fetch.await_args.args[0]
+    assert internal_request.headers["X-Provide-Uterm-Internal"] == "worker-invite-redemption-v1"
+    assert json.loads(await internal_request.text()) == {"invite": "control-invite"}
 
 
 async def test_consume_tunnel_invite_skips_non_matching_control_then_matches_share() -> None:
     from provide.uterm.cloudflare.api._tunnel_api import consume_tunnel_invite
 
-    session = {
-        "expires_at": time.time() + 3600,
-        "control_token_hash": hash_token("control-tok"),
-        "control_invite_hash": hash_token("other-invite"),
-        "control_invite_token": "control-tok",
-        "control_invite_expires_at": time.time() + 60,
-        "share_token_hash": hash_token("share-tok"),
-        "share_invite_hash": hash_token("share-invite"),
-        "share_invite_token": "share-tok",
-        "share_invite_expires_at": time.time() + 60,
-    }
-    kv = MagicMock()
-    kv.get = AsyncMock(return_value=json.dumps(session))
-    kv.put = AsyncMock()
+    stub = SimpleNamespace(
+        fetch=AsyncMock(
+            return_value=SimpleNamespace(
+                status=200,
+                body=json.dumps({"page": "session", "role": "viewer", "token": "share-tok"}),
+            )
+        )
+    )
+    namespace = SimpleNamespace(idFromName=lambda session_id: f"do:{session_id}", get=lambda _id: stub)
     request = SimpleNamespace(url="https://example.invalid/s/tunnel-abc?invite=share-invite")
-    env = SimpleNamespace(SESSION_REGISTRY=kv)
+    env = SimpleNamespace(SESSION_RUNTIME=namespace)
 
     assert await consume_tunnel_invite(request, env, "tunnel-abc") == ("session", "viewer", "share-tok")
+    internal_request = stub.fetch.await_args.args[0]
+    assert json.loads(await internal_request.text()) == {"invite": "share-invite"}
 
 
 async def test_short_share_invite_without_cookie_header_still_redirects() -> None:
