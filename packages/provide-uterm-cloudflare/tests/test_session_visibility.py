@@ -83,12 +83,12 @@ class _Runtime:
 
 
 # ---------------------------------------------------------------------------
-# Per-session visibility enforcement (route_session GET)
+# Per-session visibility enforcement (RouteDef dispatch)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_route_session_get_public_allows_viewer() -> None:
+async def test_route_def_session_get_public_allows_viewer() -> None:
     """Public sessions are readable by any authenticated caller."""
     runtime = _Runtime()
     runtime.meta["visibility"] = "public"
@@ -99,7 +99,7 @@ async def test_route_session_get_public_allows_viewer() -> None:
 
 
 @pytest.mark.asyncio
-async def test_route_session_get_private_blocks_non_owner_viewer() -> None:
+async def test_route_def_session_get_private_blocks_non_owner_viewer() -> None:
     """Private sessions return 403 for a viewer who is not the owner."""
     runtime = _Runtime()
     runtime.meta["visibility"] = "private"
@@ -112,7 +112,7 @@ async def test_route_session_get_private_blocks_non_owner_viewer() -> None:
 
 
 @pytest.mark.asyncio
-async def test_route_session_get_private_allows_owner() -> None:
+async def test_route_def_session_get_private_allows_owner() -> None:
     """Private sessions are accessible to the subject who owns them."""
     runtime = _Runtime()
     runtime.meta["visibility"] = "private"
@@ -125,7 +125,7 @@ async def test_route_session_get_private_allows_owner() -> None:
 
 
 @pytest.mark.asyncio
-async def test_route_session_get_private_allows_admin() -> None:
+async def test_route_def_session_get_private_allows_admin() -> None:
     """Private sessions are accessible to admin callers regardless of ownership."""
     runtime = _Runtime()
     runtime.meta["visibility"] = "private"
@@ -138,7 +138,7 @@ async def test_route_session_get_private_allows_admin() -> None:
 
 
 @pytest.mark.asyncio
-async def test_route_session_get_private_blocks_unauthenticated() -> None:
+async def test_route_def_session_get_private_blocks_unauthenticated() -> None:
     """Private sessions return 403 when the caller has no subject (unauthenticated viewer)."""
     runtime = _Runtime()
     runtime.meta["visibility"] = "private"

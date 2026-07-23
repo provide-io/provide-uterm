@@ -31,8 +31,6 @@ else:
         from cf_types import json_response  # type: ignore[import-not-found,no-redef]  # CF flat path
 
 if TYPE_CHECKING:
-    import re
-
     from provide.uterm.cloudflare.contracts import RuntimeProtocol
 
 
@@ -40,14 +38,10 @@ async def route_recording(
     runtime: RuntimeProtocol,
     _request: object,
     url: str,
-    match: re.Match[str],
+    session_id: str,
+    sub: str | None,
 ) -> object:
-    """Dispatch recording sub-routes.
-
-    *match* groups: (1) session_id, (2) optional sub-path (``"entries"`` or None).
-    """
-    session_id = match.group(1)
-    sub = match.group(2)  # None or "entries"
+    """Dispatch a RouteDef-matched recording sub-route."""
 
     if session_id != runtime.worker_id:
         return json_response({"error": "not_found"}, status=404)

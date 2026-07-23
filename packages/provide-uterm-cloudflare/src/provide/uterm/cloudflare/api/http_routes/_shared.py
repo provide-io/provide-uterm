@@ -79,7 +79,6 @@ _HIJACK_ID_RE = re.compile(r"/hijack/([0-9a-fA-F\-]{1,64})/")
 _MIN_LEASE_S = 1
 _MAX_LEASE_S = 3600
 _MAX_INPUT_CHARS = 10_000  # must match main package TermHub.max_input_chars default
-_SESSION_ROUTE_RE = re.compile(r"^/api/sessions/([a-zA-Z0-9_-]{1,64})(?:/([a-z]+))?$")
 _MAX_TIMEOUT_MS = 30_000
 _MAX_PROMPT_POLL_S = 30.0
 _MAX_REGEX_LEN = MAX_EXPECT_REGEX_LEN

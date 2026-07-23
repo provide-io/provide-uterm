@@ -54,12 +54,6 @@ class _Runtime:
         self.hijack = _HijackStub()
 
 
-def _match(session_id: str, sub: str | None = None) -> SimpleNamespace:
-    """Fake regex match with group(1)=session_id, group(2)=sub."""
-    groups = {1: session_id, 2: sub}
-    return SimpleNamespace(group=lambda i: groups.get(i))
-
-
 def _parse_response(resp: Any) -> tuple[int, Any]:
     """Extract (status, parsed_body) from a json_response object."""
     status = getattr(resp, "status", 200)
@@ -94,7 +88,7 @@ async def test_route_recording_entries_wrong_session() -> None:
     """Entries endpoint returns 404 for wrong session_id."""
     runtime = _Runtime(_make_store(5))
     url = "http://localhost/api/sessions/wrong-id/recording/entries"
-    resp = await route_recording(runtime, None, url, _match("wrong-id", "entries"))
+    resp = await route_recording(runtime, None, url, "wrong-id", "entries")
     status, _body = _parse_response(resp)
     assert status == 404
 
@@ -104,7 +98,7 @@ async def test_route_recording_entries_tail_order() -> None:
     """Route-level: tail mode returns entries in ascending order."""
     runtime = _Runtime(_make_store(5))
     url = "http://localhost/api/sessions/w1/recording/entries?limit=3"
-    resp = await route_recording(runtime, None, url, _match("w1", "entries"))
+    resp = await route_recording(runtime, None, url, "w1", "entries")
     status, body = _parse_response(resp)
     assert status == 200
     assert len(body) == 3
@@ -117,7 +111,7 @@ async def test_route_recording_entries_snapshot_has_screen() -> None:
     """Replay frontend compatibility: snapshot entries have data.screen."""
     runtime = _Runtime(_make_store(2))
     url = "http://localhost/api/sessions/w1/recording/entries?event=snapshot"
-    resp = await route_recording(runtime, None, url, _match("w1", "entries"))
+    resp = await route_recording(runtime, None, url, "w1", "entries")
     status, body = _parse_response(resp)
     assert status == 200
     assert len(body) >= 1
