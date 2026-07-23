@@ -16,11 +16,12 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Annotated, Any, cast
+from typing import TYPE_CHECKING, Annotated, Any, cast
 
 from fastapi import APIRouter, Body, HTTPException, Request
 
 from provide.telemetry import get_tracer
+from provide.uterm.api_routes import API_ROUTES, RouteDef
 from provide.uterm.server.audit import audit_event
 from provide.uterm.server.egress import EgressBlockedError, assert_session_egress_allowed
 from provide.uterm.server.models import model_dump
@@ -33,6 +34,7 @@ from provide.uterm.server.routes._helpers import (
     set_span_attrs,
     source_ip,
 )
+from provide.uterm.server.routes.route_defs import bind_api_routes
 from provide.uterm.server.tunnel_invites import discard_tunnel_invites_for_session, issue_tunnel_invites
 from provide.uterm.tunnel.token_hash import hash_token
 
@@ -43,6 +45,9 @@ from provide.uterm.tunnel.token_hash import hash_token
 # transient variable; only the persisted record is scrubbed.
 _SENSITIVE_CONFIG_KEYS = frozenset({"password", "passphrase", "secret", "token"})
 _SCRUB_SENTINEL = "***"  # sentinel placeholder, not a credential
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 def _scrub_sensitive(config: dict[str, Any]) -> dict[str, Any]:
@@ -57,11 +62,9 @@ def _scrub_sensitive(config: dict[str, Any]) -> dict[str, Any]:
     return {k: (_SCRUB_SENTINEL if k in _SENSITIVE_CONFIG_KEYS else v) for k, v in config.items()}
 
 
-def create_tunnels_router() -> APIRouter:
-    """Build a router for quick-connect and tunnel endpoints."""
-    router = APIRouter()
+def tunnel_capability_handlers() -> dict[str, Callable[..., object]]:
+    """Return the FastAPI handlers for shared tunnel RouteDefs."""
 
-    @router.post("/connect")
     async def quick_connect(request: Request, payload: Annotated[dict[str, Any], Body(...)]) -> dict[str, Any]:
         p = principal(request)
         az = authz(request)
@@ -148,7 +151,6 @@ def create_tunnels_router() -> APIRouter:
         url = f"{cfg.ui.app_path}/session/{session_id}"
         return {"session_id": session_id, "url": url, **model_dump(session)}
 
-    @router.post("/tunnels")
     async def create_tunnel(request: Request, payload: Annotated[dict[str, Any], Body(...)]) -> dict[str, Any]:
         """Create a tunnel session for ``uterm share``.
 
@@ -273,7 +275,6 @@ def create_tunnels_router() -> APIRouter:
             "expires_at": expires_at,
         }
 
-    @router.delete("/tunnels/{tunnel_id}/tokens")
     async def revoke_tunnel_tokens(request: Request, tunnel_id: SessionId) -> dict[str, Any]:
         """Revoke all tokens for a tunnel session. Owner or admin only.
 
@@ -301,7 +302,6 @@ def create_tunnels_router() -> APIRouter:
         )
         return {"ok": True, "session_id": tunnel_id}
 
-    @router.post("/tunnels/{tunnel_id}/tokens/rotate")
     async def rotate_tunnel_tokens(request: Request, tunnel_id: SessionId) -> dict[str, Any]:
         """Rotate all tokens for a tunnel session. Owner or admin only."""
         import secrets
@@ -372,4 +372,27 @@ def create_tunnels_router() -> APIRouter:
             "expires_at": now + ttl_s,
         }
 
-    return router
+    return {
+        "tunnels.connect": quick_connect,
+        "tunnels.create": create_tunnel,
+        "tunnels.revoke_token": revoke_tunnel_tokens,
+        "tunnels.rotate_token": rotate_tunnel_tokens,
+    }
+
+
+async def _unregistered_capability_handler() -> None:
+    """Satisfy the adapter's complete-inventory validation for unbound routes."""
+    raise RuntimeError("unregistered shared API capability invoked")
+
+
+def register_tunnel_routes(router: APIRouter) -> None:
+    """Bind the shared tunnel HTTP family exactly once through RouteDefs."""
+    tunnel_handlers = tunnel_capability_handlers()
+    handlers: dict[str, Callable[..., object]] = {
+        route.capability: _unregistered_capability_handler for route in API_ROUTES
+    }
+    handlers.update(tunnel_handlers)
+    selected: tuple[RouteDef, ...] = tuple(route for route in API_ROUTES if route.capability in tunnel_handlers)
+    tunnel_router = APIRouter()
+    bind_api_routes(tunnel_router, handlers, selected)
+    router.routes.extend(tunnel_router.routes)
