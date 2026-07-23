@@ -72,7 +72,7 @@ class TestEntryDispatchGaps:
     """Cover entry.py _api_tunnels/revoke/rotate/pam dispatch."""
 
     async def test_api_tunnels_via_fetch(self) -> None:
-        """Line 379: /api/tunnels route matched via _match_api_route."""
+        """The Worker dispatches /api/tunnels through its API route registry."""
         d = _make_dev_default()
         req = _req("/api/tunnels", method="GET")
         resp = await d.fetch(req)
