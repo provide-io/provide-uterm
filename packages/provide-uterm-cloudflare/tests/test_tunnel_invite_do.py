@@ -19,8 +19,8 @@ _INTERNAL_VALUE = "worker-invite-redemption-v1"
 
 
 class _Request:
-    def __init__(self, invite: str, *, provenance: bool = True) -> None:
-        self.url = "https://worker.invalid/_internal/tunnel-invite/redeem"
+    def __init__(self, invite: str, *, session_id: str = "tunnel-serial", provenance: bool = True) -> None:
+        self.url = f"https://worker.invalid/_internal/tunnel-invite/{session_id}/redeem"
         self.method = "POST"
         self.headers = {
             _INTERNAL_HEADER: _INTERNAL_VALUE if provenance else "forged",
@@ -32,11 +32,11 @@ class _Request:
         return self._body
 
 
-def _runtime(entry: dict[str, object]) -> tuple[SessionRuntime, SimpleNamespace]:
+def _runtime(entry: dict[str, object], *, worker_id: str = "tunnel-serial") -> tuple[SessionRuntime, SimpleNamespace]:
     connection = sqlite3.connect(":memory:")
     ctx = SimpleNamespace(
         storage=SimpleNamespace(sql=SimpleNamespace(exec=connection.execute), setAlarm=lambda _ms: None),
-        id=SimpleNamespace(name=lambda: "tunnel-serial"),
+        id=SimpleNamespace(name=lambda: worker_id),
         getWebSockets=list,
     )
     kv = SimpleNamespace(get=AsyncMock(return_value=json.dumps(entry)), put=AsyncMock())
@@ -77,12 +77,35 @@ async def test_two_concurrent_invite_redemptions_have_exactly_one_winner() -> No
     assert durable_state is not None
     assert "share_invite_hash" not in durable_state
     assert "share_invite_token" not in durable_state
+    assert "share_token_hash" not in durable_state
+    assert durable_state == {"_consumed_invite_hashes": {"viewer": hash_token("one-time-invite")}}
 
 
 async def test_invite_redemption_rejects_non_worker_provenance() -> None:
     runtime, kv = _runtime(_entry())
 
     response = await runtime.fetch(_Request("one-time-invite", provenance=False))
+
+    assert response.status == 404
+    assert kv.get.await_count == 0
+
+
+async def test_default_do_identity_uses_private_path_session_id_for_state_and_kv() -> None:
+    runtime, kv = _runtime(_entry(), worker_id="default")
+
+    response = await runtime.fetch(_Request("one-time-invite", session_id="tunnel-path-id"))
+
+    assert response.status == 200
+    assert runtime.worker_id == "tunnel-path-id"
+    assert kv.get.await_args.args[0] == "session:tunnel-path-id"
+    assert runtime.store.load_tunnel_invite_state("tunnel-path-id") is not None
+    assert runtime.store.load_tunnel_invite_state("default") is None
+
+
+async def test_private_path_session_id_must_match_named_do_identity() -> None:
+    runtime, kv = _runtime(_entry(), worker_id="tunnel-named-id")
+
+    response = await runtime.fetch(_Request("one-time-invite", session_id="tunnel-other-id"))
 
     assert response.status == 404
     assert kv.get.await_count == 0

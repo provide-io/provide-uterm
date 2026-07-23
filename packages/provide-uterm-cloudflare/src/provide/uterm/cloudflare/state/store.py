@@ -116,11 +116,11 @@ class SqliteStateStore:
         }
 
     # ------------------------------------------------------------------
-    # Tunnel invite state (one-time capability redemption)
+    # Consumed tunnel invite digests (one-time capability redemption)
     # ------------------------------------------------------------------
 
     def load_tunnel_invite_state(self, worker_id: str) -> dict[str, Any] | None:
-        """Return the DO-authoritative tunnel entry used for invite redemption."""
+        """Return persisted consumed-invite digest metadata for this DO."""
         rows = self._rows(self._run("SELECT entry_json FROM tunnel_invite_state WHERE worker_id=?", worker_id))
         if not rows:
             return None
@@ -132,7 +132,7 @@ class SqliteStateStore:
         return value if isinstance(value, dict) else None
 
     def save_tunnel_invite_state(self, worker_id: str, entry: dict[str, Any]) -> None:
-        """Persist a consumed/expired invite before publishing the KV mirror."""
+        """Persist consumed-invite digest metadata without session credentials."""
         self._run(
             "INSERT INTO tunnel_invite_state(worker_id,entry_json,updated_at) VALUES(?,?,?) "
             "ON CONFLICT(worker_id) DO UPDATE SET entry_json=excluded.entry_json,updated_at=excluded.updated_at",
