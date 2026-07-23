@@ -229,20 +229,16 @@ async def test_default_fetch_share_page_keeps_token_out_of_bootstrap() -> None:
 
 
 async def test_default_fetch_share_route() -> None:
-    """Shared tunnel links under /s/{id} redirect to /app/session/{id}."""
-    entry = {
-        "share_token_hash": hash_token("abc"),
-        "control_token_hash": hash_token("def"),
-        "share_invite_hash": hash_token("invite-abc"),
-        "share_invite_token": "abc",
-        "share_invite_expires_at": __import__("time").time() + 300,
-        "expires_at": __import__("time").time() + 3600,
-    }
+    """The share Worker proxies redemption to its session DO, never KV."""
+    stub = SimpleNamespace(
+        fetch=AsyncMock(return_value=Response.json({"page": "session", "role": "viewer", "token": "abc"}))
+    )
+    namespace = SimpleNamespace(idFromName=lambda session_id: f"do:{session_id}", get=lambda _id: stub)
     kv = SimpleNamespace(
-        get=AsyncMock(return_value=json.dumps(entry)),
+        get=AsyncMock(),
         put=AsyncMock(),
     )
-    d = _make_default({"SESSION_REGISTRY": kv})
+    d = _make_default({"SESSION_REGISTRY": kv, "SESSION_RUNTIME": namespace})
     req = SimpleNamespace(
         url="https://x/s/test-123?invite=invite-abc", headers=SimpleNamespace(get=lambda *_a, **_k: None)
     )
@@ -251,6 +247,10 @@ async def test_default_fetch_share_route() -> None:
     assert "/app/session/test-123" in str(resp.headers.get("location", ""))
     assert "token=" not in str(resp.headers.get("location", ""))
     assert "uterm_tunnel_test-123=abc" in str(resp.headers.get("Set-Cookie", ""))
+    assert kv.get.await_count == 0
+    assert kv.put.await_count == 0
+    internal_request = stub.fetch.await_args.args[0]
+    assert internal_request.headers["X-Provide-Uterm-Internal"] == "worker-invite-redemption-v1"
 
 
 async def test_default_fetch_root_path() -> None:
