@@ -2855,13 +2855,13 @@ class TestApiRouter:
         resolve.assert_called_once_with(req, cfg.auth)
 
 
-class TestSessionsRouter:
-    def test_returns_router_with_routes(self) -> None:
-        from provide.uterm.server.routes.sessions import create_sessions_router
+class TestSessionRouteCapabilities:
+    def test_returns_shared_session_capability_handlers(self) -> None:
+        from provide.uterm.server.routes.sessions import session_capability_handlers
 
-        router = create_sessions_router()  # mutant `router = None` → AttributeError on @router.get
-        assert isinstance(router, APIRouter)
-        assert "/sessions" in _paths(router)
+        handlers = session_capability_handlers()
+        assert "sessions.list" in handlers
+        assert "sessions.events_watch" in handlers
 
 
 class TestTunnelsRouter:
