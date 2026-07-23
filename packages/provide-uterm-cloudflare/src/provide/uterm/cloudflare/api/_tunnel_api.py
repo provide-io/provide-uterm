@@ -11,7 +11,7 @@ import secrets
 import time
 import uuid
 from typing import TYPE_CHECKING, Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 from provide.uterm.tunnel.token_hash import hash_token, verify_token
 
@@ -363,7 +363,8 @@ async def consume_tunnel_invite(request: object, env: object, tunnel_id: str) ->
         if namespace is None:
             return None
         target = urlparse(str(getattr(request, "url", "https://worker.invalid")))
-        url = f"{target.scheme or 'https'}://{target.netloc or 'worker.invalid'}/_internal/tunnel-invite/redeem"
+        path = f"/_internal/tunnel-invite/{quote(tunnel_id, safe='')}/redeem"
+        url = f"{target.scheme or 'https'}://{target.netloc or 'worker.invalid'}{path}"
         payload = json.dumps({"invite": str(invite)})
         headers = {"X-Provide-Uterm-Internal": "worker-invite-redemption-v1", "content-type": "application/json"}
         try:

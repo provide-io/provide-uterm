@@ -251,6 +251,7 @@ async def test_default_fetch_share_route() -> None:
     assert kv.put.await_count == 0
     internal_request = stub.fetch.await_args.args[0]
     assert internal_request.headers["X-Provide-Uterm-Internal"] == "worker-invite-redemption-v1"
+    assert internal_request.url.endswith("/_internal/tunnel-invite/test-123/redeem")
 
 
 async def test_default_fetch_root_path() -> None:

@@ -17,7 +17,7 @@ import logging
 import secrets
 import time
 from typing import TYPE_CHECKING, Any, cast
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 from provide.telemetry import get_tracer
 
@@ -56,7 +56,7 @@ else:
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
 
-_INVITE_REDEEM_PATH = "/_internal/tunnel-invite/redeem"
+_INVITE_REDEEM_PREFIX = "/_internal/tunnel-invite/"
 _INVITE_REDEEM_HEADER = "X-Provide-Uterm-Internal"
 _INVITE_REDEEM_PROVENANCE = "worker-invite-redemption-v1"
 
@@ -167,7 +167,7 @@ class _FetchMixin:
                 # concurrent revoke/rotate may have changed KV after our read.
                 self.store.save_tunnel_invite_state(
                     self.worker_id,
-                    {**session, "_consumed_invite_hashes": consumed_hashes},
+                    {"_consumed_invite_hashes": consumed_hashes},
                 )
             if matched is None:
                 return Response.json({"error": "not_found"}, status=404)
@@ -186,6 +186,13 @@ class _FetchMixin:
             path = urlparse(str(request.url)).path
         except Exception:
             return
+        if path.startswith(_INVITE_REDEEM_PREFIX):
+            parts = path.split("/")
+            if len(parts) == 5 and parts[4] == "redeem":
+                session_id = unquote(parts[3])
+                if session_id and "/" not in session_id:
+                    self.worker_id = session_id
+                    return
         for prefix in ("/ws/worker/", "/ws/browser/", "/ws/raw/", "/tunnel/", "/worker/", "/api/sessions/"):
             if path.startswith(prefix):
                 segment = path[len(prefix) :].split("/")[0]
@@ -206,10 +213,17 @@ class _FetchMixin:
             internal_provenance = headers.get(_INVITE_REDEEM_HEADER) or headers.get(_INVITE_REDEEM_HEADER.lower())
         except Exception:
             internal_provenance = None
-        if path == _INVITE_REDEEM_PATH:
+        if path.startswith(_INVITE_REDEEM_PREFIX):
             # This route is only emitted by the Worker when proxying /s/{id}; it
             # is deliberately not part of the public route table.
-            if internal_provenance != _INVITE_REDEEM_PROVENANCE:
+            parts = path.split("/")
+            session_id = unquote(parts[3]) if len(parts) == 5 and parts[4] == "redeem" else ""
+            if (
+                internal_provenance != _INVITE_REDEEM_PROVENANCE
+                or not session_id
+                or "/" in session_id
+                or session_id != self.worker_id
+            ):
                 return Response.json({"error": "not_found"}, status=404)
             return await self._redeem_tunnel_invite(request)
         if self._deleted_at is not None:
