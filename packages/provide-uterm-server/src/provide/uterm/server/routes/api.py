@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 
 from provide.uterm.server.routes.api_keys import create_api_keys_router
+from provide.uterm.server.routes.pam_events import register_pam_event_routes
 from provide.uterm.server.routes.profiles import register_profile_routes
 from provide.uterm.server.routes.sessions import register_session_routes
 from provide.uterm.server.routes.sse import register_sse_routes
@@ -45,6 +46,7 @@ def create_api_router() -> APIRouter:
     register_tunnel_routes(router)
     register_sse_routes(router)
     register_webhook_routes(router)
+    register_pam_event_routes(router)
 
     @router.get("/metrics")
     async def metrics(request: Request) -> dict[str, object]:
