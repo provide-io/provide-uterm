@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, urlparse
 
 from provide.uterm.api_routes import API_ROUTES, RouteDef, RouteRegistry, RouteScope
+from provide.uterm.cloudflare.state.registry import update_kv_session
 
 from ._recording import route_recording
 from ._shared import (
@@ -207,10 +208,10 @@ async def _connect(
 ) -> object:
     if not await _can_mutate_session(runtime, request):
         return json_response({"error": "owner or admin role required"}, status=403)
-    # A Durable Object cannot start an external connector process. A connected
-    # worker (or its native ushell connector) is already running, so expose the
-    # same successful lifecycle status FastAPI returns after start_session().
-    if runtime.worker_ws is None and getattr(runtime, "_ushell", None) is None:
+    # A Durable Object cannot start an external connector process. Its ushell
+    # connector starts only on browser attachment, so neither case is a
+    # successful replacement for FastAPI's start_session().
+    if runtime.worker_ws is None:
         return json_response({"error": "no_worker"}, status=409)
     runtime.lifecycle_state = "running"
     return json_response(_session_status_item(runtime))
@@ -236,9 +237,37 @@ async def _update(
     if not await _can_mutate_session(runtime, request):
         return json_response({"error": "owner or admin role required"}, status=403)
     payload = await runtime.request_json(request)
-    for key in ("display_name", "tags", "visibility"):
-        if key in payload:
-            runtime.meta[key] = payload[key]
+    supported = frozenset({"display_name", "tags", "visibility"})
+    unsupported = sorted(set(payload) - supported)
+    if not payload or unsupported:
+        return json_response({"error": "unsupported session update fields", "fields": unsupported}, status=422)
+    next_meta = dict(runtime.meta)
+    if "display_name" in payload:
+        display_name = payload["display_name"]
+        if not isinstance(display_name, str) or not display_name.strip():
+            return json_response({"error": "display_name must be a non-empty string"}, status=422)
+        next_meta["display_name"] = display_name.strip()
+    if "tags" in payload:
+        tags = payload["tags"]
+        if not isinstance(tags, list) or not all(isinstance(tag, str) for tag in tags):
+            return json_response({"error": "tags must be a list of strings"}, status=422)
+        next_meta["tags"] = tags
+    if "visibility" in payload:
+        visibility = payload["visibility"]
+        if visibility not in {"public", "operator", "private"}:
+            return json_response({"error": "visibility must be public, operator, or private"}, status=422)
+        next_meta["visibility"] = visibility
+    runtime.meta = next_meta
+    runtime.store.save_session_meta(runtime.worker_id, runtime.meta)
+    await update_kv_session(
+        runtime.env,
+        runtime.worker_id,
+        connected=None,
+        hijacked=runtime.hijack.session is not None,
+        input_mode=runtime.input_mode,
+        recording_available=runtime.store.current_event_seq(runtime.worker_id) > 0,
+        meta=runtime.meta,
+    )
     return json_response(_session_status_item(runtime))
 
 

@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 from provide.uterm.cloudflare.api.http_routes import route_http
 from provide.uterm.cloudflare.bridge.hijack import HijackCoordinator
+from provide.uterm.cloudflare.state.store import SqliteStateStore
 
 
 class _Request:
@@ -74,6 +76,93 @@ async def test_do_route_defs_dispatch_connect_disconnect_and_events_watch() -> N
         "dropped_count": 0,
         "timed_out": False,
     }
+
+
+async def test_connect_does_not_claim_an_unstarted_ushell_is_connected() -> None:
+    runtime = _Runtime()
+    runtime.worker_ws = None
+    runtime._ushell = object()
+
+    response = await route_http(runtime, _Request("/api/sessions/session-1/connect", "POST"))
+
+    assert response.status == 409
+    assert json.loads(response.body) == {"error": "no_worker"}
+
+
+class _Kv:
+    def __init__(self) -> None:
+        self.values: dict[str, str] = {}
+
+    async def get(self, key: str) -> str | None:
+        return self.values.get(key)
+
+    async def put(self, key: str, value: str) -> None:
+        self.values[key] = value
+
+    async def delete(self, key: str) -> None:
+        self.values.pop(key, None)
+
+
+def _persistent_runtime() -> _Runtime:
+    runtime = _Runtime()
+    store = SqliteStateStore(sqlite3.connect(":memory:").execute)
+    store.migrate()
+    runtime.store = store
+    kv = _Kv()
+    kv.values["session:session-1"] = json.dumps(
+        {
+            "session_id": "session-1",
+            "connected": True,
+            "lifecycle_state": "running",
+            "owner": "owner",
+        }
+    )
+    runtime.env = SimpleNamespace(SESSION_REGISTRY=kv)
+    return runtime
+
+
+async def test_patch_persists_valid_metadata_and_updates_fleet_kv() -> None:
+    runtime = _persistent_runtime()
+
+    response = await route_http(
+        runtime,
+        _Request(
+            "/api/sessions/session-1",
+            "PATCH",
+            {"display_name": "Prod shell", "tags": ["prod"], "visibility": "operator"},
+        ),
+    )
+
+    assert response.status == 200
+    restored = runtime.store.load_session_meta("session-1")
+    assert restored is not None
+    assert restored["display_name"] == "Prod shell"
+    assert restored["tags"] == ["prod"]
+    assert restored["visibility"] == "operator"
+    assert restored["owner"] == "owner"
+    fleet_row = json.loads(runtime.env.SESSION_REGISTRY.values["session:session-1"])
+    assert fleet_row["display_name"] == "Prod shell"
+    assert fleet_row["tags"] == ["prod"]
+    assert fleet_row["visibility"] == "operator"
+
+
+async def test_patch_rejects_unsupported_or_invalid_metadata_without_persisting() -> None:
+    runtime = _persistent_runtime()
+
+    invalid_visibility = await route_http(
+        runtime,
+        _Request("/api/sessions/session-1", "PATCH", {"visibility": "secret"}),
+    )
+    unsupported_field = await route_http(
+        runtime,
+        _Request("/api/sessions/session-1", "PATCH", {"owner": "attacker"}),
+    )
+
+    assert invalid_visibility.status == 422
+    assert unsupported_field.status == 422
+    assert runtime.store.load_session_meta("session-1") is None
+    assert runtime.store.load_session_meta("session-1") is None
+    assert json.loads(runtime.env.SESSION_REGISTRY.values["session:session-1"])["owner"] == "owner"
 
 
 async def test_do_route_defs_preserve_registry_404_405_and_422_errors() -> None:
