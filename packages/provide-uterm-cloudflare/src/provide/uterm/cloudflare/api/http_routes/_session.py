@@ -188,6 +188,15 @@ async def _delete(
         if sock is not None:
             with contextlib.suppress(Exception):
                 sock.close(1001, "session deleted")  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
+    runtime.worker_ws = None
+    for sockets_by_id in (getattr(runtime, "browser_sockets", None), getattr(runtime, "raw_sockets", None)):
+        if sockets_by_id is not None:
+            sockets_by_id.clear()
+    ushell = getattr(runtime, "_ushell", None)
+    if ushell is not None and bool(getattr(runtime, "_ushell_started", False)):
+        with contextlib.suppress(Exception):
+            await ushell.stop()
+    runtime._ushell_started = False
     return json_response({"ok": True, "session_id": runtime.worker_id, "deleted": True})
 
 

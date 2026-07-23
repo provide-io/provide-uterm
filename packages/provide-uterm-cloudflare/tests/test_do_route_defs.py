@@ -201,6 +201,22 @@ async def test_native_ushell_disconnect_remains_fleet_listed_offline_after_alarm
     assert fleet_row["owner"] == "owner"
 
 
+async def test_deleted_runtime_alarm_does_not_recreate_fleet_kv_or_reschedule() -> None:
+    from provide.uterm.cloudflare.do.session_runtime.io import _SessionRuntimeIoMixin
+
+    runtime = _persistent_runtime()
+
+    deleted = await route_http(runtime, _Request("/api/sessions/session-1", "DELETE"))
+    assert deleted.status == 200
+    # The Worker boundary removes the fleet record after this successful DO
+    # response; alarm must not recreate it from stale in-memory socket state.
+    runtime.env.SESSION_REGISTRY.values.pop("session:session-1")
+
+    await _SessionRuntimeIoMixin.alarm(runtime)
+
+    assert "session:session-1" not in runtime.env.SESSION_REGISTRY.values
+
+
 class _Kv:
     def __init__(self) -> None:
         self.values: dict[str, str] = {}

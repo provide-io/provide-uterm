@@ -415,6 +415,8 @@ class _SessionRuntimeIoMixin:
                 self.raw_sockets.pop(ws_id, None)
 
     async def alarm(self) -> None:
+        if self._deleted_at is not None:
+            return
         mono_now = time.monotonic()
         wall_now = time.time()
         session = self.hijack.session
