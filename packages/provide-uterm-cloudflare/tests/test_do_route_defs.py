@@ -117,6 +117,26 @@ async def test_disconnect_stops_started_ushell_and_reflects_stopped_state() -> N
     assert json.loads(response.body)["connected"] is False
 
 
+async def test_browser_start_transitions_native_ushell_to_running() -> None:
+    from provide.uterm.cloudflare.do.ushell import on_browser_connected
+
+    runtime = _Runtime()
+    runtime.worker_ws = None
+    runtime._ushell = SimpleNamespace(start=AsyncMock(), poll_messages=AsyncMock(return_value=[]))
+    runtime._ushell_started = False
+    runtime.lifecycle_state = "stopped"
+    runtime.broadcast_worker_frame = AsyncMock()
+    runtime.broadcast_to_browsers = AsyncMock()
+    runtime.env = SimpleNamespace(SESSION_REGISTRY=_Kv())
+
+    await on_browser_connected(runtime)
+
+    runtime._ushell.start.assert_awaited_once_with()
+    assert runtime._ushell_started is True
+    assert runtime.lifecycle_state == "running"
+    assert json.loads(runtime.env.SESSION_REGISTRY.values["session:session-1"])["lifecycle_state"] == "running"
+
+
 class _Kv:
     def __init__(self) -> None:
         self.values: dict[str, str] = {}
