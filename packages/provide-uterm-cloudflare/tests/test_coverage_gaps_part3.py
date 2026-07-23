@@ -183,7 +183,7 @@ class TestEntryDispatchGaps:
             )
         )
         d = _make_dev_default(SESSION_REGISTRY=kv)
-        req = _req("/s/missing-runtime?invite=abc")
+        req = _req("/s/missing-runtime?invite=invite-token")
         with patch(
             "provide.uterm.cloudflare.api._tunnel_api.resolve_share_context",
             new=AsyncMock(return_value=None),
