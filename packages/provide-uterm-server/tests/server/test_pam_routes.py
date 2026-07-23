@@ -91,7 +91,10 @@ def test_pam_events_returns_cloudflare_shaped_validation_errors() -> None:
     invalid_username = client.post("/api/pam-events", json={"event": "open", "username": None})
 
     assert (invalid_json.status_code, invalid_json.json()) == (400, {"error": "invalid_json"})
-    assert (unknown_event.status_code, unknown_event.json()) == (422, {"error": "unknown_event"})
+    assert (unknown_event.status_code, unknown_event.json()) == (
+        422,
+        {"error": "unknown_event", "event": "reboot"},
+    )
     assert (missing_username.status_code, missing_username.json()) == (422, {"error": "missing_username"})
     assert (invalid_username.status_code, invalid_username.json()) == (422, {"error": "missing_username"})
 

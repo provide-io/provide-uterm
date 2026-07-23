@@ -53,7 +53,7 @@ def pam_event_capability_handlers() -> dict[str, Callable[..., object]]:
 
         event = str(body.get("event") or "")
         if event not in {"open", "close"}:
-            return JSONResponse({"error": "unknown_event"}, status_code=422)
+            return JSONResponse({"error": "unknown_event", "event": event}, status_code=422)
         username = str(body.get("username") or "")
         if not username:
             return JSONResponse({"error": "missing_username"}, status_code=422)
