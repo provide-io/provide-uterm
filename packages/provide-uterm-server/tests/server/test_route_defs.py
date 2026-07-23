@@ -78,6 +78,35 @@ _EXPECTED_TUNNEL_ROUTE_CONTRACT = frozenset(
     }
 )
 
+_EXPECTED_WEBHOOK_SSE_ROUTE_CONTRACT = frozenset(
+    {
+        (
+            "sessions.events_stream",
+            "sessions.events_stream",
+            "/api/sessions/{session_id}/events/stream",
+            frozenset({"GET"}),
+        ),
+        (
+            "sessions.webhooks.create",
+            "sessions.webhooks.create",
+            "/api/sessions/{session_id}/webhooks",
+            frozenset({"POST"}),
+        ),
+        (
+            "sessions.webhooks.list",
+            "sessions.webhooks.list",
+            "/api/sessions/{session_id}/webhooks",
+            frozenset({"GET"}),
+        ),
+        (
+            "sessions.webhooks.delete",
+            "sessions.webhooks.delete",
+            "/api/sessions/{session_id}/webhooks/{webhook_id}",
+            frozenset({"DELETE"}),
+        ),
+    }
+)
+
 
 async def _handler() -> dict[str, bool]:
     return {"ok": True}
@@ -196,9 +225,7 @@ def test_api_router_binds_shared_session_route_defs_once() -> None:
         route for route in router.routes if isinstance(route, APIRoute) and route.path.startswith("/api/sessions")
     ]
     registered_operations = {
-        route.operation_id
-        for route in session_routes
-        if route.operation_id is not None and route.operation_id.startswith("sessions.")
+        route.operation_id for route in session_routes if route.operation_id in expected_operations
     }
     assert registered_operations == expected_operations
     assert sum(route.path == "/api/sessions" and route.methods == {"GET"} for route in session_routes) == 1
@@ -242,6 +269,25 @@ def test_api_router_binds_shared_tunnel_route_defs_once() -> None:
     assert registered == _EXPECTED_TUNNEL_ROUTE_CONTRACT
     for _, _, path, methods in _EXPECTED_TUNNEL_ROUTE_CONTRACT:
         assert sum(route.path == path and route.methods == set(methods) for route in tunnel_routes) == 1
+
+
+def test_api_router_binds_shared_webhook_and_sse_route_defs_once() -> None:
+    from provide.uterm.server.routes.sse import sse_capability_handlers
+    from provide.uterm.server.routes.webhooks import webhook_capability_handlers
+
+    expected_capabilities = {capability for _, capability, _, _ in _EXPECTED_WEBHOOK_SSE_ROUTE_CONTRACT}
+    assert set(sse_capability_handlers()) | set(webhook_capability_handlers()) == expected_capabilities
+
+    router = create_api_router()
+    routes = [
+        route
+        for route in router.routes
+        if isinstance(route, APIRoute) and (route.path.endswith("/events/stream") or "/webhooks" in route.path)
+    ]
+    registered = {(route.operation_id, route.name, route.path, frozenset(route.methods or ())) for route in routes}
+    assert registered == _EXPECTED_WEBHOOK_SSE_ROUTE_CONTRACT
+    for _, _, path, methods in _EXPECTED_WEBHOOK_SSE_ROUTE_CONTRACT:
+        assert sum(route.path == path and route.methods == set(methods) for route in routes) == 1
 
 
 def test_tunnel_route_adapter_rejects_invalid_tunnel_id() -> None:
@@ -303,6 +349,35 @@ async def test_tunnel_capability_handlers_deny_viewer_creation(capability: str) 
 
     assert error.value.status_code == 403
     request.app.state.uterm_authz.can_create_session.assert_awaited_once_with(request.state.uterm_principal)
+
+
+async def test_webhook_list_capability_keeps_control_authorization() -> None:
+    """The GET webhook endpoint remains protected by session-control permission."""
+    from provide.uterm.server.routes.webhooks import webhook_capability_handlers
+
+    principal = SimpleNamespace(subject_id="viewer", roles=frozenset({"viewer"}))
+    definition = SimpleNamespace(session_id="s1")
+    authorization = MagicMock()
+    authorization.can_mutate_session = AsyncMock(return_value=False)
+    registry = MagicMock()
+    registry.get_definition = AsyncMock(return_value=definition)
+    request = SimpleNamespace(
+        state=SimpleNamespace(uterm_principal=principal),
+        app=SimpleNamespace(
+            state=SimpleNamespace(
+                uterm_authz=authorization,
+                uterm_registry=registry,
+                uterm_webhooks=MagicMock(),
+            )
+        ),
+    )
+
+    with pytest.raises(HTTPException, match="insufficient privileges") as error:
+        await webhook_capability_handlers()["sessions.webhooks.list"](request, "s1")
+
+    assert error.value.status_code == 403
+    authorization.can_mutate_session.assert_awaited_once_with(principal, definition, "session.control.update")
+    request.app.state.uterm_webhooks.list_webhooks.assert_not_called()
 
 
 async def test_bulk_delete_role_authorizer_uses_existing_admin_policy() -> None:

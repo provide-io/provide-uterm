@@ -150,7 +150,7 @@ class TestSseStreamEventsSuccess:
         from fastapi import FastAPI
 
         from provide.uterm.server.bridge.hub import TermHub
-        from provide.uterm.server.routes.sse import create_sse_router
+        from provide.uterm.server.routes.sse import register_sse_routes
 
         # Build a minimal app with only the SSE router and a known session.
         hub = TermHub()  # NO EventBus — stream returns immediately
@@ -194,7 +194,7 @@ class TestSseStreamEventsSuccess:
                 return await call_next(request)  # type: ignore[operator]
 
         app.add_middleware(_SetPrincipal)
-        app.include_router(create_sse_router(), prefix="/api")
+        register_sse_routes(app.router)
 
         with TestClient(app) as client, client.stream("GET", "/api/sessions/s-stream/events/stream") as resp:
             assert resp.status_code == 200

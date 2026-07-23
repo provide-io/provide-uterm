@@ -18,7 +18,12 @@ from typing import TYPE_CHECKING, Annotated, cast
 from fastapi import APIRouter, HTTPException, Path, Query, Request
 from fastapi.responses import StreamingResponse
 
+from provide.uterm.api_routes import API_ROUTES, RouteDef
+from provide.uterm.server.routes.route_defs import bind_api_routes
+
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from provide.uterm.server.auth import Principal
     from provide.uterm.server.authorization import AuthorizationService
     from provide.uterm.server.registry import SessionRegistry
@@ -37,10 +42,9 @@ def _authz(request: Request) -> AuthorizationService:
     return cast("AuthorizationService", request.app.state.uterm_authz)
 
 
-def create_sse_router() -> APIRouter:
-    router = APIRouter()
+def sse_capability_handlers() -> dict[str, Callable[..., object]]:
+    """Return the FastAPI handlers for shared SSE RouteDefs."""
 
-    @router.get("/sessions/{session_id}/events/stream")
     async def stream_events(
         request: Request,
         session_id: _SessionId,
@@ -87,4 +91,22 @@ def create_sse_router() -> APIRouter:
             },
         )
 
-    return router
+    return {"sessions.events_stream": stream_events}
+
+
+async def _unregistered_capability_handler() -> None:
+    """Satisfy the adapter's complete-inventory validation for unbound routes."""
+    raise RuntimeError("unregistered shared API capability invoked")
+
+
+def register_sse_routes(router: APIRouter) -> None:
+    """Bind the shared SSE HTTP family exactly once through RouteDefs."""
+    sse_handlers = sse_capability_handlers()
+    handlers: dict[str, Callable[..., object]] = {
+        route.capability: _unregistered_capability_handler for route in API_ROUTES
+    }
+    handlers.update(sse_handlers)
+    selected: tuple[RouteDef, ...] = tuple(route for route in API_ROUTES if route.capability in sse_handlers)
+    sse_router = APIRouter()
+    bind_api_routes(sse_router, handlers, selected)
+    router.routes.extend(sse_router.routes)
