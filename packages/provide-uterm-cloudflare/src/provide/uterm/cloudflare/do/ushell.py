@@ -129,6 +129,20 @@ async def on_browser_connected(runtime: Any) -> None:
 
     await runtime._ushell.start()
     runtime._ushell_started = True
+    runtime.lifecycle_state = "running"
+    try:
+        from provide.uterm.cloudflare.state.registry import update_kv_session
+    except ImportError:  # pragma: no cover - CF flat bundle path
+        from state.registry import update_kv_session  # type: ignore[import-not-found,no-redef]
+    await update_kv_session(
+        runtime.env,
+        runtime.worker_id,
+        connected=True,
+        hijacked=runtime.hijack.session is not None,
+        input_mode=runtime.input_mode,
+        recording_available=runtime.store.current_event_seq(runtime.worker_id) > 0,
+        meta=runtime.meta,
+    )
 
     # Broadcast worker_connected so all browsers see "Live" in the widget.
     await runtime.broadcast_worker_frame(
