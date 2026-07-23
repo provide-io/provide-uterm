@@ -55,9 +55,31 @@ def test_duplicate_method_and_template_is_rejected() -> None:
 
 
 @pytest.mark.parametrize(
+    "second_template",
+    (
+        "/api/things/{tunnel_id}",
+        "/api/things/list",
+    ),
+)
+def test_intersecting_same_method_templates_are_rejected(second_template: str) -> None:
+    with pytest.raises(ValueError, match="intersecting route"):
+        RouteRegistry(
+            (
+                _route(operation="get_thing", template="/api/things/{session_id}"),
+                _route(
+                    operation="get_other_thing",
+                    template=second_template,
+                    scope=RouteScope.GLOBAL,
+                ),
+            )
+        )
+
+
+@pytest.mark.parametrize(
     "template",
     (
         "api/sessions/{session_id}",
+        "/health",
         "/api/sessions/{unknown_id}",
         "/api/sessions/{session_id}/",
     ),
@@ -90,3 +112,13 @@ def test_missing_capability_is_rejected() -> None:
 
     with pytest.raises(ValueError, match="session.read"):
         registry.validate_capabilities({"session.write"})
+
+
+@pytest.mark.parametrize(
+    ("field", "value"), (("operation", ""), ("operation", " "), ("capability", ""), ("capability", " "))
+)
+def test_blank_operation_or_capability_is_rejected(field: str, value: str) -> None:
+    route_kwargs = {field: value}
+
+    with pytest.raises(ValueError, match=field):
+        RouteRegistry((_route(**route_kwargs),))

@@ -82,6 +82,12 @@ class RouteRegistry:
             if signature in signatures:
                 msg = f"duplicate route: {route.method.value} {route.template}"
                 raise ValueError(msg)
+            for existing_route, _ in compiled_routes:
+                if route.method == existing_route.method and _templates_intersect(
+                    route.template, existing_route.template
+                ):
+                    msg = f"intersecting route: {route.method.value} {route.template} and {existing_route.template}"
+                    raise ValueError(msg)
             signatures.add(signature)
             compiled_routes.append((route, _compile_template(route.template)))
 
@@ -124,6 +130,8 @@ class RouteRegistry:
             raise ValueError("route method must be an HttpMethod")
         if not isinstance(route.scope, RouteScope):
             raise ValueError("route scope must be a RouteScope")
+        _validate_nonblank_normalized(route.operation, "operation")
+        _validate_nonblank_normalized(route.capability, "capability")
         parameters = _template_parameters(route.template)
         if route.scope is RouteScope.SESSION and "session_id" not in parameters:
             raise ValueError("session route template must include {session_id}")
@@ -131,7 +139,7 @@ class RouteRegistry:
 
 def _template_parameters(template: str) -> tuple[str, ...]:
     """Validate a normalized template and return its named parameters."""
-    if not isinstance(template, str) or not template.startswith("/") or (template != "/" and template.endswith("/")):
+    if not isinstance(template, str) or not template.startswith("/api/") or template.endswith("/"):
         raise ValueError("invalid route template")
     if "?" in template or "#" in template:
         raise ValueError("invalid route template")
@@ -148,6 +156,36 @@ def _template_parameters(template: str) -> tuple[str, ...]:
         elif "{" in segment or "}" in segment or _STATIC_SEGMENT_PATTERN.fullmatch(segment) is None:
             raise ValueError("invalid route template")
     return tuple(parameters)
+
+
+def _validate_nonblank_normalized(value: object, field_name: str) -> None:
+    """Require a stable, nonblank identifier for a route metadata field."""
+    if not isinstance(value, str) or not value or value != value.strip():
+        raise ValueError(f"route {field_name} must be nonblank and normalized")
+
+
+def _templates_intersect(first: str, second: str) -> bool:
+    """Return whether two validated templates can match the same path."""
+    first_segments = first.split("/")[1:]
+    second_segments = second.split("/")[1:]
+    if len(first_segments) != len(second_segments):
+        return False
+    for first_segment, second_segment in zip(first_segments, second_segments, strict=True):
+        first_parameter = first_segment.startswith("{")
+        second_parameter = second_segment.startswith("{")
+        if first_parameter and second_parameter:
+            continue
+        if first_parameter:
+            if re.fullmatch(_PARAMETER_PATTERN, second_segment) is None:
+                return False
+            continue
+        if second_parameter:
+            if re.fullmatch(_PARAMETER_PATTERN, first_segment) is None:
+                return False
+            continue
+        if first_segment != second_segment:
+            return False
+    return True
 
 
 def _compile_template(template: str) -> re.Pattern[str]:
