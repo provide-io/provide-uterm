@@ -205,7 +205,14 @@ def _compile_template(template: str) -> re.Pattern[str]:
 API_ROUTES: tuple[RouteDef, ...] = (
     RouteDef("sessions.list", HttpMethod.GET, "/api/sessions", RouteScope.GLOBAL, "sessions.list", ()),
     RouteDef("sessions.create", HttpMethod.POST, "/api/sessions", RouteScope.GLOBAL, "sessions.create", ()),
-    RouteDef("sessions.bulk_delete", HttpMethod.DELETE, "/api/sessions", RouteScope.GLOBAL, "sessions.bulk_delete", ()),
+    RouteDef(
+        "sessions.bulk_delete",
+        HttpMethod.DELETE,
+        "/api/sessions",
+        RouteScope.GLOBAL,
+        "sessions.bulk_delete",
+        frozenset({"admin"}),
+    ),
     RouteDef("sessions.get", HttpMethod.GET, "/api/sessions/{session_id}", RouteScope.SESSION, "sessions.get", ()),
     RouteDef(
         "sessions.update", HttpMethod.PATCH, "/api/sessions/{session_id}", RouteScope.SESSION, "sessions.update", ()
