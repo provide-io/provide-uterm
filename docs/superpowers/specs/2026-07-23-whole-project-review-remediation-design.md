@@ -8,11 +8,49 @@ regression test that fails before the implementation and passes afterward.
 
 ## Approach
 
-Use focused fixes inside the existing subsystem boundaries. Preserve the
-current FastAPI, Cloudflare, Go, C#, and frontend architectures rather than
-introducing a new cross-language framework. Shared security invariants must
-remain equivalent across backends even when their concurrency mechanisms
-differ.
+Use focused fixes inside the existing subsystem boundaries. Preserve the Go,
+C#, and frontend architectures. Replace the duplicated FastAPI and Cloudflare
+`/api/**` routing implementations with one Python `RouteDef` contract layer;
+this is deliberately a local backend refactor, not a new cross-language
+framework. Shared security invariants must remain equivalent across backends
+even when their concurrency mechanisms differ.
+
+## Shared API Route Contract
+
+All shared HTTP API routes are declared exactly once as immutable `RouteDef`
+values. A definition records its HTTP method, normalized path template,
+stable operation name, execution scope (`global` or `session`), authentication
+and role policy, and backend capability name. It contains no FastAPI or
+Cloudflare imports, handlers, or storage concerns.
+
+The contract layer compiles templates and validates named path parameters. It
+is the sole authority for matching the shared `/api/**` surface, detecting
+duplicate method/template pairs, and producing a deterministic route set for
+tests and runtime validation.
+
+FastAPI adapts the definitions into `APIRouter` registrations. The Cloudflare
+Worker uses the same definitions to authenticate and authorize a request, then
+either invokes a global capability or proxies a session-scoped request to the
+named Durable Object. The Durable Object resolves the same definition,
+requires session scope, verifies that the request's `session_id` identifies
+itself, then invokes its local capability.
+
+WebSocket upgrades, SPA/static assets, and runtime bootstrap/health routes
+remain native to their runtimes. They are not `RouteDef` entries because they
+do not share the same HTTP execution model.
+
+There is no migration dispatcher: the legacy Cloudflare API regexes, prefix
+fallbacks, handler lambdas, duplicated method checks, compatibility imports,
+and tests coupled to those internals are deleted once their definitions are
+served by the contract layer. Existing public endpoint URLs and response
+payloads do not change.
+
+For every route applicable to a backend, startup validation requires the
+capability declared by its `RouteDef`; absent implementations fail
+deterministically rather than silently exposing different behavior. Contract
+tests enumerate every definition, assert FastAPI and Cloudflare availability,
+and verify method mismatch (405 plus `Allow`), invalid path parameters (422),
+authentication (401), and authorization (403) uniformly.
 
 ## Security and Authentication
 
@@ -36,6 +74,10 @@ remote relays and backend parity; it will create or remove the passive
 operator-visible PAM session record directly and will not recursively forward
 the event to another relay.
 
+`POST /api/pam-events` is a `RouteDef` global capability in both backends, so
+the same declared operator/admin policy is enforced before either handler
+runs.
+
 ### One-time tunnel invites
 
 Cloudflare invite redemption will move from a KV read-modify-write sequence to
@@ -49,6 +91,11 @@ consume function contains no suspension point, so only one request in a
 process can obtain an invite. A concurrency regression test will preserve that
 single-use behavior. This design does not introduce Durable Object concepts
 into FastAPI.
+
+Invite redemption is represented as a session/tunnel-scoped capability and is
+executed by the owning Durable Object in Cloudflare. The object clears the
+invite before returning a bootstrap token, so concurrent redemptions for the
+same tunnel cannot both succeed.
 
 ### Session connector credentials
 
@@ -130,6 +177,8 @@ distributions.
   interval while explicit flush callers still receive the error.
 - JWKS refresh errors remain authentication failures and never accept an
   unverified token.
+- Shared API route mismatches return `405` with `Allow`; malformed declared
+  path parameters return `422`; unknown routes return `404`.
 
 ## Testing
 
@@ -142,11 +191,13 @@ will include:
 - C# Release build and test suite
 - Frontend typechecks and Vitest suites
 - Release/package metadata validation
+- Shared route-contract unit tests, FastAPI adapter tests, Cloudflare Worker
+  and Durable Object adapter tests, and full API parity conformance tests
 - A final clean diff and repository status review
 
 ## Non-Goals
 
 - No new public authentication mode or credential persistence service.
-- No broad rewrite of the Cloudflare runtime or FastAPI registry.
+- No migration aliases or legacy API dispatch path after `RouteDef` adoption.
 - No visual redesign of the inspect UI.
 - No unrelated cleanup or dependency upgrades.
