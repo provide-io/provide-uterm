@@ -19,7 +19,6 @@ from provide.uterm.server.routes.api import create_api_router
 from provide.uterm.server.routes.approvals import create_approvals_router
 from provide.uterm.server.routes.health import create_health_router
 from provide.uterm.server.routes.pages import create_page_router
-from provide.uterm.server.routes.profiles import create_profiles_router
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -39,7 +38,7 @@ def install_routers(
     require_authenticated: Callable[[HTTPConnection], Awaitable[None]],
     require_hub_route_authz: Callable[[HTTPConnection], Awaitable[None]],
 ) -> None:
-    """Mount the hub, health, api, profiles, approvals, and page routers."""
+    """Mount the hub, health, api, approvals, and page routers."""
     # Tunnel routes are passed as extra registrars to avoid a hard import
     # dependency from bridge → tunnel (enables future package extraction).
     from provide.uterm.server.bridge.fanout._routes import register_fanout_routes
@@ -54,7 +53,6 @@ def install_routers(
     # through) because it reveals the effective security config.
     app.include_router(create_health_router(require_authenticated=require_authenticated))
     app.include_router(create_api_router(), dependencies=[Depends(require_authenticated)])
-    app.include_router(create_profiles_router(), dependencies=[Depends(require_authenticated)])
     app.include_router(create_approvals_router(), dependencies=[Depends(require_authenticated)])
     # Graphical-target CRUD is gated by capability + tenant scope inside each
     # handler; require_authenticated ensures a resolved principal is present.
