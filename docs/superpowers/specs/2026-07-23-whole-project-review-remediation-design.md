@@ -18,14 +18,23 @@ differ.
 
 ### PAM event authorization
 
-The Cloudflare `/api/pam-events` route will resolve the authenticated principal
-and require an operator or administrator role before mutating session records.
-Viewer JWTs will receive `403`.
+Cloudflare and FastAPI will both expose `POST /api/pam-events` with the same
+request validation, session identifier derivation, open/close semantics, and
+response payloads. This closes the current feature gap: Cloudflare already
+accepts relayed PAM lifecycle notifications, while FastAPI currently supports
+only its local listener.
 
-FastAPI does not expose a remotely callable PAM event endpoint. Its PAM events
-arrive through the local platform listener, so no matching HTTP authorization
-change is required. Tests will document this boundary so a future FastAPI PAM
-endpoint cannot be added without an explicit authorization decision.
+Both endpoints will require a verified principal with session-creation
+capability, which is granted to operator and administrator roles by the local
+authorization policy. This also supports a machine relay credential expressed
+as an appropriately scoped JWT or API-key principal. Viewer credentials will
+receive `403`, and unauthenticated callers will receive `401`.
+
+FastAPI's existing local PAM listener remains supported and does not call the
+HTTP endpoint when handling events on the same host. The HTTP route is for
+remote relays and backend parity; it will create or remove the passive
+operator-visible PAM session record directly and will not recursively forward
+the event to another relay.
 
 ### One-time tunnel invites
 
@@ -112,6 +121,8 @@ distributions.
 
 - Authorization failures return `403` without revealing whether a target PAM
   session exists.
+- The FastAPI and Cloudflare PAM endpoints return matching status codes and
+  response schemas for authentication, validation, open, and close cases.
 - Consumed or stale invites return the existing invalid/expired response.
 - Tunnel protocol selection fails closed when attachment metadata is invalid.
 - Short RFB EOF still raises `EOFError`; ordinary fragmentation does not.
