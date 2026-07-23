@@ -83,6 +83,13 @@ func TestMemoryGraphicalSessionInjectPointerNoOpCases(t *testing.T) {
 	}
 }
 
+func TestMemoryGraphicalSessionClose(t *testing.T) {
+	s := gui.NewMemoryGraphicalSession(2, 2)
+	if err := s.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+}
+
 func TestMemoryGraphicalSessionInjectKeyNoOp(t *testing.T) {
 	s := gui.NewMemoryGraphicalSession(2, 2)
 	if err := s.InjectKey(0xFF0D, true); err != nil {
