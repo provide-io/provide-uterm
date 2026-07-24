@@ -483,3 +483,53 @@ async def test_bulk_delete_role_authorizer_uses_existing_admin_policy() -> None:
     assert response.status_code == 403
     assert response.json()["detail"] == "insufficient role privileges"
     authorization.is_admin.assert_awaited_once()
+
+
+@pytest.mark.parametrize(
+    "module_name",
+    (
+        "pam_events",
+        "profiles",
+        "sessions",
+        "sse",
+        "tunnels",
+        "webhooks",
+    ),
+)
+async def test_unregistered_shared_capability_handlers_are_unreachable(module_name: str) -> None:
+    module = __import__(f"provide.uterm.server.routes.{module_name}", fromlist=["_unregistered_capability_handler"])
+
+    with pytest.raises(RuntimeError, match="unregistered shared API capability"):
+        await module._unregistered_capability_handler()
+
+
+async def test_session_route_role_authorizer_rejects_missing_admin_and_member_roles() -> None:
+    from provide.uterm.server.routes.sessions import authorize_session_route_roles
+
+    authorization = MagicMock()
+    authorization.is_admin = AsyncMock(return_value=False)
+    request = SimpleNamespace(
+        state=SimpleNamespace(uterm_principal=SimpleNamespace(roles=frozenset({"viewer"}))),
+        app=SimpleNamespace(state=SimpleNamespace(uterm_authz=authorization)),
+    )
+
+    assert await authorize_session_route_roles(request, ("admin",)) is False
+    assert await authorize_session_route_roles(request, ("operator",)) is False
+    authorization.is_admin.assert_awaited_once()
+
+
+async def test_bulk_delete_handler_enforces_its_defense_in_depth_admin_check() -> None:
+    from provide.uterm.server.routes.sessions import session_capability_handlers
+
+    authorization = MagicMock()
+    authorization.is_admin = AsyncMock(return_value=False)
+    request = SimpleNamespace(
+        state=SimpleNamespace(uterm_principal=SimpleNamespace(roles=frozenset({"viewer"}))),
+        app=SimpleNamespace(state=SimpleNamespace(uterm_authz=authorization)),
+    )
+
+    with pytest.raises(HTTPException, match="admin privileges required") as error:
+        await session_capability_handlers()["sessions.bulk_delete"](request, {"filter": {}})
+
+    assert error.value.status_code == 403
+    authorization.is_admin.assert_awaited_once()

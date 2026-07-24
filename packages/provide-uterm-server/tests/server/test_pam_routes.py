@@ -97,11 +97,13 @@ def test_pam_events_returns_cloudflare_shaped_validation_errors() -> None:
     client = TestClient(_app_for(_principal("operator"), _registry()))
 
     invalid_json = client.post("/api/pam-events", content=b"{")
+    invalid_json_value = client.post("/api/pam-events", json=[])
     unknown_event = client.post("/api/pam-events", json={"event": "reboot", "username": "alice"})
     missing_username = client.post("/api/pam-events", json={"event": "open", "username": ""})
     invalid_username = client.post("/api/pam-events", json={"event": "open", "username": None})
 
     assert (invalid_json.status_code, invalid_json.json()) == (400, {"error": "invalid_json"})
+    assert (invalid_json_value.status_code, invalid_json_value.json()) == (400, {"error": "invalid_json"})
     assert (unknown_event.status_code, unknown_event.json()) == (
         422,
         {"error": "unknown_event", "event": "reboot"},
