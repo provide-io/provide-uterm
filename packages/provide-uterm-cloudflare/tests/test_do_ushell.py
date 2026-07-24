@@ -283,6 +283,16 @@ def test_init_ushell_ctx_no_storage_attr():
 # ---------------------------------------------------------------------------
 
 
+def test_recording_available_requires_a_numeric_positive_event_sequence():
+    from provide.uterm.cloudflare.do.ushell import _recording_available
+
+    runtime = SimpleNamespace(worker_id="ushell-1", store=SimpleNamespace(current_event_seq=lambda _worker_id: 2))
+    mock_runtime = SimpleNamespace(worker_id="ushell-1", store=MagicMock())
+
+    assert _recording_available(runtime) is True
+    assert _recording_available(mock_runtime) is False
+
+
 async def test_on_browser_connected_no_ushell():
     """No-op when _ushell is None."""
     from provide.uterm.cloudflare.do.ushell import on_browser_connected

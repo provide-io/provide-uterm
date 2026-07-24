@@ -1,9 +1,9 @@
 """HTTP API request handlers and the route dispatcher.
 
 Exposes the per-route async handlers (``_handle_sessions``,
-``_handle_connect``, ``_handle_session_delete``), the lightweight ``_api_*``
-indirection used by the route table, the ``_match_api_route`` dispatcher,
-and the top-level ``_route_request`` entry point used by ``Default.fetch``.
+``_handle_connect``), the lightweight ``_api_*``
+indirection used by the RouteDef capability map, and the top-level
+``_route_request`` entry point used by ``Default.fetch``.
 """
 
 from __future__ import annotations
@@ -51,9 +51,6 @@ async def _decode_jwt_principal(request: object, config: CloudflareConfig) -> An
 
 
 _STATIC_ASSET_PATH = re.compile(r"^/[a-zA-Z0-9._/-]+\.(?:html|css|js)$")
-_SESSION_ID_RE = re.compile(r"^/api/sessions/(?P<session_id>[a-zA-Z0-9_-]{1,64})$")
-_TUNNEL_TOKENS_RE = re.compile(r"^/api/tunnels/(?P<tunnel_id>[a-zA-Z0-9_-]{1,64})/tokens$")
-_TUNNEL_TOKENS_ROTATE_RE = re.compile(r"^/api/tunnels/(?P<tunnel_id>[a-zA-Z0-9_-]{1,64})/tokens/rotate$")
 
 
 async def _handle_sessions(request: object, env: object, config: CloudflareConfig) -> Response:
@@ -144,34 +141,6 @@ async def _handle_connect(request: object, env: object, config: CloudflareConfig
     return json_response({**entry, "url": f"/app/session/{session_id}"})
 
 
-async def _handle_session_delete(request: object, env: object, sid: str, config: CloudflareConfig) -> Response:
-    """Handle DELETE /api/sessions/{id}."""
-    principal = await _decode_jwt_principal(request, config)
-    if principal is not None:
-        # In JWT mode, verify the caller is the session owner or an admin.
-        # KV is the auth source — a missing row means the session doesn't exist;
-        # fail closed with 404 rather than letting the delete proceed unauthenticated.
-        session_data = await _entry_attr("get_kv_session")(env, sid)
-        if session_data is None:
-            return json_response({"error": "not_found"}, status=404)
-        session_owner = session_data.get("owner")
-        is_admin = "admin" in principal.roles
-        is_owner = session_owner is not None and principal.subject_id == session_owner
-        if not is_admin and not is_owner:
-            return json_response({"error": "forbidden"}, status=403)
-    # Attempt DO cleanup before removing the KV entry so a failed DO cleanup
-    # doesn't orphan a live DO while the session disappears from all API views.
-    namespace = getattr(env, "SESSION_RUNTIME", None)
-    if namespace is not None:
-        try:
-            stub = namespace.get(namespace.idFromName(sid))
-            await stub.fetch(request)
-        except Exception as _exc:
-            return json_response({"error": "do_cleanup_failed", "detail": str(_exc)}, status=500)
-    await _entry_attr("delete_kv_session")(env, sid)
-    return json_response({"ok": True, "session_id": sid, "deleted": True})
-
-
 async def _route_request(request: object, env: object, config: CloudflareConfig) -> Response:
     """Route an incoming request to the appropriate handler."""
     from provide.uterm.cloudflare.entry.registry import _extract_worker_id
@@ -239,13 +208,17 @@ async def _route_request(request: object, env: object, config: CloudflareConfig)
             )
             return _attach_share_token_cookie(response, request, str(spa[1]["session_id"]))
 
-    # Authenticated API routes.
-    handler = _match_api_route(path, request)
-    if handler is not None:
+    if spa is not None:
         auth_error = await _require_jwt(request, config)
         if auth_error is not None:
             return auth_error
-        return await handler(request, env, config)  # type: ignore[operator]  # ty:ignore[call-non-callable]
+        return _spa_response(spa[0], **spa[1])
+
+    from provide.uterm.cloudflare.entry.route_defs import dispatch_api_route
+
+    api_response = await dispatch_api_route(request, env, config, path)
+    if api_response is not None:
+        return api_response
 
     # DO-proxied routes (includes /tunnel/{id} for WSS upgrade).
     worker_id = _extract_worker_id(path)
@@ -256,38 +229,6 @@ async def _route_request(request: object, env: object, config: CloudflareConfig)
         return await namespace.get(namespace.idFromName(worker_id)).fetch(request)  # pragma: no cover
 
     return json_response({"error": "not_found", "path": path}, status=404)
-
-
-def _match_api_route(path: str, request: object) -> object | None:
-    """Return the handler coroutine for an authenticated route, or None."""
-    if path == "/api/sessions":
-        return _api_sessions
-    if path == "/api/connect":
-        return _api_connect
-    if path == "/api/tunnels":
-        return _api_tunnels
-    rotate_match = _TUNNEL_TOKENS_ROTATE_RE.match(path)
-    if rotate_match:
-        tid = rotate_match.group("tunnel_id")
-        return lambda req, env, cfg: _api_tunnel_rotate(req, env, cfg, tid)
-    revoke_match = _TUNNEL_TOKENS_RE.match(path)
-    if revoke_match:
-        method = str(getattr(request, "method", "GET")).upper()
-        if method == "DELETE":
-            tid = revoke_match.group("tunnel_id")
-            return lambda req, env, cfg: _api_tunnel_revoke(req, env, cfg, tid)
-    if path == "/api/pam-events":
-        return _api_pam_events
-    if path.startswith("/api/profiles"):
-        return _api_profiles
-    session_delete_match = _SESSION_ID_RE.match(path)
-    if session_delete_match and str(getattr(request, "method", "GET")).upper() == "DELETE":
-        # Stash the match for the handler.
-        return lambda req, env, cfg: _handle_session_delete(req, env, session_delete_match.group("session_id"), cfg)
-    spa = _resolve_spa_route(path)
-    if spa is not None:
-        return lambda _req, _env, _cfg: _as_future(_spa_response(spa[0], **spa[1]))
-    return None
 
 
 async def _api_sessions(request: object, env: object, config: CloudflareConfig) -> Response:
@@ -356,15 +297,8 @@ async def _api_profiles(request: object, env: object, config: CloudflareConfig) 
     return await route_profiles(request, env, path, method, principal_id)
 
 
-async def _as_future(value: Response) -> Response:
-    return value
-
-
 __all__ = [
-    "_SESSION_ID_RE",
     "_STATIC_ASSET_PATH",
-    "_TUNNEL_TOKENS_RE",
-    "_TUNNEL_TOKENS_ROTATE_RE",
     "_api_connect",
     "_api_pam_events",
     "_api_profiles",
@@ -372,10 +306,7 @@ __all__ = [
     "_api_tunnel_revoke",
     "_api_tunnel_rotate",
     "_api_tunnels",
-    "_as_future",
     "_handle_connect",
-    "_handle_session_delete",
     "_handle_sessions",
-    "_match_api_route",
     "_route_request",
 ]

@@ -11,7 +11,7 @@ import secrets
 import time
 import uuid
 from typing import TYPE_CHECKING, Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 from provide.uterm.tunnel.token_hash import hash_token, verify_token
 
@@ -349,7 +349,7 @@ async def resolve_share_context(
 
 
 async def consume_tunnel_invite(request: object, env: object, tunnel_id: str) -> tuple[str, str, str] | None:
-    """Consume a one-time tunnel invite and return ``(page_kind, role, token)``."""
+    """Ask the session DO to consume a one-time invite atomically."""
     try:
         query = parse_qs(urlparse(str(request.url)).query)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
         invite = (query.get("invite", [None]) or [None])[0]
@@ -358,47 +358,37 @@ async def consume_tunnel_invite(request: object, env: object, tunnel_id: str) ->
     if not invite:
         return None
 
-    kv = getattr(env, "SESSION_REGISTRY", None)
-    if kv is None:
-        return None
-    raw = await kv.get(f"session:{tunnel_id}")
-    if raw is None:
-        return None
     try:
-        session = json.loads(str(raw))
-    except (json.JSONDecodeError, TypeError):
-        return None
-    if session.get("revoked"):
-        return None
+        namespace = getattr(env, "SESSION_RUNTIME", None)
+        if namespace is None:
+            return None
+        target = urlparse(str(getattr(request, "url", "https://worker.invalid")))
+        path = f"/_internal/tunnel-invite/{quote(tunnel_id, safe='')}/redeem"
+        url = f"{target.scheme or 'https'}://{target.netloc or 'worker.invalid'}{path}"
+        payload = json.dumps({"invite": str(invite)})
+        headers = {"X-Provide-Uterm-Internal": "worker-invite-redemption-v1", "content-type": "application/json"}
+        try:
+            from js import Request  # type: ignore[import-not-found]
 
-    expires_at = session.get("expires_at")
-    now = time.time()
-    if isinstance(expires_at, (int, float)) and now > float(expires_at):
+            internal_request = Request(url, {"method": "POST", "headers": headers, "body": payload})
+        except ImportError:
+            from types import SimpleNamespace
+
+            async def _text() -> str:
+                return payload
+
+            internal_request = SimpleNamespace(url=url, method="POST", headers=headers, text=_text)
+        response = await namespace.get(namespace.idFromName(tunnel_id)).fetch(internal_request)
+        if int(getattr(response, "status", 500)) != 200:
+            return None
+        raw = await response.text() if hasattr(response, "text") else getattr(response, "body", "")
+        data = json.loads(str(raw))
+        page, role, token = data.get("page"), data.get("role"), data.get("token")
+        if isinstance(page, str) and isinstance(role, str) and isinstance(token, str):
+            return page, role, token
+    except Exception:
         return None
-
-    matched: tuple[str, str, str] | None = None
-    for role, token_hash_key, invite_hash_key, invite_token_key, invite_expires_key in (
-        ("operator", "control_token_hash", "control_invite_hash", "control_invite_token", "control_invite_expires_at"),
-        ("viewer", "share_token_hash", "share_invite_hash", "share_invite_token", "share_invite_expires_at"),
-    ):
-        invite_hash = str(session.get(invite_hash_key) or "")
-        raw_token = str(session.get(invite_token_key) or "")
-        active_token_hash = str(session.get(token_hash_key) or "")
-        invite_expires = session.get(invite_expires_key)
-        if not invite_hash or not raw_token or not active_token_hash:
-            continue
-        if isinstance(invite_expires, (int, float)) and now > float(invite_expires):
-            _clear_tunnel_invite(session, role)
-            continue
-        if verify_token(str(invite), invite_hash) and verify_token(raw_token, active_token_hash):
-            page_kind = "operator" if role == "operator" else str(session.get("share_page") or "session")
-            matched = (page_kind, role, raw_token)
-            _clear_tunnel_invite(session, role)
-            break
-
-    if matched is not None:
-        await kv.put(f"session:{tunnel_id}", json.dumps(session))
-    return matched
+    return None
 
 
 async def handle_share_route(

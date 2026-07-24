@@ -12,6 +12,7 @@ the mixin modules in this package.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -42,9 +43,6 @@ from .flow_control import FlowController
 from .io import _SessionRuntimeIoMixin
 from .lifecycle import _LifecycleMixin
 from .ws_helpers import _WsHelperMixin
-
-if TYPE_CHECKING:
-    import asyncio
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
@@ -122,6 +120,9 @@ class SessionRuntime(
         # Timestamp of the last _ensure_credentials() KV read (None = not loaded).
         # Independent of _meta_loaded so revocation and post-hibernation recovery work.
         self._credentials_loaded_at: float | None = None
+        # Durable Objects are single-addressed, but awaits in a fetch handler can
+        # otherwise allow a second redemption to observe the same invite state.
+        self._tunnel_invite_lock = asyncio.Lock()
 
         # ushell — set for sessions whose worker_id starts with "ushell-".
         self._ushell: Any = None  # UshellConnector | None

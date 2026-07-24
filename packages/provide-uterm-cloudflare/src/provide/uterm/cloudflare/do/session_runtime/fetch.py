@@ -17,7 +17,7 @@ import logging
 import secrets
 import time
 from typing import TYPE_CHECKING, Any, cast
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 from provide.telemetry import get_tracer
 
@@ -56,6 +56,10 @@ else:
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
 
+_INVITE_REDEEM_PREFIX = "/_internal/tunnel-invite/"
+_INVITE_REDEEM_HEADER = "X-Provide-Uterm-Internal"
+_INVITE_REDEEM_PROVENANCE = "worker-invite-redemption-v1"
+
 
 class _FetchMixin:
     """Mixin providing the DO fetch dispatch and WS upgrade for SessionRuntime."""
@@ -74,6 +78,7 @@ class _FetchMixin:
         _deleted_at: float | None
         _tunnel_worker_token_hash: str | None
         _ushell: Any
+        _tunnel_invite_lock: Any
 
         # Methods from other mixins
         async def _ensure_meta(self) -> None: ...
@@ -84,6 +89,90 @@ class _FetchMixin:
         def _register_socket(self, ws: Any, role: str) -> None: ...
         def ws_key(self, ws: Any) -> str: ...
         async def _maybe_send_presence_sync(self, ws: Any, *, exclude_self: bool = False) -> None: ...
+
+    async def _redeem_tunnel_invite(self, request: Any) -> Response:
+        """Atomically consume an invite from this session's Durable Object."""
+        try:
+            raw_body = await request.text()
+            invite = json.loads(str(raw_body)).get("invite")
+        except Exception:
+            invite = None
+        if not isinstance(invite, str) or not invite:
+            return Response.json({"error": "not_found"}, status=404)
+
+        async with self._tunnel_invite_lock:
+            persisted = self.store.load_tunnel_invite_state(self.worker_id) or {}
+            consumed = persisted.get("_consumed_invite_hashes", {})
+            consumed_hashes = consumed if isinstance(consumed, dict) else {}
+            # KV remains the current session source for revokes and rotations;
+            # SQLite only remembers consumed invite digests, so an eventually
+            # consistent KV read cannot resurrect a redeemed invite.
+            kv = getattr(self.env, "SESSION_REGISTRY", None)
+            if kv is None:
+                return Response.json({"error": "not_found"}, status=404)
+            try:
+                raw = await kv.get(f"session:{self.worker_id}")
+                session = json.loads(str(raw)) if raw is not None else None
+            except Exception:
+                session = None
+            if not isinstance(session, dict):
+                return Response.json({"error": "not_found"}, status=404)
+
+            now = time.time()
+            if session.get("revoked"):
+                return Response.json({"error": "not_found"}, status=404)
+            expires_at = session.get("expires_at")
+            if isinstance(expires_at, (int, float)) and now > float(expires_at):
+                return Response.json({"error": "not_found"}, status=404)
+
+            matched: tuple[str, str, str] | None = None
+            changed = False
+            from provide.uterm.tunnel.token_hash import verify_token
+
+            for role, token_hash_key, invite_hash_key, invite_token_key, invite_expires_key in (
+                (
+                    "operator",
+                    "control_token_hash",
+                    "control_invite_hash",
+                    "control_invite_token",
+                    "control_invite_expires_at",
+                ),
+                ("viewer", "share_token_hash", "share_invite_hash", "share_invite_token", "share_invite_expires_at"),
+            ):
+                invite_hash = str(session.get(invite_hash_key) or "")
+                raw_token = str(session.get(invite_token_key) or "")
+                active_token_hash = str(session.get(token_hash_key) or "")
+                invite_expires = session.get(invite_expires_key)
+                if not invite_hash or not raw_token or not active_token_hash:
+                    continue
+                if consumed_hashes.get(role) == invite_hash:
+                    continue
+                if isinstance(invite_expires, (int, float)) and now > float(invite_expires):
+                    for suffix in ("hash", "token", "expires_at"):
+                        session.pop(f"{'control' if role == 'operator' else 'share'}_invite_{suffix}", None)
+                    changed = True
+                    continue
+                if verify_token(invite, invite_hash) and verify_token(raw_token, active_token_hash):
+                    page = "operator" if role == "operator" else str(session.get("share_page") or "session")
+                    matched = (page, role, raw_token)
+                    consumed_hashes[role] = invite_hash
+                    for suffix in ("hash", "token", "expires_at"):
+                        session.pop(f"{'control' if role == 'operator' else 'share'}_invite_{suffix}", None)
+                    changed = True
+                    break
+
+            if changed:
+                # SQLite is authoritative and must be updated before returning
+                # a capability. Do not write this older KV snapshot back: a
+                # concurrent revoke/rotate may have changed KV after our read.
+                self.store.save_tunnel_invite_state(
+                    self.worker_id,
+                    {"_consumed_invite_hashes": consumed_hashes},
+                )
+            if matched is None:
+                return Response.json({"error": "not_found"}, status=404)
+            page, role, token = matched
+            return Response.json({"page": page, "role": role, "token": token})
 
     def _lazy_init_worker_id(self, request: Any) -> None:
         """Update worker_id from the request URL when ctx.id.name() returned 'default'.
@@ -97,6 +186,13 @@ class _FetchMixin:
             path = urlparse(str(request.url)).path
         except Exception:
             return
+        if path.startswith(_INVITE_REDEEM_PREFIX):
+            parts = path.split("/")
+            if len(parts) == 5 and parts[4] == "redeem":
+                session_id = unquote(parts[3])
+                if session_id and "/" not in session_id:
+                    self.worker_id = session_id
+                    return
         for prefix in ("/ws/worker/", "/ws/browser/", "/ws/raw/", "/tunnel/", "/worker/", "/api/sessions/"):
             if path.startswith(prefix):
                 segment = path[len(prefix) :].split("/")[0]
@@ -111,6 +207,25 @@ class _FetchMixin:
     async def _fetch_impl(self, request: Any) -> Response:
         # Resolve worker_id from URL when ctx.id.name() is unavailable (CF Python runtime bug).
         self._lazy_init_worker_id(request)
+        path = urlparse(str(request.url)).path
+        headers = getattr(request, "headers", {})
+        try:
+            internal_provenance = headers.get(_INVITE_REDEEM_HEADER) or headers.get(_INVITE_REDEEM_HEADER.lower())
+        except Exception:
+            internal_provenance = None
+        if path.startswith(_INVITE_REDEEM_PREFIX):
+            # This route is only emitted by the Worker when proxying /s/{id}; it
+            # is deliberately not part of the public route table.
+            parts = path.split("/")
+            session_id = unquote(parts[3]) if len(parts) == 5 and parts[4] == "redeem" else ""
+            if (
+                internal_provenance != _INVITE_REDEEM_PROVENANCE
+                or not session_id
+                or "/" in session_id
+                or session_id != self.worker_id
+            ):
+                return Response.json({"error": "not_found"}, status=404)
+            return await self._redeem_tunnel_invite(request)
         if self._deleted_at is not None:
             return Response(
                 json.dumps({"error": "not_found", "path": urlparse(str(request.url)).path}, ensure_ascii=True),
@@ -122,7 +237,6 @@ class _FetchMixin:
 
         # Parse URL once — reused for worker WS check and socket role routing.
         upgrade_header = str(request.headers.get("Upgrade") or "").lower()
-        path = urlparse(str(request.url)).path
 
         # Worker WS connections authenticate with a bearer token, not JWT.
         # When worker_bearer_token is None (dev/none mode), this block is

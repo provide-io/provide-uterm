@@ -415,6 +415,8 @@ class _SessionRuntimeIoMixin:
                 self.raw_sockets.pop(ws_id, None)
 
     async def alarm(self) -> None:
+        if self._deleted_at is not None:
+            return
         mono_now = time.monotonic()
         wall_now = time.time()
         session = self.hijack.session
@@ -425,15 +427,27 @@ class _SessionRuntimeIoMixin:
             with contextlib.suppress(Exception):
                 await self.push_worker_control("resume", owner="lease_expired", lease_s=0)
             await self.broadcast_hijack_state()
-        if self.worker_ws is not None or self._ushell is not None:
+        if self.worker_ws is not None or (self._ushell is not None and self._ushell_started):
             await update_kv_session(
                 self.env,
                 self.worker_id,
                 connected=True,
                 hijacked=self.hijack.session is not None,
                 input_mode=self.input_mode,
+                meta=self.meta,
             )
             schedule_alarm(self.ctx, wall_now + KV_REFRESH_S)
+        elif self._ushell is not None:
+            await update_kv_session(
+                self.env,
+                self.worker_id,
+                connected=False,
+                hijacked=self.hijack.session is not None,
+                input_mode=self.input_mode,
+                recording_available=self.store.current_event_seq(self.worker_id) > 0,
+                meta=self.meta,
+                remove_offline=False,
+            )
         elif self.hijack.session is not None:
             # ``self.hijack.session.lease_expires_at`` is a non-None float
             # (the surrounding branch already gated on ``session is not

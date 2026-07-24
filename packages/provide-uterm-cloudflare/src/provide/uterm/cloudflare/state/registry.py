@@ -25,12 +25,13 @@ async def update_kv_session(
     env: Any,
     worker_id: str,
     *,
-    connected: bool,
+    connected: bool | None,
     hijacked: bool = False,
     input_mode: str = "hijack",
     recording_enabled: bool = True,
     recording_available: bool = False,
     meta: dict[str, Any] | None = None,
+    remove_offline: bool = True,
 ) -> None:
     """Write (or delete) this DO's session entry in the KV registry.
 
@@ -41,21 +42,24 @@ async def update_kv_session(
     if kv is None:
         return
     key = f"{_KV_PREFIX}{worker_id}"
-    if not connected:
+    if connected is False and remove_offline:
         try:
             await kv.delete(key)
         except Exception as exc:
             logger.debug("kv delete %s failed: %s", key, exc)
         return
+    existing = await _read_entry(kv, key)
+    if connected is None:
+        connected = bool(existing.get("connected", False))
     m = meta or {}
     status: dict[str, Any] = {
         "session_id": worker_id,
         "display_name": m.get("display_name") or worker_id,
         "created_at": m.get("created_at") or 0.0,
         "connector_type": m.get("connector_type") or "unknown",
-        "lifecycle_state": "running",
+        "lifecycle_state": "running" if connected else "stopped",
         "input_mode": input_mode,
-        "connected": True,
+        "connected": connected,
         "auto_start": False,
         "tags": m.get("tags") or [],
         "recording_enabled": recording_enabled,
@@ -72,7 +76,7 @@ async def update_kv_session(
     # blind ``put`` here nulled tunnel/share/control auth ~60s after every worker
     # (re)connect. Merging preserves those fields (create/revoke/rotate remain
     # authoritative); a revoked entry keeps its null hashes + ``revoked`` flag.
-    status = {**await _read_entry(kv, key), **status}
+    status = {**existing, **status}
     try:
         # Note: do NOT pass expirationTtl as a keyword argument — CF Python Workers
         # (Pyodide) cannot map Python kwargs to the JS options object for KV.put().

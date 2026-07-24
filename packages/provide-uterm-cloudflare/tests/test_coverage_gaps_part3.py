@@ -72,7 +72,7 @@ class TestEntryDispatchGaps:
     """Cover entry.py _api_tunnels/revoke/rotate/pam dispatch."""
 
     async def test_api_tunnels_via_fetch(self) -> None:
-        """Line 379: /api/tunnels route matched via _match_api_route."""
+        """The Worker dispatches /api/tunnels through its API route registry."""
         d = _make_dev_default()
         req = _req("/api/tunnels", method="GET")
         resp = await d.fetch(req)
@@ -135,29 +135,24 @@ class TestEntryDispatchGaps:
         """Short-share /s/{id} for an HTTP tunnel must redirect to /app/inspect/."""
         import json
 
-        from provide.uterm.tunnel.token_hash import hash_token
-
-        kv = AsyncMock()
-        kv.get = AsyncMock(
-            return_value=json.dumps(
-                {
-                    "share_page": "inspect",
-                    "share_token_hash": hash_token("tok"),
-                    "share_invite_hash": hash_token("invite-tok"),
-                    "share_invite_token": "tok",
-                    "share_invite_expires_at": __import__("time").time() + 300,
-                    "expires_at": __import__("time").time() + 3600,
-                }
+        stub = SimpleNamespace(
+            fetch=AsyncMock(
+                return_value=SimpleNamespace(
+                    status=200,
+                    body=json.dumps({"page": "inspect", "role": "viewer", "token": "tok"}),
+                )
             )
         )
-        kv.put = AsyncMock()
-        d = _make_dev_default(SESSION_REGISTRY=kv)
+        namespace = SimpleNamespace(idFromName=lambda session_id: f"do:{session_id}", get=lambda _id: stub)
+        d = _make_dev_default(SESSION_RUNTIME=namespace)
         req = _req("/s/my-http-tunnel?invite=invite-tok")
         resp = await d.fetch(req)
         assert resp.status == 302
         loc = dict(resp.headers).get("location", "")
         assert "/app/inspect/my-http-tunnel" in loc
         assert "token=" not in loc
+        internal_request = stub.fetch.await_args.args[0]
+        assert internal_request.url.endswith("/_internal/tunnel-invite/my-http-tunnel/redeem")
 
     async def test_share_redirect_kv_returns_none_is_not_found(self) -> None:
         """Short-share KV returning None is not a valid invite."""
@@ -167,6 +162,35 @@ class TestEntryDispatchGaps:
         req = _req("/s/missing-tunnel")
         resp = await d.fetch(req)
         assert resp.status == 404
+
+    async def test_share_redirect_with_invite_but_no_runtime_is_not_found(self) -> None:
+        """An invite cannot fall back to Worker KV when the DO is unavailable."""
+        import json
+
+        from provide.uterm.tunnel.token_hash import hash_token
+
+        kv = SimpleNamespace(
+            get=AsyncMock(
+                return_value=json.dumps(
+                    {
+                        "expires_at": __import__("time").time() + 300,
+                        "share_token_hash": hash_token("share-token"),
+                        "share_invite_hash": hash_token("invite-token"),
+                        "share_invite_token": "share-token",
+                        "share_invite_expires_at": __import__("time").time() + 300,
+                    }
+                )
+            )
+        )
+        d = _make_dev_default(SESSION_REGISTRY=kv)
+        req = _req("/s/missing-runtime?invite=invite-token")
+        with patch(
+            "provide.uterm.cloudflare.api._tunnel_api.resolve_share_context",
+            new=AsyncMock(return_value=None),
+        ):
+            resp = await d.fetch(req)
+        assert resp.status == 404
+        kv.get.assert_not_awaited()
 
     async def test_share_redirect_kv_exception_is_not_found(self) -> None:
         """Short-share KV lookup failure must not expose a guessed app URL."""

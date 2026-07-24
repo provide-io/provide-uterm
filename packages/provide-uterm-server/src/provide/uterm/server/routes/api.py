@@ -15,10 +15,12 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 
 from provide.uterm.server.routes.api_keys import create_api_keys_router
-from provide.uterm.server.routes.sessions import create_sessions_router
-from provide.uterm.server.routes.sse import create_sse_router
-from provide.uterm.server.routes.tunnels import create_tunnels_router
-from provide.uterm.server.routes.webhooks import create_webhook_router
+from provide.uterm.server.routes.pam_events import register_pam_event_routes
+from provide.uterm.server.routes.profiles import register_profile_routes
+from provide.uterm.server.routes.sessions import register_session_routes
+from provide.uterm.server.routes.sse import register_sse_routes
+from provide.uterm.server.routes.tunnels import register_tunnel_routes
+from provide.uterm.server.routes.webhooks import register_webhook_routes
 
 
 def _require_metrics_auth(request: Request) -> None:
@@ -38,11 +40,13 @@ def _require_metrics_auth(request: Request) -> None:
 
 def create_api_router() -> APIRouter:
     router = APIRouter(prefix="/api")
-    router.include_router(create_sse_router())
-    router.include_router(create_webhook_router())
     router.include_router(create_api_keys_router())
-    router.include_router(create_sessions_router())
-    router.include_router(create_tunnels_router())
+    register_session_routes(router)
+    register_profile_routes(router)
+    register_tunnel_routes(router)
+    register_sse_routes(router)
+    register_webhook_routes(router)
+    register_pam_event_routes(router)
 
     @router.get("/metrics")
     async def metrics(request: Request) -> dict[str, object]:

@@ -53,12 +53,6 @@ class _Runtime:
         self.hijack = _HijackStub()
 
 
-def _match(session_id: str, sub: str | None = None) -> SimpleNamespace:
-    """Fake regex match with group(1)=session_id, group(2)=sub."""
-    groups = {1: session_id, 2: sub}
-    return SimpleNamespace(group=lambda i: groups.get(i))
-
-
 def _parse_response(resp: Any) -> tuple[int, Any]:
     """Extract (status, parsed_body) from a json_response object."""
     status = getattr(resp, "status", 200)
@@ -174,7 +168,7 @@ def test_list_recording_limit_clamped() -> None:
 @pytest.mark.asyncio
 async def test_route_recording_meta_empty() -> None:
     runtime = _Runtime(_make_store(0))
-    resp = await route_recording(runtime, None, "", _match("w1", None))
+    resp = await route_recording(runtime, None, "", "w1", None)
     status, body = _parse_response(resp)
     assert status == 200
     assert body["session_id"] == "w1"
@@ -186,7 +180,7 @@ async def test_route_recording_meta_empty() -> None:
 @pytest.mark.asyncio
 async def test_route_recording_meta_with_events() -> None:
     runtime = _Runtime(_make_store(7))
-    resp = await route_recording(runtime, None, "", _match("w1", None))
+    resp = await route_recording(runtime, None, "", "w1", None)
     status, body = _parse_response(resp)
     assert status == 200
     assert body["entry_count"] == 7
@@ -196,7 +190,7 @@ async def test_route_recording_meta_with_events() -> None:
 @pytest.mark.asyncio
 async def test_route_recording_wrong_session() -> None:
     runtime = _Runtime(_make_store(0))
-    resp = await route_recording(runtime, None, "", _match("wrong-id", None))
+    resp = await route_recording(runtime, None, "", "wrong-id", None)
     status, body = _parse_response(resp)
     assert status == 404
 
@@ -210,7 +204,7 @@ async def test_route_recording_wrong_session() -> None:
 async def test_route_recording_entries_default() -> None:
     runtime = _Runtime(_make_store(5))
     url = "http://localhost/api/sessions/w1/recording/entries"
-    resp = await route_recording(runtime, None, url, _match("w1", "entries"))
+    resp = await route_recording(runtime, None, url, "w1", "entries")
     status, body = _parse_response(resp)
     assert status == 200
     assert isinstance(body, list)
@@ -223,7 +217,7 @@ async def test_route_recording_entries_default() -> None:
 async def test_route_recording_entries_with_limit() -> None:
     runtime = _Runtime(_make_store(10))
     url = "http://localhost/api/sessions/w1/recording/entries?limit=3"
-    resp = await route_recording(runtime, None, url, _match("w1", "entries"))
+    resp = await route_recording(runtime, None, url, "w1", "entries")
     status, body = _parse_response(resp)
     assert status == 200
     assert len(body) == 3
@@ -233,7 +227,7 @@ async def test_route_recording_entries_with_limit() -> None:
 async def test_route_recording_entries_with_offset() -> None:
     runtime = _Runtime(_make_store(5))
     url = "http://localhost/api/sessions/w1/recording/entries?offset=0&limit=2"
-    resp = await route_recording(runtime, None, url, _match("w1", "entries"))
+    resp = await route_recording(runtime, None, url, "w1", "entries")
     status, body = _parse_response(resp)
     assert status == 200
     assert len(body) == 2
@@ -244,7 +238,7 @@ async def test_route_recording_entries_with_offset() -> None:
 async def test_route_recording_entries_event_filter() -> None:
     runtime = _Runtime(_make_store(10))
     url = "http://localhost/api/sessions/w1/recording/entries?event=snapshot"
-    resp = await route_recording(runtime, None, url, _match("w1", "entries"))
+    resp = await route_recording(runtime, None, url, "w1", "entries")
     status, body = _parse_response(resp)
     assert status == 200
     assert all(e["event"] == "snapshot" for e in body)
@@ -253,7 +247,7 @@ async def test_route_recording_entries_event_filter() -> None:
 @pytest.mark.asyncio
 async def test_route_recording_unknown_sub() -> None:
     runtime = _Runtime(_make_store(0))
-    resp = await route_recording(runtime, None, "", _match("w1", "something_else"))
+    resp = await route_recording(runtime, None, "", "w1", "something_else")
     status, _body = _parse_response(resp)
     assert status == 404
 
@@ -262,7 +256,7 @@ async def test_route_recording_unknown_sub() -> None:
 async def test_route_recording_download() -> None:
     """GET /recording/download returns JSONL with {ts, event, data} per line."""
     runtime = _Runtime(_make_store(3))
-    resp = await route_recording(runtime, None, "", _match("w1", "download"))
+    resp = await route_recording(runtime, None, "", "w1", "download")
     assert getattr(resp, "status", 200) == 200
     headers = getattr(resp, "headers", {}) or {}
     assert "ndjson" in headers.get("content-type", "")
@@ -289,7 +283,7 @@ async def test_route_recording_entries_bad_limit() -> None:
     """Non-integer limit falls back to default 200."""
     runtime = _Runtime(_make_store(3))
     url = "http://localhost/api/sessions/w1/recording/entries?limit=abc&offset=xyz"
-    resp = await route_recording(runtime, None, url, _match("w1", "entries"))
+    resp = await route_recording(runtime, None, url, "w1", "entries")
     status, body = _parse_response(resp)
     assert status == 200
     assert len(body) == 3  # default limit=200 → returns all 3
