@@ -17,7 +17,12 @@ from typing import TYPE_CHECKING, Annotated, Any, cast
 
 from fastapi import APIRouter, Body, HTTPException, Path, Request
 
+from provide.uterm.api_routes import API_ROUTES, RouteDef
+from provide.uterm.server.routes.route_defs import bind_api_routes
+
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from provide.uterm.server.auth import Principal
     from provide.uterm.server.authorization import AuthorizationService
     from provide.uterm.server.registry import SessionRegistry
@@ -50,10 +55,9 @@ def _webhook_manager(request: Request) -> WebhookManager:
     return cast("WebhookManager", mgr)
 
 
-def create_webhook_router() -> APIRouter:
-    router = APIRouter()
+def webhook_capability_handlers() -> dict[str, Callable[..., object]]:
+    """Return the FastAPI handlers for shared webhook RouteDefs."""
 
-    @router.post("/sessions/{session_id}/webhooks")
     async def register_webhook(
         request: Request,
         session_id: _SessionId,
@@ -114,7 +118,6 @@ def create_webhook_router() -> APIRouter:
             "pattern": cfg.pattern,
         }
 
-    @router.get("/sessions/{session_id}/webhooks")
     async def list_webhooks(
         request: Request,
         session_id: _SessionId,
@@ -145,7 +148,6 @@ def create_webhook_router() -> APIRouter:
             ]
         }
 
-    @router.delete("/sessions/{session_id}/webhooks/{webhook_id}")
     async def unregister_webhook(
         request: Request,
         session_id: _SessionId,
@@ -171,4 +173,26 @@ def create_webhook_router() -> APIRouter:
         await manager.unregister(webhook_id)
         return {"ok": True, "webhook_id": webhook_id}
 
-    return router
+    return {
+        "sessions.webhooks.create": register_webhook,
+        "sessions.webhooks.list": list_webhooks,
+        "sessions.webhooks.delete": unregister_webhook,
+    }
+
+
+async def _unregistered_capability_handler() -> None:
+    """Satisfy the adapter's complete-inventory validation for unbound routes."""
+    raise RuntimeError("unregistered shared API capability invoked")
+
+
+def register_webhook_routes(router: APIRouter) -> None:
+    """Bind the shared webhook HTTP family exactly once through RouteDefs."""
+    webhook_handlers = webhook_capability_handlers()
+    handlers: dict[str, Callable[..., object]] = {
+        route.capability: _unregistered_capability_handler for route in API_ROUTES
+    }
+    handlers.update(webhook_handlers)
+    selected: tuple[RouteDef, ...] = tuple(route for route in API_ROUTES if route.capability in webhook_handlers)
+    webhook_router = APIRouter()
+    bind_api_routes(webhook_router, handlers, selected)
+    router.routes.extend(webhook_router.routes)

@@ -30,12 +30,13 @@ Exposes:
 from __future__ import annotations
 
 import time
-from typing import Annotated, Any, cast
+from typing import TYPE_CHECKING, Annotated, Any, cast
 
 from fastapi import APIRouter, Body, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 
 from provide.telemetry import get_tracer
+from provide.uterm.api_routes import API_ROUTES, RouteDef
 from provide.uterm.server.audit import audit_event
 from provide.uterm.server.models import model_dump
 from provide.uterm.server.registry import SessionValidationError
@@ -49,13 +50,15 @@ from provide.uterm.server.routes._helpers import (
     sid_not_found,
     source_ip,
 )
+from provide.uterm.server.routes.route_defs import bind_api_routes
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
-def create_sessions_router() -> APIRouter:
-    """Build a router for session CRUD, lifecycle, and data endpoints."""
-    router = APIRouter()
+def session_capability_handlers() -> dict[str, Callable[..., object]]:
+    """Return the FastAPI handlers for shared session RouteDefs."""
 
-    @router.get("/sessions")
     async def list_sessions(
         request: Request,
         tag: Annotated[list[str] | None, Query()] = None,
@@ -94,7 +97,6 @@ def create_sessions_router() -> APIRouter:
         results.sort(key=lambda s: s.get(sort_key, ""), reverse=reverse)
         return results[offset : offset + limit]
 
-    @router.delete("/sessions")
     async def bulk_delete_sessions(
         request: Request,
         payload: Annotated[dict[str, Any], Body(...)],
@@ -136,7 +138,6 @@ def create_sessions_router() -> APIRouter:
             )
         return {"deleted": len(to_delete)}
 
-    @router.post("/sessions")
     async def create_session(request: Request, payload: Annotated[dict[str, Any], Body(...)]) -> dict[str, Any]:
         p = principal(request)
         az = authz(request)
@@ -171,7 +172,6 @@ def create_sessions_router() -> APIRouter:
         )
         return model_dump(session)
 
-    @router.get("/sessions/{session_id}")
     async def get_session(request: Request, session_id: SessionId) -> dict[str, Any]:
         p = principal(request)
         az = authz(request)
@@ -184,7 +184,6 @@ def create_sessions_router() -> APIRouter:
             raise sid_not_found(session_id) from None
         return model_dump(session)
 
-    @router.patch("/sessions/{session_id}")
     async def patch_session(
         request: Request,
         session_id: SessionId,
@@ -205,7 +204,6 @@ def create_sessions_router() -> APIRouter:
             raise sid_not_found(session_id) from None
         return model_dump(session)
 
-    @router.delete("/sessions/{session_id}")
     async def delete_session(request: Request, session_id: SessionId) -> dict[str, bool]:
         p = principal(request)
         az = authz(request)
@@ -235,7 +233,6 @@ def create_sessions_router() -> APIRouter:
         )
         return {"ok": True}
 
-    @router.post("/sessions/{session_id}/connect")
     async def connect_session(request: Request, session_id: SessionId) -> dict[str, Any]:
         p = principal(request)
         az = authz(request)
@@ -248,7 +245,6 @@ def create_sessions_router() -> APIRouter:
             raise sid_not_found(session_id) from None
         return model_dump(session)
 
-    @router.post("/sessions/{session_id}/disconnect")
     async def disconnect_session(request: Request, session_id: SessionId) -> dict[str, Any]:
         p = principal(request)
         az = authz(request)
@@ -263,7 +259,6 @@ def create_sessions_router() -> APIRouter:
             raise sid_not_found(session_id) from None
         return model_dump(session)
 
-    @router.post("/sessions/{session_id}/restart")
     async def restart_session(request: Request, session_id: SessionId) -> dict[str, Any]:
         p = principal(request)
         az = authz(request)
@@ -277,7 +272,6 @@ def create_sessions_router() -> APIRouter:
             raise sid_not_found(session_id) from None
         return model_dump(session)
 
-    @router.post("/sessions/{session_id}/mode")
     async def set_mode(
         request: Request,
         session_id: SessionId,
@@ -297,7 +291,6 @@ def create_sessions_router() -> APIRouter:
             raise sid_not_found(session_id) from None
         return model_dump(session)
 
-    @router.post("/sessions/{session_id}/clear")
     async def clear_session(request: Request, session_id: SessionId) -> dict[str, Any]:
         p = principal(request)
         az = authz(request)
@@ -310,7 +303,6 @@ def create_sessions_router() -> APIRouter:
             raise sid_not_found(session_id) from None
         return model_dump(session)
 
-    @router.post("/sessions/{session_id}/annotate")
     async def annotate_session(
         request: Request,
         session_id: SessionId,
@@ -354,7 +346,6 @@ def create_sessions_router() -> APIRouter:
         )
         return {"ts": time.time(), "seq": evt.get("seq", 0)}
 
-    @router.post("/sessions/{session_id}/analyze")
     async def analyze_session(request: Request, session_id: SessionId) -> dict[str, Any]:
         p = principal(request)
         az = authz(request)
@@ -367,7 +358,6 @@ def create_sessions_router() -> APIRouter:
             raise sid_not_found(session_id) from None
         return {"session_id": session_id, "analysis": analysis}
 
-    @router.get("/sessions/{session_id}/snapshot")
     async def snapshot(request: Request, session_id: SessionId) -> dict[str, Any] | None:
         p = principal(request)
         az = authz(request)
@@ -379,7 +369,6 @@ def create_sessions_router() -> APIRouter:
         # treatment the live broadcast and WS initial-snapshot paths apply.
         return await registry(request).last_snapshot(session_id, recipient=request)
 
-    @router.get("/sessions/{session_id}/events")
     async def events(
         request: Request,
         session_id: SessionId,
@@ -392,7 +381,6 @@ def create_sessions_router() -> APIRouter:
             raise HTTPException(status_code=403, detail="insufficient privileges")
         return await registry(request).events(session_id, limit=limit)
 
-    @router.get("/sessions/{session_id}/events/watch")
     async def watch_events(
         request: Request,
         session_id: SessionId,
@@ -414,7 +402,6 @@ def create_sessions_router() -> APIRouter:
             max_events=max_events,
         )
 
-    @router.get("/sessions/{session_id}/recording")
     async def recording(request: Request, session_id: SessionId) -> dict[str, Any]:
         p = principal(request)
         az = authz(request)
@@ -426,7 +413,6 @@ def create_sessions_router() -> APIRouter:
         except KeyError:
             raise sid_not_found(session_id) from None
 
-    @router.get("/sessions/{session_id}/recording/entries")
     async def recording_entries(
         request: Request,
         session_id: SessionId,
@@ -444,7 +430,6 @@ def create_sessions_router() -> APIRouter:
         except KeyError:
             raise sid_not_found(session_id) from None
 
-    @router.get("/sessions/{session_id}/recording/download")
     async def recording_download(request: Request, session_id: SessionId) -> FileResponse:
         p = principal(request)
         az = authz(request)
@@ -462,4 +447,55 @@ def create_sessions_router() -> APIRouter:
             raise HTTPException(status_code=404, detail="recording not available")
         return FileResponse(path, filename=path.name, media_type="application/json")
 
-    return router
+    return {
+        "sessions.list": list_sessions,
+        "sessions.bulk_delete": bulk_delete_sessions,
+        "sessions.create": create_session,
+        "sessions.get": get_session,
+        "sessions.update": patch_session,
+        "sessions.delete": delete_session,
+        "sessions.connect": connect_session,
+        "sessions.disconnect": disconnect_session,
+        "sessions.restart": restart_session,
+        "sessions.set_mode": set_mode,
+        "sessions.clear": clear_session,
+        "sessions.annotate": annotate_session,
+        "sessions.analyze": analyze_session,
+        "sessions.snapshot": snapshot,
+        "sessions.events": events,
+        "sessions.events_watch": watch_events,
+        "sessions.recording": recording,
+        "sessions.recording_entries": recording_entries,
+        "sessions.recording_download": recording_download,
+    }
+
+
+async def _unregistered_capability_handler() -> None:
+    """Satisfy the adapter's complete-inventory validation for unbound routes."""
+    raise RuntimeError("unregistered shared API capability invoked")
+
+
+async def authorize_session_route_roles(request: Request, required_roles: tuple[str, ...]) -> bool:
+    """Authorize RouteDef roles using the configured FastAPI authorization service."""
+    p = principal(request)
+    az = authz(request)
+    for role in required_roles:
+        if role == "admin":
+            if not await az.is_admin(p):
+                return False
+        elif role not in p.roles:
+            return False
+    return True
+
+
+def register_session_routes(router: APIRouter) -> None:
+    """Bind the shared session HTTP family exactly once through RouteDefs."""
+    session_handlers = session_capability_handlers()
+    handlers: dict[str, Callable[..., object]] = {
+        route.capability: _unregistered_capability_handler for route in API_ROUTES
+    }
+    handlers.update(session_handlers)
+    selected: tuple[RouteDef, ...] = tuple(route for route in API_ROUTES if route.capability in session_handlers)
+    session_router = APIRouter()
+    bind_api_routes(session_router, handlers, selected, role_authorizer=authorize_session_route_roles)
+    router.routes.extend(session_router.routes)

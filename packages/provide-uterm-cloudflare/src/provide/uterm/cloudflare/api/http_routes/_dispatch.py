@@ -4,33 +4,20 @@
 #
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 from ._hijack import route_hijack
-from ._recording import route_recording
-from ._session import route_session
-from ._shared import (
-    _SESSION_ROUTE_RE,
-    _session_status_item,
-)
+from ._session import SESSION_CAPABILITIES, SESSION_ROUTE_REGISTRY
+from ._shared import _session_status_item
 
 try:
     from provide.uterm.cloudflare.cf_types import json_response
-    from provide.uterm.cloudflare.do._sse import route_sse
-    from provide.uterm.cloudflare.do._webhooks import route_webhooks
 except ImportError:  # pragma: no cover — CF flat-path fallback
     from cf_types import json_response  # type: ignore[import-not-found,no-redef]  # ty:ignore[unresolved-import]
-    from do._sse import route_sse  # type: ignore[import-not-found,no-redef]  # ty:ignore[unresolved-import]
-    from do._webhooks import route_webhooks  # type: ignore[import-not-found,no-redef]  # ty:ignore[unresolved-import]
 
 if TYPE_CHECKING:
     from provide.uterm.cloudflare.contracts import RuntimeProtocol
-
-_SSE_ROUTE_RE = re.compile(r"^/api/sessions/([a-zA-Z0-9_-]{1,64})/events/stream$")
-_WEBHOOK_ROUTE_RE = re.compile(r"^/api/sessions/([a-zA-Z0-9_-]{1,64})/webhooks(?:/([a-zA-Z0-9_-]{1,64}))?$")
-_RECORDING_ROUTE_RE = re.compile(r"^/api/sessions/([a-zA-Z0-9_-]{1,64})/recording(?:/(entries|download))?$")
 
 # Methods that mutate state and therefore must be protected from cross-site
 # request forgery (CSRF). GET/HEAD are safe by convention.
@@ -112,39 +99,42 @@ async def route_http(runtime: RuntimeProtocol, request: object) -> object:
     if hijack_result is not None:
         return hijack_result
 
-    sse_match = _SSE_ROUTE_RE.match(path)
-    if sse_match and method == "GET":
-        guard = await _check_session_visibility(runtime, request)
-        if guard is not None:
-            return guard
-        return await route_sse(runtime, request, url, sse_match.group(1))
-
-    webhook_match = _WEBHOOK_ROUTE_RE.match(path)
-    if webhook_match:
+    match = SESSION_ROUTE_REGISTRY.match(method, path)
+    if match is not None:
+        if match.params["session_id"] != runtime.worker_id or getattr(runtime, "_deleted_at", None) is not None:
+            return json_response({"error": "not_found", "path": path}, status=404)
         guard = await _check_session_visibility(runtime, request)
         if guard is not None:
             return guard
         # Installing/deleting webhooks is a mutation: read visibility alone must
         # not allow attaching an outbound terminal-exfil sink on public sessions.
-        if method in _STATE_CHANGING_METHODS:
+        if match.route.capability in {"sessions.webhooks.create", "sessions.webhooks.delete"}:
             from provide.uterm.cloudflare.api.http_routes._session import _can_mutate_session
 
             if not await _can_mutate_session(runtime, request):
                 return json_response({"error": "forbidden"}, status=403)
-        return await route_webhooks(runtime, request, path, url, method, webhook_match.group(1), webhook_match.group(2))
+        return await SESSION_CAPABILITIES[match.route.capability](
+            runtime, request, path, url, match.route, match.params
+        )
 
-    recording_match = _RECORDING_ROUTE_RE.match(path)
-    if recording_match and method == "GET":
-        guard = await _check_session_visibility(runtime, request)
-        if guard is not None:
-            return guard
-        return await route_recording(runtime, request, url, recording_match)
-
-    session_match = _SESSION_ROUTE_RE.match(path)
-    if session_match:
-        guard = await _check_session_visibility(runtime, request)
-        if guard is not None:
-            return guard
-        return await route_session(runtime, request, path, url, method, session_match)
+    allowed = SESSION_ROUTE_REGISTRY.allowed_methods(path)
+    if allowed:
+        return json_response(
+            {"error": "method not allowed"},
+            status=405,
+            headers={"Allow": ", ".join(allowed_method.value for allowed_method in allowed)},
+        )
+    if any(_matches_route_shape(path, route.template) for route in SESSION_ROUTE_REGISTRY.routes):
+        return json_response({"error": "invalid route parameter"}, status=422)
 
     return json_response({"error": "not_found", "path": path}, status=404)
+
+
+def _matches_route_shape(path: str, template: str) -> bool:
+    """Return whether a malformed path has the shape of a session RouteDef."""
+    path_segments = path.split("/")[1:]
+    template_segments = template.split("/")[1:]
+    return len(path_segments) == len(template_segments) and all(
+        bool(actual) if expected.startswith("{") else actual == expected
+        for actual, expected in zip(path_segments, template_segments, strict=True)
+    )

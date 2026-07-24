@@ -235,18 +235,19 @@ async def test_session_clear_with_worker_sends_snapshot_req() -> None:
 
 
 # ---------------------------------------------------------------------------
-# /api/sessions/{id}/<unknown sub+method> — fallthrough 404 (line 419)
+# /api/sessions/{id}/snapshot wrong method — RouteDef registry 405
 # ---------------------------------------------------------------------------
 
 
-async def test_session_unknown_sub_method_returns_404() -> None:
-    """Unknown sub/method combo under session_match returns 404."""
+async def test_session_known_path_wrong_method_returns_registry_405() -> None:
+    """RouteDefs preserve the registry's method-not-allowed response."""
     runtime = _Runtime()
     resp = await route_http(
         runtime,
         _Req("https://x/api/sessions/w/snapshot", method="POST"),  # snapshot only allows GET
     )
-    assert resp.status == 404
+    assert resp.status == 405
+    assert resp.headers["Allow"] == "GET"
 
 
 # ---------------------------------------------------------------------------

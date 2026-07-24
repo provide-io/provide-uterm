@@ -7,8 +7,8 @@
 mutmut SKIPS every decorated function (the ``@router.get``/``@router.post`` FastAPI
 handlers — see _skip_node_and_children in mutmut/file_mutation.py), so the mutable
 surface of routes/ is the UNDECORATED code: the shared ``_helpers.py`` accessors, the
-per-module ``_registry``/``_authz``/``_principal`` accessors and ``create_*_router``
-bodies, and the NESTED undecorated helpers defined inside ``create_*_router`` (e.g.
+per-module ``_registry``/``_authz``/``_principal`` accessors and route-factory
+bodies, and the NESTED undecorated helpers defined inside route factories (e.g.
 ``_posture_caller_is_privileged``). None of it is async-streaming, so this suite needs
 no SSE/timer mocking — it builds each router with mocked app state, pulls the handler
 endpoints off ``router.routes``, and calls them directly with a mocked Request (no
@@ -823,7 +823,7 @@ class TestPagesRoutes:
 
 
 # ===========================================================================
-# webhooks.py (routes) — create_webhook_router + accessors
+# webhooks.py (routes) — RouteDef capability handlers + accessors
 # ===========================================================================
 
 
@@ -841,13 +841,15 @@ def _wh_cfg(
 
 
 class TestWebhookRoutes:
-    _REG = "/sessions/{session_id}/webhooks"
-    _DEL = "/sessions/{session_id}/webhooks/{webhook_id}"
+    _REG = "/api/sessions/{session_id}/webhooks"
+    _DEL = "/api/sessions/{session_id}/webhooks/{webhook_id}"
 
     def _router(self) -> APIRouter:
-        from provide.uterm.server.routes.webhooks import create_webhook_router
+        from provide.uterm.server.routes.webhooks import register_webhook_routes
 
-        return create_webhook_router()
+        router = APIRouter()
+        register_webhook_routes(router)
+        return router
 
     def _state(self, *, registry=None, authz=None, principal=None, webhooks=None, hub=None) -> MagicMock:
         app_state = {
@@ -1233,9 +1235,12 @@ class TestProfilesRoutes:
     _CONNECT = "/api/profiles/{profile_id}/connect"
 
     def _router(self) -> APIRouter:
-        from provide.uterm.server.routes.profiles import create_profiles_router
+        from provide.uterm.server.routes.api import create_api_router
 
-        return create_profiles_router()
+        api_router = create_api_router()
+        profiles_router = APIRouter()
+        profiles_router.routes.extend(route for route in api_router.routes if route.path.startswith("/api/profiles"))
+        return profiles_router
 
     def _profile(
         self,
@@ -1310,7 +1315,7 @@ class TestProfilesRoutes:
         assert exc.status_code == 404
         assert exc.detail == "unknown profile: ghost"
 
-    # ---- create_profiles_router: structure ----------------------------------
+    # ---- RouteDef-backed profile routes: structure --------------------------
 
     def test_router_is_apirouter_with_all_paths(self) -> None:
         router = self._router()
@@ -2690,11 +2695,13 @@ class TestApprovalsRoutes:
 
 class TestSseRoutes:
     def _router(self) -> APIRouter:
-        from provide.uterm.server.routes.sse import create_sse_router
+        from provide.uterm.server.routes.sse import register_sse_routes
 
-        return create_sse_router()
+        router = APIRouter()
+        register_sse_routes(router)
+        return router
 
-    _PATH = "/sessions/{session_id}/events/stream"
+    _PATH = "/api/sessions/{session_id}/events/stream"
 
     def test_registry_authz_accessors(self) -> None:
         from provide.uterm.server.routes.sse import _authz, _registry
@@ -2855,22 +2862,22 @@ class TestApiRouter:
         resolve.assert_called_once_with(req, cfg.auth)
 
 
-class TestSessionsRouter:
-    def test_returns_router_with_routes(self) -> None:
-        from provide.uterm.server.routes.sessions import create_sessions_router
+class TestSessionRouteCapabilities:
+    def test_returns_shared_session_capability_handlers(self) -> None:
+        from provide.uterm.server.routes.sessions import session_capability_handlers
 
-        router = create_sessions_router()  # mutant `router = None` → AttributeError on @router.get
-        assert isinstance(router, APIRouter)
-        assert "/sessions" in _paths(router)
+        handlers = session_capability_handlers()
+        assert "sessions.list" in handlers
+        assert "sessions.events_watch" in handlers
 
 
-class TestTunnelsRouter:
-    def test_returns_router_with_routes(self) -> None:
-        from provide.uterm.server.routes.tunnels import create_tunnels_router
+class TestTunnelRouteCapabilities:
+    def test_returns_shared_tunnel_capability_handlers(self) -> None:
+        from provide.uterm.server.routes.tunnels import tunnel_capability_handlers
 
-        router = create_tunnels_router()  # mutant `router = None` → AttributeError
-        assert isinstance(router, APIRouter)
-        assert "/connect" in _paths(router)
+        handlers = tunnel_capability_handlers()
+        assert "tunnels.connect" in handlers
+        assert "tunnels.rotate_token" in handlers
 
     def test_scrub_sensitive_masks_only_sensitive_keys(self) -> None:
         from provide.uterm.server.routes.tunnels import _scrub_sensitive

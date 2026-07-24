@@ -65,6 +65,8 @@ class SqliteStateStore:
                 connector_type TEXT NOT NULL DEFAULT 'unknown', created_at REAL NOT NULL DEFAULT 0,
                 tags_json TEXT NOT NULL DEFAULT '[]', visibility TEXT NOT NULL DEFAULT 'public',
                 owner TEXT)""",
+            """CREATE TABLE IF NOT EXISTS tunnel_invite_state (
+                worker_id TEXT PRIMARY KEY, entry_json TEXT NOT NULL, updated_at REAL NOT NULL)""",
         ):
             self._run(ddl)
         with contextlib.suppress(Exception):
@@ -112,6 +114,32 @@ class SqliteStateStore:
             "visibility": str(rv(r, "visibility", 4) or "public"),
             "owner": rv(r, "owner", 5),
         }
+
+    # ------------------------------------------------------------------
+    # Consumed tunnel invite digests (one-time capability redemption)
+    # ------------------------------------------------------------------
+
+    def load_tunnel_invite_state(self, worker_id: str) -> dict[str, Any] | None:
+        """Return persisted consumed-invite digest metadata for this DO."""
+        rows = self._rows(self._run("SELECT entry_json FROM tunnel_invite_state WHERE worker_id=?", worker_id))
+        if not rows:
+            return None
+        raw = self._row_value(rows[0], "entry_json", 0)
+        try:
+            value = json.loads(str(raw))
+        except (TypeError, json.JSONDecodeError):
+            return None
+        return value if isinstance(value, dict) else None
+
+    def save_tunnel_invite_state(self, worker_id: str, entry: dict[str, Any]) -> None:
+        """Persist consumed-invite digest metadata without session credentials."""
+        self._run(
+            "INSERT INTO tunnel_invite_state(worker_id,entry_json,updated_at) VALUES(?,?,?) "
+            "ON CONFLICT(worker_id) DO UPDATE SET entry_json=excluded.entry_json,updated_at=excluded.updated_at",
+            worker_id,
+            json.dumps(entry, ensure_ascii=True),
+            time.time(),
+        )
 
     # ---- Session state (hijack lease, snapshot, events) ----
 

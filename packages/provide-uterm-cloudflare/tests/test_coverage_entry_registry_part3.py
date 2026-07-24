@@ -58,17 +58,6 @@ def _req(path: str, method: str = "GET", headers: dict | None = None) -> SimpleN
 # ---------------------------------------------------------------------------
 
 
-def test_match_api_route_tunnel_rotate() -> None:
-    from provide.uterm.cloudflare.entry.handlers import _match_api_route
-
-    assert (
-        _match_api_route(
-            "/api/tunnels/tunnel-abc/tokens/rotate", _req("/api/tunnels/tunnel-abc/tokens/rotate", method="POST")
-        )
-        is not None
-    )
-
-
 # ---------------------------------------------------------------------------
 # Default.fetch() integration — exercises _api_connect/_api_sessions wrappers
 # ---------------------------------------------------------------------------
@@ -95,16 +84,20 @@ async def test_default_fetch_api_connect_post() -> None:
 
 
 async def test_default_fetch_session_delete() -> None:
-    """DELETE /api/sessions/{id} through Default.fetch()."""
-    d = _make_default()
+    """DELETE /api/sessions/{id} proxies to the session's Durable Object."""
+    stub = SimpleNamespace(
+        fetch=AsyncMock(return_value=SimpleNamespace(status=200, body='{"deleted": true}', headers={}))
+    )
+    namespace = SimpleNamespace(idFromName=lambda session_id: session_id, get=lambda _id: stub)
+    d = _make_default({"SESSION_RUNTIME": namespace})
     req = SimpleNamespace(
         url="https://x/api/sessions/test-sess",
         method="DELETE",
         headers=SimpleNamespace(get=lambda k, default=None: None),
     )
-    with patch("provide.uterm.cloudflare.entry.delete_kv_session", new=AsyncMock()):
-        resp = await d.fetch(req)
+    resp = await d.fetch(req)
     assert resp.status == 200 and json.loads(resp.body)["deleted"] is True
+    stub.fetch.assert_awaited_once_with(req)
 
 
 async def test_route_request_cf_service_token_header_does_not_bypass_jwt() -> None:
@@ -226,55 +219,6 @@ async def test_decode_jwt_principal_cf_access_service_token_header_returns_none(
     )
     result = await _decode_jwt_principal(req, cfg)
     assert result is None
-
-
-# ---------------------------------------------------------------------------
-# _handle_session_delete — session not in KV skips auth (entry.py:327->333)
-# ---------------------------------------------------------------------------
-
-
-async def test_handle_session_delete_session_not_in_kv_returns_404() -> None:
-    """When session is absent from KV and principal is present, delete fails closed with 404."""
-    from provide.uterm.cloudflare.config import CloudflareConfig
-    from provide.uterm.cloudflare.entry.handlers import _handle_session_delete
-
-    mock_del = AsyncMock()
-    with patch("provide.uterm.cloudflare.entry.delete_kv_session", new=mock_del):
-        with patch(
-            "provide.uterm.cloudflare.entry.auth._decode_jwt_principal",
-            new=AsyncMock(return_value=SimpleNamespace(subject_id="bob", roles=("viewer",))),
-        ):
-            with patch("provide.uterm.cloudflare.entry.get_kv_session", new=AsyncMock(return_value=None)):
-                resp = await _handle_session_delete(SimpleNamespace(), SimpleNamespace(), "s1", CloudflareConfig())
-    # KV is the auth source — missing row must deny (fail closed), not proceed.
-    assert resp.status == 404
-    mock_del.assert_not_awaited()
-
-
-# ---------------------------------------------------------------------------
-# _handle_session_delete — admin/owner is authorized (entry.py:331->333)
-# ---------------------------------------------------------------------------
-
-
-async def test_handle_session_delete_admin_allowed() -> None:
-    """Admin callers can delete any session."""
-    from provide.uterm.cloudflare.config import CloudflareConfig
-    from provide.uterm.cloudflare.entry.handlers import _handle_session_delete
-
-    session_data = {"owner": "alice", "visibility": "private"}
-
-    with patch("provide.uterm.cloudflare.entry.delete_kv_session", new=AsyncMock()):
-        with patch(
-            "provide.uterm.cloudflare.entry.auth._decode_jwt_principal",
-            new=AsyncMock(return_value=SimpleNamespace(subject_id="bob", roles=("admin",))),
-        ):
-            with patch(
-                "provide.uterm.cloudflare.entry.get_kv_session",
-                new=AsyncMock(return_value=session_data),
-            ):
-                resp = await _handle_session_delete(SimpleNamespace(), SimpleNamespace(), "s1", CloudflareConfig())
-    assert resp.status == 200
-    assert json.loads(resp.body)["deleted"] is True
 
 
 # ---------------------------------------------------------------------------
