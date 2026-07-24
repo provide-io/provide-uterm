@@ -515,6 +515,7 @@ async def test_session_route_role_authorizer_rejects_missing_admin_and_member_ro
 
     assert await authorize_session_route_roles(request, ("admin",)) is False
     assert await authorize_session_route_roles(request, ("operator",)) is False
+    assert await authorize_session_route_roles(request, ("viewer",)) is True
     authorization.is_admin.assert_awaited_once()
 
 
