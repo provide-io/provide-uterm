@@ -40,12 +40,23 @@ from __future__ import annotations
 
 import logging
 import time
+from numbers import Real
 from typing import TYPE_CHECKING, Any
 
 logger = logging.getLogger(__name__)
 
 # Sentinel used when UshellConnector cannot be imported (missing dependency).
 _IMPORT_ERROR: str | None = None
+
+
+def _recording_available(runtime: Any) -> bool:
+    """Return whether persisted recording events exist, without trusting mocks."""
+    try:
+        event_seq = runtime.store.current_event_seq(runtime.worker_id)
+    except Exception:
+        return False
+    return isinstance(event_seq, Real) and event_seq > 0
+
 
 if TYPE_CHECKING:
     from provide.uterm.cloudflare.state.registry import list_kv_sessions as _worker_list_kv_sessions
@@ -140,7 +151,7 @@ async def on_browser_connected(runtime: Any) -> None:
         connected=True,
         hijacked=runtime.hijack.session is not None,
         input_mode=runtime.input_mode,
-        recording_available=runtime.store.current_event_seq(runtime.worker_id) > 0,
+        recording_available=_recording_available(runtime),
         meta=runtime.meta,
     )
 
