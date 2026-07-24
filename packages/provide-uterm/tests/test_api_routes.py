@@ -7,7 +7,15 @@
 from __future__ import annotations
 
 import pytest
-from provide.uterm.api_routes import API_ROUTE_REGISTRY, API_ROUTES, HttpMethod, RouteDef, RouteRegistry, RouteScope
+from provide.uterm.api_routes import (
+    API_ROUTE_REGISTRY,
+    API_ROUTES,
+    HttpMethod,
+    RouteDef,
+    RouteRegistry,
+    RouteScope,
+    _templates_intersect,
+)
 
 
 def _route(
@@ -105,6 +113,74 @@ def test_invalid_parameter_value_does_not_match() -> None:
 
     assert registry.match(HttpMethod.GET, "/api/sessions/not.valid") is None
     assert registry.match(HttpMethod.GET, "/api/sessions/" + ("a" * 65)) is None
+
+
+def test_unknown_string_method_does_not_match() -> None:
+    registry = RouteRegistry((_route(),))
+
+    assert registry.match("TRACE", "/api/sessions/demo") is None
+
+
+@pytest.mark.parametrize(
+    "template",
+    (
+        "/api/sessions/{session_id}?page=1",
+        "/api/sessions/{session_id}#fragment",
+        "/api//sessions/{session_id}",
+        "/api/sessions/{session_id}/bad{segment}",
+    ),
+)
+def test_more_invalid_template_forms_are_rejected(template: str) -> None:
+    with pytest.raises(ValueError, match="template"):
+        RouteRegistry((_route(template=template),))
+
+
+@pytest.mark.parametrize(
+    ("route", "message"),
+    (
+        (object(), "RouteDef"),
+        (
+            RouteDef(
+                operation="get_session",
+                method="GET",  # type: ignore[arg-type]
+                template="/api/sessions/{session_id}",
+                scope=RouteScope.SESSION,
+                capability="session.read",
+                roles=(),
+            ),
+            "HttpMethod",
+        ),
+        (
+            RouteDef(
+                operation="get_session",
+                method=HttpMethod.GET,
+                template="/api/sessions/{session_id}",
+                scope="session",  # type: ignore[arg-type]
+                capability="session.read",
+                roles=(),
+            ),
+            "RouteScope",
+        ),
+    ),
+)
+def test_route_registry_rejects_invalid_route_objects(route: object, message: str) -> None:
+    with pytest.raises((TypeError, ValueError), match=message):
+        RouteRegistry((route,))  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("first_template", "second_template"),
+    (
+        ("/api/things/{session_id}", "/api/things/bad.value"),
+        ("/api/things/bad.value", "/api/things/{session_id}"),
+    ),
+)
+def test_non_matching_static_segment_does_not_intersect(first_template: str, second_template: str) -> None:
+    assert _templates_intersect(first_template, second_template) is False
+
+
+def test_parameter_and_valid_static_segment_intersect() -> None:
+    assert _templates_intersect("/api/things/{session_id}", "/api/things/list") is True
 
 
 def test_missing_capability_is_rejected() -> None:
