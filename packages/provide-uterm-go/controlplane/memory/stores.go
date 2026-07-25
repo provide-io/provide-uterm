@@ -7,6 +7,7 @@ package memory
 
 import (
 	"context"
+	"sort"
 
 	cp "github.com/provide-io/provide-uterm/packages/provide-uterm-go/controlplane"
 )
@@ -141,4 +142,47 @@ func (s *leaseStore) GetLease(_ context.Context, sessionID string) (*cp.LeaseRec
 func (s *leaseStore) ClearLease(_ context.Context, sessionID string) error {
 	delete(s.state.Leases, sessionID)
 	return nil
+}
+
+// graphicalTargetStore is the in-memory GraphicalTargetStore. Port of
+// control.plane.memory.graphical_target_store.MemoryGraphicalTargetStore.
+type graphicalTargetStore struct{ state *State }
+
+func (s *graphicalTargetStore) PutGraphicalTarget(_ context.Context, rec cp.GraphicalTargetRecord) error {
+	s.state.GraphicalTargets[rec.TargetID] = rec
+	return nil
+}
+
+func (s *graphicalTargetStore) GetGraphicalTarget(
+	_ context.Context, targetID string,
+) (*cp.GraphicalTargetRecord, error) {
+	rec, ok := s.state.GraphicalTargets[targetID]
+	if !ok {
+		return nil, nil
+	}
+	return &rec, nil
+}
+
+// ListGraphicalTargets sorts by target_id so this backend agrees with the
+// SQLite one, which gets the order from ORDER BY. Go map iteration is randomized,
+// so without the sort the two backends would disagree nondeterministically.
+func (s *graphicalTargetStore) ListGraphicalTargets(_ context.Context) ([]cp.GraphicalTargetRecord, error) {
+	ids := make([]string, 0, len(s.state.GraphicalTargets))
+	for id := range s.state.GraphicalTargets {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	out := make([]cp.GraphicalTargetRecord, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, s.state.GraphicalTargets[id])
+	}
+	return out, nil
+}
+
+func (s *graphicalTargetStore) DeleteGraphicalTarget(_ context.Context, targetID string) (bool, error) {
+	if _, ok := s.state.GraphicalTargets[targetID]; !ok {
+		return false, nil
+	}
+	delete(s.state.GraphicalTargets, targetID)
+	return true, nil
 }

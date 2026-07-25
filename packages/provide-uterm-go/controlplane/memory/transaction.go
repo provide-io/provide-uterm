@@ -55,7 +55,8 @@ func (t *Transaction) Commit(_ context.Context) error {
 		detectConflict(t.root.ResumeTokens, t.snapshot.ResumeTokens, t.state.ResumeTokens) ||
 		detectConflict(t.root.Sessions, t.snapshot.Sessions, t.state.Sessions) ||
 		detectConflict(t.root.Approvals, t.snapshot.Approvals, t.state.Approvals) ||
-		detectConflict(t.root.Leases, t.snapshot.Leases, t.state.Leases)
+		detectConflict(t.root.Leases, t.snapshot.Leases, t.state.Leases) ||
+		detectConflict(t.root.GraphicalTargets, t.snapshot.GraphicalTargets, t.state.GraphicalTargets)
 	if conflict {
 		t.closed = true
 		return cp.ConflictError("memory control-plane transaction conflicts with a concurrent commit")
@@ -65,6 +66,7 @@ func (t *Transaction) Commit(_ context.Context) error {
 	mergeTable(t.root.Sessions, t.snapshot.Sessions, t.state.Sessions)
 	mergeTable(t.root.Approvals, t.snapshot.Approvals, t.state.Approvals)
 	mergeTable(t.root.Leases, t.snapshot.Leases, t.state.Leases)
+	mergeTable(t.root.GraphicalTargets, t.snapshot.GraphicalTargets, t.state.GraphicalTargets)
 	t.closed = true
 	return nil
 }

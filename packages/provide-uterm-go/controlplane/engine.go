@@ -55,6 +55,23 @@ type LeaseStore interface {
 	ClearLease(ctx context.Context, sessionID string) error
 }
 
+// GraphicalTargetStore persists graphical-target definitions. Port of
+// control.plane.graphical_target.store.GraphicalTargetStore. A nil first return
+// from Get means "absent" (Python None).
+//
+// Tenant isolation is NOT enforced here: this is a row layer, and the caller
+// already holds a Scope derived from the authenticated principal. Filtering by
+// tenant here too would double-gate reads and hide scope bugs from the
+// registry's own tests.
+type GraphicalTargetStore interface {
+	PutGraphicalTarget(ctx context.Context, rec GraphicalTargetRecord) error
+	GetGraphicalTarget(ctx context.Context, targetID string) (*GraphicalTargetRecord, error)
+	// ListGraphicalTargets returns every row ordered by target_id.
+	ListGraphicalTargets(ctx context.Context) ([]GraphicalTargetRecord, error)
+	// DeleteGraphicalTarget reports whether a row was actually removed.
+	DeleteGraphicalTarget(ctx context.Context, targetID string) (bool, error)
+}
+
 // Engine is a control-plane backend. Port of the control.plane.bootstrap.
 // ControlPlane protocol plus the store-factory methods the concrete engines
 // expose. The store-factory methods take a Tx obtained from Begin; passing a Tx
@@ -82,4 +99,5 @@ type Engine interface {
 	TokenStore(tx Tx) TokenStore
 	ApprovalStore(tx Tx) ApprovalStore
 	LeaseStore(tx Tx) LeaseStore
+	GraphicalTargetStore(tx Tx) GraphicalTargetStore
 }
