@@ -56,11 +56,20 @@ def test_constructor_defaults() -> None:
 
 
 def test_constructor_custom_params() -> None:
-    session = TelnetSession("example.com", 2102, cols=120, rows=40, term="VT100", connect_timeout=10.0)
+    session = TelnetSession(
+        "example.com",
+        2102,
+        cols=120,
+        rows=40,
+        term="VT100",
+        connect_timeout=10.0,
+        receive_encoding="utf-8",
+    )
     assert session._cols == 120
     assert session._rows == 40
     assert session._term == "VT100"
     assert session._connect_timeout == 10.0
+    assert session._receive_encoding == "utf-8"
 
 
 def test_constructor_control_frames_off_by_default() -> None:

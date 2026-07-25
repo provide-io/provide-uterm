@@ -30,6 +30,22 @@ class TestTerminalEmulator:
         snap = emu.get_snapshot()
         assert "Hello" in snap["screen"]
 
+    def test_process_decodes_configured_utf8_receive_encoding(self) -> None:
+        emu = TerminalEmulator(cols=80, rows=5, receive_encoding="utf-8")
+        banner = "╔══ WARP ══╗"
+
+        emu.process(banner.encode("utf-8"))
+
+        assert banner in emu.get_snapshot()["screen"]
+        assert "Γò" not in emu.get_snapshot()["screen"]
+
+    def test_process_defaults_to_cp437_for_bbs_bytes(self) -> None:
+        emu = TerminalEmulator(cols=80, rows=5)
+
+        emu.process("╔═╗".encode("cp437"))
+
+        assert "╔═╗" in emu.get_snapshot()["screen"]
+
     def test_hash_changes_on_update(self) -> None:
         emu = TerminalEmulator(cols=80, rows=5)
         h1 = emu.get_snapshot()["screen_hash"]

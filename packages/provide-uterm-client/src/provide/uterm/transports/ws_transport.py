@@ -29,10 +29,14 @@ logger = get_logger(__name__)
 class WebSocketTransport(ConnectionTransport):
     """WebSocket client implementing the ConnectionTransport interface."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, text_frame_encoding: str = "latin-1") -> None:
         self._url: str | None = None
         self._ws: Any = None
         self._connected = False
+        # Byte-oriented BBS gateways historically place each terminal byte in
+        # the same-valued WebSocket text code point, hence the latin-1 default.
+        # Unicode-native terminal servers can opt into UTF-8 explicitly.
+        self._text_frame_encoding = text_frame_encoding
 
     async def connect(self, host: str, port: int, **kwargs: Any) -> None:
         """Connect to WebSocket.
@@ -105,10 +109,10 @@ class WebSocketTransport(ConnectionTransport):
 
         try:
             message = await asyncio.wait_for(self._ws.recv(), timeout=timeout_ms / 1000.0)
-            # Text frames carry terminal bytes; latin-1 round-trips bytes
-            # 0..255 1:1 (errors="replace" guards any non-encodable code point).
+            # Text frames are converted back to terminal bytes using the
+            # target's wire dialect. Binary frames already contain bytes.
             if isinstance(message, str):
-                return message.encode("latin-1", errors="replace")
+                return message.encode(self._text_frame_encoding, errors="replace")
             return bytes(message)
         except TimeoutError:
             # asyncio.TimeoutError is TimeoutError on 3.11+: a read timeout

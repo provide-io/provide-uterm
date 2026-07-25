@@ -41,6 +41,8 @@ class TerminalEmulator:
         cols: Terminal width in columns (default 80).
         rows: Terminal height in rows (default 25).
         term: Terminal type string (default ``"ANSI"``).
+        receive_encoding: Codec used to decode incoming terminal bytes. The
+            default remains CP437 for byte-oriented BBS compatibility.
 
     Memory / scrollback bounds:
         Backed by ``pyte.Screen``, which is **bounded**: only the visible
@@ -53,10 +55,17 @@ class TerminalEmulator:
         re-flows the buffer, clipping rows that no longer fit.
     """
 
-    def __init__(self, cols: int = 80, rows: int = 25, term: str = "ANSI") -> None:
+    def __init__(
+        self,
+        cols: int = 80,
+        rows: int = 25,
+        term: str = "ANSI",
+        receive_encoding: str = _CP437,
+    ) -> None:
         self.cols = cols
         self.rows = rows
         self.term = term
+        self.receive_encoding = receive_encoding
         self._screen = pyte.Screen(cols, rows)
         self._stream = pyte.Stream(self._screen)
         self._dirty = True
@@ -64,12 +73,12 @@ class TerminalEmulator:
         self._raw_tail: str = ""
 
     def process(self, data: bytes) -> None:
-        """Feed raw bytes (CP437) through the emulator.
+        """Decode and feed raw terminal bytes through the emulator.
 
         Args:
             data: Raw bytes from a transport or file.
         """
-        text = data.decode(_CP437, errors="replace")
+        text = data.decode(self.receive_encoding, errors="replace")
         self._stream.feed(text)
         # Retain a bounded tail of the raw decoded stream (ANSI/control intact)
         # so consumers can recover content that scrolled off pyte's viewport
