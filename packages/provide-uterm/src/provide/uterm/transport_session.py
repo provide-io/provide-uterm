@@ -34,9 +34,26 @@ from provide.uterm.control_channel import ControlFrameDecoder, DataChunk
 from provide.uterm.emulator import TerminalEmulator
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
 
     from provide.uterm.transports.base import ConnectionTransport
+
+
+class TerminalCapture:
+    """Bounded terminal text captured only for one caller-owned operation."""
+
+    def __init__(self, *, max_chars: int) -> None:
+        self._max_chars = max(1, int(max_chars))
+        self._text = ""
+
+    @property
+    def text(self) -> str:
+        """Return terminal text received while the capture scope was active."""
+        return self._text
+
+    def _append(self, text: str) -> None:
+        if text:
+            self._text = (self._text + text)[-self._max_chars :]
 
 
 class TransportSession:
@@ -53,6 +70,8 @@ class TransportSession:
         send_encoding: Codec used by :meth:`send` to encode outgoing strings
             (``"utf-8"`` by default; telnet uses ``"cp437"``). Encoding always
             uses ``errors="replace"`` so unrepresentable characters never raise.
+        receive_encoding: Codec used by the emulator to decode incoming
+            terminal bytes (``"cp437"`` by default).
     """
 
     def __init__(
@@ -62,13 +81,15 @@ class TransportSession:
         cols: int = 80,
         rows: int = 25,
         send_encoding: str = "utf-8",
+        receive_encoding: str = "cp437",
         control_frames: bool = False,
     ) -> None:
         self._transport = transport
         self._cols = cols
         self._rows = rows
         self._send_encoding = send_encoding
-        self._emulator = TerminalEmulator(cols, rows)
+        self._receive_encoding = receive_encoding
+        self._emulator = TerminalEmulator(cols, rows, receive_encoding=receive_encoding)
         self._read_task: asyncio.Task[None] | None = None
         self._update_event = asyncio.Event()
         self._connected = False
@@ -88,6 +109,7 @@ class TransportSession:
         self._control_frames = control_frames
         self._control_decoder: ControlFrameDecoder | None = ControlFrameDecoder() if control_frames else None
         self._control_watchers: list[Callable[[dict[str, Any]], None]] = []
+        self._captures: list[TerminalCapture] = []
 
     async def _connect_transport(self) -> None:
         """Open the underlying transport. Override in subclasses.
@@ -274,6 +296,22 @@ class TransportSession:
         """
         self._control_watchers.append(callback)
 
+    @contextlib.contextmanager
+    def capture_output(self, *, max_chars: int = 65_536) -> Iterator[TerminalCapture]:
+        """Capture terminal-only text received during this bounded scope.
+
+        Control frames are removed before text reaches the capture. The
+        capture unregisters on scope exit, so it cannot become session-wide
+        history or grow with session age.
+        """
+        capture = TerminalCapture(max_chars=max_chars)
+        self._captures.append(capture)
+        try:
+            yield capture
+        finally:
+            with contextlib.suppress(ValueError):
+                self._captures.remove(capture)
+
     async def _reader_loop(self) -> None:
         """Background task: read from transport (IAC-stripped), feed into emulator."""
         try:
@@ -285,6 +323,10 @@ class TransportSession:
                         data = self._split_control_frames(raw)
                     if data is None:
                         continue
+                    if self._captures:
+                        terminal_text = data.decode(self._receive_encoding, errors="replace")
+                        for capture in tuple(self._captures):
+                            capture._append(terminal_text)
                     # Fan out to any registered watchers BEFORE the emulator
                     # consumes the bytes, so they see the raw wire content
                     # (ANSI SGR codes etc.) and not pyte's decoded display.
@@ -302,13 +344,13 @@ class TransportSession:
         """Run *data* through the control-frame decoder.
 
         Control chunks are dispatched to control-frame watchers; data chunks
-        are re-joined and returned (CP437-encoded, matching the raw wire
-        encoding the emulator/watchers already expect). Returns ``None`` when
+        are re-joined and returned using the configured receive encoding.
+        Returns ``None`` when
         the chunk contained only control frames (nothing left for the caller
         to feed onward this round).
         """
         assert self._control_decoder is not None  # guarded by the caller
-        text = data.decode("cp437", errors="replace")
+        text = data.decode(self._receive_encoding, errors="replace")
         terminal_text_parts: list[str] = []
         for chunk in self._control_decoder.feed(text):
             if isinstance(chunk, DataChunk):
@@ -319,4 +361,4 @@ class TransportSession:
                         cb(chunk.control)
         if not terminal_text_parts:
             return None
-        return "".join(terminal_text_parts).encode("cp437", errors="replace")
+        return "".join(terminal_text_parts).encode(self._receive_encoding, errors="replace")

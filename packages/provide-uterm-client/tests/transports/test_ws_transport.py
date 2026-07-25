@@ -245,6 +245,18 @@ class TestReceive:
         result = await t.receive(4096, 100)
         assert result == b"A\xff"
 
+    async def test_receive_str_message_configured_utf8(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        ws = _make_ws()
+        banner = "╔══ WARP ══╗"
+        ws.recv = AsyncMock(return_value=banner)
+        monkeypatch.setattr("websockets.connect", AsyncMock(return_value=ws))
+        t = WebSocketTransport(text_frame_encoding="utf-8")
+        await t.connect("h", 1)
+
+        result = await t.receive(4096, 100)
+
+        assert result == banner.encode("utf-8")
+
     async def test_receive_bytes_passthrough(self, monkeypatch: pytest.MonkeyPatch) -> None:
         ws = _make_ws()
         ws.recv = AsyncMock(return_value=b"\x00\x01\x02")

@@ -28,6 +28,12 @@ def _control_frame_bytes(payload: dict[str, Any]) -> bytes:
     return encode_control_frame(payload).encode("cp437")
 
 
+def _utf8_control_frame_bytes(payload: dict[str, Any]) -> bytes:
+    from provide.uterm.control_channel import encode_control_frame
+
+    return encode_control_frame(payload).encode("utf-8")
+
+
 async def test_control_frames_off_by_default_is_raw_passthrough() -> None:
     """Default behavior: a DLE/STX-framed message is NOT parsed — the exact
     unmodified bytes reach watchers/the emulator, exactly like a plain
@@ -116,3 +122,65 @@ def test_control_frame_watch_noop_when_disabled() -> None:
     session.add_control_frame_watch(lambda _payload: None)
     assert len(session._control_watchers) == 1
     assert session._control_decoder is None
+
+
+async def test_operation_capture_excludes_control_frames_and_decodes_target_encoding() -> None:
+    banner = "╔══ WARP ══╗"
+    frame = _utf8_control_frame_bytes({"type": "online_presence", "count": 1})
+    transport = _FakeTransport([frame + banner.encode("utf-8"), ConnectionResetError("done")])
+    session = _ConcreteSession(transport, receive_encoding="utf-8", control_frames=True)
+
+    with session.capture_output() as capture:
+        await session.connect()
+        await asyncio.sleep(0.1)
+
+    await session.close()
+
+    assert capture.text == banner
+    assert "online_presence" not in capture.text
+    assert "Γò" not in capture.text
+
+
+async def test_operation_capture_is_bounded() -> None:
+    transport = _FakeTransport([b"abcdefgh", ConnectionResetError("done")])
+    session = _ConcreteSession(transport)
+
+    with session.capture_output(max_chars=5) as capture:
+        await session.connect()
+        await asyncio.sleep(0.1)
+
+    await session.close()
+
+    assert capture.text == "defgh"
+
+
+async def test_operation_capture_stops_recording_when_scope_exits() -> None:
+    class _GatedTransport(_FakeTransport):
+        def __init__(self) -> None:
+            super().__init__()
+            self.release_second = asyncio.Event()
+
+        async def receive(self, max_bytes: int, timeout_ms: int) -> bytes:
+            del max_bytes, timeout_ms
+            if self._idx == 0:
+                self._idx += 1
+                return b"during"
+            if self._idx == 1:
+                self._idx += 1
+                await self.release_second.wait()
+                return b"after"
+            raise ConnectionResetError("done")
+
+    transport = _GatedTransport()
+    session = _ConcreteSession(transport)
+
+    with session.capture_output() as capture:
+        await session.connect()
+        while session.screen_change_seq() < 1:
+            await asyncio.sleep(0)
+
+    transport.release_second.set()
+    await asyncio.sleep(0.1)
+    await session.close()
+
+    assert capture.text == "during"

@@ -42,6 +42,8 @@ async def connect_ws(
     close_timeout: int = TerminalDefaults.WS_CLOSE_TIMEOUT,
     origin: str | None = None,
     additional_headers: dict[str, str] | None = None,
+    receive_encoding: str = "cp437",
+    text_frame_encoding: str = "latin-1",
     control_frames: bool = False,
 ) -> WebSocketSession:
     """Connect to a WebSocket server and return a Session-protocol-compliant object.
@@ -50,6 +52,10 @@ async def connect_ws(
         url: Full WebSocket URL (ws:// or wss://).
         cols: Terminal width (default 80).
         rows: Terminal height (default 25).
+        receive_encoding: Codec used by the terminal emulator for incoming
+            bytes. Defaults to CP437 for BBS compatibility.
+        text_frame_encoding: Codec used to convert WebSocket text messages to
+            terminal bytes. Defaults to Latin-1 for byte-preserving gateways.
         control_frames: When ``True``, inline DLE/STX control frames are
             parsed out of the stream and routed to
             ``session.add_control_frame_watch(...)`` instead of appearing as
@@ -73,6 +79,8 @@ async def connect_ws(
         close_timeout=close_timeout,
         origin=origin,
         additional_headers=additional_headers,
+        receive_encoding=receive_encoding,
+        text_frame_encoding=text_frame_encoding,
         control_frames=control_frames,
     )
     await session.connect()
@@ -97,6 +105,8 @@ class WebSocketSession(TransportSession):
         close_timeout: int = TerminalDefaults.WS_CLOSE_TIMEOUT,
         origin: str | None = None,
         additional_headers: dict[str, str] | None = None,
+        receive_encoding: str = "cp437",
+        text_frame_encoding: str = "latin-1",
         control_frames: bool = False,
     ) -> None:
         self.url = url
@@ -106,7 +116,12 @@ class WebSocketSession(TransportSession):
         self._origin = origin
         self._additional_headers = additional_headers
         super().__init__(
-            WebSocketTransport(), cols=cols, rows=rows, send_encoding="utf-8", control_frames=control_frames
+            WebSocketTransport(text_frame_encoding=text_frame_encoding),
+            cols=cols,
+            rows=rows,
+            send_encoding="utf-8",
+            receive_encoding=receive_encoding,
+            control_frames=control_frames,
         )
 
     async def _connect_transport(self) -> None:
