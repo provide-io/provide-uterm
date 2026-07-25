@@ -148,6 +148,35 @@ type LeaseRecord struct {
 	DeletedAt      NullFloat
 }
 
+// GraphicalTargetRecord mirrors control.plane.graphical_target.types.
+// GraphicalTargetRecord — the persistence shape of graphical.Definition.
+//
+// Config holds the protocol-specific parameter object as canonical JSON text
+// rather than a map. The memory backend's optimistic-concurrency check compares
+// records with ==, so every field must be comparable; a map would not compile
+// through detectConflict's “V comparable“ constraint. Storing the JSON also
+// binds straight to the TEXT column with no marshalling in the store.
+type GraphicalTargetRecord struct {
+	TargetID            string
+	TenantID            string
+	DisplayName         string
+	Protocol            string
+	Endpoint            NullString
+	Secret              NullString
+	Width               int64
+	Height              int64
+	IsSystem            bool // stored as INTEGER 0/1 in SQLite
+	IsStatic            bool // stored as INTEGER 0/1 in SQLite
+	CaSecretRef         NullString
+	ClientCertSecretRef NullString
+	ClientKeySecretRef  NullString
+	Config              string
+	CreatedBy           NullString
+	CreatedAt           float64
+	UpdatedBy           NullString
+	UpdatedAt           NullFloat
+}
+
 // AuditHead is the persisted audit-chain head “(seq, record_hash)“.
 type AuditHead struct {
 	Seq        int64

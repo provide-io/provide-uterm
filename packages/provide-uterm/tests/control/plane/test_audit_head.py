@@ -110,12 +110,12 @@ async def test_sqlite_migration_creates_audit_head_table_at_v2(tmp_path: Path) -
         conn.close()
 
     assert "cp_audit_head" in tables
-    assert max_version == 2
+    assert max_version == 3
 
 
 @pytest.mark.asyncio
-async def test_sqlite_migrate_v1_db_forward_to_v2(tmp_path: Path) -> None:
-    """A db already at v1 (no audit-head table) migrates forward to v2 cleanly."""
+async def test_sqlite_migrate_v1_db_forward_to_head(tmp_path: Path) -> None:
+    """A db already at v1 (no audit-head table) migrates forward to head cleanly."""
     db_path = tmp_path / "cp.db"
     from provide.uterm.control.plane.sqlite import connect_sqlite
     from provide.uterm.control.plane.sqlite.schema.v0001_initial import SQL as V0001_SQL
@@ -127,7 +127,7 @@ async def test_sqlite_migrate_v1_db_forward_to_v2(tmp_path: Path) -> None:
     await conn.commit()
     await conn.close()
 
-    # Re-migrate via the normal path: v1 is skipped, v2 is applied.
+    # Re-migrate via the normal path: v1 is skipped, v2 and v3 are applied.
     plane = SqliteControlPlane(ControlPlaneConfig(database_url=str(db_path)))
     await plane.migrate()
     await plane.set_audit_head(5, "ff")
@@ -140,8 +140,9 @@ async def test_sqlite_migrate_v1_db_forward_to_v2(tmp_path: Path) -> None:
         tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     finally:
         db.close()
-    assert versions == [1, 2]
+    assert versions == [1, 2, 3]
     assert "cp_audit_head" in tables
+    assert "cp_graphical_targets" in tables
 
 
 @pytest.mark.asyncio

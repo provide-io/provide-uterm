@@ -88,6 +88,33 @@ CREATE TABLE IF NOT EXISTS cp_audit_head (
 );
 `
 
+// v0003SQL is control.plane.sqlite.schema.v0003_graphical_targets.SQL (verbatim).
+const v0003SQL = `
+CREATE TABLE IF NOT EXISTS cp_graphical_targets (
+    target_id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    protocol TEXT NOT NULL,
+    endpoint TEXT,
+    secret TEXT,
+    width INTEGER NOT NULL,
+    height INTEGER NOT NULL,
+    is_system INTEGER NOT NULL DEFAULT 0,
+    is_static INTEGER NOT NULL DEFAULT 0,
+    ca_secret_ref TEXT,
+    client_cert_secret_ref TEXT,
+    client_key_secret_ref TEXT,
+    config TEXT NOT NULL DEFAULT '{}',
+    created_by TEXT,
+    created_at REAL NOT NULL,
+    updated_by TEXT,
+    updated_at REAL
+);
+
+CREATE INDEX IF NOT EXISTS ix_cp_graphical_targets_tenant
+    ON cp_graphical_targets(tenant_id);
+`
+
 // migration is one ordered schema step.
 type migration struct {
 	version int
@@ -95,8 +122,9 @@ type migration struct {
 }
 
 // migrations is the ordered migration list. Port of control.plane.sqlite.
-// migration.MIGRATIONS: ((1, V0001_SQL), (2, V0002_SQL)).
+// migration.MIGRATIONS: ((1, V0001_SQL), (2, V0002_SQL), (3, V0003_SQL)).
 var migrations = []migration{
 	{version: 1, sql: v0001SQL},
 	{version: 2, sql: v0002SQL},
+	{version: 3, sql: v0003SQL},
 }

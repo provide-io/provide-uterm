@@ -39,14 +39,14 @@ func TestMigrateBootstrapsSchema(t *testing.T) {
 	tables := tableNames(t, path)
 	for _, want := range []string{
 		"cp_schema_version", "cp_sessions", "cp_session_tokens", "cp_resume_tokens",
-		"cp_approvals", "cp_leases", "cp_audit_head",
+		"cp_approvals", "cp_leases", "cp_audit_head", "cp_graphical_targets",
 	} {
 		if !tables[want] {
 			t.Fatalf("missing table %q", want)
 		}
 	}
-	if got := schemaVersions(t, path); len(got) != 2 || got[0] != 1 || got[1] != 2 {
-		t.Fatalf("versions = %v, want [1 2]", got)
+	if got := schemaVersions(t, path); len(got) != 3 || got[0] != 1 || got[1] != 2 || got[2] != 3 {
+		t.Fatalf("versions = %v, want [1 2 3]", got)
 	}
 }
 
@@ -57,8 +57,8 @@ func TestMigrateIsIdempotent(t *testing.T) {
 	if err := e.Migrate(context.Background()); err != nil {
 		t.Fatalf("second migrate: %v", err)
 	}
-	if got := schemaVersions(t, path); len(got) != 2 {
-		t.Fatalf("versions after re-migrate = %v, want [1 2]", got)
+	if got := schemaVersions(t, path); len(got) != 3 {
+		t.Fatalf("versions after re-migrate = %v, want [1 2 3]", got)
 	}
 }
 
@@ -122,10 +122,14 @@ func TestMigrateV1ForwardToV2(t *testing.T) {
 		t.Fatalf("audit head after forward-migrate = %+v", head)
 	}
 	_ = e.Close(context.Background())
-	if got := schemaVersions(t, path); len(got) != 2 || got[0] != 1 || got[1] != 2 {
-		t.Fatalf("versions = %v, want [1 2]", got)
+	if got := schemaVersions(t, path); len(got) != 3 || got[0] != 1 || got[1] != 2 || got[2] != 3 {
+		t.Fatalf("versions = %v, want [1 2 3]", got)
 	}
-	if !tableNames(t, path)["cp_audit_head"] {
+	names := tableNames(t, path)
+	if !names["cp_audit_head"] {
 		t.Fatal("cp_audit_head should exist after forward-migrate")
+	}
+	if !names["cp_graphical_targets"] {
+		t.Fatal("cp_graphical_targets should exist after forward-migrate")
 	}
 }
