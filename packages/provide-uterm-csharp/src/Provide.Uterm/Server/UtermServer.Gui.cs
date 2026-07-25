@@ -16,93 +16,42 @@ public sealed partial class UtermServer
     {
         if (!SafeId.IsMatch(workerId)) return DetailError(422, "invalid worker_id");
         var p = await Authenticate(ctx).ConfigureAwait(false);
-        if (!AuthorizeHub(p, workerId, "session.control.mode", out var err)) return err!;
+        if (!AuthorizesGraphicalAttach(p, workerId, out var authErr)) return authErr!;
 
         var body = await ReadJson(ctx).ConfigureAwait(false);
-        // Explicit mode wins; empty mode falls back to target_address inference (Go-style attach body).
-        var mode = body.ContainsKey("mode") ? Str(body, "mode") : "memory";
-        if (string.IsNullOrEmpty(mode))
+        if (!body.TryGetValue("target_id", out var targetVal) || targetVal.ValueKind != JsonValueKind.String)
         {
-            var target = Str(body, "target_address");
-            mode = string.IsNullOrEmpty(target) ||
-                   target.Equals("memory", StringComparison.OrdinalIgnoreCase)
-                ? "memory"
-                : "unsupported";
+            return DetailError(422, "target_id is required");
         }
 
-        IGraphicalSession session;
-        try
+        var targetId = targetVal.GetString() ?? "";
+        if (!SafeId.IsMatch(targetId))
         {
-            if (mode.Equals("memory", StringComparison.OrdinalIgnoreCase))
-            {
-                var width = Int(body, "width", 640);
-                var height = Int(body, "height", 480);
-                session = new MemoryGraphicalSession(width, height);
-            }
-            else if (mode.Equals("rfb", StringComparison.OrdinalIgnoreCase))
-            {
-                var target = Str(body, "target_address");
-                if (string.IsNullOrEmpty(target))
-                {
-                    return DetailError(422, "rfb attach requires target_address host:port");
-                }
-
-                if (!TryParseHostPort(target, out var rfbHost, out var rfbPort))
-                {
-                    return DetailError(422, "invalid target_address; expected host:port");
-                }
-
-                var client = new Vnc.RfbClient();
-                try
-                {
-                    client.ConnectAsync(rfbHost, rfbPort, ctx.RequestAborted).GetAwaiter().GetResult();
-                }
-                catch (Exception ex)
-                {
-                    return DetailError(502, "rfb connect failed: " + ex.Message);
-                }
-
-                session = client;
-            }
-            else
-            {
-                return DetailError(501, "gui attach mode not supported: " + mode + " (use mode=memory|rfb)");
-            }
-
-            var st = _deps.Hub.Registry.Get(workerId)
-                     ?? _deps.Hub.Registry.SetDefault(workerId, new WorkerTermState());
-            st.GraphicalSession = session;
+            return DetailError(422, "invalid target_id");
         }
-        catch (ArgumentOutOfRangeException ex)
+
+        var pTenant = PrincipalTenant(p);
+        if (string.IsNullOrEmpty(pTenant))
         {
-            return DetailError(422, ex.Message);
+            return DetailError(403, "graphical target access denied");
         }
-        catch (ArgumentException ex)
+
+        if (!GraphicalTargetScope.TryForTenant(pTenant, out var scope))
         {
-            return DetailError(422, ex.Message);
+            return DetailError(403, "graphical target access denied");
         }
+
+        var target = _deps.GraphicalTargets.Get(scope, targetId);
+        if (target is null)
+        {
+            return DetailError(404, "graphical target not found");
+        }
+
+        var state = _deps.Hub.Registry.Get(workerId)
+                    ?? _deps.Hub.Registry.SetDefault(workerId, new WorkerTermState());
+        state.GraphicalSession = new MemoryGraphicalSession(640, 480);
 
         return Results.Json(new { ok = true }, JsonOpts);
-    }
-
-    private static bool TryParseHostPort(string target, out string host, out int port)
-    {
-        host = "";
-        port = 0;
-        // strip optional rfb://
-        if (target.StartsWith("rfb://", StringComparison.OrdinalIgnoreCase))
-        {
-            target = target["rfb://".Length..];
-        }
-
-        var idx = target.LastIndexOf(':');
-        if (idx <= 0 || idx == target.Length - 1)
-        {
-            return false;
-        }
-
-        host = target[..idx];
-        return int.TryParse(target[(idx + 1)..], out port) && port > 0 && port < 65536;
     }
 
     private async Task<IResult> HandleGuiScreenshot(HttpContext ctx, string workerId, string hijackId)

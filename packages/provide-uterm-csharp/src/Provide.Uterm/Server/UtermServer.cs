@@ -31,6 +31,7 @@ public sealed class ServerDeps
     public required AuthorizationService Authz { get; init; }
     public required UtermServerConfig Config { get; init; }
     public required ISessionRegistry Registry { get; init; }
+    public IGraphicalTargetRegistry GraphicalTargets { get; init; } = new InMemoryGraphicalTargetRegistry();
     public string Version { get; init; } = "0.0.0-dev";
     public IClock? Clock { get; init; }
     /// <summary>Backs /api/sessions/{id}/recording routes. Defaults to <see cref="NullStore"/>.</summary>
@@ -243,6 +244,12 @@ public sealed partial class UtermServer : IAsyncDisposable
         app.MapGet("/worker/{workerId}/hijack/{hijackId}/events", HandleHijackEvents);
         app.MapPost("/worker/{workerId}/input_mode", HandleInputMode);
         app.MapPost("/worker/{workerId}/disconnect_worker", HandleDisconnectWorker);
+
+        app.MapGet("/api/graphical-targets", HandleListGraphicalTargets);
+        app.MapGet("/api/graphical-targets/{targetId}", HandleGetGraphicalTarget);
+        app.MapPost("/api/graphical-targets", HandleCreateGraphicalTarget);
+        app.MapPut("/api/graphical-targets/{targetId}", HandleUpdateGraphicalTarget);
+        app.MapDelete("/api/graphical-targets/{targetId}", HandleDeleteGraphicalTarget);
 
         // GUI REST (Go-compatible paths; memory attach for deterministic fixtures)
         app.MapPost("/worker/{workerId}/gui/attach", HandleGuiAttach);
