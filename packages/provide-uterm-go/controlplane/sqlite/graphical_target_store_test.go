@@ -7,6 +7,7 @@ package sqlite_test
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 
 	cp "github.com/provide-io/provide-uterm/packages/provide-uterm-go/controlplane"
@@ -232,4 +233,44 @@ func TestGraphicalTargetRollbackDiscards(t *testing.T) {
 	if got != nil {
 		t.Fatalf("rollback did not discard: %+v", got)
 	}
+}
+
+// TestGraphicalTargetStoreSurfacesSQLErrors covers the error returns on each
+// verb. Dropping the table is the cheapest way to make the driver fail for real
+// rather than mocking database/sql — without this the error branches are dead
+// weight that could return a nil record alongside a nil error.
+func TestGraphicalTargetStoreSurfacesSQLErrors(t *testing.T) {
+	t.Parallel()
+	e, path := newPlaneWithPath(t)
+	ctx := context.Background()
+	putGT(t, e, gtRecord("gt-1"))
+
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("open raw: %v", err)
+	}
+	if _, err := raw.ExecContext(ctx, "DROP TABLE cp_graphical_targets"); err != nil {
+		t.Fatalf("drop: %v", err)
+	}
+	_ = raw.Close()
+
+	tx, err := e.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	store := e.GraphicalTargetStore(tx)
+
+	if _, err := store.GetGraphicalTarget(ctx, "gt-1"); err == nil {
+		t.Fatal("Get should surface the missing-table error")
+	}
+	if _, err := store.ListGraphicalTargets(ctx); err == nil {
+		t.Fatal("List should surface the missing-table error")
+	}
+	if _, err := store.DeleteGraphicalTarget(ctx, "gt-1"); err == nil {
+		t.Fatal("Delete should surface the missing-table error")
+	}
+	if err := store.PutGraphicalTarget(ctx, gtRecord("gt-2")); err == nil {
+		t.Fatal("Put should surface the missing-table error")
+	}
+	_ = tx.Rollback(ctx)
 }
