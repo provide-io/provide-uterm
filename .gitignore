@@ -49,6 +49,9 @@ packages/provide-uterm-cloudflare/python_modules/
 
 # Playwright MCP output (screenshots, console logs)
 .playwright-mcp/
+# Playwright cross-backend "proof" run output (videos + summaries) — regenerable
+# test artifacts, not committed.
+packages/provide-uterm/tests/playwright/screenshots/backend-proof/
 *.png
 # But commit the canonical brand images (banner + size ladder).
 !docs/images/*.png
@@ -95,6 +98,7 @@ demo/vnc-lab/nested-video-raw/
 demo/vnc-lab/panels-server.toml
 demo/vnc-lab/panels-server.log
 demo/vnc-lab/panels-summary.log
+demo/vnc-lab/video-summary.log
 demo/vnc-lab/panels-video-raw/
 # Tracked exceptions: only the lightweight, non-video assets (poster.png /
 # terminal.cast / screenshots/*.png). The mp4/webm recordings are build
@@ -117,7 +121,7 @@ artifacts/
 .worktrees/
 
 # Internal dev-process artifacts (kept in the external archive, not the public repo)
-.provide/HANDOFF.md
+.provide/
 docs/superpowers/
 
 # C# port build outputs

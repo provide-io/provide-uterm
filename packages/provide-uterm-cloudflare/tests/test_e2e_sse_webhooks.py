@@ -338,9 +338,9 @@ async def test_do_webhook_register_with_secret_does_not_echo_secret(wrangler_ser
 
     When ``WEBHOOK_SECRET_KEY`` is unset the crypto module returns plaintext
     (documented fallback); the no-echo assertion holds either way, so this test
-    is meaningful both with and without the key configured. See the runbook in
-    ``.provide/HANDOFF.md`` for the full encrypt→decrypt→HMAC round-trip
-    validation against a deployed Worker.
+    is meaningful both with and without the key configured. The full
+    encrypt→decrypt→HMAC round-trip is validated against a deployed Worker
+    by the ``real_cf`` end-to-end suite.
     """
     worker_id = _new_worker_id()
     hook_url = "https://example.com/hook"

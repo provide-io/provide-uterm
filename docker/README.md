@@ -84,4 +84,4 @@ HIGH/CRITICAL with available fixes fail the gate (`ignore-unfixed: true`).
 ## Surface parity (not packaging)
 
 Containers make each language runnable the same way. **API/behavior gaps** are
-tracked in `.provide/HANDOFF.md` (parity matrix). MCP remains **out of scope for C#**.
+tracked in the internal cross-language parity matrix. MCP remains **out of scope for C#**.
