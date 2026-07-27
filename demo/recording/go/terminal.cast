@@ -1,4 +1,4 @@
-{"version":3,"term":{"cols":80,"rows":24},"timestamp":1783869628,"command":"go run ./cmd/demo-recording 2>/Volumes/data/pyv/provide-uterm/demo/recording/go/terminal.cast.stderr","env":{"SHELL":"/bin/zsh"}}
+{"version":3,"term":{"cols":80,"rows":24},"timestamp":1783869628,"command":"go run ./cmd/demo-recording 2>demo/recording/go/terminal.cast.stderr","env":{"SHELL":"/bin/zsh"}}
 [0.193, "o", "\r\n\u001b[1;35m══════════════════════════════════\u001b[0m\r\n\u001b[1;35m  \u001b[1mprovide-uterm recording — Go\u001b[0m\u001b[1;35m  \u001b[0m\r\n\u001b[1;35m══════════════════════════════════\u001b[0m\r\n\r\n\u001b[1;36m  → language=go  store=LocalFileStore\u001b[0m\r\n"]
 [0.006, "o", "\u001b[1;32m  ✓ session started: demo-recording-go\u001b[0m\r\n"]
 [0.006, "o", "\u001b[1;36m  → snapshot 0: 0 screen bytes\u001b[0m\r\n"]

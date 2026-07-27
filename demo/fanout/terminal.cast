@@ -1,4 +1,4 @@
-{"version":3,"term":{"cols":80,"rows":24},"timestamp":1780938892,"command":"/Volumes/data/pyv/provide-uterm/.venv/bin/python3 /Volumes/data/pyv/provide-uterm/scripts/demos/record_fanout.py --run-demo 2>demo/fanout/terminal.cast.stderr","env":{"SHELL":"/bin/zsh"}}
+{"version":3,"term":{"cols":80,"rows":24},"timestamp":1780938892,"command":".venv/bin/python3 scripts/demos/record_fanout.py --run-demo 2>demo/fanout/terminal.cast.stderr","env":{"SHELL":"/bin/zsh"}}
 [2.032, "o", "\r\n\u001b[1;35m═════════════════════════════════════════════════════════════════════════════════\u001b[0m\r\n\u001b[1;35m  \u001b[1mBroadcast a config command to 9 sessions simultaneously, show per-node output\u001b[0m\u001b[1;35m  \u001b[0m\r\n\u001b[1;35m═════════════════════════════════════════════════════════════════════════════════\u001b[0m\r\n\r\n"]
 [0.027, "o", "\u001b[1;36m  → Starting 9 fleet PTY sessions...\u001b[0m\r\n"]
 [0.010, "o", "\u001b[1;32m  ✓ fleet-0 created\u001b[0m\r\n"]

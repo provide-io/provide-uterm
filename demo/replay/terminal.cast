@@ -1,4 +1,4 @@
-{"version":3,"term":{"cols":80,"rows":24},"timestamp":1780938871,"command":"/Volumes/data/pyv/provide-uterm/.venv/bin/python3 /Volumes/data/pyv/provide-uterm/scripts/demos/record_replay.py --run-demo 2>demo/replay/terminal.cast.stderr","env":{"SHELL":"/bin/zsh"}}
+{"version":3,"term":{"cols":80,"rows":24},"timestamp":1780938871,"command":".venv/bin/python3 scripts/demos/record_replay.py --run-demo 2>demo/replay/terminal.cast.stderr","env":{"SHELL":"/bin/zsh"}}
 [2.033, "o", "\r\n\u001b[1;35m═══════════════════════════════════════════════════════════════════════════════════\u001b[0m\r\n\u001b[1;35m  \u001b[1mRecord 10 seconds of terminal activity then scrub through replay in the browser\u001b[0m\u001b[1;35m  \u001b[0m\r\n\u001b[1;35m═══════════════════════════════════════════════════════════════════════════════════\u001b[0m\r\n\r\n"]
 [0.029, "o", "\u001b[1;36m  → Posting 10 timeline annotations (step_00..step_09)...\u001b[0m\r\n"]
 [0.008, "o", "\u001b[1;32m  ✓ step_00 → seq=4\u001b[0m\r\n"]

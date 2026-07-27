@@ -11,7 +11,7 @@ byte-for-byte. This proves Go and Python agree on every shared wire surface,
 not merely that a frozen golden was copied.
 
 Run standalone to refresh the committed golden:
-    cd /Volumes/data/pyv/provide-uterm && \
+    cd <repo-root> && \
       uv run python packages/provide-uterm-go/conformance/gen_vectors.py \
       > packages/provide-uterm-go/conformance/testdata/vectors.json
 """

@@ -1,4 +1,4 @@
-{"version":3,"term":{"cols":80,"rows":24},"timestamp":1780938426,"command":"/Volumes/data/pyv/provide-uterm/.venv/bin/python3 /Volumes/data/pyv/provide-uterm/scripts/demos/record_hijack.py --run-demo 2>demo/hijack/terminal.cast.stderr","env":{"SHELL":"/bin/zsh"}}
+{"version":3,"term":{"cols":80,"rows":24},"timestamp":1780938426,"command":".venv/bin/python3 scripts/demos/record_hijack.py --run-demo 2>demo/hijack/terminal.cast.stderr","env":{"SHELL":"/bin/zsh"}}
 [2.052, "o", "\r\n\u001b[1;35m═════════════════════════════════════════════════════════════════════════════════════\u001b[0m\r\n"]
 [0.000, "o", "\u001b[1;35m  \u001b[1mViewer connects read-only, operator takes exclusive control, admin force-reclaims\u001b[0m\u001b[1;35m  \u001b[0m\r\n\u001b[1;35m═════════════════════════════════════════════════════════════════════════════════════\u001b[0m\r\n"]
 [0.000, "o", "\r\n"]
