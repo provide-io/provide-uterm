@@ -193,6 +193,47 @@ async def test_sqlite_survives_reopen(tmp_path: Path) -> None:
     assert got.config == {"vm_name": "vm-1"}
 
 
+@pytest.mark.parametrize(
+    "stored",
+    [
+        pytest.param("not-json", id="undecodable"),
+        # Valid JSON that simply isn't an object. json.loads succeeds here, so this
+        # takes a different branch than the decode failure above — config must still
+        # come back as a dict rather than a list/str leaking into the record.
+        pytest.param("[1, 2, 3]", id="json-array"),
+        pytest.param('"a string"', id="json-string"),
+        pytest.param("42", id="json-number"),
+        pytest.param("null", id="json-null"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_sqlite_non_object_config_degrades_to_empty(tmp_path: Path, stored: str) -> None:
+    """A config blob that isn't a JSON object must not take out the whole listing."""
+    db_path = str(tmp_path / "cp.db")
+    plane = SqliteControlPlane(ControlPlaneConfig(database_url=db_path))
+    await plane.open()
+    await plane.migrate()
+    await _put(plane, _record())
+    await plane.close()
+
+    raw = sqlite3.connect(db_path)
+    try:
+        raw.execute("UPDATE cp_graphical_targets SET config = ? WHERE target_id = ?", (stored, "gt-1"))
+        raw.commit()
+    finally:
+        raw.close()
+
+    reopened = SqliteControlPlane(ControlPlaneConfig(database_url=db_path))
+    await reopened.open()
+    tx = await reopened.begin()
+    rows = await reopened.graphical_target_store(tx).list_graphical_targets()
+    await tx.rollback()
+    await reopened.close()
+
+    assert len(rows) == 1
+    assert rows[0].config == {}
+
+
 @pytest.mark.asyncio
 async def test_sqlite_undecodable_config_degrades_to_empty(tmp_path: Path) -> None:
     """A corrupt config blob must not take out the whole listing."""

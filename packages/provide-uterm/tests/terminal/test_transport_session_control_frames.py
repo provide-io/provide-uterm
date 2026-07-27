@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from provide.uterm.transport_session import TransportSession
+from provide.uterm.transport_session import TerminalCapture, TransportSession
 
 from .test_transport_session import _ConcreteSession, _FakeTransport
 
@@ -139,6 +139,52 @@ async def test_operation_capture_excludes_control_frames_and_decodes_target_enco
     assert capture.text == banner
     assert "online_presence" not in capture.text
     assert "Γò" not in capture.text
+
+
+def test_terminal_capture_append_ignores_empty_text() -> None:
+    """An empty append is a no-op and must not disturb what is already held.
+
+    The reader loop cannot currently deliver this: `_split_control_frames`
+    returns None (not empty bytes) when a payload was frames-only, and non-empty
+    bytes always decode to a non-empty string under errors="replace". The guard
+    in `_append` is therefore defensive, and this exercises it directly rather
+    than through a session that cannot reach it.
+    """
+    capture = TerminalCapture(max_chars=8)
+
+    capture._append("")
+    assert capture.text == ""
+
+    capture._append("abc")
+    capture._append("")
+    assert capture.text == "abc"
+
+
+def test_terminal_capture_floors_max_chars() -> None:
+    """max_chars below 1 is floored, so a capture always retains something."""
+    capture = TerminalCapture(max_chars=0)
+    capture._append("abcdef")
+    assert capture.text == "f"
+
+
+async def test_operation_capture_ignores_frame_only_payload() -> None:
+    """A frame-only payload leaves no terminal text, so the capture stays empty.
+
+    Distinct from the unit test above: here the reader loop short-circuits on
+    `_split_control_frames` returning None, so the capture is never appended to
+    at all.
+    """
+    frame = _utf8_control_frame_bytes({"type": "online_presence", "count": 1})
+    transport = _FakeTransport([frame, ConnectionResetError("done")])
+    session = _ConcreteSession(transport, receive_encoding="utf-8", control_frames=True)
+
+    with session.capture_output() as capture:
+        await session.connect()
+        await asyncio.sleep(0.1)
+
+    await session.close()
+
+    assert capture.text == ""
 
 
 async def test_operation_capture_is_bounded() -> None:

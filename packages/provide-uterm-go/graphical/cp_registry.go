@@ -114,10 +114,7 @@ func (r *ControlPlaneRegistry) Get(scope Scope, targetID string) (*Definition, e
 		if rec == nil {
 			return nil
 		}
-		def, cErr := recordToDefinition(*rec)
-		if cErr != nil {
-			return cErr
-		}
+		def := recordToDefinition(*rec)
 		if scope.Permits(def.TenantID) {
 			found = def
 		}
@@ -145,10 +142,7 @@ func (r *ControlPlaneRegistry) List(scope Scope) ([]*Definition, error) {
 			return backendError()
 		}
 		for i := range rows {
-			def, cErr := recordToDefinition(rows[i])
-			if cErr != nil {
-				return cErr
-			}
+			def := recordToDefinition(rows[i])
 			if scope.Permits(def.TenantID) {
 				merged[def.TargetID] = def
 			}
@@ -244,10 +238,7 @@ func (r *ControlPlaneRegistry) Update(scope Scope, target *Definition) (*Definit
 		if rec == nil {
 			return newError(CodeNotFound, "graphical target not found")
 		}
-		current, cErr := recordToDefinition(*rec)
-		if cErr != nil {
-			return cErr
-		}
+		current := recordToDefinition(*rec)
 		if !scope.Permits(current.TenantID) {
 			return newError(CodeForbidden, "graphical target tenant scope denied")
 		}
@@ -293,10 +284,7 @@ func (r *ControlPlaneRegistry) Delete(scope Scope, targetID string) error {
 		if rec == nil {
 			return newError(CodeNotFound, "graphical target not found")
 		}
-		current, cErr := recordToDefinition(*rec)
-		if cErr != nil {
-			return cErr
-		}
+		current := recordToDefinition(*rec)
 		if !scope.Permits(current.TenantID) {
 			return newError(CodeForbidden, "graphical target tenant scope denied")
 		}
@@ -367,7 +355,7 @@ func definitionToRecord(d *Definition) (cp.GraphicalTargetRecord, error) {
 // read: the column is non-authoritative protocol metadata, and refusing to list
 // every target because one row is malformed turns a cosmetic defect into an
 // outage.
-func recordToDefinition(rec cp.GraphicalTargetRecord) (*Definition, error) {
+func recordToDefinition(rec cp.GraphicalTargetRecord) *Definition {
 	config := map[string]any{}
 	if rec.Config != "" {
 		decoded := map[string]any{}
@@ -398,7 +386,7 @@ func recordToDefinition(rec cp.GraphicalTargetRecord) (*Definition, error) {
 		updated := epochToTime(rec.UpdatedAt.Float64)
 		d.UpdatedAt = &updated
 	}
-	return d, nil
+	return d
 }
 
 func optString(s *string) cp.NullString {
