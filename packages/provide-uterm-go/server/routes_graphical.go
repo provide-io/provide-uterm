@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	cp "github.com/provide-io/provide-uterm/packages/provide-uterm-go/controlplane"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/graphical"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverauth"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
@@ -405,7 +406,29 @@ func graphicalRouteError(w http.ResponseWriter, err error) {
 // in-memory registry seeded with the enabled config targets as immutable
 // system/static entries. Port of ToGraphicalTargetDefinition for the conversion.
 func SeedGraphicalTargets(cfg *serverconfig.UtermServerConfig) (graphical.Registry, error) {
-	registry := graphical.NewInMemoryRegistry()
+	return seedGraphicalTargets(graphical.NewInMemoryRegistry(), cfg)
+}
+
+// NewControlPlaneGraphicalTargets builds a registry whose runtime targets live
+// in the control plane, seeded with the same immutable config targets.
+//
+// The engine must already be open and migrated. Durability follows the
+// configured control-plane backend: a sqlite backend keeps runtime targets
+// across restarts, a memory backend behaves exactly like SeedGraphicalTargets.
+// Static targets are re-seeded from the config file on every boot either way,
+// so they are never written to the store.
+func NewControlPlaneGraphicalTargets(
+	cfg *serverconfig.UtermServerConfig, engine cp.Engine,
+) (graphical.Registry, error) {
+	return seedGraphicalTargets(graphical.NewControlPlaneRegistry(engine), cfg)
+}
+
+// seedGraphicalTargets adds every enabled config target to registry as an
+// immutable system/static entry. Port of ToGraphicalTargetDefinition for the
+// conversion.
+func seedGraphicalTargets(
+	registry graphical.Registry, cfg *serverconfig.UtermServerConfig,
+) (graphical.Registry, error) {
 	for i := range cfg.GraphicalTargets {
 		target := cfg.GraphicalTargets[i]
 		if !target.Enabled {
