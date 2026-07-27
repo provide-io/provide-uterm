@@ -1,4 +1,4 @@
-{"version":3,"term":{"cols":80,"rows":24},"timestamp":1783869626,"command":"/Volumes/data/pyv/provide-uterm/.venv/bin/python3 /Volumes/data/pyv/provide-uterm/scripts/demos/recording_matrix/demo_python.py 2>/Volumes/data/pyv/provide-uterm/demo/recording/python/terminal.cast.stderr","env":{"SHELL":"/bin/zsh"}}
+{"version":3,"term":{"cols":80,"rows":24},"timestamp":1783869626,"command":".venv/bin/python3 scripts/demos/recording_matrix/demo_python.py 2>demo/recording/python/terminal.cast.stderr","env":{"SHELL":"/bin/zsh"}}
 [0.235, "o", "\r\n\u001b[1;35m════════════════════════════════════\u001b[0m\r\n\u001b[1;35m  \u001b[1mprovide-uterm recording — Python\u001b[0m\u001b[1;35m  \u001b[0m\r\n"]
 [0.000, "o", "\u001b[1;35m════════════════════════════════════\u001b[0m\r\n\r\n\u001b[1;36m  → language=python  store=LocalFileRecordingStore\u001b[0m\r\n"]
 [0.001, "o", "\u001b[1;32m  ✓ session started: demo-recording-py\u001b[0m\r\n"]

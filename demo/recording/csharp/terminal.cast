@@ -1,4 +1,4 @@
-{"version":3,"term":{"cols":80,"rows":24},"timestamp":1783869630,"command":"dotnet run --project /Volumes/data/pyv/provide-uterm/packages/provide-uterm-csharp/cmd/RecordingDemo/RecordingDemo.csproj -c Release --no-build 2>/Volumes/data/pyv/provide-uterm/demo/recording/csharp/terminal.cast.stderr","env":{"SHELL":"/bin/zsh"}}
+{"version":3,"term":{"cols":80,"rows":24},"timestamp":1783869630,"command":"dotnet run --project packages/provide-uterm-csharp/cmd/RecordingDemo/RecordingDemo.csproj -c Release --no-build 2>demo/recording/csharp/terminal.cast.stderr","env":{"SHELL":"/bin/zsh"}}
 [0.744, "o", "\r\n\u001b[1;35m════════════════════════════════\u001b[0m\r\n"]
 [0.001, "o", "\u001b[1;35m  \u001b[1mprovide-uterm recording — C#\u001b[0m\u001b[1;35m  \u001b[0m\r\n\u001b[1;35m════════════════════════════════\u001b[0m\r\n\r\n"]
 [0.000, "o", "\u001b[1;36m  → language=csharp  store=LocalFileStore\u001b[0m\r\n"]

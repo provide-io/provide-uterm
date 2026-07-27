@@ -20,7 +20,7 @@
 - Subagent 5: Tier B2/B3 as each gate unlocks.
 
 **Worktree execution status:**
-- `/Volumes/data/pyv/provide-uterm` (main): Part A implementation complete and committed.
+- `provide-uterm` (main): Part A implementation complete and committed.
 - API-gap subagent worktrees/branches (`agent-u1a`, `agent-u2-u3`, `agent-u4-u5`, `agent-u6-uws`, `agent-u7-u1`, `full-uterm-migration`) were merged into `main`, verified to have no unique commits, removed, and pruned.
 - `.claude/worktrees/agent-aa59...` (`upgrade/python-latest`) and `.claude/worktrees/agent-af3...` (`upgrade/js-docker`) are unrelated dependency-upgrade worktrees with unique commits and remain isolated for the next phase.
 
@@ -46,8 +46,8 @@ Each item is tagged **blocker** (uwarp literally cannot adopt the clean path wit
 
 | Repo | Path | Role |
 |---|---|---|
-| **uterm** (this repo) | `/Volumes/data/pyv/provide-uterm` (also symlinked at `/Users/tim/code/gh/provide-io/provide-uterm` — `realpath` confirms identical) | The terminal library. **All Part A work happens here.** |
-| **uwarp-space** | `/Users/tim/code/gh/undef-games/uwarp-space` | A TradeWars 2002 (TW2002) game platform. The consumer being audited. **Part B work happens here.** |
+| **uterm** (this repo) | `provide-uterm` (also symlinked at `provide-uterm` — `realpath` confirms identical) | The terminal library. **All Part A work happens here.** |
+| **uwarp-space** | `uwarp-space` | A TradeWars 2002 (TW2002) game platform. The consumer being audited. **Part B work happens here.** |
 
 uwarp depends on uterm via **editable path installs** (no fork, no vendoring) — `uwarp-space/pyproject.toml:199-201`:
 ```toml
@@ -556,7 +556,7 @@ session.add_watch(lambda state, raw: buf.extend(raw))  # raw bytes, ANSI/CP437 i
 
 ## PART B — uwarp-space adoption (different repo; gated on Part A)
 
-> Repo: `/Users/tim/code/gh/undef-games/uwarp-space`. Edit `packages/`, never the generated `worker/src/`. uwarp has its own gates (100% coverage, hypothesis, ruff, mypy) — run `make` targets there; check `uwarp-space/CLAUDE.md` and `Makefile` before pushing. Each fix below is independent; commit one logical unit at a time.
+> Repo: `uwarp-space`. Edit `packages/`, never the generated `worker/src/`. uwarp has its own gates (100% coverage, hypothesis, ruff, mypy) — run `make` targets there; check `uwarp-space/CLAUDE.md` and `Makefile` before pushing. Each fix below is independent; commit one logical unit at a time.
 
 These are listed shortest-leash first. **Tier B1** needs no uterm change (do anytime). **Tier B2/B3** are gated on the named uterm task shipping.
 
