@@ -101,7 +101,7 @@ class WebSocketOriginMiddleware:
       secure default for the cross-origin threat: if the operator has
       not enumerated *other* origins, none are accepted. (Before
       2026-05-22 this was a no-op; the flip is a deliberate posture
-      change — see ``.provide/design`` notes.)
+      change.)
     - The literal entry ``"*"`` is the explicit operator opt-out
       ("anything goes") for dev/test deployments that want any-origin
       access.

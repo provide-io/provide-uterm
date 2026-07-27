@@ -18,7 +18,7 @@ serves the JWKS (blocking):
 
     uv run python packages/provide-uterm-cloudflare/tests/cf_jwt_harness.py
 
-Then, in another shell (see .provide/HANDOFF.md for the full runbook):
+Then, in another shell (the full local-worker runbook follows below):
 
     cd packages/provide-uterm-cloudflare
     npx wrangler dev --port 8989 --ip 127.0.0.1 \\

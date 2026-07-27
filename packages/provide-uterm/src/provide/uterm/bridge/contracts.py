@@ -31,8 +31,7 @@ Visibility = Literal["public", "operator", "private"]
 # Lockstep is preserved while only one version exists (min == max == 1).
 # When a new protocol version lands, bump MAX_PROTOCOL_VERSION first,
 # leave MIN at the oldest still-supported version, and set PREFERRED to
-# whatever the server should actively pick during negotiation. See
-# ``.provide/design/protocol-version-handshake.md``.
+# whatever the server should actively pick during negotiation.
 MIN_PROTOCOL_VERSION = 1
 MAX_PROTOCOL_VERSION = 1
 PREFERRED_PROTOCOL_VERSION = 1

@@ -15,8 +15,8 @@ request must carry the credential the worker expects for that route:
   which must equal the worker's configured ``WORKER_BEARER_TOKEN`` secret.
 * **Real CF over https** behind Access — also the CF Access service-token pair.
 
-Without these the authenticated routes 401. See the runbook in
-``.provide/HANDOFF.md`` (or the module docstrings) for wiring a local worker.
+Without these the authenticated routes 401. See the module docstrings in this
+package's ``cf_*`` test harnesses for wiring a local worker.
 """
 
 from __future__ import annotations
