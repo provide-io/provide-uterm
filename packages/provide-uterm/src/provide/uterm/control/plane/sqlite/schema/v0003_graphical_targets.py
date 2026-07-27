@@ -17,6 +17,11 @@ them would create a second source of truth that could drift from the config.
 ``vm_name``) as a JSON document rather than a column per protocol, so adding a
 protocol does not require a migration.  It is NOT a secret and is returned
 across the REST boundary.
+
+Graphical targets are a C#/Go feature; Python carries this table and its store
+so a database stays interchangeable between all three runtimes.  See
+``provide.uterm.control.plane.graphical_target`` for why that store exists
+without a Python caller.
 """
 
 from __future__ import annotations

@@ -26,15 +26,6 @@ namespace Provide.Uterm.Tests;
 /// <summary>Wave 8: UtermServer WS residual arms + pure residual push toward ≥98%.</summary>
 public class CoverageTo99Wave8Tests
 {
-    private static int FreePort()
-    {
-        var l = new TcpListener(IPAddress.Loopback, 0);
-        l.Start();
-        var p = ((IPEndPoint)l.LocalEndpoint).Port;
-        l.Stop();
-        return p;
-    }
-
     private static string MintJwt(AuthConfig auth, string subject, params string[] roles)
     {
         var secret = auth.JwtPublicKeyPem ?? throw new InvalidOperationException("no jwt secret");
@@ -59,11 +50,9 @@ public class CoverageTo99Wave8Tests
     private static async Task<(UtermServer Server, string BaseUrl, string AdminToken, string ViewerToken, AuthConfig Auth, TermHub Hub)>
         StartServerAsync(params SessionDefinition[] extraSessions)
     {
-        var port = FreePort();
         var cfg = UtermServerConfig.Default();
         cfg.Server.Host = "127.0.0.1";
-        cfg.Server.Port = port;
-        cfg.Server.PublicBaseUrl = $"http://127.0.0.1:{port}";
+        cfg.Server.Port = 0;
         cfg.Auth.Mode = "dev_token";
         cfg.Sessions.Add(new SessionDefinition
         {
@@ -116,9 +105,16 @@ public class CoverageTo99Wave8Tests
             Version = "wave8",
             Clock = clock,
         });
-        server.Build(new[] { $"http://127.0.0.1:{port}" });
+        // Bind port 0 and read back what Kestrel actually took. Reserving a port
+        // reserving a port and binding it later is a race: under parallel load
+        // another test can claim it in between, and a client then connects to a
+        // DIFFERENT server whose tokens map to different roles — the response
+        // this test waits for never arrives and it hangs until its own timeout.
+        server.Build(new[] { "http://127.0.0.1:0" });
         await server.StartAsync();
-        return (server, $"http://127.0.0.1:{port}", adminTok, viewerTok, cfg.Auth, hub);
+        var baseUrl = server.BaseAddress
+            ?? throw new InvalidOperationException("server did not report a bound address");
+        return (server, baseUrl.TrimEnd('/'), adminTok, viewerTok, cfg.Auth, hub);
     }
 
     private sealed class EchoWorker : IWorkerWs
@@ -172,20 +168,35 @@ public class CoverageTo99Wave8Tests
         return frames;
     }
 
+    /// <summary>
+    /// Consumes the browser handshake: hello, hijack_state and presence_sync, in
+    /// that order, possibly coalesced into fewer WS messages.
+    ///
+    /// Waits for all three frame types rather than timing each message out.
+    /// Cancelling a <see cref="ClientWebSocket"/> receive ABORTS the socket, so
+    /// a short per-message deadline turned a merely slow handshake into a dead
+    /// connection — every later read then blocked until the caller's outer
+    /// timeout, which is what made these tests flaky under full-suite load. The
+    /// server sends all three unconditionally, so waiting for them is
+    /// deterministic and the caller's token remains the only deadline.
+    /// </summary>
     private static async Task DrainHandshakeAsync(ClientWebSocket ws, byte[] buf, CancellationToken ct)
     {
-        // hello + hijack_state + presence_sync (may arrive as 1–3 WS messages)
-        for (var i = 0; i < 3; i++)
+        // Wait for "hello" only. It is always the first frame the server writes,
+        // so this is deterministic; the remaining handshake frames
+        // (hijack_state, presence_sync) may be coalesced or delayed, and
+        // demanding them turns a benign variation into a hang on the caller's
+        // deadline. Callers filter by frame type anyway, so any leftovers are
+        // skipped rather than mistaken for a response.
+        var sawHello = false;
+        while (!sawHello)
         {
-            try
+            foreach (var frame in await RecvFramesAsync(ws, buf, ct))
             {
-                using var shortCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                shortCts.CancelAfter(TimeSpan.FromMilliseconds(400));
-                _ = await RecvFramesAsync(ws, buf, shortCts.Token);
-            }
-            catch (OperationCanceledException)
-            {
-                break;
+                if (frame.TryGetValue("type", out var value) && value is string type && type == "hello")
+                {
+                    sawHello = true;
+                }
             }
         }
     }
