@@ -433,7 +433,9 @@ public class HumanVncRouteTests
             UpdatedBy = "test",
         };
         Assert.True(GraphicalTargetScope.TryForTenant(TestTenant, out var scope));
-        graphicalTargets.Create(scope, target);
+        // Sync test helper: setup only, never a request path, so completing
+        // here cannot starve the thread pool.
+        graphicalTargets.CreateAsync(scope, target).GetAwaiter().GetResult();
         return targetId;
     }
 

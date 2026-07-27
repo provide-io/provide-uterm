@@ -76,25 +76,28 @@ public class ModuleSurfaceTests
         await eng.Sessions().UpsertAsync(new SessionRecord
         {
             SessionId = "s1",
-            State = "active",
+            DisplayName = "demo",
+            ConnectorType = "pty",
+            Visibility = "private",
+            LifecycleState = "running",
             CreatedAt = 1,
-            Metadata = new Dictionary<string, object?> { ["k"] = "v" },
+            UpdatedAt = 1,
         });
         var got = await eng.Sessions().GetAsync("s1");
         Assert.Equal("s1", got!.SessionId);
         await eng.Sessions().MarkDeletedAsync("s1", 10);
-        Assert.Equal("deleted", (await eng.Sessions().GetAsync("s1"))!.State);
+        Assert.Equal("deleted", (await eng.Sessions().GetAsync("s1"))!.LifecycleState);
         Assert.Equal(1, await eng.ReapAsync(now: 1000, retentionS: 10));
 
         await eng.Tokens().PutSessionTokenAsync(new SessionTokenRecord
         {
-            SessionId = "s1", TokenKind = "player", TokenHash = "hh", ExpiresAt = 99,
+            SessionId = "s1", TokenKind = "player", TokenValue = "hh", CreatedAt = 1, ExpiresAt = 99,
         });
-        Assert.Equal("hh", (await eng.Tokens().GetSessionTokenAsync("s1", "player"))!.TokenHash);
+        Assert.Equal("hh", (await eng.Tokens().GetSessionTokenAsync("s1", "player"))!.TokenValue);
 
         await eng.Tokens().CreateResumeTokenAsync(new ResumeTokenRecord
         {
-            TokenValue = "rt", SessionId = "s1", ExpiresAt = 50,
+            TokenValue = "rt", SessionId = "s1", Role = "player", CreatedAt = 1, ExpiresAt = 50,
         });
         Assert.NotNull(await eng.Tokens().GetResumeTokenAsync("rt"));
         var consumed = await eng.Tokens().ConsumeResumeTokenAsync("rt", 51);
@@ -102,21 +105,21 @@ public class ModuleSurfaceTests
         Assert.Null(await eng.Tokens().GetResumeTokenAsync("rt")); // revoked via consume
         await eng.Tokens().CreateResumeTokenAsync(new ResumeTokenRecord
         {
-            TokenValue = "rt2", SessionId = "s1", ExpiresAt = 50,
+            TokenValue = "rt2", SessionId = "s1", Role = "player", CreatedAt = 1, ExpiresAt = 50,
         });
         await eng.Tokens().RevokeResumeTokenAsync("rt2", 52);
         Assert.Null(await eng.Tokens().GetResumeTokenAsync("rt2"));
 
         await eng.Approvals().PutApprovalAsync(new ApprovalRecord
         {
-            ApprovalId = "a1", SessionId = "s1", Command = "ls", Status = "pending", CreatedAt = 1,
+            ApprovalId = "a1", SessionId = "s1", Command = "ls", State = "pending", CreatedAt = 1,
         });
         Assert.Equal("ls", (await eng.Approvals().GetApprovalAsync("a1"))!.Command);
         Assert.NotEmpty(await eng.Approvals().ListPendingAsync());
 
         await eng.Leases().PutLeaseAsync(new LeaseRecord
         {
-            SessionId = "s1", Principal = "p", HijackId = "h", ExpiresAt = 9,
+            SessionId = "s1", Owner = "p", HijackId = "h", LeaseExpiresAt = 9, CreatedAt = 1,
         });
         Assert.Equal("h", (await eng.Leases().GetLeaseAsync("s1"))!.HijackId);
         await eng.Leases().ClearLeaseAsync("s1");

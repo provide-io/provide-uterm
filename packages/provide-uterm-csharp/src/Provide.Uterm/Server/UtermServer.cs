@@ -103,6 +103,10 @@ public sealed partial class UtermServer : IAsyncDisposable
         return tok;
     }
 
+    /// <summary>The graphical-target registry this server was built with.
+    /// Exposed for tests that assert which backend the factory selected.</summary>
+    internal IGraphicalTargetRegistry GraphicalTargets => _deps.GraphicalTargets;
+
     public string? BaseAddress { get; private set; }
 
     public void MarkReady() => _ready = true;
@@ -1372,7 +1376,12 @@ public sealed partial class UtermServer : IAsyncDisposable
 /// <summary>Factory helpers for assembling a runnable server from config.</summary>
 public static class ServerFactory
 {
-    public static (UtermServer Server, string? DevToken) CreateFromConfig(UtermServerConfig cfg, string version = "0.0.0-dev")
+    /// <param name="graphicalTargets">Registry to use; defaults to a
+    /// non-durable one seeded from config.</param>
+    public static (UtermServer Server, string? DevToken) CreateFromConfig(
+        UtermServerConfig cfg,
+        string version = "0.0.0-dev",
+        IGraphicalTargetRegistry? graphicalTargets = null)
     {
         var apiKeys = new ApiKeyStore();
         string? devToken = null;
@@ -1392,7 +1401,7 @@ public static class ServerFactory
             BrowserRateLimitPerSec = cfg.BrowserRateLimitPerSec,
         });
         var registry = new InMemorySessionRegistry(cfg.Sessions);
-        var graphicalTargets = SeedGraphicalTargets(cfg);
+        graphicalTargets ??= SeedGraphicalTargets(cfg);
         var tunnelStore = new Tunnel.MemoryTunnelStore();
         var webhooks = new WebhookManager(allowLoopbackDestinations: true);
         var profiles = new InMemoryProfileStore();
@@ -1425,6 +1434,40 @@ public static class ServerFactory
         return (server, devToken);
     }
 
+    /// <summary>
+    /// Builds a server whose runtime graphical targets live in the control
+    /// plane, and returns the engine so the caller can dispose it.
+    ///
+    /// Durability follows <c>control_plane.backend</c>: sqlite keeps runtime
+    /// targets across restarts, memory behaves like <see cref="CreateFromConfig"/>.
+    /// The engine is opened AND migrated before use — nothing read a store
+    /// before the graphical-target registry, so a missing schema would
+    /// otherwise surface only at first use.
+    ///
+    /// Ownership: on success the engine belongs to the caller; if construction
+    /// fails it is closed here rather than leaked.
+    /// </summary>
+    public static async Task<(UtermServer Server, string? DevToken, ControlPlane.IEngine Engine)>
+        CreateFromConfigAsync(
+            UtermServerConfig cfg, string version = "0.0.0-dev", CancellationToken ct = default)
+    {
+        var engine = await ControlPlane.Bootstrap
+            .OpenAsync(cfg.ControlPlane.Backend, cfg.ControlPlane.DatabaseUrl, ct)
+            .ConfigureAwait(false);
+        try
+        {
+            var graphicalTargets = await NewControlPlaneGraphicalTargetsAsync(cfg, engine, ct)
+                .ConfigureAwait(false);
+            var (server, devToken) = CreateFromConfig(cfg, version, graphicalTargets);
+            return (server, devToken, engine);
+        }
+        catch
+        {
+            await engine.CloseAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
     /// <summary>Select recording store from config (local JSONL / memory / null).</summary>
     public static IRecordingStore BuildRecordingStore(UtermServerConfig cfg) =>
         cfg.Recording.StoreType.ToLowerInvariant() switch
@@ -1434,9 +1477,27 @@ public static class ServerFactory
             _ => new NullStore(),
         };
 
-    private static IGraphicalTargetRegistry SeedGraphicalTargets(UtermServerConfig cfg)
+    /// <summary>Builds a non-durable registry seeded with the config targets.</summary>
+    private static IGraphicalTargetRegistry SeedGraphicalTargets(UtermServerConfig cfg) =>
+        // Seeding runs once at startup, never in a request path, so completing
+        // the (already-synchronous) in-memory seed here cannot starve the pool.
+        SeedIntoAsync(new InMemoryGraphicalTargetRegistry(), cfg).GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Builds a registry whose runtime targets live in the control plane, seeded
+    /// with the same immutable config targets. The engine must already be open
+    /// and migrated. Durability follows the configured backend: sqlite keeps
+    /// runtime targets across restarts, memory behaves like
+    /// <see cref="SeedGraphicalTargets"/>.
+    /// </summary>
+    public static Task<IGraphicalTargetRegistry> NewControlPlaneGraphicalTargetsAsync(
+        UtermServerConfig cfg, ControlPlane.IEngine engine, CancellationToken ct = default) =>
+        SeedIntoAsync(new ControlPlaneGraphicalTargetRegistry(engine), cfg, ct);
+
+    /// <summary>Adds every enabled config target as an immutable system entry.</summary>
+    private static async Task<IGraphicalTargetRegistry> SeedIntoAsync(
+        IGraphicalTargetRegistry registry, UtermServerConfig cfg, CancellationToken ct = default)
     {
-        var registry = new InMemoryGraphicalTargetRegistry();
         foreach (var target in cfg.GraphicalTargets)
         {
             if (!target.Enabled)
@@ -1444,8 +1505,7 @@ public static class ServerFactory
                 continue;
             }
 
-            var entry = ToGraphicalTargetDefinition(target);
-            registry.AddStatic(entry);
+            await registry.AddStaticAsync(ToGraphicalTargetDefinition(target), ct).ConfigureAwait(false);
         }
 
         return registry;

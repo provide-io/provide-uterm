@@ -150,7 +150,7 @@ public sealed partial class UtermServer
             return null;
         }
 
-        var target = _deps.GraphicalTargets.Get(scope, targetId);
+        var target = await _deps.GraphicalTargets.GetAsync(scope, targetId);
         if (target is null)
         {
             await DetailError(404, "target not found").ExecuteAsync(ctx).ConfigureAwait(false);

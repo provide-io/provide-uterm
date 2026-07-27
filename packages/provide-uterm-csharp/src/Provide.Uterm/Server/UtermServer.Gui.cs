@@ -38,7 +38,7 @@ public sealed partial class UtermServer
                 return DetailError(403, "graphical target access denied");
             }
 
-            var target = _deps.GraphicalTargets.Get(scope, targetId);
+            var target = await _deps.GraphicalTargets.GetAsync(scope, targetId);
             if (target is null)
             {
                 return DetailError(404, "target not found");
