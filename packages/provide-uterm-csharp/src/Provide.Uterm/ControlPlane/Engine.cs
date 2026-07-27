@@ -18,28 +18,48 @@ public interface ITx
     Task RollbackAsync(CancellationToken cancellationToken = default);
 }
 
+// The record shapes below mirror the cp_* columns shared with the Python and Go
+// control planes, so a database written by any of the three is readable by the
+// others. Fields are named for their columns; nullable columns are nullable
+// here.
+
 public sealed class SessionRecord
 {
     public string SessionId { get; set; } = "";
-    public string State { get; set; } = "active";
+    public string DisplayName { get; set; } = "";
+    public string ConnectorType { get; set; } = "";
+    public string? Owner { get; set; }
+
+    /// <summary>"public" | "operator" | "private".</summary>
+    public string Visibility { get; set; } = "private";
+
+    /// <summary>"waiting" | "running" | "stopped" | "error" | "deleted".</summary>
+    public string LifecycleState { get; set; } = "waiting";
     public double CreatedAt { get; set; }
+    public double UpdatedAt { get; set; }
     public double? DeletedAt { get; set; }
-    public Dictionary<string, object?> Metadata { get; set; } = new();
 }
 
 public sealed class SessionTokenRecord
 {
     public string SessionId { get; set; } = "";
     public string TokenKind { get; set; } = "";
-    public string TokenHash { get; set; } = "";
-    public double ExpiresAt { get; set; }
+    public string TokenValue { get; set; } = "";
+    public double CreatedAt { get; set; }
+    public double? ExpiresAt { get; set; }
+    public double? RevokedAt { get; set; }
 }
 
 public sealed class ResumeTokenRecord
 {
     public string TokenValue { get; set; } = "";
     public string SessionId { get; set; } = "";
+    public string Role { get; set; } = "";
+    public double CreatedAt { get; set; }
     public double ExpiresAt { get; set; }
+
+    /// <summary>Stored as INTEGER 0/1.</summary>
+    public bool WasHijackOwner { get; set; }
     public double? RevokedAt { get; set; }
 }
 
@@ -48,16 +68,57 @@ public sealed class ApprovalRecord
     public string ApprovalId { get; set; } = "";
     public string SessionId { get; set; } = "";
     public string Command { get; set; } = "";
-    public string Status { get; set; } = "pending";
+    public string? RequestedBy { get; set; }
+
+    /// <summary>"pending" | "approved" | "rejected".</summary>
+    public string State { get; set; } = "pending";
     public double CreatedAt { get; set; }
+    public double? ResolvedAt { get; set; }
+    public string? ResolvedBy { get; set; }
 }
 
 public sealed class LeaseRecord
 {
     public string SessionId { get; set; } = "";
-    public string Principal { get; set; } = "";
     public string HijackId { get; set; } = "";
-    public double ExpiresAt { get; set; }
+    public string Owner { get; set; } = "";
+    public double LeaseExpiresAt { get; set; }
+    public double CreatedAt { get; set; }
+    public double? DeletedAt { get; set; }
+}
+
+/// <summary>
+/// A persisted graphical-target definition — the storage shape of
+/// <see cref="Server.GraphicalTargetDefinition"/>.
+///
+/// Config holds the protocol-specific parameter object as JSON text rather than
+/// a column per protocol, so adding a protocol needs no migration. It is not a
+/// secret and survives the redacted copy that crosses REST.
+/// </summary>
+public sealed class GraphicalTargetRecord
+{
+    public string TargetId { get; set; } = "";
+    public string TenantId { get; set; } = "";
+    public string DisplayName { get; set; } = "";
+    public string Protocol { get; set; } = "";
+    public string? Endpoint { get; set; }
+    public string? Secret { get; set; }
+    public long Width { get; set; }
+    public long Height { get; set; }
+
+    /// <summary>Stored as INTEGER 0/1.</summary>
+    public bool IsSystem { get; set; }
+
+    /// <summary>Stored as INTEGER 0/1.</summary>
+    public bool IsStatic { get; set; }
+    public string? CaSecretRef { get; set; }
+    public string? ClientCertSecretRef { get; set; }
+    public string? ClientKeySecretRef { get; set; }
+    public string Config { get; set; } = "{}";
+    public string? CreatedBy { get; set; }
+    public double CreatedAt { get; set; }
+    public string? UpdatedBy { get; set; }
+    public double? UpdatedAt { get; set; }
 }
 
 public sealed class AuditHead
@@ -97,6 +158,25 @@ public interface ILeaseStore
     Task ClearLeaseAsync(string sessionId, CancellationToken ct = default);
 }
 
+/// <summary>
+/// Persistence for graphical-target definitions.
+///
+/// Tenant isolation is NOT enforced here: this is a row layer, and the caller
+/// already holds a scope derived from the authenticated principal. Gating here
+/// too would double-check reads and hide scope bugs from the registry's tests.
+/// </summary>
+public interface IGraphicalTargetStore
+{
+    Task PutAsync(GraphicalTargetRecord rec, CancellationToken ct = default);
+    Task<GraphicalTargetRecord?> GetAsync(string targetId, CancellationToken ct = default);
+
+    /// <summary>Every row, ordered by target_id.</summary>
+    Task<IReadOnlyList<GraphicalTargetRecord>> ListAsync(CancellationToken ct = default);
+
+    /// <summary>True when a row was actually removed.</summary>
+    Task<bool> DeleteAsync(string targetId, CancellationToken ct = default);
+}
+
 public interface IEngine
 {
     EngineCapabilities Capabilities();
@@ -111,6 +191,7 @@ public interface IEngine
     ITokenStore Tokens();
     IApprovalStore Approvals();
     ILeaseStore Leases();
+    IGraphicalTargetStore GraphicalTargets();
 }
 
 public sealed class MemoryTx : ITx
@@ -141,6 +222,7 @@ public sealed class MemoryEngine : IEngine
     private readonly Dictionary<string, ResumeTokenRecord> _resumeTokens = new();
     private readonly Dictionary<string, ApprovalRecord> _approvals = new();
     private readonly Dictionary<string, LeaseRecord> _leases = new();
+    private readonly Dictionary<string, GraphicalTargetRecord> _graphicalTargets = new();
     private AuditHead? _auditHead;
     private bool _open;
 
@@ -209,6 +291,49 @@ public sealed class MemoryEngine : IEngine
     public ITokenStore Tokens() => new TokenStoreAdapter(this);
     public IApprovalStore Approvals() => new ApprovalStoreAdapter(this);
     public ILeaseStore Leases() => new LeaseStoreAdapter(this);
+    public IGraphicalTargetStore GraphicalTargets() => new GraphicalTargetStoreAdapter(this);
+
+    private sealed class GraphicalTargetStoreAdapter(MemoryEngine eng) : IGraphicalTargetStore
+    {
+        public Task PutAsync(GraphicalTargetRecord rec, CancellationToken ct = default)
+        {
+            lock (eng._lock)
+            {
+                eng._graphicalTargets[rec.TargetId] = rec;
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public Task<GraphicalTargetRecord?> GetAsync(string targetId, CancellationToken ct = default)
+        {
+            lock (eng._lock)
+            {
+                return Task.FromResult(eng._graphicalTargets.TryGetValue(targetId, out var r) ? r : null);
+            }
+        }
+
+        // Ordered by target_id so this backend agrees with the SQLite one, which
+        // gets its order from ORDER BY.
+        public Task<IReadOnlyList<GraphicalTargetRecord>> ListAsync(CancellationToken ct = default)
+        {
+            lock (eng._lock)
+            {
+                var list = eng._graphicalTargets.Values
+                    .OrderBy(t => t.TargetId, StringComparer.Ordinal)
+                    .ToList();
+                return Task.FromResult<IReadOnlyList<GraphicalTargetRecord>>(list);
+            }
+        }
+
+        public Task<bool> DeleteAsync(string targetId, CancellationToken ct = default)
+        {
+            lock (eng._lock)
+            {
+                return Task.FromResult(eng._graphicalTargets.Remove(targetId));
+            }
+        }
+    }
 
     private sealed class SessionStoreAdapter(MemoryEngine eng) : ISessionStore
     {
@@ -237,7 +362,7 @@ public sealed class MemoryEngine : IEngine
                 if (eng._sessions.TryGetValue(sessionId, out var r))
                 {
                     r.DeletedAt = deletedAt;
-                    r.State = "deleted";
+                    r.LifecycleState = "deleted";
                 }
             }
 
@@ -343,7 +468,7 @@ public sealed class MemoryEngine : IEngine
             lock (eng._lock)
             {
                 var list = eng._approvals.Values
-                    .Where(a => a.Status == "pending")
+                    .Where(a => a.State == "pending")
                     .OrderBy(a => a.CreatedAt)
                     .ThenBy(a => a.ApprovalId, StringComparer.Ordinal)
                     .ToList();

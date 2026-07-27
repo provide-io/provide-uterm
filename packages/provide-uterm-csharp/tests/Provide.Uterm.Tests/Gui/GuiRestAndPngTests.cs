@@ -17,13 +17,13 @@ namespace Provide.Uterm.Tests.Gui;
 public class GuiRestAndPngTests
 {
     [Fact]
-    public void RgbaImage_RejectsHugeDimensions()
+    public async Task RgbaImage_RejectsHugeDimensions()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => new RgbaImage(RgbaImage.MaxDimension + 1, 1));
     }
 
     [Fact]
-    public void Png_Encode_HasSignatureAndChunks()
+    public async Task Png_Encode_HasSignatureAndChunks()
     {
         var img = new RgbaImage(2, 2);
         img.Pixels[0] = 255;
@@ -267,14 +267,14 @@ public class GuiRestAndPngTests
     }
 
     [Fact]
-    public void Png_Rejects_ShortBuffer()
+    public async Task Png_Rejects_ShortBuffer()
     {
         Assert.Throws<ArgumentException>(() => Png.EncodeRgba(2, 2, new byte[4]));
         Assert.Throws<ArgumentOutOfRangeException>(() => Png.EncodeRgba(0, 1, Array.Empty<byte>()));
     }
 
     [Fact]
-    public void RgbaImage_Rejects_WrongPixelLength()
+    public async Task RgbaImage_Rejects_WrongPixelLength()
     {
         Assert.Throws<ArgumentException>(() => new RgbaImage(2, 2, new byte[3]));
     }
@@ -333,7 +333,9 @@ public class GuiRestAndPngTests
             UpdatedBy = "test",
         };
         Assert.True(GraphicalTargetScope.TryForTenant(TestTenant, out var scope));
-        graphicalTargets.Create(scope, target);
+        // Sync test helper: setup only, never a request path, so completing
+        // here cannot starve the thread pool.
+        graphicalTargets.CreateAsync(scope, target).GetAwaiter().GetResult();
         return targetId;
     }
 

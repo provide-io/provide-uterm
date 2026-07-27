@@ -26,7 +26,7 @@ public class GraphicalTargetsRestTests
     // ---- Registry / model unit tests -------------------------------------
 
     [Fact]
-    public void Scope_TryForTenant_And_System()
+    public async Task Scope_TryForTenant_And_System()
     {
         Assert.False(GraphicalTargetScope.TryForTenant("", out _));
         Assert.False(GraphicalTargetScope.TryForTenant("   ", out _));
@@ -50,7 +50,7 @@ public class GraphicalTargetsRestTests
     }
 
     [Fact]
-    public void Definition_Validate_Rejects_BadInputs()
+    public async Task Definition_Validate_Rejects_BadInputs()
     {
         Assert.Throws<ArgumentException>(() => new Def { TargetId = "bad id!", Protocol = "memory" }.Validate());
         Assert.Throws<ArgumentException>(() => new Def { TargetId = "ok", Protocol = "ftp" }.Validate());
@@ -65,7 +65,7 @@ public class GraphicalTargetsRestTests
     }
 
     [Fact]
-    public void Definition_Validate_Normalizes_RfbEndpoint()
+    public async Task Definition_Validate_Normalizes_RfbEndpoint()
     {
         var d = new Def { TargetId = "ok", Protocol = "RFB", Endpoint = "rfb://host.example:5901", Width = 10, Height = 10 };
         d.Validate();
@@ -74,7 +74,7 @@ public class GraphicalTargetsRestTests
     }
 
     [Fact]
-    public void Definition_Clone_And_PublicCopy_StripSecrets()
+    public async Task Definition_Clone_And_PublicCopy_StripSecrets()
     {
         var d = new Def
         {
@@ -98,7 +98,7 @@ public class GraphicalTargetsRestTests
     }
 
     [Fact]
-    public void ParseRfbEndpoint_Branches()
+    public async Task ParseRfbEndpoint_Branches()
     {
         Assert.Equal(("h", 5900), GraphicalTargetParsing.ParseRfbEndpoint("h:5900"));
         Assert.Equal(("h", 5900), GraphicalTargetParsing.ParseRfbEndpoint("rfb://h:5900"));
@@ -112,15 +112,15 @@ public class GraphicalTargetsRestTests
     }
 
     [Fact]
-    public void Registry_StaticCtor_And_Duplicates()
+    public async Task Registry_StaticCtor_And_Duplicates()
     {
         var reg = new InMemoryGraphicalTargetRegistry(new[]
         {
             new Def { TargetId = "s1", Protocol = "memory", Width = 10, Height = 10 },
         });
         var sys = GraphicalTargetScope.System();
-        Assert.NotNull(reg.Get(sys, "s1"));
-        Assert.Single(reg.List(sys));
+        Assert.NotNull(await reg.GetAsync(sys, "s1"));
+        Assert.Single(await reg.ListAsync(sys));
 
         Assert.Throws<InvalidOperationException>(() => new InMemoryGraphicalTargetRegistry(new[]
         {
@@ -128,19 +128,18 @@ public class GraphicalTargetsRestTests
             new Def { TargetId = "dup", Protocol = "memory", Width = 1, Height = 1 },
         }));
 
-        reg.AddStatic(new Def { TargetId = "s2", Protocol = "memory", Width = 1, Height = 1 });
-        Assert.Throws<InvalidOperationException>(() =>
-            reg.AddStatic(new Def { TargetId = "s2", Protocol = "memory", Width = 1, Height = 1 }));
+        await reg.AddStaticAsync(new Def { TargetId = "s2", Protocol = "memory", Width = 1, Height = 1 });
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await reg.AddStaticAsync(new Def { TargetId = "s2", Protocol = "memory", Width = 1, Height = 1 }));
     }
 
     [Fact]
-    public void Registry_Crud_TenantScoped()
+    public async Task Registry_Crud_TenantScoped()
     {
         var reg = new InMemoryGraphicalTargetRegistry();
         Assert.True(GraphicalTargetScope.TryForTenant(Tenant, out var scope));
         Assert.True(GraphicalTargetScope.TryForTenant("other", out var otherScope));
 
-        var created = reg.Create(scope, new Def
+        var created = await reg.CreateAsync(scope, new Def
         {
             TargetId = "gt-1",
             TenantId = Tenant,
@@ -152,29 +151,26 @@ public class GraphicalTargetsRestTests
         Assert.Equal(Tenant, created.TenantId);
 
         // Get / List honor scope.
-        Assert.NotNull(reg.Get(scope, "gt-1"));
-        Assert.Null(reg.Get(scope, "missing"));
-        Assert.Null(reg.Get(otherScope, "gt-1"));
-        Assert.Single(reg.List(scope));
-        Assert.Empty(reg.List(otherScope));
+        Assert.NotNull(await reg.GetAsync(scope, "gt-1"));
+        Assert.Null(await reg.GetAsync(scope, "missing"));
+        Assert.Null(await reg.GetAsync(otherScope, "gt-1"));
+        Assert.Single(await reg.ListAsync(scope));
+        Assert.Empty(await reg.ListAsync(otherScope));
 
         // Duplicate create.
-        var dup = Assert.Throws<GraphicalTargetException>(() =>
-            reg.Create(scope, new Def { TargetId = "gt-1", TenantId = Tenant, Protocol = "memory", Width = 1, Height = 1 }));
+        var dup = await Assert.ThrowsAsync<GraphicalTargetException>(async () => await reg.CreateAsync(scope, new Def { TargetId = "gt-1", TenantId = Tenant, Protocol = "memory", Width = 1, Height = 1 }));
         Assert.Equal(GraphicalTargetErrorCode.AlreadyExists, dup.Code);
 
         // Create with tenant that the scope does not permit.
-        var forbid = Assert.Throws<GraphicalTargetException>(() =>
-            reg.Create(scope, new Def { TargetId = "gt-x", TenantId = "other", Protocol = "memory", Width = 1, Height = 1 }));
+        var forbid = await Assert.ThrowsAsync<GraphicalTargetException>(async () => await reg.CreateAsync(scope, new Def { TargetId = "gt-x", TenantId = "other", Protocol = "memory", Width = 1, Height = 1 }));
         Assert.Equal(GraphicalTargetErrorCode.Forbidden, forbid.Code);
 
         // Invalid definition surfaces as Invalid.
-        var invalid = Assert.Throws<GraphicalTargetException>(() =>
-            reg.Create(scope, new Def { TargetId = "gt-y", TenantId = Tenant, Protocol = "memory", Width = 0, Height = 1 }));
+        var invalid = await Assert.ThrowsAsync<GraphicalTargetException>(async () => await reg.CreateAsync(scope, new Def { TargetId = "gt-y", TenantId = Tenant, Protocol = "memory", Width = 0, Height = 1 }));
         Assert.Equal(GraphicalTargetErrorCode.Invalid, invalid.Code);
 
         // Update preserves CreatedBy even when the payload omits it (PUT semantics).
-        var updated = reg.Update(scope, new Def
+        var updated = await reg.UpdateAsync(scope, new Def
         {
             TargetId = "gt-1",
             TenantId = Tenant,
@@ -189,71 +185,66 @@ public class GraphicalTargetsRestTests
         Assert.NotNull(updated.UpdatedAt);
 
         // Update missing / other-tenant.
-        var notFound = Assert.Throws<GraphicalTargetException>(() =>
-            reg.Update(scope, new Def { TargetId = "nope", TenantId = Tenant, Protocol = "memory", Width = 1, Height = 1 }));
+        var notFound = await Assert.ThrowsAsync<GraphicalTargetException>(async () => await reg.UpdateAsync(scope, new Def { TargetId = "nope", TenantId = Tenant, Protocol = "memory", Width = 1, Height = 1 }));
         Assert.Equal(GraphicalTargetErrorCode.NotFound, notFound.Code);
 
-        var updForbid = Assert.Throws<GraphicalTargetException>(() =>
-            reg.Update(otherScope, new Def { TargetId = "gt-1", TenantId = "other", Protocol = "memory", Width = 1, Height = 1 }));
+        var updForbid = await Assert.ThrowsAsync<GraphicalTargetException>(async () => await reg.UpdateAsync(otherScope, new Def { TargetId = "gt-1", TenantId = "other", Protocol = "memory", Width = 1, Height = 1 }));
         Assert.Equal(GraphicalTargetErrorCode.Forbidden, updForbid.Code);
 
         // Delete missing / other-tenant / success.
-        var delMissing = Assert.Throws<GraphicalTargetException>(() => reg.Delete(scope, "nope"));
+        var delMissing = await Assert.ThrowsAsync<GraphicalTargetException>(async () => await reg.DeleteAsync(scope, "nope"));
         Assert.Equal(GraphicalTargetErrorCode.NotFound, delMissing.Code);
-        var delForbid = Assert.Throws<GraphicalTargetException>(() => reg.Delete(otherScope, "gt-1"));
+        var delForbid = await Assert.ThrowsAsync<GraphicalTargetException>(async () => await reg.DeleteAsync(otherScope, "gt-1"));
         Assert.Equal(GraphicalTargetErrorCode.Forbidden, delForbid.Code);
-        reg.Delete(scope, "gt-1");
-        Assert.Null(reg.Get(scope, "gt-1"));
+        await reg.DeleteAsync(scope, "gt-1");
+        Assert.Null(await reg.GetAsync(scope, "gt-1"));
     }
 
     [Fact]
-    public void Registry_Static_Is_Immutable()
+    public async Task Registry_Static_Is_Immutable()
     {
         var reg = new InMemoryGraphicalTargetRegistry();
-        reg.AddStatic(new Def { TargetId = "sys-1", TenantId = Tenant, Protocol = "memory", Width = 5, Height = 5 });
+        await reg.AddStaticAsync(new Def { TargetId = "sys-1", TenantId = Tenant, Protocol = "memory", Width = 5, Height = 5 });
         Assert.True(GraphicalTargetScope.TryForTenant(Tenant, out var scope));
 
-        var upd = Assert.Throws<GraphicalTargetException>(() =>
-            reg.Update(scope, new Def { TargetId = "sys-1", TenantId = Tenant, Protocol = "memory", Width = 6, Height = 6 }));
+        var upd = await Assert.ThrowsAsync<GraphicalTargetException>(async () => await reg.UpdateAsync(scope, new Def { TargetId = "sys-1", TenantId = Tenant, Protocol = "memory", Width = 6, Height = 6 }));
         Assert.Equal(GraphicalTargetErrorCode.Immutable, upd.Code);
 
-        var del = Assert.Throws<GraphicalTargetException>(() => reg.Delete(scope, "sys-1"));
+        var del = await Assert.ThrowsAsync<GraphicalTargetException>(async () => await reg.DeleteAsync(scope, "sys-1"));
         Assert.Equal(GraphicalTargetErrorCode.Immutable, del.Code);
     }
 
     [Fact]
-    public void Registry_Forbidden_Tenant_Branches()
+    public async Task Registry_Forbidden_Tenant_Branches()
     {
         var reg = new InMemoryGraphicalTargetRegistry();
-        reg.AddStatic(new Def { TargetId = "sys-t", TenantId = Tenant, Protocol = "memory", Width = 5, Height = 5 });
+        await reg.AddStaticAsync(new Def { TargetId = "sys-t", TenantId = Tenant, Protocol = "memory", Width = 5, Height = 5 });
         Assert.True(GraphicalTargetScope.TryForTenant(Tenant, out var scope));
         Assert.True(GraphicalTargetScope.TryForTenant("other", out var otherScope));
 
         // Create with a tenant the scope does not permit → Forbidden.
-        Assert.Equal(GraphicalTargetErrorCode.Forbidden, Assert.Throws<GraphicalTargetException>(() =>
-            reg.Create(scope, new Def { TargetId = "gt-z", TenantId = "other", Protocol = "memory", Width = 1, Height = 1 })).Code);
+        Assert.Equal(GraphicalTargetErrorCode.Forbidden, (await Assert.ThrowsAsync<GraphicalTargetException>(async () => await reg.CreateAsync(scope, new Def { TargetId = "gt-z", TenantId = "other", Protocol = "memory", Width = 1, Height = 1 }))).Code);
 
         // Update with a payload tenant the scope does not permit → Forbidden (before lookup).
-        reg.Create(scope, new Def { TargetId = "gt-w", TenantId = Tenant, Protocol = "memory", Width = 1, Height = 1 });
-        Assert.Equal(GraphicalTargetErrorCode.Forbidden, Assert.Throws<GraphicalTargetException>(() =>
-            reg.Update(scope, new Def { TargetId = "gt-w", TenantId = "other", Protocol = "memory", Width = 1, Height = 1 })).Code);
+        await reg.CreateAsync(scope, new Def { TargetId = "gt-w", TenantId = Tenant, Protocol = "memory", Width = 1, Height = 1 });
+        Assert.Equal(GraphicalTargetErrorCode.Forbidden, (await Assert.ThrowsAsync<GraphicalTargetException>(async () => await reg.UpdateAsync(scope, new Def { TargetId = "gt-w", TenantId = "other", Protocol = "memory", Width = 1, Height = 1 }))).Code);
 
         // Delete a static target the scope does not permit → Forbidden.
         Assert.Equal(GraphicalTargetErrorCode.Forbidden,
-            Assert.Throws<GraphicalTargetException>(() => reg.Delete(otherScope, "sys-t")).Code);
+            (await Assert.ThrowsAsync<GraphicalTargetException>(async () => await reg.DeleteAsync(otherScope, "sys-t"))).Code);
     }
 
     [Fact]
-    public void Registry_InvalidScope_Throws_Forbidden()
+    public async Task Registry_InvalidScope_Throws_Forbidden()
     {
         var reg = new InMemoryGraphicalTargetRegistry();
         var bad = default(GraphicalTargetScope);
         Assert.Equal(GraphicalTargetErrorCode.Forbidden,
-            Assert.Throws<GraphicalTargetException>(() => reg.Get(bad, "x")).Code);
+            (await Assert.ThrowsAsync<GraphicalTargetException>(async () => await reg.GetAsync(bad, "x"))).Code);
         Assert.Equal(GraphicalTargetErrorCode.Forbidden,
-            Assert.Throws<GraphicalTargetException>(() => reg.List(bad)).Code);
+            (await Assert.ThrowsAsync<GraphicalTargetException>(async () => await reg.ListAsync(bad))).Code);
         Assert.Equal(GraphicalTargetErrorCode.Forbidden,
-            Assert.Throws<GraphicalTargetException>(() => reg.Delete(bad, "x")).Code);
+            (await Assert.ThrowsAsync<GraphicalTargetException>(async () => await reg.DeleteAsync(bad, "x"))).Code);
     }
 
     // ---- REST surface tests ---------------------------------------------
@@ -472,7 +463,7 @@ public class GraphicalTargetsRestTests
     public async Task Rest_Static_Target_Is_Immutable()
     {
         var reg = new InMemoryGraphicalTargetRegistry();
-        reg.AddStatic(new Def { TargetId = "sys-a", TenantId = Tenant, Protocol = "memory", Width = 10, Height = 10 });
+        await reg.AddStaticAsync(new Def { TargetId = "sys-a", TenantId = Tenant, Protocol = "memory", Width = 10, Height = 10 });
 
         await using var h = await Harness.StartAsync(graphicalTargets: reg);
         using var client = h.Client();
@@ -488,7 +479,7 @@ public class GraphicalTargetsRestTests
     }
 
     [Fact]
-    public void Definition_Litevirt_Validate_RequiresEndpoint()
+    public async Task Definition_Litevirt_Validate_RequiresEndpoint()
     {
         // litevirt is a supported canonical protocol; endpoint is required + normalized.
         var ok = new Def { TargetId = "vm", Protocol = "LITEVIRT", Endpoint = "dns:///10.0.0.5:7443", Width = 8, Height = 8 };
@@ -508,7 +499,7 @@ public class GraphicalTargetsRestTests
     }
 
     [Fact]
-    public void ParseLitevirtEndpoint_Branches()
+    public async Task ParseLitevirtEndpoint_Branches()
     {
         Assert.Equal(("h", 7443), GraphicalTargetParsing.ParseLitevirtEndpoint("h:7443"));
         Assert.Equal(("h", 7443), GraphicalTargetParsing.ParseLitevirtEndpoint("dns:///h:7443"));
@@ -520,7 +511,7 @@ public class GraphicalTargetsRestTests
     }
 
     [Fact]
-    public void Definition_Config_Survives_Clone_And_PublicCopy()
+    public async Task Definition_Config_Survives_Clone_And_PublicCopy()
     {
         var d = new Def { TargetId = "vm", Protocol = "memory" };
         d.Config["vm_name"] = "web-1";
@@ -588,14 +579,13 @@ public class GraphicalTargetsRestTests
     }
 
     [Fact]
-    public void Registry_Update_Invalid_Definition()
+    public async Task Registry_Update_Invalid_Definition()
     {
         var reg = new InMemoryGraphicalTargetRegistry();
         Assert.True(GraphicalTargetScope.TryForTenant(Tenant, out var scope));
-        reg.Create(scope, new Def { TargetId = "gt-u", TenantId = Tenant, Protocol = "memory", Width = 10, Height = 10 });
+        await reg.CreateAsync(scope, new Def { TargetId = "gt-u", TenantId = Tenant, Protocol = "memory", Width = 10, Height = 10 });
 
-        var ex = Assert.Throws<GraphicalTargetException>(() =>
-            reg.Update(scope, new Def { TargetId = "gt-u", TenantId = Tenant, Protocol = "memory", Width = 0, Height = 10 }));
+        var ex = await Assert.ThrowsAsync<GraphicalTargetException>(async () => await reg.UpdateAsync(scope, new Def { TargetId = "gt-u", TenantId = Tenant, Protocol = "memory", Width = 0, Height = 10 }));
         Assert.Equal(GraphicalTargetErrorCode.Invalid, ex.Code);
     }
 

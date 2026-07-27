@@ -40,7 +40,7 @@ public sealed partial class UtermServer
         IReadOnlyList<GraphicalTargetDefinition> rows;
         try
         {
-            rows = _deps.GraphicalTargets.List(scope);
+            rows = await _deps.GraphicalTargets.ListAsync(scope);
         }
         catch (GraphicalTargetException ex)
         {
@@ -64,7 +64,7 @@ public sealed partial class UtermServer
 
         try
         {
-            var target = _deps.GraphicalTargets.Get(scope, targetId);
+            var target = await _deps.GraphicalTargets.GetAsync(scope, targetId);
             if (target is null)
             {
                 return GraphicalError(404, GraphicalTargetConstants.ErrorNotFound, "graphical target not found");
@@ -121,7 +121,7 @@ public sealed partial class UtermServer
         }
         try
         {
-            var created = _deps.GraphicalTargets.Create(scope, payload);
+            var created = await _deps.GraphicalTargets.CreateAsync(scope, payload);
             return Results.Json(created.PublicCopy(), JsonOpts, statusCode: StatusCodes.Status201Created);
         }
         catch (GraphicalTargetException ex)
@@ -162,7 +162,7 @@ public sealed partial class UtermServer
             return GraphicalError(409, GraphicalTargetConstants.ErrorTargetIdMismatch, "target_id must match the request path");
         }
 
-        var existing = _deps.GraphicalTargets.Get(scope, targetId);
+        var existing = await _deps.GraphicalTargets.GetAsync(scope, targetId);
         if (existing is null)
         {
             return GraphicalError(404, GraphicalTargetConstants.ErrorNotFound, "graphical target not found");
@@ -180,7 +180,7 @@ public sealed partial class UtermServer
 
         try
         {
-            var updated = _deps.GraphicalTargets.Update(scope, payload);
+            var updated = await _deps.GraphicalTargets.UpdateAsync(scope, payload);
             return Results.Json(updated.PublicCopy(), JsonOpts);
         }
         catch (GraphicalTargetException ex)
@@ -199,7 +199,7 @@ public sealed partial class UtermServer
 
         try
         {
-            _deps.GraphicalTargets.Delete(scope, targetId);
+            await _deps.GraphicalTargets.DeleteAsync(scope, targetId);
         }
         catch (GraphicalTargetException ex)
         {

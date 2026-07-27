@@ -213,14 +213,25 @@ public readonly struct GraphicalTargetScope
     public bool Permits(string? tenantId) => IsValid && (IsSystem || tenantId is not null && tenantId == TenantId);
 }
 
+/// <summary>
+/// Tenant-scoped graphical-target storage.
+///
+/// Asynchronous because an implementation may be backed by the control plane
+/// and every caller is already an async request handler — a synchronous
+/// surface would force sync-over-async on a database call in the request path.
+/// </summary>
 public interface IGraphicalTargetRegistry
 {
-    GraphicalTargetDefinition? Get(GraphicalTargetScope scope, string targetId);
-    IReadOnlyList<GraphicalTargetDefinition> List(GraphicalTargetScope scope);
-    GraphicalTargetDefinition Create(GraphicalTargetScope scope, GraphicalTargetDefinition target);
-    GraphicalTargetDefinition Update(GraphicalTargetScope scope, GraphicalTargetDefinition target);
-    void Delete(GraphicalTargetScope scope, string targetId);
-    void AddStatic(GraphicalTargetDefinition target);
+    Task<GraphicalTargetDefinition?> GetAsync(
+        GraphicalTargetScope scope, string targetId, CancellationToken ct = default);
+    Task<IReadOnlyList<GraphicalTargetDefinition>> ListAsync(
+        GraphicalTargetScope scope, CancellationToken ct = default);
+    Task<GraphicalTargetDefinition> CreateAsync(
+        GraphicalTargetScope scope, GraphicalTargetDefinition target, CancellationToken ct = default);
+    Task<GraphicalTargetDefinition> UpdateAsync(
+        GraphicalTargetScope scope, GraphicalTargetDefinition target, CancellationToken ct = default);
+    Task DeleteAsync(GraphicalTargetScope scope, string targetId, CancellationToken ct = default);
+    Task AddStaticAsync(GraphicalTargetDefinition target, CancellationToken ct = default);
 }
 
 public sealed class InMemoryGraphicalTargetRegistry : IGraphicalTargetRegistry
@@ -251,7 +262,37 @@ public sealed class InMemoryGraphicalTargetRegistry : IGraphicalTargetRegistry
         }
     }
 
-    public GraphicalTargetDefinition? Get(GraphicalTargetScope scope, string targetId)
+    // The in-memory registry has no I/O, so each wrapper simply completes. The
+    // async surface exists for the control-plane-backed implementation.
+    public Task<GraphicalTargetDefinition?> GetAsync(
+        GraphicalTargetScope scope, string targetId, CancellationToken ct = default) =>
+        Task.FromResult(GetCore(scope, targetId));
+
+    public Task<IReadOnlyList<GraphicalTargetDefinition>> ListAsync(
+        GraphicalTargetScope scope, CancellationToken ct = default) =>
+        Task.FromResult(ListCore(scope));
+
+    public Task<GraphicalTargetDefinition> CreateAsync(
+        GraphicalTargetScope scope, GraphicalTargetDefinition target, CancellationToken ct = default) =>
+        Task.FromResult(CreateCore(scope, target));
+
+    public Task<GraphicalTargetDefinition> UpdateAsync(
+        GraphicalTargetScope scope, GraphicalTargetDefinition target, CancellationToken ct = default) =>
+        Task.FromResult(UpdateCore(scope, target));
+
+    public Task DeleteAsync(GraphicalTargetScope scope, string targetId, CancellationToken ct = default)
+    {
+        DeleteCore(scope, targetId);
+        return Task.CompletedTask;
+    }
+
+    public Task AddStaticAsync(GraphicalTargetDefinition target, CancellationToken ct = default)
+    {
+        AddStaticCore(target);
+        return Task.CompletedTask;
+    }
+
+    private GraphicalTargetDefinition? GetCore(GraphicalTargetScope scope, string targetId)
     {
         lock (_gate)
         {
@@ -270,7 +311,7 @@ public sealed class InMemoryGraphicalTargetRegistry : IGraphicalTargetRegistry
         }
     }
 
-    public IReadOnlyList<GraphicalTargetDefinition> List(GraphicalTargetScope scope)
+    private IReadOnlyList<GraphicalTargetDefinition> ListCore(GraphicalTargetScope scope)
     {
         lock (_gate)
         {
@@ -301,7 +342,7 @@ public sealed class InMemoryGraphicalTargetRegistry : IGraphicalTargetRegistry
         }
     }
 
-    public GraphicalTargetDefinition Create(GraphicalTargetScope scope, GraphicalTargetDefinition target)
+    private GraphicalTargetDefinition CreateCore(GraphicalTargetScope scope, GraphicalTargetDefinition target)
     {
         lock (_gate)
         {
@@ -332,7 +373,7 @@ public sealed class InMemoryGraphicalTargetRegistry : IGraphicalTargetRegistry
         }
     }
 
-    public GraphicalTargetDefinition Update(GraphicalTargetScope scope, GraphicalTargetDefinition target)
+    private GraphicalTargetDefinition UpdateCore(GraphicalTargetScope scope, GraphicalTargetDefinition target)
     {
         lock (_gate)
         {
@@ -375,7 +416,7 @@ public sealed class InMemoryGraphicalTargetRegistry : IGraphicalTargetRegistry
         }
     }
 
-    public void Delete(GraphicalTargetScope scope, string targetId)
+    private void DeleteCore(GraphicalTargetScope scope, string targetId)
     {
         lock (_gate)
         {
@@ -404,7 +445,7 @@ public sealed class InMemoryGraphicalTargetRegistry : IGraphicalTargetRegistry
         }
     }
 
-    public void AddStatic(GraphicalTargetDefinition target)
+    private void AddStaticCore(GraphicalTargetDefinition target)
     {
         lock (_gate)
         {
