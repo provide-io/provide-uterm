@@ -660,25 +660,38 @@ public static class Root
         }
 
         config.Server.DerivePublicBaseUrl();
-        var (server, devToken) = ServerFactory.CreateFromConfig(config, Version);
+        // The async factory owns a control-plane engine, so runtime graphical
+        // targets follow control_plane.backend: sqlite keeps them across
+        // restarts, memory behaves as before. The engine is ours to dispose.
+        var (server, devToken, engine) = await ServerFactory
+            .CreateFromConfigAsync(config, Version).ConfigureAwait(false);
         o.WriteLine($"uterm server listening on http://{config.Server.Host}:{config.Server.Port}");
         if (!string.IsNullOrEmpty(devToken))
         {
             o.WriteLine($"dev_token: {devToken}");
         }
 
-        await using (server)
+        try
         {
-            await server.StartAsync().ConfigureAwait(false);
-            if (f.ContainsKey("once"))
+            await using (server)
             {
-                await server.StopAsync().ConfigureAwait(false);
-                return 0;
-            }
+                await server.StartAsync().ConfigureAwait(false);
+                if (f.ContainsKey("once"))
+                {
+                    await server.StopAsync().ConfigureAwait(false);
+                    return 0;
+                }
 
-            // Interactive: wait for Ctrl-C (or test WaitForCancel hook), then stop.
-            await Task.Run(WaitCancel).ConfigureAwait(false);
-            await server.StopAsync().ConfigureAwait(false);
+                // Interactive: wait for Ctrl-C (or test WaitForCancel hook), then stop.
+                await Task.Run(WaitCancel).ConfigureAwait(false);
+                await server.StopAsync().ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            // Closes the connection so SQLite checkpoints its WAL; without this
+            // the database file is left incomplete for the next process.
+            await engine.CloseAsync(CancellationToken.None).ConfigureAwait(false);
         }
 
         return 0;

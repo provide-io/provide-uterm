@@ -41,8 +41,18 @@ public class EmbedSessionTests
             },
         });
 
-        var app = new List<byte[]>();
-        session.ApplicationDataReceived += (_, e) => app.Add(e.Data);
+        // ApplicationDataReceived fires independently of client delivery, so
+        // asserting on it straight after ReceiveAsync assumes an ordering the
+        // session does not promise — under load the handler had not run yet.
+        // Signal on arrival and wait for it instead. Concurrent collection
+        // because the handler runs off the test's thread.
+        var app = new System.Collections.Concurrent.ConcurrentQueue<byte[]>();
+        var appReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        session.ApplicationDataReceived += (_, e) =>
+        {
+            app.Enqueue(e.Data);
+            appReceived.TrySetResult();
+        };
 
         await up.PushFromRemoteAsync("HELLO"u8.ToArray());
         var got = await c1.ReceiveAsync();
@@ -50,6 +60,7 @@ public class EmbedSessionTests
         // deaf still receives unless filtered — selective fan-out is host filter on SendToClients
         var gotDeaf = await cDeaf.ReceiveAsync();
         Assert.Equal("HELLO"u8.ToArray(), gotDeaf);
+        await appReceived.Task.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.NotEmpty(app);
 
         // Selective: only standard
