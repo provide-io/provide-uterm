@@ -21,15 +21,25 @@ DEFAULT_EXCLUDE_PARTS = {
     "dist",
     "node_modules",
     "python_modules",
+    # C# build output and Go vendored sources: generated or third-party, so a
+    # size cap on them measures nothing a reviewer can act on.
+    "bin",
+    "obj",
+    "vendor",
+    ".worktrees",
 }
 
+DEFAULT_SUFFIXES = (".py", ".cs", ".go")
 
-def _iter_python_files(roots: list[Path]) -> list[Path]:
+
+def _iter_source_files(roots: list[Path], suffixes: tuple[str, ...]) -> list[Path]:
     files: list[Path] = []
     for root in roots:
         if not root.exists():
             continue
-        for path in root.rglob("*.py"):
+        for path in root.rglob("*"):
+            if path.suffix not in suffixes:
+                continue
             if any(part in DEFAULT_EXCLUDE_PARTS for part in path.parts):
                 continue
             if path.is_file():
@@ -43,9 +53,11 @@ def _line_count(path: Path) -> int:
         return sum(1 for _ in handle)
 
 
-def find_loc_offenders(roots: list[Path], max_lines: int) -> list[tuple[Path, int]]:
+def find_loc_offenders(
+    roots: list[Path], max_lines: int, suffixes: tuple[str, ...] = DEFAULT_SUFFIXES
+) -> list[tuple[Path, int]]:
     offenders: list[tuple[Path, int]] = []
-    for path in sorted(_iter_python_files(roots)):
+    for path in sorted(_iter_source_files(roots, suffixes)):
         lines = _line_count(path)
         if lines > max_lines:
             offenders.append((path, lines))
@@ -63,8 +75,14 @@ def _load_baseline(path: Path) -> dict[str, int]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Fail if any Python file exceeds a maximum line count.")
-    parser.add_argument("--max-lines", type=int, default=777, help="Maximum allowed lines per .py file.")
+    parser = argparse.ArgumentParser(description="Fail if any source file exceeds a maximum line count.")
+    parser.add_argument("--max-lines", type=int, default=777, help="Maximum allowed lines per source file.")
+    parser.add_argument(
+        "--suffixes",
+        nargs="+",
+        default=list(DEFAULT_SUFFIXES),
+        help="File suffixes to scan. The cap applies to every language equally.",
+    )
     parser.add_argument(
         "--roots",
         nargs="+",
@@ -74,8 +92,12 @@ def main() -> int:
             "scripts",
             "packages/provide-uterm-cloudflare/src",
             "packages/provide-uterm-cloudflare/tests",
+            "packages/provide-uterm-csharp/src",
+            "packages/provide-uterm-csharp/tests",
+            "packages/provide-uterm-csharp/cmd",
+            "packages/provide-uterm-go",
         ],
-        help="Directories to scan for Python files.",
+        help="Directories to scan.",
     )
     parser.add_argument(
         "--baseline",
@@ -86,9 +108,10 @@ def main() -> int:
     args = parser.parse_args()
 
     roots = [Path(root) for root in args.roots]
-    offenders = find_loc_offenders(roots, args.max_lines)
+    suffixes = tuple(s if s.startswith(".") else f".{s}" for s in args.suffixes)
+    offenders = find_loc_offenders(roots, args.max_lines, suffixes)
     if args.baseline is None and not offenders:
-        print(f"LOC check passed: no Python file exceeds {args.max_lines} lines.")
+        print(f"LOC check passed: no source file exceeds {args.max_lines} lines.")
         return 0
 
     if args.baseline is not None:
@@ -101,7 +124,7 @@ def main() -> int:
                 new_offenders.append((path, lines))
         offenders = new_offenders
         if not offenders:
-            print(f"LOC check passed: no Python file exceeds {args.max_lines} lines.")
+            print(f"LOC check passed: no source file exceeds {args.max_lines} lines.")
             return 0
 
     print(f"LOC check failed: {len(offenders)} file(s) exceed {args.max_lines} lines.")
