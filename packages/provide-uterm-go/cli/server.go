@@ -135,12 +135,21 @@ func buildServer(ctx context.Context, configPath, host string, port int, fronten
 	if err := engine.Open(ctx); err != nil {
 		return nil, err
 	}
+	// Migrate before anything reads a store. Nothing did previously, so a
+	// missing schema went unnoticed; the graphical-target registry below is the
+	// first real consumer and needs its table to exist.
+	if err := engine.Migrate(ctx); err != nil {
+		_ = engine.Close(ctx)
+		return nil, err
+	}
 
 	registry := NewSessionRegistry(cfg)
 	// Long-poll events/watch uses the same EventBus as SSE.
 	registry.SetEventBus(bus)
 
-	graphicalTargets, err := server.SeedGraphicalTargets(cfg)
+	// Runtime graphical targets live in the control plane, so a sqlite backend
+	// keeps them across restarts. A memory backend behaves as before.
+	graphicalTargets, err := server.NewControlPlaneGraphicalTargets(cfg, engine)
 	if err != nil {
 		_ = engine.Close(ctx)
 		return nil, err
