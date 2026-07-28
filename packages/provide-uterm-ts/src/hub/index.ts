@@ -14,6 +14,7 @@ export * from "./approvals.ts";
 export * from "./frames.ts";
 export * from "./lease.ts";
 export * from "./models.ts";
+export * from "./pattern-safety.ts";
 export * from "./presence.ts";
 export * from "./registry.ts";
 export * from "./store.ts";

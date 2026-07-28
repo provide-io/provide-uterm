@@ -6,3 +6,4 @@
 export * from "./json.ts";
 export * from "./regex.ts";
 export * from "./rounding.ts";
+export * from "./str.ts";

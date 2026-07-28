@@ -1,0 +1,335 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_pattern_safety_golden.py",
+ "patterns": [
+  {
+   "name": "empty",
+   "pattern": "",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "literal",
+   "pattern": "hello",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "single quantifier",
+   "pattern": "a+",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "star",
+   "pattern": "a*",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "optional",
+   "pattern": "a?",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "character class",
+   "pattern": "[a-z]+",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "class containing a paren",
+   "pattern": "[()]+",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "class containing a bracket",
+   "pattern": "[]]+",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "group wrapping a class with a pipe",
+   "pattern": "([|])+",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "group wrapping a class with a plus",
+   "pattern": "([a+])+",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "group wrapping a class with parens",
+   "pattern": "([()])+",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "escaped paren",
+   "pattern": "\\(a\\)+",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "escaped backslash",
+   "pattern": "\\\\+",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "anchored prompt",
+   "pattern": "^\\$ $",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "group without a quantifier",
+   "pattern": "(abc)",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "quantified plain group",
+   "pattern": "(abc)+",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "alternation at top level",
+   "pattern": "a|b",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "alternation, unquantified group",
+   "pattern": "(a|b)",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "counted quantifier",
+   "pattern": "a{2,3}",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "counted group",
+   "pattern": "(abc){2}",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "open-ended count",
+   "pattern": "a{2,}",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "dot star",
+   "pattern": ".*",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "realistic prompt guard",
+   "pattern": "(?m)^[\\w.-]+@[\\w.-]+:.*[$#] $",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "nested quantifier",
+   "pattern": "(a+)+",
+   "safe": false,
+   "error": "unsafe watch pattern: nested quantified groups are not allowed"
+  },
+  {
+   "name": "nested star",
+   "pattern": "(a*)*",
+   "safe": false,
+   "error": "unsafe watch pattern: nested quantified groups are not allowed"
+  },
+  {
+   "name": "nested counted",
+   "pattern": "(a+){2}",
+   "safe": false,
+   "error": "unsafe watch pattern: nested quantified groups are not allowed"
+  },
+  {
+   "name": "quantified alternation",
+   "pattern": "(a|b)+",
+   "safe": false,
+   "error": "unsafe watch pattern: quantified groups containing alternation are not allowed"
+  },
+  {
+   "name": "quantified alternation, counted",
+   "pattern": "(a|b){3}",
+   "safe": false,
+   "error": "unsafe watch pattern: quantified groups containing alternation are not allowed"
+  },
+  {
+   "name": "nested through a non-capturing group",
+   "pattern": "(?:a+)+",
+   "safe": false,
+   "error": "unsafe watch pattern: nested quantified groups are not allowed"
+  },
+  {
+   "name": "nested through a lookahead",
+   "pattern": "(?=(a+))+",
+   "safe": false,
+   "error": "unsafe watch pattern: nested quantified groups are not allowed"
+  },
+  {
+   "name": "nested through a double group",
+   "pattern": "((a+))+",
+   "safe": false,
+   "error": "unsafe watch pattern: nested quantified groups are not allowed"
+  },
+  {
+   "name": "alternation through a double group",
+   "pattern": "((a|b))+",
+   "safe": false,
+   "error": "unsafe watch pattern: quantified groups containing alternation are not allowed"
+  },
+  {
+   "name": "alternation through a named group",
+   "pattern": "(?P<x>a|b)+",
+   "safe": false,
+   "error": "unsafe watch pattern: quantified groups containing alternation are not allowed"
+  },
+  {
+   "name": "nested through a lookbehind",
+   "pattern": "(?<=(a+))+",
+   "safe": false,
+   "error": "unsafe watch pattern: nested quantified groups are not allowed"
+  },
+  {
+   "name": "negative lookahead",
+   "pattern": "(?!(a+))+",
+   "safe": false,
+   "error": "unsafe watch pattern: nested quantified groups are not allowed"
+  },
+  {
+   "name": "nested through a negative lookbehind",
+   "pattern": "(?<!(a+))+",
+   "safe": false,
+   "error": "unsafe watch pattern: nested quantified groups are not allowed"
+  },
+  {
+   "name": "unterminated named group",
+   "pattern": "(?P<x",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "unterminated named group with a quantifier",
+   "pattern": "(?P<x a+)+",
+   "safe": false,
+   "error": "unsafe watch pattern: nested quantified groups are not allowed"
+  },
+  {
+   "name": "brace that is not a quantifier",
+   "pattern": "a{foo}",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "unclosed brace",
+   "pattern": "a{2",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "empty braces",
+   "pattern": "a{}",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "brace with a trailing comma",
+   "pattern": "a{2,}",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "brace with only a comma",
+   "pattern": "a{,}",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "brace after a group, not a quantifier",
+   "pattern": "(a+){foo}",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "brace after a group, counted",
+   "pattern": "(a+){1,2}",
+   "safe": false,
+   "error": "unsafe watch pattern: nested quantified groups are not allowed"
+  },
+  {
+   "name": "arabic-indic digit count",
+   "pattern": "(a+){٣}",
+   "safe": false,
+   "error": "unsafe watch pattern: nested quantified groups are not allowed"
+  },
+  {
+   "name": "superscript digit count",
+   "pattern": "(a+){²}",
+   "safe": false,
+   "error": "unsafe watch pattern: nested quantified groups are not allowed"
+  },
+  {
+   "name": "fullwidth digit count",
+   "pattern": "(a+){３}",
+   "safe": false,
+   "error": "unsafe watch pattern: nested quantified groups are not allowed"
+  },
+  {
+   "name": "unbalanced close paren",
+   "pattern": "a)+",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "unbalanced open paren",
+   "pattern": "(a+",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "inline flags",
+   "pattern": "(?i)a+",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "quantifier with no preceding token",
+   "pattern": "+",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "escaped quantifier after a group",
+   "pattern": "(a+)\\+",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "literal resets the group memory",
+   "pattern": "(a+)x+",
+   "safe": true,
+   "error": null
+  },
+  {
+   "name": "alternation outside the group",
+   "pattern": "(a)|b+",
+   "safe": true,
+   "error": null
+  }
+ ]
+}
