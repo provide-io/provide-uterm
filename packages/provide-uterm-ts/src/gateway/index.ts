@@ -11,4 +11,5 @@
  * misalignment note.
  */
 
+export * from "./host-key.ts";
 export * from "./ssh-policy.ts";
