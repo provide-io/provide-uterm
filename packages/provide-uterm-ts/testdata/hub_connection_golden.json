@@ -1,0 +1,529 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_hub_connection_golden.py",
+ "now": 1000.0,
+ "registers": [
+  {
+   "name": "first connection",
+   "has_state": false,
+   "rest_expiry": null,
+   "has_owner": false,
+   "prev_was_hijacked": false,
+   "session_cleared": true,
+   "session_after": null,
+   "owner_cleared": true,
+   "worker_attached": true
+  },
+  {
+   "name": "reconnect, nothing held",
+   "has_state": true,
+   "rest_expiry": null,
+   "has_owner": false,
+   "prev_was_hijacked": false,
+   "session_cleared": true,
+   "session_after": null,
+   "owner_cleared": true,
+   "worker_attached": true
+  },
+  {
+   "name": "reconnect, live REST lease",
+   "has_state": true,
+   "rest_expiry": 1060.0,
+   "has_owner": false,
+   "prev_was_hijacked": false,
+   "session_cleared": false,
+   "session_after": 1060.0,
+   "owner_cleared": true,
+   "worker_attached": true
+  },
+  {
+   "name": "reconnect, REST lease expiring exactly now",
+   "has_state": true,
+   "rest_expiry": 1000.0,
+   "has_owner": false,
+   "prev_was_hijacked": true,
+   "session_cleared": true,
+   "session_after": null,
+   "owner_cleared": true,
+   "worker_attached": true
+  },
+  {
+   "name": "reconnect, expired REST lease",
+   "has_state": true,
+   "rest_expiry": 940.0,
+   "has_owner": false,
+   "prev_was_hijacked": true,
+   "session_cleared": true,
+   "session_after": null,
+   "owner_cleared": true,
+   "worker_attached": true
+  },
+  {
+   "name": "reconnect, dashboard owner only",
+   "has_state": true,
+   "rest_expiry": null,
+   "has_owner": true,
+   "prev_was_hijacked": true,
+   "session_cleared": true,
+   "session_after": null,
+   "owner_cleared": true,
+   "worker_attached": true
+  },
+  {
+   "name": "reconnect, live REST lease and a dashboard owner",
+   "has_state": true,
+   "rest_expiry": 1060.0,
+   "has_owner": true,
+   "prev_was_hijacked": false,
+   "session_cleared": false,
+   "session_after": 1060.0,
+   "owner_cleared": false,
+   "worker_attached": true
+  },
+  {
+   "name": "reconnect, expired REST lease and a dashboard owner",
+   "has_state": true,
+   "rest_expiry": 940.0,
+   "has_owner": true,
+   "prev_was_hijacked": true,
+   "session_cleared": true,
+   "session_after": null,
+   "owner_cleared": true,
+   "worker_attached": true
+  }
+ ],
+ "worker_caps": [
+  {
+   "name": "first worker, room to spare",
+   "existing": [],
+   "cap": 2,
+   "worker_id": "w1",
+   "admitted": true,
+   "reason": null,
+   "code": null,
+   "workers_after": [
+    "w1"
+   ]
+  },
+  {
+   "name": "second worker, at the edge",
+   "existing": [
+    "w1"
+   ],
+   "cap": 2,
+   "worker_id": "w2",
+   "admitted": true,
+   "reason": null,
+   "code": null,
+   "workers_after": [
+    "w1",
+    "w2"
+   ]
+  },
+  {
+   "name": "new worker at capacity",
+   "existing": [
+    "w1",
+    "w2"
+   ],
+   "cap": 2,
+   "worker_id": "w3",
+   "admitted": false,
+   "reason": "worker capacity exceeded",
+   "code": 1008,
+   "workers_after": [
+    "w1",
+    "w2"
+   ]
+  },
+  {
+   "name": "reconnect at capacity",
+   "existing": [
+    "w1",
+    "w2"
+   ],
+   "cap": 2,
+   "worker_id": "w1",
+   "admitted": true,
+   "reason": null,
+   "code": null,
+   "workers_after": [
+    "w1",
+    "w2"
+   ]
+  },
+  {
+   "name": "reconnect over capacity",
+   "existing": [
+    "w1",
+    "w2",
+    "w3"
+   ],
+   "cap": 2,
+   "worker_id": "w2",
+   "admitted": true,
+   "reason": null,
+   "code": null,
+   "workers_after": [
+    "w1",
+    "w2",
+    "w3"
+   ]
+  },
+  {
+   "name": "new worker with a zero cap",
+   "existing": [],
+   "cap": 0,
+   "worker_id": "w1",
+   "admitted": false,
+   "reason": "worker capacity exceeded",
+   "code": 1008,
+   "workers_after": []
+  }
+ ],
+ "principal_quotas": [
+  {
+   "name": "first connection",
+   "current": 0,
+   "cap": 2,
+   "admitted": true,
+   "reason": null,
+   "code": null,
+   "after": 1
+  },
+  {
+   "name": "second connection",
+   "current": 1,
+   "cap": 2,
+   "admitted": true,
+   "reason": null,
+   "code": null,
+   "after": 2
+  },
+  {
+   "name": "third connection at a cap of two",
+   "current": 2,
+   "cap": 2,
+   "admitted": false,
+   "reason": "too many connections",
+   "code": 1008,
+   "after": 2
+  },
+  {
+   "name": "well over the cap",
+   "current": 5,
+   "cap": 2,
+   "admitted": false,
+   "reason": "too many connections",
+   "code": 1008,
+   "after": 5
+  },
+  {
+   "name": "zero cap",
+   "current": 0,
+   "cap": 0,
+   "admitted": false,
+   "reason": "too many connections",
+   "code": 1008,
+   "after": 0
+  }
+ ],
+ "quota_exemptions": {
+  "no principal": {
+   "counted": false,
+   "tracked": {}
+  },
+  "anonymous": {
+   "counted": false,
+   "tracked": {}
+  },
+  "empty subject": {
+   "counted": false,
+   "tracked": {}
+  },
+  "non-string subject": {
+   "counted": false,
+   "tracked": {}
+  },
+  "named subject": {
+   "counted": true,
+   "tracked": {
+    "alice": 1
+   }
+  }
+ },
+ "quota_rollback": {
+  "raised": true,
+  "count_after": 0,
+  "principal_tracked": false,
+  "resume_token_tracked": false
+ },
+ "disconnects": [
+  {
+   "name": "plain viewer leaves",
+   "is_owner": false,
+   "rest_expiry": null,
+   "owned_hijack": false,
+   "was_owner": false,
+   "rest_still_active": false,
+   "resume_without_owner": false,
+   "count_after": 0,
+   "browsers_left": 0
+  },
+  {
+   "name": "holder leaves",
+   "is_owner": true,
+   "rest_expiry": null,
+   "owned_hijack": false,
+   "was_owner": true,
+   "rest_still_active": false,
+   "resume_without_owner": false,
+   "count_after": 0,
+   "browsers_left": 0
+  },
+  {
+   "name": "holder leaves with a live REST lease",
+   "is_owner": true,
+   "rest_expiry": 1060.0,
+   "owned_hijack": false,
+   "was_owner": true,
+   "rest_still_active": true,
+   "resume_without_owner": false,
+   "count_after": 0,
+   "browsers_left": 0
+  },
+  {
+   "name": "non-holder leaves claiming ownership",
+   "is_owner": false,
+   "rest_expiry": null,
+   "owned_hijack": true,
+   "was_owner": false,
+   "rest_still_active": false,
+   "resume_without_owner": true,
+   "count_after": 0,
+   "browsers_left": 0
+  },
+  {
+   "name": "non-holder leaves with a live REST lease",
+   "is_owner": false,
+   "rest_expiry": 1060.0,
+   "owned_hijack": true,
+   "was_owner": false,
+   "rest_still_active": false,
+   "resume_without_owner": false,
+   "count_after": 0,
+   "browsers_left": 0
+  }
+ ],
+ "resume_scans": [
+  {
+   "name": "empty history",
+   "events": [],
+   "resume_needed": true
+  },
+  {
+   "name": "only output",
+   "events": [
+    "term",
+    "term"
+   ],
+   "resume_needed": true
+  },
+  {
+   "name": "owner expired",
+   "events": [
+    "term",
+    "hijack_owner_expired"
+   ],
+   "resume_needed": false
+  },
+  {
+   "name": "lease expired",
+   "events": [
+    "term",
+    "hijack_lease_expired"
+   ],
+   "resume_needed": false
+  },
+  {
+   "name": "expiry then a snapshot",
+   "events": [
+    "hijack_owner_expired",
+    "snapshot"
+   ],
+   "resume_needed": false
+  },
+  {
+   "name": "acquired then output",
+   "events": [
+    "hijack_acquired",
+    "term"
+   ],
+   "resume_needed": true
+  },
+  {
+   "name": "released then output",
+   "events": [
+    "hijack_released",
+    "term"
+   ],
+   "resume_needed": true
+  },
+  {
+   "name": "acquired after an expiry",
+   "events": [
+    "hijack_owner_expired",
+    "hijack_acquired"
+   ],
+   "resume_needed": true
+  },
+  {
+   "name": "expiry after an acquire",
+   "events": [
+    "hijack_acquired",
+    "hijack_owner_expired"
+   ],
+   "resume_needed": false
+  },
+  {
+   "name": "malformed entry before an expiry",
+   "events": [
+    7,
+    "hijack_owner_expired"
+   ],
+   "resume_needed": false
+  },
+  {
+   "name": "malformed entry after an expiry",
+   "events": [
+    "hijack_owner_expired",
+    7
+   ],
+   "resume_needed": false
+  }
+ ],
+ "hellos": [
+  {
+   "name": "unknown worker",
+   "exists": false,
+   "mode": "open",
+   "rest_expiry": null,
+   "has_owner": false,
+   "version": null,
+   "applied": false,
+   "input_mode_after": null,
+   "protocol_version_after": null
+  },
+  {
+   "name": "switch to open when idle",
+   "exists": true,
+   "mode": "open",
+   "rest_expiry": null,
+   "has_owner": false,
+   "version": null,
+   "applied": true,
+   "input_mode_after": "open",
+   "protocol_version_after": null
+  },
+  {
+   "name": "switch to open while a REST lease is held",
+   "exists": true,
+   "mode": "open",
+   "rest_expiry": 1060.0,
+   "has_owner": false,
+   "version": null,
+   "applied": false,
+   "input_mode_after": "hijack",
+   "protocol_version_after": null
+  },
+  {
+   "name": "switch to open while a dashboard hold is active",
+   "exists": true,
+   "mode": "open",
+   "rest_expiry": null,
+   "has_owner": true,
+   "version": null,
+   "applied": false,
+   "input_mode_after": "hijack",
+   "protocol_version_after": null
+  },
+  {
+   "name": "switch to hijack while held",
+   "exists": true,
+   "mode": "hijack",
+   "rest_expiry": 1060.0,
+   "has_owner": false,
+   "version": null,
+   "applied": true,
+   "input_mode_after": "hijack",
+   "protocol_version_after": null
+  },
+  {
+   "name": "with a protocol version",
+   "exists": true,
+   "mode": "hijack",
+   "rest_expiry": null,
+   "has_owner": false,
+   "version": 2,
+   "applied": true,
+   "input_mode_after": "hijack",
+   "protocol_version_after": 2
+  },
+  {
+   "name": "with a legacy protocol version",
+   "exists": true,
+   "mode": "hijack",
+   "rest_expiry": null,
+   "has_owner": false,
+   "version": 0,
+   "applied": true,
+   "input_mode_after": "hijack",
+   "protocol_version_after": 0
+  }
+ ],
+ "deregisters": [
+  {
+   "name": "current socket, nothing held",
+   "same_socket": true,
+   "rest_expiry": null,
+   "has_owner": false,
+   "should_broadcast": true,
+   "was_hijacked": false,
+   "worker_cleared": true,
+   "session_cleared": true,
+   "owner_cleared": true
+  },
+  {
+   "name": "current socket, REST lease held",
+   "same_socket": true,
+   "rest_expiry": 1060.0,
+   "has_owner": false,
+   "should_broadcast": true,
+   "was_hijacked": true,
+   "worker_cleared": true,
+   "session_cleared": true,
+   "owner_cleared": true
+  },
+  {
+   "name": "current socket, dashboard hold",
+   "same_socket": true,
+   "rest_expiry": null,
+   "has_owner": true,
+   "should_broadcast": true,
+   "was_hijacked": true,
+   "worker_cleared": true,
+   "session_cleared": true,
+   "owner_cleared": true
+  },
+  {
+   "name": "superseded socket",
+   "same_socket": false,
+   "rest_expiry": 1060.0,
+   "has_owner": false,
+   "should_broadcast": false,
+   "was_hijacked": false,
+   "worker_cleared": false,
+   "session_cleared": false,
+   "owner_cleared": true
+  }
+ ]
+}
