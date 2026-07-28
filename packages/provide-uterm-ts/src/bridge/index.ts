@@ -10,5 +10,6 @@
  * Port of the Python package `provide.uterm.bridge`.
  */
 
+export * from "./contracts.ts";
 export * from "./coordinator.ts";
 export * from "./policy.ts";
