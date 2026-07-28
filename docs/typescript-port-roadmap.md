@@ -123,7 +123,22 @@ The existing `provide-uterm-frontend` (lit widgets) and `provide-uterm-app`
 | Task | Status |
 |---|---|
 | Move both browser workspaces onto TypeScript 7 | **done** |
-| Bring the React SPA to parity with the served feature set | todo |
+| React SPA covers every bootstrapped page kind | **done** |
+| Port the two standalone lit entry points to React | not planned — see below |
+
+The SPA already handles all six `page_kind` values the server bootstraps:
+`connect`, `dashboard`, `inspect`, `operator`, `replay` and `session`. That
+was verified by diffing the `case` arms in `App.tsx` against every
+`page_kind` literal in the server, not by reading the component tree — an
+earlier revision of this file claimed the SPA was incomplete on the strength
+of a truncated directory listing, which was simply wrong.
+
+Two lit pages remain outside the SPA on purpose: `vnc.html` and
+`panels.html` are separate static entry points with their own bundles, not
+routes the bootstrap dispatches to. Folding them into the SPA would mean
+loading noVNC and the panel machinery into every page's bundle to serve two
+pages that are opened directly. They stay as they are unless the bootstrap
+starts routing to them.
 
 ## Cross-language obligations
 
