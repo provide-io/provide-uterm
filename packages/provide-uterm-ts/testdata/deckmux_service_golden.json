@@ -1,0 +1,675 @@
+{
+  "colors": {
+    "all_distinct": true,
+    "colors": [
+      "#3498db",
+      "#607d8b",
+      "#f39c12",
+      "#00bcd4",
+      "#e67e22",
+      "#2ecc71",
+      "#8bc34a",
+      "#9b59b6",
+      "#1abc9c",
+      "#e91e63",
+      "#ff5722",
+      "#e74c3c"
+    ]
+  },
+  "containers": {
+    "cleanup_replaces_the_store": true,
+    "config_ignored_on_second_call": 5,
+    "configured_idle_s": 5,
+    "configured_queue_mode": "replay",
+    "default_idle_s": 30,
+    "default_queue_mode": "display",
+    "same_store_when_asked_twice": true,
+    "separate_stores": true
+  },
+  "control": {
+    "broadcast_on_grant": [
+      {
+        "msg": {
+          "from_user_id": "",
+          "queued_keys": "",
+          "reason": "handover",
+          "to_user_id": "00000000000000000000000000000001",
+          "type": "control_transfer"
+        },
+        "worker_id": "w1"
+      }
+    ],
+    "broadcast_on_grant_with_a_queue": [
+      {
+        "msg": {
+          "from_user_id": "",
+          "queued_keys": "ls",
+          "reason": "handover",
+          "to_user_id": "00000000000000000000000000000002",
+          "type": "control_transfer"
+        },
+        "worker_id": "w1"
+      }
+    ],
+    "broadcast_on_refusal": [],
+    "broadcast_on_release": [
+      {
+        "msg": {
+          "from_user_id": "00000000000000000000000000000001",
+          "queued_keys": "",
+          "reason": "handover",
+          "to_user_id": "",
+          "type": "control_transfer"
+        },
+        "worker_id": "w1"
+      }
+    ],
+    "owner_after_grant": "00000000000000000000000000000001",
+    "owner_after_refusal": "00000000000000000000000000000001",
+    "owner_after_release": null
+  },
+  "guards": {
+    "broadcast_on_claimed_identity": [
+      {
+        "msg": {
+          "color": "#607d8b",
+          "cols": 0,
+          "initials": "OT",
+          "is_owner": false,
+          "name": "Onyx Tiger",
+          "pin": null,
+          "queued_keys": "",
+          "role": "viewer",
+          "rows": 0,
+          "scroll_line": 0,
+          "scroll_range": [
+            0,
+            0
+          ],
+          "selection": null,
+          "total_lines": 0,
+          "type": "presence_update",
+          "typing": false,
+          "user_id": "00000000000000000000000000000002"
+        },
+        "worker_id": "w1"
+      }
+    ],
+    "broadcast_on_claimed_ownership": [
+      {
+        "msg": {
+          "color": "#607d8b",
+          "cols": 0,
+          "initials": "OT",
+          "is_owner": false,
+          "name": "Onyx Tiger",
+          "pin": null,
+          "queued_keys": "",
+          "role": "viewer",
+          "rows": 0,
+          "scroll_line": 0,
+          "scroll_range": [
+            0,
+            0
+          ],
+          "selection": null,
+          "total_lines": 0,
+          "type": "presence_update",
+          "typing": false,
+          "user_id": "00000000000000000000000000000002"
+        },
+        "worker_id": "w1"
+      }
+    ],
+    "broadcast_on_claimed_queue": [
+      {
+        "msg": {
+          "color": "#607d8b",
+          "cols": 0,
+          "initials": "OT",
+          "is_owner": false,
+          "name": "Onyx Tiger",
+          "pin": null,
+          "queued_keys": "",
+          "role": "viewer",
+          "rows": 0,
+          "scroll_line": 0,
+          "scroll_range": [
+            0,
+            0
+          ],
+          "selection": null,
+          "total_lines": 0,
+          "type": "presence_update",
+          "typing": false,
+          "user_id": "00000000000000000000000000000002"
+        },
+        "worker_id": "w1"
+      }
+    ],
+    "broadcast_on_selection": [
+      {
+        "msg": {
+          "color": "#607d8b",
+          "cols": 0,
+          "initials": "OT",
+          "is_owner": false,
+          "name": "Onyx Tiger",
+          "pin": null,
+          "queued_keys": "",
+          "role": "viewer",
+          "rows": 0,
+          "scroll_line": 0,
+          "scroll_range": [
+            0,
+            0
+          ],
+          "selection": {
+            "end": {
+              "col": 4,
+              "row": 3
+            },
+            "start": {
+              "col": 2,
+              "row": 1
+            }
+          },
+          "total_lines": 0,
+          "type": "presence_update",
+          "typing": false,
+          "user_id": "00000000000000000000000000000002"
+        },
+        "worker_id": "w1"
+      }
+    ],
+    "owner_after_claim": null
+  },
+  "identity": {
+    "anonymous": {
+      "config": {
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      },
+      "type": "presence_sync",
+      "users": [
+        {
+          "color": "#3498db",
+          "cols": 0,
+          "initials": "CC",
+          "is_owner": false,
+          "name": "Coral Cobra",
+          "pin": null,
+          "queued_keys": "",
+          "role": "viewer",
+          "rows": 0,
+          "scroll_line": 0,
+          "scroll_range": [
+            0,
+            0
+          ],
+          "selection": null,
+          "total_lines": 0,
+          "typing": false,
+          "user_id": "00000000000000000000000000000001"
+        }
+      ]
+    },
+    "blank_display_name": {
+      "config": {
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      },
+      "type": "presence_sync",
+      "users": [
+        {
+          "color": "#3498db",
+          "cols": 0,
+          "initials": "SR",
+          "is_owner": false,
+          "name": "sre:carol",
+          "pin": null,
+          "queued_keys": "",
+          "role": "viewer",
+          "rows": 0,
+          "scroll_line": 0,
+          "scroll_range": [
+            0,
+            0
+          ],
+          "selection": null,
+          "total_lines": 0,
+          "typing": false,
+          "user_id": "sre:carol"
+        }
+      ]
+    },
+    "named": {
+      "config": {
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      },
+      "type": "presence_sync",
+      "users": [
+        {
+          "color": "#607d8b",
+          "cols": 0,
+          "initials": "AL",
+          "is_owner": false,
+          "name": "Alice",
+          "pin": null,
+          "queued_keys": "",
+          "role": "viewer",
+          "rows": 0,
+          "scroll_line": 0,
+          "scroll_range": [
+            0,
+            0
+          ],
+          "selection": null,
+          "total_lines": 0,
+          "typing": false,
+          "user_id": "sre:alice"
+        }
+      ]
+    },
+    "unnamed_principal": {
+      "config": {
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      },
+      "type": "presence_sync",
+      "users": [
+        {
+          "color": "#00bcd4",
+          "cols": 0,
+          "initials": "SR",
+          "is_owner": false,
+          "name": "sre:bob",
+          "pin": null,
+          "queued_keys": "",
+          "role": "viewer",
+          "rows": 0,
+          "scroll_line": 0,
+          "scroll_range": [
+            0,
+            0
+          ],
+          "selection": null,
+          "total_lines": 0,
+          "typing": false,
+          "user_id": "sre:bob"
+        }
+      ]
+    }
+  },
+  "joining": {
+    "broadcast_after_first": [],
+    "broadcast_after_leave": [
+      {
+        "msg": {
+          "type": "presence_leave",
+          "user_id": "00000000000000000000000000000002"
+        },
+        "worker_id": "w1"
+      }
+    ],
+    "broadcast_after_leaving_twice": [],
+    "broadcast_after_second": [
+      {
+        "msg": {
+          "config": {
+            "auto_transfer_idle_s": 30,
+            "keystroke_queue": "display"
+          },
+          "type": "presence_sync",
+          "users": [
+            {
+              "color": "#3498db",
+              "cols": 0,
+              "initials": "CC",
+              "is_owner": false,
+              "name": "Coral Cobra",
+              "pin": null,
+              "queued_keys": "",
+              "role": "operator",
+              "rows": 0,
+              "scroll_line": 0,
+              "scroll_range": [
+                0,
+                0
+              ],
+              "selection": null,
+              "total_lines": 0,
+              "typing": false,
+              "user_id": "00000000000000000000000000000001"
+            },
+            {
+              "color": "#607d8b",
+              "cols": 0,
+              "initials": "OT",
+              "is_owner": false,
+              "name": "Onyx Tiger",
+              "pin": null,
+              "queued_keys": "",
+              "role": "viewer",
+              "rows": 0,
+              "scroll_line": 0,
+              "scroll_range": [
+                0,
+                0
+              ],
+              "selection": null,
+              "total_lines": 0,
+              "typing": false,
+              "user_id": "00000000000000000000000000000002"
+            }
+          ]
+        },
+        "worker_id": "w1"
+      }
+    ],
+    "first_sync": {
+      "config": {
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      },
+      "type": "presence_sync",
+      "users": [
+        {
+          "color": "#3498db",
+          "cols": 0,
+          "initials": "CC",
+          "is_owner": false,
+          "name": "Coral Cobra",
+          "pin": null,
+          "queued_keys": "",
+          "role": "operator",
+          "rows": 0,
+          "scroll_line": 0,
+          "scroll_range": [
+            0,
+            0
+          ],
+          "selection": null,
+          "total_lines": 0,
+          "typing": false,
+          "user_id": "00000000000000000000000000000001"
+        }
+      ]
+    },
+    "second_sync": {
+      "config": {
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      },
+      "type": "presence_sync",
+      "users": [
+        {
+          "color": "#3498db",
+          "cols": 0,
+          "initials": "CC",
+          "is_owner": false,
+          "name": "Coral Cobra",
+          "pin": null,
+          "queued_keys": "",
+          "role": "operator",
+          "rows": 0,
+          "scroll_line": 0,
+          "scroll_range": [
+            0,
+            0
+          ],
+          "selection": null,
+          "total_lines": 0,
+          "typing": false,
+          "user_id": "00000000000000000000000000000001"
+        },
+        {
+          "color": "#607d8b",
+          "cols": 0,
+          "initials": "OT",
+          "is_owner": false,
+          "name": "Onyx Tiger",
+          "pin": null,
+          "queued_keys": "",
+          "role": "viewer",
+          "rows": 0,
+          "scroll_line": 0,
+          "scroll_range": [
+            0,
+            0
+          ],
+          "selection": null,
+          "total_lines": 0,
+          "typing": false,
+          "user_id": "00000000000000000000000000000002"
+        }
+      ]
+    }
+  },
+  "prune": {
+    "ghost_id": "00000000000000000000000000000001",
+    "ghost_survived": false,
+    "users_after_join": [
+      "00000000000000000000000000000002"
+    ]
+  },
+  "queue": {
+    "broadcast_from_a_stranger": [],
+    "broadcast_on_arrow": [
+      {
+        "msg": {
+          "color": "#3498db",
+          "cols": 0,
+          "initials": "CC",
+          "is_owner": false,
+          "name": "Coral Cobra",
+          "pin": null,
+          "queued_keys": "ls↑",
+          "role": "viewer",
+          "rows": 0,
+          "scroll_line": 0,
+          "scroll_range": [
+            0,
+            0
+          ],
+          "selection": null,
+          "total_lines": 0,
+          "type": "presence_update",
+          "typing": false,
+          "user_id": "00000000000000000000000000000001"
+        },
+        "worker_id": "w1"
+      }
+    ],
+    "broadcast_on_no_keys": [
+      {
+        "msg": {
+          "color": "#3498db",
+          "cols": 0,
+          "initials": "CC",
+          "is_owner": false,
+          "name": "Coral Cobra",
+          "pin": null,
+          "queued_keys": "ls↑",
+          "role": "viewer",
+          "rows": 0,
+          "scroll_line": 0,
+          "scroll_range": [
+            0,
+            0
+          ],
+          "selection": null,
+          "total_lines": 0,
+          "type": "presence_update",
+          "typing": false,
+          "user_id": "00000000000000000000000000000001"
+        },
+        "worker_id": "w1"
+      }
+    ],
+    "broadcast_on_queue": [
+      {
+        "msg": {
+          "color": "#3498db",
+          "cols": 0,
+          "initials": "CC",
+          "is_owner": false,
+          "name": "Coral Cobra",
+          "pin": null,
+          "queued_keys": "ls",
+          "role": "viewer",
+          "rows": 0,
+          "scroll_line": 0,
+          "scroll_range": [
+            0,
+            0
+          ],
+          "selection": null,
+          "total_lines": 0,
+          "type": "presence_update",
+          "typing": false,
+          "user_id": "00000000000000000000000000000001"
+        },
+        "worker_id": "w1"
+      }
+    ]
+  },
+  "stable_identity": {
+    "again": {
+      "config": {
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      },
+      "type": "presence_sync",
+      "users": [
+        {
+          "color": "#3498db",
+          "cols": 0,
+          "initials": "CC",
+          "is_owner": false,
+          "name": "Coral Cobra",
+          "pin": null,
+          "queued_keys": "",
+          "role": "viewer",
+          "rows": 0,
+          "scroll_line": 0,
+          "scroll_range": [
+            0,
+            0
+          ],
+          "selection": null,
+          "total_lines": 0,
+          "typing": false,
+          "user_id": "00000000000000000000000000000001"
+        }
+      ]
+    },
+    "first": {
+      "config": {
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      },
+      "type": "presence_sync",
+      "users": [
+        {
+          "color": "#3498db",
+          "cols": 0,
+          "initials": "CC",
+          "is_owner": false,
+          "name": "Coral Cobra",
+          "pin": null,
+          "queued_keys": "",
+          "role": "viewer",
+          "rows": 0,
+          "scroll_line": 0,
+          "scroll_range": [
+            0,
+            0
+          ],
+          "selection": null,
+          "total_lines": 0,
+          "typing": false,
+          "user_id": "00000000000000000000000000000001"
+        }
+      ]
+    }
+  },
+  "updates": {
+    "broadcast_from_a_stranger": [],
+    "broadcast_on_oversized_pin": [],
+    "broadcast_on_unknown_field": [
+      {
+        "msg": {
+          "color": "#3498db",
+          "cols": 0,
+          "initials": "CC",
+          "is_owner": false,
+          "name": "Coral Cobra",
+          "pin": null,
+          "queued_keys": "",
+          "role": "operator",
+          "rows": 0,
+          "scroll_line": 5,
+          "scroll_range": [
+            0,
+            0
+          ],
+          "selection": null,
+          "total_lines": 0,
+          "type": "presence_update",
+          "typing": true,
+          "user_id": "00000000000000000000000000000001"
+        },
+        "worker_id": "w1"
+      }
+    ],
+    "broadcast_on_unknown_type": [],
+    "broadcast_on_update": [
+      {
+        "msg": {
+          "color": "#3498db",
+          "cols": 0,
+          "initials": "CC",
+          "is_owner": false,
+          "name": "Coral Cobra",
+          "pin": null,
+          "queued_keys": "",
+          "role": "operator",
+          "rows": 0,
+          "scroll_line": 5,
+          "scroll_range": [
+            0,
+            0
+          ],
+          "selection": null,
+          "total_lines": 0,
+          "type": "presence_update",
+          "typing": true,
+          "user_id": "00000000000000000000000000000001"
+        },
+        "worker_id": "w1"
+      }
+    ],
+    "state_after_oversized_pin": {
+      "color": "#3498db",
+      "cols": 0,
+      "initials": "CC",
+      "is_owner": false,
+      "name": "Coral Cobra",
+      "pin": null,
+      "queued_keys": "",
+      "role": "operator",
+      "rows": 0,
+      "scroll_line": 5,
+      "scroll_range": [
+        0,
+        0
+      ],
+      "selection": null,
+      "total_lines": 0,
+      "typing": true,
+      "user_id": "00000000000000000000000000000001"
+    }
+  }
+}
