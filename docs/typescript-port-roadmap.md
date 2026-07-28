@@ -25,6 +25,42 @@ Definition of done for a module:
 4. `tsc` 7 strict clean, biome clean, corpus drift check clean.
 5. Any dialect divergence recorded as an executable assertion, not a comment.
 
+## Runtime dependencies
+
+Approved 2026-07-28. Each unblocks a subsystem that cannot be written against
+the standard library alone.
+
+| Package | Subsystem | Note |
+|---|---|---|
+| `ws` | WebSocket server | Node has a WebSocket *client* but no server |
+| `ssh2` | SSH transport and gateway | |
+| `node-pty` | PTY connector | Native. See the note below |
+| `@modelcontextprotocol/sdk` | MCP tools | The protocol's own SDK |
+| `smol-toml` | TOML server config | Spec-complete and dependency-free |
+
+These are Node-facing. Nothing a Cloudflare Worker imports may reach them —
+the same bar `api-routes` already meets for the browser SPA.
+
+**No HTTP router.** An earlier revision of this file recommended `hono`. That
+recommendation is withdrawn: this port now has `api-routes`, which matches a
+method and path to an operation, extracts the parameters and reports the
+allowed methods for a 405. That is what the router would have been used for,
+and it is the table both Python backends already dispatch from. Adding a
+second router would mean two sources of truth for the same routes, which is
+exactly what the shared contract exists to prevent. Node's `http` and a
+Worker's `fetch` each hand over a method and a URL; the registry does the
+rest.
+
+**VNC** stays hand-rolled — there is no server-side RFB package worth taking,
+and the Go and C# ports hand-roll it too.
+
+**`node-pty` needs one more step.** Its prebuilt `spawn-helper` ships
+non-executable and its post-install script, which is what marks it, is held
+by this repository's `npm approve-scripts` policy. Until that is resolved
+`spawn` fails with `posix_spawnp failed`. Approving a third-party install
+script is a decision for the repository owner, so it is recorded here rather
+than taken.
+
 ## Status
 
 Ordered bottom-up by dependency. The Python column names the reference
