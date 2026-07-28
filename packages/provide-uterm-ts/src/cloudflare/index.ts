@@ -13,3 +13,4 @@
 
 export * from "./config.ts";
 export * from "./registry.ts";
+export * from "./store.ts";
