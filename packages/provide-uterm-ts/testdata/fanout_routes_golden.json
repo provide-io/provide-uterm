@@ -1,0 +1,297 @@
+{
+  "audit": [
+    {
+      "detail": {
+        "group_id": "<uuid>",
+        "name": ""
+      },
+      "event": "fanout.create_group",
+      "principal": "operator@example.org"
+    },
+    {
+      "detail": {
+        "group_id": "<uuid>",
+        "name": "prod fleet"
+      },
+      "event": "fanout.create_group",
+      "principal": "operator@example.org"
+    },
+    {
+      "detail": {
+        "group_id": "<uuid>",
+        "name": ""
+      },
+      "event": "fanout.create_group",
+      "principal": "operator@example.org"
+    },
+    {
+      "detail": {
+        "command": "uptime\\r",
+        "group_id": "<uuid>",
+        "send_id": "send-1"
+      },
+      "event": "fanout.send",
+      "principal": "operator@example.org"
+    },
+    {
+      "detail": {
+        "command": "",
+        "group_id": "<uuid>",
+        "send_id": "send-1"
+      },
+      "event": "fanout.send",
+      "principal": "operator@example.org"
+    },
+    {
+      "detail": {
+        "grantee": "intruder@example.org",
+        "group_id": "<uuid>"
+      },
+      "event": "fanout.grant_access",
+      "principal": "operator@example.org"
+    },
+    {
+      "detail": {
+        "grantee": "",
+        "group_id": "<uuid>"
+      },
+      "event": "fanout.grant_access",
+      "principal": "operator@example.org"
+    },
+    {
+      "detail": {
+        "group_id": "<uuid>"
+      },
+      "event": "fanout.delete_group",
+      "principal": "operator@example.org"
+    },
+    {
+      "detail": {
+        "command": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "group_id": "<uuid>",
+        "send_id": "send-1"
+      },
+      "event": "fanout.send",
+      "principal": "operator@example.org"
+    }
+  ],
+  "audit_command_length": 120,
+  "create_defaults": {
+    "group": {
+      "created_by": "operator@example.org",
+      "divergence_threshold": 0.8,
+      "error_pattern": null,
+      "grants": [],
+      "max_response_ms": 10000,
+      "mode": "parallel",
+      "name": "",
+      "quiesce_ms": 500,
+      "stop_on_first_error": false,
+      "worker_ids": []
+    },
+    "group_id_is_hex": true,
+    "group_id_length": 32,
+    "response": {
+      "body": {
+        "group_id": "<uuid>",
+        "name": "",
+        "session_count": 0
+      },
+      "status": 200
+    }
+  },
+  "create_forbidden": {
+    "body": {
+      "error": "forbidden: no read access to session secret"
+    },
+    "status": 403
+  },
+  "create_full": {
+    "group": {
+      "created_by": "operator@example.org",
+      "divergence_threshold": 0.5,
+      "error_pattern": "ERROR",
+      "grants": [],
+      "max_response_ms": 2000,
+      "mode": "sequential",
+      "name": "prod fleet",
+      "quiesce_ms": 100,
+      "stop_on_first_error": true,
+      "worker_ids": [
+        "w1",
+        "w2"
+      ]
+    },
+    "response": {
+      "body": {
+        "group_id": "<uuid>",
+        "name": "prod fleet",
+        "session_count": 2
+      },
+      "status": 200
+    }
+  },
+  "create_rejected": {
+    "body": {
+      "error": "group too large: 99 > 50"
+    },
+    "status": 400
+  },
+  "create_unknown_session": {
+    "body": {
+      "group_id": "<uuid>",
+      "name": "",
+      "session_count": 1
+    },
+    "status": 200
+  },
+  "delete": {
+    "body": null,
+    "status": 204
+  },
+  "delete_removed_it": true,
+  "disabled": {
+    "DELETE /api/fanout/groups/{group_id}": {
+      "body": {
+        "detail": "fan-out feature is not enabled"
+      },
+      "status": 501
+    },
+    "GET /api/fanout/groups": {
+      "body": {
+        "detail": "fan-out feature is not enabled"
+      },
+      "status": 501
+    },
+    "POST /api/fanout/groups": {
+      "body": {
+        "detail": "fan-out feature is not enabled"
+      },
+      "status": 501
+    },
+    "POST /api/fanout/groups/{group_id}/grants": {
+      "body": {
+        "detail": "fan-out feature is not enabled"
+      },
+      "status": 501
+    },
+    "POST /api/fanout/groups/{group_id}/send": {
+      "body": {
+        "detail": "fan-out feature is not enabled"
+      },
+      "status": 501
+    }
+  },
+  "grant": {
+    "body": null,
+    "status": 204
+  },
+  "grant_default_call": [
+    "grant_access",
+    "<uuid>",
+    "",
+    "operator@example.org"
+  ],
+  "list": {
+    "body": [
+      {
+        "group_id": "<uuid>",
+        "mode": "sequential",
+        "name": "prod fleet",
+        "session_count": 2
+      },
+      {
+        "group_id": "<uuid>",
+        "mode": "parallel",
+        "name": "",
+        "session_count": 1
+      }
+    ],
+    "status": 200
+  },
+  "malformed_body": {
+    "create": "AttributeError",
+    "grant": "AttributeError",
+    "send": "AttributeError"
+  },
+  "missing": {
+    "delete": {
+      "body": {
+        "error": "group not found"
+      },
+      "status": 404
+    },
+    "grant": {
+      "body": {
+        "error": "group not found"
+      },
+      "status": 404
+    },
+    "send": {
+      "body": {
+        "error": "group not found"
+      },
+      "status": 404
+    }
+  },
+  "not_creator": {
+    "delete": {
+      "body": {
+        "error": "only the group creator can delete it"
+      },
+      "status": 403
+    },
+    "grant": {
+      "body": {
+        "error": "only the group creator can grant access"
+      },
+      "status": 403
+    }
+  },
+  "routes": [
+    "DELETE /api/fanout/groups/{group_id}",
+    "GET /api/fanout/groups",
+    "POST /api/fanout/groups",
+    "POST /api/fanout/groups/{group_id}/grants",
+    "POST /api/fanout/groups/{group_id}/send"
+  ],
+  "send": {
+    "body": {
+      "command": "uptime\\r",
+      "divergent_sessions": [
+        "w2"
+      ],
+      "failed_sessions": [
+        "w2"
+      ],
+      "group_id": "<uuid>",
+      "results": [
+        {
+          "divergent": false,
+          "elapsed_ms": 12,
+          "ok": true,
+          "output_delta": "ok",
+          "worker_id": "w1"
+        },
+        {
+          "divergent": true,
+          "elapsed_ms": 34,
+          "ok": false,
+          "output_delta": null,
+          "worker_id": "w2"
+        }
+      ],
+      "send_id": "send-1",
+      "sent_at": 1000.0
+    },
+    "status": 200
+  },
+  "send_defaults_call": [
+    "send",
+    "<uuid>",
+    "",
+    "operator@example.org",
+    null,
+    null
+  ]
+}
