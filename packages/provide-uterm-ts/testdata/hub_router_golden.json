@@ -1,0 +1,193 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_hub_router_golden.py",
+ "browser_frames": [
+  {
+   "name": "term data",
+   "message": {
+    "type": "term",
+    "data": "hello\r\n"
+   },
+   "encoded": "hello\r\n"
+  },
+  {
+   "name": "term with no data",
+   "message": {
+    "type": "term"
+   },
+   "encoded": ""
+  },
+  {
+   "name": "term with empty data",
+   "message": {
+    "type": "term",
+    "data": ""
+   },
+   "encoded": ""
+  },
+  {
+   "name": "term carrying escapes",
+   "message": {
+    "type": "term",
+    "data": "\u001b[31mred\u001b[0m"
+   },
+   "encoded": "\u001b[31mred\u001b[0m"
+  },
+  {
+   "name": "snapshot",
+   "message": {
+    "type": "snapshot",
+    "screen": "hello",
+    "ts": 1.5
+   },
+   "encoded": "\u0010\u00020000002d:{\"type\":\"snapshot\",\"screen\":\"hello\",\"ts\":1.5}"
+  },
+  {
+   "name": "analysis",
+   "message": {
+    "type": "analysis",
+    "summary": "idle"
+   },
+   "encoded": "\u0010\u000200000024:{\"type\":\"analysis\",\"summary\":\"idle\"}"
+  },
+  {
+   "name": "hijack state",
+   "message": {
+    "type": "hijack_state",
+    "hijacked": true,
+    "owner": "me"
+   },
+   "encoded": "\u0010\u000200000034:{\"type\":\"hijack_state\",\"hijacked\":true,\"owner\":\"me\"}"
+  },
+  {
+   "name": "no type",
+   "message": {
+    "data": "hello"
+   },
+   "encoded": "\u0010\u000200000010:{\"data\":\"hello\"}"
+  },
+  {
+   "name": "null type",
+   "message": {
+    "type": null,
+    "data": "hello"
+   },
+   "encoded": "\u0010\u00020000001c:{\"type\":null,\"data\":\"hello\"}"
+  },
+  {
+   "name": "empty type",
+   "message": {
+    "type": "",
+    "data": "hello"
+   },
+   "encoded": "\u0010\u00020000001a:{\"type\":\"\",\"data\":\"hello\"}"
+  },
+  {
+   "name": "non-string type",
+   "message": {
+    "type": 3,
+    "data": "hello"
+   },
+   "encoded": "\u0010\u000200000019:{\"type\":3,\"data\":\"hello\"}"
+  }
+ ],
+ "owners": [
+  {
+   "name": "nobody holds it",
+   "is_dashboard": false,
+   "is_rest": false,
+   "holds_lease": false,
+   "owner": null,
+   "frame": {
+    "type": "hijack_state",
+    "hijacked": false,
+    "owner": null,
+    "lease_expires_at": null,
+    "input_mode": "hijack"
+   }
+  },
+  {
+   "name": "dashboard, held by me",
+   "is_dashboard": true,
+   "is_rest": false,
+   "holds_lease": true,
+   "owner": "me",
+   "frame": {
+    "type": "hijack_state",
+    "hijacked": true,
+    "owner": "me",
+    "lease_expires_at": null,
+    "input_mode": "hijack"
+   }
+  },
+  {
+   "name": "dashboard, held by someone else",
+   "is_dashboard": true,
+   "is_rest": false,
+   "holds_lease": false,
+   "owner": "other",
+   "frame": {
+    "type": "hijack_state",
+    "hijacked": true,
+    "owner": "other",
+    "lease_expires_at": null,
+    "input_mode": "hijack"
+   }
+  },
+  {
+   "name": "rest lease",
+   "is_dashboard": false,
+   "is_rest": true,
+   "holds_lease": false,
+   "owner": "other",
+   "frame": {
+    "type": "hijack_state",
+    "hijacked": true,
+    "owner": "other",
+    "lease_expires_at": null,
+    "input_mode": "hijack"
+   }
+  },
+  {
+   "name": "rest lease, and I hold a stale slot",
+   "is_dashboard": false,
+   "is_rest": true,
+   "holds_lease": true,
+   "owner": "other",
+   "frame": {
+    "type": "hijack_state",
+    "hijacked": true,
+    "owner": "other",
+    "lease_expires_at": null,
+    "input_mode": "hijack"
+   }
+  },
+  {
+   "name": "both, held by me",
+   "is_dashboard": true,
+   "is_rest": true,
+   "holds_lease": true,
+   "owner": "me",
+   "frame": {
+    "type": "hijack_state",
+    "hijacked": true,
+    "owner": "me",
+    "lease_expires_at": null,
+    "input_mode": "hijack"
+   }
+  },
+  {
+   "name": "both, held by someone else",
+   "is_dashboard": true,
+   "is_rest": true,
+   "holds_lease": false,
+   "owner": "other",
+   "frame": {
+    "type": "hijack_state",
+    "hijacked": true,
+    "owner": "other",
+    "lease_expires_at": null,
+    "input_mode": "hijack"
+   }
+  }
+ ]
+}
