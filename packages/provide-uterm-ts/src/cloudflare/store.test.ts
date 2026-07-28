@@ -27,6 +27,31 @@ interface StoreGolden {
     corrupt: null;
     not_an_object: null;
   };
+  events: {
+    empty_seq: number;
+    empty_min: number;
+    empty_count: number;
+    empty_list: unknown[];
+    first: { seq: number; type: string; data: unknown };
+    second: { seq: number; type: string; data: unknown };
+    third: { seq: number; type: string; data: unknown };
+    other_session_first: { seq: number; type: string; data: unknown };
+    listed: Array<{ seq: number; type: string; data: unknown }>;
+    since_first: number[];
+    since_last: number[];
+    limited: number[];
+    beyond: unknown[];
+    count: number;
+    min: number;
+    seq: number;
+    session_row_seq: number;
+    trimmed_kept: number[];
+    trimmed_min: number;
+    trimmed_seq: number;
+    trimmed_count: number;
+    other_survives: number;
+    rows_after_trim: number;
+  };
   session_state: {
     missing: null;
     after_lease: SessionStateRecord;
@@ -47,14 +72,17 @@ const golden = loadGolden<StoreGolden>("cfstore_golden.json");
 const NOW = 1_760_000_000.0;
 
 /** A migrated store over an in-memory database, and the database itself. */
-function store(now: () => number = () => NOW): { subject: SqliteStateStore; db: DatabaseSync } {
+function store(options: { now?: () => number; maxEventsPerWorker?: number } = {}): {
+  subject: SqliteStateStore;
+  db: DatabaseSync;
+} {
   const db = new DatabaseSync(":memory:");
   const exec: SqlExecutor = (sql, ...params) => {
     const statement = db.prepare(sql);
     // A statement that returns no rows cannot be read with `all()`.
     return statement.all(...(params as never[])) as Array<Record<string, unknown>>;
   };
-  const subject = new SqliteStateStore(exec, { now });
+  const subject = new SqliteStateStore(exec, { now: () => NOW, ...options });
   subject.migrate();
   return { subject, db };
 }
@@ -160,14 +188,14 @@ describe("what a session says about itself", () => {
 
   it("stamps a created time when there is none", () => {
     // So a session always has an age, even one whose caller did not say.
-    const { subject } = store(() => NOW);
+    const { subject } = store();
     subject.saveSessionMeta("w1", {});
     expect(subject.loadSessionMeta("w1")?.created_at).toBe(NOW);
   });
 
   it("stamps one when the caller said zero", () => {
     // Zero is not a time a session was created at.
-    const { subject } = store(() => NOW);
+    const { subject } = store();
     subject.saveSessionMeta("w1", { created_at: 0 });
     expect(subject.loadSessionMeta("w1")?.created_at).toBe(NOW);
   });
@@ -419,6 +447,12 @@ describe("how many events a session may keep", () => {
     expect(subject.loadSession("w1")).toBeUndefined();
     expect(subject.loadSessionMeta("w1")).toBeUndefined();
     expect(subject.loadTunnelInviteState("w1")).toBeUndefined();
+    // The event reads answer from a row that COALESCE always produces, so an
+    // executor returning nothing is the only way there is no row at all.
+    expect(subject.currentEventSeq("w1")).toBe(0);
+    expect(subject.minEventSeq("w1")).toBe(0);
+    expect(subject.countEvents("w1")).toBe(0);
+    expect(subject.listEventsSince("w1", 0)).toStrictEqual([]);
   });
 
   it("keeps at least one", () => {
@@ -429,5 +463,195 @@ describe("how many events a session may keep", () => {
       db.prepare(sql).all(...(params as never[])) as Array<Record<string, unknown>>;
     expect(new SqliteStateStore(exec, { maxEventsPerWorker: 0 }).maxEvents).toBe(1);
     expect(new SqliteStateStore(exec, { maxEventsPerWorker: -5 }).maxEvents).toBe(1);
+  });
+});
+
+describe("the event log", () => {
+  /** An event without its timestamp, which is a wall clock. */
+  function withoutTs(event: { seq: number; ts: number; type: string; data: unknown }) {
+    const { ts, ...rest } = event;
+    return rest;
+  }
+
+  it("says nothing about a session with no events", () => {
+    const { subject } = store();
+    expect(subject.currentEventSeq("w1")).toBe(golden.events.empty_seq);
+    expect(subject.minEventSeq("w1")).toBe(golden.events.empty_min);
+    expect(subject.countEvents("w1")).toBe(golden.events.empty_count);
+    expect(subject.listEventsSince("w1", 0)).toStrictEqual(golden.events.empty_list);
+  });
+
+  it("numbers events from one, upwards", () => {
+    // A browser asks "what have I missed since N". A number that went
+    // backwards would replay events it had seen or skip ones it had not.
+    const { subject } = store();
+    expect(withoutTs(subject.appendEvent("w1", "output", { text: "hello" }))).toStrictEqual(golden.events.first);
+    expect(withoutTs(subject.appendEvent("w1", "output", { text: "world" }))).toStrictEqual(golden.events.second);
+    expect(withoutTs(subject.appendEvent("w1", "resize", { cols: 80, rows: 24 }))).toStrictEqual(golden.events.third);
+  });
+
+  it("numbers each session separately", () => {
+    // Two sessions share one object's storage; a shared counter would make
+    // one session's catch-up point meaningless to the other.
+    const { subject } = store();
+    subject.appendEvent("w1", "output", { text: "hello" });
+    subject.appendEvent("w1", "output", { text: "world" });
+    expect(withoutTs(subject.appendEvent("w2", "output", { text: "other" }))).toStrictEqual(
+      golden.events.other_session_first,
+    );
+  });
+
+  it("lists one session's events and no other's", () => {
+    // Two sessions share one object's storage. A listing that crossed them
+    // would replay another session's output into this one's terminal.
+    const { subject } = store();
+    subject.appendEvent("w1", "output", { text: "mine" });
+    subject.appendEvent("w2", "output", { text: "theirs" });
+    subject.appendEvent("w2", "output", { text: "theirs again" });
+    expect(subject.listEventsSince("w1", 0).map((event) => event.data)).toStrictEqual([{ text: "mine" }]);
+  });
+
+  it("reads a fractional point as a whole one", () => {
+    // The sequence is a count of events; asking from half of one is asking
+    // from the one before it.
+    const { subject } = store();
+    for (const text of ["a", "b", "c"]) {
+      subject.appendEvent("w1", "output", { text });
+    }
+    expect(subject.listEventsSince("w1", 1.9).map((event) => event.seq)).toStrictEqual([2, 3]);
+    expect(subject.listEventsSince("w1", 0, 2.9).map((event) => event.seq)).toStrictEqual([1, 2]);
+  });
+
+  it("stamps each event with a time", () => {
+    const { subject } = store();
+    expect(subject.appendEvent("w1", "output", {}).ts).toBe(NOW);
+  });
+
+  it("hands the stamped time back when listing", () => {
+    // The time is how a replay paces itself; a listing that lost it would
+    // play a session back with no timing at all.
+    const { subject } = store();
+    subject.appendEvent("w1", "output", {});
+    expect(subject.listEventsSince("w1", 0)[0]?.ts).toBe(NOW);
+  });
+
+  it("records the sequence on the session row too", () => {
+    // Which is what a reconnecting browser reads before asking for anything,
+    // so the two must not disagree.
+    const { subject } = store();
+    for (const text of ["a", "b", "c"]) {
+      subject.appendEvent("w1", "output", { text });
+    }
+    expect(subject.loadSession("w1")?.event_seq).toBe(golden.events.session_row_seq);
+  });
+
+  it("hands back everything since a point, oldest first", () => {
+    // Oldest first, because they are replayed in order into a terminal.
+    const { subject } = store();
+    subject.appendEvent("w1", "output", { text: "hello" });
+    subject.appendEvent("w1", "output", { text: "world" });
+    subject.appendEvent("w1", "resize", { cols: 80, rows: 24 });
+    expect(subject.listEventsSince("w1", 0).map(withoutTs)).toStrictEqual(golden.events.listed);
+    expect(subject.listEventsSince("w1", 1).map((event) => event.seq)).toStrictEqual(golden.events.since_first);
+  });
+
+  it("hands back nothing when there is nothing newer", () => {
+    const { subject } = store();
+    subject.appendEvent("w1", "output", {});
+    expect(subject.listEventsSince("w1", 1)).toStrictEqual([]);
+    expect(golden.events.since_last).toStrictEqual([]);
+    expect(golden.events.beyond).toStrictEqual([]);
+  });
+
+  it("honours the limit it was given", () => {
+    // A browser catching up on a long session takes it a page at a time.
+    const { subject } = store();
+    for (const text of ["a", "b", "c"]) {
+      subject.appendEvent("w1", "output", { text });
+    }
+    expect(subject.listEventsSince("w1", 0, 2).map((event) => event.seq)).toStrictEqual(golden.events.limited);
+  });
+
+  it("defaults the limit rather than returning everything", () => {
+    const { subject } = store({ maxEventsPerWorker: 500 });
+    for (let index = 0; index < 150; index += 1) {
+      subject.appendEvent("w1", "output", { index });
+    }
+    expect(subject.listEventsSince("w1", 0)).toHaveLength(100);
+  });
+
+  it("keeps only the newest when it runs out of room", () => {
+    // A session running for hours would otherwise grow without bound in a
+    // Durable Object's storage, and it is the recent events a reconnecting
+    // browser needs.
+    const { subject } = store({ maxEventsPerWorker: 3 });
+    for (let index = 0; index < 6; index += 1) {
+      subject.appendEvent("t1", "output", { n: index });
+    }
+    expect(subject.listEventsSince("t1", 0).map((event) => event.seq)).toStrictEqual(golden.events.trimmed_kept);
+    expect(subject.countEvents("t1")).toBe(golden.events.trimmed_count);
+  });
+
+  it("keeps counting up after trimming", () => {
+    // The sequence is a position in the session's history, not an index into
+    // what is still stored.
+    const { subject } = store({ maxEventsPerWorker: 3 });
+    for (let index = 0; index < 6; index += 1) {
+      subject.appendEvent("t1", "output", { n: index });
+    }
+    expect(subject.currentEventSeq("t1")).toBe(golden.events.trimmed_seq);
+    expect(subject.minEventSeq("t1")).toBe(golden.events.trimmed_min);
+  });
+
+  it("says how far back it can still reach", () => {
+    // A browser asking for anything below this has fallen too far behind to
+    // catch up from the log and needs a snapshot instead.
+    const { subject } = store({ maxEventsPerWorker: 3 });
+    for (let index = 0; index < 6; index += 1) {
+      subject.appendEvent("t1", "output", { n: index });
+    }
+    expect(subject.minEventSeq("t1")).toBe(4);
+    expect(subject.listEventsSince("t1", 0)).toHaveLength(3);
+  });
+
+  it("trims one session without touching another", () => {
+    // A busy session must not trim a quiet one's history away.
+    const { subject } = store({ maxEventsPerWorker: 3 });
+    subject.appendEvent("t2", "output", { n: 0 });
+    for (let index = 0; index < 6; index += 1) {
+      subject.appendEvent("t1", "output", { n: index });
+    }
+    expect(subject.countEvents("t2")).toBe(golden.events.other_survives);
+  });
+
+  it("keeps exactly the room it was given", () => {
+    // The boundary: with room for three and three events, nothing is cut.
+    const { subject } = store({ maxEventsPerWorker: 3 });
+    for (let index = 0; index < 3; index += 1) {
+      subject.appendEvent("t1", "output", { n: index });
+    }
+    expect(subject.countEvents("t1")).toBe(3);
+    subject.appendEvent("t1", "output", { n: 3 });
+    expect(subject.countEvents("t1")).toBe(3);
+    expect(subject.minEventSeq("t1")).toBe(2);
+  });
+
+  it("keeps one when told to keep none", () => {
+    const { subject } = store({ maxEventsPerWorker: 0 });
+    subject.appendEvent("t1", "output", { n: 0 });
+    subject.appendEvent("t1", "output", { n: 1 });
+    expect(subject.countEvents("t1")).toBe(1);
+  });
+
+  it("reads an event whose payload is empty", () => {
+    const { subject, db } = store();
+    db.prepare("INSERT INTO session_events(worker_id,seq,ts,event_type,payload_json) VALUES(?,?,?,?,?)").run(
+      "w1",
+      1,
+      0,
+      "",
+      "",
+    );
+    expect(subject.listEventsSince("w1", 0)).toStrictEqual([{ seq: 1, ts: 0, type: "", data: {} }]);
   });
 });

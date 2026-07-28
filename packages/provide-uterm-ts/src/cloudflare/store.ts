@@ -51,6 +51,14 @@ export interface SessionStateRecord {
   deleted_at: unknown;
 }
 
+/** One thing that happened to a session. */
+export interface SessionEvent {
+  seq: number;
+  ts: number;
+  type: string;
+  data: unknown;
+}
+
 /** Options for {@link SqliteStateStore}. */
 export interface SqliteStateStoreOptions {
   maxEventsPerWorker?: number;
@@ -324,6 +332,105 @@ export class SqliteStateStore {
       mode,
       now,
     );
+  }
+
+  /**
+   * Record one thing that happened, and trim the oldest away.
+   *
+   * Sequence numbers are per session and never reused: a browser asks "what
+   * have I missed since N", so a number that went backwards would replay
+   * events it had already seen or skip ones it had not.
+   *
+   * Trimming keeps the newest. A session running for hours would otherwise
+   * grow without bound in a Durable Object's storage, and it is the recent
+   * events a reconnecting browser needs. The cut is scoped to one session, so
+   * a busy one cannot trim a quiet one's history away.
+   */
+  appendEvent(workerId: string, eventType: string, payload: unknown): SessionEvent {
+    const seq = this.currentEventSeq(workerId) + 1;
+    const ts = this.#now();
+    this.#rows(
+      `
+            INSERT INTO session_events(worker_id, seq, ts, event_type, payload_json)
+            VALUES(?, ?, ?, ?, ?)
+            `,
+      workerId,
+      seq,
+      ts,
+      eventType,
+      JSON.stringify(payload),
+    );
+    this.#rows(
+      `
+            INSERT INTO session_state(worker_id, event_seq, updated_at)
+            VALUES(?, ?, ?)
+            ON CONFLICT(worker_id) DO UPDATE SET
+                event_seq = excluded.event_seq,
+                updated_at = excluded.updated_at
+            `,
+      workerId,
+      seq,
+      ts,
+    );
+    this.#rows(
+      `
+            DELETE FROM session_events
+            WHERE worker_id = ? AND seq <= ? - ?
+            `,
+      workerId,
+      seq,
+      this.#maxEvents,
+    );
+    return { seq, ts, type: eventType, data: payload };
+  }
+
+  /** The highest sequence number this session has reached. */
+  currentEventSeq(workerId: string): number {
+    // COALESCE guarantees a row with a number in it; only an executor that
+    // returns nothing at all can leave there being no row.
+    const row = this.#row("SELECT COALESCE(MAX(seq), 0) AS seq FROM session_events WHERE worker_id = ?", workerId);
+    return row === undefined ? 0 : Number(row.seq);
+  }
+
+  /**
+   * The oldest sequence number still held.
+   *
+   * A browser asking for anything below this has fallen too far behind to
+   * catch up from the log, and needs a snapshot instead.
+   */
+  minEventSeq(workerId: string): number {
+    const row = this.#row("SELECT COALESCE(MIN(seq), 0) AS seq FROM session_events WHERE worker_id = ?", workerId);
+    return row === undefined ? 0 : Number(row.seq);
+  }
+
+  /** How many events this session still holds. */
+  countEvents(workerId: string): number {
+    const row = this.#row("SELECT COUNT(*) AS cnt FROM session_events WHERE worker_id = ?", workerId);
+    return row === undefined ? 0 : Number(row.cnt);
+  }
+
+  /** Everything that happened after `seq`, oldest first. */
+  listEventsSince(workerId: string, seq: number, limit = 100): SessionEvent[] {
+    const rows = this.#rows(
+      `
+                SELECT seq, ts, event_type, payload_json
+                FROM session_events
+                WHERE worker_id = ? AND seq > ?
+                ORDER BY seq ASC
+                LIMIT ?
+                `,
+      workerId,
+      Math.trunc(seq),
+      Math.trunc(limit),
+    );
+    return rows.map((row) => ({
+      // Both NOT NULL in the schema.
+      seq: Number(row.seq),
+      ts: Number(row.ts),
+      // NOT NULL, so there is nothing to fall back to.
+      type: String(row.event_type),
+      data: JSON.parse(String(supplied(row.payload_json) ?? "{}")) as unknown,
+    }));
   }
 
   /** Record the last screen, so a reconnecting browser has something to draw. */

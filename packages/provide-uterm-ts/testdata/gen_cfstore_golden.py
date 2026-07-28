@@ -213,6 +213,79 @@ def _record_session_state() -> dict[str, Any]:
     }
 
 
+def _record_events() -> dict[str, Any]:
+    """The event log: numbering, trimming, and catching up.
+
+    Sequence numbers are per session and never reused, because a browser asks
+    "what have I missed since N" — a number that went backwards would replay
+    events it had already seen, or skip ones it had not.
+
+    Trimming keeps the newest. A session that ran for hours would otherwise
+    grow without bound in a Durable Object's storage, and it is the recent
+    events a reconnecting browser needs.
+    """
+    store, _ = _store()
+    empty_seq = store.current_event_seq("w1")
+    empty_min = store.min_event_seq("w1")
+    empty_count = store.count_events("w1")
+    empty_list = store.list_events_since("w1", 0)
+
+    first = store.append_event("w1", "output", {"text": "hello"})
+    second = store.append_event("w1", "output", {"text": "world"})
+    third = store.append_event("w1", "resize", {"cols": 80, "rows": 24})
+
+    # A second session numbers from one again: the sequence is per session.
+    other = store.append_event("w2", "output", {"text": "other"})
+
+    listed = store.list_events_since("w1", 0)
+    since_first = store.list_events_since("w1", 1)
+    since_last = store.list_events_since("w1", 3)
+    limited = store.list_events_since("w1", 0, limit=2)
+    beyond = store.list_events_since("w1", 99)
+
+    # Trimming, with room for three.
+    trimmed_store, trimmed_conn = _store()
+    trimmed_store._max_events = 3
+    for index in range(6):
+        trimmed_store.append_event("t1", "output", {"n": index})
+    trimmed_kept = trimmed_store.list_events_since("t1", 0)
+    trimmed_min = trimmed_store.min_event_seq("t1")
+    trimmed_seq = trimmed_store.current_event_seq("t1")
+
+    # One session's trimming must not touch another's.
+    trimmed_store.append_event("t2", "output", {"n": 0})
+    for index in range(6):
+        trimmed_store.append_event("t1", "output", {"n": index})
+    other_survives = trimmed_store.count_events("t2")
+
+    return {
+        "empty_seq": empty_seq,
+        "empty_min": empty_min,
+        "empty_count": empty_count,
+        "empty_list": empty_list,
+        # The timestamps are wall clocks; only their shape is recorded.
+        "first": {k: v for k, v in first.items() if k != "ts"},
+        "second": {k: v for k, v in second.items() if k != "ts"},
+        "third": {k: v for k, v in third.items() if k != "ts"},
+        "other_session_first": {k: v for k, v in other.items() if k != "ts"},
+        "listed": [{k: v for k, v in event.items() if k != "ts"} for event in listed],
+        "since_first": [event["seq"] for event in since_first],
+        "since_last": [event["seq"] for event in since_last],
+        "limited": [event["seq"] for event in limited],
+        "beyond": beyond,
+        "count": store.count_events("w1"),
+        "min": store.min_event_seq("w1"),
+        "seq": store.current_event_seq("w1"),
+        "session_row_seq": (store.load_session("w1") or {}).get("event_seq"),
+        "trimmed_kept": [event["seq"] for event in trimmed_kept],
+        "trimmed_min": trimmed_min,
+        "trimmed_seq": trimmed_seq,
+        "trimmed_count": trimmed_store.count_events("t1"),
+        "other_survives": other_survives,
+        "rows_after_trim": _row_count(trimmed_conn, "session_events"),
+    }
+
+
 def _without_deleted(session: dict[str, Any] | None) -> dict[str, Any] | None:
     """A session without its deletion timestamp, which is a wall clock."""
     if session is None:
@@ -233,6 +306,7 @@ def main() -> int:
         "meta_upsert": _record_meta_upsert(),
         "invite_state": _record_invite_state(),
         "session_state": _record_session_state(),
+        "events": _record_events(),
     }
     OUT.write_text(json.dumps(corpus, indent=2, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8")
     print(f"wrote {OUT} ({len(corpus['tables'])} tables, {len(META_CASES)} meta cases)")
