@@ -10,12 +10,27 @@
  * package `detection`.
  */
 
-/** The snapshot shape the buffer consumes. */
+/**
+ * A screen snapshot, as the emulator hands one over.
+ *
+ * The reference declares this once, in `detection.models`, and both the
+ * buffer and the detector read it: the screen and its hash are required, and
+ * the cursor metadata is whatever the producer could work out. The detector
+ * takes a `Partial` of it, because it provably survives a snapshot that is
+ * missing the required fields and turning that into a crash mid-frame would
+ * end a session over a malformed frame.
+ */
 export interface ScreenSnapshot {
   screen: string;
   screen_hash: string;
   /** Capture time in seconds. Defaults to now when absent. */
   captured_at?: number;
+  /** Whether the cursor sits after the last drawn character. */
+  cursor_at_end?: boolean;
+  /** Whether the screen ends in a space, which suggests a live input field. */
+  has_trailing_space?: boolean;
+  /** Where the cursor is, as far as the emulator knows. */
+  cursor?: { x?: unknown; y?: unknown } | null;
   [key: string]: unknown;
 }
 

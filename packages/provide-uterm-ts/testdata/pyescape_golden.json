@@ -1,0 +1,336 @@
+{
+  "encode": [
+    {
+      "bytes": [
+        104,
+        101,
+        108,
+        108,
+        111
+      ],
+      "name": "plain ascii",
+      "value": "hello"
+    },
+    {
+      "bytes": [
+        104,
+        195,
+        169,
+        108,
+        108,
+        111,
+        32,
+        226,
+        134,
+        146,
+        32,
+        226,
+        156,
+        147
+      ],
+      "name": "unicode",
+      "value": "héllo → ✓"
+    },
+    {
+      "bytes": [],
+      "name": "empty",
+      "value": ""
+    },
+    {
+      "bytes": [
+        240,
+        159,
+        152,
+        128
+      ],
+      "name": "an emoji",
+      "value": "😀"
+    },
+    {
+      "bytes": [
+        238,
+        128,
+        128
+      ],
+      "name": "a private-use character",
+      "value": ""
+    },
+    {
+      "bytes": [
+        239,
+        183,
+        189
+      ],
+      "name": "an arabic ligature",
+      "value": "﷽"
+    },
+    {
+      "bytes": [
+        238,
+        128,
+        128,
+        239,
+        191,
+        191
+      ],
+      "name": "just past the surrogates",
+      "value": "￿"
+    }
+  ],
+  "escape": [
+    {
+      "escaped": "STARDOCK",
+      "name": "plain letters",
+      "value": "STARDOCK"
+    },
+    {
+      "escaped": "STARDOCK\\ is",
+      "name": "a space",
+      "value": "STARDOCK is"
+    },
+    {
+      "escaped": "a\\\tb",
+      "name": "a tab",
+      "value": "a\tb"
+    },
+    {
+      "escaped": "a\\\nb",
+      "name": "a newline",
+      "value": "a\nb"
+    },
+    {
+      "escaped": "a\\\rb",
+      "name": "a carriage return",
+      "value": "a\rb"
+    },
+    {
+      "escaped": "a\\\fb",
+      "name": "a form feed",
+      "value": "a\fb"
+    },
+    {
+      "escaped": "a\\\u000bb",
+      "name": "a vertical tab",
+      "value": "a\u000bb"
+    },
+    {
+      "escaped": "\\[TL=00:00:00\\]",
+      "name": "brackets",
+      "value": "[TL=00:00:00]"
+    },
+    {
+      "escaped": "\\(Y/N\\)",
+      "name": "parentheses",
+      "value": "(Y/N)"
+    },
+    {
+      "escaped": "\\{a\\}",
+      "name": "braces",
+      "value": "{a}"
+    },
+    {
+      "escaped": "really\\?",
+      "name": "a question mark",
+      "value": "really?"
+    },
+    {
+      "escaped": "a\\*b",
+      "name": "a star",
+      "value": "a*b"
+    },
+    {
+      "escaped": "a\\+b",
+      "name": "a plus",
+      "value": "a+b"
+    },
+    {
+      "escaped": "a\\-b",
+      "name": "a hyphen",
+      "value": "a-b"
+    },
+    {
+      "escaped": "a\\|b",
+      "name": "a pipe",
+      "value": "a|b"
+    },
+    {
+      "escaped": "a\\^b",
+      "name": "a caret",
+      "value": "a^b"
+    },
+    {
+      "escaped": "a\\$b",
+      "name": "a dollar",
+      "value": "a$b"
+    },
+    {
+      "escaped": "a\\\\b",
+      "name": "a backslash",
+      "value": "a\\b"
+    },
+    {
+      "escaped": "a\\.b",
+      "name": "a dot",
+      "value": "a.b"
+    },
+    {
+      "escaped": "a\\&b",
+      "name": "an ampersand",
+      "value": "a&b"
+    },
+    {
+      "escaped": "a\\~b",
+      "name": "a tilde",
+      "value": "a~b"
+    },
+    {
+      "escaped": "a\\#b",
+      "name": "a hash",
+      "value": "a#b"
+    },
+    {
+      "escaped": "a:b",
+      "name": "a colon",
+      "value": "a:b"
+    },
+    {
+      "escaped": "a/b",
+      "name": "a slash",
+      "value": "a/b"
+    },
+    {
+      "escaped": "a=b",
+      "name": "an equals",
+      "value": "a=b"
+    },
+    {
+      "escaped": "a,b",
+      "name": "a comma",
+      "value": "a,b"
+    },
+    {
+      "escaped": "a_b",
+      "name": "an underscore",
+      "value": "a_b"
+    },
+    {
+      "escaped": "123",
+      "name": "digits",
+      "value": "123"
+    },
+    {
+      "escaped": "",
+      "name": "empty",
+      "value": ""
+    },
+    {
+      "escaped": "héllo\\ →\\ ✓",
+      "name": "unicode",
+      "value": "héllo → ✓"
+    },
+    {
+      "escaped": "a\\ b\\\tc\\(\\)\\[\\]\\{\\}\\?\\*\\+\\-\\|\\^\\$\\\\\\.\\&\\~\\#",
+      "name": "everything at once",
+      "value": "a b\tc()[]{}?*+-|^$\\.&~#"
+    }
+  ],
+  "surrogates": [
+    {
+      "bytes": [
+        98,
+        97,
+        100,
+        32,
+        63,
+        32,
+        99
+      ],
+      "code_points": [
+        98,
+        97,
+        100,
+        32,
+        55296,
+        32,
+        99
+      ],
+      "name": "a lone high surrogate"
+    },
+    {
+      "bytes": [
+        98,
+        97,
+        100,
+        32,
+        63,
+        32,
+        99
+      ],
+      "code_points": [
+        98,
+        97,
+        100,
+        32,
+        56320,
+        32,
+        99
+      ],
+      "name": "a lone low surrogate"
+    },
+    {
+      "bytes": [
+        63,
+        63
+      ],
+      "code_points": [
+        55296,
+        55296
+      ],
+      "name": "two lone surrogates"
+    },
+    {
+      "bytes": [
+        97,
+        63
+      ],
+      "code_points": [
+        97,
+        55296
+      ],
+      "name": "a surrogate at the end"
+    },
+    {
+      "bytes": [
+        63,
+        97
+      ],
+      "code_points": [
+        55296,
+        97
+      ],
+      "name": "a surrogate at the start"
+    },
+    {
+      "bytes": [
+        63,
+        63
+      ],
+      "code_points": [
+        56320,
+        56320
+      ],
+      "name": "two low halves"
+    },
+    {
+      "bytes": [
+        63,
+        63
+      ],
+      "code_points": [
+        56320,
+        55296
+      ],
+      "name": "a low half then a high one"
+    }
+  ]
+}

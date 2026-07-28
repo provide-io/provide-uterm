@@ -143,6 +143,28 @@ starts routing to them.
 
 ## Known cross-port misalignments
 
+### A malformed prompt rule behaves differently in all three ports
+
+`{"regex": 123}` — a rules file with a non-string regex:
+
+- **Python** raises `TypeError` out of `re.compile`, which `compile_patterns`
+  does not catch, so the detector fails to construct *even in lenient mode* —
+  the one mode whose purpose is to survive a broken rule.
+- **Go** coerces it through `asString` to `""`, which compiles to a pattern
+  matching every screen. One typo becomes a rule that always fires.
+- **TypeScript** records it as a compile failure and skips the rule, which is
+  the only reading that does what lenient mode says it does.
+
+Relatedly, a non-string `input_type` is refused by Python's Pydantic model
+with a `ValidationError` mid-detection; the TypeScript port falls back to the
+documented default rather than ending a session over a cosmetic field. And a
+`negative_regex` of `null` becomes the string `"None"` in Python, `""` in Go
+(no exclusion), `"null"` in TypeScript.
+
+All are recorded in `detector_golden.json`. Fixing them means agreeing on one
+behaviour — most likely "record a compile failure and skip" — across all four
+ports at once.
+
 ### Identity-frame version accepts a boolean in Python only
 
 `parse_identity_frame` tests `version in frozenset({1})`. Python's `True == 1`,
