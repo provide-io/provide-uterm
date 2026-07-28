@@ -29,7 +29,7 @@ DEFAULT_EXCLUDE_PARTS = {
     ".worktrees",
 }
 
-DEFAULT_SUFFIXES = (".py", ".cs", ".go")
+DEFAULT_SUFFIXES = (".py", ".cs", ".go", ".ts")
 
 
 def _iter_source_files(roots: list[Path], suffixes: tuple[str, ...]) -> list[Path]:
@@ -96,6 +96,7 @@ def main() -> int:
             "packages/provide-uterm-csharp/tests",
             "packages/provide-uterm-csharp/cmd",
             "packages/provide-uterm-go",
+            "packages/provide-uterm-ts/src",
         ],
         help="Directories to scan.",
     )
