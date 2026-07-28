@@ -10,4 +10,5 @@
  */
 
 export * from "./defaults.ts";
+export * from "./loader.ts";
 export * from "./validators.ts";
