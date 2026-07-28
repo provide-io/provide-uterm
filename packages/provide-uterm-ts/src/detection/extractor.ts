@@ -140,9 +140,7 @@ function validateNumeric(
   // does not.
   const isNumber = typeof value === "number";
   const acceptable =
-    fieldType === "int"
-      ? typeof value === "boolean" || (isNumber && Number.isInteger(value))
-      : isNumber;
+    fieldType === "int" ? typeof value === "boolean" || (isNumber && Number.isInteger(value)) : isNumber;
   if (!acceptable) {
     errors.push(`${field}: expected ${fieldType}, got ${describeType(value)}`);
     return;
