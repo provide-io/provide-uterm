@@ -11,6 +11,7 @@
  * parity with it rather than a replacement for it.
  */
 
+export * from "./attachment.ts";
 export * from "./config.ts";
 export * from "./flow-control.ts";
 export * from "./registry.ts";
