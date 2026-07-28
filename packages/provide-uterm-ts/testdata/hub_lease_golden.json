@@ -1,0 +1,517 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_hub_lease_golden.py",
+ "now": 1000.0,
+ "dashboard_lease_s": 30,
+ "clamps": [
+  {
+   "name": "below the floor",
+   "requested": 0,
+   "clamped": 1,
+   "via_setter": 1
+  },
+  {
+   "name": "negative",
+   "requested": -1,
+   "clamped": 1,
+   "via_setter": 1
+  },
+  {
+   "name": "at the floor",
+   "requested": 1,
+   "clamped": 1,
+   "via_setter": 1
+  },
+  {
+   "name": "typical",
+   "requested": 30,
+   "clamped": 30,
+   "via_setter": 30
+  },
+  {
+   "name": "at the ceiling",
+   "requested": 600,
+   "clamped": 600,
+   "via_setter": 600
+  },
+  {
+   "name": "above the ceiling",
+   "requested": 601,
+   "clamped": 600,
+   "via_setter": 600
+  }
+ ],
+ "compute_expirations": [
+  {
+   "name": "idle",
+   "owner": null,
+   "owner_expires_at": null,
+   "session_expires_at": null,
+   "browser_expired": false,
+   "rest_expired": false,
+   "owner_after": null,
+   "session_after": null
+  },
+  {
+   "name": "browser live",
+   "owner": "ws",
+   "owner_expires_at": 1010.0,
+   "session_expires_at": null,
+   "browser_expired": false,
+   "rest_expired": false,
+   "owner_after": "ws",
+   "session_after": null
+  },
+  {
+   "name": "browser exactly now",
+   "owner": "ws",
+   "owner_expires_at": 1000.0,
+   "session_expires_at": null,
+   "browser_expired": true,
+   "rest_expired": false,
+   "owner_after": "ws",
+   "session_after": null
+  },
+  {
+   "name": "browser expired",
+   "owner": "ws",
+   "owner_expires_at": 990.0,
+   "session_expires_at": null,
+   "browser_expired": true,
+   "rest_expired": false,
+   "owner_after": "ws",
+   "session_after": null
+  },
+  {
+   "name": "browser without expiry",
+   "owner": "ws",
+   "owner_expires_at": null,
+   "session_expires_at": null,
+   "browser_expired": false,
+   "rest_expired": false,
+   "owner_after": "ws",
+   "session_after": null
+  },
+  {
+   "name": "rest live",
+   "owner": null,
+   "owner_expires_at": null,
+   "session_expires_at": 1010.0,
+   "browser_expired": false,
+   "rest_expired": false,
+   "owner_after": null,
+   "session_after": 1010.0
+  },
+  {
+   "name": "rest exactly now",
+   "owner": null,
+   "owner_expires_at": null,
+   "session_expires_at": 1000.0,
+   "browser_expired": false,
+   "rest_expired": true,
+   "owner_after": null,
+   "session_after": 1000.0
+  },
+  {
+   "name": "rest expired",
+   "owner": null,
+   "owner_expires_at": null,
+   "session_expires_at": 990.0,
+   "browser_expired": false,
+   "rest_expired": true,
+   "owner_after": null,
+   "session_after": 990.0
+  },
+  {
+   "name": "both expired",
+   "owner": "ws",
+   "owner_expires_at": 999.0,
+   "session_expires_at": 999.0,
+   "browser_expired": true,
+   "rest_expired": true,
+   "owner_after": "ws",
+   "session_after": 999.0
+  }
+ ],
+ "acquire_rest": [
+  {
+   "name": "unknown worker",
+   "ok": false,
+   "reason": "no_worker",
+   "session_hijack_id": null,
+   "session_expires_at": null,
+   "pending_after": null,
+   "worker_ws_cleared": false,
+   "pause_sent": false
+  },
+  {
+   "name": "worker not connected",
+   "ok": false,
+   "reason": "no_worker",
+   "session_hijack_id": null,
+   "session_expires_at": null,
+   "pending_after": null,
+   "worker_ws_cleared": true,
+   "pause_sent": false
+  },
+  {
+   "name": "open input mode",
+   "ok": false,
+   "reason": "open_mode",
+   "session_hijack_id": null,
+   "session_expires_at": null,
+   "pending_after": null,
+   "worker_ws_cleared": false,
+   "pause_sent": false
+  },
+  {
+   "name": "dashboard hijack held",
+   "ok": false,
+   "reason": "already_hijacked",
+   "session_hijack_id": null,
+   "session_expires_at": null,
+   "pending_after": null,
+   "worker_ws_cleared": false,
+   "pause_sent": false
+  },
+  {
+   "name": "rest lease held",
+   "ok": false,
+   "reason": "already_hijacked",
+   "session_hijack_id": "h1",
+   "session_expires_at": 1010.0,
+   "pending_after": null,
+   "worker_ws_cleared": false,
+   "pause_sent": false
+  },
+  {
+   "name": "another acquire reserving",
+   "ok": false,
+   "reason": "already_hijacked",
+   "session_hijack_id": null,
+   "session_expires_at": null,
+   "pending_after": "other",
+   "worker_ws_cleared": false,
+   "pause_sent": false
+  },
+  {
+   "name": "expired dashboard lease does not block",
+   "ok": true,
+   "reason": null,
+   "session_hijack_id": "new",
+   "session_expires_at": 1090.0,
+   "pending_after": null,
+   "worker_ws_cleared": false,
+   "pause_sent": true
+  },
+  {
+   "name": "expired rest lease does not block",
+   "ok": true,
+   "reason": null,
+   "session_hijack_id": "new",
+   "session_expires_at": 1090.0,
+   "pending_after": null,
+   "worker_ws_cleared": false,
+   "pause_sent": true
+  },
+  {
+   "name": "pause send fails",
+   "ok": false,
+   "reason": "no_worker",
+   "session_hijack_id": null,
+   "session_expires_at": null,
+   "pending_after": null,
+   "worker_ws_cleared": true,
+   "pause_sent": false
+  },
+  {
+   "name": "granted",
+   "ok": true,
+   "reason": null,
+   "session_hijack_id": "new",
+   "session_expires_at": 1090.0,
+   "pending_after": null,
+   "worker_ws_cleared": false,
+   "pause_sent": true
+  }
+ ],
+ "acquire_ws": [
+  {
+   "name": "unknown worker",
+   "ok": false,
+   "reason": "no_worker",
+   "owner_is_browser": false,
+   "owner_expires_at": null
+  },
+  {
+   "name": "worker not connected",
+   "ok": false,
+   "reason": "no_worker",
+   "owner_is_browser": false,
+   "owner_expires_at": null
+  },
+  {
+   "name": "dashboard hijack held",
+   "ok": false,
+   "reason": "already_hijacked",
+   "owner_is_browser": false,
+   "owner_expires_at": 1010.0
+  },
+  {
+   "name": "rest lease held",
+   "ok": false,
+   "reason": "already_hijacked",
+   "owner_is_browser": false,
+   "owner_expires_at": null
+  },
+  {
+   "name": "another acquire reserving",
+   "ok": false,
+   "reason": "already_hijacked",
+   "owner_is_browser": false,
+   "owner_expires_at": null
+  },
+  {
+   "name": "open input mode is not a guard here",
+   "ok": true,
+   "reason": null,
+   "owner_is_browser": true,
+   "owner_expires_at": 1030.0
+  },
+  {
+   "name": "granted",
+   "ok": true,
+   "reason": null,
+   "owner_is_browser": true,
+   "owner_expires_at": 1030.0
+  }
+ ],
+ "touch": {
+  "default_ttl": 1030.0,
+  "explicit": 1120.0,
+  "clamped_high": 1600.0,
+  "clamped_low": 1001.0,
+  "unknown": null,
+  "matching": 1030.0,
+  "mismatched": null,
+  "perpetual_touch": 1030.0,
+  "no_owner": null
+ },
+ "release": {
+  "unknown_worker": [
+   false,
+   false
+  ],
+  "owner_matches": {
+   "ok": true,
+   "rest_active": false,
+   "owner_cleared": true
+  },
+  "owner_mismatch": {
+   "ok": false,
+   "rest_active": false,
+   "owner_cleared": false
+  },
+  "owner_mismatch_with_rest": {
+   "ok": false,
+   "rest_active": true,
+   "owner_cleared": false
+  },
+  "released_with_rest_live": {
+   "ok": true,
+   "rest_active": true,
+   "owner_cleared": true
+  },
+  "lease_expired": {
+   "ok": false,
+   "rest_active": false,
+   "owner_cleared": false
+  }
+ },
+ "rest_lifecycle": {
+  "extended": 1090.0,
+  "wrong_id": null,
+  "wrong_owner": null,
+  "wrong_owner_metric": [
+   "hijack_heartbeat_denied_owner_mismatch"
+  ],
+  "unknown_worker": null,
+  "fresh": 1090.0,
+  "fresh_wrong_id": -1.0,
+  "fresh_unknown": -2.0,
+  "valid": true,
+  "valid_wrong_id": false,
+  "valid_unknown": false,
+  "valid_expired": false,
+  "released": [
+   true,
+   true
+  ],
+  "released_twice": [
+   false,
+   false
+  ],
+  "released_with_dashboard": [
+   true,
+   false
+  ]
+ },
+ "cleanup": {
+  "unknown_worker": false,
+  "idle": {
+   "changed": false,
+   "calls": [],
+   "owner_cleared": true,
+   "session_cleared": true
+  },
+  "nothing_expired": {
+   "changed": false,
+   "calls": [],
+   "owner_cleared": false,
+   "session_cleared": false
+  },
+  "dashboard_expired": {
+   "changed": true,
+   "calls": [
+    "metric",
+    "recheck_and_resume",
+    "append_event:hijack_owner_expired",
+    "broadcast_hijack_state",
+    "prune_if_idle"
+   ],
+   "owner_cleared": true,
+   "session_cleared": true
+  },
+  "rest_expired": {
+   "changed": true,
+   "calls": [
+    "metric",
+    "recheck_and_resume",
+    "append_event:hijack_lease_expired",
+    "broadcast_hijack_state",
+    "prune_if_idle"
+   ],
+   "owner_cleared": true,
+   "session_cleared": true
+  },
+  "both_expired": {
+   "changed": true,
+   "calls": [
+    "metric",
+    "recheck_and_resume",
+    "append_event:hijack_lease_expired",
+    "append_event:hijack_owner_expired",
+    "broadcast_hijack_state",
+    "prune_if_idle"
+   ],
+   "owner_cleared": true,
+   "session_cleared": true
+  },
+  "dashboard_expired_rest_live": {
+   "changed": true,
+   "calls": [
+    "metric",
+    "append_event:hijack_owner_expired",
+    "broadcast_hijack_state",
+    "prune_if_idle"
+   ],
+   "owner_cleared": true,
+   "session_cleared": false
+  }
+ },
+ "dead_browsers": {
+  "unknown_worker": false,
+  "non_owner_died": {
+   "notified": false,
+   "browsers_left": [
+    "browser"
+   ],
+   "owner_cleared": false,
+   "calls": []
+  },
+  "owner_died": {
+   "notified": true,
+   "browsers_left": [
+    "other"
+   ],
+   "owner_cleared": true,
+   "calls": [
+    "send_worker",
+    "notify_hijack_changed"
+   ]
+  },
+  "owner_died_rest_live": {
+   "notified": false,
+   "browsers_left": [
+    "other"
+   ],
+   "owner_cleared": true,
+   "calls": []
+  },
+  "owner_died_lease_expired": {
+   "notified": false,
+   "browsers_left": [
+    "other"
+   ],
+   "owner_cleared": false,
+   "calls": []
+  }
+ },
+ "input": {
+  "open_mode": true,
+  "unknown_mode": false,
+  "unknown_prepare": false,
+  "still_hijacked": true,
+  "still_hijacked_unknown": false,
+  "hijack_mode_owner": {
+   "allowed": true,
+   "owner_expires_at": 1030.0
+  },
+  "hijack_mode_not_owner": {
+   "allowed": false,
+   "owner_expires_at": 1001.0
+  },
+  "open_mode_viewer": {
+   "allowed": false,
+   "owner_expires_at": null
+  },
+  "open_mode_operator": {
+   "allowed": true,
+   "owner_expires_at": null
+  },
+  "open_mode_admin": {
+   "allowed": true,
+   "owner_expires_at": null
+  },
+  "open_mode_unknown_role": {
+   "allowed": false,
+   "owner_expires_at": null
+  }
+ },
+ "events": {
+  "window_seqs": [
+   3,
+   4,
+   5
+  ],
+  "window_latest_seq": 7,
+  "window_min_event_seq": 1,
+  "window_fresh_expires": 1010.0,
+  "all_seqs": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7
+  ],
+  "stale_fresh_expires": 1005.0
+ },
+ "get_session": {
+  "live_hijack_id": "h1",
+  "wrong_id_is_none": true,
+  "expired_is_none": true,
+  "expired_session_cleared": true,
+  "unknown_is_none": true
+ }
+}
