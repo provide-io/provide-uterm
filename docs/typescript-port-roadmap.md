@@ -46,7 +46,7 @@ module; the Go column names the sibling package for cross-checking.
 | `file-io` | `file_io` | `fileio` | **done** |
 | `ansi` | `ansi`, `_ansi_dialects` | `ansi` | **done** |
 | `screen` | `screen` | `screen` | **done** |
-| `policy` | server policy | `policy` | todo |
+| `policy` | `bridge/policy` | `policy` | **done** — held to `spec/behavior_vectors.json`, the same 48 cases as Python, Go and C# |
 | `replay` | `replay` | `replay` | **done** — the raw-stream rebuild and the log viewer, with its frame selection and delay schedule |
 
 ### Wire formats
@@ -166,7 +166,8 @@ learn about a fourth implementation:
 
 | Artefact | Change needed | Status |
 |---|---|---|
-| `spec/behavior.json` | add a `typescript` entry to `hello_defaults` | todo |
+| `spec/behavior_vectors.json` | `policy_cases` consumed directly by the TS suite | **done** |
+| `spec/behavior.json` | add a `typescript` entry to `hello_defaults` | todo — waits on the TS server, which has to *have* the capabilities before it can claim them |
 | `docs/security-language-parity.md` | add a TypeScript column | todo |
 | `docs/protocol-matrix.md` | add a TypeScript column | todo |
 | `conformance/live` | run the live scenarios against the TS server | todo |
