@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 import { loadGolden } from "../testing/golden.ts";
-import { type ByteReader, DO, DONT, ESC, IAC, SB, SE, WILL, WONT, consumeEscape, consumeIac } from "./index.ts";
+import { type ByteReader, consumeEscape, consumeIac, DO, DONT, ESC, IAC, SB, SE, WILL, WONT } from "./index.ts";
 
 interface FiltersGolden {
   constants: Record<string, number>;
