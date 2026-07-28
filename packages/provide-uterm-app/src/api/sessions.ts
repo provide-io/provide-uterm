@@ -5,29 +5,47 @@
 
 import { apiJson } from "./client";
 import { normalizeRecordingEntries, normalizeSessionStatus } from "./normalize";
-import type { QuickConnectPayload, QuickConnectResult, RecordingEntryView, SessionDetails, SessionSummary } from "./types";
-import {
-  parseRawRecordingEntries,
-  parseRawSessionStatus,
-  parseRawSessionStatusList,
-} from "./validators";
+import { routeCall } from "./paths";
+import type {
+  QuickConnectPayload,
+  QuickConnectResult,
+  RecordingEntryView,
+  SessionDetails,
+  SessionSummary,
+} from "./types";
+import { parseRawRecordingEntries, parseRawSessionStatus, parseRawSessionStatusList } from "./validators";
+
+/**
+ * Send one operation from the shared contract.
+ *
+ * The path and the method both come from the table the server and the Worker
+ * dispatch from, so neither is written out here.
+ */
+async function call<T>(
+  operation: string,
+  params: Readonly<Record<string, string>> = {},
+  body: unknown = null,
+): Promise<T> {
+  const { method, path } = routeCall(operation, params);
+  return apiJson<T>(path, method, body);
+}
 
 export async function fetchSessions(): Promise<SessionSummary[]> {
-  const payload = await apiJson<unknown>("/api/sessions");
+  const payload = await call<unknown>("sessions.list");
   return parseRawSessionStatusList(payload).map(normalizeSessionStatus);
 }
 
 export async function fetchSessionSummary(sessionId: string): Promise<SessionSummary> {
-  const raw = await apiJson<unknown>(`/api/sessions/${encodeURIComponent(sessionId)}`);
+  const raw = await call<unknown>("sessions.get", { session_id: sessionId });
   return normalizeSessionStatus(parseRawSessionStatus(raw));
 }
 
 export async function fetchSessionDetails(sessionId: string): Promise<SessionDetails> {
   const [summary, snapshot] = await Promise.all([
     fetchSessionSummary(sessionId),
-    apiJson<{ prompt_detected?: { prompt_id?: string } | null } | null>(
-      `/api/sessions/${encodeURIComponent(sessionId)}/snapshot`,
-    ),
+    call<{ prompt_detected?: { prompt_id?: string } | null } | null>("sessions.snapshot", {
+      session_id: sessionId,
+    }),
   ]);
   return {
     summary,
@@ -36,35 +54,22 @@ export async function fetchSessionDetails(sessionId: string): Promise<SessionDet
 }
 
 export async function setSessionMode(sessionId: string, inputMode: "open" | "hijack"): Promise<SessionSummary> {
-  const raw = await apiJson<unknown>(
-    `/api/sessions/${encodeURIComponent(sessionId)}/mode`,
-    "POST",
-    { input_mode: inputMode },
-  );
+  const raw = await call<unknown>("sessions.set_mode", { session_id: sessionId }, { input_mode: inputMode });
   return normalizeSessionStatus(parseRawSessionStatus(raw));
 }
 
 export async function clearSession(sessionId: string): Promise<SessionSummary> {
-  const raw = await apiJson<unknown>(
-    `/api/sessions/${encodeURIComponent(sessionId)}/clear`,
-    "POST",
-  );
+  const raw = await call<unknown>("sessions.clear", { session_id: sessionId });
   return normalizeSessionStatus(parseRawSessionStatus(raw));
 }
 
 export async function restartSession(sessionId: string): Promise<SessionSummary> {
-  const raw = await apiJson<unknown>(
-    `/api/sessions/${encodeURIComponent(sessionId)}/restart`,
-    "POST",
-  );
+  const raw = await call<unknown>("sessions.restart", { session_id: sessionId });
   return normalizeSessionStatus(parseRawSessionStatus(raw));
 }
 
 export async function analyzeSession(sessionId: string): Promise<string> {
-  const result = await apiJson<{ analysis: string }>(
-    `/api/sessions/${encodeURIComponent(sessionId)}/analyze`,
-    "POST",
-  );
+  const result = await call<{ analysis: string }>("sessions.analyze", { session_id: sessionId });
   return result.analysis;
 }
 
@@ -76,12 +81,12 @@ export async function fetchRecordingEntries(
   const params = new URLSearchParams();
   params.set("limit", String(limit));
   if (filter) params.set("event", filter);
-  const result = await apiJson<unknown>(
-    `/api/sessions/${encodeURIComponent(sessionId)}/recording/entries?${params.toString()}`,
-  );
+  // The query is the SPA's own; only the path comes from the contract.
+  const { method, path } = routeCall("sessions.recording_entries", { session_id: sessionId });
+  const result = await apiJson<unknown>(`${path}?${params.toString()}`, method);
   return normalizeRecordingEntries(parseRawRecordingEntries(result));
 }
 
 export async function quickConnect(payload: QuickConnectPayload): Promise<QuickConnectResult> {
-  return apiJson<QuickConnectResult>("/api/connect", "POST", payload);
+  return call<QuickConnectResult>("tunnels.connect", {}, payload);
 }

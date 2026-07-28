@@ -12,6 +12,11 @@
     "useUnknownInCatchVariables": true,
     "skipLibCheck": true,
     "isolatedModules": true,
+    // provide-uterm-ts is consumed as source over a workspace link, and its
+    // own modules import each other with explicit .ts specifiers. Legal here
+    // because this project only ever typechecks — Vite does the building.
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "paths": {
       "@provide-uterm-frontend/*": ["../provide-uterm-frontend/src/*"]

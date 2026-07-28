@@ -45,7 +45,7 @@ describe("fetchSessions", () => {
     const result = await fetchSessions();
     expect(result).toHaveLength(1);
     expect(result[0]?.sessionId).toBe("s1");
-    expect(mocks.apiJson).toHaveBeenCalledWith("/api/sessions");
+    expect(mocks.apiJson).toHaveBeenCalledWith("/api/sessions", "GET", null);
   });
 });
 
@@ -56,24 +56,25 @@ describe("fetchSessionSummary", () => {
     const { fetchSessionSummary } = await import("./sessions");
     const result = await fetchSessionSummary("s1");
     expect(result.sessionId).toBe("s1");
-    expect(mocks.apiJson).toHaveBeenCalledWith("/api/sessions/s1");
+    expect(mocks.apiJson).toHaveBeenCalledWith("/api/sessions/s1", "GET", null);
   });
 
-  it("encodes special characters in sessionId", async () => {
+  it("refuses a session id no route could carry", async () => {
+    // It used to percent-encode this and send it. The shared contract bounds
+    // a session id to an ASCII alphabet with no slash, dot or space in it, so
+    // the encoded form matched no route on either backend — the request could
+    // only ever have 404ed. Refusing here reports the offending value instead.
     const mocks = await importMocks();
-    mocks.apiJson.mockResolvedValue(RAW_SESSION);
     const { fetchSessionSummary } = await import("./sessions");
-    await fetchSessionSummary("a/b c");
-    expect(mocks.apiJson).toHaveBeenCalledWith("/api/sessions/a%2Fb%20c");
+    await expect(fetchSessionSummary("a/b c")).rejects.toThrow(/session_id/);
+    expect(mocks.apiJson).not.toHaveBeenCalled();
   });
 });
 
 describe("fetchSessionDetails", () => {
   it("fetches summary and snapshot in parallel", async () => {
     const mocks = await importMocks();
-    mocks.apiJson
-      .mockResolvedValueOnce(RAW_SESSION)
-      .mockResolvedValueOnce({ prompt_detected: { prompt_id: "p1" } });
+    mocks.apiJson.mockResolvedValueOnce(RAW_SESSION).mockResolvedValueOnce({ prompt_detected: { prompt_id: "p1" } });
     const { fetchSessionDetails } = await import("./sessions");
     const result = await fetchSessionDetails("s1");
     expect(result.summary.sessionId).toBe("s1");
@@ -90,9 +91,7 @@ describe("fetchSessionDetails", () => {
 
   it("returns null snapshotPromptId when prompt_detected is null", async () => {
     const mocks = await importMocks();
-    mocks.apiJson
-      .mockResolvedValueOnce(RAW_SESSION)
-      .mockResolvedValueOnce({ prompt_detected: null });
+    mocks.apiJson.mockResolvedValueOnce(RAW_SESSION).mockResolvedValueOnce({ prompt_detected: null });
     const { fetchSessionDetails } = await import("./sessions");
     const result = await fetchSessionDetails("s1");
     expect(result.snapshotPromptId).toBeNull();
@@ -106,11 +105,7 @@ describe("setSessionMode", () => {
     const { setSessionMode } = await import("./sessions");
     const result = await setSessionMode("s1", "hijack");
     expect(result.inputMode).toBe("hijack");
-    expect(mocks.apiJson).toHaveBeenCalledWith(
-      "/api/sessions/s1/mode",
-      "POST",
-      { input_mode: "hijack" },
-    );
+    expect(mocks.apiJson).toHaveBeenCalledWith("/api/sessions/s1/mode", "POST", { input_mode: "hijack" });
   });
 });
 
@@ -121,7 +116,7 @@ describe("clearSession", () => {
     const { clearSession } = await import("./sessions");
     const result = await clearSession("s1");
     expect(result.sessionId).toBe("s1");
-    expect(mocks.apiJson).toHaveBeenCalledWith("/api/sessions/s1/clear", "POST");
+    expect(mocks.apiJson).toHaveBeenCalledWith("/api/sessions/s1/clear", "POST", null);
   });
 });
 
@@ -132,10 +127,7 @@ describe("restartSession", () => {
     const { restartSession } = await import("./sessions");
     const result = await restartSession("s1");
     expect(result.sessionId).toBe("s1");
-    expect(mocks.apiJson).toHaveBeenCalledWith(
-      "/api/sessions/s1/restart",
-      "POST",
-    );
+    expect(mocks.apiJson).toHaveBeenCalledWith("/api/sessions/s1/restart", "POST", null);
   });
 });
 
@@ -172,9 +164,7 @@ describe("fetchRecordingEntries", () => {
 
   it("normalizes raw entries", async () => {
     const mocks = await importMocks();
-    mocks.apiJson.mockResolvedValue([
-      { ts: 1, event: "output", data: { screen: "hi" } },
-    ]);
+    mocks.apiJson.mockResolvedValue([{ ts: 1, event: "output", data: { screen: "hi" } }]);
     const { fetchRecordingEntries } = await import("./sessions");
     const result = await fetchRecordingEntries("s1", "", 200);
     expect(result).toHaveLength(1);

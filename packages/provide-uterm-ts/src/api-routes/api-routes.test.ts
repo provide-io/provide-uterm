@@ -4,6 +4,7 @@
 //
 
 import { describe, expect, it } from "vitest";
+import { pyReEscape } from "../pycompat/index.ts";
 import { loadGolden } from "../testing/golden.ts";
 import {
   API_ROUTE_REGISTRY,
@@ -419,6 +420,22 @@ describe("a static segment using the wider alphabet", () => {
   it("does not let a dot swallow the separator", () => {
     // `/api/things/json` is the parameter route, not the dotted one.
     expect(custom.match("GET", "/api/things/json")?.route.operation).toBe("r3");
+  });
+
+  it("escapes exactly what the reference's escaper would", () => {
+    // The segment escaper is written locally so this module needs nothing
+    // from the Node-facing runtime and the browser SPA can import it. That
+    // is only safe while it agrees with the reference across every character
+    // a static segment may hold, which the validator has already closed.
+    for (const character of "abzABZ019._~-") {
+      const template = `/api/x${character}y`;
+      const registry = new RouteRegistry([route(template)]);
+      // Escaped or not, the segment matches itself and nothing that merely
+      // looks like it.
+      expect(registry.match("GET", template)?.route.operation).toBe("a");
+      expect(registry.match("GET", `/api/xQy`)).toBeUndefined();
+      expect(pyReEscape(`x${character}y`)).toBe(`x${character}y`.replace(/[^A-Za-z0-9_]/g, "\\$&"));
+    }
   });
 
   it("matches a tilde and a dash literally", () => {

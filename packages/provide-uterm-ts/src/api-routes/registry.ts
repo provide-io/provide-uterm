@@ -17,8 +17,6 @@
  * construction means it cannot ship.
  */
 
-import { pyReEscape } from "../pycompat/index.ts";
-
 /** The HTTP methods the shared contract uses. */
 export const HTTP_METHODS = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"] as const;
 
@@ -179,6 +177,20 @@ function templatesIntersect(first: string, second: string): boolean {
 }
 
 /**
+ * Escape a static segment for use in a pattern.
+ *
+ * Everything outside the parameter alphabet is escaped, which for a segment
+ * that has already passed {@link STATIC_SEGMENT} means the dot, the tilde and
+ * the dash. Written here rather than taken from `pycompat` so this module
+ * needs nothing from the Node-facing runtime and can be imported by the
+ * browser SPA, which builds its request paths from this same table. A test
+ * pins it against the reference's escaper across the whole allowed alphabet.
+ */
+function escapeSegment(segment: string): string {
+  return segment.replace(/[^A-Za-z0-9_]/g, "\\$&");
+}
+
+/**
  * Compile a validated template into a whole-path matcher.
  *
  * Anchored and single-line, so a path carrying a newline cannot end early and
@@ -190,7 +202,7 @@ function compileTemplate(template: string): RegExp {
     .split("/")
     .slice(1)
     .map((segment) =>
-      segment.startsWith("{") ? `(?<${segment.slice(1, -1)}>${PARAMETER_PATTERN})` : pyReEscape(segment),
+      segment.startsWith("{") ? `(?<${segment.slice(1, -1)}>${PARAMETER_PATTERN})` : escapeSegment(segment),
     );
   return new RegExp(`^/${parts.join("/")}$`);
 }
