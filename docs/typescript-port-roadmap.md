@@ -44,7 +44,7 @@ module; the Go column names the sibling package for cross-checking.
 | `line-editor` | `line_editor` | `lineeditor` | **done** |
 | `channels` | `channels` | `channels` | **done** |
 | `file-io` | `file_io` | `fileio` | todo |
-| `ansi` | `ansi`, `_ansi_dialects` | `ansi` | todo |
+| `ansi` | `ansi`, `_ansi_dialects` | `ansi` | **done** |
 | `screen` | `screen` | `screen` | todo |
 | `policy` | server policy | `policy` | todo |
 | `replay` | `replay` | `replay` | todo |
@@ -149,3 +149,4 @@ in a test so it cannot drift silently.
 | `redaction` | A leading `(?i)`/`(?m)`/`(?s)` is translated into RegExp flags | ECMAScript has no inline-flag syntax, so the alternative is a hard compile error |
 | `control-channel` | JSON renders `0.0` as `0` | Go and C# do the same; the canonical-JSON signature path will not |
 | `colors` | `rewriteParams` passes a non-digit SGR component through where CPython raises | Unreachable from the SGR scanner; passing through is the safer of the two |
+| `ansi` | Token digit classes are ASCII-only, so a Unicode-digit token is left verbatim | Same `\d` boundary as `redaction`; the patterns spell `[0-9]` to make the intent explicit |
