@@ -130,7 +130,7 @@ corpus match CPython byte for byte.
 | `egress` | server `egress`, `_net` | (inside `connectors`) | **done** — metadata always blocked, embedded-IPv4 wrappers decoded, resolution failures fail closed |
 | `connectors` | server `connectors/*` | `connectors` | **partial** — the registry, the connector interface and the reference shell connector; the ssh/telnet/websocket connectors outstanding |
 | `pty` | platform PTY connector | `pty` | todo |
-| `embed` | `embed` | `embed` | **partial** — the client filter, the interceptor verdicts and the telnet policy; the session, hub and upstream pipe outstanding |
+| `embed` | `embed` | `embed` | **partial** — the client filter, the interceptor verdicts, the telnet policy and the upstream stream parser; the session and hub outstanding |
 
 ### Control plane and hub
 

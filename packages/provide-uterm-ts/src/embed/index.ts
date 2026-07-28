@@ -12,4 +12,5 @@
  * presents itself to a telnet server upstream.
  */
 
+export * from "./telnet-parse.ts";
 export * from "./types.ts";
