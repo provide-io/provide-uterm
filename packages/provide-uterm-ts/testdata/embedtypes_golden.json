@@ -1,0 +1,445 @@
+{
+  "default_backpressure": "DROP_OLDEST",
+  "default_queue_capacity": 64,
+  "default_terminal_type": "ANSI",
+  "default_window_size": [
+    80,
+    25
+  ],
+  "filters": [
+    {
+      "exclude_tags": null,
+      "name": "no filter at all",
+      "require_any_tag": null,
+      "result": true,
+      "tags": [
+        "a"
+      ]
+    },
+    {
+      "exclude_tags": null,
+      "name": "a required tag the client has",
+      "require_any_tag": [
+        "a"
+      ],
+      "result": true,
+      "tags": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "exclude_tags": null,
+      "name": "a required tag the client lacks",
+      "require_any_tag": [
+        "a"
+      ],
+      "result": false,
+      "tags": [
+        "b"
+      ]
+    },
+    {
+      "exclude_tags": null,
+      "name": "any of several required tags",
+      "require_any_tag": [
+        "a",
+        "b"
+      ],
+      "result": true,
+      "tags": [
+        "b"
+      ]
+    },
+    {
+      "exclude_tags": null,
+      "name": "none of several required tags",
+      "require_any_tag": [
+        "a",
+        "b"
+      ],
+      "result": false,
+      "tags": [
+        "c"
+      ]
+    },
+    {
+      "exclude_tags": [
+        "a"
+      ],
+      "name": "an excluded tag the client has",
+      "require_any_tag": null,
+      "result": false,
+      "tags": [
+        "a"
+      ]
+    },
+    {
+      "exclude_tags": [
+        "a"
+      ],
+      "name": "an excluded tag the client lacks",
+      "require_any_tag": null,
+      "result": true,
+      "tags": [
+        "b"
+      ]
+    },
+    {
+      "exclude_tags": [
+        "a"
+      ],
+      "name": "both required and excluded",
+      "require_any_tag": [
+        "a"
+      ],
+      "result": false,
+      "tags": [
+        "a"
+      ]
+    },
+    {
+      "exclude_tags": [
+        "b"
+      ],
+      "name": "required, and excluded by another",
+      "require_any_tag": [
+        "a"
+      ],
+      "result": false,
+      "tags": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "exclude_tags": null,
+      "name": "an empty requirement",
+      "require_any_tag": [],
+      "result": true,
+      "tags": [
+        "a"
+      ]
+    },
+    {
+      "exclude_tags": [],
+      "name": "an empty exclusion",
+      "require_any_tag": null,
+      "result": true,
+      "tags": [
+        "a"
+      ]
+    },
+    {
+      "exclude_tags": null,
+      "name": "a client with no tags",
+      "require_any_tag": [
+        "a"
+      ],
+      "result": false,
+      "tags": []
+    },
+    {
+      "exclude_tags": null,
+      "name": "a client with no tags and no filter",
+      "require_any_tag": null,
+      "result": true,
+      "tags": []
+    }
+  ],
+  "intercept_actions": [
+    "PASS",
+    "REPLACE",
+    "CONSUME",
+    "DEFER",
+    "INJECT"
+  ],
+  "intercept_defaults": {
+    "consume": [
+      "CONSUME",
+      null
+    ],
+    "defer": [
+      "DEFER",
+      null
+    ],
+    "inject": [
+      "INJECT",
+      [
+        122
+      ]
+    ],
+    "pass": [
+      "PASS",
+      null
+    ],
+    "replace": [
+      "REPLACE",
+      [
+        120,
+        121
+      ]
+    ]
+  },
+  "options": [
+    {
+      "command": 253,
+      "name": "a DO",
+      "option": 24,
+      "reply": [
+        255,
+        251,
+        24
+      ]
+    },
+    {
+      "command": 251,
+      "name": "a WILL",
+      "option": 1,
+      "reply": [
+        255,
+        253,
+        1
+      ]
+    },
+    {
+      "command": 252,
+      "name": "a WONT",
+      "option": 1,
+      "reply": [
+        255,
+        254,
+        1
+      ]
+    },
+    {
+      "command": 254,
+      "name": "a DONT",
+      "option": 24,
+      "reply": [
+        255,
+        252,
+        24
+      ]
+    },
+    {
+      "command": 200,
+      "name": "a command nobody sends",
+      "option": 24,
+      "reply": []
+    },
+    {
+      "command": 253,
+      "name": "a DO for a high option",
+      "option": 255,
+      "reply": [
+        255,
+        251,
+        255
+      ]
+    },
+    {
+      "command": 253,
+      "name": "a DO for option zero",
+      "option": 0,
+      "reply": [
+        255,
+        251,
+        0
+      ]
+    }
+  ],
+  "subnegotiations": [
+    {
+      "body": [
+        1
+      ],
+      "name": "a terminal-type request",
+      "option": 24,
+      "reply": [
+        255,
+        250,
+        24,
+        0,
+        65,
+        78,
+        83,
+        73,
+        255,
+        240
+      ],
+      "wide_reply": [
+        255,
+        250,
+        24,
+        0,
+        120,
+        116,
+        101,
+        114,
+        109,
+        45,
+        50,
+        53,
+        54,
+        99,
+        111,
+        108,
+        111,
+        114,
+        255,
+        240
+      ]
+    },
+    {
+      "body": [
+        1,
+        2
+      ],
+      "name": "a terminal-type request with a trailing byte",
+      "option": 24,
+      "reply": [
+        255,
+        250,
+        24,
+        0,
+        65,
+        78,
+        83,
+        73,
+        255,
+        240
+      ],
+      "wide_reply": [
+        255,
+        250,
+        24,
+        0,
+        120,
+        116,
+        101,
+        114,
+        109,
+        45,
+        50,
+        53,
+        54,
+        99,
+        111,
+        108,
+        111,
+        114,
+        255,
+        240
+      ]
+    },
+    {
+      "body": [
+        0
+      ],
+      "name": "a terminal type that is not a request",
+      "option": 24,
+      "reply": [],
+      "wide_reply": []
+    },
+    {
+      "body": [],
+      "name": "a terminal-type request with no body",
+      "option": 24,
+      "reply": [],
+      "wide_reply": []
+    },
+    {
+      "body": [],
+      "name": "a window-size request",
+      "option": 31,
+      "reply": [
+        255,
+        250,
+        31,
+        0,
+        80,
+        0,
+        25,
+        255,
+        240
+      ],
+      "wide_reply": [
+        255,
+        250,
+        31,
+        3,
+        232,
+        1,
+        44,
+        255,
+        240
+      ]
+    },
+    {
+      "body": [
+        1,
+        2
+      ],
+      "name": "a window-size request with a body",
+      "option": 31,
+      "reply": [
+        255,
+        250,
+        31,
+        0,
+        80,
+        0,
+        25,
+        255,
+        240
+      ],
+      "wide_reply": [
+        255,
+        250,
+        31,
+        3,
+        232,
+        1,
+        44,
+        255,
+        240
+      ]
+    },
+    {
+      "body": [
+        1
+      ],
+      "name": "an option nobody implemented",
+      "option": 99,
+      "reply": [],
+      "wide_reply": []
+    }
+  ],
+  "unencodable_terminal_type": [
+    255,
+    250,
+    24,
+    0,
+    120,
+    116,
+    101,
+    114,
+    109,
+    45,
+    63,
+    255,
+    240
+  ],
+  "wide_window": [
+    255,
+    250,
+    31,
+    3,
+    232,
+    1,
+    44,
+    255,
+    240
+  ]
+}
