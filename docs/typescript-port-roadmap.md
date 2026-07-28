@@ -171,16 +171,22 @@ Any one of these fixes it upstream:
 2. `"rewriteRelativeImportExtensions": true` with `.ts` specifiers.
 3. A bundling step for the Node entry point.
 
-Until then no module here logs. That is not yet costing anything: every
-module ported so far is a pure transform with no logging surface. The first
-module that needs a logger is `transports`, which is where the Go port
-starts calling `ptel.GetLogger` directly.
+**What is unblocked meanwhile.** The layering the Go port uses — library
+packages take an injectable logger, only transports and above call
+`ptel.GetLogger` — does not need the concrete implementation. `src/telemetry/`
+declares the `Logger` interface structurally, matching the one
+`@provide-io/telemetry` exports, plus a `noopLogger` default. Library modules
+depend on that and stay decoupled and testable today.
 
-When the dependency is usable, the layering follows the Go port: library
-modules take an injectable `Logger` defaulting to a no-op, transports and
-above call `getLogger`. A `src/telemetry/` facade should be the only place
-the package name appears, with a CI check forbidding direct
-`@opentelemetry/*` imports.
+So the blocker is narrower than it first looked: only the top layer, which
+needs a real `getLogger`, has to wait. `replay`'s viewer is the first module
+that logs at all (a warning on a corrupt log line), earlier than the
+`transports` estimate first recorded here.
+
+When the dependency is usable, `src/telemetry/` re-exports the real
+`getLogger` and swaps its interface for the imported one — a type-level no-op
+for every caller — and becomes the only place the package name appears, with
+a CI check forbidding direct `@opentelemetry/*` imports.
 
 ## Recorded divergences
 
