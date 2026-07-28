@@ -125,20 +125,20 @@ siblings. The Python package covers the Worker entry point, the Durable
 Object adapter (`do/ushell.py` with its persistence, SSE and webhook
 helpers), the CF transport, JWT auth, route definitions and UI assets.
 
-Two things make it unlike the other outstanding modules:
+**This is additive.** The Python Worker stays exactly as it is — same
+deployment, same vendored `python_modules`, same `.ci/vendor_cf_worker.sh` and
+its CI guard. The TypeScript implementation is a second, independent one at
+parity with it, not a migration path away from it. Nothing about the existing
+Worker changes.
 
-- **It needs no new runtime dependency.** The Workers types are dev-only
-  (`@cloudflare/workers-types`) and `wrangler` is already in the repo for the
-  existing Worker.
-- **The port would be a better fit than the reference.** The Worker currently
-  runs Python on Pyodide with `python_modules` vendored by
-  `.ci/vendor_cf_worker.sh` and a CI job guarding the vendored tree.
-  TypeScript is the native language of that runtime, so a TS Durable Object
-  drops Pyodide, the vendored tree and the vendor-check job together.
+It needs no new runtime dependency: the Workers types are dev-only
+(`@cloudflare/workers-types`) and `wrangler` is already in the repo.
 
 Sized as a large unit — comparable to the hub — and worth taking as one
 subsystem rather than in pieces, because the Worker entry, the DO and the
-transport only make sense together.
+transport only make sense together. Parity is measured the same way as
+everywhere else in this port: a differential corpus recorded from the Python
+implementation, so the two answer identically on the same input.
 
 ### Browser
 
