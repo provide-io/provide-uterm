@@ -34,7 +34,7 @@ module; the Go column names the sibling package for cross-checking.
 
 | Module | Python | Go | Status |
 |---|---|---|---|
-| `pycompat` | — (CPython semantics) | — | **done** |
+| `pycompat` | — (CPython semantics) | — | **done** — json, re, rounding, str, statistics, difflib, int, ipaddress |
 | `defaults` | `defaults` | `defaults` | **done** |
 | `colors` | `colors` | `colors` | **done** |
 | `sanitizer` | `sanitizer` | `sanitizer` | **done** |
@@ -139,6 +139,25 @@ routes the bootstrap dispatches to. Folding them into the SPA would mean
 loading noVNC and the panel machinery into every page's bundle to serve two
 pages that are opened directly. They stay as they are unless the bootstrap
 starts routing to them.
+
+## Known cross-port misalignments
+
+Found while porting. Neither is a missing feature; both are worth settling.
+
+**SSH placement.** Go and C# put the SSH client in `transports/` and the SSH
+server in `gateway/`. Python inverts both: the asyncssh *server* is in
+`provide-uterm-client/.../transports/ssh.py` and the asyncssh *client* is in
+`provide-uterm-server/.../connectors/ssh.py`. Every port has both sides, so
+this is placement only — but it puts a server in a client package and a client
+in a server package, and it makes cross-port comparison read as a gap (the Go
+`transports/ssh.go` header comment records it as one, scoped to that package).
+This port follows the Go/C# layout. Re-homing the Python side is a separate
+change.
+
+**Chaos jitter.** Deliberately language-specific: each port draws the delay
+from its own seeded generator, as the Go port already did. What is aligned,
+and corpus-pinned, is the fault *schedule* — which read drops, which returns
+empty, and the injected message.
 
 ## Cross-language obligations
 
