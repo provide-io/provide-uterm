@@ -55,7 +55,7 @@ module; the Go column names the sibling package for cross-checking.
 |---|---|---|---|
 | `ctrlmsg` | `control_channel_builders`, `control_channel_patterns` | `ctrlmsg` | **done** |
 | `frames` | `bridge/schemas`, server `bridge/frames` | `frames` | **done** |
-| `recording` | `recording` | `recording` | todo |
+| `recording` | `recording` | `recording` | **done** |
 | `session-logger` | `session_logger` | `sessionlogger` | todo |
 
 `ctrlmsg` carries the HMAC identity signature, which is taken over

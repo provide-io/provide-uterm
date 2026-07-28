@@ -29,6 +29,15 @@ export interface PyJsonDumpsOptions {
   sortKeys?: boolean;
   /** Escape non-ASCII as `\uXXXX`. Defaults to `true`, as CPython does. */
   ensureAscii?: boolean;
+  /**
+   * Item and key separators.
+   *
+   * Defaults to the compact `[",", ":"]` the canonical payload uses. Pass
+   * CPython's own default `[", ", ": "]` when emulating a plain
+   * `json.dumps(...)` call, which is what the recording stores measure their
+   * byte sizes against.
+   */
+  separators?: readonly [string, string];
 }
 
 /** CPython's short escapes, by code point. */
@@ -123,6 +132,7 @@ function encodeNumber(value: number): string {
 export function pyJsonDumps(value: unknown, options: PyJsonDumpsOptions = {}): string {
   const sortKeys = options.sortKeys ?? true;
   const ensureAscii = options.ensureAscii ?? true;
+  const [itemSeparator, keySeparator] = options.separators ?? [",", ":"];
 
   const encode = (node: unknown): string => {
     if (node === null) {
@@ -138,7 +148,7 @@ export function pyJsonDumps(value: unknown, options: PyJsonDumpsOptions = {}): s
       return encodeString(node, ensureAscii);
     }
     if (Array.isArray(node)) {
-      return `[${node.map(encode).join(",")}]`;
+      return `[${node.map(encode).join(itemSeparator)}]`;
     }
     if (typeof node === "object") {
       const keys = Object.keys(node as Record<string, unknown>);
@@ -146,8 +156,10 @@ export function pyJsonDumps(value: unknown, options: PyJsonDumpsOptions = {}): s
         keys.sort();
       }
       const body = keys
-        .map((key) => `${encodeString(key, ensureAscii)}:${encode((node as Record<string, unknown>)[key])}`)
-        .join(",");
+        .map(
+          (key) => `${encodeString(key, ensureAscii)}${keySeparator}${encode((node as Record<string, unknown>)[key])}`,
+        )
+        .join(itemSeparator);
       return `{${body}}`;
     }
     throw new TypeError(`Object of type ${typeof node} is not JSON serializable`);
