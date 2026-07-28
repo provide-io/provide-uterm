@@ -19,6 +19,7 @@ import {
   isUnspecified,
   networkContains,
   networkToString,
+  sixToFour,
 } from "./ipaddress.ts";
 
 interface IpGolden {
@@ -34,6 +35,8 @@ interface IpGolden {
     multicast?: boolean;
     reserved?: boolean;
     unspecified?: boolean;
+    ipv4_mapped?: string | null;
+    sixtofour?: string | null;
   }>;
   networks: Array<{
     name: string;
@@ -249,6 +252,29 @@ describe("classification", () => {
     // 100.64.0.0/10 is not private to CPython, and the codebase's metadata
     // guard relies on that.
     expect(isPrivate(parse("100.100.100.200"))).toBe(false);
+  });
+
+  it.each(valid)("$input embedded IPv4", (record) => {
+    // A wrapper that hides a metadata address from a membership check is the
+    // whole reason these are read.
+    const address = parse(record.input);
+    const mapped = ipv4Mapped(address);
+    const sixto = sixToFour(address);
+    expect(mapped === undefined ? null : ipToString(mapped)).toBe(record.ipv4_mapped ?? null);
+    expect(sixto === undefined ? null : ipToString(sixto)).toBe(record.sixtofour ?? null);
+  });
+
+  it("reads the IPv4 out of a 6to4 address", () => {
+    // 2002:a9fe:a9fe:: carries 169.254.169.254 — the metadata service.
+    const record = valid.find((entry) => entry.input === "2002:a9fe:a9fe::1");
+    expect(record?.sixtofour).toBe("169.254.169.254");
+    expect(record?.ipv4_mapped).toBeNull();
+  });
+
+  it("does not read a 6to4 address out of anything else", () => {
+    expect(sixToFour(parse("2001:db8::1"))).toBeUndefined();
+    expect(sixToFour(parse("::ffff:127.0.0.1"))).toBeUndefined();
+    expect(sixToFour(parse("127.0.0.1"))).toBeUndefined();
   });
 
   it("exposes the mapped address itself", () => {

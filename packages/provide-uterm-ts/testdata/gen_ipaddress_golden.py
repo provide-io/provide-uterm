@@ -91,6 +91,13 @@ CASES: list[str] = [
     "::ffff:127.0.0.1",
     "::ffff:8.8.8.8",
     "::ffff:0:127.0.0.1",
+    # 6to4 and the deprecated IPv4-compatible form, both of which carry a
+    # reachable IPv4 that a membership check has to see through.
+    "2002:a9fe:a9fe::1",
+    "2002:0102:0304::",
+    "::169.254.169.254",
+    "::1.2.3.4",
+    "64:ff9b::169.254.169.254",
     # The private-list exceptions, which are carved back out of a block that
     # is otherwise private.
     "192.0.0.8",
@@ -163,6 +170,10 @@ def _describe(text: str) -> dict[str, Any]:
         "multicast": address.is_multicast,
         "reserved": address.is_reserved,
         "unspecified": address.is_unspecified,
+        # The embedded-IPv4 forms. A wrapper that hides a metadata address
+        # from a membership check is the whole reason these are read.
+        "ipv4_mapped": str(address.ipv4_mapped) if getattr(address, "ipv4_mapped", None) else None,
+        "sixtofour": str(address.sixtofour) if getattr(address, "sixtofour", None) else None,
     }
 
 

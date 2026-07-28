@@ -335,6 +335,22 @@ function viaMapped(address: IpAddress, predicate: (address: IpAddress) => boolea
   return mapped === undefined ? undefined : predicate(mapped);
 }
 
+/** The 6to4 prefix, whose next 32 bits are a reachable IPv4. */
+const V6_SIXTOFOUR = ipNetwork("2002::/16") as IpNetwork;
+
+/**
+ * The IPv4 address a 6to4 address carries.
+ *
+ * A membership check that only looked at the IPv6 form would miss that
+ * `2002:a9fe:a9fe::1` reaches the v4 metadata service.
+ */
+export function sixToFour(address: IpAddress): IpAddress | undefined {
+  if (address.version !== 6 || !networkContains(V6_SIXTOFOUR, address)) {
+    return undefined;
+  }
+  return { version: 4, packed: address.packed.slice(2, 6) };
+}
+
 /** Whether the address is a loopback address. */
 export function isLoopback(address: IpAddress): boolean {
   return (
