@@ -5,16 +5,16 @@
 
 import { describe, expect, it } from "vitest";
 import { loadGolden } from "../testing/golden.ts";
+import type { ControlFrameChunk } from "./index.ts";
 import {
   ControlFrameDecoder,
   ControlFrameProtocolError,
   DLE,
-  STX,
   encodeControlFrame,
   encodeTerminalData,
   isControlFrame,
+  STX,
 } from "./index.ts";
-import type { ControlFrameChunk } from "./index.ts";
 
 interface ControlChannelGolden {
   encode_data: Array<{ data: string; out: string }>;

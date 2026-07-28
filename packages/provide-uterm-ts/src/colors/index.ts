@@ -16,6 +16,6 @@
  */
 
 export { downgradeTo16, downgradeTo256 } from "./downgrade.ts";
-export { type ColorMode, applyColorMode, applyColorModeBytes } from "./mode.ts";
+export { applyColorMode, applyColorModeBytes, type ColorMode } from "./mode.ts";
 export { rgbTo16Index, rgbTo256 } from "./rgb.ts";
 export { type DowngradeTarget, rewriteParams, sgrPattern } from "./sgr.ts";
