@@ -10,3 +10,4 @@
  */
 
 export * from "./expect.ts";
+export * from "./io.ts";
