@@ -1,0 +1,308 @@
+{
+  "cases": [
+    {
+      "name": "a tie at four places",
+      "ndigits": 4,
+      "rounded": 0.0312,
+      "rounded_hex": "0x1.ff2e48e8a71dep-6",
+      "value": 0.03125,
+      "value_hex": "0x1.0000000000000p-5"
+    },
+    {
+      "name": "a tie that rounds down to even",
+      "ndigits": 4,
+      "rounded": 0.4062,
+      "rounded_hex": "0x1.9ff2e48e8a71ep-2",
+      "value": 0.40625,
+      "value_hex": "0x1.a000000000000p-2"
+    },
+    {
+      "name": "a tie one ulp low",
+      "ndigits": 4,
+      "rounded": 0.0312,
+      "rounded_hex": "0x1.ff2e48e8a71dep-6",
+      "value": 0.031249999999999997,
+      "value_hex": "0x1.fffffffffffffp-6"
+    },
+    {
+      "name": "a tie one ulp high",
+      "ndigits": 4,
+      "rounded": 0.0313,
+      "rounded_hex": "0x1.0068db8bac711p-5",
+      "value": 0.03125000000000001,
+      "value_hex": "0x1.0000000000001p-5"
+    },
+    {
+      "name": "a negative tie",
+      "ndigits": 4,
+      "rounded": -0.0312,
+      "rounded_hex": "-0x1.ff2e48e8a71dep-6",
+      "value": -0.03125,
+      "value_hex": "-0x1.0000000000000p-5"
+    },
+    {
+      "name": "a negative tie one ulp low",
+      "ndigits": 4,
+      "rounded": -0.0313,
+      "rounded_hex": "-0x1.0068db8bac711p-5",
+      "value": -0.03125000000000001,
+      "value_hex": "-0x1.0000000000001p-5"
+    },
+    {
+      "name": "a tie at two places",
+      "ndigits": 2,
+      "rounded": 0.12,
+      "rounded_hex": "0x1.eb851eb851eb8p-4",
+      "value": 0.125,
+      "value_hex": "0x1.0000000000000p-3"
+    },
+    {
+      "name": "a tie at two places rounding up to even",
+      "ndigits": 2,
+      "rounded": 0.38,
+      "rounded_hex": "0x1.851eb851eb852p-2",
+      "value": 0.375,
+      "value_hex": "0x1.8000000000000p-2"
+    },
+    {
+      "name": "a tie at one place",
+      "ndigits": 1,
+      "rounded": 0.2,
+      "rounded_hex": "0x1.999999999999ap-3",
+      "value": 0.25,
+      "value_hex": "0x1.0000000000000p-2"
+    },
+    {
+      "name": "a tie at zero places",
+      "ndigits": 0,
+      "rounded": 0.0,
+      "rounded_hex": "0x0.0p+0",
+      "value": 0.5,
+      "value_hex": "0x1.0000000000000p-1"
+    },
+    {
+      "name": "another tie at zero places",
+      "ndigits": 0,
+      "rounded": 2.0,
+      "rounded_hex": "0x1.0000000000000p+1",
+      "value": 1.5,
+      "value_hex": "0x1.8000000000000p+0"
+    },
+    {
+      "name": "a third",
+      "ndigits": 4,
+      "rounded": 0.3333,
+      "rounded_hex": "0x1.554c985f06f69p-2",
+      "value": 0.3333333333333333,
+      "value_hex": "0x1.5555555555555p-2"
+    },
+    {
+      "name": "two thirds",
+      "ndigits": 4,
+      "rounded": 0.6667,
+      "rounded_hex": "0x1.5559b3d07c84bp-1",
+      "value": 0.6666666666666666,
+      "value_hex": "0x1.5555555555555p-1"
+    },
+    {
+      "name": "a seventh",
+      "ndigits": 4,
+      "rounded": 0.1429,
+      "rounded_hex": "0x1.24a8c154c985fp-3",
+      "value": 0.14285714285714285,
+      "value_hex": "0x1.2492492492492p-3"
+    },
+    {
+      "name": "a tenth",
+      "ndigits": 4,
+      "rounded": 0.1,
+      "rounded_hex": "0x1.999999999999ap-4",
+      "value": 0.1,
+      "value_hex": "0x1.999999999999ap-4"
+    },
+    {
+      "name": "something already short",
+      "ndigits": 4,
+      "rounded": 0.5,
+      "rounded_hex": "0x1.0000000000000p-1",
+      "value": 0.5,
+      "value_hex": "0x1.0000000000000p-1"
+    },
+    {
+      "name": "zero",
+      "ndigits": 4,
+      "rounded": 0.0,
+      "rounded_hex": "0x0.0p+0",
+      "value": 0.0,
+      "value_hex": "0x0.0p+0"
+    },
+    {
+      "name": "negative zero",
+      "ndigits": 4,
+      "rounded": -0.0,
+      "rounded_hex": "-0x0.0p+0",
+      "value": -0.0,
+      "value_hex": "-0x0.0p+0"
+    },
+    {
+      "name": "one",
+      "ndigits": 4,
+      "rounded": 1.0,
+      "rounded_hex": "0x1.0000000000000p+0",
+      "value": 1.0,
+      "value_hex": "0x1.0000000000000p+0"
+    },
+    {
+      "name": "negative one",
+      "ndigits": 4,
+      "rounded": -1.0,
+      "rounded_hex": "-0x1.0000000000000p+0",
+      "value": -1.0,
+      "value_hex": "-0x1.0000000000000p+0"
+    },
+    {
+      "name": "a whole number",
+      "ndigits": 4,
+      "rounded": 42.0,
+      "rounded_hex": "0x1.5000000000000p+5",
+      "value": 42.0,
+      "value_hex": "0x1.5000000000000p+5"
+    },
+    {
+      "name": "a negative repeating fraction",
+      "ndigits": 4,
+      "rounded": -0.3333,
+      "rounded_hex": "-0x1.554c985f06f69p-2",
+      "value": -0.3333333333333333,
+      "value_hex": "-0x1.5555555555555p-2"
+    },
+    {
+      "name": "more digits than the value has",
+      "ndigits": 10,
+      "rounded": 0.5,
+      "rounded_hex": "0x1.0000000000000p-1",
+      "value": 0.5,
+      "value_hex": "0x1.0000000000000p-1"
+    },
+    {
+      "name": "no digits at all",
+      "ndigits": 0,
+      "rounded": 2.0,
+      "rounded_hex": "0x1.0000000000000p+1",
+      "value": 2.5,
+      "value_hex": "0x1.4000000000000p+1"
+    },
+    {
+      "name": "a large value",
+      "ndigits": 4,
+      "rounded": 12345.6789,
+      "rounded_hex": "0x1.81cd6e631f8a1p+13",
+      "value": 12345.678901234,
+      "value_hex": "0x1.81cd6e63c529fp+13"
+    },
+    {
+      "name": "larger than any fraction",
+      "ndigits": 4,
+      "rounded": 1.152921504606847e+18,
+      "rounded_hex": "0x1.0000000000000p+60",
+      "value": 1.152921504606847e+18,
+      "value_hex": "0x1.0000000000000p+60"
+    },
+    {
+      "name": "very large indeed",
+      "ndigits": 4,
+      "rounded": 1e+300,
+      "rounded_hex": "0x1.7e43c8800759cp+996",
+      "value": 1e+300,
+      "value_hex": "0x1.7e43c8800759cp+996"
+    },
+    {
+      "name": "negative and very large",
+      "ndigits": 4,
+      "rounded": -1.152921504606847e+18,
+      "rounded_hex": "-0x1.0000000000000p+60",
+      "value": -1.152921504606847e+18,
+      "value_hex": "-0x1.0000000000000p+60"
+    },
+    {
+      "name": "the smallest subnormal",
+      "ndigits": 4,
+      "rounded": 0.0,
+      "rounded_hex": "0x0.0p+0",
+      "value": 5e-324,
+      "value_hex": "0x0.0000000000001p-1022"
+    },
+    {
+      "name": "a larger subnormal",
+      "ndigits": 4,
+      "rounded": 0.0,
+      "rounded_hex": "0x0.0p+0",
+      "value": 1e-320,
+      "value_hex": "0x0.00000000007e8p-1022"
+    },
+    {
+      "name": "a negative subnormal",
+      "ndigits": 4,
+      "rounded": -0.0,
+      "rounded_hex": "-0x0.0p+0",
+      "value": -5e-324,
+      "value_hex": "-0x0.0000000000001p-1022"
+    },
+    {
+      "name": "a very small value",
+      "ndigits": 4,
+      "rounded": 0.0,
+      "rounded_hex": "0x0.0p+0",
+      "value": 1e-09,
+      "value_hex": "0x1.12e0be826d695p-30"
+    },
+    {
+      "name": "a negative very small value",
+      "ndigits": 4,
+      "rounded": -0.0,
+      "rounded_hex": "-0x0.0p+0",
+      "value": -1e-09,
+      "value_hex": "-0x1.12e0be826d695p-30"
+    },
+    {
+      "name": "the classic float surprise",
+      "ndigits": 2,
+      "rounded": 2.67,
+      "rounded_hex": "0x1.55c28f5c28f5cp+1",
+      "value": 2.675,
+      "value_hex": "0x1.5666666666666p+1"
+    },
+    {
+      "name": "its negative",
+      "ndigits": 2,
+      "rounded": -2.67,
+      "rounded_hex": "-0x1.55c28f5c28f5cp+1",
+      "value": -2.675,
+      "value_hex": "-0x1.5666666666666p+1"
+    },
+    {
+      "name": "a value whose scaling would drift",
+      "ndigits": 2,
+      "rounded": 1.0,
+      "rounded_hex": "0x1.0000000000000p+0",
+      "value": 1.005,
+      "value_hex": "0x1.0147ae147ae14p+0"
+    },
+    {
+      "name": "another scaling drift",
+      "ndigits": 2,
+      "rounded": 1.01,
+      "rounded_hex": "0x1.028f5c28f5c29p+0",
+      "value": 1.015,
+      "value_hex": "0x1.03d70a3d70a3dp+0"
+    },
+    {
+      "name": "a third scaling drift",
+      "ndigits": 2,
+      "rounded": 8.84,
+      "rounded_hex": "0x1.1ae147ae147aep+3",
+      "value": 8.835,
+      "value_hex": "0x1.1ab851eb851ecp+3"
+    }
+  ]
+}

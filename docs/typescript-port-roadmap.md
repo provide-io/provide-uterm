@@ -72,7 +72,7 @@ corpus match CPython byte for byte.
 | `emulator` | `emulator` | `emulator` | **done** |
 | `render` | `render` | `render` | **partial** — SGR row rendering; image/palette/segments outstanding |
 | `detection` | `detection` | `detection` | **partial** — screen buffer and input-type heuristic; rule engine, extractor and flow outstanding |
-| `deckmux` | `deckmux` | `deckmux` | **partial** — the wire protocol, the presence store with its untrusted-value bounds, and control transfer with the keystroke queue; the service outstanding |
+| `deckmux` | `deckmux` | `deckmux` | **partial** — the wire protocol, the presence store with its untrusted-value bounds, control transfer with the keystroke queue, derived names/colours and the edge-bar geometry; the identity bridge, service and hub mixin outstanding |
 | `annotation` | `provide-uterm-annotation` | `annotation` | **done** — the 20 built-in rules, the detector and the streaming boundary carry |
 
 ### Session and transport

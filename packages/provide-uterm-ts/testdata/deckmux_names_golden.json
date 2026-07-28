@@ -1,0 +1,513 @@
+{
+  "adjectives": [
+    "red",
+    "blue",
+    "green",
+    "amber",
+    "silver",
+    "coral",
+    "jade",
+    "onyx",
+    "pearl",
+    "ruby",
+    "gold",
+    "iron",
+    "copper",
+    "bronze",
+    "crystal",
+    "storm",
+    "frost",
+    "ember",
+    "dusk",
+    "dawn",
+    "ash",
+    "moss",
+    "slate",
+    "flint",
+    "cedar",
+    "birch",
+    "maple",
+    "sage",
+    "thorn",
+    "drift",
+    "spark",
+    "blaze"
+  ],
+  "animals": [
+    "fox",
+    "hawk",
+    "wolf",
+    "otter",
+    "lynx",
+    "crane",
+    "bear",
+    "deer",
+    "eagle",
+    "raven",
+    "heron",
+    "viper",
+    "shark",
+    "whale",
+    "tiger",
+    "panther",
+    "falcon",
+    "condor",
+    "bison",
+    "moose",
+    "cobra",
+    "gecko",
+    "puma",
+    "osprey",
+    "badger",
+    "ferret",
+    "marten",
+    "jackal",
+    "ibis",
+    "newt",
+    "pike",
+    "wren",
+    "tanuki"
+  ],
+  "centers": [
+    {
+      "center": 22,
+      "name": "an even height",
+      "scroll_top": 10,
+      "visible_lines": 24
+    },
+    {
+      "center": 22,
+      "name": "an odd height",
+      "scroll_top": 10,
+      "visible_lines": 25
+    },
+    {
+      "center": 10,
+      "name": "a single line",
+      "scroll_top": 10,
+      "visible_lines": 1
+    },
+    {
+      "center": 10,
+      "name": "no height",
+      "scroll_top": 10,
+      "visible_lines": 0
+    },
+    {
+      "center": 12,
+      "name": "from the top",
+      "scroll_top": 0,
+      "visible_lines": 24
+    }
+  ],
+  "color_walk": [
+    {
+      "color": "#9b59b6",
+      "name": "nothing taken",
+      "steps_taken": 0,
+      "taken": []
+    },
+    {
+      "color": "#e67e22",
+      "name": "its natural slot taken",
+      "steps_taken": 1,
+      "taken": [
+        "#9b59b6"
+      ]
+    },
+    {
+      "color": "#1abc9c",
+      "name": "two in a row taken",
+      "steps_taken": 2,
+      "taken": [
+        "#9b59b6",
+        "#e67e22"
+      ]
+    },
+    {
+      "color": "#2ecc71",
+      "name": "all but the last taken",
+      "steps_taken": 11,
+      "taken": [
+        "#9b59b6",
+        "#e67e22",
+        "#1abc9c",
+        "#f39c12",
+        "#e91e63",
+        "#00bcd4",
+        "#8bc34a",
+        "#ff5722",
+        "#607d8b",
+        "#e74c3c",
+        "#3498db"
+      ]
+    },
+    {
+      "color": "#9b59b6",
+      "name": "everything taken",
+      "steps_taken": 12,
+      "taken": [
+        "#9b59b6",
+        "#e67e22",
+        "#1abc9c",
+        "#f39c12",
+        "#e91e63",
+        "#00bcd4",
+        "#8bc34a",
+        "#ff5722",
+        "#607d8b",
+        "#e74c3c",
+        "#3498db",
+        "#2ecc71"
+      ]
+    }
+  ],
+  "colors": [
+    "#e74c3c",
+    "#3498db",
+    "#2ecc71",
+    "#9b59b6",
+    "#e67e22",
+    "#1abc9c",
+    "#f39c12",
+    "#e91e63",
+    "#00bcd4",
+    "#8bc34a",
+    "#ff5722",
+    "#607d8b"
+  ],
+  "edge": [
+    {
+      "height_pct": 1.0,
+      "name": "the whole buffer visible",
+      "scroll_top_line": 0,
+      "top_pct": 0.0,
+      "total_lines": 24,
+      "visible_lines": 24
+    },
+    {
+      "height_pct": 0.24,
+      "name": "the top of a long buffer",
+      "scroll_top_line": 0,
+      "top_pct": 0.0,
+      "total_lines": 100,
+      "visible_lines": 24
+    },
+    {
+      "height_pct": 0.24,
+      "name": "the middle",
+      "scroll_top_line": 38,
+      "top_pct": 0.38,
+      "total_lines": 100,
+      "visible_lines": 24
+    },
+    {
+      "height_pct": 0.24,
+      "name": "the bottom",
+      "scroll_top_line": 76,
+      "top_pct": 0.76,
+      "total_lines": 100,
+      "visible_lines": 24
+    },
+    {
+      "height_pct": 0.1,
+      "name": "scrolled past the end",
+      "scroll_top_line": 90,
+      "top_pct": 0.9,
+      "total_lines": 100,
+      "visible_lines": 24
+    },
+    {
+      "height_pct": 1.0,
+      "name": "no lines at all",
+      "scroll_top_line": 0,
+      "top_pct": 0.0,
+      "total_lines": 0,
+      "visible_lines": 24
+    },
+    {
+      "height_pct": 1.0,
+      "name": "a negative total",
+      "scroll_top_line": 0,
+      "top_pct": 0.0,
+      "total_lines": -1,
+      "visible_lines": 24
+    },
+    {
+      "height_pct": 1.0,
+      "name": "more visible than there are lines",
+      "scroll_top_line": 0,
+      "top_pct": 0.0,
+      "total_lines": 24,
+      "visible_lines": 100
+    },
+    {
+      "height_pct": 0.3333,
+      "name": "a third",
+      "scroll_top_line": 1,
+      "top_pct": 0.3333,
+      "total_lines": 3,
+      "visible_lines": 1
+    },
+    {
+      "height_pct": 0.3333,
+      "name": "two thirds",
+      "scroll_top_line": 2,
+      "top_pct": 0.6667,
+      "total_lines": 3,
+      "visible_lines": 1
+    },
+    {
+      "height_pct": 0.1429,
+      "name": "a seventh",
+      "scroll_top_line": 1,
+      "top_pct": 0.1429,
+      "total_lines": 7,
+      "visible_lines": 1
+    },
+    {
+      "height_pct": 0.0312,
+      "name": "exactly on a rounding half",
+      "scroll_top_line": 1,
+      "top_pct": 0.0312,
+      "total_lines": 32,
+      "visible_lines": 1
+    },
+    {
+      "height_pct": 0.0312,
+      "name": "the next half up",
+      "scroll_top_line": 5,
+      "top_pct": 0.1562,
+      "total_lines": 32,
+      "visible_lines": 1
+    },
+    {
+      "height_pct": 0.0312,
+      "name": "a half that rounds the other way",
+      "scroll_top_line": 13,
+      "top_pct": 0.4062,
+      "total_lines": 32,
+      "visible_lines": 1
+    }
+  ],
+  "initials": [
+    {
+      "display": "Red Fox",
+      "initials": "RF",
+      "name": "two words"
+    },
+    {
+      "display": "Alice",
+      "initials": "AL",
+      "name": "one word"
+    },
+    {
+      "display": "A",
+      "initials": "A",
+      "name": "one short word"
+    },
+    {
+      "display": "Mary Jane Watson",
+      "initials": "MJ",
+      "name": "three words"
+    },
+    {
+      "display": "",
+      "initials": "",
+      "name": "empty"
+    },
+    {
+      "display": " Bob Smith",
+      "initials": "BS",
+      "name": "leading space"
+    },
+    {
+      "display": "Bob\tSmith",
+      "initials": "BS",
+      "name": "a tab between the words"
+    },
+    {
+      "display": "Bob  Smith",
+      "initials": "BS",
+      "name": "two spaces between the words"
+    },
+    {
+      "display": "Bob\nSmith",
+      "initials": "BS",
+      "name": "a newline between the words"
+    },
+    {
+      "display": "red fox",
+      "initials": "RF",
+      "name": "lower case"
+    },
+    {
+      "display": "Ünter Straße",
+      "initials": "ÜS",
+      "name": "unicode"
+    },
+    {
+      "display": "😀",
+      "initials": "😀",
+      "name": "a single unicode char"
+    },
+    {
+      "display": "😀😁",
+      "initials": "😀😁",
+      "name": "two astral characters"
+    },
+    {
+      "display": "😀x",
+      "initials": "😀X",
+      "name": "an astral character and a letter"
+    }
+  ],
+  "names": [
+    {
+      "color": "#9b59b6",
+      "connection_id": "conn-1",
+      "hash": "81147307047316163030579473219414020596304580661214900775769238594301991371743",
+      "initials": "BT",
+      "name": "Blaze Tanuki"
+    },
+    {
+      "color": "#3498db",
+      "connection_id": "conn-2",
+      "hash": "111166330622141693830071289039694121102534924817086115627388310485813567777317",
+      "initials": "CG",
+      "name": "Coral Gecko"
+    },
+    {
+      "color": "#e74c3c",
+      "connection_id": "conn-3",
+      "hash": "103040949851559540870863548927041002043797257641636851272290339926152511423736",
+      "initials": "CW",
+      "name": "Cedar Wren"
+    },
+    {
+      "color": "#00bcd4",
+      "connection_id": "abc123",
+      "hash": "49134673262984350012203662936972218187780495801618915546443112853445148770448",
+      "initials": "FT",
+      "name": "Frost Tiger"
+    },
+    {
+      "color": "#3498db",
+      "connection_id": "",
+      "hash": "102987336249554097029535212322581322789799900648198034993379397001115665086549",
+      "initials": "MP",
+      "name": "Moss Panther"
+    },
+    {
+      "color": "#e91e63",
+      "connection_id": "a",
+      "hash": "91634880152443617534842621287039938041581081254914058002978601050179556493499",
+      "initials": "SO",
+      "name": "Sage Otter"
+    },
+    {
+      "color": "#8bc34a",
+      "connection_id": "0000000000000000000000000000000000000000000000000000000000000000",
+      "hash": "43818440918752194932361111069974500978685488528537958092503678290143620697941",
+      "initials": "MW",
+      "name": "Moss Wolf"
+    },
+    {
+      "color": "#ff5722",
+      "connection_id": "user@host",
+      "hash": "42193267188469655258437171357714309615441537844966389640547143812367410825846",
+      "initials": "SB",
+      "name": "Slate Bison"
+    },
+    {
+      "color": "#8bc34a",
+      "connection_id": "héllo",
+      "hash": "27266598955776302384162412470401681156362214092355812932576774604444209152377",
+      "initials": "BM",
+      "name": "Birch Marten"
+    },
+    {
+      "color": "#3498db",
+      "connection_id": "😀",
+      "hash": "108675630968267008227778572451170725577785950928504733736152867604697062040281",
+      "initials": "BR",
+      "name": "Birch Raven"
+    },
+    {
+      "color": "#9b59b6",
+      "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "hash": "26976151650327184665232101549013848897822304147308221808637048383968355394887",
+      "initials": "OW",
+      "name": "Onyx Whale"
+    },
+    {
+      "color": "#3498db",
+      "connection_id": "The quick brown fox",
+      "hash": "41917229102353174899840552341612949239635855496289270050500639532950214983081",
+      "initials": "RR",
+      "name": "Ruby Raven"
+    }
+  ],
+  "positions": [
+    {
+      "line": 0,
+      "name": "the first line",
+      "position": 0.0,
+      "total_lines": 100
+    },
+    {
+      "line": 50,
+      "name": "the middle",
+      "position": 0.5,
+      "total_lines": 100
+    },
+    {
+      "line": 100,
+      "name": "the last line",
+      "position": 1.0,
+      "total_lines": 100
+    },
+    {
+      "line": 150,
+      "name": "past the end",
+      "position": 1.0,
+      "total_lines": 100
+    },
+    {
+      "line": 5,
+      "name": "no lines at all",
+      "position": 0.0,
+      "total_lines": 0
+    },
+    {
+      "line": 5,
+      "name": "a negative total",
+      "position": 0.0,
+      "total_lines": -1
+    },
+    {
+      "line": 1,
+      "name": "a third",
+      "position": 0.3333,
+      "total_lines": 3
+    },
+    {
+      "line": 1,
+      "name": "exactly on a rounding half",
+      "position": 0.0312,
+      "total_lines": 32
+    },
+    {
+      "line": 5,
+      "name": "the next half up",
+      "position": 0.1562,
+      "total_lines": 32
+    },
+    {
+      "line": 13,
+      "name": "a half that rounds the other way",
+      "position": 0.4062,
+      "total_lines": 32
+    }
+  ]
+}

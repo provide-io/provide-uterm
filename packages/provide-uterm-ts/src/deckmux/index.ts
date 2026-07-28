@@ -9,6 +9,8 @@
  * Port of the Python package `provide.uterm.deckmux`.
  */
 
+export * from "./edge.ts";
+export * from "./names.ts";
 export * from "./presence.ts";
 export * from "./protocol.ts";
 export * from "./transfer.ts";
