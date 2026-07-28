@@ -155,19 +155,18 @@ learn about a fourth implementation:
 | `ci/quality_checks.sh` | golden-corpus drift gate | **done** |
 | `.github/workflows/ci.yml` | typecheck, lint and coverage in `npm-quality` | **done** |
 
-## Blocked: telemetry
+## Telemetry: fixed upstream, waiting on a release
 
 The port must log through `provide.telemetry`, never through OpenTelemetry
 directly — the same rule the Python reference and the Go port follow. The
-TypeScript sibling exists and is the right dependency:
-`@provide-io/telemetry`, which exports `getLogger` / `Logger` (the analogue
-of Go's `ptel.GetLogger`) and keeps OpenTelemetry as an optional peer
-dependency with a browser no-op.
+TypeScript sibling is the right dependency: `@provide-io/telemetry`, which
+exports `getLogger` / `Logger` (the analogue of Go's `ptel.GetLogger`) and
+keeps OpenTelemetry as an optional peer dependency with a browser no-op.
 
-**It cannot be consumed from Node as published.** `@provide-io/telemetry@0.5.2`
-declares `"type": "module"` but its `dist/` contains 115 extensionless
-relative imports (`from './config'`). Node's ESM resolver requires full
-specifiers, so importing the package fails outright:
+`@provide-io/telemetry@0.5.2` — still what npm serves — cannot be imported
+from Node at all. It declares `"type": "module"` but its `dist/` contains 115
+extensionless relative imports (`from './config'`), which Node's ESM resolver
+rejects:
 
 ```
 $ node --input-type=module -e "import('@provide-io/telemetry')"
@@ -175,18 +174,22 @@ ERR_MODULE_NOT_FOUND: Cannot find module '.../dist/config'
     imported from .../dist/index.js
 ```
 
-Root cause is in `provide-telemetry/typescript/tsconfig.json`: it builds with
-`"moduleResolution": "bundler"` and emits with plain `tsc`. Bundler
-resolution allows extensionless specifiers in source and `tsc` does not
-rewrite them on emit, so the output is only loadable by a bundler. That is
-consistent with the package's stated focus on frontends, but this port is a
-Node runtime.
+Root cause was in `provide-telemetry/typescript/tsconfig.json`: it built with
+`"moduleResolution": "bundler"` and emitted with plain `tsc`. Bundler
+resolution allows extensionless specifiers in source, `tsc` does not rewrite
+them on emit, and the result loads only under a bundler.
 
-Any one of these fixes it upstream:
+**Fixed upstream** in `provide-telemetry` (`292d306c`, not yet published):
+`nodenext` resolution with explicit `.js` specifiers across source, tests and
+scripts. Nothing already in that repo's pipeline could have caught this —
+lint, typecheck and its 1666-test vitest suite all resolve like a bundler and
+were green the whole time it was broken — so the fix also adds
+`ci/verify-npm-consumer-package.sh`, which packs the tarball and imports every
+entry point from a real Node process. It was verified to exit 1 against a
+`dist/` with the extensions stripped back off.
 
-1. `"moduleResolution": "nodenext"` with `.js` specifiers in source.
-2. `"rewriteRelativeImportExtensions": true` with `.ts` specifiers.
-3. A bundling step for the Node entry point.
+**Remaining step: publish.** This port picks the dependency up when a release
+carrying that fix reaches npm.
 
 **What is unblocked meanwhile.** The layering the Go port uses — library
 packages take an injectable logger, only transports and above call
@@ -199,8 +202,8 @@ depend on that and stay decoupled and testable today.
 `getLogger`, so the layers above the libraries are not held up. It emits the
 same structured record shape (name, level, field object, optional message)
 behind the same `Logger` interface, which makes it a re-export away from the
-real thing: when the dependency becomes usable, that module collapses to an
-export line and no caller changes.
+real thing: when the release lands, that module collapses to an export line
+and no caller changes.
 
 What it deliberately does **not** do, because faking it would be worse than
 its absence: trace and span correlation, sampling, PII redaction, and OTLP
@@ -208,10 +211,10 @@ export. Those are precisely why the real package is the target rather than
 this being treated as sufficient. Deleting it is the definition of done for
 this section.
 
-When the dependency is usable, `src/telemetry/` re-exports the real
-`getLogger` and swaps its interface for the imported one — a type-level no-op
-for every caller — and becomes the only place the package name appears, with
-a CI check forbidding direct `@opentelemetry/*` imports.
+When the release lands, `src/telemetry/` re-exports the real `getLogger` and
+swaps its interface for the imported one — a type-level no-op for every
+caller — and becomes the only place the package name appears, with a CI check
+forbidding direct `@opentelemetry/*` imports.
 
 ## Recorded divergences
 
