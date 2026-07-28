@@ -152,7 +152,7 @@ corpus match CPython byte for byte.
 | `manager` | External Management Tier | `manager` | todo |
 | `mcp` | client `ai`/MCP (28 tools) | `mcp` | todo |
 | `cli` | server CLI (`uterm`) | `cli` | todo |
-| `cloudflare` | `provide-uterm-cloudflare` (53 files, ~8.3k lines) | — | **partial** — the Worker configuration with its startup refusals, the KV session registry, and the whole Durable Object state store (schema, session metadata, invite state, lease state, snapshots, event log, recording view, webhooks and resume tokens); the session runtime's flow controller, its WebSocket attachment reading, webhook secret encryption, the polling server-sent-events endpoint, and the JWT claim handling (token splitting, JWKS key choice, standard-claim validation, role derivation and token extraction); the Worker entry, the rest of the session runtime, transport, auth and routes outstanding |
+| `cloudflare` | `provide-uterm-cloudflare` (53 files, ~8.3k lines) | — | **partial** — the Worker configuration with its startup refusals, the KV session registry, and the whole Durable Object state store (schema, session metadata, invite state, lease state, snapshots, event log, recording view, webhooks and resume tokens); the session runtime's flow controller, its WebSocket attachment reading, webhook secret encryption, the polling server-sent-events endpoint, and the whole JWT auth path (token splitting, JWKS key choice and its caching endpoint, standard-claim validation, RS256 signature verification, role derivation, principal derivation and token extraction); the Worker entry, the rest of the session runtime, transport, auth and routes outstanding |
 
 #### Cloudflare Durable Objects
 

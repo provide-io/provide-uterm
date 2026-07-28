@@ -1,0 +1,325 @@
+{
+  "cache_steps": [
+    {
+      "elapsed": 0.0,
+      "endpoint_failing": false,
+      "error": null,
+      "fetched": true,
+      "keys": [
+        {
+          "kid": "k1"
+        }
+      ],
+      "name": "the first fetch"
+    },
+    {
+      "elapsed": 1.0,
+      "endpoint_failing": false,
+      "error": null,
+      "fetched": false,
+      "keys": [
+        {
+          "kid": "k1"
+        }
+      ],
+      "name": "again, inside the ttl"
+    },
+    {
+      "elapsed": 61.0,
+      "endpoint_failing": false,
+      "error": null,
+      "fetched": true,
+      "keys": [
+        {
+          "kid": "k1"
+        }
+      ],
+      "name": "after the ttl, the endpoint healthy"
+    },
+    {
+      "elapsed": 122.0,
+      "endpoint_failing": true,
+      "error": null,
+      "fetched": true,
+      "keys": [
+        {
+          "kid": "k1"
+        }
+      ],
+      "name": "after the ttl, the endpoint down"
+    },
+    {
+      "elapsed": 123.0,
+      "endpoint_failing": true,
+      "error": null,
+      "fetched": false,
+      "keys": [
+        {
+          "kid": "k1"
+        }
+      ],
+      "name": "again, inside the negative ttl"
+    },
+    {
+      "elapsed": 128.0,
+      "endpoint_failing": true,
+      "error": null,
+      "fetched": true,
+      "keys": [
+        {
+          "kid": "k1"
+        }
+      ],
+      "name": "after the negative ttl, still down"
+    },
+    {
+      "elapsed": 134.0,
+      "endpoint_failing": false,
+      "error": null,
+      "fetched": true,
+      "keys": [
+        {
+          "kid": "k1"
+        }
+      ],
+      "name": "after the negative ttl, recovered"
+    }
+  ],
+  "cache_ttl_s": 60.0,
+  "first_fetch_failure": {
+    "calls": 1,
+    "error": "RuntimeError"
+  },
+  "negative_ttl_s": 5.0,
+  "principals": [
+    {
+      "claims": {
+        "roles": [
+          "operator"
+        ],
+        "sub": "u1"
+      },
+      "config": {},
+      "error": null,
+      "name": "a user",
+      "roles": [
+        "operator"
+      ],
+      "subject_id": "u1"
+    },
+    {
+      "claims": {
+        "sub": "u1"
+      },
+      "config": {},
+      "error": null,
+      "name": "a user with no roles",
+      "roles": [
+        "viewer"
+      ],
+      "subject_id": "u1"
+    },
+    {
+      "claims": {
+        "sub": 7
+      },
+      "config": {},
+      "error": null,
+      "name": "a subject that is a number",
+      "roles": [
+        "viewer"
+      ],
+      "subject_id": "7"
+    },
+    {
+      "claims": {
+        "roles": [
+          "admin"
+        ]
+      },
+      "config": {},
+      "error": "missing sub",
+      "name": "no subject at all",
+      "roles": null,
+      "subject_id": null
+    },
+    {
+      "claims": {
+        "sub": ""
+      },
+      "config": {},
+      "error": "missing sub",
+      "name": "an empty subject",
+      "roles": null,
+      "subject_id": null
+    },
+    {
+      "claims": {
+        "sub": null
+      },
+      "config": {},
+      "error": "missing sub",
+      "name": "a null subject",
+      "roles": null,
+      "subject_id": null
+    },
+    {
+      "claims": {
+        "common_name": "ci.example"
+      },
+      "config": {},
+      "error": null,
+      "name": "a service token",
+      "roles": [
+        "viewer"
+      ],
+      "subject_id": "ci.example"
+    },
+    {
+      "claims": {
+        "common_name": "ci.example"
+      },
+      "config": {
+        "jwt_service_token_admin": true
+      },
+      "error": null,
+      "name": "a service token, admin opted in",
+      "roles": [
+        "admin"
+      ],
+      "subject_id": "ci.example"
+    },
+    {
+      "claims": {
+        "common_name": "ci.example",
+        "sub": "svc"
+      },
+      "config": {
+        "jwt_service_token_admin": true
+      },
+      "error": null,
+      "name": "a service token with a subject",
+      "roles": [
+        "admin"
+      ],
+      "subject_id": "svc"
+    },
+    {
+      "claims": {
+        "common_name": "ci.example",
+        "email": "a@b",
+        "sub": "u1"
+      },
+      "config": {
+        "jwt_service_token_admin": true
+      },
+      "error": null,
+      "name": "a common name with an email",
+      "roles": [
+        "viewer"
+      ],
+      "subject_id": "u1"
+    },
+    {
+      "claims": {
+        "common_name": "ci.example",
+        "email": "",
+        "sub": "u1"
+      },
+      "config": {
+        "jwt_service_token_admin": true
+      },
+      "error": null,
+      "name": "a common name with an empty email",
+      "roles": [
+        "admin"
+      ],
+      "subject_id": "u1"
+    },
+    {
+      "claims": {
+        "common_name": "ci",
+        "roles": [
+          "viewer"
+        ]
+      },
+      "config": {},
+      "error": null,
+      "name": "a service token with roles of its own",
+      "roles": [
+        "viewer"
+      ],
+      "subject_id": "ci"
+    },
+    {
+      "claims": {
+        "common_name": "ci",
+        "roles": [
+          "viewer"
+        ]
+      },
+      "config": {
+        "jwt_service_token_admin": true
+      },
+      "error": null,
+      "name": "a service token with roles, admin opted in",
+      "roles": [
+        "admin"
+      ],
+      "subject_id": "ci"
+    },
+    {
+      "claims": {
+        "roles": [
+          "admin"
+        ]
+      },
+      "config": {},
+      "error": "missing sub",
+      "name": "neither subject nor common name",
+      "roles": null,
+      "subject_id": null
+    },
+    {
+      "claims": {
+        "roles": [
+          "viewer"
+        ],
+        "sub": "u1"
+      },
+      "config": {
+        "jwt_service_token_admin": true
+      },
+      "error": null,
+      "name": "no email and no common name, admin opted in",
+      "roles": [
+        "viewer"
+      ],
+      "subject_id": "u1"
+    }
+  ],
+  "separate_urls": {
+    "again": [
+      {
+        "kid": "a"
+      }
+    ],
+    "calls": 2,
+    "first": [
+      {
+        "kid": "a"
+      }
+    ],
+    "second": [
+      {
+        "kid": "b"
+      }
+    ]
+  },
+  "unconfigured": {
+    "error": "missing jwt public key"
+  },
+  "verification_failure": {
+    "error": "failed to verify token: the key was unusable"
+  }
+}
