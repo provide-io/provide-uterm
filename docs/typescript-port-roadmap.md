@@ -150,7 +150,15 @@ The existing `provide-uterm-frontend` (lit widgets) and `provide-uterm-app`
 |---|---|
 | Move both browser workspaces onto TypeScript 7 | **done** |
 | React SPA covers every bootstrapped page kind | **done** |
+| SPA consumes `provide-uterm-ts` rather than restating it | **started** — its API paths and methods now come from the shared route table |
 | Port the two standalone lit entry points to React | not planned — see below |
+
+The SPA depends on `provide-uterm-ts` as a workspace package and builds every
+request from `API_ROUTES`, so a route that moves on the Python side reaches
+the browser as a failing test rather than a 404. `api-routes` is deliberately
+free of any `pycompat` import for this reason — that package reaches for
+Node's `Buffer`, which has no place in a browser bundle. Anything else the
+SPA takes from the runtime port has to clear the same bar.
 
 The SPA already handles all six `page_kind` values the server bootstraps:
 `connect`, `dashboard`, `inspect`, `operator`, `replay` and `session`. That

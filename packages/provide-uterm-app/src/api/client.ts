@@ -3,7 +3,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
-export type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
+// Re-exported rather than declared again: the shared contract already says
+// which verbs exist, and a second list here would be a second thing to keep
+// in step.
+export type { HttpMethod } from "provide-uterm-ts/api-routes";
+
+import type { HttpMethod } from "provide-uterm-ts/api-routes";
 
 export async function apiJson<T>(path: string, method: HttpMethod = "GET", body: unknown = null): Promise<T> {
   const init: RequestInit = {
