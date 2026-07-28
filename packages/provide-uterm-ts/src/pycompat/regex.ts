@@ -164,3 +164,62 @@ export function compilePySearch(pattern: string, options: PySearchOptions = {}):
   }
   return new RegExp(source, [...flags].join(""));
 }
+
+/**
+ * The exact set CPython's `re.escape` escapes.
+ *
+ * Since 3.7 it stopped escaping everything non-alphanumeric and settled on
+ * this list — which still includes the whitespace characters, so a space
+ * becomes `\ `. Most hand-written escape helpers leave a space alone, and the
+ * difference shows up in the detector's diagnostics: the escaped text is what
+ * an operator reads back when a rule is not firing.
+ */
+const RE_ESCAPE_CHARS = new Set("()[]{}?*+-|^$\\.&~# \t\n\r\v\f");
+
+/** Escape a string so it matches itself, as CPython's `re.escape`. */
+export function pyReEscape(value: string): string {
+  let out = "";
+  for (const char of value) {
+    out += RE_ESCAPE_CHARS.has(char) ? `\\${char}` : char;
+  }
+  return out;
+}
+
+/** An ASCII question mark — what CPython substitutes when encoding fails. */
+const ENCODE_REPLACEMENT = "?";
+
+/** A UTF-16 unit that is half of a pair. */
+function isSurrogate(code: number): boolean {
+  return code >= 0xd800 && code <= 0xdfff;
+}
+
+/**
+ * Encode as UTF-8 the way `str.encode(errors="replace")` does.
+ *
+ * The replacement is an ASCII question mark, not the U+FFFD that *decoding*
+ * substitutes. The prompt fingerprint hashes these bytes, so reaching for the
+ * wrong character diverges every cache key for a screen carrying an unpaired
+ * surrogate.
+ *
+ * A surrogate that is half of a valid pair is a real character and encodes
+ * normally; only the unpaired ones are replaced.
+ */
+export function pyEncodeReplace(value: string): Buffer {
+  let out = "";
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (!isSurrogate(code)) {
+      out += value[index];
+      continue;
+    }
+    const next = index + 1 < value.length ? value.charCodeAt(index + 1) : Number.NaN;
+    const paired = code <= 0xdbff && next >= 0xdc00 && next <= 0xdfff;
+    if (paired) {
+      out += value.slice(index, index + 2);
+      index += 1;
+      continue;
+    }
+    out += ENCODE_REPLACEMENT;
+  }
+  return Buffer.from(out, "utf-8");
+}
