@@ -10,4 +10,5 @@
  * `render`.
  */
 
+export * from "./palette.ts";
 export * from "./sgr.ts";
