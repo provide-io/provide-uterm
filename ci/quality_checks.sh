@@ -56,6 +56,9 @@ step "pip-audit"          uv run python -m pip_audit --local
 step "licenses"           uv run python scripts/check_licenses.py
 step "performance-smoke"  uv run python scripts/run_performance_smoke.py --iterations 100000 --enforce
 step "cf-vendor-tree"     bash .ci/check_cf_vendor_tree.sh
+# Re-runs the TypeScript port's differential generators against the CPython
+# reference; a stale corpus means the TS tests are asserting old behaviour.
+step "ts-goldens"         bash .ci/check_ts_goldens.sh
 step "package-artifacts"  uv run python scripts/verify_package_artifacts.py
 
 printf '\n=== quality-checks summary ===\n'
