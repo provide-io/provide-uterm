@@ -12,6 +12,7 @@
 
 export * from "./approvals.ts";
 export * from "./connection.ts";
+export * from "./frame-builders.ts";
 export * from "./frames.ts";
 export * from "./lease.ts";
 export * from "./models.ts";
