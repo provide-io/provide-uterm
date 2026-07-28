@@ -10,5 +10,6 @@
  */
 
 export * from "./collector.ts";
+export * from "./controller.ts";
 export * from "./divergence.ts";
 export * from "./models.ts";
