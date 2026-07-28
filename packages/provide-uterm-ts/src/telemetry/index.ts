@@ -10,4 +10,5 @@
  * `@provide-io/telemetry` dependency.
  */
 
+export * from "./get-logger.ts";
 export * from "./logger.ts";
