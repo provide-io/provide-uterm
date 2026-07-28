@@ -68,8 +68,8 @@ export interface MessageRouterOptions {
  * render its JSON onto the user's screen.
  */
 export function encodeBrowserFrame(message: Record<string, unknown>): string {
-  if (String(message["type"] ?? "") === "term") {
-    return encodeTerminalData(String(message["data"] ?? ""));
+  if (String(message.type ?? "") === "term") {
+    return encodeTerminalData(String(message.data ?? ""));
   }
   return encodeControlFrame(message);
 }

@@ -261,7 +261,7 @@ describe("PromptWaiter", () => {
   it("skips a prompt the caller's filter rejects", async () => {
     const session = new ScriptedSession([prompt({ prompt_id: "a" }), prompt({ prompt_id: "b" })]);
     const result = await new PromptWaiter(session).waitForPrompt({
-      onPromptDetected: (detected) => detected["prompt_id"] === "b",
+      onPromptDetected: (detected) => detected.prompt_id === "b",
     });
     expect(result.promptId).toBe("b");
   });
@@ -287,7 +287,7 @@ describe("PromptWaiter", () => {
     const session = new ScriptedSession([prompt({ prompt_id: "a" }), prompt({ prompt_id: "b" })]);
     await new PromptWaiter(session).waitForPrompt({
       expectedPromptId: "b",
-      onPromptSeen: (detected) => seen.push(String(detected["prompt_id"])),
+      onPromptSeen: (detected) => seen.push(String(detected.prompt_id)),
     });
     expect(seen).toStrictEqual(["a", "b"]);
   });

@@ -94,7 +94,7 @@ export class FakeLeaseHub implements LeaseHubCallbacks {
 
   async sendWorker(workerId: string, message: Record<string, unknown>): Promise<boolean> {
     this.sent.push(message);
-    this.calls.push({ call: "send_worker", workerId, action: String(message["action"] ?? "") });
+    this.calls.push({ call: "send_worker", workerId, action: String(message.action ?? "") });
     return true;
   }
 

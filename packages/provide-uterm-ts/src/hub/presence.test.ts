@@ -193,15 +193,15 @@ describe("PresenceManager worker pokes", () => {
     const { hub, presence } = build();
     await presence.requestSnapshot("w1");
     expect(hub.sent).toHaveLength(1);
-    expect(hub.sent[0]?.["type"]).toBe(golden.control_frames.types[0]);
-    expect(hub.sent[0]?.["ts"]).toBe(golden.control_frames.timestamps[0]);
+    expect(hub.sent[0]?.type).toBe(golden.control_frames.types[0]);
+    expect(hub.sent[0]?.ts).toBe(golden.control_frames.timestamps[0]);
     expect(Object.keys(hub.sent[0] ?? {}).sort()).toStrictEqual(golden.control_frames.keys[0]);
   });
 
   it("sends an analysis request", async () => {
     const { hub, presence } = build();
     await presence.requestAnalysis("w1");
-    expect(hub.sent[0]?.["type"]).toBe(golden.control_frames.types[1]);
+    expect(hub.sent[0]?.type).toBe(golden.control_frames.types[1]);
   });
 
   it("gives each request its own id", async () => {
@@ -211,15 +211,15 @@ describe("PresenceManager worker pokes", () => {
     const { hub, presence } = build();
     await presence.requestSnapshot("w1");
     await presence.requestSnapshot("w1");
-    expect(hub.sent[0]?.["req_id"]).not.toBe(hub.sent[1]?.["req_id"]);
-    expect(String(hub.sent[0]?.["req_id"]).length).toBe(golden.control_frames.req_id_lengths[0]);
+    expect(hub.sent[0]?.req_id).not.toBe(hub.sent[1]?.req_id);
+    expect(String(hub.sent[0]?.req_id).length).toBe(golden.control_frames.req_id_lengths[0]);
   });
 
   it("stamps a poke with wall time by default", async () => {
     const hub = new FakeHub();
     const presence = new PresenceManager({ hub });
     await presence.requestSnapshot("w1");
-    expect(Math.abs(Number(hub.sent[0]?.["ts"]) - Date.now() / 1000)).toBeLessThan(5);
+    expect(Math.abs(Number(hub.sent[0]?.ts) - Date.now() / 1000)).toBeLessThan(5);
   });
 });
 

@@ -15,7 +15,7 @@ import {
   WorkerTermState,
 } from "./index.ts";
 
-export interface HubLeaseGolden {
+interface HubLeaseGolden {
   now: number;
   dashboard_lease_s: number;
   clamps: Array<{ name: string; requested: number; clamped: number; via_setter: number }>;
@@ -342,43 +342,43 @@ describe("HijackLeaseManager.tryAcquireWs", () => {
 describe("HijackLeaseManager.touchOwner", () => {
   it("extends by the configured TTL by default", async () => {
     const { manager } = build({ owner: BROWSER, ownerExpiresAt: NOW + 1 });
-    expect(await manager.touchOwner("w1")).toBe(golden.touch["default_ttl"]);
+    expect(await manager.touchOwner("w1")).toBe(golden.touch.default_ttl);
   });
 
   it("extends by an explicit TTL", async () => {
     const { manager } = build({ owner: BROWSER, ownerExpiresAt: NOW + 1 });
-    expect(await manager.touchOwner("w1", 120)).toBe(golden.touch["explicit"]);
+    expect(await manager.touchOwner("w1", 120)).toBe(golden.touch.explicit);
   });
 
   it("clamps an explicit TTL to the bounds", async () => {
     const { manager } = build({ owner: BROWSER, ownerExpiresAt: NOW + 1 });
-    expect(await manager.touchOwner("w1", 9999)).toBe(golden.touch["clamped_high"]);
-    expect(await manager.touchOwner("w1", 0)).toBe(golden.touch["clamped_low"]);
+    expect(await manager.touchOwner("w1", 9999)).toBe(golden.touch.clamped_high);
+    expect(await manager.touchOwner("w1", 0)).toBe(golden.touch.clamped_low);
   });
 
   it("returns nothing for an unknown worker or one with no owner", async () => {
     const { manager } = build({ owner: BROWSER, ownerExpiresAt: NOW + 1 });
-    expect(await manager.touchOwner("nope")).toBe(golden.touch["unknown"] ?? undefined);
+    expect(await manager.touchOwner("nope")).toBe(golden.touch.unknown ?? undefined);
     const bare = build({});
-    expect(await bare.manager.touchOwner("w1")).toBe(golden.touch["no_owner"] ?? undefined);
+    expect(await bare.manager.touchOwner("w1")).toBe(golden.touch.no_owner ?? undefined);
   });
 });
 
 describe("HijackLeaseManager.touchIfOwner", () => {
   it("extends the lease for the holder", async () => {
     const { manager } = build({ owner: BROWSER, ownerExpiresAt: NOW + 1 });
-    expect(await manager.touchIfOwner("w1", BROWSER)).toBe(golden.touch["matching"]);
+    expect(await manager.touchIfOwner("w1", BROWSER)).toBe(golden.touch.matching);
   });
 
   it("refuses for anyone else", async () => {
     // Otherwise any connected browser could keep someone else's hold alive.
     const { manager } = build({ owner: BROWSER, ownerExpiresAt: NOW + 1 });
-    expect(await manager.touchIfOwner("w1", OTHER)).toBe(golden.touch["mismatched"] ?? undefined);
+    expect(await manager.touchIfOwner("w1", OTHER)).toBe(golden.touch.mismatched ?? undefined);
   });
 
   it("extends a perpetual hold", async () => {
     const { manager } = build({ owner: BROWSER });
-    expect(await manager.touchIfOwner("w1", BROWSER)).toBe(golden.touch["perpetual_touch"]);
+    expect(await manager.touchIfOwner("w1", BROWSER)).toBe(golden.touch.perpetual_touch);
   });
 
   it("returns nothing for an unknown worker", async () => {

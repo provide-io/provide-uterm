@@ -104,8 +104,8 @@ describe("TransportSession lifecycle", () => {
     const transport = new ScriptedTransport();
     const session = new TransportSession({ transport, cols: 100, rows: 40 });
     await session.connect();
-    expect(session.snapshot()["cols"]).toBe(100);
-    expect(session.snapshot()["rows"]).toBe(40);
+    expect(session.snapshot().cols).toBe(100);
+    expect(session.snapshot().rows).toBe(40);
     await session.close();
   });
 
@@ -141,7 +141,7 @@ describe("TransportSession screen", () => {
   it("feeds received bytes into the emulator", async () => {
     const { transport, session } = await build();
     await transport.feed("hello");
-    expect(session.snapshot()["screen"]).toContain("hello");
+    expect(session.snapshot().screen).toContain("hello");
     await session.close();
   });
 
@@ -252,7 +252,7 @@ describe("TransportSession watchers", () => {
     const screensAtWatchTime: string[] = [];
     const { transport, session } = await build();
     session.addWatch(() => {
-      screensAtWatchTime.push(String(session.snapshot()["screen"]));
+      screensAtWatchTime.push(String(session.snapshot().screen));
     });
     await transport.feed("first");
     await transport.feed("second");
@@ -273,7 +273,7 @@ describe("TransportSession watchers", () => {
     session.addWatch((_snapshot, raw) => seen.push(raw));
     await transport.feed("data");
     expect(seen).toStrictEqual(["data"]);
-    expect(session.snapshot()["screen"]).toContain("data");
+    expect(session.snapshot().screen).toContain("data");
     await session.close();
   });
 });
@@ -282,7 +282,7 @@ describe("TransportSession control frames", () => {
   it("passes plain terminal data straight through", async () => {
     const { transport, session } = await build({ controlChannel: true });
     await transport.feed(encodeTerminalData("hello"));
-    expect(session.snapshot()["screen"]).toContain("hello");
+    expect(session.snapshot().screen).toContain("hello");
     await session.close();
   });
 
@@ -294,7 +294,7 @@ describe("TransportSession control frames", () => {
     session.addControlFrameWatch((frame) => seen.push(frame));
     await transport.feed(encodeControlFrame({ type: "hijack_state", hijacked: true }));
     expect(seen).toStrictEqual([{ type: "hijack_state", hijacked: true }]);
-    expect(session.snapshot()["screen"]).not.toContain("hijack_state");
+    expect(session.snapshot().screen).not.toContain("hijack_state");
     await session.close();
   });
 
@@ -314,7 +314,7 @@ describe("TransportSession control frames", () => {
     session.addControlFrameWatch((frame) => seen.push(frame));
     await transport.feed(encodeControlFrame({ type: "ping" }) + encodeTerminalData("after"));
     expect(seen).toHaveLength(1);
-    expect(session.snapshot()["screen"]).toContain("after");
+    expect(session.snapshot().screen).toContain("after");
     await session.close();
   });
 

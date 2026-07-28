@@ -38,18 +38,18 @@ function expectParse(
 
 describe("telnet constants", () => {
   it("match the reference", () => {
-    expect(TELNET.IAC).toBe(golden.constants["IAC"]);
-    expect(TELNET.WILL).toBe(golden.constants["WILL"]);
-    expect(TELNET.WONT).toBe(golden.constants["WONT"]);
-    expect(TELNET.DO).toBe(golden.constants["DO"]);
-    expect(TELNET.DONT).toBe(golden.constants["DONT"]);
-    expect(TELNET.SB).toBe(golden.constants["SB"]);
-    expect(TELNET.SE).toBe(golden.constants["SE"]);
-    expect(TELNET.OPT_BINARY).toBe(golden.constants["OPT_BINARY"]);
-    expect(TELNET.OPT_ECHO).toBe(golden.constants["OPT_ECHO"]);
-    expect(TELNET.OPT_SGA).toBe(golden.constants["OPT_SGA"]);
-    expect(TELNET.OPT_NAWS).toBe(golden.constants["OPT_NAWS"]);
-    expect(TELNET.OPT_TTYPE).toBe(golden.constants["OPT_TTYPE"]);
+    expect(TELNET.IAC).toBe(golden.constants.IAC);
+    expect(TELNET.WILL).toBe(golden.constants.WILL);
+    expect(TELNET.WONT).toBe(golden.constants.WONT);
+    expect(TELNET.DO).toBe(golden.constants.DO);
+    expect(TELNET.DONT).toBe(golden.constants.DONT);
+    expect(TELNET.SB).toBe(golden.constants.SB);
+    expect(TELNET.SE).toBe(golden.constants.SE);
+    expect(TELNET.OPT_BINARY).toBe(golden.constants.OPT_BINARY);
+    expect(TELNET.OPT_ECHO).toBe(golden.constants.OPT_ECHO);
+    expect(TELNET.OPT_SGA).toBe(golden.constants.OPT_SGA);
+    expect(TELNET.OPT_NAWS).toBe(golden.constants.OPT_NAWS);
+    expect(TELNET.OPT_TTYPE).toBe(golden.constants.OPT_TTYPE);
   });
 });
 

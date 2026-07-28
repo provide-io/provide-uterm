@@ -246,7 +246,7 @@ describe("FanOutController policy", () => {
     const { controller, hub } = build({ policyGate: { interceptFanout: async () => ({ action: "hold" }) } });
     await controller.createGroup(group(["w1"]), "alice");
     await controller.send("g1", "x".repeat(900), "alice");
-    expect(String(hub.events[0]?.data?.["command"]).length).toBe(500);
+    expect(String(hub.events[0]?.data?.command).length).toBe(500);
   });
 
   it("runs a held command once it is approved", async () => {

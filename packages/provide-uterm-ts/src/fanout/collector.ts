@@ -51,7 +51,7 @@ function monotonicNow(): number {
 
 /** The string at `key` in an event payload, or empty when there is none. */
 function textField(event: Record<string, unknown>, key: string): string {
-  const data = event["data"];
+  const data = event.data;
   // Events come off a bus shared with other producers; a malformed payload
   // must not throw in the middle of a fan-out.
   if (typeof data !== "object" || data === null) {
@@ -98,7 +98,7 @@ export async function collectOutput(options: CollectOutputOptions): Promise<Coll
       if (event === undefined || event === null) {
         break;
       }
-      if (event["type"] === "term") {
+      if (event.type === "term") {
         const text = textField(event, "data");
         if (text !== "") {
           termChunks.push(text);

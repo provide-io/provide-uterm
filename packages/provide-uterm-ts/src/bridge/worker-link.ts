@@ -94,8 +94,8 @@ export function toWsUrl(managerUrl: string, path: string): string {
  * envelope.
  */
 export function encodeBridgeFrame(message: Record<string, unknown>): string {
-  if (String(message["type"] ?? "") === "term") {
-    return encodeTerminalData(String(message["data"] ?? ""));
+  if (String(message.type ?? "") === "term") {
+    return encodeTerminalData(String(message.data ?? ""));
   }
   return encodeControlFrame(message);
 }
@@ -142,13 +142,13 @@ export class WorkerLink {
 
   /** Apply one control message from the hub. */
   async handleControl(message: Record<string, unknown>): Promise<void> {
-    const type = message["type"];
+    const type = message.type;
     if (type === "snapshot_req") {
       await this.#sendSnapshot();
       return;
     }
     if (type === "control") {
-      await this.#applyAction(message["action"]);
+      await this.#applyAction(message.action);
       return;
     }
     if (type === "resize") {
@@ -156,8 +156,8 @@ export class WorkerLink {
       // default rather than reaching the kernel.
       await this.#guard(() =>
         this.#worker.setSize(
-          safeInt(message["cols"], DEFAULT_COLS, { minVal: 1 }),
-          safeInt(message["rows"], DEFAULT_ROWS, { minVal: 1 }),
+          safeInt(message.cols, DEFAULT_COLS, { minVal: 1 }),
+          safeInt(message.rows, DEFAULT_ROWS, { minVal: 1 }),
         ),
       );
       return;
@@ -220,14 +220,14 @@ export class WorkerLink {
     }
     this.#emit({
       type: "snapshot",
-      screen: snapshot["screen"] ?? "",
-      cursor: snapshot["cursor"] ?? { x: 0, y: 0 },
-      cols: safeInt(snapshot["cols"], DEFAULT_COLS),
-      rows: safeInt(snapshot["rows"], DEFAULT_ROWS),
-      screen_hash: snapshot["screen_hash"] ?? "",
-      cursor_at_end: snapshot["cursor_at_end"] ?? true,
-      has_trailing_space: snapshot["has_trailing_space"] ?? false,
-      prompt_detected: snapshot["prompt_detected"],
+      screen: snapshot.screen ?? "",
+      cursor: snapshot.cursor ?? { x: 0, y: 0 },
+      cols: safeInt(snapshot.cols, DEFAULT_COLS),
+      rows: safeInt(snapshot.rows, DEFAULT_ROWS),
+      screen_hash: snapshot.screen_hash ?? "",
+      cursor_at_end: snapshot.cursor_at_end ?? true,
+      has_trailing_space: snapshot.has_trailing_space ?? false,
+      prompt_detected: snapshot.prompt_detected,
       ts: this.#now(),
     });
   }

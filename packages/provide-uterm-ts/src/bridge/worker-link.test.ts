@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { loadGolden } from "../testing/golden.ts";
 import {
   encodeBridgeFrame,
@@ -222,7 +222,7 @@ describe("WorkerLink control dispatch", () => {
     const outbound: Array<Record<string, unknown>> = [];
     link.onSend((message) => outbound.push(message));
     await link.handleControl({ type: "control", action: "pause" });
-    expect(Math.abs(Number(outbound[0]?.["ts"]) - Date.now() / 1000)).toBeLessThan(5);
+    expect(Math.abs(Number(outbound[0]?.ts) - Date.now() / 1000)).toBeLessThan(5);
   });
 
   it("ignores an unknown type with no handler", async () => {

@@ -43,9 +43,9 @@ const systemClocks: Clocks = {
  * reference has it, not because a test can tell the difference.
  */
 export function encodeWorkerFrame(message: Record<string, unknown>): string {
-  const type = message["type"];
+  const type = message.type;
   if (String(type ?? "") === "input") {
-    return encodeTerminalData(String(message["data"] ?? ""));
+    return encodeTerminalData(String(message.data ?? ""));
   }
   return encodeControlFrame(message);
 }
