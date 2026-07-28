@@ -1,0 +1,390 @@
+{
+  "auth": [
+    {
+      "error": null,
+      "kwargs": {},
+      "name": "defaults"
+    },
+    {
+      "error": null,
+      "kwargs": {
+        "require_upstream_proxy_secret": true,
+        "upstream_proxy_secret": "s"
+      },
+      "name": "a proxy secret that is required and present"
+    },
+    {
+      "error": "auth.upstream_proxy_secret is required when auth.require_upstream_proxy_secret=True",
+      "kwargs": {
+        "require_upstream_proxy_secret": true
+      },
+      "name": "a proxy secret that is required and missing"
+    },
+    {
+      "error": "auth.upstream_proxy_secret is required when auth.require_upstream_proxy_secret=True",
+      "kwargs": {
+        "require_upstream_proxy_secret": true,
+        "upstream_proxy_secret": "  "
+      },
+      "name": "a proxy secret that is required and blank"
+    },
+    {
+      "error": null,
+      "kwargs": {
+        "upstream_proxy_secret": "s"
+      },
+      "name": "a proxy secret nobody required"
+    },
+    {
+      "error": null,
+      "kwargs": {
+        "identity_provider": "webhook",
+        "webhook_idp_secret": "s"
+      },
+      "name": "a webhook idp that must sign, with a secret"
+    },
+    {
+      "error": "requiring a signed IdP response needs auth.webhook_idp_secret; set the secret or set auth.webhook_idp_require_signed_response=false to disable verification",
+      "kwargs": {
+        "identity_provider": "webhook"
+      },
+      "name": "a webhook idp that must sign, with no secret"
+    },
+    {
+      "error": "requiring a signed IdP response needs auth.webhook_idp_secret; set the secret or set auth.webhook_idp_require_signed_response=false to disable verification",
+      "kwargs": {
+        "identity_provider": "webhook",
+        "webhook_idp_secret": "   "
+      },
+      "name": "a webhook idp that must sign, with a blank secret"
+    },
+    {
+      "error": null,
+      "kwargs": {
+        "identity_provider": "webhook",
+        "webhook_idp_require_signed_response": false
+      },
+      "name": "a webhook idp that need not sign"
+    },
+    {
+      "error": null,
+      "kwargs": {
+        "identity_provider": "local"
+      },
+      "name": "a local idp with no secret"
+    },
+    {
+      "error": "auth.webhook_idp_url must use https:// (cleartext http:// is only allowed for loopback hosts)",
+      "kwargs": {
+        "webhook_idp_url": "http://idp.example.org/decide"
+      },
+      "name": "a cleartext webhook url"
+    },
+    {
+      "error": "auth.jwt_jwks_url must use https:// (cleartext http:// is only allowed for loopback hosts)",
+      "kwargs": {
+        "jwt_jwks_url": "http://keys.example.org/jwks"
+      },
+      "name": "a cleartext jwks url"
+    },
+    {
+      "error": "Extra inputs are not permitted",
+      "kwargs": {
+        "totally_made_up": true
+      },
+      "name": "an unknown field"
+    }
+  ],
+  "auth_defaults": {
+    "allow_adhoc_browser_observers": false,
+    "clock_skew_seconds": 15,
+    "delegate_roles": true,
+    "identity_provider": "local",
+    "jwt_algorithms": [
+      "HS256"
+    ],
+    "mode": "jwt",
+    "trusted_proxy_ips": [],
+    "webhook_idp_on_failure": "deny",
+    "webhook_idp_require_response_nonce": false,
+    "webhook_idp_require_signed_response": true
+  },
+  "bind": {
+    "derived_public_base_url": "http://0.0.0.0:8080",
+    "explicit_public_base_url": "https://uterm.example.org"
+  },
+  "loopback_hosts": [
+    "127.0.0.1",
+    "::1",
+    "localhost"
+  ],
+  "models": [
+    {
+      "error": null,
+      "kwargs": {
+        "chain_enabled": true,
+        "chain_file": "/var/log/chain.jsonl"
+      },
+      "model": "AuditConfig",
+      "name": "an audit chain with a file"
+    },
+    {
+      "error": "audit.chain_enabled requires audit.chain_file (the append-only WORM log path)",
+      "kwargs": {
+        "chain_enabled": true
+      },
+      "model": "AuditConfig",
+      "name": "an audit chain with nowhere to write"
+    },
+    {
+      "error": "audit.chain_enabled requires audit.chain_file (the append-only WORM log path)",
+      "kwargs": {
+        "chain_enabled": true,
+        "chain_file": "   "
+      },
+      "model": "AuditConfig",
+      "name": "an audit chain with a blank file"
+    },
+    {
+      "error": null,
+      "kwargs": {
+        "chain_enabled": false
+      },
+      "model": "AuditConfig",
+      "name": "an audit chain switched off"
+    },
+    {
+      "error": null,
+      "kwargs": {
+        "max_bytes": 0
+      },
+      "model": "RecordingConfig",
+      "name": "a recording size of zero"
+    },
+    {
+      "error": "recording.max_bytes must be >= 0 (0 = unlimited), got: -1",
+      "kwargs": {
+        "max_bytes": -1
+      },
+      "model": "RecordingConfig",
+      "name": "a negative recording size"
+    },
+    {
+      "error": null,
+      "kwargs": {
+        "retention_s": 0
+      },
+      "model": "RecordingConfig",
+      "name": "a retention of zero"
+    },
+    {
+      "error": "recording.retention_s must be >= 0 (0 = keep indefinitely), got: -1",
+      "kwargs": {
+        "retention_s": -1
+      },
+      "model": "RecordingConfig",
+      "name": "a negative retention"
+    },
+    {
+      "error": "control_plane.reap_interval_s must be > 0, got: 0",
+      "kwargs": {
+        "reap_interval_s": 0
+      },
+      "model": "ControlPlaneConfig",
+      "name": "a reap interval of zero"
+    },
+    {
+      "error": "control_plane.reap_interval_s must be > 0, got: -1",
+      "kwargs": {
+        "reap_interval_s": -1
+      },
+      "model": "ControlPlaneConfig",
+      "name": "a negative reap interval"
+    },
+    {
+      "error": "control_plane.reap_retention_s must be >= 0 (0 = reap as soon as past expiry), got: -1",
+      "kwargs": {
+        "reap_retention_s": -1
+      },
+      "model": "ControlPlaneConfig",
+      "name": "a negative reap retention"
+    },
+    {
+      "error": null,
+      "kwargs": {
+        "backend": "sqlite",
+        "database_url": "sqlite:///x.db"
+      },
+      "model": "ControlPlaneConfig",
+      "name": "sqlite with a database url"
+    },
+    {
+      "error": "control_plane.database_url is required when control_plane.backend='sqlite'",
+      "kwargs": {
+        "backend": "sqlite"
+      },
+      "model": "ControlPlaneConfig",
+      "name": "sqlite with no database url"
+    },
+    {
+      "error": "pam.relay_url must use https:// (cleartext http:// is only allowed for loopback hosts)",
+      "kwargs": {
+        "relay_url": "http://relay.example.org/notify"
+      },
+      "model": "PamConfig",
+      "name": "a pam relay over cleartext"
+    },
+    {
+      "error": null,
+      "kwargs": {
+        "relay_url": "https://relay.example.org/notify"
+      },
+      "model": "PamConfig",
+      "name": "a pam relay over tls"
+    }
+  ],
+  "paths": [
+    {
+      "cleaned": "/app",
+      "fallback": "/app",
+      "name": "already clean",
+      "value": "/app"
+    },
+    {
+      "cleaned": "/app",
+      "fallback": "/app",
+      "name": "no leading slash",
+      "value": "app"
+    },
+    {
+      "cleaned": "/app",
+      "fallback": "/app",
+      "name": "trailing slash",
+      "value": "/app/"
+    },
+    {
+      "cleaned": "/app",
+      "fallback": "/app",
+      "name": "several trailing slashes",
+      "value": "/app///"
+    },
+    {
+      "cleaned": "/app",
+      "fallback": "/app",
+      "name": "padded",
+      "value": "  /app  "
+    },
+    {
+      "cleaned": "/",
+      "fallback": "/app",
+      "name": "just a slash",
+      "value": "/"
+    },
+    {
+      "cleaned": "/fallback",
+      "fallback": "/fallback",
+      "name": "empty falls back",
+      "value": ""
+    },
+    {
+      "cleaned": "/a/b/c",
+      "fallback": "/app",
+      "name": "nested",
+      "value": "/a/b/c/"
+    },
+    {
+      "cleaned": "/app/sub",
+      "fallback": "/app",
+      "name": "no slashes at all",
+      "value": "app/sub"
+    }
+  ],
+  "ui_defaults": {
+    "app_path": "/app",
+    "assets_path": "/_terminal",
+    "normalised_app_path": "/app",
+    "normalised_assets_path": "/assets"
+  },
+  "urls": [
+    {
+      "error": null,
+      "name": "https",
+      "url": "https://idp.example.org/decide"
+    },
+    {
+      "error": null,
+      "name": "https on a port",
+      "url": "https://idp.example.org:8443/decide"
+    },
+    {
+      "error": null,
+      "name": "http to loopback by name",
+      "url": "http://localhost:9000/decide"
+    },
+    {
+      "error": null,
+      "name": "http to loopback by address",
+      "url": "http://127.0.0.1:9000/decide"
+    },
+    {
+      "error": null,
+      "name": "http to ipv6 loopback",
+      "url": "http://[::1]:9000/decide"
+    },
+    {
+      "error": null,
+      "name": "http to a .localhost name",
+      "url": "http://idp.localhost/decide"
+    },
+    {
+      "error": "auth.webhook_idp_url must use https:// (cleartext http:// is only allowed for loopback hosts)",
+      "name": "http to a routable host",
+      "url": "http://idp.example.org/decide"
+    },
+    {
+      "error": "auth.webhook_idp_url must use https:// (cleartext http:// is only allowed for loopback hosts)",
+      "name": "http to a private address",
+      "url": "http://10.0.0.1/decide"
+    },
+    {
+      "error": "auth.webhook_idp_url must use https:// (cleartext http:// is only allowed for loopback hosts)",
+      "name": "http to something that ends in localhost",
+      "url": "http://notlocalhost/decide"
+    },
+    {
+      "error": "auth.webhook_idp_url must use https:// (cleartext http:// is only allowed for loopback hosts)",
+      "name": "http to a host that merely contains localhost",
+      "url": "http://localhost.evil.example/decide"
+    },
+    {
+      "error": null,
+      "name": "uppercase loopback",
+      "url": "http://LOCALHOST:9000/decide"
+    },
+    {
+      "error": "auth.webhook_idp_url must use http(s)",
+      "name": "a scheme that is neither",
+      "url": "ftp://idp.example.org/decide"
+    },
+    {
+      "error": "auth.webhook_idp_url must use http(s)",
+      "name": "no scheme at all",
+      "url": "idp.example.org/decide"
+    },
+    {
+      "error": "auth.webhook_idp_url must use http(s)",
+      "name": "a file url",
+      "url": "file:///etc/passwd"
+    },
+    {
+      "error": null,
+      "name": "empty",
+      "url": ""
+    },
+    {
+      "error": null,
+      "name": "none",
+      "url": null
+    }
+  ]
+}

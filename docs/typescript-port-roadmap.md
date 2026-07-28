@@ -93,7 +93,7 @@ corpus match CPython byte for byte.
 |---|---|---|---|
 | `auth` | `auth` | `auth` | **done** — OpenSSH fingerprints, the authorized_keys grammar, and both reference resolvers |
 | `serverauth` | server `auth*`, `webhook*`, `api_keys`, `dev_idp` | `serverauth` | **partial** — webhook signing, the RBAC allow-list and the API-key store; the auth modes and dev IDP outstanding |
-| `serverconfig` | server `config*`, `profiles` | `serverconfig` | todo |
+| `serverconfig` | server `config*`, `profiles` | `serverconfig` | **partial** — the outbound-URL guard, mount-path normalisation and every cross-field validator; TOML loading and profiles outstanding |
 | `controlplane` | `control/plane` (+ memory/sqlite/bootstrap) | `controlplane` | todo |
 | `hub` | server `bridge/hub` (nine services) | `hub` | **done** — all nine services, plus the state model, frame encoders, prompt guards and the regex-safety validator |
 | `bridge` | `bridge` worker side | `bridge` | **done** — authorization matrix, hijack coordinator, protocol contract, hijackable primitives and the worker link |
