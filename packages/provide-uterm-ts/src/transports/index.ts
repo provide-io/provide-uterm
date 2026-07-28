@@ -13,4 +13,5 @@ export * from "./base.ts";
 export * from "./chaos.ts";
 export * from "./reconnect.ts";
 export * from "./telnet.ts";
+export * from "./telnet-transport.ts";
 export * from "./websocket.ts";
