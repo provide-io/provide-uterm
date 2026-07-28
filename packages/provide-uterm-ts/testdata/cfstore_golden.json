@@ -49,6 +49,89 @@
       "secret"
     ]
   },
+  "events": {
+    "beyond": [],
+    "count": 3,
+    "empty_count": 0,
+    "empty_list": [],
+    "empty_min": 0,
+    "empty_seq": 0,
+    "first": {
+      "data": {
+        "text": "hello"
+      },
+      "seq": 1,
+      "type": "output"
+    },
+    "limited": [
+      1,
+      2
+    ],
+    "listed": [
+      {
+        "data": {
+          "text": "hello"
+        },
+        "seq": 1,
+        "type": "output"
+      },
+      {
+        "data": {
+          "text": "world"
+        },
+        "seq": 2,
+        "type": "output"
+      },
+      {
+        "data": {
+          "cols": 80,
+          "rows": 24
+        },
+        "seq": 3,
+        "type": "resize"
+      }
+    ],
+    "min": 1,
+    "other_session_first": {
+      "data": {
+        "text": "other"
+      },
+      "seq": 1,
+      "type": "output"
+    },
+    "other_survives": 1,
+    "rows_after_trim": 4,
+    "second": {
+      "data": {
+        "text": "world"
+      },
+      "seq": 2,
+      "type": "output"
+    },
+    "seq": 3,
+    "session_row_seq": 3,
+    "since_first": [
+      2,
+      3
+    ],
+    "since_last": [],
+    "third": {
+      "data": {
+        "cols": 80,
+        "rows": 24
+      },
+      "seq": 3,
+      "type": "resize"
+    },
+    "trimmed_count": 3,
+    "trimmed_kept": [
+      4,
+      5,
+      6
+    ],
+    "trimmed_min": 4,
+    "trimmed_seq": 6
+  },
   "invite_state": {
     "after_second_save": {
       "share": "sha256:def"
