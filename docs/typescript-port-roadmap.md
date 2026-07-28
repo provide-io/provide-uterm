@@ -157,7 +157,7 @@ corpus match CPython byte for byte.
 | `tunnel` | `tunnel`, `tunnel_invites`, `pam_tunnel` | `tunnel` | todo |
 | `tunnelclient` | share/inspect client | `tunnelclient` | todo |
 | `vnc` | `vnc` | `vnc` | todo |
-| `shell` | `shell` | `shell` | todo |
+| `shell` | `shell` | `shell` | **partial** — the terminal output formatting (messages, labelled values, fixed-width tables). Its image rendering is re-exported from `render`, already ported. Its Python evaluation sandbox is **not planned**: restricting Python builtins has no counterpart on this runtime, and inventing an evaluation sandbox rather than porting one would be a new security surface wearing a port's clothes |
 | `manager` | External Management Tier | `manager` | todo |
 | `mcp` | client `ai`/MCP (28 tools) | `mcp` | todo |
 | `cli` | server CLI (`uterm`) | `cli` | todo |
