@@ -1,0 +1,275 @@
+{
+  "columns": {
+    "resume_tokens": [
+      "token",
+      "worker_id",
+      "role",
+      "was_hijack_owner",
+      "created_at",
+      "expires_at"
+    ],
+    "session_events": [
+      "worker_id",
+      "seq",
+      "ts",
+      "event_type",
+      "payload_json"
+    ],
+    "session_meta": [
+      "worker_id",
+      "display_name",
+      "connector_type",
+      "created_at",
+      "tags_json",
+      "visibility",
+      "owner"
+    ],
+    "session_state": [
+      "worker_id",
+      "hijack_id",
+      "owner",
+      "lease_expires_at",
+      "last_snapshot_json",
+      "deleted_at",
+      "event_seq",
+      "updated_at",
+      "input_mode"
+    ],
+    "tunnel_invite_state": [
+      "worker_id",
+      "entry_json",
+      "updated_at"
+    ],
+    "webhooks": [
+      "webhook_id",
+      "session_id",
+      "url",
+      "event_types_json",
+      "pattern",
+      "secret"
+    ]
+  },
+  "invite_state": {
+    "after_second_save": {
+      "share": "sha256:def"
+    },
+    "corrupt": null,
+    "first": {
+      "consumed_at": 12.0,
+      "share": "sha256:abc"
+    },
+    "missing": null,
+    "not_an_object": null,
+    "rows": 1
+  },
+  "meta": [
+    {
+      "created_at": 1234.5,
+      "loaded": {
+        "connector_type": "ssh",
+        "display_name": "Session One",
+        "owner": "alice",
+        "tags": [
+          "a",
+          "b"
+        ],
+        "visibility": "private"
+      },
+      "meta": {
+        "connector_type": "ssh",
+        "created_at": 1234.5,
+        "display_name": "Session One",
+        "owner": "alice",
+        "tags": [
+          "a",
+          "b"
+        ],
+        "visibility": "private"
+      },
+      "name": "everything supplied",
+      "rows": 1
+    },
+    {
+      "created_at": null,
+      "loaded": {
+        "connector_type": "unknown",
+        "display_name": "w1",
+        "owner": null,
+        "tags": [],
+        "visibility": "public"
+      },
+      "meta": {},
+      "name": "nothing supplied",
+      "rows": 1
+    },
+    {
+      "created_at": null,
+      "loaded": {
+        "connector_type": "unknown",
+        "display_name": "w1",
+        "owner": null,
+        "tags": [],
+        "visibility": "public"
+      },
+      "meta": {
+        "connector_type": "",
+        "display_name": "",
+        "tags": [],
+        "visibility": ""
+      },
+      "name": "empty strings",
+      "rows": 1
+    },
+    {
+      "created_at": null,
+      "loaded": {
+        "connector_type": "unknown",
+        "display_name": "x",
+        "owner": null,
+        "tags": [],
+        "visibility": "public"
+      },
+      "meta": {
+        "display_name": "x",
+        "owner": null
+      },
+      "name": "no owner",
+      "rows": 1
+    },
+    {
+      "created_at": null,
+      "loaded": {
+        "connector_type": "unknown",
+        "display_name": "w1",
+        "owner": null,
+        "tags": [],
+        "visibility": "public"
+      },
+      "meta": {
+        "created_at": 0
+      },
+      "name": "a created time of zero",
+      "rows": 1
+    },
+    {
+      "created_at": null,
+      "loaded": {
+        "connector_type": "unknown",
+        "display_name": "héllo → ✓",
+        "owner": null,
+        "tags": [],
+        "visibility": "public"
+      },
+      "meta": {
+        "display_name": "héllo → ✓"
+      },
+      "name": "unicode in the name",
+      "rows": 1
+    }
+  ],
+  "meta_upsert": {
+    "loaded": {
+      "connector_type": "unknown",
+      "created_at": 2.0,
+      "display_name": "second",
+      "owner": null,
+      "tags": [],
+      "visibility": "public"
+    },
+    "missing": null,
+    "rows": 2
+  },
+  "session_state": {
+    "after_clear": {
+      "event_seq": 0,
+      "hijack_id": null,
+      "input_mode": "observe",
+      "last_snapshot": {
+        "cols": 80,
+        "screen": "hello"
+      },
+      "lease_expires_at": null,
+      "owner": null,
+      "worker_id": "w1"
+    },
+    "after_delete_has_timestamp": true,
+    "after_delete_keeps_row": true,
+    "after_lease": {
+      "deleted_at": null,
+      "event_seq": 0,
+      "hijack_id": "h1",
+      "input_mode": "hijack",
+      "last_snapshot": null,
+      "lease_expires_at": 1760000060.0,
+      "owner": "alice",
+      "worker_id": "w1"
+    },
+    "after_mode": {
+      "deleted_at": null,
+      "event_seq": 0,
+      "hijack_id": "h1",
+      "input_mode": "observe",
+      "last_snapshot": {
+        "cols": 80,
+        "screen": "hello"
+      },
+      "lease_expires_at": 1760000060.0,
+      "owner": "alice",
+      "worker_id": "w1"
+    },
+    "after_snapshot": {
+      "deleted_at": null,
+      "event_seq": 0,
+      "hijack_id": "h1",
+      "input_mode": "hijack",
+      "last_snapshot": {
+        "cols": 80,
+        "screen": "hello"
+      },
+      "lease_expires_at": 1760000060.0,
+      "owner": "alice",
+      "worker_id": "w1"
+    },
+    "fresh_worker": {
+      "deleted_at": null,
+      "event_seq": 0,
+      "hijack_id": "h2",
+      "input_mode": "hijack",
+      "last_snapshot": null,
+      "lease_expires_at": 1760000030.0,
+      "owner": "bob",
+      "worker_id": "w2"
+    },
+    "missing": null,
+    "mode_only": {
+      "deleted_at": null,
+      "event_seq": 0,
+      "hijack_id": null,
+      "input_mode": "observe",
+      "last_snapshot": null,
+      "lease_expires_at": null,
+      "owner": null,
+      "worker_id": "w3"
+    },
+    "snapshot_only": {
+      "deleted_at": null,
+      "event_seq": 0,
+      "hijack_id": null,
+      "input_mode": "hijack",
+      "last_snapshot": {
+        "screen": "x"
+      },
+      "lease_expires_at": null,
+      "owner": null,
+      "worker_id": "w4"
+    }
+  },
+  "tables": [
+    "resume_tokens",
+    "session_events",
+    "session_meta",
+    "session_state",
+    "tunnel_invite_state",
+    "webhooks"
+  ]
+}
