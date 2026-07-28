@@ -54,6 +54,30 @@ rest.
 **VNC** stays hand-rolled — there is no server-side RFB package worth taking,
 and the Go and C# ports hand-roll it too.
 
+**Tunnel token hashing needs a decision.** `tunnel/token_hash.py` stores
+share and control tokens as `hashlib.blake2b(..., digest_size=32)` digests and
+compares them in constant time. Node's `crypto` exposes BLAKE2b only as
+`blake2b512`, and truncating that is *not* the same value — the digest length
+is part of BLAKE2b's parameter block, so the two disagree from the first byte:
+
+```
+python  blake2b(b"hello", digest_size=32)  324dcf027dd4a30a932c441f365a25e8…
+node    blake2b512(b"hello")[:32]          e4cfa39a3d37be31c59609e807970799…
+```
+
+The digests are stored at rest and read by whichever implementation serves the
+request, so this is an interop requirement rather than a local one: a port
+that hashed differently would fail every share-token check against a session
+another implementation issued. Three ways out —
+
+1. `@noble/hashes` (audited, dependency-free, ~8 kB for blake2b) — recommended;
+2. hand-write BLAKE2b with a configurable output length;
+3. change the algorithm on both sides, which is a migration for deployed
+   digests and out of this port's scope.
+
+This blocks the Durable Object session runtime's auth path, which is what
+reads those digests.
+
 **`node-pty` needs one more step.** Its prebuilt `spawn-helper` ships
 non-executable and its post-install script, which is what marks it, is held
 by this repository's `npm approve-scripts` policy. Until that is resolved
