@@ -34,7 +34,6 @@ from provide.uterm.server.bridge.frames import (
     make_snapshot_frame,
 )
 from provide.uterm.server.bridge.models import _safe_float, _safe_int
-from provide.uterm.server.bridge.rest_helpers import extract_prompt_id
 
 if TYPE_CHECKING:
     from fastapi import WebSocket
@@ -157,23 +156,14 @@ def _build_worker_frame(mtype: str, msg: dict[str, Any]) -> dict[str, Any]:
 async def _dispatch_worker_frame(hub: TermHub, worker_id: str, mtype: str, frame: dict[str, Any]) -> None:
     """Run the downstream I/O for a successfully-built worker frame.
 
-    Runs OUTSIDE the per-frame builder guard: a failure here (update / broadcast
-    / append_event / redaction) is a genuine server-side fault and must
+    Runs OUTSIDE the per-frame builder guard: a failure here (snapshot commit /
+    broadcast / append_event / redaction) is a genuine server-side fault and must
     propagate to the outer handler, NOT be mis-isolated as an "invalid worker
     frame" (which would mis-count it and silently swallow a real bug).
     """
     if mtype == "snapshot":
-        await hub.update_last_snapshot(worker_id, frame)
-        await hub.append_event(
-            worker_id,
-            "snapshot",
-            {
-                "prompt_id": extract_prompt_id(frame),
-                "screen_hash": frame.get("screen_hash"),
-                "screen": frame.get("screen", ""),
-            },
-        )
-        await hub.broadcast(worker_id, frame)
+        committed = await hub.commit_snapshot_event(worker_id, frame)
+        await hub.broadcast(worker_id, committed)
     elif mtype == "analysis":
         await hub.broadcast(worker_id, frame)
     else:  # mtype == "status"
