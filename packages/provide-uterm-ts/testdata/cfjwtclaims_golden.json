@@ -1,0 +1,1225 @@
+{
+  "audience_alone": {
+    "error": "JwtValidationError",
+    "message": "invalid audience",
+    "result": null
+  },
+  "b64url": [
+    {
+      "encoded": "YWJjZA",
+      "error": null,
+      "message": null,
+      "name": "no padding needed",
+      "result": [
+        97,
+        98,
+        99,
+        100
+      ]
+    },
+    {
+      "encoded": "YWJjZGU",
+      "error": null,
+      "message": null,
+      "name": "one pad",
+      "result": [
+        97,
+        98,
+        99,
+        100,
+        101
+      ]
+    },
+    {
+      "encoded": "YWJjZGVm",
+      "error": null,
+      "message": null,
+      "name": "two pads",
+      "result": [
+        97,
+        98,
+        99,
+        100,
+        101,
+        102
+      ]
+    },
+    {
+      "encoded": "",
+      "error": null,
+      "message": null,
+      "name": "empty",
+      "result": []
+    },
+    {
+      "encoded": "-_--",
+      "error": null,
+      "message": null,
+      "name": "url-safe characters",
+      "result": [
+        251,
+        255,
+        190
+      ]
+    },
+    {
+      "encoded": "!!!",
+      "error": null,
+      "message": null,
+      "name": "not base64 at all",
+      "result": []
+    },
+    {
+      "encoded": "YWJ!jZA",
+      "error": "Error",
+      "message": "Incorrect padding",
+      "name": "punctuation among the digits",
+      "result": null
+    },
+    {
+      "encoded": "a",
+      "error": "Error",
+      "message": "Invalid base64-encoded string: number of data characters (1) cannot be 1 more than a multiple of 4",
+      "name": "a single character",
+      "result": null
+    },
+    {
+      "encoded": "ab",
+      "error": null,
+      "message": null,
+      "name": "two characters",
+      "result": [
+        105
+      ]
+    },
+    {
+      "encoded": "abc",
+      "error": null,
+      "message": null,
+      "name": "three characters",
+      "result": [
+        105,
+        183
+      ]
+    },
+    {
+      "encoded": "====",
+      "error": null,
+      "message": null,
+      "name": "padding alone",
+      "result": []
+    },
+    {
+      "encoded": "a+b/c",
+      "error": "Error",
+      "message": "Invalid base64-encoded string: number of data characters (5) cannot be 1 more than a multiple of 4",
+      "name": "standard-alphabet characters",
+      "result": null
+    },
+    {
+      "encoded": "a-b_c+d/e",
+      "error": "Error",
+      "message": "Invalid base64-encoded string: number of data characters (9) cannot be 1 more than a multiple of 4",
+      "name": "both alphabets at once",
+      "result": null
+    },
+    {
+      "encoded": "YW Jj ZA",
+      "error": "Error",
+      "message": "Incorrect padding",
+      "name": "whitespace inside",
+      "result": null
+    },
+    {
+      "encoded": "YWJj\nZA",
+      "error": "Error",
+      "message": "Incorrect padding",
+      "name": "a newline inside",
+      "result": null
+    },
+    {
+      "encoded": "YWJj=WJj",
+      "error": "Error",
+      "message": "Incorrect padding",
+      "name": "data after the padding",
+      "result": null
+    },
+    {
+      "encoded": "YW==JjZA",
+      "error": null,
+      "message": null,
+      "name": "padding in the middle",
+      "result": [
+        97
+      ]
+    },
+    {
+      "encoded": "YWJjZA=",
+      "error": null,
+      "message": null,
+      "name": "one pad short",
+      "result": [
+        97,
+        98,
+        99,
+        100
+      ]
+    },
+    {
+      "encoded": "YWJjZA==",
+      "error": null,
+      "message": null,
+      "name": "padded exactly",
+      "result": [
+        97,
+        98,
+        99,
+        100
+      ]
+    },
+    {
+      "encoded": "YWJj=YWJj",
+      "error": null,
+      "message": null,
+      "name": "a stray pad between groups",
+      "result": [
+        97,
+        98,
+        99,
+        97,
+        98,
+        99
+      ]
+    },
+    {
+      "encoded": "=YWJj",
+      "error": null,
+      "message": null,
+      "name": "a leading pad",
+      "result": [
+        97,
+        98,
+        99
+      ]
+    }
+  ],
+  "bearer": [
+    {
+      "name": "a bearer header",
+      "result": "abc.def.ghi"
+    },
+    {
+      "name": "a lowercase scheme",
+      "result": "abc"
+    },
+    {
+      "name": "a shouted scheme",
+      "result": "abc"
+    },
+    {
+      "name": "a padded token",
+      "result": "abc"
+    },
+    {
+      "name": "a bearer with no token",
+      "result": null
+    },
+    {
+      "name": "another scheme",
+      "result": null
+    },
+    {
+      "name": "a scheme that merely starts the same",
+      "result": null
+    },
+    {
+      "name": "no authorization at all",
+      "result": null
+    },
+    {
+      "name": "the access cookie",
+      "result": "abc"
+    },
+    {
+      "name": "the cookie among others",
+      "result": "abc"
+    },
+    {
+      "name": "a padded cookie",
+      "result": "abc"
+    },
+    {
+      "name": "an empty cookie",
+      "result": null
+    },
+    {
+      "name": "a cookie of another name",
+      "result": null
+    },
+    {
+      "name": "a cookie whose name merely contains it",
+      "result": null
+    },
+    {
+      "name": "a cookie value containing an equals sign",
+      "result": "a=b"
+    },
+    {
+      "name": "a bare cookie before the real one",
+      "result": "abc"
+    },
+    {
+      "name": "both",
+      "result": "hdr"
+    },
+    {
+      "name": "a bearer with no token, and a cookie",
+      "result": "cke"
+    },
+    {
+      "name": "headers that raise",
+      "result": null
+    },
+    {
+      "name": "no headers at all",
+      "result": null
+    }
+  ],
+  "claims": [
+    {
+      "config": {},
+      "error": null,
+      "message": null,
+      "name": "a valid token",
+      "payload": {
+        "exp": 1700000060.0
+      },
+      "result": null
+    },
+    {
+      "config": {},
+      "error": "JwtValidationError",
+      "message": "missing exp claim",
+      "name": "no exp at all",
+      "payload": {},
+      "result": null
+    },
+    {
+      "config": {},
+      "error": "JwtValidationError",
+      "message": "token has expired",
+      "name": "expired",
+      "payload": {
+        "exp": 1699999940.0
+      },
+      "result": null
+    },
+    {
+      "config": {},
+      "error": null,
+      "message": null,
+      "name": "expired inside the skew",
+      "payload": {
+        "exp": 1699999990.0
+      },
+      "result": null
+    },
+    {
+      "config": {},
+      "error": "JwtValidationError",
+      "message": "token has expired",
+      "name": "expired outside the skew",
+      "payload": {
+        "exp": 1699999969.0
+      },
+      "result": null
+    },
+    {
+      "config": {},
+      "error": null,
+      "message": null,
+      "name": "expiring exactly now",
+      "payload": {
+        "exp": 1700000000.0
+      },
+      "result": null
+    },
+    {
+      "config": {},
+      "error": "JwtValidationError",
+      "message": "token not yet valid",
+      "name": "not yet valid",
+      "payload": {
+        "exp": 1700000060.0,
+        "nbf": 1700000060.0
+      },
+      "result": null
+    },
+    {
+      "config": {},
+      "error": null,
+      "message": null,
+      "name": "not yet valid inside the skew",
+      "payload": {
+        "exp": 1700000060.0,
+        "nbf": 1700000010.0
+      },
+      "result": null
+    },
+    {
+      "config": {},
+      "error": "JwtValidationError",
+      "message": "token not yet valid",
+      "name": "not yet valid outside the skew",
+      "payload": {
+        "exp": 1700000060.0,
+        "nbf": 1700000031.0
+      },
+      "result": null
+    },
+    {
+      "config": {},
+      "error": null,
+      "message": null,
+      "name": "valid from exactly now",
+      "payload": {
+        "exp": 1700000060.0,
+        "nbf": 1700000000.0
+      },
+      "result": null
+    },
+    {
+      "config": {
+        "clock_skew_seconds": -600
+      },
+      "error": "JwtValidationError",
+      "message": "token has expired",
+      "name": "expired with a negative skew",
+      "payload": {
+        "exp": 1699999999.0
+      },
+      "result": null
+    },
+    {
+      "config": {
+        "clock_skew_seconds": -600
+      },
+      "error": null,
+      "message": null,
+      "name": "valid with a negative skew",
+      "payload": {
+        "exp": 1700000001.0
+      },
+      "result": null
+    },
+    {
+      "config": {
+        "clock_skew_seconds": 30.9
+      },
+      "error": "JwtValidationError",
+      "message": "token has expired",
+      "name": "a fractional skew, truncated away",
+      "payload": {
+        "exp": 1699999969.5
+      },
+      "result": null
+    },
+    {
+      "config": {
+        "clock_skew_seconds": 30.9
+      },
+      "error": null,
+      "message": null,
+      "name": "a fractional skew, still inside",
+      "payload": {
+        "exp": 1699999970.5
+      },
+      "result": null
+    },
+    {
+      "config": {},
+      "error": "JwtValidationError",
+      "message": "missing exp claim",
+      "name": "an expiry of null",
+      "payload": {
+        "exp": null
+      },
+      "result": null
+    },
+    {
+      "config": {},
+      "error": "JwtValidationError",
+      "message": "missing exp claim",
+      "name": "no expiry and not yet valid",
+      "payload": {
+        "nbf": 1700000060.0
+      },
+      "result": null
+    },
+    {
+      "config": {
+        "issuer": "https://idp"
+      },
+      "error": null,
+      "message": null,
+      "name": "the right issuer",
+      "payload": {
+        "exp": 1700000060.0,
+        "iss": "https://idp"
+      },
+      "result": null
+    },
+    {
+      "config": {
+        "issuer": "https://idp"
+      },
+      "error": "JwtValidationError",
+      "message": "invalid issuer",
+      "name": "the wrong issuer",
+      "payload": {
+        "exp": 1700000060.0,
+        "iss": "https://evil"
+      },
+      "result": null
+    },
+    {
+      "config": {
+        "issuer": "https://idp"
+      },
+      "error": "JwtValidationError",
+      "message": "invalid issuer",
+      "name": "no issuer claim but one configured",
+      "payload": {
+        "exp": 1700000060.0
+      },
+      "result": null
+    },
+    {
+      "config": {},
+      "error": null,
+      "message": null,
+      "name": "an issuer claim with none configured",
+      "payload": {
+        "exp": 1700000060.0,
+        "iss": "https://any"
+      },
+      "result": null
+    },
+    {
+      "config": {
+        "issuer": ""
+      },
+      "error": null,
+      "message": null,
+      "name": "an empty configured issuer",
+      "payload": {
+        "exp": 1700000060.0,
+        "iss": "x"
+      },
+      "result": null
+    },
+    {
+      "config": {
+        "audience": "uterm"
+      },
+      "error": null,
+      "message": null,
+      "name": "the right audience",
+      "payload": {
+        "aud": "uterm",
+        "exp": 1700000060.0
+      },
+      "result": null
+    },
+    {
+      "config": {
+        "audience": "uterm"
+      },
+      "error": "JwtValidationError",
+      "message": "invalid audience",
+      "name": "the wrong audience",
+      "payload": {
+        "aud": "other",
+        "exp": 1700000060.0
+      },
+      "result": null
+    },
+    {
+      "config": {
+        "audience": "uterm"
+      },
+      "error": null,
+      "message": null,
+      "name": "an audience list containing it",
+      "payload": {
+        "aud": [
+          "a",
+          "uterm"
+        ],
+        "exp": 1700000060.0
+      },
+      "result": null
+    },
+    {
+      "config": {
+        "audience": "uterm"
+      },
+      "error": "JwtValidationError",
+      "message": "invalid audience",
+      "name": "an audience list without it",
+      "payload": {
+        "aud": [
+          "a",
+          "b"
+        ],
+        "exp": 1700000060.0
+      },
+      "result": null
+    },
+    {
+      "config": {
+        "audience": "uterm"
+      },
+      "error": "JwtValidationError",
+      "message": "invalid audience",
+      "name": "an empty audience list",
+      "payload": {
+        "aud": [],
+        "exp": 1700000060.0
+      },
+      "result": null
+    },
+    {
+      "config": {
+        "audience": "uterm"
+      },
+      "error": "JwtValidationError",
+      "message": "invalid audience",
+      "name": "no audience claim but one configured",
+      "payload": {
+        "exp": 1700000060.0
+      },
+      "result": null
+    },
+    {
+      "config": {},
+      "error": null,
+      "message": null,
+      "name": "an audience claim with none configured",
+      "payload": {
+        "aud": "any",
+        "exp": 1700000060.0
+      },
+      "result": null
+    }
+  ],
+  "default_clock_skew_seconds": 30,
+  "default_role": "viewer",
+  "default_roles_claim": "roles",
+  "default_scopes_claim": "scope",
+  "exp_alone": {
+    "error": "JwtValidationError",
+    "message": "token has expired",
+    "result": null
+  },
+  "issuer_alone": {
+    "error": "JwtValidationError",
+    "message": "invalid issuer",
+    "result": null
+  },
+  "jwks": [
+    {
+      "alg": "RS256",
+      "error": null,
+      "jwks": {
+        "keys": [
+          {
+            "alg": "RS256",
+            "kid": "k1"
+          },
+          {
+            "kid": "k2"
+          }
+        ]
+      },
+      "kid": "k1",
+      "message": null,
+      "name": "a matching kid",
+      "result": {
+        "alg": "RS256",
+        "kid": "k1"
+      }
+    },
+    {
+      "alg": null,
+      "error": null,
+      "jwks": {
+        "keys": [
+          {
+            "kid": "k0"
+          },
+          {
+            "kid": "k1",
+            "n": "x"
+          }
+        ]
+      },
+      "kid": "k1",
+      "message": null,
+      "name": "the second key",
+      "result": {
+        "kid": "k1",
+        "n": "x"
+      }
+    },
+    {
+      "alg": "RS256",
+      "error": "JwtValidationError",
+      "jwks": {
+        "keys": [
+          {
+            "kid": "k0"
+          }
+        ]
+      },
+      "kid": "k9",
+      "message": "no matching key found in JWKS",
+      "name": "a kid that is not there",
+      "result": null
+    },
+    {
+      "alg": "RS256",
+      "error": null,
+      "jwks": {
+        "keys": [
+          {
+            "alg": "ES256"
+          },
+          {
+            "alg": "RS256",
+            "n": "x"
+          }
+        ]
+      },
+      "kid": null,
+      "message": null,
+      "name": "no kid, matching alg",
+      "result": {
+        "alg": "RS256",
+        "n": "x"
+      }
+    },
+    {
+      "alg": "RS256",
+      "error": null,
+      "jwks": {
+        "keys": [
+          {
+            "n": "x"
+          }
+        ]
+      },
+      "kid": null,
+      "message": null,
+      "name": "no kid, no alg on the key",
+      "result": {
+        "n": "x"
+      }
+    },
+    {
+      "alg": null,
+      "error": null,
+      "jwks": {
+        "keys": [
+          {
+            "alg": "ES256",
+            "n": "x"
+          }
+        ]
+      },
+      "kid": null,
+      "message": null,
+      "name": "no kid and no alg at all",
+      "result": {
+        "alg": "ES256",
+        "n": "x"
+      }
+    },
+    {
+      "alg": "RS256",
+      "error": "JwtValidationError",
+      "jwks": {
+        "keys": []
+      },
+      "kid": "k1",
+      "message": "JWKS contains no keys",
+      "name": "no keys",
+      "result": null
+    },
+    {
+      "alg": "RS256",
+      "error": "JwtValidationError",
+      "jwks": {},
+      "kid": "k1",
+      "message": "JWKS contains no keys",
+      "name": "no keys field",
+      "result": null
+    },
+    {
+      "alg": "RS256",
+      "error": null,
+      "jwks": {
+        "keys": [
+          {
+            "alg": "RS256"
+          },
+          {
+            "kid": "k1"
+          }
+        ]
+      },
+      "kid": "k1",
+      "message": null,
+      "name": "a named kid beats a matching alg",
+      "result": {
+        "kid": "k1"
+      }
+    }
+  ],
+  "nbf_alone": {
+    "error": "JwtValidationError",
+    "message": "token not yet valid",
+    "result": null
+  },
+  "now": 1700000000.0,
+  "parts": [
+    {
+      "error": null,
+      "message": null,
+      "name": "a whole token",
+      "result": [
+        {
+          "alg": "RS256",
+          "kid": "k1"
+        },
+        {
+          "sub": "u1"
+        }
+      ],
+      "token": "eyJhbGciOiJSUzI1NiIsImtpZCI6ImsxIn0.eyJzdWIiOiJ1MSJ9.AQID"
+    },
+    {
+      "error": "JwtValidationError",
+      "message": "malformed JWT: expected 3 parts",
+      "name": "two parts",
+      "result": null,
+      "token": "a.b"
+    },
+    {
+      "error": "JwtValidationError",
+      "message": "malformed JWT: expected 3 parts",
+      "name": "four parts",
+      "result": null,
+      "token": "a.b.c.d"
+    },
+    {
+      "error": "JwtValidationError",
+      "message": "malformed JWT: expected 3 parts",
+      "name": "no dots at all",
+      "result": null,
+      "token": "abc"
+    },
+    {
+      "error": "JwtValidationError",
+      "message": "malformed JWT: expected 3 parts",
+      "name": "empty",
+      "result": null,
+      "token": ""
+    },
+    {
+      "error": "JSONDecodeError",
+      "message": "Expecting value: line 1 column 1 (char 0)",
+      "name": "empty parts",
+      "result": null,
+      "token": ".."
+    },
+    {
+      "error": "JSONDecodeError",
+      "message": "Expecting value: line 1 column 1 (char 0)",
+      "name": "a header that is not json",
+      "result": null,
+      "token": "bm9wZQ.eyJzdWIiOiJ1MSJ9.c2ln"
+    },
+    {
+      "error": "JSONDecodeError",
+      "message": "Expecting value: line 1 column 1 (char 0)",
+      "name": "a payload that is not json",
+      "result": null,
+      "token": "eyJhbGciOiJSUzI1NiJ9.bm9wZQ.c2ln"
+    },
+    {
+      "error": "JSONDecodeError",
+      "message": "Expecting value: line 1 column 1 (char 0)",
+      "name": "a header that is not base64",
+      "result": null,
+      "token": "!!!.eyJzdWIiOiJ1MSJ9.c2ln"
+    },
+    {
+      "error": null,
+      "message": null,
+      "name": "a header that is a list",
+      "result": [
+        [
+          1,
+          2
+        ],
+        {
+          "sub": "u1"
+        }
+      ],
+      "token": "WzEsMl0.eyJzdWIiOiJ1MSJ9.c2ln"
+    }
+  ],
+  "resolve": [
+    {
+      "name": "admin",
+      "result": "admin",
+      "roles": [
+        "admin"
+      ]
+    },
+    {
+      "name": "operator",
+      "result": "operator",
+      "roles": [
+        "operator"
+      ]
+    },
+    {
+      "name": "viewer",
+      "result": "viewer",
+      "roles": [
+        "viewer"
+      ]
+    },
+    {
+      "name": "nothing",
+      "result": "viewer",
+      "roles": []
+    },
+    {
+      "name": "something unknown",
+      "result": "viewer",
+      "roles": [
+        "root"
+      ]
+    },
+    {
+      "name": "admin and operator",
+      "result": "admin",
+      "roles": [
+        "operator",
+        "admin"
+      ]
+    },
+    {
+      "name": "operator and viewer",
+      "result": "operator",
+      "roles": [
+        "viewer",
+        "operator"
+      ]
+    },
+    {
+      "name": "all three",
+      "result": "admin",
+      "roles": [
+        "viewer",
+        "operator",
+        "admin"
+      ]
+    }
+  ],
+  "roles": [
+    {
+      "claims": {
+        "roles": [
+          "admin"
+        ]
+      },
+      "config": {},
+      "name": "roles as a list",
+      "result": [
+        "admin"
+      ]
+    },
+    {
+      "claims": {
+        "roles": "admin,operator"
+      },
+      "config": {},
+      "name": "roles as a string",
+      "result": [
+        "admin",
+        "operator"
+      ]
+    },
+    {
+      "claims": {
+        "scope": "operator viewer"
+      },
+      "config": {},
+      "name": "no roles, a scope instead",
+      "result": [
+        "operator",
+        "viewer"
+      ]
+    },
+    {
+      "claims": {
+        "scope": ""
+      },
+      "config": {},
+      "name": "no roles and an empty scope",
+      "result": [
+        "viewer"
+      ]
+    },
+    {
+      "claims": {
+        "scope": [
+          "operator"
+        ]
+      },
+      "config": {},
+      "name": "no roles and a scope that is not a string",
+      "result": [
+        "viewer"
+      ]
+    },
+    {
+      "claims": {},
+      "config": {},
+      "name": "neither",
+      "result": [
+        "viewer"
+      ]
+    },
+    {
+      "claims": {},
+      "config": {
+        "jwt_default_role": "operator"
+      },
+      "name": "a configured default",
+      "result": [
+        "operator"
+      ]
+    },
+    {
+      "claims": {},
+      "config": {
+        "jwt_default_role": ""
+      },
+      "name": "an empty configured default",
+      "result": [
+        "viewer"
+      ]
+    },
+    {
+      "claims": {
+        "groups": [
+          "eng"
+        ]
+      },
+      "config": {
+        "jwt_roles_claim": "groups"
+      },
+      "name": "roles under another claim",
+      "result": [
+        "eng"
+      ]
+    },
+    {
+      "claims": {
+        "scp": "admin"
+      },
+      "config": {
+        "jwt_scopes_claim": "scp"
+      },
+      "name": "a scope under another claim",
+      "result": [
+        "admin"
+      ]
+    },
+    {
+      "claims": {
+        "groups": [
+          "eng"
+        ]
+      },
+      "config": {
+        "jwt_role_map": {
+          "eng": "admin"
+        },
+        "jwt_roles_claim": "groups"
+      },
+      "name": "a mapped group",
+      "result": [
+        "admin"
+      ]
+    },
+    {
+      "claims": {
+        "groups": [
+          "sales"
+        ]
+      },
+      "config": {
+        "jwt_role_map": {
+          "eng": "admin"
+        },
+        "jwt_roles_claim": "groups"
+      },
+      "name": "a group with no mapping",
+      "result": [
+        "sales"
+      ]
+    },
+    {
+      "claims": {
+        "roles": []
+      },
+      "config": {
+        "jwt_role_map": {
+          "eng": "admin"
+        }
+      },
+      "name": "a mapping that empties nothing",
+      "result": [
+        "viewer"
+      ]
+    },
+    {
+      "claims": {
+        "roles": [
+          "viewer"
+        ],
+        "scope": "admin"
+      },
+      "config": {},
+      "name": "both roles and scope",
+      "result": [
+        "viewer"
+      ]
+    }
+  ],
+  "roles_claim": [
+    {
+      "name": "a list",
+      "raw": [
+        "admin",
+        "operator"
+      ],
+      "result": [
+        "admin",
+        "operator"
+      ]
+    },
+    {
+      "name": "a comma-separated string",
+      "raw": "admin,operator",
+      "result": [
+        "admin",
+        "operator"
+      ]
+    },
+    {
+      "name": "a string with spaces around the commas",
+      "raw": " admin , operator ",
+      "result": [
+        "admin",
+        "operator"
+      ]
+    },
+    {
+      "name": "a string with empty parts",
+      "raw": "admin,,operator,",
+      "result": [
+        "admin",
+        "operator"
+      ]
+    },
+    {
+      "name": "an empty string",
+      "raw": "",
+      "result": []
+    },
+    {
+      "name": "a string of separators",
+      "raw": ",,,",
+      "result": []
+    },
+    {
+      "name": "a list of numbers",
+      "raw": [
+        1,
+        2
+      ],
+      "result": [
+        "1",
+        "2"
+      ]
+    },
+    {
+      "name": "a list with a null",
+      "raw": [
+        "admin",
+        null
+      ],
+      "result": [
+        "admin",
+        "None"
+      ]
+    },
+    {
+      "name": "an empty list",
+      "raw": [],
+      "result": []
+    },
+    {
+      "name": "a number",
+      "raw": 7,
+      "result": []
+    },
+    {
+      "name": "a boolean",
+      "raw": true,
+      "result": []
+    },
+    {
+      "name": "nothing",
+      "raw": null,
+      "result": []
+    },
+    {
+      "name": "a mapping",
+      "raw": {
+        "admin": true
+      },
+      "result": []
+    },
+    {
+      "name": "a space-separated string",
+      "raw": "admin operator",
+      "result": [
+        "admin operator"
+      ]
+    }
+  ],
+  "signature_bytes": [
+    1,
+    2,
+    3
+  ],
+  "signing_input": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1MSJ9"
+}

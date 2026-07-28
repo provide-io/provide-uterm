@@ -152,7 +152,7 @@ corpus match CPython byte for byte.
 | `manager` | External Management Tier | `manager` | todo |
 | `mcp` | client `ai`/MCP (28 tools) | `mcp` | todo |
 | `cli` | server CLI (`uterm`) | `cli` | todo |
-| `cloudflare` | `provide-uterm-cloudflare` (53 files, ~8.3k lines) | — | **partial** — the Worker configuration with its startup refusals, the KV session registry, and the whole Durable Object state store (schema, session metadata, invite state, lease state, snapshots, event log, recording view, webhooks and resume tokens); the session runtime's flow controller, its WebSocket attachment reading, webhook secret encryption, and the polling server-sent-events endpoint; the Worker entry, the rest of the session runtime, transport, auth and routes outstanding |
+| `cloudflare` | `provide-uterm-cloudflare` (53 files, ~8.3k lines) | — | **partial** — the Worker configuration with its startup refusals, the KV session registry, and the whole Durable Object state store (schema, session metadata, invite state, lease state, snapshots, event log, recording view, webhooks and resume tokens); the session runtime's flow controller, its WebSocket attachment reading, webhook secret encryption, the polling server-sent-events endpoint, and the JWT claim handling (token splitting, JWKS key choice, standard-claim validation, role derivation and token extraction); the Worker entry, the rest of the session runtime, transport, auth and routes outstanding |
 
 #### Cloudflare Durable Objects
 
@@ -367,3 +367,4 @@ in a test so it cannot drift silently.
 | `ansi` | Token digit classes are ASCII-only, so a Unicode-digit token is left verbatim | Same `\d` boundary as `redaction`; the patterns spell `[0-9]` to make the intent explicit |
 | `cloudflare/sse` | An event field holding a whole-valued float renders as `1700000000`, not `1700000000.0` | The `pycompat` number divergence reaching a wire format: both ends read the field as JSON, so the value survives — only the bytes differ |
 | `cloudflare/sse` | An `after_seq` beyond 2^53−1 is rounded to the nearest double | Both then ask for events after a sequence larger than any that exists, so the answer is the same; the number asked for is not |
+| `cloudflare/jwt` | A `null` inside a roles claim stringifies to `"null"`, not `"None"` | `str(None)` against `String(null)`; inert either way, since neither is a role this system knows and the principal resolves identically |
