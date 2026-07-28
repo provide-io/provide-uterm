@@ -122,7 +122,7 @@ The existing `provide-uterm-frontend` (lit widgets) and `provide-uterm-app`
 
 | Task | Status |
 |---|---|
-| Move both browser workspaces onto TypeScript 7 | todo |
+| Move both browser workspaces onto TypeScript 7 | **done** |
 | Bring the React SPA to parity with the served feature set | todo |
 
 ## Cross-language obligations
