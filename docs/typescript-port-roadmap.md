@@ -53,14 +53,16 @@ module; the Go column names the sibling package for cross-checking.
 
 | Module | Python | Go | Status |
 |---|---|---|---|
-| `ctrlmsg` | `control_channel_builders`, `control_channel_patterns` | `ctrlmsg` | todo |
+| `ctrlmsg` | `control_channel_builders`, `control_channel_patterns` | `ctrlmsg` | **done** |
 | `frames` | `bridge/schemas`, server `bridge/frames` | `frames` | todo |
 | `recording` | `recording` | `recording` | todo |
 | `session-logger` | `session_logger` | `sessionlogger` | todo |
 
-`ctrlmsg` carries the HMAC identity signature and therefore needs
-CPython-exact canonical JSON, including float repr. That is the one place the
-float divergence recorded in the control-channel corpus is not acceptable.
+`ctrlmsg` carries the HMAC identity signature, which is taken over
+CPython-canonical JSON, so the float divergence recorded in the
+control-channel corpus is not acceptable there. `pycompat/json.ts` supplies
+the exact serialisation and the 24 signed identity frames in the `ctrlmsg`
+corpus match CPython byte for byte.
 
 ### Terminal
 
