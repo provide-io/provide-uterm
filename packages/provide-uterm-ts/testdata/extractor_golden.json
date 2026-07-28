@@ -1,0 +1,1455 @@
+{
+  "convenience_matches_extract": true,
+  "convert": [
+    {
+      "is_bool": false,
+      "name": "plain text",
+      "ok": true,
+      "type": "string",
+      "value": "hello",
+      "value_out": "hello"
+    },
+    {
+      "is_bool": false,
+      "name": "text with padding",
+      "ok": true,
+      "type": "string",
+      "value": "  hello  ",
+      "value_out": "hello"
+    },
+    {
+      "is_bool": false,
+      "name": "an integer",
+      "ok": true,
+      "type": "int",
+      "value": "42",
+      "value_out": 42
+    },
+    {
+      "is_bool": false,
+      "name": "an integer with separators",
+      "ok": true,
+      "type": "int",
+      "value": "1,234,567",
+      "value_out": 1234567
+    },
+    {
+      "is_bool": false,
+      "name": "an integer with padding",
+      "ok": true,
+      "type": "int",
+      "value": "  42  ",
+      "value_out": 42
+    },
+    {
+      "is_bool": false,
+      "name": "a negative integer",
+      "ok": true,
+      "type": "int",
+      "value": "-42",
+      "value_out": -42
+    },
+    {
+      "is_bool": false,
+      "name": "a positive integer",
+      "ok": true,
+      "type": "int",
+      "value": "+42",
+      "value_out": 42
+    },
+    {
+      "is_bool": false,
+      "name": "an integer with underscores",
+      "ok": true,
+      "type": "int",
+      "value": "1_000",
+      "value_out": 1000
+    },
+    {
+      "error": "ValueError",
+      "message": "invalid literal for int() with base 10: '1.9'",
+      "name": "a float as an int",
+      "ok": false,
+      "type": "int",
+      "value": "1.9"
+    },
+    {
+      "error": "ValueError",
+      "message": "invalid literal for int() with base 10: 'abc'",
+      "name": "text as an int",
+      "ok": false,
+      "type": "int",
+      "value": "abc"
+    },
+    {
+      "error": "ValueError",
+      "message": "invalid literal for int() with base 10: ''",
+      "name": "nothing as an int",
+      "ok": false,
+      "type": "int",
+      "value": ""
+    },
+    {
+      "is_bool": false,
+      "name": "a float",
+      "ok": true,
+      "type": "float",
+      "value": "1.5",
+      "value_out": 1.5
+    },
+    {
+      "is_bool": false,
+      "name": "a float with separators",
+      "ok": true,
+      "type": "float",
+      "value": "1,234.5",
+      "value_out": 1234.5
+    },
+    {
+      "is_bool": false,
+      "name": "an integer as a float",
+      "ok": true,
+      "type": "float",
+      "value": "42",
+      "value_out": 42.0
+    },
+    {
+      "is_bool": false,
+      "name": "an exponent",
+      "ok": true,
+      "type": "float",
+      "value": "1e5",
+      "value_out": 100000.0
+    },
+    {
+      "is_infinite": true,
+      "name": "an infinity",
+      "ok": true,
+      "type": "float",
+      "value": "inf",
+      "value_out": null
+    },
+    {
+      "is_infinite": false,
+      "name": "a negative infinity",
+      "ok": true,
+      "type": "float",
+      "value": "-inf",
+      "value_out": null
+    },
+    {
+      "is_nan": true,
+      "name": "a not-a-number",
+      "ok": true,
+      "type": "float",
+      "value": "nan",
+      "value_out": null
+    },
+    {
+      "error": "ValueError",
+      "message": "could not convert string to float: 'abc'",
+      "name": "text as a float",
+      "ok": false,
+      "type": "float",
+      "value": "abc"
+    },
+    {
+      "is_bool": true,
+      "name": "true",
+      "ok": true,
+      "type": "bool",
+      "value": "true",
+      "value_out": true
+    },
+    {
+      "is_bool": true,
+      "name": "yes",
+      "ok": true,
+      "type": "bool",
+      "value": "yes",
+      "value_out": true
+    },
+    {
+      "is_bool": true,
+      "name": "y",
+      "ok": true,
+      "type": "bool",
+      "value": "y",
+      "value_out": true
+    },
+    {
+      "is_bool": true,
+      "name": "one",
+      "ok": true,
+      "type": "bool",
+      "value": "1",
+      "value_out": true
+    },
+    {
+      "is_bool": true,
+      "name": "on",
+      "ok": true,
+      "type": "bool",
+      "value": "on",
+      "value_out": true
+    },
+    {
+      "is_bool": true,
+      "name": "upper case true",
+      "ok": true,
+      "type": "bool",
+      "value": "TRUE",
+      "value_out": true
+    },
+    {
+      "is_bool": true,
+      "name": "mixed case yes",
+      "ok": true,
+      "type": "bool",
+      "value": "Yes",
+      "value_out": true
+    },
+    {
+      "is_bool": true,
+      "name": "false",
+      "ok": true,
+      "type": "bool",
+      "value": "false",
+      "value_out": false
+    },
+    {
+      "is_bool": true,
+      "name": "no",
+      "ok": true,
+      "type": "bool",
+      "value": "no",
+      "value_out": false
+    },
+    {
+      "is_bool": true,
+      "name": "n",
+      "ok": true,
+      "type": "bool",
+      "value": "n",
+      "value_out": false
+    },
+    {
+      "is_bool": true,
+      "name": "zero",
+      "ok": true,
+      "type": "bool",
+      "value": "0",
+      "value_out": false
+    },
+    {
+      "is_bool": true,
+      "name": "off",
+      "ok": true,
+      "type": "bool",
+      "value": "off",
+      "value_out": false
+    },
+    {
+      "error": "ValueError",
+      "message": "Cannot convert 'maybe' to bool",
+      "name": "something else as a bool",
+      "ok": false,
+      "type": "bool",
+      "value": "maybe"
+    },
+    {
+      "error": "ValueError",
+      "message": "Cannot convert '' to bool",
+      "name": "nothing as a bool",
+      "ok": false,
+      "type": "bool",
+      "value": ""
+    },
+    {
+      "is_bool": false,
+      "name": "an unknown type",
+      "ok": true,
+      "type": "nonsense",
+      "value": "42",
+      "value_out": "42"
+    }
+  ],
+  "extract": [
+    {
+      "config": [
+        {
+          "field": "sector",
+          "regex": "Sector\\s+(\\d+)",
+          "type": "int"
+        },
+        {
+          "field": "credits",
+          "regex": "Credits\\s+([\\d,]+)",
+          "type": "int"
+        }
+      ],
+      "name": "several fields",
+      "result": {
+        "_validation": {
+          "errors": [],
+          "valid": true
+        },
+        "credits": 1234,
+        "sector": 42
+      },
+      "screen": "Sector  1  Credits 100\nyou travel onwards\nSector  42  Credits 1,234\nCommand [TL=00:00:00]:? "
+    },
+    {
+      "config": {
+        "field": "sector",
+        "regex": "Sector\\s+(\\d+)",
+        "type": "int"
+      },
+      "name": "a single config rather than a list",
+      "result": {
+        "_validation": {
+          "errors": [],
+          "valid": true
+        },
+        "sector": 42
+      },
+      "screen": "Sector 42"
+    },
+    {
+      "config": null,
+      "name": "nothing configured",
+      "result": null,
+      "screen": "Sector 42"
+    },
+    {
+      "config": [],
+      "name": "an empty list",
+      "result": null,
+      "screen": "Sector 42"
+    },
+    {
+      "config": {},
+      "name": "an empty dict",
+      "result": null,
+      "screen": "Sector 42"
+    },
+    {
+      "config": "sector",
+      "name": "a config that is neither",
+      "result": null,
+      "screen": "Sector 42"
+    },
+    {
+      "config": {
+        "regex": "(\\d+)"
+      },
+      "name": "a dict with no field key",
+      "result": null,
+      "screen": "Sector 42"
+    },
+    {
+      "config": [
+        {
+          "field": "sector",
+          "regex": "Sector\\s+(\\d+)"
+        }
+      ],
+      "name": "nothing matched",
+      "result": null,
+      "screen": "nothing"
+    },
+    {
+      "config": [
+        {
+          "field": "sector",
+          "regex": "Sector\\s+(\\d+)",
+          "type": "int"
+        },
+        {
+          "field": "credits",
+          "regex": "Credits\\s+(\\d+)",
+          "type": "int"
+        }
+      ],
+      "name": "one field matched and one not",
+      "result": {
+        "_validation": {
+          "errors": [],
+          "valid": true
+        },
+        "sector": 42
+      },
+      "screen": "Sector 42"
+    },
+    {
+      "config": [
+        {
+          "field": "sector",
+          "regex": "Sector\\s+(\\d+)",
+          "type": "int"
+        },
+        {
+          "field": "credits",
+          "regex": "Credits\\s+(\\d+)",
+          "required": true,
+          "type": "int"
+        }
+      ],
+      "name": "a required field that is missing",
+      "result": {
+        "_validation": {
+          "errors": [
+            "credits: required but not found"
+          ],
+          "valid": false
+        },
+        "sector": 42
+      },
+      "screen": "Sector 42"
+    },
+    {
+      "config": [
+        {
+          "field": "sector",
+          "regex": "Sector\\s+(\\d+)",
+          "type": "int",
+          "validate": {
+            "min": 10
+          }
+        }
+      ],
+      "name": "a value below its minimum",
+      "result": {
+        "_validation": {
+          "errors": [
+            "sector: value 3 below min 10"
+          ],
+          "valid": false
+        },
+        "sector": 3
+      },
+      "screen": "Sector 3"
+    },
+    {
+      "config": [
+        {
+          "field": "sector",
+          "regex": "Sector\\s+(\\d+)",
+          "type": "int",
+          "validate": {
+            "max": 100
+          }
+        }
+      ],
+      "name": "a value above its maximum",
+      "result": {
+        "_validation": {
+          "errors": [
+            "sector: value 300 exceeds max 100"
+          ],
+          "valid": false
+        },
+        "sector": 300
+      },
+      "screen": "Sector 300"
+    },
+    {
+      "config": [
+        {
+          "field": "sector",
+          "regex": "Sector\\s+(\\d+)",
+          "type": "int",
+          "validate": {
+            "max": 100,
+            "min": 1
+          }
+        }
+      ],
+      "name": "a value inside its range",
+      "result": {
+        "_validation": {
+          "errors": [],
+          "valid": true
+        },
+        "sector": 42
+      },
+      "screen": "Sector 42"
+    },
+    {
+      "config": [
+        {
+          "field": "sector",
+          "regex": "Sector\\s+(\\d+)",
+          "type": "int",
+          "validate": {
+            "max": 42,
+            "min": 42
+          }
+        }
+      ],
+      "name": "a value exactly on its bounds",
+      "result": {
+        "_validation": {
+          "errors": [],
+          "valid": true
+        },
+        "sector": 42
+      },
+      "screen": "Sector 42"
+    },
+    {
+      "config": [
+        {
+          "field": "name",
+          "regex": "Name:\\s*(\\w+)",
+          "validate": {
+            "pattern": "^[A-Z]"
+          }
+        }
+      ],
+      "name": "a string against a pattern",
+      "result": {
+        "_validation": {
+          "errors": [],
+          "valid": true
+        },
+        "name": "Alice"
+      },
+      "screen": "Name: Alice"
+    },
+    {
+      "config": [
+        {
+          "field": "name",
+          "regex": "Name:\\s*(\\w+)",
+          "validate": {
+            "pattern": "^[A-Z]"
+          }
+        }
+      ],
+      "name": "a string failing its pattern",
+      "result": {
+        "_validation": {
+          "errors": [
+            "name: value 'alice' does not match pattern ^[A-Z]"
+          ],
+          "valid": false
+        },
+        "name": "alice"
+      },
+      "screen": "Name: alice"
+    },
+    {
+      "config": [
+        {
+          "field": "name",
+          "regex": "Name:\\s*(\\w+)",
+          "validate": {
+            "pattern": "^A"
+          }
+        }
+      ],
+      "name": "a pattern anchored only at the start",
+      "result": {
+        "_validation": {
+          "errors": [],
+          "valid": true
+        },
+        "name": "Alice"
+      },
+      "screen": "Name: Alice"
+    },
+    {
+      "config": [
+        {
+          "field": "mode",
+          "regex": "Mode:\\s*(\\w+)",
+          "validate": {
+            "allowed_values": [
+              "safe",
+              "fast"
+            ]
+          }
+        }
+      ],
+      "name": "a string in its allowed values",
+      "result": {
+        "_validation": {
+          "errors": [],
+          "valid": true
+        },
+        "mode": "safe"
+      },
+      "screen": "Mode: safe"
+    },
+    {
+      "config": [
+        {
+          "field": "mode",
+          "regex": "Mode:\\s*(\\w+)",
+          "validate": {
+            "allowed_values": [
+              "safe",
+              "fast"
+            ]
+          }
+        }
+      ],
+      "name": "a string outside its allowed values",
+      "result": {
+        "_validation": {
+          "errors": [
+            "mode: value 'reckless' not in allowed values ['safe', 'fast']"
+          ],
+          "valid": false
+        },
+        "mode": "reckless"
+      },
+      "screen": "Mode: reckless"
+    },
+    {
+      "config": [
+        {
+          "field": "ratio",
+          "regex": "Ratio\\s+([\\d.]+)",
+          "type": "float",
+          "validate": {
+            "max": 2.0,
+            "min": 1.0
+          }
+        }
+      ],
+      "name": "a float validated as one",
+      "result": {
+        "_validation": {
+          "errors": [],
+          "valid": true
+        },
+        "ratio": 1.5
+      },
+      "screen": "Ratio 1.5"
+    },
+    {
+      "config": [
+        {
+          "field": "docked",
+          "regex": "Docked\\s+(\\w+)",
+          "type": "bool"
+        }
+      ],
+      "name": "a bool needs no validation rules",
+      "result": {
+        "_validation": {
+          "errors": [],
+          "valid": true
+        },
+        "docked": true
+      },
+      "screen": "Docked yes"
+    },
+    {
+      "config": [
+        {
+          "field": "ratio",
+          "regex": "Ratio\\s+(\\d+)",
+          "type": "float",
+          "validate": {
+            "min": 1
+          }
+        }
+      ],
+      "name": "a float that is a whole number",
+      "result": {
+        "_validation": {
+          "errors": [],
+          "valid": true
+        },
+        "ratio": 2.0
+      },
+      "screen": "Ratio 2"
+    },
+    {
+      "config": [
+        {
+          "field": "sector",
+          "regex": "Sector\\s+(\\d+)",
+          "type": "int"
+        },
+        {
+          "field": "credits",
+          "regex": "Credits\\s+(\\d+)",
+          "required": 1
+        }
+      ],
+      "name": "a required flag that is not a boolean",
+      "result": {
+        "_validation": {
+          "errors": [
+            "credits: required but not found"
+          ],
+          "valid": false
+        },
+        "sector": 42
+      },
+      "screen": "Sector 42"
+    },
+    {
+      "config": [
+        {
+          "field": 0,
+          "regex": "(\\d+)"
+        }
+      ],
+      "name": "a field name that is zero",
+      "result": null,
+      "screen": "Sector 42"
+    },
+    {
+      "config": [
+        {
+          "field": "name",
+          "regex": "Name:\\s*(\\w+)",
+          "validate": {
+            "pattern": "lice"
+          }
+        }
+      ],
+      "name": "a pattern with no anchor",
+      "result": {
+        "_validation": {
+          "errors": [
+            "name: value 'Alice' does not match pattern lice"
+          ],
+          "valid": false
+        },
+        "name": "Alice"
+      },
+      "screen": "Name: Alice"
+    },
+    {
+      "config": [
+        {
+          "field": "sector"
+        }
+      ],
+      "name": "a screen that says undefined",
+      "result": null,
+      "screen": "Sector undefined"
+    },
+    {
+      "config": [
+        {
+          "field": "sector",
+          "regex": "Sector\\s+(\\w+)"
+        },
+        {
+          "field": "sector",
+          "regex": "Sector\\s+(\\w+)",
+          "type": "int"
+        }
+      ],
+      "name": "a value checked against a type it is not",
+      "result": {
+        "_validation": {
+          "errors": [
+            "sector: expected int, got str"
+          ],
+          "valid": false
+        },
+        "sector": "abc"
+      },
+      "screen": "Sector abc"
+    },
+    {
+      "config": [
+        {
+          "field": "ratio",
+          "regex": "Ratio\\s+([\\d.]+)",
+          "type": "float"
+        },
+        {
+          "field": "ratio",
+          "regex": "Ratio\\s+(zzz)",
+          "type": "int"
+        }
+      ],
+      "name": "a fraction checked as a whole number",
+      "result": {
+        "_validation": {
+          "errors": [
+            "ratio: expected int, got float"
+          ],
+          "valid": false
+        },
+        "ratio": 1.5
+      },
+      "screen": "Ratio 1.5"
+    },
+    {
+      "config": [
+        {
+          "field": "sector",
+          "regex": "Sector\\s+(\\d+)",
+          "validate": {
+            "allowed_values": [
+              1,
+              2,
+              "3"
+            ]
+          }
+        }
+      ],
+      "name": "allowed values that are numbers",
+      "result": {
+        "_validation": {
+          "errors": [
+            "sector: value '42' not in allowed values [1, 2, '3']"
+          ],
+          "valid": false
+        },
+        "sector": "42"
+      },
+      "screen": "Sector 42"
+    },
+    {
+      "config": [
+        {
+          "field": "sector",
+          "regex": "Sector\\s+(\\d+)",
+          "type": "int"
+        },
+        {
+          "field": "sector",
+          "regex": "Sector\\s+(zzz)",
+          "type": "string"
+        }
+      ],
+      "name": "a whole number checked as text",
+      "result": {
+        "_validation": {
+          "errors": [
+            "sector: expected string, got int"
+          ],
+          "valid": false
+        },
+        "sector": 42
+      },
+      "screen": "Sector 42"
+    },
+    {
+      "config": [
+        {
+          "field": "docked",
+          "regex": "Docked\\s+(\\w+)",
+          "type": "bool"
+        },
+        {
+          "field": "docked",
+          "regex": "Docked\\s+(zzz)",
+          "type": "string"
+        }
+      ],
+      "name": "a boolean checked as text",
+      "result": {
+        "_validation": {
+          "errors": [
+            "docked: expected string, got bool"
+          ],
+          "valid": false
+        },
+        "docked": true
+      },
+      "screen": "Docked yes"
+    },
+    {
+      "config": [
+        {
+          "field": "docked",
+          "regex": "Docked\\s+(\\w+)",
+          "type": "bool"
+        },
+        {
+          "field": "docked",
+          "regex": "Docked\\s+(zzz)",
+          "type": "int"
+        }
+      ],
+      "name": "a boolean checked as a whole number",
+      "result": {
+        "_validation": {
+          "errors": [],
+          "valid": true
+        },
+        "docked": true
+      },
+      "screen": "Docked yes"
+    },
+    {
+      "config": [
+        {
+          "field": "docked",
+          "regex": "Docked\\s+(\\w+)",
+          "type": "bool"
+        },
+        {
+          "field": "docked",
+          "regex": "Docked\\s+(zzz)",
+          "type": "float"
+        }
+      ],
+      "name": "a boolean checked as a fraction",
+      "result": {
+        "_validation": {
+          "errors": [
+            "docked: expected float, got bool"
+          ],
+          "valid": false
+        },
+        "docked": true
+      },
+      "screen": "Docked yes"
+    },
+    {
+      "config": [
+        {
+          "field": 7,
+          "regex": "(\\d+)"
+        },
+        {
+          "field": "sector",
+          "regex": "Sector\\s+(\\d+)",
+          "type": "int"
+        }
+      ],
+      "name": "a config whose field is not a string",
+      "result": {
+        "7": "42",
+        "_validation": {
+          "errors": [],
+          "valid": true
+        },
+        "sector": 42
+      },
+      "screen": "Sector 42"
+    },
+    {
+      "config": [
+        {
+          "field": "sector",
+          "regex": "Sector\\s+(\\d+)",
+          "type": "int",
+          "validate": {
+            "min": 10
+          }
+        },
+        {
+          "field": "mode",
+          "regex": "Mode:\\s*(\\w+)",
+          "validate": {
+            "allowed_values": [
+              "safe"
+            ]
+          }
+        },
+        {
+          "field": "credits",
+          "regex": "Credits\\s+(\\d+)",
+          "required": true,
+          "type": "int"
+        }
+      ],
+      "name": "several problems at once",
+      "result": {
+        "_validation": {
+          "errors": [
+            "sector: value 3 below min 10",
+            "mode: value 'reckless' not in allowed values ['safe']",
+            "credits: required but not found"
+          ],
+          "valid": false
+        },
+        "mode": "reckless",
+        "sector": 3
+      },
+      "screen": "Sector 3 Mode: reckless"
+    }
+  ],
+  "screen": "Sector  1  Credits 100\nyou travel onwards\nSector  42  Credits 1,234\nCommand [TL=00:00:00]:? ",
+  "single": [
+    {
+      "config": {
+        "field": "name",
+        "regex": "Name:\\s*(\\w+)"
+      },
+      "name": "a plain string",
+      "result": {
+        "name": "Alice"
+      },
+      "screen": "Name: Alice"
+    },
+    {
+      "config": {
+        "field": "sector",
+        "regex": "Sector\\s+(\\d+)",
+        "type": "int"
+      },
+      "name": "an int",
+      "result": {
+        "sector": 42
+      },
+      "screen": "Sector 42"
+    },
+    {
+      "config": {
+        "field": "ratio",
+        "regex": "Ratio\\s+([\\d.]+)",
+        "type": "float"
+      },
+      "name": "a float",
+      "result": {
+        "ratio": 1.5
+      },
+      "screen": "Ratio 1.5"
+    },
+    {
+      "config": {
+        "field": "docked",
+        "regex": "Docked\\s+(\\w+)",
+        "type": "bool"
+      },
+      "name": "a bool",
+      "result": {
+        "docked": true
+      },
+      "screen": "Docked yes"
+    },
+    {
+      "config": {
+        "field": "sector",
+        "regex": "Sector\\s+(\\d+)",
+        "type": "int"
+      },
+      "name": "the last of several",
+      "result": {
+        "sector": 42
+      },
+      "screen": "Sector  1  Credits 100\nyou travel onwards\nSector  42  Credits 1,234\nCommand [TL=00:00:00]:? "
+    },
+    {
+      "config": {
+        "field": "credits",
+        "regex": "Credits\\s+([\\d,]+)",
+        "type": "int"
+      },
+      "name": "thousands separators",
+      "result": {
+        "credits": 1234
+      },
+      "screen": "Sector  1  Credits 100\nyou travel onwards\nSector  42  Credits 1,234\nCommand [TL=00:00:00]:? "
+    },
+    {
+      "config": {
+        "field": "sector",
+        "regex": "\\d+",
+        "type": "int"
+      },
+      "name": "no capture group takes the whole match",
+      "result": {
+        "sector": 42
+      },
+      "screen": "Sector 42"
+    },
+    {
+      "config": {
+        "field": "pair",
+        "regex": "a=(\\d+) b=(\\d+)"
+      },
+      "name": "two groups take the first",
+      "result": {
+        "pair": "1"
+      },
+      "screen": "a=1 b=2"
+    },
+    {
+      "config": {
+        "field": "sector",
+        "regex": "Sector\\s+(\\d+)"
+      },
+      "name": "no match at all",
+      "result": null,
+      "screen": "nothing here"
+    },
+    {
+      "config": {
+        "field": "sector",
+        "regex": "Sector\\s+(\\w+)",
+        "type": "int"
+      },
+      "name": "an int that is not one",
+      "result": null,
+      "screen": "Sector abc"
+    },
+    {
+      "config": {
+        "field": "sector",
+        "regex": "Sector\\s+([\\d.]+)",
+        "type": "int"
+      },
+      "name": "a float-shaped string as an int",
+      "result": null,
+      "screen": "Sector 1.9"
+    },
+    {
+      "config": {
+        "field": "docked",
+        "regex": "Docked\\s+(\\w+)",
+        "type": "bool"
+      },
+      "name": "a bool that is not one",
+      "result": null,
+      "screen": "Docked maybe"
+    },
+    {
+      "config": {
+        "field": "sector",
+        "regex": "(\\d+)",
+        "type": "nonsense"
+      },
+      "name": "an unknown type falls back to text",
+      "result": {
+        "sector": "42"
+      },
+      "screen": "Sector 42"
+    },
+    {
+      "config": {
+        "field": "name",
+        "regex": "Name:(.*)"
+      },
+      "name": "whitespace is stripped",
+      "result": {
+        "name": "Alice"
+      },
+      "screen": "Name:   Alice   "
+    },
+    {
+      "config": {
+        "regex": "(\\d+)"
+      },
+      "name": "no field name",
+      "result": null,
+      "screen": "Sector 42"
+    },
+    {
+      "config": {
+        "field": "sector"
+      },
+      "name": "no regex",
+      "result": null,
+      "screen": "Sector 42"
+    },
+    {
+      "config": {
+        "field": "",
+        "regex": "(\\d+)"
+      },
+      "name": "an empty field name",
+      "result": null,
+      "screen": "Sector 42"
+    },
+    {
+      "config": {
+        "field": "sector",
+        "regex": ""
+      },
+      "name": "an empty regex",
+      "result": null,
+      "screen": "Sector 42"
+    },
+    {
+      "config": {
+        "field": "sector",
+        "regex": "sector\\s+(\\d+)",
+        "type": "int"
+      },
+      "name": "case-insensitive by default",
+      "result": {
+        "sector": 42
+      },
+      "screen": "SECTOR 42"
+    },
+    {
+      "config": {
+        "field": "sector",
+        "regex": "^Sector\\s+(\\d+)",
+        "type": "int"
+      },
+      "name": "multiline by default",
+      "result": {
+        "sector": 42
+      },
+      "screen": "one\nSector 42"
+    },
+    {
+      "config": {
+        "field": "balance",
+        "regex": "Balance\\s+(-?\\d+)",
+        "type": "int"
+      },
+      "name": "a negative int",
+      "result": {
+        "balance": -50
+      },
+      "screen": "Balance -50"
+    },
+    {
+      "config": {
+        "field": "drift",
+        "regex": "Drift\\s+(-?[\\d.]+)",
+        "type": "float"
+      },
+      "name": "a negative float",
+      "result": {
+        "drift": -1.5
+      },
+      "screen": "Drift -1.5"
+    },
+    {
+      "config": {
+        "field": "distance",
+        "regex": "Distance\\s+(\\S+)",
+        "type": "float"
+      },
+      "name": "an exponent",
+      "result": {
+        "distance": 100000.0
+      },
+      "screen": "Distance 1e5"
+    },
+    {
+      "config": {
+        "field": "distance",
+        "regex": "Distance\\s+(\\S+)",
+        "type": "float"
+      },
+      "name": "an infinity",
+      "result": {
+        "distance": {
+          "__float__": "inf"
+        }
+      },
+      "screen": "Distance inf"
+    },
+    {
+      "config": {
+        "field": "sector",
+        "regex": "Sector\\s+(\\S+)",
+        "type": "int"
+      },
+      "name": "underscores in a number",
+      "result": {
+        "sector": 1000
+      },
+      "screen": "Sector 1_000"
+    }
+  ],
+  "unvalidated": [
+    {
+      "name": "several fields",
+      "result": {
+        "credits": 1234,
+        "sector": 42
+      }
+    },
+    {
+      "name": "a single config rather than a list",
+      "result": {
+        "sector": 42
+      }
+    },
+    {
+      "name": "nothing configured",
+      "result": null
+    },
+    {
+      "name": "an empty list",
+      "result": null
+    },
+    {
+      "name": "an empty dict",
+      "result": null
+    },
+    {
+      "name": "a config that is neither",
+      "result": null
+    },
+    {
+      "name": "a dict with no field key",
+      "result": null
+    },
+    {
+      "name": "nothing matched",
+      "result": null
+    },
+    {
+      "name": "one field matched and one not",
+      "result": {
+        "sector": 42
+      }
+    },
+    {
+      "name": "a required field that is missing",
+      "result": {
+        "sector": 42
+      }
+    },
+    {
+      "name": "a value below its minimum",
+      "result": {
+        "sector": 3
+      }
+    },
+    {
+      "name": "a value above its maximum",
+      "result": {
+        "sector": 300
+      }
+    },
+    {
+      "name": "a value inside its range",
+      "result": {
+        "sector": 42
+      }
+    },
+    {
+      "name": "a value exactly on its bounds",
+      "result": {
+        "sector": 42
+      }
+    },
+    {
+      "name": "a string against a pattern",
+      "result": {
+        "name": "Alice"
+      }
+    },
+    {
+      "name": "a string failing its pattern",
+      "result": {
+        "name": "alice"
+      }
+    },
+    {
+      "name": "a pattern anchored only at the start",
+      "result": {
+        "name": "Alice"
+      }
+    },
+    {
+      "name": "a string in its allowed values",
+      "result": {
+        "mode": "safe"
+      }
+    },
+    {
+      "name": "a string outside its allowed values",
+      "result": {
+        "mode": "reckless"
+      }
+    },
+    {
+      "name": "a float validated as one",
+      "result": {
+        "ratio": 1.5
+      }
+    },
+    {
+      "name": "a bool needs no validation rules",
+      "result": {
+        "docked": true
+      }
+    },
+    {
+      "name": "a float that is a whole number",
+      "result": {
+        "ratio": 2.0
+      }
+    },
+    {
+      "name": "a required flag that is not a boolean",
+      "result": {
+        "sector": 42
+      }
+    },
+    {
+      "name": "a field name that is zero",
+      "result": null
+    },
+    {
+      "name": "a pattern with no anchor",
+      "result": {
+        "name": "Alice"
+      }
+    },
+    {
+      "name": "a screen that says undefined",
+      "result": null
+    },
+    {
+      "name": "a value checked against a type it is not",
+      "result": {
+        "sector": "abc"
+      }
+    },
+    {
+      "name": "a fraction checked as a whole number",
+      "result": {
+        "ratio": 1.5
+      }
+    },
+    {
+      "name": "allowed values that are numbers",
+      "result": {
+        "sector": "42"
+      }
+    },
+    {
+      "name": "a whole number checked as text",
+      "result": {
+        "sector": 42
+      }
+    },
+    {
+      "name": "a boolean checked as text",
+      "result": {
+        "docked": true
+      }
+    },
+    {
+      "name": "a boolean checked as a whole number",
+      "result": {
+        "docked": true
+      }
+    },
+    {
+      "name": "a boolean checked as a fraction",
+      "result": {
+        "docked": true
+      }
+    },
+    {
+      "name": "a config whose field is not a string",
+      "result": {
+        "7": "42",
+        "sector": 42
+      }
+    },
+    {
+      "name": "several problems at once",
+      "result": {
+        "mode": "reckless",
+        "sector": 3
+      }
+    }
+  ]
+}

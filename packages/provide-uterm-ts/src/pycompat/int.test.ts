@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 import { loadGolden } from "../testing/golden.ts";
-import { pyInt, safeInt } from "./index.ts";
+import { pyFloat, pyInt, safeInt } from "./index.ts";
 
 interface WorkerLinkGolden {
   safe_ints: Array<{
@@ -137,5 +137,51 @@ describe("pyInt", () => {
   it("handles an empty string", () => {
     expect(pyInt("")).toBeUndefined();
     expect(pyInt("   ")).toBeUndefined();
+  });
+});
+
+describe("CPython's float()", () => {
+  it("reads a decimal literal", () => {
+    expect(pyFloat("1.5")).toBe(1.5);
+    expect(pyFloat("42")).toBe(42);
+    expect(pyFloat(".5")).toBe(0.5);
+    expect(pyFloat("-1.5")).toBe(-1.5);
+    expect(pyFloat("+1.5")).toBe(1.5);
+    expect(pyFloat("1e5")).toBe(100000);
+    expect(pyFloat("1E-3")).toBe(0.001);
+  });
+
+  it("reads the words CPython reads, in any case", () => {
+    // "inf" is a float there and NaN under `Number`, so a port reaching for
+    // the built-in silently turns an infinity into a failed conversion.
+    expect(pyFloat("inf")).toBe(Number.POSITIVE_INFINITY);
+    expect(pyFloat("INF")).toBe(Number.POSITIVE_INFINITY);
+    expect(pyFloat("Infinity")).toBe(Number.POSITIVE_INFINITY);
+    expect(pyFloat("-inf")).toBe(Number.NEGATIVE_INFINITY);
+    expect(pyFloat("-INFINITY")).toBe(Number.NEGATIVE_INFINITY);
+    expect(pyFloat("nan")).toBeNaN();
+    expect(pyFloat("NaN")).toBeNaN();
+  });
+
+  it("ignores surrounding whitespace", () => {
+    expect(pyFloat("  1.5  ")).toBe(1.5);
+    expect(pyFloat("\t-inf\n")).toBe(Number.NEGATIVE_INFINITY);
+  });
+
+  it("allows underscores between digits, as the language does", () => {
+    expect(pyFloat("1_000.5")).toBe(1000.5);
+    expect(pyFloat("1_0e1_0")).toBe(1e11);
+  });
+
+  it("refuses what CPython refuses", () => {
+    // `Number("")` is zero and `Number("0x10")` is sixteen; both would turn an
+    // unreadable screen into a plausible number.
+    expect(pyFloat("")).toBeUndefined();
+    expect(pyFloat("   ")).toBeUndefined();
+    expect(pyFloat("abc")).toBeUndefined();
+    expect(pyFloat("0x10")).toBeUndefined();
+    expect(pyFloat("1,234")).toBeUndefined();
+    expect(pyFloat("1.2.3")).toBeUndefined();
+    expect(pyFloat("--1")).toBeUndefined();
   });
 });

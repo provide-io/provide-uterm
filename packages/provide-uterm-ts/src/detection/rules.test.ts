@@ -144,7 +144,10 @@ describe("a rule set the reference refuses", () => {
     // The cursor expectation and the stability flag are gates. A truthy
     // string read as one would silently invert what a rule asked for.
     expect(() =>
-      parseRuleSet({ game: "g", prompts: [{ id: "a", match: { pattern: "x" }, screen: { expect_cursor_at_end: "yes" } }] }),
+      parseRuleSet({
+        game: "g",
+        prompts: [{ id: "a", match: { pattern: "x" }, screen: { expect_cursor_at_end: "yes" } }],
+      }),
     ).toThrow(RuleValidationError);
     expect(() =>
       parseRuleSet({

@@ -115,3 +115,43 @@ export function safeInt(value: unknown, fallback: number, options: SafeIntOption
   }
   return parsed;
 }
+
+/**
+ * A CPython float literal.
+ *
+ * Optional sign, then either a decimal number with an optional exponent, or
+ * one of the words CPython accepts. Underscores are legal between digits, as
+ * they are in the language's own literals.
+ */
+const FLOAT_LITERAL = /^[+-]?(?:\d[\d_]*\.?[\d_]*|\.\d[\d_]*)(?:[eE][+-]?\d[\d_]*)?$/;
+
+/** The words CPython reads as floats, lower-cased. */
+const FLOAT_WORDS: Readonly<Record<string, number>> = {
+  inf: Number.POSITIVE_INFINITY,
+  infinity: Number.POSITIVE_INFINITY,
+  nan: Number.NaN,
+};
+
+/**
+ * CPython's `float()`, or nothing where it would raise.
+ *
+ * Deliberately not `Number()`, which differs in ways that all end with a
+ * plausible-looking wrong answer: `Number("")` is zero, `Number("0x10")` is
+ * 16, and `Number("inf")` is NaN where CPython reads an infinity. A screen
+ * that could not be read must produce nothing, not a number.
+ */
+export function pyFloat(value: string): number | undefined {
+  const text = value.trim();
+  const sign = text.startsWith("-") ? -1 : 1;
+  const word = FLOAT_WORDS[text.replace(/^[+-]/, "").toLowerCase()];
+  if (word !== undefined) {
+    // `nan` has no sign to apply, and negating it changes nothing observable.
+    return sign * word;
+  }
+  if (!FLOAT_LITERAL.test(text)) {
+    return undefined;
+  }
+  // The literal shape is already guaranteed above, so the conversion cannot
+  // fail from here.
+  return Number(text.replaceAll("_", ""));
+}
