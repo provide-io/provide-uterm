@@ -138,6 +138,50 @@ learn about a fourth implementation:
 | `ci/quality_checks.sh` | golden-corpus drift gate | **done** |
 | `.github/workflows/ci.yml` | typecheck, lint and coverage in `npm-quality` | **done** |
 
+## Blocked: telemetry
+
+The port must log through `provide.telemetry`, never through OpenTelemetry
+directly — the same rule the Python reference and the Go port follow. The
+TypeScript sibling exists and is the right dependency:
+`@provide-io/telemetry`, which exports `getLogger` / `Logger` (the analogue
+of Go's `ptel.GetLogger`) and keeps OpenTelemetry as an optional peer
+dependency with a browser no-op.
+
+**It cannot be consumed from Node as published.** `@provide-io/telemetry@0.5.2`
+declares `"type": "module"` but its `dist/` contains 115 extensionless
+relative imports (`from './config'`). Node's ESM resolver requires full
+specifiers, so importing the package fails outright:
+
+```
+$ node --input-type=module -e "import('@provide-io/telemetry')"
+ERR_MODULE_NOT_FOUND: Cannot find module '.../dist/config'
+    imported from .../dist/index.js
+```
+
+Root cause is in `provide-telemetry/typescript/tsconfig.json`: it builds with
+`"moduleResolution": "bundler"` and emits with plain `tsc`. Bundler
+resolution allows extensionless specifiers in source and `tsc` does not
+rewrite them on emit, so the output is only loadable by a bundler. That is
+consistent with the package's stated focus on frontends, but this port is a
+Node runtime.
+
+Any one of these fixes it upstream:
+
+1. `"moduleResolution": "nodenext"` with `.js` specifiers in source.
+2. `"rewriteRelativeImportExtensions": true` with `.ts` specifiers.
+3. A bundling step for the Node entry point.
+
+Until then no module here logs. That is not yet costing anything: every
+module ported so far is a pure transform with no logging surface. The first
+module that needs a logger is `transports`, which is where the Go port
+starts calling `ptel.GetLogger` directly.
+
+When the dependency is usable, the layering follows the Go port: library
+modules take an injectable `Logger` defaulting to a no-op, transports and
+above call `getLogger`. A `src/telemetry/` facade should be the only place
+the package name appears, with a CI check forbidding direct
+`@opentelemetry/*` imports.
+
 ## Recorded divergences
 
 Deliberate, tested differences from the CPython reference. Each is asserted
