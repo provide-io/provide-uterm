@@ -41,8 +41,8 @@ module; the Go column names the sibling package for cross-checking.
 | `redaction` | `redaction` | `redaction` | **done** |
 | `filters` | `filters` | `filters` | **done** |
 | `control-channel` | `control_channel`, `ws_bytes` | `controlchannel` | **done** |
-| `line-editor` | `line_editor` | `lineeditor` | todo |
-| `channels` | `channels` | `channels` | todo |
+| `line-editor` | `line_editor` | `lineeditor` | **done** |
+| `channels` | `channels` | `channels` | **done** |
 | `file-io` | `file_io` | `fileio` | todo |
 | `ansi` | `ansi`, `_ansi_dialects` | `ansi` | todo |
 | `screen` | `screen` | `screen` | todo |
