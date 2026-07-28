@@ -1,0 +1,323 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_detection_golden.py",
+ "input_type": [
+  {
+   "screen": "",
+   "type": "multi_key"
+  },
+  {
+   "screen": "nothing in particular",
+   "type": "multi_key"
+  },
+  {
+   "screen": "Press any key to continue",
+   "type": "any_key"
+  },
+  {
+   "screen": "press a key",
+   "type": "any_key"
+  },
+  {
+   "screen": "Hit any key",
+   "type": "any_key"
+  },
+  {
+   "screen": "STRIKE ANY KEY",
+   "type": "any_key"
+  },
+  {
+   "screen": "<MORE>",
+   "type": "any_key"
+  },
+  {
+   "screen": "[more]",
+   "type": "any_key"
+  },
+  {
+   "screen": "-- More --",
+   "type": "any_key"
+  },
+  {
+   "screen": "Continue? (y/n)",
+   "type": "single_key"
+  },
+  {
+   "screen": "Are you sure (yes/no)",
+   "type": "single_key"
+  },
+  {
+   "screen": "continue?",
+   "type": "single_key"
+  },
+  {
+   "screen": "quit?",
+   "type": "single_key"
+  },
+  {
+   "screen": "abort?",
+   "type": "single_key"
+  },
+  {
+   "screen": "retry?",
+   "type": "single_key"
+  },
+  {
+   "screen": "Proceed [Y/N]",
+   "type": "single_key"
+  },
+  {
+   "screen": "(Q)uit or (A)bort",
+   "type": "single_key"
+  },
+  {
+   "screen": "Enter your name",
+   "type": "multi_key"
+  },
+  {
+   "screen": "Type a command",
+   "type": "multi_key"
+  },
+  {
+   "screen": "input:",
+   "type": "multi_key"
+  },
+  {
+   "screen": "Name:",
+   "type": "multi_key"
+  },
+  {
+   "screen": "Password:",
+   "type": "multi_key"
+  },
+  {
+   "screen": "Username:",
+   "type": "multi_key"
+  },
+  {
+   "screen": "Choose:",
+   "type": "multi_key"
+  },
+  {
+   "screen": "Select:",
+   "type": "multi_key"
+  },
+  {
+   "screen": "Command:",
+   "type": "multi_key"
+  },
+  {
+   "screen": "Search:",
+   "type": "multi_key"
+  },
+  {
+   "screen": "Press any key, then enter your name",
+   "type": "any_key"
+  },
+  {
+   "screen": "Continue? (y/n) — or type a command",
+   "type": "single_key"
+  },
+  {
+   "screen": "PRESS ANY KEY",
+   "type": "any_key"
+  },
+  {
+   "screen": "xxpress any keyxx",
+   "type": "any_key"
+  },
+  {
+   "screen": "1234567890",
+   "type": "multi_key"
+  }
+ ],
+ "buffers": [
+  {
+   "name": "single screen",
+   "snapshots": [
+    {
+     "screen": "a",
+     "screen_hash": "h1",
+     "captured_at": 100.0
+    }
+   ],
+   "buffers": [
+    {
+     "screen": "a",
+     "screen_hash": "h1",
+     "captured_at": 100.0,
+     "time_since_last_change": 0.0,
+     "matched_prompt_id": null
+    }
+   ],
+   "recent_2": [
+    "h1"
+   ],
+   "recent_all": [
+    "h1"
+   ]
+  },
+  {
+   "name": "unchanged screen accumulates idle time",
+   "snapshots": [
+    {
+     "screen": "a",
+     "screen_hash": "h1",
+     "captured_at": 100.0
+    },
+    {
+     "screen": "a",
+     "screen_hash": "h1",
+     "captured_at": 102.5
+    },
+    {
+     "screen": "a",
+     "screen_hash": "h1",
+     "captured_at": 105.0
+    }
+   ],
+   "buffers": [
+    {
+     "screen": "a",
+     "screen_hash": "h1",
+     "captured_at": 100.0,
+     "time_since_last_change": 0.0,
+     "matched_prompt_id": null
+    },
+    {
+     "screen": "a",
+     "screen_hash": "h1",
+     "captured_at": 102.5,
+     "time_since_last_change": 2.5,
+     "matched_prompt_id": null
+    },
+    {
+     "screen": "a",
+     "screen_hash": "h1",
+     "captured_at": 105.0,
+     "time_since_last_change": 5.0,
+     "matched_prompt_id": null
+    }
+   ],
+   "recent_2": [
+    "h1",
+    "h1"
+   ],
+   "recent_all": [
+    "h1",
+    "h1",
+    "h1"
+   ]
+  },
+  {
+   "name": "changed screen restarts the clock",
+   "snapshots": [
+    {
+     "screen": "a",
+     "screen_hash": "h1",
+     "captured_at": 100.0
+    },
+    {
+     "screen": "b",
+     "screen_hash": "h2",
+     "captured_at": 103.0
+    },
+    {
+     "screen": "b",
+     "screen_hash": "h2",
+     "captured_at": 104.0
+    }
+   ],
+   "buffers": [
+    {
+     "screen": "a",
+     "screen_hash": "h1",
+     "captured_at": 100.0,
+     "time_since_last_change": 0.0,
+     "matched_prompt_id": null
+    },
+    {
+     "screen": "b",
+     "screen_hash": "h2",
+     "captured_at": 103.0,
+     "time_since_last_change": 3.0,
+     "matched_prompt_id": null
+    },
+    {
+     "screen": "b",
+     "screen_hash": "h2",
+     "captured_at": 104.0,
+     "time_since_last_change": 1.0,
+     "matched_prompt_id": null
+    }
+   ],
+   "recent_2": [
+    "h2",
+    "h2"
+   ],
+   "recent_all": [
+    "h1",
+    "h2",
+    "h2"
+   ]
+  },
+  {
+   "name": "alternating screens",
+   "snapshots": [
+    {
+     "screen": "a",
+     "screen_hash": "h1",
+     "captured_at": 10.0
+    },
+    {
+     "screen": "b",
+     "screen_hash": "h2",
+     "captured_at": 11.0
+    },
+    {
+     "screen": "a",
+     "screen_hash": "h1",
+     "captured_at": 12.0
+    }
+   ],
+   "buffers": [
+    {
+     "screen": "a",
+     "screen_hash": "h1",
+     "captured_at": 10.0,
+     "time_since_last_change": 0.0,
+     "matched_prompt_id": null
+    },
+    {
+     "screen": "b",
+     "screen_hash": "h2",
+     "captured_at": 11.0,
+     "time_since_last_change": 1.0,
+     "matched_prompt_id": null
+    },
+    {
+     "screen": "a",
+     "screen_hash": "h1",
+     "captured_at": 12.0,
+     "time_since_last_change": 1.0,
+     "matched_prompt_id": null
+    }
+   ],
+   "recent_2": [
+    "h2",
+    "h1"
+   ],
+   "recent_all": [
+    "h1",
+    "h2",
+    "h1"
+   ]
+  }
+ ],
+ "eviction": {
+  "kept": [
+   "h2",
+   "h3",
+   "h4"
+  ]
+ }
+}

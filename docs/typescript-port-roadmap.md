@@ -71,7 +71,7 @@ corpus match CPython byte for byte.
 | `vt` | pyte (dependency) | `vt` | **done** |
 | `emulator` | `emulator` | `emulator` | **done** |
 | `render` | `render` | `render` | **partial** — SGR row rendering; image/palette/segments outstanding |
-| `detection` | `detection` | `detection` | todo |
+| `detection` | `detection` | `detection` | **partial** — screen buffer and input-type heuristic; rule engine, extractor and flow outstanding |
 | `deckmux` | `deckmux` | `deckmux` | todo |
 | `annotation` | `provide-uterm-annotation` | `annotation` | todo |
 
