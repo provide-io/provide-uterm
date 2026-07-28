@@ -56,6 +56,16 @@ export class BufferManager {
     this.#maxSize = maxSize;
   }
 
+  /** How many screens are held. */
+  get size(): number {
+    return this.#buffer.length;
+  }
+
+  /** The most this will hold before dropping the oldest. */
+  get maxSize(): number {
+    return this.#maxSize;
+  }
+
   /**
    * Add a screen snapshot and compute its timing metadata.
    *
