@@ -1,0 +1,42 @@
+//
+// SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
+
+// Minimal vendored slice of the litevirt v1 API — only the VNC proxy surface
+// uterm consumes.
+//
+// Upstream is github.com/litevirt/litevirt (proto/litevirt/v1/service.proto),
+// whose generated Go package covers the entire litevirt control plane (hosts,
+// VMs, stacks, devices, snapshots) in ~40k lines. uterm dials exactly one RPC,
+// so vendoring this slice drops the module requirement and its `replace` onto a
+// fork instead of carrying that surface.
+//
+// Wire compatibility is what makes the substitution safe, and it is preserved
+// exactly:
+//   - proto package `litevirt.v1` + service `LiteVirt` => the gRPC method path
+//     stays `/litevirt.v1.LiteVirt/ProxyVNC`
+//   - `VNCData.data` keeps field number 1
+//
+// Keep those three in sync with upstream. Regenerate with:
+//   buf generate  (from packages/provide-uterm-go/vnc/gen)
+
+syntax = "proto3";
+
+package litevirt.v1;
+
+option go_package = "github.com/provide-io/provide-uterm/packages/provide-uterm-go/vnc/gen/litevirt/v1;litevirtv1";
+
+// VNCData is one chunk of the RFB byte stream tunneled over gRPC.
+message VNCData {
+  bytes data = 1;
+}
+
+// LiteVirt is the upstream service, narrowed to the VNC proxy RPC. Declaring
+// only ProxyVNC does not change the wire contract: gRPC dispatches on the
+// per-method path, so a client generated from this file is indistinguishable
+// from one generated against the full service definition.
+service LiteVirt {
+  // ProxyVNC tunnels a bidirectional RFB stream to a VM's VNC console.
+  rpc ProxyVNC(stream VNCData) returns (stream VNCData);
+}

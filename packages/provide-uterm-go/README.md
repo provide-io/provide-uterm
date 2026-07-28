@@ -120,7 +120,8 @@ make quality-gate   # fmt-check, vet, golangci-lint, race tests, coverage >= 97.
 
 Library/wire packages are held at (or within a hair of) 100% statement
 coverage; the whole-module floor is `COVER_THRESHOLD=97.8` (measured
-**~98.0%** after filtering `cmd/` + litevirt glue). Remaining residual is
+**~98.0%** after filtering `cmd/` + litevirt glue + the `vnc/gen/` protoc
+output — see the `cover` target for why each is out). Remaining residual is
 live-socket/OS-signal/fault-injection-only branches in manager/server/pty/cli
 (see the Makefile header). `go vet`, `golangci-lint`, and `-race` cleanliness
 are enforced across every package. New files need the SPDX header block.

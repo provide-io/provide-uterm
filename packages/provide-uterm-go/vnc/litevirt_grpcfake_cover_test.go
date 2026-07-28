@@ -16,7 +16,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
-	pb "github.com/litevirt/litevirt/gen/litevirt/v1"
+	pb "github.com/provide-io/provide-uterm/packages/provide-uterm-go/vnc/gen/litevirt/v1"
 )
 
 // fakeClientStream implements grpc.ClientStream over channels so ProxyVNC can be

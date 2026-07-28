@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Buf module for the vendored litevirt VNC slice. See litevirt/v1/vnc.proto for
+# why this slice exists and what must stay wire-identical to upstream.
+version: v2
+modules:
+  - path: .
+lint:
+  use:
+    - STANDARD
+  except:
+    # Upstream owns every name in this file; the slice mirrors them exactly so
+    # the gRPC method path and message identity match. Renaming anything to
+    # satisfy the linter would break the wire contract, so the naming rules that
+    # upstream does not follow are turned off rather than obeyed:
+    - SERVICE_SUFFIX # service LiteVirt, not LiteVirtService
+    - PACKAGE_DIRECTORY_MATCH # file lives under the vendoring package's gen/
+    - RPC_REQUEST_RESPONSE_UNIQUE # ProxyVNC is symmetric: VNCData both ways
+    - RPC_REQUEST_STANDARD_NAME # VNCData, not ProxyVNCRequest
+    - RPC_RESPONSE_STANDARD_NAME # VNCData, not ProxyVNCResponse
+breaking:
+  use:
+    - WIRE_JSON

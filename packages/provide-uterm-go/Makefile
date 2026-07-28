@@ -58,12 +58,18 @@ race:
 
 # Cover libraries only. Denominator filters:
 #   - cmd/ mains and demo programs (validated by build-binaries / manual demos)
+#   - vnc/gen/ protoc output (vendored litevirt VNC stubs). Not hand-written, so
+#     a statement cap on it measures the generator, not this repo. `go test
+#     ./...` also attributes no coverage to a package with no test files of its
+#     own, so these lines would read 0% however hard the callers exercise them —
+#     and they are exercised, over a real gRPC connection, by server's
+#     TestGUIAttach* against a live fake LiteVirt server.
 cover:
 	@rm -f coverage.raw coverage.out
 	@$(GO) test -coverprofile=coverage.raw -covermode=atomic ./...
 	@test -s coverage.raw || { echo "cover: empty coverage.raw"; exit 1; }
 	@head -1 coverage.raw > coverage.out
-	@grep -E '^(mode:|.*\.go:)' coverage.raw | grep -vE '(/cmd/)' | grep -v '^mode:' >> coverage.out || true
+	@grep -E '^(mode:|.*\.go:)' coverage.raw | grep -vE '(/cmd/|/vnc/gen/)' | grep -v '^mode:' >> coverage.out || true
 	@total=$$($(GO) tool cover -func=coverage.out | awk '/^total:/ {gsub("%","",$$3); print $$3}'); \
 	echo "total coverage: $${total:-0}% (threshold $(COVER_THRESHOLD)%)"; \
 	if [ -z "$$total" ]; then echo "cover: could not parse total"; exit 1; fi; \

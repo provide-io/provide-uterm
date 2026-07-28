@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	pb "github.com/litevirt/litevirt/gen/litevirt/v1"
+	pb "github.com/provide-io/provide-uterm/packages/provide-uterm-go/vnc/gen/litevirt/v1"
 	"google.golang.org/grpc"
 )
 
