@@ -72,7 +72,7 @@ corpus match CPython byte for byte.
 | `emulator` | `emulator` | `emulator` | **done** |
 | `render` | `render` | `render` | **partial** — SGR row rendering; image/palette/segments outstanding |
 | `detection` | `detection` | `detection` | **partial** — screen buffer and input-type heuristic; rule engine, extractor and flow outstanding |
-| `deckmux` | `deckmux` | `deckmux` | **partial** — the wire protocol, the presence store with its untrusted-value bounds, control transfer with the keystroke queue, derived names/colours, the edge-bar geometry, the SSH identity bridge and the presence service; the hub mixin outstanding |
+| `deckmux` | `deckmux` | `deckmux` | **complete** — protocol, presence store, control transfer, derived names/colours, edge geometry, SSH identity bridge and the presence service. `_hub_mixin.py` is deliberately not ported: it owns no state and exists only to keep Python call sites working (the mixin shape, monkey-patched `deckmux_*` test hooks, and the legacy `hub._presence_stores` attribute names). Go and C# both skip it too — `packages/provide-uterm-go/deckmux/` is exactly the same seven modules — so a hub composes `DeckMuxPresence` directly |
 | `annotation` | `provide-uterm-annotation` | `annotation` | **done** — the 20 built-in rules, the detector and the streaming boundary carry |
 
 ### Session and transport
