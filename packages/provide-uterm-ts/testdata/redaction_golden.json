@@ -1,0 +1,268 @@
+{
+ "cases": [
+  {
+   "identity": "nothing is configured",
+   "out": "nothing is configured",
+   "patterns": [],
+   "text": "nothing is configured"
+  },
+  {
+   "identity": "",
+   "out": "",
+   "patterns": [],
+   "text": ""
+  },
+  {
+   "identity": "the secret value",
+   "out": "the [REDACTED] value",
+   "patterns": [
+    "secret"
+   ],
+   "text": "the secret value"
+  },
+  {
+   "identity": "no match here",
+   "out": "no match here",
+   "patterns": [
+    "secret"
+   ],
+   "text": "no match here"
+  },
+  {
+   "identity": "secret secret secret",
+   "out": "[REDACTED] [REDACTED] [REDACTED]",
+   "patterns": [
+    "secret"
+   ],
+   "text": "secret secret secret"
+  },
+  {
+   "identity": "secretsecret",
+   "out": "[REDACTED][REDACTED]",
+   "patterns": [
+    "secret"
+   ],
+   "text": "secretsecret"
+  },
+  {
+   "identity": "secret at the start, secret in the middle",
+   "out": "[REDACTED] at the start, secret in the middle",
+   "patterns": [
+    "^secret"
+   ],
+   "text": "secret at the start, secret in the middle"
+  },
+  {
+   "identity": "ends with secret",
+   "out": "ends with [REDACTED]",
+   "patterns": [
+    "secret$"
+   ],
+   "text": "ends with secret"
+  },
+  {
+   "identity": "secret secretive",
+   "out": "[REDACTED] secretive",
+   "patterns": [
+    "\\bsecret\\b"
+   ],
+   "text": "secret secretive"
+  },
+  {
+   "identity": "port 8780 and port 2102",
+   "out": "port [REDACTED] and port [REDACTED]",
+   "patterns": [
+    "\\d+"
+   ],
+   "text": "port 8780 and port 2102"
+  },
+  {
+   "identity": "an ERROR and a WARNING and Ok",
+   "out": "an [REDACTED] and a [REDACTED] and Ok",
+   "patterns": [
+    "[A-Z]{3,}"
+   ],
+   "text": "an ERROR and a WARNING and Ok"
+  },
+  {
+   "identity": "aaa b",
+   "out": "[REDACTED][REDACTED] [REDACTED]b[REDACTED]",
+   "patterns": [
+    "a*"
+   ],
+   "text": "aaa b"
+  },
+  {
+   "identity": "password=hunter2 token=abc123 user=tim",
+   "out": "[REDACTED] [REDACTED] user=tim",
+   "patterns": [
+    "(password|token)=\\S+"
+   ],
+   "text": "password=hunter2 token=abc123 user=tim"
+  },
+  {
+   "identity": "key AKIA0123456789ABCDEF here",
+   "out": "key [REDACTED] here",
+   "patterns": [
+    "(?:AKIA)[0-9A-Z]{16}"
+   ],
+   "text": "key AKIA0123456789ABCDEF here"
+  },
+  {
+   "identity": "Secret SECRET secret",
+   "out": "[REDACTED] [REDACTED] [REDACTED]",
+   "patterns": [
+    "(?i)secret"
+   ],
+   "text": "Secret SECRET secret"
+  },
+  {
+   "identity": "line one\nline two",
+   "out": "[REDACTED] one\n[REDACTED] two",
+   "patterns": [
+    "(?m)^line"
+   ],
+   "text": "line one\nline two"
+  },
+  {
+   "identity": "a\nb",
+   "out": "[REDACTED]",
+   "patterns": [
+    "(?s)a.b"
+   ],
+   "text": "a\nb"
+  },
+  {
+   "identity": "SECRET\nsecret",
+   "out": "[REDACTED]\n[REDACTED]",
+   "patterns": [
+    "(?im)^secret$"
+   ],
+   "text": "SECRET\nsecret"
+  },
+  {
+   "identity": "foo bar baz",
+   "out": "[REDACTED] [REDACTED] baz",
+   "patterns": [
+    "foo",
+    "bar"
+   ],
+   "text": "foo bar baz"
+  },
+  {
+   "identity": "foo bar",
+   "out": "[REDACTED] bar",
+   "patterns": [
+    "\\[REDACTED\\]",
+    "foo"
+   ],
+   "text": "foo bar"
+  },
+  {
+   "identity": "foo bar",
+   "out": "[REDACTED] bar",
+   "patterns": [
+    "foo",
+    "\\[REDACTED\\]"
+   ],
+   "text": "foo bar"
+  },
+  {
+   "identity": "abc",
+   "out": "[REDACTED]c",
+   "patterns": [
+    "ab",
+    "bc"
+   ],
+   "text": "abc"
+  },
+  {
+   "identity": "axb",
+   "out": "[REDACTED]a[REDACTED][REDACTED]b[REDACTED]",
+   "patterns": [
+    "x?"
+   ],
+   "text": "axb"
+  },
+  {
+   "identity": "a.b.c",
+   "out": "a[REDACTED]b[REDACTED]c",
+   "patterns": [
+    "\\."
+   ],
+   "text": "a.b.c"
+  },
+  {
+   "identity": "total $42.00 due",
+   "out": "total [REDACTED] due",
+   "patterns": [
+    "\\$\\d+\\.\\d{2}"
+   ],
+   "text": "total $42.00 due"
+  },
+  {
+   "identity": "a  b\tc",
+   "out": "a[REDACTED]b[REDACTED]c",
+   "patterns": [
+    "\\s+"
+   ],
+   "text": "a  b\tc"
+  },
+  {
+   "identity": "x\u00e9 and xe",
+   "out": "[REDACTED] and [REDACTED]",
+   "patterns": [
+    "x[e\u00e9]"
+   ],
+   "text": "x\u00e9 and xe"
+  },
+  {
+   "identity": "Authorization: Bearer eyJhbGc.iOi-JIUz_I1",
+   "out": "Authorization: [REDACTED]",
+   "patterns": [
+    "Bearer [A-Za-z0-9._-]+"
+   ],
+   "text": "Authorization: Bearer eyJhbGc.iOi-JIUz_I1"
+  },
+  {
+   "identity": "card 4111-1111-1111-1111 ok",
+   "out": "card [REDACTED] ok",
+   "patterns": [
+    "[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{4}"
+   ],
+   "text": "card 4111-1111-1111-1111 ok"
+  },
+  {
+   "identity": "",
+   "out": "",
+   "patterns": [
+    "secret"
+   ],
+   "text": ""
+  }
+ ],
+ "dialect_divergences": [
+  {
+   "out": "[REDACTED] and [REDACTED]",
+   "patterns": [
+    "x\\w"
+   ],
+   "text": "x\u00e9 and xe"
+  },
+  {
+   "out": "[REDACTED] and [REDACTED]",
+   "patterns": [
+    "\\d+"
+   ],
+   "text": "42 and \u0664\u0662"
+  },
+  {
+   "out": "[REDACTED]",
+   "patterns": [
+    "\\w+"
+   ],
+   "text": "a\u00efb"
+  }
+ ],
+ "generator": "packages/provide-uterm-ts/testdata/gen_redaction_golden.py"
+}
