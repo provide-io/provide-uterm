@@ -12,4 +12,5 @@
 
 export * from "./contracts.ts";
 export * from "./coordinator.ts";
+export * from "./hijackable.ts";
 export * from "./policy.ts";

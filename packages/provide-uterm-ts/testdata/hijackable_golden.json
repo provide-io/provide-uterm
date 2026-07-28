@@ -1,0 +1,120 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_hijackable_golden.py",
+ "step_token_cap": 100,
+ "default_checkpoints": 2,
+ "steps": [
+  {
+   "name": "not hijacked",
+   "hijacked": false,
+   "requests": [
+    2
+   ],
+   "tokens": 0
+  },
+  {
+   "name": "default request",
+   "hijacked": true,
+   "requests": [],
+   "tokens": 2
+  },
+  {
+   "name": "single step",
+   "hijacked": true,
+   "requests": [
+    1
+   ],
+   "tokens": 1
+  },
+  {
+   "name": "one iteration",
+   "hijacked": true,
+   "requests": [
+    2
+   ],
+   "tokens": 2
+  },
+  {
+   "name": "several requests accumulate",
+   "hijacked": true,
+   "requests": [
+    2,
+    2,
+    2
+   ],
+   "tokens": 6
+  },
+  {
+   "name": "zero adds nothing",
+   "hijacked": true,
+   "requests": [
+    0
+   ],
+   "tokens": 0
+  },
+  {
+   "name": "negative adds nothing",
+   "hijacked": true,
+   "requests": [
+    -5
+   ],
+   "tokens": 0
+  },
+  {
+   "name": "negative after a grant keeps the grant",
+   "hijacked": true,
+   "requests": [
+    2,
+    -5
+   ],
+   "tokens": 2
+  },
+  {
+   "name": "exactly at the cap",
+   "hijacked": true,
+   "requests": [
+    100
+   ],
+   "tokens": 100
+  },
+  {
+   "name": "one past the cap",
+   "hijacked": true,
+   "requests": [
+    101
+   ],
+   "tokens": 100
+  },
+  {
+   "name": "accumulating past the cap",
+   "hijacked": true,
+   "requests": [
+    60,
+    60
+   ],
+   "tokens": 100
+  },
+  {
+   "name": "far past the cap",
+   "hijacked": true,
+   "requests": [
+    10000
+   ],
+   "tokens": 100
+  },
+  {
+   "name": "fractional request",
+   "hijacked": true,
+   "requests": [
+    2
+   ],
+   "tokens": 2
+  }
+ ],
+ "gate": {
+  "after_one_step": 1,
+  "after_two_steps": 0,
+  "blocks_without_tokens": true,
+  "tokens_after_resume": 4,
+  "tokens_after_rehijack": 0
+ }
+}
