@@ -247,7 +247,12 @@ export class TelnetBuffer {
 
   /** Add a read and take whatever is now complete. */
   feed(data: Uint8Array): TelnetParseResult {
-    this.#held.push(...data);
+    // Appended one at a time rather than spread: a spread of a large read is
+    // a call with that many arguments, and a chunk big enough to matter —
+    // which is exactly what a hostile peer sends — overflows the stack.
+    for (const byte of data) {
+      this.#held.push(byte);
+    }
     const result = parseTelnetBuffer(Uint8Array.from(this.#held));
     this.#held = this.#held.slice(result.consumed);
     return result;

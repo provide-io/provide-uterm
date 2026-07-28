@@ -1,0 +1,504 @@
+{
+  "answers": [
+    {
+      "incoming": [
+        255,
+        253,
+        0
+      ],
+      "name": "do binary",
+      "payload": [],
+      "reply": []
+    },
+    {
+      "incoming": [
+        255,
+        253,
+        3
+      ],
+      "name": "do sga",
+      "payload": [],
+      "reply": []
+    },
+    {
+      "incoming": [
+        255,
+        253,
+        31
+      ],
+      "name": "do naws",
+      "payload": [],
+      "reply": [
+        255,
+        251,
+        31,
+        255,
+        250,
+        31,
+        0,
+        80,
+        0,
+        25,
+        255,
+        240
+      ]
+    },
+    {
+      "incoming": [
+        255,
+        253,
+        24
+      ],
+      "name": "do ttype",
+      "payload": [],
+      "reply": [
+        255,
+        251,
+        24,
+        255,
+        250,
+        24,
+        0,
+        65,
+        78,
+        83,
+        73,
+        255,
+        240
+      ]
+    },
+    {
+      "incoming": [
+        255,
+        253,
+        1
+      ],
+      "name": "do echo",
+      "payload": [],
+      "reply": [
+        255,
+        252,
+        1
+      ]
+    },
+    {
+      "incoming": [
+        255,
+        253,
+        99
+      ],
+      "name": "do something unknown",
+      "payload": [],
+      "reply": [
+        255,
+        252,
+        99
+      ]
+    },
+    {
+      "incoming": [
+        255,
+        251,
+        1
+      ],
+      "name": "will echo",
+      "payload": [],
+      "reply": [
+        255,
+        253,
+        1
+      ]
+    },
+    {
+      "incoming": [
+        255,
+        251,
+        3
+      ],
+      "name": "will sga",
+      "payload": [],
+      "reply": [
+        255,
+        253,
+        3
+      ]
+    },
+    {
+      "incoming": [
+        255,
+        251,
+        99
+      ],
+      "name": "will something unknown",
+      "payload": [],
+      "reply": [
+        255,
+        254,
+        99
+      ]
+    },
+    {
+      "incoming": [
+        255,
+        254,
+        0
+      ],
+      "name": "dont binary",
+      "payload": [],
+      "reply": [
+        255,
+        252,
+        0
+      ]
+    },
+    {
+      "incoming": [
+        255,
+        252,
+        1
+      ],
+      "name": "wont echo",
+      "payload": [],
+      "reply": [
+        255,
+        254,
+        1
+      ]
+    },
+    {
+      "incoming": [
+        255,
+        250,
+        24,
+        1,
+        255,
+        240
+      ],
+      "name": "a ttype request",
+      "payload": [],
+      "reply": [
+        255,
+        250,
+        24,
+        0,
+        65,
+        78,
+        83,
+        73,
+        255,
+        240
+      ]
+    },
+    {
+      "incoming": [
+        255,
+        250,
+        31,
+        0,
+        80,
+        0,
+        25,
+        255,
+        240
+      ],
+      "name": "a naws subnegotiation",
+      "payload": [],
+      "reply": []
+    },
+    {
+      "incoming": [
+        255,
+        250,
+        24,
+        255,
+        240
+      ],
+      "name": "a ttype block with no sub-command",
+      "payload": [],
+      "reply": []
+    },
+    {
+      "incoming": [
+        255,
+        250,
+        255,
+        240
+      ],
+      "name": "an empty subnegotiation",
+      "payload": [],
+      "reply": []
+    }
+  ],
+  "cols": 80,
+  "default_connect_timeout_s": 30.0,
+  "failures": {
+    "closed_leaves_it_disconnected": false,
+    "closed_with_nothing_buffered": "Connection closed by remote",
+    "partial_then_close": {
+      "first": [
+        97
+      ],
+      "second": [
+        255
+      ]
+    },
+    "receive_before_connect": "Not connected",
+    "send_before_connect": "Not connected",
+    "set_size_before_connect": "Not connected",
+    "unbounded_subnegotiation": "telnet receive buffer exceeded 262144 bytes (likely IAC SB without IAC SE) \u2014 closing connection"
+  },
+  "handshake": {
+    "connected": true,
+    "opening_offer": [
+      255,
+      251,
+      0,
+      255,
+      251,
+      3
+    ]
+  },
+  "max_rx_buffer": 262144,
+  "peer_ip": "203.0.113.7",
+  "receives": [
+    {
+      "chunks": [
+        [
+          104,
+          101,
+          108,
+          108,
+          111
+        ]
+      ],
+      "name": "plain text",
+      "payloads": [
+        [
+          104,
+          101,
+          108,
+          108,
+          111
+        ]
+      ]
+    },
+    {
+      "chunks": [
+        [
+          255,
+          255
+        ]
+      ],
+      "name": "a doubled command byte",
+      "payloads": [
+        [
+          255
+        ]
+      ]
+    },
+    {
+      "chunks": [
+        [
+          97,
+          255,
+          253,
+          0,
+          98
+        ]
+      ],
+      "name": "a negotiation between text",
+      "payloads": [
+        [
+          97,
+          98
+        ]
+      ]
+    },
+    {
+      "chunks": [
+        [
+          97,
+          255
+        ],
+        [
+          253,
+          0
+        ]
+      ],
+      "name": "a sequence split across reads",
+      "payloads": [
+        [
+          97
+        ],
+        []
+      ]
+    },
+    {
+      "chunks": [
+        [
+          255,
+          250,
+          24,
+          1,
+          255,
+          240
+        ]
+      ],
+      "name": "a subnegotiation",
+      "payloads": [
+        []
+      ]
+    }
+  ],
+  "rows": 25,
+  "sends": [
+    {
+      "input": [
+        108,
+        115,
+        32,
+        45,
+        108,
+        97,
+        13
+      ],
+      "name": "plain text",
+      "wire": [
+        108,
+        115,
+        32,
+        45,
+        108,
+        97,
+        13
+      ]
+    },
+    {
+      "input": [
+        97,
+        255,
+        98
+      ],
+      "name": "a command byte",
+      "wire": [
+        97,
+        255,
+        255,
+        98
+      ]
+    },
+    {
+      "input": [
+        255,
+        255
+      ],
+      "name": "only command bytes",
+      "wire": [
+        255,
+        255,
+        255,
+        255
+      ]
+    },
+    {
+      "input": [
+        97,
+        98,
+        99,
+        127
+      ],
+      "name": "a delete",
+      "wire": [
+        97,
+        98,
+        99,
+        8
+      ]
+    },
+    {
+      "input": [
+        127,
+        255
+      ],
+      "name": "a delete and a command byte",
+      "wire": [
+        8,
+        255,
+        255
+      ]
+    },
+    {
+      "input": [],
+      "name": "empty",
+      "wire": []
+    },
+    {
+      "input": [
+        128,
+        200,
+        254
+      ],
+      "name": "high bytes that are not commands",
+      "wire": [
+        128,
+        200,
+        254
+      ]
+    }
+  ],
+  "sequences": {
+    "incoming_will_suppresses_our_will": [
+      255,
+      250,
+      31,
+      0,
+      80,
+      0,
+      25,
+      255,
+      240
+    ],
+    "naws_after_resize": [
+      255,
+      251,
+      31,
+      255,
+      250,
+      31,
+      0,
+      132,
+      0,
+      43,
+      255,
+      240
+    ],
+    "naws_with_a_command_byte": [
+      255,
+      250,
+      31,
+      0,
+      255,
+      255,
+      0,
+      25,
+      255,
+      240
+    ]
+  },
+  "set_size": {
+    "cols": 132,
+    "rows": 43,
+    "wire": [
+      255,
+      250,
+      31,
+      0,
+      132,
+      0,
+      43,
+      255,
+      240
+    ]
+  },
+  "term": "ANSI"
+}
