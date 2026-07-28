@@ -11,3 +11,4 @@
 
 export * from "./presence.ts";
 export * from "./protocol.ts";
+export * from "./transfer.ts";
