@@ -92,7 +92,7 @@ corpus match CPython byte for byte.
 | Module | Python | Go | Status |
 |---|---|---|---|
 | `auth` | `auth` | `auth` | **done** — OpenSSH fingerprints, the authorized_keys grammar, and both reference resolvers |
-| `serverauth` | server `auth*`, `webhook*`, `api_keys`, `dev_idp` | `serverauth` | todo |
+| `serverauth` | server `auth*`, `webhook*`, `api_keys`, `dev_idp` | `serverauth` | **partial** — webhook signing, the RBAC allow-list and the API-key store; the auth modes and dev IDP outstanding |
 | `serverconfig` | server `config*`, `profiles` | `serverconfig` | todo |
 | `controlplane` | `control/plane` (+ memory/sqlite/bootstrap) | `controlplane` | todo |
 | `hub` | server `bridge/hub` (nine services) | `hub` | **done** — all nine services, plus the state model, frame encoders, prompt guards and the regex-safety validator |
@@ -144,6 +144,17 @@ starts routing to them.
 ## Known cross-port misalignments
 
 Found while porting. Neither is a missing feature; both are worth settling.
+
+**Webhook signature ambiguity.** The signed material is
+`timestamp + "." + body`, so a body beginning with digits and a dot can be
+re-read as part of the timestamp: a signature over `0.body` at `17000000` is
+byte-identical to one over `body` at `17000000.0`, and since both timestamps
+name the same instant the second *verifies*. Confirmed against the Python
+reference, and shared by Go and C#. Not reachable for the JSON bodies the
+governance webhook actually sends (they begin with `{`), but the scheme is
+ambiguous in principle; the fix — length-prefixing or hex-encoding the
+timestamp — has to land in all four ports together. The TypeScript port
+matches the current behaviour and pins it with a test that says why.
 
 **SSH placement.** Go and C# put the SSH client in `transports/` and the SSH
 server in `gateway/`. Python inverts both: the asyncssh *server* is in
