@@ -16,6 +16,7 @@
  * own tests, not part of its surface.
  */
 
+export * as annotation from "./annotation/index.ts";
 export * as ansi from "./ansi/index.ts";
 export * as auth from "./auth/index.ts";
 export * as bridge from "./bridge/index.ts";
