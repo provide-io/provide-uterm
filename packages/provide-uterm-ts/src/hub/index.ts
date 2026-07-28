@@ -19,4 +19,5 @@ export * from "./polling.ts";
 export * from "./presence.ts";
 export * from "./registry.ts";
 export * from "./rest-helpers.ts";
+export * from "./router-behavioral.ts";
 export * from "./store.ts";

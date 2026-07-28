@@ -1,0 +1,143 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_router_behavioral_golden.py",
+ "ring_max": 50,
+ "heuristics": [
+  {
+   "name": "no keystrokes",
+   "timestamps": [],
+   "cps": 0.0,
+   "jitter": 0.0
+  },
+  {
+   "name": "one keystroke",
+   "timestamps": [
+    1000.0
+   ],
+   "cps": 0.0,
+   "jitter": 0.0
+  },
+  {
+   "name": "two evenly spaced",
+   "timestamps": [
+    1000.0,
+    1000.5
+   ],
+   "cps": 2.0,
+   "jitter": 0.0
+  },
+  {
+   "name": "three evenly spaced",
+   "timestamps": [
+    1000.0,
+    1000.5,
+    1001.0
+   ],
+   "cps": 2.0,
+   "jitter": 0.0
+  },
+  {
+   "name": "fast and even",
+   "timestamps": [
+    1000.0,
+    1000.1,
+    1000.2,
+    1000.3
+   ],
+   "cps": 10.000000000001515,
+   "jitter": 4.308232357047019e-27
+  },
+  {
+   "name": "human-ish, uneven",
+   "timestamps": [
+    1000.0,
+    1000.12,
+    1000.31,
+    1000.38,
+    1000.72
+   ],
+   "cps": 5.555555555555345,
+   "jitter": 0.013799999999999151
+  },
+  {
+   "name": "machine-even, no jitter",
+   "timestamps": [
+    1000.0,
+    1000.05,
+    1000.1,
+    1000.15,
+    1000.2
+   ],
+   "cps": 19.999999999995453,
+   "jitter": 4.308232357047019e-27
+  },
+  {
+   "name": "one long pause",
+   "timestamps": [
+    1000.0,
+    1000.05,
+    1000.1,
+    1005.0
+   ],
+   "cps": 0.6,
+   "jitter": 7.840833333333223
+  },
+  {
+   "name": "all at the same instant",
+   "timestamps": [
+    1000.0,
+    1000.0,
+    1000.0
+   ],
+   "cps": 0.0,
+   "jitter": 0.0
+  },
+  {
+   "name": "two at the same instant",
+   "timestamps": [
+    1000.0,
+    1000.0
+   ],
+   "cps": 0.0,
+   "jitter": 0.0
+  },
+  {
+   "name": "sub-millisecond",
+   "timestamps": [
+    1000.0,
+    1000.0001,
+    1000.0002
+   ],
+   "cps": 10000.000002510205,
+   "jitter": 0.0
+  }
+ ],
+ "ring": {
+  "maxlen": 50,
+  "length": 50,
+  "first": 1010.0,
+  "last": 1059.0,
+  "cps": 1.0,
+  "jitter": 0.0
+ },
+ "isolation": {
+  "before_a": {
+   "cps": 2.0,
+   "jitter": 0.0
+  },
+  "before_b": {
+   "cps": 0.0,
+   "jitter": 0.0
+  },
+  "after_a": {
+   "cps": 0.0,
+   "jitter": 0.0
+  },
+  "after_b": {
+   "cps": 0.0,
+   "jitter": 0.0
+  },
+  "tracked_after_forget": [
+   "b"
+  ]
+ }
+}
