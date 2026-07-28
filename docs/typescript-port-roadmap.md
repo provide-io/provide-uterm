@@ -45,7 +45,7 @@ module; the Go column names the sibling package for cross-checking.
 | `channels` | `channels` | `channels` | **done** |
 | `file-io` | `file_io` | `fileio` | todo |
 | `ansi` | `ansi`, `_ansi_dialects` | `ansi` | **done** |
-| `screen` | `screen` | `screen` | todo |
+| `screen` | `screen` | `screen` | **done** |
 | `policy` | server policy | `policy` | todo |
 | `replay` | `replay` | `replay` | todo |
 
