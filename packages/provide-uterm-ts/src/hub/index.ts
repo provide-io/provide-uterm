@@ -22,4 +22,5 @@ export * from "./registry.ts";
 export * from "./rest-helpers.ts";
 export * from "./router.ts";
 export * from "./router-behavioral.ts";
+export * from "./safe-float.ts";
 export * from "./store.ts";
