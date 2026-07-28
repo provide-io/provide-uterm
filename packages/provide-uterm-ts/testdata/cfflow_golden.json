@@ -1,0 +1,167 @@
+{
+  "ack_grace_s": 10.0,
+  "decisions": [
+    {
+      "decision": "pause",
+      "name": "first congested check",
+      "paused": true
+    },
+    {
+      "decision": null,
+      "name": "still congested",
+      "paused": true
+    },
+    {
+      "decision": "resume",
+      "name": "first clear check",
+      "paused": false
+    },
+    {
+      "decision": null,
+      "name": "still clear",
+      "paused": false
+    }
+  ],
+  "fairness": {
+    "both_congested": {
+      "all_active_congested": true,
+      "decision": "pause",
+      "paused": true
+    },
+    "one_congested": {
+      "all_active_congested": false,
+      "decision": null,
+      "fast_is_congested": false,
+      "slow_is_congested": true
+    },
+    "recovered": {
+      "all_active_congested": false,
+      "decision": "resume",
+      "paused": false
+    }
+  },
+  "forget": {
+    "after": {
+      "all_active_congested": false,
+      "congested": {
+        "a": false,
+        "b": false
+      },
+      "max_inflight": 0,
+      "paused": false
+    },
+    "before": {
+      "all_active_congested": false,
+      "congested": {
+        "a": true,
+        "b": false
+      },
+      "max_inflight": 1001,
+      "paused": false
+    },
+    "forget_unknown_raises": false
+  },
+  "high_water": 1000,
+  "hysteresis": [
+    {
+      "all_active_congested": false,
+      "congested": {
+        "a": false
+      },
+      "inflight": 999,
+      "max_inflight": 999,
+      "name": "below the high mark",
+      "paused": false
+    },
+    {
+      "all_active_congested": false,
+      "congested": {
+        "a": false
+      },
+      "inflight": 1000,
+      "max_inflight": 1000,
+      "name": "exactly on the high mark",
+      "paused": false
+    },
+    {
+      "all_active_congested": true,
+      "congested": {
+        "a": true
+      },
+      "inflight": 1001,
+      "max_inflight": 1001,
+      "name": "just above the high mark",
+      "paused": false
+    },
+    {
+      "all_active_congested": true,
+      "congested": {
+        "a": true
+      },
+      "inflight": 201,
+      "max_inflight": 201,
+      "name": "draining, still above the low mark",
+      "paused": false
+    },
+    {
+      "all_active_congested": true,
+      "congested": {
+        "a": true
+      },
+      "inflight": 200,
+      "max_inflight": 200,
+      "name": "exactly on the low mark",
+      "paused": false
+    },
+    {
+      "all_active_congested": false,
+      "congested": {
+        "a": false
+      },
+      "inflight": 199,
+      "max_inflight": 199,
+      "name": "just below the low mark",
+      "paused": false
+    },
+    {
+      "all_active_congested": true,
+      "congested": {
+        "a": true
+      },
+      "inflight": 1001,
+      "max_inflight": 1001,
+      "name": "back above the high mark",
+      "paused": false
+    }
+  ],
+  "low_water": 200,
+  "monotonic_acks": {
+    "after_first": 100,
+    "after_newer": 0,
+    "after_stale": 100
+  },
+  "no_ackers": {
+    "all_active_congested": false,
+    "decision": null,
+    "is_congested": true,
+    "max_inflight": 0
+  },
+  "pause": "pause",
+  "recovered": {
+    "after": [
+      "a"
+    ],
+    "again": [],
+    "before": []
+  },
+  "resume": "resume",
+  "silent_client": {
+    "all_active_congested": false,
+    "decision": null,
+    "inside_the_window": true,
+    "just_past_the_boundary": false,
+    "max_inflight_ignores_it": 0,
+    "on_the_boundary": true,
+    "still_congested": true
+  }
+}

@@ -12,5 +12,6 @@
  */
 
 export * from "./config.ts";
+export * from "./flow-control.ts";
 export * from "./registry.ts";
 export * from "./store.ts";
