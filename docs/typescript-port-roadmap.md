@@ -54,29 +54,14 @@ rest.
 **VNC** stays hand-rolled — there is no server-side RFB package worth taking,
 and the Go and C# ports hand-roll it too.
 
-**Tunnel token hashing needs a decision.** `tunnel/token_hash.py` stores
-share and control tokens as `hashlib.blake2b(..., digest_size=32)` digests and
-compares them in constant time. Node's `crypto` exposes BLAKE2b only as
+**Tunnel token hashing is resolved — no dependency needed.** The Durable
+Object authenticates share and control cookies against stored
+`blake2b(digest_size=32)` digests. Node's `crypto` exposes BLAKE2b only as
 `blake2b512`, and truncating that is *not* the same value — the digest length
-is part of BLAKE2b's parameter block, so the two disagree from the first byte:
-
-```
-python  blake2b(b"hello", digest_size=32)  324dcf027dd4a30a932c441f365a25e8…
-node    blake2b512(b"hello")[:32]          e4cfa39a3d37be31c59609e807970799…
-```
-
-The digests are stored at rest and read by whichever implementation serves the
-request, so this is an interop requirement rather than a local one: a port
-that hashed differently would fail every share-token check against a session
-another implementation issued. Three ways out —
-
-1. `@noble/hashes` (audited, dependency-free, ~8 kB for blake2b) — recommended;
-2. hand-write BLAKE2b with a configurable output length;
-3. change the algorithm on both sides, which is a migration for deployed
-   digests and out of this port's scope.
-
-This blocks the Durable Object session runtime's auth path, which is what
-reads those digests.
+is part of BLAKE2b's parameter block, so the two disagree from the first byte.
+`pycompat/blake2b` implements RFC 7693 with a configurable output length and
+is pinned against CPython for eighteen inputs, including either side of the
+128-byte block boundary. `serverauth/token-hash` is the store on top of it.
 
 **`node-pty` needs one more step.** Its prebuilt `spawn-helper` ships
 non-executable and its post-install script, which is what marks it, is held
@@ -94,7 +79,7 @@ module; the Go column names the sibling package for cross-checking.
 
 | Module | Python | Go | Status |
 |---|---|---|---|
-| `pycompat` | — (CPython semantics) | — | **done** — json, re, rounding, str, statistics, difflib, int, ipaddress |
+| `pycompat` | — (CPython semantics) | — | **done** — json, re, rounding, str, statistics, difflib, int, ipaddress, blake2b |
 | `defaults` | `defaults` | `defaults` | **done** |
 | `colors` | `colors` | `colors` | **done** |
 | `sanitizer` | `sanitizer` | `sanitizer` | **done** |
@@ -152,7 +137,7 @@ corpus match CPython byte for byte.
 | Module | Python | Go | Status |
 |---|---|---|---|
 | `auth` | `auth` | `auth` | **done** — OpenSSH fingerprints, the authorized_keys grammar, and both reference resolvers |
-| `serverauth` | server `auth*`, `webhook*`, `api_keys`, `dev_idp` | `serverauth` | **partial** — webhook signing, the RBAC allow-list and the API-key store; the auth modes and dev IDP outstanding |
+| `serverauth` | server `auth*`, `webhook*`, `api_keys`, `dev_idp` | `serverauth` | **partial** — webhook signing, the RBAC allow-list, the API-key store and the tunnel token hash; the auth modes and dev IDP outstanding |
 | `serverconfig` | server `config*`, `profiles` | `serverconfig` | **partial** — the outbound-URL guard, mount-path normalisation, every cross-field validator, TOML loading with its structural pass and relative-path resolution, the security-posture report and the security response headers; the Pydantic schema itself and profiles outstanding |
 | `controlplane` | `control/plane` (+ memory/sqlite/bootstrap) | `controlplane` | **partial** — the record types, the in-memory backend with its optimistic concurrency, the reaper, the audit head and the bootstrap; the SQLite backend outstanding |
 | `hub` | server `bridge/hub` (nine services) | `hub` | **done** — all nine services, plus the state model, frame encoders, prompt guards and the regex-safety validator |
