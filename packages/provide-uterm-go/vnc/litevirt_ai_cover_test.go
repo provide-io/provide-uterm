@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/litevirt/litevirt/gen/litevirt/v1"
+	pb "github.com/provide-io/provide-uterm/packages/provide-uterm-go/vnc/gen/litevirt/v1"
 )
 
 // rfbServerHandshake builds a valid server->client RFB byte stream up to and

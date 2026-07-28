@@ -15,7 +15,7 @@ import (
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/graphical"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
 
-	pb "github.com/litevirt/litevirt/gen/litevirt/v1"
+	pb "github.com/provide-io/provide-uterm/packages/provide-uterm-go/vnc/gen/litevirt/v1"
 )
 
 // seedTarget adds an immutable static graphical target to a fresh registry, then
