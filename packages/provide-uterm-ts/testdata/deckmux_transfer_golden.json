@@ -1,0 +1,223 @@
+{
+  "auto": [
+    {
+      "idle": 100.0,
+      "name": "nobody waiting",
+      "queued": [],
+      "transfer": false,
+      "warn": false
+    },
+    {
+      "idle": 5.0,
+      "name": "well within the window",
+      "queued": [
+        "u2"
+      ],
+      "transfer": false,
+      "warn": false
+    },
+    {
+      "idle": 20.0,
+      "name": "exactly at the warning threshold",
+      "queued": [
+        "u2"
+      ],
+      "transfer": false,
+      "warn": true
+    },
+    {
+      "idle": 25.0,
+      "name": "between warning and transfer",
+      "queued": [
+        "u2"
+      ],
+      "transfer": false,
+      "warn": true
+    },
+    {
+      "idle": 30.0,
+      "name": "exactly at the transfer threshold",
+      "queued": [
+        "u2"
+      ],
+      "transfer": true,
+      "warn": false
+    },
+    {
+      "idle": 45.0,
+      "name": "past the transfer threshold",
+      "queued": [
+        "u2"
+      ],
+      "transfer": true,
+      "warn": false
+    }
+  ],
+  "modes": {
+    "display": {
+      "from_user_id": "u1",
+      "queued_keys": "ls↵",
+      "reason": "handover",
+      "to_user_id": "u2",
+      "type": "control_transfer"
+    },
+    "display_queue_after": "",
+    "empty": {
+      "from_user_id": "u1",
+      "queued_keys": "",
+      "reason": "auto_idle",
+      "to_user_id": "u2",
+      "type": "control_transfer"
+    },
+    "replay": {
+      "from_user_id": "u1",
+      "queued_keys": "ls\r",
+      "reason": "handover",
+      "to_user_id": "u2",
+      "type": "control_transfer"
+    },
+    "replay_queue_after": "",
+    "someone_elses_queue": {
+      "from_user_id": "u1",
+      "queued_keys": "",
+      "reason": "handover",
+      "to_user_id": "u2",
+      "type": "control_transfer"
+    },
+    "someone_elses_queue_survives": "rm -rf /↵"
+  },
+  "queues": [
+    {
+      "after_flush": "",
+      "chunks": [
+        "ls"
+      ],
+      "displays": [
+        "ls"
+      ],
+      "name": "a single chunk",
+      "raw_length": 2,
+      "raw_tail": "ls"
+    },
+    {
+      "after_flush": "",
+      "chunks": [
+        "l",
+        "s",
+        " -la"
+      ],
+      "displays": [
+        "l",
+        "ls",
+        "ls -la"
+      ],
+      "name": "several chunks",
+      "raw_length": 6,
+      "raw_tail": "ls -la"
+    },
+    {
+      "after_flush": "",
+      "chunks": [
+        "\u001b[A"
+      ],
+      "displays": [
+        "↑"
+      ],
+      "name": "an arrow key",
+      "raw_length": 3,
+      "raw_tail": "\u001b[A"
+    },
+    {
+      "after_flush": "",
+      "chunks": [
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      ],
+      "displays": [
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      ],
+      "name": "exactly the bound",
+      "raw_length": 256,
+      "raw_tail": "xxxxxxxx"
+    },
+    {
+      "after_flush": "",
+      "chunks": [
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      ],
+      "displays": [
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      ],
+      "name": "one over the bound",
+      "raw_length": 256,
+      "raw_tail": "xxxxxxxx"
+    },
+    {
+      "after_flush": "",
+      "chunks": [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ],
+      "displays": [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ],
+      "name": "well over the bound",
+      "raw_length": 256,
+      "raw_tail": "bbbbbbbb"
+    },
+    {
+      "after_flush": "",
+      "chunks": [
+        ""
+      ],
+      "displays": [
+        ""
+      ],
+      "name": "empty",
+      "raw_length": 0,
+      "raw_tail": ""
+    }
+  ],
+  "settings": {
+    "default_enabled": true,
+    "default_mode": "display",
+    "disabled_never_warns": [
+      false,
+      false
+    ],
+    "max_queue_length": 256,
+    "negative_disables": false,
+    "short_window_transfers": [
+      false,
+      true
+    ],
+    "short_window_warns_immediately": [
+      true,
+      false
+    ],
+    "warning_lead_s": 10,
+    "zero_disables": false
+  },
+  "warning_sequence": {
+    "after_empty_queue": [
+      true,
+      false
+    ],
+    "after_reset": [
+      true,
+      false
+    ],
+    "after_transfer": [
+      true,
+      false
+    ],
+    "first": [
+      true,
+      false
+    ],
+    "second": [
+      false,
+      false
+    ]
+  }
+}
