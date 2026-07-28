@@ -72,7 +72,7 @@ corpus match CPython byte for byte.
 | `emulator` | `emulator` | `emulator` | **done** |
 | `render` | `render` | `render` | **partial** — SGR row rendering; image/palette/segments outstanding |
 | `detection` | `detection` | `detection` | **partial** — screen buffer and input-type heuristic; rule engine, extractor and flow outstanding |
-| `deckmux` | `deckmux` | `deckmux` | **partial** — the wire protocol, the presence store with its untrusted-value bounds, control transfer with the keystroke queue, derived names/colours and the edge-bar geometry; the identity bridge, service and hub mixin outstanding |
+| `deckmux` | `deckmux` | `deckmux` | **partial** — the wire protocol, the presence store with its untrusted-value bounds, control transfer with the keystroke queue, derived names/colours, the edge-bar geometry and the SSH identity bridge; the service and hub mixin outstanding |
 | `annotation` | `provide-uterm-annotation` | `annotation` | **done** — the 20 built-in rules, the detector and the streaming boundary carry |
 
 ### Session and transport
@@ -142,6 +142,17 @@ pages that are opened directly. They stay as they are unless the bootstrap
 starts routing to them.
 
 ## Known cross-port misalignments
+
+### Identity-frame version accepts a boolean in Python only
+
+`parse_identity_frame` tests `version in frozenset({1})`. Python's `True == 1`,
+so a frame carrying `"version": true` is read as version 1 and accepted. Go's
+`identityVersion` (`deckmux/identity.go`) accepts only the int and float forms
+and refuses a bool, so the two ports already disagree; the TypeScript port
+follows Go. Recorded in `deckmux_identity_golden.json` as
+`python_boolean_version` so the divergence stays visible. Fixing it means
+tightening the Python check, which is a behaviour change in the reference and
+should land across all four ports together.
 
 Found while porting. Neither is a missing feature; both are worth settling.
 
