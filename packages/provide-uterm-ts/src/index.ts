@@ -26,6 +26,7 @@ export * as connectors from "./connectors/index.ts";
 export * as controlChannel from "./control-channel/index.ts";
 export * as controlplane from "./controlplane/index.ts";
 export * as ctrlmsg from "./ctrlmsg/index.ts";
+export * as deckmux from "./deckmux/index.ts";
 export * as defaults from "./defaults/index.ts";
 export * as detection from "./detection/index.ts";
 export * as egress from "./egress/index.ts";
