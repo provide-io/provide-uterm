@@ -106,7 +106,7 @@ corpus match CPython byte for byte.
 |---|---|---|---|
 | `server` | server `routes/*`, `app/*`, `runtime` | `server` | todo |
 | `client` | client `hijack`, `control_ws` | `client` | todo |
-| `gateway` | server `gateway` | `gateway` | todo |
+| `gateway` | server `gateway` | `gateway` | **partial** — the SSH server's security policy (loopback bind test, host-key permissions, per-IP limits, permissive-auth refusal); the asyncssh-shaped server itself outstanding |
 | `tunnel` | `tunnel`, `tunnel_invites`, `pam_tunnel` | `tunnel` | todo |
 | `tunnelclient` | share/inspect client | `tunnelclient` | todo |
 | `vnc` | `vnc` | `vnc` | todo |
