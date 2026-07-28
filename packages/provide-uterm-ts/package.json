@@ -1,0 +1,30 @@
+{
+  "name": "provide-uterm-ts",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "description": "TypeScript port of the provide-uterm terminal session platform",
+  "license": "AGPL-3.0-or-later",
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "lint": "biome lint src/",
+    "fix": "biome check --write --unsafe src/"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.16",
+    "@types/node": "^24.10.1",
+    "@vitest/coverage-v8": "^4.1.8",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.8"
+  }
+}

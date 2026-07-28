@@ -1,7 +1,11 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.4.6/schema.json",
   "files": {
-    "includes": ["packages/provide-uterm-frontend/src/**", "packages/provide-uterm-app/src/**"]
+    "includes": [
+      "packages/provide-uterm-frontend/src/**",
+      "packages/provide-uterm-app/src/**",
+      "packages/provide-uterm-ts/src/**"
+    ]
   },
   "formatter": {
     "enabled": true,
@@ -16,6 +20,16 @@
     }
   },
   "overrides": [
+    {
+      "includes": ["packages/provide-uterm-ts/src/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noControlCharactersInRegex": "off"
+          }
+        }
+      }
+    },
     {
       "includes": ["packages/provide-uterm-frontend/src/**/*.test.ts"],
       "linter": {

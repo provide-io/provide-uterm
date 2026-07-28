@@ -7,7 +7,8 @@
   },
   "workspaces": [
     "packages/provide-uterm-frontend",
-    "packages/provide-uterm-app"
+    "packages/provide-uterm-app",
+    "packages/provide-uterm-ts"
   ],
   "scripts": {
     "clean:frontend-generated": "node scripts/clean-frontend-generated.mjs",
@@ -17,8 +18,12 @@
     "dev:app": "npm run dev --workspace=packages/provide-uterm-app",
     "typecheck:frontend": "npm run typecheck --workspace=packages/provide-uterm-frontend",
     "typecheck:app": "npm run typecheck --workspace=packages/provide-uterm-app",
+    "typecheck:ts": "npm run typecheck --workspace=packages/provide-uterm-ts",
+    "test:ts": "npm run test --workspace=packages/provide-uterm-ts",
+    "test:ts:coverage": "npm run test:coverage --workspace=packages/provide-uterm-ts",
     "lint:frontend": "npm run lint --workspace=packages/provide-uterm-frontend",
     "lint:app": "npm run lint --workspace=packages/provide-uterm-app",
+    "lint:ts": "npm run lint --workspace=packages/provide-uterm-ts",
     "lint:ws-json": "uv run python scripts/check_bare_json_ws_sends.py",
     "fix:frontend": "npm run fix --workspace=packages/provide-uterm-frontend",
     "fix:app": "npm run fix --workspace=packages/provide-uterm-app"

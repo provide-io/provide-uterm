@@ -67,7 +67,10 @@ repos:
     hooks:
       - id: codespell
         additional_dependencies: ["tomli"]
-        exclude: "package-lock\\.json"
+        # The TypeScript testdata exclusion covers differential-parity
+        # goldens, whose inputs deliberately include non-English and
+        # truncated byte sequences.
+        exclude: "package-lock\\.json|^packages/provide-uterm-ts/testdata/"
 
   - repo: local
     hooks:
@@ -148,10 +151,10 @@ repos:
           - .secrets.baseline
           - --no-verify
           - --exclude-files
-          # The Go testdata exclusion covers differential-parity goldens
-          # (e.g. ctrlmsg HMAC signature corpora) — synthetic test vectors,
-          # not real credentials.
-          - "(^|/)(\\.secrets\\.baseline|\\.venv|\\.pytest_cache|\\.mypy_cache|\\.ruff_cache|\\.uterm-recordings|node_modules|dist|build|htmlcov)/?|^packages/provide-uterm-server/src/provide/uterm/server/frontend/assets/|^packages/provide-uterm-go/[^/]+/testdata/|^packages/provide-uterm-csharp/.*/testdata/"
+          # The Go/C#/TypeScript testdata exclusions cover differential-parity
+          # goldens (e.g. ctrlmsg HMAC signature corpora, latin-1 byte-path
+          # hex) — synthetic test vectors, not real credentials.
+          - "(^|/)(\\.secrets\\.baseline|\\.venv|\\.pytest_cache|\\.mypy_cache|\\.ruff_cache|\\.uterm-recordings|node_modules|dist|build|htmlcov)/?|^packages/provide-uterm-server/src/provide/uterm/server/frontend/assets/|^packages/provide-uterm-go/[^/]+/testdata/|^packages/provide-uterm-csharp/.*/testdata/|^packages/provide-uterm-ts/testdata/"
         language: python
         language_version: python3
         additional_dependencies:
