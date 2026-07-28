@@ -21,6 +21,7 @@ export * as ansi from "./ansi/index.ts";
 export * as auth from "./auth/index.ts";
 export * as bridge from "./bridge/index.ts";
 export * as channels from "./channels/index.ts";
+export * as cloudflare from "./cloudflare/index.ts";
 export * as colors from "./colors/index.ts";
 export * as connectors from "./connectors/index.ts";
 export * as controlChannel from "./control-channel/index.ts";

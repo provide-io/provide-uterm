@@ -1,0 +1,2335 @@
+{
+  "defaults": {
+    "deckmux_auto_transfer_idle_s": 30,
+    "deckmux_keystroke_queue": "display",
+    "durable_object_class": "SessionRuntime",
+    "environment": "development",
+    "jwt": {
+      "algorithms": [
+        "RS256"
+      ],
+      "audience": null,
+      "clock_skew_seconds": 30,
+      "issuer": null,
+      "jwks_url": null,
+      "jwt_default_role": "viewer",
+      "jwt_role_map": {},
+      "jwt_roles_claim": "roles",
+      "jwt_scopes_claim": "scope",
+      "jwt_service_token_admin": false,
+      "mode": "jwt",
+      "public_key_pem": null
+    },
+    "limits": {
+      "backpressure_ack_grace_s": 10.0,
+      "backpressure_high_water_bytes": 4194304,
+      "backpressure_low_water_bytes": 1048576,
+      "max_buffer_bytes": 1048576,
+      "max_events_per_worker": 2000,
+      "max_input_chars": 10000,
+      "max_ws_message_bytes": 1048576
+    },
+    "log_level": "info",
+    "resume_enabled": true,
+    "resume_ttl_s": 300,
+    "security_csp": null,
+    "security_hsts": null,
+    "security_mode": "strict",
+    "security_permissions_policy": null,
+    "security_referrer_policy": null,
+    "security_x_content_type_options": null,
+    "security_x_frame_options": null,
+    "tunnel_ip_binding": false,
+    "tunnel_token_transport": "cookie",
+    "tunnel_token_ttl_s": 3600,
+    "upstream": {
+      "base_ws_url": "",
+      "connect_timeout_ms": 3000,
+      "heartbeat_s": 25,
+      "max_backoff_s": 5
+    },
+    "worker_bearer_token": null
+  },
+  "from_vars_attribute": {
+    "deckmux_auto_transfer_idle_s": 30,
+    "deckmux_keystroke_queue": "display",
+    "durable_object_class": "SessionRuntime",
+    "environment": "development",
+    "jwt": {
+      "algorithms": [
+        "RS256"
+      ],
+      "audience": null,
+      "clock_skew_seconds": 30,
+      "issuer": null,
+      "jwks_url": null,
+      "jwt_default_role": "viewer",
+      "jwt_role_map": {},
+      "jwt_roles_claim": "roles",
+      "jwt_scopes_claim": "scope",
+      "jwt_service_token_admin": false,
+      "mode": "jwt",
+      "public_key_pem": null
+    },
+    "limits": {
+      "backpressure_ack_grace_s": 10.0,
+      "backpressure_high_water_bytes": 4194304,
+      "backpressure_low_water_bytes": 1048576,
+      "max_buffer_bytes": 1048576,
+      "max_events_per_worker": 2000,
+      "max_input_chars": 10000,
+      "max_ws_message_bytes": 1048576
+    },
+    "log_level": "info",
+    "resume_enabled": true,
+    "resume_ttl_s": 300,
+    "security_csp": null,
+    "security_hsts": null,
+    "security_mode": "strict",
+    "security_permissions_policy": null,
+    "security_referrer_policy": null,
+    "security_x_content_type_options": null,
+    "security_x_frame_options": null,
+    "tunnel_ip_binding": false,
+    "tunnel_token_transport": "cookie",
+    "tunnel_token_ttl_s": 3600,
+    "upstream": {
+      "base_ws_url": "",
+      "connect_timeout_ms": 3000,
+      "heartbeat_s": 25,
+      "max_backoff_s": 5
+    },
+    "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+  },
+  "good_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq",
+  "invalid": [
+    {
+      "env": {},
+      "message": "WORKER_BEARER_TOKEN is required when AUTH_MODE='jwt'",
+      "name": "no bearer token",
+      "type": "ValueError"
+    },
+    {
+      "env": {
+        "WORKER_BEARER_TOKEN": ""
+      },
+      "message": "WORKER_BEARER_TOKEN is required when AUTH_MODE='jwt'",
+      "name": "an empty bearer token",
+      "type": "ValueError"
+    },
+    {
+      "env": {
+        "WORKER_BEARER_TOKEN": "change-me"
+      },
+      "message": "WORKER_BEARER_TOKEN uses a known placeholder value. Set a high-entropy runtime token (e.g. `python -c 'import secrets; print(secrets.token_urlsafe(32))'`).",
+      "name": "a placeholder bearer token",
+      "type": "ValueError"
+    },
+    {
+      "env": {
+        "WORKER_BEARER_TOKEN": "ChangeMe"
+      },
+      "message": "WORKER_BEARER_TOKEN uses a known placeholder value. Set a high-entropy runtime token (e.g. `python -c 'import secrets; print(secrets.token_urlsafe(32))'`).",
+      "name": "a placeholder in different case",
+      "type": "ValueError"
+    },
+    {
+      "env": {
+        "WORKER_BEARER_TOKEN": "  placeholder  "
+      },
+      "message": "WORKER_BEARER_TOKEN uses a known placeholder value. Set a high-entropy runtime token (e.g. `python -c 'import secrets; print(secrets.token_urlsafe(32))'`).",
+      "name": "a placeholder with padding",
+      "type": "ValueError"
+    },
+    {
+      "env": {
+        "WORKER_BEARER_TOKEN": "prefix-replace-me-suffix-padding"
+      },
+      "message": "WORKER_BEARER_TOKEN uses a known placeholder value. Set a high-entropy runtime token (e.g. `python -c 'import secrets; print(secrets.token_urlsafe(32))'`).",
+      "name": "a placeholder as a marker inside a longer token",
+      "type": "ValueError"
+    },
+    {
+      "env": {
+        "WORKER_BEARER_TOKEN": "worker-secret"
+      },
+      "message": "WORKER_BEARER_TOKEN uses a known placeholder value. Set a high-entropy runtime token (e.g. `python -c 'import secrets; print(secrets.token_urlsafe(32))'`).",
+      "name": "an exact placeholder, not a marker",
+      "type": "ValueError"
+    },
+    {
+      "env": {
+        "WORKER_BEARER_TOKEN": "   worker-secret   "
+      },
+      "message": "WORKER_BEARER_TOKEN uses a known placeholder value. Set a high-entropy runtime token (e.g. `python -c 'import secrets; print(secrets.token_urlsafe(32))'`).",
+      "name": "an exact placeholder with padding",
+      "type": "ValueError"
+    },
+    {
+      "env": {
+        "WORKER_BEARER_TOKEN": "dummy-token"
+      },
+      "message": "WORKER_BEARER_TOKEN uses a known placeholder value. Set a high-entropy runtime token (e.g. `python -c 'import secrets; print(secrets.token_urlsafe(32))'`).",
+      "name": "another exact placeholder",
+      "type": "ValueError"
+    },
+    {
+      "env": {
+        "WORKER_BEARER_TOKEN": "abc123"
+      },
+      "message": "WORKER_BEARER_TOKEN must be at least 32 characters of high-entropy material. CF Workers are always internet-facing, so the worker bearer token is an edge auth boundary — use a long random token.",
+      "name": "a short bearer token",
+      "type": "ValueError"
+    },
+    {
+      "env": {
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kN"
+      },
+      "message": "WORKER_BEARER_TOKEN must be at least 32 characters of high-entropy material. CF Workers are always internet-facing, so the worker bearer token is an edge auth boundary — use a long random token.",
+      "name": "a bearer token one character short",
+      "type": "ValueError"
+    },
+    {
+      "env": {
+        "AUTH_MODE": "none",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "message": "AUTH_MODE must be 'jwt' (dev/none modes are removed; the worker is always internet-facing)",
+      "name": "an open auth mode",
+      "type": "ValueError"
+    },
+    {
+      "env": {
+        "AUTH_MODE": "dev",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "message": "AUTH_MODE must be 'jwt' (dev/none modes are removed; the worker is always internet-facing)",
+      "name": "a development auth mode",
+      "type": "ValueError"
+    },
+    {
+      "env": {
+        "AUTH_MODE": "header",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "message": "AUTH_MODE must be 'jwt' (dev/none modes are removed; the worker is always internet-facing)",
+      "name": "an unknown auth mode",
+      "type": "ValueError"
+    },
+    {
+      "env": {
+        "JWT_ALGORITHMS": "HS256,RS256",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "message": "JWT_ALGORITHMS must not combine HMAC (HS*) with asymmetric algorithms or an asymmetric public key / JWKS URL (algorithm-confusion risk)",
+      "name": "HMAC combined with an asymmetric algorithm",
+      "type": "ValueError"
+    },
+    {
+      "env": {
+        "JWT_ALGORITHMS": "HS256",
+        "JWT_JWKS_URL": "https://x/jwks",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "message": "JWT_ALGORITHMS must not combine HMAC (HS*) with asymmetric algorithms or an asymmetric public key / JWKS URL (algorithm-confusion risk)",
+      "name": "HMAC combined with a JWKS URL",
+      "type": "ValueError"
+    },
+    {
+      "env": {
+        "JWT_ALGORITHMS": "HS256",
+        "JWT_PUBLIC_KEY_PEM": "-----BEGIN PUBLIC KEY-----\nabc\n-----END PUBLIC KEY-----",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "message": "JWT_ALGORITHMS must not combine HMAC (HS*) with asymmetric algorithms or an asymmetric public key / JWKS URL (algorithm-confusion risk)",
+      "name": "HMAC combined with a public key PEM",
+      "type": "ValueError"
+    },
+    {
+      "env": {
+        "MAX_WS_MESSAGE_BYTES": "lots",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "message": "invalid literal for int() with base 10: 'lots'",
+      "name": "a limit that is not a number",
+      "type": "ValueError"
+    },
+    {
+      "env": {
+        "MAX_INPUT_CHARS": "1000.5",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "message": "invalid literal for int() with base 10: '1000.5'",
+      "name": "a limit that is a float",
+      "type": "ValueError"
+    },
+    {
+      "env": {
+        "UPSTREAM_HEARTBEAT_S": "",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "message": "invalid literal for int() with base 10: ''",
+      "name": "an empty numeric setting",
+      "type": "ValueError"
+    },
+    {
+      "env": {
+        "BACKPRESSURE_ACK_GRACE_S": "soon",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "message": "could not convert string to float: 'soon'",
+      "name": "a grace period that is not a number",
+      "type": "ValueError"
+    },
+    {
+      "env": {
+        "JWT_ALGORITHMS": "HS512",
+        "JWT_PUBLIC_KEY_PEM": "-----BEGIN CERTIFICATE-----\nabc\n-----END CERTIFICATE-----",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "message": "JWT_ALGORITHMS must not combine HMAC (HS*) with asymmetric algorithms or an asymmetric public key / JWKS URL (algorithm-confusion risk)",
+      "name": "HMAC combined with a certificate",
+      "type": "ValueError"
+    }
+  ],
+  "min_bearer_token_chars": 32,
+  "non_string": [
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 20000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": false,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "MAX_INPUT_CHARS": 20000,
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "a numeric binding"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": true,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "TUNNEL_IP_BINDING": true,
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "a boolean binding"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 20.5,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": false,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "BACKPRESSURE_ACK_GRACE_S": 20.5,
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "a float binding"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": false,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "JWT_ISSUER": null,
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "a null binding"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": false,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "MAX_INPUT_CHARS": null,
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "a null numeric binding falls back"
+    }
+  ],
+  "valid": [
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": false,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "only what is required"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": false,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "everything at its default"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 45,
+        "deckmux_keystroke_queue": "replay",
+        "durable_object_class": "OtherRuntime",
+        "environment": "production",
+        "jwt": {
+          "algorithms": [
+            "RS256",
+            "ES256"
+          ],
+          "audience": "uterm",
+          "clock_skew_seconds": 60,
+          "issuer": "https://issuer.example",
+          "jwks_url": "https://issuer.example/.well-known/jwks.json",
+          "jwt_default_role": "operator",
+          "jwt_role_map": {
+            "engineering": "admin",
+            "ops": "operator"
+          },
+          "jwt_roles_claim": "groups",
+          "jwt_scopes_claim": "scp",
+          "jwt_service_token_admin": true,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 20.5,
+          "backpressure_high_water_bytes": 8388608,
+          "backpressure_low_water_bytes": 2097152,
+          "max_buffer_bytes": 2097152,
+          "max_events_per_worker": 5000,
+          "max_input_chars": 20000,
+          "max_ws_message_bytes": 2097152
+        },
+        "log_level": "debug",
+        "resume_enabled": false,
+        "resume_ttl_s": 600,
+        "security_csp": "default-src 'self'",
+        "security_hsts": "max-age=63072000",
+        "security_mode": "dev",
+        "security_permissions_policy": "camera=()",
+        "security_referrer_policy": "no-referrer",
+        "security_x_content_type_options": "nosniff",
+        "security_x_frame_options": "DENY",
+        "tunnel_ip_binding": true,
+        "tunnel_token_transport": "header",
+        "tunnel_token_ttl_s": 7200,
+        "upstream": {
+          "base_ws_url": "wss://upstream.example/ws",
+          "connect_timeout_ms": 5000,
+          "heartbeat_s": 30,
+          "max_backoff_s": 10
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "AUTH_MODE": "jwt",
+        "BACKPRESSURE_ACK_GRACE_S": "20.5",
+        "BACKPRESSURE_HIGH_WATER_BYTES": "8388608",
+        "BACKPRESSURE_LOW_WATER_BYTES": "2097152",
+        "DECKMUX_AUTO_TRANSFER_IDLE_S": "45",
+        "DECKMUX_KEYSTROKE_QUEUE": "replay",
+        "DO_CLASS_NAME": "OtherRuntime",
+        "ENVIRONMENT": "production",
+        "JWT_ALGORITHMS": "RS256,ES256",
+        "JWT_AUDIENCE": "uterm",
+        "JWT_CLOCK_SKEW_SECONDS": "60",
+        "JWT_DEFAULT_ROLE": "operator",
+        "JWT_ISSUER": "https://issuer.example",
+        "JWT_JWKS_URL": "https://issuer.example/.well-known/jwks.json",
+        "JWT_ROLES_CLAIM": "groups",
+        "JWT_ROLE_MAP": "{\"engineering\": \"admin\", \"ops\": \"operator\"}",
+        "JWT_SCOPES_CLAIM": "scp",
+        "JWT_SERVICE_TOKEN_ADMIN": "1",
+        "LOG_LEVEL": "debug",
+        "MAX_BUFFER_BYTES": "2097152",
+        "MAX_EVENTS_PER_WORKER": "5000",
+        "MAX_INPUT_CHARS": "20000",
+        "MAX_WS_MESSAGE_BYTES": "2097152",
+        "RESUME_ENABLED": "0",
+        "RESUME_TTL_S": "600",
+        "SECURITY_CSP": "default-src 'self'",
+        "SECURITY_HSTS": "max-age=63072000",
+        "SECURITY_MODE": "dev",
+        "SECURITY_PERMISSIONS_POLICY": "camera=()",
+        "SECURITY_REFERRER_POLICY": "no-referrer",
+        "SECURITY_X_CONTENT_TYPE_OPTIONS": "nosniff",
+        "SECURITY_X_FRAME_OPTIONS": "DENY",
+        "TUNNEL_IP_BINDING": "true",
+        "TUNNEL_TOKEN_TRANSPORT": "header",
+        "TUNNEL_TOKEN_TTL_S": "7200",
+        "UPSTREAM_BASE_WS_URL": "wss://upstream.example/ws",
+        "UPSTREAM_CONNECT_TIMEOUT_MS": "5000",
+        "UPSTREAM_HEARTBEAT_S": "30",
+        "UPSTREAM_MAX_BACKOFF_S": "10",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "every knob set"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 1,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 0,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 0.0,
+          "backpressure_high_water_bytes": 1024,
+          "backpressure_low_water_bytes": 0,
+          "max_buffer_bytes": 1024,
+          "max_events_per_worker": 100,
+          "max_input_chars": 100,
+          "max_ws_message_bytes": 1024
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 30,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": false,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 60,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 100,
+          "heartbeat_s": 1,
+          "max_backoff_s": 1
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "BACKPRESSURE_ACK_GRACE_S": "-1",
+        "BACKPRESSURE_HIGH_WATER_BYTES": "0",
+        "BACKPRESSURE_LOW_WATER_BYTES": "-5",
+        "DECKMUX_AUTO_TRANSFER_IDLE_S": "0",
+        "JWT_CLOCK_SKEW_SECONDS": "-30",
+        "MAX_BUFFER_BYTES": "1",
+        "MAX_EVENTS_PER_WORKER": "0",
+        "MAX_INPUT_CHARS": "1",
+        "MAX_WS_MESSAGE_BYTES": "0",
+        "RESUME_TTL_S": "1",
+        "TUNNEL_TOKEN_TTL_S": "1",
+        "UPSTREAM_CONNECT_TIMEOUT_MS": "0",
+        "UPSTREAM_HEARTBEAT_S": "0",
+        "UPSTREAM_MAX_BACKOFF_S": "0",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "numbers below their floors"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": false,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "SECURITY_MODE": "wide-open",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "an unknown security mode falls back to strict"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": false,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "SECURITY_MODE": "   ",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "an empty security mode falls back to strict"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "dev",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": false,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "SECURITY_MODE": "DEV",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "security mode is case-insensitive"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": false,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "AUTH_MODE": "   ",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "an empty auth mode defaults to jwt"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": false,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "AUTH_MODE": "JWT",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "auth mode is case-insensitive"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": false,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "JWT_ALGORITHMS": " , , ",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "an empty algorithm list falls back"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256",
+            "ES384"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": false,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "JWT_ALGORITHMS": " RS256 , ES384 ",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "algorithms are trimmed"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "HS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": false,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "JWT_ALGORITHMS": "HS256",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "an HMAC algorithm on its own"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "HS256",
+            "HS512"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": false,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "JWT_ALGORITHMS": "HS256,HS512",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "several HMAC algorithms"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "HS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": "sekrit"
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": false,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "JWT_ALGORITHMS": "HS256",
+        "JWT_PUBLIC_KEY_PEM": "sekrit",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "an HMAC algorithm with a raw secret"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": false,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "JWT_AUDIENCE": "",
+        "JWT_ISSUER": "",
+        "JWT_JWKS_URL": "",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "empty optional strings become absent"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": "",
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": false,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "SECURITY_CSP": "",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "an empty security header is kept"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": false,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "JWT_ROLE_MAP": "[\"a\", \"b\"]",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "a role map that is not an object is ignored"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": false,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "JWT_ROLE_MAP": "{not json",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "a role map that is not JSON is ignored"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": false,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "JWT_ROLE_MAP": "   ",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "an empty role map"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {
+            "2": "admin",
+            "a": "1"
+          },
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": false,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "JWT_ROLE_MAP": "{\"a\": 1, \"2\": \"admin\"}",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "role map values are stringified"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": true,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "TUNNEL_IP_BINDING": "yes",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "a boolean read from yes"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": true,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "TUNNEL_IP_BINDING": "ON",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "a boolean read from on"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": false,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "TUNNEL_IP_BINDING": "maybe",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "a boolean read from anything else is false"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": false,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": false,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "RESUME_ENABLED": "no",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "resume disabled"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": false,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "TUNNEL_TOKEN_TRANSPORT": "",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "an empty transport falls back"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": false,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "DECKMUX_KEYSTROKE_QUEUE": "",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "an empty queue mode falls back"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": false,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "JWT_DEFAULT_ROLE": "",
+        "JWT_ROLES_CLAIM": "",
+        "JWT_SCOPES_CLAIM": "",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "empty claim names fall back"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": true,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": true,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "TUNNEL_IP_BINDING": "  yes  ",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "a boolean with padding"
+    },
+    {
+      "config": {
+        "deckmux_auto_transfer_idle_s": 30,
+        "deckmux_keystroke_queue": "display",
+        "durable_object_class": "SessionRuntime",
+        "environment": "development",
+        "jwt": {
+          "algorithms": [
+            "RS256"
+          ],
+          "audience": null,
+          "clock_skew_seconds": 30,
+          "issuer": null,
+          "jwks_url": null,
+          "jwt_default_role": "viewer",
+          "jwt_role_map": {},
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_service_token_admin": false,
+          "mode": "jwt",
+          "public_key_pem": null
+        },
+        "limits": {
+          "backpressure_ack_grace_s": 10.0,
+          "backpressure_high_water_bytes": 4194304,
+          "backpressure_low_water_bytes": 1048576,
+          "max_buffer_bytes": 1048576,
+          "max_events_per_worker": 2000,
+          "max_input_chars": 10000,
+          "max_ws_message_bytes": 1048576
+        },
+        "log_level": "info",
+        "resume_enabled": false,
+        "resume_ttl_s": 300,
+        "security_csp": null,
+        "security_hsts": null,
+        "security_mode": "strict",
+        "security_permissions_policy": null,
+        "security_referrer_policy": null,
+        "security_x_content_type_options": null,
+        "security_x_frame_options": null,
+        "tunnel_ip_binding": false,
+        "tunnel_token_transport": "cookie",
+        "tunnel_token_ttl_s": 3600,
+        "upstream": {
+          "base_ws_url": "",
+          "connect_timeout_ms": 3000,
+          "heartbeat_s": 25,
+          "max_backoff_s": 5
+        },
+        "worker_bearer_token": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "env": {
+        "RESUME_ENABLED": "  NO  ",
+        "WORKER_BEARER_TOKEN": "K7fQ2xLm9pRt4vWy8zAb3cDe6gHj1kNq"
+      },
+      "name": "a boolean with padding and case"
+    }
+  ]
+}
