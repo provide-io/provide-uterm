@@ -43,7 +43,7 @@ module; the Go column names the sibling package for cross-checking.
 | `control-channel` | `control_channel`, `ws_bytes` | `controlchannel` | **done** |
 | `line-editor` | `line_editor` | `lineeditor` | **done** |
 | `channels` | `channels` | `channels` | **done** |
-| `file-io` | `file_io` | `fileio` | todo |
+| `file-io` | `file_io` | `fileio` | **done** |
 | `ansi` | `ansi`, `_ansi_dialects` | `ansi` | **done** |
 | `screen` | `screen` | `screen` | **done** |
 | `policy` | server policy | `policy` | todo |
