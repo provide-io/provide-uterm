@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 import { loadGolden } from "../testing/golden.ts";
-import { type DetectorSnapshot, DetectorPatternCompileError, PromptDetector } from "./index.ts";
+import { DetectorPatternCompileError, type DetectorSnapshot, PromptDetector } from "./index.ts";
 
 interface RecordedMatch {
   prompt_id: string;

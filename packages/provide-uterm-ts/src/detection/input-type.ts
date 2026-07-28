@@ -11,7 +11,16 @@
  */
 
 /** What a prompt expects the user to send. */
-export type InputType = "any_key" | "single_key" | "multi_key";
+/**
+ * What the heuristic can conclude.
+ *
+ * Both references return a plain string here; the union is narrower because
+ * these three are all the heuristic ever produces. It is deliberately not
+ * `rules.InputType`, which is the wider set an operator may *declare* — a
+ * guess and a declaration are different things, and the heuristic cannot
+ * produce `menu_choice` or `none`.
+ */
+export type DetectedInputType = "any_key" | "single_key" | "multi_key";
 
 /** Phrases meaning "press anything to continue". */
 const ANY_KEY_PHRASES = [
@@ -60,7 +69,7 @@ const MULTI_KEY_PHRASES = [
  * case-insensitive and by substring, so a phrase embedded in a longer word
  * still counts. Anything unmatched falls through to `multi_key`.
  */
-export function autoDetectInputType(screen: string): InputType {
+export function autoDetectInputType(screen: string): DetectedInputType {
   const lowered = screen.toLowerCase();
   if (ANY_KEY_PHRASES.some((phrase) => lowered.includes(phrase))) {
     return "any_key";
