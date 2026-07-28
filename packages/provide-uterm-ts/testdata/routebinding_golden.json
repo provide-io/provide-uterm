@@ -1,0 +1,348 @@
+{
+  "all_methods": [
+    "DELETE",
+    "GET",
+    "HEAD",
+    "OPTIONS",
+    "PATCH",
+    "POST",
+    "PUT"
+  ],
+  "bindings": [
+    {
+      "error": null,
+      "message": null,
+      "missing": [],
+      "name": "one route",
+      "operations": [
+        "sessions.get"
+      ],
+      "registered": [
+        {
+          "headers": null,
+          "in_schema": true,
+          "methods": [
+            "GET"
+          ],
+          "name": "sessions.get",
+          "template": "/api/sessions/{session_id}"
+        }
+      ],
+      "with_authorizer": false
+    },
+    {
+      "error": null,
+      "message": null,
+      "missing": [],
+      "name": "two methods on one path",
+      "operations": [
+        "sessions.list",
+        "sessions.create"
+      ],
+      "registered": [
+        {
+          "headers": null,
+          "in_schema": true,
+          "methods": [
+            "GET"
+          ],
+          "name": "sessions.list",
+          "template": "/api/sessions"
+        },
+        {
+          "headers": null,
+          "in_schema": true,
+          "methods": [
+            "POST"
+          ],
+          "name": "sessions.create",
+          "template": "/api/sessions"
+        },
+        {
+          "headers": null,
+          "in_schema": false,
+          "methods": [
+            "DELETE",
+            "GET",
+            "HEAD",
+            "OPTIONS",
+            "PATCH",
+            "POST",
+            "PUT"
+          ],
+          "name": null,
+          "template": "/api/sessions"
+        }
+      ],
+      "with_authorizer": false
+    },
+    {
+      "error": null,
+      "message": null,
+      "missing": [],
+      "name": "three methods on one path",
+      "operations": [
+        "sessions.list",
+        "sessions.create",
+        "sessions.bulk_delete"
+      ],
+      "registered": [
+        {
+          "headers": null,
+          "in_schema": true,
+          "methods": [
+            "GET"
+          ],
+          "name": "sessions.list",
+          "template": "/api/sessions"
+        },
+        {
+          "headers": null,
+          "in_schema": true,
+          "methods": [
+            "POST"
+          ],
+          "name": "sessions.create",
+          "template": "/api/sessions"
+        },
+        {
+          "headers": null,
+          "in_schema": true,
+          "methods": [
+            "DELETE"
+          ],
+          "name": "sessions.bulk_delete",
+          "template": "/api/sessions"
+        },
+        {
+          "headers": null,
+          "in_schema": false,
+          "methods": [
+            "DELETE",
+            "GET",
+            "HEAD",
+            "OPTIONS",
+            "PATCH",
+            "POST",
+            "PUT"
+          ],
+          "name": null,
+          "template": "/api/sessions"
+        }
+      ],
+      "with_authorizer": true
+    },
+    {
+      "error": null,
+      "message": null,
+      "missing": [],
+      "name": "routes on separate paths",
+      "operations": [
+        "sessions.get",
+        "sessions.connect"
+      ],
+      "registered": [
+        {
+          "headers": null,
+          "in_schema": true,
+          "methods": [
+            "GET"
+          ],
+          "name": "sessions.get",
+          "template": "/api/sessions/{session_id}"
+        },
+        {
+          "headers": null,
+          "in_schema": true,
+          "methods": [
+            "POST"
+          ],
+          "name": "sessions.connect",
+          "template": "/api/sessions/{session_id}/connect"
+        }
+      ],
+      "with_authorizer": false
+    },
+    {
+      "error": null,
+      "message": null,
+      "missing": [],
+      "name": "nothing at all",
+      "operations": [],
+      "registered": [],
+      "with_authorizer": false
+    },
+    {
+      "error": "ValueError",
+      "message": "missing route capabilities: sessions.connect",
+      "missing": [
+        "sessions.connect"
+      ],
+      "name": "a handler missing for a selected route",
+      "operations": [
+        "sessions.get",
+        "sessions.connect"
+      ],
+      "registered": [],
+      "with_authorizer": false
+    },
+    {
+      "error": "ValueError",
+      "message": "missing route capabilities: tunnels.create",
+      "missing": [
+        "tunnels.create"
+      ],
+      "name": "a handler missing for a route not selected",
+      "operations": [
+        "sessions.get"
+      ],
+      "registered": [],
+      "with_authorizer": false
+    },
+    {
+      "error": "ValueError",
+      "message": "missing route capabilities: profiles.list, tunnels.create",
+      "missing": [
+        "tunnels.create",
+        "profiles.list"
+      ],
+      "name": "several handlers missing",
+      "operations": [
+        "sessions.get"
+      ],
+      "registered": [],
+      "with_authorizer": false
+    },
+    {
+      "error": "ValueError",
+      "message": "role_authorizer is required for routes with required roles",
+      "missing": [],
+      "name": "a guarded route with no authorizer",
+      "operations": [
+        "sessions.bulk_delete"
+      ],
+      "registered": [],
+      "with_authorizer": false
+    },
+    {
+      "error": null,
+      "message": null,
+      "missing": [],
+      "name": "a guarded route with an authorizer",
+      "operations": [
+        "sessions.bulk_delete"
+      ],
+      "registered": [
+        {
+          "headers": null,
+          "in_schema": true,
+          "methods": [
+            "DELETE"
+          ],
+          "name": "sessions.bulk_delete",
+          "template": "/api/sessions"
+        }
+      ],
+      "with_authorizer": true
+    },
+    {
+      "error": null,
+      "message": null,
+      "missing": [],
+      "name": "an unguarded route with an authorizer",
+      "operations": [
+        "sessions.get"
+      ],
+      "registered": [
+        {
+          "headers": null,
+          "in_schema": true,
+          "methods": [
+            "GET"
+          ],
+          "name": "sessions.get",
+          "template": "/api/sessions/{session_id}"
+        }
+      ],
+      "with_authorizer": true
+    }
+  ],
+  "foreign_route": {
+    "error": "ValueError",
+    "message": "route definition is not in API_ROUTES"
+  },
+  "guards": [
+    {
+      "authorized": null,
+      "detail": null,
+      "name": "the route's own path",
+      "operation": "sessions.get",
+      "path": "/api/sessions/w1",
+      "status": null
+    },
+    {
+      "authorized": null,
+      "detail": "invalid route path parameters",
+      "name": "a path with a bad parameter",
+      "operation": "sessions.get",
+      "path": "/api/sessions/a.b",
+      "status": 422
+    },
+    {
+      "authorized": null,
+      "detail": "invalid route path parameters",
+      "name": "a path with no parameter",
+      "operation": "sessions.get",
+      "path": "/api/sessions",
+      "status": 422
+    },
+    {
+      "authorized": null,
+      "detail": "invalid route path parameters",
+      "name": "a path for another route",
+      "operation": "sessions.get",
+      "path": "/api/sessions/w1/connect",
+      "status": 422
+    },
+    {
+      "authorized": null,
+      "detail": "invalid route path parameters",
+      "name": "a path that is not an api path",
+      "operation": "sessions.get",
+      "path": "/nope",
+      "status": 422
+    },
+    {
+      "authorized": true,
+      "detail": null,
+      "name": "a guarded route, allowed",
+      "operation": "sessions.bulk_delete",
+      "path": "/api/sessions",
+      "status": null
+    },
+    {
+      "authorized": false,
+      "detail": "insufficient role privileges",
+      "name": "a guarded route, refused",
+      "operation": "sessions.bulk_delete",
+      "path": "/api/sessions",
+      "status": 403
+    },
+    {
+      "authorized": true,
+      "detail": "invalid route path parameters",
+      "name": "a guarded route on a bad path",
+      "operation": "sessions.bulk_delete",
+      "path": "/api/sessions/",
+      "status": 422
+    },
+    {
+      "authorized": false,
+      "detail": null,
+      "name": "an unguarded route with a refusing authorizer",
+      "operation": "sessions.get",
+      "path": "/api/sessions/w1",
+      "status": null
+    }
+  ]
+}

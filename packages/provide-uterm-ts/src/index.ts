@@ -49,6 +49,7 @@ export * as render from "./render/index.ts";
 export * as replay from "./replay/index.ts";
 export * as sanitizer from "./sanitizer/index.ts";
 export * as screen from "./screen/index.ts";
+export * as server from "./server/index.ts";
 export * as serverauth from "./serverauth/index.ts";
 export * as serverconfig from "./serverconfig/index.ts";
 export * as session from "./session/index.ts";
