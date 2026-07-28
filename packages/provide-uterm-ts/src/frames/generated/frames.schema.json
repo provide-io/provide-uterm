@@ -1,0 +1,1739 @@
+{
+  "_banner": "AUTO-GENERATED \u2014 DO NOT EDIT. Regenerate via scripts/codegen_frames.py. SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved. SPDX-License-Identifier: AGPL-3.0-or-later.",
+  "definitions": {
+    "AnalysisFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "formatted": {
+          "title": "Formatted",
+          "type": "string"
+        },
+        "raw": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw"
+        },
+        "ts": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ts"
+        },
+        "type": {
+          "const": "analysis",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "formatted"
+      ],
+      "title": "AnalysisFrame",
+      "type": "object"
+    },
+    "ApprovalPendingFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "title": "Command",
+          "type": "string"
+        },
+        "expires_at": {
+          "title": "Expires At",
+          "type": "number"
+        },
+        "request_id": {
+          "title": "Request Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "approval_pending",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "command",
+        "request_id",
+        "expires_at"
+      ],
+      "title": "ApprovalPendingFrame",
+      "type": "object"
+    },
+    "ApprovalResolvedFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "outcome": {
+          "title": "Outcome",
+          "type": "string"
+        },
+        "request_id": {
+          "title": "Request Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "approval_resolved",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "outcome",
+        "request_id"
+      ],
+      "title": "ApprovalResolvedFrame",
+      "type": "object"
+    },
+    "ControlFrame": {
+      "additionalProperties": false,
+      "description": "Server-originated worker-control frame (pause/resume/step).",
+      "properties": {
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "lease_s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lease S"
+        },
+        "owner": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Owner"
+        },
+        "ts": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ts"
+        },
+        "type": {
+          "const": "control",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "action"
+      ],
+      "title": "ControlFrame",
+      "type": "object"
+    },
+    "ControlTransferFrame": {
+      "additionalProperties": false,
+      "description": "DeckMux ownership-transfer notice.",
+      "properties": {
+        "from_user_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "From User Id"
+        },
+        "queued_keys": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Queued Keys"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "to_user_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "To User Id"
+        },
+        "type": {
+          "const": "control_transfer",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "ControlTransferFrame",
+      "type": "object"
+    },
+    "ErrorFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "client_max": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Client Max"
+        },
+        "client_min": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Client Min"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "server_max": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Server Max"
+        },
+        "server_min": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Server Min"
+        },
+        "type": {
+          "const": "error",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "message"
+      ],
+      "title": "ErrorFrame",
+      "type": "object"
+    },
+    "HeartbeatAckFrame": {
+      "additionalProperties": false,
+      "description": "Server reply to a browser heartbeat \u2014 refreshes the lease.",
+      "properties": {
+        "lease_expires_at": {
+          "title": "Lease Expires At",
+          "type": "number"
+        },
+        "ts": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ts"
+        },
+        "type": {
+          "const": "heartbeat_ack",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "lease_expires_at"
+      ],
+      "title": "HeartbeatAckFrame",
+      "type": "object"
+    },
+    "HeartbeatFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "ts": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ts"
+        },
+        "type": {
+          "const": "heartbeat",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "HeartbeatFrame",
+      "type": "object"
+    },
+    "HelloFrame": {
+      "description": "Server-originated hello-frame to the browser describing capabilities.\n\nSchema is intentionally permissive (``extra=\"ignore\"``) because the field\nset drifts as new capabilities land; field-by-field tightening will happen\nonce the wire format is fully stable.",
+      "properties": {
+        "can_hijack": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Can Hijack"
+        },
+        "capabilities": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Capabilities"
+        },
+        "hijack_control": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hijack Control"
+        },
+        "hijack_step_supported": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hijack Step Supported"
+        },
+        "hijacked": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hijacked"
+        },
+        "hijacked_by_me": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hijacked By Me"
+        },
+        "input_mode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Input Mode"
+        },
+        "mcp_supported": {
+          "default": false,
+          "title": "Mcp Supported",
+          "type": "boolean"
+        },
+        "protocol": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Protocol"
+        },
+        "protocol_version": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Protocol Version"
+        },
+        "resume_supported": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resume Supported"
+        },
+        "resume_token": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resume Token"
+        },
+        "resumed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resumed"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role"
+        },
+        "ts": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ts"
+        },
+        "type": {
+          "const": "hello",
+          "title": "Type",
+          "type": "string"
+        },
+        "vnc_supported": {
+          "default": false,
+          "title": "Vnc Supported",
+          "type": "boolean"
+        },
+        "worker_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Worker Id"
+        },
+        "worker_online": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Worker Online"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "HelloFrame",
+      "type": "object"
+    },
+    "HijackReleaseFrame": {
+      "additionalProperties": false,
+      "description": "Browser-originated request to release the hijack lease.",
+      "properties": {
+        "ts": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ts"
+        },
+        "type": {
+          "const": "hijack_release",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "HijackReleaseFrame",
+      "type": "object"
+    },
+    "HijackRequestFrame": {
+      "additionalProperties": false,
+      "description": "Browser-originated request to acquire the hijack lease.",
+      "properties": {
+        "token": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Token"
+        },
+        "ts": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ts"
+        },
+        "type": {
+          "const": "hijack_request",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "HijackRequestFrame",
+      "type": "object"
+    },
+    "HijackStateFrame": {
+      "additionalProperties": false,
+      "description": "Broadcast lease-state update.",
+      "properties": {
+        "hijacked": {
+          "title": "Hijacked",
+          "type": "boolean"
+        },
+        "input_mode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Input Mode"
+        },
+        "lease_expires_at": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lease Expires At"
+        },
+        "owner": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Owner"
+        },
+        "type": {
+          "const": "hijack_state",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "hijacked"
+      ],
+      "title": "HijackStateFrame",
+      "type": "object"
+    },
+    "HijackStepFrame": {
+      "additionalProperties": false,
+      "description": "Browser-originated single-step request.",
+      "properties": {
+        "ts": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ts"
+        },
+        "type": {
+          "const": "hijack_step",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "HijackStepFrame",
+      "type": "object"
+    },
+    "IdentityFrame": {
+      "additionalProperties": true,
+      "description": "Inline control-channel identity frame.",
+      "properties": {
+        "claims": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Claims"
+        },
+        "fingerprint": {
+          "default": "",
+          "title": "Fingerprint",
+          "type": "string"
+        },
+        "signature": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Signature"
+        },
+        "subject": {
+          "title": "Subject",
+          "type": "string"
+        },
+        "transport": {
+          "default": "ssh",
+          "title": "Transport",
+          "type": "string"
+        },
+        "type": {
+          "const": "identity",
+          "title": "Type",
+          "type": "string"
+        },
+        "version": {
+          "default": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "subject"
+      ],
+      "title": "IdentityFrame",
+      "type": "object"
+    },
+    "InputFrame": {
+      "additionalProperties": false,
+      "description": "Browser/operator input destined for the worker.",
+      "properties": {
+        "data": {
+          "title": "Data",
+          "type": "string"
+        },
+        "ts": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ts"
+        },
+        "type": {
+          "const": "input",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "data"
+      ],
+      "title": "InputFrame",
+      "type": "object"
+    },
+    "InputModeChangedFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "input_mode": {
+          "title": "Input Mode",
+          "type": "string"
+        },
+        "ts": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ts"
+        },
+        "type": {
+          "const": "input_mode_changed",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "input_mode"
+      ],
+      "title": "InputModeChangedFrame",
+      "type": "object"
+    },
+    "LinkPatternEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "enum": [
+            "cmd",
+            "url",
+            "key",
+            "focus"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "class": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Class"
+        },
+        "flags": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Flags"
+        },
+        "group": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Group"
+        },
+        "hover": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hover"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "line_contains": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Line Contains"
+        },
+        "pattern": {
+          "title": "Pattern",
+          "type": "string"
+        },
+        "payload": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Payload"
+        }
+      },
+      "required": [
+        "pattern",
+        "action"
+      ],
+      "title": "LinkPatternEntry",
+      "type": "object"
+    },
+    "LinkPatternsFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "patterns": {
+          "items": {
+            "$ref": "#/definitions/LinkPatternEntry"
+          },
+          "title": "Patterns",
+          "type": "array"
+        },
+        "type": {
+          "const": "link_patterns",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "patterns"
+      ],
+      "title": "LinkPatternsFrame",
+      "type": "object"
+    },
+    "PingFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "ts": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ts"
+        },
+        "type": {
+          "const": "ping",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "PingFrame",
+      "type": "object"
+    },
+    "PongFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "ts": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ts"
+        },
+        "type": {
+          "const": "pong",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "PongFrame",
+      "type": "object"
+    },
+    "PresenceLeaveFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "ts": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ts"
+        },
+        "type": {
+          "const": "presence_leave",
+          "title": "Type",
+          "type": "string"
+        },
+        "user_id": {
+          "title": "User Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "user_id"
+      ],
+      "title": "PresenceLeaveFrame",
+      "type": "object"
+    },
+    "PresenceSyncFrame": {
+      "additionalProperties": true,
+      "description": "Full presence roster sent on browser connect.",
+      "properties": {
+        "config": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Config"
+        },
+        "owner_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Owner Id"
+        },
+        "type": {
+          "const": "presence_sync",
+          "title": "Type",
+          "type": "string"
+        },
+        "users": {
+          "anyOf": [
+            {
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Users"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "PresenceSyncFrame",
+      "type": "object"
+    },
+    "PresenceUpdateFrame": {
+      "additionalProperties": true,
+      "description": "DeckMux per-user presence update \u2014 schema is permissive because\noptional fields (scroll, selection, pin, typing, queued_keys) are\nattached only when relevant.",
+      "properties": {
+        "type": {
+          "const": "presence_update",
+          "title": "Type",
+          "type": "string"
+        },
+        "user_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "User Id"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "PresenceUpdateFrame",
+      "type": "object"
+    },
+    "ResumeFailedFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "type": {
+          "const": "resume_failed",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "ResumeFailedFrame",
+      "type": "object"
+    },
+    "ResumeFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "player_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Player Id"
+        },
+        "token": {
+          "title": "Token",
+          "type": "string"
+        },
+        "type": {
+          "const": "resume",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "token"
+      ],
+      "title": "ResumeFrame",
+      "type": "object"
+    },
+    "ResumeOkFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "resume_ok",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "ResumeOkFrame",
+      "type": "object"
+    },
+    "SessionTokenFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "player_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Player Id"
+        },
+        "token": {
+          "title": "Token",
+          "type": "string"
+        },
+        "type": {
+          "const": "session_token",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "token"
+      ],
+      "title": "SessionTokenFrame",
+      "type": "object"
+    },
+    "SnapshotFrame": {
+      "additionalProperties": false,
+      "description": "Worker-originated full-screen snapshot.",
+      "properties": {
+        "cols": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cols"
+        },
+        "cursor": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cursor"
+        },
+        "cursor_at_end": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cursor At End"
+        },
+        "has_trailing_space": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Has Trailing Space"
+        },
+        "prompt_detected": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt Detected"
+        },
+        "raw_tail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Tail"
+        },
+        "rows": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rows"
+        },
+        "screen": {
+          "title": "Screen",
+          "type": "string"
+        },
+        "screen_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Screen Hash"
+        },
+        "ts": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ts"
+        },
+        "type": {
+          "const": "snapshot",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "screen"
+      ],
+      "title": "SnapshotFrame",
+      "type": "object"
+    },
+    "SnapshotReqFrame": {
+      "additionalProperties": false,
+      "description": "Browser-originated request for a fresh screen snapshot.",
+      "properties": {
+        "ts": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ts"
+        },
+        "type": {
+          "const": "snapshot_req",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "SnapshotReqFrame",
+      "type": "object"
+    },
+    "StatusFrame": {
+      "additionalProperties": true,
+      "description": "Worker-originated status passthrough (``coerce_worker_status_frame``).\n\nSchema is permissive because the worker may attach arbitrary status\npayloads. The frame type discriminator and ``ts`` field are the only\nguarantees.",
+      "properties": {
+        "ts": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ts"
+        },
+        "type": {
+          "const": "status",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "StatusFrame",
+      "type": "object"
+    },
+    "TermFrame": {
+      "additionalProperties": false,
+      "description": "Raw terminal output bytes from the worker to subscribers.",
+      "properties": {
+        "data": {
+          "title": "Data",
+          "type": "string"
+        },
+        "ts": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ts"
+        },
+        "type": {
+          "const": "term",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "data"
+      ],
+      "title": "TermFrame",
+      "type": "object"
+    },
+    "WorkerConnectedFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "ts": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ts"
+        },
+        "type": {
+          "const": "worker_connected",
+          "title": "Type",
+          "type": "string"
+        },
+        "worker_id": {
+          "title": "Worker Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "worker_id"
+      ],
+      "title": "WorkerConnectedFrame",
+      "type": "object"
+    },
+    "WorkerDisconnectedFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "ts": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ts"
+        },
+        "type": {
+          "const": "worker_disconnected",
+          "title": "Type",
+          "type": "string"
+        },
+        "worker_id": {
+          "title": "Worker Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "worker_id"
+      ],
+      "title": "WorkerDisconnectedFrame",
+      "type": "object"
+    },
+    "WorkerHelloFrame": {
+      "additionalProperties": false,
+      "description": "Worker-originated hello-frame carrying input_mode + capabilities.",
+      "properties": {
+        "mode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mode"
+        },
+        "ts": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ts"
+        },
+        "type": {
+          "const": "worker_hello",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "WorkerHelloFrame",
+      "type": "object"
+    }
+  },
+  "discriminator": {
+    "mapping": {
+      "analysis": "#/definitions/AnalysisFrame",
+      "approval_pending": "#/definitions/ApprovalPendingFrame",
+      "approval_resolved": "#/definitions/ApprovalResolvedFrame",
+      "control": "#/definitions/ControlFrame",
+      "control_transfer": "#/definitions/ControlTransferFrame",
+      "error": "#/definitions/ErrorFrame",
+      "heartbeat": "#/definitions/HeartbeatFrame",
+      "heartbeat_ack": "#/definitions/HeartbeatAckFrame",
+      "hello": "#/definitions/HelloFrame",
+      "hijack_release": "#/definitions/HijackReleaseFrame",
+      "hijack_request": "#/definitions/HijackRequestFrame",
+      "hijack_state": "#/definitions/HijackStateFrame",
+      "hijack_step": "#/definitions/HijackStepFrame",
+      "identity": "#/definitions/IdentityFrame",
+      "input": "#/definitions/InputFrame",
+      "input_mode_changed": "#/definitions/InputModeChangedFrame",
+      "link_patterns": "#/definitions/LinkPatternsFrame",
+      "ping": "#/definitions/PingFrame",
+      "pong": "#/definitions/PongFrame",
+      "presence_leave": "#/definitions/PresenceLeaveFrame",
+      "presence_sync": "#/definitions/PresenceSyncFrame",
+      "presence_update": "#/definitions/PresenceUpdateFrame",
+      "resume": "#/definitions/ResumeFrame",
+      "resume_failed": "#/definitions/ResumeFailedFrame",
+      "resume_ok": "#/definitions/ResumeOkFrame",
+      "session_token": "#/definitions/SessionTokenFrame",
+      "snapshot": "#/definitions/SnapshotFrame",
+      "snapshot_req": "#/definitions/SnapshotReqFrame",
+      "status": "#/definitions/StatusFrame",
+      "term": "#/definitions/TermFrame",
+      "worker_connected": "#/definitions/WorkerConnectedFrame",
+      "worker_disconnected": "#/definitions/WorkerDisconnectedFrame",
+      "worker_hello": "#/definitions/WorkerHelloFrame"
+    },
+    "propertyName": "type"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/definitions/TermFrame"
+    },
+    {
+      "$ref": "#/definitions/InputFrame"
+    },
+    {
+      "$ref": "#/definitions/SnapshotReqFrame"
+    },
+    {
+      "$ref": "#/definitions/SnapshotFrame"
+    },
+    {
+      "$ref": "#/definitions/ControlFrame"
+    },
+    {
+      "$ref": "#/definitions/HijackStateFrame"
+    },
+    {
+      "$ref": "#/definitions/HijackRequestFrame"
+    },
+    {
+      "$ref": "#/definitions/HijackReleaseFrame"
+    },
+    {
+      "$ref": "#/definitions/HijackStepFrame"
+    },
+    {
+      "$ref": "#/definitions/WorkerConnectedFrame"
+    },
+    {
+      "$ref": "#/definitions/WorkerDisconnectedFrame"
+    },
+    {
+      "$ref": "#/definitions/WorkerHelloFrame"
+    },
+    {
+      "$ref": "#/definitions/HeartbeatFrame"
+    },
+    {
+      "$ref": "#/definitions/HeartbeatAckFrame"
+    },
+    {
+      "$ref": "#/definitions/PingFrame"
+    },
+    {
+      "$ref": "#/definitions/PongFrame"
+    },
+    {
+      "$ref": "#/definitions/HelloFrame"
+    },
+    {
+      "$ref": "#/definitions/ResumeFrame"
+    },
+    {
+      "$ref": "#/definitions/IdentityFrame"
+    },
+    {
+      "$ref": "#/definitions/SessionTokenFrame"
+    },
+    {
+      "$ref": "#/definitions/ResumeOkFrame"
+    },
+    {
+      "$ref": "#/definitions/ResumeFailedFrame"
+    },
+    {
+      "$ref": "#/definitions/LinkPatternsFrame"
+    },
+    {
+      "$ref": "#/definitions/AnalysisFrame"
+    },
+    {
+      "$ref": "#/definitions/ErrorFrame"
+    },
+    {
+      "$ref": "#/definitions/StatusFrame"
+    },
+    {
+      "$ref": "#/definitions/InputModeChangedFrame"
+    },
+    {
+      "$ref": "#/definitions/ApprovalPendingFrame"
+    },
+    {
+      "$ref": "#/definitions/ApprovalResolvedFrame"
+    },
+    {
+      "$ref": "#/definitions/PresenceUpdateFrame"
+    },
+    {
+      "$ref": "#/definitions/PresenceSyncFrame"
+    },
+    {
+      "$ref": "#/definitions/PresenceLeaveFrame"
+    },
+    {
+      "$ref": "#/definitions/ControlTransferFrame"
+    }
+  ],
+  "title": "AnyFrame"
+}

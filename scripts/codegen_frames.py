@@ -10,12 +10,16 @@ Pipeline
 
 1. Import ``AnyFrame`` from ``provide.uterm.bridge.schemas``.
 2. Build a stable, deterministic JSON Schema with ``TypeAdapter.json_schema()``.
-3. Write it to ``packages/provide-uterm-frontend/src/generated/frames.schema.json``.
-4. Shell out to ``npx json-schema-to-typescript`` to produce
-   ``packages/provide-uterm-frontend/src/generated/frames.ts``.
+3. Write it to each consumer's ``generated/frames.schema.json``.
+4. Shell out to ``npx json-schema-to-typescript`` to produce the matching
+   ``generated/frames.ts``.
 5. Prepend an SPDX header + AUTO-GENERATED banner.
 
-Both outputs include explicit banners so accidental hand-edits are obvious.
+There are two consumers — the browser frontend and the TypeScript runtime
+port — and both are generated from the same Pydantic source in the same run,
+so they cannot drift apart from each other or from Python.
+
+All outputs include explicit banners so accidental hand-edits are obvious.
 The pre-commit hook + CI run this script with ``--check`` to fail if the
 committed outputs drift from the Pydantic source.
 """
@@ -36,6 +40,10 @@ from provide.uterm.bridge.schemas import AnyFrame
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_GEN_DIR = REPO_ROOT / "packages" / "provide-uterm-frontend" / "src" / "generated"
+TS_PORT_GEN_DIR = REPO_ROOT / "packages" / "provide-uterm-ts" / "src" / "frames" / "generated"
+# Every consumer of the frame schemas. Generated together from one Pydantic
+# source so the browser and the runtime port cannot disagree about the wire.
+GEN_DIRS = (FRONTEND_GEN_DIR, TS_PORT_GEN_DIR)
 SCHEMA_PATH = FRONTEND_GEN_DIR / "frames.schema.json"
 TS_PATH = FRONTEND_GEN_DIR / "frames.ts"
 
@@ -122,31 +130,38 @@ def _files_equal(a: Path, b: Path) -> bool:
 
 def _check_mode() -> int:
     """Regenerate into a temp dir; non-zero exit if committed files drift."""
-    if not SCHEMA_PATH.exists() or not TS_PATH.exists():
-        print(
-            f"codegen_frames: missing output files at {FRONTEND_GEN_DIR}; "
-            "run `python scripts/codegen_frames.py` and commit the results.",
-            file=sys.stderr,
-        )
+    expected = [path for gen_dir in GEN_DIRS for path in (gen_dir / "frames.schema.json", gen_dir / "frames.ts")]
+    missing = [path for path in expected if not path.exists()]
+    if missing:
+        for path in missing:
+            print(
+                f"codegen_frames: missing output file {path.relative_to(REPO_ROOT)}; "
+                "run `python scripts/codegen_frames.py` and commit the results.",
+                file=sys.stderr,
+            )
         return 1
+
+    drifted: list[Path] = []
     with tempfile.TemporaryDirectory() as tmp:
         tmp_schema = Path(tmp) / "frames.schema.json"
         tmp_ts = Path(tmp) / "frames.ts"
         _write_outputs(tmp_schema, tmp_ts)
-        ok_schema = _files_equal(tmp_schema, SCHEMA_PATH)
-        ok_ts = _files_equal(tmp_ts, TS_PATH)
-        if ok_schema and ok_ts:
-            return 0
-        print(
-            "codegen_frames: generated outputs differ from the committed files.\n"
-            "Run `python scripts/codegen_frames.py` and commit the regenerated files.",
-            file=sys.stderr,
-        )
-        if not ok_schema:
-            print(f"  drift: {SCHEMA_PATH.relative_to(REPO_ROOT)}", file=sys.stderr)
-        if not ok_ts:
-            print(f"  drift: {TS_PATH.relative_to(REPO_ROOT)}", file=sys.stderr)
-        return 1
+        for gen_dir in GEN_DIRS:
+            if not _files_equal(tmp_schema, gen_dir / "frames.schema.json"):
+                drifted.append(gen_dir / "frames.schema.json")
+            if not _files_equal(tmp_ts, gen_dir / "frames.ts"):
+                drifted.append(gen_dir / "frames.ts")
+
+    if not drifted:
+        return 0
+    print(
+        "codegen_frames: generated outputs differ from the committed files.\n"
+        "Run `python scripts/codegen_frames.py` and commit the regenerated files.",
+        file=sys.stderr,
+    )
+    for path in drifted:
+        print(f"  drift: {path.relative_to(REPO_ROOT)}", file=sys.stderr)
+    return 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -165,9 +180,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.check:
         return _check_mode()
 
-    _write_outputs(SCHEMA_PATH, TS_PATH)
-    print(f"codegen_frames: wrote {SCHEMA_PATH.relative_to(REPO_ROOT)}")
-    print(f"codegen_frames: wrote {TS_PATH.relative_to(REPO_ROOT)}")
+    for gen_dir in GEN_DIRS:
+        schema_path = gen_dir / "frames.schema.json"
+        ts_path = gen_dir / "frames.ts"
+        _write_outputs(schema_path, ts_path)
+        print(f"codegen_frames: wrote {schema_path.relative_to(REPO_ROOT)}")
+        print(f"codegen_frames: wrote {ts_path.relative_to(REPO_ROOT)}")
     return 0
 
 

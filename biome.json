@@ -4,7 +4,8 @@
     "includes": [
       "packages/provide-uterm-frontend/src/**",
       "packages/provide-uterm-app/src/**",
-      "packages/provide-uterm-ts/src/**"
+      "packages/provide-uterm-ts/src/**",
+      "!**/generated/**"
     ]
   },
   "formatter": {
