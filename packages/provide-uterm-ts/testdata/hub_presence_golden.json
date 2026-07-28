@@ -1,0 +1,175 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_hub_presence_golden.py",
+ "now": 1000.0,
+ "input": [
+  {
+   "name": "hijack mode, holder",
+   "input_mode": "hijack",
+   "role": null,
+   "is_owner": true,
+   "allowed": true
+  },
+  {
+   "name": "hijack mode, not the holder",
+   "input_mode": "hijack",
+   "role": null,
+   "is_owner": false,
+   "allowed": false
+  },
+  {
+   "name": "hijack mode, holder with an operator role",
+   "input_mode": "hijack",
+   "role": "operator",
+   "is_owner": true,
+   "allowed": true
+  },
+  {
+   "name": "hijack mode, admin who is not the holder",
+   "input_mode": "hijack",
+   "role": "admin",
+   "is_owner": false,
+   "allowed": false
+  },
+  {
+   "name": "open mode, viewer",
+   "input_mode": "open",
+   "role": "viewer",
+   "is_owner": false,
+   "allowed": false
+  },
+  {
+   "name": "open mode, operator",
+   "input_mode": "open",
+   "role": "operator",
+   "is_owner": false,
+   "allowed": true
+  },
+  {
+   "name": "open mode, admin",
+   "input_mode": "open",
+   "role": "admin",
+   "is_owner": false,
+   "allowed": true
+  },
+  {
+   "name": "open mode, unknown browser",
+   "input_mode": "open",
+   "role": null,
+   "is_owner": false,
+   "allowed": false
+  },
+  {
+   "name": "open mode, holder with no role",
+   "input_mode": "open",
+   "role": null,
+   "is_owner": true,
+   "allowed": false
+  }
+ ],
+ "snapshots": [
+  {
+   "name": "unknown worker",
+   "is_hijacked": false,
+   "hijacked_by_me": false,
+   "worker_online": false,
+   "input_mode": "hijack"
+  },
+  {
+   "name": "idle worker",
+   "is_hijacked": false,
+   "hijacked_by_me": false,
+   "worker_online": true,
+   "input_mode": "hijack"
+  },
+  {
+   "name": "worker offline",
+   "is_hijacked": false,
+   "hijacked_by_me": false,
+   "worker_online": false,
+   "input_mode": "hijack"
+  },
+  {
+   "name": "hijacked by me",
+   "is_hijacked": true,
+   "hijacked_by_me": true,
+   "worker_online": true,
+   "input_mode": "hijack"
+  },
+  {
+   "name": "hijacked by someone else",
+   "is_hijacked": true,
+   "hijacked_by_me": false,
+   "worker_online": true,
+   "input_mode": "hijack"
+  },
+  {
+   "name": "my hijack has expired",
+   "is_hijacked": false,
+   "hijacked_by_me": false,
+   "worker_online": true,
+   "input_mode": "hijack"
+  },
+  {
+   "name": "rest lease held",
+   "is_hijacked": true,
+   "hijacked_by_me": false,
+   "worker_online": true,
+   "input_mode": "hijack"
+  },
+  {
+   "name": "open input mode",
+   "is_hijacked": false,
+   "hijacked_by_me": false,
+   "worker_online": true,
+   "input_mode": "open"
+  },
+  {
+   "name": "perpetual hold by me",
+   "is_hijacked": true,
+   "hijacked_by_me": true,
+   "worker_online": true,
+   "input_mode": "hijack"
+  },
+  {
+   "name": "my hold lapsed, rest took over",
+   "is_hijacked": true,
+   "hijacked_by_me": false,
+   "worker_online": true,
+   "input_mode": "hijack"
+  }
+ ],
+ "control_frames": {
+  "types": [
+   "snapshot_req",
+   "analyze_req"
+  ],
+  "timestamps": [
+   1000.0,
+   1000.0
+  ],
+  "req_id_lengths": [
+   36,
+   36
+  ],
+  "req_ids_differ": true,
+  "keys": [
+   [
+    "req_id",
+    "ts",
+    "type"
+   ],
+   [
+    "req_id",
+    "ts",
+    "type"
+   ]
+  ]
+ },
+ "roles": {
+  "resolved": [
+   "viewer",
+   "operator",
+   "admin"
+  ]
+ }
+}
