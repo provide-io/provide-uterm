@@ -13,3 +13,4 @@
 
 export * from "./host-key.ts";
 export * from "./ssh-policy.ts";
+export * from "./ssh-server.ts";
