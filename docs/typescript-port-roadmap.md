@@ -180,10 +180,18 @@ declares the `Logger` interface structurally, matching the one
 `@provide-io/telemetry` exports, plus a `noopLogger` default. Library modules
 depend on that and stay decoupled and testable today.
 
-So the blocker is narrower than it first looked: only the top layer, which
-needs a real `getLogger`, has to wait. `replay`'s viewer is the first module
-that logs at all (a warning on a corrupt log line), earlier than the
-`transports` estimate first recorded here.
+`src/telemetry/get-logger.ts` is a **deliberate stand-in** for the concrete
+`getLogger`, so the layers above the libraries are not held up. It emits the
+same structured record shape (name, level, field object, optional message)
+behind the same `Logger` interface, which makes it a re-export away from the
+real thing: when the dependency becomes usable, that module collapses to an
+export line and no caller changes.
+
+What it deliberately does **not** do, because faking it would be worse than
+its absence: trace and span correlation, sampling, PII redaction, and OTLP
+export. Those are precisely why the real package is the target rather than
+this being treated as sufficient. Deleting it is the definition of done for
+this section.
 
 When the dependency is usable, `src/telemetry/` re-exports the real
 `getLogger` and swaps its interface for the imported one — a type-level no-op
