@@ -45,6 +45,7 @@ export * as replay from "./replay/index.ts";
 export * as sanitizer from "./sanitizer/index.ts";
 export * as screen from "./screen/index.ts";
 export * as serverauth from "./serverauth/index.ts";
+export * as serverconfig from "./serverconfig/index.ts";
 export * as session from "./session/index.ts";
 export * as sessionLogger from "./session-logger/index.ts";
 export * as telemetry from "./telemetry/index.ts";
