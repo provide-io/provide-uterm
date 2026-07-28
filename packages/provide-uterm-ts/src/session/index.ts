@@ -9,6 +9,7 @@
  * Port of the Python module `provide.uterm.expect`.
  */
 
+export * from "./adapters.ts";
 export * from "./capture.ts";
 export * from "./expect.ts";
 export * from "./io.ts";
