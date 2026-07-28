@@ -1,0 +1,274 @@
+{
+  "banner": "\u001b[1m\u001b[36mushell\u001b[0m \u001b[2m— Python REPL inside your terminal\u001b[0m\r\n\u001b[2mType \u001b[0mhelp\u001b[2m for available commands.\u001b[0m\r\n\r\n",
+  "clear_screen": "\u001b[2J\u001b[H",
+  "kv": [
+    {
+      "key": "name",
+      "line": "  \u001b[2mname                \u001b[0mvalue\r\n",
+      "name": "a short key",
+      "value": "value",
+      "width": 20
+    },
+    {
+      "key": "12345678901234567890",
+      "line": "  \u001b[2m12345678901234567890\u001b[0mvalue\r\n",
+      "name": "a key exactly the width",
+      "value": "value",
+      "width": 20
+    },
+    {
+      "key": "123456789012345678901234",
+      "line": "  \u001b[2m123456789012345678901234\u001b[0mvalue\r\n",
+      "name": "a key longer than the width",
+      "value": "value",
+      "width": 20
+    },
+    {
+      "key": "",
+      "line": "  \u001b[2m                    \u001b[0mvalue\r\n",
+      "name": "an empty key",
+      "value": "value",
+      "width": 20
+    },
+    {
+      "key": "name",
+      "line": "  \u001b[2mname\u001b[0mvalue\r\n",
+      "name": "a narrow width",
+      "value": "value",
+      "width": 4
+    },
+    {
+      "key": "name",
+      "line": "  \u001b[2mname\u001b[0mvalue\r\n",
+      "name": "no width at all",
+      "value": "value",
+      "width": 0
+    }
+  ],
+  "messages": [
+    {
+      "error": "\u001b[31merror:\u001b[0m something happened\r\n",
+      "heading": "\u001b[1m\u001b[36msomething happened\u001b[0m\r\n",
+      "info": "\u001b[2msomething happened\u001b[0m\r\n",
+      "name": "ordinary text",
+      "success": "\u001b[32msomething happened\u001b[0m\r\n",
+      "text": "something happened"
+    },
+    {
+      "error": "\u001b[31merror:\u001b[0m \r\n",
+      "heading": "\u001b[1m\u001b[36m\u001b[0m\r\n",
+      "info": "\u001b[2m\u001b[0m\r\n",
+      "name": "nothing",
+      "success": "\u001b[32m\u001b[0m\r\n",
+      "text": ""
+    },
+    {
+      "error": "\u001b[31merror:\u001b[0m two\nlines\r\n",
+      "heading": "\u001b[1m\u001b[36mtwo\nlines\u001b[0m\r\n",
+      "info": "\u001b[2mtwo\nlines\u001b[0m\r\n",
+      "name": "text with a newline in it",
+      "success": "\u001b[32mtwo\nlines\u001b[0m\r\n",
+      "text": "two\nlines"
+    },
+    {
+      "error": "\u001b[31merror:\u001b[0m héllo → ✓\r\n",
+      "heading": "\u001b[1m\u001b[36mhéllo → ✓\u001b[0m\r\n",
+      "info": "\u001b[2mhéllo → ✓\u001b[0m\r\n",
+      "name": "text that is not ascii",
+      "success": "\u001b[32mhéllo → ✓\u001b[0m\r\n",
+      "text": "héllo → ✓"
+    }
+  ],
+  "prompt": "\u001b[32m❯\u001b[0m ",
+  "tables": [
+    {
+      "headers": null,
+      "name": "nothing at all",
+      "rows": [],
+      "table": "\u001b[2m(no results)\u001b[0m\r\n"
+    },
+    {
+      "headers": [
+        "a",
+        "b"
+      ],
+      "name": "nothing at all, with headers",
+      "rows": [],
+      "table": "\u001b[2m(no results)\u001b[0m\r\n"
+    },
+    {
+      "headers": null,
+      "name": "one row",
+      "rows": [
+        [
+          "a",
+          "b"
+        ]
+      ],
+      "table": "  a  b\r\n"
+    },
+    {
+      "headers": null,
+      "name": "two rows",
+      "rows": [
+        [
+          "a",
+          "b"
+        ],
+        [
+          "cc",
+          "dd"
+        ]
+      ],
+      "table": "  a   b \r\n  cc  dd\r\n"
+    },
+    {
+      "headers": [
+        "one",
+        "two"
+      ],
+      "name": "rows and headers",
+      "rows": [
+        [
+          "a",
+          "b"
+        ],
+        [
+          "cc",
+          "dd"
+        ]
+      ],
+      "table": "  \u001b[1mone\u001b[0m  \u001b[1mtwo\u001b[0m\r\n  ---  ---\r\n  a    b  \r\n  cc   dd \r\n"
+    },
+    {
+      "headers": [
+        "header"
+      ],
+      "name": "a header longer than its column",
+      "rows": [
+        [
+          "a"
+        ]
+      ],
+      "table": "  \u001b[1mheader\u001b[0m\r\n  ------\r\n  a     \r\n"
+    },
+    {
+      "headers": [
+        "h"
+      ],
+      "name": "a column longer than its header",
+      "rows": [
+        [
+          "aaaaaaaa"
+        ]
+      ],
+      "table": "  \u001b[1mh       \u001b[0m\r\n  --------\r\n  aaaaaaaa\r\n"
+    },
+    {
+      "headers": null,
+      "name": "one column",
+      "rows": [
+        [
+          "a"
+        ],
+        [
+          "bb"
+        ]
+      ],
+      "table": "  a \r\n  bb\r\n"
+    },
+    {
+      "headers": null,
+      "name": "a short row",
+      "rows": [
+        [
+          "a",
+          "b"
+        ],
+        [
+          "c"
+        ]
+      ],
+      "table": "  a\r\n  c\r\n"
+    },
+    {
+      "headers": null,
+      "name": "a short row first",
+      "rows": [
+        [
+          "c"
+        ],
+        [
+          "a",
+          "b"
+        ]
+      ],
+      "table": "  c\r\n  a\r\n"
+    },
+    {
+      "headers": [
+        "one",
+        "two"
+      ],
+      "name": "a short row with headers",
+      "rows": [
+        [
+          "a",
+          "b"
+        ],
+        [
+          "c"
+        ]
+      ],
+      "table": "  \u001b[1mone\u001b[0m\r\n  ---\r\n  a  \r\n  c  \r\n"
+    },
+    {
+      "headers": [
+        "one",
+        "two"
+      ],
+      "name": "more headers than columns",
+      "rows": [
+        [
+          "a"
+        ]
+      ],
+      "table": "  \u001b[1mone\u001b[0m\r\n  ---\r\n  a  \r\n"
+    },
+    {
+      "headers": [
+        "one"
+      ],
+      "name": "fewer headers than columns",
+      "rows": [
+        [
+          "a",
+          "b"
+        ]
+      ],
+      "table": "  \u001b[1mone\u001b[0m\r\n  ---\r\n  a  \r\n"
+    },
+    {
+      "headers": null,
+      "name": "an empty cell",
+      "rows": [
+        [
+          "",
+          "b"
+        ]
+      ],
+      "table": "    b\r\n"
+    },
+    {
+      "headers": null,
+      "name": "a row of empty cells",
+      "rows": [
+        [
+          "",
+          ""
+        ]
+      ],
+      "table": "    \r\n"
+    }
+  ]
+}

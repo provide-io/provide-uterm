@@ -55,6 +55,7 @@ export * as serverauth from "./serverauth/index.ts";
 export * as serverconfig from "./serverconfig/index.ts";
 export * as session from "./session/index.ts";
 export * as sessionLogger from "./session-logger/index.ts";
+export * as shell from "./shell/index.ts";
 export * as telemetry from "./telemetry/index.ts";
 export * as transports from "./transports/index.ts";
 export * as vt from "./vt/index.ts";
