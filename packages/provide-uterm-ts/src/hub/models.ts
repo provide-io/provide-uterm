@@ -41,6 +41,17 @@ export const EVENT_DEQUE_MAXLEN = 2000;
  */
 export type Connection = object;
 
+/**
+ * The worker side of a session.
+ *
+ * Only the write half is modelled: it is all the hub's lease and routing
+ * paths use, and narrowing it here keeps them free of a transport type.
+ */
+export interface WorkerSocket extends Connection {
+  /** Write an already-encoded frame to the worker. */
+  sendText(payload: string): Promise<void>;
+}
+
 /** A live REST hijack lease. */
 export interface HijackSession {
   /** Identifier the heartbeat and release calls refer to. */
@@ -262,7 +273,7 @@ export class HijackLease {
  */
 export class WorkerTermState {
   /** The worker's own socket, once it has connected. */
-  workerWs: Connection | undefined;
+  workerWs: WorkerSocket | undefined;
   /** Attached browsers and the role each holds. */
   browsers = new Map<Connection, BrowserRole>();
   /** Dashboard WebSocket holding the hijack lease. */
