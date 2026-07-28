@@ -129,3 +129,6 @@ packages/provide-uterm-csharp/bin/
 packages/provide-uterm-csharp/**/bin/
 packages/provide-uterm-csharp/**/obj/
 packages/provide-uterm-csharp/coverage-out/
+
+# TypeScript port: vitest coverage output
+packages/provide-uterm-ts/coverage/
