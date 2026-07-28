@@ -14,5 +14,7 @@
 export * from "./buffer.ts";
 export * from "./detector.ts";
 export * from "./extractor.ts";
+export * from "./flow.ts";
 export * from "./input-type.ts";
+export * from "./loader.ts";
 export * from "./rules.ts";
