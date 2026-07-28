@@ -90,7 +90,7 @@ corpus match CPython byte for byte.
 
 | Module | Python | Go | Status |
 |---|---|---|---|
-| `auth` | `auth` | `auth` | todo |
+| `auth` | `auth` | `auth` | **done** — OpenSSH fingerprints, the authorized_keys grammar, and both reference resolvers |
 | `serverauth` | server `auth*`, `webhook*`, `api_keys`, `dev_idp` | `serverauth` | todo |
 | `serverconfig` | server `config*`, `profiles` | `serverconfig` | todo |
 | `controlplane` | `control/plane` (+ memory/sqlite/bootstrap) | `controlplane` | todo |
