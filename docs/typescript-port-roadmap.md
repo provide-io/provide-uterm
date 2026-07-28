@@ -79,7 +79,7 @@ corpus match CPython byte for byte.
 
 | Module | Python | Go | Status |
 |---|---|---|---|
-| `session` | `io`, `expect`, protocols | `session` | **partial** — guarded sends, prompt waiting, input dispatch, bounded capture and the transport session; the telnet and websocket adapters outstanding |
+| `session` | `io`, `expect`, protocols | `session` | **done** — guarded sends, prompt waiting, input dispatch, bounded capture, the transport session and the telnet/websocket adapters |
 | `termsession` | `transport_session`, `telnet_session`, `ws_session` | `termsession` | todo |
 | `transports` | client `transports/*` | `transports` | todo |
 | `connectors` | server `connectors/*` | `connectors` | todo |
