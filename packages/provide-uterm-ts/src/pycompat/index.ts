@@ -4,6 +4,7 @@
 //
 
 export * from "./difflib.ts";
+export * from "./int.ts";
 export * from "./json.ts";
 export * from "./regex.ts";
 export * from "./rounding.ts";
