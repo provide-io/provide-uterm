@@ -1,0 +1,2047 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_line_editor_golden.py",
+ "cases": [
+  {
+   "name": "plain typing then enter",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    "a",
+    "b",
+    "c",
+    "\r"
+   ],
+   "steps": [
+    {
+     "char": "a",
+     "emitted": "a",
+     "line": null,
+     "buffer": "a",
+     "cursor": 1
+    },
+    {
+     "char": "b",
+     "emitted": "b",
+     "line": null,
+     "buffer": "ab",
+     "cursor": 2
+    },
+    {
+     "char": "c",
+     "emitted": "c",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 3
+    },
+    {
+     "char": "\r",
+     "emitted": "\r\n",
+     "line": "abc",
+     "buffer": "",
+     "cursor": 0
+    }
+   ]
+  },
+  {
+   "name": "newline also completes the line",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    "a",
+    "b",
+    "\n"
+   ],
+   "steps": [
+    {
+     "char": "a",
+     "emitted": "a",
+     "line": null,
+     "buffer": "a",
+     "cursor": 1
+    },
+    {
+     "char": "b",
+     "emitted": "b",
+     "line": null,
+     "buffer": "ab",
+     "cursor": 2
+    },
+    {
+     "char": "\n",
+     "emitted": "\r\n",
+     "line": "ab",
+     "buffer": "",
+     "cursor": 0
+    }
+   ]
+  },
+  {
+   "name": "enter on an empty buffer",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    "\r"
+   ],
+   "steps": [
+    {
+     "char": "\r",
+     "emitted": "\r\n",
+     "line": "",
+     "buffer": "",
+     "cursor": 0
+    }
+   ]
+  },
+  {
+   "name": "two lines in sequence",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    "o",
+    "n",
+    "e",
+    "\r",
+    "t",
+    "w",
+    "o",
+    "\r"
+   ],
+   "steps": [
+    {
+     "char": "o",
+     "emitted": "o",
+     "line": null,
+     "buffer": "o",
+     "cursor": 1
+    },
+    {
+     "char": "n",
+     "emitted": "n",
+     "line": null,
+     "buffer": "on",
+     "cursor": 2
+    },
+    {
+     "char": "e",
+     "emitted": "e",
+     "line": null,
+     "buffer": "one",
+     "cursor": 3
+    },
+    {
+     "char": "\r",
+     "emitted": "\r\n",
+     "line": "one",
+     "buffer": "",
+     "cursor": 0
+    },
+    {
+     "char": "t",
+     "emitted": "t",
+     "line": null,
+     "buffer": "t",
+     "cursor": 1
+    },
+    {
+     "char": "w",
+     "emitted": "w",
+     "line": null,
+     "buffer": "tw",
+     "cursor": 2
+    },
+    {
+     "char": "o",
+     "emitted": "o",
+     "line": null,
+     "buffer": "two",
+     "cursor": 3
+    },
+    {
+     "char": "\r",
+     "emitted": "\r\n",
+     "line": "two",
+     "buffer": "",
+     "cursor": 0
+    }
+   ]
+  },
+  {
+   "name": "password masking on insert",
+   "max_length": 80,
+   "password_mode": true,
+   "chars": [
+    "s",
+    "e",
+    "c",
+    "r",
+    "e",
+    "t",
+    "\r"
+   ],
+   "steps": [
+    {
+     "char": "s",
+     "emitted": "*",
+     "line": null,
+     "buffer": "s",
+     "cursor": 1
+    },
+    {
+     "char": "e",
+     "emitted": "*",
+     "line": null,
+     "buffer": "se",
+     "cursor": 2
+    },
+    {
+     "char": "c",
+     "emitted": "*",
+     "line": null,
+     "buffer": "sec",
+     "cursor": 3
+    },
+    {
+     "char": "r",
+     "emitted": "*",
+     "line": null,
+     "buffer": "secr",
+     "cursor": 4
+    },
+    {
+     "char": "e",
+     "emitted": "*",
+     "line": null,
+     "buffer": "secre",
+     "cursor": 5
+    },
+    {
+     "char": "t",
+     "emitted": "*",
+     "line": null,
+     "buffer": "secret",
+     "cursor": 6
+    },
+    {
+     "char": "\r",
+     "emitted": "\r\n",
+     "line": "secret",
+     "buffer": "",
+     "cursor": 0
+    }
+   ]
+  },
+  {
+   "name": "backspace at end of line",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    "a",
+    "b",
+    "c",
+    ""
+   ],
+   "steps": [
+    {
+     "char": "a",
+     "emitted": "a",
+     "line": null,
+     "buffer": "a",
+     "cursor": 1
+    },
+    {
+     "char": "b",
+     "emitted": "b",
+     "line": null,
+     "buffer": "ab",
+     "cursor": 2
+    },
+    {
+     "char": "c",
+     "emitted": "c",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 3
+    },
+    {
+     "char": "",
+     "emitted": "\b \u001b[1D",
+     "line": null,
+     "buffer": "ab",
+     "cursor": 2
+    }
+   ]
+  },
+  {
+   "name": "backspace alternate code",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    "a",
+    "b",
+    "c",
+    "\b"
+   ],
+   "steps": [
+    {
+     "char": "a",
+     "emitted": "a",
+     "line": null,
+     "buffer": "a",
+     "cursor": 1
+    },
+    {
+     "char": "b",
+     "emitted": "b",
+     "line": null,
+     "buffer": "ab",
+     "cursor": 2
+    },
+    {
+     "char": "c",
+     "emitted": "c",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 3
+    },
+    {
+     "char": "\b",
+     "emitted": "\b \u001b[1D",
+     "line": null,
+     "buffer": "ab",
+     "cursor": 2
+    }
+   ]
+  },
+  {
+   "name": "backspace on an empty buffer is a no-op",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    ""
+   ],
+   "steps": [
+    {
+     "char": "",
+     "emitted": "",
+     "line": null,
+     "buffer": "",
+     "cursor": 0
+    }
+   ]
+  },
+  {
+   "name": "backspace mid-line redraws the tail",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    "a",
+    "b",
+    "c",
+    "d",
+    "\u0001",
+    "\u0006",
+    "\u0006",
+    ""
+   ],
+   "steps": [
+    {
+     "char": "a",
+     "emitted": "a",
+     "line": null,
+     "buffer": "a",
+     "cursor": 1
+    },
+    {
+     "char": "b",
+     "emitted": "b",
+     "line": null,
+     "buffer": "ab",
+     "cursor": 2
+    },
+    {
+     "char": "c",
+     "emitted": "c",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 3
+    },
+    {
+     "char": "d",
+     "emitted": "d",
+     "line": null,
+     "buffer": "abcd",
+     "cursor": 4
+    },
+    {
+     "char": "\u0001",
+     "emitted": "\u001b[4D",
+     "line": null,
+     "buffer": "abcd",
+     "cursor": 0
+    },
+    {
+     "char": "\u0006",
+     "emitted": "\u001b[C",
+     "line": null,
+     "buffer": "abcd",
+     "cursor": 1
+    },
+    {
+     "char": "\u0006",
+     "emitted": "\u001b[C",
+     "line": null,
+     "buffer": "abcd",
+     "cursor": 2
+    },
+    {
+     "char": "",
+     "emitted": "\bcd \u001b[3D",
+     "line": null,
+     "buffer": "acd",
+     "cursor": 1
+    }
+   ]
+  },
+  {
+   "name": "backspace mid-line in password mode",
+   "max_length": 80,
+   "password_mode": true,
+   "chars": [
+    "a",
+    "b",
+    "c",
+    "d",
+    "\u0001",
+    "\u0006",
+    "\u0006",
+    ""
+   ],
+   "steps": [
+    {
+     "char": "a",
+     "emitted": "*",
+     "line": null,
+     "buffer": "a",
+     "cursor": 1
+    },
+    {
+     "char": "b",
+     "emitted": "*",
+     "line": null,
+     "buffer": "ab",
+     "cursor": 2
+    },
+    {
+     "char": "c",
+     "emitted": "*",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 3
+    },
+    {
+     "char": "d",
+     "emitted": "*",
+     "line": null,
+     "buffer": "abcd",
+     "cursor": 4
+    },
+    {
+     "char": "\u0001",
+     "emitted": "\u001b[4D",
+     "line": null,
+     "buffer": "abcd",
+     "cursor": 0
+    },
+    {
+     "char": "\u0006",
+     "emitted": "\u001b[C",
+     "line": null,
+     "buffer": "abcd",
+     "cursor": 1
+    },
+    {
+     "char": "\u0006",
+     "emitted": "\u001b[C",
+     "line": null,
+     "buffer": "abcd",
+     "cursor": 2
+    },
+    {
+     "char": "",
+     "emitted": "\b** \u001b[3D",
+     "line": null,
+     "buffer": "acd",
+     "cursor": 1
+    }
+   ]
+  },
+  {
+   "name": "ctrl-a from mid-line",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    "a",
+    "b",
+    "c",
+    "\u0001"
+   ],
+   "steps": [
+    {
+     "char": "a",
+     "emitted": "a",
+     "line": null,
+     "buffer": "a",
+     "cursor": 1
+    },
+    {
+     "char": "b",
+     "emitted": "b",
+     "line": null,
+     "buffer": "ab",
+     "cursor": 2
+    },
+    {
+     "char": "c",
+     "emitted": "c",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 3
+    },
+    {
+     "char": "\u0001",
+     "emitted": "\u001b[3D",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 0
+    }
+   ]
+  },
+  {
+   "name": "ctrl-a at start is a no-op",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    "\u0001"
+   ],
+   "steps": [
+    {
+     "char": "\u0001",
+     "emitted": "",
+     "line": null,
+     "buffer": "",
+     "cursor": 0
+    }
+   ]
+  },
+  {
+   "name": "ctrl-e from start",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    "a",
+    "b",
+    "c",
+    "\u0001",
+    "\u0005"
+   ],
+   "steps": [
+    {
+     "char": "a",
+     "emitted": "a",
+     "line": null,
+     "buffer": "a",
+     "cursor": 1
+    },
+    {
+     "char": "b",
+     "emitted": "b",
+     "line": null,
+     "buffer": "ab",
+     "cursor": 2
+    },
+    {
+     "char": "c",
+     "emitted": "c",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 3
+    },
+    {
+     "char": "\u0001",
+     "emitted": "\u001b[3D",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 0
+    },
+    {
+     "char": "\u0005",
+     "emitted": "\u001b[3C",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 3
+    }
+   ]
+  },
+  {
+   "name": "ctrl-e at end is a no-op",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    "a",
+    "b",
+    "c",
+    "\u0005"
+   ],
+   "steps": [
+    {
+     "char": "a",
+     "emitted": "a",
+     "line": null,
+     "buffer": "a",
+     "cursor": 1
+    },
+    {
+     "char": "b",
+     "emitted": "b",
+     "line": null,
+     "buffer": "ab",
+     "cursor": 2
+    },
+    {
+     "char": "c",
+     "emitted": "c",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 3
+    },
+    {
+     "char": "\u0005",
+     "emitted": "",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 3
+    }
+   ]
+  },
+  {
+   "name": "ctrl-b moves left",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    "a",
+    "b",
+    "c",
+    "\u0002"
+   ],
+   "steps": [
+    {
+     "char": "a",
+     "emitted": "a",
+     "line": null,
+     "buffer": "a",
+     "cursor": 1
+    },
+    {
+     "char": "b",
+     "emitted": "b",
+     "line": null,
+     "buffer": "ab",
+     "cursor": 2
+    },
+    {
+     "char": "c",
+     "emitted": "c",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 3
+    },
+    {
+     "char": "\u0002",
+     "emitted": "\u001b[D",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 2
+    }
+   ]
+  },
+  {
+   "name": "ctrl-b at start is a no-op",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    "\u0002"
+   ],
+   "steps": [
+    {
+     "char": "\u0002",
+     "emitted": "",
+     "line": null,
+     "buffer": "",
+     "cursor": 0
+    }
+   ]
+  },
+  {
+   "name": "ctrl-f moves right",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    "a",
+    "b",
+    "c",
+    "\u0001",
+    "\u0006"
+   ],
+   "steps": [
+    {
+     "char": "a",
+     "emitted": "a",
+     "line": null,
+     "buffer": "a",
+     "cursor": 1
+    },
+    {
+     "char": "b",
+     "emitted": "b",
+     "line": null,
+     "buffer": "ab",
+     "cursor": 2
+    },
+    {
+     "char": "c",
+     "emitted": "c",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 3
+    },
+    {
+     "char": "\u0001",
+     "emitted": "\u001b[3D",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 0
+    },
+    {
+     "char": "\u0006",
+     "emitted": "\u001b[C",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 1
+    }
+   ]
+  },
+  {
+   "name": "ctrl-f at end is a no-op",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    "a",
+    "b",
+    "c",
+    "\u0006"
+   ],
+   "steps": [
+    {
+     "char": "a",
+     "emitted": "a",
+     "line": null,
+     "buffer": "a",
+     "cursor": 1
+    },
+    {
+     "char": "b",
+     "emitted": "b",
+     "line": null,
+     "buffer": "ab",
+     "cursor": 2
+    },
+    {
+     "char": "c",
+     "emitted": "c",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 3
+    },
+    {
+     "char": "\u0006",
+     "emitted": "",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 3
+    }
+   ]
+  },
+  {
+   "name": "ctrl-u from end of line",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    "a",
+    "b",
+    "c",
+    "\u0015"
+   ],
+   "steps": [
+    {
+     "char": "a",
+     "emitted": "a",
+     "line": null,
+     "buffer": "a",
+     "cursor": 1
+    },
+    {
+     "char": "b",
+     "emitted": "b",
+     "line": null,
+     "buffer": "ab",
+     "cursor": 2
+    },
+    {
+     "char": "c",
+     "emitted": "c",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 3
+    },
+    {
+     "char": "\u0015",
+     "emitted": "\u001b[3D\u001b[K",
+     "line": null,
+     "buffer": "",
+     "cursor": 0
+    }
+   ]
+  },
+  {
+   "name": "ctrl-u mid-line keeps the tail",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    "a",
+    "b",
+    "c",
+    "d",
+    "\u0002",
+    "\u0002",
+    "\u0015"
+   ],
+   "steps": [
+    {
+     "char": "a",
+     "emitted": "a",
+     "line": null,
+     "buffer": "a",
+     "cursor": 1
+    },
+    {
+     "char": "b",
+     "emitted": "b",
+     "line": null,
+     "buffer": "ab",
+     "cursor": 2
+    },
+    {
+     "char": "c",
+     "emitted": "c",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 3
+    },
+    {
+     "char": "d",
+     "emitted": "d",
+     "line": null,
+     "buffer": "abcd",
+     "cursor": 4
+    },
+    {
+     "char": "\u0002",
+     "emitted": "\u001b[D",
+     "line": null,
+     "buffer": "abcd",
+     "cursor": 3
+    },
+    {
+     "char": "\u0002",
+     "emitted": "\u001b[D",
+     "line": null,
+     "buffer": "abcd",
+     "cursor": 2
+    },
+    {
+     "char": "\u0015",
+     "emitted": "\u001b[2Dcd\u001b[K\u001b[2D",
+     "line": null,
+     "buffer": "cd",
+     "cursor": 0
+    }
+   ]
+  },
+  {
+   "name": "ctrl-u at start is a no-op",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    "\u0015"
+   ],
+   "steps": [
+    {
+     "char": "\u0015",
+     "emitted": "",
+     "line": null,
+     "buffer": "",
+     "cursor": 0
+    }
+   ]
+  },
+  {
+   "name": "ctrl-u mid-line in password mode",
+   "max_length": 80,
+   "password_mode": true,
+   "chars": [
+    "a",
+    "b",
+    "c",
+    "d",
+    "\u0002",
+    "\u0002",
+    "\u0015"
+   ],
+   "steps": [
+    {
+     "char": "a",
+     "emitted": "*",
+     "line": null,
+     "buffer": "a",
+     "cursor": 1
+    },
+    {
+     "char": "b",
+     "emitted": "*",
+     "line": null,
+     "buffer": "ab",
+     "cursor": 2
+    },
+    {
+     "char": "c",
+     "emitted": "*",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 3
+    },
+    {
+     "char": "d",
+     "emitted": "*",
+     "line": null,
+     "buffer": "abcd",
+     "cursor": 4
+    },
+    {
+     "char": "\u0002",
+     "emitted": "\u001b[D",
+     "line": null,
+     "buffer": "abcd",
+     "cursor": 3
+    },
+    {
+     "char": "\u0002",
+     "emitted": "\u001b[D",
+     "line": null,
+     "buffer": "abcd",
+     "cursor": 2
+    },
+    {
+     "char": "\u0015",
+     "emitted": "\u001b[2D**\u001b[K\u001b[2D",
+     "line": null,
+     "buffer": "cd",
+     "cursor": 0
+    }
+   ]
+  },
+  {
+   "name": "ctrl-k from mid-line",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    "a",
+    "b",
+    "c",
+    "d",
+    "\u0002",
+    "\u0002",
+    "\u000b"
+   ],
+   "steps": [
+    {
+     "char": "a",
+     "emitted": "a",
+     "line": null,
+     "buffer": "a",
+     "cursor": 1
+    },
+    {
+     "char": "b",
+     "emitted": "b",
+     "line": null,
+     "buffer": "ab",
+     "cursor": 2
+    },
+    {
+     "char": "c",
+     "emitted": "c",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 3
+    },
+    {
+     "char": "d",
+     "emitted": "d",
+     "line": null,
+     "buffer": "abcd",
+     "cursor": 4
+    },
+    {
+     "char": "\u0002",
+     "emitted": "\u001b[D",
+     "line": null,
+     "buffer": "abcd",
+     "cursor": 3
+    },
+    {
+     "char": "\u0002",
+     "emitted": "\u001b[D",
+     "line": null,
+     "buffer": "abcd",
+     "cursor": 2
+    },
+    {
+     "char": "\u000b",
+     "emitted": "\u001b[K",
+     "line": null,
+     "buffer": "ab",
+     "cursor": 2
+    }
+   ]
+  },
+  {
+   "name": "ctrl-k at end is a no-op",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    "a",
+    "b",
+    "c",
+    "\u000b"
+   ],
+   "steps": [
+    {
+     "char": "a",
+     "emitted": "a",
+     "line": null,
+     "buffer": "a",
+     "cursor": 1
+    },
+    {
+     "char": "b",
+     "emitted": "b",
+     "line": null,
+     "buffer": "ab",
+     "cursor": 2
+    },
+    {
+     "char": "c",
+     "emitted": "c",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 3
+    },
+    {
+     "char": "\u000b",
+     "emitted": "",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 3
+    }
+   ]
+  },
+  {
+   "name": "ctrl-w on a single word",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    "h",
+    "e",
+    "l",
+    "l",
+    "o",
+    "\u0017"
+   ],
+   "steps": [
+    {
+     "char": "h",
+     "emitted": "h",
+     "line": null,
+     "buffer": "h",
+     "cursor": 1
+    },
+    {
+     "char": "e",
+     "emitted": "e",
+     "line": null,
+     "buffer": "he",
+     "cursor": 2
+    },
+    {
+     "char": "l",
+     "emitted": "l",
+     "line": null,
+     "buffer": "hel",
+     "cursor": 3
+    },
+    {
+     "char": "l",
+     "emitted": "l",
+     "line": null,
+     "buffer": "hell",
+     "cursor": 4
+    },
+    {
+     "char": "o",
+     "emitted": "o",
+     "line": null,
+     "buffer": "hello",
+     "cursor": 5
+    },
+    {
+     "char": "\u0017",
+     "emitted": "\u001b[5D\u001b[K",
+     "line": null,
+     "buffer": "",
+     "cursor": 0
+    }
+   ]
+  },
+  {
+   "name": "ctrl-w skips trailing spaces first",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    "o",
+    "n",
+    "e",
+    " ",
+    "t",
+    "w",
+    "o",
+    " ",
+    " ",
+    " ",
+    "\u0017"
+   ],
+   "steps": [
+    {
+     "char": "o",
+     "emitted": "o",
+     "line": null,
+     "buffer": "o",
+     "cursor": 1
+    },
+    {
+     "char": "n",
+     "emitted": "n",
+     "line": null,
+     "buffer": "on",
+     "cursor": 2
+    },
+    {
+     "char": "e",
+     "emitted": "e",
+     "line": null,
+     "buffer": "one",
+     "cursor": 3
+    },
+    {
+     "char": " ",
+     "emitted": " ",
+     "line": null,
+     "buffer": "one ",
+     "cursor": 4
+    },
+    {
+     "char": "t",
+     "emitted": "t",
+     "line": null,
+     "buffer": "one t",
+     "cursor": 5
+    },
+    {
+     "char": "w",
+     "emitted": "w",
+     "line": null,
+     "buffer": "one tw",
+     "cursor": 6
+    },
+    {
+     "char": "o",
+     "emitted": "o",
+     "line": null,
+     "buffer": "one two",
+     "cursor": 7
+    },
+    {
+     "char": " ",
+     "emitted": " ",
+     "line": null,
+     "buffer": "one two ",
+     "cursor": 8
+    },
+    {
+     "char": " ",
+     "emitted": " ",
+     "line": null,
+     "buffer": "one two  ",
+     "cursor": 9
+    },
+    {
+     "char": " ",
+     "emitted": " ",
+     "line": null,
+     "buffer": "one two   ",
+     "cursor": 10
+    },
+    {
+     "char": "\u0017",
+     "emitted": "\u001b[6D\u001b[K",
+     "line": null,
+     "buffer": "one ",
+     "cursor": 4
+    }
+   ]
+  },
+  {
+   "name": "ctrl-w on the second of two words",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    "o",
+    "n",
+    "e",
+    " ",
+    "t",
+    "w",
+    "o",
+    "\u0017"
+   ],
+   "steps": [
+    {
+     "char": "o",
+     "emitted": "o",
+     "line": null,
+     "buffer": "o",
+     "cursor": 1
+    },
+    {
+     "char": "n",
+     "emitted": "n",
+     "line": null,
+     "buffer": "on",
+     "cursor": 2
+    },
+    {
+     "char": "e",
+     "emitted": "e",
+     "line": null,
+     "buffer": "one",
+     "cursor": 3
+    },
+    {
+     "char": " ",
+     "emitted": " ",
+     "line": null,
+     "buffer": "one ",
+     "cursor": 4
+    },
+    {
+     "char": "t",
+     "emitted": "t",
+     "line": null,
+     "buffer": "one t",
+     "cursor": 5
+    },
+    {
+     "char": "w",
+     "emitted": "w",
+     "line": null,
+     "buffer": "one tw",
+     "cursor": 6
+    },
+    {
+     "char": "o",
+     "emitted": "o",
+     "line": null,
+     "buffer": "one two",
+     "cursor": 7
+    },
+    {
+     "char": "\u0017",
+     "emitted": "\u001b[3D\u001b[K",
+     "line": null,
+     "buffer": "one ",
+     "cursor": 4
+    }
+   ]
+  },
+  {
+   "name": "ctrl-w with only spaces",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    " ",
+    " ",
+    " ",
+    "\u0017"
+   ],
+   "steps": [
+    {
+     "char": " ",
+     "emitted": " ",
+     "line": null,
+     "buffer": " ",
+     "cursor": 1
+    },
+    {
+     "char": " ",
+     "emitted": " ",
+     "line": null,
+     "buffer": "  ",
+     "cursor": 2
+    },
+    {
+     "char": " ",
+     "emitted": " ",
+     "line": null,
+     "buffer": "   ",
+     "cursor": 3
+    },
+    {
+     "char": "\u0017",
+     "emitted": "\u001b[3D\u001b[K",
+     "line": null,
+     "buffer": "",
+     "cursor": 0
+    }
+   ]
+  },
+  {
+   "name": "ctrl-w at start is a no-op",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    "\u0017"
+   ],
+   "steps": [
+    {
+     "char": "\u0017",
+     "emitted": "",
+     "line": null,
+     "buffer": "",
+     "cursor": 0
+    }
+   ]
+  },
+  {
+   "name": "ctrl-w mid-line keeps the tail",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    "o",
+    "n",
+    "e",
+    " ",
+    "t",
+    "w",
+    "o",
+    " ",
+    "t",
+    "h",
+    "r",
+    "e",
+    "e",
+    "\u0002",
+    "\u0002",
+    "\u0002",
+    "\u0002",
+    "\u0002",
+    "\u0017"
+   ],
+   "steps": [
+    {
+     "char": "o",
+     "emitted": "o",
+     "line": null,
+     "buffer": "o",
+     "cursor": 1
+    },
+    {
+     "char": "n",
+     "emitted": "n",
+     "line": null,
+     "buffer": "on",
+     "cursor": 2
+    },
+    {
+     "char": "e",
+     "emitted": "e",
+     "line": null,
+     "buffer": "one",
+     "cursor": 3
+    },
+    {
+     "char": " ",
+     "emitted": " ",
+     "line": null,
+     "buffer": "one ",
+     "cursor": 4
+    },
+    {
+     "char": "t",
+     "emitted": "t",
+     "line": null,
+     "buffer": "one t",
+     "cursor": 5
+    },
+    {
+     "char": "w",
+     "emitted": "w",
+     "line": null,
+     "buffer": "one tw",
+     "cursor": 6
+    },
+    {
+     "char": "o",
+     "emitted": "o",
+     "line": null,
+     "buffer": "one two",
+     "cursor": 7
+    },
+    {
+     "char": " ",
+     "emitted": " ",
+     "line": null,
+     "buffer": "one two ",
+     "cursor": 8
+    },
+    {
+     "char": "t",
+     "emitted": "t",
+     "line": null,
+     "buffer": "one two t",
+     "cursor": 9
+    },
+    {
+     "char": "h",
+     "emitted": "h",
+     "line": null,
+     "buffer": "one two th",
+     "cursor": 10
+    },
+    {
+     "char": "r",
+     "emitted": "r",
+     "line": null,
+     "buffer": "one two thr",
+     "cursor": 11
+    },
+    {
+     "char": "e",
+     "emitted": "e",
+     "line": null,
+     "buffer": "one two thre",
+     "cursor": 12
+    },
+    {
+     "char": "e",
+     "emitted": "e",
+     "line": null,
+     "buffer": "one two three",
+     "cursor": 13
+    },
+    {
+     "char": "\u0002",
+     "emitted": "\u001b[D",
+     "line": null,
+     "buffer": "one two three",
+     "cursor": 12
+    },
+    {
+     "char": "\u0002",
+     "emitted": "\u001b[D",
+     "line": null,
+     "buffer": "one two three",
+     "cursor": 11
+    },
+    {
+     "char": "\u0002",
+     "emitted": "\u001b[D",
+     "line": null,
+     "buffer": "one two three",
+     "cursor": 10
+    },
+    {
+     "char": "\u0002",
+     "emitted": "\u001b[D",
+     "line": null,
+     "buffer": "one two three",
+     "cursor": 9
+    },
+    {
+     "char": "\u0002",
+     "emitted": "\u001b[D",
+     "line": null,
+     "buffer": "one two three",
+     "cursor": 8
+    },
+    {
+     "char": "\u0017",
+     "emitted": "\u001b[4Dthree\u001b[K\u001b[5D",
+     "line": null,
+     "buffer": "one three",
+     "cursor": 4
+    }
+   ]
+  },
+  {
+   "name": "ctrl-w mid-line in password mode",
+   "max_length": 80,
+   "password_mode": true,
+   "chars": [
+    "o",
+    "n",
+    "e",
+    " ",
+    "t",
+    "w",
+    "o",
+    "\u0002",
+    "\u0002",
+    "\u0017"
+   ],
+   "steps": [
+    {
+     "char": "o",
+     "emitted": "*",
+     "line": null,
+     "buffer": "o",
+     "cursor": 1
+    },
+    {
+     "char": "n",
+     "emitted": "*",
+     "line": null,
+     "buffer": "on",
+     "cursor": 2
+    },
+    {
+     "char": "e",
+     "emitted": "*",
+     "line": null,
+     "buffer": "one",
+     "cursor": 3
+    },
+    {
+     "char": " ",
+     "emitted": "*",
+     "line": null,
+     "buffer": "one ",
+     "cursor": 4
+    },
+    {
+     "char": "t",
+     "emitted": "*",
+     "line": null,
+     "buffer": "one t",
+     "cursor": 5
+    },
+    {
+     "char": "w",
+     "emitted": "*",
+     "line": null,
+     "buffer": "one tw",
+     "cursor": 6
+    },
+    {
+     "char": "o",
+     "emitted": "*",
+     "line": null,
+     "buffer": "one two",
+     "cursor": 7
+    },
+    {
+     "char": "\u0002",
+     "emitted": "\u001b[D",
+     "line": null,
+     "buffer": "one two",
+     "cursor": 6
+    },
+    {
+     "char": "\u0002",
+     "emitted": "\u001b[D",
+     "line": null,
+     "buffer": "one two",
+     "cursor": 5
+    },
+    {
+     "char": "\u0017",
+     "emitted": "\u001b[1D**\u001b[K\u001b[2D",
+     "line": null,
+     "buffer": "one wo",
+     "cursor": 4
+    }
+   ]
+  },
+  {
+   "name": "insertion at the length limit rings the bell",
+   "max_length": 3,
+   "password_mode": false,
+   "chars": [
+    "a",
+    "b",
+    "c",
+    "d"
+   ],
+   "steps": [
+    {
+     "char": "a",
+     "emitted": "a",
+     "line": null,
+     "buffer": "a",
+     "cursor": 1
+    },
+    {
+     "char": "b",
+     "emitted": "b",
+     "line": null,
+     "buffer": "ab",
+     "cursor": 2
+    },
+    {
+     "char": "c",
+     "emitted": "c",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 3
+    },
+    {
+     "char": "d",
+     "emitted": "\u0007",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 3
+    }
+   ]
+  },
+  {
+   "name": "limit of one character",
+   "max_length": 1,
+   "password_mode": false,
+   "chars": [
+    "a",
+    "b"
+   ],
+   "steps": [
+    {
+     "char": "a",
+     "emitted": "a",
+     "line": null,
+     "buffer": "a",
+     "cursor": 1
+    },
+    {
+     "char": "b",
+     "emitted": "\u0007",
+     "line": null,
+     "buffer": "a",
+     "cursor": 1
+    }
+   ]
+  },
+  {
+   "name": "mid-line insertion redraws the tail",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    "a",
+    "b",
+    "c",
+    "\u0001",
+    "X"
+   ],
+   "steps": [
+    {
+     "char": "a",
+     "emitted": "a",
+     "line": null,
+     "buffer": "a",
+     "cursor": 1
+    },
+    {
+     "char": "b",
+     "emitted": "b",
+     "line": null,
+     "buffer": "ab",
+     "cursor": 2
+    },
+    {
+     "char": "c",
+     "emitted": "c",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 3
+    },
+    {
+     "char": "\u0001",
+     "emitted": "\u001b[3D",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 0
+    },
+    {
+     "char": "X",
+     "emitted": "Xabc\u001b[3D",
+     "line": null,
+     "buffer": "Xabc",
+     "cursor": 1
+    }
+   ]
+  },
+  {
+   "name": "mid-line insertion in password mode",
+   "max_length": 80,
+   "password_mode": true,
+   "chars": [
+    "a",
+    "b",
+    "c",
+    "\u0001",
+    "X"
+   ],
+   "steps": [
+    {
+     "char": "a",
+     "emitted": "*",
+     "line": null,
+     "buffer": "a",
+     "cursor": 1
+    },
+    {
+     "char": "b",
+     "emitted": "*",
+     "line": null,
+     "buffer": "ab",
+     "cursor": 2
+    },
+    {
+     "char": "c",
+     "emitted": "*",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 3
+    },
+    {
+     "char": "\u0001",
+     "emitted": "\u001b[3D",
+     "line": null,
+     "buffer": "abc",
+     "cursor": 0
+    },
+    {
+     "char": "X",
+     "emitted": "****\u001b[3D",
+     "line": null,
+     "buffer": "Xabc",
+     "cursor": 1
+    }
+   ]
+  },
+  {
+   "name": "non-ascii character inserts",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    "a",
+    "é",
+    "b",
+    "\r"
+   ],
+   "steps": [
+    {
+     "char": "a",
+     "emitted": "a",
+     "line": null,
+     "buffer": "a",
+     "cursor": 1
+    },
+    {
+     "char": "é",
+     "emitted": "é",
+     "line": null,
+     "buffer": "aé",
+     "cursor": 2
+    },
+    {
+     "char": "b",
+     "emitted": "b",
+     "line": null,
+     "buffer": "aéb",
+     "cursor": 3
+    },
+    {
+     "char": "\r",
+     "emitted": "\r\n",
+     "line": "aéb",
+     "buffer": "",
+     "cursor": 0
+    }
+   ]
+  },
+  {
+   "name": "unrecognised control inserts literally",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    "\u001f",
+    "\r"
+   ],
+   "steps": [
+    {
+     "char": "\u001f",
+     "emitted": "\u001f",
+     "line": null,
+     "buffer": "\u001f",
+     "cursor": 1
+    },
+    {
+     "char": "\r",
+     "emitted": "\r\n",
+     "line": "\u001f",
+     "buffer": "",
+     "cursor": 0
+    }
+   ]
+  },
+  {
+   "name": "interleaved editing session",
+   "max_length": 80,
+   "password_mode": false,
+   "chars": [
+    "h",
+    "e",
+    "l",
+    "l",
+    "o",
+    " ",
+    "w",
+    "o",
+    "r",
+    "l",
+    "d",
+    "\u0001",
+    "s",
+    "a",
+    "y",
+    " ",
+    "\u0005",
+    "!",
+    "\u0017",
+    "\u0015",
+    "d",
+    "o",
+    "n",
+    "e",
+    "\r"
+   ],
+   "steps": [
+    {
+     "char": "h",
+     "emitted": "h",
+     "line": null,
+     "buffer": "h",
+     "cursor": 1
+    },
+    {
+     "char": "e",
+     "emitted": "e",
+     "line": null,
+     "buffer": "he",
+     "cursor": 2
+    },
+    {
+     "char": "l",
+     "emitted": "l",
+     "line": null,
+     "buffer": "hel",
+     "cursor": 3
+    },
+    {
+     "char": "l",
+     "emitted": "l",
+     "line": null,
+     "buffer": "hell",
+     "cursor": 4
+    },
+    {
+     "char": "o",
+     "emitted": "o",
+     "line": null,
+     "buffer": "hello",
+     "cursor": 5
+    },
+    {
+     "char": " ",
+     "emitted": " ",
+     "line": null,
+     "buffer": "hello ",
+     "cursor": 6
+    },
+    {
+     "char": "w",
+     "emitted": "w",
+     "line": null,
+     "buffer": "hello w",
+     "cursor": 7
+    },
+    {
+     "char": "o",
+     "emitted": "o",
+     "line": null,
+     "buffer": "hello wo",
+     "cursor": 8
+    },
+    {
+     "char": "r",
+     "emitted": "r",
+     "line": null,
+     "buffer": "hello wor",
+     "cursor": 9
+    },
+    {
+     "char": "l",
+     "emitted": "l",
+     "line": null,
+     "buffer": "hello worl",
+     "cursor": 10
+    },
+    {
+     "char": "d",
+     "emitted": "d",
+     "line": null,
+     "buffer": "hello world",
+     "cursor": 11
+    },
+    {
+     "char": "\u0001",
+     "emitted": "\u001b[11D",
+     "line": null,
+     "buffer": "hello world",
+     "cursor": 0
+    },
+    {
+     "char": "s",
+     "emitted": "shello world\u001b[11D",
+     "line": null,
+     "buffer": "shello world",
+     "cursor": 1
+    },
+    {
+     "char": "a",
+     "emitted": "ahello world\u001b[11D",
+     "line": null,
+     "buffer": "sahello world",
+     "cursor": 2
+    },
+    {
+     "char": "y",
+     "emitted": "yhello world\u001b[11D",
+     "line": null,
+     "buffer": "sayhello world",
+     "cursor": 3
+    },
+    {
+     "char": " ",
+     "emitted": " hello world\u001b[11D",
+     "line": null,
+     "buffer": "say hello world",
+     "cursor": 4
+    },
+    {
+     "char": "\u0005",
+     "emitted": "\u001b[11C",
+     "line": null,
+     "buffer": "say hello world",
+     "cursor": 15
+    },
+    {
+     "char": "!",
+     "emitted": "!",
+     "line": null,
+     "buffer": "say hello world!",
+     "cursor": 16
+    },
+    {
+     "char": "\u0017",
+     "emitted": "\u001b[6D\u001b[K",
+     "line": null,
+     "buffer": "say hello ",
+     "cursor": 10
+    },
+    {
+     "char": "\u0015",
+     "emitted": "\u001b[10D\u001b[K",
+     "line": null,
+     "buffer": "",
+     "cursor": 0
+    },
+    {
+     "char": "d",
+     "emitted": "d",
+     "line": null,
+     "buffer": "d",
+     "cursor": 1
+    },
+    {
+     "char": "o",
+     "emitted": "o",
+     "line": null,
+     "buffer": "do",
+     "cursor": 2
+    },
+    {
+     "char": "n",
+     "emitted": "n",
+     "line": null,
+     "buffer": "don",
+     "cursor": 3
+    },
+    {
+     "char": "e",
+     "emitted": "e",
+     "line": null,
+     "buffer": "done",
+     "cursor": 4
+    },
+    {
+     "char": "\r",
+     "emitted": "\r\n",
+     "line": "done",
+     "buffer": "",
+     "cursor": 0
+    }
+   ]
+  }
+ ],
+ "silent_mode": {
+  "buffer": "ab",
+  "cursor": 2
+ }
+}
