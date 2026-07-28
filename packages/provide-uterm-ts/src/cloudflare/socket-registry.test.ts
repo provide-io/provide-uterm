@@ -167,7 +167,7 @@ describe("who else is connected", () => {
     const existing: RegistrySocket = {};
     registry.register(existing, "browser");
     registry.register(joining, "browser");
-    expect(registry.presenceIds(joining)).toEqual([wsKey(existing)]);
+    expect(registry.presenceIds({ exclude: joining })).toEqual([wsKey(existing)]);
   });
 
   it("names everybody when told to exclude nobody", () => {
@@ -182,6 +182,52 @@ describe("who else is connected", () => {
 
   it("names nobody on an empty session", () => {
     expect(new SocketRegistry(new RecordingFlow()).presenceIds()).toEqual([]);
+  });
+
+  it("prefers the runtime's own list", () => {
+    // Which is what survives hibernation: an object resumed with its sockets
+    // still open has an empty registry and a full runtime, and a list built
+    // from the registry alone would tell every browser it was alone.
+    const registry = new SocketRegistry(new RecordingFlow());
+    const resumed: RegistrySocket = {};
+    const roles = new Map<RegistrySocket, string>([[resumed, "browser"]]);
+    expect(registry.browsers.size).toBe(0);
+    expect(
+      registry.presenceIds({ liveSockets: () => [resumed], roleOf: (socket) => roles.get(socket) ?? "browser" }),
+    ).toEqual([wsKey(resumed)]);
+  });
+
+  it("filters the runtime's list by role", () => {
+    // It carries every socket, not only the browsers.
+    const registry = new SocketRegistry(new RecordingFlow());
+    const browser: RegistrySocket = {};
+    const worker: RegistrySocket = {};
+    const roles = new Map<RegistrySocket, string>([
+      [browser, "browser"],
+      [worker, "worker"],
+    ]);
+    expect(
+      registry.presenceIds({
+        liveSockets: () => [browser, worker],
+        roleOf: (socket) => roles.get(socket) ?? "browser",
+      }),
+    ).toEqual([wsKey(browser)]);
+  });
+
+  it("falls back to the registry when the runtime reports nothing", () => {
+    const registry = new SocketRegistry(new RecordingFlow());
+    const browser: RegistrySocket = {};
+    registry.register(browser, "browser");
+    expect(registry.presenceIds({ liveSockets: () => [] })).toEqual([wsKey(browser)]);
+  });
+
+  it("excludes the joining browser from the runtime's list too", () => {
+    const registry = new SocketRegistry(new RecordingFlow());
+    const joining: RegistrySocket = {};
+    const existing: RegistrySocket = {};
+    expect(registry.presenceIds({ exclude: joining, liveSockets: () => [existing, joining] })).toEqual([
+      wsKey(existing),
+    ]);
   });
 });
 

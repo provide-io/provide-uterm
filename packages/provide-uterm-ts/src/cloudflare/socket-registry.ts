@@ -28,6 +28,19 @@ export interface RegistrySocket {
   [KEY_FIELD]?: string;
 }
 
+/** How the presence list is built. */
+export interface PresenceOptions {
+  /** The browser being told, left out so it is not listed as its own peer. */
+  exclude?: RegistrySocket | undefined;
+  /**
+   * Every socket the runtime is holding, which is what survives hibernation.
+   * Omitted by a caller that has no runtime to ask.
+   */
+  liveSockets?: (() => readonly RegistrySocket[]) | undefined;
+  /** How to read a socket's role, since the runtime's list is not filed by it. */
+  roleOf?: ((socket: RegistrySocket) => string) | undefined;
+}
+
 /** What has to be let go when a connection ends. */
 export interface ConnectionState {
   forget(wsId: string): void;
@@ -118,12 +131,35 @@ export class SocketRegistry {
   /**
    * The browsers currently connected, excluding one.
    *
+   * The runtime's own list is preferred over this registry's, because it is
+   * what survives hibernation: a Durable Object resumed with its sockets
+   * still open has an empty registry and a full runtime, and a presence list
+   * built from the registry alone would tell every browser it was alone.
+   * The registry is the fallback for the case the runtime reports nothing.
+   *
+   * A socket's role is read from its attachment rather than from where it was
+   * filed, for the same reason — after eviction the attachment is all there
+   * is.
+   *
    * The exclusion is how a joining browser is told about its peers rather
    * than about itself: it is already registered by the time the runtime
    * reports the connection open.
    */
-  presenceIds(exclude?: RegistrySocket): string[] {
-    const excluded = exclude === undefined ? undefined : wsKey(exclude);
-    return [...this.browsers.keys()].filter((key) => key !== excluded);
+  presenceIds(options: PresenceOptions = {}): string[] {
+    const excluded = options.exclude === undefined ? undefined : wsKey(options.exclude);
+    const live = options.liveSockets?.() ?? [];
+    const sockets = live.length > 0 ? live : [...this.browsers.values()];
+    const ids: string[] = [];
+    for (const socket of sockets) {
+      // The runtime's list carries every socket, not only the browsers.
+      if (options.roleOf !== undefined && options.roleOf(socket) !== "browser") {
+        continue;
+      }
+      const key = wsKey(socket);
+      if (key !== excluded) {
+        ids.push(key);
+      }
+    }
+    return ids;
   }
 }
