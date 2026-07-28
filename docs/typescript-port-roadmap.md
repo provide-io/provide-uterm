@@ -56,7 +56,7 @@ module; the Go column names the sibling package for cross-checking.
 | `ctrlmsg` | `control_channel_builders`, `control_channel_patterns` | `ctrlmsg` | **done** |
 | `frames` | `bridge/schemas`, server `bridge/frames` | `frames` | **done** |
 | `recording` | `recording` | `recording` | **done** |
-| `session-logger` | `session_logger` | `sessionlogger` | todo |
+| `session-logger` | `session_logger` | `sessionlogger` | **done** |
 
 `ctrlmsg` carries the HMAC identity signature, which is taken over
 CPython-canonical JSON, so the float divergence recorded in the

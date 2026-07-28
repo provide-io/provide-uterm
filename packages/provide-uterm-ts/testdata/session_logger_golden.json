@@ -1,0 +1,286 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_session_logger_golden.py",
+ "exclude_mode": [
+  {
+   "event": "log_start",
+   "data": {
+    "stripped": true
+   },
+   "session_id": "s1"
+  },
+  {
+   "event": "send",
+   "data": {
+    "keys": "ls -la\r",
+    "bytes_b64": "bHMgLWxhDQ=="
+   },
+   "session_id": "s1"
+  },
+  {
+   "event": "send",
+   "data": {
+    "keys": "***",
+    "bytes_b64": "Kioq",
+    "masked": true,
+    "byte_count": 8
+   },
+   "session_id": "s1"
+  },
+  {
+   "event": "read",
+   "data": {
+    "screen": "hello",
+    "cursor": {
+     "x": 1
+    },
+    "raw": "raw ",
+    "raw_bytes_b64": "cmF3/w=="
+   },
+   "session_id": "s1"
+  },
+  {
+   "event": "custom",
+   "data": {
+    "a": 1
+   },
+   "session_id": "s1"
+  },
+  {
+   "event": "with_context",
+   "data": {},
+   "session_id": "s1",
+   "ctx": {
+    "worker": "w1",
+    "n": "2"
+   }
+  },
+  {
+   "event": "without_context",
+   "data": {},
+   "session_id": "s1"
+  },
+  {
+   "event": "log_stop",
+   "data": {},
+   "session_id": "s1"
+  }
+ ],
+ "wire_mode": [
+  {
+   "event": "log_start",
+   "data": {
+    "stripped": true
+   },
+   "session_id": "s1"
+  },
+  {
+   "event": "send",
+   "data": {
+    "keys": "ls -la\r",
+    "bytes_b64": "bHMgLWxhDQ=="
+   },
+   "session_id": "s1"
+  },
+  {
+   "event": "send",
+   "data": {
+    "keys": "***",
+    "bytes_b64": "Kioq",
+    "masked": true,
+    "byte_count": 8
+   },
+   "session_id": "s1"
+  },
+  {
+   "event": "read",
+   "data": {
+    "screen": "hello",
+    "cursor": {
+     "x": 1
+    },
+    "raw": "raw ",
+    "raw_bytes_b64": "cmF3/w=="
+   },
+   "session_id": "s1"
+  },
+  {
+   "event": "custom",
+   "data": {
+    "a": 1
+   },
+   "session_id": "s1"
+  },
+  {
+   "event": "wire_send",
+   "data": {
+    "text": "wire out",
+    "bytes_b64": "d2lyZSBvdXQ="
+   },
+   "session_id": "s1"
+  },
+  {
+   "event": "wire_recv",
+   "data": {
+    "text": "wire in",
+    "bytes_b64": "d2lyZSBpbg=="
+   },
+   "session_id": "s1"
+  },
+  {
+   "event": "control_send",
+   "data": {
+    "control": {
+     "type": "hello"
+    }
+   },
+   "session_id": "s1"
+  },
+  {
+   "event": "control_recv",
+   "data": {
+    "control": {
+     "type": "hello_ack"
+    }
+   },
+   "session_id": "s1"
+  },
+  {
+   "event": "with_context",
+   "data": {},
+   "session_id": "s1",
+   "ctx": {
+    "worker": "w1",
+    "n": "2"
+   }
+  },
+  {
+   "event": "without_context",
+   "data": {},
+   "session_id": "s1"
+  },
+  {
+   "event": "log_stop",
+   "data": {},
+   "session_id": "s1"
+  }
+ ],
+ "redacted": [
+  {
+   "event": "log_start",
+   "data": {
+    "stripped": true
+   },
+   "session_id": "s1"
+  },
+  {
+   "event": "send",
+   "data": {
+    "keys": "ls -la\r",
+    "bytes_b64": "bHMgLWxhDQ=="
+   },
+   "session_id": "s1"
+  },
+  {
+   "event": "send",
+   "data": {
+    "keys": "***",
+    "bytes_b64": "Kioq",
+    "masked": true,
+    "byte_count": 8
+   },
+   "session_id": "s1"
+  },
+  {
+   "event": "read",
+   "data": {
+    "screen": "hello",
+    "cursor": {
+     "x": 1
+    },
+    "raw": "raw ",
+    "raw_bytes_b64": "cmF3/w=="
+   },
+   "session_id": "s1"
+  },
+  {
+   "event": "custom",
+   "data": {
+    "a": 1
+   },
+   "session_id": "s1"
+  },
+  {
+   "event": "wire_send",
+   "data": {
+    "text": "wire out",
+    "bytes_b64": "d2lyZSBvdXQ="
+   },
+   "session_id": "s1"
+  },
+  {
+   "event": "wire_recv",
+   "data": {
+    "text": "wire in",
+    "bytes_b64": "d2lyZSBpbg=="
+   },
+   "session_id": "s1"
+  },
+  {
+   "event": "control_send",
+   "data": {
+    "control": {
+     "type": "hello"
+    }
+   },
+   "session_id": "s1"
+  },
+  {
+   "event": "control_recv",
+   "data": {
+    "control": {
+     "type": "hello_ack"
+    }
+   },
+   "session_id": "s1"
+  },
+  {
+   "event": "with_context",
+   "data": {},
+   "session_id": "s1",
+   "ctx": {
+    "worker": "w1",
+    "n": "2"
+   }
+  },
+  {
+   "event": "without_context",
+   "data": {},
+   "session_id": "s1"
+  },
+  {
+   "event": "log_stop",
+   "data": {},
+   "session_id": "s1"
+  }
+ ],
+ "quota": {
+  "entries": [
+   {
+    "event": "log_start",
+    "data": {
+     "stripped": true
+    },
+    "session_id": "s1"
+   },
+   {
+    "event": "log_stop",
+    "data": {},
+    "session_id": "s1"
+   }
+  ]
+ },
+ "batch": {
+  "after_one": 1,
+  "after_two": 3
+ }
+}
