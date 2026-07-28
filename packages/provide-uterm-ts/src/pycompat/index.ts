@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
+export * from "./blake2b.ts";
 export * from "./difflib.ts";
 export * from "./int.ts";
 export * from "./ipaddress.ts";

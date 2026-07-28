@@ -13,4 +13,5 @@
 export * from "./api-keys.ts";
 export * from "./digests.ts";
 export * from "./roles.ts";
+export * from "./token-hash.ts";
 export * from "./webhook-signing.ts";
