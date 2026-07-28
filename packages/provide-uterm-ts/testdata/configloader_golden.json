@@ -1,0 +1,546 @@
+{
+  "mappings": [
+    {
+      "document": {},
+      "error": null,
+      "kind": "accepted",
+      "message": null,
+      "name": "an empty document",
+      "sessions": [
+        {
+          "auto_start": true,
+          "auto_transfer_idle_s": 30,
+          "connector_config": {},
+          "connector_type": "shell",
+          "display_name": "Provide Shell",
+          "ephemeral": false,
+          "input_mode": "open",
+          "keystroke_queue": "display",
+          "owner": null,
+          "presence": false,
+          "recording_enabled": null,
+          "session_id": "provide-shell",
+          "tags": [
+            "shell",
+            "reference"
+          ],
+          "visibility": "public"
+        }
+      ]
+    },
+    {
+      "document": {
+        "auth": {
+          "mode": "jwt"
+        }
+      },
+      "error": null,
+      "kind": "accepted",
+      "message": null,
+      "name": "a partial section",
+      "sessions": [
+        {
+          "auto_start": true,
+          "auto_transfer_idle_s": 30,
+          "connector_config": {},
+          "connector_type": "shell",
+          "display_name": "Provide Shell",
+          "ephemeral": false,
+          "input_mode": "open",
+          "keystroke_queue": "display",
+          "owner": null,
+          "presence": false,
+          "recording_enabled": null,
+          "session_id": "provide-shell",
+          "tags": [
+            "shell",
+            "reference"
+          ],
+          "visibility": "public"
+        }
+      ]
+    },
+    {
+      "document": {
+        "nonsense": 1
+      },
+      "error": "ValueError",
+      "kind": "schema",
+      "message": null,
+      "name": "an unknown top-level key",
+      "sessions": null
+    },
+    {
+      "document": {
+        "server": "nope"
+      },
+      "error": "ValueError",
+      "kind": "structural",
+      "message": "[server] must be a table (got str)",
+      "name": "server as a string",
+      "sessions": null
+    },
+    {
+      "document": {
+        "auth": "nope"
+      },
+      "error": "ValueError",
+      "kind": "structural",
+      "message": "[auth] must be a table (got str)",
+      "name": "auth as a string",
+      "sessions": null
+    },
+    {
+      "document": {
+        "ui": 7
+      },
+      "error": "ValueError",
+      "kind": "structural",
+      "message": "[ui] must be a table (got int)",
+      "name": "ui as a number",
+      "sessions": null
+    },
+    {
+      "document": {
+        "recording": []
+      },
+      "error": "ValueError",
+      "kind": "structural",
+      "message": "[recording] must be a table (got list)",
+      "name": "recording as a list",
+      "sessions": null
+    },
+    {
+      "document": {
+        "profiles": true
+      },
+      "error": "ValueError",
+      "kind": "structural",
+      "message": "[profiles] must be a table (got bool)",
+      "name": "profiles as a boolean",
+      "sessions": null
+    },
+    {
+      "document": {
+        "security": "x"
+      },
+      "error": "ValueError",
+      "kind": "structural",
+      "message": "[security] must be a table (got str)",
+      "name": "security as a string",
+      "sessions": null
+    },
+    {
+      "document": {
+        "tunnel": 1
+      },
+      "error": "ValueError",
+      "kind": "structural",
+      "message": "[tunnel] must be a table (got int)",
+      "name": "tunnel as a number",
+      "sessions": null
+    },
+    {
+      "document": {
+        "webhooks": "x"
+      },
+      "error": "ValueError",
+      "kind": "structural",
+      "message": "[webhooks] must be a table (got str)",
+      "name": "webhooks as a string",
+      "sessions": null
+    },
+    {
+      "document": {
+        "pam": [
+          1
+        ]
+      },
+      "error": "ValueError",
+      "kind": "structural",
+      "message": "[pam] must be a table (got list)",
+      "name": "pam as a list",
+      "sessions": null
+    },
+    {
+      "document": {
+        "control_plane": "x"
+      },
+      "error": "ValueError",
+      "kind": "structural",
+      "message": "[control_plane] must be a table (got str)",
+      "name": "control_plane as a string",
+      "sessions": null
+    },
+    {
+      "document": {
+        "auth": null
+      },
+      "error": "ValueError",
+      "kind": "structural",
+      "message": "[auth] must be a table (got NoneType)",
+      "name": "a section that is null",
+      "sessions": null
+    },
+    {
+      "document": {
+        "auth": "1979-05-27 07:32:00+00:00"
+      },
+      "error": "ValueError",
+      "kind": "structural",
+      "message": "[auth] must be a table (got datetime)",
+      "name": "a section that is a datetime",
+      "sessions": null
+    },
+    {
+      "document": {
+        "auth": "1979-05-27"
+      },
+      "error": "ValueError",
+      "kind": "structural",
+      "message": "[auth] must be a table (got date)",
+      "name": "a section that is a date",
+      "sessions": null
+    },
+    {
+      "document": {
+        "auth": "07:32:00"
+      },
+      "error": "ValueError",
+      "kind": "structural",
+      "message": "[auth] must be a table (got time)",
+      "name": "a section that is a time",
+      "sessions": null
+    },
+    {
+      "document": {
+        "sessions": [
+          {
+            "name": "a"
+          },
+          {
+            "name": "b"
+          }
+        ]
+      },
+      "error": "ValueError",
+      "kind": "schema",
+      "message": null,
+      "name": "sessions as a list of tables",
+      "sessions": null
+    },
+    {
+      "document": {
+        "sessions": [
+          {
+            "name": "a"
+          },
+          "nope",
+          7,
+          null
+        ]
+      },
+      "error": "ValueError",
+      "kind": "schema",
+      "message": null,
+      "name": "sessions with a bad entry",
+      "sessions": null
+    },
+    {
+      "document": {
+        "sessions": [
+          "nope"
+        ]
+      },
+      "error": null,
+      "kind": "accepted",
+      "message": null,
+      "name": "sessions entirely bad",
+      "sessions": []
+    },
+    {
+      "document": {
+        "sessions": []
+      },
+      "error": null,
+      "kind": "accepted",
+      "message": null,
+      "name": "sessions as an empty list",
+      "sessions": []
+    },
+    {
+      "document": {
+        "sessions": {
+          "name": "a"
+        }
+      },
+      "error": "ValueError",
+      "kind": "schema",
+      "message": null,
+      "name": "sessions as a table",
+      "sessions": null
+    },
+    {
+      "document": {
+        "sessions": "nope"
+      },
+      "error": "ValueError",
+      "kind": "schema",
+      "message": null,
+      "name": "sessions as a string",
+      "sessions": null
+    }
+  ],
+  "merge_is_pure": {
+    "base": {
+      "t": {
+        "a": 1
+      }
+    },
+    "override": {
+      "t": {
+        "b": 2
+      }
+    }
+  },
+  "merges": [
+    {
+      "base": {},
+      "name": "nothing over nothing",
+      "override": {},
+      "result": {}
+    },
+    {
+      "base": {},
+      "name": "a value over nothing",
+      "override": {
+        "a": 1
+      },
+      "result": {
+        "a": 1
+      }
+    },
+    {
+      "base": {
+        "a": 1
+      },
+      "name": "nothing over a value",
+      "override": {},
+      "result": {
+        "a": 1
+      }
+    },
+    {
+      "base": {
+        "a": 1
+      },
+      "name": "a value replaced",
+      "override": {
+        "a": 2
+      },
+      "result": {
+        "a": 2
+      }
+    },
+    {
+      "base": {
+        "a": 1
+      },
+      "name": "a value of another type",
+      "override": {
+        "a": "two"
+      },
+      "result": {
+        "a": "two"
+      }
+    },
+    {
+      "base": {
+        "t": {
+          "a": 1,
+          "b": 2
+        }
+      },
+      "name": "a table merged",
+      "override": {
+        "t": {
+          "b": 3
+        }
+      },
+      "result": {
+        "t": {
+          "a": 1,
+          "b": 3
+        }
+      }
+    },
+    {
+      "base": {
+        "t": {
+          "a": 1
+        }
+      },
+      "name": "a table added",
+      "override": {
+        "u": {
+          "b": 2
+        }
+      },
+      "result": {
+        "t": {
+          "a": 1
+        },
+        "u": {
+          "b": 2
+        }
+      }
+    },
+    {
+      "base": {
+        "t": {
+          "u": {
+            "a": 1,
+            "b": 2
+          }
+        }
+      },
+      "name": "a nested table merged",
+      "override": {
+        "t": {
+          "u": {
+            "b": 3
+          }
+        }
+      },
+      "result": {
+        "t": {
+          "u": {
+            "a": 1,
+            "b": 3
+          }
+        }
+      }
+    },
+    {
+      "base": {
+        "a": 1
+      },
+      "name": "a table over a value",
+      "override": {
+        "a": {
+          "b": 2
+        }
+      },
+      "result": {
+        "a": {
+          "b": 2
+        }
+      }
+    },
+    {
+      "base": {
+        "a": {
+          "b": 2
+        }
+      },
+      "name": "a value over a table",
+      "override": {
+        "a": 1
+      },
+      "result": {
+        "a": 1
+      }
+    },
+    {
+      "base": {
+        "a": "abc"
+      },
+      "name": "a table over a string",
+      "override": {
+        "a": {
+          "b": 2
+        }
+      },
+      "result": {
+        "a": {
+          "b": 2
+        }
+      }
+    },
+    {
+      "base": {
+        "a": [
+          1,
+          2,
+          3
+        ]
+      },
+      "name": "a list replaced",
+      "override": {
+        "a": [
+          4
+        ]
+      },
+      "result": {
+        "a": [
+          4
+        ]
+      }
+    },
+    {
+      "base": {
+        "a": [
+          1,
+          2
+        ]
+      },
+      "name": "an empty list",
+      "override": {
+        "a": []
+      },
+      "result": {
+        "a": []
+      }
+    },
+    {
+      "base": {
+        "a": 1
+      },
+      "name": "a null over a value",
+      "override": {
+        "a": null
+      },
+      "result": {
+        "a": null
+      }
+    },
+    {
+      "base": {
+        "a": null
+      },
+      "name": "a table over a null",
+      "override": {
+        "a": {
+          "b": 1
+        }
+      },
+      "result": {
+        "a": {
+          "b": 1
+        }
+      }
+    }
+  ],
+  "table_sections": [
+    "auth",
+    "control_plane",
+    "pam",
+    "profiles",
+    "recording",
+    "security",
+    "server",
+    "tunnel",
+    "ui",
+    "webhooks"
+  ]
+}
