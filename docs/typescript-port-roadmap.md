@@ -96,7 +96,7 @@ corpus match CPython byte for byte.
 | `controlplane` | `control/plane` (+ memory/sqlite/bootstrap) | `controlplane` | todo |
 | `hub` | server `bridge/hub` (nine services) | `hub` | **done** — all nine services, plus the state model, frame encoders, prompt guards and the regex-safety validator |
 | `bridge` | `bridge` worker side | `bridge` | **done** — authorization matrix, hijack coordinator, protocol contract, hijackable primitives and the worker link |
-| `fanout` | server `bridge/fanout` | `fanout` | **partial** — divergence detection, group records, the in-memory store, the output collector and the controller; REST routes outstanding |
+| `fanout` | server `bridge/fanout` | `fanout` | **done** — divergence detection, group records, the in-memory store, the output collector, the controller and the REST routes |
 | `graphical` | graphical target registry | `graphical` | todo |
 | `gui` | `vnc`, GUI ops | `gui` | todo |
 
