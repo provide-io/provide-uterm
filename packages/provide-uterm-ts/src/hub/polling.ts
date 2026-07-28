@@ -118,7 +118,7 @@ export class PollingCoordinator {
         return undefined;
       }
       const snapshot = state.lastSnapshot;
-      if (snapshot !== undefined && Number(snapshot["ts"] ?? 0) > requestedAt) {
+      if (snapshot !== undefined && Number(snapshot.ts ?? 0) > requestedAt) {
         return snapshot;
       }
       await this.#hub.sleep(SNAPSHOT_POLL_INTERVAL_S);
@@ -170,7 +170,7 @@ export class PollingCoordinator {
       if (snapshotMatches(snapshot, { expectPromptId: options.expectPromptId, expectRegex })) {
         return { matched: true, snapshot };
       }
-      const snapshotTs = snapshot === undefined ? 0 : Number(snapshot["ts"] ?? 0);
+      const snapshotTs = snapshot === undefined ? 0 : Number(snapshot.ts ?? 0);
       if (snapshotTs <= lastSnapshotTs) {
         await this.#hub.requestSnapshot(workerId);
       }

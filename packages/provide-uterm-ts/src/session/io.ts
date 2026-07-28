@@ -195,7 +195,7 @@ export class PromptWaiter {
     while ((performance.now() - start) / 1000 < timeoutSec) {
       const session = await assertConnected(this.#session);
       const snapshot = session.snapshot?.() ?? {};
-      const screen = String(snapshot["screen"] ?? "");
+      const screen = String(snapshot.screen ?? "");
       this.#onScreenUpdate?.(screen);
 
       if (!("prompt_detected" in snapshot)) {
@@ -205,15 +205,15 @@ export class PromptWaiter {
         continue;
       }
 
-      const detected = (snapshot["prompt_detected"] ?? {}) as Record<string, unknown>;
+      const detected = (snapshot.prompt_detected ?? {}) as Record<string, unknown>;
       const full: Record<string, unknown> = {
         ...detected,
         screen,
-        screen_hash: snapshot["screen_hash"] ?? "",
-        captured_at: snapshot["captured_at"],
+        screen_hash: snapshot.screen_hash ?? "",
+        captured_at: snapshot.captured_at,
       };
-      const promptId = String(detected["prompt_id"] ?? "");
-      const isIdle = Boolean(detected["is_idle"] ?? false);
+      const promptId = String(detected.prompt_id ?? "");
+      const isIdle = Boolean(detected.is_idle ?? false);
       options.onPromptSeen?.(full);
 
       const elapsed = (performance.now() - start) / 1000;
@@ -239,8 +239,8 @@ export class PromptWaiter {
       return {
         screen,
         promptId,
-        inputType: detected["input_type"],
-        kvData: full["kv_data"],
+        inputType: detected.input_type,
+        kvData: full.kv_data,
         isIdle,
       };
     }

@@ -57,7 +57,7 @@ describe("HijackCoordinator.acquire", () => {
     // The caller is handed an authoritative token for the new period, so an
     // id captured before the renewal stops working — which is what makes a
     // leaked one time-bounded rather than permanent.
-    expect(golden.coordinator["renewal_mints_new_id"]).toBe(true);
+    expect(golden.coordinator.renewal_mints_new_id).toBe(true);
     const coordinator = new HijackCoordinator();
     const first = coordinator.acquire("alice", 90, NOW);
     const renewed = coordinator.acquire("alice", 90, NOW + 10);
@@ -230,23 +230,23 @@ describe("HijackCoordinator.canSendInput", () => {
   it("allows the holder", () => {
     const { coordinator, clock, hijackId } = gated();
     clock.now = NOW + 1;
-    expect(coordinator.canSendInput(hijackId)).toBe(golden.coordinator["can_send_with_id"]);
+    expect(coordinator.canSendInput(hijackId)).toBe(golden.coordinator.can_send_with_id);
   });
 
   it("refuses a mismatched id", () => {
     const { coordinator, clock } = gated();
     clock.now = NOW + 1;
-    expect(coordinator.canSendInput("nope")).toBe(golden.coordinator["can_send_wrong_id"]);
+    expect(coordinator.canSendInput("nope")).toBe(golden.coordinator.can_send_wrong_id);
   });
 
   it("refuses a caller with no id", () => {
     const { coordinator, clock } = gated();
     clock.now = NOW + 1;
-    expect(coordinator.canSendInput()).toBe(golden.coordinator["can_send_no_id"]);
+    expect(coordinator.canSendInput()).toBe(golden.coordinator.can_send_no_id);
   });
 
   it("refuses when nothing is held", () => {
-    expect(new HijackCoordinator().canSendInput("anything")).toBe(golden.coordinator["can_send_when_idle"]);
+    expect(new HijackCoordinator().canSendInput("anything")).toBe(golden.coordinator.can_send_when_idle);
   });
 
   it("refuses once the lease has lapsed", () => {
@@ -254,7 +254,7 @@ describe("HijackCoordinator.canSendInput", () => {
     // heartbeating stops being able to type.
     const { coordinator, clock, hijackId } = gated();
     clock.now = NOW + 1000;
-    expect(coordinator.canSendInput(hijackId)).toBe(golden.coordinator["can_send_after_expiry"]);
+    expect(coordinator.canSendInput(hijackId)).toBe(golden.coordinator.can_send_after_expiry);
   });
 
   it("reads its own clock by default", () => {

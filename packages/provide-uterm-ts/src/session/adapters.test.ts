@@ -94,12 +94,12 @@ describe("session encodings", () => {
 
 describe("TelnetSession", () => {
   it("uses the reference defaults", () => {
-    expect(TELNET_SESSION_DEFAULTS.cols).toBe(golden.telnet_defaults["cols"]);
-    expect(TELNET_SESSION_DEFAULTS.rows).toBe(golden.telnet_defaults["rows"]);
-    expect(TELNET_SESSION_DEFAULTS.term).toBe(golden.telnet_defaults["term"]);
-    expect(TELNET_SESSION_DEFAULTS.connectTimeoutS).toBe(golden.telnet_defaults["connect_timeout"]);
-    expect(TELNET_SESSION_DEFAULTS.receiveEncoding).toBe(golden.telnet_defaults["receive_encoding"]);
-    expect(TELNET_SESSION_DEFAULTS.controlFrames).toBe(golden.telnet_defaults["control_frames"]);
+    expect(TELNET_SESSION_DEFAULTS.cols).toBe(golden.telnet_defaults.cols);
+    expect(TELNET_SESSION_DEFAULTS.rows).toBe(golden.telnet_defaults.rows);
+    expect(TELNET_SESSION_DEFAULTS.term).toBe(golden.telnet_defaults.term);
+    expect(TELNET_SESSION_DEFAULTS.connectTimeoutS).toBe(golden.telnet_defaults.connect_timeout);
+    expect(TELNET_SESSION_DEFAULTS.receiveEncoding).toBe(golden.telnet_defaults.receive_encoding);
+    expect(TELNET_SESSION_DEFAULTS.controlFrames).toBe(golden.telnet_defaults.control_frames);
   });
 
   it("sends as CP437", async () => {
@@ -136,14 +136,14 @@ describe("TelnetSession", () => {
 
 describe("WebSocketSession", () => {
   it("uses the reference defaults", () => {
-    expect(WEBSOCKET_SESSION_DEFAULTS.cols).toBe(golden.ws_defaults["cols"]);
-    expect(WEBSOCKET_SESSION_DEFAULTS.rows).toBe(golden.ws_defaults["rows"]);
-    expect(WEBSOCKET_SESSION_DEFAULTS.pingIntervalS).toBe(golden.ws_defaults["ping_interval"]);
-    expect(WEBSOCKET_SESSION_DEFAULTS.pingTimeoutS).toBe(golden.ws_defaults["ping_timeout"]);
-    expect(WEBSOCKET_SESSION_DEFAULTS.closeTimeoutS).toBe(golden.ws_defaults["close_timeout"]);
-    expect(WEBSOCKET_SESSION_DEFAULTS.receiveEncoding).toBe(golden.ws_defaults["receive_encoding"]);
-    expect(WEBSOCKET_SESSION_DEFAULTS.textFrameEncoding).toBe(golden.ws_defaults["text_frame_encoding"]);
-    expect(WEBSOCKET_SESSION_DEFAULTS.controlFrames).toBe(golden.ws_defaults["control_frames"]);
+    expect(WEBSOCKET_SESSION_DEFAULTS.cols).toBe(golden.ws_defaults.cols);
+    expect(WEBSOCKET_SESSION_DEFAULTS.rows).toBe(golden.ws_defaults.rows);
+    expect(WEBSOCKET_SESSION_DEFAULTS.pingIntervalS).toBe(golden.ws_defaults.ping_interval);
+    expect(WEBSOCKET_SESSION_DEFAULTS.pingTimeoutS).toBe(golden.ws_defaults.ping_timeout);
+    expect(WEBSOCKET_SESSION_DEFAULTS.closeTimeoutS).toBe(golden.ws_defaults.close_timeout);
+    expect(WEBSOCKET_SESSION_DEFAULTS.receiveEncoding).toBe(golden.ws_defaults.receive_encoding);
+    expect(WEBSOCKET_SESSION_DEFAULTS.textFrameEncoding).toBe(golden.ws_defaults.text_frame_encoding);
+    expect(WEBSOCKET_SESSION_DEFAULTS.controlFrames).toBe(golden.ws_defaults.control_frames);
   });
 
   it("decodes terminal bytes as CP437 but a text frame as latin-1", async () => {

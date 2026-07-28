@@ -260,7 +260,7 @@ describe("cleanupExpired", () => {
       ownerExpiresAt: NOW - 10,
       session: session(NOW + 10),
     });
-    expect((golden.cleanup["dashboard_expired_rest_live"] as SweepRecord).calls).not.toContain("recheck_and_resume");
+    expect((golden.cleanup.dashboard_expired_rest_live as SweepRecord).calls).not.toContain("recheck_and_resume");
   });
 });
 
@@ -410,7 +410,7 @@ describe("getEventsData", () => {
     // seen and silently drop the ones it has not.
     const { manager } = withEvents();
     const data = await manager.getEventsData("w1", "h1", session(NOW + 5), 2, 3);
-    expect(data.rows.map((row) => row["seq"])).toStrictEqual(golden.events.window_seqs);
+    expect(data.rows.map((row) => row.seq)).toStrictEqual(golden.events.window_seqs);
     expect(data.latestSeq).toBe(golden.events.window_latest_seq);
     expect(data.minEventSeq).toBe(golden.events.window_min_event_seq);
     expect(data.freshExpires).toBe(golden.events.window_fresh_expires);
@@ -419,7 +419,7 @@ describe("getEventsData", () => {
   it("returns everything when the window is wide", async () => {
     const { manager } = withEvents();
     const data = await manager.getEventsData("w1", "h1", session(NOW + 5), 0, 100);
-    expect(data.rows.map((row) => row["seq"])).toStrictEqual(golden.events.all_seqs);
+    expect(data.rows.map((row) => row.seq)).toStrictEqual(golden.events.all_seqs);
   });
 
   it("falls back to the caller's expiry when the hijack id no longer matches", async () => {
@@ -434,7 +434,7 @@ describe("getEventsData", () => {
     const { manager, state } = withEvents();
     state?.events.push({ type: "output" });
     const data = await manager.getEventsData("w1", "h1", session(NOW + 5), 0, 100);
-    expect(data.rows.map((row) => row["seq"])).toStrictEqual(golden.events.all_seqs);
+    expect(data.rows.map((row) => row.seq)).toStrictEqual(golden.events.all_seqs);
   });
 
   it("returns an empty window for an unknown worker", async () => {

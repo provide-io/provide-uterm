@@ -15,14 +15,7 @@
  * exactly even when registration fails halfway through.
  */
 
-import {
-  BoundedDeque,
-  type BrowserRole,
-  type Connection,
-  type InputMode,
-  type WorkerSocket,
-  WorkerTermState,
-} from "./models.ts";
+import { type BrowserRole, type Connection, type InputMode, type WorkerSocket, WorkerTermState } from "./models.ts";
 import type { WorkerRegistry } from "./registry.ts";
 
 /** Raised when the hub is already holding as many workers as it will. */
@@ -125,7 +118,7 @@ function monotonicNow(): number {
 export function scanEventsForResume(state: WorkerTermState): boolean {
   const events = state.events.toArray();
   for (let index = events.length - 1; index >= 0; index -= 1) {
-    const eventType = events[index]?.["type"];
+    const eventType = events[index]?.type;
     if (typeof eventType !== "string") {
       continue;
     }
@@ -310,7 +303,7 @@ export class ConnectionManager {
   activateBrowserBroadcasts(workerId: string, ws: Connection): void {
     const state = this.#hub.registry.get(workerId);
     // The browser can disconnect between its startup frames and this call.
-    if (state !== undefined && state.browsers.has(ws)) {
+    if (state?.browsers.has(ws)) {
       this.#hub.startupPendingBrowsers.delete(ws);
     }
   }

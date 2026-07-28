@@ -536,7 +536,7 @@ export class HijackLeaseManager {
     }
     const rows = state.events
       .toArray()
-      .filter((event) => Number(event["seq"] ?? 0) > afterSeq)
+      .filter((event) => Number(event.seq ?? 0) > afterSeq)
       .slice(0, limit);
     const session = state.hijackSession;
     return {

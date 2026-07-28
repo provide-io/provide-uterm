@@ -68,14 +68,14 @@ export function extractPromptId(snapshot?: Record<string, unknown>): string | un
   if (snapshot === undefined) {
     return undefined;
   }
-  const detected = snapshot["prompt_detected"];
+  const detected = snapshot.prompt_detected;
   // The array check mirrors the reference's isinstance(dict); JSON cannot
   // produce an array carrying a prompt_id, so it is faithful rather than
   // load-bearing.
   if (typeof detected !== "object" || detected === null || Array.isArray(detected)) {
     return undefined;
   }
-  const value = (detected as Record<string, unknown>)["prompt_id"];
+  const value = (detected as Record<string, unknown>).prompt_id;
   return typeof value === "string" && value !== "" ? value : undefined;
 }
 
@@ -136,5 +136,5 @@ export function snapshotMatches(snapshot: Record<string, unknown> | undefined, g
   if (expectRegex === undefined) {
     return true;
   }
-  return expectRegex.test(String(snapshot["screen"] ?? ""));
+  return expectRegex.test(String(snapshot.screen ?? ""));
 }

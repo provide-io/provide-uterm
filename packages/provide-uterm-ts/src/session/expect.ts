@@ -58,7 +58,7 @@ export interface SendAndExpectOptions {
 
 /** The screen from a snapshot, or empty when it has none. */
 function screenOf(session: ExpectSession): string {
-  return String(session.snapshot()["screen"] ?? "");
+  return String(session.snapshot().screen ?? "");
 }
 
 /**
