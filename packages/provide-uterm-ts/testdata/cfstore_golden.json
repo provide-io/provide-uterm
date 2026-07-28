@@ -262,6 +262,71 @@
     "missing": null,
     "rows": 2
   },
+  "recording": {
+    "empty": [],
+    "filtered": [
+      0,
+      2,
+      4
+    ],
+    "filtered_tail": [
+      4
+    ],
+    "from_start": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "negative_offset": [
+      0,
+      1
+    ],
+    "offset_one": [
+      1,
+      2
+    ],
+    "over_limit": 5,
+    "shape": {
+      "data": {
+        "n": 0
+      },
+      "event": "output"
+    },
+    "tail": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "tail_limited": [
+      3,
+      4
+    ],
+    "under_limit": [
+      4
+    ]
+  },
+  "resume_tokens": {
+    "blank_role": "viewer",
+    "cleanup_kept_live": true,
+    "cleanup_leaves": 1,
+    "cleanup_returns": 0,
+    "disowned_flag": false,
+    "expired": null,
+    "expired_row_removed": true,
+    "live": {
+      "role": "operator",
+      "token": "t1",
+      "was_hijack_owner": false,
+      "worker_id": "w1"
+    },
+    "missing": null,
+    "owned_flag": true,
+    "revoked": null
+  },
   "session_state": {
     "after_clear": {
       "event_seq": 0,
@@ -354,5 +419,75 @@
     "session_state",
     "tunnel_invite_state",
     "webhooks"
-  ]
+  ],
+  "webhooks": {
+    "after_update": [
+      {
+        "event_types": [],
+        "pattern": null,
+        "secret": null,
+        "session_id": "s1",
+        "url": "https://example/moved",
+        "webhook_id": "h1"
+      }
+    ],
+    "both": [
+      {
+        "event_types": null,
+        "pattern": null,
+        "secret": null,
+        "session_id": "s1",
+        "url": "https://example/hook",
+        "webhook_id": "h1"
+      },
+      {
+        "event_types": [
+          "output",
+          "exit"
+        ],
+        "pattern": "ERROR",
+        "secret": "sh",
+        "session_id": "s1",
+        "url": "https://example/other",
+        "webhook_id": "h2"
+      }
+    ],
+    "deleted": true,
+    "deleted_again": false,
+    "empty": [],
+    "minimal": [
+      {
+        "event_types": null,
+        "pattern": null,
+        "secret": null,
+        "session_id": "s1",
+        "url": "https://example/hook",
+        "webhook_id": "h1"
+      }
+    ],
+    "missing": false,
+    "other_session": [
+      {
+        "event_types": null,
+        "pattern": null,
+        "secret": null,
+        "session_id": "s2",
+        "url": "https://example/theirs",
+        "webhook_id": "h3"
+      }
+    ],
+    "remaining": [
+      {
+        "event_types": [
+          "output",
+          "exit"
+        ],
+        "pattern": "ERROR",
+        "secret": "sh",
+        "session_id": "s1",
+        "url": "https://example/other",
+        "webhook_id": "h2"
+      }
+    ]
+  }
 }

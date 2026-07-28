@@ -286,6 +286,136 @@ def _record_events() -> dict[str, Any]:
     }
 
 
+def _record_webhooks() -> dict[str, Any]:
+    """Webhook registrations, which are per session."""
+    store, _ = _store()
+    empty = store.load_webhooks("s1")
+    store.save_webhook("h1", "s1", "https://example/hook")
+    minimal = store.load_webhooks("s1")
+    store.save_webhook(
+        "h2",
+        "s1",
+        "https://example/other",
+        event_types=["output", "exit"],
+        pattern="ERROR",
+        secret="sh",  # noqa: S106 - a corpus fixture, never a credential
+    )
+    both = store.load_webhooks("s1")
+    store.save_webhook("h3", "s2", "https://example/theirs")
+    other_session = store.load_webhooks("s2")
+
+    # A second save under one id replaces it rather than adding another.
+    store.save_webhook("h1", "s1", "https://example/moved", event_types=[])
+    after_update = [w for w in store.load_webhooks("s1") if w["webhook_id"] == "h1"]
+
+    deleted = store.delete_webhook("h1")
+    deleted_again = store.delete_webhook("h1")
+    missing = store.delete_webhook("never")
+
+    return {
+        "empty": empty,
+        "minimal": minimal,
+        "both": sorted(both, key=lambda w: w["webhook_id"]),
+        "other_session": other_session,
+        "after_update": after_update,
+        "deleted": deleted,
+        "deleted_again": deleted_again,
+        "missing": missing,
+        "remaining": sorted(store.load_webhooks("s1"), key=lambda w: w["webhook_id"]),
+    }
+
+
+def _record_resume_tokens() -> dict[str, Any]:
+    """Resume tokens, which let a browser pick a session back up."""
+    store, _ = _store()
+    missing = store.get_resume_token("t0")
+
+    store.create_resume_token("t1", "w1", "operator", 300.0)
+    live = store.get_resume_token("t1")
+
+    store.mark_resume_hijack_owner("t1", True)
+    owned = store.get_resume_token("t1")
+    store.mark_resume_hijack_owner("t1", False)
+    disowned = store.get_resume_token("t1")
+
+    store.revoke_resume_token("t1")
+    revoked = store.get_resume_token("t1")
+
+    # An expired token is refused *and* removed on the way out.
+    expired_store, expired_conn = _store()
+    expired_store.create_resume_token("t2", "w1", "viewer", -1.0)
+    expired = expired_store.get_resume_token("t2")
+    rows_after_expiry = _row_count(expired_conn, "resume_tokens")
+
+    # A row written with no role reads as the least privileged one.
+    blank, _ = _store()
+    blank._run(
+        "INSERT INTO resume_tokens(token,worker_id,role,was_hijack_owner,created_at,expires_at) VALUES(?,?,?,?,?,?)",
+        "t3",
+        "w1",
+        "",
+        0,
+        0.0,
+        NOW * 2,
+    )
+    blank_role = blank.get_resume_token("t3")
+
+    swept, swept_conn = _store()
+    swept.create_resume_token("keep", "w1", "viewer", 3600.0)
+    swept.create_resume_token("drop", "w1", "viewer", -1.0)
+    swept_returned = swept.cleanup_expired_tokens()
+    swept_remaining = _row_count(swept_conn, "resume_tokens")
+
+    return {
+        "missing": missing,
+        "live": {k: v for k, v in (live or {}).items() if k not in {"created_at", "expires_at"}},
+        "owned_flag": (owned or {}).get("was_hijack_owner"),
+        "disowned_flag": (disowned or {}).get("was_hijack_owner"),
+        "revoked": revoked,
+        "expired": expired,
+        "expired_row_removed": rows_after_expiry == 0,
+        "blank_role": (blank_role or {}).get("role"),
+        "cleanup_returns": swept_returned,
+        "cleanup_leaves": swept_remaining,
+        "cleanup_kept_live": swept.get_resume_token("keep") is not None,
+    }
+
+
+def _record_recording() -> dict[str, Any]:
+    """The recording view of the event log."""
+    store, _ = _store()
+    empty = store.list_recording_entries("w1")
+    for index in range(5):
+        store.append_event("w1", "output" if index % 2 == 0 else "resize", {"n": index})
+
+    tail = store.list_recording_entries("w1")
+    tail_limited = store.list_recording_entries("w1", limit=2)
+    from_start = store.list_recording_entries("w1", offset=0)
+    offset_one = store.list_recording_entries("w1", offset=1, limit=2)
+    filtered = store.list_recording_entries("w1", event="output")
+    filtered_tail = store.list_recording_entries("w1", event="output", limit=1)
+    over_limit = store.list_recording_entries("w1", limit=10_000)
+    under_limit = store.list_recording_entries("w1", limit=0)
+    negative_offset = store.list_recording_entries("w1", offset=-5, limit=2)
+
+    def _ns(entries: list[dict[str, Any]]) -> list[Any]:
+        return [entry["data"]["n"] for entry in entries]
+
+    return {
+        "empty": empty,
+        "tail": _ns(tail),
+        "tail_limited": _ns(tail_limited),
+        "from_start": _ns(from_start),
+        "offset_one": _ns(offset_one),
+        "filtered": _ns(filtered),
+        "filtered_tail": _ns(filtered_tail),
+        "over_limit": len(over_limit),
+        "under_limit": _ns(under_limit),
+        "negative_offset": _ns(negative_offset),
+        "shape": {k: v for k, v in tail[0].items() if k != "ts"},
+    }
+
+
 def _without_deleted(session: dict[str, Any] | None) -> dict[str, Any] | None:
     """A session without its deletion timestamp, which is a wall clock."""
     if session is None:
@@ -307,6 +437,9 @@ def main() -> int:
         "invite_state": _record_invite_state(),
         "session_state": _record_session_state(),
         "events": _record_events(),
+        "webhooks": _record_webhooks(),
+        "resume_tokens": _record_resume_tokens(),
+        "recording": _record_recording(),
     }
     OUT.write_text(json.dumps(corpus, indent=2, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8")
     print(f"wrote {OUT} ({len(corpus['tables'])} tables, {len(META_CASES)} meta cases)")

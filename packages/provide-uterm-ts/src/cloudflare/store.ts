@@ -59,6 +59,42 @@ export interface SessionEvent {
   data: unknown;
 }
 
+/** A registered webhook. */
+export interface WebhookRecord {
+  webhook_id: string;
+  session_id: string;
+  url: string;
+  event_types: unknown;
+  pattern: unknown;
+  secret: unknown;
+}
+
+/** A token that lets a browser pick a session back up. */
+export interface ResumeTokenRecord {
+  token: unknown;
+  worker_id: unknown;
+  role: string;
+  was_hijack_owner: boolean;
+  created_at: number;
+  expires_at: number;
+}
+
+/** One entry in the recording view of the log. */
+export interface RecordingEntry {
+  ts: number;
+  event: string;
+  data: unknown;
+}
+
+/** How a recording is queried. */
+export interface RecordingQuery {
+  limit?: number;
+  /** Where to start. Absent means the tail. */
+  offset?: number;
+  /** Only entries of this type. */
+  event?: string;
+}
+
 /** Options for {@link SqliteStateStore}. */
 export interface SqliteStateStoreOptions {
   maxEventsPerWorker?: number;
@@ -431,6 +467,178 @@ export class SqliteStateStore {
       type: String(row.event_type),
       data: JSON.parse(String(supplied(row.payload_json) ?? "{}")) as unknown,
     }));
+  }
+
+  /**
+   * The recording view of the log.
+   *
+   * With no offset this reads the *tail* — the most recent entries, returned
+   * oldest-first so they play back in order. With one it reads forwards from
+   * that point. The limit is clamped at both ends: a request for none would
+   * return an empty recording, and one for everything would try to hold a
+   * long session in memory.
+   */
+  listRecordingEntries(workerId: string, query: RecordingQuery = {}): RecordingEntry[] {
+    const limit = Math.max(1, Math.min(Math.trunc(query.limit ?? 200), 500));
+    const tail = query.offset === undefined;
+
+    const params: unknown[] = [workerId];
+    let where = "WHERE worker_id = ?";
+    if (query.event !== undefined) {
+      where += " AND event_type = ?";
+      params.push(query.event);
+    }
+    params.push(limit);
+    let suffix = `${tail ? "ORDER BY seq DESC" : "ORDER BY seq ASC"} LIMIT ?`;
+    if (!tail) {
+      suffix += " OFFSET ?";
+      // Clamped as the reference clamps it. SQLite reads a negative offset as
+      // none, so this changes no answer — it says that reading from before
+      // the start means reading from the start.
+      params.push(Math.max(0, Math.trunc(query.offset as number)));
+    }
+
+    // Every caller value goes through a placeholder; the string only stitches
+    // together fragments written here.
+    const rows = this.#rows(`SELECT ts, event_type, payload_json FROM session_events ${where} ${suffix}`, ...params);
+    if (tail) {
+      rows.reverse();
+    }
+    return rows.map((row) => ({
+      ts: Number(row.ts),
+      event: String(row.event_type),
+      data: JSON.parse(String(supplied(row.payload_json) ?? "{}")) as unknown,
+    }));
+  }
+
+  /** Register somewhere to send a session's events, replacing any by that id. */
+  saveWebhook(
+    webhookId: string,
+    sessionId: string,
+    url: string,
+    options: { eventTypes?: string[]; pattern?: string; secret?: string } = {},
+  ): void {
+    this.#rows(
+      `
+            INSERT INTO webhooks(webhook_id, session_id, url, event_types_json, pattern, secret)
+            VALUES(?, ?, ?, ?, ?, ?)
+            ON CONFLICT(webhook_id) DO UPDATE SET
+                url = excluded.url,
+                event_types_json = excluded.event_types_json,
+                pattern = excluded.pattern,
+                secret = excluded.secret
+            `,
+      webhookId,
+      sessionId,
+      url,
+      // Absent and empty are different: no list means every event, an empty
+      // one means none.
+      options.eventTypes === undefined ? null : JSON.stringify(options.eventTypes),
+      options.pattern ?? null,
+      options.secret ?? null,
+    );
+  }
+
+  /** Every webhook registered for one session. */
+  loadWebhooks(sessionId: string): WebhookRecord[] {
+    const rows = this.#rows(
+      `
+                SELECT webhook_id, session_id, url, event_types_json, pattern, secret
+                FROM webhooks
+                WHERE session_id = ?
+                `,
+      sessionId,
+    );
+    return rows.map((row) => ({
+      webhook_id: String(row.webhook_id),
+      session_id: String(row.session_id),
+      url: String(row.url),
+      event_types: JSON.parse(String(supplied(row.event_types_json) ?? "null")) as unknown,
+      pattern: row.pattern ?? null,
+      secret: row.secret ?? null,
+    }));
+  }
+
+  /**
+   * Remove a webhook.
+   *
+   * @returns Whether there was one to remove, so a caller can answer "no such
+   *   webhook" rather than reporting a success that did nothing.
+   */
+  deleteWebhook(webhookId: string): boolean {
+    if (this.#row("SELECT webhook_id FROM webhooks WHERE webhook_id = ?", webhookId) === undefined) {
+      return false;
+    }
+    this.#rows("DELETE FROM webhooks WHERE webhook_id = ?", webhookId);
+    return true;
+  }
+
+  /** Mint a token that lets a browser pick this session back up. */
+  createResumeToken(token: string, workerId: string, role: string, ttlSeconds: number): void {
+    const now = this.#now();
+    this.#rows(
+      `
+            INSERT INTO resume_tokens(token, worker_id, role, was_hijack_owner, created_at, expires_at)
+            VALUES(?, ?, ?, 0, ?, ?)
+            `,
+      token,
+      workerId,
+      role,
+      now,
+      now + ttlSeconds,
+    );
+  }
+
+  /**
+   * Read a resume token, if it is still good.
+   *
+   * An expired one is removed on the way out rather than merely refused, so a
+   * token that has lapsed cannot be used and does not linger.
+   */
+  getResumeToken(token: string): ResumeTokenRecord | undefined {
+    const row = this.#row(
+      "SELECT token, worker_id, role, was_hijack_owner, created_at, expires_at FROM resume_tokens WHERE token = ?",
+      token,
+    );
+    if (row === undefined) {
+      return undefined;
+    }
+    const expiresAt = Number(row.expires_at);
+    if (this.#now() > expiresAt) {
+      this.revokeResumeToken(token);
+      return undefined;
+    }
+    return {
+      token: row.token,
+      worker_id: row.worker_id,
+      // The least privileged reading of a row that does not say.
+      role: String(supplied(row.role) ?? "viewer"),
+      was_hijack_owner: Boolean(Number(row.was_hijack_owner)),
+      created_at: Number(row.created_at),
+      expires_at: expiresAt,
+    };
+  }
+
+  /** Record whether this token's holder had the keyboard. */
+  markResumeHijackOwner(token: string, isOwner: boolean): void {
+    this.#rows("UPDATE resume_tokens SET was_hijack_owner = ? WHERE token = ?", isOwner ? 1 : 0, token);
+  }
+
+  /** Invalidate a resume token. */
+  revokeResumeToken(token: string): void {
+    this.#rows("DELETE FROM resume_tokens WHERE token = ?", token);
+  }
+
+  /**
+   * Remove every lapsed token.
+   *
+   * Returns zero rather than a count: not every executor reports how many
+   * rows a delete touched, and a number that was sometimes right would be
+   * worse than one that is always the same.
+   */
+  cleanupExpiredTokens(): number {
+    this.#rows("DELETE FROM resume_tokens WHERE expires_at <= ?", this.#now());
+    return 0;
   }
 
   /** Record the last screen, so a reconnecting browser has something to draw. */
