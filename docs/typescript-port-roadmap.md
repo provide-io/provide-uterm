@@ -115,6 +115,30 @@ corpus match CPython byte for byte.
 | `manager` | External Management Tier | `manager` | todo |
 | `mcp` | client `ai`/MCP (28 tools) | `mcp` | todo |
 | `cli` | server CLI (`uterm`) | `cli` | todo |
+| `cloudflare` | `provide-uterm-cloudflare` (53 files, ~8.3k lines) | — | todo — see below |
+
+#### Cloudflare Durable Objects
+
+Python-only: neither the Go nor the C# port has any Cloudflare surface, so
+this is a place where TypeScript lags the *reference* rather than its
+siblings. The Python package covers the Worker entry point, the Durable
+Object adapter (`do/ushell.py` with its persistence, SSE and webhook
+helpers), the CF transport, JWT auth, route definitions and UI assets.
+
+Two things make it unlike the other outstanding modules:
+
+- **It needs no new runtime dependency.** The Workers types are dev-only
+  (`@cloudflare/workers-types`) and `wrangler` is already in the repo for the
+  existing Worker.
+- **The port would be a better fit than the reference.** The Worker currently
+  runs Python on Pyodide with `python_modules` vendored by
+  `.ci/vendor_cf_worker.sh` and a CI job guarding the vendored tree.
+  TypeScript is the native language of that runtime, so a TS Durable Object
+  drops Pyodide, the vendored tree and the vendor-check job together.
+
+Sized as a large unit — comparable to the hub — and worth taking as one
+subsystem rather than in pieces, because the Worker entry, the DO and the
+transport only make sense together.
 
 ### Browser
 
