@@ -10,3 +10,4 @@
  */
 
 export * from "./divergence.ts";
+export * from "./models.ts";
