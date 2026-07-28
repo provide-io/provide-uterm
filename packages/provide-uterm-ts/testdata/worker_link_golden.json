@@ -1,0 +1,377 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_worker_link_golden.py",
+ "reconnect_backoff": [
+  1,
+  2,
+  5,
+  10,
+  30
+ ],
+ "permanent_statuses": [
+  401,
+  403,
+  404
+ ],
+ "urls": [
+  {
+   "name": "https",
+   "manager_url": "https://hub.example",
+   "path": "/ws/worker/w1/term",
+   "url": "wss://hub.example/ws/worker/w1/term"
+  },
+  {
+   "name": "http",
+   "manager_url": "http://hub.example",
+   "path": "/ws/worker/w1/term",
+   "url": "ws://hub.example/ws/worker/w1/term"
+  },
+  {
+   "name": "https with a trailing slash",
+   "manager_url": "https://hub.example/",
+   "path": "/ws/worker/w1/term",
+   "url": "wss://hub.example/ws/worker/w1/term"
+  },
+  {
+   "name": "http with several trailing slashes",
+   "manager_url": "http://hub.example///",
+   "path": "/ws/worker/w1/term",
+   "url": "ws://hub.example/ws/worker/w1/term"
+  },
+  {
+   "name": "https with a port",
+   "manager_url": "https://hub.example:8443",
+   "path": "/ws/worker/w1/term",
+   "url": "wss://hub.example:8443/ws/worker/w1/term"
+  },
+  {
+   "name": "https with a base path",
+   "manager_url": "https://hub.example/uterm",
+   "path": "/ws/worker/w1/term",
+   "url": "wss://hub.example/uterm/ws/worker/w1/term"
+  },
+  {
+   "name": "already wss",
+   "manager_url": "wss://hub.example",
+   "path": "/ws/worker/w1/term",
+   "url": "wss://hub.example/ws/worker/w1/term"
+  },
+  {
+   "name": "already ws",
+   "manager_url": "ws://hub.example",
+   "path": "/ws/worker/w1/term",
+   "url": "ws://hub.example/ws/worker/w1/term"
+  },
+  {
+   "name": "no scheme",
+   "manager_url": "hub.example",
+   "path": "/ws/worker/w1/term",
+   "url": "hub.example/ws/worker/w1/term"
+  },
+  {
+   "name": "empty",
+   "manager_url": "",
+   "path": "/ws/worker/w1/term",
+   "url": "/ws/worker/w1/term"
+  },
+  {
+   "name": "uppercase scheme is not rewritten",
+   "manager_url": "HTTPS://hub.example",
+   "path": "/ws/worker/w1/term",
+   "url": "HTTPS://hub.example/ws/worker/w1/term"
+  },
+  {
+   "name": "http inside the host is not rewritten",
+   "manager_url": "https://http.example",
+   "path": "/ws/worker/w1/term",
+   "url": "wss://http.example/ws/worker/w1/term"
+  },
+  {
+   "name": "scheme-like text after another scheme",
+   "manager_url": "ftp://hub.example/http://inner",
+   "path": "/ws/worker/w1/term",
+   "url": "ftp://hub.example/http://inner/ws/worker/w1/term"
+  },
+  {
+   "name": "scheme-like text in a path",
+   "manager_url": "https://hub.example/proxy/http://inner",
+   "path": "/ws/worker/w1/term",
+   "url": "wss://hub.example/proxy/http://inner/ws/worker/w1/term"
+  }
+ ],
+ "frames": [
+  {
+   "name": "term data",
+   "message": {
+    "type": "term",
+    "data": "hello"
+   },
+   "encoded": "hello"
+  },
+  {
+   "name": "term with no data",
+   "message": {
+    "type": "term"
+   },
+   "encoded": ""
+  },
+  {
+   "name": "status",
+   "message": {
+    "type": "status",
+    "hijacked": true,
+    "ts": 1.5
+   },
+   "encoded": "\u0010\u00020000002a:{\"type\":\"status\",\"hijacked\":true,\"ts\":1.5}"
+  },
+  {
+   "name": "snapshot",
+   "message": {
+    "type": "snapshot",
+    "screen": "x"
+   },
+   "encoded": "\u0010\u000200000020:{\"type\":\"snapshot\",\"screen\":\"x\"}"
+  },
+  {
+   "name": "no type",
+   "message": {
+    "data": "hello"
+   },
+   "encoded": "\u0010\u000200000010:{\"data\":\"hello\"}"
+  },
+  {
+   "name": "null type",
+   "message": {
+    "type": null,
+    "data": "hello"
+   },
+   "encoded": "\u0010\u00020000001c:{\"type\":null,\"data\":\"hello\"}"
+  }
+ ],
+ "safe_ints": [
+  {
+   "name": "integer",
+   "value": 40,
+   "default": 80,
+   "min_val": 1,
+   "result": 40
+  },
+  {
+   "name": "zero with a floor",
+   "value": 0,
+   "default": 25,
+   "min_val": 1,
+   "result": 25
+  },
+  {
+   "name": "zero with no floor",
+   "value": 0,
+   "default": 25,
+   "min_val": null,
+   "result": 0
+  },
+  {
+   "name": "negative with a floor",
+   "value": -1,
+   "default": 80,
+   "min_val": 1,
+   "result": 80
+  },
+  {
+   "name": "negative with no floor",
+   "value": -1,
+   "default": 80,
+   "min_val": null,
+   "result": -1
+  },
+  {
+   "name": "numeric string",
+   "value": "123",
+   "default": 0,
+   "min_val": null,
+   "result": 123
+  },
+  {
+   "name": "numeric string with spaces",
+   "value": " 123 ",
+   "default": 0,
+   "min_val": null,
+   "result": 123
+  },
+  {
+   "name": "float",
+   "value": 40.9,
+   "default": 80,
+   "min_val": 1,
+   "result": 40
+  },
+  {
+   "name": "negative float",
+   "value": -40.9,
+   "default": 80,
+   "min_val": null,
+   "result": -40
+  },
+  {
+   "name": "float string is refused",
+   "value": "1.5",
+   "default": 80,
+   "min_val": null,
+   "result": 80
+  },
+  {
+   "name": "empty string",
+   "value": "",
+   "default": 80,
+   "min_val": null,
+   "result": 80
+  },
+  {
+   "name": "word",
+   "value": "bad",
+   "default": 80,
+   "min_val": null,
+   "result": 80
+  },
+  {
+   "name": "none",
+   "value": null,
+   "default": 42,
+   "min_val": null,
+   "result": 42
+  },
+  {
+   "name": "list",
+   "value": [
+    1,
+    2
+   ],
+   "default": 25,
+   "min_val": null,
+   "result": 25
+  },
+  {
+   "name": "bool true",
+   "value": true,
+   "default": 80,
+   "min_val": null,
+   "result": 1
+  },
+  {
+   "name": "bool false",
+   "value": false,
+   "default": 80,
+   "min_val": null,
+   "result": 0
+  },
+  {
+   "name": "at the floor",
+   "value": 1,
+   "default": 80,
+   "min_val": 1,
+   "result": 1
+  },
+  {
+   "name": "underscore separated",
+   "value": "1_0",
+   "default": 80,
+   "min_val": null,
+   "result": 10
+  },
+  {
+   "name": "unicode digits",
+   "value": "٣",
+   "default": 80,
+   "min_val": null,
+   "result": 3
+  },
+  {
+   "name": "superscript digit is refused",
+   "value": "²",
+   "default": 80,
+   "min_val": null,
+   "result": 80
+  },
+  {
+   "name": "leading plus",
+   "value": "+7",
+   "default": 80,
+   "min_val": null,
+   "result": 7
+  },
+  {
+   "name": "leading minus",
+   "value": "-7",
+   "default": 80,
+   "min_val": null,
+   "result": -7
+  },
+  {
+   "name": "leading underscore is refused",
+   "value": "_10",
+   "default": 80,
+   "min_val": null,
+   "result": 80
+  },
+  {
+   "name": "trailing underscore is refused",
+   "value": "10_",
+   "default": 80,
+   "min_val": null,
+   "result": 80
+  },
+  {
+   "name": "doubled underscore is refused",
+   "value": "1__0",
+   "default": 80,
+   "min_val": null,
+   "result": 80
+  },
+  {
+   "name": "newline padding",
+   "value": "\n12\t",
+   "default": 80,
+   "min_val": null,
+   "result": 12
+  },
+  {
+   "name": "hex is refused",
+   "value": "0x10",
+   "default": 80,
+   "min_val": null,
+   "result": 80
+  },
+  {
+   "name": "plus with spaces is refused",
+   "value": "+ 7",
+   "default": 80,
+   "min_val": null,
+   "result": 80
+  },
+  {
+   "name": "very large",
+   "value": "999999999999999999999999999999",
+   "default": 80,
+   "min_val": null,
+   "result": 999999999999999999999999999999
+  },
+  {
+   "name": "none with a fractional default",
+   "value": null,
+   "default": 25.7,
+   "min_val": null,
+   "result": 25
+  },
+  {
+   "name": "word with a fractional default",
+   "value": "bad",
+   "default": 25.7,
+   "min_val": null,
+   "result": 25.7
+  }
+ ],
+ "resize_defaults": {
+  "cols": 80,
+  "rows": 25,
+  "min": 1
+ }
+}
