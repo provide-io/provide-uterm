@@ -129,7 +129,7 @@ corpus match CPython byte for byte.
 |---|---|---|---|
 | `auth` | `auth` | `auth` | **done** — OpenSSH fingerprints, the authorized_keys grammar, and both reference resolvers |
 | `serverauth` | server `auth*`, `webhook*`, `api_keys`, `dev_idp` | `serverauth` | **partial** — webhook signing, the RBAC allow-list and the API-key store; the auth modes and dev IDP outstanding |
-| `serverconfig` | server `config*`, `profiles` | `serverconfig` | **partial** — the outbound-URL guard, mount-path normalisation, every cross-field validator, TOML loading with its structural pass and relative-path resolution, and the security-posture report; the Pydantic schema itself and profiles outstanding |
+| `serverconfig` | server `config*`, `profiles` | `serverconfig` | **partial** — the outbound-URL guard, mount-path normalisation, every cross-field validator, TOML loading with its structural pass and relative-path resolution, the security-posture report and the security response headers; the Pydantic schema itself and profiles outstanding |
 | `controlplane` | `control/plane` (+ memory/sqlite/bootstrap) | `controlplane` | **partial** — the record types, the in-memory backend with its optimistic concurrency, the reaper, the audit head and the bootstrap; the SQLite backend outstanding |
 | `hub` | server `bridge/hub` (nine services) | `hub` | **done** — all nine services, plus the state model, frame encoders, prompt guards and the regex-safety validator |
 | `bridge` | `bridge` worker side | `bridge` | **done** — authorization matrix, hijack coordinator, protocol contract, hijackable primitives and the worker link |
@@ -365,6 +365,7 @@ in a test so it cannot drift silently.
 | `vt` | An unhandled C0 control is drawn, where pyte stalls its parser and swallows the rest of the stream | Matches the Go port; a stray byte freezing the display permanently is a bug, not a contract |
 | `pycompat` | An integral number renders as a Python `int`; insertion order is not preserved for integer-like object keys | JavaScript has one number type and reorders such keys — neither affects the canonical signing path |
 | `ansi` | Token digit classes are ASCII-only, so a Unicode-digit token is left verbatim | Same `\d` boundary as `redaction`; the patterns spell `[0-9]` to make the intent explicit |
+| `serverconfig` | `security.mode` is compared verbatim for headers and normalised for the posture report | The reference's own inconsistency, carried over: a config writing `STRICT` reports as strict and serves the relaxed headers |
 | `cloudflare/sse` | An event field holding a whole-valued float renders as `1700000000`, not `1700000000.0` | The `pycompat` number divergence reaching a wire format: both ends read the field as JSON, so the value survives — only the bytes differ |
 | `cloudflare/sse` | An `after_seq` beyond 2^53−1 is rounded to the nearest double | Both then ask for events after a sequence larger than any that exists, so the answer is the same; the number asked for is not |
 | `cloudflare/jwt` | A `null` inside a roles claim stringifies to `"null"`, not `"None"` | `str(None)` against `String(null)`; inert either way, since neither is a role this system knows and the principal resolves identically |
