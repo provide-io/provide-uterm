@@ -54,7 +54,7 @@ module; the Go column names the sibling package for cross-checking.
 | Module | Python | Go | Status |
 |---|---|---|---|
 | `ctrlmsg` | `control_channel_builders`, `control_channel_patterns` | `ctrlmsg` | **done** |
-| `frames` | `bridge/schemas`, server `bridge/frames` | `frames` | todo |
+| `frames` | `bridge/schemas`, server `bridge/frames` | `frames` | **done** |
 | `recording` | `recording` | `recording` | todo |
 | `session-logger` | `session_logger` | `sessionlogger` | todo |
 
