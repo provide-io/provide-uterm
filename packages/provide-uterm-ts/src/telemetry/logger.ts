@@ -19,8 +19,8 @@
  * the interface `@provide-io/telemetry` exports. That is deliberate: it keeps
  * every library module decoupled from the concrete implementation, and it
  * works today. The concrete `getLogger` is **not** re-exported yet because
- * `@provide-io/telemetry@0.5.2` cannot be loaded by Node — see the "Blocked:
- * telemetry" section of `docs/typescript-port-roadmap.md` for the
+ * `@provide-io/telemetry@0.5.2` cannot be loaded by Node — see the "Telemetry:
+ * fixed upstream" section of `docs/typescript-port-roadmap.md` for the
  * reproduction and the upstream fix. When that lands, this module re-exports
  * the real `getLogger` and swaps this interface for the imported one, which
  * is a type-level no-op for every caller.

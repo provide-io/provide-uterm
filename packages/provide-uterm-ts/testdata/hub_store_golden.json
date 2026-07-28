@@ -1,0 +1,258 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_hub_store_golden.py",
+ "now": 1000.0,
+ "max_buffer_chars": 16,
+ "buffers": [
+  {
+   "name": "no newline, empty buffer",
+   "prior": "",
+   "data": "ls",
+   "command": null,
+   "buffered_after": "ls"
+  },
+  {
+   "name": "no newline, accumulating",
+   "prior": "ls ",
+   "data": "-la",
+   "command": null,
+   "buffered_after": "ls -la"
+  },
+  {
+   "name": "linefeed completes a command",
+   "prior": "ls",
+   "data": "\n",
+   "command": "ls\n",
+   "buffered_after": null
+  },
+  {
+   "name": "carriage return completes a command",
+   "prior": "ls",
+   "data": "\r",
+   "command": "ls\r",
+   "buffered_after": null
+  },
+  {
+   "name": "crlf completes a command",
+   "prior": "ls",
+   "data": "\r\n",
+   "command": "ls\r\n",
+   "buffered_after": null
+  },
+  {
+   "name": "newline mid-payload keeps the tail",
+   "prior": "",
+   "data": "ls\nrm -rf /",
+   "command": "ls\nrm -rf /",
+   "buffered_after": null
+  },
+  {
+   "name": "newline alone",
+   "prior": "",
+   "data": "\n",
+   "command": "\n",
+   "buffered_after": null
+  },
+  {
+   "name": "exactly at the cap",
+   "prior": "aaaaaaaaaaaaaaa",
+   "data": "b",
+   "command": null,
+   "buffered_after": "aaaaaaaaaaaaaaab"
+  },
+  {
+   "name": "one past the cap",
+   "prior": "aaaaaaaaaaaaaaaa",
+   "data": "b",
+   "command": null,
+   "buffered_after": null
+  },
+  {
+   "name": "over the cap in one write",
+   "prior": "",
+   "data": "aaaaaaaaaaaaaaaaa",
+   "command": null,
+   "buffered_after": null
+  },
+  {
+   "name": "over the cap even with a newline",
+   "prior": "",
+   "data": "aaaaaaaaaaaaaaaaaaaa\n",
+   "command": null,
+   "buffered_after": null
+  }
+ ],
+ "buffer_isolation": {
+  "first": "one\n",
+  "second": "two\n"
+ },
+ "clamps": [
+  {
+   "name": "below the floor",
+   "lease_s": 0,
+   "clamped": 1
+  },
+  {
+   "name": "negative",
+   "lease_s": -5,
+   "clamped": 1
+  },
+  {
+   "name": "at the floor",
+   "lease_s": 1,
+   "clamped": 1
+  },
+  {
+   "name": "typical",
+   "lease_s": 90,
+   "clamped": 90
+  },
+  {
+   "name": "at the ceiling",
+   "lease_s": 14400,
+   "clamped": 14400
+  },
+  {
+   "name": "above the ceiling",
+   "lease_s": 14401,
+   "clamped": 14400
+  },
+  {
+   "name": "absurd",
+   "lease_s": 1000000000,
+   "clamped": 14400
+  }
+ ],
+ "hijack": [
+  {
+   "name": "idle",
+   "has_owner": false,
+   "owner_expires_at": null,
+   "session_expires_at": null,
+   "has_valid_rest_lease": false,
+   "is_dashboard_hijack_active": false,
+   "is_hijacked": false,
+   "lease_view_is_dashboard_active": false
+  },
+  {
+   "name": "dashboard owner, unexpired",
+   "has_owner": true,
+   "owner_expires_at": 1010.0,
+   "session_expires_at": null,
+   "has_valid_rest_lease": false,
+   "is_dashboard_hijack_active": true,
+   "is_hijacked": true,
+   "lease_view_is_dashboard_active": true
+  },
+  {
+   "name": "dashboard owner, expiring exactly now",
+   "has_owner": true,
+   "owner_expires_at": 1000.0,
+   "session_expires_at": null,
+   "has_valid_rest_lease": false,
+   "is_dashboard_hijack_active": false,
+   "is_hijacked": false,
+   "lease_view_is_dashboard_active": false
+  },
+  {
+   "name": "dashboard owner, expired",
+   "has_owner": true,
+   "owner_expires_at": 990.0,
+   "session_expires_at": null,
+   "has_valid_rest_lease": false,
+   "is_dashboard_hijack_active": false,
+   "is_hijacked": false,
+   "lease_view_is_dashboard_active": false
+  },
+  {
+   "name": "dashboard owner, no expiry",
+   "has_owner": true,
+   "owner_expires_at": null,
+   "session_expires_at": null,
+   "has_valid_rest_lease": false,
+   "is_dashboard_hijack_active": true,
+   "is_hijacked": true,
+   "lease_view_is_dashboard_active": false
+  },
+  {
+   "name": "rest lease, unexpired",
+   "has_owner": false,
+   "owner_expires_at": null,
+   "session_expires_at": 1010.0,
+   "has_valid_rest_lease": true,
+   "is_dashboard_hijack_active": false,
+   "is_hijacked": true,
+   "lease_view_is_dashboard_active": false
+  },
+  {
+   "name": "rest lease, expiring exactly now",
+   "has_owner": false,
+   "owner_expires_at": null,
+   "session_expires_at": 1000.0,
+   "has_valid_rest_lease": false,
+   "is_dashboard_hijack_active": false,
+   "is_hijacked": false,
+   "lease_view_is_dashboard_active": false
+  },
+  {
+   "name": "rest lease, expired",
+   "has_owner": false,
+   "owner_expires_at": null,
+   "session_expires_at": 990.0,
+   "has_valid_rest_lease": false,
+   "is_dashboard_hijack_active": false,
+   "is_hijacked": false,
+   "lease_view_is_dashboard_active": false
+  },
+  {
+   "name": "dashboard expired, rest live",
+   "has_owner": true,
+   "owner_expires_at": 990.0,
+   "session_expires_at": 1010.0,
+   "has_valid_rest_lease": true,
+   "is_dashboard_hijack_active": false,
+   "is_hijacked": true,
+   "lease_view_is_dashboard_active": false
+  }
+ ],
+ "metric": {
+  "seen": [
+   [
+    "default_value",
+    1
+   ],
+   [
+    "explicit",
+    5
+   ],
+   [
+    "truncated",
+    2
+   ],
+   [
+    "negative",
+    -3
+   ]
+  ]
+ },
+ "notify": {
+  "sync_raise_propagates": true,
+  "seen": [
+   [
+    "w1",
+    true,
+    "operator"
+   ],
+   [
+    "w2",
+    false,
+    null
+   ],
+   [
+    "w3",
+    true,
+    "admin"
+   ]
+  ],
+  "async_callback_ran_before_yield": false
+ }
+}

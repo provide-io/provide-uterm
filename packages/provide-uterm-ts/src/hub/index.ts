@@ -13,3 +13,4 @@
 export * from "./approvals.ts";
 export * from "./models.ts";
 export * from "./registry.ts";
+export * from "./store.ts";
