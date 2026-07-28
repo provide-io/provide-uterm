@@ -115,7 +115,7 @@ corpus match CPython byte for byte.
 | `manager` | External Management Tier | `manager` | todo |
 | `mcp` | client `ai`/MCP (28 tools) | `mcp` | todo |
 | `cli` | server CLI (`uterm`) | `cli` | todo |
-| `cloudflare` | `provide-uterm-cloudflare` (53 files, ~8.3k lines) | — | todo — see below |
+| `cloudflare` | `provide-uterm-cloudflare` (53 files, ~8.3k lines) | — | **partial** — the Worker configuration with its startup refusals; the Worker entry, Durable Object, transport, auth and routes outstanding |
 
 #### Cloudflare Durable Objects
 

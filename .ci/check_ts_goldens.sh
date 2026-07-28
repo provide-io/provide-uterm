@@ -31,13 +31,22 @@ for generator in "$testdata"/gen_*_golden.py; do
     continue
   fi
 
+  # A generator that drives a workspace package outside the root environment
+  # declares it with a `# uv-package: <name>` marker on its own line.
+  package="$(sed -n 's/^# uv-package: *//p' "$generator" | head -1)"
+  if [[ -n "$package" ]]; then
+    run=(uv run --package "$package" python "$generator")
+  else
+    run=(uv run python "$generator")
+  fi
+
   before="$(shasum -a 256 "$corpus" | cut -d' ' -f1)"
-  uv run python "$generator" >/dev/null
+  "${run[@]}" >/dev/null
   after="$(shasum -a 256 "$corpus" | cut -d' ' -f1)"
 
   if [[ "$before" != "$after" ]]; then
     echo "stale golden corpus: $corpus"
-    echo "  regenerate with: uv run python $generator"
+    echo "  regenerate with: ${run[*]}"
     stale+=("$corpus")
   fi
 done
