@@ -14,4 +14,5 @@ export * from "./identity.ts";
 export * from "./names.ts";
 export * from "./presence.ts";
 export * from "./protocol.ts";
+export * from "./service.ts";
 export * from "./transfer.ts";
