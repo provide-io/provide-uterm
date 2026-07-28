@@ -9,5 +9,6 @@
  * Port of the Python package `provide.uterm.server.bridge.fanout`.
  */
 
+export * from "./collector.ts";
 export * from "./divergence.ts";
 export * from "./models.ts";
