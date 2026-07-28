@@ -81,7 +81,7 @@ corpus match CPython byte for byte.
 |---|---|---|---|
 | `session` | `io`, `expect`, protocols | `session` | **done** — guarded sends, prompt waiting, input dispatch, bounded capture, the transport session and the telnet/websocket adapters |
 | `termsession` | `transport_session`, `telnet_session`, `ws_session` | `termsession` | todo |
-| `transports` | client `transports/*` | `transports` | **partial** — telnet RFC 854 framing and negotiation; websocket, SSH, reconnect and chaos outstanding |
+| `transports` | client `transports/*` | `transports` | **partial** — telnet RFC 854 framing and negotiation, and the reconnect budget/backoff; websocket, SSH and chaos outstanding |
 | `connectors` | server `connectors/*` | `connectors` | todo |
 | `pty` | platform PTY connector | `pty` | todo |
 | `embed` | `embed` | `embed` | todo |
