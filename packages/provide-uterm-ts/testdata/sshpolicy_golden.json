@@ -1,0 +1,227 @@
+{
+  "default_max_connections_per_ip": 5,
+  "expected_mode": 384,
+  "expected_mode_repr": "0o600",
+  "foreign_owner": {
+    "message": "refusing to load SSH host key owned by uid 501 (current uid 502)",
+    "uid_offset": 1
+  },
+  "key_permissions": [
+    {
+      "error": null,
+      "mode": 384,
+      "mode_repr": "0o600",
+      "name": "owner read write"
+    },
+    {
+      "error": "refusing to load SSH host key with insecure mode 0o400 (expected 0o600)",
+      "mode": 256,
+      "mode_repr": "0o400",
+      "name": "owner read only"
+    },
+    {
+      "error": "refusing to load SSH host key with insecure mode 0o640 (expected 0o600)",
+      "mode": 416,
+      "mode_repr": "0o640",
+      "name": "group readable"
+    },
+    {
+      "error": "refusing to load SSH host key with insecure mode 0o644 (expected 0o600)",
+      "mode": 420,
+      "mode_repr": "0o644",
+      "name": "world readable"
+    },
+    {
+      "error": "refusing to load SSH host key with insecure mode 0o666 (expected 0o600)",
+      "mode": 438,
+      "mode_repr": "0o666",
+      "name": "world writable"
+    },
+    {
+      "error": "refusing to load SSH host key with insecure mode 0o700 (expected 0o600)",
+      "mode": 448,
+      "mode_repr": "0o700",
+      "name": "executable"
+    },
+    {
+      "error": "refusing to load SSH host key with insecure mode 0o0 (expected 0o600)",
+      "mode": 0,
+      "mode_repr": "0o0",
+      "name": "no permissions"
+    }
+  ],
+  "loopback": [
+    {
+      "host": "127.0.0.1",
+      "loopback": true
+    },
+    {
+      "host": "127.0.0.2",
+      "loopback": true
+    },
+    {
+      "host": "127.255.255.254",
+      "loopback": true
+    },
+    {
+      "host": "::1",
+      "loopback": true
+    },
+    {
+      "host": "localhost",
+      "loopback": true
+    },
+    {
+      "host": "LOCALHOST",
+      "loopback": false
+    },
+    {
+      "host": "localhost.localdomain",
+      "loopback": false
+    },
+    {
+      "host": "0.0.0.0",
+      "loopback": false
+    },
+    {
+      "host": "::",
+      "loopback": false
+    },
+    {
+      "host": "10.0.0.1",
+      "loopback": false
+    },
+    {
+      "host": "192.168.1.10",
+      "loopback": false
+    },
+    {
+      "host": "example.org",
+      "loopback": false
+    },
+    {
+      "host": "",
+      "loopback": false
+    },
+    {
+      "host": "127.0.0.1.",
+      "loopback": false
+    },
+    {
+      "host": "0177.0.0.1",
+      "loopback": false
+    },
+    {
+      "host": "2130706433",
+      "loopback": false
+    },
+    {
+      "host": "::ffff:127.0.0.1",
+      "loopback": true
+    },
+    {
+      "host": "fe80::1",
+      "loopback": false
+    }
+  ],
+  "per_ip_limit": {
+    "events": [
+      {
+        "counts": {
+          "10.0.0.1": 1
+        },
+        "peer": [
+          "10.0.0.1",
+          5000
+        ],
+        "rejected": false
+      },
+      {
+        "counts": {
+          "10.0.0.1": 2
+        },
+        "peer": [
+          "10.0.0.1",
+          5001
+        ],
+        "rejected": false
+      },
+      {
+        "counts": {
+          "10.0.0.1": 2
+        },
+        "peer": [
+          "10.0.0.1",
+          5002
+        ],
+        "rejected": true
+      },
+      {
+        "counts": {
+          "10.0.0.1": 2,
+          "10.0.0.2": 1
+        },
+        "peer": [
+          "10.0.0.2",
+          5003
+        ],
+        "rejected": false
+      },
+      {
+        "counts": {},
+        "peer": null,
+        "rejected": false
+      }
+    ],
+    "limit": 2,
+    "unknown_peer_rejected": false
+  },
+  "start_guard": [
+    {
+      "message": "refusing to start an SSH server that accepts any credential on a non-loopback bind ('0.0.0.0'); pass credentials_validator / public_key_validator, bind to loopback, or set allow_unauthenticated=True to opt in explicitly",
+      "name": "no validators on a public bind",
+      "refused": true
+    },
+    {
+      "message": null,
+      "name": "no validators on loopback",
+      "refused": false
+    },
+    {
+      "message": null,
+      "name": "no validators on localhost",
+      "refused": false
+    },
+    {
+      "message": null,
+      "name": "a password validator on a public bind",
+      "refused": false
+    },
+    {
+      "message": null,
+      "name": "a key validator on a public bind",
+      "refused": false
+    },
+    {
+      "message": null,
+      "name": "an explicit opt-in on a public bind",
+      "refused": false
+    },
+    {
+      "message": "refusing to start an SSH server that accepts any credential on a non-loopback bind ('10.0.0.1'); pass credentials_validator / public_key_validator, bind to loopback, or set allow_unauthenticated=True to opt in explicitly",
+      "name": "no validators on a private range",
+      "refused": true
+    }
+  ],
+  "validators": {
+    "begin_auth": true,
+    "password_supported": true,
+    "permissive_password": true,
+    "permissive_public_key": true,
+    "public_key_supported": true,
+    "strict_key_right": true,
+    "strict_key_wrong": false,
+    "strict_password_right": true,
+    "strict_password_wrong": false
+  }
+}
