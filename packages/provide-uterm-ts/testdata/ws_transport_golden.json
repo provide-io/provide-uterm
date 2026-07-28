@@ -1,0 +1,299 @@
+{
+  "connect_failure": {
+    "causes": [
+      "ConnectionError",
+      "OSError"
+    ],
+    "connected": false,
+    "message": "Failed to connect to wss://down.example.org:2323"
+  },
+  "connects": [
+    {
+      "connected": true,
+      "forwarded": {},
+      "name": "host and port",
+      "url": "wss://bbs.example.org:2323"
+    },
+    {
+      "connected": true,
+      "forwarded": {},
+      "name": "explicit url wins",
+      "url": "ws://localhost:8080/ws"
+    },
+    {
+      "connected": true,
+      "forwarded": {},
+      "name": "empty url falls back",
+      "url": "wss://bbs.example.org:2323"
+    },
+    {
+      "connected": true,
+      "forwarded": {
+        "max_size": 65536,
+        "ping_interval": 20.0
+      },
+      "name": "forwards the tuning options",
+      "url": "wss://h:1"
+    },
+    {
+      "connected": true,
+      "forwarded": {
+        "additional_headers": {
+          "UA": "bot"
+        },
+        "origin": "https://app.example.org"
+      },
+      "name": "forwards origin and headers",
+      "url": "wss://h:1"
+    },
+    {
+      "connected": true,
+      "forwarded": {
+        "ping_timeout": 5.0
+      },
+      "name": "drops an option left unset",
+      "url": "wss://h:1"
+    },
+    {
+      "connected": true,
+      "forwarded": {},
+      "name": "drops an option it does not know",
+      "url": "wss://h:1"
+    },
+    {
+      "connected": true,
+      "forwarded": {
+        "close_timeout": 0.0,
+        "ping_interval": 0
+      },
+      "name": "keeps a zero",
+      "url": "wss://h:1"
+    }
+  ],
+  "default_text_frame_encoding": "latin-1",
+  "failures": {
+    "disconnect_idempotent": {
+      "connected_after": false
+    },
+    "failed_reconnect": {
+      "connected_after": false,
+      "receive_message": "Not connected",
+      "send_message": "Not connected"
+    },
+    "receive_closed": {
+      "connected_after": false,
+      "message": "Connection closed"
+    },
+    "receive_error": {
+      "connected_after": false,
+      "message": "WebSocket receive error"
+    },
+    "receive_not_connected": "Not connected",
+    "receive_timeout": {
+      "connected_after": true,
+      "data": []
+    },
+    "send_closed": {
+      "connected_after": false,
+      "message": "Connection closed"
+    },
+    "send_not_connected": "Not connected"
+  },
+  "liveness": [
+    {
+      "connected": false,
+      "state": "CONNECTING"
+    },
+    {
+      "connected": true,
+      "state": "OPEN"
+    },
+    {
+      "connected": false,
+      "state": "CLOSING"
+    },
+    {
+      "connected": false,
+      "state": "CLOSED"
+    },
+    {
+      "connected": false,
+      "state": "never connected"
+    }
+  ],
+  "receives": [
+    {
+      "is_text": true,
+      "latin-1": [
+        104,
+        101,
+        108,
+        108,
+        111
+      ],
+      "message": "hello",
+      "name": "ascii text frame",
+      "utf-8": [
+        104,
+        101,
+        108,
+        108,
+        111
+      ]
+    },
+    {
+      "is_text": true,
+      "latin-1": [
+        63,
+        63,
+        201
+      ],
+      "message": "─│É",
+      "name": "high code points in a text frame",
+      "utf-8": [
+        226,
+        148,
+        128,
+        226,
+        148,
+        130,
+        195,
+        137
+      ]
+    },
+    {
+      "is_text": true,
+      "latin-1": [
+        201,
+        205,
+        187
+      ],
+      "message": "ÉÍ»",
+      "name": "cp437 box drawing as latin-1 code points",
+      "utf-8": [
+        195,
+        137,
+        195,
+        141,
+        194,
+        187
+      ]
+    },
+    {
+      "is_text": true,
+      "latin-1": [
+        255
+      ],
+      "message": "ÿ",
+      "name": "the top of the latin-1 range",
+      "utf-8": [
+        195,
+        191
+      ]
+    },
+    {
+      "is_text": false,
+      "latin-1": [
+        27,
+        91,
+        50,
+        74,
+        255
+      ],
+      "message": [
+        27,
+        91,
+        50,
+        74,
+        255
+      ],
+      "name": "binary frame",
+      "utf-8": [
+        27,
+        91,
+        50,
+        74,
+        255
+      ]
+    },
+    {
+      "is_text": true,
+      "latin-1": [],
+      "message": "",
+      "name": "empty text frame",
+      "utf-8": []
+    }
+  ],
+  "sends": [
+    {
+      "bytes": [
+        108,
+        115,
+        32,
+        45,
+        108,
+        97,
+        13
+      ],
+      "is_text": true,
+      "name": "ascii",
+      "text": "ls -la\r"
+    },
+    {
+      "bytes": [
+        104,
+        195,
+        169,
+        108,
+        108,
+        111,
+        32,
+        226,
+        134,
+        146,
+        32,
+        226,
+        156,
+        147
+      ],
+      "is_text": true,
+      "name": "utf-8 text",
+      "text": "héllo → ✓"
+    },
+    {
+      "bytes": [
+        97,
+        255,
+        98
+      ],
+      "is_text": true,
+      "name": "a byte that is not valid utf-8",
+      "text": "a�b"
+    },
+    {
+      "bytes": [
+        99,
+        97,
+        102,
+        195
+      ],
+      "is_text": true,
+      "name": "a truncated multi-byte character",
+      "text": "caf�"
+    },
+    {
+      "bytes": [
+        128
+      ],
+      "is_text": true,
+      "name": "a lone continuation byte",
+      "text": "�"
+    },
+    {
+      "bytes": [],
+      "is_text": true,
+      "name": "empty",
+      "text": ""
+    }
+  ]
+}

@@ -9,5 +9,7 @@
  * Port of the Python package `provide.uterm.transports`.
  */
 
+export * from "./base.ts";
 export * from "./reconnect.ts";
 export * from "./telnet.ts";
+export * from "./websocket.ts";
