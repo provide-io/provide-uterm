@@ -21,6 +21,7 @@ export * as auth from "./auth/index.ts";
 export * as bridge from "./bridge/index.ts";
 export * as channels from "./channels/index.ts";
 export * as colors from "./colors/index.ts";
+export * as connectors from "./connectors/index.ts";
 export * as controlChannel from "./control-channel/index.ts";
 export * as ctrlmsg from "./ctrlmsg/index.ts";
 export * as defaults from "./defaults/index.ts";

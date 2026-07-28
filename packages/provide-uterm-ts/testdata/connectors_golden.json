@@ -1,0 +1,704 @@
+{
+  "cols": 80,
+  "config": {
+    "input_mode_default": "open",
+    "input_mode_hijack": "hijack",
+    "no_config_at_all": null,
+    "several_unknown_keys": "unknown shell connector_config keys: ['alpha', 'zeta']",
+    "unknown_key": "unknown shell connector_config keys: ['host']",
+    "valid_keys": [
+      "input_mode"
+    ]
+  },
+  "display_name": "Reference session",
+  "lifecycle": {
+    "cleared": [
+      {
+        "cols": 80,
+        "cursor": {
+          "x": 6,
+          "y": 9
+        },
+        "cursor_at_end": true,
+        "has_trailing_space": false,
+        "prompt_detected": {
+          "prompt_id": "shell_prompt"
+        },
+        "rows": 25,
+        "screen": "\u001b[1;36m[Reference session (w1)]\u001b[0m\n------------------------------------------------------------\n\u001b[32mMode:\u001b[0m Shared input\n\u001b[32mControl:\u001b[0m Live\n\u001b[32mHelp:\u001b[0m /help /mode open|hijack /clear /nick /say /status /shell /reset\n\u001b[33mTranscript cleared.\u001b[0m\n\n\u001b[1mTranscript\u001b[0m\n\nuser> ",
+        "screen_hash": "8cdf551932104433",
+        "ts": "<ts>",
+        "type": "snapshot"
+      }
+    ],
+    "connected_after_start": true,
+    "connected_after_stop": false,
+    "connected_before_start": false,
+    "initial_analysis": "[interactive shell analysis \u2014 worker: w1]\ninput_mode: open\npaused: False\nturn_counter: 0\ntranscript_entries: 2\nlast_command: (none)\nprompt_visible: True",
+    "initial_snapshot": {
+      "cols": 80,
+      "cursor": {
+        "x": 6,
+        "y": 11
+      },
+      "cursor_at_end": true,
+      "has_trailing_space": false,
+      "prompt_detected": {
+        "prompt_id": "shell_prompt"
+      },
+      "rows": 25,
+      "screen": "\u001b[1;36m[Reference session (w1)]\u001b[0m\n------------------------------------------------------------\n\u001b[32mMode:\u001b[0m Shared input\n\u001b[32mControl:\u001b[0m Live\n\u001b[32mHelp:\u001b[0m /help /mode open|hijack /clear /nick /say /status /shell /reset\n\u001b[33mReady. Type /help for commands.\u001b[0m\n\n\u001b[1mTranscript\u001b[0m\n system: Session online.\nsession: Use /help, /mode open, /mode hijack, /clear, /status, /reset.\n\nuser> ",
+      "screen_hash": "7ad397c4d4124b02",
+      "ts": "<ts>",
+      "type": "snapshot"
+    },
+    "poll_is_empty": true,
+    "set_mode_hijack": [
+      {
+        "input_mode": "hijack",
+        "protocol": {
+          "max": 1,
+          "min": 1,
+          "preferred": 1
+        },
+        "ts": "<ts>",
+        "type": "worker_hello"
+      },
+      {
+        "cols": 80,
+        "cursor": {
+          "x": 6,
+          "y": 10
+        },
+        "cursor_at_end": true,
+        "has_trailing_space": false,
+        "prompt_detected": {
+          "prompt_id": "shell_prompt"
+        },
+        "rows": 25,
+        "screen": "\u001b[1;36m[Reference session (w1)]\u001b[0m\n------------------------------------------------------------\n\u001b[32mMode:\u001b[0m Exclusive hijack\n\u001b[32mControl:\u001b[0m Live\n\u001b[32mHelp:\u001b[0m /help /mode open|hijack /clear /nick /say /status /shell /reset\n\u001b[33mInput mode set to Exclusive hijack.\u001b[0m\n\n\u001b[1mTranscript\u001b[0m\n system: mode: Exclusive hijack\n\nuser> ",
+        "screen_hash": "8858935d3cbada37",
+        "ts": "<ts>",
+        "type": "snapshot"
+      }
+    ],
+    "set_mode_invalid": "invalid mode: sideways"
+  },
+  "registry": {
+    "builtin_types": [
+      "shell",
+      "ssh",
+      "telnet",
+      "websocket"
+    ],
+    "shell_builds": "ShellSessionConnector",
+    "unknown_type": "unsupported connector_type: 'carrier-pigeon'"
+  },
+  "rows": 25,
+  "script": [
+    {
+      "analysis": "[interactive shell analysis \u2014 worker: w1]\ninput_mode: open\npaused: False\nturn_counter: 1\ntranscript_entries: 4\nlast_command: (none)\nprompt_visible: True",
+      "connected": true,
+      "kind": "input",
+      "messages": [
+        {
+          "cols": 80,
+          "cursor": {
+            "x": 6,
+            "y": 13
+          },
+          "cursor_at_end": true,
+          "has_trailing_space": false,
+          "prompt_detected": {
+            "prompt_id": "shell_prompt"
+          },
+          "rows": 25,
+          "screen": "\u001b[1;36m[Reference session (w1)]\u001b[0m\n------------------------------------------------------------\n\u001b[32mMode:\u001b[0m Shared input\n\u001b[32mControl:\u001b[0m Live\n\u001b[32mHelp:\u001b[0m /help /mode open|hijack /clear /nick /say /status /shell /reset\n\u001b[33mInput accepted.\u001b[0m\n\n\u001b[1mTranscript\u001b[0m\n system: Session online.\nsession: Use /help, /mode open, /mode hijack, /clear, /status, /reset.\n   user: user: hello there\nsession: session: received \"hello there\"\n\nuser> ",
+          "screen_hash": "8d15b9becf042919",
+          "ts": "<ts>",
+          "type": "snapshot"
+        }
+      ],
+      "name": "plain text",
+      "payload": "hello there"
+    },
+    {
+      "analysis": "[interactive shell analysis \u2014 worker: w1]\ninput_mode: open\npaused: False\nturn_counter: 2\ntranscript_entries: 6\nlast_command: (none)\nprompt_visible: True",
+      "connected": true,
+      "kind": "input",
+      "messages": [
+        {
+          "cols": 80,
+          "cursor": {
+            "x": 6,
+            "y": 15
+          },
+          "cursor_at_end": true,
+          "has_trailing_space": false,
+          "prompt_detected": {
+            "prompt_id": "shell_prompt"
+          },
+          "rows": 25,
+          "screen": "\u001b[1;36m[Reference session (w1)]\u001b[0m\n------------------------------------------------------------\n\u001b[32mMode:\u001b[0m Shared input\n\u001b[32mControl:\u001b[0m Live\n\u001b[32mHelp:\u001b[0m /help /mode open|hijack /clear /nick /say /status /shell /reset\n\u001b[33mInput accepted.\u001b[0m\n\n\u001b[1mTranscript\u001b[0m\n system: Session online.\nsession: Use /help, /mode open, /mode hijack, /clear, /status, /reset.\n   user: user: hello there\nsession: session: received \"hello there\"\n   user: user: spaced out\nsession: session: received \"spaced out\"\n\nuser> ",
+          "screen_hash": "c3ce5ca097f2bf06",
+          "ts": "<ts>",
+          "type": "snapshot"
+        }
+      ],
+      "name": "text needing normalisation",
+      "payload": "  spaced\tout\r"
+    },
+    {
+      "analysis": "[interactive shell analysis \u2014 worker: w1]\ninput_mode: open\npaused: False\nturn_counter: 2\ntranscript_entries: 6\nlast_command: (none)\nprompt_visible: True",
+      "connected": true,
+      "kind": "input",
+      "messages": [
+        {
+          "cols": 80,
+          "cursor": {
+            "x": 6,
+            "y": 15
+          },
+          "cursor_at_end": true,
+          "has_trailing_space": false,
+          "prompt_detected": {
+            "prompt_id": "shell_prompt"
+          },
+          "rows": 25,
+          "screen": "\u001b[1;36m[Reference session (w1)]\u001b[0m\n------------------------------------------------------------\n\u001b[32mMode:\u001b[0m Shared input\n\u001b[32mControl:\u001b[0m Live\n\u001b[32mHelp:\u001b[0m /help /mode open|hijack /clear /nick /say /status /shell /reset\n\u001b[33mEmpty input ignored.\u001b[0m\n\n\u001b[1mTranscript\u001b[0m\n system: Session online.\nsession: Use /help, /mode open, /mode hijack, /clear, /status, /reset.\n   user: user: hello there\nsession: session: received \"hello there\"\n   user: user: spaced out\nsession: session: received \"spaced out\"\n\nuser> ",
+          "screen_hash": "999d720210bfc4f1",
+          "ts": "<ts>",
+          "type": "snapshot"
+        }
+      ],
+      "name": "empty input",
+      "payload": "   "
+    },
+    {
+      "analysis": "[interactive shell analysis \u2014 worker: w1]\ninput_mode: open\npaused: False\nturn_counter: 3\ntranscript_entries: 7\nlast_command: /help\nprompt_visible: True",
+      "connected": true,
+      "kind": "input",
+      "messages": [
+        {
+          "cols": 80,
+          "cursor": {
+            "x": 6,
+            "y": 16
+          },
+          "cursor_at_end": true,
+          "has_trailing_space": false,
+          "prompt_detected": {
+            "prompt_id": "shell_prompt"
+          },
+          "rows": 25,
+          "screen": "\u001b[1;36m[Reference session (w1)]\u001b[0m\n------------------------------------------------------------\n\u001b[32mMode:\u001b[0m Shared input\n\u001b[32mControl:\u001b[0m Live\n\u001b[32mHelp:\u001b[0m /help /mode open|hijack /clear /nick /say /status /shell /reset\n\u001b[33mCommand help printed below.\u001b[0m\n\n\u001b[1mTranscript\u001b[0m\n system: Session online.\nsession: Use /help, /mode open, /mode hijack, /clear, /status, /reset.\n   user: user: hello there\nsession: session: received \"hello there\"\n   user: user: spaced out\nsession: session: received \"spaced out\"\n system: Commands: /help /clear /mode open|hijack /status /nick <name> /say <text> /shell /reset\n\nuser> ",
+          "screen_hash": "d28b63c5995d1dc1",
+          "ts": "<ts>",
+          "type": "snapshot"
+        }
+      ],
+      "name": "help",
+      "payload": "/help"
+    },
+    {
+      "analysis": "[interactive shell analysis \u2014 worker: w1]\ninput_mode: open\npaused: False\nturn_counter: 4\ntranscript_entries: 8\nlast_command: /status\nprompt_visible: True",
+      "connected": true,
+      "kind": "input",
+      "messages": [
+        {
+          "cols": 80,
+          "cursor": {
+            "x": 6,
+            "y": 17
+          },
+          "cursor_at_end": true,
+          "has_trailing_space": false,
+          "prompt_detected": {
+            "prompt_id": "shell_prompt"
+          },
+          "rows": 25,
+          "screen": "\u001b[1;36m[Reference session (w1)]\u001b[0m\n------------------------------------------------------------\n\u001b[32mMode:\u001b[0m Shared input\n\u001b[32mControl:\u001b[0m Live\n\u001b[32mHelp:\u001b[0m /help /mode open|hijack /clear /nick /say /status /shell /reset\n\u001b[33mSession status printed below.\u001b[0m\n\n\u001b[1mTranscript\u001b[0m\n system: Session online.\nsession: Use /help, /mode open, /mode hijack, /clear, /status, /reset.\n   user: user: hello there\nsession: session: received \"hello there\"\n   user: user: spaced out\nsession: session: received \"spaced out\"\n system: Commands: /help /clear /mode open|hijack /status /nick <name> /say <text> /shell /reset\n system: mode=open paused=False turns=4\n\nuser> ",
+          "screen_hash": "4f3fd09dbce81d39",
+          "ts": "<ts>",
+          "type": "snapshot"
+        }
+      ],
+      "name": "status",
+      "payload": "/status"
+    },
+    {
+      "analysis": "[interactive shell analysis \u2014 worker: w1]\ninput_mode: open\npaused: False\nturn_counter: 5\ntranscript_entries: 9\nlast_command: /nick\nprompt_visible: True",
+      "connected": true,
+      "kind": "input",
+      "messages": [
+        {
+          "cols": 80,
+          "cursor": {
+            "x": 7,
+            "y": 18
+          },
+          "cursor_at_end": true,
+          "has_trailing_space": false,
+          "prompt_detected": {
+            "prompt_id": "shell_prompt"
+          },
+          "rows": 25,
+          "screen": "\u001b[1;36m[Reference session (w1)]\u001b[0m\n------------------------------------------------------------\n\u001b[32mMode:\u001b[0m Shared input\n\u001b[32mControl:\u001b[0m Live\n\u001b[32mHelp:\u001b[0m /help /mode open|hijack /clear /nick /say /status /shell /reset\n\u001b[33mNickname set to alice.\u001b[0m\n\n\u001b[1mTranscript\u001b[0m\n system: Session online.\nsession: Use /help, /mode open, /mode hijack, /clear, /status, /reset.\n   user: user: hello there\nsession: session: received \"hello there\"\n   user: user: spaced out\nsession: session: received \"spaced out\"\n system: Commands: /help /clear /mode open|hijack /status /nick <name> /say <text> /shell /reset\n system: mode=open paused=False turns=4\n system: nickname: alice\n\nalice> ",
+          "screen_hash": "e5b4abaa293c1ea4",
+          "ts": "<ts>",
+          "type": "snapshot"
+        }
+      ],
+      "name": "nick",
+      "payload": "/nick alice"
+    },
+    {
+      "analysis": "[interactive shell analysis \u2014 worker: w1]\ninput_mode: open\npaused: False\nturn_counter: 6\ntranscript_entries: 10\nlast_command: /nick\nprompt_visible: True",
+      "connected": true,
+      "kind": "input",
+      "messages": [
+        {
+          "cols": 80,
+          "cursor": {
+            "x": 7,
+            "y": 19
+          },
+          "cursor_at_end": true,
+          "has_trailing_space": false,
+          "prompt_detected": {
+            "prompt_id": "shell_prompt"
+          },
+          "rows": 25,
+          "screen": "\u001b[1;36m[Reference session (w1)]\u001b[0m\n------------------------------------------------------------\n\u001b[32mMode:\u001b[0m Shared input\n\u001b[32mControl:\u001b[0m Live\n\u001b[32mHelp:\u001b[0m /help /mode open|hijack /clear /nick /say /status /shell /reset\n\u001b[33mUsage: /nick <name>\u001b[0m\n\n\u001b[1mTranscript\u001b[0m\n system: Session online.\nsession: Use /help, /mode open, /mode hijack, /clear, /status, /reset.\n   user: user: hello there\nsession: session: received \"hello there\"\n   user: user: spaced out\nsession: session: received \"spaced out\"\n system: Commands: /help /clear /mode open|hijack /status /nick <name> /say <text> /shell /reset\n system: mode=open paused=False turns=4\n system: nickname: alice\n system: usage: /nick <name>\n\nalice> ",
+          "screen_hash": "9b25c40df07b0f07",
+          "ts": "<ts>",
+          "type": "snapshot"
+        }
+      ],
+      "name": "nick with no argument",
+      "payload": "/nick"
+    },
+    {
+      "analysis": "[interactive shell analysis \u2014 worker: w1]\ninput_mode: open\npaused: False\nturn_counter: 7\ntranscript_entries: 10\nlast_command: /nick\nprompt_visible: True",
+      "connected": true,
+      "kind": "input",
+      "messages": [
+        {
+          "cols": 80,
+          "cursor": {
+            "x": 26,
+            "y": 19
+          },
+          "cursor_at_end": true,
+          "has_trailing_space": false,
+          "prompt_detected": {
+            "prompt_id": "shell_prompt"
+          },
+          "rows": 25,
+          "screen": "\u001b[1;36m[Reference session (w1)]\u001b[0m\n------------------------------------------------------------\n\u001b[32mMode:\u001b[0m Shared input\n\u001b[32mControl:\u001b[0m Live\n\u001b[32mHelp:\u001b[0m /help /mode open|hijack /clear /nick /say /status /shell /reset\n\u001b[33mNickname set to nnnnnnnnnnnnnnnnnnnnnnnn.\u001b[0m\n\n\u001b[1mTranscript\u001b[0m\nsession: Use /help, /mode open, /mode hijack, /clear, /status, /reset.\n   user: user: hello there\nsession: session: received \"hello there\"\n   user: user: spaced out\nsession: session: received \"spaced out\"\n system: Commands: /help /clear /mode open|hijack /status /nick <name> /say <text> /shell /reset\n system: mode=open paused=False turns=4\n system: nickname: alice\n system: usage: /nick <name>\n system: nickname: nnnnnnnnnnnnnnnnnnnnnnnn\n\nnnnnnnnnnnnnnnnnnnnnnnnn> ",
+          "screen_hash": "8b00ac278414bee2",
+          "ts": "<ts>",
+          "type": "snapshot"
+        }
+      ],
+      "name": "nick that is too long",
+      "payload": "/nick nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn"
+    },
+    {
+      "analysis": "[interactive shell analysis \u2014 worker: w1]\ninput_mode: open\npaused: False\nturn_counter: 8\ntranscript_entries: 10\nlast_command: /nick\nprompt_visible: True",
+      "connected": true,
+      "kind": "input",
+      "messages": [
+        {
+          "cols": 80,
+          "cursor": {
+            "x": 5,
+            "y": 19
+          },
+          "cursor_at_end": true,
+          "has_trailing_space": false,
+          "prompt_detected": {
+            "prompt_id": "shell_prompt"
+          },
+          "rows": 25,
+          "screen": "\u001b[1;36m[Reference session (w1)]\u001b[0m\n------------------------------------------------------------\n\u001b[32mMode:\u001b[0m Shared input\n\u001b[32mControl:\u001b[0m Live\n\u001b[32mHelp:\u001b[0m /help /mode open|hijack /clear /nick /say /status /shell /reset\n\u001b[33mNickname set to bob.\u001b[0m\n\n\u001b[1mTranscript\u001b[0m\n   user: user: hello there\nsession: session: received \"hello there\"\n   user: user: spaced out\nsession: session: received \"spaced out\"\n system: Commands: /help /clear /mode open|hijack /status /nick <name> /say <text> /shell /reset\n system: mode=open paused=False turns=4\n system: nickname: alice\n system: usage: /nick <name>\n system: nickname: nnnnnnnnnnnnnnnnnnnnnnnn\n system: nickname: bob\n\nbob> ",
+          "screen_hash": "90fedd6005f5af80",
+          "ts": "<ts>",
+          "type": "snapshot"
+        }
+      ],
+      "name": "nick with extra spaces",
+      "payload": "/nick    bob"
+    },
+    {
+      "analysis": "[interactive shell analysis \u2014 worker: w1]\ninput_mode: open\npaused: False\nturn_counter: 9\ntranscript_entries: 10\nlast_command: /say\nprompt_visible: True",
+      "connected": true,
+      "kind": "input",
+      "messages": [
+        {
+          "cols": 80,
+          "cursor": {
+            "x": 5,
+            "y": 19
+          },
+          "cursor_at_end": true,
+          "has_trailing_space": false,
+          "prompt_detected": {
+            "prompt_id": "shell_prompt"
+          },
+          "rows": 25,
+          "screen": "\u001b[1;36m[Reference session (w1)]\u001b[0m\n------------------------------------------------------------\n\u001b[32mMode:\u001b[0m Shared input\n\u001b[32mControl:\u001b[0m Live\n\u001b[32mHelp:\u001b[0m /help /mode open|hijack /clear /nick /say /status /shell /reset\n\u001b[33mMessage appended.\u001b[0m\n\n\u001b[1mTranscript\u001b[0m\nsession: session: received \"hello there\"\n   user: user: spaced out\nsession: session: received \"spaced out\"\n system: Commands: /help /clear /mode open|hijack /status /nick <name> /say <text> /shell /reset\n system: mode=open paused=False turns=4\n system: nickname: alice\n system: usage: /nick <name>\n system: nickname: nnnnnnnnnnnnnnnnnnnnnnnn\n system: nickname: bob\n   user: bob: something\n\nbob> ",
+          "screen_hash": "55bee4d8ec4a39c4",
+          "ts": "<ts>",
+          "type": "snapshot"
+        }
+      ],
+      "name": "say",
+      "payload": "/say something"
+    },
+    {
+      "analysis": "[interactive shell analysis \u2014 worker: w1]\ninput_mode: open\npaused: False\nturn_counter: 10\ntranscript_entries: 10\nlast_command: /say\nprompt_visible: True",
+      "connected": true,
+      "kind": "input",
+      "messages": [
+        {
+          "cols": 80,
+          "cursor": {
+            "x": 5,
+            "y": 19
+          },
+          "cursor_at_end": true,
+          "has_trailing_space": false,
+          "prompt_detected": {
+            "prompt_id": "shell_prompt"
+          },
+          "rows": 25,
+          "screen": "\u001b[1;36m[Reference session (w1)]\u001b[0m\n------------------------------------------------------------\n\u001b[32mMode:\u001b[0m Shared input\n\u001b[32mControl:\u001b[0m Live\n\u001b[32mHelp:\u001b[0m /help /mode open|hijack /clear /nick /say /status /shell /reset\n\u001b[33mUsage: /say <text>\u001b[0m\n\n\u001b[1mTranscript\u001b[0m\n   user: user: spaced out\nsession: session: received \"spaced out\"\n system: Commands: /help /clear /mode open|hijack /status /nick <name> /say <text> /shell /reset\n system: mode=open paused=False turns=4\n system: nickname: alice\n system: usage: /nick <name>\n system: nickname: nnnnnnnnnnnnnnnnnnnnnnnn\n system: nickname: bob\n   user: bob: something\n system: usage: /say <text>\n\nbob> ",
+          "screen_hash": "7c1d70fc32efc770",
+          "ts": "<ts>",
+          "type": "snapshot"
+        }
+      ],
+      "name": "say with no argument",
+      "payload": "/say"
+    },
+    {
+      "analysis": "[interactive shell analysis \u2014 worker: w1]\ninput_mode: open\npaused: False\nturn_counter: 11\ntranscript_entries: 10\nlast_command: /shell\nprompt_visible: True",
+      "connected": true,
+      "kind": "input",
+      "messages": [
+        {
+          "cols": 80,
+          "cursor": {
+            "x": 5,
+            "y": 19
+          },
+          "cursor_at_end": true,
+          "has_trailing_space": false,
+          "prompt_detected": {
+            "prompt_id": "shell_prompt"
+          },
+          "rows": 25,
+          "screen": "\u001b[1;36m[Reference session (w1)]\u001b[0m\n------------------------------------------------------------\n\u001b[32mMode:\u001b[0m Shared input\n\u001b[32mControl:\u001b[0m Live\n\u001b[32mHelp:\u001b[0m /help /mode open|hijack /clear /nick /say /status /shell /reset\n\u001b[33mShell response appended.\u001b[0m\n\n\u001b[1mTranscript\u001b[0m\nsession: session: received \"spaced out\"\n system: Commands: /help /clear /mode open|hijack /status /nick <name> /say <text> /shell /reset\n system: mode=open paused=False turns=4\n system: nickname: alice\n system: usage: /nick <name>\n system: nickname: nnnnnnnnnnnnnnnnnnnnnnnn\n system: nickname: bob\n   user: bob: something\n system: usage: /say <text>\nsession: This hosted server is the reference implementation.\n\nbob> ",
+          "screen_hash": "6a5d33f72d0123c3",
+          "ts": "<ts>",
+          "type": "snapshot"
+        }
+      ],
+      "name": "shell",
+      "payload": "/shell"
+    },
+    {
+      "analysis": "[interactive shell analysis \u2014 worker: w1]\ninput_mode: hijack\npaused: False\nturn_counter: 12\ntranscript_entries: 10\nlast_command: /mode\nprompt_visible: True",
+      "connected": true,
+      "kind": "input",
+      "messages": [
+        {
+          "input_mode": "hijack",
+          "protocol": {
+            "max": 1,
+            "min": 1,
+            "preferred": 1
+          },
+          "ts": "<ts>",
+          "type": "worker_hello"
+        },
+        {
+          "cols": 80,
+          "cursor": {
+            "x": 5,
+            "y": 19
+          },
+          "cursor_at_end": true,
+          "has_trailing_space": false,
+          "prompt_detected": {
+            "prompt_id": "shell_prompt"
+          },
+          "rows": 25,
+          "screen": "\u001b[1;36m[Reference session (w1)]\u001b[0m\n------------------------------------------------------------\n\u001b[32mMode:\u001b[0m Exclusive hijack\n\u001b[32mControl:\u001b[0m Live\n\u001b[32mHelp:\u001b[0m /help /mode open|hijack /clear /nick /say /status /shell /reset\n\u001b[33mInput mode set to Exclusive hijack.\u001b[0m\n\n\u001b[1mTranscript\u001b[0m\n system: Commands: /help /clear /mode open|hijack /status /nick <name> /say <text> /shell /reset\n system: mode=open paused=False turns=4\n system: nickname: alice\n system: usage: /nick <name>\n system: nickname: nnnnnnnnnnnnnnnnnnnnnnnn\n system: nickname: bob\n   user: bob: something\n system: usage: /say <text>\nsession: This hosted server is the reference implementation.\n system: mode: Exclusive hijack\n\nbob> ",
+          "screen_hash": "e75faa7a1dd8d3a7",
+          "ts": "<ts>",
+          "type": "snapshot"
+        }
+      ],
+      "name": "mode hijack",
+      "payload": "/mode hijack"
+    },
+    {
+      "analysis": "[interactive shell analysis \u2014 worker: w1]\ninput_mode: hijack\npaused: False\nturn_counter: 13\ntranscript_entries: 10\nlast_command: /mode\nprompt_visible: True",
+      "connected": true,
+      "kind": "input",
+      "messages": [
+        {
+          "cols": 80,
+          "cursor": {
+            "x": 5,
+            "y": 19
+          },
+          "cursor_at_end": true,
+          "has_trailing_space": false,
+          "prompt_detected": {
+            "prompt_id": "shell_prompt"
+          },
+          "rows": 25,
+          "screen": "\u001b[1;36m[Reference session (w1)]\u001b[0m\n------------------------------------------------------------\n\u001b[32mMode:\u001b[0m Exclusive hijack\n\u001b[32mControl:\u001b[0m Live\n\u001b[32mHelp:\u001b[0m /help /mode open|hijack /clear /nick /say /status /shell /reset\n\u001b[33mUsage: /mode open|hijack\u001b[0m\n\n\u001b[1mTranscript\u001b[0m\n system: mode=open paused=False turns=4\n system: nickname: alice\n system: usage: /nick <name>\n system: nickname: nnnnnnnnnnnnnnnnnnnnnnnn\n system: nickname: bob\n   user: bob: something\n system: usage: /say <text>\nsession: This hosted server is the reference implementation.\n system: mode: Exclusive hijack\n system: usage: /mode open|hijack\n\nbob> ",
+          "screen_hash": "7848e6259ebc5534",
+          "ts": "<ts>",
+          "type": "snapshot"
+        }
+      ],
+      "name": "mode with a bad argument",
+      "payload": "/mode sideways"
+    },
+    {
+      "analysis": "[interactive shell analysis \u2014 worker: w1]\ninput_mode: open\npaused: False\nturn_counter: 14\ntranscript_entries: 10\nlast_command: /mode\nprompt_visible: True",
+      "connected": true,
+      "kind": "input",
+      "messages": [
+        {
+          "input_mode": "open",
+          "protocol": {
+            "max": 1,
+            "min": 1,
+            "preferred": 1
+          },
+          "ts": "<ts>",
+          "type": "worker_hello"
+        },
+        {
+          "cols": 80,
+          "cursor": {
+            "x": 5,
+            "y": 19
+          },
+          "cursor_at_end": true,
+          "has_trailing_space": false,
+          "prompt_detected": {
+            "prompt_id": "shell_prompt"
+          },
+          "rows": 25,
+          "screen": "\u001b[1;36m[Reference session (w1)]\u001b[0m\n------------------------------------------------------------\n\u001b[32mMode:\u001b[0m Shared input\n\u001b[32mControl:\u001b[0m Live\n\u001b[32mHelp:\u001b[0m /help /mode open|hijack /clear /nick /say /status /shell /reset\n\u001b[33mInput mode set to Shared input.\u001b[0m\n\n\u001b[1mTranscript\u001b[0m\n system: nickname: alice\n system: usage: /nick <name>\n system: nickname: nnnnnnnnnnnnnnnnnnnnnnnn\n system: nickname: bob\n   user: bob: something\n system: usage: /say <text>\nsession: This hosted server is the reference implementation.\n system: mode: Exclusive hijack\n system: usage: /mode open|hijack\n system: mode: Shared input\n\nbob> ",
+          "screen_hash": "0446cf156852e935",
+          "ts": "<ts>",
+          "type": "snapshot"
+        }
+      ],
+      "name": "mode open",
+      "payload": "/mode OPEN"
+    },
+    {
+      "analysis": "[interactive shell analysis \u2014 worker: w1]\ninput_mode: open\npaused: False\nturn_counter: 15\ntranscript_entries: 10\nlast_command: /wat\nprompt_visible: True",
+      "connected": true,
+      "kind": "input",
+      "messages": [
+        {
+          "cols": 80,
+          "cursor": {
+            "x": 5,
+            "y": 19
+          },
+          "cursor_at_end": true,
+          "has_trailing_space": false,
+          "prompt_detected": {
+            "prompt_id": "shell_prompt"
+          },
+          "rows": 25,
+          "screen": "\u001b[1;36m[Reference session (w1)]\u001b[0m\n------------------------------------------------------------\n\u001b[32mMode:\u001b[0m Shared input\n\u001b[32mControl:\u001b[0m Live\n\u001b[32mHelp:\u001b[0m /help /mode open|hijack /clear /nick /say /status /shell /reset\n\u001b[33mUnknown command: /wat\u001b[0m\n\n\u001b[1mTranscript\u001b[0m\n system: usage: /nick <name>\n system: nickname: nnnnnnnnnnnnnnnnnnnnnnnn\n system: nickname: bob\n   user: bob: something\n system: usage: /say <text>\nsession: This hosted server is the reference implementation.\n system: mode: Exclusive hijack\n system: usage: /mode open|hijack\n system: mode: Shared input\n system: unknown command: /wat\n\nbob> ",
+          "screen_hash": "d5d4f9333ef9f6c5",
+          "ts": "<ts>",
+          "type": "snapshot"
+        }
+      ],
+      "name": "an unknown command",
+      "payload": "/wat"
+    },
+    {
+      "analysis": "[interactive shell analysis \u2014 worker: w1]\ninput_mode: open\npaused: False\nturn_counter: 16\ntranscript_entries: 0\nlast_command: /clear\nprompt_visible: True",
+      "connected": true,
+      "kind": "input",
+      "messages": [
+        {
+          "cols": 80,
+          "cursor": {
+            "x": 5,
+            "y": 9
+          },
+          "cursor_at_end": true,
+          "has_trailing_space": false,
+          "prompt_detected": {
+            "prompt_id": "shell_prompt"
+          },
+          "rows": 25,
+          "screen": "\u001b[1;36m[Reference session (w1)]\u001b[0m\n------------------------------------------------------------\n\u001b[32mMode:\u001b[0m Shared input\n\u001b[32mControl:\u001b[0m Live\n\u001b[32mHelp:\u001b[0m /help /mode open|hijack /clear /nick /say /status /shell /reset\n\u001b[33mTranscript cleared.\u001b[0m\n\n\u001b[1mTranscript\u001b[0m\n\nbob> ",
+          "screen_hash": "995ab340b7c388b0",
+          "ts": "<ts>",
+          "type": "snapshot"
+        }
+      ],
+      "name": "clear",
+      "payload": "/clear"
+    },
+    {
+      "analysis": "[interactive shell analysis \u2014 worker: w1]\ninput_mode: open\npaused: True\nturn_counter: 16\ntranscript_entries: 1\nlast_command: /clear\nprompt_visible: True",
+      "connected": true,
+      "kind": "control",
+      "messages": [
+        {
+          "cols": 80,
+          "cursor": {
+            "x": 5,
+            "y": 10
+          },
+          "cursor_at_end": true,
+          "has_trailing_space": false,
+          "prompt_detected": {
+            "prompt_id": "shell_prompt"
+          },
+          "rows": 25,
+          "screen": "\u001b[1;36m[Reference session (w1)]\u001b[0m\n------------------------------------------------------------\n\u001b[32mMode:\u001b[0m Shared input\n\u001b[32mControl:\u001b[0m Paused for hijack\n\u001b[32mHelp:\u001b[0m /help /mode open|hijack /clear /nick /say /status /shell /reset\n\u001b[33mExclusive control active. Input is still accepted.\u001b[0m\n\n\u001b[1mTranscript\u001b[0m\n system: control: hijack acquired\n\nbob> ",
+          "screen_hash": "1450e4792ba9c3ff",
+          "ts": "<ts>",
+          "type": "snapshot"
+        }
+      ],
+      "name": "control pause",
+      "payload": "pause"
+    },
+    {
+      "analysis": "[interactive shell analysis \u2014 worker: w1]\ninput_mode: open\npaused: True\nturn_counter: 17\ntranscript_entries: 2\nlast_command: /clear\nprompt_visible: True",
+      "connected": true,
+      "kind": "control",
+      "messages": [
+        {
+          "cols": 80,
+          "cursor": {
+            "x": 5,
+            "y": 11
+          },
+          "cursor_at_end": true,
+          "has_trailing_space": false,
+          "prompt_detected": {
+            "prompt_id": "shell_prompt"
+          },
+          "rows": 25,
+          "screen": "\u001b[1;36m[Reference session (w1)]\u001b[0m\n------------------------------------------------------------\n\u001b[32mMode:\u001b[0m Shared input\n\u001b[32mControl:\u001b[0m Paused for hijack\n\u001b[32mHelp:\u001b[0m /help /mode open|hijack /clear /nick /say /status /shell /reset\n\u001b[33mSingle-step acknowledged.\u001b[0m\n\n\u001b[1mTranscript\u001b[0m\n system: control: hijack acquired\n system: control: single step #17\n\nbob> ",
+          "screen_hash": "266470aa267ca7e2",
+          "ts": "<ts>",
+          "type": "snapshot"
+        }
+      ],
+      "name": "control step",
+      "payload": "step"
+    },
+    {
+      "analysis": "[interactive shell analysis \u2014 worker: w1]\ninput_mode: open\npaused: False\nturn_counter: 17\ntranscript_entries: 3\nlast_command: /clear\nprompt_visible: True",
+      "connected": true,
+      "kind": "control",
+      "messages": [
+        {
+          "cols": 80,
+          "cursor": {
+            "x": 5,
+            "y": 12
+          },
+          "cursor_at_end": true,
+          "has_trailing_space": false,
+          "prompt_detected": {
+            "prompt_id": "shell_prompt"
+          },
+          "rows": 25,
+          "screen": "\u001b[1;36m[Reference session (w1)]\u001b[0m\n------------------------------------------------------------\n\u001b[32mMode:\u001b[0m Shared input\n\u001b[32mControl:\u001b[0m Live\n\u001b[32mHelp:\u001b[0m /help /mode open|hijack /clear /nick /say /status /shell /reset\n\u001b[33mExclusive control released.\u001b[0m\n\n\u001b[1mTranscript\u001b[0m\n system: control: hijack acquired\n system: control: single step #17\n system: control: released\n\nbob> ",
+          "screen_hash": "c44e0985882c7be0",
+          "ts": "<ts>",
+          "type": "snapshot"
+        }
+      ],
+      "name": "control resume",
+      "payload": "resume"
+    },
+    {
+      "analysis": "[interactive shell analysis \u2014 worker: w1]\ninput_mode: open\npaused: False\nturn_counter: 17\ntranscript_entries: 4\nlast_command: /clear\nprompt_visible: True",
+      "connected": true,
+      "kind": "control",
+      "messages": [
+        {
+          "cols": 80,
+          "cursor": {
+            "x": 5,
+            "y": 13
+          },
+          "cursor_at_end": true,
+          "has_trailing_space": false,
+          "prompt_detected": {
+            "prompt_id": "shell_prompt"
+          },
+          "rows": 25,
+          "screen": "\u001b[1;36m[Reference session (w1)]\u001b[0m\n------------------------------------------------------------\n\u001b[32mMode:\u001b[0m Shared input\n\u001b[32mControl:\u001b[0m Live\n\u001b[32mHelp:\u001b[0m /help /mode open|hijack /clear /nick /say /status /shell /reset\n\u001b[33mIgnored unknown control action: explode\u001b[0m\n\n\u001b[1mTranscript\u001b[0m\n system: control: hijack acquired\n system: control: single step #17\n system: control: released\n system: control: ignored explode\n\nbob> ",
+          "screen_hash": "485e7e82b0eb52d2",
+          "ts": "<ts>",
+          "type": "snapshot"
+        }
+      ],
+      "name": "an unknown control action",
+      "payload": "explode"
+    },
+    {
+      "analysis": "[interactive shell analysis \u2014 worker: w1]\ninput_mode: open\npaused: False\nturn_counter: 0\ntranscript_entries: 2\nlast_command: (none)\nprompt_visible: True",
+      "connected": true,
+      "kind": "input",
+      "messages": [
+        {
+          "input_mode": "open",
+          "protocol": {
+            "max": 1,
+            "min": 1,
+            "preferred": 1
+          },
+          "ts": "<ts>",
+          "type": "worker_hello"
+        },
+        {
+          "cols": 80,
+          "cursor": {
+            "x": 6,
+            "y": 11
+          },
+          "cursor_at_end": true,
+          "has_trailing_space": false,
+          "prompt_detected": {
+            "prompt_id": "shell_prompt"
+          },
+          "rows": 25,
+          "screen": "\u001b[1;36m[Reference session (w1)]\u001b[0m\n------------------------------------------------------------\n\u001b[32mMode:\u001b[0m Shared input\n\u001b[32mControl:\u001b[0m Live\n\u001b[32mHelp:\u001b[0m /help /mode open|hijack /clear /nick /say /status /shell /reset\n\u001b[33mSession reset.\u001b[0m\n\n\u001b[1mTranscript\u001b[0m\n system: Session online.\nsession: Use /help, /mode open, /mode hijack, /clear, /status, /reset.\n\nuser> ",
+          "screen_hash": "9f51354f26cb4102",
+          "ts": "<ts>",
+          "type": "snapshot"
+        }
+      ],
+      "name": "reset",
+      "payload": "/reset"
+    }
+  ],
+  "session_id": "w1",
+  "transcript_limit": 10
+}

@@ -83,7 +83,7 @@ corpus match CPython byte for byte.
 | `termsession` | `transport_session`, `telnet_session`, `ws_session` | `termsession` | todo |
 | `transports` | client `transports/*` | `transports` | **partial** — the transport interface, telnet RFC 854 framing and negotiation, the reconnect budget/backoff, the WebSocket client, and the chaos wrapper; SSH outstanding |
 | `egress` | server `egress`, `_net` | (inside `connectors`) | **done** — metadata always blocked, embedded-IPv4 wrappers decoded, resolution failures fail closed |
-| `connectors` | server `connectors/*` | `connectors` | todo |
+| `connectors` | server `connectors/*` | `connectors` | **partial** — the registry, the connector interface and the reference shell connector; the ssh/telnet/websocket connectors outstanding |
 | `pty` | platform PTY connector | `pty` | todo |
 | `embed` | `embed` | `embed` | todo |
 
