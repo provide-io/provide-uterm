@@ -200,6 +200,31 @@ class MessageRouter:
             hub._event_bus._enqueue(worker_id, evt)
         return evt
 
+    async def commit_snapshot_event(self, worker_id: str, snapshot: dict[str, Any]) -> dict[str, Any]:
+        """Atomically store a snapshot and append its correlated ring event."""
+        hub = self._hub
+        payload = dict(snapshot)
+        frame_type = payload.pop("type", "snapshot")
+        payload = {"type": frame_type, **self._redact_event_payload("snapshot", payload)}
+        async with hub._lock:
+            st = hub.registry.get(worker_id)
+            if st is None:
+                return {**payload, "event_seq": 0}
+            st.event_seq += 1
+            committed = {**payload, "event_seq": st.event_seq}
+            evt: dict[str, Any] = {
+                "seq": st.event_seq,
+                "ts": time.time(),
+                "type": "snapshot",
+                "data": committed,
+            }
+            st.last_snapshot = committed
+            st.events.append(evt)
+            st.min_event_seq = int(st.events[0]["seq"])
+        if hub._event_bus is not None:
+            hub._event_bus._enqueue(worker_id, evt)
+        return committed
+
     # -- Broadcast / send hot path --------------------------------------
     # Thin wrappers over :mod:`router_broadcast` (fan-out / redaction / worker
     # send); method surface and ``hub._lock`` semantics are unchanged.
