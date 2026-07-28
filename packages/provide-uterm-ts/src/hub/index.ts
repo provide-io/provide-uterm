@@ -10,4 +10,5 @@
  * package `hub`. The rate limiter lives in `../ratelimit`.
  */
 
+export * from "./approvals.ts";
 export * from "./registry.ts";
