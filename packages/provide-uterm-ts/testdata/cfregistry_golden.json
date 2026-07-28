@@ -1,0 +1,560 @@
+{
+  "degradation": {
+    "corrupt_entry_is_replaced": {
+      "auto_start": false,
+      "connected": true,
+      "connector_type": "unknown",
+      "created_at": 0.0,
+      "display_name": "w1",
+      "hijacked": false,
+      "input_mode": "hijack",
+      "last_error": null,
+      "lifecycle_state": "running",
+      "owner": null,
+      "recording_available": false,
+      "recording_enabled": true,
+      "session_id": "w1",
+      "tags": [],
+      "visibility": "public"
+    },
+    "delete_failure_is_silent": true,
+    "delete_failure_left_it": true,
+    "get_failure_still_writes": {
+      "auto_start": false,
+      "connected": true,
+      "connector_type": "unknown",
+      "created_at": 0.0,
+      "display_name": "w1",
+      "hijacked": false,
+      "input_mode": "hijack",
+      "last_error": null,
+      "lifecycle_state": "running",
+      "owner": null,
+      "recording_available": false,
+      "recording_enabled": true,
+      "session_id": "w1",
+      "tags": [],
+      "visibility": "public"
+    },
+    "non_object_entry_is_replaced": {
+      "auto_start": false,
+      "connected": true,
+      "connector_type": "unknown",
+      "created_at": 0.0,
+      "display_name": "w1",
+      "hijacked": false,
+      "input_mode": "hijack",
+      "last_error": null,
+      "lifecycle_state": "running",
+      "owner": null,
+      "recording_available": false,
+      "recording_enabled": true,
+      "session_id": "w1",
+      "tags": [],
+      "visibility": "public"
+    },
+    "put_failure_is_silent": true,
+    "put_failure_left_nothing": true
+  },
+  "existing": {
+    "connected": true,
+    "connector_type": "telnet",
+    "control_invite_token": "one-time-control",
+    "control_token_hash": "sha256:def",
+    "created_at": 1000.0,
+    "display_name": "the old name",
+    "expires_at": 2000.0,
+    "owner": "alice",
+    "revoked": false,
+    "session_id": "w1",
+    "share_invite_token": "one-time-share",
+    "share_token_hash": "sha256:abc",
+    "tags": [
+      "a"
+    ],
+    "visibility": "private",
+    "worker_token": "wt"
+  },
+  "kv_refresh_s": 60,
+  "list_shapes": {
+    "keys_as_objects": [
+      {
+        "connected": true,
+        "connector_type": "telnet",
+        "created_at": 1000.0,
+        "display_name": "the old name",
+        "expires_at": 2000.0,
+        "owner": "alice",
+        "revoked": false,
+        "session_id": "w1",
+        "tags": [
+          "a"
+        ],
+        "visibility": "private"
+      }
+    ],
+    "python_rejects_a_dict_listing": "'builtin_function_or_method' object is not iterable"
+  },
+  "no_binding": {
+    "get": null,
+    "list": []
+  },
+  "reads": {
+    "after_delete": null,
+    "delete_failure_is_silent": true,
+    "get_failure": null,
+    "list_failure": [],
+    "listed": [
+      {
+        "connected": true,
+        "connector_type": "telnet",
+        "created_at": 1000.0,
+        "display_name": "the old name",
+        "expires_at": 2000.0,
+        "owner": "alice",
+        "revoked": false,
+        "session_id": "w1",
+        "tags": [
+          "a"
+        ],
+        "visibility": "private"
+      },
+      {
+        "connected": false,
+        "session_id": "w2"
+      }
+    ],
+    "missing": null,
+    "one": {
+      "connected": true,
+      "connector_type": "telnet",
+      "control_invite_token": "one-time-control",
+      "control_token_hash": "sha256:def",
+      "created_at": 1000.0,
+      "display_name": "the old name",
+      "expires_at": 2000.0,
+      "owner": "alice",
+      "revoked": false,
+      "session_id": "w1",
+      "share_invite_token": "one-time-share",
+      "share_token_hash": "sha256:abc",
+      "tags": [
+        "a"
+      ],
+      "visibility": "private",
+      "worker_token": "wt"
+    }
+  },
+  "updates": [
+    {
+      "calls": [
+        "get:session:w1",
+        "put:session:w1"
+      ],
+      "initial": null,
+      "kwargs": {
+        "connected": true
+      },
+      "name": "a fresh session",
+      "stored": {
+        "auto_start": false,
+        "connected": true,
+        "connector_type": "unknown",
+        "created_at": 0.0,
+        "display_name": "w1",
+        "hijacked": false,
+        "input_mode": "hijack",
+        "last_error": null,
+        "lifecycle_state": "running",
+        "owner": null,
+        "recording_available": false,
+        "recording_enabled": true,
+        "session_id": "w1",
+        "tags": [],
+        "visibility": "public"
+      }
+    },
+    {
+      "calls": [
+        "get:session:w1",
+        "put:session:w1"
+      ],
+      "initial": null,
+      "kwargs": {
+        "connected": true,
+        "hijacked": true,
+        "input_mode": "observe",
+        "meta": {
+          "connector_type": "ssh",
+          "created_at": 1234.5,
+          "display_name": "Session One",
+          "owner": "bob",
+          "tags": [
+            "x",
+            "y"
+          ],
+          "visibility": "private"
+        },
+        "recording_available": true,
+        "recording_enabled": false
+      },
+      "name": "with everything the meta can carry",
+      "stored": {
+        "auto_start": false,
+        "connected": true,
+        "connector_type": "ssh",
+        "created_at": 1234.5,
+        "display_name": "Session One",
+        "hijacked": true,
+        "input_mode": "observe",
+        "last_error": null,
+        "lifecycle_state": "running",
+        "owner": "bob",
+        "recording_available": true,
+        "recording_enabled": false,
+        "session_id": "w1",
+        "tags": [
+          "x",
+          "y"
+        ],
+        "visibility": "private"
+      }
+    },
+    {
+      "calls": [
+        "get:session:w1",
+        "put:session:w1"
+      ],
+      "initial": null,
+      "kwargs": {
+        "connected": true,
+        "meta": {}
+      },
+      "name": "an empty meta",
+      "stored": {
+        "auto_start": false,
+        "connected": true,
+        "connector_type": "unknown",
+        "created_at": 0.0,
+        "display_name": "w1",
+        "hijacked": false,
+        "input_mode": "hijack",
+        "last_error": null,
+        "lifecycle_state": "running",
+        "owner": null,
+        "recording_available": false,
+        "recording_enabled": true,
+        "session_id": "w1",
+        "tags": [],
+        "visibility": "public"
+      }
+    },
+    {
+      "calls": [
+        "get:session:w1",
+        "put:session:w1"
+      ],
+      "initial": null,
+      "kwargs": {
+        "connected": true,
+        "meta": {
+          "connector_type": "",
+          "display_name": "",
+          "tags": [],
+          "visibility": ""
+        }
+      },
+      "name": "a meta whose fields are empty",
+      "stored": {
+        "auto_start": false,
+        "connected": true,
+        "connector_type": "unknown",
+        "created_at": 0.0,
+        "display_name": "w1",
+        "hijacked": false,
+        "input_mode": "hijack",
+        "last_error": null,
+        "lifecycle_state": "running",
+        "owner": null,
+        "recording_available": false,
+        "recording_enabled": true,
+        "session_id": "w1",
+        "tags": [],
+        "visibility": "public"
+      }
+    },
+    {
+      "calls": [
+        "get:session:w1",
+        "put:session:w1"
+      ],
+      "initial": {
+        "connected": true,
+        "connector_type": "telnet",
+        "control_invite_token": "one-time-control",
+        "control_token_hash": "sha256:def",
+        "created_at": 1000.0,
+        "display_name": "the old name",
+        "expires_at": 2000.0,
+        "owner": "alice",
+        "revoked": false,
+        "session_id": "w1",
+        "share_invite_token": "one-time-share",
+        "share_token_hash": "sha256:abc",
+        "tags": [
+          "a"
+        ],
+        "visibility": "private",
+        "worker_token": "wt"
+      },
+      "kwargs": {
+        "connected": true
+      },
+      "name": "over an existing entry",
+      "stored": {
+        "auto_start": false,
+        "connected": true,
+        "connector_type": "unknown",
+        "control_invite_token": "one-time-control",
+        "control_token_hash": "sha256:def",
+        "created_at": 0.0,
+        "display_name": "w1",
+        "expires_at": 2000.0,
+        "hijacked": false,
+        "input_mode": "hijack",
+        "last_error": null,
+        "lifecycle_state": "running",
+        "owner": null,
+        "recording_available": false,
+        "recording_enabled": true,
+        "revoked": false,
+        "session_id": "w1",
+        "share_invite_token": "one-time-share",
+        "share_token_hash": "sha256:abc",
+        "tags": [],
+        "visibility": "public",
+        "worker_token": "wt"
+      }
+    },
+    {
+      "calls": [
+        "get:session:w1",
+        "put:session:w1"
+      ],
+      "initial": {
+        "connected": true,
+        "connector_type": "telnet",
+        "control_invite_token": "one-time-control",
+        "control_token_hash": "sha256:def",
+        "created_at": 1000.0,
+        "display_name": "the old name",
+        "expires_at": 2000.0,
+        "owner": "alice",
+        "revoked": false,
+        "session_id": "w1",
+        "share_invite_token": "one-time-share",
+        "share_token_hash": "sha256:abc",
+        "tags": [
+          "a"
+        ],
+        "visibility": "private",
+        "worker_token": "wt"
+      },
+      "kwargs": {
+        "connected": false,
+        "remove_offline": false
+      },
+      "name": "over an existing entry while disconnecting",
+      "stored": {
+        "auto_start": false,
+        "connected": false,
+        "connector_type": "unknown",
+        "control_invite_token": "one-time-control",
+        "control_token_hash": "sha256:def",
+        "created_at": 0.0,
+        "display_name": "w1",
+        "expires_at": 2000.0,
+        "hijacked": false,
+        "input_mode": "hijack",
+        "last_error": null,
+        "lifecycle_state": "stopped",
+        "owner": null,
+        "recording_available": false,
+        "recording_enabled": true,
+        "revoked": false,
+        "session_id": "w1",
+        "share_invite_token": "one-time-share",
+        "share_token_hash": "sha256:abc",
+        "tags": [],
+        "visibility": "public",
+        "worker_token": "wt"
+      }
+    },
+    {
+      "calls": [
+        "get:session:w1",
+        "put:session:w1"
+      ],
+      "initial": {
+        "connected": true,
+        "connector_type": "telnet",
+        "control_invite_token": "one-time-control",
+        "control_token_hash": "sha256:def",
+        "created_at": 1000.0,
+        "display_name": "the old name",
+        "expires_at": 2000.0,
+        "owner": "alice",
+        "revoked": false,
+        "session_id": "w1",
+        "share_invite_token": "one-time-share",
+        "share_token_hash": "sha256:abc",
+        "tags": [
+          "a"
+        ],
+        "visibility": "private",
+        "worker_token": "wt"
+      },
+      "kwargs": {
+        "connected": null
+      },
+      "name": "inheriting the connected flag",
+      "stored": {
+        "auto_start": false,
+        "connected": true,
+        "connector_type": "unknown",
+        "control_invite_token": "one-time-control",
+        "control_token_hash": "sha256:def",
+        "created_at": 0.0,
+        "display_name": "w1",
+        "expires_at": 2000.0,
+        "hijacked": false,
+        "input_mode": "hijack",
+        "last_error": null,
+        "lifecycle_state": "running",
+        "owner": null,
+        "recording_available": false,
+        "recording_enabled": true,
+        "revoked": false,
+        "session_id": "w1",
+        "share_invite_token": "one-time-share",
+        "share_token_hash": "sha256:abc",
+        "tags": [],
+        "visibility": "public",
+        "worker_token": "wt"
+      }
+    },
+    {
+      "calls": [
+        "get:session:w1",
+        "put:session:w1"
+      ],
+      "initial": {
+        "session_id": "w1"
+      },
+      "kwargs": {
+        "connected": null
+      },
+      "name": "inheriting from an entry that has none",
+      "stored": {
+        "auto_start": false,
+        "connected": false,
+        "connector_type": "unknown",
+        "created_at": 0.0,
+        "display_name": "w1",
+        "hijacked": false,
+        "input_mode": "hijack",
+        "last_error": null,
+        "lifecycle_state": "stopped",
+        "owner": null,
+        "recording_available": false,
+        "recording_enabled": true,
+        "session_id": "w1",
+        "tags": [],
+        "visibility": "public"
+      }
+    },
+    {
+      "calls": [
+        "delete:session:w1"
+      ],
+      "initial": {
+        "connected": true,
+        "connector_type": "telnet",
+        "control_invite_token": "one-time-control",
+        "control_token_hash": "sha256:def",
+        "created_at": 1000.0,
+        "display_name": "the old name",
+        "expires_at": 2000.0,
+        "owner": "alice",
+        "revoked": false,
+        "session_id": "w1",
+        "share_invite_token": "one-time-share",
+        "share_token_hash": "sha256:abc",
+        "tags": [
+          "a"
+        ],
+        "visibility": "private",
+        "worker_token": "wt"
+      },
+      "kwargs": {
+        "connected": false
+      },
+      "name": "disconnecting removes the entry",
+      "stored": null
+    },
+    {
+      "calls": [
+        "get:session:w1",
+        "put:session:w1"
+      ],
+      "initial": {
+        "connected": true,
+        "connector_type": "telnet",
+        "control_invite_token": "one-time-control",
+        "control_token_hash": "sha256:def",
+        "created_at": 1000.0,
+        "display_name": "the old name",
+        "expires_at": 2000.0,
+        "owner": "alice",
+        "revoked": false,
+        "session_id": "w1",
+        "share_invite_token": "one-time-share",
+        "share_token_hash": "sha256:abc",
+        "tags": [
+          "a"
+        ],
+        "visibility": "private",
+        "worker_token": "wt"
+      },
+      "kwargs": {
+        "connected": false,
+        "remove_offline": false
+      },
+      "name": "disconnecting without removing",
+      "stored": {
+        "auto_start": false,
+        "connected": false,
+        "connector_type": "unknown",
+        "control_invite_token": "one-time-control",
+        "control_token_hash": "sha256:def",
+        "created_at": 0.0,
+        "display_name": "w1",
+        "expires_at": 2000.0,
+        "hijacked": false,
+        "input_mode": "hijack",
+        "last_error": null,
+        "lifecycle_state": "stopped",
+        "owner": null,
+        "recording_available": false,
+        "recording_enabled": true,
+        "revoked": false,
+        "session_id": "w1",
+        "share_invite_token": "one-time-share",
+        "share_token_hash": "sha256:abc",
+        "tags": [],
+        "visibility": "public",
+        "worker_token": "wt"
+      }
+    }
+  ]
+}
