@@ -219,6 +219,40 @@ loading noVNC and the panel machinery into every page's bundle to serve two
 pages that are opened directly. They stay as they are unless the bootstrap
 starts routing to them.
 
+## Traps for the modules still to be ported
+
+Found by auditing shipped work against the reference rather than by a failing
+test. Neither is a bug in the port today; both are bugs waiting for whoever
+writes the module named.
+
+### A lease's expiry is monotonic in memory and wall-clock on disk
+
+`do/persistence.py` converts before saving:
+
+```python
+wall_expires = session.lease_expires_at + (time.time() - time.monotonic())
+```
+
+`store.saveLease` is faithful to its reference and writes what it is given, so
+the conversion is the caller's. A port of `persistence.py` that passes
+`session.lease_expires_at` straight through will write a monotonic reading
+into a wall-clock column — and monotonic clocks reset per isolate, so every
+lease would read as either long expired or far in the future after an
+eviction. Nothing in the store's own tests can catch it.
+
+### A presence or broadcast list must come from the runtime, not the registry
+
+`io.py`'s `_all_live_sockets` asks `ctx.getWebSockets()` and falls back to the
+in-memory map only when it reports nothing. A Durable Object is resumed with
+its sockets still open and its dictionaries empty, so a list built from the
+registry alone is empty exactly when it matters.
+
+`socket-registry.ts` was shipped with that bug and fixed in `bdfc05b7`; the
+same shape is needed by `broadcast_to_browsers` when `io.py` is ported. The
+tests did not catch it because every one of them built the registry up in the
+same process that read it — a suite that never resumes a component cannot see
+a resumption bug.
+
 ## Known cross-port misalignments
 
 ### A malformed prompt rule behaves differently in all three ports
