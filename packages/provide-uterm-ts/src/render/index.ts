@@ -11,4 +11,5 @@
  */
 
 export * from "./palette.ts";
+export * from "./segments.ts";
 export * from "./sgr.ts";
