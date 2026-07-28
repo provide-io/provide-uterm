@@ -32,6 +32,7 @@ export * as deckmux from "./deckmux/index.ts";
 export * as defaults from "./defaults/index.ts";
 export * as detection from "./detection/index.ts";
 export * as egress from "./egress/index.ts";
+export * as embed from "./embed/index.ts";
 export * as emulator from "./emulator/index.ts";
 export * as fanout from "./fanout/index.ts";
 export * as fileIo from "./file-io/index.ts";
