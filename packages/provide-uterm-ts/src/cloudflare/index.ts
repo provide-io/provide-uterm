@@ -17,6 +17,7 @@ export * from "./flow-control.ts";
 export * from "./jwt.ts";
 export * from "./jwt-verify.ts";
 export * from "./registry.ts";
+export * from "./session-auth.ts";
 export * from "./sse.ts";
 export * from "./store.ts";
 export * from "./webhook-crypto.ts";
