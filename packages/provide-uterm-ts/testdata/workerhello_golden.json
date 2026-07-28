@@ -1,0 +1,286 @@
+{
+  "hellos": [
+    {
+      "client_max": 1,
+      "client_min": 1,
+      "hello": {},
+      "name": "nothing at all",
+      "selected": 1
+    },
+    {
+      "client_max": 1,
+      "client_min": 1,
+      "hello": {
+        "input_mode": "open"
+      },
+      "name": "only an input mode",
+      "selected": 1
+    },
+    {
+      "client_max": 1,
+      "client_min": 1,
+      "hello": {
+        "protocol": {
+          "max": 1,
+          "min": 1
+        }
+      },
+      "name": "a range",
+      "selected": 1
+    },
+    {
+      "client_max": 1,
+      "client_min": 1,
+      "hello": {
+        "protocol": {
+          "max": 1
+        }
+      },
+      "name": "a range with no minimum",
+      "selected": 1
+    },
+    {
+      "client_max": 1,
+      "client_min": 1,
+      "hello": {
+        "protocol": {
+          "min": 1
+        }
+      },
+      "name": "a range with no maximum",
+      "selected": 1
+    },
+    {
+      "client_max": 1,
+      "client_min": 1,
+      "hello": {
+        "protocol": {}
+      },
+      "name": "an empty range object",
+      "selected": 1
+    },
+    {
+      "client_max": 9,
+      "client_min": 1,
+      "hello": {
+        "protocol": {
+          "max": 9,
+          "min": 1
+        }
+      },
+      "name": "a range asking for more than the hub has",
+      "selected": 1
+    },
+    {
+      "client_max": 9,
+      "client_min": 5,
+      "hello": {
+        "protocol": {
+          "max": 9,
+          "min": 5
+        }
+      },
+      "name": "a range entirely above the hub",
+      "selected": null
+    },
+    {
+      "client_max": 1,
+      "client_min": 1,
+      "hello": {
+        "protocol": {
+          "max": 0,
+          "min": 0
+        }
+      },
+      "name": "a range of zero",
+      "selected": 1
+    },
+    {
+      "client_max": 1,
+      "client_min": 1,
+      "hello": {
+        "protocol": {
+          "max": -1,
+          "min": -3
+        }
+      },
+      "name": "a negative range",
+      "selected": 1
+    },
+    {
+      "client_max": 1,
+      "client_min": 1,
+      "hello": {
+        "protocol": {
+          "max": "1",
+          "min": "1"
+        }
+      },
+      "name": "a range with a string version",
+      "selected": 1
+    },
+    {
+      "client_max": 1,
+      "client_min": 1,
+      "hello": {
+        "protocol": {
+          "max": null,
+          "min": "nonsense"
+        }
+      },
+      "name": "a range with an unreadable version",
+      "selected": 1
+    },
+    {
+      "client_max": 2,
+      "client_min": 1,
+      "hello": {
+        "protocol": {
+          "max": 2.9,
+          "min": 1.7
+        }
+      },
+      "name": "a range with a fractional version",
+      "selected": 1
+    },
+    {
+      "client_max": 1,
+      "client_min": 9,
+      "hello": {
+        "protocol": {
+          "max": 1,
+          "min": 9
+        }
+      },
+      "name": "a range whose bounds are crossed",
+      "selected": null
+    },
+    {
+      "client_max": 1,
+      "client_min": 1,
+      "hello": {
+        "protocol_version": 1
+      },
+      "name": "a legacy version",
+      "selected": 1
+    },
+    {
+      "client_max": 1,
+      "client_min": 1,
+      "hello": {
+        "protocol_version": 0
+      },
+      "name": "a legacy version of zero",
+      "selected": 1
+    },
+    {
+      "client_max": 1,
+      "client_min": 1,
+      "hello": {
+        "protocol_version": -2
+      },
+      "name": "a legacy negative version",
+      "selected": 1
+    },
+    {
+      "client_max": 7,
+      "client_min": 7,
+      "hello": {
+        "protocol_version": 7
+      },
+      "name": "a legacy version above the hub",
+      "selected": null
+    },
+    {
+      "client_max": 1,
+      "client_min": 1,
+      "hello": {
+        "protocol_version": null
+      },
+      "name": "a legacy version that is null",
+      "selected": 1
+    },
+    {
+      "client_max": 2,
+      "client_min": 2,
+      "hello": {
+        "protocol_version": "2"
+      },
+      "name": "a legacy version that is a string",
+      "selected": null
+    },
+    {
+      "client_max": 1,
+      "client_min": 1,
+      "hello": {
+        "protocol_version": "nonsense"
+      },
+      "name": "a legacy version that is unreadable",
+      "selected": 1
+    },
+    {
+      "client_max": 1,
+      "client_min": 1,
+      "hello": {
+        "protocol": {
+          "max": 1,
+          "min": 1
+        },
+        "protocol_version": 9
+      },
+      "name": "both shapes",
+      "selected": 1
+    },
+    {
+      "client_max": 1,
+      "client_min": 1,
+      "hello": {
+        "protocol": 1
+      },
+      "name": "a protocol that is a number",
+      "selected": 1
+    },
+    {
+      "client_max": 1,
+      "client_min": 1,
+      "hello": {
+        "protocol": "1"
+      },
+      "name": "a protocol that is a string",
+      "selected": 1
+    },
+    {
+      "client_max": 1,
+      "client_min": 1,
+      "hello": {
+        "protocol": [
+          1,
+          1
+        ]
+      },
+      "name": "a protocol that is a list",
+      "selected": 1
+    },
+    {
+      "client_max": 1,
+      "client_min": 1,
+      "hello": {
+        "protocol": null
+      },
+      "name": "a protocol that is null",
+      "selected": 1
+    },
+    {
+      "client_max": 1,
+      "client_min": 1,
+      "hello": {
+        "protocol": 1,
+        "protocol_version": 1
+      },
+      "name": "a protocol that is not an object, with a legacy version",
+      "selected": 1
+    }
+  ],
+  "server_max": 1,
+  "server_min": 1
+}
