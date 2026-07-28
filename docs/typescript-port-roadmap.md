@@ -144,7 +144,7 @@ corpus match CPython byte for byte.
 | `api-routes` | `api_routes` (the shared HTTP contract) | — | **done** — the whole table, template validation, shadowing detection, matching and the capability check |
 | `server` | server `routes/*`, `app/*`, `runtime` | `server` | **partial** — binding the shared contract to a backend's handlers, with its capability and role-guard validation and a framework-neutral dispatcher; the handlers, app wiring and runtime outstanding |
 | `client` | client `hijack`, `control_ws` | `client` | todo |
-| `gateway` | server `gateway` | `gateway` | **partial** — the SSH server's security policy (loopback bind test, host-key permissions, per-IP limits, permissive-auth refusal) and the host-key store, including an OpenSSH ed25519 encoder written from the format because Node emits only PKCS#8; the server wiring itself outstanding |
+| `gateway` | server `gateway` | `gateway` | **partial** — the SSH server's security policy (loopback bind test, host-key permissions, per-IP limits, permissive-auth refusal) the host-key store (including an OpenSSH ed25519 encoder written from the format, because Node emits only PKCS#8) and the SSH server itself, stood up on an ephemeral port and connected to for real |
 | `tunnel` | `tunnel`, `tunnel_invites`, `pam_tunnel` | `tunnel` | todo |
 | `tunnelclient` | share/inspect client | `tunnelclient` | todo |
 | `vnc` | `vnc` | `vnc` | todo |
