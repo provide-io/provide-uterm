@@ -46,8 +46,8 @@ function clamp(value: number, low: number, high: number): number {
 
 /** A bounded VT/ANSI screen. */
 export class Screen {
-  readonly cols: number;
-  readonly rows: number;
+  cols: number;
+  rows: number;
   /** Sparse row-major buffer: row index to column index to cell. */
   readonly #buffer = new Map<number, Map<number, Char>>();
   cursor: Cursor;
@@ -393,6 +393,51 @@ export class Screen {
       }
     }
     this.#blankRange(this.cursor.y, Math.max(this.cols - span, this.cursor.x), this.cols);
+  }
+
+  // ── Lifecycle ───────────────────────────────────────────────────────────
+
+  /** Return the screen to its initial state, keeping its dimensions. */
+  reset(): void {
+    this.#buffer.clear();
+    this.#savedCursor = undefined;
+    this.#marginTop = 0;
+    this.#marginBottom = this.rows - 1;
+    this.#insertMode = false;
+    this.cursor = { x: 0, y: 0, hidden: false, attrs: defaultChar() };
+  }
+
+  /**
+   * Resize the screen.
+   *
+   * Rows are taken from the bottom when shrinking, so the newest output
+   * survives and the oldest scrolls away, and blank rows are added at the
+   * bottom when growing. Columns are clipped rather than reflowed.
+   *
+   * The cursor is deliberately not clamped, matching the reference: a shrink
+   * can leave it beyond the last row until the next absolute move.
+   */
+  resize(rows: number, cols: number): void {
+    if (rows < this.rows) {
+      const dropped = this.rows - rows;
+      for (let y = 0; y < rows; y += 1) {
+        this.#moveRow(y + dropped, y);
+      }
+      for (let y = rows; y < this.rows; y += 1) {
+        this.#buffer.delete(y);
+      }
+    }
+    if (cols < this.cols) {
+      for (const row of this.#buffer.values()) {
+        for (let x = cols; x < this.cols; x += 1) {
+          row.delete(x);
+        }
+      }
+    }
+    this.rows = rows;
+    this.cols = cols;
+    this.#marginTop = 0;
+    this.#marginBottom = rows - 1;
   }
 
   // ── Modes and rendition ─────────────────────────────────────────────────

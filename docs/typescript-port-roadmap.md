@@ -69,8 +69,8 @@ corpus match CPython byte for byte.
 | Module | Python | Go | Status |
 |---|---|---|---|
 | `vt` | pyte (dependency) | `vt` | **done** |
-| `emulator` | `emulator` | `emulator` | todo |
-| `render` | `render` | `render` | todo |
+| `emulator` | `emulator` | `emulator` | **done** |
+| `render` | `render` | `render` | **partial** — SGR row rendering; image/palette/segments outstanding |
 | `detection` | `detection` | `detection` | todo |
 | `deckmux` | `deckmux` | `deckmux` | todo |
 | `annotation` | `provide-uterm-annotation` | `annotation` | todo |
@@ -201,6 +201,7 @@ in a test so it cannot drift silently.
 | `redaction` | A leading `(?i)`/`(?m)`/`(?s)` is translated into RegExp flags | ECMAScript has no inline-flag syntax, so the alternative is a hard compile error |
 | `control-channel` | JSON renders `0.0` as `0` | Go and C# do the same; the canonical-JSON signature path will not |
 | `colors` | `rewriteParams` passes a non-digit SGR component through where CPython raises | Unreachable from the SGR scanner; passing through is the safer of the two |
+| `emulator` | `resize` clips at the top deterministically, where the reference varies by whether the screen was read first | The reference buffer materialises rows on read, so a shrink behaves differently; deterministic clipping is what it documents |
 | `vt` | An unhandled C0 control is drawn, where pyte stalls its parser and swallows the rest of the stream | Matches the Go port; a stray byte freezing the display permanently is a bug, not a contract |
 | `pycompat` | An integral number renders as a Python `int`; insertion order is not preserved for integer-like object keys | JavaScript has one number type and reorders such keys — neither affects the canonical signing path |
 | `ansi` | Token digit classes are ASCII-only, so a Unicode-digit token is left verbatim | Same `\d` boundary as `redaction`; the patterns spell `[0-9]` to make the intent explicit |
