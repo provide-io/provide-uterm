@@ -142,7 +142,7 @@ corpus match CPython byte for byte.
 | Module | Python | Go | Status |
 |---|---|---|---|
 | `api-routes` | `api_routes` (the shared HTTP contract) | — | **done** — the whole table, template validation, shadowing detection, matching and the capability check |
-| `server` | server `routes/*`, `app/*`, `runtime` | `server` | todo |
+| `server` | server `routes/*`, `app/*`, `runtime` | `server` | **partial** — binding the shared contract to a backend's handlers, with its capability and role-guard validation and a framework-neutral dispatcher; the handlers, app wiring and runtime outstanding |
 | `client` | client `hijack`, `control_ws` | `client` | todo |
 | `gateway` | server `gateway` | `gateway` | **partial** — the SSH server's security policy (loopback bind test, host-key permissions, per-IP limits, permissive-auth refusal); the asyncssh-shaped server itself outstanding |
 | `tunnel` | `tunnel`, `tunnel_invites`, `pam_tunnel` | `tunnel` | todo |
