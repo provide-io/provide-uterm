@@ -1,0 +1,130 @@
+{
+  "key_is_stable": true,
+  "keys_differ": true,
+  "steps": [
+    {
+      "browsers": [],
+      "forgotten": [],
+      "hijack_owners": [],
+      "name": "registered worker",
+      "raw": [],
+      "resume_tokens": [],
+      "worker": true
+    },
+    {
+      "browsers": [
+        "browser-a"
+      ],
+      "forgotten": [],
+      "hijack_owners": [],
+      "name": "registered browser-a",
+      "raw": [],
+      "resume_tokens": [],
+      "worker": true
+    },
+    {
+      "browsers": [
+        "browser-a",
+        "browser-b"
+      ],
+      "forgotten": [],
+      "hijack_owners": [],
+      "name": "registered browser-b",
+      "raw": [],
+      "resume_tokens": [],
+      "worker": true
+    },
+    {
+      "browsers": [
+        "browser-a",
+        "browser-b"
+      ],
+      "forgotten": [],
+      "hijack_owners": [],
+      "name": "registered raw-a",
+      "raw": [
+        "raw-a"
+      ],
+      "resume_tokens": [],
+      "worker": true
+    },
+    {
+      "browsers": [
+        "browser-a",
+        "browser-b"
+      ],
+      "forgotten": [],
+      "hijack_owners": [
+        "browser-a"
+      ],
+      "name": "browser-a owns the hijack",
+      "raw": [
+        "raw-a"
+      ],
+      "resume_tokens": [
+        "browser-a"
+      ],
+      "worker": true
+    },
+    {
+      "browsers": [
+        "browser-b"
+      ],
+      "forgotten": [
+        "browser-a"
+      ],
+      "hijack_owners": [],
+      "name": "browser-a leaves",
+      "raw": [
+        "raw-a"
+      ],
+      "resume_tokens": [],
+      "worker": true
+    },
+    {
+      "browsers": [
+        "browser-b"
+      ],
+      "forgotten": [
+        "browser-a",
+        "raw-a"
+      ],
+      "hijack_owners": [],
+      "name": "raw-a leaves",
+      "raw": [],
+      "resume_tokens": [],
+      "worker": true
+    },
+    {
+      "browsers": [
+        "browser-b"
+      ],
+      "forgotten": [
+        "browser-a",
+        "raw-a",
+        "worker"
+      ],
+      "hijack_owners": [],
+      "name": "the worker leaves",
+      "raw": [],
+      "resume_tokens": [],
+      "worker": false
+    },
+    {
+      "browsers": [],
+      "forgotten": [
+        "browser-a",
+        "raw-a",
+        "worker",
+        "browser-b"
+      ],
+      "hijack_owners": [],
+      "name": "browser-b leaves",
+      "raw": [],
+      "resume_tokens": [],
+      "worker": false
+    }
+  ],
+  "worker_replaced": true,
+  "worker_survives_browser_removal": true
+}
