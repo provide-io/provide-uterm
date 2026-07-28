@@ -94,7 +94,7 @@ corpus match CPython byte for byte.
 | `serverauth` | server `auth*`, `webhook*`, `api_keys`, `dev_idp` | `serverauth` | todo |
 | `serverconfig` | server `config*`, `profiles` | `serverconfig` | todo |
 | `controlplane` | `control/plane` (+ memory/sqlite/bootstrap) | `controlplane` | todo |
-| `hub` | server `bridge/hub` (nine services) | `hub` | todo |
+| `hub` | server `bridge/hub` (nine services) | `hub` | **partial** — rate limiter (token bucket + per-client LRU); eight services outstanding |
 | `bridge` | `bridge` worker side | `bridge` | todo |
 | `fanout` | server `bridge/fanout` | `fanout` | todo |
 | `graphical` | graphical target registry | `graphical` | todo |

@@ -1,0 +1,317 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_ratelimit_golden.py",
+ "buckets": [
+  {
+   "name": "burst defaults to the rate",
+   "rate": 3.0,
+   "burst": null,
+   "script": [
+    [
+     0.0,
+     5
+    ]
+   ],
+   "verdicts": [
+    true,
+    true,
+    true,
+    false,
+    false
+   ]
+  },
+  {
+   "name": "explicit burst",
+   "rate": 1.0,
+   "burst": 5.0,
+   "script": [
+    [
+     0.0,
+     7
+    ]
+   ],
+   "verdicts": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false
+   ]
+  },
+  {
+   "name": "refills at the configured rate",
+   "rate": 1.0,
+   "burst": 1.0,
+   "script": [
+    [
+     0.0,
+     2
+    ],
+    [
+     1.0,
+     2
+    ],
+    [
+     1.0,
+     2
+    ]
+   ],
+   "verdicts": [
+    true,
+    false,
+    true,
+    false,
+    true,
+    false
+   ]
+  },
+  {
+   "name": "partial refill does not grant a token",
+   "rate": 1.0,
+   "burst": 1.0,
+   "script": [
+    [
+     0.0,
+     1
+    ],
+    [
+     0.5,
+     1
+    ],
+    [
+     0.5,
+     1
+    ]
+   ],
+   "verdicts": [
+    true,
+    false,
+    true
+   ]
+  },
+  {
+   "name": "refill is capped at the burst",
+   "rate": 2.0,
+   "burst": 2.0,
+   "script": [
+    [
+     0.0,
+     2
+    ],
+    [
+     100.0,
+     5
+    ]
+   ],
+   "verdicts": [
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false
+   ]
+  },
+  {
+   "name": "fractional rate",
+   "rate": 0.5,
+   "burst": 1.0,
+   "script": [
+    [
+     0.0,
+     1
+    ],
+    [
+     1.0,
+     1
+    ],
+    [
+     1.0,
+     1
+    ]
+   ],
+   "verdicts": [
+    true,
+    false,
+    true
+   ]
+  },
+  {
+   "name": "zero rate never refills",
+   "rate": 0.0,
+   "burst": 1.0,
+   "script": [
+    [
+     0.0,
+     2
+    ],
+    [
+     10.0,
+     1
+    ]
+   ],
+   "verdicts": [
+    true,
+    false,
+    false
+   ]
+  },
+  {
+   "name": "high rate",
+   "rate": 100.0,
+   "burst": 100.0,
+   "script": [
+    [
+     0.0,
+     101
+    ]
+   ],
+   "verdicts": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false
+   ]
+  }
+ ],
+ "limiter": {
+  "per_client": [
+   true,
+   true,
+   false,
+   false
+  ],
+  "other_client": [
+   true,
+   true,
+   false,
+   false
+  ],
+  "send": [
+   true,
+   true,
+   false,
+   false
+  ],
+  "global_verdicts": [
+   true,
+   true,
+   false,
+   false
+  ],
+  "global_untouched_by_denial": true
+ },
+ "eviction": {
+  "cache_max": 1024,
+  "evict_count": 512,
+  "size_at_cap": 1024,
+  "size_after_overflow": 513,
+  "overflow_client_kept": true,
+  "oldest_evicted": true,
+  "newest_kept": true
+ },
+ "self_reset": {
+  "first": true,
+  "second": false,
+  "after_churn": false
+ }
+}
