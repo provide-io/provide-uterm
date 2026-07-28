@@ -47,7 +47,7 @@ module; the Go column names the sibling package for cross-checking.
 | `ansi` | `ansi`, `_ansi_dialects` | `ansi` | **done** |
 | `screen` | `screen` | `screen` | **done** |
 | `policy` | server policy | `policy` | todo |
-| `replay` | `replay` | `replay` | todo |
+| `replay` | `replay` | `replay` | **done** — the raw-stream rebuild and the log viewer, with its frame selection and delay schedule |
 
 ### Wire formats
 

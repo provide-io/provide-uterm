@@ -38,6 +38,7 @@ export * as ratelimit from "./ratelimit/index.ts";
 export * as recording from "./recording/index.ts";
 export * as redaction from "./redaction/index.ts";
 export * as render from "./render/index.ts";
+export * as replay from "./replay/index.ts";
 export * as sanitizer from "./sanitizer/index.ts";
 export * as screen from "./screen/index.ts";
 export * as session from "./session/index.ts";
