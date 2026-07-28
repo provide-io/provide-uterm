@@ -115,7 +115,7 @@ corpus match CPython byte for byte.
 | `manager` | External Management Tier | `manager` | todo |
 | `mcp` | client `ai`/MCP (28 tools) | `mcp` | todo |
 | `cli` | server CLI (`uterm`) | `cli` | todo |
-| `cloudflare` | `provide-uterm-cloudflare` (53 files, ~8.3k lines) | — | **partial** — the Worker configuration with its startup refusals, the KV session registry, and the whole Durable Object state store (schema, session metadata, invite state, lease state, snapshots, event log, recording view, webhooks and resume tokens); the session runtime's flow controller, its WebSocket attachment reading, and webhook secret encryption; the Worker entry, the rest of the session runtime, transport, auth and routes outstanding |
+| `cloudflare` | `provide-uterm-cloudflare` (53 files, ~8.3k lines) | — | **partial** — the Worker configuration with its startup refusals, the KV session registry, and the whole Durable Object state store (schema, session metadata, invite state, lease state, snapshots, event log, recording view, webhooks and resume tokens); the session runtime's flow controller, its WebSocket attachment reading, webhook secret encryption, and the polling server-sent-events endpoint; the Worker entry, the rest of the session runtime, transport, auth and routes outstanding |
 
 #### Cloudflare Durable Objects
 
@@ -320,3 +320,5 @@ in a test so it cannot drift silently.
 | `vt` | An unhandled C0 control is drawn, where pyte stalls its parser and swallows the rest of the stream | Matches the Go port; a stray byte freezing the display permanently is a bug, not a contract |
 | `pycompat` | An integral number renders as a Python `int`; insertion order is not preserved for integer-like object keys | JavaScript has one number type and reorders such keys — neither affects the canonical signing path |
 | `ansi` | Token digit classes are ASCII-only, so a Unicode-digit token is left verbatim | Same `\d` boundary as `redaction`; the patterns spell `[0-9]` to make the intent explicit |
+| `cloudflare/sse` | An event field holding a whole-valued float renders as `1700000000`, not `1700000000.0` | The `pycompat` number divergence reaching a wire format: both ends read the field as JSON, so the value survives — only the bytes differ |
+| `cloudflare/sse` | An `after_seq` beyond 2^53−1 is rounded to the nearest double | Both then ask for events after a sequence larger than any that exists, so the answer is the same; the number asked for is not |
