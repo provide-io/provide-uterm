@@ -154,6 +154,56 @@ PROBES: tuple[dict[str, Any], ...] = (
         "json": {"input_mode": "hijack"},
         "volatile": ("created_at", "connected", "lifecycle_state"),
     },
+    # The worker's own route onto the same field. It sits behind the same gate
+    # as the lease routes rather than the session ones, and it asks for
+    # ``session.control.mode`` — so its refusals are the gate's ``detail``
+    # while the hub's own two are the lease routes' ``error``. Both envelopes
+    # appear below and both are the reference's.
+    #
+    # This one re-asserts the mode the session is already in, which is what a
+    # worker does on reconnect and must not be a refusal. It also leaves the
+    # session in ``hijack`` for the acquire that follows.
+    {
+        "id": "worker_mode_noop_hijack",
+        "method": "POST",
+        "path": f"/worker/{SESSION}/input_mode",
+        "auth": "token",
+        "json": {"input_mode": "hijack"},
+    },
+    {
+        "id": "worker_mode_anonymous",
+        "method": "POST",
+        "path": f"/worker/{SESSION}/input_mode",
+        "auth": "none",
+        "json": {"input_mode": "open"},
+    },
+    {
+        "id": "worker_mode_unknown_worker",
+        "method": "POST",
+        "path": "/worker/no-such-worker/input_mode",
+        "auth": "token",
+        "json": {"input_mode": "open"},
+    },
+    {
+        "id": "worker_mode_undefined",
+        "method": "POST",
+        "path": f"/worker/{SESSION}/input_mode",
+        "auth": "token",
+        "json": {"input_mode": "sideways"},
+    },
+    {
+        "id": "worker_mode_malformed_worker_id",
+        "method": "POST",
+        "path": "/worker/not%20a%20worker/input_mode",
+        "auth": "token",
+        "json": {"input_mode": "open"},
+    },
+    {
+        "id": "worker_mode_wrong_method",
+        "method": "GET",
+        "path": f"/worker/{SESSION}/input_mode",
+        "auth": "token",
+    },
     {
         "id": "acquire",
         "method": "POST",
@@ -161,6 +211,24 @@ PROBES: tuple[dict[str, Any], ...] = (
         "auth": "token",
         "json": {"owner": "conformance", "lease_s": 60},
         "volatile": ("hijack_id", "lease_expires_at"),
+    },
+    # The refusal this route exists for, and the transition it still allows
+    # while the lease is held. ``second_acquire`` below is what proves the
+    # refusal left the lease alone rather than answering 409 and writing the
+    # field anyway — the answer alone shows what was said, not what was stored.
+    {
+        "id": "worker_mode_open_while_held",
+        "method": "POST",
+        "path": f"/worker/{SESSION}/input_mode",
+        "auth": "token",
+        "json": {"input_mode": "open"},
+    },
+    {
+        "id": "worker_mode_hijack_while_held",
+        "method": "POST",
+        "path": f"/worker/{SESSION}/input_mode",
+        "auth": "token",
+        "json": {"input_mode": "hijack"},
     },
     {
         "id": "second_acquire",
@@ -284,6 +352,15 @@ PROBES: tuple[dict[str, Any], ...] = (
         "auth": "token",
         "json": {"input_mode": "open"},
         "volatile": ("created_at", "connected", "lifecycle_state"),
+    },
+    # The other no-op, from the other side: nothing is held and the session is
+    # already open, so there is no guard to trip and no field to move.
+    {
+        "id": "worker_mode_noop_open",
+        "method": "POST",
+        "path": f"/worker/{SESSION}/input_mode",
+        "auth": "token",
+        "json": {"input_mode": "open"},
     },
 )
 

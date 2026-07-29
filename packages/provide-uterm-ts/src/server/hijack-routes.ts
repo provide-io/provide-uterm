@@ -52,10 +52,31 @@
  * * **Nothing else is charged.** `heartbeat`, `snapshot` and `release` are
  *   free, which is what keeps a lease from being rate limited into expiring.
  *
+ * ## The worker's own mode route
+ *
+ * `POST /worker/{id}/input_mode` is not a lease route — it is the reference's
+ * `rest_workerctl`, a sibling module — but it is served here because the gate
+ * is here and it needs the same one. It asks for a different capability
+ * (`session.control.mode`, which an operator holds, rather than
+ * `session.control.hijack`, which only an administrator does), and it is what
+ * a worker calls to say which mode it came up in.
+ *
+ * It is refused while a lease is held, where the *session* route
+ * (`POST /api/sessions/{id}/mode`) succeeds and force-releases. The difference
+ * is authority rather than mechanism: an operator opening a session is
+ * entitled to take it back from whoever holds the lease, and a worker is not —
+ * `open` means everyone may type, so a worker that could flip it would end the
+ * holder's exclusivity while their lease still answered heartbeats.
+ *
+ * Both routes end at the same hub method, which is where the reference keeps
+ * the guard. Nothing here re-implements it.
+ *
  * ## What is not here
  *
- * The events poll (`GET .../hijack/{id}/events`) is not bound. That is stated
- * in the roadmap rather than approximated.
+ * The events poll (`GET .../hijack/{id}/events`) is not bound, and neither is
+ * `POST /worker/{id}/disconnect_worker` — the reference's other worker-control
+ * route, which is an administrator's. Both are stated in the roadmap rather
+ * than approximated.
  */
 
 import { extractPromptId, type HijackSession, type InputMode } from "../hub/index.ts";
@@ -80,6 +101,29 @@ export const NO_WORKER_ERROR = "No worker connected for this session.";
 
 /** All a caller over its budget is told. It names no window and no deadline. */
 export const RATE_LIMITED_ERROR = "rate_limited";
+
+/** What the mode route says when the hub has no worker under that id. */
+export const WORKER_MODE_NO_WORKER_ERROR = "No worker registered.";
+
+/** What the mode route says when a lease is standing in the way. */
+export const WORKER_MODE_ACTIVE_HIJACK_ERROR = "Cannot switch to open while hijack is active.";
+
+/**
+ * What this port substitutes for the reference's per-field validation list.
+ *
+ * The reference validates this route's body with its framework's model, so an
+ * `input_mode` outside the two permitted values is refused with a list of
+ * per-field errors rather than a sentence. Reproducing that envelope is a unit
+ * of its own and no scenario reads it, so the status is held exactly and the
+ * body is this port's own one-string `detail` — the same divergence the path
+ * parameters and the query validators already carry.
+ *
+ * Note that the *session* route's 422 is a real sentence in the reference too
+ * (`app.ts`'s `INPUT_MODE_DETAIL`), because that one is hand-written rather
+ * than generated. Two routes onto one field, refused in two envelopes, and
+ * both are the reference's.
+ */
+export const WORKER_MODE_INVALID_BODY_DETAIL = "invalid request body parameters";
 
 /**
  * The bucket a caller with no address of its own is charged to.
@@ -171,6 +215,26 @@ export function parseHijackPath(path: string): HijackPath | undefined {
   return undefined;
 }
 
+/**
+ * Read a `/worker/{id}/{verb}` path, for the verbs that are not lease routes.
+ *
+ * Returns nothing for anything else, including a verb this port does not
+ * serve: `disconnect_worker` is a real route in the reference and is not one
+ * here, and it has to fall through to the 404 an unserved path gets rather
+ * than reach a handler that would answer it approximately.
+ */
+export function parseWorkerControlPath(path: string): { workerId: string; verb: string } | undefined {
+  const segments = path.split("/");
+  if (segments.length !== 4 || segments[0] !== "" || segments[1] !== "worker") {
+    return undefined;
+  }
+  const verb = segments[3] as string;
+  return WORKER_CONTROL_VERBS.has(verb) ? { workerId: segments[2] as string, verb } : undefined;
+}
+
+/** The worker-control verbs this port serves, and the capability each needs. */
+const WORKER_CONTROL_VERBS: ReadonlyMap<string, string> = new Map([["input_mode", "session.control.mode"]]);
+
 /** Whether a verb reads the session rather than driving it. */
 const READ_VERBS: ReadonlySet<string> = new Set(["snapshot"]);
 
@@ -259,7 +323,10 @@ export async function readJsonBody(request: Request): Promise<Record<string, unk
 }
 
 /**
- * Answer a lease request, or hand the path back untouched.
+ * Answer a `/worker/...` request, or hand the path back untouched.
+ *
+ * Leases first, then the worker-control verbs: the two families share the
+ * gate and nothing else, and no path is both.
  *
  * @returns The response, or `undefined` when the path belongs to somebody
  *   else.
@@ -270,10 +337,80 @@ export async function handleHijackRequest(
 ): Promise<Response | undefined> {
   const url = new URL(request.url);
   const parsed = parseHijackPath(url.pathname);
-  if (parsed === undefined) {
-    return undefined;
+  if (parsed !== undefined) {
+    return await answer(request, parsed, options);
   }
-  return await answer(request, parsed, options);
+  const control = parseWorkerControlPath(url.pathname);
+  if (control !== undefined) {
+    return await answerControl(request, control.workerId, control.verb, options);
+  }
+  return undefined;
+}
+
+/**
+ * One worker-control request, once its path has been read.
+ *
+ * The same gate the lease routes go through, in the same order — path, method,
+ * credential, existence, privilege — differing only in the capability it
+ * demands. Existence comes after the credential so that nobody can enumerate
+ * session ids by watching whether the refusal is 401 or 404.
+ */
+async function answerControl(
+  request: Request,
+  workerId: string,
+  verb: string,
+  options: HijackRouteOptions,
+): Promise<Response> {
+  if (!WORKER_ID.test(workerId)) {
+    return detail(422, "invalid route path parameters");
+  }
+  if (request.method.toUpperCase() !== "POST") {
+    return detail(405, "Method Not Allowed", { Allow: "POST" });
+  }
+  if (!options.authenticated) {
+    return detail(401, HIJACK_UNAUTHENTICATED_DETAIL);
+  }
+  const session = options.registry.definition(workerId);
+  if (session === undefined) {
+    return detail(404, `unknown session: ${workerId}`);
+  }
+  // Present, because `parseWorkerControlPath` only returns verbs it is keyed
+  // by. Nothing is charged against the rate limiter here: the reference meters
+  // acquires, sends and steps, and metering a mode change would let a flood of
+  // them throttle the routes that drive a held terminal.
+  if (!canMutateSession(options.principal, session, WORKER_CONTROL_VERBS.get(verb) as string)) {
+    return detail(403, "insufficient privileges");
+  }
+  return await setWorkerInputMode(request, workerId, options.hub);
+}
+
+/**
+ * Move one worker between `open` and `hijack`, at the worker's own request.
+ *
+ * The guard is the hub's and stays there — `setInputMode` is the same method
+ * the WebSocket hello path goes through, so every way onto the field is
+ * guarded rather than only this one. All that is decided here is which status
+ * each of the hub's two refusals is worth.
+ *
+ * The value is read exactly as it arrives. The reference validates it against
+ * a pattern with no trimming, unlike the session route which strips first, so
+ * a padded `" open"` is refused here and obeyed there.
+ */
+async function setWorkerInputMode(request: Request, workerId: string, hub: SessionHub): Promise<Response> {
+  const mode = (await readJsonBody(request)).input_mode;
+  if (typeof mode !== "string" || !INPUT_MODES.has(mode)) {
+    return detail(422, WORKER_MODE_INVALID_BODY_DETAIL);
+  }
+  const result = await hub.setInputMode(workerId, mode as InputMode);
+  if (!result.ok) {
+    // The session registry and the hub's worker table are not the same table:
+    // a configured session whose connector never came up is past the gate and
+    // still unknown here, which is the only way this 404 is reached.
+    return result.reason === "not_found"
+      ? leaseError(404, WORKER_MODE_NO_WORKER_ERROR)
+      : leaseError(409, WORKER_MODE_ACTIVE_HIJACK_ERROR);
+  }
+  return Response.json({ ok: true, input_mode: mode, worker_id: workerId });
 }
 
 /** The refusal a path's own grammar earns, or nothing when it is well-formed. */
