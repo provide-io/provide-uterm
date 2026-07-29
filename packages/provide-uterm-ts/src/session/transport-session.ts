@@ -17,6 +17,7 @@
 import { ControlFrameDecoder, type DataChunk } from "../control-channel/index.ts";
 import { TerminalEmulator } from "../emulator/index.ts";
 import { DEFAULT_CAPTURE_MAX_CHARS, TerminalCapture } from "./capture.ts";
+import { type ExpectResult, type SendAndExpectOptions, sendAndExpect } from "./expect.ts";
 
 /** Reinterpret latin-1 text as the byte sequence it stands for. */
 function toBytes(text: string): Uint8Array {
@@ -95,6 +96,17 @@ export class TransportSession {
   /** Write to the far end. */
   async send(data: string): Promise<void> {
     await this.#transport.send(data);
+  }
+
+  /**
+   * Send keys and wait for what they should produce.
+   *
+   * The reason to have this on the session rather than beside it: a caller
+   * that sends first and waits afterwards can miss the answer entirely, and
+   * this reads the change counter before it writes.
+   */
+  async sendExpect(keys: string, options: Omit<SendAndExpectOptions, "keys"> = {}): Promise<ExpectResult> {
+    return sendAndExpect(this, keys, options);
   }
 
   /** Whether the session is still reading. */
