@@ -255,6 +255,118 @@ public sealed class ConformanceLiveDriverServerTests : IClassFixture<LiveDriverS
         Assert.NotNull((string?)fields["error"]);
     }
 
+    /// <summary>The session the default configuration ships, in both roles.</summary>
+    private const string Shell = "provide-shell";
+
+    /// <summary>Put the shell session into <c>open</c> or <c>hijack</c> mode.</summary>
+    private static string ModeStep(string id, string mode) =>
+        $$"""{"id": "{{id}}", "action": "set_input_mode", "session_id": "{{Shell}}", "input_mode": "{{mode}}"}""";
+
+    /// <summary>
+    /// A step acting on the lease the step named <c>acquire</c> recorded — the
+    /// protocol's own example of a step that needs an earlier step's answer.
+    /// </summary>
+    private static string LeaseStep(string id, string action, string extra = "") =>
+        $$"""
+        {"id": "{{id}}", "action": "{{action}}", "worker_id": "{{Shell}}",
+         "hijack_id": "${acquire.body.hijack_id}"{{extra}}}
+        """;
+
+    [Fact]
+    public async Task A_reference_sends_the_request_to_the_route_an_earlier_step_named()
+    {
+        var id = "live" + Guid.NewGuid().ToString("N")[..8];
+        var result = await RunAsync(
+            $$$"""{"id": "create", "action": "http_post", "path": "/api/sessions", "body": {"session_id": "{{{id}}}"}}""",
+            """{"id": "read", "action": "get_session", "session_id": "${create.body.session_id}"}""",
+            """{"id": "events", "action": "session_events", "session_id": "${create.body.session_id}", "limit": 3}""");
+
+        Assert.Equal("completed", (string?)result["status"]);
+        // The proof a reference resolved to a *value*: the request reached the
+        // session the earlier step created. A resolver that matched nothing
+        // would leave the literal `${...}`, which is not an id any route has —
+        // and both steps would still have run, which is the quiet failure.
+        Assert.Equal(200, (int?)Fields(result, "read")["status"]);
+        Assert.Equal(id, (string?)Fields(result, "read")["body"]!["session_id"]);
+        Assert.Equal(200, (int?)Fields(result, "events")["status"]);
+    }
+
+    [Fact]
+    public async Task Every_lease_action_reaches_the_server_through_the_client_library()
+    {
+        // What is asserted here is the driver's half: each action names a route,
+        // the request is made through `HijackClient`, and whatever came back is
+        // an observation. Whether *this* server mints a lease is the harness's
+        // question, not the driver's — the lifecycle end to end is proved
+        // against the reference server.
+        var result = await RunAsync(
+            ModeStep("mode", "hijack"),
+            $$"""
+            {"id": "acquire", "action": "hijack_acquire", "worker_id": "{{Shell}}",
+             "owner": "operator", "lease_s": 30}
+            """,
+            $$"""{"id": "beat", "action": "hijack_heartbeat", "worker_id": "{{Shell}}", "hijack_id": "hj-1", "lease_s": 45}""",
+            $$"""{"id": "send", "action": "hijack_send", "worker_id": "{{Shell}}", "hijack_id": "hj-1", "keys": "echo hi\n"}""",
+            $$"""{"id": "stepped", "action": "hijack_step", "worker_id": "{{Shell}}", "hijack_id": "hj-1"}""",
+            $$"""{"id": "snap", "action": "hijack_snapshot", "worker_id": "{{Shell}}", "hijack_id": "hj-1"}""",
+            $$"""{"id": "release", "action": "hijack_release", "worker_id": "{{Shell}}", "hijack_id": "hj-1"}""",
+            ModeStep("open", "open"));
+
+        Assert.Equal("completed", (string?)result["status"]);
+        Assert.Equal("hijack", (string?)Fields(result, "mode")["body"]!["input_mode"]);
+        foreach (var id in new[] { "acquire", "beat", "send", "stepped", "snap", "release" })
+        {
+            // A status at all means a route answered: an action the driver could
+            // not build a request for records a null status and its own error.
+            Assert.NotNull((int?)Fields(result, id)["status"]);
+            Assert.Null(Fields(result, id)["error"]);
+        }
+
+        Assert.Equal("open", (string?)Fields(result, "open")["body"]!["input_mode"]);
+    }
+
+    [Fact]
+    public async Task Session_events_reads_the_events_a_session_recorded()
+    {
+        var result = await RunAsync(
+            $$"""{"id": "all", "action": "session_events", "session_id": "{{Shell}}"}""",
+            $$"""{"id": "few", "action": "session_events", "session_id": "{{Shell}}", "limit": 5}""");
+
+        Assert.Equal("completed", (string?)result["status"]);
+        Assert.Equal(200, (int?)Fields(result, "all")["status"]);
+        // A bare array, as every other port's client hands it back.
+        Assert.NotNull(Fields(result, "all")["body"]!.AsArray());
+        Assert.Equal(200, (int?)Fields(result, "few")["status"]);
+    }
+
+    [Fact]
+    public async Task A_reference_nobody_can_resolve_ends_the_run_rather_than_being_recorded()
+    {
+        var result = await RunAsync(
+            """{"id": "health", "action": "health"}""",
+            LeaseStep("snap", "hijack_snapshot"));
+
+        // A malformed scenario, not something a server did: recording it as a
+        // field would let the harness compare it as though the server answered.
+        Assert.Equal("error", (string?)result["status"]);
+        Assert.Contains("acquire", (string?)result["error"]!, StringComparison.Ordinal);
+        Assert.Single(result["steps"]!.AsArray());
+    }
+
+    [Fact]
+    public async Task A_hijack_step_the_scenario_left_incomplete_records_its_own_error()
+    {
+        var result = await RunAsync(
+            """{"id": "no_worker", "action": "hijack_acquire"}""",
+            $$"""{"id": "no_lease", "action": "hijack_send", "worker_id": "{{Shell}}"}""",
+            $$"""{"id": "no_mode", "action": "set_input_mode", "session_id": "{{Shell}}"}""");
+
+        Assert.Equal("completed", (string?)result["status"]);
+        Assert.Contains("worker_id", (string?)Fields(result, "no_worker")["error"]!, StringComparison.Ordinal);
+        Assert.Contains("hijack_id", (string?)Fields(result, "no_lease")["error"]!, StringComparison.Ordinal);
+        Assert.Contains("input_mode", (string?)Fields(result, "no_mode")["error"]!, StringComparison.Ordinal);
+    }
+
     private static string ClosedBaseUrl()
     {
         // Take a port and give it straight back, so nothing is listening on it.

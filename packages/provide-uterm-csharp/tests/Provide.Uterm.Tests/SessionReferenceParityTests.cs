@@ -261,6 +261,47 @@ public sealed class SessionReferenceParityTests
     }
 
     [Fact]
+    public async Task SessionEvents_Asks_For_The_Limit_It_Was_Given()
+    {
+        var (server, http, token) = await StartAsync();
+        await using (server)
+        {
+            using (http)
+            {
+                using var client = HijackClient.WithBearer(server.BaseAddress!.TrimEnd('/'), token);
+
+                // The reference always sends a limit (Python `limit=100`, Go
+                // `orDefault(limit, 100)`); a client that omitted it would take
+                // whatever default a server happened to have.
+                Assert.IsAssignableFrom<IReadOnlyList<object?>>(await client.SessionEvents("provide-shell", 5));
+                Assert.IsAssignableFrom<IReadOnlyList<object?>>(await client.SessionEvents("provide-shell", 0));
+            }
+        }
+    }
+
+    [Fact]
+    public async Task SetSessionMode_Sends_The_Key_The_Reference_Route_Reads()
+    {
+        var (server, http, token) = await StartAsync();
+        await using (server)
+        {
+            using (http)
+            {
+                using var client = HijackClient.WithBearer(server.BaseAddress!.TrimEnd('/'), token);
+
+                // POST /api/sessions/{id}/mode reads `input_mode` — in this
+                // port's own server and in the reference's. A client sending
+                // `mode` gets a 422 from every server in the matrix.
+                var hijacked = await client.SetSessionMode("provide-shell", "hijack");
+                Assert.Equal("hijack", hijacked["input_mode"]);
+
+                var opened = await client.SetSessionMode("provide-shell", "open");
+                Assert.Equal("open", opened["input_mode"]);
+            }
+        }
+    }
+
+    [Fact]
     public async Task SessionSnapshot_Returns_The_Null_The_Server_Sent()
     {
         var (server, http, token) = await StartAsync();
