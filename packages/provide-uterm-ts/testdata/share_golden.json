@@ -1,0 +1,1017 @@
+{
+  "protocol": {
+    "channels": {
+      "control": 0,
+      "data": 1,
+      "tcp": 2,
+      "http": 3
+    },
+    "flags": {
+      "data": 0,
+      "eof": 1
+    },
+    "encoded": [
+      {
+        "name": "a data frame",
+        "channel": 1,
+        "payload": "hi",
+        "flags": 0,
+        "value": "01006869"
+      },
+      {
+        "name": "an empty payload",
+        "channel": 1,
+        "payload": "",
+        "flags": 0,
+        "value": "0100"
+      },
+      {
+        "name": "an end-of-file frame",
+        "channel": 1,
+        "payload": "",
+        "flags": 1,
+        "value": "0101"
+      },
+      {
+        "name": "the control channel",
+        "channel": 0,
+        "payload": "{}",
+        "flags": 0,
+        "value": "00007b7d"
+      },
+      {
+        "name": "the highest channel",
+        "channel": 255,
+        "payload": "x",
+        "flags": 255,
+        "value": "ffff78"
+      },
+      {
+        "name": "bytes outside ASCII",
+        "channel": 1,
+        "payload": "hÃ©llo â",
+        "flags": 0,
+        "value": "010068c3a96c6c6f20e29883"
+      },
+      {
+        "name": "a channel past the end",
+        "channel": 256,
+        "payload": "x",
+        "flags": 0,
+        "error": "channel must be 0..255"
+      },
+      {
+        "name": "a negative channel",
+        "channel": -1,
+        "payload": "x",
+        "flags": 0,
+        "error": "channel must be 0..255"
+      },
+      {
+        "name": "flags past the end",
+        "channel": 1,
+        "payload": "x",
+        "flags": 256,
+        "error": "flags must be 0..255"
+      },
+      {
+        "name": "negative flags",
+        "channel": 1,
+        "payload": "x",
+        "flags": -1,
+        "error": "flags must be 0..255"
+      }
+    ],
+    "decoded": [
+      {
+        "name": "a data frame",
+        "raw": "01006869",
+        "channel": 1,
+        "flags": 0,
+        "payload": "hi",
+        "is_eof": false,
+        "is_control": false
+      },
+      {
+        "name": "an end-of-file frame",
+        "raw": "0101",
+        "channel": 1,
+        "flags": 1,
+        "payload": "",
+        "is_eof": true,
+        "is_control": false
+      },
+      {
+        "name": "a control frame",
+        "raw": "00007b7d",
+        "channel": 0,
+        "flags": 0,
+        "payload": "{}",
+        "is_eof": false,
+        "is_control": true
+      },
+      {
+        "name": "a header and nothing else",
+        "raw": "0100",
+        "channel": 1,
+        "flags": 0,
+        "payload": "",
+        "is_eof": false,
+        "is_control": false
+      },
+      {
+        "name": "one byte",
+        "raw": "01",
+        "error": "frame too short"
+      },
+      {
+        "name": "nothing at all",
+        "raw": "",
+        "error": "frame too short"
+      },
+      {
+        "name": "every flag set",
+        "raw": "01ff7061796c6f6164",
+        "channel": 1,
+        "flags": 255,
+        "payload": "payload",
+        "is_eof": true,
+        "is_control": false
+      }
+    ],
+    "control_encoded": [
+      {
+        "name": "an ordinary message",
+        "message": {
+          "type": "hello"
+        },
+        "value": "00007b2274797065223a2268656c6c6f227d"
+      },
+      {
+        "name": "a message with fields",
+        "message": {
+          "type": "resize",
+          "cols": 80,
+          "rows": 25
+        },
+        "value": "00007b2274797065223a22726573697a65222c22636f6c73223a38302c22726f7773223a32357d"
+      },
+      {
+        "name": "a message with no type",
+        "message": {
+          "cols": 80
+        },
+        "error": "control message must have a 'type' key"
+      },
+      {
+        "name": "an empty message",
+        "message": {},
+        "error": "control message must have a 'type' key"
+      },
+      {
+        "name": "a message whose type is null",
+        "message": {
+          "type": null
+        },
+        "value": "00007b2274797065223a6e756c6c7d"
+      },
+      {
+        "name": "text outside ASCII",
+        "message": {
+          "type": "héllo ☃"
+        },
+        "value": "00007b2274797065223a22685c75303065396c6c6f205c7532363033227d"
+      }
+    ],
+    "control_decoded": [
+      {
+        "name": "an object",
+        "payload": "{\"type\":\"hello\"}",
+        "value": {
+          "type": "hello"
+        }
+      },
+      {
+        "name": "an empty object",
+        "payload": "{}",
+        "value": {}
+      },
+      {
+        "name": "a list",
+        "payload": "[1,2]",
+        "error": "control payload must be a JSON object"
+      },
+      {
+        "name": "a string",
+        "payload": "\"hello\"",
+        "error": "control payload must be a JSON object"
+      },
+      {
+        "name": "a number",
+        "payload": "42",
+        "error": "control payload must be a JSON object"
+      },
+      {
+        "name": "null",
+        "payload": "null",
+        "error": "control payload must be a JSON object"
+      },
+      {
+        "name": "nothing at all",
+        "payload": "",
+        "error": "invalid control payload"
+      },
+      {
+        "name": "broken json",
+        "payload": "{",
+        "error": "invalid control payload"
+      },
+      {
+        "name": "bytes that are not utf-8",
+        "payload": "ÿþ",
+        "error": "invalid control payload"
+      },
+      {
+        "name": "json holding a byte that is not utf-8",
+        "payload": "{\"type\":\"ÿ\"}",
+        "error": "invalid control payload"
+      }
+    ]
+  },
+  "tokens": [
+    {
+      "name": "a token on the command line",
+      "token": "from-flag",
+      "token_file": "a file holding a token",
+      "file_contents": {
+        "a file holding a token": "  from-named-file  \n",
+        "a file holding only spaces": "   \n"
+      },
+      "resolved": "from-flag"
+    },
+    {
+      "name": "a named token file",
+      "token": null,
+      "token_file": "a file holding a token",
+      "file_contents": {
+        "a file holding a token": "  from-named-file  \n",
+        "a file holding only spaces": "   \n"
+      },
+      "resolved": "from-named-file"
+    },
+    {
+      "name": "a named file that is not there",
+      "token": null,
+      "token_file": "a path with no file at it",
+      "file_contents": {
+        "a file holding a token": "  from-named-file  \n",
+        "a file holding only spaces": "   \n"
+      },
+      "resolved": null
+    },
+    {
+      "name": "a named file holding only spaces",
+      "token": null,
+      "token_file": "a file holding only spaces",
+      "file_contents": {
+        "a file holding a token": "  from-named-file  \n",
+        "a file holding only spaces": "   \n"
+      },
+      "resolved": ""
+    },
+    {
+      "name": "a token file that is a directory",
+      "token": null,
+      "token_file": "a path that is a directory",
+      "file_contents": {
+        "a file holding a token": "  from-named-file  \n",
+        "a file holding only spaces": "   \n"
+      },
+      "resolved": null
+    },
+    {
+      "name": "an empty token on the command line",
+      "token": "",
+      "token_file": "a file holding a token",
+      "file_contents": {
+        "a file holding a token": "  from-named-file  \n",
+        "a file holding only spaces": "   \n"
+      },
+      "resolved": "from-named-file"
+    },
+    {
+      "name": "no token argument at all",
+      "token": null,
+      "token_file": null,
+      "file_contents": {
+        "a file holding a token": "  from-named-file  \n",
+        "a file holding only spaces": "   \n"
+      },
+      "resolved": null
+    }
+  ],
+  "display_names": [
+    {
+      "name": "a name given on the command line",
+      "display_name": "my session",
+      "user": "ada",
+      "node": "workstation",
+      "resolved": "my session"
+    },
+    {
+      "name": "no name given",
+      "display_name": null,
+      "user": "ada",
+      "node": "workstation",
+      "resolved": "ada@workstation"
+    },
+    {
+      "name": "a user nobody can name",
+      "display_name": null,
+      "user": "raises",
+      "node": "workstation",
+      "resolved": "unknown@workstation"
+    },
+    {
+      "name": "a host with no name",
+      "display_name": null,
+      "user": "ada",
+      "node": "",
+      "resolved": "ada@localhost"
+    },
+    {
+      "name": "neither a user nor a host",
+      "display_name": null,
+      "user": "raises",
+      "node": "",
+      "resolved": "unknown@localhost"
+    }
+  ],
+  "commands": [
+    {
+      "name": "a relative endpoint over https",
+      "server": "https://warp.example",
+      "attach": false,
+      "cmd": null,
+      "tunnel_info": {
+        "tunnel_id": "t-1",
+        "share_url": "https://warp.example/s/abc",
+        "control_url": "https://warp.example/c/abc",
+        "ws_endpoint": "/tunnel/abc",
+        "worker_token": "worker-token"
+      },
+      "log": [
+        [
+          "create",
+          "https://warp.example",
+          "d",
+          "t"
+        ],
+        [
+          "bridge",
+          "wss://warp.example/tunnel/abc"
+        ],
+        [
+          "close",
+          "spawned:None"
+        ]
+      ],
+      "ran": {
+        "ws_endpoint": "wss://warp.example/tunnel/abc",
+        "worker_token": "worker-token",
+        "attach": false
+      },
+      "stdout": "Sharing terminal session...\n  View:    https://warp.example/s/abc\n  Control: https://warp.example/c/abc\n\nConnected. Press Ctrl+C to stop sharing.\n",
+      "stderr": "",
+      "exit_code": null
+    },
+    {
+      "name": "a relative endpoint over http",
+      "server": "http://warp.example",
+      "attach": false,
+      "cmd": null,
+      "tunnel_info": {
+        "tunnel_id": "t-1",
+        "share_url": "https://warp.example/s/abc",
+        "control_url": "https://warp.example/c/abc",
+        "ws_endpoint": "/tunnel/abc",
+        "worker_token": "worker-token"
+      },
+      "log": [
+        [
+          "create",
+          "http://warp.example",
+          "d",
+          "t"
+        ],
+        [
+          "bridge",
+          "ws://warp.example/tunnel/abc"
+        ],
+        [
+          "close",
+          "spawned:None"
+        ]
+      ],
+      "ran": {
+        "ws_endpoint": "ws://warp.example/tunnel/abc",
+        "worker_token": "worker-token",
+        "attach": false
+      },
+      "stdout": "Sharing terminal session...\n  View:    https://warp.example/s/abc\n  Control: https://warp.example/c/abc\n\nConnected. Press Ctrl+C to stop sharing.\n",
+      "stderr": "",
+      "exit_code": null
+    },
+    {
+      "name": "a server named with a trailing slash",
+      "server": "https://warp.example/",
+      "attach": false,
+      "cmd": null,
+      "tunnel_info": {
+        "tunnel_id": "t-1",
+        "share_url": "https://warp.example/s/abc",
+        "control_url": "https://warp.example/c/abc",
+        "ws_endpoint": "/tunnel/abc",
+        "worker_token": "worker-token"
+      },
+      "log": [
+        [
+          "create",
+          "https://warp.example/",
+          "d",
+          "t"
+        ],
+        [
+          "bridge",
+          "wss://warp.example/tunnel/abc"
+        ],
+        [
+          "close",
+          "spawned:None"
+        ]
+      ],
+      "ran": {
+        "ws_endpoint": "wss://warp.example/tunnel/abc",
+        "worker_token": "worker-token",
+        "attach": false
+      },
+      "stdout": "Sharing terminal session...\n  View:    https://warp.example/s/abc\n  Control: https://warp.example/c/abc\n\nConnected. Press Ctrl+C to stop sharing.\n",
+      "stderr": "",
+      "exit_code": null
+    },
+    {
+      "name": "an absolute endpoint",
+      "server": "https://warp.example",
+      "attach": false,
+      "cmd": null,
+      "tunnel_info": {
+        "tunnel_id": "t-1",
+        "share_url": "https://warp.example/s/abc",
+        "control_url": "https://warp.example/c/abc",
+        "ws_endpoint": "wss://elsewhere.example/tunnel/abc",
+        "worker_token": "worker-token"
+      },
+      "log": [
+        [
+          "create",
+          "https://warp.example",
+          "d",
+          "t"
+        ],
+        [
+          "bridge",
+          "wss://elsewhere.example/tunnel/abc"
+        ],
+        [
+          "close",
+          "spawned:None"
+        ]
+      ],
+      "ran": {
+        "ws_endpoint": "wss://elsewhere.example/tunnel/abc",
+        "worker_token": "worker-token",
+        "attach": false
+      },
+      "stdout": "Sharing terminal session...\n  View:    https://warp.example/s/abc\n  Control: https://warp.example/c/abc\n\nConnected. Press Ctrl+C to stop sharing.\n",
+      "stderr": "",
+      "exit_code": null
+    },
+    {
+      "name": "an absolute endpoint over cleartext",
+      "server": "https://warp.example",
+      "attach": false,
+      "cmd": null,
+      "tunnel_info": {
+        "tunnel_id": "t-1",
+        "share_url": "https://warp.example/s/abc",
+        "control_url": "https://warp.example/c/abc",
+        "ws_endpoint": "ws://elsewhere.example/tunnel/abc",
+        "worker_token": "worker-token"
+      },
+      "log": [
+        [
+          "create",
+          "https://warp.example",
+          "d",
+          "t"
+        ],
+        [
+          "bridge",
+          "ws://elsewhere.example/tunnel/abc"
+        ],
+        [
+          "close",
+          "spawned:None"
+        ]
+      ],
+      "ran": {
+        "ws_endpoint": "ws://elsewhere.example/tunnel/abc",
+        "worker_token": "worker-token",
+        "attach": false
+      },
+      "stdout": "Sharing terminal session...\n  View:    https://warp.example/s/abc\n  Control: https://warp.example/c/abc\n\nConnected. Press Ctrl+C to stop sharing.\n",
+      "stderr": "",
+      "exit_code": null
+    },
+    {
+      "name": "an answer with no endpoint",
+      "server": "https://warp.example",
+      "attach": false,
+      "cmd": null,
+      "tunnel_info": {
+        "tunnel_id": "t-1",
+        "share_url": "https://warp.example/s/abc",
+        "control_url": "https://warp.example/c/abc",
+        "ws_endpoint": "",
+        "worker_token": "worker-token"
+      },
+      "log": [
+        [
+          "create",
+          "https://warp.example",
+          "d",
+          "t"
+        ]
+      ],
+      "ran": {},
+      "stdout": "",
+      "stderr": "error: server response missing ws_endpoint\n",
+      "exit_code": 1
+    },
+    {
+      "name": "an answer with nothing in it",
+      "server": "https://warp.example",
+      "attach": false,
+      "cmd": null,
+      "tunnel_info": {},
+      "log": [
+        [
+          "create",
+          "https://warp.example",
+          "d",
+          "t"
+        ]
+      ],
+      "ran": {},
+      "stdout": "",
+      "stderr": "error: server response missing ws_endpoint\n",
+      "exit_code": 1
+    },
+    {
+      "name": "an answer with no urls to print",
+      "server": "https://warp.example",
+      "attach": false,
+      "cmd": null,
+      "tunnel_info": {
+        "ws_endpoint": "/tunnel/abc",
+        "worker_token": "w"
+      },
+      "log": [
+        [
+          "create",
+          "https://warp.example",
+          "d",
+          "t"
+        ],
+        [
+          "bridge",
+          "wss://warp.example/tunnel/abc"
+        ],
+        [
+          "close",
+          "spawned:None"
+        ]
+      ],
+      "ran": {
+        "ws_endpoint": "wss://warp.example/tunnel/abc",
+        "worker_token": "w",
+        "attach": false
+      },
+      "stdout": "Sharing terminal session...\n  View:    \n  Control: \n\nConnected. Press Ctrl+C to stop sharing.\n",
+      "stderr": "",
+      "exit_code": null
+    },
+    {
+      "name": "attaching to this terminal",
+      "server": "https://warp.example",
+      "attach": true,
+      "cmd": null,
+      "tunnel_info": {
+        "tunnel_id": "t-1",
+        "share_url": "https://warp.example/s/abc",
+        "control_url": "https://warp.example/c/abc",
+        "ws_endpoint": "/tunnel/abc",
+        "worker_token": "worker-token"
+      },
+      "log": [
+        [
+          "create",
+          "https://warp.example",
+          "d",
+          "t"
+        ],
+        [
+          "start",
+          "attached"
+        ],
+        [
+          "bridge",
+          "wss://warp.example/tunnel/abc"
+        ],
+        [
+          "close",
+          "attached"
+        ]
+      ],
+      "ran": {
+        "ws_endpoint": "wss://warp.example/tunnel/abc",
+        "worker_token": "worker-token",
+        "attach": true
+      },
+      "stdout": "Sharing terminal session...\n  View:    https://warp.example/s/abc\n  Control: https://warp.example/c/abc\n\nConnected. Press Ctrl+C to stop sharing.\n",
+      "stderr": "",
+      "exit_code": null
+    },
+    {
+      "name": "sharing a command",
+      "server": "https://warp.example",
+      "attach": false,
+      "cmd": [
+        "htop"
+      ],
+      "tunnel_info": {
+        "tunnel_id": "t-1",
+        "share_url": "https://warp.example/s/abc",
+        "control_url": "https://warp.example/c/abc",
+        "ws_endpoint": "/tunnel/abc",
+        "worker_token": "worker-token"
+      },
+      "log": [
+        [
+          "create",
+          "https://warp.example",
+          "d",
+          "t"
+        ],
+        [
+          "bridge",
+          "wss://warp.example/tunnel/abc"
+        ],
+        [
+          "close",
+          "spawned:['htop']"
+        ]
+      ],
+      "ran": {
+        "ws_endpoint": "wss://warp.example/tunnel/abc",
+        "worker_token": "worker-token",
+        "attach": false
+      },
+      "stdout": "Sharing terminal session...\n  View:    https://warp.example/s/abc\n  Control: https://warp.example/c/abc\n\nConnected. Press Ctrl+C to stop sharing.\n",
+      "stderr": "",
+      "exit_code": null
+    },
+    {
+      "name": "a server whose path mentions http",
+      "server": "https://warp.example/http://x",
+      "attach": false,
+      "cmd": null,
+      "tunnel_info": {
+        "tunnel_id": "t-1",
+        "share_url": "https://warp.example/s/abc",
+        "control_url": "https://warp.example/c/abc",
+        "ws_endpoint": "/tunnel/abc",
+        "worker_token": "worker-token"
+      },
+      "log": [
+        [
+          "create",
+          "https://warp.example/http://x",
+          "d",
+          "t"
+        ],
+        [
+          "bridge",
+          "wss://warp.example/ws://x/tunnel/abc"
+        ],
+        [
+          "close",
+          "spawned:None"
+        ]
+      ],
+      "ran": {
+        "ws_endpoint": "wss://warp.example/ws://x/tunnel/abc",
+        "worker_token": "worker-token",
+        "attach": false
+      },
+      "stdout": "Sharing terminal session...\n  View:    https://warp.example/s/abc\n  Control: https://warp.example/c/abc\n\nConnected. Press Ctrl+C to stop sharing.\n",
+      "stderr": "",
+      "exit_code": null
+    }
+  ],
+  "bridges": [
+    {
+      "name": "both sides quiet",
+      "reads": [
+        ""
+      ],
+      "receives": [
+        ""
+      ],
+      "is_attach": false,
+      "log": [
+        [
+          "read",
+          4096,
+          ""
+        ],
+        [
+          "recv",
+          ""
+        ]
+      ]
+    },
+    {
+      "name": "a byte each way",
+      "reads": [
+        "hi",
+        ""
+      ],
+      "receives": [
+        "there",
+        ""
+      ],
+      "is_attach": false,
+      "log": [
+        [
+          "read",
+          4096,
+          "hi"
+        ],
+        [
+          "send",
+          "01006869"
+        ],
+        [
+          "read",
+          4096,
+          ""
+        ],
+        [
+          "recv",
+          "there"
+        ],
+        [
+          "write",
+          "there"
+        ],
+        [
+          "recv",
+          ""
+        ]
+      ]
+    },
+    {
+      "name": "the pty closing first",
+      "reads": [
+        ""
+      ],
+      "receives": [
+        "a",
+        "b",
+        ""
+      ],
+      "is_attach": false,
+      "log": [
+        [
+          "read",
+          4096,
+          ""
+        ],
+        [
+          "recv",
+          "a"
+        ],
+        [
+          "write",
+          "a"
+        ],
+        [
+          "recv",
+          "b"
+        ],
+        [
+          "write",
+          "b"
+        ],
+        [
+          "recv",
+          ""
+        ]
+      ]
+    },
+    {
+      "name": "the socket closing first",
+      "reads": [
+        "a",
+        "b",
+        ""
+      ],
+      "receives": [
+        ""
+      ],
+      "is_attach": false,
+      "log": [
+        [
+          "read",
+          4096,
+          "a"
+        ],
+        [
+          "send",
+          "010061"
+        ],
+        [
+          "read",
+          4096,
+          "b"
+        ],
+        [
+          "send",
+          "010062"
+        ],
+        [
+          "read",
+          4096,
+          ""
+        ],
+        [
+          "recv",
+          ""
+        ]
+      ]
+    },
+    {
+      "name": "the pty failing",
+      "reads": [
+        null
+      ],
+      "receives": [
+        ""
+      ],
+      "is_attach": false,
+      "log": [
+        [
+          "read",
+          4096,
+          null
+        ],
+        [
+          "recv",
+          ""
+        ]
+      ]
+    },
+    {
+      "name": "the socket failing",
+      "reads": [
+        ""
+      ],
+      "receives": [
+        null
+      ],
+      "is_attach": false,
+      "log": [
+        [
+          "read",
+          4096,
+          ""
+        ],
+        [
+          "recv",
+          null
+        ]
+      ]
+    },
+    {
+      "name": "attached, so the terminal is written to",
+      "reads": [
+        ""
+      ],
+      "receives": [
+        "there",
+        ""
+      ],
+      "is_attach": true,
+      "log": [
+        [
+          "read",
+          4096,
+          ""
+        ],
+        [
+          "recv",
+          "there"
+        ],
+        [
+          "write_local",
+          "there"
+        ],
+        [
+          "recv",
+          ""
+        ]
+      ]
+    },
+    {
+      "name": "not attached, so the pty is written to",
+      "reads": [
+        ""
+      ],
+      "receives": [
+        "there",
+        ""
+      ],
+      "is_attach": false,
+      "log": [
+        [
+          "read",
+          4096,
+          ""
+        ],
+        [
+          "recv",
+          "there"
+        ],
+        [
+          "write",
+          "there"
+        ],
+        [
+          "recv",
+          ""
+        ]
+      ]
+    },
+    {
+      "name": "text outside ASCII",
+      "reads": [
+        "héllo ☃",
+        ""
+      ],
+      "receives": [
+        "☃",
+        ""
+      ],
+      "is_attach": false,
+      "log": [
+        [
+          "read",
+          4096,
+          "héllo ☃"
+        ],
+        [
+          "send",
+          "010068c3a96c6c6f20e29883"
+        ],
+        [
+          "read",
+          4096,
+          ""
+        ],
+        [
+          "recv",
+          "☃"
+        ],
+        [
+          "write",
+          "☃"
+        ],
+        [
+          "recv",
+          ""
+        ]
+      ]
+    }
+  ]
+}

@@ -6,4 +6,5 @@
 /** Tunnel sharing: invite bootstrap and the hashing that keeps tokens off disk. */
 
 export * from "./invites.ts";
+export * from "./protocol.ts";
 export * from "./token-hash.ts";
