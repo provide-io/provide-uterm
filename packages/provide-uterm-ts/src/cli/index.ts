@@ -6,3 +6,4 @@
 /** The `uterm` command line. */
 
 export * from "./share.ts";
+export * from "./watch.ts";
