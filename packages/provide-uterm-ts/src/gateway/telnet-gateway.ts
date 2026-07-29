@@ -18,6 +18,7 @@
  */
 
 import { createServer, type Server, type Socket } from "node:net";
+import { portOf } from "../transports/telnet-server.ts";
 import { IacNegotiator } from "./iac.ts";
 import { isLoopbackBind } from "./ssh-policy.ts";
 
@@ -87,19 +88,6 @@ export function assertBindAllowed(host: string, allowUnauthenticated: boolean): 
         "set allowUnauthenticated only when this listener is protected by another access-control layer",
     );
   }
-}
-
-/**
- * The port a listening server ended up on.
- *
- * @throws {Error} When the server is not listening on a network address — a
- *   caller asking a Unix socket for its port has asked the wrong question.
- */
-export function portOf(address: ReturnType<Server["address"]>): number {
-  if (address === null || typeof address !== "object") {
-    throw new Error("telnet gateway is not listening on a network address");
-  }
-  return address.port;
 }
 
 /** A running listener. */

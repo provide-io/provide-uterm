@@ -10,7 +10,6 @@ import {
   DEFAULT_NEGOTIATE_TIMEOUT_S,
   DEFAULT_TELNET_HOST,
   DEFAULT_TELNET_PORT,
-  portOf,
   type RunningTelnetGateway,
   TelnetGateway,
   type UpstreamSession,
@@ -109,15 +108,6 @@ describe("where a telnet listener may bind", () => {
     // A refused configuration must never hold a port, even briefly.
     const { gateway } = gatewayWith();
     await expect(gateway.start("0.0.0.0", 0)).rejects.toThrow("refusing to start");
-  });
-
-  it("reads the port off a listening server, and refuses to guess", () => {
-    // A caller that asked for port zero needs the one it actually got; a
-    // server on a Unix socket has no port to give, and saying so beats
-    // inventing one.
-    expect(portOf({ address: "127.0.0.1", family: "IPv4", port: 4242 })).toBe(4242);
-    expect(() => portOf(null)).toThrow("not listening on a network address");
-    expect(() => portOf("/tmp/somewhere.sock")).toThrow("not listening on a network address");
   });
 
   it("defaults to loopback and the reference's port", () => {
