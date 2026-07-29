@@ -72,3 +72,43 @@ const DIGIT = new RegExp(
 export function pyIsDigit(text: string): boolean {
   return text !== "" && DIGIT.test(text);
 }
+
+/**
+ * A string as Python's `repr()` writes it.
+ *
+ * Two things a plain quoting would get wrong. Python switches quote style
+ * rather than escaping: a string holding an apostrophe and no double quote is
+ * written in double quotes. And a control character is escaped rather than
+ * printed — the difference between a refusal an operator can read and one that
+ * moves their cursor, which matters because these strings are attacker-chosen
+ * and end up in logs.
+ */
+export function pyRepr(text: string): string {
+  const escaped = [...text]
+    .map((character) => {
+      const code = character.codePointAt(0) as number;
+      if (character === "\\") {
+        return "\\\\";
+      }
+      if (character === "\n") {
+        return "\\n";
+      }
+      if (character === "\r") {
+        return "\\r";
+      }
+      if (character === "\t") {
+        return "\\t";
+      }
+      // Everything else below space, and the delete character. Printable
+      // non-ASCII is left alone, which is what Python 3 does.
+      if (code < 0x20 || code === 0x7f) {
+        return `\\x${code.toString(16).padStart(2, "0")}`;
+      }
+      return character;
+    })
+    .join("");
+  if (escaped.includes("'") && !escaped.includes('"')) {
+    return `"${escaped}"`;
+  }
+  return `'${escaped.replaceAll("'", "\\'")}'`;
+}
