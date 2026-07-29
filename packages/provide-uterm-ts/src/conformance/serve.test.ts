@@ -90,9 +90,10 @@ describe("announcing", () => {
     const sessions = (await response.json()) as { session_id: string; lifecycle_state: string; connected: boolean }[];
     expect(sessions[0]?.session_id).toBe("provide-shell");
     expect(sessions[0]?.lifecycle_state).toBe("running");
-    // And still not connected: the session is up, but this server binds no
-    // transport a client could attach through, and it does not pretend to.
-    expect(sessions[0]?.connected).toBe(false);
+    // And connected: the session is up *and* attached to the hub as a worker,
+    // which is what makes it leasable. Both by the time the line is written,
+    // so the harness's first request never observes a half-started server.
+    expect(sessions[0]?.connected).toBe(true);
     stop();
     await finished;
   });

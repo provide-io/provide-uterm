@@ -29,27 +29,48 @@
  */
 
 import { API_ROUTE_REGISTRY, API_ROUTES, type RouteDef } from "../api-routes/index.ts";
+import type { InputMode } from "../hub/index.ts";
 import {
   ANONYMOUS_SUBJECT,
   type AuthSettings,
   resolveJwtPrincipal,
   type ServerPrincipal,
 } from "../serverauth/index.ts";
-import { canReadSession } from "./authorization.ts";
+import { canMutateSession, canReadSession } from "./authorization.ts";
 import { healthReport, livenessReport, readinessReport } from "./health.ts";
+import { handleHijackRequest, INPUT_MODES, readJsonBody as readBody } from "./hijack-routes.ts";
 import { bindApiRoutes, type RouteHandler } from "./route-binding.ts";
+import type { SessionHub } from "./session-hub.ts";
 import { filterSessions, type SessionListQuery, type SessionRegistry } from "./session-registry.ts";
 
 /** The refusal every unauthenticated request gets, whatever it asked for. */
 export const UNAUTHENTICATED_DETAIL = "authentication required";
 
+/** What a mode nobody defined is refused with. It names both permitted values. */
+export const INPUT_MODE_DETAIL = "input_mode must be 'open' or 'hijack'";
+
 /** The capabilities this server implements, as the shared table names them. */
-export const SERVED_CAPABILITIES: readonly string[] = ["sessions.list", "sessions.get"];
+export const SERVED_CAPABILITIES: readonly string[] = [
+  "sessions.list",
+  "sessions.get",
+  "sessions.snapshot",
+  "sessions.set_mode",
+];
+
+/** How a session's connector is reached, when one is running. */
+export interface ConnectorAccess {
+  /** Tell a running connector its input mode changed. */
+  setMode(sessionId: string, mode: InputMode): Promise<void>;
+}
 
 /** What a server app is built with. */
 export interface ServerAppOptions {
   registry: SessionRegistry;
   auth: AuthSettings;
+  /** The hub the lease routes arbitrate through. */
+  hub: SessionHub;
+  /** The running connectors, for the routes that change one. */
+  connectors: ConnectorAccess;
   /** The version health reports. */
   version: string;
   /** Which store is behind the control plane, as health reports it. */
@@ -206,7 +227,7 @@ export function createServerApp(options: ServerAppOptions): ServerApp {
    * table of capability to function with nowhere to put either. Building it
    * is a filter over forty routes, which is not the cost of anything.
    */
-  function handlers(principal: ServerPrincipal, url: URL): ReadonlyMap<string, RouteHandler> {
+  function handlers(request: Request, principal: ServerPrincipal, url: URL): ReadonlyMap<string, RouteHandler> {
     const registry = options.registry;
     const map = new Map<string, RouteHandler>();
     for (const route of API_ROUTES) {
@@ -236,7 +257,65 @@ export function createServerApp(options: ServerAppOptions): ServerApp {
       // Present, because its definition is.
       return Response.json(registry.status(sessionId) as object);
     });
+
+    map.set("sessions.snapshot", async (context) => {
+      const sessionId = context.params.session_id as string;
+      const definition = registry.definition(sessionId);
+      if (definition === undefined) {
+        return refusal(404, `unknown session: ${sessionId}`);
+      }
+      if (!canReadSession(principal, definition)) {
+        return refusal(403, "insufficient privileges");
+      }
+      // A session whose worker has never sent a screen answers `null` with a
+      // 200, not a 404: the session exists and has nothing to show yet, which
+      // is a different thing from a session that does not exist.
+      return Response.json((await options.hub.getLastSnapshot(sessionId)) ?? null);
+    });
+
+    map.set("sessions.set_mode", async (context) => {
+      const sessionId = context.params.session_id as string;
+      const definition = registry.definition(sessionId);
+      if (definition === undefined) {
+        return refusal(404, `unknown session: ${sessionId}`);
+      }
+      // Existence, then privilege, then the payload — a caller who may not
+      // touch the session learns nothing about whether their body was valid.
+      if (!canMutateSession(principal, definition, "session.control.mode")) {
+        return refusal(403, "insufficient privileges");
+      }
+      const body = await readBody(request);
+      const mode = String(body.input_mode ?? "").trim();
+      if (!INPUT_MODES.has(mode)) {
+        return refusal(422, INPUT_MODE_DETAIL);
+      }
+      await setSessionMode(sessionId, mode as InputMode);
+      // Present, because its definition is.
+      return Response.json(registry.status(sessionId) as object);
+    });
     return map;
+  }
+
+  /**
+   * Move one session between `open` and `hijack`.
+   *
+   * Three places hold the mode and all three are written, in the reference's
+   * order. The hub's copy is what an acquire is refused against, so a port
+   * that changed only the definition would report `hijack` to every reader
+   * while still refusing every lease with "not available in open input mode".
+   *
+   * Opening a session releases whatever is held on it first. In open mode the
+   * lease stops gating input, so leaving one in place would put a holder in
+   * the position of believing they alone are driving a terminal that everyone
+   * can now type into.
+   */
+  async function setSessionMode(sessionId: string, mode: InputMode): Promise<void> {
+    if (mode === "open") {
+      await options.hub.forceReleaseHijack(sessionId);
+    }
+    options.registry.setInputMode(sessionId, mode);
+    await options.connectors.setMode(sessionId, mode);
+    await options.hub.setInputMode(sessionId, mode);
   }
 
   /**
@@ -266,17 +345,32 @@ export function createServerApp(options: ServerAppOptions): ServerApp {
       return Response.json(answer.body, { status: answer.status });
     }
 
+    const principal = principalOf(request);
+    const authenticated = principal.subject_id !== ANONYMOUS_SUBJECT;
+
+    // The lease routes are not part of the shared contract — they are the
+    // hub's own — so they are matched here rather than through the table.
+    // Ahead of it, because nothing in the table claims a `/worker/` path.
+    const lease = await handleHijackRequest(request, {
+      hub: options.hub,
+      registry: options.registry,
+      principal,
+      authenticated,
+    });
+    if (lease !== undefined) {
+      return lease;
+    }
+
     // A route matched is a route whose caller has to have authenticated. The
     // match happens first so that a path nobody routes stays a 404 for
     // everyone, and second so that existence is never revealed to a caller
     // who has not identified themselves.
     const match = API_ROUTE_REGISTRY.match(method, path);
     const served = match !== undefined && SERVED_ROUTES.includes(match.route);
-    const principal = principalOf(request);
-    if (served && principal.subject_id === ANONYMOUS_SUBJECT) {
+    if (served && !authenticated) {
       return unauthenticated();
     }
-    return bindApiRoutes(handlers(principal, url), SERVED_ROUTES).dispatch(method, path);
+    return bindApiRoutes(handlers(request, principal, url), SERVED_ROUTES).dispatch(method, path);
   }
 
   return {

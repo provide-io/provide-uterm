@@ -1,0 +1,555 @@
+{
+  "note": "Recorded in order from the reference FastAPI server on an ephemeral port, in dev_token mode, with the default configuration and its session's worker actually attached. A probe may quote an earlier one with ${id.path}. Values that differ between runs are '<volatile>'; 'body_keys' is the key set of a body that was masked whole.",
+  "volatile": "<volatile>",
+  "session_id": "provide-shell",
+  "probes": [
+    {
+      "id": "snapshot_before_hijack",
+      "method": "GET",
+      "path": "/api/sessions/provide-shell/snapshot",
+      "auth": "token",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "<volatile>",
+      "body_keys": [
+        "cols",
+        "cursor",
+        "cursor_at_end",
+        "has_trailing_space",
+        "prompt_detected",
+        "raw_tail",
+        "rows",
+        "screen",
+        "screen_hash",
+        "ts",
+        "type"
+      ]
+    },
+    {
+      "id": "snapshot_anonymous",
+      "method": "GET",
+      "path": "/api/sessions/provide-shell/snapshot",
+      "auth": "none",
+      "status": 401,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "detail": "authentication required"
+      }
+    },
+    {
+      "id": "snapshot_unknown_session",
+      "method": "GET",
+      "path": "/api/sessions/no-such-session/snapshot",
+      "auth": "token",
+      "status": 404,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "detail": "unknown session: no-such-session"
+      }
+    },
+    {
+      "id": "acquire_while_open",
+      "method": "POST",
+      "path": "/worker/provide-shell/hijack/acquire",
+      "auth": "token",
+      "status": 409,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "error": "Hijack not available in open input mode."
+      },
+      "json": {
+        "owner": "conformance",
+        "lease_s": 60
+      }
+    },
+    {
+      "id": "acquire_unknown_worker",
+      "method": "POST",
+      "path": "/worker/no-such-worker/hijack/acquire",
+      "auth": "token",
+      "status": 404,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "detail": "unknown session: no-such-worker"
+      },
+      "json": {
+        "owner": "conformance",
+        "lease_s": 60
+      }
+    },
+    {
+      "id": "acquire_anonymous",
+      "method": "POST",
+      "path": "/worker/provide-shell/hijack/acquire",
+      "auth": "none",
+      "status": 401,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "detail": "authentication required"
+      },
+      "json": {
+        "owner": "nobody",
+        "lease_s": 60
+      }
+    },
+    {
+      "id": "mode_undefined",
+      "method": "POST",
+      "path": "/api/sessions/provide-shell/mode",
+      "auth": "token",
+      "status": 422,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "detail": "input_mode must be 'open' or 'hijack'"
+      },
+      "json": {
+        "input_mode": "sideways"
+      }
+    },
+    {
+      "id": "mode_missing",
+      "method": "POST",
+      "path": "/api/sessions/provide-shell/mode",
+      "auth": "token",
+      "status": 422,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "detail": "input_mode must be 'open' or 'hijack'"
+      },
+      "json": {}
+    },
+    {
+      "id": "mode_anonymous",
+      "method": "POST",
+      "path": "/api/sessions/provide-shell/mode",
+      "auth": "none",
+      "status": 401,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "detail": "authentication required"
+      },
+      "json": {
+        "input_mode": "hijack"
+      }
+    },
+    {
+      "id": "mode_unknown_session",
+      "method": "POST",
+      "path": "/api/sessions/no-such-session/mode",
+      "auth": "token",
+      "status": 404,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "detail": "unknown session: no-such-session"
+      },
+      "json": {
+        "input_mode": "hijack"
+      }
+    },
+    {
+      "id": "to_hijack",
+      "method": "POST",
+      "path": "/api/sessions/provide-shell/mode",
+      "auth": "token",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "session_id": "provide-shell",
+        "display_name": "Provide Shell",
+        "created_at": "<volatile>",
+        "connector_type": "shell",
+        "lifecycle_state": "<volatile>",
+        "input_mode": "hijack",
+        "connected": "<volatile>",
+        "auto_start": true,
+        "tags": [
+          "shell",
+          "reference"
+        ],
+        "recording_enabled": false,
+        "recording_available": false,
+        "owner": null,
+        "visibility": "public",
+        "stopped_at": null,
+        "last_error": null
+      },
+      "json": {
+        "input_mode": "hijack"
+      }
+    },
+    {
+      "id": "acquire",
+      "method": "POST",
+      "path": "/worker/provide-shell/hijack/acquire",
+      "auth": "token",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "ok": true,
+        "worker_id": "provide-shell",
+        "hijack_id": "<volatile>",
+        "lease_expires_at": "<volatile>",
+        "owner": "conformance"
+      },
+      "json": {
+        "owner": "conformance",
+        "lease_s": 60
+      }
+    },
+    {
+      "id": "second_acquire",
+      "method": "POST",
+      "path": "/worker/provide-shell/hijack/acquire",
+      "auth": "token",
+      "status": 409,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "error": "Worker is already hijacked."
+      },
+      "json": {
+        "owner": "second",
+        "lease_s": 60
+      }
+    },
+    {
+      "id": "heartbeat",
+      "method": "POST",
+      "path": "/worker/provide-shell/hijack/${acquire.body.hijack_id}/heartbeat",
+      "auth": "token",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "ok": true,
+        "worker_id": "provide-shell",
+        "hijack_id": "<volatile>",
+        "lease_expires_at": "<volatile>"
+      },
+      "json": {
+        "lease_s": 60
+      }
+    },
+    {
+      "id": "heartbeat_unknown_lease",
+      "method": "POST",
+      "path": "/worker/provide-shell/hijack/00000000-0000-0000-0000-000000000000/heartbeat",
+      "auth": "token",
+      "status": 404,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "error": "Invalid or expired hijack session."
+      },
+      "json": {
+        "lease_s": 60
+      }
+    },
+    {
+      "id": "hijack_snapshot",
+      "method": "GET",
+      "path": "/worker/provide-shell/hijack/${acquire.body.hijack_id}/snapshot",
+      "auth": "token",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "<volatile>",
+      "body_keys": [
+        "hijack_id",
+        "lease_expires_at",
+        "ok",
+        "prompt_id",
+        "snapshot",
+        "worker_id"
+      ]
+    },
+    {
+      "id": "hijack_snapshot_unknown_lease",
+      "method": "GET",
+      "path": "/worker/provide-shell/hijack/00000000-0000-0000-0000-000000000000/snapshot",
+      "auth": "token",
+      "status": 404,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "error": "Invalid or expired hijack session."
+      }
+    },
+    {
+      "id": "hijack_send",
+      "method": "POST",
+      "path": "/worker/provide-shell/hijack/${acquire.body.hijack_id}/send",
+      "auth": "token",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "ok": true,
+        "worker_id": "provide-shell",
+        "hijack_id": "<volatile>",
+        "sent": "/say hello\r",
+        "matched_prompt_id": "shell_prompt",
+        "lease_expires_at": "<volatile>"
+      },
+      "json": {
+        "keys": "/say hello\r"
+      }
+    },
+    {
+      "id": "hijack_step",
+      "method": "POST",
+      "path": "/worker/provide-shell/hijack/${acquire.body.hijack_id}/step",
+      "auth": "token",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "ok": true,
+        "worker_id": "provide-shell",
+        "hijack_id": "<volatile>",
+        "lease_expires_at": "<volatile>"
+      }
+    },
+    {
+      "id": "hijack_send_unknown_lease",
+      "method": "POST",
+      "path": "/worker/provide-shell/hijack/00000000-0000-0000-0000-000000000000/send",
+      "auth": "token",
+      "status": 404,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "error": "Invalid or expired hijack session."
+      },
+      "json": {
+        "keys": "x"
+      }
+    },
+    {
+      "id": "malformed_worker_id",
+      "method": "POST",
+      "path": "/worker/not%20a%20worker/hijack/acquire",
+      "auth": "token",
+      "status": 422,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "detail": [
+          {
+            "type": "string_pattern_mismatch",
+            "loc": [
+              "path",
+              "worker_id"
+            ],
+            "msg": "String should match pattern '^[\\w\\-]+$'",
+            "input": "not a worker",
+            "ctx": {
+              "pattern": "^[\\w\\-]+$"
+            }
+          }
+        ]
+      },
+      "json": {
+        "owner": "conformance",
+        "lease_s": 60
+      }
+    },
+    {
+      "id": "malformed_hijack_id",
+      "method": "POST",
+      "path": "/worker/provide-shell/hijack/NOT-A-UUID/heartbeat",
+      "auth": "token",
+      "status": 422,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "detail": [
+          {
+            "type": "string_pattern_mismatch",
+            "loc": [
+              "path",
+              "hijack_id"
+            ],
+            "msg": "String should match pattern '^[0-9a-f\\-]{1,64}$'",
+            "input": "NOT-A-UUID",
+            "ctx": {
+              "pattern": "^[0-9a-f\\-]{1,64}$"
+            }
+          }
+        ]
+      },
+      "json": {
+        "lease_s": 60
+      }
+    },
+    {
+      "id": "hijack_unknown_path",
+      "method": "POST",
+      "path": "/worker/provide-shell/hijack/${acquire.body.hijack_id}/not-a-verb",
+      "auth": "token",
+      "status": 404,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "detail": "Not Found"
+      },
+      "json": {}
+    },
+    {
+      "id": "session_snapshot_while_held",
+      "method": "GET",
+      "path": "/api/sessions/provide-shell/snapshot",
+      "auth": "token",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "<volatile>",
+      "body_keys": [
+        "cols",
+        "cursor",
+        "cursor_at_end",
+        "has_trailing_space",
+        "prompt_detected",
+        "raw_tail",
+        "rows",
+        "screen",
+        "screen_hash",
+        "ts",
+        "type"
+      ]
+    },
+    {
+      "id": "release",
+      "method": "POST",
+      "path": "/worker/provide-shell/hijack/${acquire.body.hijack_id}/release",
+      "auth": "token",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "ok": true,
+        "worker_id": "provide-shell",
+        "hijack_id": "<volatile>"
+      }
+    },
+    {
+      "id": "release_again",
+      "method": "POST",
+      "path": "/worker/provide-shell/hijack/${acquire.body.hijack_id}/release",
+      "auth": "token",
+      "status": 404,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "error": "Invalid or expired hijack session."
+      }
+    },
+    {
+      "id": "acquire_after_release",
+      "method": "POST",
+      "path": "/worker/provide-shell/hijack/acquire",
+      "auth": "token",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "ok": true,
+        "worker_id": "provide-shell",
+        "hijack_id": "<volatile>",
+        "lease_expires_at": "<volatile>",
+        "owner": "third"
+      },
+      "json": {
+        "owner": "third",
+        "lease_s": 60
+      }
+    },
+    {
+      "id": "release_third",
+      "method": "POST",
+      "path": "/worker/provide-shell/hijack/${acquire_after_release.body.hijack_id}/release",
+      "auth": "token",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "ok": true,
+        "worker_id": "provide-shell",
+        "hijack_id": "<volatile>"
+      }
+    },
+    {
+      "id": "to_open",
+      "method": "POST",
+      "path": "/api/sessions/provide-shell/mode",
+      "auth": "token",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "session_id": "provide-shell",
+        "display_name": "Provide Shell",
+        "created_at": "<volatile>",
+        "connector_type": "shell",
+        "lifecycle_state": "<volatile>",
+        "input_mode": "open",
+        "connected": "<volatile>",
+        "auto_start": true,
+        "tags": [
+          "shell",
+          "reference"
+        ],
+        "recording_enabled": false,
+        "recording_available": false,
+        "owner": null,
+        "visibility": "public",
+        "stopped_at": null,
+        "last_error": null
+      },
+      "json": {
+        "input_mode": "open"
+      }
+    }
+  ]
+}

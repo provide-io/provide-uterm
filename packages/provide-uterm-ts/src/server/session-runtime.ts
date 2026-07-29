@@ -13,26 +13,28 @@
  *
  * ## What this is, and what it is not
  *
- * The reference's runtime is a worker: it owns a connector *and* dials the hub
- * over a WebSocket, and it reports `running` once both are up. This one owns
- * the connector and stops there. That is the whole of the difference, and it
- * is deliberate — but it means `running` here has to be read for exactly what
- * it claims.
+ * The reference's runtime is a worker: it owns a connector *and* attaches to
+ * the hub, and it reports `running` and `connected` once both are up. This one
+ * does both too — `worker-attach.ts` joins the connector to the hub — so the
+ * two fields carry the same two meanings here that they do there.
  *
- * It claims the session has been brought up: its connector was built from the
- * definition, `start()` was called on it and returned, and the connector is
- * live and will answer for itself. For the reference `shell` connector — the
- * one the default configuration uses, and the only one this port registers —
- * that is the entire session, because it has no network underneath it. So a
- * `running` reported here is a session that can be snapshotted, typed at and
- * asked for its analysis. Nothing is being claimed that is not true.
+ * `running` claims the session has been brought up: its connector was built
+ * from the definition, `start()` was called on it and returned, and the
+ * connector is live and will answer for itself. For the reference `shell`
+ * connector — the one the default configuration uses, and the only one this
+ * port registers — that is the entire session, because it has no network
+ * underneath it.
  *
- * It does *not* claim a client can reach it. This server binds the read half
- * of the session API and no terminal transport at all, so nothing has attached
- * and `connected` stays false — which is what that separate field is for.
- * Encoding "a client is attached" into `lifecycle_state` would collapse two
- * questions into one field and lose both answers; online and offline are not
- * lifecycle states.
+ * `connected` claims the worker is attached to the hub: the hub holds its
+ * socket, will pause it for a lease, and can ask it for a screen. That is what
+ * the field means in the reference, and it is a genuinely separate question
+ * from the lifecycle one — which is why it is a separate field. Encoding it
+ * into `lifecycle_state` would collapse two questions into one and lose both
+ * answers; online and offline are not lifecycle states.
+ *
+ * The one thing neither claims is that a *browser* can reach the session. This
+ * server binds no WebSocket, so nothing renders it live. That shows up as an
+ * empty presence set, not as a lifecycle or a connection.
  *
  * ## Where a failed start comes to rest, and why it is not `error`
  *
@@ -59,7 +61,10 @@
  */
 
 import { buildConnector, type SessionConnector } from "../connectors/index.ts";
+import type { InputMode } from "../hub/index.ts";
+import type { SessionHub } from "./session-hub.ts";
 import type { SessionRegistry } from "./session-registry.ts";
+import { type AttachedWorker, attachConnector } from "./worker-attach.ts";
 
 /** How a connector is built for one session. The connector registry's shape. */
 export type ConnectorBuilder = (
@@ -92,13 +97,17 @@ function errorText(error: unknown): string {
  */
 export class SessionRuntimes {
   readonly #registry: SessionRegistry;
+  readonly #hub: SessionHub;
   readonly #build: ConnectorBuilder;
   readonly #now: () => number;
   /** Only sessions that are up: one that failed to start is not in here. */
   readonly #connectors = new Map<string, SessionConnector>();
+  /** The hub attachment for each running session, for taking it back off. */
+  readonly #attached = new Map<string, AttachedWorker>();
 
-  constructor(registry: SessionRegistry, options: SessionRuntimeOptions = {}) {
+  constructor(registry: SessionRegistry, hub: SessionHub, options: SessionRuntimeOptions = {}) {
     this.#registry = registry;
+    this.#hub = hub;
     this.#build = options.build ?? buildConnector;
     this.#now = options.now ?? (() => Date.now() / 1000);
   }
@@ -106,6 +115,19 @@ export class SessionRuntimes {
   /** The live connector for a session, or nothing when it is not up. */
   connector(sessionId: string): SessionConnector | undefined {
     return this.#connectors.get(sessionId);
+  }
+
+  /**
+   * Tell a running connector its input mode changed.
+   *
+   * A session that is not up is not an error: the definition and the hub have
+   * already recorded the new mode, and the connector will be built in it when
+   * the session next starts. The reference reaches its connector through the
+   * runtime for the same reason — the mode is a property of the session, and
+   * the connector is only one of the places holding a copy.
+   */
+  async setMode(sessionId: string, mode: InputMode): Promise<void> {
+    await this.#connectors.get(sessionId)?.setMode(mode);
   }
 
   /**
@@ -148,7 +170,14 @@ export class SessionRuntimes {
       // Recorded only once it is up, so nothing is ever left holding a
       // connector that threw on the way.
       this.#connectors.set(sessionId, connector);
-      this.#registry.setState(sessionId, { lifecycle_state: "running" });
+      // Attached to the hub as a worker, which is what makes the session
+      // leasable: the hub arbitrates over workers, and one that had merely
+      // been started would be refused every acquire with `no_worker`.
+      this.#attached.set(
+        sessionId,
+        await attachConnector(this.#hub, sessionId, connector, definition.input_mode, { now: this.#now }),
+      );
+      this.#registry.setState(sessionId, { lifecycle_state: "running", connected: true });
     } catch (error) {
       // `stopped`, with the reason and the instant — where the reference's run
       // loop comes to rest when it gives up. See the note on `error` above.
@@ -188,9 +217,13 @@ export class SessionRuntimes {
    */
   async stopAll(): Promise<void> {
     for (const [sessionId, connector] of this.#connectors) {
+      // Detached before it is stopped, so nothing can take a lease on a
+      // worker whose connector is on its way down.
+      await this.#attached.get(sessionId)?.detach();
       await connector.stop();
-      this.#registry.setState(sessionId, { lifecycle_state: "stopped", stopped_at: this.#now() });
+      this.#registry.setState(sessionId, { lifecycle_state: "stopped", connected: false, stopped_at: this.#now() });
     }
+    this.#attached.clear();
     this.#connectors.clear();
   }
 }

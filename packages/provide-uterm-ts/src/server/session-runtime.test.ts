@@ -18,6 +18,7 @@ import { describe, expect, it } from "vitest";
 import { SESSION_LIFECYCLES } from "../bridge/index.ts";
 import type { SessionConnector, WorkerMessage } from "../connectors/index.ts";
 import { loadGolden } from "../testing/golden.ts";
+import { SessionHub } from "./session-hub.ts";
 import { SessionRegistry } from "./session-registry.ts";
 import { SessionRuntimes } from "./session-runtime.ts";
 import { type SessionLifecycle, sessionDefinitionFrom } from "./session-status.ts";
@@ -138,17 +139,17 @@ describe("bringing one session up", () => {
   it("runs the session's own connector, and says running once it is up", async () => {
     const registry = registryOf({ session_id: "one", connector_type: "shell" });
     const connector = new FakeConnector();
-    const runtimes = new SessionRuntimes(registry, { build: () => connector });
+    const runtimes = new SessionRuntimes(registry, new SessionHub(), { build: () => connector });
 
     await runtimes.start("one");
 
     expect(connector.started).toBe(1);
-    // `running`, and `connected` still false: the connector is up, but this
-    // port binds no route a client could reach it through, and those are two
-    // questions the wire asks with two fields.
+    // `running`, and `connected` too: the connector is up *and* attached to
+    // the hub as a worker, which are the two things the reference's own
+    // runtime reports with those two fields.
     expect(observe(registry, "one")).toEqual({
       lifecycle_state: "running",
-      connected: false,
+      connected: true,
       last_error: null,
       stopped_at_set: false,
     });
@@ -162,7 +163,7 @@ describe("bringing one session up", () => {
       connector_config: { host: "h" },
     });
     const seen: unknown[][] = [];
-    const runtimes = new SessionRuntimes(registry, {
+    const runtimes = new SessionRuntimes(registry, new SessionHub(), {
       build: (...args) => {
         seen.push(args);
         return new FakeConnector();
@@ -178,7 +179,7 @@ describe("bringing one session up", () => {
     // A connector that normalised its settings in place would otherwise
     // rewrite the definition, and the next request would answer differently.
     const registry = registryOf({ session_id: "one", connector_config: { host: "h" } });
-    const runtimes = new SessionRuntimes(registry, {
+    const runtimes = new SessionRuntimes(registry, new SessionHub(), {
       build: (_id, _name, _type, config) => {
         config.host = "rewritten";
         return new FakeConnector();
@@ -195,13 +196,13 @@ describe("bringing one session up", () => {
     // `last_error` with it: what failed last time is not what is happening now.
     const registry = registryOf({ session_id: "one" });
     registry.setState("one", { lifecycle_state: "error", last_error: "old", stopped_at: 1 });
-    const runtimes = new SessionRuntimes(registry, { build: () => new FakeConnector() });
+    const runtimes = new SessionRuntimes(registry, new SessionHub(), { build: () => new FakeConnector() });
 
     await runtimes.start("one");
 
     expect(observe(registry, "one")).toEqual({
       lifecycle_state: "running",
-      connected: false,
+      connected: true,
       last_error: null,
       stopped_at_set: false,
     });
@@ -215,7 +216,7 @@ describe("bringing one session up", () => {
     const gate = new Promise<void>((resolve) => {
       release = resolve;
     });
-    const runtimes = new SessionRuntimes(registry, { build: () => new FakeConnector({ gate }) });
+    const runtimes = new SessionRuntimes(registry, new SessionHub(), { build: () => new FakeConnector({ gate }) });
 
     const starting = runtimes.start("one");
     expect(observe(registry, "one")).toEqual(golden.starting);
@@ -230,7 +231,7 @@ describe("bringing one session up", () => {
     // fault — the same tolerance the registry's own `setState` has.
     const registry = registryOf({ session_id: "one" });
     let built = 0;
-    const runtimes = new SessionRuntimes(registry, {
+    const runtimes = new SessionRuntimes(registry, new SessionHub(), {
       build: () => {
         built += 1;
         return new FakeConnector();
@@ -246,7 +247,7 @@ describe("bringing one session up", () => {
     // start neither rebuilds the connector nor rewinds the state.
     const registry = registryOf({ session_id: "one" });
     let built = 0;
-    const runtimes = new SessionRuntimes(registry, {
+    const runtimes = new SessionRuntimes(registry, new SessionHub(), {
       build: () => {
         built += 1;
         return new FakeConnector();
@@ -263,7 +264,7 @@ describe("bringing one session up", () => {
     expect(golden.started_twice).toEqual(golden.starting);
     expect(observe(registry, "one")).toEqual({
       lifecycle_state: "running",
-      connected: false,
+      connected: true,
       last_error: null,
       stopped_at_set: false,
     });
@@ -273,7 +274,7 @@ describe("bringing one session up", () => {
 describe("a session that will not come up", () => {
   it("comes to rest where the reference does, saying what failed", async () => {
     const registry = registryOf({ session_id: "one", connector_type: "no-such-connector" });
-    const runtimes = new SessionRuntimes(registry);
+    const runtimes = new SessionRuntimes(registry, new SessionHub());
 
     await runtimes.start("one");
 
@@ -289,7 +290,7 @@ describe("a session that will not come up", () => {
     // these two states diverge would be re-introducing the bug.
     const never = registryOf({ session_id: "one" });
     const failed = registryOf({ session_id: "one", connector_type: "no-such-connector" });
-    await new SessionRuntimes(failed).start("one");
+    await new SessionRuntimes(failed, new SessionHub()).start("one");
 
     expect(observe(never, "one").lifecycle_state).toBe(observe(failed, "one").lifecycle_state);
     expect(observe(never, "one").last_error).toBeNull();
@@ -298,7 +299,7 @@ describe("a session that will not come up", () => {
 
   it("says so for a failure that was not an Error at all", async () => {
     const registry = registryOf({ session_id: "one" });
-    const runtimes = new SessionRuntimes(registry, {
+    const runtimes = new SessionRuntimes(registry, new SessionHub(), {
       build: () => {
         throw "a string nobody wrapped";
       },
@@ -311,7 +312,7 @@ describe("a session that will not come up", () => {
 
   it("says so when the connector was built but refused to start", async () => {
     const registry = registryOf({ session_id: "one" });
-    const runtimes = new SessionRuntimes(registry, {
+    const runtimes = new SessionRuntimes(registry, new SessionHub(), {
       build: () => new FakeConnector({ failWith: "upstream refused" }),
     });
 
@@ -328,7 +329,7 @@ describe("a session that will not come up", () => {
   it("does not hold on to a connector that never started", async () => {
     const registry = registryOf({ session_id: "one" });
     const connector = new FakeConnector({ failWith: "upstream refused" });
-    const runtimes = new SessionRuntimes(registry, { build: () => connector });
+    const runtimes = new SessionRuntimes(registry, new SessionHub(), { build: () => connector });
 
     await runtimes.start("one");
 
@@ -345,7 +346,7 @@ describe("honouring auto_start", () => {
       { session_id: "off", auto_start: false },
       { session_id: "also-on", auto_start: true },
     );
-    const runtimes = new SessionRuntimes(registry, { build: () => new FakeConnector() });
+    const runtimes = new SessionRuntimes(registry, new SessionHub(), { build: () => new FakeConnector() });
 
     await runtimes.startAutoStart();
 
@@ -359,7 +360,7 @@ describe("honouring auto_start", () => {
   it("carries on past one that will not come up", async () => {
     // One session nobody can start must not cost every other session its boot.
     const registry = registryOf({ session_id: "first", connector_type: "no-such-connector" }, { session_id: "second" });
-    const runtimes = new SessionRuntimes(registry, {
+    const runtimes = new SessionRuntimes(registry, new SessionHub(), {
       build: (_id, _name, type) => {
         if (type === "no-such-connector") {
           throw new Error("unsupported connector_type");
@@ -384,7 +385,7 @@ describe("honouring auto_start", () => {
     // that reports `running` here is running the reference connector, and can
     // answer for itself.
     const registry = registryOf({ session_id: "one", connector_type: "shell" });
-    const runtimes = new SessionRuntimes(registry);
+    const runtimes = new SessionRuntimes(registry, new SessionHub());
 
     await runtimes.startAutoStart();
 
@@ -402,7 +403,7 @@ describe("bringing sessions back down", () => {
     const registry = registryOf({ session_id: "one" });
     const connector = new FakeConnector();
     let clock = 1_700_000_000;
-    const runtimes = new SessionRuntimes(registry, { build: () => connector, now: () => clock });
+    const runtimes = new SessionRuntimes(registry, new SessionHub(), { build: () => connector, now: () => clock });
 
     await runtimes.start("one");
     clock = 1_700_000_005;
@@ -417,7 +418,7 @@ describe("bringing sessions back down", () => {
   it("can be started again after it was stopped", async () => {
     const registry = registryOf({ session_id: "one" });
     let built = 0;
-    const runtimes = new SessionRuntimes(registry, {
+    const runtimes = new SessionRuntimes(registry, new SessionHub(), {
       build: () => {
         built += 1;
         return new FakeConnector();
@@ -434,7 +435,7 @@ describe("bringing sessions back down", () => {
 
   it("has nothing to stop when nothing was started", async () => {
     const registry = registryOf({ session_id: "one" });
-    const runtimes = new SessionRuntimes(registry);
+    const runtimes = new SessionRuntimes(registry, new SessionHub());
 
     await expect(runtimes.stopAll()).resolves.toBeUndefined();
 
@@ -442,12 +443,12 @@ describe("bringing sessions back down", () => {
   });
 
   it("has no connector for a session nobody started", () => {
-    expect(new SessionRuntimes(registryOf({ session_id: "one" })).connector("one")).toBeUndefined();
+    expect(new SessionRuntimes(registryOf({ session_id: "one" }), new SessionHub()).connector("one")).toBeUndefined();
   });
 
   it("reads the wall clock when nobody handed it one", async () => {
     const registry = registryOf({ session_id: "one" });
-    const runtimes = new SessionRuntimes(registry, { build: () => new FakeConnector() });
+    const runtimes = new SessionRuntimes(registry, new SessionHub(), { build: () => new FakeConnector() });
     const before = Date.now() / 1000;
 
     await runtimes.start("one");
@@ -492,7 +493,7 @@ describe("the vocabulary a session's state is named in", () => {
     // nothing this runtime does can produce it — start, fail, stop and start
     // again, and the name never appears.
     const registry = registryOf({ session_id: "one", connector_type: "no-such-connector" }, { session_id: "two" });
-    const runtimes = new SessionRuntimes(registry, {
+    const runtimes = new SessionRuntimes(registry, new SessionHub(), {
       build: (_id, _name, type) => {
         if (type === "no-such-connector") {
           throw new Error("unsupported connector_type");

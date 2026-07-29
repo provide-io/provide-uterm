@@ -149,3 +149,31 @@ export function canReadSession(principal: AuthorizablePrincipal, session: Author
   // Anything else — `private`, or a visibility nobody defined — is closed.
   return false;
 }
+
+/**
+ * Whether a principal may perform one mutating action on a session.
+ *
+ * Deliberately *not* symmetric with {@link canReadSession}: visibility does
+ * not appear at all. A session being public says who may watch it, never who
+ * may change it — so a public session is readable by anyone with the
+ * capability and still writable only by its owner or an administrator of it.
+ *
+ * An unowned session therefore admits nobody but an admin. That is the
+ * reference's reading and it is the safe one: a session with no owner has
+ * nobody whose consent a change could be attributed to.
+ */
+export function canMutateSession(
+  principal: AuthorizablePrincipal,
+  session: AuthorizableSession,
+  action: Capability,
+): boolean {
+  // The capability first and on its own, so a scoped token that lost the
+  // action is refused however administrative its roles look.
+  if (!hasCapability(principal, action)) {
+    return false;
+  }
+  if (isAdminForSession(principal, session)) {
+    return true;
+  }
+  return isOwner(principal, session);
+}
