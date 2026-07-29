@@ -1,0 +1,68 @@
+{
+  "id": "003_error_shapes",
+  "title": "What a server says when it cannot do what was asked",
+  "timeout_ms": 20000,
+  "auth": "dev_token",
+  "steps": [
+    { "id": "unknown_session", "action": "get_session", "session_id": "no-such-session", "auth": "token" },
+    { "id": "unknown_path", "action": "http_get", "path": "/api/not-a-thing", "auth": "token" },
+    { "id": "wrong_method", "action": "http_post", "path": "/api/health", "body": {}, "auth": "token" },
+    { "id": "unknown_session_anonymous", "action": "http_get", "path": "/api/sessions/no-such-session", "auth": "none" }
+  ],
+  "expect": [
+    {
+      "step": "unknown_session",
+      "path": "status",
+      "equals": 404,
+      "why": "A session that was never created is absent, not forbidden — the caller is authorized, the thing is not there."
+    },
+    {
+      "step": "unknown_session",
+      "path": "ok",
+      "equals": false,
+      "why": "The client library must not report a 404 as success; a caller would read the error body as a session."
+    },
+    {
+      "step": "unknown_session",
+      "path": "body.detail",
+      "equals": "unknown session: no-such-session",
+      "why": "The message names what was asked for. Pinned exactly because an operator greps for it, and because a port that echoes the id differently is a port with a different escaping story."
+    },
+    {
+      "step": "unknown_path",
+      "path": "status",
+      "equals": 404,
+      "why": "A path in no route table is absent."
+    },
+    {
+      "step": "unknown_path",
+      "path": "body.detail",
+      "equals": "Not Found",
+      "why": "The framework default in the reference. Recorded so a port that answers its own framework's wording shows up here rather than in a consumer's error dialog."
+    },
+    {
+      "step": "wrong_method",
+      "path": "status",
+      "equals": 405,
+      "why": "A known path with an unknown method is not a 404: the difference is what tells a client to stop retrying versus to fix the verb."
+    },
+    {
+      "step": "wrong_method",
+      "path": "body.detail",
+      "equals": "Method Not Allowed",
+      "why": "Same reasoning as the 404 wording — the reference's answer, pinned so a divergence is visible."
+    },
+    {
+      "step": "unknown_session_anonymous",
+      "path": "status",
+      "equals": 401,
+      "why": "Authentication is decided before existence. Answering 404 to an anonymous caller would let anyone enumerate which session ids exist."
+    },
+    {
+      "step": "unknown_session_anonymous",
+      "path": "body",
+      "equals": { "detail": "authentication required" },
+      "why": "The same refusal as any other unauthenticated request — it must not leak that the path was routable."
+    }
+  ]
+}

@@ -1,0 +1,96 @@
+{
+  "id": "001_health",
+  "title": "Health is public, and says the same thing to everyone",
+  "timeout_ms": 20000,
+  "auth": "dev_token",
+  "steps": [
+    {
+      "id": "anonymous",
+      "action": "http_get",
+      "path": "/api/health",
+      "auth": "none",
+      "volatile": ["body.uptime_s", "body.active_sessions", "body.version"]
+    },
+    {
+      "id": "authenticated",
+      "action": "health",
+      "auth": "token",
+      "volatile": ["body.uptime_s", "body.active_sessions", "body.version"]
+    },
+    {
+      "id": "forged_token",
+      "action": "http_get",
+      "path": "/api/health",
+      "auth": "bad",
+      "volatile": ["body.uptime_s", "body.active_sessions", "body.version"]
+    }
+  ],
+  "expect": [
+    {
+      "step": "anonymous",
+      "path": "status",
+      "equals": 200,
+      "why": "Health is the liveness probe. A load balancer has no token, so a server that refuses an anonymous probe is a server nothing can route to."
+    },
+    {
+      "step": "anonymous",
+      "path": "body.status",
+      "equals": "ok",
+      "why": "The field the probe reads. Every port answers the same word or the probe means something different per deployment."
+    },
+    {
+      "step": "anonymous",
+      "path": "body.service",
+      "equals": "uterm-server",
+      "why": "How a probe tells this service from whatever else is on the port."
+    },
+    {
+      "step": "anonymous",
+      "path": "body.ok",
+      "equals": true,
+      "why": "A boolean, not the number one and not the string true — a client keying on it must not have to guess."
+    },
+    {
+      "step": "anonymous",
+      "path": "body.ready",
+      "equals": true,
+      "why": "Readiness is separate from liveness and both are reported here."
+    },
+    {
+      "step": "anonymous",
+      "path": "body.uptime_s",
+      "present": true,
+      "why": "Its value is volatile, but a port that omits it entirely has dropped a field an operator's dashboard reads."
+    },
+    {
+      "step": "anonymous",
+      "path": "body.control_plane_backend",
+      "type": "string",
+      "why": "Which store is behind the control plane is part of what health reports; the value differs by deployment, the field does not."
+    },
+    {
+      "step": "authenticated",
+      "path": "status",
+      "equals": 200,
+      "why": "Presenting a token must not change a public endpoint's answer."
+    },
+    {
+      "step": "authenticated",
+      "path": "ok",
+      "equals": true,
+      "why": "The client library's own reading of a 200, which is the thing a consumer branches on."
+    },
+    {
+      "step": "authenticated",
+      "path": "body.status",
+      "equals": "ok",
+      "why": "The same answer through the client library as over raw HTTP."
+    },
+    {
+      "step": "forged_token",
+      "path": "status",
+      "equals": 200,
+      "why": "A public endpoint does not validate what it does not require. A server that 401s an unparseable token here would fail probes during any key rotation."
+    }
+  ]
+}

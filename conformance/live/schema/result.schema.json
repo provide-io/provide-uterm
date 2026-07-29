@@ -2,30 +2,47 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://provide.io/schemas/uterm-live-harness-result.json",
   "title": "Uterm live harness result",
+  "description": "What one driver observed running one scenario. A driver never states a verdict: the harness evaluates every expectation, so four languages cannot disagree about what an expectation means.",
   "type": "object",
-  "required": ["scenario_id", "language", "status", "events"],
+  "required": ["scenario_id", "language", "role", "status", "steps"],
+  "additionalProperties": false,
   "properties": {
     "scenario_id": { "type": "string" },
-    "language": { "type": "string", "enum": ["python", "go", "csharp"] },
-    "status": { "type": "string", "enum": ["pass", "fail", "unsupported"] },
+    "language": {
+      "type": "string",
+      "enum": ["python", "go", "csharp", "typescript"]
+    },
+    "role": { "type": "string", "enum": ["client", "server"] },
+    "status": {
+      "type": "string",
+      "enum": ["completed", "unsupported", "error"],
+      "description": "completed: every step ran (a 500 is an observation, not a failure). unsupported: a required capability is missing. error: the driver itself failed."
+    },
     "capabilities": {
       "type": "array",
       "items": { "type": "string" }
     },
-    "events": {
+    "steps": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["name"],
+        "required": ["id", "fields"],
+        "additionalProperties": false,
         "properties": {
-          "name": { "type": "string" },
-          "ts_ms": { "type": "number" },
-          "payload_b64": { "type": "string" },
-          "fields": { "type": "object" }
+          "id": { "type": "string" },
+          "fields": {
+            "type": "object",
+            "description": "status (int|null), ok (bool), body (parsed JSON, or the string <non-json>), error (string|null).",
+            "properties": {
+              "status": { "type": ["integer", "null"] },
+              "ok": { "type": "boolean" },
+              "body": {},
+              "error": { "type": ["string", "null"] }
+            }
+          }
         }
       }
     },
-    "error": { "type": "string" }
-  },
-  "additionalProperties": false
+    "error": { "type": ["string", "null"] }
+  }
 }

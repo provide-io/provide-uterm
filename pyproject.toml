@@ -108,6 +108,10 @@ ignore = [
 "__init__.py" = ["F401", "RUF022"]
 "tests_mutation/**/*.py" = ["E402", "B905", "S101", "S105", "S106", "S110", "ARG", "TCH", "RUF003", "RUF012", "RUF015", "RUF043", "RUF059"]
 "packages/**/tests/**/*.py" = ["E402", "B905", "S101", "S105", "S106", "S110", "S603", "S607", "ARG", "TCH", "RUF003", "RUF012", "RUF015", "RUF043", "RUF059"]
+# The repo-level suites (conformance, scripts, ansi) are tests too, and trip
+# the same rules for the same reasons: fixtures assert, tokens are literals,
+# and a test's imports are used at runtime.
+"tests/**/*.py" = ["E402", "B905", "S101", "S105", "S106", "S110", "S603", "S607", "ARG", "TCH", "RUF003", "RUF012", "RUF015", "RUF043", "RUF059"]
 
 [tool.mypy]
 python_version = "3.11"
