@@ -1,0 +1,161 @@
+{
+  "id": "007_hijack_refusals",
+  "title": "Who may not take the lease, and how they are told",
+  "timeout_ms": 30000,
+  "auth": "dev_token",
+  "steps": [
+    {
+      "id": "acquire_while_open",
+      "action": "hijack_acquire",
+      "worker_id": "provide-shell",
+      "owner": "conformance",
+      "lease_s": 60,
+      "auth": "token"
+    },
+    {
+      "id": "unknown_worker",
+      "action": "hijack_acquire",
+      "worker_id": "no-such-worker",
+      "owner": "conformance",
+      "lease_s": 60,
+      "auth": "token"
+    },
+    {
+      "id": "undefined_mode",
+      "action": "http_post",
+      "path": "/api/sessions/provide-shell/mode",
+      "body": {
+        "input_mode": "sideways"
+      },
+      "auth": "token"
+    },
+    {
+      "id": "to_hijack",
+      "action": "set_input_mode",
+      "session_id": "provide-shell",
+      "input_mode": "hijack",
+      "auth": "token",
+      "volatile": [
+        "body.created_at",
+        "body.connected"
+      ]
+    },
+    {
+      "id": "acquire",
+      "action": "hijack_acquire",
+      "worker_id": "provide-shell",
+      "owner": "first",
+      "lease_s": 60,
+      "auth": "token",
+      "volatile": [
+        "body.hijack_id",
+        "body.lease_expires_at"
+      ]
+    },
+    {
+      "id": "second_acquire",
+      "action": "hijack_acquire",
+      "worker_id": "provide-shell",
+      "owner": "second",
+      "lease_s": 60,
+      "auth": "token"
+    },
+    {
+      "id": "anonymous_acquire",
+      "action": "http_post",
+      "path": "/worker/provide-shell/hijack/acquire",
+      "body": {
+        "owner": "nobody",
+        "lease_s": 60
+      },
+      "auth": "none"
+    },
+    {
+      "id": "release",
+      "action": "hijack_release",
+      "worker_id": "provide-shell",
+      "hijack_id": "${acquire.body.hijack_id}",
+      "auth": "token",
+      "volatile": [
+        "body.hijack_id"
+      ]
+    }
+  ],
+  "expect": [
+    {
+      "step": "acquire_while_open",
+      "path": "status",
+      "equals": 409,
+      "why": "A session in open mode is one everybody may type into, so there is no lease to take. 409 says the request conflicts with the state the session is in \u2014 as against 403, which would say the caller is not allowed."
+    },
+    {
+      "step": "acquire_while_open",
+      "path": "body",
+      "equals": {
+        "error": "Hijack not available in open input mode."
+      },
+      "why": "The message names the reason, because the fix is a mode change and a caller that is only told 'conflict' cannot know that."
+    },
+    {
+      "step": "unknown_worker",
+      "path": "status",
+      "equals": 404,
+      "why": "A worker that does not exist is absent, not conflicting."
+    },
+    {
+      "step": "unknown_worker",
+      "path": "body",
+      "equals": {
+        "detail": "unknown session: no-such-worker"
+      },
+      "why": "Note the envelope and the wording: this refusal comes back with `detail`, and calls the thing a session even though the route is a worker route. Both are the reference's, and pinning them is how a port stops quietly picking one of the two envelopes for every refusal it writes."
+    },
+    {
+      "step": "undefined_mode",
+      "path": "status",
+      "equals": 422,
+      "why": "A mode nobody defined is a malformed request, not a conflict. The vocabulary is exactly open and hijack."
+    },
+    {
+      "step": "undefined_mode",
+      "path": "body.detail",
+      "equals": "input_mode must be 'open' or 'hijack'",
+      "why": "A plain string, and it names both permitted values \u2014 an operator reading it does not have to go and find the enum."
+    },
+    {
+      "step": "second_acquire",
+      "path": "status",
+      "equals": 409,
+      "why": "The lease is exclusive. This is the arbitration the whole product turns on: two operators must not both believe they are driving the terminal."
+    },
+    {
+      "step": "second_acquire",
+      "path": "body",
+      "equals": {
+        "error": "Worker is already hijacked."
+      },
+      "why": "It says the worker is taken, not who has it \u2014 a second caller learning the owner's name would be told something about a session they have no lease on."
+    },
+    {
+      "step": "anonymous_acquire",
+      "path": "status",
+      "equals": 401,
+      "why": "Authentication comes before arbitration. An unauthenticated caller must not be able to learn whether a lease is free by watching whether the refusal is 401 or 409."
+    },
+    {
+      "step": "anonymous_acquire",
+      "path": "body",
+      "equals": {
+        "detail": "authentication required"
+      },
+      "why": "The same refusal every unauthenticated request gets, byte for byte, so it leaks nothing about the worker's state."
+    },
+    {
+      "step": "release",
+      "path": "status",
+      "equals": 200,
+      "why": "The holder can still give the lease back after somebody else was refused \u2014 a failed acquire must not disturb the lease that caused it."
+    }
+  ],
+  "mutates": true
+}
