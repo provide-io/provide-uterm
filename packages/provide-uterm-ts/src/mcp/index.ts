@@ -8,6 +8,7 @@
  * a session.
  */
 
+export * from "./authorization.ts";
+export * from "./guards.ts";
 export * from "./policy.ts";
 export * from "./tools.ts";
-export * from "./authorization.ts";

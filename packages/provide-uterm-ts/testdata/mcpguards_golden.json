@@ -1,0 +1,762 @@
+{
+  "max_pattern_length": 512,
+  "catastrophic": [
+    {
+      "name": "a quantified group of a quantified atom",
+      "pattern": "(a+)+",
+      "refused": true
+    },
+    {
+      "name": "a starred group of a starred atom",
+      "pattern": "(a*)*",
+      "refused": true
+    },
+    {
+      "name": "a starred group of a plus atom",
+      "pattern": "(a+)*",
+      "refused": true
+    },
+    {
+      "name": "a quantified group of a starred atom",
+      "pattern": "(a*)+",
+      "refused": true
+    },
+    {
+      "name": "a quantified group of a word run",
+      "pattern": "(\\w+)+",
+      "refused": true
+    },
+    {
+      "name": "a counted group of a quantified atom",
+      "pattern": "(a+){2}",
+      "refused": true
+    },
+    {
+      "name": "the classic, anchored",
+      "pattern": "(a+)+$",
+      "refused": true
+    },
+    {
+      "name": "a nested quantifier further in",
+      "pattern": "^x(a+)+y$",
+      "refused": true
+    },
+    {
+      "name": "a lazy quantifier inside a quantified group",
+      "pattern": "(a+?)+",
+      "refused": true
+    },
+    {
+      "name": "a lazy star inside a quantified group",
+      "pattern": "(a*?)+",
+      "refused": true
+    },
+    {
+      "name": "a counted body inside a quantified group",
+      "pattern": "(a{2,3})+",
+      "refused": true
+    },
+    {
+      "name": "a group of a group of a quantified atom",
+      "pattern": "((a+)+)",
+      "refused": true
+    },
+    {
+      "name": "a backreference, quantified",
+      "pattern": "(a)\\1+",
+      "refused": true
+    },
+    {
+      "name": "a backreference, starred",
+      "pattern": "(a)\\1*",
+      "refused": true
+    },
+    {
+      "name": "a backreference, counted",
+      "pattern": "(a)\\1{2,5}",
+      "refused": true
+    },
+    {
+      "name": "a two-digit backreference, quantified",
+      "pattern": "(a)\\12+",
+      "refused": true
+    },
+    {
+      "name": "a backreference alone in a quantified group",
+      "pattern": "(a)(\\1)+",
+      "refused": true
+    },
+    {
+      "name": "a two-digit backreference alone in a quantified group",
+      "pattern": "(a)(\\10)+",
+      "refused": true
+    },
+    {
+      "name": "a ten-group backreference, quantified",
+      "pattern": "(a)\\10+",
+      "refused": true
+    },
+    {
+      "name": "a quantifier alone in a lazy group",
+      "pattern": "(+?)+",
+      "refused": true
+    },
+    {
+      "name": "nothing at all",
+      "pattern": "",
+      "refused": false
+    },
+    {
+      "name": "a literal",
+      "pattern": "hello",
+      "refused": false
+    },
+    {
+      "name": "a quantified atom",
+      "pattern": "a+",
+      "refused": false
+    },
+    {
+      "name": "a quantified group of a literal",
+      "pattern": "(ab)+",
+      "refused": false
+    },
+    {
+      "name": "a quantified group of an alternation",
+      "pattern": "(ab|cd)+",
+      "refused": false
+    },
+    {
+      "name": "a group that is not quantified",
+      "pattern": "(a+)",
+      "refused": false
+    },
+    {
+      "name": "an empty group, quantified",
+      "pattern": "()+",
+      "refused": false
+    },
+    {
+      "name": "an empty group, starred",
+      "pattern": "()*",
+      "refused": false
+    },
+    {
+      "name": "a non-capturing group, quantified",
+      "pattern": "(?:ab)+",
+      "refused": false
+    },
+    {
+      "name": "a group followed by a literal",
+      "pattern": "(a+)b",
+      "refused": false
+    },
+    {
+      "name": "a group followed by a question mark",
+      "pattern": "(a+)?",
+      "refused": false
+    },
+    {
+      "name": "a character class, quantified",
+      "pattern": "[a-z]+",
+      "refused": false
+    },
+    {
+      "name": "a quantified group of a class",
+      "pattern": "([a-z])+",
+      "refused": false
+    },
+    {
+      "name": "an escaped quantifier inside a group",
+      "pattern": "(a\\*)+",
+      "refused": false
+    },
+    {
+      "name": "an escaped plus inside a group",
+      "pattern": "(a\\+)+",
+      "refused": false
+    },
+    {
+      "name": "escaped parentheses",
+      "pattern": "\\(a+\\)+",
+      "refused": false
+    },
+    {
+      "name": "an unclosed group",
+      "pattern": "(a+",
+      "refused": false
+    },
+    {
+      "name": "an unopened group",
+      "pattern": "a+)",
+      "refused": false
+    },
+    {
+      "name": "an unopened group, quantified",
+      "pattern": "a+)+",
+      "refused": false
+    },
+    {
+      "name": "a null escape, quantified",
+      "pattern": "\\0+",
+      "refused": false
+    },
+    {
+      "name": "a null escape alone in a quantified group",
+      "pattern": "(\\0)+",
+      "refused": false
+    },
+    {
+      "name": "an optional atom in a quantified group",
+      "pattern": "(a?)+",
+      "refused": false
+    },
+    {
+      "name": "an escaped star alone in a quantified group",
+      "pattern": "(\\*)+",
+      "refused": false
+    },
+    {
+      "name": "a bare backreference",
+      "pattern": "(a)\\1",
+      "refused": false
+    },
+    {
+      "name": "an escape that is not a backreference",
+      "pattern": "\\d+",
+      "refused": false
+    },
+    {
+      "name": "a prompt somebody would really write",
+      "pattern": "^\\$ $",
+      "refused": false
+    },
+    {
+      "name": "a login prompt somebody would really write",
+      "pattern": "(?i)password:\\s*$",
+      "refused": false
+    },
+    {
+      "name": "an overlapping alternation, which it does not catch",
+      "pattern": "(a|a)*",
+      "refused": false
+    },
+    {
+      "name": "an overlapping alternation of runs",
+      "pattern": "(a|aa)+",
+      "refused": false
+    },
+    {
+      "name": "adjacent quantifiers, which it does not catch",
+      "pattern": "a+a+$",
+      "refused": false
+    }
+  ],
+  "compiled": [
+    {
+      "name": "an ordinary pattern",
+      "pattern": "^ready$",
+      "compiled": "^ready$"
+    },
+    {
+      "name": "nothing at all",
+      "pattern": "",
+      "compiled": ""
+    },
+    {
+      "name": "a pattern at the cap",
+      "pattern": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "compiled": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "name": "a pattern one past the cap",
+      "pattern": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "error": "pattern too long (max 512 chars)"
+    },
+    {
+      "name": "a pattern far past the cap",
+      "pattern": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "error": "pattern too long (max 512 chars)"
+    },
+    {
+      "name": "a catastrophic pattern under the cap",
+      "pattern": "(a+)+$",
+      "error": "pattern rejected: catastrophic-backtracking construct (nested quantifier or quantified backreference)"
+    },
+    {
+      "name": "a catastrophic pattern over the cap",
+      "pattern": "(a+)+bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "error": "pattern too long (max 512 chars)"
+    },
+    {
+      "name": "a pattern the engine refuses",
+      "pattern": "(unclosed",
+      "error": "invalid pattern: missing ), unterminated subpattern at position 0"
+    },
+    {
+      "name": "a repeat with nothing to repeat",
+      "pattern": "*",
+      "error": "invalid pattern: nothing to repeat at position 0"
+    },
+    {
+      "name": "a class nobody closed",
+      "pattern": "[a-",
+      "error": "invalid pattern: unterminated character set at position 0"
+    },
+    {
+      "name": "a group nobody named properly",
+      "pattern": "(?P<>x)",
+      "error": "invalid pattern: missing group name at position 4"
+    },
+    {
+      "name": "a backreference to a group that is not there",
+      "pattern": "(a)\\2",
+      "error": "invalid pattern: invalid group reference 2 at position 4"
+    }
+  ],
+  "pattern_rejections": [
+    {
+      "name": "an ordinary pattern",
+      "pattern": "^ready$",
+      "rejection": null
+    },
+    {
+      "name": "nothing at all",
+      "pattern": "",
+      "rejection": null
+    },
+    {
+      "name": "a pattern at the cap",
+      "pattern": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "rejection": null
+    },
+    {
+      "name": "a pattern one past the cap",
+      "pattern": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "rejection": {
+        "success": false,
+        "error": "invalid_pattern",
+        "detail": "pattern too long (max 512 chars)"
+      }
+    },
+    {
+      "name": "a pattern far past the cap",
+      "pattern": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "rejection": {
+        "success": false,
+        "error": "invalid_pattern",
+        "detail": "pattern too long (max 512 chars)"
+      }
+    },
+    {
+      "name": "a catastrophic pattern under the cap",
+      "pattern": "(a+)+$",
+      "rejection": {
+        "success": false,
+        "error": "invalid_pattern",
+        "detail": "pattern rejected: catastrophic-backtracking construct (nested quantifier or quantified backreference)"
+      }
+    },
+    {
+      "name": "a catastrophic pattern over the cap",
+      "pattern": "(a+)+bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "rejection": {
+        "success": false,
+        "error": "invalid_pattern",
+        "detail": "pattern too long (max 512 chars)"
+      }
+    },
+    {
+      "name": "a pattern the engine refuses",
+      "pattern": "(unclosed",
+      "rejection": {
+        "success": false,
+        "error": "invalid_pattern",
+        "detail": "invalid pattern: missing ), unterminated subpattern at position 0"
+      }
+    },
+    {
+      "name": "a repeat with nothing to repeat",
+      "pattern": "*",
+      "rejection": {
+        "success": false,
+        "error": "invalid_pattern",
+        "detail": "invalid pattern: nothing to repeat at position 0"
+      }
+    },
+    {
+      "name": "a class nobody closed",
+      "pattern": "[a-",
+      "rejection": {
+        "success": false,
+        "error": "invalid_pattern",
+        "detail": "invalid pattern: unterminated character set at position 0"
+      }
+    },
+    {
+      "name": "a group nobody named properly",
+      "pattern": "(?P<>x)",
+      "rejection": {
+        "success": false,
+        "error": "invalid_pattern",
+        "detail": "invalid pattern: missing group name at position 4"
+      }
+    },
+    {
+      "name": "a backreference to a group that is not there",
+      "pattern": "(a)\\2",
+      "rejection": {
+        "success": false,
+        "error": "invalid_pattern",
+        "detail": "invalid pattern: invalid group reference 2 at position 4"
+      }
+    }
+  ],
+  "no_pattern_rejection": null,
+  "no_pattern_compiled": [
+    null,
+    null
+  ],
+  "compiled_or_rejection": [
+    {
+      "name": "an ordinary pattern",
+      "pattern": "^ready$",
+      "compiled": "^ready$",
+      "rejection": null
+    },
+    {
+      "name": "nothing at all",
+      "pattern": "",
+      "compiled": "",
+      "rejection": null
+    },
+    {
+      "name": "a pattern at the cap",
+      "pattern": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "compiled": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "rejection": null
+    },
+    {
+      "name": "a pattern one past the cap",
+      "pattern": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "compiled": null,
+      "rejection": {
+        "success": false,
+        "error": "invalid_pattern",
+        "detail": "pattern too long (max 512 chars)"
+      }
+    },
+    {
+      "name": "a pattern far past the cap",
+      "pattern": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "compiled": null,
+      "rejection": {
+        "success": false,
+        "error": "invalid_pattern",
+        "detail": "pattern too long (max 512 chars)"
+      }
+    },
+    {
+      "name": "a catastrophic pattern under the cap",
+      "pattern": "(a+)+$",
+      "compiled": null,
+      "rejection": {
+        "success": false,
+        "error": "invalid_pattern",
+        "detail": "pattern rejected: catastrophic-backtracking construct (nested quantifier or quantified backreference)"
+      }
+    },
+    {
+      "name": "a catastrophic pattern over the cap",
+      "pattern": "(a+)+bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "compiled": null,
+      "rejection": {
+        "success": false,
+        "error": "invalid_pattern",
+        "detail": "pattern too long (max 512 chars)"
+      }
+    },
+    {
+      "name": "a pattern the engine refuses",
+      "pattern": "(unclosed",
+      "compiled": null,
+      "rejection": {
+        "success": false,
+        "error": "invalid_pattern",
+        "detail": "invalid pattern: missing ), unterminated subpattern at position 0"
+      }
+    },
+    {
+      "name": "a repeat with nothing to repeat",
+      "pattern": "*",
+      "compiled": null,
+      "rejection": {
+        "success": false,
+        "error": "invalid_pattern",
+        "detail": "invalid pattern: nothing to repeat at position 0"
+      }
+    },
+    {
+      "name": "a class nobody closed",
+      "pattern": "[a-",
+      "compiled": null,
+      "rejection": {
+        "success": false,
+        "error": "invalid_pattern",
+        "detail": "invalid pattern: unterminated character set at position 0"
+      }
+    },
+    {
+      "name": "a group nobody named properly",
+      "pattern": "(?P<>x)",
+      "compiled": null,
+      "rejection": {
+        "success": false,
+        "error": "invalid_pattern",
+        "detail": "invalid pattern: missing group name at position 4"
+      }
+    },
+    {
+      "name": "a backreference to a group that is not there",
+      "pattern": "(a)\\2",
+      "compiled": null,
+      "rejection": {
+        "success": false,
+        "error": "invalid_pattern",
+        "detail": "invalid pattern: invalid group reference 2 at position 4"
+      }
+    }
+  ],
+  "ids": [
+    {
+      "name": "an ordinary id",
+      "value": "worker-1",
+      "kind": "worker_id",
+      "rejection": null
+    },
+    {
+      "name": "an id with a dot",
+      "value": "worker.1",
+      "kind": "worker_id",
+      "rejection": null
+    },
+    {
+      "name": "an id with an underscore",
+      "value": "worker_1",
+      "kind": "worker_id",
+      "rejection": null
+    },
+    {
+      "name": "an id that is a uuid",
+      "value": "00000000-0000-0000-0000-000000000000",
+      "kind": "hijack_id",
+      "rejection": null
+    },
+    {
+      "name": "nothing at all",
+      "value": "",
+      "kind": "worker_id",
+      "rejection": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid worker_id: ''"
+      }
+    },
+    {
+      "name": "this directory",
+      "value": ".",
+      "kind": "worker_id",
+      "rejection": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid worker_id: '.'"
+      }
+    },
+    {
+      "name": "the one above",
+      "value": "..",
+      "kind": "worker_id",
+      "rejection": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid worker_id: '..'"
+      }
+    },
+    {
+      "name": "three dots, which name nothing special",
+      "value": "...",
+      "kind": "worker_id",
+      "rejection": null
+    },
+    {
+      "name": "a path",
+      "value": "a/b",
+      "kind": "worker_id",
+      "rejection": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid worker_id: 'a/b'"
+      }
+    },
+    {
+      "name": "a path upwards",
+      "value": "../etc",
+      "kind": "worker_id",
+      "rejection": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid worker_id: '../etc'"
+      }
+    },
+    {
+      "name": "an encoded slash",
+      "value": "a%2Fb",
+      "kind": "worker_id",
+      "rejection": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid worker_id: 'a%2Fb'"
+      }
+    },
+    {
+      "name": "a query",
+      "value": "a?b=c",
+      "kind": "worker_id",
+      "rejection": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid worker_id: 'a?b=c'"
+      }
+    },
+    {
+      "name": "a space",
+      "value": "a b",
+      "kind": "worker_id",
+      "rejection": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid worker_id: 'a b'"
+      }
+    },
+    {
+      "name": "a newline",
+      "value": "a\nb",
+      "kind": "worker_id",
+      "rejection": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid worker_id: 'a\\nb'"
+      }
+    },
+    {
+      "name": "a null byte",
+      "value": "a\u0000b",
+      "kind": "worker_id",
+      "rejection": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid worker_id: 'a\\x00b'"
+      }
+    },
+    {
+      "name": "a colon",
+      "value": "a:b",
+      "kind": "session_id",
+      "rejection": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid session_id: 'a:b'"
+      }
+    },
+    {
+      "name": "something that is not ascii",
+      "value": "wörker",
+      "kind": "worker_id",
+      "rejection": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid worker_id: 'wörker'"
+      }
+    }
+  ],
+  "id_default_kind": {
+    "success": false,
+    "error": "invalid_id",
+    "detail": "invalid id: 'a/b'"
+  },
+  "id_pairs": [
+    {
+      "name": "both good",
+      "pairs": [
+        [
+          "w-1",
+          "worker_id"
+        ],
+        [
+          "h-1",
+          "hijack_id"
+        ]
+      ],
+      "rejection": null
+    },
+    {
+      "name": "the first is bad",
+      "pairs": [
+        [
+          "a/b",
+          "worker_id"
+        ],
+        [
+          "h-1",
+          "hijack_id"
+        ]
+      ],
+      "rejection": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid worker_id: 'a/b'"
+      }
+    },
+    {
+      "name": "the second is bad",
+      "pairs": [
+        [
+          "w-1",
+          "worker_id"
+        ],
+        [
+          "c/d",
+          "hijack_id"
+        ]
+      ],
+      "rejection": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid hijack_id: 'c/d'"
+      }
+    },
+    {
+      "name": "both are bad",
+      "pairs": [
+        [
+          "a/b",
+          "worker_id"
+        ],
+        [
+          "c/d",
+          "hijack_id"
+        ]
+      ],
+      "rejection": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid worker_id: 'a/b'"
+      }
+    },
+    {
+      "name": "nothing to check",
+      "pairs": [],
+      "rejection": null
+    }
+  ]
+}
