@@ -1,0 +1,2877 @@
+{
+  "screen": "\u001b[31mred\u001b[0m\nplain\nlast",
+  "snapshot": {
+    "screen": "\u001b[31mred\u001b[0m\nplain\nlast",
+    "cursor": [
+      1,
+      2
+    ],
+    "cols": 80,
+    "rows": 24,
+    "extra": "kept"
+  },
+  "events": {
+    "events": [
+      {
+        "type": "snapshot",
+        "data": {
+          "screen": "waiting"
+        }
+      },
+      {
+        "type": "input_send",
+        "data": {
+          "keys": "ls"
+        }
+      },
+      {
+        "type": "snapshot",
+        "data": {
+          "screen": "ada@host:~$ "
+        }
+      }
+    ]
+  },
+  "session_tools": [
+    "session_list",
+    "session_status",
+    "session_read",
+    "session_connect",
+    "session_disconnect",
+    "session_create",
+    "session_watch",
+    "session_subscribe",
+    "fanout_group_create",
+    "fanout_send",
+    "session_annotate"
+  ],
+  "gui_tools": [
+    "gui_hijack_begin",
+    "gui_hijack_release",
+    "gui_screenshot",
+    "gui_click",
+    "gui_type",
+    "gui_key",
+    "gui_drag"
+  ],
+  "cases": [
+    {
+      "name": "listing sessions",
+      "tool": "session_list",
+      "args": {},
+      "ok": true,
+      "data": {
+        "sessions": []
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "sessions": []
+      },
+      "calls": [
+        {
+          "method": "list_sessions"
+        }
+      ]
+    },
+    {
+      "name": "listing when the server is unhappy",
+      "tool": "session_list",
+      "args": {},
+      "ok": false,
+      "data": {
+        "error": "down"
+      },
+      "diverges": false,
+      "result": {
+        "success": false,
+        "error": "down"
+      },
+      "calls": [
+        {
+          "method": "list_sessions"
+        }
+      ]
+    },
+    {
+      "name": "asking after a session",
+      "tool": "session_status",
+      "args": {
+        "session_id": "s-1"
+      },
+      "ok": true,
+      "data": {
+        "status": "running"
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "status": "running"
+      },
+      "calls": [
+        {
+          "method": "get_session",
+          "session_id": "s-1"
+        }
+      ]
+    },
+    {
+      "name": "asking after a session that is a path",
+      "tool": "session_status",
+      "args": {
+        "session_id": "a/b"
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid session_id: 'a/b'"
+      },
+      "calls": []
+    },
+    {
+      "name": "reading a session",
+      "tool": "session_read",
+      "args": {
+        "session_id": "s-1"
+      },
+      "ok": true,
+      "data": {
+        "snapshot": {
+          "screen": "\u001b[31mred\u001b[0m\nplain\nlast",
+          "cursor": [
+            1,
+            2
+          ],
+          "cols": 80,
+          "rows": 24,
+          "extra": "kept"
+        }
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "snapshot": {
+          "screen": "red\nplain\nlast"
+        }
+      },
+      "calls": [
+        {
+          "method": "session_snapshot",
+          "session_id": "s-1"
+        }
+      ]
+    },
+    {
+      "name": "reading a session as it stands",
+      "tool": "session_read",
+      "args": {
+        "session_id": "s-1",
+        "output": "raw"
+      },
+      "ok": true,
+      "data": {
+        "snapshot": {
+          "screen": "\u001b[31mred\u001b[0m\nplain\nlast",
+          "cursor": [
+            1,
+            2
+          ],
+          "cols": 80,
+          "rows": 24,
+          "extra": "kept"
+        }
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "snapshot": {
+          "screen": "\u001b[31mred\u001b[0m\nplain\nlast",
+          "cursor": [
+            1,
+            2
+          ],
+          "cols": 80,
+          "rows": 24,
+          "extra": "kept"
+        }
+      },
+      "calls": [
+        {
+          "method": "session_snapshot",
+          "session_id": "s-1"
+        }
+      ]
+    },
+    {
+      "name": "reading a session laid out",
+      "tool": "session_read",
+      "args": {
+        "session_id": "s-1",
+        "output": "rendered"
+      },
+      "ok": true,
+      "data": {
+        "snapshot": {
+          "screen": "\u001b[31mred\u001b[0m\nplain\nlast",
+          "cursor": [
+            1,
+            2
+          ],
+          "cols": 80,
+          "rows": 24,
+          "extra": "kept"
+        }
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "snapshot": {
+          "screen": "red\nplain\nlast",
+          "cursor": [
+            1,
+            2
+          ],
+          "cols": 80,
+          "rows": 24
+        }
+      },
+      "calls": [
+        {
+          "method": "session_snapshot",
+          "session_id": "s-1"
+        }
+      ]
+    },
+    {
+      "name": "reading the last line of a session",
+      "tool": "session_read",
+      "args": {
+        "session_id": "s-1",
+        "tail_lines": 1
+      },
+      "ok": true,
+      "data": {
+        "snapshot": {
+          "screen": "\u001b[31mred\u001b[0m\nplain\nlast",
+          "cursor": [
+            1,
+            2
+          ],
+          "cols": 80,
+          "rows": 24,
+          "extra": "kept"
+        }
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "snapshot": {
+          "screen": "last"
+        }
+      },
+      "calls": [
+        {
+          "method": "session_snapshot",
+          "session_id": "s-1"
+        }
+      ]
+    },
+    {
+      "name": "reading a session with nothing on screen",
+      "tool": "session_read",
+      "args": {
+        "session_id": "s-1"
+      },
+      "ok": true,
+      "data": {
+        "snapshot": {}
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "snapshot": {}
+      },
+      "calls": [
+        {
+          "method": "session_snapshot",
+          "session_id": "s-1"
+        }
+      ]
+    },
+    {
+      "name": "reading a session whose snapshot is only a screen",
+      "tool": "session_read",
+      "args": {
+        "session_id": "s-1"
+      },
+      "ok": true,
+      "data": {
+        "snapshot": {
+          "screen": "\u001b[31mred\u001b[0m\nplain\nlast"
+        }
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "snapshot": {
+          "screen": "red\nplain\nlast"
+        }
+      },
+      "calls": [
+        {
+          "method": "session_snapshot",
+          "session_id": "s-1"
+        }
+      ]
+    },
+    {
+      "name": "reading a session that said nothing",
+      "tool": "session_read",
+      "args": {
+        "session_id": "s-1"
+      },
+      "ok": true,
+      "data": {
+        "other": 1
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "other": 1
+      },
+      "calls": [
+        {
+          "method": "session_snapshot",
+          "session_id": "s-1"
+        }
+      ]
+    },
+    {
+      "name": "reading a session that failed",
+      "tool": "session_read",
+      "args": {
+        "session_id": "s-1"
+      },
+      "ok": false,
+      "data": {
+        "snapshot": {
+          "screen": "\u001b[31mred\u001b[0m\nplain\nlast",
+          "cursor": [
+            1,
+            2
+          ],
+          "cols": 80,
+          "rows": 24,
+          "extra": "kept"
+        }
+      },
+      "diverges": false,
+      "result": {
+        "success": false,
+        "snapshot": {
+          "screen": "\u001b[31mred\u001b[0m\nplain\nlast",
+          "cursor": [
+            1,
+            2
+          ],
+          "cols": 80,
+          "rows": 24,
+          "extra": "kept"
+        }
+      },
+      "calls": [
+        {
+          "method": "session_snapshot",
+          "session_id": "s-1"
+        }
+      ]
+    },
+    {
+      "name": "reading a session that is a path",
+      "tool": "session_read",
+      "args": {
+        "session_id": "a/b"
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid session_id: 'a/b'"
+      },
+      "calls": []
+    },
+    {
+      "name": "connecting a session",
+      "tool": "session_connect",
+      "args": {
+        "session_id": "s-1"
+      },
+      "ok": true,
+      "data": {
+        "connected": true
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "connected": true
+      },
+      "calls": [
+        {
+          "method": "connect_session",
+          "session_id": "s-1"
+        }
+      ]
+    },
+    {
+      "name": "connecting a session that is a path",
+      "tool": "session_connect",
+      "args": {
+        "session_id": "../etc"
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid session_id: '../etc'"
+      },
+      "calls": []
+    },
+    {
+      "name": "disconnecting a session",
+      "tool": "session_disconnect",
+      "args": {
+        "session_id": "s-1"
+      },
+      "ok": true,
+      "data": {
+        "ok": true
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "ok": true
+      },
+      "calls": [
+        {
+          "method": "disconnect_session",
+          "session_id": "s-1"
+        }
+      ]
+    },
+    {
+      "name": "disconnecting a session that is a path",
+      "tool": "session_disconnect",
+      "args": {
+        "session_id": "a/b"
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid session_id: 'a/b'"
+      },
+      "calls": []
+    },
+    {
+      "name": "creating a local session",
+      "tool": "session_create",
+      "args": {
+        "connector_type": "local"
+      },
+      "ok": true,
+      "data": {
+        "session_id": "s-9"
+      },
+      "diverges": false,
+      "result": {
+        "success": false,
+        "error": "invalid_connector_type",
+        "connector_type": "local"
+      },
+      "calls": []
+    },
+    {
+      "name": "creating one with everything filled in",
+      "tool": "session_create",
+      "args": {
+        "connector_type": "ssh",
+        "display_name": "box",
+        "host": "example.test",
+        "port": 22,
+        "username": "ada",
+        "password": "hunter2",
+        "input_mode": "open"
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": true
+      },
+      "calls": [
+        {
+          "method": "quick_connect",
+          "connector_type": "ssh",
+          "display_name": "box",
+          "host": "example.test",
+          "port": 22,
+          "username": "ada",
+          "password": "hunter2",
+          "input_mode": "open"
+        }
+      ]
+    },
+    {
+      "name": "creating one with fields nobody filled in",
+      "tool": "session_create",
+      "args": {
+        "connector_type": "ssh",
+        "host": "example.test",
+        "display_name": null,
+        "username": null
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": true
+      },
+      "calls": [
+        {
+          "method": "quick_connect",
+          "connector_type": "ssh",
+          "host": "example.test"
+        }
+      ]
+    },
+    {
+      "name": "creating one on a connector nobody allows",
+      "tool": "session_create",
+      "args": {
+        "connector_type": "exec"
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": false,
+        "error": "invalid_connector_type",
+        "connector_type": "exec"
+      },
+      "calls": []
+    },
+    {
+      "name": "creating one pointed at a port that is not one",
+      "tool": "session_create",
+      "args": {
+        "connector_type": "telnet",
+        "host": "example.test",
+        "port": 0
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": false,
+        "error": "invalid_port",
+        "port": 0
+      },
+      "calls": []
+    },
+    {
+      "name": "creating one pointed inside the network",
+      "tool": "session_create",
+      "args": {
+        "connector_type": "telnet",
+        "host": "127.0.0.1",
+        "port": 23
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": false,
+        "error": "invalid_host",
+        "host": "127.0.0.1"
+      },
+      "calls": []
+    },
+    {
+      "name": "creating one pointed at a scheme nobody allows",
+      "tool": "session_create",
+      "args": {
+        "connector_type": "websocket",
+        "url": "file:///etc/passwd"
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": false,
+        "error": "invalid_url_scheme",
+        "scheme": "file"
+      },
+      "calls": []
+    },
+    {
+      "name": "creating one with a url pointed inside the network",
+      "tool": "session_create",
+      "args": {
+        "connector_type": "websocket",
+        "url": "ws://localhost:8080/x"
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": false,
+        "error": "invalid_host",
+        "host": "localhost"
+      },
+      "calls": []
+    },
+    {
+      "name": "watching a session",
+      "tool": "session_watch",
+      "args": {
+        "session_id": "s-1"
+      },
+      "ok": true,
+      "data": {
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "calls": [
+        {
+          "method": "watch_session_events",
+          "session_id": "s-1",
+          "event_types": null,
+          "pattern": null,
+          "timeout_ms": 10000,
+          "max_events": 50
+        }
+      ]
+    },
+    {
+      "name": "watching for particular events",
+      "tool": "session_watch",
+      "args": {
+        "session_id": "s-1",
+        "event_types": "snapshot,input_send"
+      },
+      "ok": true,
+      "data": {
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "calls": [
+        {
+          "method": "watch_session_events",
+          "session_id": "s-1",
+          "event_types": "snapshot,input_send",
+          "pattern": null,
+          "timeout_ms": 10000,
+          "max_events": 50
+        }
+      ]
+    },
+    {
+      "name": "watching for a pattern",
+      "tool": "session_watch",
+      "args": {
+        "session_id": "s-1",
+        "pattern": "\\$ $"
+      },
+      "ok": true,
+      "data": {
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "calls": [
+        {
+          "method": "watch_session_events",
+          "session_id": "s-1",
+          "event_types": null,
+          "pattern": "\\$ $",
+          "timeout_ms": 10000,
+          "max_events": 50
+        }
+      ]
+    },
+    {
+      "name": "watching for a pattern that could hang",
+      "tool": "session_watch",
+      "args": {
+        "session_id": "s-1",
+        "pattern": "(a+)+$"
+      },
+      "ok": true,
+      "data": {
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "diverges": false,
+      "result": {
+        "success": false,
+        "error": "invalid_pattern",
+        "detail": "pattern rejected: catastrophic-backtracking construct (nested quantifier or quantified backreference)"
+      },
+      "calls": []
+    },
+    {
+      "name": "watching for longer than allowed",
+      "tool": "session_watch",
+      "args": {
+        "session_id": "s-1",
+        "timeout_s": 600
+      },
+      "ok": true,
+      "data": {
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "calls": [
+        {
+          "method": "watch_session_events",
+          "session_id": "s-1",
+          "event_types": null,
+          "pattern": null,
+          "timeout_ms": 30000,
+          "max_events": 50
+        }
+      ]
+    },
+    {
+      "name": "watching for less than a moment",
+      "tool": "session_watch",
+      "args": {
+        "session_id": "s-1",
+        "timeout_s": 0
+      },
+      "ok": true,
+      "data": {
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "calls": [
+        {
+          "method": "watch_session_events",
+          "session_id": "s-1",
+          "event_types": null,
+          "pattern": null,
+          "timeout_ms": 100,
+          "max_events": 50
+        }
+      ]
+    },
+    {
+      "name": "watching for a negative time",
+      "tool": "session_watch",
+      "args": {
+        "session_id": "s-1",
+        "timeout_s": -5
+      },
+      "ok": true,
+      "data": {
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "calls": [
+        {
+          "method": "watch_session_events",
+          "session_id": "s-1",
+          "event_types": null,
+          "pattern": null,
+          "timeout_ms": 100,
+          "max_events": 50
+        }
+      ]
+    },
+    {
+      "name": "watching for a fraction of a second",
+      "tool": "session_watch",
+      "args": {
+        "session_id": "s-1",
+        "timeout_s": 0.25
+      },
+      "ok": true,
+      "data": {
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "calls": [
+        {
+          "method": "watch_session_events",
+          "session_id": "s-1",
+          "event_types": null,
+          "pattern": null,
+          "timeout_ms": 250,
+          "max_events": 50
+        }
+      ]
+    },
+    {
+      "name": "watching for more events than allowed",
+      "tool": "session_watch",
+      "args": {
+        "session_id": "s-1",
+        "max_events": 5000
+      },
+      "ok": true,
+      "data": {
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "calls": [
+        {
+          "method": "watch_session_events",
+          "session_id": "s-1",
+          "event_types": null,
+          "pattern": null,
+          "timeout_ms": 10000,
+          "max_events": 50
+        }
+      ]
+    },
+    {
+      "name": "watching for no events at all",
+      "tool": "session_watch",
+      "args": {
+        "session_id": "s-1",
+        "max_events": 0
+      },
+      "ok": true,
+      "data": {
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "calls": [
+        {
+          "method": "watch_session_events",
+          "session_id": "s-1",
+          "event_types": null,
+          "pattern": null,
+          "timeout_ms": 10000,
+          "max_events": 1
+        }
+      ]
+    },
+    {
+      "name": "watching for a negative number of events",
+      "tool": "session_watch",
+      "args": {
+        "session_id": "s-1",
+        "max_events": -3
+      },
+      "ok": true,
+      "data": {
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "calls": [
+        {
+          "method": "watch_session_events",
+          "session_id": "s-1",
+          "event_types": null,
+          "pattern": null,
+          "timeout_ms": 10000,
+          "max_events": 1
+        }
+      ]
+    },
+    {
+      "name": "watching a session that is a path",
+      "tool": "session_watch",
+      "args": {
+        "session_id": "a/b"
+      },
+      "ok": true,
+      "data": {
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "diverges": false,
+      "result": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid session_id: 'a/b'"
+      },
+      "calls": []
+    },
+    {
+      "name": "subscribing to a session",
+      "tool": "session_subscribe",
+      "args": {
+        "session_id": "s-1"
+      },
+      "ok": true,
+      "data": {
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ],
+        "matched_pattern": false
+      },
+      "calls": [
+        {
+          "method": "watch_session_events",
+          "session_id": "s-1",
+          "event_types": null,
+          "pattern": null,
+          "timeout_ms": 30000,
+          "max_events": 200
+        }
+      ]
+    },
+    {
+      "name": "subscribing with a pattern that fires",
+      "tool": "session_subscribe",
+      "args": {
+        "session_id": "s-1",
+        "pattern": "\\$ $"
+      },
+      "ok": true,
+      "data": {
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ],
+        "matched_pattern": true
+      },
+      "calls": [
+        {
+          "method": "watch_session_events",
+          "session_id": "s-1",
+          "event_types": null,
+          "pattern": "\\$ $",
+          "timeout_ms": 30000,
+          "max_events": 200
+        }
+      ]
+    },
+    {
+      "name": "subscribing with a pattern that does not",
+      "tool": "session_subscribe",
+      "args": {
+        "session_id": "s-1",
+        "pattern": "never-appears"
+      },
+      "ok": true,
+      "data": {
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ],
+        "matched_pattern": false
+      },
+      "calls": [
+        {
+          "method": "watch_session_events",
+          "session_id": "s-1",
+          "event_types": null,
+          "pattern": "never-appears",
+          "timeout_ms": 30000,
+          "max_events": 200
+        }
+      ]
+    },
+    {
+      "name": "subscribing with a pattern the server refused for",
+      "tool": "session_subscribe",
+      "args": {
+        "session_id": "s-1",
+        "pattern": "\\$ $"
+      },
+      "ok": false,
+      "data": {
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "diverges": false,
+      "result": {
+        "success": false,
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ],
+        "matched_pattern": false
+      },
+      "calls": [
+        {
+          "method": "watch_session_events",
+          "session_id": "s-1",
+          "event_types": null,
+          "pattern": "\\$ $",
+          "timeout_ms": 30000,
+          "max_events": 200
+        }
+      ]
+    },
+    {
+      "name": "subscribing with a pattern that could hang",
+      "tool": "session_subscribe",
+      "args": {
+        "session_id": "s-1",
+        "pattern": "(a+)+$"
+      },
+      "ok": true,
+      "data": {
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "diverges": false,
+      "result": {
+        "success": false,
+        "error": "invalid_pattern",
+        "detail": "pattern rejected: catastrophic-backtracking construct (nested quantifier or quantified backreference)"
+      },
+      "calls": []
+    },
+    {
+      "name": "subscribing where an event is not a mapping",
+      "tool": "session_subscribe",
+      "args": {
+        "session_id": "s-1",
+        "pattern": "prompt"
+      },
+      "ok": true,
+      "data": {
+        "events": [
+          "not a mapping",
+          {
+            "data": {
+              "screen": "prompt here"
+            }
+          }
+        ]
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "events": [
+          "not a mapping",
+          {
+            "data": {
+              "screen": "prompt here"
+            }
+          }
+        ],
+        "matched_pattern": true
+      },
+      "calls": [
+        {
+          "method": "watch_session_events",
+          "session_id": "s-1",
+          "event_types": null,
+          "pattern": "prompt",
+          "timeout_ms": 30000,
+          "max_events": 200
+        }
+      ]
+    },
+    {
+      "name": "subscribing where an event carries nothing",
+      "tool": "session_subscribe",
+      "args": {
+        "session_id": "s-1",
+        "pattern": "x"
+      },
+      "ok": true,
+      "data": {
+        "events": [
+          {
+            "type": "snapshot"
+          },
+          {
+            "type": "snapshot",
+            "data": null
+          }
+        ]
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "events": [
+          {
+            "type": "snapshot"
+          },
+          {
+            "type": "snapshot",
+            "data": null
+          }
+        ],
+        "matched_pattern": false
+      },
+      "calls": [
+        {
+          "method": "watch_session_events",
+          "session_id": "s-1",
+          "event_types": null,
+          "pattern": "x",
+          "timeout_ms": 30000,
+          "max_events": 200
+        }
+      ]
+    },
+    {
+      "name": "subscribing where the payload is not a mapping",
+      "tool": "session_subscribe",
+      "args": {
+        "session_id": "s-1",
+        "pattern": "x"
+      },
+      "ok": true,
+      "data": {
+        "events": [
+          {
+            "data": "a string"
+          }
+        ]
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "events": [
+          {
+            "data": "a string"
+          }
+        ],
+        "matched_pattern": false
+      },
+      "calls": [
+        {
+          "method": "watch_session_events",
+          "session_id": "s-1",
+          "event_types": null,
+          "pattern": "x",
+          "timeout_ms": 30000,
+          "max_events": 200
+        }
+      ]
+    },
+    {
+      "name": "subscribing where an event is nothing at all",
+      "tool": "session_subscribe",
+      "args": {
+        "session_id": "s-1",
+        "pattern": "found"
+      },
+      "ok": true,
+      "data": {
+        "events": [
+          null,
+          {
+            "data": {
+              "screen": "found it"
+            }
+          }
+        ]
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "events": [
+          null,
+          {
+            "data": {
+              "screen": "found it"
+            }
+          }
+        ],
+        "matched_pattern": true
+      },
+      "calls": [
+        {
+          "method": "watch_session_events",
+          "session_id": "s-1",
+          "event_types": null,
+          "pattern": "found",
+          "timeout_ms": 30000,
+          "max_events": 200
+        }
+      ]
+    },
+    {
+      "name": "subscribing where the screen is nothing at all",
+      "tool": "session_subscribe",
+      "args": {
+        "session_id": "s-1",
+        "pattern": "None"
+      },
+      "ok": true,
+      "data": {
+        "events": [
+          {
+            "data": {
+              "screen": null
+            }
+          }
+        ]
+      },
+      "diverges": true,
+      "result": {
+        "success": true,
+        "events": [
+          {
+            "data": {
+              "screen": null
+            }
+          }
+        ],
+        "matched_pattern": true
+      },
+      "calls": [
+        {
+          "method": "watch_session_events",
+          "session_id": "s-1",
+          "event_types": null,
+          "pattern": "None",
+          "timeout_ms": 30000,
+          "max_events": 200
+        }
+      ]
+    },
+    {
+      "name": "subscribing where the screen is missing entirely",
+      "tool": "session_subscribe",
+      "args": {
+        "session_id": "s-1",
+        "pattern": "None"
+      },
+      "ok": true,
+      "data": {
+        "events": [
+          {
+            "data": {}
+          }
+        ]
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "events": [
+          {
+            "data": {}
+          }
+        ],
+        "matched_pattern": false
+      },
+      "calls": [
+        {
+          "method": "watch_session_events",
+          "session_id": "s-1",
+          "event_types": null,
+          "pattern": "None",
+          "timeout_ms": 30000,
+          "max_events": 200
+        }
+      ]
+    },
+    {
+      "name": "subscribing where the screen is not text",
+      "tool": "session_subscribe",
+      "args": {
+        "session_id": "s-1",
+        "pattern": "42"
+      },
+      "ok": true,
+      "data": {
+        "events": [
+          {
+            "data": {
+              "screen": 42
+            }
+          }
+        ]
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "events": [
+          {
+            "data": {
+              "screen": 42
+            }
+          }
+        ],
+        "matched_pattern": true
+      },
+      "calls": [
+        {
+          "method": "watch_session_events",
+          "session_id": "s-1",
+          "event_types": null,
+          "pattern": "42",
+          "timeout_ms": 30000,
+          "max_events": 200
+        }
+      ]
+    },
+    {
+      "name": "subscribing where there are no events at all",
+      "tool": "session_subscribe",
+      "args": {
+        "session_id": "s-1",
+        "pattern": "x"
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": true,
+        "matched_pattern": false
+      },
+      "calls": [
+        {
+          "method": "watch_session_events",
+          "session_id": "s-1",
+          "event_types": null,
+          "pattern": "x",
+          "timeout_ms": 30000,
+          "max_events": 200
+        }
+      ]
+    },
+    {
+      "name": "subscribing for longer than allowed",
+      "tool": "session_subscribe",
+      "args": {
+        "session_id": "s-1",
+        "duration_s": 9999
+      },
+      "ok": true,
+      "data": {
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ],
+        "matched_pattern": false
+      },
+      "calls": [
+        {
+          "method": "watch_session_events",
+          "session_id": "s-1",
+          "event_types": null,
+          "pattern": null,
+          "timeout_ms": 120000,
+          "max_events": 200
+        }
+      ]
+    },
+    {
+      "name": "subscribing for less than a second",
+      "tool": "session_subscribe",
+      "args": {
+        "session_id": "s-1",
+        "duration_s": 0.1
+      },
+      "ok": true,
+      "data": {
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ],
+        "matched_pattern": false
+      },
+      "calls": [
+        {
+          "method": "watch_session_events",
+          "session_id": "s-1",
+          "event_types": null,
+          "pattern": null,
+          "timeout_ms": 1000,
+          "max_events": 200
+        }
+      ]
+    },
+    {
+      "name": "subscribing for more events than allowed",
+      "tool": "session_subscribe",
+      "args": {
+        "session_id": "s-1",
+        "max_events": 100000
+      },
+      "ok": true,
+      "data": {
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ],
+        "matched_pattern": false
+      },
+      "calls": [
+        {
+          "method": "watch_session_events",
+          "session_id": "s-1",
+          "event_types": null,
+          "pattern": null,
+          "timeout_ms": 30000,
+          "max_events": 500
+        }
+      ]
+    },
+    {
+      "name": "subscribing for no events at all",
+      "tool": "session_subscribe",
+      "args": {
+        "session_id": "s-1",
+        "max_events": 0
+      },
+      "ok": true,
+      "data": {
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ],
+        "matched_pattern": false
+      },
+      "calls": [
+        {
+          "method": "watch_session_events",
+          "session_id": "s-1",
+          "event_types": null,
+          "pattern": null,
+          "timeout_ms": 30000,
+          "max_events": 1
+        }
+      ]
+    },
+    {
+      "name": "subscribing to a session that is a path",
+      "tool": "session_subscribe",
+      "args": {
+        "session_id": "a/b"
+      },
+      "ok": true,
+      "data": {
+        "events": [
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "waiting"
+            }
+          },
+          {
+            "type": "input_send",
+            "data": {
+              "keys": "ls"
+            }
+          },
+          {
+            "type": "snapshot",
+            "data": {
+              "screen": "ada@host:~$ "
+            }
+          }
+        ]
+      },
+      "diverges": false,
+      "result": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid session_id: 'a/b'"
+      },
+      "calls": []
+    },
+    {
+      "name": "making a group",
+      "tool": "fanout_group_create",
+      "args": {
+        "session_ids": [
+          "s-1",
+          "s-2"
+        ]
+      },
+      "ok": true,
+      "data": {
+        "group_id": "g-1"
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "group_id": "g-1"
+      },
+      "calls": [
+        {
+          "method": "post",
+          "path": "/api/fanout/groups",
+          "body": {
+            "name": "fleet",
+            "worker_ids": [
+              "s-1",
+              "s-2"
+            ],
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "making a group on somebody's terms",
+      "tool": "fanout_group_create",
+      "args": {
+        "session_ids": [
+          "s-1"
+        ],
+        "name": "prod",
+        "mode": "serial"
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": true
+      },
+      "calls": [
+        {
+          "method": "post",
+          "path": "/api/fanout/groups",
+          "body": {
+            "name": "prod",
+            "worker_ids": [
+              "s-1"
+            ],
+            "mode": "serial"
+          }
+        }
+      ]
+    },
+    {
+      "name": "making a group of nothing",
+      "tool": "fanout_group_create",
+      "args": {
+        "session_ids": []
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": true
+      },
+      "calls": [
+        {
+          "method": "post",
+          "path": "/api/fanout/groups",
+          "body": {
+            "name": "fleet",
+            "worker_ids": [],
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "broadcasting to a group",
+      "tool": "fanout_send",
+      "args": {
+        "group_id": "g-1",
+        "data": "ls\n"
+      },
+      "ok": true,
+      "data": {
+        "results": []
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "results": []
+      },
+      "calls": [
+        {
+          "method": "post",
+          "path": "/api/fanout/groups/g-1/send",
+          "body": {
+            "data": "ls\n",
+            "quiesce_ms": 500,
+            "max_response_ms": 10000
+          }
+        }
+      ]
+    },
+    {
+      "name": "broadcasting on somebody's terms",
+      "tool": "fanout_send",
+      "args": {
+        "group_id": "g-1",
+        "data": "x",
+        "quiesce_ms": 10,
+        "max_response_ms": 20
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": true
+      },
+      "calls": [
+        {
+          "method": "post",
+          "path": "/api/fanout/groups/g-1/send",
+          "body": {
+            "data": "x",
+            "quiesce_ms": 10,
+            "max_response_ms": 20
+          }
+        }
+      ]
+    },
+    {
+      "name": "broadcasting to a group that is a path",
+      "tool": "fanout_send",
+      "args": {
+        "group_id": "a/b",
+        "data": "x"
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid group_id: 'a/b'"
+      },
+      "calls": []
+    },
+    {
+      "name": "marking a moment",
+      "tool": "session_annotate",
+      "args": {
+        "session_id": "s-1",
+        "label": "deploy"
+      },
+      "ok": true,
+      "data": {
+        "id": "a-1"
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "id": "a-1"
+      },
+      "calls": [
+        {
+          "method": "post",
+          "path": "/api/sessions/s-1/annotate",
+          "body": {
+            "label": "deploy",
+            "description": "",
+            "severity": "info"
+          }
+        }
+      ]
+    },
+    {
+      "name": "marking a moment in full",
+      "tool": "session_annotate",
+      "args": {
+        "session_id": "s-1",
+        "label": "oops",
+        "description": "it broke",
+        "severity": "error"
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": true
+      },
+      "calls": [
+        {
+          "method": "post",
+          "path": "/api/sessions/s-1/annotate",
+          "body": {
+            "label": "oops",
+            "description": "it broke",
+            "severity": "error"
+          }
+        }
+      ]
+    },
+    {
+      "name": "marking a session that is a path",
+      "tool": "session_annotate",
+      "args": {
+        "session_id": "a/b",
+        "label": "x"
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid session_id: 'a/b'"
+      },
+      "calls": []
+    },
+    {
+      "name": "taking a graphical lease",
+      "tool": "gui_hijack_begin",
+      "args": {
+        "worker_id": "w-1"
+      },
+      "ok": true,
+      "data": {
+        "hijack_id": "h-1"
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "hijack_id": "h-1"
+      },
+      "calls": [
+        {
+          "method": "acquire",
+          "worker_id": "w-1",
+          "owner": "operator",
+          "lease_s": 90
+        }
+      ]
+    },
+    {
+      "name": "taking a graphical lease on somebody's terms",
+      "tool": "gui_hijack_begin",
+      "args": {
+        "worker_id": "w-1",
+        "lease_s": 5,
+        "owner": "ada"
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": true
+      },
+      "calls": [
+        {
+          "method": "acquire",
+          "worker_id": "w-1",
+          "owner": "ada",
+          "lease_s": 5
+        }
+      ]
+    },
+    {
+      "name": "taking a graphical lease on a path",
+      "tool": "gui_hijack_begin",
+      "args": {
+        "worker_id": "a/b"
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid worker_id: 'a/b'"
+      },
+      "calls": []
+    },
+    {
+      "name": "giving a graphical lease back",
+      "tool": "gui_hijack_release",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1"
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": true
+      },
+      "calls": [
+        {
+          "method": "release",
+          "worker_id": "w-1",
+          "hijack_id": "h-1"
+        }
+      ]
+    },
+    {
+      "name": "giving back a lease with a bad id",
+      "tool": "gui_hijack_release",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "c/d"
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid hijack_id: 'c/d'"
+      },
+      "calls": []
+    },
+    {
+      "name": "taking a screenshot",
+      "tool": "gui_screenshot",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1"
+      },
+      "ok": true,
+      "data": {
+        "screenshot": "iVBOR"
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "screenshot": "iVBOR"
+      },
+      "calls": [
+        {
+          "method": "gui_screenshot",
+          "worker_id": "w-1",
+          "hijack_id": "h-1"
+        }
+      ]
+    },
+    {
+      "name": "taking a screenshot with a bad id",
+      "tool": "gui_screenshot",
+      "args": {
+        "worker_id": "a/b",
+        "hijack_id": "h-1"
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid worker_id: 'a/b'"
+      },
+      "calls": []
+    },
+    {
+      "name": "clicking",
+      "tool": "gui_click",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1",
+        "x": 3,
+        "y": 4
+      },
+      "ok": true,
+      "data": {
+        "ok": true
+      },
+      "diverges": false,
+      "result": {
+        "success": true,
+        "ok": true
+      },
+      "calls": [
+        {
+          "method": "gui_click",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "x": 3,
+          "y": 4,
+          "button": "left"
+        }
+      ]
+    },
+    {
+      "name": "clicking another button",
+      "tool": "gui_click",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1",
+        "x": 0,
+        "y": 0,
+        "button": "right"
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": true
+      },
+      "calls": [
+        {
+          "method": "gui_click",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "x": 0,
+          "y": 0,
+          "button": "right"
+        }
+      ]
+    },
+    {
+      "name": "clicking with a bad id",
+      "tool": "gui_click",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "c/d",
+        "x": 1,
+        "y": 1
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid hijack_id: 'c/d'"
+      },
+      "calls": []
+    },
+    {
+      "name": "typing at a console",
+      "tool": "gui_type",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1",
+        "text": "hello"
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": true
+      },
+      "calls": [
+        {
+          "method": "gui_type",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "text": "hello"
+        }
+      ]
+    },
+    {
+      "name": "typing nothing at a console",
+      "tool": "gui_type",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1",
+        "text": ""
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": true
+      },
+      "calls": [
+        {
+          "method": "gui_type",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "name": "typing at a console with a bad id",
+      "tool": "gui_type",
+      "args": {
+        "worker_id": "a/b",
+        "hijack_id": "h-1",
+        "text": "x"
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid worker_id: 'a/b'"
+      },
+      "calls": []
+    },
+    {
+      "name": "pressing a key",
+      "tool": "gui_key",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1",
+        "key_name": "Enter"
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": true
+      },
+      "calls": [
+        {
+          "method": "gui_key",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "key_name": "Enter"
+        }
+      ]
+    },
+    {
+      "name": "pressing a key with a bad id",
+      "tool": "gui_key",
+      "args": {
+        "worker_id": "a/b",
+        "hijack_id": "h-1",
+        "key_name": "Tab"
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid worker_id: 'a/b'"
+      },
+      "calls": []
+    },
+    {
+      "name": "dragging",
+      "tool": "gui_drag",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1",
+        "start_x": 1,
+        "start_y": 2,
+        "end_x": 3,
+        "end_y": 4
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": true
+      },
+      "calls": [
+        {
+          "method": "gui_drag",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "start_x": 1,
+          "start_y": 2,
+          "end_x": 3,
+          "end_y": 4
+        }
+      ]
+    },
+    {
+      "name": "dragging with a bad id",
+      "tool": "gui_drag",
+      "args": {
+        "worker_id": "a/b",
+        "hijack_id": "h-1",
+        "start_x": 0,
+        "start_y": 0,
+        "end_x": 1,
+        "end_y": 1
+      },
+      "ok": true,
+      "data": {},
+      "diverges": false,
+      "result": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid worker_id: 'a/b'"
+      },
+      "calls": []
+    }
+  ]
+}
