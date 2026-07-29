@@ -1,0 +1,404 @@
+{
+  "note": "Recorded from provide.uterm.server.authorization.LocalAuthorizationProvider \u2014 the RBAC provider a deployment gets unless it configures a webhook policy engine.",
+  "role_capabilities": {
+    "admin": [
+      "graphical.session.attach",
+      "graphical.target.manage",
+      "graphical.target.read",
+      "session.control.clear",
+      "session.control.connect",
+      "session.control.create",
+      "session.control.delete",
+      "session.control.hijack",
+      "session.control.mode",
+      "session.control.update",
+      "session.read",
+      "session.recording.read"
+    ],
+    "operator": [
+      "graphical.session.attach",
+      "graphical.target.manage",
+      "graphical.target.read",
+      "session.control.clear",
+      "session.control.connect",
+      "session.control.create",
+      "session.control.mode",
+      "session.control.update",
+      "session.read",
+      "session.recording.read"
+    ],
+    "viewer": [
+      "graphical.target.read",
+      "session.read",
+      "session.recording.read"
+    ]
+  },
+  "sessions": [
+    {
+      "name": "public",
+      "session_id": "secret",
+      "owner": null,
+      "visibility": "public"
+    },
+    {
+      "name": "operator_only",
+      "session_id": "secret",
+      "owner": null,
+      "visibility": "operator"
+    },
+    {
+      "name": "private",
+      "session_id": "secret",
+      "owner": null,
+      "visibility": "private"
+    },
+    {
+      "name": "owned_private",
+      "session_id": "secret",
+      "owner": "owner",
+      "visibility": "private"
+    },
+    {
+      "name": "other_private",
+      "session_id": "other",
+      "owner": null,
+      "visibility": "private"
+    }
+  ],
+  "principals": [
+    {
+      "name": "admin",
+      "subject_id": "root",
+      "roles": [
+        "admin"
+      ],
+      "scopes": [],
+      "capabilities": [
+        "graphical.session.attach",
+        "graphical.target.manage",
+        "graphical.target.read",
+        "session.control.clear",
+        "session.control.connect",
+        "session.control.create",
+        "session.control.delete",
+        "session.control.hijack",
+        "session.control.mode",
+        "session.control.update",
+        "session.read",
+        "session.recording.read"
+      ],
+      "is_admin": true,
+      "can_read_session": {
+        "public": true,
+        "operator_only": true,
+        "private": true,
+        "owned_private": true,
+        "other_private": true
+      },
+      "is_owner": {
+        "public": false,
+        "operator_only": false,
+        "private": false,
+        "owned_private": false,
+        "other_private": false
+      }
+    },
+    {
+      "name": "operator",
+      "subject_id": "op",
+      "roles": [
+        "operator"
+      ],
+      "scopes": [],
+      "capabilities": [
+        "graphical.session.attach",
+        "graphical.target.manage",
+        "graphical.target.read",
+        "session.control.clear",
+        "session.control.connect",
+        "session.control.create",
+        "session.control.mode",
+        "session.control.update",
+        "session.read",
+        "session.recording.read"
+      ],
+      "is_admin": false,
+      "can_read_session": {
+        "public": true,
+        "operator_only": true,
+        "private": false,
+        "owned_private": false,
+        "other_private": false
+      },
+      "is_owner": {
+        "public": false,
+        "operator_only": false,
+        "private": false,
+        "owned_private": false,
+        "other_private": false
+      }
+    },
+    {
+      "name": "viewer",
+      "subject_id": "watcher",
+      "roles": [
+        "viewer"
+      ],
+      "scopes": [],
+      "capabilities": [
+        "graphical.target.read",
+        "session.read",
+        "session.recording.read"
+      ],
+      "is_admin": false,
+      "can_read_session": {
+        "public": true,
+        "operator_only": false,
+        "private": false,
+        "owned_private": false,
+        "other_private": false
+      },
+      "is_owner": {
+        "public": false,
+        "operator_only": false,
+        "private": false,
+        "owned_private": false,
+        "other_private": false
+      }
+    },
+    {
+      "name": "no_roles",
+      "subject_id": "nobody",
+      "roles": [],
+      "scopes": [],
+      "capabilities": [],
+      "is_admin": false,
+      "can_read_session": {
+        "public": false,
+        "operator_only": false,
+        "private": false,
+        "owned_private": false,
+        "other_private": false
+      },
+      "is_owner": {
+        "public": false,
+        "operator_only": false,
+        "private": false,
+        "owned_private": false,
+        "other_private": false
+      }
+    },
+    {
+      "name": "owner_viewer",
+      "subject_id": "owner",
+      "roles": [
+        "viewer"
+      ],
+      "scopes": [],
+      "capabilities": [
+        "graphical.target.read",
+        "session.read",
+        "session.recording.read"
+      ],
+      "is_admin": false,
+      "can_read_session": {
+        "public": true,
+        "operator_only": false,
+        "private": false,
+        "owned_private": true,
+        "other_private": false
+      },
+      "is_owner": {
+        "public": false,
+        "operator_only": false,
+        "private": false,
+        "owned_private": true,
+        "other_private": false
+      }
+    },
+    {
+      "name": "share",
+      "subject_id": "share:secret:abcdef",
+      "roles": [
+        "viewer"
+      ],
+      "scopes": [],
+      "capabilities": [
+        "graphical.target.read",
+        "session.read",
+        "session.recording.read"
+      ],
+      "is_admin": false,
+      "can_read_session": {
+        "public": true,
+        "operator_only": true,
+        "private": true,
+        "owned_private": true,
+        "other_private": false
+      },
+      "is_owner": {
+        "public": false,
+        "operator_only": false,
+        "private": false,
+        "owned_private": false,
+        "other_private": false
+      }
+    },
+    {
+      "name": "share_elsewhere",
+      "subject_id": "share:other:abcdef",
+      "roles": [
+        "viewer"
+      ],
+      "scopes": [],
+      "capabilities": [
+        "graphical.target.read",
+        "session.read",
+        "session.recording.read"
+      ],
+      "is_admin": false,
+      "can_read_session": {
+        "public": true,
+        "operator_only": false,
+        "private": false,
+        "owned_private": false,
+        "other_private": true
+      },
+      "is_owner": {
+        "public": false,
+        "operator_only": false,
+        "private": false,
+        "owned_private": false,
+        "other_private": false
+      }
+    },
+    {
+      "name": "scoped_out",
+      "subject_id": "narrow",
+      "roles": [
+        "admin"
+      ],
+      "scopes": [
+        "session.control.delete"
+      ],
+      "why": "an admin token whose scopes do not include session.read",
+      "capabilities": [
+        "session.control.delete"
+      ],
+      "is_admin": true,
+      "can_read_session": {
+        "public": false,
+        "operator_only": false,
+        "private": false,
+        "owned_private": false,
+        "other_private": false
+      },
+      "is_owner": {
+        "public": false,
+        "operator_only": false,
+        "private": false,
+        "owned_private": false,
+        "other_private": false
+      }
+    },
+    {
+      "name": "scoped_in",
+      "subject_id": "narrow",
+      "roles": [
+        "admin"
+      ],
+      "scopes": [
+        "session.read"
+      ],
+      "why": "the same token, scoped to the one capability being asked about",
+      "capabilities": [
+        "session.read"
+      ],
+      "is_admin": true,
+      "can_read_session": {
+        "public": true,
+        "operator_only": true,
+        "private": true,
+        "owned_private": true,
+        "other_private": true
+      },
+      "is_owner": {
+        "public": false,
+        "operator_only": false,
+        "private": false,
+        "owned_private": false,
+        "other_private": false
+      }
+    },
+    {
+      "name": "scoped_star",
+      "subject_id": "wide",
+      "roles": [
+        "viewer"
+      ],
+      "scopes": [
+        "*"
+      ],
+      "why": "the star opts out of narrowing rather than granting everything",
+      "capabilities": [
+        "graphical.target.read",
+        "session.read",
+        "session.recording.read"
+      ],
+      "is_admin": false,
+      "can_read_session": {
+        "public": true,
+        "operator_only": false,
+        "private": false,
+        "owned_private": false,
+        "other_private": false
+      },
+      "is_owner": {
+        "public": false,
+        "operator_only": false,
+        "private": false,
+        "owned_private": false,
+        "other_private": false
+      }
+    },
+    {
+      "name": "session_admin",
+      "subject_id": "share-operator",
+      "roles": [
+        "admin"
+      ],
+      "scopes": [],
+      "admin_session_scope": "secret",
+      "why": "a tunnel share's admin grant, confined to one session",
+      "capabilities": [
+        "graphical.session.attach",
+        "graphical.target.manage",
+        "graphical.target.read",
+        "session.control.clear",
+        "session.control.connect",
+        "session.control.create",
+        "session.control.delete",
+        "session.control.hijack",
+        "session.control.mode",
+        "session.control.update",
+        "session.read",
+        "session.recording.read"
+      ],
+      "is_admin": false,
+      "can_read_session": {
+        "public": true,
+        "operator_only": true,
+        "private": true,
+        "owned_private": true,
+        "other_private": false
+      },
+      "is_owner": {
+        "public": false,
+        "operator_only": false,
+        "private": false,
+        "owned_private": false,
+        "other_private": false
+      }
+    }
+  ]
+}

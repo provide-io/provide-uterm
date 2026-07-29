@@ -120,11 +120,10 @@ REGISTRY: Final[tuple[Registration, ...]] = (
     ),
     Registration(
         language="typescript",
-        roles=frozenset({CLIENT}),
+        roles=frozenset({CLIENT, SERVER}),
         build=_typescript,
         needs_files=("packages/provide-uterm-ts/bin/uterm-conformance.mjs",),
         needs_tools=("node",),
-        note="no server role yet: the TypeScript server is still being ported",
     ),
 )
 

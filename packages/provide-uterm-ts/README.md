@@ -39,6 +39,9 @@ uv run python packages/provide-uterm-ts/testdata/gen_colors_golden.py
 | `colors` | 894-record CPython corpus (RGB quantisation, SGR rewriting, text + latin-1 byte paths) |
 | `defaults` | Constant-for-constant assertion against `TerminalDefaults` |
 | `pycompat` | CPython `round()` tie-breaking table |
+| `server` | 17 probes recorded off the **running** reference FastAPI server on an ephemeral port, in `dev_token` mode, with the default configuration — status, body and headers, masked only where the live scenarios declare a field volatile |
+| `serverauth` | 45 token vectors driven through the reference's own JWT path (every way a token can be right and every way it can be wrong), the bearer-header grammar, and what `setup_dev_idp` mints |
+| `server` (RBAC) | The whole `LocalAuthorizationProvider` decision table: what each role grants, how scopes narrow it, and who may read a session of each visibility |
 
 ## Development
 
@@ -75,13 +78,34 @@ node packages/provide-uterm-ts/bin/uterm-conformance.mjs \
   client --base-url URL --token TOKEN --scenario FILE
 ```
 
-It writes one line of JSON matching `conformance/live/schema/result.schema.json`
-and evaluates nothing: every expectation is the harness's to judge. The client
-role goes through the real `HijackClient`, with a `fetch`-backed transport
-underneath it that records the status code the library drops — so a 401, a 403
-and a 404 stay three different observations. The `serve` role reports that this
-port has no conformance server yet and exits non-zero, rather than standing up
-a stub that would make the matrix look complete.
+Both roles are real:
+
+```bash
+node packages/provide-uterm-ts/bin/uterm-conformance.mjs serve --auth dev_token
+node packages/provide-uterm-ts/bin/uterm-conformance.mjs \
+  client --base-url URL --token TOKEN --scenario FILE
+```
+
+The **client** role writes one line of JSON matching
+`conformance/live/schema/result.schema.json` and evaluates nothing: every
+expectation is the harness's to judge. It goes through the real
+`HijackClient`, with a `fetch`-backed transport underneath it that records the
+status code the library drops — so a 401, a 403 and a 404 stay three different
+observations.
+
+The **server** role stands `src/server/` up on an ephemeral port (bind zero,
+report what the operating system gave you — nothing in this repository may
+name a port), announces its base URL and a token, and serves until stdin
+closes or the process is signalled. The token is minted by the `dev_token`
+stub identity provider and verified by the ordinary `jwt` path, so a forged
+one is refused by exactly the code a production deployment runs.
+
+Run the matrix from the repository root:
+
+```bash
+PYTHONPATH=conformance/live uv run python conformance/live/harness \
+  --servers python typescript --clients python typescript
+```
 
 Like `src/react`, it is kept off the default entry: it reads files and writes to
 standard output, and `provide-uterm-ts/conformance` reaches it by name.

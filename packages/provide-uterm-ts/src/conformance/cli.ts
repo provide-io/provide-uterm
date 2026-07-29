@@ -11,19 +11,22 @@
  * The harness reads that line, so a driver that printed twice, or that
  * printed nothing on a bad argument, would be a cell the matrix cannot read.
  *
- * `serve` is answered rather than implemented. This port has no conformance
- * server yet, and a stub one would make the matrix look complete while
- * proving nothing — the protocol's `--list-drivers` exists so an incomplete
- * matrix is visible instead.
+ * Both roles are real. `serve` stands this port's own server up on an
+ * ephemeral port and keeps it there; `client` runs a scenario's steps and
+ * writes down what it saw. Neither judges anything: every expectation belongs
+ * to the harness, in one implementation, so four languages cannot disagree
+ * about what an expectation *means* — only about what their server did.
  */
 
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { CLIENT_CAPABILITIES, type DriverResult, LANGUAGE, runClientScenario, type Scenario } from "./client-driver.ts";
+import { parseFlags, required, USAGE } from "./flags.ts";
+import { runServe, type ServeOptions } from "./serve.ts";
 import { errorMessage } from "./transport.ts";
 
 /** What the command line is run with. Defaults are the real thing. */
-export interface CliOptions {
+export interface CliOptions extends ServeOptions {
   /** Where the one line goes. */
   write?: ((line: string) => void) | undefined;
   /** The fetch the driver's transport uses. */
@@ -32,11 +35,7 @@ export interface CliOptions {
   readScenario?: ((path: string) => Promise<string>) | undefined;
 }
 
-/** How to run this driver. */
-export const USAGE = "usage: <driver> client --base-url URL --token TOKEN --scenario FILE";
-
-/** Why `serve` does nothing. */
-export const SERVE_REFUSAL = "the TypeScript server role is not built: this port has no conformance server driver yet";
+export { USAGE } from "./flags.ts";
 
 /**
  * Run one subcommand and return the exit code.
@@ -55,8 +54,7 @@ export async function runCli(argv: string[], options: CliOptions = {}): Promise<
   const [role, ...rest] = argv;
 
   if (role === "serve") {
-    write(JSON.stringify({ role: "server", language: LANGUAGE, status: "error", error: SERVE_REFUSAL }));
-    return 1;
+    return runServe(rest, { ...options, write });
   }
   if (role !== "client") {
     write(
@@ -110,39 +108,4 @@ async function runClient(argv: string[], options: CliOptions): Promise<DriverRes
       error: errorMessage(error),
     };
   }
-}
-
-/**
- * Read `--name value` pairs.
- *
- * Flags nobody here knows are kept rather than refused, so a harness passing
- * one this driver has not learnt yet is not a run that never happened.
- */
-function parseFlags(argv: string[]): Map<string, string> {
-  const flags = new Map<string, string>();
-  let name: string | null = null;
-  for (const token of argv) {
-    if (name === null) {
-      if (!token.startsWith("--")) {
-        throw new Error(`expected a --flag, got ${JSON.stringify(token)}; ${USAGE}`);
-      }
-      name = token.slice(2);
-      continue;
-    }
-    flags.set(name, token);
-    name = null;
-  }
-  if (name !== null) {
-    throw new Error(`--${name} has no value; ${USAGE}`);
-  }
-  return flags;
-}
-
-/** A flag the client role cannot run without. */
-function required(flags: Map<string, string>, name: string): string {
-  const value = flags.get(name);
-  if (value === undefined) {
-    throw new Error(`--${name} is required; ${USAGE}`);
-  }
-  return value;
 }
