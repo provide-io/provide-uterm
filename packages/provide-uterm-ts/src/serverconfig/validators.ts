@@ -192,6 +192,27 @@ export function validatePamConfig(input: Record<string, unknown>): void {
 }
 
 /**
+ * Check a governance section.
+ *
+ * Five outbound channels, every one of them either carrying a shared secret or
+ * being asked whether a session may proceed. A policy or authorisation answer
+ * arriving over cleartext is one anybody on the path can rewrite.
+ *
+ * @throws {Error} On a cleartext URL to anywhere but loopback.
+ */
+export function validateGovernanceConfig(input: Record<string, unknown>): void {
+  for (const field of [
+    "policy_webhook_url",
+    "registry_webhook_url",
+    "authz_webhook_url",
+    "behavioral_audit_url",
+    "telemetry_webhook_url",
+  ]) {
+    requireSecureUrl(input[field] as string | undefined, `governance.${field}`);
+  }
+}
+
+/**
  * The base URL the server hands out in links.
  *
  * Derived from the bind when the operator gave none; behind a proxy the bind

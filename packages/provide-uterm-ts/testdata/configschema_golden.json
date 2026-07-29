@@ -1,0 +1,4378 @@
+{
+  "specs": {
+    "AuthConfig": {
+      "mode": {
+        "kind": "str",
+        "optional": false
+      },
+      "principal_header": {
+        "kind": "str",
+        "optional": false
+      },
+      "role_header": {
+        "kind": "str",
+        "optional": false
+      },
+      "tenant_header": {
+        "kind": "str",
+        "optional": false
+      },
+      "principal_cookie": {
+        "kind": "str",
+        "optional": false
+      },
+      "role_cookie": {
+        "kind": "str",
+        "optional": false
+      },
+      "tenant_cookie": {
+        "kind": "str",
+        "optional": false
+      },
+      "surface_cookie": {
+        "kind": "str",
+        "optional": false
+      },
+      "token_cookie": {
+        "kind": "str",
+        "optional": false
+      },
+      "jwt_issuer": {
+        "kind": "str",
+        "optional": false
+      },
+      "jwt_audience": {
+        "kind": "str",
+        "optional": false
+      },
+      "jwt_jwks_url": {
+        "kind": "str",
+        "optional": true
+      },
+      "jwt_public_key_pem": {
+        "kind": "str",
+        "optional": true
+      },
+      "jwt_algorithms": {
+        "kind": "list",
+        "item": {
+          "kind": "str"
+        },
+        "optional": false
+      },
+      "clock_skew_seconds": {
+        "kind": "int",
+        "optional": false
+      },
+      "jwt_roles_claim": {
+        "kind": "str",
+        "optional": false
+      },
+      "jwt_scopes_claim": {
+        "kind": "str",
+        "optional": false
+      },
+      "jwt_tenant_claim": {
+        "kind": "str",
+        "optional": false
+      },
+      "worker_bearer_token": {
+        "kind": "str",
+        "optional": true
+      },
+      "api_keys_enabled": {
+        "kind": "bool",
+        "optional": false
+      },
+      "header_mode_acknowledged": {
+        "kind": "bool",
+        "optional": false
+      },
+      "require_jwt_in_production": {
+        "kind": "bool",
+        "optional": false
+      },
+      "trusted_proxy_ips": {
+        "kind": "list",
+        "item": {
+          "kind": "str"
+        },
+        "optional": false
+      },
+      "upstream_proxy_secret": {
+        "kind": "str",
+        "optional": true
+      },
+      "require_upstream_proxy_secret": {
+        "kind": "bool",
+        "optional": false
+      },
+      "identity_provider": {
+        "kind": "literal",
+        "choices": [
+          "local",
+          "webhook"
+        ],
+        "optional": false
+      },
+      "delegate_roles": {
+        "kind": "bool",
+        "optional": false
+      },
+      "webhook_idp_url": {
+        "kind": "str",
+        "optional": true
+      },
+      "webhook_idp_secret": {
+        "kind": "str",
+        "optional": true
+      },
+      "webhook_idp_timeout_s": {
+        "kind": "float",
+        "optional": false
+      },
+      "webhook_idp_on_failure": {
+        "kind": "literal",
+        "choices": [
+          "deny",
+          "viewer"
+        ],
+        "optional": false
+      },
+      "webhook_idp_require_signed_response": {
+        "kind": "bool",
+        "optional": false
+      },
+      "webhook_idp_require_response_nonce": {
+        "kind": "bool",
+        "optional": false
+      },
+      "webhook_idp_forward_headers": {
+        "kind": "list",
+        "item": {
+          "kind": "str"
+        },
+        "optional": false
+      },
+      "webhook_idp_forward_cookies": {
+        "kind": "list",
+        "item": {
+          "kind": "str"
+        },
+        "optional": false
+      },
+      "allow_adhoc_browser_observers": {
+        "kind": "bool",
+        "optional": false
+      }
+    },
+    "AuditConfig": {
+      "chain_enabled": {
+        "kind": "bool",
+        "optional": false
+      },
+      "chain_file": {
+        "kind": "str",
+        "optional": true
+      }
+    },
+    "UiConfig": {
+      "app_path": {
+        "kind": "str",
+        "optional": false
+      },
+      "assets_path": {
+        "kind": "str",
+        "optional": false
+      },
+      "xterm_cdn": {
+        "kind": "str",
+        "optional": false
+      },
+      "fitaddon_cdn": {
+        "kind": "str",
+        "optional": false
+      },
+      "fonts_cdn": {
+        "kind": "str",
+        "optional": false
+      },
+      "xterm_cdn_integrity": {
+        "kind": "str",
+        "optional": false
+      },
+      "fitaddon_cdn_integrity": {
+        "kind": "str",
+        "optional": false
+      }
+    },
+    "RecordingConfig": {
+      "enabled_by_default": {
+        "kind": "bool",
+        "optional": false
+      },
+      "directory": {
+        "kind": "path",
+        "optional": false
+      },
+      "max_bytes": {
+        "kind": "int",
+        "optional": false
+      },
+      "retention_s": {
+        "kind": "int",
+        "optional": false
+      },
+      "control_channel_mode": {
+        "kind": "literal",
+        "choices": [
+          "exclude",
+          "wire"
+        ],
+        "optional": false
+      },
+      "redact_sensitive": {
+        "kind": "bool",
+        "optional": false
+      },
+      "store_type": {
+        "kind": "literal",
+        "choices": [
+          "local",
+          "memory",
+          "null",
+          "webhook"
+        ],
+        "optional": false
+      },
+      "webhook_url": {
+        "kind": "str",
+        "optional": true
+      },
+      "webhook_secret": {
+        "kind": "str",
+        "optional": true
+      },
+      "webhook_timeout_s": {
+        "kind": "float",
+        "optional": false
+      },
+      "flush_interval_s": {
+        "kind": "float",
+        "optional": false
+      },
+      "flush_batch_size": {
+        "kind": "int",
+        "optional": false
+      }
+    },
+    "ControlPlaneConfig": {
+      "backend": {
+        "kind": "literal",
+        "choices": [
+          "memory",
+          "sqlite"
+        ],
+        "optional": false
+      },
+      "database_url": {
+        "kind": "str",
+        "optional": true
+      },
+      "reap_interval_s": {
+        "kind": "int",
+        "optional": false
+      },
+      "reap_retention_s": {
+        "kind": "int",
+        "optional": false
+      }
+    },
+    "SecurityConfig": {
+      "mode": {
+        "kind": "literal",
+        "choices": [
+          "strict",
+          "dev"
+        ],
+        "optional": false
+      },
+      "dev_mode_acknowledged": {
+        "kind": "bool",
+        "optional": false
+      },
+      "csp": {
+        "kind": "str",
+        "optional": true
+      },
+      "hsts": {
+        "kind": "str",
+        "optional": true
+      },
+      "x_frame_options": {
+        "kind": "str",
+        "optional": true
+      },
+      "x_content_type_options": {
+        "kind": "str",
+        "optional": true
+      },
+      "referrer_policy": {
+        "kind": "str",
+        "optional": true
+      },
+      "permissions_policy": {
+        "kind": "str",
+        "optional": true
+      },
+      "block_private_connector_targets": {
+        "kind": "bool",
+        "optional": false
+      },
+      "metrics_require_auth": {
+        "kind": "bool",
+        "optional": false
+      },
+      "default_session_visibility": {
+        "kind": "literal",
+        "choices": [
+          "public",
+          "operator",
+          "private"
+        ],
+        "optional": false
+      }
+    },
+    "TunnelConfig": {
+      "token_ttl_s": {
+        "kind": "int",
+        "optional": false
+      },
+      "token_transport": {
+        "kind": "literal",
+        "choices": [
+          "query",
+          "cookie",
+          "both"
+        ],
+        "optional": false
+      },
+      "cookie_secure": {
+        "kind": "bool",
+        "optional": false
+      },
+      "cookie_samesite": {
+        "kind": "literal",
+        "choices": [
+          "lax",
+          "strict",
+          "none"
+        ],
+        "optional": false
+      },
+      "ip_binding": {
+        "kind": "bool",
+        "optional": false
+      }
+    },
+    "WebhooksConfig": {
+      "allow_loopback_destinations": {
+        "kind": "bool",
+        "optional": false
+      }
+    },
+    "ProfileStoreConfig": {
+      "directory": {
+        "kind": "path",
+        "optional": false
+      }
+    },
+    "ServerBindConfig": {
+      "host": {
+        "kind": "str",
+        "optional": false
+      },
+      "port": {
+        "kind": "int",
+        "optional": false
+      },
+      "public_base_url": {
+        "kind": "str",
+        "optional": false
+      },
+      "title": {
+        "kind": "str",
+        "optional": false
+      },
+      "node_id": {
+        "kind": "str",
+        "optional": false
+      },
+      "allowed_origins": {
+        "kind": "list",
+        "item": {
+          "kind": "str"
+        },
+        "optional": false
+      },
+      "max_sessions": {
+        "kind": "int",
+        "optional": true
+      }
+    },
+    "PamConfig": {
+      "notify_socket": {
+        "kind": "str",
+        "optional": true
+      },
+      "mode": {
+        "kind": "literal",
+        "choices": [
+          "notify",
+          "capture"
+        ],
+        "optional": false
+      },
+      "auto_session": {
+        "kind": "bool",
+        "optional": false
+      },
+      "auto_session_command": {
+        "kind": "str",
+        "optional": false
+      },
+      "relay_url": {
+        "kind": "str",
+        "optional": true
+      },
+      "relay_token": {
+        "kind": "str",
+        "optional": true
+      },
+      "capture_socket_dir": {
+        "kind": "str",
+        "optional": true
+      },
+      "require_peer_uids": {
+        "kind": "list",
+        "item": {
+          "kind": "int"
+        },
+        "optional": true
+      }
+    },
+    "GovernanceConfig": {
+      "policy_webhook_url": {
+        "kind": "str",
+        "optional": true
+      },
+      "policy_webhook_secret": {
+        "kind": "str",
+        "optional": true
+      },
+      "policy_webhook_timeout_s": {
+        "kind": "float",
+        "optional": false
+      },
+      "discovery_provider": {
+        "kind": "str",
+        "optional": false
+      },
+      "registry_webhook_url": {
+        "kind": "str",
+        "optional": true
+      },
+      "registry_webhook_secret": {
+        "kind": "str",
+        "optional": true
+      },
+      "registry_webhook_interval_s": {
+        "kind": "float",
+        "optional": false
+      },
+      "authz_webhook_url": {
+        "kind": "str",
+        "optional": true
+      },
+      "authz_webhook_secret": {
+        "kind": "str",
+        "optional": true
+      },
+      "authz_webhook_timeout_s": {
+        "kind": "float",
+        "optional": false
+      },
+      "behavioral_audit_url": {
+        "kind": "str",
+        "optional": true
+      },
+      "behavioral_audit_secret": {
+        "kind": "str",
+        "optional": true
+      },
+      "behavioral_audit_interval_s": {
+        "kind": "float",
+        "optional": false
+      },
+      "behavioral_max_cps": {
+        "kind": "float",
+        "optional": true
+      },
+      "behavioral_min_jitter": {
+        "kind": "float",
+        "optional": true
+      },
+      "behavioral_fail_open": {
+        "kind": "bool",
+        "optional": false
+      },
+      "telemetry_webhook_url": {
+        "kind": "str",
+        "optional": true
+      },
+      "telemetry_webhook_secret": {
+        "kind": "str",
+        "optional": true
+      },
+      "telemetry_webhook_timeout_s": {
+        "kind": "float",
+        "optional": false
+      },
+      "external_connectors": {
+        "kind": "list",
+        "item": {
+          "kind": "str"
+        },
+        "optional": false
+      }
+    },
+    "GraphicalTargetConfig": {
+      "target_id": {
+        "kind": "str",
+        "optional": false
+      },
+      "tenant_id": {
+        "kind": "str",
+        "optional": false
+      },
+      "protocol": {
+        "kind": "str",
+        "optional": false
+      },
+      "target_address": {
+        "kind": "str",
+        "optional": false
+      },
+      "vm_name": {
+        "kind": "str",
+        "optional": true
+      },
+      "name": {
+        "kind": "str",
+        "optional": false
+      },
+      "description": {
+        "kind": "str",
+        "optional": true
+      },
+      "enabled": {
+        "kind": "bool",
+        "optional": false
+      },
+      "width": {
+        "kind": "int",
+        "optional": false
+      },
+      "height": {
+        "kind": "int",
+        "optional": false
+      },
+      "is_static": {
+        "kind": "bool",
+        "optional": false
+      },
+      "config": {
+        "kind": "dict",
+        "optional": false
+      }
+    }
+  },
+  "top_level_spec": {
+    "environment": {
+      "kind": "literal",
+      "choices": [
+        "dev",
+        "production"
+      ],
+      "optional": false
+    },
+    "server": {
+      "kind": "model",
+      "name": "ServerBindConfig",
+      "optional": false
+    },
+    "auth": {
+      "kind": "model",
+      "name": "AuthConfig",
+      "optional": false
+    },
+    "control_plane": {
+      "kind": "model",
+      "name": "ControlPlaneConfig",
+      "optional": false
+    },
+    "ui": {
+      "kind": "model",
+      "name": "UiConfig",
+      "optional": false
+    },
+    "recording": {
+      "kind": "model",
+      "name": "RecordingConfig",
+      "optional": false
+    },
+    "profiles": {
+      "kind": "model",
+      "name": "ProfileStoreConfig",
+      "optional": false
+    },
+    "security": {
+      "kind": "model",
+      "name": "SecurityConfig",
+      "optional": false
+    },
+    "tunnel": {
+      "kind": "model",
+      "name": "TunnelConfig",
+      "optional": false
+    },
+    "webhooks": {
+      "kind": "model",
+      "name": "WebhooksConfig",
+      "optional": false
+    },
+    "pam": {
+      "kind": "model",
+      "name": "PamConfig",
+      "optional": false
+    },
+    "governance": {
+      "kind": "model",
+      "name": "GovernanceConfig",
+      "optional": false
+    },
+    "audit": {
+      "kind": "model",
+      "name": "AuditConfig",
+      "optional": false
+    },
+    "sessions": {
+      "kind": "list",
+      "item": {
+        "kind": "model",
+        "name": "SessionDefinition"
+      },
+      "optional": false
+    },
+    "graphical_targets": {
+      "kind": "list",
+      "item": {
+        "kind": "model",
+        "name": "GraphicalTargetConfig"
+      },
+      "optional": false
+    },
+    "session_idle_timeout_s": {
+      "kind": "int",
+      "optional": false
+    },
+    "session_retention_s": {
+      "kind": "int",
+      "optional": false
+    },
+    "browser_rate_limit_per_sec": {
+      "kind": "float",
+      "optional": false
+    },
+    "worker_frame_on_invalid": {
+      "kind": "literal",
+      "choices": [
+        "drop",
+        "reject"
+      ],
+      "optional": false
+    },
+    "max_connections_per_principal": {
+      "kind": "int",
+      "optional": false
+    },
+    "max_workers": {
+      "kind": "int",
+      "optional": false
+    }
+  },
+  "cases": [
+    {
+      "model": "SecurityConfig",
+      "name": "the default posture",
+      "kwargs": {},
+      "accepted": {
+        "mode": "strict",
+        "dev_mode_acknowledged": false,
+        "csp": null,
+        "hsts": null,
+        "x_frame_options": null,
+        "x_content_type_options": null,
+        "referrer_policy": null,
+        "permissions_policy": null,
+        "block_private_connector_targets": false,
+        "metrics_require_auth": false,
+        "default_session_visibility": "public"
+      }
+    },
+    {
+      "model": "SecurityConfig",
+      "name": "the relaxed header set, named",
+      "kwargs": {
+        "mode": "dev"
+      },
+      "accepted": {
+        "mode": "dev",
+        "dev_mode_acknowledged": false,
+        "csp": null,
+        "hsts": null,
+        "x_frame_options": null,
+        "x_content_type_options": null,
+        "referrer_policy": null,
+        "permissions_policy": null,
+        "block_private_connector_targets": false,
+        "metrics_require_auth": false,
+        "default_session_visibility": "public"
+      }
+    },
+    {
+      "model": "SecurityConfig",
+      "name": "a mode nobody defined",
+      "kwargs": {
+        "mode": "relaxed"
+      },
+      "errors": [
+        {
+          "type": "literal_error",
+          "loc": [
+            "mode"
+          ],
+          "msg": "Input should be 'strict' or 'dev'"
+        }
+      ]
+    },
+    {
+      "model": "SecurityConfig",
+      "name": "a mode in the wrong case",
+      "kwargs": {
+        "mode": "STRICT"
+      },
+      "errors": [
+        {
+          "type": "literal_error",
+          "loc": [
+            "mode"
+          ],
+          "msg": "Input should be 'strict' or 'dev'"
+        }
+      ]
+    },
+    {
+      "model": "SecurityConfig",
+      "name": "a mode that is not a string",
+      "kwargs": {
+        "mode": 1
+      },
+      "errors": [
+        {
+          "type": "literal_error",
+          "loc": [
+            "mode"
+          ],
+          "msg": "Input should be 'strict' or 'dev'"
+        }
+      ]
+    },
+    {
+      "model": "SecurityConfig",
+      "name": "a session visibility outside the set",
+      "kwargs": {
+        "default_session_visibility": "everyone"
+      },
+      "errors": [
+        {
+          "type": "literal_error",
+          "loc": [
+            "default_session_visibility"
+          ],
+          "msg": "Input should be 'public', 'operator' or 'private'"
+        }
+      ]
+    },
+    {
+      "model": "SecurityConfig",
+      "name": "a visibility the set has",
+      "kwargs": {
+        "default_session_visibility": "private"
+      },
+      "accepted": {
+        "mode": "strict",
+        "dev_mode_acknowledged": false,
+        "csp": null,
+        "hsts": null,
+        "x_frame_options": null,
+        "x_content_type_options": null,
+        "referrer_policy": null,
+        "permissions_policy": null,
+        "block_private_connector_targets": false,
+        "metrics_require_auth": false,
+        "default_session_visibility": "private"
+      }
+    },
+    {
+      "model": "SecurityConfig",
+      "name": "a boolean written as a word",
+      "kwargs": {
+        "metrics_require_auth": "no"
+      },
+      "accepted": {
+        "mode": "strict",
+        "dev_mode_acknowledged": false,
+        "csp": null,
+        "hsts": null,
+        "x_frame_options": null,
+        "x_content_type_options": null,
+        "referrer_policy": null,
+        "permissions_policy": null,
+        "block_private_connector_targets": false,
+        "metrics_require_auth": false,
+        "default_session_visibility": "public"
+      }
+    },
+    {
+      "model": "SecurityConfig",
+      "name": "a boolean written as the string true",
+      "kwargs": {
+        "metrics_require_auth": "true"
+      },
+      "accepted": {
+        "mode": "strict",
+        "dev_mode_acknowledged": false,
+        "csp": null,
+        "hsts": null,
+        "x_frame_options": null,
+        "x_content_type_options": null,
+        "referrer_policy": null,
+        "permissions_policy": null,
+        "block_private_connector_targets": false,
+        "metrics_require_auth": true,
+        "default_session_visibility": "public"
+      }
+    },
+    {
+      "model": "SecurityConfig",
+      "name": "a boolean written as a number",
+      "kwargs": {
+        "metrics_require_auth": 1
+      },
+      "accepted": {
+        "mode": "strict",
+        "dev_mode_acknowledged": false,
+        "csp": null,
+        "hsts": null,
+        "x_frame_options": null,
+        "x_content_type_options": null,
+        "referrer_policy": null,
+        "permissions_policy": null,
+        "block_private_connector_targets": false,
+        "metrics_require_auth": true,
+        "default_session_visibility": "public"
+      }
+    },
+    {
+      "model": "SecurityConfig",
+      "name": "a boolean given a list",
+      "kwargs": {
+        "metrics_require_auth": []
+      },
+      "errors": [
+        {
+          "type": "bool_type",
+          "loc": [
+            "metrics_require_auth"
+          ],
+          "msg": "Input should be a valid boolean"
+        }
+      ]
+    },
+    {
+      "model": "SecurityConfig",
+      "name": "a boolean given a number outside the set",
+      "kwargs": {
+        "metrics_require_auth": 2
+      },
+      "errors": [
+        {
+          "type": "bool_parsing",
+          "loc": [
+            "metrics_require_auth"
+          ],
+          "msg": "Input should be a valid boolean, unable to interpret input"
+        }
+      ]
+    },
+    {
+      "model": "SecurityConfig",
+      "name": "a boolean given a word that is not one",
+      "kwargs": {
+        "metrics_require_auth": "maybe"
+      },
+      "errors": [
+        {
+          "type": "bool_parsing",
+          "loc": [
+            "metrics_require_auth"
+          ],
+          "msg": "Input should be a valid boolean, unable to interpret input"
+        }
+      ]
+    },
+    {
+      "model": "SecurityConfig",
+      "name": "a boolean written in capitals",
+      "kwargs": {
+        "metrics_require_auth": "TRUE"
+      },
+      "accepted": {
+        "mode": "strict",
+        "dev_mode_acknowledged": false,
+        "csp": null,
+        "hsts": null,
+        "x_frame_options": null,
+        "x_content_type_options": null,
+        "referrer_policy": null,
+        "permissions_policy": null,
+        "block_private_connector_targets": false,
+        "metrics_require_auth": true,
+        "default_session_visibility": "public"
+      }
+    },
+    {
+      "model": "SecurityConfig",
+      "name": "a boolean written as off",
+      "kwargs": {
+        "metrics_require_auth": "off"
+      },
+      "accepted": {
+        "mode": "strict",
+        "dev_mode_acknowledged": false,
+        "csp": null,
+        "hsts": null,
+        "x_frame_options": null,
+        "x_content_type_options": null,
+        "referrer_policy": null,
+        "permissions_policy": null,
+        "block_private_connector_targets": false,
+        "metrics_require_auth": false,
+        "default_session_visibility": "public"
+      }
+    },
+    {
+      "model": "SecurityConfig",
+      "name": "a boolean given null",
+      "kwargs": {
+        "metrics_require_auth": null
+      },
+      "errors": [
+        {
+          "type": "bool_type",
+          "loc": [
+            "metrics_require_auth"
+          ],
+          "msg": "Input should be a valid boolean"
+        }
+      ]
+    },
+    {
+      "model": "SecurityConfig",
+      "name": "a field nobody defined",
+      "kwargs": {
+        "metrics_require_authh": true
+      },
+      "errors": [
+        {
+          "type": "extra_forbidden",
+          "loc": [
+            "metrics_require_authh"
+          ],
+          "msg": "Extra inputs are not permitted"
+        }
+      ]
+    },
+    {
+      "model": "SecurityConfig",
+      "name": "two things wrong at once",
+      "kwargs": {
+        "mode": "relaxed",
+        "metrics_require_auth": []
+      },
+      "errors": [
+        {
+          "type": "literal_error",
+          "loc": [
+            "mode"
+          ],
+          "msg": "Input should be 'strict' or 'dev'"
+        },
+        {
+          "type": "bool_type",
+          "loc": [
+            "metrics_require_auth"
+          ],
+          "msg": "Input should be a valid boolean"
+        }
+      ]
+    },
+    {
+      "model": "SecurityConfig",
+      "name": "a literal given null",
+      "kwargs": {
+        "mode": null
+      },
+      "errors": [
+        {
+          "type": "literal_error",
+          "loc": [
+            "mode"
+          ],
+          "msg": "Input should be 'strict' or 'dev'"
+        }
+      ]
+    },
+    {
+      "model": "SecurityConfig",
+      "name": "two things wrong, written the other way round",
+      "kwargs": {
+        "metrics_require_auth": [],
+        "mode": "relaxed"
+      },
+      "errors": [
+        {
+          "type": "literal_error",
+          "loc": [
+            "mode"
+          ],
+          "msg": "Input should be 'strict' or 'dev'"
+        },
+        {
+          "type": "bool_type",
+          "loc": [
+            "metrics_require_auth"
+          ],
+          "msg": "Input should be a valid boolean"
+        }
+      ]
+    },
+    {
+      "model": "SecurityConfig",
+      "name": "a name nobody defined alongside a bad value",
+      "kwargs": {
+        "metrics_require_authh": true,
+        "mode": "relaxed"
+      },
+      "errors": [
+        {
+          "type": "literal_error",
+          "loc": [
+            "mode"
+          ],
+          "msg": "Input should be 'strict' or 'dev'"
+        },
+        {
+          "type": "extra_forbidden",
+          "loc": [
+            "metrics_require_authh"
+          ],
+          "msg": "Extra inputs are not permitted"
+        }
+      ]
+    },
+    {
+      "model": "SecurityConfig",
+      "name": "a header given as null",
+      "kwargs": {
+        "csp": null
+      },
+      "accepted": {
+        "mode": "strict",
+        "dev_mode_acknowledged": false,
+        "csp": null,
+        "hsts": null,
+        "x_frame_options": null,
+        "x_content_type_options": null,
+        "referrer_policy": null,
+        "permissions_policy": null,
+        "block_private_connector_targets": false,
+        "metrics_require_auth": false,
+        "default_session_visibility": "public"
+      }
+    },
+    {
+      "model": "SecurityConfig",
+      "name": "a header given as a number",
+      "kwargs": {
+        "csp": 5
+      },
+      "errors": [
+        {
+          "type": "string_type",
+          "loc": [
+            "csp"
+          ],
+          "msg": "Input should be a valid string"
+        }
+      ]
+    },
+    {
+      "model": "AuthConfig",
+      "name": "an identity provider outside the set",
+      "kwargs": {
+        "identity_provider": "ldap"
+      },
+      "errors": [
+        {
+          "type": "literal_error",
+          "loc": [
+            "identity_provider"
+          ],
+          "msg": "Input should be 'local' or 'webhook'"
+        }
+      ]
+    },
+    {
+      "model": "AuthConfig",
+      "name": "a failure mode outside the set",
+      "kwargs": {
+        "webhook_idp_on_failure": "allow"
+      },
+      "errors": [
+        {
+          "type": "literal_error",
+          "loc": [
+            "webhook_idp_on_failure"
+          ],
+          "msg": "Input should be 'deny' or 'viewer'"
+        }
+      ]
+    },
+    {
+      "model": "AuthConfig",
+      "name": "the fail-open failure mode, named",
+      "kwargs": {
+        "webhook_idp_on_failure": "viewer"
+      },
+      "accepted": {
+        "mode": "jwt",
+        "principal_header": "x-uterm-principal",
+        "role_header": "x-uterm-role",
+        "tenant_header": "x-uterm-tenant",
+        "principal_cookie": "uterm_principal",
+        "role_cookie": "uterm_role",
+        "tenant_cookie": "uterm_tenant",
+        "surface_cookie": "uterm_surface",
+        "token_cookie": "uterm_token",
+        "jwt_issuer": "provide-uterm",
+        "jwt_audience": "provide-uterm-server",
+        "jwt_jwks_url": null,
+        "jwt_public_key_pem": null,
+        "jwt_algorithms": [
+          "HS256"
+        ],
+        "clock_skew_seconds": 15,
+        "jwt_roles_claim": "roles",
+        "jwt_scopes_claim": "scope",
+        "jwt_tenant_claim": "tenant_id",
+        "worker_bearer_token": null,
+        "api_keys_enabled": false,
+        "header_mode_acknowledged": false,
+        "require_jwt_in_production": false,
+        "trusted_proxy_ips": [],
+        "upstream_proxy_secret": null,
+        "require_upstream_proxy_secret": false,
+        "identity_provider": "local",
+        "delegate_roles": true,
+        "webhook_idp_url": null,
+        "webhook_idp_secret": null,
+        "webhook_idp_timeout_s": 2.0,
+        "webhook_idp_on_failure": "viewer",
+        "webhook_idp_require_signed_response": true,
+        "webhook_idp_require_response_nonce": false,
+        "webhook_idp_forward_headers": [],
+        "webhook_idp_forward_cookies": [],
+        "allow_adhoc_browser_observers": false
+      }
+    },
+    {
+      "model": "AuthConfig",
+      "name": "a clock skew that is not a number",
+      "kwargs": {
+        "clock_skew_seconds": "fifteen"
+      },
+      "errors": [
+        {
+          "type": "int_parsing",
+          "loc": [
+            "clock_skew_seconds"
+          ],
+          "msg": "Input should be a valid integer, unable to parse string as an integer"
+        }
+      ]
+    },
+    {
+      "model": "AuthConfig",
+      "name": "a clock skew written as a string",
+      "kwargs": {
+        "clock_skew_seconds": "30"
+      },
+      "accepted": {
+        "mode": "jwt",
+        "principal_header": "x-uterm-principal",
+        "role_header": "x-uterm-role",
+        "tenant_header": "x-uterm-tenant",
+        "principal_cookie": "uterm_principal",
+        "role_cookie": "uterm_role",
+        "tenant_cookie": "uterm_tenant",
+        "surface_cookie": "uterm_surface",
+        "token_cookie": "uterm_token",
+        "jwt_issuer": "provide-uterm",
+        "jwt_audience": "provide-uterm-server",
+        "jwt_jwks_url": null,
+        "jwt_public_key_pem": null,
+        "jwt_algorithms": [
+          "HS256"
+        ],
+        "clock_skew_seconds": 30,
+        "jwt_roles_claim": "roles",
+        "jwt_scopes_claim": "scope",
+        "jwt_tenant_claim": "tenant_id",
+        "worker_bearer_token": null,
+        "api_keys_enabled": false,
+        "header_mode_acknowledged": false,
+        "require_jwt_in_production": false,
+        "trusted_proxy_ips": [],
+        "upstream_proxy_secret": null,
+        "require_upstream_proxy_secret": false,
+        "identity_provider": "local",
+        "delegate_roles": true,
+        "webhook_idp_url": null,
+        "webhook_idp_secret": null,
+        "webhook_idp_timeout_s": 2.0,
+        "webhook_idp_on_failure": "deny",
+        "webhook_idp_require_signed_response": true,
+        "webhook_idp_require_response_nonce": false,
+        "webhook_idp_forward_headers": [],
+        "webhook_idp_forward_cookies": [],
+        "allow_adhoc_browser_observers": false
+      }
+    },
+    {
+      "model": "AuthConfig",
+      "name": "a clock skew written as a whole float",
+      "kwargs": {
+        "clock_skew_seconds": 30.0
+      },
+      "accepted": {
+        "mode": "jwt",
+        "principal_header": "x-uterm-principal",
+        "role_header": "x-uterm-role",
+        "tenant_header": "x-uterm-tenant",
+        "principal_cookie": "uterm_principal",
+        "role_cookie": "uterm_role",
+        "tenant_cookie": "uterm_tenant",
+        "surface_cookie": "uterm_surface",
+        "token_cookie": "uterm_token",
+        "jwt_issuer": "provide-uterm",
+        "jwt_audience": "provide-uterm-server",
+        "jwt_jwks_url": null,
+        "jwt_public_key_pem": null,
+        "jwt_algorithms": [
+          "HS256"
+        ],
+        "clock_skew_seconds": 30,
+        "jwt_roles_claim": "roles",
+        "jwt_scopes_claim": "scope",
+        "jwt_tenant_claim": "tenant_id",
+        "worker_bearer_token": null,
+        "api_keys_enabled": false,
+        "header_mode_acknowledged": false,
+        "require_jwt_in_production": false,
+        "trusted_proxy_ips": [],
+        "upstream_proxy_secret": null,
+        "require_upstream_proxy_secret": false,
+        "identity_provider": "local",
+        "delegate_roles": true,
+        "webhook_idp_url": null,
+        "webhook_idp_secret": null,
+        "webhook_idp_timeout_s": 2.0,
+        "webhook_idp_on_failure": "deny",
+        "webhook_idp_require_signed_response": true,
+        "webhook_idp_require_response_nonce": false,
+        "webhook_idp_forward_headers": [],
+        "webhook_idp_forward_cookies": [],
+        "allow_adhoc_browser_observers": false
+      }
+    },
+    {
+      "model": "AuthConfig",
+      "name": "a clock skew written as a fraction",
+      "kwargs": {
+        "clock_skew_seconds": 30.5
+      },
+      "errors": [
+        {
+          "type": "int_from_float",
+          "loc": [
+            "clock_skew_seconds"
+          ],
+          "msg": "Input should be a valid integer, got a number with a fractional part"
+        }
+      ]
+    },
+    {
+      "model": "AuthConfig",
+      "name": "a clock skew given a boolean",
+      "kwargs": {
+        "clock_skew_seconds": true
+      },
+      "accepted": {
+        "mode": "jwt",
+        "principal_header": "x-uterm-principal",
+        "role_header": "x-uterm-role",
+        "tenant_header": "x-uterm-tenant",
+        "principal_cookie": "uterm_principal",
+        "role_cookie": "uterm_role",
+        "tenant_cookie": "uterm_tenant",
+        "surface_cookie": "uterm_surface",
+        "token_cookie": "uterm_token",
+        "jwt_issuer": "provide-uterm",
+        "jwt_audience": "provide-uterm-server",
+        "jwt_jwks_url": null,
+        "jwt_public_key_pem": null,
+        "jwt_algorithms": [
+          "HS256"
+        ],
+        "clock_skew_seconds": 1,
+        "jwt_roles_claim": "roles",
+        "jwt_scopes_claim": "scope",
+        "jwt_tenant_claim": "tenant_id",
+        "worker_bearer_token": null,
+        "api_keys_enabled": false,
+        "header_mode_acknowledged": false,
+        "require_jwt_in_production": false,
+        "trusted_proxy_ips": [],
+        "upstream_proxy_secret": null,
+        "require_upstream_proxy_secret": false,
+        "identity_provider": "local",
+        "delegate_roles": true,
+        "webhook_idp_url": null,
+        "webhook_idp_secret": null,
+        "webhook_idp_timeout_s": 2.0,
+        "webhook_idp_on_failure": "deny",
+        "webhook_idp_require_signed_response": true,
+        "webhook_idp_require_response_nonce": false,
+        "webhook_idp_forward_headers": [],
+        "webhook_idp_forward_cookies": [],
+        "allow_adhoc_browser_observers": false
+      }
+    },
+    {
+      "model": "AuthConfig",
+      "name": "a clock skew given false",
+      "kwargs": {
+        "clock_skew_seconds": false
+      },
+      "accepted": {
+        "mode": "jwt",
+        "principal_header": "x-uterm-principal",
+        "role_header": "x-uterm-role",
+        "tenant_header": "x-uterm-tenant",
+        "principal_cookie": "uterm_principal",
+        "role_cookie": "uterm_role",
+        "tenant_cookie": "uterm_tenant",
+        "surface_cookie": "uterm_surface",
+        "token_cookie": "uterm_token",
+        "jwt_issuer": "provide-uterm",
+        "jwt_audience": "provide-uterm-server",
+        "jwt_jwks_url": null,
+        "jwt_public_key_pem": null,
+        "jwt_algorithms": [
+          "HS256"
+        ],
+        "clock_skew_seconds": 0,
+        "jwt_roles_claim": "roles",
+        "jwt_scopes_claim": "scope",
+        "jwt_tenant_claim": "tenant_id",
+        "worker_bearer_token": null,
+        "api_keys_enabled": false,
+        "header_mode_acknowledged": false,
+        "require_jwt_in_production": false,
+        "trusted_proxy_ips": [],
+        "upstream_proxy_secret": null,
+        "require_upstream_proxy_secret": false,
+        "identity_provider": "local",
+        "delegate_roles": true,
+        "webhook_idp_url": null,
+        "webhook_idp_secret": null,
+        "webhook_idp_timeout_s": 2.0,
+        "webhook_idp_on_failure": "deny",
+        "webhook_idp_require_signed_response": true,
+        "webhook_idp_require_response_nonce": false,
+        "webhook_idp_forward_headers": [],
+        "webhook_idp_forward_cookies": [],
+        "allow_adhoc_browser_observers": false
+      }
+    },
+    {
+      "model": "AuthConfig",
+      "name": "a timeout given a whole number",
+      "kwargs": {
+        "webhook_idp_timeout_s": 3
+      },
+      "accepted": {
+        "mode": "jwt",
+        "principal_header": "x-uterm-principal",
+        "role_header": "x-uterm-role",
+        "tenant_header": "x-uterm-tenant",
+        "principal_cookie": "uterm_principal",
+        "role_cookie": "uterm_role",
+        "tenant_cookie": "uterm_tenant",
+        "surface_cookie": "uterm_surface",
+        "token_cookie": "uterm_token",
+        "jwt_issuer": "provide-uterm",
+        "jwt_audience": "provide-uterm-server",
+        "jwt_jwks_url": null,
+        "jwt_public_key_pem": null,
+        "jwt_algorithms": [
+          "HS256"
+        ],
+        "clock_skew_seconds": 15,
+        "jwt_roles_claim": "roles",
+        "jwt_scopes_claim": "scope",
+        "jwt_tenant_claim": "tenant_id",
+        "worker_bearer_token": null,
+        "api_keys_enabled": false,
+        "header_mode_acknowledged": false,
+        "require_jwt_in_production": false,
+        "trusted_proxy_ips": [],
+        "upstream_proxy_secret": null,
+        "require_upstream_proxy_secret": false,
+        "identity_provider": "local",
+        "delegate_roles": true,
+        "webhook_idp_url": null,
+        "webhook_idp_secret": null,
+        "webhook_idp_timeout_s": 3.0,
+        "webhook_idp_on_failure": "deny",
+        "webhook_idp_require_signed_response": true,
+        "webhook_idp_require_response_nonce": false,
+        "webhook_idp_forward_headers": [],
+        "webhook_idp_forward_cookies": [],
+        "allow_adhoc_browser_observers": false
+      }
+    },
+    {
+      "model": "AuthConfig",
+      "name": "a timeout given false",
+      "kwargs": {
+        "webhook_idp_timeout_s": false
+      },
+      "accepted": {
+        "mode": "jwt",
+        "principal_header": "x-uterm-principal",
+        "role_header": "x-uterm-role",
+        "tenant_header": "x-uterm-tenant",
+        "principal_cookie": "uterm_principal",
+        "role_cookie": "uterm_role",
+        "tenant_cookie": "uterm_tenant",
+        "surface_cookie": "uterm_surface",
+        "token_cookie": "uterm_token",
+        "jwt_issuer": "provide-uterm",
+        "jwt_audience": "provide-uterm-server",
+        "jwt_jwks_url": null,
+        "jwt_public_key_pem": null,
+        "jwt_algorithms": [
+          "HS256"
+        ],
+        "clock_skew_seconds": 15,
+        "jwt_roles_claim": "roles",
+        "jwt_scopes_claim": "scope",
+        "jwt_tenant_claim": "tenant_id",
+        "worker_bearer_token": null,
+        "api_keys_enabled": false,
+        "header_mode_acknowledged": false,
+        "require_jwt_in_production": false,
+        "trusted_proxy_ips": [],
+        "upstream_proxy_secret": null,
+        "require_upstream_proxy_secret": false,
+        "identity_provider": "local",
+        "delegate_roles": true,
+        "webhook_idp_url": null,
+        "webhook_idp_secret": null,
+        "webhook_idp_timeout_s": 0.0,
+        "webhook_idp_on_failure": "deny",
+        "webhook_idp_require_signed_response": true,
+        "webhook_idp_require_response_nonce": false,
+        "webhook_idp_forward_headers": [],
+        "webhook_idp_forward_cookies": [],
+        "allow_adhoc_browser_observers": false
+      }
+    },
+    {
+      "model": "AuthConfig",
+      "name": "a timeout that is not a number",
+      "kwargs": {
+        "webhook_idp_timeout_s": "soon"
+      },
+      "errors": [
+        {
+          "type": "float_parsing",
+          "loc": [
+            "webhook_idp_timeout_s"
+          ],
+          "msg": "Input should be a valid number, unable to parse string as a number"
+        }
+      ]
+    },
+    {
+      "model": "AuthConfig",
+      "name": "a list of algorithms",
+      "kwargs": {
+        "jwt_algorithms": [
+          "RS256",
+          "ES256"
+        ]
+      },
+      "accepted": {
+        "mode": "jwt",
+        "principal_header": "x-uterm-principal",
+        "role_header": "x-uterm-role",
+        "tenant_header": "x-uterm-tenant",
+        "principal_cookie": "uterm_principal",
+        "role_cookie": "uterm_role",
+        "tenant_cookie": "uterm_tenant",
+        "surface_cookie": "uterm_surface",
+        "token_cookie": "uterm_token",
+        "jwt_issuer": "provide-uterm",
+        "jwt_audience": "provide-uterm-server",
+        "jwt_jwks_url": null,
+        "jwt_public_key_pem": null,
+        "jwt_algorithms": [
+          "RS256",
+          "ES256"
+        ],
+        "clock_skew_seconds": 15,
+        "jwt_roles_claim": "roles",
+        "jwt_scopes_claim": "scope",
+        "jwt_tenant_claim": "tenant_id",
+        "worker_bearer_token": null,
+        "api_keys_enabled": false,
+        "header_mode_acknowledged": false,
+        "require_jwt_in_production": false,
+        "trusted_proxy_ips": [],
+        "upstream_proxy_secret": null,
+        "require_upstream_proxy_secret": false,
+        "identity_provider": "local",
+        "delegate_roles": true,
+        "webhook_idp_url": null,
+        "webhook_idp_secret": null,
+        "webhook_idp_timeout_s": 2.0,
+        "webhook_idp_on_failure": "deny",
+        "webhook_idp_require_signed_response": true,
+        "webhook_idp_require_response_nonce": false,
+        "webhook_idp_forward_headers": [],
+        "webhook_idp_forward_cookies": [],
+        "allow_adhoc_browser_observers": false
+      }
+    },
+    {
+      "model": "AuthConfig",
+      "name": "a list given a bare string",
+      "kwargs": {
+        "jwt_algorithms": "RS256"
+      },
+      "errors": [
+        {
+          "type": "list_type",
+          "loc": [
+            "jwt_algorithms"
+          ],
+          "msg": "Input should be a valid list"
+        }
+      ]
+    },
+    {
+      "model": "AuthConfig",
+      "name": "a list with a number in it",
+      "kwargs": {
+        "jwt_algorithms": [
+          "RS256",
+          256
+        ]
+      },
+      "errors": [
+        {
+          "type": "string_type",
+          "loc": [
+            "jwt_algorithms",
+            1
+          ],
+          "msg": "Input should be a valid string"
+        }
+      ]
+    },
+    {
+      "model": "AuthConfig",
+      "name": "a trusted proxy list",
+      "kwargs": {
+        "trusted_proxy_ips": [
+          "10.0.0.1"
+        ]
+      },
+      "accepted": {
+        "mode": "jwt",
+        "principal_header": "x-uterm-principal",
+        "role_header": "x-uterm-role",
+        "tenant_header": "x-uterm-tenant",
+        "principal_cookie": "uterm_principal",
+        "role_cookie": "uterm_role",
+        "tenant_cookie": "uterm_tenant",
+        "surface_cookie": "uterm_surface",
+        "token_cookie": "uterm_token",
+        "jwt_issuer": "provide-uterm",
+        "jwt_audience": "provide-uterm-server",
+        "jwt_jwks_url": null,
+        "jwt_public_key_pem": null,
+        "jwt_algorithms": [
+          "HS256"
+        ],
+        "clock_skew_seconds": 15,
+        "jwt_roles_claim": "roles",
+        "jwt_scopes_claim": "scope",
+        "jwt_tenant_claim": "tenant_id",
+        "worker_bearer_token": null,
+        "api_keys_enabled": false,
+        "header_mode_acknowledged": false,
+        "require_jwt_in_production": false,
+        "trusted_proxy_ips": [
+          "10.0.0.1"
+        ],
+        "upstream_proxy_secret": null,
+        "require_upstream_proxy_secret": false,
+        "identity_provider": "local",
+        "delegate_roles": true,
+        "webhook_idp_url": null,
+        "webhook_idp_secret": null,
+        "webhook_idp_timeout_s": 2.0,
+        "webhook_idp_on_failure": "deny",
+        "webhook_idp_require_signed_response": true,
+        "webhook_idp_require_response_nonce": false,
+        "webhook_idp_forward_headers": [],
+        "webhook_idp_forward_cookies": [],
+        "allow_adhoc_browser_observers": false
+      }
+    },
+    {
+      "model": "AuthConfig",
+      "name": "a field nobody defined",
+      "kwargs": {
+        "jwt_algorithm": [
+          "RS256"
+        ]
+      },
+      "errors": [
+        {
+          "type": "extra_forbidden",
+          "loc": [
+            "jwt_algorithm"
+          ],
+          "msg": "Extra inputs are not permitted"
+        }
+      ]
+    },
+    {
+      "model": "AuthConfig",
+      "name": "a clock skew written as a fractional string",
+      "kwargs": {
+        "clock_skew_seconds": "30.5"
+      },
+      "errors": [
+        {
+          "type": "int_parsing",
+          "loc": [
+            "clock_skew_seconds"
+          ],
+          "msg": "Input should be a valid integer, unable to parse string as an integer"
+        }
+      ]
+    },
+    {
+      "model": "AuthConfig",
+      "name": "a clock skew written with spaces around it",
+      "kwargs": {
+        "clock_skew_seconds": " 30 "
+      },
+      "accepted": {
+        "mode": "jwt",
+        "principal_header": "x-uterm-principal",
+        "role_header": "x-uterm-role",
+        "tenant_header": "x-uterm-tenant",
+        "principal_cookie": "uterm_principal",
+        "role_cookie": "uterm_role",
+        "tenant_cookie": "uterm_tenant",
+        "surface_cookie": "uterm_surface",
+        "token_cookie": "uterm_token",
+        "jwt_issuer": "provide-uterm",
+        "jwt_audience": "provide-uterm-server",
+        "jwt_jwks_url": null,
+        "jwt_public_key_pem": null,
+        "jwt_algorithms": [
+          "HS256"
+        ],
+        "clock_skew_seconds": 30,
+        "jwt_roles_claim": "roles",
+        "jwt_scopes_claim": "scope",
+        "jwt_tenant_claim": "tenant_id",
+        "worker_bearer_token": null,
+        "api_keys_enabled": false,
+        "header_mode_acknowledged": false,
+        "require_jwt_in_production": false,
+        "trusted_proxy_ips": [],
+        "upstream_proxy_secret": null,
+        "require_upstream_proxy_secret": false,
+        "identity_provider": "local",
+        "delegate_roles": true,
+        "webhook_idp_url": null,
+        "webhook_idp_secret": null,
+        "webhook_idp_timeout_s": 2.0,
+        "webhook_idp_on_failure": "deny",
+        "webhook_idp_require_signed_response": true,
+        "webhook_idp_require_response_nonce": false,
+        "webhook_idp_forward_headers": [],
+        "webhook_idp_forward_cookies": [],
+        "allow_adhoc_browser_observers": false
+      }
+    },
+    {
+      "model": "AuthConfig",
+      "name": "a clock skew given null",
+      "kwargs": {
+        "clock_skew_seconds": null
+      },
+      "errors": [
+        {
+          "type": "int_type",
+          "loc": [
+            "clock_skew_seconds"
+          ],
+          "msg": "Input should be a valid integer"
+        }
+      ]
+    },
+    {
+      "model": "AuthConfig",
+      "name": "a timeout given a boolean",
+      "kwargs": {
+        "webhook_idp_timeout_s": true
+      },
+      "accepted": {
+        "mode": "jwt",
+        "principal_header": "x-uterm-principal",
+        "role_header": "x-uterm-role",
+        "tenant_header": "x-uterm-tenant",
+        "principal_cookie": "uterm_principal",
+        "role_cookie": "uterm_role",
+        "tenant_cookie": "uterm_tenant",
+        "surface_cookie": "uterm_surface",
+        "token_cookie": "uterm_token",
+        "jwt_issuer": "provide-uterm",
+        "jwt_audience": "provide-uterm-server",
+        "jwt_jwks_url": null,
+        "jwt_public_key_pem": null,
+        "jwt_algorithms": [
+          "HS256"
+        ],
+        "clock_skew_seconds": 15,
+        "jwt_roles_claim": "roles",
+        "jwt_scopes_claim": "scope",
+        "jwt_tenant_claim": "tenant_id",
+        "worker_bearer_token": null,
+        "api_keys_enabled": false,
+        "header_mode_acknowledged": false,
+        "require_jwt_in_production": false,
+        "trusted_proxy_ips": [],
+        "upstream_proxy_secret": null,
+        "require_upstream_proxy_secret": false,
+        "identity_provider": "local",
+        "delegate_roles": true,
+        "webhook_idp_url": null,
+        "webhook_idp_secret": null,
+        "webhook_idp_timeout_s": 1.0,
+        "webhook_idp_on_failure": "deny",
+        "webhook_idp_require_signed_response": true,
+        "webhook_idp_require_response_nonce": false,
+        "webhook_idp_forward_headers": [],
+        "webhook_idp_forward_cookies": [],
+        "allow_adhoc_browser_observers": false
+      }
+    },
+    {
+      "model": "AuthConfig",
+      "name": "a timeout written as a string",
+      "kwargs": {
+        "webhook_idp_timeout_s": "2.5"
+      },
+      "accepted": {
+        "mode": "jwt",
+        "principal_header": "x-uterm-principal",
+        "role_header": "x-uterm-role",
+        "tenant_header": "x-uterm-tenant",
+        "principal_cookie": "uterm_principal",
+        "role_cookie": "uterm_role",
+        "tenant_cookie": "uterm_tenant",
+        "surface_cookie": "uterm_surface",
+        "token_cookie": "uterm_token",
+        "jwt_issuer": "provide-uterm",
+        "jwt_audience": "provide-uterm-server",
+        "jwt_jwks_url": null,
+        "jwt_public_key_pem": null,
+        "jwt_algorithms": [
+          "HS256"
+        ],
+        "clock_skew_seconds": 15,
+        "jwt_roles_claim": "roles",
+        "jwt_scopes_claim": "scope",
+        "jwt_tenant_claim": "tenant_id",
+        "worker_bearer_token": null,
+        "api_keys_enabled": false,
+        "header_mode_acknowledged": false,
+        "require_jwt_in_production": false,
+        "trusted_proxy_ips": [],
+        "upstream_proxy_secret": null,
+        "require_upstream_proxy_secret": false,
+        "identity_provider": "local",
+        "delegate_roles": true,
+        "webhook_idp_url": null,
+        "webhook_idp_secret": null,
+        "webhook_idp_timeout_s": 2.5,
+        "webhook_idp_on_failure": "deny",
+        "webhook_idp_require_signed_response": true,
+        "webhook_idp_require_response_nonce": false,
+        "webhook_idp_forward_headers": [],
+        "webhook_idp_forward_cookies": [],
+        "allow_adhoc_browser_observers": false
+      }
+    },
+    {
+      "model": "AuthConfig",
+      "name": "a string field given null",
+      "kwargs": {
+        "jwt_issuer": null
+      },
+      "errors": [
+        {
+          "type": "string_type",
+          "loc": [
+            "jwt_issuer"
+          ],
+          "msg": "Input should be a valid string"
+        }
+      ]
+    },
+    {
+      "model": "AuthConfig",
+      "name": "an optional string given a number",
+      "kwargs": {
+        "jwt_jwks_url": 5
+      },
+      "errors": [
+        {
+          "type": "string_type",
+          "loc": [
+            "jwt_jwks_url"
+          ],
+          "msg": "Input should be a valid string"
+        }
+      ]
+    },
+    {
+      "model": "AuthConfig",
+      "name": "a list given null",
+      "kwargs": {
+        "jwt_algorithms": null
+      },
+      "errors": [
+        {
+          "type": "list_type",
+          "loc": [
+            "jwt_algorithms"
+          ],
+          "msg": "Input should be a valid list"
+        }
+      ]
+    },
+    {
+      "model": "AuthConfig",
+      "name": "a bad field alongside an unsatisfiable combination",
+      "kwargs": {
+        "identity_provider": "webhook",
+        "webhook_idp_require_signed_response": true,
+        "clock_skew_seconds": "x"
+      },
+      "errors": [
+        {
+          "type": "int_parsing",
+          "loc": [
+            "clock_skew_seconds"
+          ],
+          "msg": "Input should be a valid integer, unable to parse string as an integer"
+        }
+      ]
+    },
+    {
+      "model": "TunnelConfig",
+      "name": "the default TTL",
+      "kwargs": {},
+      "accepted": {
+        "token_ttl_s": 3600,
+        "token_transport": "cookie",
+        "cookie_secure": true,
+        "cookie_samesite": "lax",
+        "ip_binding": false
+      }
+    },
+    {
+      "model": "TunnelConfig",
+      "name": "a TTL below the floor",
+      "kwargs": {
+        "token_ttl_s": 59
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "token_ttl_s"
+          ],
+          "msg": "Value error, tunnel.token_ttl_s must be >= 60, got: 59"
+        }
+      ]
+    },
+    {
+      "model": "TunnelConfig",
+      "name": "a TTL at the floor",
+      "kwargs": {
+        "token_ttl_s": 60
+      },
+      "accepted": {
+        "token_ttl_s": 60,
+        "token_transport": "cookie",
+        "cookie_secure": true,
+        "cookie_samesite": "lax",
+        "ip_binding": false
+      }
+    },
+    {
+      "model": "TunnelConfig",
+      "name": "a TTL of zero",
+      "kwargs": {
+        "token_ttl_s": 0
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "token_ttl_s"
+          ],
+          "msg": "Value error, tunnel.token_ttl_s must be >= 60, got: 0"
+        }
+      ]
+    },
+    {
+      "model": "TunnelConfig",
+      "name": "a negative TTL",
+      "kwargs": {
+        "token_ttl_s": -1
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "token_ttl_s"
+          ],
+          "msg": "Value error, tunnel.token_ttl_s must be >= 60, got: -1"
+        }
+      ]
+    },
+    {
+      "model": "TunnelConfig",
+      "name": "a transport outside the set",
+      "kwargs": {
+        "token_transport": "header"
+      },
+      "errors": [
+        {
+          "type": "literal_error",
+          "loc": [
+            "token_transport"
+          ],
+          "msg": "Input should be 'query', 'cookie' or 'both'"
+        }
+      ]
+    },
+    {
+      "model": "TunnelConfig",
+      "name": "a samesite outside the set",
+      "kwargs": {
+        "cookie_samesite": "Lax"
+      },
+      "errors": [
+        {
+          "type": "literal_error",
+          "loc": [
+            "cookie_samesite"
+          ],
+          "msg": "Input should be 'lax', 'strict' or 'none'"
+        }
+      ]
+    },
+    {
+      "model": "TunnelConfig",
+      "name": "a samesite the set has",
+      "kwargs": {
+        "cookie_samesite": "none"
+      },
+      "accepted": {
+        "token_ttl_s": 3600,
+        "token_transport": "cookie",
+        "cookie_secure": true,
+        "cookie_samesite": "none",
+        "ip_binding": false
+      }
+    },
+    {
+      "model": "TunnelConfig",
+      "name": "a low TTL and a bad transport at once",
+      "kwargs": {
+        "token_ttl_s": 10,
+        "token_transport": "header"
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "token_ttl_s"
+          ],
+          "msg": "Value error, tunnel.token_ttl_s must be >= 60, got: 10"
+        },
+        {
+          "type": "literal_error",
+          "loc": [
+            "token_transport"
+          ],
+          "msg": "Input should be 'query', 'cookie' or 'both'"
+        }
+      ]
+    },
+    {
+      "model": "TunnelConfig",
+      "name": "a TTL that is not a number at all",
+      "kwargs": {
+        "token_ttl_s": "an hour"
+      },
+      "errors": [
+        {
+          "type": "int_parsing",
+          "loc": [
+            "token_ttl_s"
+          ],
+          "msg": "Input should be a valid integer, unable to parse string as an integer"
+        }
+      ]
+    },
+    {
+      "model": "ControlPlaneConfig",
+      "name": "a backend outside the set",
+      "kwargs": {
+        "backend": "postgres"
+      },
+      "errors": [
+        {
+          "type": "literal_error",
+          "loc": [
+            "backend"
+          ],
+          "msg": "Input should be 'memory' or 'sqlite'"
+        }
+      ]
+    },
+    {
+      "model": "ControlPlaneConfig",
+      "name": "a sqlite backend with nowhere to store",
+      "kwargs": {
+        "backend": "sqlite"
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [],
+          "msg": "Value error, control_plane.database_url is required when control_plane.backend='sqlite'"
+        }
+      ]
+    },
+    {
+      "model": "ControlPlaneConfig",
+      "name": "a sqlite backend with somewhere to store",
+      "kwargs": {
+        "backend": "sqlite",
+        "database_url": "sqlite:///x.db"
+      },
+      "accepted": {
+        "backend": "sqlite",
+        "database_url": "sqlite:///x.db",
+        "reap_interval_s": 3600,
+        "reap_retention_s": 604800
+      }
+    },
+    {
+      "model": "ControlPlaneConfig",
+      "name": "a reap interval of zero",
+      "kwargs": {
+        "reap_interval_s": 0
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "reap_interval_s"
+          ],
+          "msg": "Value error, control_plane.reap_interval_s must be > 0, got: 0"
+        }
+      ]
+    },
+    {
+      "model": "ControlPlaneConfig",
+      "name": "a negative reap retention",
+      "kwargs": {
+        "reap_retention_s": -1
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "reap_retention_s"
+          ],
+          "msg": "Value error, control_plane.reap_retention_s must be >= 0 (0 = reap as soon as past expiry), got: -1"
+        }
+      ]
+    },
+    {
+      "model": "ControlPlaneConfig",
+      "name": "a reap retention of zero",
+      "kwargs": {
+        "reap_retention_s": 0
+      },
+      "accepted": {
+        "backend": "memory",
+        "database_url": null,
+        "reap_interval_s": 3600,
+        "reap_retention_s": 0
+      }
+    },
+    {
+      "model": "RecordingConfig",
+      "name": "a store outside the set",
+      "kwargs": {
+        "store_type": "s3"
+      },
+      "errors": [
+        {
+          "type": "literal_error",
+          "loc": [
+            "store_type"
+          ],
+          "msg": "Input should be 'local', 'memory', 'null' or 'webhook'"
+        }
+      ]
+    },
+    {
+      "model": "RecordingConfig",
+      "name": "a control-channel mode outside the set",
+      "kwargs": {
+        "control_channel_mode": "include"
+      },
+      "errors": [
+        {
+          "type": "literal_error",
+          "loc": [
+            "control_channel_mode"
+          ],
+          "msg": "Input should be 'exclude' or 'wire'"
+        }
+      ]
+    },
+    {
+      "model": "RecordingConfig",
+      "name": "the wire control-channel mode",
+      "kwargs": {
+        "control_channel_mode": "wire"
+      },
+      "accepted": {
+        "enabled_by_default": false,
+        "directory": ".uterm-recordings",
+        "max_bytes": 0,
+        "retention_s": 0,
+        "control_channel_mode": "wire",
+        "redact_sensitive": true,
+        "store_type": "local",
+        "webhook_url": null,
+        "webhook_secret": null,
+        "webhook_timeout_s": 2.0,
+        "flush_interval_s": 5.0,
+        "flush_batch_size": 100
+      }
+    },
+    {
+      "model": "RecordingConfig",
+      "name": "a negative size bound",
+      "kwargs": {
+        "max_bytes": -1
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "max_bytes"
+          ],
+          "msg": "Value error, recording.max_bytes must be >= 0 (0 = unlimited), got: -1"
+        }
+      ]
+    },
+    {
+      "model": "RecordingConfig",
+      "name": "a negative retention",
+      "kwargs": {
+        "retention_s": -1
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "retention_s"
+          ],
+          "msg": "Value error, recording.retention_s must be >= 0 (0 = keep indefinitely), got: -1"
+        }
+      ]
+    },
+    {
+      "model": "RecordingConfig",
+      "name": "a directory given as a string",
+      "kwargs": {
+        "directory": "/var/rec"
+      },
+      "accepted": {
+        "enabled_by_default": false,
+        "directory": "/var/rec",
+        "max_bytes": 0,
+        "retention_s": 0,
+        "control_channel_mode": "exclude",
+        "redact_sensitive": true,
+        "store_type": "local",
+        "webhook_url": null,
+        "webhook_secret": null,
+        "webhook_timeout_s": 2.0,
+        "flush_interval_s": 5.0,
+        "flush_batch_size": 100
+      }
+    },
+    {
+      "model": "RecordingConfig",
+      "name": "a directory given a number",
+      "kwargs": {
+        "directory": 5
+      },
+      "errors": [
+        {
+          "type": "path_type",
+          "loc": [
+            "directory"
+          ],
+          "msg": "Input is not a valid path for <class 'pathlib._local.Path'>"
+        }
+      ]
+    },
+    {
+      "model": "RecordingConfig",
+      "name": "a directory with a trailing slash",
+      "kwargs": {
+        "directory": "/var/rec/"
+      },
+      "accepted": {
+        "enabled_by_default": false,
+        "directory": "/var/rec",
+        "max_bytes": 0,
+        "retention_s": 0,
+        "control_channel_mode": "exclude",
+        "redact_sensitive": true,
+        "store_type": "local",
+        "webhook_url": null,
+        "webhook_secret": null,
+        "webhook_timeout_s": 2.0,
+        "flush_interval_s": 5.0,
+        "flush_batch_size": 100
+      }
+    },
+    {
+      "model": "RecordingConfig",
+      "name": "a directory given as empty",
+      "kwargs": {
+        "directory": ""
+      },
+      "accepted": {
+        "enabled_by_default": false,
+        "directory": ".",
+        "max_bytes": 0,
+        "retention_s": 0,
+        "control_channel_mode": "exclude",
+        "redact_sensitive": true,
+        "store_type": "local",
+        "webhook_url": null,
+        "webhook_secret": null,
+        "webhook_timeout_s": 2.0,
+        "flush_interval_s": 5.0,
+        "flush_batch_size": 100
+      }
+    },
+    {
+      "model": "RecordingConfig",
+      "name": "a relative directory",
+      "kwargs": {
+        "directory": "rec/../rec"
+      },
+      "accepted": {
+        "enabled_by_default": false,
+        "directory": "rec/../rec",
+        "max_bytes": 0,
+        "retention_s": 0,
+        "control_channel_mode": "exclude",
+        "redact_sensitive": true,
+        "store_type": "local",
+        "webhook_url": null,
+        "webhook_secret": null,
+        "webhook_timeout_s": 2.0,
+        "flush_interval_s": 5.0,
+        "flush_batch_size": 100
+      }
+    },
+    {
+      "model": "RecordingConfig",
+      "name": "a directory written from here",
+      "kwargs": {
+        "directory": "./rec"
+      },
+      "accepted": {
+        "enabled_by_default": false,
+        "directory": "rec",
+        "max_bytes": 0,
+        "retention_s": 0,
+        "control_channel_mode": "exclude",
+        "redact_sensitive": true,
+        "store_type": "local",
+        "webhook_url": null,
+        "webhook_secret": null,
+        "webhook_timeout_s": 2.0,
+        "flush_interval_s": 5.0,
+        "flush_batch_size": 100
+      }
+    },
+    {
+      "model": "RecordingConfig",
+      "name": "a directory given null",
+      "kwargs": {
+        "directory": null
+      },
+      "errors": [
+        {
+          "type": "path_type",
+          "loc": [
+            "directory"
+          ],
+          "msg": "Input is not a valid path for <class 'pathlib._local.Path'>"
+        }
+      ]
+    },
+    {
+      "model": "RecordingConfig",
+      "name": "a batch size that is not a number",
+      "kwargs": {
+        "flush_batch_size": "many"
+      },
+      "errors": [
+        {
+          "type": "int_parsing",
+          "loc": [
+            "flush_batch_size"
+          ],
+          "msg": "Input should be a valid integer, unable to parse string as an integer"
+        }
+      ]
+    },
+    {
+      "model": "UiConfig",
+      "name": "a mount path with no leading slash",
+      "kwargs": {
+        "app_path": "app"
+      },
+      "accepted": {
+        "app_path": "/app",
+        "assets_path": "/_terminal",
+        "xterm_cdn": "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0",
+        "fitaddon_cdn": "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0",
+        "fonts_cdn": "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap",
+        "xterm_cdn_integrity": "",
+        "fitaddon_cdn_integrity": ""
+      }
+    },
+    {
+      "model": "UiConfig",
+      "name": "a mount path with a trailing slash",
+      "kwargs": {
+        "app_path": "/app/"
+      },
+      "accepted": {
+        "app_path": "/app",
+        "assets_path": "/_terminal",
+        "xterm_cdn": "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0",
+        "fitaddon_cdn": "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0",
+        "fonts_cdn": "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap",
+        "xterm_cdn_integrity": "",
+        "fitaddon_cdn_integrity": ""
+      }
+    },
+    {
+      "model": "UiConfig",
+      "name": "a mount path of only slashes",
+      "kwargs": {
+        "assets_path": "///"
+      },
+      "accepted": {
+        "app_path": "/app",
+        "assets_path": "/",
+        "xterm_cdn": "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0",
+        "fitaddon_cdn": "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0",
+        "fonts_cdn": "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap",
+        "xterm_cdn_integrity": "",
+        "fitaddon_cdn_integrity": ""
+      }
+    },
+    {
+      "model": "UiConfig",
+      "name": "an empty mount path",
+      "kwargs": {
+        "app_path": ""
+      },
+      "accepted": {
+        "app_path": "/app",
+        "assets_path": "/_terminal",
+        "xterm_cdn": "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0",
+        "fitaddon_cdn": "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0",
+        "fonts_cdn": "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap",
+        "xterm_cdn_integrity": "",
+        "fitaddon_cdn_integrity": ""
+      }
+    },
+    {
+      "model": "UiConfig",
+      "name": "a mount path that is not a string",
+      "kwargs": {
+        "app_path": 5
+      },
+      "errors": [
+        {
+          "type": "string_type",
+          "loc": [
+            "app_path"
+          ],
+          "msg": "Input should be a valid string"
+        }
+      ]
+    },
+    {
+      "model": "UiConfig",
+      "name": "a field nobody defined",
+      "kwargs": {
+        "xterm_cdn_sri": "sha384-x"
+      },
+      "errors": [
+        {
+          "type": "extra_forbidden",
+          "loc": [
+            "xterm_cdn_sri"
+          ],
+          "msg": "Extra inputs are not permitted"
+        }
+      ]
+    },
+    {
+      "model": "ServerBindConfig",
+      "name": "the derived public base URL",
+      "kwargs": {},
+      "accepted": {
+        "host": "127.0.0.1",
+        "port": 8780,
+        "public_base_url": "http://127.0.0.1:8780",
+        "title": "provide-uterm-server",
+        "node_id": "default",
+        "allowed_origins": [],
+        "max_sessions": null
+      }
+    },
+    {
+      "model": "ServerBindConfig",
+      "name": "an explicit public base URL",
+      "kwargs": {
+        "public_base_url": "https://uterm.example"
+      },
+      "accepted": {
+        "host": "127.0.0.1",
+        "port": 8780,
+        "public_base_url": "https://uterm.example",
+        "title": "provide-uterm-server",
+        "node_id": "default",
+        "allowed_origins": [],
+        "max_sessions": null
+      }
+    },
+    {
+      "model": "ServerBindConfig",
+      "name": "a port written as a string",
+      "kwargs": {
+        "port": "8080"
+      },
+      "accepted": {
+        "host": "127.0.0.1",
+        "port": 8080,
+        "public_base_url": "http://127.0.0.1:8080",
+        "title": "provide-uterm-server",
+        "node_id": "default",
+        "allowed_origins": [],
+        "max_sessions": null
+      }
+    },
+    {
+      "model": "ServerBindConfig",
+      "name": "a port that is not a number",
+      "kwargs": {
+        "port": "eighty"
+      },
+      "errors": [
+        {
+          "type": "int_parsing",
+          "loc": [
+            "port"
+          ],
+          "msg": "Input should be a valid integer, unable to parse string as an integer"
+        }
+      ]
+    },
+    {
+      "model": "ServerBindConfig",
+      "name": "a session cap given as null",
+      "kwargs": {
+        "max_sessions": null
+      },
+      "accepted": {
+        "host": "127.0.0.1",
+        "port": 8780,
+        "public_base_url": "http://127.0.0.1:8780",
+        "title": "provide-uterm-server",
+        "node_id": "default",
+        "allowed_origins": [],
+        "max_sessions": null
+      }
+    },
+    {
+      "model": "ServerBindConfig",
+      "name": "a session cap given a number",
+      "kwargs": {
+        "max_sessions": 10
+      },
+      "accepted": {
+        "host": "127.0.0.1",
+        "port": 8780,
+        "public_base_url": "http://127.0.0.1:8780",
+        "title": "provide-uterm-server",
+        "node_id": "default",
+        "allowed_origins": [],
+        "max_sessions": 10
+      }
+    },
+    {
+      "model": "ServerBindConfig",
+      "name": "an origin list",
+      "kwargs": {
+        "allowed_origins": [
+          "https://a.example"
+        ]
+      },
+      "accepted": {
+        "host": "127.0.0.1",
+        "port": 8780,
+        "public_base_url": "http://127.0.0.1:8780",
+        "title": "provide-uterm-server",
+        "node_id": "default",
+        "allowed_origins": [
+          "https://a.example"
+        ],
+        "max_sessions": null
+      }
+    },
+    {
+      "model": "GovernanceConfig",
+      "name": "a cleartext policy webhook",
+      "kwargs": {
+        "policy_webhook_url": "http://policy.example/hook"
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [],
+          "msg": "Value error, governance.policy_webhook_url must use https:// (cleartext http:// is only allowed for loopback hosts)"
+        }
+      ]
+    },
+    {
+      "model": "GovernanceConfig",
+      "name": "a loopback policy webhook",
+      "kwargs": {
+        "policy_webhook_url": "http://127.0.0.1:9000/hook"
+      },
+      "accepted": {
+        "policy_webhook_url": "http://127.0.0.1:9000/hook",
+        "policy_webhook_secret": null,
+        "policy_webhook_timeout_s": 2.0,
+        "discovery_provider": "webhook",
+        "registry_webhook_url": null,
+        "registry_webhook_secret": null,
+        "registry_webhook_interval_s": 60.0,
+        "authz_webhook_url": null,
+        "authz_webhook_secret": null,
+        "authz_webhook_timeout_s": 2.0,
+        "behavioral_audit_url": null,
+        "behavioral_audit_secret": null,
+        "behavioral_audit_interval_s": 30.0,
+        "behavioral_max_cps": null,
+        "behavioral_min_jitter": null,
+        "behavioral_fail_open": false,
+        "telemetry_webhook_url": null,
+        "telemetry_webhook_secret": null,
+        "telemetry_webhook_timeout_s": 2.0,
+        "external_connectors": []
+      }
+    },
+    {
+      "model": "GovernanceConfig",
+      "name": "a cleartext registry webhook",
+      "kwargs": {
+        "registry_webhook_url": "http://registry.example"
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [],
+          "msg": "Value error, governance.registry_webhook_url must use https:// (cleartext http:// is only allowed for loopback hosts)"
+        }
+      ]
+    },
+    {
+      "model": "GovernanceConfig",
+      "name": "a cleartext authz webhook",
+      "kwargs": {
+        "authz_webhook_url": "http://authz.example"
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [],
+          "msg": "Value error, governance.authz_webhook_url must use https:// (cleartext http:// is only allowed for loopback hosts)"
+        }
+      ]
+    },
+    {
+      "model": "GovernanceConfig",
+      "name": "a cleartext behavioural audit sink",
+      "kwargs": {
+        "behavioral_audit_url": "http://audit.example"
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [],
+          "msg": "Value error, governance.behavioral_audit_url must use https:// (cleartext http:// is only allowed for loopback hosts)"
+        }
+      ]
+    },
+    {
+      "model": "GovernanceConfig",
+      "name": "a cleartext telemetry webhook",
+      "kwargs": {
+        "telemetry_webhook_url": "http://telemetry.example"
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [],
+          "msg": "Value error, governance.telemetry_webhook_url must use https:// (cleartext http:// is only allowed for loopback hosts)"
+        }
+      ]
+    },
+    {
+      "model": "GovernanceConfig",
+      "name": "a secure telemetry webhook",
+      "kwargs": {
+        "telemetry_webhook_url": "https://telemetry.example"
+      },
+      "accepted": {
+        "policy_webhook_url": null,
+        "policy_webhook_secret": null,
+        "policy_webhook_timeout_s": 2.0,
+        "discovery_provider": "webhook",
+        "registry_webhook_url": null,
+        "registry_webhook_secret": null,
+        "registry_webhook_interval_s": 60.0,
+        "authz_webhook_url": null,
+        "authz_webhook_secret": null,
+        "authz_webhook_timeout_s": 2.0,
+        "behavioral_audit_url": null,
+        "behavioral_audit_secret": null,
+        "behavioral_audit_interval_s": 30.0,
+        "behavioral_max_cps": null,
+        "behavioral_min_jitter": null,
+        "behavioral_fail_open": false,
+        "telemetry_webhook_url": "https://telemetry.example",
+        "telemetry_webhook_secret": null,
+        "telemetry_webhook_timeout_s": 2.0,
+        "external_connectors": []
+      }
+    },
+    {
+      "model": "GovernanceConfig",
+      "name": "a webhook with no scheme at all",
+      "kwargs": {
+        "policy_webhook_url": "policy.example/hook"
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [],
+          "msg": "Value error, governance.policy_webhook_url must use http(s)"
+        }
+      ]
+    },
+    {
+      "model": "GovernanceConfig",
+      "name": "a keystroke ceiling given as null",
+      "kwargs": {
+        "behavioral_max_cps": null
+      },
+      "accepted": {
+        "policy_webhook_url": null,
+        "policy_webhook_secret": null,
+        "policy_webhook_timeout_s": 2.0,
+        "discovery_provider": "webhook",
+        "registry_webhook_url": null,
+        "registry_webhook_secret": null,
+        "registry_webhook_interval_s": 60.0,
+        "authz_webhook_url": null,
+        "authz_webhook_secret": null,
+        "authz_webhook_timeout_s": 2.0,
+        "behavioral_audit_url": null,
+        "behavioral_audit_secret": null,
+        "behavioral_audit_interval_s": 30.0,
+        "behavioral_max_cps": null,
+        "behavioral_min_jitter": null,
+        "behavioral_fail_open": false,
+        "telemetry_webhook_url": null,
+        "telemetry_webhook_secret": null,
+        "telemetry_webhook_timeout_s": 2.0,
+        "external_connectors": []
+      }
+    },
+    {
+      "model": "GovernanceConfig",
+      "name": "a keystroke ceiling given a number",
+      "kwargs": {
+        "behavioral_max_cps": 40
+      },
+      "accepted": {
+        "policy_webhook_url": null,
+        "policy_webhook_secret": null,
+        "policy_webhook_timeout_s": 2.0,
+        "discovery_provider": "webhook",
+        "registry_webhook_url": null,
+        "registry_webhook_secret": null,
+        "registry_webhook_interval_s": 60.0,
+        "authz_webhook_url": null,
+        "authz_webhook_secret": null,
+        "authz_webhook_timeout_s": 2.0,
+        "behavioral_audit_url": null,
+        "behavioral_audit_secret": null,
+        "behavioral_audit_interval_s": 30.0,
+        "behavioral_max_cps": 40.0,
+        "behavioral_min_jitter": null,
+        "behavioral_fail_open": false,
+        "telemetry_webhook_url": null,
+        "telemetry_webhook_secret": null,
+        "telemetry_webhook_timeout_s": 2.0,
+        "external_connectors": []
+      }
+    },
+    {
+      "model": "GovernanceConfig",
+      "name": "a keystroke ceiling given a list",
+      "kwargs": {
+        "behavioral_max_cps": []
+      },
+      "errors": [
+        {
+          "type": "float_type",
+          "loc": [
+            "behavioral_max_cps"
+          ],
+          "msg": "Input should be a valid number"
+        }
+      ]
+    },
+    {
+      "model": "AuditConfig",
+      "name": "a field nobody defined",
+      "kwargs": {
+        "chain_path": "/var/log/chain.jsonl"
+      },
+      "errors": [
+        {
+          "type": "extra_forbidden",
+          "loc": [
+            "chain_path"
+          ],
+          "msg": "Extra inputs are not permitted"
+        }
+      ]
+    },
+    {
+      "model": "WebhooksConfig",
+      "name": "loopback destinations allowed",
+      "kwargs": {
+        "allow_loopback_destinations": true
+      },
+      "accepted": {
+        "allow_loopback_destinations": true
+      }
+    },
+    {
+      "model": "WebhooksConfig",
+      "name": "a field nobody defined",
+      "kwargs": {
+        "allow_loopback": true
+      },
+      "errors": [
+        {
+          "type": "extra_forbidden",
+          "loc": [
+            "allow_loopback"
+          ],
+          "msg": "Extra inputs are not permitted"
+        }
+      ]
+    },
+    {
+      "model": "ProfileStoreConfig",
+      "name": "a directory given as a string",
+      "kwargs": {
+        "directory": "/srv/profiles"
+      },
+      "accepted": {
+        "directory": "/srv/profiles"
+      }
+    },
+    {
+      "model": "PamConfig",
+      "name": "a mode outside the set",
+      "kwargs": {
+        "mode": "record"
+      },
+      "errors": [
+        {
+          "type": "literal_error",
+          "loc": [
+            "mode"
+          ],
+          "msg": "Input should be 'notify' or 'capture'"
+        }
+      ]
+    },
+    {
+      "model": "PamConfig",
+      "name": "the capture mode",
+      "kwargs": {
+        "mode": "capture"
+      },
+      "accepted": {
+        "notify_socket": null,
+        "mode": "capture",
+        "auto_session": false,
+        "auto_session_command": "/bin/bash",
+        "relay_url": null,
+        "relay_token": null,
+        "capture_socket_dir": null,
+        "require_peer_uids": null
+      }
+    },
+    {
+      "model": "PamConfig",
+      "name": "a peer uid list",
+      "kwargs": {
+        "require_peer_uids": [
+          0,
+          1000
+        ]
+      },
+      "accepted": {
+        "notify_socket": null,
+        "mode": "notify",
+        "auto_session": false,
+        "auto_session_command": "/bin/bash",
+        "relay_url": null,
+        "relay_token": null,
+        "capture_socket_dir": null,
+        "require_peer_uids": [
+          0,
+          1000
+        ]
+      }
+    },
+    {
+      "model": "PamConfig",
+      "name": "a peer uid list with a string in it",
+      "kwargs": {
+        "require_peer_uids": [
+          "root"
+        ]
+      },
+      "errors": [
+        {
+          "type": "int_parsing",
+          "loc": [
+            "require_peer_uids",
+            0
+          ],
+          "msg": "Input should be a valid integer, unable to parse string as an integer"
+        }
+      ]
+    },
+    {
+      "model": "PamConfig",
+      "name": "no peer uid list at all",
+      "kwargs": {
+        "require_peer_uids": null
+      },
+      "accepted": {
+        "notify_socket": null,
+        "mode": "notify",
+        "auto_session": false,
+        "auto_session_command": "/bin/bash",
+        "relay_url": null,
+        "relay_token": null,
+        "capture_socket_dir": null,
+        "require_peer_uids": null
+      }
+    },
+    {
+      "model": "GraphicalTargetConfig",
+      "name": "a seeded target",
+      "kwargs": {
+        "target_id": "vm-1",
+        "target_address": "10.0.0.5:5900"
+      },
+      "accepted": {
+        "target_id": "vm-1",
+        "tenant_id": "",
+        "protocol": "rfb",
+        "target_address": "10.0.0.5:5900",
+        "vm_name": null,
+        "name": "",
+        "description": null,
+        "enabled": true,
+        "width": 640,
+        "height": 480,
+        "is_static": false,
+        "config": {}
+      }
+    },
+    {
+      "model": "GraphicalTargetConfig",
+      "name": "protocol-specific parameters",
+      "kwargs": {
+        "config": {
+          "vm_name": "win11"
+        }
+      },
+      "accepted": {
+        "target_id": "",
+        "tenant_id": "",
+        "protocol": "rfb",
+        "target_address": "",
+        "vm_name": null,
+        "name": "",
+        "description": null,
+        "enabled": true,
+        "width": 640,
+        "height": 480,
+        "is_static": false,
+        "config": {
+          "vm_name": "win11"
+        }
+      }
+    },
+    {
+      "model": "GraphicalTargetConfig",
+      "name": "parameters given a list",
+      "kwargs": {
+        "config": []
+      },
+      "errors": [
+        {
+          "type": "dict_type",
+          "loc": [
+            "config"
+          ],
+          "msg": "Input should be a valid dictionary"
+        }
+      ]
+    },
+    {
+      "model": "GraphicalTargetConfig",
+      "name": "parameters given null",
+      "kwargs": {
+        "config": null
+      },
+      "errors": [
+        {
+          "type": "dict_type",
+          "loc": [
+            "config"
+          ],
+          "msg": "Input should be a valid dictionary"
+        }
+      ]
+    },
+    {
+      "model": "GraphicalTargetConfig",
+      "name": "a size that is not a number",
+      "kwargs": {
+        "width": "wide"
+      },
+      "errors": [
+        {
+          "type": "int_parsing",
+          "loc": [
+            "width"
+          ],
+          "msg": "Input should be a valid integer, unable to parse string as an integer"
+        }
+      ]
+    }
+  ],
+  "top_level_cases": [
+    {
+      "name": "a worker cap of zero",
+      "kwargs": {
+        "max_workers": 0
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "max_workers"
+          ],
+          "msg": "Value error, max_workers must be >= 1, got: 0"
+        }
+      ]
+    },
+    {
+      "name": "a negative worker cap",
+      "kwargs": {
+        "max_workers": -1
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "max_workers"
+          ],
+          "msg": "Value error, max_workers must be >= 1, got: -1"
+        }
+      ]
+    },
+    {
+      "name": "a worker cap of one",
+      "kwargs": {
+        "max_workers": 1
+      },
+      "accepted": {
+        "environment": "production",
+        "server": {
+          "host": "127.0.0.1",
+          "port": 8780,
+          "public_base_url": "http://127.0.0.1:8780",
+          "title": "provide-uterm-server",
+          "node_id": "default",
+          "allowed_origins": [],
+          "max_sessions": null
+        },
+        "auth": {
+          "mode": "dev_token",
+          "principal_header": "x-uterm-principal",
+          "role_header": "x-uterm-role",
+          "tenant_header": "x-uterm-tenant",
+          "principal_cookie": "uterm_principal",
+          "role_cookie": "uterm_role",
+          "tenant_cookie": "uterm_tenant",
+          "surface_cookie": "uterm_surface",
+          "token_cookie": "uterm_token",
+          "jwt_issuer": "provide-uterm",
+          "jwt_audience": "provide-uterm-server",
+          "jwt_jwks_url": null,
+          "jwt_public_key_pem": null,
+          "jwt_algorithms": [
+            "HS256"
+          ],
+          "clock_skew_seconds": 15,
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_tenant_claim": "tenant_id",
+          "worker_bearer_token": null,
+          "api_keys_enabled": false,
+          "header_mode_acknowledged": false,
+          "require_jwt_in_production": false,
+          "trusted_proxy_ips": [],
+          "upstream_proxy_secret": null,
+          "require_upstream_proxy_secret": false,
+          "identity_provider": "local",
+          "delegate_roles": true,
+          "webhook_idp_url": null,
+          "webhook_idp_secret": null,
+          "webhook_idp_timeout_s": 2.0,
+          "webhook_idp_on_failure": "deny",
+          "webhook_idp_require_signed_response": true,
+          "webhook_idp_require_response_nonce": false,
+          "webhook_idp_forward_headers": [],
+          "webhook_idp_forward_cookies": [],
+          "allow_adhoc_browser_observers": false
+        },
+        "control_plane": {
+          "backend": "memory",
+          "database_url": null,
+          "reap_interval_s": 3600,
+          "reap_retention_s": 604800
+        },
+        "ui": {
+          "app_path": "/app",
+          "assets_path": "/_terminal",
+          "xterm_cdn": "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0",
+          "fitaddon_cdn": "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0",
+          "fonts_cdn": "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap",
+          "xterm_cdn_integrity": "",
+          "fitaddon_cdn_integrity": ""
+        },
+        "recording": {
+          "enabled_by_default": false,
+          "directory": ".uterm-recordings",
+          "max_bytes": 0,
+          "retention_s": 0,
+          "control_channel_mode": "exclude",
+          "redact_sensitive": true,
+          "store_type": "local",
+          "webhook_url": null,
+          "webhook_secret": null,
+          "webhook_timeout_s": 2.0,
+          "flush_interval_s": 5.0,
+          "flush_batch_size": 100
+        },
+        "profiles": {
+          "directory": ".uterm-profiles"
+        },
+        "security": {
+          "mode": "strict",
+          "dev_mode_acknowledged": false,
+          "csp": null,
+          "hsts": null,
+          "x_frame_options": null,
+          "x_content_type_options": null,
+          "referrer_policy": null,
+          "permissions_policy": null,
+          "block_private_connector_targets": false,
+          "metrics_require_auth": false,
+          "default_session_visibility": "public"
+        },
+        "tunnel": {
+          "token_ttl_s": 3600,
+          "token_transport": "cookie",
+          "cookie_secure": true,
+          "cookie_samesite": "lax",
+          "ip_binding": false
+        },
+        "webhooks": {
+          "allow_loopback_destinations": false
+        },
+        "pam": {
+          "notify_socket": null,
+          "mode": "notify",
+          "auto_session": false,
+          "auto_session_command": "/bin/bash",
+          "relay_url": null,
+          "relay_token": null,
+          "capture_socket_dir": null,
+          "require_peer_uids": null
+        },
+        "governance": {
+          "policy_webhook_url": null,
+          "policy_webhook_secret": null,
+          "policy_webhook_timeout_s": 2.0,
+          "discovery_provider": "webhook",
+          "registry_webhook_url": null,
+          "registry_webhook_secret": null,
+          "registry_webhook_interval_s": 60.0,
+          "authz_webhook_url": null,
+          "authz_webhook_secret": null,
+          "authz_webhook_timeout_s": 2.0,
+          "behavioral_audit_url": null,
+          "behavioral_audit_secret": null,
+          "behavioral_audit_interval_s": 30.0,
+          "behavioral_max_cps": null,
+          "behavioral_min_jitter": null,
+          "behavioral_fail_open": false,
+          "telemetry_webhook_url": null,
+          "telemetry_webhook_secret": null,
+          "telemetry_webhook_timeout_s": 2.0,
+          "external_connectors": []
+        },
+        "audit": {
+          "chain_enabled": false,
+          "chain_file": null
+        },
+        "sessions": [
+          {
+            "session_id": "provide-shell",
+            "display_name": "Provide Shell",
+            "connector_type": "shell",
+            "connector_config": {},
+            "input_mode": "open",
+            "auto_start": true,
+            "tags": [
+              "shell",
+              "reference"
+            ],
+            "recording_enabled": null,
+            "owner": null,
+            "visibility": "public",
+            "ephemeral": false,
+            "presence": false,
+            "auto_transfer_idle_s": 30,
+            "keystroke_queue": "display"
+          }
+        ],
+        "graphical_targets": [],
+        "session_idle_timeout_s": 0,
+        "session_retention_s": 0,
+        "browser_rate_limit_per_sec": 300.0,
+        "worker_frame_on_invalid": "drop",
+        "max_connections_per_principal": 25,
+        "max_workers": 1
+      }
+    },
+    {
+      "name": "an environment outside the set",
+      "kwargs": {
+        "environment": "staging"
+      },
+      "errors": [
+        {
+          "type": "literal_error",
+          "loc": [
+            "environment"
+          ],
+          "msg": "Input should be 'dev' or 'production'"
+        }
+      ]
+    },
+    {
+      "name": "the dev environment, named",
+      "kwargs": {
+        "environment": "dev"
+      },
+      "accepted": {
+        "environment": "dev",
+        "server": {
+          "host": "127.0.0.1",
+          "port": 8780,
+          "public_base_url": "http://127.0.0.1:8780",
+          "title": "provide-uterm-server",
+          "node_id": "default",
+          "allowed_origins": [],
+          "max_sessions": null
+        },
+        "auth": {
+          "mode": "dev_token",
+          "principal_header": "x-uterm-principal",
+          "role_header": "x-uterm-role",
+          "tenant_header": "x-uterm-tenant",
+          "principal_cookie": "uterm_principal",
+          "role_cookie": "uterm_role",
+          "tenant_cookie": "uterm_tenant",
+          "surface_cookie": "uterm_surface",
+          "token_cookie": "uterm_token",
+          "jwt_issuer": "provide-uterm",
+          "jwt_audience": "provide-uterm-server",
+          "jwt_jwks_url": null,
+          "jwt_public_key_pem": null,
+          "jwt_algorithms": [
+            "HS256"
+          ],
+          "clock_skew_seconds": 15,
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_tenant_claim": "tenant_id",
+          "worker_bearer_token": null,
+          "api_keys_enabled": false,
+          "header_mode_acknowledged": false,
+          "require_jwt_in_production": false,
+          "trusted_proxy_ips": [],
+          "upstream_proxy_secret": null,
+          "require_upstream_proxy_secret": false,
+          "identity_provider": "local",
+          "delegate_roles": true,
+          "webhook_idp_url": null,
+          "webhook_idp_secret": null,
+          "webhook_idp_timeout_s": 2.0,
+          "webhook_idp_on_failure": "deny",
+          "webhook_idp_require_signed_response": true,
+          "webhook_idp_require_response_nonce": false,
+          "webhook_idp_forward_headers": [],
+          "webhook_idp_forward_cookies": [],
+          "allow_adhoc_browser_observers": false
+        },
+        "control_plane": {
+          "backend": "memory",
+          "database_url": null,
+          "reap_interval_s": 3600,
+          "reap_retention_s": 604800
+        },
+        "ui": {
+          "app_path": "/app",
+          "assets_path": "/_terminal",
+          "xterm_cdn": "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0",
+          "fitaddon_cdn": "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0",
+          "fonts_cdn": "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap",
+          "xterm_cdn_integrity": "",
+          "fitaddon_cdn_integrity": ""
+        },
+        "recording": {
+          "enabled_by_default": false,
+          "directory": ".uterm-recordings",
+          "max_bytes": 0,
+          "retention_s": 0,
+          "control_channel_mode": "exclude",
+          "redact_sensitive": true,
+          "store_type": "local",
+          "webhook_url": null,
+          "webhook_secret": null,
+          "webhook_timeout_s": 2.0,
+          "flush_interval_s": 5.0,
+          "flush_batch_size": 100
+        },
+        "profiles": {
+          "directory": ".uterm-profiles"
+        },
+        "security": {
+          "mode": "strict",
+          "dev_mode_acknowledged": false,
+          "csp": null,
+          "hsts": null,
+          "x_frame_options": null,
+          "x_content_type_options": null,
+          "referrer_policy": null,
+          "permissions_policy": null,
+          "block_private_connector_targets": false,
+          "metrics_require_auth": false,
+          "default_session_visibility": "public"
+        },
+        "tunnel": {
+          "token_ttl_s": 3600,
+          "token_transport": "cookie",
+          "cookie_secure": true,
+          "cookie_samesite": "lax",
+          "ip_binding": false
+        },
+        "webhooks": {
+          "allow_loopback_destinations": false
+        },
+        "pam": {
+          "notify_socket": null,
+          "mode": "notify",
+          "auto_session": false,
+          "auto_session_command": "/bin/bash",
+          "relay_url": null,
+          "relay_token": null,
+          "capture_socket_dir": null,
+          "require_peer_uids": null
+        },
+        "governance": {
+          "policy_webhook_url": null,
+          "policy_webhook_secret": null,
+          "policy_webhook_timeout_s": 2.0,
+          "discovery_provider": "webhook",
+          "registry_webhook_url": null,
+          "registry_webhook_secret": null,
+          "registry_webhook_interval_s": 60.0,
+          "authz_webhook_url": null,
+          "authz_webhook_secret": null,
+          "authz_webhook_timeout_s": 2.0,
+          "behavioral_audit_url": null,
+          "behavioral_audit_secret": null,
+          "behavioral_audit_interval_s": 30.0,
+          "behavioral_max_cps": null,
+          "behavioral_min_jitter": null,
+          "behavioral_fail_open": false,
+          "telemetry_webhook_url": null,
+          "telemetry_webhook_secret": null,
+          "telemetry_webhook_timeout_s": 2.0,
+          "external_connectors": []
+        },
+        "audit": {
+          "chain_enabled": false,
+          "chain_file": null
+        },
+        "sessions": [
+          {
+            "session_id": "provide-shell",
+            "display_name": "Provide Shell",
+            "connector_type": "shell",
+            "connector_config": {},
+            "input_mode": "open",
+            "auto_start": true,
+            "tags": [
+              "shell",
+              "reference"
+            ],
+            "recording_enabled": null,
+            "owner": null,
+            "visibility": "public",
+            "ephemeral": false,
+            "presence": false,
+            "auto_transfer_idle_s": 30,
+            "keystroke_queue": "display"
+          }
+        ],
+        "graphical_targets": [],
+        "session_idle_timeout_s": 0,
+        "session_retention_s": 0,
+        "browser_rate_limit_per_sec": 300.0,
+        "worker_frame_on_invalid": "drop",
+        "max_connections_per_principal": 25,
+        "max_workers": 10000
+      }
+    },
+    {
+      "name": "a frame policy outside the set",
+      "kwargs": {
+        "worker_frame_on_invalid": "close"
+      },
+      "errors": [
+        {
+          "type": "literal_error",
+          "loc": [
+            "worker_frame_on_invalid"
+          ],
+          "msg": "Input should be 'drop' or 'reject'"
+        }
+      ]
+    },
+    {
+      "name": "the reject frame policy",
+      "kwargs": {
+        "worker_frame_on_invalid": "reject"
+      },
+      "accepted": {
+        "environment": "production",
+        "server": {
+          "host": "127.0.0.1",
+          "port": 8780,
+          "public_base_url": "http://127.0.0.1:8780",
+          "title": "provide-uterm-server",
+          "node_id": "default",
+          "allowed_origins": [],
+          "max_sessions": null
+        },
+        "auth": {
+          "mode": "dev_token",
+          "principal_header": "x-uterm-principal",
+          "role_header": "x-uterm-role",
+          "tenant_header": "x-uterm-tenant",
+          "principal_cookie": "uterm_principal",
+          "role_cookie": "uterm_role",
+          "tenant_cookie": "uterm_tenant",
+          "surface_cookie": "uterm_surface",
+          "token_cookie": "uterm_token",
+          "jwt_issuer": "provide-uterm",
+          "jwt_audience": "provide-uterm-server",
+          "jwt_jwks_url": null,
+          "jwt_public_key_pem": null,
+          "jwt_algorithms": [
+            "HS256"
+          ],
+          "clock_skew_seconds": 15,
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_tenant_claim": "tenant_id",
+          "worker_bearer_token": null,
+          "api_keys_enabled": false,
+          "header_mode_acknowledged": false,
+          "require_jwt_in_production": false,
+          "trusted_proxy_ips": [],
+          "upstream_proxy_secret": null,
+          "require_upstream_proxy_secret": false,
+          "identity_provider": "local",
+          "delegate_roles": true,
+          "webhook_idp_url": null,
+          "webhook_idp_secret": null,
+          "webhook_idp_timeout_s": 2.0,
+          "webhook_idp_on_failure": "deny",
+          "webhook_idp_require_signed_response": true,
+          "webhook_idp_require_response_nonce": false,
+          "webhook_idp_forward_headers": [],
+          "webhook_idp_forward_cookies": [],
+          "allow_adhoc_browser_observers": false
+        },
+        "control_plane": {
+          "backend": "memory",
+          "database_url": null,
+          "reap_interval_s": 3600,
+          "reap_retention_s": 604800
+        },
+        "ui": {
+          "app_path": "/app",
+          "assets_path": "/_terminal",
+          "xterm_cdn": "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0",
+          "fitaddon_cdn": "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0",
+          "fonts_cdn": "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap",
+          "xterm_cdn_integrity": "",
+          "fitaddon_cdn_integrity": ""
+        },
+        "recording": {
+          "enabled_by_default": false,
+          "directory": ".uterm-recordings",
+          "max_bytes": 0,
+          "retention_s": 0,
+          "control_channel_mode": "exclude",
+          "redact_sensitive": true,
+          "store_type": "local",
+          "webhook_url": null,
+          "webhook_secret": null,
+          "webhook_timeout_s": 2.0,
+          "flush_interval_s": 5.0,
+          "flush_batch_size": 100
+        },
+        "profiles": {
+          "directory": ".uterm-profiles"
+        },
+        "security": {
+          "mode": "strict",
+          "dev_mode_acknowledged": false,
+          "csp": null,
+          "hsts": null,
+          "x_frame_options": null,
+          "x_content_type_options": null,
+          "referrer_policy": null,
+          "permissions_policy": null,
+          "block_private_connector_targets": false,
+          "metrics_require_auth": false,
+          "default_session_visibility": "public"
+        },
+        "tunnel": {
+          "token_ttl_s": 3600,
+          "token_transport": "cookie",
+          "cookie_secure": true,
+          "cookie_samesite": "lax",
+          "ip_binding": false
+        },
+        "webhooks": {
+          "allow_loopback_destinations": false
+        },
+        "pam": {
+          "notify_socket": null,
+          "mode": "notify",
+          "auto_session": false,
+          "auto_session_command": "/bin/bash",
+          "relay_url": null,
+          "relay_token": null,
+          "capture_socket_dir": null,
+          "require_peer_uids": null
+        },
+        "governance": {
+          "policy_webhook_url": null,
+          "policy_webhook_secret": null,
+          "policy_webhook_timeout_s": 2.0,
+          "discovery_provider": "webhook",
+          "registry_webhook_url": null,
+          "registry_webhook_secret": null,
+          "registry_webhook_interval_s": 60.0,
+          "authz_webhook_url": null,
+          "authz_webhook_secret": null,
+          "authz_webhook_timeout_s": 2.0,
+          "behavioral_audit_url": null,
+          "behavioral_audit_secret": null,
+          "behavioral_audit_interval_s": 30.0,
+          "behavioral_max_cps": null,
+          "behavioral_min_jitter": null,
+          "behavioral_fail_open": false,
+          "telemetry_webhook_url": null,
+          "telemetry_webhook_secret": null,
+          "telemetry_webhook_timeout_s": 2.0,
+          "external_connectors": []
+        },
+        "audit": {
+          "chain_enabled": false,
+          "chain_file": null
+        },
+        "sessions": [
+          {
+            "session_id": "provide-shell",
+            "display_name": "Provide Shell",
+            "connector_type": "shell",
+            "connector_config": {},
+            "input_mode": "open",
+            "auto_start": true,
+            "tags": [
+              "shell",
+              "reference"
+            ],
+            "recording_enabled": null,
+            "owner": null,
+            "visibility": "public",
+            "ephemeral": false,
+            "presence": false,
+            "auto_transfer_idle_s": 30,
+            "keystroke_queue": "display"
+          }
+        ],
+        "graphical_targets": [],
+        "session_idle_timeout_s": 0,
+        "session_retention_s": 0,
+        "browser_rate_limit_per_sec": 300.0,
+        "worker_frame_on_invalid": "reject",
+        "max_connections_per_principal": 25,
+        "max_workers": 10000
+      }
+    },
+    {
+      "name": "a browser rate limit given a whole number",
+      "kwargs": {
+        "browser_rate_limit_per_sec": 10
+      },
+      "accepted": {
+        "environment": "production",
+        "server": {
+          "host": "127.0.0.1",
+          "port": 8780,
+          "public_base_url": "http://127.0.0.1:8780",
+          "title": "provide-uterm-server",
+          "node_id": "default",
+          "allowed_origins": [],
+          "max_sessions": null
+        },
+        "auth": {
+          "mode": "dev_token",
+          "principal_header": "x-uterm-principal",
+          "role_header": "x-uterm-role",
+          "tenant_header": "x-uterm-tenant",
+          "principal_cookie": "uterm_principal",
+          "role_cookie": "uterm_role",
+          "tenant_cookie": "uterm_tenant",
+          "surface_cookie": "uterm_surface",
+          "token_cookie": "uterm_token",
+          "jwt_issuer": "provide-uterm",
+          "jwt_audience": "provide-uterm-server",
+          "jwt_jwks_url": null,
+          "jwt_public_key_pem": null,
+          "jwt_algorithms": [
+            "HS256"
+          ],
+          "clock_skew_seconds": 15,
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_tenant_claim": "tenant_id",
+          "worker_bearer_token": null,
+          "api_keys_enabled": false,
+          "header_mode_acknowledged": false,
+          "require_jwt_in_production": false,
+          "trusted_proxy_ips": [],
+          "upstream_proxy_secret": null,
+          "require_upstream_proxy_secret": false,
+          "identity_provider": "local",
+          "delegate_roles": true,
+          "webhook_idp_url": null,
+          "webhook_idp_secret": null,
+          "webhook_idp_timeout_s": 2.0,
+          "webhook_idp_on_failure": "deny",
+          "webhook_idp_require_signed_response": true,
+          "webhook_idp_require_response_nonce": false,
+          "webhook_idp_forward_headers": [],
+          "webhook_idp_forward_cookies": [],
+          "allow_adhoc_browser_observers": false
+        },
+        "control_plane": {
+          "backend": "memory",
+          "database_url": null,
+          "reap_interval_s": 3600,
+          "reap_retention_s": 604800
+        },
+        "ui": {
+          "app_path": "/app",
+          "assets_path": "/_terminal",
+          "xterm_cdn": "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0",
+          "fitaddon_cdn": "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0",
+          "fonts_cdn": "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap",
+          "xterm_cdn_integrity": "",
+          "fitaddon_cdn_integrity": ""
+        },
+        "recording": {
+          "enabled_by_default": false,
+          "directory": ".uterm-recordings",
+          "max_bytes": 0,
+          "retention_s": 0,
+          "control_channel_mode": "exclude",
+          "redact_sensitive": true,
+          "store_type": "local",
+          "webhook_url": null,
+          "webhook_secret": null,
+          "webhook_timeout_s": 2.0,
+          "flush_interval_s": 5.0,
+          "flush_batch_size": 100
+        },
+        "profiles": {
+          "directory": ".uterm-profiles"
+        },
+        "security": {
+          "mode": "strict",
+          "dev_mode_acknowledged": false,
+          "csp": null,
+          "hsts": null,
+          "x_frame_options": null,
+          "x_content_type_options": null,
+          "referrer_policy": null,
+          "permissions_policy": null,
+          "block_private_connector_targets": false,
+          "metrics_require_auth": false,
+          "default_session_visibility": "public"
+        },
+        "tunnel": {
+          "token_ttl_s": 3600,
+          "token_transport": "cookie",
+          "cookie_secure": true,
+          "cookie_samesite": "lax",
+          "ip_binding": false
+        },
+        "webhooks": {
+          "allow_loopback_destinations": false
+        },
+        "pam": {
+          "notify_socket": null,
+          "mode": "notify",
+          "auto_session": false,
+          "auto_session_command": "/bin/bash",
+          "relay_url": null,
+          "relay_token": null,
+          "capture_socket_dir": null,
+          "require_peer_uids": null
+        },
+        "governance": {
+          "policy_webhook_url": null,
+          "policy_webhook_secret": null,
+          "policy_webhook_timeout_s": 2.0,
+          "discovery_provider": "webhook",
+          "registry_webhook_url": null,
+          "registry_webhook_secret": null,
+          "registry_webhook_interval_s": 60.0,
+          "authz_webhook_url": null,
+          "authz_webhook_secret": null,
+          "authz_webhook_timeout_s": 2.0,
+          "behavioral_audit_url": null,
+          "behavioral_audit_secret": null,
+          "behavioral_audit_interval_s": 30.0,
+          "behavioral_max_cps": null,
+          "behavioral_min_jitter": null,
+          "behavioral_fail_open": false,
+          "telemetry_webhook_url": null,
+          "telemetry_webhook_secret": null,
+          "telemetry_webhook_timeout_s": 2.0,
+          "external_connectors": []
+        },
+        "audit": {
+          "chain_enabled": false,
+          "chain_file": null
+        },
+        "sessions": [
+          {
+            "session_id": "provide-shell",
+            "display_name": "Provide Shell",
+            "connector_type": "shell",
+            "connector_config": {},
+            "input_mode": "open",
+            "auto_start": true,
+            "tags": [
+              "shell",
+              "reference"
+            ],
+            "recording_enabled": null,
+            "owner": null,
+            "visibility": "public",
+            "ephemeral": false,
+            "presence": false,
+            "auto_transfer_idle_s": 30,
+            "keystroke_queue": "display"
+          }
+        ],
+        "graphical_targets": [],
+        "session_idle_timeout_s": 0,
+        "session_retention_s": 0,
+        "browser_rate_limit_per_sec": 10.0,
+        "worker_frame_on_invalid": "drop",
+        "max_connections_per_principal": 25,
+        "max_workers": 10000
+      }
+    },
+    {
+      "name": "a field nobody defined",
+      "kwargs": {
+        "max_worker": 10
+      },
+      "errors": [
+        {
+          "type": "extra_forbidden",
+          "loc": [
+            "max_worker"
+          ],
+          "msg": "Extra inputs are not permitted"
+        }
+      ]
+    },
+    {
+      "name": "a section given a scalar",
+      "kwargs": {
+        "auth": "jwt"
+      },
+      "errors": [
+        {
+          "type": "model_type",
+          "loc": [
+            "auth"
+          ],
+          "msg": "Input should be a valid dictionary or instance of AuthConfig"
+        }
+      ]
+    },
+    {
+      "name": "a section given null",
+      "kwargs": {
+        "auth": null
+      },
+      "errors": [
+        {
+          "type": "model_type",
+          "loc": [
+            "auth"
+          ],
+          "msg": "Input should be a valid dictionary or instance of AuthConfig"
+        }
+      ]
+    },
+    {
+      "name": "a bad value inside a section",
+      "kwargs": {
+        "auth": {
+          "identity_provider": "ldap"
+        }
+      },
+      "errors": [
+        {
+          "type": "literal_error",
+          "loc": [
+            "auth",
+            "identity_provider"
+          ],
+          "msg": "Input should be 'local' or 'webhook'"
+        }
+      ]
+    },
+    {
+      "name": "a name nobody defined inside a section",
+      "kwargs": {
+        "security": {
+          "mdoe": "dev"
+        }
+      },
+      "errors": [
+        {
+          "type": "extra_forbidden",
+          "loc": [
+            "security",
+            "mdoe"
+          ],
+          "msg": "Extra inputs are not permitted"
+        }
+      ]
+    },
+    {
+      "name": "an unsatisfiable combination inside a section",
+      "kwargs": {
+        "audit": {
+          "chain_enabled": true
+        }
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "audit"
+          ],
+          "msg": "Value error, audit.chain_enabled requires audit.chain_file (the append-only WORM log path)"
+        }
+      ]
+    },
+    {
+      "name": "a cleartext URL inside a section",
+      "kwargs": {
+        "pam": {
+          "relay_url": "http://relay.example"
+        }
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "pam"
+          ],
+          "msg": "Value error, pam.relay_url must use https:// (cleartext http:// is only allowed for loopback hosts)"
+        }
+      ]
+    },
+    {
+      "name": "a section that is fine",
+      "kwargs": {
+        "tunnel": {
+          "token_ttl_s": 120
+        }
+      },
+      "accepted": {
+        "environment": "production",
+        "server": {
+          "host": "127.0.0.1",
+          "port": 8780,
+          "public_base_url": "http://127.0.0.1:8780",
+          "title": "provide-uterm-server",
+          "node_id": "default",
+          "allowed_origins": [],
+          "max_sessions": null
+        },
+        "auth": {
+          "mode": "dev_token",
+          "principal_header": "x-uterm-principal",
+          "role_header": "x-uterm-role",
+          "tenant_header": "x-uterm-tenant",
+          "principal_cookie": "uterm_principal",
+          "role_cookie": "uterm_role",
+          "tenant_cookie": "uterm_tenant",
+          "surface_cookie": "uterm_surface",
+          "token_cookie": "uterm_token",
+          "jwt_issuer": "provide-uterm",
+          "jwt_audience": "provide-uterm-server",
+          "jwt_jwks_url": null,
+          "jwt_public_key_pem": null,
+          "jwt_algorithms": [
+            "HS256"
+          ],
+          "clock_skew_seconds": 15,
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_tenant_claim": "tenant_id",
+          "worker_bearer_token": null,
+          "api_keys_enabled": false,
+          "header_mode_acknowledged": false,
+          "require_jwt_in_production": false,
+          "trusted_proxy_ips": [],
+          "upstream_proxy_secret": null,
+          "require_upstream_proxy_secret": false,
+          "identity_provider": "local",
+          "delegate_roles": true,
+          "webhook_idp_url": null,
+          "webhook_idp_secret": null,
+          "webhook_idp_timeout_s": 2.0,
+          "webhook_idp_on_failure": "deny",
+          "webhook_idp_require_signed_response": true,
+          "webhook_idp_require_response_nonce": false,
+          "webhook_idp_forward_headers": [],
+          "webhook_idp_forward_cookies": [],
+          "allow_adhoc_browser_observers": false
+        },
+        "control_plane": {
+          "backend": "memory",
+          "database_url": null,
+          "reap_interval_s": 3600,
+          "reap_retention_s": 604800
+        },
+        "ui": {
+          "app_path": "/app",
+          "assets_path": "/_terminal",
+          "xterm_cdn": "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0",
+          "fitaddon_cdn": "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0",
+          "fonts_cdn": "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap",
+          "xterm_cdn_integrity": "",
+          "fitaddon_cdn_integrity": ""
+        },
+        "recording": {
+          "enabled_by_default": false,
+          "directory": ".uterm-recordings",
+          "max_bytes": 0,
+          "retention_s": 0,
+          "control_channel_mode": "exclude",
+          "redact_sensitive": true,
+          "store_type": "local",
+          "webhook_url": null,
+          "webhook_secret": null,
+          "webhook_timeout_s": 2.0,
+          "flush_interval_s": 5.0,
+          "flush_batch_size": 100
+        },
+        "profiles": {
+          "directory": ".uterm-profiles"
+        },
+        "security": {
+          "mode": "strict",
+          "dev_mode_acknowledged": false,
+          "csp": null,
+          "hsts": null,
+          "x_frame_options": null,
+          "x_content_type_options": null,
+          "referrer_policy": null,
+          "permissions_policy": null,
+          "block_private_connector_targets": false,
+          "metrics_require_auth": false,
+          "default_session_visibility": "public"
+        },
+        "tunnel": {
+          "token_ttl_s": 120,
+          "token_transport": "cookie",
+          "cookie_secure": true,
+          "cookie_samesite": "lax",
+          "ip_binding": false
+        },
+        "webhooks": {
+          "allow_loopback_destinations": false
+        },
+        "pam": {
+          "notify_socket": null,
+          "mode": "notify",
+          "auto_session": false,
+          "auto_session_command": "/bin/bash",
+          "relay_url": null,
+          "relay_token": null,
+          "capture_socket_dir": null,
+          "require_peer_uids": null
+        },
+        "governance": {
+          "policy_webhook_url": null,
+          "policy_webhook_secret": null,
+          "policy_webhook_timeout_s": 2.0,
+          "discovery_provider": "webhook",
+          "registry_webhook_url": null,
+          "registry_webhook_secret": null,
+          "registry_webhook_interval_s": 60.0,
+          "authz_webhook_url": null,
+          "authz_webhook_secret": null,
+          "authz_webhook_timeout_s": 2.0,
+          "behavioral_audit_url": null,
+          "behavioral_audit_secret": null,
+          "behavioral_audit_interval_s": 30.0,
+          "behavioral_max_cps": null,
+          "behavioral_min_jitter": null,
+          "behavioral_fail_open": false,
+          "telemetry_webhook_url": null,
+          "telemetry_webhook_secret": null,
+          "telemetry_webhook_timeout_s": 2.0,
+          "external_connectors": []
+        },
+        "audit": {
+          "chain_enabled": false,
+          "chain_file": null
+        },
+        "sessions": [
+          {
+            "session_id": "provide-shell",
+            "display_name": "Provide Shell",
+            "connector_type": "shell",
+            "connector_config": {},
+            "input_mode": "open",
+            "auto_start": true,
+            "tags": [
+              "shell",
+              "reference"
+            ],
+            "recording_enabled": null,
+            "owner": null,
+            "visibility": "public",
+            "ephemeral": false,
+            "presence": false,
+            "auto_transfer_idle_s": 30,
+            "keystroke_queue": "display"
+          }
+        ],
+        "graphical_targets": [],
+        "session_idle_timeout_s": 0,
+        "session_retention_s": 0,
+        "browser_rate_limit_per_sec": 300.0,
+        "worker_frame_on_invalid": "drop",
+        "max_connections_per_principal": 25,
+        "max_workers": 10000
+      }
+    },
+    {
+      "name": "a bad value two sections deep",
+      "kwargs": {
+        "graphical_targets": [
+          {
+            "width": "wide"
+          }
+        ]
+      },
+      "errors": [
+        {
+          "type": "int_parsing",
+          "loc": [
+            "graphical_targets",
+            0,
+            "width"
+          ],
+          "msg": "Input should be a valid integer, unable to parse string as an integer"
+        }
+      ]
+    },
+    {
+      "name": "a list of sections given one section",
+      "kwargs": {
+        "graphical_targets": {
+          "target_id": "vm-1"
+        }
+      },
+      "errors": [
+        {
+          "type": "list_type",
+          "loc": [
+            "graphical_targets"
+          ],
+          "msg": "Input should be a valid list"
+        }
+      ]
+    },
+    {
+      "name": "a session definition",
+      "kwargs": {
+        "sessions": [
+          {
+            "session_id": "s1"
+          }
+        ]
+      },
+      "accepted": {
+        "environment": "production",
+        "server": {
+          "host": "127.0.0.1",
+          "port": 8780,
+          "public_base_url": "http://127.0.0.1:8780",
+          "title": "provide-uterm-server",
+          "node_id": "default",
+          "allowed_origins": [],
+          "max_sessions": null
+        },
+        "auth": {
+          "mode": "dev_token",
+          "principal_header": "x-uterm-principal",
+          "role_header": "x-uterm-role",
+          "tenant_header": "x-uterm-tenant",
+          "principal_cookie": "uterm_principal",
+          "role_cookie": "uterm_role",
+          "tenant_cookie": "uterm_tenant",
+          "surface_cookie": "uterm_surface",
+          "token_cookie": "uterm_token",
+          "jwt_issuer": "provide-uterm",
+          "jwt_audience": "provide-uterm-server",
+          "jwt_jwks_url": null,
+          "jwt_public_key_pem": null,
+          "jwt_algorithms": [
+            "HS256"
+          ],
+          "clock_skew_seconds": 15,
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_tenant_claim": "tenant_id",
+          "worker_bearer_token": null,
+          "api_keys_enabled": false,
+          "header_mode_acknowledged": false,
+          "require_jwt_in_production": false,
+          "trusted_proxy_ips": [],
+          "upstream_proxy_secret": null,
+          "require_upstream_proxy_secret": false,
+          "identity_provider": "local",
+          "delegate_roles": true,
+          "webhook_idp_url": null,
+          "webhook_idp_secret": null,
+          "webhook_idp_timeout_s": 2.0,
+          "webhook_idp_on_failure": "deny",
+          "webhook_idp_require_signed_response": true,
+          "webhook_idp_require_response_nonce": false,
+          "webhook_idp_forward_headers": [],
+          "webhook_idp_forward_cookies": [],
+          "allow_adhoc_browser_observers": false
+        },
+        "control_plane": {
+          "backend": "memory",
+          "database_url": null,
+          "reap_interval_s": 3600,
+          "reap_retention_s": 604800
+        },
+        "ui": {
+          "app_path": "/app",
+          "assets_path": "/_terminal",
+          "xterm_cdn": "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0",
+          "fitaddon_cdn": "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0",
+          "fonts_cdn": "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap",
+          "xterm_cdn_integrity": "",
+          "fitaddon_cdn_integrity": ""
+        },
+        "recording": {
+          "enabled_by_default": false,
+          "directory": ".uterm-recordings",
+          "max_bytes": 0,
+          "retention_s": 0,
+          "control_channel_mode": "exclude",
+          "redact_sensitive": true,
+          "store_type": "local",
+          "webhook_url": null,
+          "webhook_secret": null,
+          "webhook_timeout_s": 2.0,
+          "flush_interval_s": 5.0,
+          "flush_batch_size": 100
+        },
+        "profiles": {
+          "directory": ".uterm-profiles"
+        },
+        "security": {
+          "mode": "strict",
+          "dev_mode_acknowledged": false,
+          "csp": null,
+          "hsts": null,
+          "x_frame_options": null,
+          "x_content_type_options": null,
+          "referrer_policy": null,
+          "permissions_policy": null,
+          "block_private_connector_targets": false,
+          "metrics_require_auth": false,
+          "default_session_visibility": "public"
+        },
+        "tunnel": {
+          "token_ttl_s": 3600,
+          "token_transport": "cookie",
+          "cookie_secure": true,
+          "cookie_samesite": "lax",
+          "ip_binding": false
+        },
+        "webhooks": {
+          "allow_loopback_destinations": false
+        },
+        "pam": {
+          "notify_socket": null,
+          "mode": "notify",
+          "auto_session": false,
+          "auto_session_command": "/bin/bash",
+          "relay_url": null,
+          "relay_token": null,
+          "capture_socket_dir": null,
+          "require_peer_uids": null
+        },
+        "governance": {
+          "policy_webhook_url": null,
+          "policy_webhook_secret": null,
+          "policy_webhook_timeout_s": 2.0,
+          "discovery_provider": "webhook",
+          "registry_webhook_url": null,
+          "registry_webhook_secret": null,
+          "registry_webhook_interval_s": 60.0,
+          "authz_webhook_url": null,
+          "authz_webhook_secret": null,
+          "authz_webhook_timeout_s": 2.0,
+          "behavioral_audit_url": null,
+          "behavioral_audit_secret": null,
+          "behavioral_audit_interval_s": 30.0,
+          "behavioral_max_cps": null,
+          "behavioral_min_jitter": null,
+          "behavioral_fail_open": false,
+          "telemetry_webhook_url": null,
+          "telemetry_webhook_secret": null,
+          "telemetry_webhook_timeout_s": 2.0,
+          "external_connectors": []
+        },
+        "audit": {
+          "chain_enabled": false,
+          "chain_file": null
+        },
+        "sessions": [
+          {
+            "session_id": "s1",
+            "display_name": "s1",
+            "connector_type": "shell",
+            "connector_config": {},
+            "input_mode": "open",
+            "auto_start": true,
+            "tags": [],
+            "recording_enabled": null,
+            "owner": null,
+            "visibility": "public",
+            "ephemeral": false,
+            "presence": false,
+            "auto_transfer_idle_s": 30,
+            "keystroke_queue": "display"
+          }
+        ],
+        "graphical_targets": [],
+        "session_idle_timeout_s": 0,
+        "session_retention_s": 0,
+        "browser_rate_limit_per_sec": 300.0,
+        "worker_frame_on_invalid": "drop",
+        "max_connections_per_principal": 25,
+        "max_workers": 10000
+      }
+    }
+  ]
+}

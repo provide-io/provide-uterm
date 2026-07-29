@@ -13,6 +13,8 @@ export * from "./defaults.ts";
 export * from "./loader.ts";
 export * from "./posture.ts";
 export * from "./profiles.ts";
+export * from "./schema.ts";
+export * from "./schema-fields.ts";
 export * from "./security-headers.ts";
 export * from "./server-defaults.ts";
 export * from "./validators.ts";
