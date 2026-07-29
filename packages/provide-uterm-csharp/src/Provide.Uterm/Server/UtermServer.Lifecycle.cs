@@ -58,7 +58,7 @@ public sealed partial class UtermServer
     {
         var app = _app ?? Build();
         await app.StartAsync(cancellationToken).ConfigureAwait(false);
-        OnStarted(app);
+        await OnStartedAsync(app, cancellationToken).ConfigureAwait(false);
         _runTask = app.WaitForShutdownAsync(cancellationToken);
         await _runTask.ConfigureAwait(false);
     }
@@ -68,18 +68,18 @@ public sealed partial class UtermServer
     {
         var app = _app ?? Build();
         await app.StartAsync(cancellationToken).ConfigureAwait(false);
-        OnStarted(app);
+        await OnStartedAsync(app, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
     /// Everything that happens once the host is listening, in one place so the
     /// two ways of starting cannot drift apart.
     /// </summary>
-    private void OnStarted(WebApplication app)
+    private async Task OnStartedAsync(WebApplication app, CancellationToken cancellationToken)
     {
         BaseAddress = app.Urls.FirstOrDefault();
         MarkReady();
-        StartAutoStartSessions();
+        await StartAutoStartSessionsAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -96,7 +96,7 @@ public sealed partial class UtermServer
     /// is recorded on that session and the loop carries on — the same
     /// tolerance Go's boot loop has.
     /// </summary>
-    private void StartAutoStartSessions()
+    private async Task StartAutoStartSessionsAsync(CancellationToken cancellationToken)
     {
         foreach (var item in _deps.Registry.ListWithDefinitions())
         {
@@ -104,7 +104,7 @@ public sealed partial class UtermServer
             if (def is null || !def.AutoStart) continue;
             try
             {
-                ActivateSession(def.SessionId, def);
+                await ActivateSessionAsync(def.SessionId, def, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -114,16 +114,34 @@ public sealed partial class UtermServer
     }
 
     /// <summary>
-    /// Mark a session that could not be brought up, the way the reference's
-    /// runtime does: the lifecycle says <c>error</c> and <c>last_error</c> says
-    /// what happened, rather than the session quietly looking stopped.
+    /// Mark a session that could not be brought up, where the reference's run
+    /// loop comes to rest: <c>stopped</c>, with the reason in
+    /// <c>last_error</c> and the instant in <c>stopped_at</c>.
+    ///
+    /// <c>server/runtime.py</c>'s <c>_run</c> (~425-482) does assign
+    /// <c>_state = "error"</c> on a failed run — but that is a state *between
+    /// retry attempts*. A permanent failure breaks out of the retry loop and the
+    /// line after it assigns <c>"stopped"</c> and <c>_stopped_at</c>; a transient
+    /// one sleeps a backoff and assigns <c>"starting"</c> again at the top of the
+    /// loop. Nothing ever rests at <c>error</c>.
+    ///
+    /// So "stopped because nobody asked" and "stopped because it failed" are told
+    /// apart by <c>last_error</c>, never by the state — which is why both it and
+    /// <c>stopped_at</c> are written here.
+    ///
+    /// <c>error</c> stays in this port's vocabulary because it is the reference's
+    /// (<c>bridge/contracts.py: SessionLifecycle</c>), and a client reading a
+    /// reference server's state field can still be handed it. This port has no
+    /// retry loop — one start attempt, no backoff — so it has no window in which
+    /// to publish <c>error</c>, and nothing here assigns it.
     /// </summary>
     private void RecordSessionStartFailure(string sessionId, Exception error)
     {
         if (!_deps.Registry.TryGetStatus(sessionId, out var status)) return;
-        status.LifecycleState = SessionLifecycleState.Error;
+        status.LifecycleState = SessionLifecycleState.Stopped;
         status.Connected = false;
         status.LastError = error.Message;
+        status.StoppedAt = _clock.Wall();
     }
 
     public async Task StopAsync(CancellationToken cancellationToken = default)

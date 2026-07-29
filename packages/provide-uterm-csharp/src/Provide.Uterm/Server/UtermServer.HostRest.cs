@@ -210,7 +210,7 @@ public sealed partial class UtermServer
             ConnectorConfig = connectorConfig,
         };
         _deps.Registry.Upsert(def);
-        var st = ActivateSession(sid, def);
+        var st = await ActivateSessionAsync(sid, def, ctx.RequestAborted).ConfigureAwait(false);
         EnsureMetrics().Inc("profile_connect_total");
         return Results.Json(new
         {
@@ -643,7 +643,7 @@ public sealed partial class UtermServer
             ConnectorConfig = connectorConfig,
         };
         _deps.Registry.Upsert(def);
-        var st = ActivateSession(sid, def);
+        var st = await ActivateSessionAsync(sid, def, ctx.RequestAborted).ConfigureAwait(false);
         EnsureMetrics().Inc("quick_connect_total");
         return Results.Json(new
         {
