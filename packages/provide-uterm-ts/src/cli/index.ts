@@ -5,5 +5,6 @@
 
 /** The `uterm` command line. */
 
+export * from "./inspect.ts";
 export * from "./share.ts";
 export * from "./watch.ts";
