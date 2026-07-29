@@ -212,6 +212,8 @@ export const TOP_LEVEL_FIELD_SPEC = {
   session_idle_timeout_s: "int",
   session_retention_s: "int",
   browser_rate_limit_per_sec: "float",
+  rest_acquire_rate_limit_per_sec: "float",
+  rest_send_rate_limit_per_sec: "float",
   worker_frame_on_invalid: ["drop", "reject"],
   max_connections_per_principal: "int",
   max_workers: "int",

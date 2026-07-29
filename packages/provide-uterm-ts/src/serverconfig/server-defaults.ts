@@ -128,6 +128,8 @@ export const SERVER_CONFIG_DEFAULTS: ServerConfigDocument = deepFreeze({
     webhook_timeout_s: 2.0,
     webhook_url: null,
   },
+  rest_acquire_rate_limit_per_sec: 5.0,
+  rest_send_rate_limit_per_sec: 20.0,
   security: {
     block_private_connector_targets: false,
     csp: null,
@@ -225,6 +227,8 @@ export const SERVER_CONFIG_TOP_LEVEL: readonly string[] = [
   "environment",
   "max_connections_per_principal",
   "max_workers",
+  "rest_acquire_rate_limit_per_sec",
+  "rest_send_rate_limit_per_sec",
   "session_idle_timeout_s",
   "session_retention_s",
   "worker_frame_on_invalid",

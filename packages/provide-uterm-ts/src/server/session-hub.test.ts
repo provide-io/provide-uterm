@@ -20,7 +20,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ControlFrameDecoder } from "../control-channel/index.ts";
 import type { WorkerSocket } from "../hub/index.ts";
-import { SessionHub } from "./session-hub.ts";
+import { SESSION_HUB_REST_ACQUIRE_RATE, SESSION_HUB_REST_SEND_RATE, SessionHub } from "./session-hub.ts";
 
 /** A worker socket that records every frame the hub sent it. */
 function worker(): WorkerSocket & { sent: Record<string, unknown>[] } {
@@ -321,5 +321,76 @@ describe("each service asking the composition, and getting the composition's ans
       restStillActive: true,
       resumeWithoutOwner: false,
     });
+  });
+});
+
+describe("the REST rate ceilings the hub runs on", () => {
+  /** How many calls a policy allows before it starts refusing. */
+  function budget(allow: () => boolean): number {
+    let allowed = 0;
+    // One more than any rate under test, so the count is the budget and not
+    // the loop bound.
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      if (allow()) {
+        allowed += 1;
+      }
+    }
+    return allowed;
+  }
+
+  it("runs on the reference's own defaults when the configuration says nothing", () => {
+    // A deployment that has never heard of these keys must behave exactly as
+    // it did before they existed.
+    const hub = new SessionHub({ now: () => 1000 });
+    expect(hub.limiter.restAcquireRate).toBe(SESSION_HUB_REST_ACQUIRE_RATE);
+    expect(hub.limiter.restSendRate).toBe(SESSION_HUB_REST_SEND_RATE);
+    expect(budget(() => hub.limiter.allowRestAcquire("a"))).toBe(5);
+    expect(budget(() => hub.limiter.allowRestSend("a"))).toBe(20);
+  });
+
+  it("takes the acquire ceiling from the configuration and leaves send alone", () => {
+    const hub = new SessionHub({ now: () => 1000, restAcquireRate: 2 });
+    expect(hub.limiter.restAcquireRate).toBe(2);
+    expect(budget(() => hub.limiter.allowRestAcquire("a"))).toBe(2);
+    expect(budget(() => hub.limiter.allowRestSend("a"))).toBe(SESSION_HUB_REST_SEND_RATE);
+  });
+
+  it("takes the send ceiling from the configuration and leaves acquire alone", () => {
+    const hub = new SessionHub({ now: () => 1000, restSendRate: 3 });
+    expect(hub.limiter.restSendRate).toBe(3);
+    expect(budget(() => hub.limiter.allowRestSend("a"))).toBe(3);
+    expect(budget(() => hub.limiter.allowRestAcquire("a"))).toBe(SESSION_HUB_REST_ACQUIRE_RATE);
+  });
+
+  it("refills a configured ceiling at the configured rate", () => {
+    // The rate is a rate and not just a burst: a client that waits earns
+    // exactly what it configured back, on the hub's own monotonic clock.
+    const clock = { mono: 1000 };
+    const hub = new SessionHub({ now: () => clock.mono, restAcquireRate: 2 });
+    expect(budget(() => hub.limiter.allowRestAcquire("a"))).toBe(2);
+    clock.mono += 1;
+    expect(budget(() => hub.limiter.allowRestAcquire("a"))).toBe(2);
+  });
+
+  it("floors a sub-1 rate rather than running a policy that admits nothing", () => {
+    // Belt and braces. The schema refuses anything under 1/s at config load —
+    // below the floor a bucket's ceiling sits under the whole token a call
+    // costs, so it would admit nothing however long the caller waits — but a
+    // caller that constructs a hub directly bypasses the schema entirely, and
+    // gets the floor rather than a bricked endpoint. The bucket property
+    // itself is pinned in `../ratelimit/`, where a starved bucket can still be
+    // built.
+    const hub = new SessionHub({ now: () => 1000, restAcquireRate: 0.5, restSendRate: 0 });
+    expect(hub.limiter.restAcquireRate).toBe(1);
+    expect(hub.limiter.restSendRate).toBe(1);
+    expect(budget(() => hub.limiter.allowRestAcquire("a"))).toBe(1);
+  });
+
+  it("hands one call a second out at the floor itself", () => {
+    const clock = { mono: 1000 };
+    const hub = new SessionHub({ now: () => clock.mono, restAcquireRate: 1 });
+    expect(budget(() => hub.limiter.allowRestAcquire("a"))).toBe(1);
+    clock.mono += 1;
+    expect(budget(() => hub.limiter.allowRestAcquire("a"))).toBe(1);
   });
 });

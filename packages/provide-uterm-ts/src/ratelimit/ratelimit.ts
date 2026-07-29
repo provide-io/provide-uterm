@@ -28,8 +28,26 @@ export const REST_CLIENT_CACHE_MAX = 1024;
 /** How many entries an overflow evicts, so the next one is amortised. */
 export const REST_CLIENT_EVICT_COUNT = REST_CLIENT_CACHE_MAX / 2;
 
-/** The minimum configurable rate; below this a policy would deny forever. */
-const MIN_RATE = 0.1;
+/**
+ * Tightest rate (tokens/sec) any bucket-backed policy may be configured with.
+ *
+ * This is 1.0 for a structural reason, not a taste one: {@link TokenBucket}
+ * defaults its burst to one second of the rate, so a bucket configured below
+ * 1.0 can never hold a whole token and therefore denies *every* call forever,
+ * however long the caller waits. A rate in `[0, 1)` is a bricked endpoint
+ * wearing the costume of a rate limit, so the server configuration refuses the
+ * whole band rather than accepting a number that silently means "never".
+ *
+ * {@link RateLimiter} also clamps to this floor. Config refusing below it
+ * keeps the clamp from quietly handing back a *looser* limit than the operator
+ * wrote.
+ *
+ * Making sub-1 rates meaningful would mean decoupling burst from rate
+ * (`burst = max(1.0, rate)`) — a change to token-bucket semantics across every
+ * port and their recorded goldens. Worth doing deliberately if a sub-1 policy
+ * is ever actually wanted; not worth doing by accident here.
+ */
+export const MIN_RATE_PER_SEC = 1.0;
 
 /** Construction options for {@link TokenBucket}. */
 export interface TokenBucketOptions {
@@ -109,10 +127,11 @@ export class RateLimiter {
   readonly #sendPerClient = new Map<string, TokenBucket>();
 
   constructor(options: RateLimiterOptions) {
-    // A zero or negative rate would deny every request forever, which is a
-    // misconfiguration rather than a policy; floor it instead.
-    this.#acquireRate = Math.max(MIN_RATE, options.restAcquireRate);
-    this.#sendRate = Math.max(MIN_RATE, options.restSendRate);
+    // Any rate under the floor would deny every request forever — see
+    // {@link MIN_RATE_PER_SEC} — which is a misconfiguration rather than a
+    // policy; floor it instead.
+    this.#acquireRate = Math.max(MIN_RATE_PER_SEC, options.restAcquireRate);
+    this.#sendRate = Math.max(MIN_RATE_PER_SEC, options.restSendRate);
     this.#now = options.now;
     this.restAcquireBucket = this.#mint(this.#acquireRate);
     this.restSendBucket = this.#mint(this.#sendRate);

@@ -278,6 +278,35 @@ TOP_LEVEL_CASES: list[tuple[str, dict[str, Any]]] = [
     ("a frame policy outside the set", {"worker_frame_on_invalid": "close"}),
     ("the reject frame policy", {"worker_frame_on_invalid": "reject"}),
     ("a browser rate limit given a whole number", {"browser_rate_limit_per_sec": 10}),
+    # The REST hijack ceilings. A rate limit is trusted once configured, so
+    # every value that cannot be honoured verbatim is refused rather than
+    # reinterpreted. Zero is ambiguous between "unlimited" and "refuse
+    # everything". The whole band under 1/s is refused for the second of
+    # those reasons and not for ambiguity: a bucket's burst is one second of
+    # its rate, so a sub-1/s bucket never holds a whole token and denies
+    # every call forever — 0.5 means "never", not "one call every two
+    # seconds". Non-finite values are refused because inf passes every >=
+    # bound and would silently mean no limit at all. Fractions at or above
+    # the floor are a real policy and are accepted.
+    ("a REST acquire ceiling", {"rest_acquire_rate_limit_per_sec": 2}),
+    ("a REST send ceiling", {"rest_send_rate_limit_per_sec": 100}),
+    ("a fractional REST acquire ceiling", {"rest_acquire_rate_limit_per_sec": 2.5}),
+    ("the tightest REST ceiling there is", {"rest_acquire_rate_limit_per_sec": 1}),
+    ("a REST acquire ceiling of zero", {"rest_acquire_rate_limit_per_sec": 0}),
+    ("a REST send ceiling of zero", {"rest_send_rate_limit_per_sec": 0}),
+    ("a negative REST acquire ceiling", {"rest_acquire_rate_limit_per_sec": -1}),
+    ("a REST send ceiling under the floor", {"rest_send_rate_limit_per_sec": 0.5}),
+    ("a REST acquire ceiling a hair under the floor", {"rest_acquire_rate_limit_per_sec": 0.99}),
+    ("a REST acquire ceiling that is not a number", {"rest_acquire_rate_limit_per_sec": "fast"}),
+    # The reference also refuses inf/-inf/nan on these two fields — inf passes
+    # every >= bound, so accepting it would silently mean no limit at all.
+    # Those cases are NOT recorded here because JSON has no way to spell them:
+    # json.dumps emits bare `Infinity`/`NaN`, which JSON.parse rejects, so a
+    # corpus carrying them would be unreadable by the ports meant to replay it.
+    # TOML *can* spell them (`x = inf`), so every port still has to implement
+    # the refusal; it is pinned by the reference's own unit tests
+    # (tests/server/test_config.py::..._rejects_positive_infinity_... and
+    # siblings) rather than by this corpus.
     ("a field nobody defined", {"max_worker": 10}),
     ("a section given a scalar", {"auth": "jwt"}),
     ("a section given null", {"auth": None}),

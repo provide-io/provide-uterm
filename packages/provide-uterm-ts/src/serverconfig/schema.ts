@@ -18,7 +18,8 @@
  * rather than falling back to one.
  */
 
-import { pyRepr as pyStrRepr } from "../pycompat/index.ts";
+import { floatRepr, pyRepr as pyStrRepr } from "../pycompat/index.ts";
+import { MIN_RATE_PER_SEC } from "../ratelimit/index.ts";
 import { SECTION_FIELD_SPECS, TOP_LEVEL_FIELD_SPEC } from "./schema-fields.ts";
 import {
   cleanPath,
@@ -374,9 +375,78 @@ function pyRepr(value: unknown): string {
   return typeof value === "string" ? pyStrRepr(value) : pyStr(value);
 }
 
+/**
+ * A float as CPython's `repr` writes it, which is what these messages carry.
+ *
+ * The value has already been coerced to a float by the time a rule sees it, so
+ * a whole one keeps its `.0` and the two values a comparison cannot order have
+ * the interpreter's names rather than JavaScript's.
+ */
+function pyFloat(value: number): string {
+  if (Number.isNaN(value)) {
+    return "nan";
+  }
+  if (value === Number.POSITIVE_INFINITY) {
+    return "inf";
+  }
+  if (value === Number.NEGATIVE_INFINITY) {
+    return "-inf";
+  }
+  if (Number.isInteger(value)) {
+    // A negative zero is still a signed float, and `${-0}` drops the sign.
+    return `${Object.is(value, -0) ? "-0" : value}.0`;
+  }
+  return floatRepr(value);
+}
+
+/**
+ * Refuse any REST hijack rate that would not behave as the operator wrote it.
+ *
+ * A rate limit is trusted once configured, so every value that cannot be
+ * honoured verbatim is refused rather than reinterpreted.
+ *
+ * **Not finite.** `inf` passes every `>=` bound, so accepting it would
+ * silently mean "no limit at all" — the same fail-open that makes a trusted
+ * limit worse than none. `-inf` and NaN go with it: none of the three is a
+ * rate anybody meant to write.
+ *
+ * **Below {@link MIN_RATE_PER_SEC}.** `0` is ambiguous — read as "unlimited"
+ * it disables the limit, read as "refuse everything" it bricks the REST hijack
+ * API, and nothing in the file says which the operator meant. The whole band
+ * under the floor is refused for the *second* of those reasons rather than for
+ * ambiguity: a token bucket's burst is one second of its rate, so a sub-1/s
+ * bucket never holds a whole token and denies every call forever. `0.5` is not
+ * "one call every two seconds", it is "never" — so it is refused exactly like
+ * `0`. Negatives go the same way, and the floor also keeps the limiter's own
+ * clamp from handing back a looser rate than was configured.
+ *
+ * Fractions at or above the floor are a real policy and are kept.
+ *
+ * The bound is written `!(value >= MIN)` rather than `value < MIN` so a NaN —
+ * which compares false against everything — falls into the refusal instead of
+ * sliding past a `<` test. With the finite check running first that form is no
+ * longer the only thing catching a NaN, but it is the second line of defence.
+ * Do not "simplify" it.
+ */
+function restRateComplaint(field: string, value: unknown): string | undefined {
+  const rate = value as number;
+  const floor = pyFloat(MIN_RATE_PER_SEC);
+  if (!Number.isFinite(rate)) {
+    return `${field} must be a finite number >= ${floor}, got: ${pyFloat(rate)}`;
+  }
+  if (!(rate >= MIN_RATE_PER_SEC)) {
+    return `${field} must be >= ${floor}, got: ${pyFloat(rate)}`;
+  }
+  return undefined;
+}
+
 /** The top-level scalars' own rules. */
 const TOP_LEVEL_RULES: Readonly<Record<string, FieldRule>> = {
   max_workers: (value) => notBelow(value, 1, `max_workers must be >= 1, got: ${value as number}`),
+  // Refused at load rather than at the first request: a server that boots with
+  // a nonsense limit and discovers it later is a server running unprotected.
+  rest_acquire_rate_limit_per_sec: (value) => restRateComplaint("rest_acquire_rate_limit_per_sec", value),
+  rest_send_rate_limit_per_sec: (value) => restRateComplaint("rest_send_rate_limit_per_sec", value),
 };
 
 /** The connector types every server has, whatever else is registered. */

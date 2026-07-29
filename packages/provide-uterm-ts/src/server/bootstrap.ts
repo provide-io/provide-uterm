@@ -158,7 +158,15 @@ export function bootstrapServer(options: BootstrapOptions = {}): BootstrappedSer
   // it: the lease routes arbitrate through it, and a session that starts
   // attaches to it as a worker. One hub per server — two would arbitrate
   // separately over the same terminal.
-  const hub = new SessionHub({ wallNow: options.now });
+  // The REST ceilings are read straight off the merged document: every field
+  // has a default, so a document that never mentions them still supplies the
+  // reference's own numbers, and one that does supplies numbers the schema has
+  // already refused if they were unusable.
+  const hub = new SessionHub({
+    wallNow: options.now,
+    restAcquireRate: config.rest_acquire_rate_limit_per_sec as number,
+    restSendRate: config.rest_send_rate_limit_per_sec as number,
+  });
   const runtimes = new SessionRuntimes(registry, hub, { now: options.now });
   const app = createServerApp({
     registry,
