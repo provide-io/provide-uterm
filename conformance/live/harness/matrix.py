@@ -127,17 +127,38 @@ def _row(
     mechanics: Runner,
     seen: dict[Pair, dict[str, Any]],
 ) -> list[Cell]:
-    """One server, every client — the server stood up once and shared.
+    """One server, every client.
 
-    Standing a server up is the expensive part of a cell, so a row pays for it
-    once. A server that will not start costs its whole row and no more.
+    Standing a server up is the expensive part of a cell, so a row normally
+    pays for it once and shares it. A scenario that declares it *mutates* gets
+    a server per client instead: one that puts a session into hijack mode and
+    takes its lease would otherwise leave the next client starting from
+    somewhere the scenario never described — its first step answered by a
+    server the previous client had already changed.
     """
+    if scenario.mutates:
+        return [_isolated_cell(scenario, server, client, mechanics, seen) for client in clients]
     timeout_s = scenario.timeout_ms / 1000
     try:
         with mechanics.start_server(server, auth=scenario.auth, timeout_s=timeout_s) as running:
             return [_run_cell(scenario, server, client, mechanics, running, seen) for client in clients]
     except DriverError as error:
         return [Cell(scenario.id, server.language, client.language, ERROR, detail=str(error)) for client in clients]
+
+
+def _isolated_cell(
+    scenario: Scenario,
+    server: DriverSpec,
+    client: DriverSpec,
+    mechanics: Runner,
+    seen: dict[Pair, dict[str, Any]],
+) -> Cell:
+    """One client against a server of its own, for a scenario that changes it."""
+    try:
+        with mechanics.start_server(server, auth=scenario.auth, timeout_s=scenario.timeout_ms / 1000) as running:
+            return _run_cell(scenario, server, client, mechanics, running, seen)
+    except DriverError as error:
+        return Cell(scenario.id, server.language, client.language, ERROR, detail=str(error))
 
 
 def _run_cell(
@@ -174,8 +195,13 @@ def _judge(
     reported = result.get("status")
     if reported in {UNSUPPORTED, ERROR}:
         return Cell(scenario.id, server, client, str(reported), detail=result.get("error"))
-    watched = observations(result, scenario.volatile_by_step)
-    seen[(server, client)] = watched
+    # Two different readings of the same result, deliberately. An
+    # expectation is this cell's own contract and must see what the server
+    # actually said — a scenario has to be able to assert that a lease expiry
+    # is a *number* even though no two runs agree on which number. Masking
+    # exists only so two cells can be compared, so it applies only there.
+    watched = observations(result, {})
+    seen[(server, client)] = observations(result, scenario.volatile_by_step)
     failures = tuple(found for found in (check(one, watched) for one in scenario.expectations) if found is not None)
     return Cell(scenario.id, server, client, FAIL if failures else PASS, failures=failures)
 

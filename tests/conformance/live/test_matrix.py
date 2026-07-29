@@ -258,3 +258,100 @@ class TestServerFailure:
         assert [cell.status for cell in report.cells] == ["error", "error"]
         assert all("would not bind" in str(cell.detail) for cell in report.cells)
         assert not report.ok
+
+
+class TestWhatEachCheckSees:
+    """Masking is for the comparison, not for the expectations."""
+
+    def test_an_expectation_sees_the_real_value_of_a_volatile_field(self, tmp_path: Path) -> None:
+        # A lease expiry is volatile — no two runs agree on it — but a
+        # scenario still has to be able to say it is a number rather than a
+        # formatted time. Masking before checking made that impossible: every
+        # volatile field looked like the string "<volatile>".
+        raw = {
+            **_SCENARIO,
+            "steps": [{"id": "health", "action": "health", "volatile": ["body.expires_at"]}],
+            "expect": [{"step": "health", "path": "body.expires_at", "type": "number", "why": "because"}],
+        }
+        path = tmp_path / "001_example.json"
+        path.write_text(json.dumps(raw))
+        scenario = load_scenario(path)
+        runner = _Runner({("python", "python"): _result("python", extra={"expires_at": 1785331723.5})})
+        report = run_matrix([scenario], servers=[_spec("python")], clients=[_spec("python")], runner=runner)
+        assert report.cells[0].status == "pass", report.cells[0].failures
+
+    def test_the_comparison_still_ignores_it(self, tmp_path: Path) -> None:
+        # And the other half must keep holding: two cells that saw different
+        # expiries have not seen different servers.
+        raw = {
+            **_SCENARIO,
+            "steps": [{"id": "health", "action": "health", "volatile": ["body.expires_at"]}],
+            "expect": [{"step": "health", "path": "body.expires_at", "type": "number", "why": "because"}],
+        }
+        path = tmp_path / "001_example.json"
+        path.write_text(json.dumps(raw))
+        scenario = load_scenario(path)
+        runner = _Runner(
+            {
+                ("python", "python"): _result("python", extra={"expires_at": 1.0}),
+                ("go", "python"): _result("python", extra={"expires_at": 99999.0}),
+            }
+        )
+        report = run_matrix(
+            [scenario], servers=[_spec("python"), _spec("go")], clients=[_spec("python")], runner=runner
+        )
+        assert report.ok
+
+
+class TestIsolation:
+    """A scenario that changes the server cannot share one."""
+
+    def _mutating(self, tmp_path: Path, mutates: bool) -> Any:
+        raw = {**_SCENARIO, "mutates": mutates}
+        path = tmp_path / "001_example.json"
+        path.write_text(json.dumps(raw))
+        return load_scenario(path)
+
+    def test_a_read_only_scenario_shares_one_server_across_its_clients(self, tmp_path: Path) -> None:
+        # Standing a server up is the expensive part of a cell. Nothing a
+        # read-only scenario does can be seen by the next client, so it pays
+        # for one server and uses it four times.
+        runner = _Runner({("python", client): _result(client) for client in ("python", "go")})
+        run_matrix(
+            [self._mutating(tmp_path, False)],
+            servers=[_spec("python")],
+            clients=[_spec("python"), _spec("go")],
+            runner=runner,
+        )
+        assert runner.started == ["python"]
+
+    def test_a_mutating_scenario_gets_a_fresh_server_for_each_client(self, tmp_path: Path) -> None:
+        # A scenario that puts a session into hijack mode and takes its lease
+        # leaves the next client somewhere the scenario never described. The
+        # second client's first step would then be answered by a server the
+        # first client had already changed.
+        runner = _Runner({("python", client): _result(client) for client in ("python", "go")})
+        run_matrix(
+            [self._mutating(tmp_path, True)],
+            servers=[_spec("python")],
+            clients=[_spec("python"), _spec("go")],
+            runner=runner,
+        )
+        assert runner.started == ["python", "python"]
+
+    def test_a_server_that_will_not_start_still_fails_only_its_own_cell(self, tmp_path: Path) -> None:
+        class _BrokenOnce(_Runner):
+            def start_server(self, spec: DriverSpec, **kwargs: Any) -> Any:
+                self.started.append(spec.language)
+                if len(self.started) == 1:
+                    raise DriverError("first start failed")
+                return _Server(spec.language)
+
+        runner = _BrokenOnce({("python", "go"): _result("go")})
+        report = run_matrix(
+            [self._mutating(tmp_path, True)],
+            servers=[_spec("python")],
+            clients=[_spec("python"), _spec("go")],
+            runner=runner,
+        )
+        assert [cell.status for cell in report.cells] == ["error", "pass"]
