@@ -335,8 +335,8 @@ public sealed partial class UtermServer : IAsyncDisposable
     private async Task<IResult> HandleHijackAcquire(HttpContext ctx, string workerId)
     {
         if (!SafeId.IsMatch(workerId)) return DetailError(422, "invalid worker_id");
-        var p = await Authenticate(ctx).ConfigureAwait(false);
-        if (!AuthorizeHub(p, workerId, "session.control.hijack", out var err)) return err!;
+        var (p, authError) = await RequireHubAuthz(ctx, workerId, "session.control.hijack").ConfigureAwait(false);
+        if (authError is not null) return authError;
 
         var clientId = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
         if (!_deps.Hub.AllowRestAcquireFor(clientId))
@@ -390,8 +390,8 @@ public sealed partial class UtermServer : IAsyncDisposable
     private async Task<IResult> HandleHijackHeartbeat(HttpContext ctx, string workerId, string hijackId)
     {
         if (!ValidateIds(workerId, hijackId, out var err)) return err!;
-        var p = await Authenticate(ctx).ConfigureAwait(false);
-        if (!AuthorizeHub(p, workerId, "session.control.hijack", out err)) return err!;
+        var (p, authError) = await RequireHubAuthz(ctx, workerId, "session.control.hijack").ConfigureAwait(false);
+        if (authError is not null) return authError;
 
         var hs = _deps.Hub.GetRestSession(workerId, hijackId);
         if (hs is null) return BridgeError(404, "Invalid or expired hijack session.");
@@ -419,8 +419,8 @@ public sealed partial class UtermServer : IAsyncDisposable
     private async Task<IResult> HandleHijackSend(HttpContext ctx, string workerId, string hijackId)
     {
         if (!ValidateIds(workerId, hijackId, out var err)) return err!;
-        var p = await Authenticate(ctx).ConfigureAwait(false);
-        if (!AuthorizeHub(p, workerId, "session.control.hijack", out err)) return err!;
+        var (p, authError) = await RequireHubAuthz(ctx, workerId, "session.control.hijack").ConfigureAwait(false);
+        if (authError is not null) return authError;
 
         var clientId = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
         if (!_deps.Hub.AllowRestSendFor(clientId))
@@ -449,8 +449,8 @@ public sealed partial class UtermServer : IAsyncDisposable
     private async Task<IResult> HandleHijackStep(HttpContext ctx, string workerId, string hijackId)
     {
         if (!ValidateIds(workerId, hijackId, out var err)) return err!;
-        var p = await Authenticate(ctx).ConfigureAwait(false);
-        if (!AuthorizeHub(p, workerId, "session.control.hijack", out err)) return err!;
+        var (p, authError) = await RequireHubAuthz(ctx, workerId, "session.control.hijack").ConfigureAwait(false);
+        if (authError is not null) return authError;
         if (_deps.Hub.GetRestSession(workerId, hijackId) is null)
         {
             return BridgeError(404, "Invalid or expired hijack session.");
@@ -469,8 +469,8 @@ public sealed partial class UtermServer : IAsyncDisposable
     private async Task<IResult> HandleHijackRelease(HttpContext ctx, string workerId, string hijackId)
     {
         if (!ValidateIds(workerId, hijackId, out var err)) return err!;
-        var p = await Authenticate(ctx).ConfigureAwait(false);
-        if (!AuthorizeHub(p, workerId, "session.control.hijack", out err)) return err!;
+        var (p, authError) = await RequireHubAuthz(ctx, workerId, "session.control.hijack").ConfigureAwait(false);
+        if (authError is not null) return authError;
 
         var (released, shouldResume) = _deps.Hub.ReleaseRestHijack(workerId, hijackId);
         if (!released)
@@ -496,8 +496,8 @@ public sealed partial class UtermServer : IAsyncDisposable
     private async Task<IResult> HandleHijackSnapshot(HttpContext ctx, string workerId, string hijackId)
     {
         if (!ValidateIds(workerId, hijackId, out var err)) return err!;
-        var p = await Authenticate(ctx).ConfigureAwait(false);
-        if (!AuthorizeHub(p, workerId, "session.read", out err)) return err!;
+        var (p, authError) = await RequireHubAuthz(ctx, workerId, "session.read").ConfigureAwait(false);
+        if (authError is not null) return authError;
         if (_deps.Hub.GetRestSession(workerId, hijackId) is null)
         {
             return BridgeError(404, "Invalid or expired hijack session.");
@@ -525,8 +525,8 @@ public sealed partial class UtermServer : IAsyncDisposable
     private async Task<IResult> HandleHijackEvents(HttpContext ctx, string workerId, string hijackId)
     {
         if (!ValidateIds(workerId, hijackId, out var err)) return err!;
-        var p = await Authenticate(ctx).ConfigureAwait(false);
-        if (!AuthorizeHub(p, workerId, "session.read", out err)) return err!;
+        var (p, authError) = await RequireHubAuthz(ctx, workerId, "session.read").ConfigureAwait(false);
+        if (authError is not null) return authError;
         if (_deps.Hub.GetRestSession(workerId, hijackId) is null)
         {
             return BridgeError(404, "Invalid or expired hijack session.");
@@ -541,8 +541,8 @@ public sealed partial class UtermServer : IAsyncDisposable
     private async Task<IResult> HandleInputMode(HttpContext ctx, string workerId)
     {
         if (!SafeId.IsMatch(workerId)) return DetailError(422, "invalid worker_id");
-        var p = await Authenticate(ctx).ConfigureAwait(false);
-        if (!AuthorizeHub(p, workerId, "session.control.mode", out var err)) return err!;
+        var (p, authError) = await RequireHubAuthz(ctx, workerId, "session.control.mode").ConfigureAwait(false);
+        if (authError is not null) return authError;
         var body = await ReadJson(ctx).ConfigureAwait(false);
         var mode = Str(body, "input_mode", InputModes.Hijack);
         var (ok, reason) = _deps.Hub.Router.SetInputMode(workerId, mode);
@@ -553,7 +553,11 @@ public sealed partial class UtermServer : IAsyncDisposable
     private async Task<IResult> HandleDisconnectWorker(HttpContext ctx, string workerId)
     {
         if (!SafeId.IsMatch(workerId)) return DetailError(422, "invalid worker_id");
-        var p = await Authenticate(ctx).ConfigureAwait(false);
+        // Authentication before the role check, as on every other hub route:
+        // the reference's admin arm (app/hub_authz.py:97-100) runs inside a
+        // router already mounted behind _require_authenticated.
+        var (p, authError) = await RequireAuthenticated(ctx).ConfigureAwait(false);
+        if (authError is not null) return authError;
         if (!_deps.Authz.IsAdmin(p))
         {
             return DetailError(403, "admin role required");
@@ -1051,34 +1055,41 @@ public sealed partial class UtermServer : IAsyncDisposable
         return (p, null);
     }
 
+    /// <summary>
+    /// The two gates every <c>/worker/{id}/...</c> route passes, in the order
+    /// the reference mounts them: <c>_require_authenticated</c> first, then
+    /// <c>_require_hub_route_authz</c>
+    /// (<c>app/routes_wiring.py:47-50</c>). The order is the point. A caller who
+    /// presented no credential is nobody and is told so (401) before any session
+    /// is looked up; only a caller the server did authenticate can be told they
+    /// hold the wrong role (403). Deciding both at once would let an
+    /// unauthenticated caller read session state out of which refusal they got.
+    /// </summary>
+    private async Task<(Principal Principal, IResult? Error)> RequireHubAuthz(
+        HttpContext ctx, string workerId, string capability)
+    {
+        var (p, authError) = await RequireAuthenticated(ctx).ConfigureAwait(false);
+        if (authError is not null)
+        {
+            return (p, authError);
+        }
+
+        return AuthorizeHub(p, workerId, capability, out var error) ? (p, null) : (p, error);
+    }
+
     private bool AuthorizeHub(Principal p, string workerId, string capability, out IResult? error)
     {
         if (!_deps.Registry.TryGetDefinition(workerId, out var def))
         {
-            // Ad-hoc workers: allow admin/operator with capability
-            if (capability == "session.read")
-            {
-                if (_deps.Authz.HasCapability(p, capability))
-                {
-                    error = null;
-                    return true;
-                }
-            }
-            else if (_deps.Authz.IsAdmin(p) || (_deps.Authz.HasCapability(p, capability) && p.Roles.Has("operator")))
-            {
-                // Auto-register unknown worker as a session so subsequent calls work.
-                _deps.Registry.Upsert(new SessionDefinition
-                {
-                    SessionId = workerId,
-                    DisplayName = workerId,
-                    ConnectorType = "shell",
-                    Visibility = "public",
-                    Owner = p.SubjectId,
-                });
-                error = null;
-                return true;
-            }
-
+            // A worker nobody registered is absent, and absent is what the
+            // caller is told — in the session routes' `detail` envelope, and
+            // calling it a session even here, because that is what the
+            // reference's hub authz says (app/hub_authz.py:108-110). It has no
+            // ad-hoc arm: a worker with no SessionDefinition has no visibility
+            // policy to consult, so there is nothing to authorize against. The
+            // arm this port used to have auto-registered the worker for any
+            // admin, which turned "does not exist" into "exists, nobody home"
+            // (409) and let a typo'd worker id mint a session.
             error = DetailError(404, "unknown session: " + workerId);
             return false;
         }
@@ -1123,13 +1134,25 @@ public sealed partial class UtermServer : IAsyncDisposable
     private static IResult DetailError(int status, string detail) =>
         Results.Json(new { detail }, statusCode: status);
 
+    /// <summary>
+    /// The lease routes' refusal envelope: the <c>error</c> key and nothing
+    /// else, exactly as the reference writes it
+    /// (<c>bridge/routes/rest.py</c>, every <c>JSONResponse({"error": ...})</c>).
+    /// The success bodies of those same routes do carry <c>ok: true</c> — that
+    /// is the flag a client branches on before it types into somebody's
+    /// terminal. Repeating it as <c>ok: false</c> on a refusal invents a second
+    /// envelope that no reference client reads and that conformance/live
+    /// scenarios 006/007 pin against.
+    /// </summary>
     private static IResult BridgeError(int status, string error) =>
-        Results.Json(new { ok = false, error }, statusCode: status);
+        Results.Json(new { error }, statusCode: status);
 
+    // The reference's wording for each acquire refusal, verbatim
+    // (bridge/routes/rest.py:213-217 error_msgs).
     private static string AcquireErrorMessage(string reason) => reason switch
     {
-        "no_worker" => "No worker connected.",
-        "open_mode" => "Worker is in open input mode.",
+        "no_worker" => "No worker connected for this session.",
+        "open_mode" => "Hijack not available in open input mode.",
         "already_hijacked" => "Worker is already hijacked.",
         _ => reason,
     };

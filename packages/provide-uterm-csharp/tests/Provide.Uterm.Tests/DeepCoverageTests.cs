@@ -264,6 +264,18 @@ public class DeepCoverageTests
             Subject = "admin",
             Roles = new[] { "admin" },
         });
+        // w1 is a registered session, not a bare hub worker: the hub routes
+        // authorize against a SessionDefinition, and a worker nobody registered
+        // is answered "unknown session" (app/hub_authz.py:108-110) rather than
+        // authorized on the strength of the caller's role alone.
+        cfg.Sessions.Add(new SessionDefinition
+        {
+            SessionId = "w1",
+            DisplayName = "W1",
+            ConnectorType = "shell",
+            Visibility = "public",
+            Owner = "admin",
+        });
         var apiKeys = new ApiKeyStore();
         var auth = new LocalIdentityProvider(cfg.Auth, apiKeys);
         var authz = new AuthorizationService();

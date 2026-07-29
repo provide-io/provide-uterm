@@ -76,7 +76,7 @@ public sealed partial class UtermServer
     /// runtime bridges its connector to the hub over <c>/ws/worker/{id}/term</c>,
     /// so a configured session can be leased, snapshotted and typed at through
     /// the hijack routes. Starting the connector without attaching it leaves
-    /// every one of those answering "No worker connected."
+    /// every one of those answering "No worker connected for this session."
     /// </summary>
     private async Task StartShellConnectorAsync(
         string sessionId, SessionDefinition def, CancellationToken cancellationToken = default)

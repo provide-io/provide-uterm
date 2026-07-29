@@ -166,7 +166,9 @@ public class CoverageTo99Wave10Tests
             BindingFlags.NonPublic | BindingFlags.Static);
         Assert.NotNull(m);
         Assert.Equal("weird", m!.Invoke(null, new object?[] { "weird" }));
-        Assert.Equal("No worker connected.", m.Invoke(null, new object?[] { "no_worker" }));
+        // The reference's error_msgs table, verbatim (bridge/routes/rest.py:213-217).
+        Assert.Equal("No worker connected for this session.", m.Invoke(null, new object?[] { "no_worker" }));
+        Assert.Equal("Hijack not available in open input mode.", m.Invoke(null, new object?[] { "open_mode" }));
         Assert.Equal("Worker is already hijacked.", m.Invoke(null, new object?[] { "already_hijacked" }));
     }
 

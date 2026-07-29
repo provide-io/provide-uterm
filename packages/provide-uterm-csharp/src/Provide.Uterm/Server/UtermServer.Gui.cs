@@ -15,13 +15,12 @@ public sealed partial class UtermServer
     private async Task<IResult> HandleGuiAttach(HttpContext ctx, string workerId)
     {
         if (!SafeId.IsMatch(workerId)) return DetailError(422, "invalid worker_id");
-        var p = await Authenticate(ctx).ConfigureAwait(false);
+        var (p, authError) = await RequireHubAuthz(ctx, workerId, "session.control.hijack").ConfigureAwait(false);
+        if (authError is not null) return authError;
         if (!_deps.Authz.HasCapability(p, "graphical.session.attach"))
         {
             return DetailError(403, "insufficient privileges");
         }
-
-        if (!AuthorizeHub(p, workerId, "session.control.hijack", out var err)) return err!;
 
         var body = await ReadJson(ctx).ConfigureAwait(false);
         var targetId = Str(body, "target_id");
@@ -122,8 +121,8 @@ public sealed partial class UtermServer
     private async Task<IResult> HandleGuiScreenshot(HttpContext ctx, string workerId, string hijackId)
     {
         if (!ValidateIds(workerId, hijackId, out var err)) return err!;
-        var p = await Authenticate(ctx).ConfigureAwait(false);
-        if (!AuthorizeHub(p, workerId, "session.read", out err)) return err!;
+        var (p, authError) = await RequireHubAuthz(ctx, workerId, "session.read").ConfigureAwait(false);
+        if (authError is not null) return authError;
 
         var hs = _deps.Hub.GetRestSession(workerId, hijackId);
         if (hs is null) return BridgeError(404, "Invalid or expired hijack session.");
@@ -226,8 +225,8 @@ public sealed partial class UtermServer
         HttpContext ctx, string workerId, string hijackId)
     {
         if (!ValidateIds(workerId, hijackId, out var err)) return (null, err);
-        var p = await Authenticate(ctx).ConfigureAwait(false);
-        if (!AuthorizeHub(p, workerId, "session.control.hijack", out err)) return (null, err);
+        var (p, authError) = await RequireHubAuthz(ctx, workerId, "session.control.hijack").ConfigureAwait(false);
+        if (authError is not null) return (null, authError);
 
         var hs = _deps.Hub.GetRestSession(workerId, hijackId);
         if (hs is null)
