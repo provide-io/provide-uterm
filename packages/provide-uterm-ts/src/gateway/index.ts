@@ -15,4 +15,5 @@ export * from "./host-key.ts";
 export * from "./iac.ts";
 export * from "./ssh-policy.ts";
 export * from "./ssh-server.ts";
+export * from "./telnet-gateway.ts";
 export * from "./ws-server.ts";
