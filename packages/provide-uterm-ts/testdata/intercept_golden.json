@@ -1,0 +1,510 @@
+{
+  "denylist": [
+    "authorization",
+    "connection",
+    "content-length",
+    "cookie",
+    "forwarded",
+    "host",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailer",
+    "transfer-encoding",
+    "upgrade",
+    "x-forwarded-for",
+    "x-forwarded-host",
+    "x-forwarded-proto",
+    "x-real-ip"
+  ],
+  "parsed": [
+    {
+      "name": "forwarding",
+      "message": {
+        "action": "forward"
+      },
+      "decision": {
+        "action": "forward",
+        "headers": null,
+        "body": null
+      }
+    },
+    {
+      "name": "dropping",
+      "message": {
+        "action": "drop"
+      },
+      "decision": {
+        "action": "drop",
+        "headers": null,
+        "body": null
+      }
+    },
+    {
+      "name": "modifying nothing",
+      "message": {
+        "action": "modify"
+      },
+      "decision": {
+        "action": "modify",
+        "headers": null,
+        "body": null
+      }
+    },
+    {
+      "name": "no action at all",
+      "message": {},
+      "decision": {
+        "action": "forward",
+        "headers": null,
+        "body": null
+      }
+    },
+    {
+      "name": "an action nobody defined",
+      "message": {
+        "action": "sideways"
+      },
+      "decision": {
+        "action": "forward",
+        "headers": null,
+        "body": null
+      }
+    },
+    {
+      "name": "an action in capitals",
+      "message": {
+        "action": "FORWARD"
+      },
+      "decision": {
+        "action": "forward",
+        "headers": null,
+        "body": null
+      }
+    },
+    {
+      "name": "an action that is not text",
+      "message": {
+        "action": 42
+      },
+      "decision": {
+        "action": "forward",
+        "headers": null,
+        "body": null
+      }
+    },
+    {
+      "name": "an action that is null",
+      "message": {
+        "action": null
+      },
+      "decision": {
+        "action": "forward",
+        "headers": null,
+        "body": null
+      }
+    },
+    {
+      "name": "modifying an ordinary header",
+      "message": {
+        "action": "modify",
+        "headers": {
+          "X-Trace": "1",
+          "Accept": "text/plain"
+        }
+      },
+      "decision": {
+        "action": "modify",
+        "headers": {
+          "X-Trace": "1",
+          "Accept": "text/plain"
+        },
+        "body": null
+      }
+    },
+    {
+      "name": "modifying the host",
+      "message": {
+        "action": "modify",
+        "headers": {
+          "Host": "evil.example"
+        }
+      },
+      "decision": {
+        "action": "modify",
+        "headers": {},
+        "body": null
+      }
+    },
+    {
+      "name": "modifying the host in capitals",
+      "message": {
+        "action": "modify",
+        "headers": {
+          "HOST": "evil.example"
+        }
+      },
+      "decision": {
+        "action": "modify",
+        "headers": {},
+        "body": null
+      }
+    },
+    {
+      "name": "modifying authorization",
+      "message": {
+        "action": "modify",
+        "headers": {
+          "Authorization": "Bearer stolen"
+        }
+      },
+      "decision": {
+        "action": "modify",
+        "headers": {},
+        "body": null
+      }
+    },
+    {
+      "name": "modifying a cookie",
+      "message": {
+        "action": "modify",
+        "headers": {
+          "Cookie": "session=stolen"
+        }
+      },
+      "decision": {
+        "action": "modify",
+        "headers": {},
+        "body": null
+      }
+    },
+    {
+      "name": "modifying the length",
+      "message": {
+        "action": "modify",
+        "headers": {
+          "Content-Length": "0"
+        }
+      },
+      "decision": {
+        "action": "modify",
+        "headers": {},
+        "body": null
+      }
+    },
+    {
+      "name": "modifying the transfer encoding",
+      "message": {
+        "action": "modify",
+        "headers": {
+          "Transfer-Encoding": "chunked"
+        }
+      },
+      "decision": {
+        "action": "modify",
+        "headers": {},
+        "body": null
+      }
+    },
+    {
+      "name": "modifying the connection",
+      "message": {
+        "action": "modify",
+        "headers": {
+          "Connection": "close"
+        }
+      },
+      "decision": {
+        "action": "modify",
+        "headers": {},
+        "body": null
+      }
+    },
+    {
+      "name": "modifying the forwarding family",
+      "message": {
+        "action": "modify",
+        "headers": {
+          "Forwarded": "for=1.2.3.4",
+          "X-Forwarded-For": "1.2.3.4",
+          "X-Forwarded-Host": "evil.example",
+          "X-Forwarded-Proto": "http",
+          "X-Real-IP": "1.2.3.4"
+        }
+      },
+      "decision": {
+        "action": "modify",
+        "headers": {},
+        "body": null
+      }
+    },
+    {
+      "name": "modifying one allowed and one denied header",
+      "message": {
+        "action": "modify",
+        "headers": {
+          "X-Trace": "1",
+          "Authorization": "Bearer stolen"
+        }
+      },
+      "decision": {
+        "action": "modify",
+        "headers": {
+          "X-Trace": "1"
+        },
+        "body": null
+      }
+    },
+    {
+      "name": "headers that are not a mapping",
+      "message": {
+        "action": "modify",
+        "headers": [
+          "Host: evil"
+        ]
+      },
+      "decision": {
+        "action": "modify",
+        "headers": null,
+        "body": null
+      }
+    },
+    {
+      "name": "headers whose values are not text",
+      "message": {
+        "action": "modify",
+        "headers": {
+          "X-Count": 5
+        }
+      },
+      "decision": {
+        "action": "modify",
+        "headers": {
+          "X-Count": "5"
+        },
+        "body": null
+      }
+    },
+    {
+      "name": "a body",
+      "message": {
+        "action": "modify",
+        "body_b64": "aGVsbG8="
+      },
+      "decision": {
+        "action": "modify",
+        "headers": null,
+        "body": "aGVsbG8="
+      }
+    },
+    {
+      "name": "a body that is not base64",
+      "message": {
+        "action": "modify",
+        "body_b64": "not base64!!"
+      },
+      "decision": {
+        "action": "modify",
+        "headers": null,
+        "body": null
+      }
+    },
+    {
+      "name": "a body with the padding missing",
+      "message": {
+        "action": "modify",
+        "body_b64": "aGVsbG8"
+      },
+      "decision": {
+        "action": "modify",
+        "headers": null,
+        "body": null
+      }
+    },
+    {
+      "name": "a body that is not text",
+      "message": {
+        "action": "modify",
+        "body_b64": 42
+      },
+      "decision": {
+        "action": "modify",
+        "headers": null,
+        "body": null
+      }
+    },
+    {
+      "name": "an empty body",
+      "message": {
+        "action": "modify",
+        "body_b64": ""
+      },
+      "decision": {
+        "action": "modify",
+        "headers": null,
+        "body": ""
+      }
+    },
+    {
+      "name": "a body on a forward",
+      "message": {
+        "action": "forward",
+        "body_b64": "aGVsbG8="
+      },
+      "decision": {
+        "action": "forward",
+        "headers": null,
+        "body": null
+      }
+    },
+    {
+      "name": "headers on a drop",
+      "message": {
+        "action": "drop",
+        "headers": {
+          "X-Trace": "1"
+        }
+      },
+      "decision": {
+        "action": "drop",
+        "headers": null,
+        "body": null
+      }
+    }
+  ],
+  "gates": [
+    {
+      "name": "the defaults",
+      "given": {
+        "timeout_s": 30.0,
+        "timeout_action": "forward"
+      },
+      "enabled": false,
+      "inspect_enabled": true,
+      "timeout_s": 30.0,
+      "timeout_action": "forward",
+      "pending_count": 0
+    },
+    {
+      "name": "a short timeout",
+      "given": {
+        "timeout_s": 2.0,
+        "timeout_action": "drop"
+      },
+      "enabled": false,
+      "inspect_enabled": true,
+      "timeout_s": 2.0,
+      "timeout_action": "drop",
+      "pending_count": 0
+    },
+    {
+      "name": "a timeout below the floor",
+      "given": {
+        "timeout_s": 0.1,
+        "timeout_action": "forward"
+      },
+      "enabled": false,
+      "inspect_enabled": true,
+      "timeout_s": 1.0,
+      "timeout_action": "forward",
+      "pending_count": 0
+    },
+    {
+      "name": "a negative timeout",
+      "given": {
+        "timeout_s": -5.0,
+        "timeout_action": "forward"
+      },
+      "enabled": false,
+      "inspect_enabled": true,
+      "timeout_s": 1.0,
+      "timeout_action": "forward",
+      "pending_count": 0
+    },
+    {
+      "name": "a timeout action nobody defined",
+      "given": {
+        "timeout_s": 5.0,
+        "timeout_action": "sideways"
+      },
+      "enabled": false,
+      "inspect_enabled": true,
+      "timeout_s": 5.0,
+      "timeout_action": "forward",
+      "pending_count": 0
+    },
+    {
+      "name": "a timeout action of drop",
+      "given": {
+        "timeout_s": 5.0,
+        "timeout_action": "drop"
+      },
+      "enabled": false,
+      "inspect_enabled": true,
+      "timeout_s": 5.0,
+      "timeout_action": "drop",
+      "pending_count": 0
+    }
+  ],
+  "flows": [
+    {
+      "name": "a decision arriving",
+      "pending_while_waiting": 1,
+      "resolved": true,
+      "decision": {
+        "action": "drop",
+        "headers": null,
+        "body": null
+      },
+      "pending_after": 0
+    },
+    {
+      "name": "a decision nobody was waiting for",
+      "pending_while_waiting": 0,
+      "resolved": false,
+      "decision": null,
+      "pending_after": 0
+    },
+    {
+      "name": "a second decision for the same request",
+      "pending_while_waiting": 1,
+      "resolved": true,
+      "decision": {
+        "action": "drop",
+        "headers": null,
+        "body": null
+      },
+      "pending_after": 0
+    },
+    {
+      "name": "nothing arriving before the timeout",
+      "pending_while_waiting": 1,
+      "resolved": false,
+      "decision": {
+        "action": "drop",
+        "headers": null,
+        "body": null
+      },
+      "pending_after": 0
+    },
+    {
+      "name": "everything released at once",
+      "pending_while_waiting": 3,
+      "resolved": true,
+      "decision": {
+        "action": "drop",
+        "headers": null,
+        "body": null
+      },
+      "pending_after": 0
+    },
+    {
+      "name": "releasing nothing",
+      "pending_while_waiting": 0,
+      "resolved": true,
+      "decision": null,
+      "pending_after": 0
+    }
+  ]
+}
