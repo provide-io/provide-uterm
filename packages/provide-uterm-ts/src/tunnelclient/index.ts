@@ -5,5 +5,6 @@
 
 /** The share and inspect client: watching and rewriting what crosses a tunnel. */
 
+export * from "./client.ts";
 export * from "./http-proxy.ts";
 export * from "./intercept.ts";
