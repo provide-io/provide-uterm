@@ -8,5 +8,6 @@
  * and the map from an application user to the identity a shell runs as.
  */
 
+export * from "./pam-events.ts";
 export * from "./uid-map.ts";
 export * from "./validate.ts";
