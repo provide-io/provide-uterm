@@ -19,7 +19,11 @@ namespace Provide.Uterm.Server;
 /// </summary>
 public static class SessionLifecycleState
 {
-    /// <summary>Registered but not brought up, or brought down again.</summary>
+    /// <summary>
+    /// Registered but not brought up, brought down again — or tried and failed.
+    /// The reference's run loop rests here in every one of those cases;
+    /// <c>last_error</c>, not the state, says which one it was.
+    /// </summary>
     public const string Stopped = "stopped";
 
     /// <summary>Asked to come up; the connector has not reported in yet.</summary>
@@ -28,7 +32,14 @@ public static class SessionLifecycleState
     /// <summary>Up.</summary>
     public const string Running = "running";
 
-    /// <summary>The connector failed; <c>last_error</c> says how.</summary>
+    /// <summary>
+    /// A failed run attempt, between retries. The reference assigns this in
+    /// <c>server/runtime.py: _run</c> and then leaves it again on the next pass
+    /// — <c>starting</c> when it retries, <c>stopped</c> when it gives up — so
+    /// no session comes to rest here. It is listed because it is the
+    /// reference's vocabulary and a client may be handed it by a reference
+    /// server; this port, having no retry loop, never assigns it.
+    /// </summary>
     public const string Error = "error";
 
     /// <summary>Every name, for validating what a port reports.</summary>

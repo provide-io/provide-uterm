@@ -47,7 +47,8 @@ public sealed class SessionLifecycleParityTests
     }
 
     /// <summary>Start a real server on *cfg*, the way the live driver does.</summary>
-    private static async Task<(UtermServer Server, HttpClient Http)> StartAsync(UtermServerConfig cfg)
+    private static async Task<(UtermServer Server, HttpClient Http)> StartAsync(
+        UtermServerConfig cfg, ISessionRegistry? registry = null)
     {
         var port = FreePort();
         cfg.Server.Host = "127.0.0.1";
@@ -66,7 +67,7 @@ public sealed class SessionLifecycleParityTests
             Auth = new LocalIdentityProvider(cfg.Auth, new ApiKeyStore()),
             Authz = new AuthorizationService(),
             Config = cfg,
-            Registry = new InMemorySessionRegistry(cfg.Sessions),
+            Registry = registry ?? new InMemorySessionRegistry(cfg.Sessions),
             Version = "lifecycle",
         });
         server.Build([$"http://127.0.0.1:{port}"]);
@@ -118,6 +119,83 @@ public sealed class SessionLifecycleParityTests
             Assert.Equal("stopped", session.GetProperty("lifecycle_state").GetString());
             Assert.False(session.GetProperty("connected").GetBoolean());
         }
+    }
+
+    /// <summary>
+    /// A session whose start throws comes to rest where the reference's run loop
+    /// comes to rest.
+    ///
+    /// <c>server/runtime.py</c>'s <c>_run</c> (~425-482) assigns
+    /// <c>_state = "error"</c> on a failed attempt, but that assignment is only
+    /// ever observable *between* retries: a permanent failure breaks the loop and
+    /// the line after it assigns <c>"stopped"</c> and <c>_stopped_at</c>, while a
+    /// transient one sleeps a backoff and assigns <c>"starting"</c> again at the
+    /// top. Nothing rests at <c>error</c>.
+    ///
+    /// So the reason a session stopped is read off <c>last_error</c>, not off the
+    /// state — which is why all three fields are asserted here.
+    /// </summary>
+    [Fact]
+    public async Task A_Session_That_Fails_To_Start_Rests_At_Stopped_With_The_Reason()
+    {
+        var cfg = UtermServerConfig.Default();
+        var registry = new FailingStartRegistry(
+            new InMemorySessionRegistry(cfg.Sessions), "provide-shell", "connector refused");
+        var (server, http) = await StartAsync(cfg, registry);
+        await using (server)
+        using (http)
+        {
+            var session = await http.GetFromJsonAsync<JsonElement>("/api/sessions/provide-shell");
+
+            Assert.Equal("stopped", session.GetProperty("lifecycle_state").GetString());
+            Assert.Equal("connector refused", session.GetProperty("last_error").GetString());
+            Assert.Equal(JsonValueKind.Number, session.GetProperty("stopped_at").ValueKind);
+            Assert.False(session.GetProperty("connected").GetBoolean());
+        }
+    }
+
+    /// <summary>An <see cref="ISessionRegistry"/> whose <c>StartSession</c> throws for one id.</summary>
+    private sealed class FailingStartRegistry : ISessionRegistry
+    {
+        private readonly InMemorySessionRegistry _inner;
+        private readonly string _failingId;
+        private readonly string _message;
+
+        public FailingStartRegistry(InMemorySessionRegistry inner, string failingId, string message)
+        {
+            _inner = inner;
+            _failingId = failingId;
+            _message = message;
+        }
+
+        public SessionStatus? StartSession(string sessionId) =>
+            sessionId == _failingId ? throw new InvalidOperationException(_message) : _inner.StartSession(sessionId);
+
+        public bool TryGetDefinition(string sessionId, out SessionDefinition definition) =>
+            _inner.TryGetDefinition(sessionId, out definition);
+
+        public bool TryGetStatus(string sessionId, out SessionStatus status) =>
+            _inner.TryGetStatus(sessionId, out status);
+
+        public IReadOnlyList<SessionItem> ListWithDefinitions() => _inner.ListWithDefinitions();
+
+        public SessionDefinition Upsert(SessionDefinition def) => _inner.Upsert(def);
+
+        public bool Delete(string sessionId) => _inner.Delete(sessionId);
+
+        public SessionStatus? StopSession(string sessionId) => _inner.StopSession(sessionId);
+
+        public SessionStatus? RestartSession(string sessionId) => _inner.RestartSession(sessionId);
+
+        public SessionStatus? ClearSession(string sessionId) => _inner.ClearSession(sessionId);
+
+        public SessionStatus? SetMode(string sessionId, string inputMode) => _inner.SetMode(sessionId, inputMode);
+
+        public SessionStatus? PatchSession(
+            string sessionId, string? displayName, string? visibility, IReadOnlyList<string>? tags) =>
+            _inner.PatchSession(sessionId, displayName, visibility, tags);
+
+        public int BulkDelete(string? lifecycleState) => _inner.BulkDelete(lifecycleState);
     }
 
     // -- the lifecycle vocabulary is the reference's ---------------------------

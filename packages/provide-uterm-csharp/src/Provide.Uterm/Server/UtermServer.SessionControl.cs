@@ -88,18 +88,33 @@ public sealed partial class UtermServer
         return StatusOrNotFound(sessionId, st);
     }
 
+    /// <summary>
+    /// Stop the session. The connector goes with it and the worker leaves the
+    /// hub — the reference's runtime stops its connector and its worker socket
+    /// closes with it, and a session that kept a worker after being stopped
+    /// could still be leased.
+    /// </summary>
     private async Task<IResult> HandleDisconnectSession(HttpContext ctx, string sessionId)
     {
         var (_, _, err) = await TryGatedSession(ctx, sessionId, "session.control.connect").ConfigureAwait(false);
         if (err is not null) return err;
+        StopLiveConnector(sessionId);
         return StatusOrNotFound(sessionId, _deps.Registry.StopSession(sessionId));
     }
 
+    /// <summary>Stop, then start again — including the connector and its worker.</summary>
     private async Task<IResult> HandleRestartSession(HttpContext ctx, string sessionId)
     {
-        var (_, _, err) = await TryGatedSession(ctx, sessionId, "session.control.connect").ConfigureAwait(false);
+        var (_, def, err) = await TryGatedSession(ctx, sessionId, "session.control.connect").ConfigureAwait(false);
         if (err is not null) return err;
-        return StatusOrNotFound(sessionId, _deps.Registry.RestartSession(sessionId));
+        StopLiveConnector(sessionId);
+        var st = _deps.Registry.RestartSession(sessionId);
+        if (st is not null && def is not null)
+        {
+            st = await ActivateSessionAsync(sessionId, def, ctx.RequestAborted).ConfigureAwait(false) ?? st;
+        }
+
+        return StatusOrNotFound(sessionId, st);
     }
 
     private async Task<IResult> HandleClearSession(HttpContext ctx, string sessionId)

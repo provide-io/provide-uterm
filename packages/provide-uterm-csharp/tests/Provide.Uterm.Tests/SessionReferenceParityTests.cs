@@ -59,11 +59,12 @@ public sealed class SessionReferenceParityTests
     /// A server on the *default* configuration — the one the live driver serves —
     /// so what the matrix sees is what these tests see.
     /// </summary>
-    private static async Task<(UtermServer Server, HttpClient Http, string Token)> StartAsync()
+    private static async Task<(UtermServer Server, HttpClient Http, string Token)> StartAsync(
+        UtermServerConfig? config = null)
     {
         Environment.SetEnvironmentVariable("UTERM_TEST_MODE", "1");
         var port = FreePort();
-        var cfg = UtermServerConfig.Default();
+        var cfg = config ?? UtermServerConfig.Default();
         cfg.Server.Host = "127.0.0.1";
         cfg.Server.Port = port;
         cfg.Server.PublicBaseUrl = $"http://127.0.0.1:{port}";
@@ -304,6 +305,42 @@ public sealed class SessionReferenceParityTests
     [Fact]
     public async Task SessionSnapshot_Returns_The_Null_The_Server_Sent()
     {
+        // A session nobody started has no worker and so no screen: the server
+        // answers a bare null, and the client hands that back rather than
+        // wrapping it in an object — which is what this pins.
+        //
+        // `provide-shell` is not the subject, because it is auto-started: its
+        // worker files a snapshot the moment it attaches, exactly as the
+        // reference's runtime does at the top of _bridge_session. Asked against
+        // a live reference server, GET /api/sessions/provide-shell/snapshot
+        // answers a snapshot object, not null.
+        var cfg = UtermServerConfig.Default();
+        cfg.Sessions.Add(new SessionDefinition
+        {
+            SessionId = "unstarted",
+            DisplayName = "Unstarted",
+            ConnectorType = "shell",
+            AutoStart = false,
+        });
+        var (server, http, token) = await StartAsync(cfg);
+        await using (server)
+        {
+            using (http)
+            {
+                using var client = HijackClient.WithBearer(server.BaseAddress!.TrimEnd('/'), token);
+
+                Assert.Null(await client.SessionSnapshot("unstarted"));
+            }
+        }
+    }
+
+    /// <summary>
+    /// The auto-started session's own screen is there to be read, because
+    /// starting it attached a worker that filed one.
+    /// </summary>
+    [Fact]
+    public async Task SessionSnapshot_Answers_The_Auto_Started_Sessions_Screen()
+    {
         var (server, http, token) = await StartAsync();
         await using (server)
         {
@@ -311,9 +348,10 @@ public sealed class SessionReferenceParityTests
             {
                 using var client = HijackClient.WithBearer(server.BaseAddress!.TrimEnd('/'), token);
 
-                // Nothing has been drawn, so the reference answers a bare null —
-                // not an object with a null inside it.
-                Assert.Null(await client.SessionSnapshot("provide-shell"));
+                var snapshot = await client.SessionSnapshot("provide-shell");
+
+                var fields = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(snapshot);
+                Assert.Equal("snapshot", fields["type"]);
             }
         }
     }

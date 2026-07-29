@@ -69,6 +69,9 @@ public class CoverageTo99Wave8Tests
             ConnectorType = "shell",
             Visibility = "public",
             Owner = "admin-user",
+            // Nobody asked for it, so nothing starts it — which is what leaves
+            // it without a worker now that starting a session attaches one.
+            AutoStart = false,
         });
         cfg.Sessions.Add(new SessionDefinition
         {

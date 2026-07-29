@@ -265,84 +265,6 @@ public sealed partial class UtermServer : IAsyncDisposable
         return st;
     }
 
-    /// <summary>
-    /// Live connectors started by profile/quick connect (shell/ushell/pty → ushell).
-    /// </summary>
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Connectors.IConnector> _liveConnectors =
-        new(StringComparer.Ordinal);
-
-    /// <summary>
-    /// Start session lifecycle, copy connector_config onto status, register hub worker,
-    /// and for shell/ushell/pty start a real Ushell connector that pumps term events.
-    /// </summary>
-    private SessionStatus? ActivateSession(string sessionId, SessionDefinition def)
-    {
-        var st = _deps.Registry.StartSession(sessionId);
-        if (st is null) return null;
-        st.ConnectorConfig = new Dictionary<string, object?>(def.ConnectorConfig);
-        // Ensure hub worker state so ring-buffer events attach to a real worker id.
-        // The state this creates carries the session's own input mode: a fresh
-        // WorkerTermState says "hijack" (what an unknown worker is assumed to
-        // be) and EnrichStatus reads the mode back off the hub, so the default
-        // would report every activated session as hijack-only whatever its
-        // configuration said. A worker already registered here keeps the mode
-        // it reported — the hub learns that from the worker, as the reference does.
-        _deps.Hub.Registry.SetDefault(sessionId, new Hub.WorkerTermState { InputMode = def.InputMode });
-        var ct = def.ConnectorType.Trim().ToLowerInvariant();
-        if (ct is "shell" or "ushell" or "pty")
-        {
-            // Synchronous so REST tests / cover exercise the live path before return.
-            StartShellConnector(sessionId, def);
-        }
-        else
-        {
-            // Non-shell: wire status only + bootstrap event (SSH/telnet need live network).
-            _deps.Hub.AppendEventData(sessionId, "session_started", new Dictionary<string, object?>
-            {
-                ["connector_type"] = def.ConnectorType,
-                ["display_name"] = def.DisplayName,
-            });
-        }
-
-        return st;
-    }
-
-    /// <summary>
-    /// Start a live ushell connector and pump welcome/term frames onto the EventBus.
-    /// Ushell is process-free and deterministic (no PTY / external process).
-    /// </summary>
-    private void StartShellConnector(string sessionId, SessionDefinition def)
-    {
-        var connector = new Shell.UshellConnector(sessionId, new Shell.UshellConnectorConfig
-        {
-            DisplayName = def.DisplayName,
-            PollDelay = TimeSpan.FromMilliseconds(1),
-            PollSleep = static _ => { },
-        });
-        connector.Start();
-        _liveConnectors[sessionId] = connector;
-        _deps.Hub.AppendEventData(sessionId, "session_started", new Dictionary<string, object?>
-        {
-            ["connector_type"] = def.ConnectorType,
-            ["display_name"] = def.DisplayName,
-            ["shell"] = true,
-            ["live"] = true,
-        });
-        // Welcome path returns immediately (no idle sleep).
-        foreach (var frame in connector.PollMessages())
-        {
-            var et = frame.TryGetValue("type", out var t) ? t?.ToString() ?? "term" : "term";
-            if (frame.TryGetValue("data", out var d) && d is Dictionary<string, object?> data)
-            {
-                _deps.Hub.AppendEventData(sessionId, et, data);
-            }
-            else
-            {
-                _deps.Hub.AppendEventData(sessionId, et, frame);
-            }
-        }
-    }
-
     private static Dictionary<string, object?> ExtractConnectorConfig(Dictionary<string, JsonElement> body)
     {
         var cfg = new Dictionary<string, object?>(StringComparer.Ordinal);
@@ -581,6 +503,16 @@ public sealed partial class UtermServer : IAsyncDisposable
             return BridgeError(404, "Invalid or expired hijack session.");
         }
 
+        // Ask the worker for the screen as it is now, the way the reference does
+        // (bridge/routes/rest.py: hijack_snapshot → hub.wait_for_snapshot, whose
+        // first act is request_snapshot). A worker that answers in process — the
+        // session's own connector, bridged by LocalWorkerLink — has stored its
+        // answer by the time this returns, so what the lease reads back includes
+        // the keys it just sent. A worker across a socket answers when it
+        // answers; this port reads the last snapshot it filed rather than
+        // holding the request open for one, which is the reference's poll loop
+        // and not yet ported.
+        await _deps.Hub.Presence.RequestSnapshotAsync(workerId, ctx.RequestAborted).ConfigureAwait(false);
         var snap = _deps.Hub.Router.GetLastSnapshot(workerId) ?? new Dictionary<string, object?>
         {
             ["text"] = "",
