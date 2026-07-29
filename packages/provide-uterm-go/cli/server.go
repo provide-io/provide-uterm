@@ -30,6 +30,7 @@ import (
 // the CLI owns (the control-plane engine and the resolved config/logger).
 type serverBundle struct {
 	srv      *server.Server
+	hub      *hub.TermHub
 	engine   cp.Engine
 	cfg      *serverconfig.UtermServerConfig
 	logger   *slog.Logger
@@ -128,6 +129,8 @@ func buildServerFromConfig(
 		WorkerToken:                cfg.Auth.WorkerBearerToken,
 		WorkerFrameOnInvalid:       cfg.WorkerFrameOnInvalid,
 		BrowserRateLimitPerSec:     cfg.BrowserRateLimitPerSec,
+		RestAcquireRateLimitPerSec: cfg.RestAcquireRateLimitPerSec,
+		RestSendRateLimitPerSec:    cfg.RestSendRateLimitPerSec,
 		MaxConnectionsPerPrincipal: cfg.MaxConnectionsPerPrincipal,
 		MaxWorkers:                 cfg.MaxWorkers,
 		// Match Python create_server_app: mint resume tokens on browser connect.
@@ -206,7 +209,10 @@ func buildServerFromConfig(
 			}
 		}()
 	}
-	return &serverBundle{srv: srv, engine: engine, cfg: cfg, logger: logger, devToken: devToken, registry: registry}, nil
+	return &serverBundle{
+		srv: srv, hub: h, engine: engine, cfg: cfg,
+		logger: logger, devToken: devToken, registry: registry,
+	}, nil
 }
 
 // workerBearerToken resolves the hub's worker token, which hosted sessions

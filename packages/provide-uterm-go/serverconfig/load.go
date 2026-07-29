@@ -27,6 +27,7 @@ var knownTopLevel = map[string]struct{}{
 	"recording": {}, "profiles": {}, "security": {}, "tunnel": {}, "webhooks": {},
 	"pam": {}, "governance": {}, "audit": {}, "sessions": {}, "graphical_targets": {},
 	"session_idle_timeout_s": {}, "session_retention_s": {}, "browser_rate_limit_per_sec": {},
+	"rest_acquire_rate_limit_per_sec": {}, "rest_send_rate_limit_per_sec": {},
 	"worker_frame_on_invalid": {}, "max_connections_per_principal": {}, "max_workers": {},
 }
 
@@ -183,6 +184,12 @@ func applyTopScalars(cfg *UtermServerConfig, data map[string]any) error {
 	if v, ok := data["browser_rate_limit_per_sec"]; ok {
 		cfg.BrowserRateLimitPerSec = asFloat(v)
 	}
+	if v, ok := data["rest_acquire_rate_limit_per_sec"]; ok {
+		cfg.RestAcquireRateLimitPerSec = asFloat(v)
+	}
+	if v, ok := data["rest_send_rate_limit_per_sec"]; ok {
+		cfg.RestSendRateLimitPerSec = asFloat(v)
+	}
 	if v, ok := data["worker_frame_on_invalid"]; ok {
 		s := asString(v)
 		if !inSet(s, "drop", "reject") {
@@ -310,7 +317,12 @@ func runValidators(cfg *UtermServerConfig) error {
 	if cfg.MaxWorkers < 1 {
 		return fmt.Errorf("max_workers must be >= 1, got: %d", cfg.MaxWorkers)
 	}
-	return nil
+	// Refused at load, not at first use: a server that boots with a nonsense
+	// limit and discovers it later is a server running unprotected.
+	if err := validateRestRateLimit("rest_acquire_rate_limit_per_sec", cfg.RestAcquireRateLimitPerSec); err != nil {
+		return err
+	}
+	return validateRestRateLimit("rest_send_rate_limit_per_sec", cfg.RestSendRateLimitPerSec)
 }
 
 func asFloat(v any) float64 {

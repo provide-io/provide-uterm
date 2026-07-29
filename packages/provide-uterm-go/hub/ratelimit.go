@@ -5,6 +5,21 @@
 
 package hub
 
+// MinRatePerSec is the tightest rate (tokens/sec) any bucket-backed policy may
+// be configured with. Port of ratelimit.MIN_RATE_PER_SEC.
+//
+// One call per second is the tightest limit a [TokenBucket] can actually
+// honour, because its burst is one second of its own rate. Below 1/sec the
+// bucket's ceiling is under the single token a call costs, so it never holds a
+// whole token and denies every call forever, however long the caller waits — a
+// bricked endpoint dressed as a tight limit, and exactly what refusing a rate
+// of 0 is meant to prevent. The server config therefore refuses any configured
+// rate below this floor, and [RateLimiter] clamps to it: were a lower rate
+// accepted, the clamp would silently hand back a *looser* limit than the
+// operator wrote, and a rate limit that quietly loosens itself is worse than
+// none.
+const MinRatePerSec = 1.0
+
 // TokenBucket is a simple token-bucket rate limiter. Port of
 // provide.uterm.server.bridge.ratelimit.TokenBucket.
 //

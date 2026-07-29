@@ -7,8 +7,12 @@ package serverconfig
 
 import (
 	"fmt"
+	"math"
 	"net/url"
+	"strconv"
 	"strings"
+
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
 )
 
 // loopbackHosts mirrors _LOOPBACK_HOSTS in config_schema.py.
@@ -141,6 +145,64 @@ func validateAuth(a *AuthConfig) error {
 				"set auth.webhook_idp_require_signed_response=false to disable verification")
 	}
 	return nil
+}
+
+// validateRestRateLimit ports config_schema._validate_rest_rate_limit: refuse
+// any rate the limiter cannot honour verbatim.
+//
+// A rate limit is trusted, so it must never end up looser than what the
+// operator wrote, and it must never be a limit the limiter cannot express.
+//
+// 0 is refused rather than interpreted: read as "unlimited" it would silently
+// disable the limit, read as "refuse everything" it would silently brick the
+// REST hijack API, and there is no way to tell which the operator meant.
+// Negative values are refused for the same reason.
+//
+// Anything below [hub.MinRatePerSec] is refused for both halves of that. The
+// limiter clamps to the floor, so accepting a lower rate would quietly hand
+// back a *higher* rate than was configured; and the sub-1/sec band is not a
+// tight policy at all — a bucket whose burst is one second of its rate never
+// holds the whole token a call costs, so it denies everything forever. "One
+// call every ten seconds" is not a stricter limit than one per second, it is
+// an outage, which is the same silent bricking 0 is refused to prevent.
+//
+// Non-finite values are refused explicitly, because neither is caught by the
+// range test alone. +Inf compares true against every floor, and an unbounded
+// limit is the same silent disabling as 0. NaN compares false against
+// everything, which the `!(v >= min)` form below already refuses — that form
+// is deliberate: `v < min` would admit NaN.
+func validateRestRateLimit(field string, value float64) error {
+	if math.IsInf(value, 0) || math.IsNaN(value) {
+		return restRateError(field, value)
+	}
+	if !(value >= hub.MinRatePerSec) { //nolint:staticcheck // QF1001: `!(x >= y)` is deliberate — it refuses NaN, `x < y` admits it
+		return restRateError(field, value)
+	}
+	return nil
+}
+
+// restRateError is the single refusal message: it names the offending key,
+// states the floor, and echoes the value that was written.
+func restRateError(field string, value float64) error {
+	return fmt.Errorf("%s must be >= %s, got: %s", field, pyFloat(hub.MinRatePerSec), pyFloat(value))
+}
+
+// pyFloat renders a float the way Python's repr does, so a refusal reads
+// identically across the two ports: 0 → "0.0", NaN → "nan".
+func pyFloat(v float64) string {
+	switch {
+	case math.IsNaN(v):
+		return "nan"
+	case math.IsInf(v, 1):
+		return "inf"
+	case math.IsInf(v, -1):
+		return "-inf"
+	}
+	s := strconv.FormatFloat(v, 'g', -1, 64)
+	if !strings.ContainsAny(s, ".e") {
+		s += ".0"
+	}
+	return s
 }
 
 func validateAudit(a *AuditConfig) error {
