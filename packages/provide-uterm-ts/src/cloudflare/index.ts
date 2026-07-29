@@ -18,6 +18,7 @@ export * from "./jwt.ts";
 export * from "./jwt-verify.ts";
 export * from "./registry.ts";
 export * from "./session-auth.ts";
+export * from "./session-lifecycle.ts";
 export * from "./socket-registry.ts";
 export * from "./sse.ts";
 export * from "./store.ts";

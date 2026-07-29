@@ -1,0 +1,900 @@
+{
+  "fixed_ts": 1700000000.0,
+  "resume_token": "recorded-resume-token",
+  "ws_id": "ws-1",
+  "worker_id": "w1",
+  "open": [
+    {
+      "name": "a worker arriving",
+      "case": {
+        "role": "worker"
+      },
+      "actions": [
+        {
+          "kind": "register_socket",
+          "role": "worker"
+        },
+        {
+          "kind": "broadcast_worker_frame",
+          "frame": {
+            "type": "worker_connected",
+            "worker_id": "w1",
+            "ts": 1700000000.0
+          }
+        },
+        {
+          "kind": "update_kv",
+          "connected": true
+        }
+      ],
+      "closed": [],
+      "lifecycle_state": "running",
+      "kv": [
+        {
+          "worker_id": "w1",
+          "connected": true,
+          "hijacked": false,
+          "input_mode": "open"
+        }
+      ]
+    },
+    {
+      "name": "a worker arriving at a deleted session",
+      "case": {
+        "role": "worker",
+        "deleted": true
+      },
+      "actions": [],
+      "closed": [
+        {
+          "code": 1001,
+          "reason": "session deleted"
+        }
+      ],
+      "lifecycle_state": "starting",
+      "kv": []
+    },
+    {
+      "name": "a raw socket arriving with a screen to show",
+      "case": {
+        "role": "raw",
+        "has_snapshot": true
+      },
+      "actions": [
+        {
+          "kind": "register_socket",
+          "role": "raw"
+        },
+        {
+          "kind": "send_text",
+          "text": "the screen"
+        }
+      ],
+      "closed": [],
+      "lifecycle_state": "starting",
+      "kv": []
+    },
+    {
+      "name": "a raw socket arriving with nothing to show",
+      "case": {
+        "role": "raw",
+        "has_snapshot": false
+      },
+      "actions": [
+        {
+          "kind": "register_socket",
+          "role": "raw"
+        }
+      ],
+      "closed": [],
+      "lifecycle_state": "starting",
+      "kv": []
+    },
+    {
+      "name": "an admin browser on a fresh upgrade",
+      "case": {
+        "role": "browser",
+        "browser_role": "admin",
+        "already_initialized": true,
+        "presence": true
+      },
+      "actions": [
+        {
+          "kind": "register_socket",
+          "role": "browser"
+        },
+        {
+          "kind": "presence_sync",
+          "exclude_self": true
+        },
+        {
+          "kind": "send_hijack_state"
+        },
+        {
+          "kind": "send",
+          "frame": {
+            "type": "snapshot",
+            "screen": "the screen"
+          }
+        },
+        {
+          "kind": "on_browser_connected"
+        }
+      ],
+      "closed": [],
+      "lifecycle_state": "starting",
+      "kv": []
+    },
+    {
+      "name": "an admin browser after hibernation",
+      "case": {
+        "role": "browser",
+        "browser_role": "admin",
+        "already_initialized": false,
+        "presence": true
+      },
+      "actions": [
+        {
+          "kind": "register_socket",
+          "role": "browser"
+        },
+        {
+          "kind": "create_resume_token",
+          "token": "recorded-resume-token",
+          "worker_id": "w1",
+          "role": "admin",
+          "ttl": 300.0
+        },
+        {
+          "kind": "send",
+          "frame": {
+            "type": "hello",
+            "worker_id": "w1",
+            "worker_online": false,
+            "can_hijack": true,
+            "input_mode": "open",
+            "role": "admin",
+            "hijack_control": "rest",
+            "hijack_step_supported": true,
+            "resume_supported": true,
+            "presence_enabled": true,
+            "protocol_version": 1,
+            "protocol": {
+              "selected": 1,
+              "server_min": 1,
+              "server_max": 1
+            },
+            "ts": 1700000000.0,
+            "resume_token": "recorded-resume-token"
+          }
+        },
+        {
+          "kind": "presence_sync",
+          "exclude_self": true
+        },
+        {
+          "kind": "send_hijack_state"
+        },
+        {
+          "kind": "send",
+          "frame": {
+            "type": "snapshot",
+            "screen": "the screen"
+          }
+        },
+        {
+          "kind": "on_browser_connected"
+        }
+      ],
+      "closed": [],
+      "lifecycle_state": "starting",
+      "kv": []
+    },
+    {
+      "name": "an operator browser after hibernation",
+      "case": {
+        "role": "browser",
+        "browser_role": "operator"
+      },
+      "actions": [
+        {
+          "kind": "register_socket",
+          "role": "browser"
+        },
+        {
+          "kind": "create_resume_token",
+          "token": "recorded-resume-token",
+          "worker_id": "w1",
+          "role": "operator",
+          "ttl": 300.0
+        },
+        {
+          "kind": "send",
+          "frame": {
+            "type": "hello",
+            "worker_id": "w1",
+            "worker_online": false,
+            "can_hijack": false,
+            "input_mode": "open",
+            "role": "operator",
+            "hijack_control": "rest",
+            "hijack_step_supported": true,
+            "resume_supported": true,
+            "presence_enabled": false,
+            "protocol_version": 1,
+            "protocol": {
+              "selected": 1,
+              "server_min": 1,
+              "server_max": 1
+            },
+            "ts": 1700000000.0,
+            "resume_token": "recorded-resume-token"
+          }
+        },
+        {
+          "kind": "presence_sync",
+          "exclude_self": true
+        },
+        {
+          "kind": "send_hijack_state"
+        },
+        {
+          "kind": "send",
+          "frame": {
+            "type": "snapshot",
+            "screen": "the screen"
+          }
+        },
+        {
+          "kind": "on_browser_connected"
+        }
+      ],
+      "closed": [],
+      "lifecycle_state": "starting",
+      "kv": []
+    },
+    {
+      "name": "a viewer browser after hibernation",
+      "case": {
+        "role": "browser",
+        "browser_role": "viewer"
+      },
+      "actions": [
+        {
+          "kind": "register_socket",
+          "role": "browser"
+        },
+        {
+          "kind": "create_resume_token",
+          "token": "recorded-resume-token",
+          "worker_id": "w1",
+          "role": "viewer",
+          "ttl": 300.0
+        },
+        {
+          "kind": "send",
+          "frame": {
+            "type": "hello",
+            "worker_id": "w1",
+            "worker_online": false,
+            "can_hijack": false,
+            "input_mode": "open",
+            "role": "viewer",
+            "hijack_control": "rest",
+            "hijack_step_supported": true,
+            "resume_supported": true,
+            "presence_enabled": false,
+            "protocol_version": 1,
+            "protocol": {
+              "selected": 1,
+              "server_min": 1,
+              "server_max": 1
+            },
+            "ts": 1700000000.0,
+            "resume_token": "recorded-resume-token"
+          }
+        },
+        {
+          "kind": "presence_sync",
+          "exclude_self": true
+        },
+        {
+          "kind": "send_hijack_state"
+        },
+        {
+          "kind": "send",
+          "frame": {
+            "type": "snapshot",
+            "screen": "the screen"
+          }
+        },
+        {
+          "kind": "on_browser_connected"
+        }
+      ],
+      "closed": [],
+      "lifecycle_state": "starting",
+      "kv": []
+    },
+    {
+      "name": "a browser with a role nobody defined",
+      "case": {
+        "role": "browser",
+        "browser_role": "superuser"
+      },
+      "actions": [
+        {
+          "kind": "register_socket",
+          "role": "browser"
+        },
+        {
+          "kind": "create_resume_token",
+          "token": "recorded-resume-token",
+          "worker_id": "w1",
+          "role": "superuser",
+          "ttl": 300.0
+        },
+        {
+          "kind": "send",
+          "frame": {
+            "type": "hello",
+            "worker_id": "w1",
+            "worker_online": false,
+            "can_hijack": false,
+            "input_mode": "open",
+            "role": "superuser",
+            "hijack_control": "rest",
+            "hijack_step_supported": true,
+            "resume_supported": true,
+            "presence_enabled": false,
+            "protocol_version": 1,
+            "protocol": {
+              "selected": 1,
+              "server_min": 1,
+              "server_max": 1
+            },
+            "ts": 1700000000.0,
+            "resume_token": "recorded-resume-token"
+          }
+        },
+        {
+          "kind": "presence_sync",
+          "exclude_self": true
+        },
+        {
+          "kind": "send_hijack_state"
+        },
+        {
+          "kind": "send",
+          "frame": {
+            "type": "snapshot",
+            "screen": "the screen"
+          }
+        },
+        {
+          "kind": "on_browser_connected"
+        }
+      ],
+      "closed": [],
+      "lifecycle_state": "starting",
+      "kv": []
+    },
+    {
+      "name": "a browser after hibernation with resume off",
+      "case": {
+        "role": "browser",
+        "browser_role": "admin",
+        "resume_on": false
+      },
+      "actions": [
+        {
+          "kind": "register_socket",
+          "role": "browser"
+        },
+        {
+          "kind": "send",
+          "frame": {
+            "type": "hello",
+            "worker_id": "w1",
+            "worker_online": false,
+            "can_hijack": true,
+            "input_mode": "open",
+            "role": "admin",
+            "hijack_control": "rest",
+            "hijack_step_supported": true,
+            "resume_supported": false,
+            "presence_enabled": false,
+            "protocol_version": 1,
+            "protocol": {
+              "selected": 1,
+              "server_min": 1,
+              "server_max": 1
+            },
+            "ts": 1700000000.0
+          }
+        },
+        {
+          "kind": "presence_sync",
+          "exclude_self": true
+        },
+        {
+          "kind": "send_hijack_state"
+        },
+        {
+          "kind": "send",
+          "frame": {
+            "type": "snapshot",
+            "screen": "the screen"
+          }
+        },
+        {
+          "kind": "on_browser_connected"
+        }
+      ],
+      "closed": [],
+      "lifecycle_state": "starting",
+      "kv": []
+    },
+    {
+      "name": "a browser after hibernation with no screen yet",
+      "case": {
+        "role": "browser",
+        "browser_role": "admin",
+        "has_snapshot": false
+      },
+      "actions": [
+        {
+          "kind": "register_socket",
+          "role": "browser"
+        },
+        {
+          "kind": "create_resume_token",
+          "token": "recorded-resume-token",
+          "worker_id": "w1",
+          "role": "admin",
+          "ttl": 300.0
+        },
+        {
+          "kind": "send",
+          "frame": {
+            "type": "hello",
+            "worker_id": "w1",
+            "worker_online": false,
+            "can_hijack": true,
+            "input_mode": "open",
+            "role": "admin",
+            "hijack_control": "rest",
+            "hijack_step_supported": true,
+            "resume_supported": true,
+            "presence_enabled": false,
+            "protocol_version": 1,
+            "protocol": {
+              "selected": 1,
+              "server_min": 1,
+              "server_max": 1
+            },
+            "ts": 1700000000.0,
+            "resume_token": "recorded-resume-token"
+          }
+        },
+        {
+          "kind": "presence_sync",
+          "exclude_self": true
+        },
+        {
+          "kind": "send_hijack_state"
+        },
+        {
+          "kind": "on_browser_connected"
+        }
+      ],
+      "closed": [],
+      "lifecycle_state": "starting",
+      "kv": []
+    },
+    {
+      "name": "a browser arriving at a deleted session",
+      "case": {
+        "role": "browser",
+        "deleted": true
+      },
+      "actions": [],
+      "closed": [
+        {
+          "code": 1001,
+          "reason": "session deleted"
+        }
+      ],
+      "lifecycle_state": "starting",
+      "kv": []
+    },
+    {
+      "name": "a browser on a session in hijack mode",
+      "case": {
+        "role": "browser",
+        "browser_role": "admin",
+        "input_mode": "hijack"
+      },
+      "actions": [
+        {
+          "kind": "register_socket",
+          "role": "browser"
+        },
+        {
+          "kind": "create_resume_token",
+          "token": "recorded-resume-token",
+          "worker_id": "w1",
+          "role": "admin",
+          "ttl": 300.0
+        },
+        {
+          "kind": "send",
+          "frame": {
+            "type": "hello",
+            "worker_id": "w1",
+            "worker_online": false,
+            "can_hijack": true,
+            "input_mode": "hijack",
+            "role": "admin",
+            "hijack_control": "rest",
+            "hijack_step_supported": true,
+            "resume_supported": true,
+            "presence_enabled": false,
+            "protocol_version": 1,
+            "protocol": {
+              "selected": 1,
+              "server_min": 1,
+              "server_max": 1
+            },
+            "ts": 1700000000.0,
+            "resume_token": "recorded-resume-token"
+          }
+        },
+        {
+          "kind": "presence_sync",
+          "exclude_self": true
+        },
+        {
+          "kind": "send_hijack_state"
+        },
+        {
+          "kind": "send",
+          "frame": {
+            "type": "snapshot",
+            "screen": "the screen"
+          }
+        },
+        {
+          "kind": "on_browser_connected"
+        }
+      ],
+      "closed": [],
+      "lifecycle_state": "starting",
+      "kv": []
+    }
+  ],
+  "close": [
+    {
+      "name": "a browser leaving a presence session",
+      "case": {
+        "role": "browser",
+        "presence": true
+      },
+      "actions": [
+        {
+          "kind": "broadcast_browsers",
+          "frame": {
+            "type": "presence_leave",
+            "user_id": "ws-1",
+            "ts": 1700000000.0
+          }
+        },
+        {
+          "kind": "remove_socket"
+        }
+      ],
+      "closed": [],
+      "lifecycle_state": "starting",
+      "kv": []
+    },
+    {
+      "name": "a browser leaving a session without presence",
+      "case": {
+        "role": "browser",
+        "presence": false
+      },
+      "actions": [
+        {
+          "kind": "remove_socket"
+        }
+      ],
+      "closed": [],
+      "lifecycle_state": "starting",
+      "kv": []
+    },
+    {
+      "name": "a browser that held the hijack leaving",
+      "case": {
+        "role": "browser",
+        "held_hijack": true,
+        "has_resume_token": true
+      },
+      "actions": [
+        {
+          "kind": "mark_resume_hijack_owner",
+          "token": "recorded-resume-token",
+          "owner": true
+        },
+        {
+          "kind": "remove_socket"
+        }
+      ],
+      "closed": [],
+      "lifecycle_state": "starting",
+      "kv": []
+    },
+    {
+      "name": "a browser that held the hijack with no resume token",
+      "case": {
+        "role": "browser",
+        "held_hijack": true,
+        "has_resume_token": false
+      },
+      "actions": [
+        {
+          "kind": "remove_socket"
+        }
+      ],
+      "closed": [],
+      "lifecycle_state": "starting",
+      "kv": []
+    },
+    {
+      "name": "a browser leaving a deleted session",
+      "case": {
+        "role": "browser",
+        "presence": true,
+        "deleted": true
+      },
+      "actions": [
+        {
+          "kind": "remove_socket"
+        }
+      ],
+      "closed": [],
+      "lifecycle_state": "starting",
+      "kv": []
+    },
+    {
+      "name": "a worker leaving",
+      "case": {
+        "role": "worker"
+      },
+      "actions": [
+        {
+          "kind": "remove_socket"
+        },
+        {
+          "kind": "broadcast_worker_frame",
+          "frame": {
+            "type": "worker_disconnected",
+            "worker_id": "w1",
+            "ts": 1700000000.0
+          }
+        },
+        {
+          "kind": "update_kv",
+          "connected": false
+        }
+      ],
+      "closed": [],
+      "lifecycle_state": "stopped",
+      "kv": [
+        {
+          "worker_id": "w1",
+          "connected": false
+        }
+      ]
+    },
+    {
+      "name": "a worker leaving a deleted session",
+      "case": {
+        "role": "worker",
+        "deleted": true
+      },
+      "actions": [
+        {
+          "kind": "remove_socket"
+        },
+        {
+          "kind": "update_kv",
+          "connected": false
+        }
+      ],
+      "closed": [],
+      "lifecycle_state": "starting",
+      "kv": [
+        {
+          "worker_id": "w1",
+          "connected": false
+        }
+      ]
+    },
+    {
+      "name": "a raw socket leaving",
+      "case": {
+        "role": "raw"
+      },
+      "actions": [
+        {
+          "kind": "remove_socket"
+        }
+      ],
+      "closed": [],
+      "lifecycle_state": "starting",
+      "kv": []
+    }
+  ],
+  "error": [
+    {
+      "name": "a browser leaving a presence session",
+      "case": {
+        "role": "browser",
+        "presence": true
+      },
+      "actions": [
+        {
+          "kind": "broadcast_browsers",
+          "frame": {
+            "type": "presence_leave",
+            "user_id": "ws-1",
+            "ts": 1700000000.0
+          }
+        },
+        {
+          "kind": "remove_socket"
+        }
+      ],
+      "closed": [],
+      "lifecycle_state": "starting",
+      "kv": []
+    },
+    {
+      "name": "a browser leaving a session without presence",
+      "case": {
+        "role": "browser",
+        "presence": false
+      },
+      "actions": [
+        {
+          "kind": "remove_socket"
+        }
+      ],
+      "closed": [],
+      "lifecycle_state": "starting",
+      "kv": []
+    },
+    {
+      "name": "a browser that held the hijack leaving",
+      "case": {
+        "role": "browser",
+        "held_hijack": true,
+        "has_resume_token": true
+      },
+      "actions": [
+        {
+          "kind": "mark_resume_hijack_owner",
+          "token": "recorded-resume-token",
+          "owner": true
+        },
+        {
+          "kind": "remove_socket"
+        }
+      ],
+      "closed": [],
+      "lifecycle_state": "starting",
+      "kv": []
+    },
+    {
+      "name": "a browser that held the hijack with no resume token",
+      "case": {
+        "role": "browser",
+        "held_hijack": true,
+        "has_resume_token": false
+      },
+      "actions": [
+        {
+          "kind": "remove_socket"
+        }
+      ],
+      "closed": [],
+      "lifecycle_state": "starting",
+      "kv": []
+    },
+    {
+      "name": "a browser leaving a deleted session",
+      "case": {
+        "role": "browser",
+        "presence": true,
+        "deleted": true
+      },
+      "actions": [
+        {
+          "kind": "remove_socket"
+        }
+      ],
+      "closed": [],
+      "lifecycle_state": "starting",
+      "kv": []
+    },
+    {
+      "name": "a worker leaving",
+      "case": {
+        "role": "worker"
+      },
+      "actions": [
+        {
+          "kind": "remove_socket"
+        },
+        {
+          "kind": "broadcast_worker_frame",
+          "frame": {
+            "type": "worker_disconnected",
+            "worker_id": "w1",
+            "ts": 1700000000.0
+          }
+        },
+        {
+          "kind": "update_kv",
+          "connected": false
+        }
+      ],
+      "closed": [],
+      "lifecycle_state": "error",
+      "kv": [
+        {
+          "worker_id": "w1",
+          "connected": false
+        }
+      ]
+    },
+    {
+      "name": "a worker leaving a deleted session",
+      "case": {
+        "role": "worker",
+        "deleted": true
+      },
+      "actions": [
+        {
+          "kind": "remove_socket"
+        },
+        {
+          "kind": "update_kv",
+          "connected": false
+        }
+      ],
+      "closed": [],
+      "lifecycle_state": "starting",
+      "kv": [
+        {
+          "worker_id": "w1",
+          "connected": false
+        }
+      ]
+    },
+    {
+      "name": "a raw socket leaving",
+      "case": {
+        "role": "raw"
+      },
+      "actions": [
+        {
+          "kind": "remove_socket"
+        }
+      ],
+      "closed": [],
+      "lifecycle_state": "starting",
+      "kv": []
+    }
+  ]
+}
