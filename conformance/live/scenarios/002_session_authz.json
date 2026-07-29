@@ -1,0 +1,79 @@
+{
+  "id": "002_session_authz",
+  "title": "The session list refuses everyone it should, the same way",
+  "timeout_ms": 20000,
+  "auth": "dev_token",
+  "steps": [
+    { "id": "anonymous", "action": "http_get", "path": "/api/sessions", "auth": "none" },
+    { "id": "forged_token", "action": "http_get", "path": "/api/sessions", "auth": "bad" },
+    { "id": "anonymous_library", "action": "list_sessions", "auth": "none" },
+    {
+      "id": "authenticated",
+      "action": "list_sessions",
+      "auth": "token",
+      "volatile": ["body.*.created_at", "body.*.connected", "body.*.lifecycle_state"]
+    }
+  ],
+  "expect": [
+    {
+      "step": "anonymous",
+      "path": "status",
+      "equals": 401,
+      "why": "No credential at all is unauthenticated, not forbidden. 403 would tell a caller their token was read and rejected, which is a different thing to debug."
+    },
+    {
+      "step": "anonymous",
+      "path": "body",
+      "equals": { "detail": "authentication required" },
+      "why": "The refusal body is the whole contract for a client that renders errors. Pinned exactly so no port invents its own wording or its own envelope."
+    },
+    {
+      "step": "forged_token",
+      "path": "status",
+      "equals": 401,
+      "why": "A token that does not verify is indistinguishable from no token — saying which would tell an attacker whether a token was well-formed."
+    },
+    {
+      "step": "forged_token",
+      "path": "body",
+      "equals": { "detail": "authentication required" },
+      "why": "Byte-identical to the anonymous refusal, deliberately: a different message here is an oracle."
+    },
+    {
+      "step": "anonymous_library",
+      "path": "ok",
+      "equals": false,
+      "why": "What every port's client library concludes from a 401. A library that reported success on a refusal would hand a caller an error body as data."
+    },
+    {
+      "step": "anonymous_library",
+      "path": "status",
+      "equals": 401,
+      "why": "Observed under the library, which drops the status itself. Without this the matrix could not tell a 401 from a 403 or a 500."
+    },
+    {
+      "step": "authenticated",
+      "path": "status",
+      "equals": 200,
+      "why": "A valid token lists sessions."
+    },
+    {
+      "step": "authenticated",
+      "path": "ok",
+      "equals": true,
+      "why": "The library agrees with the status it was given."
+    },
+    {
+      "step": "authenticated",
+      "path": "body",
+      "type": "array",
+      "why": "The list is a bare array, not an object wrapping one. A port that wrapped it would break every client's iteration."
+    },
+    {
+      "step": "authenticated",
+      "path": "body",
+      "min_count": 0,
+      "why": "An empty list is a legitimate answer; this asserts the shape can be counted at all."
+    }
+  ]
+}

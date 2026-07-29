@@ -1,0 +1,102 @@
+{
+  "id": "004_session_shape",
+  "title": "A session reads the same whether it came from the list or on its own",
+  "timeout_ms": 20000,
+  "auth": "dev_token",
+  "requires": [],
+  "steps": [
+    {
+      "id": "listed",
+      "action": "list_sessions",
+      "auth": "token",
+      "volatile": ["body.*.created_at", "body.*.connected", "body.*.lifecycle_state"]
+    },
+    {
+      "id": "fetched",
+      "action": "get_session",
+      "session_id": "provide-shell",
+      "auth": "token",
+      "volatile": ["body.created_at", "body.connected", "body.lifecycle_state"]
+    }
+  ],
+  "expect": [
+    {
+      "step": "listed",
+      "path": "body.0.session_id",
+      "equals": "provide-shell",
+      "why": "The reference configuration defines one session. A port whose defaults differ would leave every deployment's first experience different."
+    },
+    {
+      "step": "listed",
+      "path": "body.0.connector_type",
+      "equals": "shell",
+      "why": "Which connector the default session uses is part of the default configuration, not of the port."
+    },
+    {
+      "step": "listed",
+      "path": "body.0.input_mode",
+      "equals": "open",
+      "why": "The input mode decides whether a viewer can type. A default that differed by port would be a security difference by port."
+    },
+    {
+      "step": "listed",
+      "path": "body.0.visibility",
+      "equals": "public",
+      "why": "Who can see the session. Same reasoning as the input mode."
+    },
+    {
+      "step": "listed",
+      "path": "body.0.owner",
+      "type": "null",
+      "why": "A configured session has no owner until someone takes it. Null, not an empty string and not absent."
+    },
+    {
+      "step": "listed",
+      "path": "body.0.tags",
+      "equals": ["shell", "reference"],
+      "why": "Tags come from the configuration and keep their order — a port that sorted or de-duplicated them would change what a filter matches."
+    },
+    {
+      "step": "listed",
+      "path": "body.0.recording_enabled",
+      "equals": false,
+      "why": "Recording is off unless asked for. A port defaulting it on would record sessions nobody consented to."
+    },
+    {
+      "step": "listed",
+      "path": "body.0.lifecycle_state",
+      "present": true,
+      "why": "Its value depends on how far startup got, but a port that never reports lifecycle at all has dropped the field a dashboard reads."
+    },
+    {
+      "step": "fetched",
+      "path": "status",
+      "equals": 200,
+      "why": "The session named by the list can be fetched on its own."
+    },
+    {
+      "step": "fetched",
+      "path": "body.session_id",
+      "equals": "provide-shell",
+      "why": "Fetching by id returns that id."
+    },
+    {
+      "step": "fetched",
+      "path": "body.display_name",
+      "equals": "Provide Shell",
+      "why": "The human-facing name comes from the configuration."
+    },
+    {
+      "step": "fetched",
+      "path": "body.stopped_at",
+      "type": "null",
+      "why": "A running session has not stopped. Null rather than absent, so a client can tell 'has not stopped' from 'this port does not say'."
+    },
+    {
+      "step": "fetched",
+      "path": "body.last_error",
+      "type": "null",
+      "why": "Nothing has gone wrong, and a port must say so rather than omitting the field."
+    }
+  ]
+}

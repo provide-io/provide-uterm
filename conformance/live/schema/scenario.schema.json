@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://provide.io/schemas/uterm-live-scenario.json",
+  "title": "Uterm live harness scenario",
+  "description": "One scenario run against every server language by every client language. Steps are performed by a driver; expectations are evaluated by the harness.",
+  "type": "object",
+  "required": ["id", "title", "steps", "expect"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[0-9]{3}_[a-z0-9_]+$",
+      "description": "Ordered identifier, matching the file name."
+    },
+    "title": { "type": "string", "minLength": 1 },
+    "timeout_ms": { "type": "integer", "minimum": 1, "default": 15000 },
+    "requires": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Capabilities a driver must report to run this scenario at all.",
+      "default": []
+    },
+    "auth": {
+      "type": "string",
+      "enum": ["dev_token", "jwt", "api_key", "header", "webhook"],
+      "default": "dev_token",
+      "description": "The auth mode the server driver is asked to start in."
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "action"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+          "action": {
+            "type": "string",
+            "enum": [
+              "health",
+              "list_sessions",
+              "get_session",
+              "session_snapshot",
+              "http_get",
+              "http_post"
+            ]
+          },
+          "auth": {
+            "type": "string",
+            "enum": ["token", "none", "bad"],
+            "default": "token"
+          },
+          "path": { "type": "string", "description": "For http_get/http_post." },
+          "session_id": { "type": "string" },
+          "body": { "description": "For http_post: the JSON body to send." },
+          "volatile": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Dotted paths within this step's fields whose value differs legitimately between runs and languages, and is masked before comparison.",
+            "default": []
+          }
+        }
+      }
+    },
+    "expect": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["step", "path"],
+        "additionalProperties": false,
+        "properties": {
+          "step": { "type": "string" },
+          "path": {
+            "type": "string",
+            "description": "Dotted path into the step's recorded fields, e.g. body.status or body.sessions.0.id."
+          },
+          "equals": {},
+          "in": { "type": "array" },
+          "type": {
+            "type": "string",
+            "enum": ["string", "number", "boolean", "array", "object", "null"]
+          },
+          "matches": { "type": "string", "description": "A regular expression the value must match as text." },
+          "min_count": { "type": "integer", "minimum": 0 },
+          "present": { "type": "boolean" },
+          "why": { "type": "string", "description": "Why this is the contract. Read when a cell fails." }
+        }
+      }
+    }
+  }
+}
