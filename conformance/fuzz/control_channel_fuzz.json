@@ -1,0 +1,9188 @@
+{
+ "schema": "provide-uterm/control-channel-fuzz/1",
+ "generator": "conformance/fuzz/gen_control_channel_fuzz.py",
+ "reference": "CPython provide.uterm.control_channel",
+ "seed": 20260729,
+ "limits": {
+  "header_bytes": 11,
+  "max_control_payload_bytes": 1048576,
+  "max_frame_depth": 32
+ },
+ "counts": {
+  "encode_data": 96,
+  "encode_control": 96,
+  "is_control_frame": 128,
+  "decode": 192,
+  "regressions": 4,
+  "serializer_divergences": 6
+ },
+ "encode_data": [
+  {
+   "id": "CCF-ED-0000",
+   "in_b64": "4pSAOX03LzpYB2ICEC8bXfCfnIHimIN7w6kQZXot8J+cgQDDjQsv",
+   "out_b64": "4pSAOX03LzpYB2ICEBAvG13wn5yB4piDe8OpEBBlei3wn5yBAMONCy8="
+  },
+  {
+   "id": "CCF-ED-0001",
+   "in_b64": "8J+YgA==",
+   "out_b64": "8J+YgA=="
+  },
+  {
+   "id": "CCF-ED-0002",
+   "in_b64": "EPCfnIEwZgIC5L2g8J+YgNCW8J+YgFsQEHobG2Jizqk=",
+   "out_b64": "EBDwn5yBMGYCAuS9oPCfmIDQlvCfmIBbEBAQEHobG2Jizqk="
+  },
+  {
+   "id": "CCF-ED-0003",
+   "in_b64": "wr7Dk0Eiwq9G8J+YgDoCNOOBgiIiAvCdhJ4HOiwb8J+YgMO/w5s6w5YQw7EQ",
+   "out_b64": "wr7Dk0Eiwq9G8J+YgDoCNOOBgiIiAvCdhJ4HOiwb8J+YgMO/w5s6w5YQEMOxEBA="
+  },
+  {
+   "id": "CCF-ED-0004",
+   "in_b64": "EBAi",
+   "out_b64": "EBAQECI="
+  },
+  {
+   "id": "CCF-ED-0005",
+   "in_b64": "QX1a8J2EnhDwn5iAw68QQsKMEPCfmIBc",
+   "out_b64": "QX1a8J2EnhAQ8J+YgMOvEBBCwowQEPCfmIBc"
+  },
+  {
+   "id": "CCF-ED-0006",
+   "in_b64": "QzrDvRDDqeOBgvCdhJ55woxjeULigqwQXToQwoh5AhAOAg==",
+   "out_b64": "QzrDvRAQw6njgYLwnYSeecKMY3lC4oKsEBBdOhAQwoh5AhAQDgI="
+  },
+  {
+   "id": "CCF-ED-0007",
+   "in_b64": "OjpcAngQX8OBAmZbLAI=",
+   "out_b64": "OjpcAngQEF/DgQJmWywC"
+  },
+  {
+   "id": "CCF-ED-0008",
+   "in_b64": "RRBbRMKjfRA=",
+   "out_b64": "RRAQW0TCo30QEA=="
+  },
+  {
+   "id": "CCF-ED-0009",
+   "in_b64": "5L2gw7/wnYSe5L2gw7M=",
+   "out_b64": "5L2gw7/wnYSe5L2gw7M="
+  },
+  {
+   "id": "CCF-ED-0010",
+   "in_b64": "4pSAWBtCY0VGEFs=",
+   "out_b64": "4pSAWBtCY0VGEBBb"
+  },
+  {
+   "id": "CCF-ED-0011",
+   "in_b64": "OALwnYSeEA==",
+   "out_b64": "OALwnYSeEBA="
+  },
+  {
+   "id": "CCF-ED-0012",
+   "in_b64": "AvCdhJ7DgCI=",
+   "out_b64": "AvCdhJ7DgCI="
+  },
+  {
+   "id": "CCF-ED-0013",
+   "in_b64": "NhA=",
+   "out_b64": "NhAQ"
+  },
+  {
+   "id": "CCF-ED-0014",
+   "in_b64": "M8OmQmIQfQ==",
+   "out_b64": "M8OmQmIQEH0="
+  },
+  {
+   "id": "CCF-ED-0015",
+   "in_b64": "8J+cgeKUgh/CtnoiAsKgEA==",
+   "out_b64": "8J+cgeKUgh/CtnoiAsKgEBA="
+  },
+  {
+   "id": "CCF-ED-0016",
+   "in_b64": "w4tZEEICOUMCAg7ilIAQAmICADFiffCdhJ7wn5iAwppbQQ==",
+   "out_b64": "w4tZEBBCAjlDAgIO4pSAEBACYgIAMWJ98J2EnvCfmIDCmltB"
+  },
+  {
+   "id": "CCF-ED-0017",
+   "in_b64": "AhA6ZTrwn5yBOgIQzqk6MQ==",
+   "out_b64": "AhAQOmU68J+cgToCEBDOqTox"
+  },
+  {
+   "id": "CCF-ED-0018",
+   "in_b64": "WBAHwoZlwroQEOKYg8Ol4pSCAgLDjcOlw5bDsUEQEA==",
+   "out_b64": "WBAQB8KGZcK6EBAQEOKYg8Ol4pSCAgLDjcOlw5bDsUEQEBAQ"
+  },
+  {
+   "id": "CCF-ED-0019",
+   "in_b64": "AmQ=",
+   "out_b64": "AmQ="
+  },
+  {
+   "id": "CCF-ED-0020",
+   "in_b64": "egvQlhDCrA590JYCXyJf0JbkvaDDm+KCrA==",
+   "out_b64": "egvQlhAQwqwOfdCWAl8iX9CW5L2gw5vigqw="
+  },
+  {
+   "id": "CCF-ED-0021",
+   "in_b64": "w6M6G/CfmIDCmBACEGXwnYSeEBA6GwtcYwHCmRAg",
+   "out_b64": "w6M6G/CfmIDCmBAQAhAQZfCdhJ4QEBAQOhsLXGMBwpkQECA="
+  },
+  {
+   "id": "CCF-ED-0022",
+   "in_b64": "RB/wn5iAw6kCEMKHAnjDvxDwnYSeAuKCrOS9oPCfnIFDCxs6EBACzqnjgYJhwoU=",
+   "out_b64": "RB/wn5iAw6kCEBDChwJ4w78QEPCdhJ4C4oKs5L2g8J+cgUMLGzoQEBAQAs6p44GCYcKF"
+  },
+  {
+   "id": "CCF-ED-0023",
+   "in_b64": "zqnDqAIQQfCdhJ7wnYSeZBDDscK1wovCsMOR",
+   "out_b64": "zqnDqAIQEEHwnYSe8J2EnmQQEMOxwrXCi8Kww5E="
+  },
+  {
+   "id": "CCF-ED-0024",
+   "in_b64": "EMKpDgDDvw==",
+   "out_b64": "EBDCqQ4Aw78="
+  },
+  {
+   "id": "CCF-ED-0025",
+   "in_b64": "EMO/AsOxwqnwn5iAEBsvw4PwnYSeQcOpGxDDkvCdhJ7ilILCosOqXMOp",
+   "out_b64": "EBDDvwLDscKp8J+YgBAQGy/Dg/CdhJ5Bw6kbEBDDkvCdhJ7ilILCosOqXMOp"
+  },
+  {
+   "id": "CCF-ED-0026",
+   "in_b64": "EEUCwpMQEBAQw4YQAn8QLXg6Ol0=",
+   "out_b64": "EBBFAsKTEBAQEBAQEBDDhhAQAn8QEC14Ojpd"
+  },
+  {
+   "id": "CCF-ED-0027",
+   "in_b64": "EDo6f0Nfw5Biw6kQEC/Cq3kCEMOx5L2gwpxfEHtBLAIQw5A=",
+   "out_b64": "EBA6On9DX8OQYsOpEBAQEC/Cq3kCEBDDseS9oMKcXxAQe0EsAhAQw5A="
+  },
+  {
+   "id": "CCF-ED-0028",
+   "in_b64": "B9CWw5fwnYSef+2VnB8LAvCfnIHwn5yBw78Qw4Dwn5yBw5YC8J2EntCWEENCLgc=",
+   "out_b64": "B9CWw5fwnYSef+2VnB8LAvCfnIHwn5yBw78QEMOA8J+cgcOWAvCdhJ7QlhAQQ0IuBw=="
+  },
+  {
+   "id": "CCF-ED-0029",
+   "in_b64": "WhBc0JZhAn1iZeS9oM6pEEIfN1oCAw==",
+   "out_b64": "WhAQXNCWYQJ9YmXkvaDOqRAQQh83WgID"
+  },
+  {
+   "id": "CCF-ED-0030",
+   "in_b64": "0JYiOvCfnIE1w5FDAfCfnIEgw6nChn8QOGQCw7MCQsOCH/CfmIAs8J+cgfCfmIAQEBA=",
+   "out_b64": "0JYiOvCfnIE1w5FDAfCfnIEgw6nChn8QEDhkAsOzAkLDgh/wn5iALPCfnIHwn5iAEBAQEBAQ"
+  },
+  {
+   "id": "CCF-ED-0031",
+   "in_b64": "wrw=",
+   "out_b64": "wrw="
+  },
+  {
+   "id": "CCF-ED-0032",
+   "in_b64": "EFnwn5yB8J+YgGY5EBAQEA==",
+   "out_b64": "EBBZ8J+cgfCfmIBmORAQEBAQEBAQ"
+  },
+  {
+   "id": "CCF-ED-0033",
+   "in_b64": "zqnCi0JfwpFaEFnCtF0tYzrtlZzDscOjOcK0w6FiwrQ1MhDCkDnjgYLilIB/wrI=",
+   "out_b64": "zqnCi0JfwpFaEBBZwrRdLWM67ZWcw7HDoznCtMOhYsK0NTIQEMKQOeOBguKUgH/Csg=="
+  },
+  {
+   "id": "CCF-ED-0034",
+   "in_b64": "wrEC",
+   "out_b64": "wrEC"
+  },
+  {
+   "id": "CCF-ED-0035",
+   "in_b64": "",
+   "out_b64": ""
+  },
+  {
+   "id": "CCF-ED-0036",
+   "in_b64": "wq/Cj+2VnAF/44GCfWEC8J+cgRAyw5UCOmNB4pSC8J2Eng==",
+   "out_b64": "wq/Cj+2VnAF/44GCfWEC8J+cgRAQMsOVAjpjQeKUgvCdhJ4="
+  },
+  {
+   "id": "CCF-ED-0037",
+   "in_b64": "w7E6EALkvaBYOgJ/w7/wn5iAAvCfmIAsB386AA==",
+   "out_b64": "w7E6EBAC5L2gWDoCf8O/8J+YgALwn5iALAd/OgA="
+  },
+  {
+   "id": "CCF-ED-0038",
+   "in_b64": "f8KMRQJdYsK1AlgQADrDv2FCEH0QWAfQlvCdhJ59wo0CZi0CEPCfmIAQ",
+   "out_b64": "f8KMRQJdYsK1AlgQEAA6w79hQhAQfRAQWAfQlvCdhJ59wo0CZi0CEBDwn5iAEBA="
+  },
+  {
+   "id": "CCF-ED-0039",
+   "in_b64": "IgIQLwEQ",
+   "out_b64": "IgIQEC8BEBA="
+  },
+  {
+   "id": "CCF-ED-0040",
+   "in_b64": "LFoCEA==",
+   "out_b64": "LFoCEBA="
+  },
+  {
+   "id": "CCF-ED-0041",
+   "in_b64": "EABhEMKs",
+   "out_b64": "EBAAYRAQwqw="
+  },
+  {
+   "id": "CCF-ED-0042",
+   "in_b64": "AjZGfQJbB/CdhJ4CReKUgF3wnYSewpblpb3DpQIHAi1hIGE6wrwQ4piDex8Q4piDw6k=",
+   "out_b64": "AjZGfQJbB/CdhJ4CReKUgF3wnYSewpblpb3DpQIHAi1hIGE6wrwQEOKYg3sfEBDimIPDqQ=="
+  },
+  {
+   "id": "CCF-ED-0043",
+   "in_b64": "XxBb4oKsw5zOqRDkvaABYlvDnRBi44GCEAI=",
+   "out_b64": "XxAQW+KCrMOczqkQEOS9oAFiW8OdEBBi44GCEBAC"
+  },
+  {
+   "id": "CCF-ED-0044",
+   "in_b64": "EMKbwoVfZSLimIMiRQLCpHoC0JbCvzoQwo8QfTrtlZw=",
+   "out_b64": "EBDCm8KFX2Ui4piDIkUCwqR6AtCWwr86EBDCjxAQfTrtlZw="
+  },
+  {
+   "id": "CCF-ED-0045",
+   "in_b64": "IgBBOgICAhAQzqk=",
+   "out_b64": "IgBBOgICAhAQEBDOqQ=="
+  },
+  {
+   "id": "CCF-ED-0046",
+   "in_b64": "AcO0w6YAWBA=",
+   "out_b64": "AcO0w6YAWBAQ"
+  },
+  {
+   "id": "CCF-ED-0047",
+   "in_b64": "EM6pw6k=",
+   "out_b64": "EBDOqcOp"
+  },
+  {
+   "id": "CCF-ED-0048",
+   "in_b64": "AgAQDgLigqwQAeKCrC46wpMv4oKsIiDwn5yBEA==",
+   "out_b64": "AgAQEA4C4oKsEBAB4oKsLjrCky/igqwiIPCfnIEQEA=="
+  },
+  {
+   "id": "CCF-ED-0049",
+   "in_b64": "EAMC8J+cgQLwn5yBQVoQw6MQwpPigqwQMg4QHw==",
+   "out_b64": "EBADAvCfnIEC8J+cgUFaEBDDoxAQwpPigqwQEDIOEBAf"
+  },
+  {
+   "id": "CCF-ED-0050",
+   "in_b64": "AnovEPCdhJ46eEIAOcOW8J+cgRDDnALDqcKFw6MQw4kCG0ECw6Y6AjY=",
+   "out_b64": "AnovEBDwnYSeOnhCADnDlvCfnIEQEMOcAsOpwoXDoxAQw4kCG0ECw6Y6AjY="
+  },
+  {
+   "id": "CCF-ED-0051",
+   "in_b64": "5L2gAgHwn5iAC2LDtl0HEMK37ZWcw7E6",
+   "out_b64": "5L2gAgHwn5iAC2LDtl0HEBDCt+2VnMOxOg=="
+  },
+  {
+   "id": "CCF-ED-0052",
+   "in_b64": "WwJ9ZhDwnYSeX/CfmIBCEMKPXTUCw7E=",
+   "out_b64": "WwJ9ZhAQ8J2Enl/wn5iAQhAQwo9dNQLDsQ=="
+  },
+  {
+   "id": "CCF-ED-0053",
+   "in_b64": "5aW9AlsfOsKgAg==",
+   "out_b64": "5aW9AlsfOsKgAg=="
+  },
+  {
+   "id": "CCF-ED-0054",
+   "in_b64": "",
+   "out_b64": ""
+  },
+  {
+   "id": "CCF-ED-0055",
+   "in_b64": "ZOOBgjY6YhA=",
+   "out_b64": "ZOOBgjY6YhAQ"
+  },
+  {
+   "id": "CCF-ED-0056",
+   "in_b64": "",
+   "out_b64": ""
+  },
+  {
+   "id": "CCF-ED-0057",
+   "in_b64": "NhA6wpICQX194oKsw6UQOuKUglw6wpbChAPtlZzCujc=",
+   "out_b64": "NhAQOsKSAkF9feKCrMOlEBA64pSCXDrClsKEA+2VnMK6Nw=="
+  },
+  {
+   "id": "CCF-ED-0058",
+   "in_b64": "AgLilIDtlZwCG0MCWF3DkxACEBDtlZxfEH/ChALOqV8=",
+   "out_b64": "AgLilIDtlZwCG0MCWF3DkxAQAhAQEBDtlZxfEBB/woQCzqlf"
+  },
+  {
+   "id": "CCF-ED-0059",
+   "in_b64": "EAJmEBAQIBBGECzChsKQWnjwn5yBQcKbQxDDuxtDB+KUghAC8J+YgAIC8J+YgA==",
+   "out_b64": "EBACZhAQEBAQECAQEEYQECzChsKQWnjwn5yBQcKbQxAQw7sbQwfilIIQEALwn5iAAgLwn5iA"
+  },
+  {
+   "id": "CCF-ED-0060",
+   "in_b64": "XB/ClRAQEOKUgDjlpb3wn5iA0JY68J+YgMOpAnjDoRBFMH3QlgIQ",
+   "out_b64": "XB/ClRAQEBAQEOKUgDjlpb3wn5iA0JY68J+YgMOpAnjDoRAQRTB90JYCEBA="
+  },
+  {
+   "id": "CCF-ED-0061",
+   "in_b64": "AsOjBwLwn5yBIi0L",
+   "out_b64": "AsOjBwLwn5yBIi0L"
+  },
+  {
+   "id": "CCF-ED-0062",
+   "in_b64": "w7sC4oKsAvCfnIEQ",
+   "out_b64": "w7sC4oKsAvCfnIEQEA=="
+  },
+  {
+   "id": "CCF-ED-0063",
+   "in_b64": "8J+YgA==",
+   "out_b64": "8J+YgA=="
+  },
+  {
+   "id": "CCF-ED-0064",
+   "in_b64": "Y18wY1xdQ8ORw6RcGwFcfRBc8J+YgMKnwr/CmixdLBDCuvCfnIEC",
+   "out_b64": "Y18wY1xdQ8ORw6RcGwFcfRAQXPCfmIDCp8K/wposXSwQEMK68J+cgQI="
+  },
+  {
+   "id": "CCF-ED-0065",
+   "in_b64": "YxA6f/CfmIAQAhDCuznwnYSeMgJCw6HwnYSewp0HNXs=",
+   "out_b64": "YxAQOn/wn5iAEBACEBDCuznwnYSeMgJCw6HwnYSewp0HNXs="
+  },
+  {
+   "id": "CCF-ED-0066",
+   "in_b64": "woFdAcKl8J2EngLDjvCfmIAQLMO/fzrDhmNZDkHDjQPOqcKm",
+   "out_b64": "woFdAcKl8J2EngLDjvCfmIAQECzDv386w4ZjWQ5Bw40DzqnCpg=="
+  },
+  {
+   "id": "CCF-ED-0067",
+   "in_b64": "X+KUgsO94pSAAsOxwoUCOi06wqTwn5yB4pSAEHvwnYSefcKeXPCdhJ7jgYIQQ3sQw6/CjOWlvXs=",
+   "out_b64": "X+KUgsO94pSAAsOxwoUCOi06wqTwn5yB4pSAEBB78J2Enn3CnlzwnYSe44GCEBBDexAQw6/CjOWlvXs="
+  },
+  {
+   "id": "CCF-ED-0068",
+   "in_b64": "EAIQ44GCexA68J+YgC9aY/CfnIHDpwE27ZWcMcKd8J+YgHrDmhB9AhDCkwM4AQI=",
+   "out_b64": "EBACEBDjgYJ7EBA68J+YgC9aY/CfnIHDpwE27ZWcMcKd8J+YgHrDmhAQfQIQEMKTAzgBAg=="
+  },
+  {
+   "id": "CCF-ED-0069",
+   "in_b64": "QQICAPCfnIHilIIiEGbjgYLOqVkQGyxfOjkQwoJb0JZCQRA=",
+   "out_b64": "QQICAPCfnIHilIIiEBBm44GCzqlZEBAbLF86ORAQwoJb0JZCQRAQ"
+  },
+  {
+   "id": "CCF-ED-0070",
+   "in_b64": "ADo=",
+   "out_b64": "ADo="
+  },
+  {
+   "id": "CCF-ED-0071",
+   "in_b64": "",
+   "out_b64": ""
+  },
+  {
+   "id": "CCF-ED-0072",
+   "in_b64": "EHoQAmMLwrhBOmEDQno=",
+   "out_b64": "EBB6EBACYwvCuEE6YQNCeg=="
+  },
+  {
+   "id": "CCF-ED-0073",
+   "in_b64": "euS9oBDDiPCfnIF7QSACfQd6OhA6GxAQWeS9oENfQwJ7Ni5mHw==",
+   "out_b64": "euS9oBAQw4jwn5yBe0EgAn0HejoQEDobEBAQEFnkvaBDX0MCezYuZh8="
+  },
+  {
+   "id": "CCF-ED-0074",
+   "in_b64": "YRAbwrHwn5yBe2LwnYSeEPCfnIEC8J+YgA==",
+   "out_b64": "YRAQG8Kx8J+cgXti8J2EnhAQ8J+cgQLwn5iA"
+  },
+  {
+   "id": "CCF-ED-0075",
+   "in_b64": "8J+YgAJiQhAv",
+   "out_b64": "8J+YgAJiQhAQLw=="
+  },
+  {
+   "id": "CCF-ED-0076",
+   "in_b64": "YxDwn5yB8J+cgTpDwp/DiAJG44GC5L2g",
+   "out_b64": "YxAQ8J+cgfCfnIE6Q8Kfw4gCRuOBguS9oA=="
+  },
+  {
+   "id": "CCF-ED-0077",
+   "in_b64": "Rg==",
+   "out_b64": "Rg=="
+  },
+  {
+   "id": "CCF-ED-0078",
+   "in_b64": "ZlxBewDDh+KCrMKkeRDwnYSew49iDgFDA2JEDg==",
+   "out_b64": "ZlxBewDDh+KCrMKkeRAQ8J2EnsOPYg4BQwNiRA4="
+  },
+  {
+   "id": "CCF-ED-0079",
+   "in_b64": "WTQbAvCfmIAQAsO/Ons6W/CfnIHwn5iAAhA=",
+   "out_b64": "WTQbAvCfmIAQEALDvzp7Olvwn5yB8J+YgAIQEA=="
+  },
+  {
+   "id": "CCF-ED-0080",
+   "in_b64": "Di0QfRs68J2Enhs6G38CNQ==",
+   "out_b64": "Di0QEH0bOvCdhJ4bOht/AjU="
+  },
+  {
+   "id": "CCF-ED-0081",
+   "in_b64": "QxAz",
+   "out_b64": "QxAQMw=="
+  },
+  {
+   "id": "CCF-ED-0082",
+   "in_b64": "8J+YgDAvAhAQAvCfmIDwnYSeOn8=",
+   "out_b64": "8J+YgDAvAhAQEBAC8J+YgPCdhJ46fw=="
+  },
+  {
+   "id": "CCF-ED-0083",
+   "in_b64": "w4gC0JZlwoUiZdCWw6nwn5iA",
+   "out_b64": "w4gC0JZlwoUiZdCWw6nwn5iA"
+  },
+  {
+   "id": "CCF-ED-0084",
+   "in_b64": "ZXpc4oKsXzoQLRACAi4QIDrwn5yB44GCOg==",
+   "out_b64": "ZXpc4oKsXzoQEC0QEAICLhAQIDrwn5yB44GCOg=="
+  },
+  {
+   "id": "CCF-ED-0085",
+   "in_b64": "Qn3Dr+2VnPCfmIDDqUMbEDLOqTlDAgIBEAICMH1/EEVZ4pSCNw==",
+   "out_b64": "Qn3Dr+2VnPCfmIDDqUMbEBAyzqk5QwICARAQAgIwfX8QEEVZ4pSCNw=="
+  },
+  {
+   "id": "CCF-ED-0086",
+   "in_b64": "OmN78J+YgELCjTICB0EOw4cQ8J+YgBAQwoDOqQLwn5iAM+KCrMKMWyDDjA==",
+   "out_b64": "OmN78J+YgELCjTICB0EOw4cQEPCfmIAQEBAQwoDOqQLwn5iAM+KCrMKMWyDDjA=="
+  },
+  {
+   "id": "CCF-ED-0087",
+   "in_b64": "w7ECAi96EAfwnYSeWBBmMsOFEH0Q5L2gwovDnWFjXBA6BxADNhBd8J+cgQ==",
+   "out_b64": "w7ECAi96EBAH8J2EnlgQEGYyw4UQEH0QEOS9oMKLw51hY1wQEDoHEBADNhAQXfCfnIE="
+  },
+  {
+   "id": "CCF-ED-0088",
+   "in_b64": "exACw7Ra44GCEDobAvCdhJ4CwqI=",
+   "out_b64": "exAQAsO0WuOBghAQOhsC8J2EngLCog=="
+  },
+  {
+   "id": "CCF-ED-0089",
+   "in_b64": "Q8OxEAMAEDcCEMOvECx4AvCdhJ4Q8J+cgcOq",
+   "out_b64": "Q8OxEBADABAQNwIQEMOvEBAseALwnYSeEBDwn5yBw6o="
+  },
+  {
+   "id": "CCF-ED-0090",
+   "in_b64": "Ai9/OuKCrB/jgYJhwoDwnYSeOgs64oKsEDrDmUbCtwIQEPCfmIAfAkQ=",
+   "out_b64": "Ai9/OuKCrB/jgYJhwoDwnYSeOgs64oKsEBA6w5lGwrcCEBAQEPCfmIAfAkQ="
+  },
+  {
+   "id": "CCF-ED-0091",
+   "in_b64": "Q1s5EOS9oAdhOA==",
+   "out_b64": "Q1s5EBDkvaAHYTg="
+  },
+  {
+   "id": "CCF-ED-0092",
+   "in_b64": "fcO/exAQAhDjgYICQkN47ZWcG8OxzqlkwpQ=",
+   "out_b64": "fcO/exAQEBACEBDjgYICQkN47ZWcG8OxzqlkwpQ="
+  },
+  {
+   "id": "CCF-ED-0093",
+   "in_b64": "Qg==",
+   "out_b64": "Qg=="
+  },
+  {
+   "id": "CCF-ED-0094",
+   "in_b64": "DsKFB2PDrDTDv13wnYSeEBDCt8Oy4piDQznwn5iAAe2VnOOBgkIgNw==",
+   "out_b64": "DsKFB2PDrDTDv13wnYSeEBAQEMK3w7LimINDOfCfmIAB7ZWc44GCQiA3"
+  },
+  {
+   "id": "CCF-ED-0095",
+   "in_b64": "OlgC5L2gEBAQ5L2gAvCfmIBGOg==",
+   "out_b64": "OlgC5L2gEBAQEBAQ5L2gAvCfmIBGOg=="
+  }
+ ],
+ "encode_control": [
+  {
+   "id": "CCF-EC-0000",
+   "payload": {
+    "k0a8iqo": [],
+    "k1l2yr4": 1828200446,
+    "k2m": null
+   },
+   "out_b64": "EAIwMDAwMDAyZTp7ImswYThpcW8iOltdLCJrMWwyeXI0IjoxODI4MjAwNDQ2LCJrMm0iOm51bGx9"
+  },
+  {
+   "id": "CCF-EC-0001",
+   "payload": {
+    "k0kiy": null,
+    "k1718i8": null,
+    "k2pqb7": "4@\u00a2W",
+    "k3mt": null
+   },
+   "out_b64": "EAIwMDAwMDAzYTp7Imswa2l5IjpudWxsLCJrMTcxOGk4IjpudWxsLCJrMnBxYjciOiI0QMKiVyIsImszbXQiOm51bGx9"
+  },
+  {
+   "id": "CCF-EC-0002",
+   "payload": {},
+   "out_b64": "EAIwMDAwMDAwMjp7fQ=="
+  },
+  {
+   "id": "CCF-EC-0003",
+   "payload": {
+    "k0jv_h": [
+     [
+      []
+     ],
+     null,
+     {
+      "k0taje4": ".r|r\r\u2500R",
+      "k10a": "'?t\u00a2i].?a",
+      "k2kxi5g": 284157563
+     }
+    ],
+    "k1n1mvw": "\u2502S6",
+    "k2p": {
+     "k0": "pYX"
+    }
+   },
+   "out_b64": "EAIwMDAwMDA3Yzp7ImswanZfaCI6W1tbXV0sbnVsbCx7ImswdGFqZTQiOiIucnxyXHLilIBSIiwiazEwYSI6Iic/dMKiaV0uP2EiLCJrMmt4aTVnIjoyODQxNTc1NjN9XSwiazFuMW12dyI6IuKUglM2IiwiazJwIjp7ImswIjoicFlYIn19"
+  },
+  {
+   "id": "CCF-EC-0004",
+   "payload": {
+    "k04": false
+   },
+   "out_b64": "EAIwMDAwMDAwZDp7ImswNCI6ZmFsc2V9"
+  },
+  {
+   "id": "CCF-EC-0005",
+   "payload": {
+    "k0": {
+     "k0m": false
+    },
+    "k1": {
+     "k02x9yh": false,
+     "k10xoez": {
+      "k0d2b": {
+       "k0gw2p": "s \r",
+       "k1_2t": 1740809026,
+       "k24i": "b"
+      }
+     }
+    },
+    "k24iqv": [
+     "NV\bK",
+     [
+      {
+       "k0c": false
+      }
+     ],
+     "s)YMcXs"
+    ]
+   },
+   "out_b64": "EAIwMDAwMDA5Yzp7ImswIjp7ImswbSI6ZmFsc2V9LCJrMSI6eyJrMDJ4OXloIjpmYWxzZSwiazEweG9leiI6eyJrMGQyYiI6eyJrMGd3MnAiOiJzIFxyIiwiazFfMnQiOjE3NDA4MDkwMjYsImsyNGkiOiJiIn19fSwiazI0aXF2IjpbIk5WXGJLIixbeyJrMGMiOmZhbHNlfV0sInMpWU1jWHMiXX0="
+  },
+  {
+   "id": "CCF-EC-0006",
+   "payload": {
+    "k0tc": null,
+    "k1uywj7": "/ XTO.+$u",
+    "k2qu06": 505015849
+   },
+   "out_b64": "EAIwMDAwMDAzNjp7ImswdGMiOm51bGwsImsxdXl3ajciOiIvIFhUTy4rJHUiLCJrMnF1MDYiOjUwNTAxNTg0OX0="
+  },
+  {
+   "id": "CCF-EC-0007",
+   "payload": {
+    "k0krjo": "",
+    "k14": {
+     "k0": "\u2502B\f",
+     "k1": true
+    },
+    "k26mr79": [
+     "e|X{M8EI"
+    ],
+    "k3wh32o": [
+     true
+    ]
+   },
+   "out_b64": "EAIwMDAwMDA1NTp7Imswa3JqbyI6IiIsImsxNCI6eyJrMCI6IuKUgkJcZiIsImsxIjp0cnVlfSwiazI2bXI3OSI6WyJlfFh7TThFSSJdLCJrM3doMzJvIjpbdHJ1ZV19"
+  },
+  {
+   "id": "CCF-EC-0008",
+   "payload": {
+    "k0i": [
+     [
+      {}
+     ],
+     null
+    ],
+    "k17z30x": null,
+    "k2_": true
+   },
+   "out_b64": "EAIwMDAwMDAyZDp7ImswaSI6W1t7fV0sbnVsbF0sImsxN3ozMHgiOm51bGwsImsyXyI6dHJ1ZX0="
+  },
+  {
+   "id": "CCF-EC-0009",
+   "payload": {
+    "k0d74": true,
+    "k1urzq": false
+   },
+   "out_b64": "EAIwMDAwMDAxZDp7ImswZDc0Ijp0cnVlLCJrMXVyenEiOmZhbHNlfQ=="
+  },
+  {
+   "id": "CCF-EC-0010",
+   "payload": {
+    "k0": {
+     "k06": true
+    },
+    "k1_fi": [
+     false
+    ],
+    "k2": [],
+    "k3y": {
+     "k0p6": 241454560,
+     "k1blsa": 1691003827,
+     "k2lh8t": [
+      "",
+      "B\ud55cpTO+\\%*"
+     ]
+    }
+   },
+   "out_b64": "EAIwMDAwMDA3NTp7ImswIjp7ImswNiI6dHJ1ZX0sImsxX2ZpIjpbZmFsc2VdLCJrMiI6W10sImszeSI6eyJrMHA2IjoyNDE0NTQ1NjAsImsxYmxzYSI6MTY5MTAwMzgyNywiazJsaDh0IjpbIiIsIkLtlZxwVE8rXFwlKiJdfX0="
+  },
+  {
+   "id": "CCF-EC-0011",
+   "payload": {
+    "k0t36": null
+   },
+   "out_b64": "EAIwMDAwMDAwZTp7ImswdDM2IjpudWxsfQ=="
+  },
+  {
+   "id": "CCF-EC-0012",
+   "payload": {
+    "k0t": [
+     -629633501,
+     {
+      "k0c8mki": null,
+      "k1e": {},
+      "k2flv4": {
+       "k0": "\\M\u00ff4\u20ac_\fQL\u00a2.F",
+       "k1": null
+      }
+     },
+     true
+    ]
+   },
+   "out_b64": "EAIwMDAwMDA2Mjp7ImswdCI6Wy02Mjk2MzM1MDEseyJrMGM4bWtpIjpudWxsLCJrMWUiOnt9LCJrMmZsdjQiOnsiazAiOiJcXE3DvzTigqxfXGZRTMKiLkYiLCJrMSI6bnVsbH19LHRydWVdfQ=="
+  },
+  {
+   "id": "CCF-EC-0013",
+   "payload": {
+    "k087r": -582935823,
+    "k1n9d": false
+   },
+   "out_b64": "EAIwMDAwMDAyMjp7ImswODdyIjotNTgyOTM1ODIzLCJrMW45ZCI6ZmFsc2V9"
+  },
+  {
+   "id": "CCF-EC-0014",
+   "payload": {
+    "k0ll": {
+     "k0b7": [
+      null,
+      false,
+      264605067
+     ],
+     "k1i4z": -1962260882,
+     "k2ni": [
+      false,
+      [
+       null,
+       1026694582,
+       true
+      ]
+     ]
+    },
+    "k1z9kcw": false,
+    "k2pvr3q": {
+     "k05e": 1823530489,
+     "k1s": ".qU"
+    }
+   },
+   "out_b64": "EAIwMDAwMDA5Yzp7ImswbGwiOnsiazBiNyI6W251bGwsZmFsc2UsMjY0NjA1MDY3XSwiazFpNHoiOi0xOTYyMjYwODgyLCJrMm5pIjpbZmFsc2UsW251bGwsMTAyNjY5NDU4Mix0cnVlXV19LCJrMXo5a2N3IjpmYWxzZSwiazJwdnIzcSI6eyJrMDVlIjoxODIzNTMwNDg5LCJrMXMiOiIucVUifX0="
+  },
+  {
+   "id": "CCF-EC-0015",
+   "payload": {
+    "k0_ra": false
+   },
+   "out_b64": "EAIwMDAwMDAwZjp7ImswX3JhIjpmYWxzZX0="
+  },
+  {
+   "id": "CCF-EC-0016",
+   "payload": {
+    "k0bm_": "i\u0416\u00ff\u2603)",
+    "k1": true
+   },
+   "out_b64": "EAIwMDAwMDAxZjp7ImswYm1fIjoiadCWw7/imIMpIiwiazEiOnRydWV9"
+  },
+  {
+   "id": "CCF-EC-0017",
+   "payload": {
+    "k0v_y7": [
+     {
+      "k0a": [
+       -582702825,
+       false,
+       null
+      ]
+     },
+     true,
+     false
+    ],
+    "k1wf05a": "/",
+    "k2o": 60472340,
+    "k3": [
+     {
+      "k0": "8K'"
+     }
+    ]
+   },
+   "out_b64": "EAIwMDAwMDA2ODp7Imswdl95NyI6W3siazBhIjpbLTU4MjcwMjgyNSxmYWxzZSxudWxsXX0sdHJ1ZSxmYWxzZV0sImsxd2YwNWEiOiIvIiwiazJvIjo2MDQ3MjM0MCwiazMiOlt7ImswIjoiOEsnIn1dfQ=="
+  },
+  {
+   "id": "CCF-EC-0018",
+   "payload": {},
+   "out_b64": "EAIwMDAwMDAwMjp7fQ=="
+  },
+  {
+   "id": "CCF-EC-0019",
+   "payload": {
+    "k0gy1": "But2rib\u03a9\n\"",
+    "k1ktl": true
+   },
+   "out_b64": "EAIwMDAwMDAyNjp7ImswZ3kxIjoiQnV0MnJpYs6pXG5cIiIsImsxa3RsIjp0cnVlfQ=="
+  },
+  {
+   "id": "CCF-EC-0020",
+   "payload": {
+    "k03n3": [
+     {
+      "k0a7": "oz'H\f\u2500Pkc"
+     }
+    ],
+    "k1t5y": false,
+    "k27xq9k": [
+     [
+      492805902,
+      [
+       false
+      ],
+      []
+     ],
+     "\u00e9:\u0416xbM6+",
+     "\u00a1\ba4cl!Fa1}"
+    ]
+   },
+   "out_b64": "EAIwMDAwMDA3MTp7ImswM24zIjpbeyJrMGE3Ijoib3onSFxm4pSAUGtjIn1dLCJrMXQ1eSI6ZmFsc2UsImsyN3hxOWsiOltbNDkyODA1OTAyLFtmYWxzZV0sW11dLCLDqTrQlnhiTTYrIiwiwqFcYmE0Y2whRmExfSJdfQ=="
+  },
+  {
+   "id": "CCF-EC-0021",
+   "payload": {
+    "k03o7tg": true,
+    "k1224kz": {
+     "k0ar5b": {
+      "k03nq9": "xR>KAnA0`",
+      "k1": 1513895828
+     },
+     "k1vkesd": "e^7\u00f1",
+     "k2q6": false
+    },
+    "k2z": [
+     false,
+     {
+      "k0l5y": null
+     },
+     []
+    ],
+    "k34x6qw": null
+   },
+   "out_b64": "EAIwMDAwMDA5YTp7ImswM283dGciOnRydWUsImsxMjI0a3oiOnsiazBhcjViIjp7ImswM25xOSI6InhSPktBbkEwYCIsImsxIjoxNTEzODk1ODI4fSwiazF2a2VzZCI6ImVeN8OxIiwiazJxNiI6ZmFsc2V9LCJrMnoiOltmYWxzZSx7ImswbDV5IjpudWxsfSxbXV0sImszNHg2cXciOm51bGx9"
+  },
+  {
+   "id": "CCF-EC-0022",
+   "payload": {
+    "k07": true,
+    "k1": true,
+    "k2ev_wb": null,
+    "k36vi6d": true
+   },
+   "out_b64": "EAIwMDAwMDAzNDp7ImswNyI6dHJ1ZSwiazEiOnRydWUsImsyZXZfd2IiOm51bGwsImszNnZpNmQiOnRydWV9"
+  },
+  {
+   "id": "CCF-EC-0023",
+   "payload": {
+    "k0btlg": [],
+    "k1": {},
+    "k2fiud": {},
+    "k3jr_": true
+   },
+   "out_b64": "EAIwMDAwMDAyZTp7ImswYnRsZyI6W10sImsxIjp7fSwiazJmaXVkIjp7fSwiazNqcl8iOnRydWV9"
+  },
+  {
+   "id": "CCF-EC-0024",
+   "payload": {
+    "k0_9xq": [
+     [
+      "",
+      null
+     ],
+     2110846279,
+     ">"
+    ],
+    "k1584": {}
+   },
+   "out_b64": "EAIwMDAwMDAzMDp7ImswXzl4cSI6W1siIixudWxsXSwyMTEwODQ2Mjc5LCI+Il0sImsxNTg0Ijp7fX0="
+  },
+  {
+   "id": "CCF-EC-0025",
+   "payload": {
+    "k0mt7m": 746953764,
+    "k11u": "\b ",
+    "k2c2": ""
+   },
+   "out_b64": "EAIwMDAwMDAyYjp7ImswbXQ3bSI6NzQ2OTUzNzY0LCJrMTF1IjoiXGIgIiwiazJjMiI6IiJ9"
+  },
+  {
+   "id": "CCF-EC-0026",
+   "payload": {
+    "k0eke44": null,
+    "k150gp": "H\u00a1H\u2603g>"
+   },
+   "out_b64": "EAIwMDAwMDAyNTp7ImswZWtlNDQiOm51bGwsImsxNTBncCI6IkjCoUjimINnPiJ9"
+  },
+  {
+   "id": "CCF-EC-0027",
+   "payload": {
+    "k05": []
+   },
+   "out_b64": "EAIwMDAwMDAwYTp7ImswNSI6W119"
+  },
+  {
+   "id": "CCF-EC-0028",
+   "payload": {
+    "k0r": "#\u20ac]s}",
+    "k13": {
+     "k0": {
+      "k0t": 357350231,
+      "k1rx": 1480733583,
+      "k2290cw": "k,o6[@IBy0r"
+     },
+     "k1dsd": null
+    }
+   },
+   "out_b64": "EAIwMDAwMDA2Nzp7ImswciI6IiPigqxdc30iLCJrMTMiOnsiazAiOnsiazB0IjozNTczNTAyMzEsImsxcngiOjE0ODA3MzM1ODMsImsyMjkwY3ciOiJrLG82W0BJQnkwciJ9LCJrMWRzZCI6bnVsbH19"
+  },
+  {
+   "id": "CCF-EC-0029",
+   "payload": {
+    "k0lb7k": [
+     "H",
+     "\u30421U#I=VB$nY\u2603"
+    ],
+    "k1wsz": true,
+    "k2l3lhb": false,
+    "k3hh": 1585140011
+   },
+   "out_b64": "EAIwMDAwMDA1Mjp7ImswbGI3ayI6WyJIIiwi44GCMVUjST1WQiRuWeKYgyJdLCJrMXdzeiI6dHJ1ZSwiazJsM2xoYiI6ZmFsc2UsImszaGgiOjE1ODUxNDAwMTF9"
+  },
+  {
+   "id": "CCF-EC-0030",
+   "payload": {
+    "k01rpp": {
+     "k0": [
+      true
+     ]
+    }
+   },
+   "out_b64": "EAIwMDAwMDAxODp7ImswMXJwcCI6eyJrMCI6W3RydWVdfX0="
+  },
+  {
+   "id": "CCF-EC-0031",
+   "payload": {
+    "k0mb9": -728863702,
+    "k1oh6": {
+     "k0": false,
+     "k1": {
+      "k0xlfji": -1508089860
+     }
+    },
+    "k2": [],
+    "k3": [
+     [],
+     -1580161184
+    ]
+   },
+   "out_b64": "EAIwMDAwMDA2NDp7ImswbWI5IjotNzI4ODYzNzAyLCJrMW9oNiI6eyJrMCI6ZmFsc2UsImsxIjp7ImsweGxmamkiOi0xNTA4MDg5ODYwfX0sImsyIjpbXSwiazMiOltbXSwtMTU4MDE2MTE4NF19"
+  },
+  {
+   "id": "CCF-EC-0032",
+   "payload": {},
+   "out_b64": "EAIwMDAwMDAwMjp7fQ=="
+  },
+  {
+   "id": "CCF-EC-0033",
+   "payload": {
+    "k0v": null,
+    "k1n": -1214295204,
+    "k2": [],
+    "k35aqc": {
+     "k0m": -503602805
+    }
+   },
+   "out_b64": "EAIwMDAwMDA0Mjp7ImswdiI6bnVsbCwiazFuIjotMTIxNDI5NTIwNCwiazIiOltdLCJrMzVhcWMiOnsiazBtIjotNTAzNjAyODA1fX0="
+  },
+  {
+   "id": "CCF-EC-0034",
+   "payload": {
+    "k07": [
+     {
+      "k0es": null
+     },
+     "Ls\u00e9/Jt\u00ffY\u03a9"
+    ]
+   },
+   "out_b64": "EAIwMDAwMDAyNjp7ImswNyI6W3siazBlcyI6bnVsbH0sIkxzw6kvSnTDv1nOqSJdfQ=="
+  },
+  {
+   "id": "CCF-EC-0035",
+   "payload": {
+    "k0w2g1": null,
+    "k19ivxr": false,
+    "k2u282": {
+     "k01": -1288580786
+    }
+   },
+   "out_b64": "EAIwMDAwMDAzYzp7ImswdzJnMSI6bnVsbCwiazE5aXZ4ciI6ZmFsc2UsImsydTI4MiI6eyJrMDEiOi0xMjg4NTgwNzg2fX0="
+  },
+  {
+   "id": "CCF-EC-0036",
+   "payload": {
+    "k0": "pspAGiV0"
+   },
+   "out_b64": "EAIwMDAwMDAxMTp7ImswIjoicHNwQUdpVjAifQ=="
+  },
+  {
+   "id": "CCF-EC-0037",
+   "payload": {
+    "k02": {
+     "k0kxj": "%o~{(Q",
+     "k1r8l": -192321551,
+     "k20larv": "A"
+    },
+    "k1": {
+     "k0945": null,
+     "k1cu": {
+      "k0": 552636137,
+      "k1": 1582691880,
+      "k2z": {}
+     }
+    },
+    "k2um1l": 1696863465,
+    "k3inab": false
+   },
+   "out_b64": "EAIwMDAwMDBhMzp7ImswMiI6eyJrMGt4aiI6IiVvfnsoUSIsImsxcjhsIjotMTkyMzIxNTUxLCJrMjBsYXJ2IjoiQSJ9LCJrMSI6eyJrMDk0NSI6bnVsbCwiazFjdSI6eyJrMCI6NTUyNjM2MTM3LCJrMSI6MTU4MjY5MTg4MCwiazJ6Ijp7fX19LCJrMnVtMWwiOjE2OTY4NjM0NjUsImszaW5hYiI6ZmFsc2V9"
+  },
+  {
+   "id": "CCF-EC-0038",
+   "payload": {},
+   "out_b64": "EAIwMDAwMDAwMjp7fQ=="
+  },
+  {
+   "id": "CCF-EC-0039",
+   "payload": {
+    "k0r": [
+     null
+    ],
+    "k12yfnr": "Z<D;p,N/v<!(",
+    "k2tjza": {},
+    "k3s67": "4f\u00e9"
+   },
+   "out_b64": "EAIwMDAwMDA0Mjp7ImswciI6W251bGxdLCJrMTJ5Zm5yIjoiWjxEO3AsTi92PCEoIiwiazJ0anphIjp7fSwiazNzNjciOiI0ZsOpIn0="
+  },
+  {
+   "id": "CCF-EC-0040",
+   "payload": {
+    "k0jf": {
+     "k0": [
+      false,
+      "8l/\b6RC6\u2603X\"O",
+      1358368704
+     ],
+     "k188": [],
+     "k2kt": false
+    }
+   },
+   "out_b64": "EAIwMDAwMDA0Yzp7ImswamYiOnsiazAiOltmYWxzZSwiOGwvXGI2UkM24piDWFwiTyIsMTM1ODM2ODcwNF0sImsxODgiOltdLCJrMmt0IjpmYWxzZX19"
+  },
+  {
+   "id": "CCF-EC-0041",
+   "payload": {
+    "k0lpt": {},
+    "k1b1h8": null,
+    "k2ex8": true
+   },
+   "out_b64": "EAIwMDAwMDAyNzp7ImswbHB0Ijp7fSwiazFiMWg4IjpudWxsLCJrMmV4OCI6dHJ1ZX0="
+  },
+  {
+   "id": "CCF-EC-0042",
+   "payload": {
+    "k0k1t2": [
+     false,
+     "?"
+    ]
+   },
+   "out_b64": "EAIwMDAwMDAxNjp7ImswazF0MiI6W2ZhbHNlLCI/Il19"
+  },
+  {
+   "id": "CCF-EC-0043",
+   "payload": {
+    "k0": null,
+    "k1c5gd": [],
+    "k2mc": 403375774
+   },
+   "out_b64": "EAIwMDAwMDAyODp7ImswIjpudWxsLCJrMWM1Z2QiOltdLCJrMm1jIjo0MDMzNzU3NzR9"
+  },
+  {
+   "id": "CCF-EC-0044",
+   "payload": {
+    "k0d6v": null
+   },
+   "out_b64": "EAIwMDAwMDAwZTp7ImswZDZ2IjpudWxsfQ=="
+  },
+  {
+   "id": "CCF-EC-0045",
+   "payload": {
+    "k0cpt6": false,
+    "k1ied1w": null
+   },
+   "out_b64": "EAIwMDAwMDAxZjp7ImswY3B0NiI6ZmFsc2UsImsxaWVkMXciOm51bGx9"
+  },
+  {
+   "id": "CCF-EC-0046",
+   "payload": {},
+   "out_b64": "EAIwMDAwMDAwMjp7fQ=="
+  },
+  {
+   "id": "CCF-EC-0047",
+   "payload": {
+    "k061d9p": "`X?`"
+   },
+   "out_b64": "EAIwMDAwMDAxMjp7ImswNjFkOXAiOiJgWD9gIn0="
+  },
+  {
+   "id": "CCF-EC-0048",
+   "payload": {
+    "k0u": [
+     133944802,
+     703580833
+    ],
+    "k1lk8": "~;\u2603`\u2502\u00ff"
+   },
+   "out_b64": "EAIwMDAwMDAzMzp7ImswdSI6WzEzMzk0NDgwMiw3MDM1ODA4MzNdLCJrMWxrOCI6In474piDYOKUgsO/In0="
+  },
+  {
+   "id": "CCF-EC-0049",
+   "payload": {
+    "k0": "b.E$zO:^",
+    "k1v5ud": [
+     false
+    ]
+   },
+   "out_b64": "EAIwMDAwMDAyMjp7ImswIjoiYi5FJHpPOl4iLCJrMXY1dWQiOltmYWxzZV19"
+  },
+  {
+   "id": "CCF-EC-0050",
+   "payload": {
+    "k0": -13824402,
+    "k1fcw5x": {},
+    "k2eh2n": [
+     "kb+EJOO"
+    ],
+    "k3qdz6k": -1684049907
+   },
+   "out_b64": "EAIwMDAwMDA0ODp7ImswIjotMTM4MjQ0MDIsImsxZmN3NXgiOnt9LCJrMmVoMm4iOlsia2IrRUpPTyJdLCJrM3FkejZrIjotMTY4NDA0OTkwN30="
+  },
+  {
+   "id": "CCF-EC-0051",
+   "payload": {
+    "k02": null,
+    "k1": {
+     "k0jy6": false
+    },
+    "k2lv": 177912225,
+    "k3y": {
+     "k0225z": "47&",
+     "k13yd4i": [
+      -413414839
+     ]
+    }
+   },
+   "out_b64": "EAIwMDAwMDA2MDp7ImswMiI6bnVsbCwiazEiOnsiazBqeTYiOmZhbHNlfSwiazJsdiI6MTc3OTEyMjI1LCJrM3kiOnsiazAyMjV6IjoiNDcmIiwiazEzeWQ0aSI6Wy00MTM0MTQ4MzldfX0="
+  },
+  {
+   "id": "CCF-EC-0052",
+   "payload": {
+    "k0fox5": -250559714,
+    "k1wggfb": {},
+    "k2lb": [
+     1343577984
+    ]
+   },
+   "out_b64": "EAIwMDAwMDAzNjp7ImswZm94NSI6LTI1MDU1OTcxNCwiazF3Z2dmYiI6e30sImsybGIiOlsxMzQzNTc3OTg0XX0="
+  },
+  {
+   "id": "CCF-EC-0053",
+   "payload": {
+    "k0fznd": 943852057
+   },
+   "out_b64": "EAIwMDAwMDAxNDp7ImswZnpuZCI6OTQzODUyMDU3fQ=="
+  },
+  {
+   "id": "CCF-EC-0054",
+   "payload": {
+    "k0aeolf": {
+     "k0bt6": "E",
+     "k1": 1949449331
+    }
+   },
+   "out_b64": "EAIwMDAwMDAyOTp7ImswYWVvbGYiOnsiazBidDYiOiJFIiwiazEiOjE5NDk0NDkzMzF9fQ=="
+  },
+  {
+   "id": "CCF-EC-0055",
+   "payload": {},
+   "out_b64": "EAIwMDAwMDAwMjp7fQ=="
+  },
+  {
+   "id": "CCF-EC-0056",
+   "payload": {
+    "k0": "",
+    "k11neu_": {},
+    "k2a98": "|\u4f60j",
+    "k3ef": {}
+   },
+   "out_b64": "EAIwMDAwMDAzMDp7ImswIjoiIiwiazExbmV1XyI6e30sImsyYTk4IjoifOS9oGoiLCJrM2VmIjp7fX0="
+  },
+  {
+   "id": "CCF-EC-0057",
+   "payload": {
+    "k04p4": {
+     "k0acmp": 86562612
+    },
+    "k1ol": {
+     "k04": {
+      "k0j": false,
+      "k1hq": "d!\u2500r\nZdh\u20ac[/{",
+      "k2y7va0": {}
+     }
+    },
+    "k205zey": "k\ud55cx@JPC"
+   },
+   "out_b64": "EAIwMDAwMDA3ODp7ImswNHA0Ijp7ImswYWNtcCI6ODY1NjI2MTJ9LCJrMW9sIjp7ImswNCI6eyJrMGoiOmZhbHNlLCJrMWhxIjoiZCHilIByXG5aZGjigqxbL3siLCJrMnk3dmEwIjp7fX19LCJrMjA1emV5Ijoia+2VnHhASlBDIn0="
+  },
+  {
+   "id": "CCF-EC-0058",
+   "payload": {
+    "k0n": "s6R]!^+\u3042\u00a1w>%",
+    "k1e": "\b#"
+   },
+   "out_b64": "EAIwMDAwMDAyNTp7ImswbiI6InM2Ul0hXivjgYLCoXc+JSIsImsxZSI6IlxiIyJ9"
+  },
+  {
+   "id": "CCF-EC-0059",
+   "payload": {},
+   "out_b64": "EAIwMDAwMDAwMjp7fQ=="
+  },
+  {
+   "id": "CCF-EC-0060",
+   "payload": {},
+   "out_b64": "EAIwMDAwMDAwMjp7fQ=="
+  },
+  {
+   "id": "CCF-EC-0061",
+   "payload": {
+    "k0l9u": -2129619721
+   },
+   "out_b64": "EAIwMDAwMDAxNTp7ImswbDl1IjotMjEyOTYxOTcyMX0="
+  },
+  {
+   "id": "CCF-EC-0062",
+   "payload": {
+    "k0t": "b}\u03a9m\\)HU\u00ff^~",
+    "k1ynz": false,
+    "k21": null
+   },
+   "out_b64": "EAIwMDAwMDAzMTp7ImswdCI6ImJ9zqltXFwpSFXDv15+IiwiazF5bnoiOmZhbHNlLCJrMjEiOm51bGx9"
+  },
+  {
+   "id": "CCF-EC-0063",
+   "payload": {
+    "k0d_": false,
+    "k1xfgb8": null,
+    "k2": [
+     null
+    ],
+    "k31ncl": "dxz0Lm.o9vST"
+   },
+   "out_b64": "EAIwMDAwMDA0MTp7ImswZF8iOmZhbHNlLCJrMXhmZ2I4IjpudWxsLCJrMiI6W251bGxdLCJrMzFuY2wiOiJkeHowTG0ubzl2U1QifQ=="
+  },
+  {
+   "id": "CCF-EC-0064",
+   "payload": {
+    "k01": {
+     "k0enak5": null,
+     "k16": [],
+     "k2a": 1374225308
+    }
+   },
+   "out_b64": "EAIwMDAwMDAzMjp7ImswMSI6eyJrMGVuYWs1IjpudWxsLCJrMTYiOltdLCJrMmEiOjEzNzQyMjUzMDh9fQ=="
+  },
+  {
+   "id": "CCF-EC-0065",
+   "payload": {
+    "k0p0l6r": [
+     [
+      {
+       "k0518ms": true
+      }
+     ],
+     43965247,
+     true
+    ]
+   },
+   "out_b64": "EAIwMDAwMDAyZTp7ImswcDBsNnIiOltbeyJrMDUxOG1zIjp0cnVlfV0sNDM5NjUyNDcsdHJ1ZV19"
+  },
+  {
+   "id": "CCF-EC-0066",
+   "payload": {
+    "k0rg": [
+     171136657,
+     true
+    ],
+    "k13epym": null,
+    "k20": -156877206
+   },
+   "out_b64": "EAIwMDAwMDAzOTp7ImswcmciOlsxNzExMzY2NTcsdHJ1ZV0sImsxM2VweW0iOm51bGwsImsyMCI6LTE1Njg3NzIwNn0="
+  },
+  {
+   "id": "CCF-EC-0067",
+   "payload": {
+    "k04": {},
+    "k1ps55": [
+     true
+    ],
+    "k2irnf0": [
+     {
+      "k0rjnx": true
+     },
+     -1408631260
+    ],
+    "k3e": null
+   },
+   "out_b64": "EAIwMDAwMDA0ZDp7ImswNCI6e30sImsxcHM1NSI6W3RydWVdLCJrMmlybmYwIjpbeyJrMHJqbngiOnRydWV9LC0xNDA4NjMxMjYwXSwiazNlIjpudWxsfQ=="
+  },
+  {
+   "id": "CCF-EC-0068",
+   "payload": {
+    "k0cw": {
+     "k0afvy": {}
+    }
+   },
+   "out_b64": "EAIwMDAwMDAxNjp7ImswY3ciOnsiazBhZnZ5Ijp7fX19"
+  },
+  {
+   "id": "CCF-EC-0069",
+   "payload": {},
+   "out_b64": "EAIwMDAwMDAwMjp7fQ=="
+  },
+  {
+   "id": "CCF-EC-0070",
+   "payload": {
+    "k02": 1782944211,
+    "k1b0n": [
+     false,
+     "T<k?."
+    ],
+    "k2sva": {}
+   },
+   "out_b64": "EAIwMDAwMDAzNTp7ImswMiI6MTc4Mjk0NDIxMSwiazFiMG4iOltmYWxzZSwiVDxrPy4iXSwiazJzdmEiOnt9fQ=="
+  },
+  {
+   "id": "CCF-EC-0071",
+   "payload": {
+    "k0uqt4": []
+   },
+   "out_b64": "EAIwMDAwMDAwZDp7ImswdXF0NCI6W119"
+  },
+  {
+   "id": "CCF-EC-0072",
+   "payload": {
+    "k0c70": "FY \t#]",
+    "k1bb1": 299473286,
+    "k2onqns": ""
+   },
+   "out_b64": "EAIwMDAwMDAzMjp7ImswYzcwIjoiRlkgXHQjXSIsImsxYmIxIjoyOTk0NzMyODYsImsyb25xbnMiOiIifQ=="
+  },
+  {
+   "id": "CCF-EC-0073",
+   "payload": {
+    "k0z": [
+     "\u03b1JW",
+     null
+    ],
+    "k1": null,
+    "k27t_": null,
+    "k3p": "\u597d"
+   },
+   "out_b64": "EAIwMDAwMDAzODp7ImsweiI6WyLOsUpXIixudWxsXSwiazEiOm51bGwsImsyN3RfIjpudWxsLCJrM3AiOiLlpb0ifQ=="
+  },
+  {
+   "id": "CCF-EC-0074",
+   "payload": {},
+   "out_b64": "EAIwMDAwMDAwMjp7fQ=="
+  },
+  {
+   "id": "CCF-EC-0075",
+   "payload": {
+    "k0vhq": "[zk<"
+   },
+   "out_b64": "EAIwMDAwMDAxMDp7ImswdmhxIjoiW3prPCJ9"
+  },
+  {
+   "id": "CCF-EC-0076",
+   "payload": {},
+   "out_b64": "EAIwMDAwMDAwMjp7fQ=="
+  },
+  {
+   "id": "CCF-EC-0077",
+   "payload": {
+    "k0g": 68465492,
+    "k1l_me": ">'!e \u03b1*[5pZ",
+    "k2y": -205881025
+   },
+   "out_b64": "EAIwMDAwMDAzOTp7ImswZyI6Njg0NjU0OTIsImsxbF9tZSI6Ij4nIWUgzrEqWzVwWiIsImsyeSI6LTIwNTg4MTAyNX0="
+  },
+  {
+   "id": "CCF-EC-0078",
+   "payload": {
+    "k0": "#2=5?5`\u03b1\fu",
+    "k15r": [
+     null,
+     -1534250196,
+     {}
+    ],
+    "k2rfwkc": "w",
+    "k34s3nq": {
+     "k05s9": null
+    }
+   },
+   "out_b64": "EAIwMDAwMDA1OTp7ImswIjoiIzI9NT81YM6xXGZ1IiwiazE1ciI6W251bGwsLTE1MzQyNTAxOTYse31dLCJrMnJmd2tjIjoidyIsImszNHMzbnEiOnsiazA1czkiOm51bGx9fQ=="
+  },
+  {
+   "id": "CCF-EC-0079",
+   "payload": {
+    "k0": null,
+    "k1ql2y6": null
+   },
+   "out_b64": "EAIwMDAwMDAxYTp7ImswIjpudWxsLCJrMXFsMnk2IjpudWxsfQ=="
+  },
+  {
+   "id": "CCF-EC-0080",
+   "payload": {
+    "k0c2": 2067626635,
+    "k1z": false,
+    "k2i": null,
+    "k3g69": {}
+   },
+   "out_b64": "EAIwMDAwMDAzNTp7ImswYzIiOjIwNjc2MjY2MzUsImsxeiI6ZmFsc2UsImsyaSI6bnVsbCwiazNnNjkiOnt9fQ=="
+  },
+  {
+   "id": "CCF-EC-0081",
+   "payload": {
+    "k0": true,
+    "k1l63": [
+     {
+      "k0d0u5": null,
+      "k1wnjzc": {
+       "k0m": null,
+       "k1vwog": null
+      }
+     },
+     {}
+    ]
+   },
+   "out_b64": "EAIwMDAwMDA0ZDp7ImswIjp0cnVlLCJrMWw2MyI6W3siazBkMHU1IjpudWxsLCJrMXduanpjIjp7ImswbSI6bnVsbCwiazF2d29nIjpudWxsfX0se31dfQ=="
+  },
+  {
+   "id": "CCF-EC-0082",
+   "payload": {
+    "k0d8": null,
+    "k1": {
+     "k0ui": null,
+     "k1fme86": [],
+     "k2mi": "\u0416"
+    },
+    "k2": [],
+    "k3cvpu": -1502646909
+   },
+   "out_b64": "EAIwMDAwMDA1Njp7ImswZDgiOm51bGwsImsxIjp7ImswdWkiOm51bGwsImsxZm1lODYiOltdLCJrMm1pIjoi0JYifSwiazIiOltdLCJrM2N2cHUiOi0xNTAyNjQ2OTA5fQ=="
+  },
+  {
+   "id": "CCF-EC-0083",
+   "payload": {
+    "k049": 1691030902,
+    "k1": null,
+    "k23v3o5": 488920045,
+    "k32": {
+     "k0o93": true,
+     "k1rvy": [
+      null,
+      1112337831
+     ]
+    }
+   },
+   "out_b64": "EAIwMDAwMDA2MDp7ImswNDkiOjE2OTEwMzA5MDIsImsxIjpudWxsLCJrMjN2M281Ijo0ODg5MjAwNDUsImszMiI6eyJrMG85MyI6dHJ1ZSwiazFydnkiOltudWxsLDExMTIzMzc4MzFdfX0="
+  },
+  {
+   "id": "CCF-EC-0084",
+   "payload": {},
+   "out_b64": "EAIwMDAwMDAwMjp7fQ=="
+  },
+  {
+   "id": "CCF-EC-0085",
+   "payload": {
+    "k0ifa2": "3X~",
+    "k1ba2": true,
+    "k2": false
+   },
+   "out_b64": "EAIwMDAwMDAyODp7ImswaWZhMiI6IjNYfiIsImsxYmEyIjp0cnVlLCJrMiI6ZmFsc2V9"
+  },
+  {
+   "id": "CCF-EC-0086",
+   "payload": {},
+   "out_b64": "EAIwMDAwMDAwMjp7fQ=="
+  },
+  {
+   "id": "CCF-EC-0087",
+   "payload": {
+    "k0k": "q)_",
+    "k1tbf1k": {
+     "k078c": null
+    },
+    "k2c": false
+   },
+   "out_b64": "EAIwMDAwMDAzMjp7ImswayI6InEpXyIsImsxdGJmMWsiOnsiazA3OGMiOm51bGx9LCJrMmMiOmZhbHNlfQ=="
+  },
+  {
+   "id": "CCF-EC-0088",
+   "payload": {
+    "k0cn": {
+     "k0mwn": "m\n"
+    },
+    "k1h": false,
+    "k22": "y"
+   },
+   "out_b64": "EAIwMDAwMDAyZTp7ImswY24iOnsiazBtd24iOiJtXG4ifSwiazFoIjpmYWxzZSwiazIyIjoieSJ9"
+  },
+  {
+   "id": "CCF-EC-0089",
+   "payload": {},
+   "out_b64": "EAIwMDAwMDAwMjp7fQ=="
+  },
+  {
+   "id": "CCF-EC-0090",
+   "payload": {
+    "k0q": "\u0416.=",
+    "k1xsax": {
+     "k0di1": false,
+     "k1zjck": [
+      "qs;g#Z",
+      1178599221,
+      {
+       "k0qxx8y": -1984571764
+      }
+     ],
+     "k22p": {
+      "k0": "?o04o",
+      "k1n": null
+     }
+    },
+    "k24sd": [
+     "",
+     "\ud55cG1?PvH"
+    ],
+    "k3lhmr": false
+   },
+   "out_b64": "EAIwMDAwMDBhNzp7ImswcSI6ItCWLj0iLCJrMXhzYXgiOnsiazBkaTEiOmZhbHNlLCJrMXpqY2siOlsicXM7ZyNaIiwxMTc4NTk5MjIxLHsiazBxeHg4eSI6LTE5ODQ1NzE3NjR9XSwiazIycCI6eyJrMCI6Ij9vMDRvIiwiazFuIjpudWxsfX0sImsyNHNkIjpbIiIsIu2VnEcxP1B2SCJdLCJrM2xobXIiOmZhbHNlfQ=="
+  },
+  {
+   "id": "CCF-EC-0091",
+   "payload": {},
+   "out_b64": "EAIwMDAwMDAwMjp7fQ=="
+  },
+  {
+   "id": "CCF-EC-0092",
+   "payload": {
+    "k0c0ug": false
+   },
+   "out_b64": "EAIwMDAwMDAxMDp7ImswYzB1ZyI6ZmFsc2V9"
+  },
+  {
+   "id": "CCF-EC-0093",
+   "payload": {
+    "k05t4": {},
+    "k160qo": {
+     "k01sju": [
+      {
+       "k08t": 1036512943
+      },
+      null,
+      null
+     ],
+     "k1": {
+      "k0": {
+       "k01p": null,
+       "k1": -1676477751
+      },
+      "k1ztu": [
+       null,
+       -99912517,
+       null
+      ]
+     }
+    }
+   },
+   "out_b64": "EAIwMDAwMDA4OTp7ImswNXQ0Ijp7fSwiazE2MHFvIjp7ImswMXNqdSI6W3siazA4dCI6MTAzNjUxMjk0M30sbnVsbCxudWxsXSwiazEiOnsiazAiOnsiazAxcCI6bnVsbCwiazEiOi0xNjc2NDc3NzUxfSwiazF6dHUiOltudWxsLC05OTkxMjUxNyxudWxsXX19fQ=="
+  },
+  {
+   "id": "CCF-EC-0094",
+   "payload": {
+    "k0gv": [
+     {
+      "k0vb4r5": -1846435116,
+      "k17": 1995328592,
+      "k202": [
+       false,
+       false
+      ]
+     }
+    ]
+   },
+   "out_b64": "EAIwMDAwMDA0ODp7ImswZ3YiOlt7ImswdmI0cjUiOi0xODQ2NDM1MTE2LCJrMTciOjE5OTUzMjg1OTIsImsyMDIiOltmYWxzZSxmYWxzZV19XX0="
+  },
+  {
+   "id": "CCF-EC-0095",
+   "payload": {
+    "k0z": [
+     true
+    ],
+    "k10": 1252019705,
+    "k2": ""
+   },
+   "out_b64": "EAIwMDAwMDAyNzp7ImsweiI6W3RydWVdLCJrMTAiOjEyNTIwMTk3MDUsImsyIjoiIn0="
+  }
+ ],
+ "is_control_frame": [
+  {
+   "id": "CCF-PR-0000",
+   "in_b64": "EFwwMDAwMDAxZjp7ImswIjozMzg2NDcxMDEsImsxb3NzcSI6ZmFsc2V9",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0001",
+   "in_b64": "EAIwMDAwMDAyMDp7ImswbDVyIjoiPGrkvaBQTlxcNCIsImsxIjpudWxsfQ==",
+   "out": true
+  },
+  {
+   "id": "CCF-PR-0002",
+   "in_b64": "EAIwMDAwMDAwMjp7fcK7LcOp",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0003",
+   "in_b64": "EAIQAhs=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0004",
+   "in_b64": "EAIwMDAwMDADMDp7ImswZ3hkYSI6ZmFsc2V9",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0005",
+   "in_b64": "EAIwMDAwMDAyOTp7ImswZCI6LTEzNjI4NjkwNDYsImsxIjpbImt8eik0fmojZW1cdCJdfQ==",
+   "out": true
+  },
+  {
+   "id": "CCF-PR-0006",
+   "in_b64": "EAIwMDAwMDA0Mjp7ImswNjduIjpudWxsLCJrMThseWtlIjpbZmFsc2UsIkIqIixudWxsXSwiazJtZyI6ZmFsc2UsImszX3IiOiJXIn0=",
+   "out": true
+  },
+  {
+   "id": "CCF-PR-0007",
+   "in_b64": "EAIwMDAwMDAxMTp7IjgwdzlrdGgiOmZhbHNlfQ==",
+   "out": true
+  },
+  {
+   "id": "CCF-PR-0008",
+   "in_b64": "EAIwMDAwMDA1MTp7ImswNXE0OCI6W10sImsxaXV0Ijp7Ims=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0009",
+   "in_b64": "EAJnNGFhODcyZzp7ImswIjp7ImswYXAxYyI6bnVsbCwiazE1OGUzIjoiL8KiJSZ4TiJ9fQ==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0010",
+   "in_b64": "EAIwMDAwMDAxMDp7ImswNWhuaSI6ZmE=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0011",
+   "in_b64": "XToC0Jbwn5yB",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0012",
+   "in_b64": "EAIyOGRiYjM4Qjp7ImswIjpudWxsLCJrMWdnc3IiOiI7Yn5rKX1ufic3IWkiLCJrMiI6IsOxME52In0=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0013",
+   "in_b64": "EAIwMDAwMDA1Nzp7ImswZ3kwaCI6LTE0NTIxNjU2OTksImsxdmMzIjp7ImswdG1jIjp7Imswc2h5Ijp7fSwiazEzangiOmZhbHNlLCJrMjdyIjoiw79zZ3UvYkF1OSJ9fX0=",
+   "out": true
+  },
+  {
+   "id": "CCF-PR-0014",
+   "in_b64": "EAJhIDhGekNCRjt7ImswZWhuIjpbbnVsbCxudWxsLGZhbHNlXSwiazFldHJ0dCI6ZmFsc2UsImsyMiI6LTU2NTM1MTg2NCwiazNyIjp0cnVlfQ==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0015",
+   "in_b64": "MBBhwqwQLfCfmIB4EALwn5yBEEEQAhBhCw==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0016",
+   "in_b64": "EDIwMDAwMDAwMjp7fQ==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0017",
+   "in_b64": "EAIwMDAwMDAyMzp7ImswZXBiIjoxOTgzMzA1NjYsImsxMG4iOiJJ5L2gJ1EifQ==",
+   "out": true
+  },
+  {
+   "id": "CCF-PR-0018",
+   "in_b64": "EAIwMDAwMDAxODp7ImswIjpudWxsLCJrMTRzeiI=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0019",
+   "in_b64": "EAIwMDAw",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0020",
+   "in_b64": "EAIwMCAwMDAwMjp7fQ==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0021",
+   "in_b64": "EAIwMDA=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0022",
+   "in_b64": "esKkw5I6wpDimIPDgUEAEEE64oKsQgI3LC7wn5iAAA==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0023",
+   "in_b64": "EAIwMDAwMDA2Njp7Imswc21oeWsiOltdLCJrMTd0IjpmYWxzZSwiazIiOmZhbHNlLCJrM3dqIjp7ImswcWk3Ijo0NzY2MDE4MDcsImsxY2E2IjpbXSwiazJvdWxoIjpbbnVsbCxudWxsLG51bGxdfX0=",
+   "out": true
+  },
+  {
+   "id": "CCF-PR-0024",
+   "in_b64": "EAIwMDAwMDAwZTo=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0025",
+   "in_b64": "EAIwMDAwMDA1NDp7Ig==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0026",
+   "in_b64": "AjDwnYSeRBDwnYSeOg4QOhAtOg==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0027",
+   "in_b64": "EALtlZzwn5yBYhDDuOKUgsKXEAJ4WhA60JZ6",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0028",
+   "in_b64": "Al0Q",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0029",
+   "in_b64": "EAJBMjVDRmYyMDp7ImswbyI6In4iLCJrMWVsIjotMzUyOTk2OTA4LCJrMmhuM2V4IjpmYWxzZX0=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0030",
+   "in_b64": "EAIwMDAwMDA0MTp7ImswMSI6Ilx0VUpuMWkiLCJrMTkiOltudWxsLC0zNzExNzYwNDhdLCJrMjBweHciOiJEQXFL4piDP2DigqwifRAyLg==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0031",
+   "in_b64": "EAIwMDAwMA==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0032",
+   "in_b64": "EAIw",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0033",
+   "in_b64": "EAIwMDAwMDAyODp7ImswbCI6WyLOqSHtlZwnZSJdLCJrMXV0XyI6LTE4",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0034",
+   "in_b64": "EAJnejA3ejYxYTt7ImswIjp7ImswZV8iOlsiw7FcYjTOqX4xJE5oX20iLC0xNjY4MTg4OTMyXSwiazE1bWMiOiJEw781In0sImsxIjp7ImswYnFvIjpudWxsLCJrMTVmZSI6ZmFsc2UsImsyajczNyI6bnVsbH0sImsyN19vb2siOiJlTGkifQ==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0035",
+   "in_b64": "EAIwMDAwMDAyMTp7ImswZm0iOns=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0036",
+   "in_b64": "EAIgMzJmQXpBQTp7ImswbyI6IkQhRX3OqSIsImsxc2poZ2EiOi0zODU1MjU2NDAsImsyY3ZubXEiOlsxNjY4NDQ5ODAzXX0=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0037",
+   "in_b64": "EAIwMDAwMDAxYTp7ImsweSI6ZmFsc2UsImsxIjoifXtRMEYifQ==",
+   "out": true
+  },
+  {
+   "id": "CCF-PR-0038",
+   "in_b64": "EAIwMDAwMDA0OTp7ImswZWFwciI6Ikgtal4zeSVoIiwiazFncSI6eyJrMGQiOjc4MDEx",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0039",
+   "in_b64": "EAI0NkU5ZGdENjt7ImswMSI6Ink25L2gXGIxYksjXG4iLCJrMWxnMmlkIjp0cnVlLCJrMmdianl4IjotMTU4NTEwMTYwMX0=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0040",
+   "in_b64": "EAI=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0041",
+   "in_b64": "EAIwMDAwMDAyYTp7ImswbDR3MQ==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0042",
+   "in_b64": "EAIwMDAwMDAzYzp7ImswaDVrIjp7ImswMnVqIjpbMjAx",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0043",
+   "in_b64": "EAIwMDAwMDAwZTp7ImswcGxva2kiOnt9fQ==",
+   "out": true
+  },
+  {
+   "id": "CCF-PR-0044",
+   "in_b64": "EAI4QjE0NTRmODt7ImswNyI6In52buKYgy50Xjs4VVxmIyIsImsxMF9rIjpmYWxzZX0=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0045",
+   "in_b64": "EAIwMDAwMDAzZDp7ImswajZmIjo5MTM0Njg4MDIsImsx",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0046",
+   "in_b64": "8J+cgRAC8J+cgRA6RHkHXMKYQjo=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0047",
+   "in_b64": "EAIbXMO6wqzCgfCfmIDwn5iAw5ZfH8OfGw==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0048",
+   "in_b64": "EAIwMDAwMDA1YTp7ImswcDkwaiI6MTc1NzgyMTg3MiwiazEiOnRydWUsImsyaHBsNGwiOltmYWxzZSxbImA0IiwtMjAwNDk3ODIxMSwtMzk0NjM3NTQ2XSwtMTYwMTU1NjUzXX1bOMO/wqjkvaA=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0049",
+   "in_b64": "EFvCgjoyEPCdhJ7Dtg==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0050",
+   "in_b64": "EAIwMDAwMDBjMjp7ImswXzRka+WlvSI6IuS9oGtNTG4mR1BHIUXCoiIsImsxZ3I5ciI6Iit0U359PmlUPWcndCIsImsyIjoidiIsImszcTN6ZGgiOnsiazBzIjp7ImswdWIiOiJofHhVXHIifSwiazFuc190Ijp7ImswNWciOmZhbHNlLCJrMV8wc3QiOnsiazA3aWx4eiI6bnVsbCwiazExX2t5XyI6bnVsbCwiazIiOi00NTQyMTIyODF9LCJrMjZhdmxyIjpudWxsfX19",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0051",
+   "in_b64": "EAI4NGcxZGJkIDp7ImswaXdrejIiOmZhbHNlfQ==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0052",
+   "in_b64": "EAIi5aW9LsKFw7/CnMKVYvCfnIE=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0053",
+   "in_b64": "EAIwMDAwMDAwZDp7Imswb2IiOnRydWV9",
+   "out": true
+  },
+  {
+   "id": "CCF-PR-0054",
+   "in_b64": "EAIwMDAwMDA0MMOHeyJrMGJld3p6Ijp7fSwiazFuZzQiOm51bGwsImsyMzB1IjpudWxsLCJrM18iOiJeWDUjeuWlvXxGZOKYg1AifQ==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0055",
+   "in_b64": "w6w6LFtiEFzCosO/8J+YgBBEEPCfmIAQYsOlXPCdhJ7wnYSe7ZWcwpJiAg==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0056",
+   "in_b64": "EAJ5Nw==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0057",
+   "in_b64": "EAI1NDExMmZhZDt7ImswNDg3aSI6bnVsbH0=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0058",
+   "in_b64": "w6zwn5yBfRBh",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0059",
+   "in_b64": "EAIwMDAwMDAwZjp7ImswcSI=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0060",
+   "in_b64": "EAIwMDAwMDAxMjp7ImswIjpbbnVsbCx0cnVlXX0=",
+   "out": true
+  },
+  {
+   "id": "CCF-PR-0061",
+   "in_b64": "Y3t7Al/DqQLwn5iAOntd",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0062",
+   "in_b64": "EAIwMDAwMDAwYjp7ImswIjpudWxsfQ==",
+   "out": true
+  },
+  {
+   "id": "CCF-PR-0063",
+   "in_b64": "EAIwMDAwMDA3OTp7ImswOGl1IjoiVe2VnDtcbjYkSVxyIiwiazF3dSI6eyJrMGN6ZiI6Ikw8JWc/IiwiazFoIjozOTYwMjk0MTUsImsyMWciOltudWxsLFtudWxsLC0xNzAzODAyMzcwLC0xMDQ0NDE3ODhdLC0yMDI4NDY3NDEwXX19",
+   "out": true
+  },
+  {
+   "id": "CCF-PR-0064",
+   "in_b64": "EAJDQjY3ejY3ZDt7ImswOSI6LTEyMjc5Njk1MSwiazEiOlt7ImswamNvbDgiOlt0cnVlLHRydWVdLCJrMTltIjpudWxsfSwxODcxMjA1MTY0LG51bGxdLCJrMnUiOiJURn1eTyBuIiwiazMiOi0zNjM1NjQwNjl9",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0065",
+   "in_b64": "Rg5jOBB4AmNFAgJd7ZWcQ8KUG+KUgH19IPCfnIEC",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0066",
+   "in_b64": "EAIwMDAwMDAzMDp7ImswdSI6eyJrMCI6ZmFsc2UsImsxeGs1amsiOm51bGx9LCJrMWlqOSI6dHJ1ZX3CkjpZ5aW9YfCdhJ4=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0067",
+   "in_b64": "wrEvG8KoATrigqw6f1s=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0068",
+   "in_b64": "EAIwMDAwMDAxYzp7ImswIjoi7ZWcXFzOqeKUgkdL5aW9dlxyWXR2In0=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0069",
+   "in_b64": "EAIwMDAwMDAyNTp7ImswMmZ6dSI6IlIiLCJrMXFvIjpbXSwiazI5c21oNiI6W119AGEQ",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0070",
+   "in_b64": "EAIwMDAwMDAwMjp7fV14",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0071",
+   "in_b64": "EAIwMDAwMDA1Yjp7ImswdTQiOm51bGwsImsxZSI6IuKYg2TtlZwmaD8iLCJrMnh2IjoiIiwiazNhMjR4IjpbMzUwMTU4LFtmYWxzZSxmYQ==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0072",
+   "in_b64": "EAIwMDAwMDAwZTp7ImswOG4iOmZhbHNlfQ==",
+   "out": true
+  },
+  {
+   "id": "CCF-PR-0073",
+   "in_b64": "EAIyNTYgNTE2MTt7ImswcXIiOnsiazBiYXQ5YSI6Il9n0JZJJ3BVZiJ9LCJrMTBmIjpmYWxzZSwiazJiaiI6dHJ1ZX0=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0074",
+   "in_b64": "EAIwMDAwMDAxMjp7ImswY3ciOiJBcFhD7ZWcIn1iMcK6",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0075",
+   "in_b64": "EALOqSwfw73CkPCdhJ4b4piD8J2Enng2AgsCwoQQNMOxOg==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0076",
+   "in_b64": "EAIwMDAwMDAw",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0077",
+   "in_b64": "EAI=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0078",
+   "in_b64": "EAJkNzY3OTJFZjt7ImswNHlkZCI6eyJrMHVjOHRtIjotMTc4NjYwODQ5MX19",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0079",
+   "in_b64": "EAIwMDAwMDAwMjp7fQ==",
+   "out": true
+  },
+  {
+   "id": "CCF-PR-0080",
+   "in_b64": "EAIwMDAwMDAxOTp7ImswcyI6InlrIiwiazEyIjpbbnVsbF0=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0081",
+   "in_b64": "EAIwMDAwMDAzZDp7ImswaGciwo9beyJrMHJ3Ijo2ODMxMjM0ODgsImsxIjpmYWxzZX0sW1tudWxsLC0xMzM3OTU3MzgzXV1dfQ==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0082",
+   "in_b64": "EAIzYURDZjViQTp7ImswZ2NyNTciOm51bGwsImsxdHAyMCI6dHJ1ZSwiazJvYWRjdiI6W10sImszZCI6dHJ1ZX0=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0083",
+   "in_b64": "EAIwMEUwMDAzZjp7ImswN3IiOnRydWUsImsxIjpudWxsLCJrMjJ1ZjZqIjpbXSwiazM3ODVxIjoiUyZCTdCW44GCXGJSwqFnIn0=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0084",
+   "in_b64": "EAIwMDAwMDA=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0085",
+   "in_b64": "EAIwMDAwMDAwMjp7fQ==",
+   "out": true
+  },
+  {
+   "id": "CCF-PR-0086",
+   "in_b64": "EAIwMDAwMDA0Yjp7ImswdiI6ZmFsc2UsImsxbGciOnsiazAiOjYxODAxMzEwLCJrMXBqZ2JvIjpudWxsfSwiazJ3YjB1diI6eyJrMDJtIjpudWxsfX0=",
+   "out": true
+  },
+  {
+   "id": "CCF-PR-0087",
+   "in_b64": "EAI6ZAI0MO2VnOKUgMOsEGUC8J+YgMKYDgICHw==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0088",
+   "in_b64": "EAIwMDAwMDA0MDp7ImswdWRoIjpbW11dLCJrMSI6LTc3ODA2NjY3NjUsImsyXzFfMnIiOiLimIM6IiwiazN0ODhxeSI6InQxJyJ9",
+   "out": true
+  },
+  {
+   "id": "CCF-PR-0089",
+   "in_b64": "EAJ9EEZ7w7EQfRAiNRDilIBi",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0090",
+   "in_b64": "EAIwMDAwMDA0Yzp7IGswNWRlayI6eyJrMGVvIjpudWxsLCJrMXYwIjpbMjU3ODA1MjUwXX0sImsxbmJ4bW4iOm51bGwsImsydzMiOjIxMDQwODY1NTl9",
+   "out": true
+  },
+  {
+   "id": "CCF-PR-0091",
+   "in_b64": "EAJnMTVmMmMxRjp7ImswY24iOi05ODk5OTg4NjcsImsxazgiOnsiazB2OHQiOiIsPeOBgiJ9fQ==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0092",
+   "in_b64": "EAIwMDAwMDAwZDp7ImswIjoia3RHOCJ9",
+   "out": true
+  },
+  {
+   "id": "CCF-PR-0093",
+   "in_b64": "AgIwMDAwMDAwMjp7fQ==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0094",
+   "in_b64": "EALCpX1kZQ==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0095",
+   "in_b64": "EA==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0096",
+   "in_b64": "EAIwMDAwMDAwMjp7fQtaQcON",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0097",
+   "in_b64": "EAIwMDAwMDAxMTp7ImswaWxtMm8iOmZhbHNlfQ==",
+   "out": true
+  },
+  {
+   "id": "CCF-PR-0098",
+   "in_b64": "EAIwMDAwMDA0MDp7ImswNyI6W3RydWUsdHJ1ZSx0cnVlXSwiazE4IjoiXG7kvaAiLCJrMiI6NjMwNTk=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0099",
+   "in_b64": "EAJjLQ==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0100",
+   "in_b64": "EAI=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0101",
+   "in_b64": "fQ==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0102",
+   "in_b64": "EAIwMDAwMDAyOTp7Imswd2k2bSI6ZmFsc2UsImsxIjoiRsKhw79QPFTimIMzzrFOL2kifQ==",
+   "out": true
+  },
+  {
+   "id": "CCF-PR-0103",
+   "in_b64": "4oKs8J+cgQJEMxA6CxBi8J+cgX8tfzkCAAA3X8O2QTM=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0104",
+   "in_b64": "EAIwMDAwMDAwMjo1fQ==",
+   "out": true
+  },
+  {
+   "id": "CCF-PR-0105",
+   "in_b64": "w7FDIMKJQyLwn5iAXPCfmIBhQxAiENCWOjACwpzimINkew==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0106",
+   "in_b64": "EAIwMDAwMDAwZTp7ImswZGZuIjpudWxsfQ==",
+   "out": true
+  },
+  {
+   "id": "CCF-PR-0107",
+   "in_b64": "EAIwMDAwMDAwMjp7",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0108",
+   "in_b64": "Xy4=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0109",
+   "in_b64": "EAI3YTE2QkZFYzp7ImswIjp7Imswc3ciOiLtlZzilII0ODbjgYI9PGIifX0=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0110",
+   "in_b64": "EAIwMDAwMDAyYzp7ImswcyI6",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0111",
+   "in_b64": "EAIwMDAwMDAxYzp7ImswIjoxODM1MjE1NjI4LCI=",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0112",
+   "in_b64": "EAIwMDAwMDAwMjp7fQ==",
+   "out": true
+  },
+  {
+   "id": "CCF-PR-0113",
+   "in_b64": "EAIwMDAwMDA0ODp7ImswYjVoIjp7ImswIjp0cnVlLCJrMWdtIjoiOVxmP3RIIiwiazJsIjpudWxsfSwiazEiOm51bGwsImsybTdybSI6bnVsbH0yEBACYsK2",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0114",
+   "in_b64": "EAIwMDAwMDAwYTp7ImswNCI6W119",
+   "out": true
+  },
+  {
+   "id": "CCF-PR-0115",
+   "in_b64": "EAIwMDAwMDAzYTp7ImswXyI6LTc4NzQ3ODkxMywiazFqeGYiOjE0MzQwNzkw8J+cgTksImsyaSI6eyJrMHZwNjE1IjpbXX19",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0116",
+   "in_b64": "EAIwMDAwMDAxMjp7ImswbSI6LTkwODU4OTMzMH0=",
+   "out": true
+  },
+  {
+   "id": "CCF-PR-0117",
+   "in_b64": "EALwn5iAEBB78J+cgRDCpsKPRcO5QvCfnIHwn5yBQX0uWA==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0118",
+   "in_b64": "EAIwMDAwMDAxNDp7ImswMTZ6IjotMjc2OTMxNzY5fQ==",
+   "out": true
+  },
+  {
+   "id": "CCF-PR-0119",
+   "in_b64": "EAIw",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0120",
+   "in_b64": "EAIwMDAwMDAyZjp7ImswIjpudWxsLCJrMTUxdiI6LTE0ODI2NDA5NjMsImsyIjotMjgwMzY4NDQwfQ==",
+   "out": true
+  },
+  {
+   "id": "CCF-PR-0121",
+   "in_b64": "EAIwMDAwMDBhNTp7ImswYzgwaiI6eyJrMCI6eyJrMGUiOmZhbHNlfX0sImsxIjpmYWxzZSwiazJkdHYiOm51bGwsImszZmMiOnsiazBjX2lzMSI6W1sieWZqUntT15QiXV0sImsxczRtIjpbWyLQlsKhS2TDv3g9aFkyMlxmIiwiXFxs7ZWcUiIsdHJ1ZV0sdHJ1ZV0sImsybSI6WzcxOTY3MjI3Ng==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0122",
+   "in_b64": "EAIwMDAwMAsxZDp7ImswIjpudWxsLCJrMXQiOi0xNjk5MTk3MzE4fQ==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0123",
+   "in_b64": "EAIwMDAwMDA2Mjp7ImswbHIwIjp7fSwiazEiOnsiazByY3QiOmZhbHNlLCJrMWlwbSI6W1tdLFsi0JbDsWhcXHPCoiIsImN1X3NcbuS9oHQiLCI3d3xhe041W86xMUIiXV19LCJrMjAiOltdfS3DsloQ",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0124",
+   "in_b64": "EAI3Y2NiYzE4RTp7fQ==",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0125",
+   "in_b64": "X/CfnIHwn5iA",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0126",
+   "in_b64": "w6kiwokuf2LCrhDimIMCMAICXfCdhJ45EMOsEBAA4oKs",
+   "out": false
+  },
+  {
+   "id": "CCF-PR-0127",
+   "in_b64": "EAJkNzJkQ0U0NTp7ImswdHhwbnoiOm51bGwsImsxIjotOTg2MDgwODQ0fQ==",
+   "out": false
+  }
+ ],
+ "decode": [
+  {
+   "id": "CCF-DC-0000",
+   "chunks_b64": [
+    "EAIwMDAwMDA1Nzp7ImQiOltbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1sxXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXX0QAjAwMDAwMDJkOnsiayI6MX0QAjAwMDAwMDFmOnsiazB2bjV1IjoieWkp5aW9IiwiazEiOiLilIBDIn3wn5iAw5A="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": "control payload nests deeper than 32",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "control payload nests deeper than 32",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0001",
+   "chunks_b64": [
+    "EAIwMDAwMDAwZDp7ImsiOiJiOhACYiJ98J+cgfCdhJ5bwrgCEBAsYg==",
+    "4oKsEAIwMDE=",
+    "MDBkYTA6"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0002",
+   "chunks_b64": [
+    "EA==",
+    "Ag==",
+    "MA==",
+    "MA==",
+    "MQ==",
+    "MA==",
+    "MA==",
+    "OQ==",
+    "MA==",
+    "ZA==",
+    "Og==",
+    "EA==",
+    "Ag==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "Mg==",
+    "YQ==",
+    "Og==",
+    "ew==",
+    "Ig==",
+    "aw==",
+    "MA==",
+    "bg==",
+    "Zw==",
+    "Ig==",
+    "Og==",
+    "bg==",
+    "dQ==",
+    "bA==",
+    "bA==",
+    "LA==",
+    "Ig==",
+    "aw==",
+    "MQ==",
+    "Yg==",
+    "YQ==",
+    "aA==",
+    "Ig==",
+    "Og==",
+    "bg==",
+    "dQ=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "control payload too large",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "control payload too large",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0003",
+   "chunks_b64": [
+    "EAIwMDAwMDAwNDpudWxsEAIwMDAwMDAwYjp7ImsiOiJhYmEifeKUgMKaes6p8J+YgGQQEHsQEEIBEAIwMDAwMDAwMTox"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "control payload must be an object",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "control payload must be an object",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0004",
+   "chunks_b64": [
+    "EAIwMDAwMDA1NTp7ImswMWIiOiIjZ+2VnCFoLEEvLiIsImsxIjp7fSwiazJocGZvNCI6eyJrMGtxaCI6IteUzqlQLe2VnCIsImsxYWRyIjoiXGYnNVLtlZxMXCJCIn19NALwn5yBAgBjeToQEOS9oEY6"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k01b": "#g\ud55c!h,A/.",
+       "k1": {},
+       "k2hpfo4": {
+        "k0kqh": "\u05d4\u03a9P-\ud55c",
+        "k1adr": "\f'5R\ud55cL\"B"
+       }
+      }
+     },
+     {
+      "kind": "data",
+      "data_b64": "NALwn5yBAgBjeToQ5L2gRjo="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k01b": "#g\ud55c!h,A/.",
+       "k1": {},
+       "k2hpfo4": {
+        "k0kqh": "\u05d4\u03a9P-\ud55c",
+        "k1adr": "\f'5R\ud55cL\"B"
+       }
+      }
+     },
+     {
+      "kind": "data",
+      "data_b64": "NALwn5yBAgBjeToQ5L2gRjo="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0005",
+   "chunks_b64": [
+    "Zn/DqQLwn5iA8J+cgcOXC2EA8J+cgcKf0JY="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "Zn/DqQLwn5iA8J+cgcOXC2EA8J+cgcKf0JY="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "Zn/DqQLwn5iA8J+cgcOXC2EA8J+cgcKf0JY="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0006",
+   "chunks_b64": [
+    "EAI=",
+    "MDAxMDAyNw==",
+    "Njo="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "control payload too large",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "control payload too large",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0007",
+   "chunks_b64": [
+    "EAIwMDAwMDAQEBACMDAwMDAwNA==",
+    "NDp7ImswNHUiOlstNTkwMTA1Njk1LHt9XSwiazF6bDd1MiI6dHJ1ZSwiazIzeCI6MTQ0MDcyOTI3MSwiazNsIjpudWxsfRACMDAwMDAwMDI6e30="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0008",
+   "chunks_b64": [
+    "EAIwMDAwMDAwMTrDqRACMDAwMDAwMjc6eyJrIjoxfRACEAIwMDAwMDAwZTp7ImsiOiJiYhA6YWIifQ=="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": "invalid control payload length",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control payload length",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0009",
+   "chunks_b64": [
+    "EAIw",
+    "MA==",
+    "MDAwMDA=",
+    "Mjp7fQ=="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {}
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {}
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0010",
+   "chunks_b64": [
+    "EBDwn5iAG1k=",
+    "4oKsAsKvEBAQEPCfmIA=",
+    "EBA4EBAQEA==",
+    "EA==",
+    "AjAwMDAwMDAzOmFiYw=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "EPCfmIAbWQ=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "4oKsAsKvEBDwn5iA"
+     },
+     {
+      "kind": "data",
+      "data_b64": "EDgQEA=="
+     }
+    ],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0011",
+   "chunks_b64": [
+    "EAI4Q0VmOTZlQix7fRACMDAwMDA=",
+    "MDA=",
+    "Yg==",
+    "OnsiayI6ImIQYQ==",
+    "In0QAjAwMDAwMDAxOsOpEAIwMDAwMDAwMTrDqQ=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0012",
+   "chunks_b64": [
+    "EA==",
+    "Ag==",
+    "MDAwMDAwMjM=",
+    "Og==",
+    "eyJrIjoxfX8bWx9Z8J2EnvCfmIBjwpLCnw=="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0013",
+   "chunks_b64": [
+    "EAI=",
+    "MDAw",
+    "MDAwM2Y6eyJrMHJtejEiOnsiazB2MzAiOiLDqeKCrGoiLCJrMSI6NTIxNzk1MDAwfSwiazFxOCI6LTE0ODIwNDMyODR9EBAQEBAQ8J2EnjozQnsDAQNDw5MQAjAwMDAwMDUwOnsiazBnOHMiOlt7ImswIjpudWxsLCJrMTgwIjpbXX1dLCJrMTIiOnRydWUsImsyIjpbIkhKJ2pQaFx0NHxkIixb",
+    "XV0sImszM2giOnRydWV9EA==",
+    "AjAwMDAwMDNhOnsiazAiOi0xOTczNTQyMDgxLCJrMTFfYmk1Ijp0cnVlLCJrMnp4Y2J0IjpudWxsLCJrMzh3IjpbXX0="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0rmz1": {
+        "k0v30": "\u00e9\u20acj",
+        "k1": 521795000
+       },
+       "k1q8": -1482043284
+      }
+     },
+     {
+      "kind": "data",
+      "data_b64": "EBAQ8J2EnjozQnsDAQNDw5M="
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0g8s": [
+        {
+         "k0": null,
+         "k180": []
+        }
+       ],
+       "k12": true,
+       "k2": [
+        "HJ'jPh\t4|d",
+        []
+       ],
+       "k33h": true
+      }
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0": -1973542081,
+       "k11_bi5": true,
+       "k2zxcbt": null,
+       "k38w": []
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0rmz1": {
+        "k0v30": "\u00e9\u20acj",
+        "k1": 521795000
+       },
+       "k1q8": -1482043284
+      }
+     },
+     {
+      "kind": "data",
+      "data_b64": "EBAQ8J2EnjozQnsDAQNDw5M="
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0g8s": [
+        {
+         "k0": null,
+         "k180": []
+        }
+       ],
+       "k12": true,
+       "k2": [
+        "HJ'jPh\t4|d",
+        []
+       ],
+       "k33h": true
+      }
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0": -1973542081,
+       "k11_bi5": true,
+       "k2zxcbt": null,
+       "k38w": []
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0014",
+   "chunks_b64": [
+    "EAIwMDAwMDAwZDp7ImsiOiJhYhA6YiJ9",
+    "EAIwMDAwMDAyYTp7ImswemEiOnsiazAiOm51bGwsIms=",
+    "MTgiOiIoWTzOqUhK4piDN8KhIn19"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0015",
+   "chunks_b64": [
+    "EBAQEBAQEBBDwqtbw7Hwn5iAAhAQAhAQWhAQEBAQEFvwn5iA"
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "EBAQEEPCq1vDsfCfmIACEAIQWhAQEFvwn5iA"
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "EBAQEEPCq1vDsfCfmIACEAIQWhAQEFvwn5iA"
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0016",
+   "chunks_b64": [
+    "EAIwMDAwMDA2MTp7ImswaW5iIjpbW251bGwsdHJ1ZSw1NDA1NzY0MF0sW1tudWxsLDEzMTk0MDA3NjJdLHRydWUsMTU3MjI4NzQyXV0sImsxbGEiOltudWxsLG51bGxdLA==",
+    "ImsyayI6bnVsbH0QEBAQEBA="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0inb": [
+        [
+         null,
+         true,
+         54057640
+        ],
+        [
+         [
+          null,
+          1319400762
+         ],
+         true,
+         157228742
+        ]
+       ],
+       "k1la": [
+        null,
+        null
+       ],
+       "k2k": null
+      }
+     },
+     {
+      "kind": "data",
+      "data_b64": "EBAQ"
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0inb": [
+        [
+         null,
+         true,
+         54057640
+        ],
+        [
+         [
+          null,
+          1319400762
+         ],
+         true,
+         157228742
+        ]
+       ],
+       "k1la": [
+        null,
+        null
+       ],
+       "k2k": null
+      }
+     },
+     {
+      "kind": "data",
+      "data_b64": "EBAQ"
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0017",
+   "chunks_b64": [
+    "EAIwMDAwMDAzODp7ImsiOjF9EAIwMDAwMDAwMjp7fRACMDAwMDAwMzI6eyJrMHc3OXBx",
+    "IjpudWxsLCJrMXViayI6dHJ1ZSwiazJpd29xIjoia2Ep4oKswpcC0JZhf+KCrMOg5L2gEBA5"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0018",
+   "chunks_b64": [
+    "8J2Eng==",
+    "Qg==",
+    "EA==",
+    "EA==",
+    "EA==",
+    "AQ==",
+    "EA==",
+    "Ag==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MQ==",
+    "MA==",
+    "Og==",
+    "ew==",
+    "Ig==",
+    "EA==",
+    "EA==",
+    "EA==",
+    "EA=="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "8J2Eng=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "Qg=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     }
+    ],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0019",
+   "chunks_b64": [
+    "wqUAEBA6EBAQEA==",
+    "EAIwMDAwMDAwZTo=",
+    "eyJrIjoiAmJiYTpiIn0QAjAwMDAwMDBhOnsiayI6",
+    "ImJi",
+    "In0QAjAwMDAwMDBhOnsiayI6IhACIn0="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "wqUAEDoQEA=="
+     }
+    ],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0020",
+   "chunks_b64": [
+    "EAIwMDAwMDAwMDoQAjAwMDAwMDAxOnsQAjAwMDAwMGU5OnsiazB3NyI6eyJrMDJwIjpbW10sdHJ1ZV19LCJrMWYiOlsifWLQlmQiLHsiazBreHN6Ijp7ImswZyI6NjEyMDUwODA2LCJrMXpiY3UiOg==",
+    "MzUxMjEwNDAzfSwiazFtdCI6eyJrMHp6YXlkIjpudWxsLCJrMXluMiI6ZmFs"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0021",
+   "chunks_b64": [
+    "EAIwMDAwMDAwZTo=",
+    "eyJrIjoiAjo6OgJhIn0="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0022",
+   "chunks_b64": [
+    "EAI=",
+    "MDAwMDAwNTc6eyJkIjpbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbMV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV19"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "control payload nests deeper than 32",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "control payload nests deeper than 32",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0023",
+   "chunks_b64": [
+    "EAIwMDAwMDAwOTp7",
+    "ImsiOiJiIn0QAjAwMDAwMDAyOnt9EA==",
+    "AjAwMDAwMDAxOg==",
+    "w6k="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k": "b"
+      }
+     },
+     {
+      "kind": "control",
+      "control": {}
+     }
+    ],
+    "error": "invalid control payload length",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control payload length",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0024",
+   "chunks_b64": [
+    "EAI=",
+    "MDAwMDAwMDQ6bnVsbDXimIM0eA=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "control payload must be an object",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "control payload must be an object",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0025",
+   "chunks_b64": [
+    "EAIwMDAwMDAyODp7ImswbzQ4c2YiOmZhbHNlLCJrMWciOiJKIiwiazJ5MzhycCI6W119EMOp",
+    "EHgQAg==",
+    "MDAwMDAwMDE6w6k="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0026",
+   "chunks_b64": [
+    "EAIwMDEwMGJlMzpBEBACEAIwMDAwMDAwMTrDqfCfmIADL1zwn5iAL/CfmIAQEA=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "control payload too large",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "control payload too large",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0027",
+   "chunks_b64": [
+    "EA==",
+    "Ag==",
+    "RQ==",
+    "Qw==",
+    "OQ==",
+    "Rw==",
+    "MA==",
+    "Qg==",
+    "YQ==",
+    "IA==",
+    "AA==",
+    "ew==",
+    "fQ=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0028",
+   "chunks_b64": [
+    "EAIwMDEwMGU4Yjo=",
+    "EAIwMDAwMDAwOTo=",
+    "eyJr",
+    "IjoiAiJ9EBAQEBACMDAwMDAwMA=="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": "control payload too large",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "control payload too large",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0029",
+   "chunks_b64": [
+    "4oKsYlnwn5yBY31jw4FaOvCfmIDCiAI=",
+    "EBAQEBAQAiDDv10=",
+    "woPjgYLigqxYwpEOwrnjgYI6",
+    "EA==",
+    "AjAwMDAwMDAxOsOp"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "4oKsYlnwn5yBY31jw4FaOvCfmIDCiAI="
+     },
+     {
+      "kind": "data",
+      "data_b64": "EBAQAiDDv10="
+     },
+     {
+      "kind": "data",
+      "data_b64": "woPjgYLigqxYwpEOwrnjgYI6"
+     }
+    ],
+    "error": "invalid control payload length",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control payload length",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0030",
+   "chunks_b64": [
+    "EAIwMA==",
+    "MTAwOQ==",
+    "Mw==",
+    "Mjo="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": "control payload too large",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "control payload too large",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0031",
+   "chunks_b64": [
+    "EAIwMDAwMDAzNTp7ImswaiI6dHJ1ZSwiazF5bSI6LTE2NzE1MzA3MTUsImsycjZiXyI6bnVsbCwiazMiOiIifRACMDAwMDAwNWY6eyJrMG1hYiI6NzkzMTE4OTU3LCJrMSI6eyJrMGxzbWUiOm51bGwsImsxZ2MiOjM5MzQ5ODM1Nn0sImsycWZ1eiI6LTEwMDQ5NDM1MjAsImszZF8yIjoiRNCWw79gIn0QOhACMDAwMDAwMGM6eyJrMCI6ZmFsc2V9"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0032",
+   "chunks_b64": [
+    "EAIwMDAwMDAzNDp7ImswZXN5bSI6IilcYn1EZDsiLCJrMTM1d3NlIjp0cnVlLCJrMmVnIjo5OTk3NzUzNzl9EA==",
+    "AjAwMDAwMDUwOnsiazBjamd3Ijp7ImswZCI6bnVsbH0sImsxMW45aiI6eyJrMGkxIjo3MDIzMTUyMTAsImsxIjoiYydQL8KiIn0sImsyY3IxbyI6ZmFsc2V9EAIwMDAwMDAzNzp7ImswIjo3MjY3Mjg5MzAsImsxYWEwIjpudWxsLCJrMnciOjkwNDc4MDUyNSwiazM5bSI6e319EAIwMDAwMDAzNTp7ImsiOjF9"
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0esym": ")\b}Dd;",
+       "k135wse": true,
+       "k2eg": 999775379
+      }
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0cjgw": {
+        "k0d": null
+       },
+       "k11n9j": {
+        "k0i1": 702315210,
+        "k1": "c'P/\u00a2"
+       },
+       "k2cr1o": false
+      }
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0": 726728930,
+       "k1aa0": null,
+       "k2w": 904780525,
+       "k39m": {}
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0esym": ")\b}Dd;",
+       "k135wse": true,
+       "k2eg": 999775379
+      }
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0cjgw": {
+        "k0d": null
+       },
+       "k11n9j": {
+        "k0i1": 702315210,
+        "k1": "c'P/\u00a2"
+       },
+       "k2cr1o": false
+      }
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0": 726728930,
+       "k1aa0": null,
+       "k2w": 904780525,
+       "k39m": {}
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0033",
+   "chunks_b64": [
+    "EA==",
+    "YQ==",
+    "EA==",
+    "Ag==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "Og=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0034",
+   "chunks_b64": [
+    "EAIw",
+    "MDAwMDAwMTrDqRACMDA=",
+    "MTAwN2EwOg=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control payload length",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control payload length",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0035",
+   "chunks_b64": [
+    "EAIwMDAwMDAwZTp7ImswMzBlZSI6ImsifRACMDAwMDAwMzQ6eyJrMGJmIjoiR+KYgzk7ODlZXGZZIiwiazEyZm0iOjQzNTM4OTE1MywiazIiOiIuRWQifQ=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k030ee": "k"
+      }
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0bf": "G\u26039;89Y\fY",
+       "k12fm": 435389153,
+       "k2": ".Ed"
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k030ee": "k"
+      }
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0bf": "G\u26039;89Y\fY",
+       "k12fm": 435389153,
+       "k2": ".Ed"
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0036",
+   "chunks_b64": [
+    "OhA=",
+    "EOKUgA==",
+    "ZMOMEBBD",
+    "wrs="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "Og=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "EOKUgA=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "ZMOMEEM="
+     },
+     {
+      "kind": "data",
+      "data_b64": "wrs="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "OhDilIBkw4wQQ8K7"
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0037",
+   "chunks_b64": [
+    "EAIwMDAwMDAw",
+    "Mjp7fQ=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {}
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {}
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0038",
+   "chunks_b64": [
+    "EAIwMDAwMDAwYzp7ImsiOiI6YTo6In0QAjAwMDAwMDk4OnsiazBkIjpbeyJrMHBrN3MiOnsiazAzIjpudWxsfSwiazF2aHo4cSI6W3RydWVdfSwiaSIsZmFsc2VdLCJrMTJzcjZ1IjpbdHJ1ZSx7fSx7Imswcnk4Ijp0cnVlLCJrMTEiOnt9LCJrMjBnaiI6IiJ9XSwiazJlX3RwdyI6eyJrMG1ocCI6bnVsbCwiazE0bSI6bnVsbH19"
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k": ":a::"
+      }
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0d": [
+        {
+         "k0pk7s": {
+          "k03": null
+         },
+         "k1vhz8q": [
+          true
+         ]
+        },
+        "i",
+        false
+       ],
+       "k12sr6u": [
+        true,
+        {},
+        {
+         "k0ry8": true,
+         "k11": {},
+         "k20gj": ""
+        }
+       ],
+       "k2e_tpw": {
+        "k0mhp": null,
+        "k14m": null
+       }
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k": ":a::"
+      }
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0d": [
+        {
+         "k0pk7s": {
+          "k03": null
+         },
+         "k1vhz8q": [
+          true
+         ]
+        },
+        "i",
+        false
+       ],
+       "k12sr6u": [
+        true,
+        {},
+        {
+         "k0ry8": true,
+         "k11": {},
+         "k20gj": ""
+        }
+       ],
+       "k2e_tpw": {
+        "k0mhp": null,
+        "k14m": null
+       }
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0039",
+   "chunks_b64": [
+    "EA==",
+    "Ag==",
+    "MDAwMDAwMg==",
+    "NTp7ImswbDB6czciOnsiazA5IjpudWxsLCJrMXRtOCI6ImZoIn19"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0l0zs7": {
+        "k09": null,
+        "k1tm8": "fh"
+       }
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0l0zs7": {
+        "k09": null,
+        "k1tm8": "fh"
+       }
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0040",
+   "chunks_b64": [
+    "w7Uu",
+    "8J+cgXk6Ag==",
+    "wrXDjxAQ",
+    "WXoQ",
+    "EA=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "w7Uu"
+     },
+     {
+      "kind": "data",
+      "data_b64": "8J+cgXk6Ag=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "wrXDjxA="
+     },
+     {
+      "kind": "data",
+      "data_b64": "WXo="
+     },
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "w7Uu8J+cgXk6AsK1w48QWXoQ"
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0041",
+   "chunks_b64": [
+    "NQ=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "NQ=="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "NQ=="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0042",
+   "chunks_b64": [
+    "EAI6RGEwZGdGYyw=",
+    "e30QAjAwMDAwMDFjOg==",
+    "eyJrMDVoOCI6dHJ1ZSwiazFjMnUzIjpudWxsfRACMDAwMDAwMGU6eyJrIjoiAgI6AjphIn0="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0043",
+   "chunks_b64": [
+    "w7E=",
+    "ZA==",
+    "w5M=",
+    "8J2Eng==",
+    "5L2g",
+    "8J2Eng==",
+    "4pSA",
+    "Ag=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "w7E="
+     },
+     {
+      "kind": "data",
+      "data_b64": "ZA=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "w5M="
+     },
+     {
+      "kind": "data",
+      "data_b64": "8J2Eng=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "5L2g"
+     },
+     {
+      "kind": "data",
+      "data_b64": "8J2Eng=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "4pSA"
+     },
+     {
+      "kind": "data",
+      "data_b64": "Ag=="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "w7Fkw5PwnYSe5L2g8J2EnuKUgAI="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0044",
+   "chunks_b64": [
+    "EAIwMDAwMDA3MA==",
+    "OnsiazBkIjp7ImswdHQ5IjpbXSwiazE1eiI6W251bGwsLTk1MTg0MDY3NSwiSm52eWkiXSwiazI5byI6e319LCJrMXJlaXg3Ijp7ImswIjpmYWxzZSwiazFvcm00IjpmYWxzZSwiazJyZzciOltdfX0Q",
+    "EBAQEBDOqfCfmIAgOTo="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0d": {
+        "k0tt9": [],
+        "k15z": [
+         null,
+         -951840675,
+         "Jnvyi"
+        ],
+        "k29o": {}
+       },
+       "k1reix7": {
+        "k0": false,
+        "k1orm4": false,
+        "k2rg7": []
+       }
+      }
+     },
+     {
+      "kind": "data",
+      "data_b64": "EBAQzqnwn5iAIDk6"
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0d": {
+        "k0tt9": [],
+        "k15z": [
+         null,
+         -951840675,
+         "Jnvyi"
+        ],
+        "k29o": {}
+       },
+       "k1reix7": {
+        "k0": false,
+        "k1orm4": false,
+        "k2rg7": []
+       }
+      }
+     },
+     {
+      "kind": "data",
+      "data_b64": "EBAQzqnwn5iAIDk6"
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0045",
+   "chunks_b64": [
+    "EAIwMDAwMDAwMjpbXRACMDAwMDAwMGU6eyJrIjoiAjpiYmICIn0QAjAwMDAwMDZhOnsiazBjZTRtIjp7ImswajZwIjp7ImswaWsxIjpmYWxzZSwiazF2bTZr",
+    "IjpudWxsfSwiazFramtoXyI6ZmFsc2UsImsyZHNsIjpbbnVsbCwtMjAxNTQ4MDM4MSxudWxsXX0sImsxIjpbXX0QEA=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "control payload must be an object",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "control payload must be an object",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0046",
+   "chunks_b64": [
+    "8J+cgRAQOgLwn5yBEBDigqzilIDwn5yBAjNiwr8Q",
+    "AjA=",
+    "MDAwMDBiNg==",
+    "OnsiazAxdGUiOiIwaUoocsKiaEwiLCJrMXM5cyI6eyJrMGd6aCI6WzE5NDMxNTA1MjUsIlx0Iix7fV0sImsxIjp7ImswNmlkbyI6eyJrMGcyIjotNzExODE3Njg3LCJrMW9qNiI6bnVsbCwiazJzOSI6bnVsbH0sImsxbjR4IjpbdHJ1ZSwxNjU3MTE4NTM1XX0sImsyZHJyIjpudWxsfSwiazJkNTRrIjp7ImswIjpmYWxzZX19eRAQw5Q6wqoQEMOzW10QEBtm",
+    "EBA="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "8J+cgRA6AvCfnIEQ4oKs4pSA8J+cgQIzYsK/"
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k01te": "0iJ(r\u00a2hL",
+       "k1s9s": {
+        "k0gzh": [
+         1943150525,
+         "\t",
+         {}
+        ],
+        "k1": {
+         "k06ido": {
+          "k0g2": -711817687,
+          "k1oj6": null,
+          "k2s9": null
+         },
+         "k1n4x": [
+          true,
+          1657118535
+         ]
+        },
+        "k2drr": null
+       },
+       "k2d54k": {
+        "k0": false
+       }
+      }
+     },
+     {
+      "kind": "data",
+      "data_b64": "eRDDlDrCqhDDs1tdEBtm"
+     },
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "8J+cgRA6AvCfnIEQ4oKs4pSA8J+cgQIzYsK/"
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k01te": "0iJ(r\u00a2hL",
+       "k1s9s": {
+        "k0gzh": [
+         1943150525,
+         "\t",
+         {}
+        ],
+        "k1": {
+         "k06ido": {
+          "k0g2": -711817687,
+          "k1oj6": null,
+          "k2s9": null
+         },
+         "k1n4x": [
+          true,
+          1657118535
+         ]
+        },
+        "k2drr": null
+       },
+       "k2d54k": {
+        "k0": false
+       }
+      }
+     },
+     {
+      "kind": "data",
+      "data_b64": "eRDDlDrCqhDDs1tdEBtmEA=="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0047",
+   "chunks_b64": [
+    "OjrilIB98J+cgQI=",
+    "EBA=",
+    "8J+YgBAQHxA=",
+    "EA==",
+    "EBA="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "OjrilIB98J+cgQI="
+     },
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "8J+YgBAf"
+     },
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "OjrilIB98J+cgQIQ8J+YgBAfEBA="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0048",
+   "chunks_b64": [
+    "EAIwMDAwMDAwYTp7ImsiOiJiECJ9"
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0049",
+   "chunks_b64": [
+    "EA==",
+    "EA==",
+    "EA==",
+    "EA=="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "EBA="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0050",
+   "chunks_b64": [
+    "EA==",
+    "Ag==",
+    "Rg==",
+    "IA==",
+    "Yw==",
+    "Nw==",
+    "YQ==",
+    "MQ==",
+    "MA==",
+    "YQ==",
+    "Og==",
+    "ew==",
+    "fQ==",
+    "8J2Eng==",
+    "wr4=",
+    "EA==",
+    "EA==",
+    "zqk=",
+    "EA==",
+    "EA==",
+    "EA==",
+    "EA==",
+    "EA==",
+    "EA=="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0051",
+   "chunks_b64": [
+    "An86AgI6MsKYeAsD",
+    "w4c6"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "An86AgI6MsKYeAsD"
+     },
+     {
+      "kind": "data",
+      "data_b64": "w4c6"
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "An86AgI6MsKYeAsDw4c6"
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0052",
+   "chunks_b64": [
+    "Ig==",
+    "w78=",
+    "ew==",
+    "w64=",
+    "8J+cgQ==",
+    "eg==",
+    "Ag==",
+    "Nw==",
+    "4oKs",
+    "EA==",
+    "AQ==",
+    "EA==",
+    "Ag==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "ZQ==",
+    "Og==",
+    "ew==",
+    "Ig==",
+    "aw==",
+    "Ig==",
+    "Og==",
+    "Ig==",
+    "Yg==",
+    "YQ==",
+    "YQ==",
+    "EA==",
+    "Ag==",
+    "YQ==",
+    "Ig==",
+    "fQ=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "Ig=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "w78="
+     },
+     {
+      "kind": "data",
+      "data_b64": "ew=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "w64="
+     },
+     {
+      "kind": "data",
+      "data_b64": "8J+cgQ=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "eg=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "Ag=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "Nw=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "4oKs"
+     }
+    ],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0053",
+   "chunks_b64": [
+    "EAJkNyBHNDg0ZwB7fRACMDAwMDAwNjE6eyJrMDVzeCI6eyJrMDNrMiI6W3siazA=",
+    "X3BzdmwiOjI5MTMwODMyNiwiazF3ajc4IjpudWxsfV19LCJrMWhsNHNpIjotNDI5MTEzNTY2LCJrMiI6dHJ1ZSwiazNsIjpbXX0QAjAwMDAwMDA0Om51bGwQAjAwMDAwMDBkOnsiazBiZzIiOiJEIn0="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0054",
+   "chunks_b64": [
+    "EAIwMDAwMDAwMjo=",
+    "e33lpb3wn5iAAX1jWQ=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {}
+     },
+     {
+      "kind": "data",
+      "data_b64": "5aW98J+YgAF9Y1k="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {}
+     },
+     {
+      "kind": "data",
+      "data_b64": "5aW98J+YgAF9Y1k="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0055",
+   "chunks_b64": [
+    "EBAQEBAQOgs3OgJlAg==",
+    "WwEQAjAw",
+    "MDAwMDI0OnsiazA0IjpbbnVsbCxbW251bGxdXV0sImsxd3IiOg=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "EBAQOgs3OgJlAg=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "WwE="
+     }
+    ],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "EBAQOgs3OgJlAlsB"
+     }
+    ],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0056",
+   "chunks_b64": [
+    "EAIwMDAwMDAyNzp7ImswNiI6dHI=",
+    "dWUsImsxOCI6dHJ1ZSwiazI1aTJpNSI6IjRIYiJ9EAIwMDAwMDAxZDp7ImswIjoiR1NcYk0=",
+    "K2hu0JYiLCJr",
+    "MQ==",
+    "IjpudWxsfQ=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k06": true,
+       "k18": true,
+       "k25i2i5": "4Hb"
+      }
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0": "GS\bM+hn\u0416",
+       "k1": null
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k06": true,
+       "k18": true,
+       "k25i2i5": "4Hb"
+      }
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0": "GS\bM+hn\u0416",
+       "k1": null
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0057",
+   "chunks_b64": [
+    "8J+YgMK98J+YgM6pIsOWwpUu8J+YgEHwnYSeYwI="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "8J+YgMK98J+YgM6pIsOWwpUu8J+YgEHwnYSeYwI="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "8J+YgMK98J+YgM6pIsOWwpUu8J+YgEHwnYSeYwI="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0058",
+   "chunks_b64": [
+    "EAIwMDAwMDAwMjp7fRAQEBA="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {}
+     },
+     {
+      "kind": "data",
+      "data_b64": "EBA="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {}
+     },
+     {
+      "kind": "data",
+      "data_b64": "EBA="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0059",
+   "chunks_b64": [
+    "EAIwMDAwMDA0",
+    "MDp7ImswNmMiOlstMTYyMDg1ODg1MixbbnVsbCxmYWxzZSxbdHJ1ZSwxMzg3OTExMjMxXV0sIlwieUNwZihkIl19"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k06c": [
+        -1620858852,
+        [
+         null,
+         false,
+         [
+          true,
+          1387911231
+         ]
+        ],
+        "\"yCpf(d"
+       ]
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k06c": [
+        -1620858852,
+        [
+         null,
+         false,
+         [
+          true,
+          1387911231
+         ]
+        ],
+        "\"yCpf(d"
+       ]
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0060",
+   "chunks_b64": [
+    "EAIwMDAwMDAwMzp7LH3wnYSeEMOpEAIwMDAwMDAyMzp7ImsiOjF9"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0061",
+   "chunks_b64": [
+    "EAIwMDAwMDA0NDp7ImswNmgiOm51bGwsImsxbXE1IjpbMTc4ODIyNzE0Nix7fSxmYWxzZV0sImsya3JjIjpudWxsLCJrM3IwIjpudWxsfRACOWU3M0RlMTcse30QAjAwMDAwMDI4OnsiayI6MX0QAjAwMDAwMDBhOnsiayI6ImFhIn0="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0062",
+   "chunks_b64": [
+    "EAIwMDAwMDAyMDp7ImsiOjF9"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0063",
+   "chunks_b64": [
+    "EAIwMDAwMDAy",
+    "Zjp7ImsiOjF9EAI=",
+    "MDAwMDAwMDQ6bnVsbPCdhJ4QEAJ98J+YgBAQXMO38J2Enn8=",
+    "WuKCrAI4OhAQ"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control payload length",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control payload length",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0064",
+   "chunks_b64": [
+    "EAIwMDAwMDAxNjp7ImsiOjF9AnsxNEFdQ0FEEBAsOhAQWmQQAjAwMDAwMDEwOnsiazAybGl5IjpmYWxzZX0="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0065",
+   "chunks_b64": [
+    "EAEQAjAwMDAwMDAxOsOp"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0066",
+   "chunks_b64": [
+    "EAIwMDAwMDA1Nzp7ImQiOltbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1sxXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXX0QAjAwMDAwEAIwMDAwMDAwYzp7ImsiOiI6YjphIn0QAjAwMDAwMDBkOnsiayI6IjoQYjoQIn0="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "control payload nests deeper than 32",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "control payload nests deeper than 32",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0067",
+   "chunks_b64": [
+    "EAIwMDAwMBAQEBAQAjAwMDAwMDI5OnsiayI6MX0QOg=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0068",
+   "chunks_b64": [
+    "EAIwMDAwMDAxZTp7ImswNzl4NDkiOnsiazAiOi0xODI3ODk5MTA2",
+    "fX0QEBAQQlzwn5iAQyACOsKIexAQAw=="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k079x49": {
+        "k0": -1827899106
+       }
+      }
+     },
+     {
+      "kind": "data",
+      "data_b64": "EBBCXPCfmIBDIAI6woh7EAM="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k079x49": {
+        "k0": -1827899106
+       }
+      }
+     },
+     {
+      "kind": "data",
+      "data_b64": "EBBCXPCfmIBDIAI6woh7EAM="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0069",
+   "chunks_b64": [
+    "EAIwMDE=",
+    "MDAwYmQ68J+cgRAQWDQQAjAw",
+    "MDAwMDA=",
+    "ZTp7ImswMyI6Is6pRDEi",
+    "fRAQ"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "control payload too large",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "control payload too large",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0070",
+   "chunks_b64": [
+    "EAI=",
+    "MDAwMDAwNTc6eyJkIjpbW1s=",
+    "W1tb",
+    "Ww==",
+    "W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbMV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV19"
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": "control payload nests deeper than 32",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "control payload nests deeper than 32",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0071",
+   "chunks_b64": [
+    "EA==",
+    "Ag==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "Mw==",
+    "OA==",
+    "Og==",
+    "ew==",
+    "Ig==",
+    "aw==",
+    "MA==",
+    "Ig==",
+    "Og==",
+    "Ig==",
+    "Uw==",
+    "TQ==",
+    "cQ==",
+    "PA==",
+    "cw==",
+    "cQ==",
+    "4piD",
+    "XA==",
+    "XA==",
+    "ag==",
+    "Sw==",
+    "PQ==",
+    "Ig==",
+    "LA==",
+    "Ig==",
+    "aw==",
+    "MQ==",
+    "EA==",
+    "Ag==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "Og=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0072",
+   "chunks_b64": [
+    "W/CfmIACAvCfnIFkIMOQAOS9oBA=",
+    "EPCfmIACw4XCtWTigqzjgYJDEAAQEBAQEBA="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "W/CfmIACAvCfnIFkIMOQAOS9oA=="
+     }
+    ],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0073",
+   "chunks_b64": [
+    "w4LDnw==",
+    "w6k3Ag5D8J+YgDrDozrCoBti",
+    "EBBbw5Es8J2EngM="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "w4LDnw=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "w6k3Ag5D8J+YgDrDozrCoBti"
+     },
+     {
+      "kind": "data",
+      "data_b64": "EFvDkSzwnYSeAw=="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "w4LDn8OpNwIOQ/CfmIA6w6M6wqAbYhBbw5Es8J2EngM="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0074",
+   "chunks_b64": [
+    "EAIwMDAwMDA=",
+    "NDI6eyJrMHhubzAiOnt9LCJrMTZyYXoiOiI9Wlk1fCIsImsydzBxbyI6LTE4MjkwOTQ2NDIsImszel83emsiOm51bGx98J+cgQLwn5iAwrXCgltaLfCfnIF9w78zWOKUggICEAIwMDAwMDAwMTp7"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0075",
+   "chunks_b64": [
+    "EBAQEBAQQg=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "EBAQQg=="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "EBAQQg=="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0076",
+   "chunks_b64": [
+    "EAIwMDAwMDA1Nzp7ImQiOltbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s=",
+    "W1tbMV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXQ==",
+    "XV1dXX0QAjAwMDAwMDAzOmFiY/CdhJ5hEBA="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "control payload nests deeper than 32",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "control payload nests deeper than 32",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0077",
+   "chunks_b64": [
+    "EA=="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0078",
+   "chunks_b64": [
+    "EAIwMDAwMDAwZDp7ImsiOiJhYjo6ECJ9EBAQEBAQEAIwMDAwMDAwZDp7ImsiOiICEBBhAiJ9"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0079",
+   "chunks_b64": [
+    "EA==",
+    "Ag==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "OQ==",
+    "Og==",
+    "ew==",
+    "Ig==",
+    "aw==",
+    "Ig==",
+    "Og==",
+    "Ig==",
+    "Ag==",
+    "Ig==",
+    "fQ==",
+    "EA==",
+    "Ag==",
+    "MA==",
+    "MA==",
+    "MQ==",
+    "MA==",
+    "MA==",
+    "NQ==",
+    "OQ==",
+    "MQ==",
+    "Og=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0080",
+   "chunks_b64": [
+    "EAI1Y0YgRjRGZQB7fRACMDAwMA==",
+    "MDAwMDoQAmJGZDczYjogOnt9EAIwMDAwMDAxNjp7ImswYm42OSI=",
+    "Oi0xOTg0MDAw",
+    "Mzc1fQ=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0081",
+   "chunks_b64": [
+    "EAIwMDAwMDAwMTrDqRAQwow2EBDwn5iAEBDwn5yBEAIwMDAwMDAzZDp7Imswazg=",
+    "bGxmIjoxMTU5NjQxNzQsImsxIjpmYWxzZSwiazJydmoiOnt9LCJrMzZrIjotOTI1Njk4MDg5fQ=="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": "invalid control payload length",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control payload length",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0082",
+   "chunks_b64": [
+    "EA==",
+    "Ag==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MQ==",
+    "Og==",
+    "w6k=",
+    "w6k=",
+    "EA==",
+    "Ag==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "5L2g",
+    "EA==",
+    "EA==",
+    "Ag==",
+    "Ag==",
+    "Ag==",
+    "EA==",
+    "EA==",
+    "Og==",
+    "OA==",
+    "EA==",
+    "EA==",
+    "AA=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control payload length",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control payload length",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0083",
+   "chunks_b64": [
+    "EAIwMDAwMDAyZDp7ImswOGZ4eiI6ZmFsc2UsImsxdDAiOjE1NjM3NzYyMCwiazI0aSI6bnVsbH0QAjAwMDAwMDAzOnRydQ=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0084",
+   "chunks_b64": [
+    "EA==",
+    "EA==",
+    "wpY=",
+    "fQ==",
+    "fQ==",
+    "EA==",
+    "EA==",
+    "EA==",
+    "EA==",
+    "woU=",
+    "EA==",
+    "EA==",
+    "EA==",
+    "EA==",
+    "EA==",
+    "EA=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "wpY="
+     },
+     {
+      "kind": "data",
+      "data_b64": "fQ=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "fQ=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "woU="
+     },
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "EMKWfX0QEMKFEBAQ"
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0085",
+   "chunks_b64": [
+    "EAIwMDAwMA==",
+    "MDFkOnsiayI6",
+    "MX0QAjAwMDAwEAIwMDAwMDAwMDo="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0086",
+   "chunks_b64": [
+    "EAIwMDAwMDAwMjp7fRACMDAwMDAwMTg6eyJrMDVkYiI6dHJ1ZSwiazEiOm51bGx9EBAQEBACMDAwMDAwNjY6eyJrMGIwbngiOlsxMzgwMDkwODksInHkvaA9IixbInk6ZTdtMFxmU1QiLG51bGwsLTg2MzY4NDg5XV0sImsxIjoiKU5kd3bCouKYg2QiLCJrMjFwIjp0cnVlLCJrM2ciOm51bGx9"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {}
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k05db": true,
+       "k1": null
+      }
+     },
+     {
+      "kind": "data",
+      "data_b64": "EBA="
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0b0nx": [
+        138009089,
+        "q\u4f60=",
+        [
+         "y:e7m0\fST",
+         null,
+         -86368489
+        ]
+       ],
+       "k1": ")Ndwv\u00a2\u2603d",
+       "k21p": true,
+       "k3g": null
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {}
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k05db": true,
+       "k1": null
+      }
+     },
+     {
+      "kind": "data",
+      "data_b64": "EBA="
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0b0nx": [
+        138009089,
+        "q\u4f60=",
+        [
+         "y:e7m0\fST",
+         null,
+         -86368489
+        ]
+       ],
+       "k1": ")Ndwv\u00a2\u2603d",
+       "k21p": true,
+       "k3g": null
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0087",
+   "chunks_b64": [
+    "EAIwMDAwMDAwOTp7ImsiOiJhIn0QAjAwMDA=",
+    "MDA0MTp7ImsiOjF9EBA="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k": "a"
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k": "a"
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0088",
+   "chunks_b64": [
+    "EAIwMDAwMDAwOTo=",
+    "eyJrIjoiOiJ9EAIwMDAwMDA0",
+    "YTp7ImswZG0iOi03MzQ3MDI3MzYsImsxbW1xeiI6IlNKeGJDY9CWNVU4IiwiazIiOlstNTkxNDY1NTAwXSwiazNkMXBwIjp0cnVlfRACMDAwMDAwMDg6eyJrIjoxfRACMDAwMDAwMDk6eyJrIjoiYSJ9"
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k": ":"
+      }
+     }
+    ],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0089",
+   "chunks_b64": [
+    "EAIwMDAwMDAw",
+    "MDo=",
+    "EBA=",
+    "4oKsMhAQMgIALvCdhJ4=",
+    "EBA5"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0090",
+   "chunks_b64": [
+    "EDoQAjAwMDAwMDAyOnt9EAIwMDEwMGExNDoQAjAwMDAwMDNmOnsiazA4bmhyciI6ImVTYmdVXiY3WlxyTe2VnCIsImsxYXciOm51bGwsImsyIjpmYWxzZSwiazMzIjp0cnVlfQ=="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0091",
+   "chunks_b64": [
+    "w5UQAjAwMTAwMWUyOg=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "control payload too large",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "control payload too large",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0092",
+   "chunks_b64": [
+    "EAIwMDAwMDAyNjp7ImswZ3kiOltudWxsLG51bGxdLA==",
+    "ImsxXzYiOltmYWxzZSwiIl19EAIwMDAwMDA1OTp7ImswdA=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0gy": [
+        null,
+        null
+       ],
+       "k1_6": [
+        false,
+        ""
+       ]
+      }
+     }
+    ],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0gy": [
+        null,
+        null
+       ],
+       "k1_6": [
+        false,
+        ""
+       ]
+      }
+     }
+    ],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0093",
+   "chunks_b64": [
+    "EBAQEBACMDAwMDAwMTc6eyJrMG4iOiJ24pSCKn1hSCMtXGZ8In0QAjAwMDAwMDQ1OnsiazBlYl8xMCI6bnVsbCwiazFjNjEiOiLXlFxmIiwiazJud2siOi0zMTQxMjgwMDYsImszIjp7ImswMSI6ZmFsc2V9fQ=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "EBA="
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0n": "v\u2502*}aH#-\f|"
+      }
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0eb_10": null,
+       "k1c61": "\u05d4\f",
+       "k2nwk": -314128006,
+       "k3": {
+        "k01": false
+       }
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "EBA="
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0n": "v\u2502*}aH#-\f|"
+      }
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0eb_10": null,
+       "k1c61": "\u05d4\f",
+       "k2nwk": -314128006,
+       "k3": {
+        "k01": false
+       }
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0094",
+   "chunks_b64": [
+    "EA==",
+    "AjAwEHg=",
+    "EBAQEA=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0095",
+   "chunks_b64": [
+    "EBAQEBAQEAJiNDEwRWFmICx7fRACMDAwMDAwMzU6eyJrMHRjIjoiMUw7eGHCoU7igqw/0JYiLCJrMXp2cXR6IjpudWxsLCJrMiI6IiE9JTExIn0="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0096",
+   "chunks_b64": [
+    "EAIwMDAwMDA=",
+    "MTE6eyJrMHAiOjUzMjYxODk3MX0QAjAwMDAwMDAwOsKI5aW9QwIQEGLwn5yB8J2Enn06IGI="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0097",
+   "chunks_b64": [
+    "EA==",
+    "Ag==",
+    "MDAwMDAwNw==",
+    "Mjp7",
+    "ImswaWRvIjoi4pSAzrEhc1QiLCJrMSI6eyJrMGx1a205IjotMjY2MzUyMTIwLCJrMWhqMnEiOjE4NTM4NDEyMCwiazJqdnciOm51bGx9LCJrMnkiOjE2NzY2MTM0MjAsImszbngiOjg1MjA2MjQwOH0="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0ido": "\u2500\u03b1!sT",
+       "k1": {
+        "k0lukm9": -266352120,
+        "k1hj2q": 185384120,
+        "k2jvw": null
+       },
+       "k2y": 1676613420,
+       "k3nx": 852062408
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0ido": "\u2500\u03b1!sT",
+       "k1": {
+        "k0lukm9": -266352120,
+        "k1hj2q": 185384120,
+        "k2jvw": null
+       },
+       "k2y": 1676613420,
+       "k3nx": 852062408
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0098",
+   "chunks_b64": [
+    "EAIwMDAwMDA=",
+    "MDI6e30=",
+    "4pSCYQICEAJkZ2FnRA==",
+    "OEM5LHt9"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {}
+     },
+     {
+      "kind": "data",
+      "data_b64": "4pSCYQIC"
+     }
+    ],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0099",
+   "chunks_b64": [
+    "EMOp"
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0100",
+   "chunks_b64": [
+    "EAIwMDAwMDAxMDp7ImswNHJ3YnciOm51bGx9EAIwMDAwMDAyZjp7ImswdXF2NyI6LTYwOTg4MTAyMywiazFmaWIiOg==",
+    "eyJrMGkiOjEwMTgzMDA4NH19EAIwMDA=",
+    "MDAwMDM6dHJ1EAIwMDAwMDAwMjp7fQ=="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k04rwbw": null
+      }
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0uqv7": -609881023,
+       "k1fib": {
+        "k0i": 101830084
+       }
+      }
+     }
+    ],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0101",
+   "chunks_b64": [
+    "EAIwMDAwMDAxNjp7ImswOWJ1ZWsiOjE=",
+    "Mzg0NDY1MTc3fRACMDAwMDAwMzM6eyJrMDVqciI6dHJ1ZSwiazExMzZ6eSI6W10sImsyNzg0ZSI6WyJqPFxiY1hIZGk7Il19EAIwMDAwMDAyOTp7Ims=",
+    "MGZ4MyI6eyJrMCI6e30sImsxcXkiOm51bGwsImsyeW4iOltdfX0="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k09buek": 1384465177
+      }
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k05jr": true,
+       "k1136zy": [],
+       "k2784e": [
+        "j<\bcXHdi;"
+       ]
+      }
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0fx3": {
+        "k0": {},
+        "k1qy": null,
+        "k2yn": []
+       }
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k09buek": 1384465177
+      }
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k05jr": true,
+       "k1136zy": [],
+       "k2784e": [
+        "j<\bcXHdi;"
+       ]
+      }
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0fx3": {
+        "k0": {},
+        "k1qy": null,
+        "k2yn": []
+       }
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0102",
+   "chunks_b64": [
+    "8J+cgQ==",
+    "XA=="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "8J+cgQ=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "XA=="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "8J+cgVw="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0103",
+   "chunks_b64": [
+    "EAIwMDAwMDAwMzoiYSI5EBBYEBBDMAB5AvCfnIHwnYSeIDoQEOWlvRAQ"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "control payload must be an object",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "control payload must be an object",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0104",
+   "chunks_b64": [
+    "NFs=",
+    "AvCdhJ7DhkJm7ZWcRTrDpDct4pSA8J2EnmMQ",
+    "Ag==",
+    "RDc6",
+    "QmdhY2I7e30="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "NFs="
+     },
+     {
+      "kind": "data",
+      "data_b64": "AvCdhJ7DhkJm7ZWcRTrDpDct4pSA8J2EnmM="
+     }
+    ],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0105",
+   "chunks_b64": [
+    "EBDwnYSe4oKsLPCfnIHClUMCQWPCrzbwn5yBEBBdw6tF4pSCw4QQAjAwMDAwMDI0OnsiazBwZyI6IiIsImsxYWZh"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "EPCdhJ7igqws8J+cgcKVQwJBY8KvNvCfnIEQXcOrReKUgsOE"
+     }
+    ],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "EPCdhJ7igqws8J+cgcKVQwJBY8KvNvCfnIEQXcOrReKUgsOE"
+     }
+    ],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0106",
+   "chunks_b64": [
+    "EA==",
+    "Ag==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MQ==",
+    "NA==",
+    "Og==",
+    "ew==",
+    "Ig==",
+    "aw==",
+    "MA==",
+    "OA==",
+    "NQ==",
+    "Yw==",
+    "dQ==",
+    "Ig==",
+    "Og==",
+    "OA==",
+    "NA==",
+    "Ng==",
+    "Mg==",
+    "Ng==",
+    "MQ==",
+    "Mw==",
+    "NA==",
+    "MA==",
+    "fQ=="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k085cu": 846261340
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k085cu": 846261340
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0107",
+   "chunks_b64": [
+    "WfCfnIEQEDrjgYJ7M3hkQfCfmIBdEAIwMDAwMDAw",
+    "ZQ==",
+    "OnsiayI=",
+    "OiI=",
+    "EAIQOmJhIn0Qw6kQEA=="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "WfCfnIEQOuOBgnszeGRB8J+YgF0="
+     }
+    ],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0108",
+   "chunks_b64": [
+    "EA==",
+    "AA==",
+    "EA==",
+    "Ag==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "Mg==",
+    "Og==",
+    "ew==",
+    "fQ=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0109",
+   "chunks_b64": [
+    "EAIwMDAwMDAwMTrDqRABEAIwMDAwMDAwMTo=",
+    "exACMDAwMDAwMjU6eyJrMHV6aSI6Ilx0Ok9NW20iLCJrMTZfIjoiQF9uX0xcdHcifQ=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control payload length",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control payload length",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0110",
+   "chunks_b64": [
+    "EAIwMDAwMDAxYw==",
+    "OnsiazBwc3JlZyI6e30sImsxcV9iIjoQAjAwMDAw",
+    "MDBlOnsiayI=",
+    "OiJhYmICYgIifQ=="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0111",
+   "chunks_b64": [
+    "EAIwMDAwMA==",
+    "MDAxOnsQAjAwMDAwMDAyOnt9"
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0112",
+   "chunks_b64": [
+    "EAJFQjpnZUNkNQB7",
+    "fQ=="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0113",
+   "chunks_b64": [
+    "EAIwMDAwMDAwZTp7ImswdzBmIjpudWxsfRACMDAwMDAwMTk6eyJrMDc3NCI6bnVsbCwiazE0Ijp0cnVlfQ=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0w0f": null
+      }
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0774": null,
+       "k14": true
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0w0f": null
+      }
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0774": null,
+       "k14": true
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0114",
+   "chunks_b64": [
+    "EAIwMDAwMDAxMDp7ImswOTF0Z2ciOnRydWV9EHgQAjAwMDAwMDA5OnsiayI6IgIifQ=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0115",
+   "chunks_b64": [
+    "EA==",
+    "Ag==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MQ==",
+    "Og==",
+    "w6k=",
+    "EA==",
+    "Ag==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "Mg==",
+    "Og==",
+    "ew==",
+    "fQ==",
+    "EA==",
+    "Og==",
+    "8J+YgA==",
+    "Dg==",
+    "Yw==",
+    "wqg=",
+    "8J+cgQ==",
+    "zqk=",
+    "Ig==",
+    "Dg==",
+    "Rg==",
+    "w7E=",
+    "eQ==",
+    "8J+YgA==",
+    "XQ==",
+    "QQ==",
+    "EA==",
+    "EA=="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": "invalid control payload length",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control payload length",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0116",
+   "chunks_b64": [
+    "EADilILCpgMQEFxiePCfmIBjEBACQvCdhJ57EAIwMDAwMDAwMzp0cnUQEBAQEBA="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0117",
+   "chunks_b64": [
+    "EA==",
+    "Ag==",
+    "RkU2YkY0NmI7e30=",
+    "EAIwMDAwMDAwMTo=",
+    "w6kQAjAwMDAwMDAxOsOp"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0118",
+   "chunks_b64": [
+    "EAIwMDAwMDAzNjp7ImsweGNmZjgiOi0xMDkxOTMzMjEzLCJrMTRpYyI6",
+    "bnVsbCwiazJhIjoiTUZQTDvCokk2In0QAjAwMDAwMDBlOnsiazAzaGQiOm51bGx9EAIwMDAwMDAwMzphYmMQAjAwMDAwMDM1Onsiaw==",
+    "MGxsIjoiUCxgIiwiazF6MzVnOSI6bnVsbCwiazJvIjpmYWxzZSwiazMwaiI6dHJ1ZQ==",
+    "fQ=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0119",
+   "chunks_b64": [
+    "EAIwMDAwMDAwMjp7fRACNDFCMDQ6YTgse30QAjAwMDAwMDBhOnsiayI6IjoQIn3wn5yBEBACEBAs"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0120",
+   "chunks_b64": [
+    "EDoQAg==",
+    "MDAwMDA=",
+    "MDAwOmHjgYIgEA==",
+    "EH0s44GCAkHwn5iAAg==",
+    "AvCfnIEQAjAwMDAwMDA5OnsiayI6IjoifQ=="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0121",
+   "chunks_b64": [
+    "EAIwMDAwMDBhOTp7ImswIjp7ImswZ3MiOlt0cnVlLDkxMDM2NjMwNV0sImsxNzgyIjoiIiwiazIwdzIxIjpudWxsfSwiazFjcmEiOlstMjAzNzYwNTAx",
+    "MCxbXSxudWxsXSwiazJzY2w4cCI6W3siazBrdjMiOltdLCJrMSI6bnVsbCwiazI4c2kiOiI77ZWcQSJ9XSwiazMw"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0122",
+   "chunks_b64": [],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0123",
+   "chunks_b64": [
+    "EBAQEBAQEAIwMDAw",
+    "MDAw",
+    "ZQ==",
+    "Ons="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "EBAQ"
+     }
+    ],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "EBAQ"
+     }
+    ],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0124",
+   "chunks_b64": [
+    "wpx7QcObLBACY2c1ZDJFMDQ6e30="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0125",
+   "chunks_b64": [
+    "EAIwMDAwMDA0YTp7ImswX2IiOnsiazBtbnIiOiJQa+KYg2lQJM6xL1xiQk8iLCJrMWNyIjpbW3RydWUsdHJ1ZV0sMTE0NA==",
+    "NDgyMDc2LGZhbHNlXX19EAIwMDAwMDAwZjp7Imswemhl",
+    "IjpmYWxzZX0QAjAwMDAwMBACMDAwMDAwM2I6eyJrMDciOm51bGwsImsxIjozMzI3OTA1MTUsImsyIjotMTYx",
+    "MjUwODYwMCwiazNmODIwbyI6bnVsbH0="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0_b": {
+        "k0mnr": "Pk\u2603iP$\u03b1/\bBO",
+        "k1cr": [
+         [
+          true,
+          true
+         ],
+         1144482076,
+         false
+        ]
+       }
+      }
+     }
+    ],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0126",
+   "chunks_b64": [
+    "EAIwMDAwMDAzMDp7ImswdSI6bnVsbCwiazFhemsiOm51bGwsImsyejFheTQiOiJRSz5IPWVmbUIvIn0="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0u": null,
+       "k1azk": null,
+       "k2z1ay4": "QK>H=efmB/"
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0u": null,
+       "k1azk": null,
+       "k2z1ay4": "QK>H=efmB/"
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0127",
+   "chunks_b64": [
+    "EBAQAjAwMDAwMDRmOnsiazA=",
+    "MWJociI6Im8iLCJrMQ==",
+    "ZCI="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     }
+    ],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     }
+    ],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0128",
+   "chunks_b64": [
+    "EBAQEBACMDAwMDAwMGE6eyJrIjoiEBAiffCfmIA=",
+    "XA==",
+    "AjpYEBAHZAJhAVxmG8Oj"
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0129",
+   "chunks_b64": [
+    "EBAQEBAQEHhD"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0130",
+   "chunks_b64": [
+    "EAIwMDAwMDAw",
+    "MTrDqRACMDA=",
+    "MDAwMDA=",
+    "Yzp7ImsiOiI6OmE6",
+    "In0="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control payload length",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control payload length",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0131",
+   "chunks_b64": [
+    "EAIwMDAwMDAzOQ==",
+    "Ons=",
+    "ImswYjFuaHEiOlsiSeWlvVxcI2EiLG51bGwsbnVsbF0sImsxY2hqIjoiWe2VnMKiPdCWPlx0In0Q",
+    "AjAwMDAwMDA=",
+    "MTrDqQ=="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0b1nhq": [
+        "I\u597d\\#a",
+        null,
+        null
+       ],
+       "k1chj": "Y\ud55c\u00a2=\u0416>\t"
+      }
+     }
+    ],
+    "error": "invalid control payload length",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control payload length",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0132",
+   "chunks_b64": [
+    "EAIwMDAwMDAzMjp7ImsweiI6",
+    "bnVsbCwiazE3NCI6LTE3MzkyMzIzMDQsImsyZmx6OCI6Mjg1MzE1NzQ1fRACMDAxMDA1MjA6"
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": "control payload too large",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "control payload too large",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0133",
+   "chunks_b64": [
+    "EA==",
+    "AjAwMDAwMDA=",
+    "Mg==",
+    "Ont9"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {}
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {}
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0134",
+   "chunks_b64": [
+    "EAIwMDAwMDA2Nzp7Imsw",
+    "IjoxNDUzNDE5MjQwLCJrMTY2aDlrIjotMTc5MDIwNDg1OSwiazIxYjNyIjp7fSwiazMiOnsiazAiOm51bGwsImsxbjUiOiIiLCJrMmwiOnsiazB0MzkiOiIpQThuXkIifX19EAIwMDAwMDAwMTrDqQ=="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": "invalid control payload length",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control payload length",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0135",
+   "chunks_b64": [
+    "EA==",
+    "w6k="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0136",
+   "chunks_b64": [
+    "EA==",
+    "Ag==",
+    "NQ==",
+    "ZQ==",
+    "Qw==",
+    "Yg==",
+    "QQ==",
+    "Mg==",
+    "Nw==",
+    "MQ==",
+    "Ow==",
+    "ew==",
+    "fQ=="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0137",
+   "chunks_b64": [
+    "EBAQEBACMDAwMDAwMGI6eyJrIjoiYmFhIn0="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "EBA="
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k": "baa"
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "EBA="
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k": "baa"
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0138",
+   "chunks_b64": [
+    "EAIwMDAwMDAwMjpbXRAQEBBD8J+YgPCdhJ4QEAIuzqnwnYSewpsQEBACMDAwMDAwMDE6w6k="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": "control payload must be an object",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "control payload must be an object",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0139",
+   "chunks_b64": [
+    "EAIwMDAwMDAwZDp7ImswbDMiOm51bGx9EAIwMDAwMDAxNjp7ImswZG14YzciOjE5NjIyMjU3OTR9LNCWAe2VnDh7esOaHzICIsOHEAIwMDAwMDA4ZTp7",
+    "ImswMiI6e30sImsxNTQ5",
+    "d3IiOnsiazBnaiI6eyJrMHcwaHAiOmZhbHNlLCJrMSI6eyJrMF82eSI6bnVsbH0sImsyb2M2biI6eyJrMGltOXoiOjYxNTk3MjcsImsxIjoyNDAxNzc1MDF9fSwiazFobiI6W2ZhbHNlLHRydWVdLCJrMjVvIg==",
+    "OmZhbHNlfX0="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0l3": null
+      }
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0dmxc7": 1962225794
+      }
+     },
+     {
+      "kind": "data",
+      "data_b64": "LNCWAe2VnDh7esOaHzICIsOH"
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k02": {},
+       "k1549wr": {
+        "k0gj": {
+         "k0w0hp": false,
+         "k1": {
+          "k0_6y": null
+         },
+         "k2oc6n": {
+          "k0im9z": 6159727,
+          "k1": 240177501
+         }
+        },
+        "k1hn": [
+         false,
+         true
+        ],
+        "k25o": false
+       }
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0l3": null
+      }
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0dmxc7": 1962225794
+      }
+     },
+     {
+      "kind": "data",
+      "data_b64": "LNCWAe2VnDh7esOaHzICIsOH"
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k02": {},
+       "k1549wr": {
+        "k0gj": {
+         "k0w0hp": false,
+         "k1": {
+          "k0_6y": null
+         },
+         "k2oc6n": {
+          "k0im9z": 6159727,
+          "k1": 240177501
+         }
+        },
+        "k1hn": [
+         false,
+         true
+        ],
+        "k25o": false
+       }
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0140",
+   "chunks_b64": [
+    "EAIwMDAwMDAyZjp7ImswMiI6LTE5NDcwMjMwNTIsImsxeTciOmZhbHNlLCJrMnhfcThuIjp0cnVlfRACMDAwMDAwMTU6eyJrIjox",
+    "fRACMDAwMDAwMjA6eyJrMDh0IjoxMzkwNjE0NTA2LCJrMWNlc24wIjoiIn0="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k02": -1947023052,
+       "k1y7": false,
+       "k2x_q8n": true
+      }
+     }
+    ],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0141",
+   "chunks_b64": [
+    "EAIwMDAwMDAzYTp7ImswIjp7ImswMTAiOnt9fSwiazE2dnciOi0xMjc5NDYzNjU5LCJrMmkiOmZhbHNlLCJrMyI6e319EAIwMDAwMDAwMjp7fQ=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0": {
+        "k010": {}
+       },
+       "k16vw": -1279463659,
+       "k2i": false,
+       "k3": {}
+      }
+     },
+     {
+      "kind": "control",
+      "control": {}
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0": {
+        "k010": {}
+       },
+       "k16vw": -1279463659,
+       "k2i": false,
+       "k3": {}
+      }
+     },
+     {
+      "kind": "control",
+      "control": {}
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0142",
+   "chunks_b64": [
+    "EAIwMDAwMDAwNDpudQ==",
+    "bGwQAjAwMDAwMDBiOg==",
+    "eyJrIjoiYQI6In0=",
+    "EBAC8J2EnsOpw7E68J+YgMKV",
+    "Qw=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "control payload must be an object",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "control payload must be an object",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0143",
+   "chunks_b64": [
+    "EAIwMDAwMDAwMzphYmMQAjAwMDAwMDQ0OnsiazAiOi0yNDY4MjI4NDksImsxIjotMjE0MzA3OTQxMiwiazIiOiI4LSZsZFNtXFzjgYLilIAiLCJrM2ciOiJTUCJ9"
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0144",
+   "chunks_b64": [
+    "EAIwMDAwMDA1Nzp7",
+    "ImQiOltbW1s=",
+    "W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbMV1dXV0=",
+    "XV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dfTc="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "control payload nests deeper than 32",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "control payload nests deeper than 32",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0145",
+   "chunks_b64": [
+    "CxAQQw==",
+    "EAIwMA==",
+    "MDAwMDA5OnsiayI6ImEifeWlvfCfmIDOqfCfnIFiNc6pw799AmJBAgM="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "CxBD"
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k": "a"
+      }
+     },
+     {
+      "kind": "data",
+      "data_b64": "5aW98J+YgM6p8J+cgWI1zqnDv30CYkECAw=="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "CxBD"
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k": "a"
+      }
+     },
+     {
+      "kind": "data",
+      "data_b64": "5aW98J+YgM6p8J+cgWI1zqnDv30CYkECAw=="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0146",
+   "chunks_b64": [
+    "EAIwMDAwMDAy",
+    "Yjo=",
+    "eyJrIjoxfQ=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0147",
+   "chunks_b64": [
+    "EA==",
+    "EA==",
+    "EA==",
+    "EA==",
+    "EA==",
+    "EA=="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "EBAQ"
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0148",
+   "chunks_b64": [
+    "EAIwMDAwMDAzZDp7ImswZ2ZfIjpbW251bGwseyJrMHhnIjoxMzMwOTcxODQ1LCJrMWo2d3EiOm51bGwsImsycyI6IiJ9XV19EAIwMDAwMDAyOA==",
+    "OnsiazA2ayI6e30sImsQAjAwMDAwMDIyOnsiayI6MX0QAjAwMDAwMDAwOg=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0gf_": [
+        [
+         null,
+         {
+          "k0xg": 1330971845,
+          "k1j6wq": null,
+          "k2s": ""
+         }
+        ]
+       ]
+      }
+     }
+    ],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0149",
+   "chunks_b64": [
+    "EBAQEBAQYzEQEBAQwqEQAjAwMDAwMDAzOnRydX0QEBAQ8J2EnnjDqeKYgy7DjmN6ehACMDAwMDAwNTc6eyJkIjpbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tb",
+    "W1s=",
+    "W1tbW1tbWzE=",
+    "XV1dXV1dXV0=",
+    "XV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV19"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0150",
+   "chunks_b64": [
+    "eA==",
+    "eQ=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "eA=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "eQ=="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "eHk="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0151",
+   "chunks_b64": [
+    "8J+YgA==",
+    "EBA=",
+    "Qw=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "8J+YgA=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "Qw=="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "8J+YgBBD"
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0152",
+   "chunks_b64": [
+    "AEQ6QkMCAhAQMXrwnYSeEBAQAjAwMDAwMDYyOnsiazBvbWQiOmZhbHNlLCJrMXgiOnsiazAzamMyIjoxNzgzMTIyNTc4LA==",
+    "ImsxbGUiOnRydWUsImsyIjotMTg4MDAzOTQwNn0sImsyMnEyOXciOltdLCJrM3NvayI6IiZRIn0="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "AEQ6QkMCAhAxevCdhJ4Q"
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0omd": false,
+       "k1x": {
+        "k03jc2": 1783122578,
+        "k1le": true,
+        "k2": -1880039406
+       },
+       "k22q29w": [],
+       "k3sok": "&Q"
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "AEQ6QkMCAhAxevCdhJ4Q"
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0omd": false,
+       "k1x": {
+        "k03jc2": 1783122578,
+        "k1le": true,
+        "k2": -1880039406
+       },
+       "k22q29w": [],
+       "k3sok": "&Q"
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0153",
+   "chunks_b64": [
+    "On3wnYSeEBBcEBBYB+KYgzpk8J2EnhACMDAwMDAwMDI6e30QAjA=",
+    "MA==",
+    "MDAwMDAxOsOpEBAQEBAQ"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "On3wnYSeEFwQWAfimIM6ZPCdhJ4="
+     },
+     {
+      "kind": "control",
+      "control": {}
+     }
+    ],
+    "error": "invalid control payload length",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control payload length",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0154",
+   "chunks_b64": [
+    "EAIwMDAwMDAwZTo=",
+    "eyJrIjoiOg==",
+    "YmECYg==",
+    "YSJ9EAIwMDAwMDAwMTrDqeOBgkHilIDkvaBieQICYwMCW/CfmIAQEA=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0155",
+   "chunks_b64": [
+    "EAIwMDAwMDA1Nzp7ImswIjp7ImswIjp0",
+    "cnU=",
+    "ZSwiaw==",
+    "MTVmY21tIjpbWy0xMDE1MTM1NzQyLCIvVEphJUfQllnCoVYiLCJ3N8O/OS10OsOpIUvlpb0iXSxudWxsLG51bGxdfX0="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0": {
+        "k0": true,
+        "k15fcmm": [
+         [
+          -1015135742,
+          "/TJa%G\u0416Y\u00a1V",
+          "w7\u00ff9-t:\u00e9!K\u597d"
+         ],
+         null,
+         null
+        ]
+       }
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0": {
+        "k0": true,
+        "k15fcmm": [
+         [
+          -1015135742,
+          "/TJa%G\u0416Y\u00a1V",
+          "w7\u00ff9-t:\u00e9!K\u597d"
+         ],
+         null,
+         null
+        ]
+       }
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0156",
+   "chunks_b64": [
+    "EA==",
+    "AkEgYzlhQjU=",
+    "ODp7fRAAEAIwMDAwMDA=",
+    "MDQ=",
+    "Om51bGw="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0157",
+   "chunks_b64": [
+    "EAIwMDAwMDAwMjp7fRACMDAwMDAwNjY6eyJrMDl2OGx2Ijp7ImswOWh5OSI6ZmFsc2UsImsxMGlkbCI6ZmFsc2V9LCJrMWYiOlstMTQ0ODkwMzMxNSxmYWxzZV0sImsycmRnYSI6InN9es6xWCIsImszMHl6b2QiOm51bGx9EAIwMDAwMDAzMzp7ImswZWh5dW8iOmZhbHNlLCJrMXYyX20iOnRydWUsImsydG1yM18iOjEwNjgyNTk0OX3DsRAQMvCdhJ4CEBAALsO2",
+    "YmM6w6ld"
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {}
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k09v8lv": {
+        "k09hy9": false,
+        "k10idl": false
+       },
+       "k1f": [
+        -1448903315,
+        false
+       ],
+       "k2rdga": "s}z\u03b1X",
+       "k30yzod": null
+      }
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0ehyuo": false,
+       "k1v2_m": true,
+       "k2tmr3_": 106825949
+      }
+     },
+     {
+      "kind": "data",
+      "data_b64": "w7EQMvCdhJ4CEAAuw7Y="
+     },
+     {
+      "kind": "data",
+      "data_b64": "YmM6w6ld"
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {}
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k09v8lv": {
+        "k09hy9": false,
+        "k10idl": false
+       },
+       "k1f": [
+        -1448903315,
+        false
+       ],
+       "k2rdga": "s}z\u03b1X",
+       "k30yzod": null
+      }
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0ehyuo": false,
+       "k1v2_m": true,
+       "k2tmr3_": 106825949
+      }
+     },
+     {
+      "kind": "data",
+      "data_b64": "w7EQMvCdhJ4CEAAuw7ZiYzrDqV0="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0158",
+   "chunks_b64": [
+    "EA==",
+    "EA==",
+    "wpU=",
+    "AQ==",
+    "eQ==",
+    "Ag==",
+    "EA==",
+    "EA==",
+    "Ag==",
+    "AQ==",
+    "Ig==",
+    "AQ==",
+    "EA==",
+    "AA=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "wpU="
+     },
+     {
+      "kind": "data",
+      "data_b64": "AQ=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "eQ=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "Ag=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "Ag=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "AQ=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "Ig=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "AQ=="
+     }
+    ],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0159",
+   "chunks_b64": [
+    "EAIwMDAwMDA5Nzp7Imswa2EiOls2NDczNjMyOTQse30sdHJ1ZV0sImsxaG1wYSI6LTEyMDI2MDQxMjUsImsya25tcSI6Wy00MDI1MTIxNTRdLCJrM3ppNW4iOnsiazB4bXY4Ijp0cnVlLCJrMTA1bW1xIjpbZmFsc2VdLCJrMiI6eyJrMGsiOm51bGwsImsxOG8yIjotNA==",
+    "NTc0MDYx",
+    "NTh9fX0QAjAwMDAwMDNmOnsi",
+    "azBweiI6dHJ1ZSwiazF5cDVmIjpudWxsLCJrMjIxOHEiOjc5"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0ka": [
+        647363294,
+        {},
+        true
+       ],
+       "k1hmpa": -1202604125,
+       "k2knmq": [
+        -402512154
+       ],
+       "k3zi5n": {
+        "k0xmv8": true,
+        "k105mmq": [
+         false
+        ],
+        "k2": {
+         "k0k": null,
+         "k18o2": -457406158
+        }
+       }
+      }
+     }
+    ],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0ka": [
+        647363294,
+        {},
+        true
+       ],
+       "k1hmpa": -1202604125,
+       "k2knmq": [
+        -402512154
+       ],
+       "k3zi5n": {
+        "k0xmv8": true,
+        "k105mmq": [
+         false
+        ],
+        "k2": {
+         "k0k": null,
+         "k18o2": -457406158
+        }
+       }
+      }
+     }
+    ],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0160",
+   "chunks_b64": [
+    "EBAQEBACMDAwMDAwMGE=",
+    "OnsiayI6IjoQIn0QAjAwMTAwY2NlOhACMDAwMDAwMTc=",
+    "OnsiazB4eCI6bnVsbCwiazEiOltbXV19"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "EBA="
+     }
+    ],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0161",
+   "chunks_b64": [
+    "EA==",
+    "Ag==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "ZQ==",
+    "Og==",
+    "ew==",
+    "Ig==",
+    "aw==",
+    "Ig==",
+    "Og==",
+    "Ig==",
+    "Ag==",
+    "YQ==",
+    "Ag==",
+    "Yg==",
+    "Ag==",
+    "YQ==",
+    "Ig==",
+    "fQ==",
+    "EA==",
+    "EA=="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0162",
+   "chunks_b64": [
+    "EBAQAjAwMDAwMDAxOnsQAjAwMDAwMGMwOnsiazA0MWRpOSI6eyJrMHJ5Ijp0cnVlLCJrMV8iOiJtzrE1N3lRWuKCrFtJREYifSwiazFlYnkiOnsiazBkZ3ciOm51bGwsImsxd2U4NyI6eyJrMGo0Ijp7ImswNmQ1Ijoi15Tlpb1FWEU/IiwiazFtb3QiOiJiTGs1KzBGZUdmMyIsImsyaSI6bnVsbH0sImsxbWozIjoxMTA2MjcxMjkzfSwiazJvdzJrYSI6Imt1eVBcYldmVnjkvaA0bSJ9fRACMDA="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0163",
+   "chunks_b64": [
+    "w7Xwn5iAAgHwnYSeLC7CoFrChxACMDAxMDBkMTE6EAIwMDAwMDAwEAIwMDAwMDA4Njp7ImswOGt4IjoxMDQ3OTE3Njc0LCJrMTRfXyI6bnVsbCwiazJyMjhrIjpbeyJrMHkw",
+    "aHYiOm51bGwsImsxODY3ZnIiOi0zODc4OTk5NjEsImsyciI6dHJ1ZQ==",
+    "fV0sImszIjp7Imswc3UiOlsxNzcxNjE5MDUyXSwiazEiOi04MDc2NQ==",
+    "NDQ5fX0="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "control payload too large",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "control payload too large",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0164",
+   "chunks_b64": [
+    "EAIwMDAwMDAwYTp7ImsiOiJhECJ9ZlszAnsDwp/Dm3sQEBAQEA==",
+    "Ag==",
+    "MDAwMDAwMDE6ew=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0165",
+   "chunks_b64": [
+    "EA==",
+    "AjAwMA==",
+    "MDAwMWI6eyJrMCI6InjkvaA2IiwiazEydXMiOm51bGx9EAI=",
+    "MDAxMDA5ZTg6EAIwMDAwMDAw",
+    "Yzp7ImsiOiIQAjphIn0QAjAwMDAwMDAyOnt9"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0": "x\u4f606",
+       "k12us": null
+      }
+     }
+    ],
+    "error": "control payload too large",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "control payload too large",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0166",
+   "chunks_b64": [
+    "CwIQEDYQEA=="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "CwIQNhA="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "CwIQNhA="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0167",
+   "chunks_b64": [
+    "EAI=",
+    "MDAwMDAwMDI=",
+    "Ons=",
+    "EAI6ZmJjMjogRCx7",
+    "fQ=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0168",
+   "chunks_b64": [
+    "EAIwMDAwMDAyNjp7ImsiOjF9EAIwMDAwMDAwNDpudWxs"
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0169",
+   "chunks_b64": [
+    "EAIwMDAwMDA1Nzp7ImQiOltbW1tbW1tbW1tbW1s=",
+    "W1tbW1tbW1tbW1tbW1tbW1tbW1s=",
+    "W1tbW1tbWzFdXV1d",
+    "XV1dXV1dXV1dXV1dXV1dXV0=",
+    "XV1dXV1dXV1dXV1dXV1dXV1dXX0="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": "control payload nests deeper than 32",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "control payload nests deeper than 32",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0170",
+   "chunks_b64": [
+    "EAIwMDEwMDY1NDoQAjAwMDAwMDBhOnsiayI6ImFiIn0QAjAwMDAwMDBhOnsiayI6IjoCIn1bw4BiOgJaAmJ5Ag=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "control payload too large",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "control payload too large",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0171",
+   "chunks_b64": [
+    "w414EBAQEMKMEAIwMDAwMDAwMDo="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0172",
+   "chunks_b64": [
+    "EA==",
+    "EA==",
+    "EA==",
+    "EA==",
+    "EA==",
+    "Ag==",
+    "MA==",
+    "MA==",
+    "MQ==",
+    "MA==",
+    "MA==",
+    "Yg==",
+    "ZQ==",
+    "YQ==",
+    "Og==",
+    "EA==",
+    "w6k="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     }
+    ],
+    "error": "control payload too large",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "control payload too large",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0173",
+   "chunks_b64": [
+    "EA==",
+    "EA==",
+    "EA==",
+    "Ag==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "Mg==",
+    "Og=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     }
+    ],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     }
+    ],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0174",
+   "chunks_b64": [
+    "EAIyNTdnZmczZyx7fRACMDAwMDAwNTc6eyJkIjpbW1tbW1tbW1tbW1tbW1tbWw==",
+    "W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1sxXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXX0CexAQMmZhQvCdhJ4="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0175",
+   "chunks_b64": [
+    "EA==",
+    "AjAwMDAwMDAyOns=",
+    "fQ=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {}
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {}
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0176",
+   "chunks_b64": [
+    "EA==",
+    "Ag==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "Yw==",
+    "Og==",
+    "ew==",
+    "Ig==",
+    "aw==",
+    "Ig==",
+    "Og==",
+    "Ig==",
+    "YQ==",
+    "EA==",
+    "Yg==",
+    "Yg==",
+    "Ig==",
+    "fQ==",
+    "EA==",
+    "EA==",
+    "EA==",
+    "EA=="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0177",
+   "chunks_b64": [
+    "e+KCrPCfnIEx44GCzqkDAjZaQwJ58J+cgeKYgxACMDAwMDAwMDA6"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0178",
+   "chunks_b64": [
+    "EAIwMDAwMDAzNDp7ImsiOjF9EAIwMDAwMDA0NDp7ImswdCI6eyJrMDU4d2QiOnRydWUsImsxdDBpIjoicETQlkbCoUh+TyIsImsyaTYiOlt0cnVlXX0sImsxIjpudWxsfQ=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control payload length",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control payload length",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0179",
+   "chunks_b64": [
+    "EAIwMDAwMDA0Yjp7ImswbWwiOnsiazAiOiIobCIsImsxZ3MyNCI6ZmFsc2U=",
+    "fSwiazFwa2FybSI6eyJrMHRzYSI6ZmFsc2UsImsxbjNmIjpmYWxzZX19EAIwMDAwMDAzOTp7ImswZ3EiOiIiLCJrMWNkeSI6LTMyNzYwNzkx",
+    "MSwiazJneXEiOnRydWUsImszMGZjeCI6dHJ1ZX0="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0ml": {
+        "k0": "(l",
+        "k1gs24": false
+       },
+       "k1pkarm": {
+        "k0tsa": false,
+        "k1n3f": false
+       }
+      }
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0gq": "",
+       "k1cdy": -327607911,
+       "k2gyq": true,
+       "k30fcx": true
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0ml": {
+        "k0": "(l",
+        "k1gs24": false
+       },
+       "k1pkarm": {
+        "k0tsa": false,
+        "k1n3f": false
+       }
+      }
+     },
+     {
+      "kind": "control",
+      "control": {
+       "k0gq": "",
+       "k1cdy": -327607911,
+       "k2gyq": true,
+       "k30fcx": true
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0180",
+   "chunks_b64": [
+    "EBAQAjAwMDAwMDAzOnRydQ=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0181",
+   "chunks_b64": [
+    "eMKSwrs="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "eMKSwrs="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "eMKSwrs="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0182",
+   "chunks_b64": [
+    "EAIwMDEwMDE3NzoQ",
+    "AjAwMDAwMDFlOnsiayI6MX0="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "control payload too large",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "control payload too large",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0183",
+   "chunks_b64": [
+    "EAIwMDAwMDAwYjp7ImsiOiJhOjoifRACMDAwMDAwMmM6eyJrIjoxfQ=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k": "a::"
+      }
+     }
+    ],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k": "a::"
+      }
+     }
+    ],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0184",
+   "chunks_b64": [
+    "EA==",
+    "Ag==",
+    "MDAwMDAwMDI=",
+    "Og=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0185",
+   "chunks_b64": [
+    "EAIwMDAwMDA5MTp7ImswMiI6W1tbbnVsbCxudWxsLG51bGw=",
+    "XSxudWxsXSxbbnVsbF0sW3RydWVdXSwiazFrNzNiIjoiLCklzqksQ0NGXFxm",
+    "IiwiazI5IjotOTkwOTA2MjcxLCJrM2t5IjpbeyJrMDd2IjpbIlnOqVxuIixudWxsXSwiazEiOm51bGwsImsyNzdxIjpmYWxzZX1dfQ=="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k02": [
+        [
+         [
+          null,
+          null,
+          null
+         ],
+         null
+        ],
+        [
+         null
+        ],
+        [
+         true
+        ]
+       ],
+       "k1k73b": ",)%\u03a9,CCF\\f",
+       "k29": -990906271,
+       "k3ky": [
+        {
+         "k07v": [
+          "Y\u03a9\n",
+          null
+         ],
+         "k1": null,
+         "k277q": false
+        }
+       ]
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k02": [
+        [
+         [
+          null,
+          null,
+          null
+         ],
+         null
+        ],
+        [
+         null
+        ],
+        [
+         true
+        ]
+       ],
+       "k1k73b": ",)%\u03a9,CCF\\f",
+       "k29": -990906271,
+       "k3ky": [
+        {
+         "k07v": [
+          "Y\u03a9\n",
+          null
+         ],
+         "k1": null,
+         "k277q": false
+        }
+       ]
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   }
+  },
+  {
+   "id": "CCF-DC-0186",
+   "chunks_b64": [
+    "EAI2RDozNDFhMgB7fRAQEAIwMDAwMDAwMjp7fRBh"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0187",
+   "chunks_b64": [
+    "w4MQEA==",
+    "EBAQ",
+    "AjAwMDAwMDE=",
+    "YTp7ImswaWUiOltdLCJrMXJpMTViIjoQw6k="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "w4MQ"
+     },
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     }
+    ],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "w4MQEA=="
+     }
+    ],
+    "error": "truncated control frame",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0188",
+   "chunks_b64": [
+    "EA==",
+    "eA=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control prefix",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0189",
+   "chunks_b64": [
+    "EA==",
+    "Ag==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "ZA==",
+    "Og==",
+    "ew==",
+    "Ig==",
+    "aw==",
+    "Ig==",
+    "Og==",
+    "Ig==",
+    "Ag==",
+    "YQ==",
+    "YQ==",
+    "Yg==",
+    "Yg==",
+    "Ig==",
+    "fQ==",
+    "EA==",
+    "Ag==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "Og=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0190",
+   "chunks_b64": [
+    "EA==",
+    "EA==",
+    "EA==",
+    "EA==",
+    "EA==",
+    "EA==",
+    "EA==",
+    "EA==",
+    "8J+YgA==",
+    "Cw==",
+    "Wg==",
+    "Ag==",
+    "w7E=",
+    "Qg==",
+    "7ZWc",
+    "8J2Eng==",
+    "Ww==",
+    "4piD",
+    "EA==",
+    "Ag==",
+    "Rg==",
+    "Mg==",
+    "ZQ==",
+    "Og==",
+    "ZA==",
+    "OA==",
+    "Zw==",
+    "Yw==",
+    "AA==",
+    "ew==",
+    "fQ=="
+   ],
+   "finish": false,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "EA=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "8J+YgA=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "Cw=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "Wg=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "Ag=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "w7E="
+     },
+     {
+      "kind": "data",
+      "data_b64": "Qg=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "7ZWc"
+     },
+     {
+      "kind": "data",
+      "data_b64": "8J2Eng=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "Ww=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "4piD"
+     }
+    ],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  },
+  {
+   "id": "CCF-DC-0191",
+   "chunks_b64": [
+    "EAIwMDAwMDAwMjp7fRACMDAxMDA2ZTI6EAIwMBACMDAwMDAw",
+    "MWE6eyJrIjoxfQ=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "control payload too large",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "control payload too large",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   }
+  }
+ ],
+ "regressions": [
+  {
+   "id": "CCF-REG-0001",
+   "chunks_b64": [
+    "YRA=",
+    "EGI="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "YQ=="
+     },
+     {
+      "kind": "data",
+      "data_b64": "EGI="
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "YRBi"
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "note": "A lone trailing DLE flushes the data before it and buffers the DLE; the next feed decides whether it was an escape or a frame. Chunked and single feeds emit different numbers of data events for this stream."
+  },
+  {
+   "id": "CCF-REG-0002",
+   "chunks_b64": [
+    "EAIwMDAwMDAwYzp7ImsiOiIQAhAQIn10YWls"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "note": "Raw DLE/STX bytes inside a control payload are covered by the length header and must not be rescanned as framing."
+  },
+  {
+   "id": "CCF-REG-0003",
+   "chunks_b64": [
+    "EA==",
+    "Ag==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "MA==",
+    "Zg==",
+    "Og==",
+    "ew==",
+    "Ig==",
+    "aw==",
+    "MA==",
+    "Ig==",
+    "Og==",
+    "Ig==",
+    "5L2g",
+    "5aW9",
+    "Ig==",
+    "fQ=="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0": "\u4f60\u597d"
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "single": {
+    "events": [
+     {
+      "kind": "control",
+      "control": {
+       "k0": "\u4f60\u597d"
+      }
+     }
+    ],
+    "error": null,
+    "on_error": []
+   },
+   "note": "A frame split at every single code point, with a 3-byte code point in the payload: byte-length header vs code-point-indexed buffer walk."
+  },
+  {
+   "id": "CCF-REG-0004",
+   "chunks_b64": [
+    "YWIQAjAwMDAwMDBjOnsiayI=",
+    "OjF9eHh4eHg="
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [
+     {
+      "kind": "data",
+      "data_b64": "YWI="
+     }
+    ],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control json",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "note": "Found by explore_control_channel_fuzz.py. Data that precedes a frame the decoder later rejects is DELIVERED when the feed is split (an earlier feed() already returned it) and DISCARDED when the whole stream arrives at once (the raise throws away the events built so far). Same bytes, same error, different delivery."
+  }
+ ],
+ "serializer_divergences": [
+  {
+   "id": "CCF-SD-0001",
+   "note": "CPython keeps int/float apart through JSON; Go, .NET and JS all write 0.",
+   "payload": {
+    "k0": 0.0
+   },
+   "cpython_out_b64": "EAIwMDAwMDAwYTp7ImswIjowLjB9"
+  },
+  {
+   "id": "CCF-SD-0002",
+   "note": "Same, inside an array, next to a value that really is fractional.",
+   "payload": {
+    "k0": [
+     1.0,
+     1.5,
+     2
+    ]
+   },
+   "cpython_out_b64": "EAIwMDAwMDAxMjp7ImswIjpbMS4wLDEuNSwyXX0="
+  },
+  {
+   "id": "CCF-SD-0003",
+   "note": "Go and .NET escape U+2028/U+2029; CPython and JS emit them raw.",
+   "payload": {
+    "k0": "\u2028\u2029"
+   },
+   "cpython_out_b64": "EAIwMDAwMDAwZjp7ImswIjoi4oCo4oCpIn0="
+  },
+  {
+   "id": "CCF-SD-0004",
+   "note": ".NET escapes DEL (U+007F); the other three emit it raw.",
+   "payload": {
+    "k0": "\u007f"
+   },
+   "cpython_out_b64": "EAIwMDAwMDAwYTp7ImswIjoifyJ9"
+  },
+  {
+   "id": "CCF-SD-0005",
+   "note": ".NET writes \\uXXXX escapes with upper-case hex digits (\\u001F); the other three use lower case.",
+   "payload": {
+    "k0": "\u001f"
+   },
+   "cpython_out_b64": "EAIwMDAwMDAwZjp7ImswIjoiXHUwMDFmIn0="
+  },
+  {
+   "id": "CCF-SD-0006",
+   "note": ".NET writes astral code points as a \\uXXXX surrogate pair; CPython, Go and JS emit raw UTF-8.",
+   "payload": {
+    "k0": "\ud834\udd1e"
+   },
+   "cpython_out_b64": "EAIwMDAwMDAwZDp7ImswIjoi8J2EniJ9"
+  }
+ ]
+}
