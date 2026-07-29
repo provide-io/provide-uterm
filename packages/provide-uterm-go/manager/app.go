@@ -74,9 +74,8 @@ func CreateManagerApp(cfg ManagerConfig, opts AppOptions) (*Server, http.Handler
 	}
 
 	s := &Server{M: m, getenv: getenv}
-	mux := s.Routes()
 
-	var handler http.Handler = mux
+	handler := s.Routes()
 	if auth != nil {
 		handler = auth.Wrap(handler)
 	}
@@ -86,8 +85,12 @@ func CreateManagerApp(cfg ManagerConfig, opts AppOptions) (*Server, http.Handler
 	return s, handler, nil
 }
 
-// Routes registers every manager REST route on a fresh mux.
-func (s *Server) Routes() *http.ServeMux {
+// Routes registers every manager REST route on a fresh mux and returns it
+// wrapped in routeFallback, so an unrouted path or a wrong method answers with
+// the reference's JSON envelope rather than net/http's plain text. It returns
+// an http.Handler, not the *ServeMux, precisely so that wrapper cannot be
+// dropped by a caller that mounts the routes itself.
+func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	// Health + swarm control (spawn.py).
 	mux.HandleFunc("GET /health", s.handleHealth)
@@ -121,7 +124,7 @@ func (s *Server) Routes() *http.ServeMux {
 	mux.HandleFunc("GET /agent/{agent_id}/events", s.handleAgentEvents)
 	// Worker status self-report (agent_update.py).
 	mux.HandleFunc("POST /agent/{agent_id}/status", s.handleUpdateStatus)
-	return mux
+	return routeFallback(mux)
 }
 
 // corsMiddleware applies a credentialed CORS policy for the given allowlist.
