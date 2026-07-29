@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -111,6 +112,34 @@ type Step struct {
 	// Body is the http_post payload, kept as raw JSON so the bytes the
 	// scenario wrote are the bytes that go on the wire.
 	Body json.RawMessage `json:"body"`
+	// Repeat is how many times the step is performed, each repetition recorded
+	// as its own observation. It is not an action field: it changes how often
+	// the step happens, nothing about what is sent. The schema admits 2..200;
+	// absent (zero here) means once.
+	Repeat int `json:"repeat"`
+}
+
+// observationIDs is the ids one step's observations are recorded under.
+//
+// A step that runs once keeps its own id; a repeated step numbers its
+// repetitions from zero — flood.0, flood.1 — and the bare id records nothing.
+// Every repetition is recorded, never just the last: a scenario repeats a step
+// because it expects the answers to stop being the same, so which repetition
+// changed is the thing being measured, and a driver keeping only the final
+// answer would turn "the thirty-first request was refused" into "a request was
+// refused".
+//
+// There is no repeat of 1 in the schema, so an explicit 1 means what an absent
+// field means rather than renumbering a single run.
+func (s *Step) observationIDs() []string {
+	if s.Repeat < 2 {
+		return []string{s.ID}
+	}
+	ids := make([]string, s.Repeat)
+	for index := range ids {
+		ids[index] = s.ID + "." + strconv.Itoa(index)
+	}
+	return ids
 }
 
 // owner is who hijack_acquire takes the lease as.

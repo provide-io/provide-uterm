@@ -64,22 +64,47 @@ func RunScenario(ctx context.Context, sc *Scenario, opts ClientOptions) Result {
 		// A reference that cannot be resolved is a malformed scenario rather
 		// than something a server did, so it ends the run without leaving a
 		// step behind for the harness to compare.
+		// References are resolved once, here, and not again inside the
+		// repetitions: a reference can never name a repeated step, so nothing
+		// it could read changes between one repetition and the next.
 		if err := resolveStep(&step, seen); err != nil {
 			failRun(&result, step.ID, err)
 			break
 		}
-		fields, fatal := runner.run(runCtx, step)
-		seen[step.ID] = fields
-		result.Steps = append(result.Steps, StepResult{ID: step.ID, Fields: fields})
-		if fatal != nil {
-			// The driver could not perform this step. That is a driver failure,
-			// not an observation, so the run is reported as an error rather
-			// than silently skipping the step.
-			failRun(&result, step.ID, fatal)
+		if !runner.perform(runCtx, step, seen, &result) {
 			break
 		}
 	}
 	return result
+}
+
+// perform runs one step's repetitions, recording each as its own observation
+// under the id [Step.observationIDs] gives it. It reports whether the run may
+// continue.
+//
+// A repetition that merely fails — a refusal, a dead socket — is an
+// observation like any other and the repetitions carry on, because a scenario
+// repeats a step exactly when it expects the answers to change. Only a step
+// the driver cannot perform at all ends the run.
+func (r *stepRunner) perform(
+	ctx context.Context,
+	step Step,
+	seen map[string]StepFields,
+	result *Result,
+) bool {
+	for _, observed := range step.observationIDs() {
+		fields, fatal := r.run(ctx, step)
+		seen[observed] = fields
+		result.Steps = append(result.Steps, StepResult{ID: observed, Fields: fields})
+		if fatal != nil {
+			// The driver could not perform this step. That is a driver failure,
+			// not an observation, so the run is reported as an error rather
+			// than silently skipping the step.
+			failRun(result, observed, fatal)
+			return false
+		}
+	}
+	return true
 }
 
 // failRun marks a run as a driver failure, naming the step that ended it.

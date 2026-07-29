@@ -53,6 +53,41 @@ func TestParseScenarioAllStepFields(t *testing.T) {
 	}
 }
 
+func TestParseScenarioReadsRepeat(t *testing.T) {
+	sc, err := ParseScenario([]byte(`{
+		"id": "070_flood", "title": "Flood",
+		"steps": [{"id": "flood", "action": "health", "repeat": 31}]
+	}`))
+	if err != nil {
+		t.Fatalf("ParseScenario: %v", err)
+	}
+	if sc.Steps[0].Repeat != 31 {
+		t.Fatalf("repeat = %d, want 31", sc.Steps[0].Repeat)
+	}
+}
+
+func TestObservationIDs(t *testing.T) {
+	cases := []struct {
+		name   string
+		repeat int
+		want   []string
+	}{
+		// A step that runs once keeps its bare id; there is no repeat of 1, so
+		// an explicit 1 must mean the same thing an absent field does.
+		{"absent", 0, []string{"flood"}},
+		{"one", 1, []string{"flood"}},
+		{"three", 3, []string{"flood.0", "flood.1", "flood.2"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			step := &Step{ID: "flood", Action: ActionHealth, Repeat: tc.repeat}
+			if got := step.observationIDs(); !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("observationIDs = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestParseScenarioRejects(t *testing.T) {
 	cases := []struct{ name, data, want string }{
 		{"not json", `{`, "not valid JSON"},
