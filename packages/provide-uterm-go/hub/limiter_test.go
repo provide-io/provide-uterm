@@ -23,8 +23,8 @@ func newLimiter(clk *ManualClock) *RateLimiter {
 
 func TestLimiterInitClampsRatesToMinimum(t *testing.T) {
 	l := NewRateLimiter(0.0, -5.0, NewManualClock(0))
-	mustEqual(t, l.AcquireRate(), 0.1, "acquire rate floor")
-	mustEqual(t, l.SendRate(), 0.1, "send rate floor")
+	mustEqual(t, l.AcquireRate(), MinRatePerSec, "acquire rate floor")
+	mustEqual(t, l.SendRate(), MinRatePerSec, "send rate floor")
 }
 
 func TestLimiterInitPreservesNormalRates(t *testing.T) {

@@ -112,12 +112,12 @@ type RateLimiter struct {
 }
 
 // NewRateLimiter builds a limiter with the given acquire/send token rates
-// (each clamped up to a 0.1/sec floor to avoid divide-by-zero / stuck
-// buckets). clock is injectable; nil selects the real clock.
+// (each clamped up to the [MinRatePerSec] floor to avoid divide-by-zero /
+// stuck buckets). clock is injectable; nil selects the real clock.
 func NewRateLimiter(restAcquireRate, restSendRate float64, clock Clock) *RateLimiter {
 	clock = orDefaultClock(clock)
-	acquireRate := maxFloat(0.1, restAcquireRate)
-	sendRate := maxFloat(0.1, restSendRate)
+	acquireRate := maxFloat(MinRatePerSec, restAcquireRate)
+	sendRate := maxFloat(MinRatePerSec, restSendRate)
 	return &RateLimiter{
 		acquireRate:      acquireRate,
 		sendRate:         sendRate,

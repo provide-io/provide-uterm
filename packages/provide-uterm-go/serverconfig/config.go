@@ -337,9 +337,19 @@ type UtermServerConfig struct {
 	// GraphicalTargets are seeded as immutable system targets at boot.
 	GraphicalTargets []GraphicalTargetConfig `json:"graphical_targets" toml:"graphical_targets"`
 
-	SessionIdleTimeoutS        int     `json:"session_idle_timeout_s" toml:"session_idle_timeout_s"`
-	SessionRetentionS          int     `json:"session_retention_s" toml:"session_retention_s"`
-	BrowserRateLimitPerSec     float64 `json:"browser_rate_limit_per_sec" toml:"browser_rate_limit_per_sec"`
+	SessionIdleTimeoutS    int     `json:"session_idle_timeout_s" toml:"session_idle_timeout_s"`
+	SessionRetentionS      int     `json:"session_retention_s" toml:"session_retention_s"`
+	BrowserRateLimitPerSec float64 `json:"browser_rate_limit_per_sec" toml:"browser_rate_limit_per_sec"`
+	// RestAcquireRateLimitPerSec / RestSendRateLimitPerSec are the ceilings for
+	// the REST hijack API's token buckets (tokens/sec, burst = one second of
+	// the same rate). Each is applied twice: once globally and once per calling
+	// client, so a single client can never consume more than its own share.
+	// acquire guards POST /hijack/acquire — the expensive, state-changing lease
+	// grab; send is shared by the hijack send *and* step endpoints, which are
+	// cheap keystroke-rate calls. Defaults are the hub's built-in values, so an
+	// unset deployment is unchanged.
+	RestAcquireRateLimitPerSec float64 `json:"rest_acquire_rate_limit_per_sec" toml:"rest_acquire_rate_limit_per_sec"`
+	RestSendRateLimitPerSec    float64 `json:"rest_send_rate_limit_per_sec" toml:"rest_send_rate_limit_per_sec"`
 	WorkerFrameOnInvalid       string  `json:"worker_frame_on_invalid" toml:"worker_frame_on_invalid"`
 	MaxConnectionsPerPrincipal int     `json:"max_connections_per_principal" toml:"max_connections_per_principal"`
 	MaxWorkers                 int     `json:"max_workers" toml:"max_workers"`
@@ -364,6 +374,8 @@ func DefaultServerConfig() *UtermServerConfig {
 		Audit:                      AuditConfig{},
 		Sessions:                   defaultSessions(),
 		BrowserRateLimitPerSec:     300,
+		RestAcquireRateLimitPerSec: 5,
+		RestSendRateLimitPerSec:    20,
 		WorkerFrameOnInvalid:       "drop",
 		MaxConnectionsPerPrincipal: 25,
 		MaxWorkers:                 10000,
