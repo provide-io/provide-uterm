@@ -70,7 +70,7 @@ function toBase64(bytes: Uint8Array): string {
  *
  * @throws {Error} When the text is not base64.
  */
-function fromBase64(text: string): Uint8Array {
+function fromBase64(text: string): Uint8Array<ArrayBuffer> {
   const bytes = Buffer.from(text, "base64");
   // Buffer is lenient where the reference's decoder is not: it drops what it
   // cannot read rather than refusing, and it accepts a value with its padding

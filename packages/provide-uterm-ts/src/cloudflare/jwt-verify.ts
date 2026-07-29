@@ -171,7 +171,15 @@ export async function verifyRs256(
     throw new JwtValidationError(`unusable key in JWKS: ${(error as Error).message}`);
   }
 
-  const valid = await crypto.subtle.verify(WEB_CRYPTO_ALGORITHM.name, key, signature, signingInput);
+  // Re-wrapped rather than passed straight through: with the DOM types in
+  // scope, `BufferSource` wants an `ArrayBuffer`-backed view, and these are
+  // typed over the wider `ArrayBufferLike`. Same bytes either way.
+  const valid = await crypto.subtle.verify(
+    WEB_CRYPTO_ALGORITHM.name,
+    key,
+    new Uint8Array(signature),
+    new Uint8Array(signingInput),
+  );
   if (!valid) {
     throw new JwtValidationError("signature verification failed");
   }

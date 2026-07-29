@@ -36,10 +36,20 @@ describe("the package root", () => {
     // importing the package by name failed outright while every subpath
     // import worked — the kind of break only a real consumer hits.
     const expected = subpackages()
-      .filter((name) => name !== "testing")
+      .filter((name) => name !== "testing" && name !== "react")
       .map(exportName)
       .sort();
     expect(Object.keys(uterm).sort()).toStrictEqual(expected);
+  });
+
+  it("keeps the React bindings off the default entry", () => {
+    // They are the only part of the package that needs React and a DOM.
+    // Re-exporting them here would make every consumer — a CLI, a worker, a
+    // test — load a user-interface library to reach the terminal emulator.
+    // The `./*` subpath already reaches them, so a consumer that wants them
+    // asks for them by name.
+    expect(subpackages()).toContain("react");
+    expect(Object.keys(uterm)).not.toContain("react");
   });
 
   it("does not export the testing helpers", () => {
