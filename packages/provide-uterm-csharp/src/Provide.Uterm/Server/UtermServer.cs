@@ -422,10 +422,9 @@ public sealed partial class UtermServer : IAsyncDisposable
         var (p, authError) = await RequireHubAuthz(ctx, workerId, "session.control.hijack").ConfigureAwait(false);
         if (authError is not null) return authError;
 
-        var clientId = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        if (!_deps.Hub.AllowRestSendFor(clientId))
+        if (!AllowRestWrite(ctx, "rest_send_rate_limited_total", out var limited))
         {
-            return BridgeError(429, "rate_limited");
+            return limited!;
         }
 
         if (_deps.Hub.GetRestSession(workerId, hijackId) is null)
@@ -451,6 +450,17 @@ public sealed partial class UtermServer : IAsyncDisposable
         if (!ValidateIds(workerId, hijackId, out var err)) return err!;
         var (p, authError) = await RequireHubAuthz(ctx, workerId, "session.control.hijack").ConfigureAwait(false);
         if (authError is not null) return authError;
+
+        // Step is a write into a hijacked worker, so it is metered like one, and
+        // it spends the *send* budget rather than a budget of its own — the
+        // reference charges `allow_rest_send_for` from the step route
+        // (bridge/routes/rest.py:429), as does Go (server/bridge_rest2.go:97).
+        // The refusal is still counted under step's own name.
+        if (!AllowRestWrite(ctx, "rest_step_rate_limited_total", out var limited))
+        {
+            return limited!;
+        }
+
         if (_deps.Hub.GetRestSession(workerId, hijackId) is null)
         {
             return BridgeError(404, "Invalid or expired hijack session.");
@@ -1133,6 +1143,30 @@ public sealed partial class UtermServer : IAsyncDisposable
 
     private static IResult DetailError(int status, string detail) =>
         Results.Json(new { detail }, statusCode: status);
+
+    /// <summary>
+    /// The REST send budget, charged for every route that writes to a hijacked
+    /// worker (<c>send</c> and <c>step</c>), with a per-route counter name.
+    ///
+    /// Called after authn/authz and before the lease lookup, which is the order
+    /// the reference mounts it (bridge/routes/rest.py:345, :429 — both precede
+    /// <c>get_rest_session</c>). The position is observable: an over-budget
+    /// request for a lease nobody holds answers 429, not 404, so a caller
+    /// cannot enumerate lease ids on somebody else's budget.
+    /// </summary>
+    private bool AllowRestWrite(HttpContext ctx, string metric, out IResult? error)
+    {
+        var clientId = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        if (_deps.Hub.AllowRestSendFor(clientId))
+        {
+            error = null;
+            return true;
+        }
+
+        _deps.Hub.Metric(metric, 1);
+        error = BridgeError(429, "rate_limited");
+        return false;
+    }
 
     /// <summary>
     /// The lease routes' refusal envelope: the <c>error</c> key and nothing
