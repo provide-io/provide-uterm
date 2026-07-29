@@ -37,6 +37,7 @@ the standard library alone.
 | `@modelcontextprotocol/sdk` | MCP tools | The protocol's own SDK |
 | `smol-toml` | TOML server config | Spec-complete and dependency-free |
 | `node-pty` (approved 2026-07-29) | PTY connector | Native. npm extracts its `spawn-helper` without the execute bit, so every spawn fails with `posix_spawnp failed`; `npm run ensure:pty` (also a `pretest`) restores it |
+| `react` / `react-dom` (19) | React bindings | The goal names React. Kept off the default entry, so a CLI or a worker never loads a user-interface library; reachable as `provide-uterm-ts/react` |
 | `@noble/hashes` | Tunnel token hashing | Node's `createHash` offers only BLAKE2b-512, and truncating it gives a different digest — BLAKE2b mixes the output length into its parameter block. Audited and dependency-free |
 
 These are Node-facing. Nothing a Cloudflare Worker imports may reach them —
@@ -69,6 +70,14 @@ prebuilt `spawn-helper` without the execute bit, so every spawn failed with
 `posix_spawnp failed` — a message that names nothing. `packages/provide-uterm-ts/scripts/ensure-pty-helper.mjs` restores it; it runs
 as `pretest` and can be run directly with `npm run ensure:pty`. It is
 idempotent and silent when there is nothing to do.
+
+**React.** There is no React anywhere in the reference: the Python frontend
+is vanilla TypeScript with xterm.js, and neither the Go nor the C# port has a
+frontend at all. So `src/react` is not ported from anything — it is new work,
+written to reproduce the existing frontend's *behaviour* over the frames and
+control channel already ported here, and tested on its own terms rather than
+against a corpus that cannot exist. It is the only part of the package that
+needs a DOM, and it is deliberately not re-exported from the default entry.
 
 Ordered bottom-up by dependency. The Python column names the reference
 module; the Go column names the sibling package for cross-checking.
