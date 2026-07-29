@@ -1,5 +1,7 @@
+#
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
+#
 """FastAPI adapter for shared PAM event ingestion."""
 
 from __future__ import annotations
@@ -43,7 +45,7 @@ async def authorize_pam_event_roles(request: Request, required_roles: tuple[str,
 def pam_event_capability_handlers() -> dict[str, Callable[..., object]]:
     """Return the FastAPI handler for the shared ``pam_events.ingest`` capability."""
 
-    async def ingest(request: Request):
+    async def ingest(request: Request) -> JSONResponse | dict[str, Any]:
         p = principal(request)
         if not await authz(request).can_create_session(p):
             raise HTTPException(status_code=403, detail="insufficient privileges")

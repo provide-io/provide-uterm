@@ -187,7 +187,7 @@ async def _delete(
     for sock in sockets:
         if sock is not None:
             with contextlib.suppress(Exception):
-                sock.close(1001, "session deleted")  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
+                sock.close(1001, "session deleted")  # ty:ignore[unresolved-attribute]
     runtime.worker_ws = None
     for sockets_by_id in (getattr(runtime, "browser_sockets", None), getattr(runtime, "raw_sockets", None)):
         if sockets_by_id is not None:
