@@ -255,10 +255,16 @@ describe("running a tool through the chokepoint", () => {
     // checked before a principal is even resolved.
     let asked = false;
     await expect(
-      authorized("session_delete", { getState: async () => {
-        asked = true;
-        return undefined;
-      } }, async () => "ran"),
+      authorized(
+        "session_delete",
+        {
+          getState: async () => {
+            asked = true;
+            return undefined;
+          },
+        },
+        async () => "ran",
+      ),
     ).rejects.toThrow("No authorization policy registered");
     expect(asked).toBe(false);
   });
