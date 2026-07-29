@@ -1,0 +1,69 @@
+name: "🎲 Fuzz Explore (control channel)"
+
+# Why this exists, separate from the deterministic corpus replay in ci.yml:
+#
+# ci.yml's `quality` job runs ci/check_fuzz_corpus.sh and the pytest replay of
+# conformance/fuzz/control_channel_fuzz.json. That corpus is FROZEN — the same
+# seed, the same 522 cases, forever — because four language ports assert against
+# it and a corpus that shifted under them would be worthless as a contract. The
+# price of freezing it is that it can never find anything new: it only re-checks
+# inputs somebody already recorded.
+#
+# This workflow is where new inputs come from. It runs the same generators with
+# FRESH random seeds and checks the CPython reference against itself: encode/
+# decode round-trips, the structural predicate agreeing with the decoder, that
+# arbitrary input only ever raises ControlFrameProtocolError with the buffer
+# dropped, and that a chunked feed and a whole feed reject the same streams.
+#
+# On divergence the job prints the seed and the base64 of the offending input.
+# That case is then pinned by hand as a CCF-REG-nnnn entry in
+# conformance/fuzz/gen_control_channel_fuzz.py, the corpus is regenerated, and
+# all four ports inherit the regression permanently. A divergence found once
+# must never be found twice.
+#
+# Weekly rather than per-commit: the deterministic replay already guards every
+# commit, and an exploratory run that failed on a PR would be failing on an
+# input that PR did not introduce.
+#
+# Script policy: run: blocks stay <= 3 lines. The exploration loop lives in
+# ci/fuzz_explore.sh.
+
+on:
+  workflow_dispatch:
+    inputs:
+      rounds:
+        description: "Fresh seeds to explore"
+        default: "8"
+      iterations:
+        description: "Iterations per property, per seed"
+        default: "50000"
+  schedule:
+    # Weekly, Sundays 08:00 UTC — two hours after the full mutation gate, so the
+    # two long-running weekly jobs do not contend for runners.
+    - cron: "0 8 * * 0"
+
+permissions:
+  contents: read
+
+jobs:
+  explore:
+    runs-on: ubuntu-latest
+    # 8 rounds x 50k iterations x 5 properties is a few minutes; the ceiling is
+    # slack for a runner that is starved rather than an expected duration.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      # uv drives the explorer (uv run) and the workspace install.
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+      # Pin the interpreter so a divergence is attributable to one CPython.
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.11"
+      # The explorer imports provide.uterm.control_channel from the workspace.
+      - run: uv sync --frozen --group dev
+      # Belt and braces: prove the frozen corpus is still reproducible and
+      # current before trusting anything this run says about the reference.
+      - run: bash ci/check_fuzz_corpus.sh
+      # Fresh random seeds. On failure the seed + offending input are in the log.
+      - name: "Explore with fresh seeds"
+        run: bash ci/fuzz_explore.sh "${{ inputs.rounds || '8' }}" "${{ inputs.iterations || '50000' }}"

@@ -69,8 +69,11 @@ repos:
         additional_dependencies: ["tomli"]
         # The TypeScript testdata exclusion covers differential-parity
         # goldens, whose inputs deliberately include non-English and
-        # truncated byte sequences.
-        exclude: "package-lock\\.json|^packages/provide-uterm-ts/testdata/"
+        # truncated byte sequences. conformance/fuzz is the same thing
+        # generated rather than written: its inputs are random bytes and
+        # deliberately-malformed literals (a bare "tru" for the invalid-JSON
+        # path), so every English word it appears to contain is a coincidence.
+        exclude: "package-lock\\.json|^packages/provide-uterm-ts/testdata/|^conformance/fuzz/"
 
   - repo: local
     hooks:
@@ -153,8 +156,10 @@ repos:
           - --exclude-files
           # The Go/C#/TypeScript testdata exclusions cover differential-parity
           # goldens (e.g. ctrlmsg HMAC signature corpora, latin-1 byte-path
-          # hex) — synthetic test vectors, not real credentials.
-          - "(^|/)(\\.secrets\\.baseline|\\.venv|\\.pytest_cache|\\.mypy_cache|\\.ruff_cache|\\.uterm-recordings|node_modules|dist|build|htmlcov)/?|^packages/provide-uterm-server/src/provide/uterm/server/frontend/assets/|^packages/provide-uterm-go/[^/]+/testdata/|^packages/provide-uterm-csharp/.*/testdata/|^packages/provide-uterm-ts/testdata/"
+          # hex) — synthetic test vectors, not real credentials. conformance/fuzz
+          # is a generated corpus: every codec input is base64 by design, so
+          # high entropy is the format rather than a leak.
+          - "(^|/)(\\.secrets\\.baseline|\\.venv|\\.pytest_cache|\\.mypy_cache|\\.ruff_cache|\\.uterm-recordings|node_modules|dist|build|htmlcov)/?|^packages/provide-uterm-server/src/provide/uterm/server/frontend/assets/|^packages/provide-uterm-go/[^/]+/testdata/|^packages/provide-uterm-csharp/.*/testdata/|^packages/provide-uterm-ts/testdata/|^conformance/fuzz/"
         language: python
         language_version: python3
         additional_dependencies:
