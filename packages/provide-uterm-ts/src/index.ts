@@ -41,6 +41,7 @@ export * as frames from "./frames/index.ts";
 export * as gateway from "./gateway/index.ts";
 export * as hub from "./hub/index.ts";
 export * as lineEditor from "./line-editor/index.ts";
+export * as manager from "./manager/index.ts";
 export * as mcp from "./mcp/index.ts";
 export * as policy from "./policy/index.ts";
 export * as pty from "./pty/index.ts";
