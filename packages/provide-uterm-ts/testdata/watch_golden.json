@@ -1,0 +1,124 @@
+{
+  "extracted": [
+    {
+      "name": "a bare identifier",
+      "value": "t-abc123",
+      "id": "t-abc123"
+    },
+    {
+      "name": "an identifier with underscores",
+      "value": "t_abc_123",
+      "id": "t_abc_123"
+    },
+    {
+      "name": "nothing at all",
+      "value": "",
+      "id": ""
+    },
+    {
+      "name": "an inspect link",
+      "value": "https://warp.example/app/inspect/t-abc123",
+      "id": "t-abc123"
+    },
+    {
+      "name": "a session link",
+      "value": "https://warp.example/app/session/t-abc123",
+      "id": "t-abc123"
+    },
+    {
+      "name": "an operator link",
+      "value": "https://warp.example/app/operator/t-abc123",
+      "id": "t-abc123"
+    },
+    {
+      "name": "a short share link",
+      "value": "https://warp.example/s/t-abc123",
+      "id": "t-abc123"
+    },
+    {
+      "name": "a link over cleartext",
+      "value": "http://warp.example/s/t-abc123",
+      "id": "t-abc123"
+    },
+    {
+      "name": "a websocket link",
+      "value": "wss://warp.example/s/t-abc123",
+      "id": "t-abc123"
+    },
+    {
+      "name": "a link with a query",
+      "value": "https://warp.example/s/t-abc123?x=1",
+      "id": "t-abc123"
+    },
+    {
+      "name": "a link whose query names another tunnel",
+      "value": "https://warp.example/s/t-abc123?id=t-other",
+      "id": "t-abc123"
+    },
+    {
+      "name": "a link with a fragment",
+      "value": "https://warp.example/s/t-abc123#top",
+      "id": "t-abc123"
+    },
+    {
+      "name": "a link with something after the identifier",
+      "value": "https://warp.example/s/t-abc123/more",
+      "id": "t-abc123"
+    },
+    {
+      "name": "a link with a port",
+      "value": "https://warp.example:8443/s/t-abc123",
+      "id": "t-abc123"
+    },
+    {
+      "name": "a link with a path in front",
+      "value": "https://warp.example/tunnels/s/t-abc123",
+      "id": "t-abc123"
+    },
+    {
+      "name": "a link naming no tunnel",
+      "value": "https://warp.example/",
+      "id": "https://warp.example/"
+    },
+    {
+      "name": "a link to a route nobody serves",
+      "value": "https://warp.example/app/other/t-abc123",
+      "id": "https://warp.example/app/other/t-abc123"
+    },
+    {
+      "name": "a link with an empty identifier",
+      "value": "https://warp.example/s/",
+      "id": "https://warp.example/s/"
+    },
+    {
+      "name": "a link with an identifier of one character",
+      "value": "https://warp.example/s/a",
+      "id": "a"
+    },
+    {
+      "name": "a link with two identifiers",
+      "value": "https://warp.example/s/first/s/second",
+      "id": "first"
+    },
+    {
+      "name": "a link with a dotted identifier",
+      "value": "https://warp.example/s/t.abc",
+      "id": "t"
+    },
+    {
+      "name": "something that merely contains a scheme marker",
+      "value": "not-a-url://but-has-one",
+      "id": "not-a-url://but-has-one"
+    },
+    {
+      "name": "a bare path",
+      "value": "/s/t-abc123",
+      "id": "/s/t-abc123"
+    },
+    {
+      "name": "an identifier that looks like a path",
+      "value": "s/t-abc123",
+      "id": "s/t-abc123"
+    }
+  ]
+}
