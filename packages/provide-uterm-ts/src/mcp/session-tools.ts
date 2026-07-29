@@ -24,6 +24,7 @@
  *   is checked before anything is sent.
  */
 
+import { pyStr } from "../pycompat/index.ts";
 import { compiledPatternOrRejection, rejectBadId, rejectBadPattern } from "./guards.ts";
 import { type ClientAnswer, type ToolResult, toolAnswer } from "./hijack-tools.ts";
 import { cleanSnapshot, validateSessionCreate } from "./tools.ts";
@@ -354,10 +355,17 @@ function patternFired(pattern: RegExp, events: unknown): boolean {
       continue;
     }
     const payload = (event as Record<string, unknown>).data;
-    const screen = typeof payload === "object" && payload !== null ? (payload as Record<string, unknown>).screen : "";
-    // Rendered as text, as the reference renders it: a number on the screen
-    // is matched as the digits it prints as.
-    if (pattern.test(typeof screen === "string" ? screen : String(screen ?? ""))) {
+    // The default applies to an *absent* key, not to a null value: the
+    // reference reads `payload.get("screen", "")`, so a screen written down
+    // as nothing is nothing rather than the empty string, and renders as
+    // `None` below.
+    const fields = typeof payload === "object" && payload !== null ? (payload as Record<string, unknown>) : {};
+    const screen = "screen" in fields ? fields.screen : "";
+    // Rendered as the reference renders it, not as this runtime would: a
+    // screen that is `null` becomes the four characters `None`, which a
+    // pattern can fire on. `String` would have given a different four and
+    // quietly changed which sessions an agent is told about.
+    if (pattern.test(pyStr(screen))) {
       return true;
     }
   }

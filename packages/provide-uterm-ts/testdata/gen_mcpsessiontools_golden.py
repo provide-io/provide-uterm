@@ -144,8 +144,7 @@ class _Client:
         return await self._record("gui_drag", worker_id=worker_id, hijack_id=hijack_id, **kwargs)
 
 
-# (name, tool, args, ok, data[, "diverges"]) — the last field marks a case the
-# port answers differently on purpose.
+# (name, tool, args, ok, data)
 CASES: list[tuple[Any, ...]] = [
     # --- managing sessions -------------------------------------------------
     ("listing sessions", "session_list", {}, True, {"sessions": []}),
@@ -343,17 +342,12 @@ CASES: list[tuple[Any, ...]] = [
         True,
         {"events": [None, {"data": {"screen": "found it"}}]},
     ),
-    # Recorded, and deliberately not reproduced: the reference renders a null
-    # screen as the four characters ``None`` and matches a pattern against
-    # them, so ``^N`` fires on a screen the terminal never showed. See the
-    # port's own test for what it does instead.
     (
         "subscribing where the screen is nothing at all",
         "session_subscribe",
         {"session_id": "s-1", "pattern": "None"},
         True,
         {"events": [{"data": {"screen": None}}]},
-        "diverges",
     ),
     (
         "subscribing where the screen is missing entirely",
@@ -497,7 +491,6 @@ def main() -> None:
                 "args": case[2],
                 "ok": case[3],
                 "data": case[4],
-                "diverges": len(case) > 5,
                 **asyncio.run(_run(case[1], case[2], case[3], case[4])),
             }
             for case in CASES

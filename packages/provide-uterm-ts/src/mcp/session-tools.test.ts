@@ -24,8 +24,6 @@ interface Case {
   data: unknown;
   result: Record<string, unknown>;
   calls: Array<Record<string, unknown>>;
-  /** Set where this port answers differently on purpose. */
-  diverges: boolean;
 }
 
 interface SessionToolsGolden {
@@ -80,15 +78,9 @@ describe("the nineteen tools that finish the surface", () => {
     const { client, calls } = recordingClient(record.ok, record.data);
     const result = await callSessionTool(client, record.tool, record.args);
 
-    // What was asked of the client is held even where the answer diverges:
-    // a divergence in what a filter matches is not a licence to call
-    // something else.
-    expect(calls).toEqual(record.calls);
-    if (record.diverges) {
-      return;
-    }
     expect(result).toEqual(record.result);
     expect(Object.keys(result)).toEqual(Object.keys(record.result));
+    expect(calls).toEqual(record.calls);
   });
 
   it("refuses a tool nobody registered", async () => {
@@ -250,18 +242,38 @@ describe("watching and subscribing, which a model can ask too much of", () => {
     expect(result.matched_pattern).toBe(true);
   });
 
-  it("takes a screen that is nothing as nothing, not as the word for it", async () => {
-    // A recorded divergence. The reference renders a null screen with
-    // `str(None)` and matches against the four characters `None`, so a
-    // pattern like `^N` fires on a screen the terminal never showed. Here a
-    // screen that is nothing matches nothing — the alternative is a filter
-    // firing on an artifact of how the absence was written down.
-    for (const events of [[{ data: { screen: null } }], [{ data: {} }], [{ data: { screen: undefined } }]]) {
-      const { client } = recordingClient(true, { events });
-      for (const pattern of ["None", "null", "undefined", "^$"]) {
-        const result = await callSessionTool(client, "session_subscribe", { session_id: "s-1", pattern });
-        expect(result.matched_pattern).toBe(pattern === "^$");
-      }
+  it("renders a screen that is not text the way the reference renders it", async () => {
+    // The reference writes each screen with `str()` before matching, so a
+    // screen that is `None` becomes the four characters `None` and a pattern
+    // can fire on them. Reaching for this runtime's `String` would have given
+    // `null` instead and quietly changed which sessions an agent is told
+    // about — the filter's verdict is the whole output of this tool.
+    const cases: Array<[unknown, string, boolean]> = [
+      [null, "None", true],
+      [null, "null", false],
+      [true, "True", true],
+      [true, "true", false],
+      [42, "42", true],
+      [["a"], "\\['a'\\]", true],
+    ];
+    for (const [screen, pattern, fires] of cases) {
+      const { client } = recordingClient(true, { events: [{ data: { screen } }] });
+      const result = await callSessionTool(client, "session_subscribe", { session_id: "s-1", pattern });
+      expect(result.matched_pattern).toBe(fires);
+    }
+  });
+
+  it("defaults an absent screen to nothing written, not to nothing at all", async () => {
+    // `payload.get("screen", "")` defaults on a missing key. A screen nobody
+    // wrote down is the empty string; one written down as null is null, and
+    // the two render differently.
+    const { client } = recordingClient(true, { events: [{ data: {} }] });
+    for (const [pattern, fires] of [
+      ["^$", true],
+      ["None", false],
+    ] as const) {
+      const result = await callSessionTool(client, "session_subscribe", { session_id: "s-1", pattern });
+      expect(result.matched_pattern).toBe(fires);
     }
   });
 
