@@ -381,4 +381,235 @@ public sealed class SessionHijackParityTests
             Assert.Equal("insufficient privileges", body.GetProperty("detail").GetString());
         }
     }
+
+    private static async Task<string> AcquireAsync(HttpClient http, string owner = "tester")
+    {
+        var acquire = await http.PostAsync(
+            "/worker/provide-shell/hijack/acquire", Json($$"""{"owner": "{{owner}}", "lease_s": 30}"""));
+        acquire.EnsureSuccessStatusCode();
+        return (await acquire.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("hijack_id").GetString()!;
+    }
+
+    private static async Task<HttpResponseMessage> OpenWorker(HttpClient http) =>
+        await http.PostAsync("/worker/provide-shell/input_mode", Json("""{"input_mode": "open"}"""));
+
+    private static async Task<string?> ReadInputMode(HttpClient http)
+    {
+        var status = await http.GetAsync("/api/sessions/provide-shell");
+        status.EnsureSuccessStatusCode();
+        return (await status.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("input_mode").GetString();
+    }
+
+    /// <summary>
+    /// The worker's own mode route may not open a session out from under a
+    /// lease. The reference refuses it in the hub, before the field is written
+    /// (<c>bridge/hub/router_impl.py:326-334</c> returns
+    /// <c>(False, "active_hijack")</c>), and the route turns that into 409 in
+    /// the lease routes' <c>error</c> envelope
+    /// (<c>bridge/routes/rest_workerctl.py:62-69</c>).
+    ///
+    /// The refusal is the whole point of the lease: <c>open</c> means everyone
+    /// may type, so opening a leased session would end the holder's
+    /// exclusivity while their lease still answers heartbeats and tells them
+    /// they have it. So the status code is not enough to assert — the mode
+    /// must be unwritten and the lease must still be exclusive afterwards.
+    /// </summary>
+    [Fact]
+    public async Task Opening_A_Worker_Is_Refused_While_A_Lease_Is_Held()
+    {
+        var (server, http, _) = await StartAsync();
+        await using (server)
+        using (http)
+        {
+            (await SwitchToHijackMode(http)).EnsureSuccessStatusCode();
+            var hijackId = await AcquireAsync(http);
+
+            var open = await OpenWorker(http);
+
+            Assert.Equal(HttpStatusCode.Conflict, open.StatusCode);
+            var body = await open.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("Cannot switch to open while hijack is active.", body.GetProperty("error").GetString());
+            Assert.False(body.TryGetProperty("ok", out _));
+
+            // The field was not written. A port that answers 409 and assigns
+            // the mode anyway passes a status-only test and still opens the
+            // session to everyone.
+            Assert.Equal("hijack", await ReadInputMode(http));
+
+            // And the lease survives intact: it still extends, and it is still
+            // the only one — which is the exclusivity the guard exists for.
+            var heartbeat = await http.PostAsync(
+                $"/worker/provide-shell/hijack/{hijackId}/heartbeat", Json("""{"lease_s": 30}"""));
+            Assert.Equal(HttpStatusCode.OK, heartbeat.StatusCode);
+            var second = await http.PostAsync(
+                "/worker/provide-shell/hijack/acquire", Json("""{"owner": "other", "lease_s": 30}"""));
+            Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
+            Assert.Equal(
+                "Worker is already hijacked.",
+                (await second.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetString());
+        }
+    }
+
+    /// <summary>
+    /// The guard is about a held lease and nothing else. With none held the
+    /// same request is the ordinary way to open a session, and refusing it
+    /// would break every caller that switches modes between runs.
+    /// </summary>
+    [Fact]
+    public async Task Opening_A_Worker_With_No_Lease_Held_Is_Allowed()
+    {
+        var (server, http, _) = await StartAsync();
+        await using (server)
+        using (http)
+        {
+            (await SwitchToHijackMode(http)).EnsureSuccessStatusCode();
+
+            var open = await OpenWorker(http);
+
+            Assert.Equal(HttpStatusCode.OK, open.StatusCode);
+            var body = await open.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.True(body.GetProperty("ok").GetBoolean());
+            Assert.Equal("open", body.GetProperty("input_mode").GetString());
+            Assert.Equal("open", await ReadInputMode(http));
+        }
+    }
+
+    /// <summary>
+    /// Only the switch to <c>open</c> is refused. The reference's guard reads
+    /// the requested mode, not the current one, so a caller re-asserting
+    /// <c>hijack</c> — which is what the mode already is under a lease — is
+    /// answered normally. Refusing a no-op would break callers that set the
+    /// mode defensively before every acquire.
+    /// </summary>
+    [Fact]
+    public async Task Re_Asserting_Hijack_Mode_Under_A_Lease_Is_Not_Refused()
+    {
+        var (server, http, _) = await StartAsync();
+        await using (server)
+        using (http)
+        {
+            (await SwitchToHijackMode(http)).EnsureSuccessStatusCode();
+            await AcquireAsync(http);
+
+            var again = await http.PostAsync(
+                "/worker/provide-shell/input_mode", Json("""{"input_mode": "hijack"}"""));
+
+            Assert.Equal(HttpStatusCode.OK, again.StatusCode);
+            Assert.True((await again.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("ok").GetBoolean());
+            Assert.Equal("hijack", await ReadInputMode(http));
+        }
+    }
+
+    /// <summary>
+    /// The guard holds a lease, not a session: released, the same request is
+    /// allowed again. A port that latched the refusal would leave a session
+    /// stuck in <c>hijack</c> forever after its first lease.
+    /// </summary>
+    [Fact]
+    public async Task Opening_A_Worker_Is_Allowed_Once_The_Lease_Is_Released()
+    {
+        var (server, http, _) = await StartAsync();
+        await using (server)
+        using (http)
+        {
+            (await SwitchToHijackMode(http)).EnsureSuccessStatusCode();
+            var hijackId = await AcquireAsync(http);
+            Assert.Equal(HttpStatusCode.Conflict, (await OpenWorker(http)).StatusCode);
+
+            (await http.PostAsync($"/worker/provide-shell/hijack/{hijackId}/release", Json("{}")))
+                .EnsureSuccessStatusCode();
+
+            Assert.Equal(HttpStatusCode.OK, (await OpenWorker(http)).StatusCode);
+            Assert.Equal("open", await ReadInputMode(http));
+        }
+    }
+
+    /// <summary>
+    /// The other two refusals the mode route can make, which the hijack guard
+    /// must not have swallowed into one answer. A mode that is neither word is
+    /// a malformed request — the reference validates the body before the hub
+    /// sees it (<c>bridge/models.py InputModeRequest</c>) — and a session with
+    /// no worker registered is absent, in the hub routes' own <c>error</c>
+    /// envelope (<c>bridge/routes/rest_workerctl.py:64-67</c>).
+    /// </summary>
+    [Fact]
+    public async Task The_Mode_Route_Keeps_Its_Other_Refusals_Apart()
+    {
+        var (server, http, _) = await StartAsync();
+        await using (server)
+        using (http)
+        {
+            var nonsense = await http.PostAsync(
+                "/worker/provide-shell/input_mode", Json("""{"input_mode": "sideways"}"""));
+
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, nonsense.StatusCode);
+            Assert.Equal(
+                "input_mode must be 'open' or 'hijack'",
+                (await nonsense.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("detail").GetString());
+
+            // A session that was never started has a definition to authorize
+            // against but no worker state in the hub.
+            (await http.PostAsync("/api/sessions", Json(
+                """{"session_id": "idle-one", "display_name": "Idle", "connector_type": "shell", "auto_start": false}""")))
+                .EnsureSuccessStatusCode();
+
+            var absent = await http.PostAsync(
+                "/worker/idle-one/input_mode", Json("""{"input_mode": "open"}"""));
+
+            Assert.Equal(HttpStatusCode.NotFound, absent.StatusCode);
+            Assert.Equal(
+                "No worker registered.",
+                (await absent.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetString());
+        }
+    }
+
+    /// <summary>
+    /// The session route is the other authority over the same field, and the
+    /// reference deliberately answers it differently: an operator opening a
+    /// session takes it back from whoever holds the lease. So
+    /// <c>registry.set_mode</c> force-releases first and only then sets the
+    /// mode (<c>server/registry.py:339-348</c> — <c>_force_release_hijack</c>
+    /// ahead of <c>hub.set_input_mode</c>, which is why the hub's guard never
+    /// refuses this path).
+    ///
+    /// Releasing is not optional politeness. In open mode the lease no longer
+    /// gates input, so one left answering heartbeats would tell its holder
+    /// they still hold an exclusivity that no longer exists.
+    /// </summary>
+    [Fact]
+    public async Task Opening_The_Session_Force_Releases_The_Lease_It_Ends()
+    {
+        var (server, http, _) = await StartAsync();
+        await using (server)
+        using (http)
+        {
+            (await SwitchToHijackMode(http)).EnsureSuccessStatusCode();
+            var hijackId = await AcquireAsync(http);
+
+            var open = await http.PostAsync(
+                "/api/sessions/provide-shell/mode", Json("""{"input_mode": "open"}"""));
+
+            Assert.Equal(HttpStatusCode.OK, open.StatusCode);
+            Assert.Equal("open", (await open.Content.ReadFromJsonAsync<JsonElement>())
+                .GetProperty("input_mode").GetString());
+            Assert.Equal("open", await ReadInputMode(http));
+
+            // The lease is gone, and says so the next time its holder speaks.
+            var heartbeat = await http.PostAsync(
+                $"/worker/provide-shell/hijack/{hijackId}/heartbeat", Json("""{"lease_s": 30}"""));
+            Assert.Equal(HttpStatusCode.NotFound, heartbeat.StatusCode);
+            Assert.Equal(
+                "Invalid or expired hijack session.",
+                (await heartbeat.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetString());
+
+            // Nobody inherited it either: the session is open, so a fresh
+            // acquire is refused for the mode rather than for the old lease.
+            var acquire = await http.PostAsync(
+                "/worker/provide-shell/hijack/acquire", Json("""{"owner": "other", "lease_s": 30}"""));
+            Assert.Equal(HttpStatusCode.Conflict, acquire.StatusCode);
+            Assert.Equal(
+                "Hijack not available in open input mode.",
+                (await acquire.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetString());
+        }
+    }
 }

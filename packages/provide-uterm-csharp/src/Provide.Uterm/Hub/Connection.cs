@@ -88,19 +88,65 @@ public sealed class ConnectionManager
         }
     }
 
-    public bool ForceReleaseHijack(string workerId)
+    /// <summary>
+    /// End whatever is held on a worker and let it run again — the release
+    /// nobody asked for, which is what opening a session does to the lease
+    /// that was gating it.
+    ///
+    /// The reference does not clear the state and stop
+    /// (<c>bridge/hub/connection_hijack.py:99-131</c>): it tells the worker to
+    /// resume (naming the owner it took the session from, or
+    /// <c>server-forced</c> when the holder was a dashboard socket), fires the
+    /// hijack-changed callback, and broadcasts the new hijack state to the
+    /// browsers. A silent release would leave the worker paused with nobody
+    /// left to unpause it and every connected UI still showing a lease that no
+    /// longer exists.
+    ///
+    /// Reports whether anything was actually held, so a caller can tell a
+    /// release from a no-op — and "held" is the same expiry-aware predicate
+    /// the rest of the hub uses, so an owner whose lease already ran out is
+    /// not announced as a release.
+    /// </summary>
+    public async Task<bool> ForceReleaseHijackAsync(string workerId, CancellationToken ct = default)
     {
+        var owner = "server-forced";
+        var had = false;
         lock (_hub.SharedLock)
         {
             var st = _hub.Registry.Get(workerId);
             if (st is null) return false;
-            var had = st.HijackSession is not null || st.HijackOwner is not null;
-            st.HijackSession = null;
+            if (st.HijackSession is not null)
+            {
+                owner = st.HijackSession.Owner;
+                st.HijackSession = null;
+                had = true;
+            }
+
+            if (_hub.State.IsDashboardHijackActive(st))
+            {
+                had = true;
+            }
+
+            // Only a live owner is a release worth announcing, but the fields
+            // are cleared either way — an owner whose lease already ran out is
+            // stale state, not a holder, and leaving it behind would keep
+            // answering "hijacked" to anything reading it before the expiry
+            // sweep runs.
             st.HijackOwner = null;
             st.HijackOwnerExpiresAt = null;
+            // A reserve mid-flight is dropped too: TryAcquireRestAsync only
+            // installs its session while its own pending marker is still
+            // there, so clearing it makes an acquire racing this release fail
+            // rather than land a lease on a session that is being opened.
             st.HijackPending = null;
-            return had;
         }
+
+        if (!had) return false;
+        await SendWorkerAsync(workerId, HijackLeaseManager.ResumeFrame(owner, _hub.Clock.Wall()), ct)
+            .ConfigureAwait(false);
+        _hub.State.NotifyHijackChanged(workerId, false, null);
+        await BroadcastHijackStateAsync(workerId, ct).ConfigureAwait(false);
+        return true;
     }
 
     public Dictionary<string, object?> RegisterBrowser(string workerId, object ws, string role, bool deferBroadcast = false)

@@ -556,9 +556,29 @@ public sealed partial class UtermServer : IAsyncDisposable
         var body = await ReadJson(ctx).ConfigureAwait(false);
         var mode = Str(body, "input_mode", InputModes.Hijack);
         var (ok, reason) = _deps.Hub.Router.SetInputMode(workerId, mode);
-        if (!ok) return BridgeError(400, reason);
+        if (!ok) return InputModeError(reason);
         return Results.Json(new { ok = true, worker_id = workerId, input_mode = mode }, JsonOpts);
     }
+
+    /// <summary>
+    /// The reference's words for a refused mode change
+    /// (<c>bridge/routes/rest_workerctl.py:62-69</c>): 404 when no worker is
+    /// registered, 409 for the one refusal the hub makes on its own — a switch
+    /// to <c>open</c> under a live lease — and both in the hub routes'
+    /// <c>error</c> envelope rather than the <c>detail</c> one.
+    ///
+    /// A mode that is neither <c>open</c> nor <c>hijack</c> never reaches the
+    /// hub there: the request body is a model whose <c>input_mode</c> is
+    /// validated on the way in (<c>bridge/models.py InputModeRequest</c>), so
+    /// it is answered as a malformed request, in the validation envelope, with
+    /// the same wording the session route uses for the same mistake.
+    /// </summary>
+    private static IResult InputModeError(string reason) => reason switch
+    {
+        "invalid_mode" => DetailError(422, "input_mode must be 'open' or 'hijack'"),
+        "no_worker" => BridgeError(404, "No worker registered."),
+        _ => BridgeError(409, "Cannot switch to open while hijack is active."),
+    };
 
     private async Task<IResult> HandleDisconnectWorker(HttpContext ctx, string workerId)
     {
@@ -938,10 +958,26 @@ public sealed partial class UtermServer : IAsyncDisposable
 
         using var ws = await ctx.WebSockets.AcceptWebSocketAsync().ConfigureAwait(false);
         var conn = new BrowserWsConn(ws);
+        // Seed the hub's state for a session it has not seen with that
+        // session's own mode, before the registration creates it with the
+        // unknown-worker default. A fresh WorkerTermState says "hijack" — the
+        // reference's default too (bridge/models.py:147) — because an
+        // unannounced worker is assumed to be arbitrated. But a *configured*
+        // session already said what it is, and in the reference its runtime
+        // announces exactly that on attach (worker_hello carries the
+        // connector's input_mode). Without this, connecting a socket is enough
+        // to turn a session the operator configured as `open` into one only a
+        // lease holder may type at — an arbitration nobody asked for.
+        if (_deps.Registry.TryGetDefinition(workerId, out var wdef))
+        {
+            _deps.Hub.Registry.SetDefault(workerId, new Hub.WorkerTermState { InputMode = wdef.InputMode });
+        }
+
         _deps.Hub.Conn.RegisterWorker(workerId, conn);
         if (_deps.Registry is InMemorySessionRegistry mem)
         {
-            mem.MarkWorker(workerId, true, false, InputModes.Hijack);
+            // Online, and nothing else: a worker arriving is not a mode change.
+            mem.MarkWorker(workerId, true, false);
         }
 
         // Notify already-connected browsers (Python/Go worker_connected fan-out).
@@ -999,14 +1035,27 @@ public sealed partial class UtermServer : IAsyncDisposable
         }
         finally
         {
+            // Everything about a disconnect is inside the identity check. A
+            // socket that a later one displaced is nobody's worker any more —
+            // DeregisterWorker answers false for it — and its eventual close
+            // says nothing about the session, which is still being served by
+            // the socket that replaced it. Marking the session offline out here
+            // took down a live session, with a lease held on it, because a
+            // stale socket finally noticed it was gone. The reference draws the
+            // line in the same place (bridge/routes/websockets_impl.py:241-247,
+            // and see :106-111 for why the check exists at all).
             var (shouldBroadcast, wasHijacked) = _deps.Hub.Conn.DeregisterWorker(workerId, conn);
-            if (_deps.Registry is InMemorySessionRegistry mem2)
-            {
-                mem2.MarkWorker(workerId, false, false, InputModes.Hijack);
-            }
-
             if (shouldBroadcast)
             {
+                if (_deps.Registry is InMemorySessionRegistry mem2)
+                {
+                    // Offline, and nothing else: a worker leaving is not a mode
+                    // change either. Rewriting the mode here left every session
+                    // reporting `hijack` after its worker went away, whatever
+                    // it had been configured as.
+                    mem2.MarkWorker(workerId, false, false);
+                }
+
                 try
                 {
                     await _deps.Hub.Conn.BroadcastToBrowsersAsync(

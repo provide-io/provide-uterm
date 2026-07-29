@@ -137,6 +137,30 @@ public sealed class MessageRouter
         }
     }
 
+    /// <summary>
+    /// Move a worker between <c>hijack</c> and <c>open</c>, refusing the one
+    /// switch that would end a lease's exclusivity behind its holder's back.
+    ///
+    /// <c>open</c> means everyone connected may type. Flipping a leased
+    /// session to it would leave the holder with a lease that still verifies
+    /// and still extends — every signal they have says they alone are driving
+    /// a terminal anyone can now type into. So the reference refuses that one
+    /// transition (<c>bridge/hub/router_impl.py:326-334</c>, Go
+    /// <c>hub/router.go:162</c>), and refuses it here rather than in the route
+    /// handler: this is the only place the field is written, so no caller can
+    /// reach the write with the guard behind them.
+    ///
+    /// Refused is the requested mode, not the current one — <c>hijack</c>
+    /// under a lease is what the mode already is, and callers that re-assert
+    /// it before an acquire are answered normally. "Hijacked" is the hub's own
+    /// <see cref="StateStore.IsHijacked"/>: a live dashboard owner or a REST
+    /// lease that has not expired, so a lease that ran out stops blocking.
+    ///
+    /// The session route (<c>POST /api/sessions/{id}/mode</c>) is the other
+    /// authority over this field and answers differently on purpose — an
+    /// operator opening a session is entitled to take it back, so that path
+    /// force-releases the lease first and arrives here with nothing held.
+    /// </summary>
     public (bool Ok, string Reason) SetInputMode(string workerId, string mode)
     {
         if (mode is not (InputModes.Hijack or InputModes.Open))
@@ -148,6 +172,11 @@ public sealed class MessageRouter
         {
             var st = _hub.Registry.Get(workerId);
             if (st is null) return (false, "no_worker");
+            if (mode == InputModes.Open && _hub.State.IsHijacked(st))
+            {
+                return (false, "active_hijack");
+            }
+
             st.InputMode = mode;
             return (true, "");
         }

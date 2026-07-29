@@ -413,7 +413,7 @@ public class DeepCoverageTests
         Assert.True(send.Ok, send.Reason);
         Assert.Contains("keys", worker.Sent);
         await hub.Conn.BroadcastHijackStateAsync("w1");
-        hub.Conn.ForceReleaseHijack("w1");
+        await hub.Conn.ForceReleaseHijackAsync("w1");
     }
 
     [Fact]

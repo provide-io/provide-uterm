@@ -384,14 +384,29 @@ public sealed class InMemorySessionRegistry : ISessionRegistry
         }
     }
 
-    public void MarkWorker(string sessionId, bool online, bool isHijacked, string inputMode)
+    /// <summary>
+    /// Record that a worker came or went for <paramref name="sessionId"/>.
+    ///
+    /// <paramref name="inputMode"/> is optional because a socket arriving or
+    /// leaving is not a mode change. The session's mode comes from its
+    /// definition and from what the worker announces — the reference's worker
+    /// connect/disconnect path touches neither
+    /// (<c>bridge/routes/websockets_impl.py:112-121, 241-247</c>) — so callers
+    /// on that path pass nothing and the configured mode is left where it is.
+    /// Passing a mode is for the callers that genuinely set one.
+    /// </summary>
+    public void MarkWorker(string sessionId, bool online, bool isHijacked, string? inputMode = null)
     {
         lock (_gate)
         {
             if (!_status.TryGetValue(sessionId, out var st)) return;
             st.Connected = online;
             st.IsHijacked = isHijacked;
-            st.InputMode = inputMode;
+            if (inputMode is not null)
+            {
+                st.InputMode = inputMode;
+            }
+
             st.LifecycleState = online ? SessionLifecycleState.Running : SessionLifecycleState.Stopped;
         }
     }

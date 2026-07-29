@@ -118,7 +118,7 @@ public class CoverageTo97Wave7Tests
         Assert.False(ok4);
         Assert.Equal("already_hijacked", r4);
 
-        hub.Conn.ForceReleaseHijack("w2");
+        hub.Conn.ForceReleaseHijackAsync("w2").GetAwaiter().GetResult();
         hub.Conn.RegisterWorker("w2", good);
         var (ok6, _) = hub.TryAcquireRestHijackAsync("w2", "owner-a", 30, "hx2", 30).GetAwaiter().GetResult();
         if (ok6)

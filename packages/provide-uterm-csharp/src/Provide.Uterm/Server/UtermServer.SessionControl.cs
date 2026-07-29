@@ -5,6 +5,7 @@
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Provide.Uterm.Hub;
 using Provide.Uterm.ServerAuth;
 using Provide.Uterm.ServerConfig;
 
@@ -135,9 +136,25 @@ public sealed partial class UtermServer
             return DetailError(422, "input_mode must be 'open' or 'hijack'");
         }
 
+        // Opening a session ends the lease that was gating it. The reference
+        // force-releases before it writes the mode
+        // (server/registry.py:339-348: _force_release_hijack, then
+        // runtime.set_mode, then hub.set_input_mode) — which is also why the
+        // hub's "cannot open while hijacked" guard never refuses this path.
+        //
+        // The two routes onto this one field differ by authority, not by
+        // mechanism: the worker's own route is refused, while an operator
+        // opening the session is entitled to take it back. But taking it back
+        // has to *end* the lease, because in open mode the lease no longer
+        // gates anyone's input — one left alive would go on telling its holder
+        // they have an exclusivity that everyone else now shares.
+        if (mode == InputModes.Open)
+        {
+            await _deps.Hub.Conn.ForceReleaseHijackAsync(sessionId, ctx.RequestAborted).ConfigureAwait(false);
+        }
+
         var st = _deps.Registry.SetMode(sessionId, mode);
-        var hubSt = _deps.Hub.Registry.Get(sessionId);
-        if (hubSt is not null) hubSt.InputMode = mode;
+        _deps.Hub.Router.SetInputMode(sessionId, mode);
         return StatusOrNotFound(sessionId, st);
     }
 
