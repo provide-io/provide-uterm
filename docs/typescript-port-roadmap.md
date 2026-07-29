@@ -128,7 +128,7 @@ corpus match CPython byte for byte.
 | `termsession` | `transport_session`, `telnet_session`, `ws_session` | `termsession` | todo |
 | `transports` | client `transports/*` | `transports` | **partial** — the transport interface, telnet RFC 854 framing and negotiation, the reconnect budget/backoff, the WebSocket client, the chaos wrapper, the full RFC 854 telnet client and the SSH session stream adapters; the SSH server itself outstanding |
 | `egress` | server `egress`, `_net` | (inside `connectors`) | **done** — metadata always blocked, embedded-IPv4 wrappers decoded, resolution failures fail closed |
-| `connectors` | server `connectors/*` | `connectors` | **partial** — the registry, the connector interface, the reference shell connector, and the telnet and WebSocket connectors with their closed settings, shared overlay and post-connect address guards; the ssh connector outstanding |
+| `connectors` | server `connectors/*` | `connectors` | **done** — the registry, the connector interface, the reference shell connector, and the telnet, WebSocket and SSH connectors with their closed settings, shared overlay, post-connect address guards and, for SSH, mandatory host-key verification. The transport each one drives is injected, so a caller supplies the socket |
 | `pty` | platform PTY connector | `pty` | todo |
 | `embed` | `embed` | `embed` | **partial** — the client filter, the interceptor verdicts, the telnet policy and the upstream stream parser; the session and hub outstanding |
 

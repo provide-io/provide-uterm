@@ -32,6 +32,7 @@ import {
   overlayScreen,
   overlaySnapshot,
   pyBool,
+  pyTruthy,
   rejectUnknownConnectorKeys,
 } from "./overlay.ts";
 
@@ -118,8 +119,8 @@ export class TelnetSessionConnector implements SessionConnector {
     this.#inputMode = String(config.input_mode ?? "open");
     // Absent means on: a session with no overlay setting still says who it is
     // and what it is connected to.
-    this.#hubOverlay = config.hub_overlay === undefined ? true : Boolean(config.hub_overlay);
-    this.#blockPrivate = Boolean(config.block_private_connector_targets);
+    this.#hubOverlay = config.hub_overlay === undefined ? true : pyTruthy(config.hub_overlay);
+    this.#blockPrivate = pyTruthy(config.block_private_connector_targets);
     this.#banner = `Connected to telnet://${this.#host}:${this.#port}`;
   }
 
