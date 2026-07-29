@@ -76,6 +76,13 @@ export interface ScenarioStep {
    * masks them before it compares; a driver records what it saw either way.
    */
   volatile?: string[];
+  /**
+   * Do this step this many times — see {@link observationIds}.
+   *
+   * Not an action field: it changes how many times the step is performed and
+   * nothing about what is sent.
+   */
+  repeat?: number;
 }
 
 /** A scenario, as far as a client driver reads one. */
@@ -153,24 +160,57 @@ export async function runClientScenario(scenario: Scenario, options: ClientRunOp
       return result(options.scenarioId, "error", steps, errorMessage(error));
     }
 
-    // One transport per step, because `auth` is per step and the transport's
-    // record is of one request.
-    const transport = new FetchTransport({
-      baseUrl: options.baseUrl,
-      token: options.token,
-      auth: step.auth ?? "token",
-      fetchImpl: options.fetchImpl,
-    });
-    const plan = planStep(new HijackClient({ transport }), step);
-    if ("refuse" in plan) {
-      // What ran already is still reported, so a reader can see how far it got.
-      return result(options.scenarioId, "error", steps, plan.refuse);
+    // Resolved once, before the repetitions, as the reference driver does: a
+    // reference can never name a repeated step, so there is nothing a second
+    // resolution could see that the first did not.
+    for (const observed of observationIds(step.id, written.repeat)) {
+      // One transport per request, because `auth` is per step and the
+      // transport's record is of one request — so a repeated step needs one
+      // apiece rather than a record of only its last repetition.
+      const transport = new FetchTransport({
+        baseUrl: options.baseUrl,
+        token: options.token,
+        auth: step.auth ?? "token",
+        fetchImpl: options.fetchImpl,
+      });
+      const plan = planStep(new HijackClient({ transport }), step);
+      if ("refuse" in plan) {
+        // What ran already is still reported, so a reader can see how far it
+        // got.
+        return result(options.scenarioId, "error", steps, plan.refuse);
+      }
+      // Awaited in turn, never started together: a scenario repeats a step to
+      // watch a budget being spent, and answers that raced would say a request
+      // was refused without saying which one.
+      const fields = await observe(transport, plan.run);
+      seen.set(observed, fields);
+      steps.push({ id: observed, fields });
     }
-    const fields = await observe(transport, plan.run);
-    seen.set(step.id, fields);
-    steps.push({ id: step.id, fields });
   }
   return result(options.scenarioId, "completed", steps, null);
+}
+
+/**
+ * The ids one step's observations are recorded under.
+ *
+ * A step that runs once keeps its own id; a repeated step numbers its
+ * repetitions from zero — `flood.0`, `flood.1` — and the bare id records
+ * nothing. Every repetition is recorded, never just the last: a scenario
+ * repeats a step precisely because it expects the answers to stop being the
+ * same, so a driver that kept only the final answer would turn "the
+ * thirty-first request was refused" into "a request was refused", and those
+ * are different claims about a budget.
+ */
+function observationIds(stepId: string, repeat: number | undefined): string[] {
+  // There is no `repeat: 1`. Two ways of writing the same thing, where one of
+  // them renumbers every observation, is a difference nobody would remember
+  // when reading a scenario — so the harness refuses it and one run is one
+  // bare id either way.
+  const times = repeat ?? 1;
+  if (times === 1) {
+    return [stepId];
+  }
+  return Array.from({ length: times }, (_unused, index) => `${stepId}.${index}`);
 }
 
 /**
