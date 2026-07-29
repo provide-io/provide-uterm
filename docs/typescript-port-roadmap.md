@@ -138,7 +138,7 @@ corpus match CPython byte for byte.
 |---|---|---|---|
 | `auth` | `auth` | `auth` | **done** — OpenSSH fingerprints, the authorized_keys grammar, and both reference resolvers |
 | `serverauth` | server `auth*`, `webhook*`, `api_keys`, `dev_idp` | `serverauth` | **partial** — webhook signing, the RBAC allow-list, the API-key store and the tunnel token hash; the auth modes and dev IDP outstanding |
-| `serverconfig` | server `config*`, `profiles` | `serverconfig` | **partial** — the outbound-URL guard, mount-path normalisation, every cross-field validator, TOML loading with its structural pass and relative-path resolution, the security-posture report and the security response headers; the Pydantic schema itself and profiles outstanding |
+| `serverconfig` | server `config*`, `profiles` | `serverconfig` | **partial** — the outbound-URL guard, mount-path normalisation, every cross-field validator, TOML loading with its structural pass and relative-path resolution, the whole default configuration, the security-posture report and the security response headers; the schema's per-field validation and profiles outstanding |
 | `controlplane` | `control/plane` (+ memory/sqlite/bootstrap) | `controlplane` | **partial** — the record types, the in-memory backend with its optimistic concurrency, the reaper, the audit head and the bootstrap; the SQLite backend outstanding |
 | `hub` | server `bridge/hub` (nine services) | `hub` | **done** — all nine services, plus the state model, frame encoders and builders, float coercion, prompt guards and the regex-safety validator |
 | `bridge` | `bridge` worker side | `bridge` | **done** — authorization matrix, hijack coordinator, protocol contract, hijackable primitives, the worker link and the hello protocol-range reader |
@@ -252,6 +252,17 @@ same shape is needed by `broadcast_to_browsers` when `io.py` is ported. The
 tests did not catch it because every one of them built the registry up in the
 same process that read it — a suite that never resumes a component cannot see
 a resumption bug.
+
+### Two config sections are not covered by the structural pass
+
+`config.py`'s `_TABLE_SECTIONS` names ten sections, and the schema has twelve:
+`audit` and `governance` are tables but are not in the list. A document writing
+one of them as a string therefore gets the schema's complaint about a field
+nobody wrote, rather than the friendly `[audit] must be a table (got str)`.
+
+Pinned by a test rather than closed, because closing it would make the port
+refuse a message the reference phrases differently — the fix belongs on the
+Python side first.
 
 ### The VNC human relay has four ordering constraints
 

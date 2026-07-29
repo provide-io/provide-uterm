@@ -1,0 +1,196 @@
+{
+  "config": {
+    "audit": {
+      "chain_enabled": false,
+      "chain_file": null
+    },
+    "auth": {
+      "allow_adhoc_browser_observers": false,
+      "api_keys_enabled": false,
+      "clock_skew_seconds": 15,
+      "delegate_roles": true,
+      "header_mode_acknowledged": false,
+      "identity_provider": "local",
+      "jwt_algorithms": [
+        "HS256"
+      ],
+      "jwt_audience": "provide-uterm-server",
+      "jwt_issuer": "provide-uterm",
+      "jwt_jwks_url": null,
+      "jwt_public_key_pem": null,
+      "jwt_roles_claim": "roles",
+      "jwt_scopes_claim": "scope",
+      "jwt_tenant_claim": "tenant_id",
+      "mode": "dev_token",
+      "principal_cookie": "uterm_principal",
+      "principal_header": "x-uterm-principal",
+      "require_jwt_in_production": false,
+      "require_upstream_proxy_secret": false,
+      "role_cookie": "uterm_role",
+      "role_header": "x-uterm-role",
+      "surface_cookie": "uterm_surface",
+      "tenant_cookie": "uterm_tenant",
+      "tenant_header": "x-uterm-tenant",
+      "token_cookie": "uterm_token",
+      "trusted_proxy_ips": [],
+      "upstream_proxy_secret": null,
+      "webhook_idp_forward_cookies": [],
+      "webhook_idp_forward_headers": [],
+      "webhook_idp_on_failure": "deny",
+      "webhook_idp_require_response_nonce": false,
+      "webhook_idp_require_signed_response": true,
+      "webhook_idp_secret": null,
+      "webhook_idp_timeout_s": 2.0,
+      "webhook_idp_url": null,
+      "worker_bearer_token": null
+    },
+    "browser_rate_limit_per_sec": 300.0,
+    "control_plane": {
+      "backend": "memory",
+      "database_url": null,
+      "reap_interval_s": 3600,
+      "reap_retention_s": 604800
+    },
+    "environment": "production",
+    "governance": {
+      "authz_webhook_secret": null,
+      "authz_webhook_timeout_s": 2.0,
+      "authz_webhook_url": null,
+      "behavioral_audit_interval_s": 30.0,
+      "behavioral_audit_secret": null,
+      "behavioral_audit_url": null,
+      "behavioral_fail_open": false,
+      "behavioral_max_cps": null,
+      "behavioral_min_jitter": null,
+      "discovery_provider": "webhook",
+      "external_connectors": [],
+      "policy_webhook_secret": null,
+      "policy_webhook_timeout_s": 2.0,
+      "policy_webhook_url": null,
+      "registry_webhook_interval_s": 60.0,
+      "registry_webhook_secret": null,
+      "registry_webhook_url": null,
+      "telemetry_webhook_secret": null,
+      "telemetry_webhook_timeout_s": 2.0,
+      "telemetry_webhook_url": null
+    },
+    "graphical_targets": [],
+    "max_connections_per_principal": 25,
+    "max_workers": 10000,
+    "pam": {
+      "auto_session": false,
+      "auto_session_command": "/bin/bash",
+      "capture_socket_dir": null,
+      "mode": "notify",
+      "notify_socket": null,
+      "relay_token": null,
+      "relay_url": null,
+      "require_peer_uids": null
+    },
+    "profiles": {
+      "directory": ".uterm-profiles"
+    },
+    "recording": {
+      "control_channel_mode": "exclude",
+      "directory": ".uterm-recordings",
+      "enabled_by_default": false,
+      "flush_batch_size": 100,
+      "flush_interval_s": 5.0,
+      "max_bytes": 0,
+      "redact_sensitive": true,
+      "retention_s": 0,
+      "store_type": "local",
+      "webhook_secret": null,
+      "webhook_timeout_s": 2.0,
+      "webhook_url": null
+    },
+    "security": {
+      "block_private_connector_targets": false,
+      "csp": null,
+      "default_session_visibility": "public",
+      "dev_mode_acknowledged": false,
+      "hsts": null,
+      "metrics_require_auth": false,
+      "mode": "strict",
+      "permissions_policy": null,
+      "referrer_policy": null,
+      "x_content_type_options": null,
+      "x_frame_options": null
+    },
+    "server": {
+      "allowed_origins": [],
+      "host": "127.0.0.1",
+      "max_sessions": null,
+      "node_id": "default",
+      "port": 8780,
+      "public_base_url": "http://127.0.0.1:8780",
+      "title": "provide-uterm-server"
+    },
+    "session_idle_timeout_s": 0,
+    "session_retention_s": 0,
+    "sessions": [
+      {
+        "auto_start": true,
+        "auto_transfer_idle_s": 30,
+        "connector_config": {},
+        "connector_type": "shell",
+        "display_name": "Provide Shell",
+        "ephemeral": false,
+        "input_mode": "open",
+        "keystroke_queue": "display",
+        "owner": null,
+        "presence": false,
+        "recording_enabled": null,
+        "session_id": "provide-shell",
+        "tags": [
+          "shell",
+          "reference"
+        ],
+        "visibility": "public"
+      }
+    ],
+    "tunnel": {
+      "cookie_samesite": "lax",
+      "cookie_secure": true,
+      "ip_binding": false,
+      "token_transport": "cookie",
+      "token_ttl_s": 3600
+    },
+    "ui": {
+      "app_path": "/app",
+      "assets_path": "/_terminal",
+      "fitaddon_cdn": "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0",
+      "fitaddon_cdn_integrity": "",
+      "fonts_cdn": "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap",
+      "xterm_cdn": "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0",
+      "xterm_cdn_integrity": ""
+    },
+    "webhooks": {
+      "allow_loopback_destinations": false
+    },
+    "worker_frame_on_invalid": "drop"
+  },
+  "sections": [
+    "audit",
+    "auth",
+    "control_plane",
+    "governance",
+    "pam",
+    "profiles",
+    "recording",
+    "security",
+    "server",
+    "tunnel",
+    "ui",
+    "webhooks"
+  ],
+  "top_level_scalars": [
+    "browser_rate_limit_per_sec",
+    "environment",
+    "max_connections_per_principal",
+    "max_workers",
+    "session_idle_timeout_s",
+    "session_retention_s",
+    "worker_frame_on_invalid"
+  ]
+}
