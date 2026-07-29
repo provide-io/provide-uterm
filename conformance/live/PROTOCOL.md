@@ -171,6 +171,25 @@ is a **run error** — not a step observation. It is a malformed scenario, and
 recording it as a field would let the harness compare it as though the server
 had done something.
 
+The same rule holds for a step **missing an argument its action needs** — a
+`hijack_send` with no `hijack_id`, an `http_get` with no `path`. It is a run
+error, for the same reason.
+
+Both are belt and braces: the harness refuses either at load, so a committed
+scenario cannot reach a driver in that state. The rule is written down anyway
+because four drivers reached four different answers when it was not, and a
+disagreement about what a *malformed* scenario does is still a cell that fails
+for a reason having nothing to do with any server.
+
+Two smaller readings, settled the same way — by what the reference driver
+does, since one of them has to be first:
+
+* a reference may appear in **any argument field**, but never in `id` or
+  `action`. A step that renamed itself could not be matched to its own
+  expectations;
+* a `body` written as a reference is substituted as **JSON**, not as text, so
+  a step can post back an object it was handed.
+
 ## Capabilities
 
 A scenario may require capabilities (`"requires": ["hijack.rest"]`). A driver
