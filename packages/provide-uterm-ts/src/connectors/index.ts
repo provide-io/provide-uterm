@@ -12,3 +12,4 @@
 export * from "./base.ts";
 export * from "./registry.ts";
 export * from "./shell.ts";
+export * from "./telnet.ts";
