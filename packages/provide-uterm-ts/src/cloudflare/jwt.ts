@@ -17,6 +17,7 @@
  * allowed to say.
  */
 
+import { pyB64UrlDecode } from "../pycompat/base64.ts";
 import type { JwtConfig } from "./config.ts";
 
 /** A token that cannot be trusted, whatever the reason. */
@@ -37,9 +38,6 @@ export interface JwtParts {
   signingInput: Uint8Array;
 }
 
-/** The standard base64 alphabet, after the url alphabet is translated into it. */
-const BASE64_ALPHABET = /[A-Za-z0-9+/]/;
-
 /** The roles this system knows, strongest first. */
 const KNOWN_ROLES = ["admin", "operator", "viewer"] as const;
 
@@ -53,56 +51,14 @@ const ACCESS_COOKIE = "CF_Authorization";
 const BEARER_PREFIX = "bearer ";
 
 /**
- * Decode one base64url segment.
+ * Decode one base64url segment, the way CPython does.
  *
- * Padding is supplied from the *original* length, then characters outside the
- * alphabet are discarded rather than refused — both as CPython's decoder
- * does. That combination is why a header of `!!!` decodes to nothing and
- * reaches the JSON parser as empty, while one of `YWJ!jZA` fails outright:
- * discarding shifts the padding arithmetic, which was computed before it.
- *
- * A strict decoder here would report the wrong failure for a malformed token.
+ * The semantics — padding computed before anything outside the alphabet is
+ * discarded — live in `pycompat/base64`, because the server's own JWT path
+ * needs the same decoder and two copies of a decoder are two decoders.
  */
 export function b64urlDecode(text: string): Uint8Array {
-  const padding = 4 - (text.length % 4);
-  const padded = padding === 4 ? text : text + "=".repeat(padding);
-
-  // Everything outside the alphabet is dropped first; only the pads and the
-  // data survive to be counted.
-  const kept = [...padded.replaceAll("-", "+").replaceAll("_", "/")].filter(
-    (character) => character === "=" || BASE64_ALPHABET.test(character),
-  );
-
-  let data = "";
-  for (const [index, character] of kept.entries()) {
-    if (character !== "=") {
-      data += character;
-      continue;
-    }
-    const group = data.length % 4;
-    // A pad arriving on a whole group is stray and simply skipped — which is
-    // why `YWJj=YWJj` decodes both groups and `====` decodes nothing.
-    if (group === 0) {
-      continue;
-    }
-    // A single character carries no whole byte, however much padding follows.
-    if (group === 1) {
-      throw new Error(`invalid base64: ${text}`);
-    }
-    // Otherwise the padding has to complete the group exactly, and the data
-    // ends here: `YWJjZA==` decodes and `YWJjZA=` does not.
-    if (kept.slice(index).filter((pad) => pad === "=").length < 4 - group) {
-      throw new Error(`invalid base64: ${text}`);
-    }
-    return Uint8Array.from(Buffer.from(data, "base64"));
-  }
-
-  const remainder = data.length % 4;
-  // Nothing padded the last group at all.
-  if (remainder !== 0) {
-    throw new Error(`invalid base64: ${text}`);
-  }
-  return Uint8Array.from(Buffer.from(data, "base64"));
+  return pyB64UrlDecode(text);
 }
 
 /** Split a token into its header, payload, signature and signed bytes. */

@@ -28,12 +28,35 @@ class TestTheRealRegistry:
         assert [spec.language for spec in found.clients] == ["python"]
         assert found.gaps == ()
 
-    def test_a_language_that_is_only_a_client_says_so_rather_than_vanishing(self) -> None:
+    def test_typescript_is_available_in_both_roles(self) -> None:
+        # It was client-only until its server was built; the roles it is
+        # registered with are what decides whether the matrix runs that row,
+        # so a regression there would quietly halve the matrix.
         registration = next(one for one in REGISTRY if one.language == "typescript")
-        assert registration.roles == frozenset({CLIENT})
+        assert registration.roles == frozenset({CLIENT, SERVER})
         found = available(REPO_ROOT, only=["typescript"])
+        assert [spec.language for spec in found.servers] == ["typescript"]
+        assert found.gaps == ()
+
+    def test_a_language_that_is_only_a_client_says_so_rather_than_vanishing(self, tmp_path: Path) -> None:
+        # Written against a driver made up here rather than a real one: every
+        # language in the repository now has both roles, and the case this
+        # guards — a client-only driver silently missing from the server
+        # column — has to keep being covered anyway.
+        (tmp_path / "there").write_text("")
+        registration = Registration(
+            language="client-only",
+            roles=frozenset({CLIENT}),
+            build=lambda root: REGISTRY[0].build(root),
+            needs_files=("there",),
+            needs_tools=(),
+            note="no server driver was ever written",
+        )
+        found = available(tmp_path, only=["client-only"], registry=[registration])
         assert found.servers == ()
+        assert [spec.language for spec in found.clients] == ["python"]
         assert any("no server role" in gap for gap in found.gaps)
+        assert any("no server driver was ever written" in gap for gap in found.gaps)
 
     def test_the_cell_count_is_reported_so_a_short_matrix_is_visible(self) -> None:
         found = available(REPO_ROOT, only=["python", "typescript"])

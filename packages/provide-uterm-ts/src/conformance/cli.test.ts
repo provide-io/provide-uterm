@@ -7,7 +7,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { type CliOptions, type DriverResult, LANGUAGE, runCli, SERVE_REFUSAL, USAGE } from "./index.ts";
+import { type CliOptions, type DriverResult, LANGUAGE, runCli, SERVER_CAPABILITIES, USAGE } from "./index.ts";
 
 /** A fetch that says yes and names the path it was asked for. */
 const OK = (async (input: unknown) => {
@@ -167,19 +167,47 @@ describe("a run the driver could not start", () => {
 });
 
 describe("the server role", () => {
-  it("says it is not built rather than standing up something that is not the server", async () => {
-    // A stub server would make the matrix look complete while proving
-    // nothing about this port.
-    const { code, line } = await invoke(["serve", "--auth", "dev_token"]);
+  it("announces where it is listening and what token to present", async () => {
+    let stop = () => {};
+    const stopped = new Promise<void>((resolve) => {
+      stop = resolve;
+    });
+    const written: string[] = [];
+    const running = runCli(["serve", "--auth", "dev_token"], {
+      write: (line) => written.push(line),
+      until: () => stopped,
+    });
+    // The announcement is written before the shutdown is asked for, so it is
+    // there to read while the server is still up.
+    await vi.waitFor(() => expect(written).toHaveLength(1));
+
+    const line = JSON.parse(written[0] ?? "") as Record<string, unknown>;
+    expect(line.role).toBe("server");
+    expect(line.language).toBe(LANGUAGE);
+    expect(line.token).not.toBe("");
+    expect(line.capabilities).toEqual([...SERVER_CAPABILITIES]);
+    // An ephemeral port, reported rather than agreed: nothing in the harness
+    // may name one.
+    const port = Number(new URL(String(line.base_url)).port);
+    expect(port).toBeGreaterThan(0);
+
+    // And it is really listening, on that port, answering as itself.
+    const health = await fetch(`${String(line.base_url)}/api/health`);
+    expect(health.status).toBe(200);
+    expect(((await health.json()) as { service: string }).service).toBe("uterm-server");
+
+    stop();
+    expect(await running).toBe(0);
+  });
+
+  it("says why it could not start rather than dying quietly", async () => {
+    // The harness waits for a line; the only thing worse than a failed cell
+    // is a hung one.
+    const { code, line } = await invoke(["serve", "--auth", "none"]);
 
     expect(code).toBe(1);
-    expect(line).toStrictEqual({
-      role: "server",
-      language: LANGUAGE,
-      status: "error",
-      error: SERVE_REFUSAL,
-    });
-    expect(SERVE_REFUSAL).toContain("not built");
+    expect(line).toMatchObject({ role: "server", language: LANGUAGE, status: "error" });
+    expect((line as { error: string }).error).toContain("removed for security reasons");
   });
 });
 

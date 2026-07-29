@@ -8,6 +8,18 @@
  *
  * Framework-neutral: a method and a path go in, a handler or a refusal comes
  * out. Node's `http` and a Worker's `fetch` each supply the first two.
+ *
+ * `node-http.ts` is deliberately absent from this barrel. It is the one file
+ * here that imports `node:http`, and this barrel is on the package's default
+ * entry — a Worker that imported `provide-uterm-ts` would pull the runtime in
+ * behind it and fail to start. It is reached by path, the way `react` and
+ * `conformance` are kept off the entry for the same reason.
  */
 
+export * from "./app.ts";
+export * from "./authorization.ts";
+export * from "./bootstrap.ts";
+export * from "./health.ts";
 export * from "./route-binding.ts";
+export * from "./session-registry.ts";
+export * from "./session-status.ts";
