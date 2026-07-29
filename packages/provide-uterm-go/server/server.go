@@ -85,7 +85,24 @@ type Deps struct {
 	FrontendDir string
 	// Logger is the base structured logger. nil → the telemetry logger.
 	Logger *slog.Logger
+	// OnStarted is everything that has to happen once the server is listening
+	// but before it serves its first request — in practice, bringing up the
+	// auto_start sessions. Keeping it here is what stops the two ways of
+	// starting a server (Run for the CLI, Serve for an already-bound listener)
+	// from drifting apart, which is how the live-conformance server came to
+	// have no boot step at all. nil → nothing to do.
+	//
+	// It runs on an already-bound listener, so a client that connects first
+	// simply waits in the accept backlog and sees a settled server. A hook that
+	// overruns OnStartedTimeout is left to finish in the background rather than
+	// holding the server closed — one connector that will not dial must not
+	// keep every other route unanswered.
+	OnStarted func(context.Context)
 }
+
+// OnStartedTimeout bounds how long [Server.Serve] waits for Deps.OnStarted
+// before it starts accepting regardless.
+const OnStartedTimeout = 10 * time.Second
 
 // Server is the assembled HTTP/WebSocket server. Construct it with [New].
 type Server struct {
@@ -253,6 +270,7 @@ func (s *Server) Run(ctx context.Context) error {
 func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	s.StartSweeps(ctx)
 	s.MarkReady()
+	s.runOnStarted(ctx, OnStartedTimeout)
 	s.httpSrv = &http.Server{
 		Handler:           s.handler,
 		ReadHeaderTimeout: 30 * time.Second,
@@ -269,6 +287,29 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 			return nil
 		}
 		return err
+	}
+}
+
+// runOnStarted runs the boot hook on the bound-but-not-yet-accepting listener,
+// waiting at most OnStartedTimeout. An overrunning hook keeps going in the
+// background; the server starts answering rather than staying shut.
+func (s *Server) runOnStarted(ctx context.Context, timeout time.Duration) {
+	hook := s.deps.OnStarted
+	if hook == nil {
+		return
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		hook(ctx)
+	}()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-done:
+	case <-ctx.Done():
+	case <-timer.C:
+		s.logger.Warn("uterm_server_boot_slow", "timeout_s", timeout.Seconds())
 	}
 }
 

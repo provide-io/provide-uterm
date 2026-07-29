@@ -151,7 +151,7 @@ func main() {
 		},
 		st: &server.SessionStatus{
 			SessionID: sid, DisplayName: sid, ConnectorType: "shell",
-			LifecycleState: "running", InputMode: "hijack", Visibility: "public",
+			LifecycleState: server.LifecycleRunning, InputMode: "hijack", Visibility: "public",
 			Owner: &owner, Tags: []string{},
 		},
 	}

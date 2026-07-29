@@ -181,6 +181,10 @@ func buildServerFromConfig(
 		Logger:           logger,
 		Recording:        buildRecordingStore(cfg),
 		FrontendDir:      frontendDir,
+		// The one boot step: bring up the auto_start sessions once the socket is
+		// bound. Every way of starting this server goes through Serve, so no
+		// entry point can quietly ship without it.
+		OnStarted: registry.StartAutoStartSessions,
 	})
 	if err != nil {
 		_ = engine.Close(ctx)
@@ -247,10 +251,9 @@ func runServer(ctx context.Context, configPath, host string, port int, frontendD
 		bundle.logger.Info("uterm_dev_token_issued", "token", bundle.devToken)
 	}
 
-	// Spawn auto_start sessions in the background so a slow/failed connector dial
-	// never blocks the server from listening (mirrors the Python lifespan boot
-	// task registry.start_auto_start_sessions).
-	go bundle.registry.StartAutoStartSessions(sigCtx)
-
+	// auto_start sessions are spawned by the server's OnStarted hook, once the
+	// listener is bound (see buildServerFromConfig) — not here, so that this
+	// entry point and the live-conformance one cannot disagree about whether a
+	// configured session comes up.
 	return bundle.srv.Run(sigCtx)
 }
