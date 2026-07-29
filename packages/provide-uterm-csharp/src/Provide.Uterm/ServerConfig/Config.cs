@@ -3,7 +3,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
+using System.Globalization;
 using Provide.Uterm.Defaults;
+using Provide.Uterm.Hub;
 
 namespace Provide.Uterm.ServerConfig;
 
@@ -210,6 +212,89 @@ public sealed class UtermServerConfig
     public int SessionIdleTimeoutS { get; set; }
     public int SessionRetentionS { get; set; }
     public double BrowserRateLimitPerSec { get; set; } = 300;
+
+    private double _restAcquireRateLimitPerSec = 5;
+    private double _restSendRateLimitPerSec = 20;
+
+    /// <summary>
+    /// Ceiling for <c>POST /worker/{id}/hijack/acquire</c> (tokens/sec, burst =
+    /// one second of the same rate), applied twice — once globally and once per
+    /// calling client, so one client can never spend more than its own share.
+    /// Guards the expensive, state-changing lease grab. Default is the hub's
+    /// own built-in value, so an unset deployment is unchanged.
+    /// </summary>
+    public double RestAcquireRateLimitPerSec
+    {
+        get => _restAcquireRateLimitPerSec;
+        set => _restAcquireRateLimitPerSec = ValidateRestRateLimit("rest_acquire_rate_limit_per_sec", value);
+    }
+
+    /// <summary>
+    /// Ceiling shared by the hijack <c>send</c> <em>and</em> <c>step</c>
+    /// endpoints — both are cheap keystroke-rate calls, which is why the budget
+    /// is larger than acquire's. Same double application and burst rule.
+    /// </summary>
+    public double RestSendRateLimitPerSec
+    {
+        get => _restSendRateLimitPerSec;
+        set => _restSendRateLimitPerSec = ValidateRestRateLimit("rest_send_rate_limit_per_sec", value);
+    }
+
+    /// <summary>
+    /// Refuses any rate that would not behave as the operator wrote it — the
+    /// port of <c>config_schema._validate_rest_rate_limit</c>.
+    ///
+    /// A rate limit is trusted once configured, so every value that cannot be
+    /// honoured verbatim is refused rather than reinterpreted.
+    ///
+    /// <em>Not finite.</em> <c>inf</c> passes every <c>&gt;=</c> bound, so
+    /// accepting it would silently mean "no limit at all" — the same fail-open
+    /// that makes a trusted limit worse than none. <c>-inf</c> and <c>NaN</c>
+    /// go with it: none of the three is a rate anybody meant to write.
+    ///
+    /// <em>Below <see cref="TokenBucket.MinRatePerSec"/>.</em> <c>0</c> is
+    /// ambiguous — read as "unlimited" it disables the limit, read as "refuse
+    /// everything" it bricks the REST hijack API, and nothing in the file says
+    /// which the operator meant. The whole band under the floor is refused for
+    /// the <em>second</em> of those reasons rather than for ambiguity: a token
+    /// bucket's burst is one second of its rate, so a sub-1/s bucket never
+    /// holds a whole token and denies every call forever. <c>0.5</c> is not
+    /// "one call every two seconds", it is "never" — so it is refused exactly
+    /// like <c>0</c>. Negatives go the same way, and the floor also keeps the
+    /// limiter's own clamp from handing back a looser rate than was configured.
+    ///
+    /// Rates at or above the floor are a real policy and are kept.
+    ///
+    /// The bound is written <c>!(value &gt;= MIN)</c> rather than
+    /// <c>value &lt; MIN</c> so a NaN — which compares false against everything
+    /// — falls into the refusal instead of sliding past a <c>&lt;</c> test.
+    /// The finiteness check above already catches NaN; this is the second line
+    /// of defence that survives someone reordering or dropping it. Do not
+    /// "simplify" it.
+    ///
+    /// Refusing lives on the property rather than in the TOML loader so every
+    /// path that builds a config — file, CLI, embedding caller — is refused at
+    /// startup. A server that boots with a nonsense limit and discovers it at
+    /// first use is a server that ran unprotected in between.
+    /// </summary>
+    private static double ValidateRestRateLimit(string key, double value)
+    {
+        var floor = TokenBucket.MinRatePerSec.ToString("0.0##", CultureInfo.InvariantCulture);
+        if (!double.IsFinite(value))
+        {
+            throw new ArgumentException(FormattableString.Invariant(
+                $"{key} must be a finite number >= {floor}, got: {value}"));
+        }
+
+        if (!(value >= TokenBucket.MinRatePerSec))
+        {
+            throw new ArgumentException(FormattableString.Invariant(
+                $"{key} must be >= {floor}, got: {value}"));
+        }
+
+        return value;
+    }
+
     public string WorkerFrameOnInvalid { get; set; } = "drop";
     public int MaxConnectionsPerPrincipal { get; set; } = 25;
     public int MaxWorkers { get; set; } = 10000;

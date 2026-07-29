@@ -47,6 +47,22 @@ public static class ConfigLoader
             cfg.BrowserRateLimitPerSec = brd;
         }
 
+        // The REST hijack ceilings. Written as "present ⇒ apply" rather than
+        // ToDouble's silent fallback: a rate that failed to parse and quietly
+        // reverted to the default would be indistinguishable from one never
+        // written, which is the exact silent-loosening these keys are validated
+        // against. The range check itself lives on the property setter, so
+        // configs built without a file get it too.
+        if (root.TryGetValue("rest_acquire_rate_limit_per_sec", out var ra))
+        {
+            cfg.RestAcquireRateLimitPerSec = RequireRate("rest_acquire_rate_limit_per_sec", ra);
+        }
+
+        if (root.TryGetValue("rest_send_rate_limit_per_sec", out var rs))
+        {
+            cfg.RestSendRateLimitPerSec = RequireRate("rest_send_rate_limit_per_sec", rs);
+        }
+
         if (root.TryGetValue("max_workers", out var mw))
         {
             cfg.MaxWorkers = ToInt(mw, cfg.MaxWorkers);
@@ -222,6 +238,23 @@ public static class ConfigLoader
         double d => (int)d,
         string s when int.TryParse(s, out var n) => n,
         _ => fallback,
+    };
+
+    /// <summary>
+    /// A written-down rate must be a number. TOML integers and floats both
+    /// count (an operator who writes <c>7</c> rather than <c>7.0</c> means 7),
+    /// as does a numeric string, matching the reference's lax float field;
+    /// anything else is refused by name rather than folded to the default.
+    /// </summary>
+    private static double RequireRate(string key, object? v) => v switch
+    {
+        double d => d,
+        long l => l,
+        int i => i,
+        string s when double.TryParse(
+            s, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var n)
+            => n,
+        _ => throw new ArgumentException($"{key} must be a number, got: {v}"),
     };
 
     private static double ToDouble(object? v, double fallback) => v switch

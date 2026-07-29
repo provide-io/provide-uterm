@@ -23,8 +23,8 @@ public sealed class RateLimiter
     public RateLimiter(double restAcquireRate, double restSendRate, IClock? clock = null)
     {
         _clock = ClockUtil.OrDefault(clock);
-        _acquireRate = Math.Max(0.1, restAcquireRate);
-        _sendRate = Math.Max(0.1, restSendRate);
+        _acquireRate = Math.Max(TokenBucket.MinRatePerSec, restAcquireRate);
+        _sendRate = Math.Max(TokenBucket.MinRatePerSec, restSendRate);
         _acquireBucket = new TokenBucket(_acquireRate, clock: _clock);
         _sendBucket = new TokenBucket(_sendRate, clock: _clock);
     }
