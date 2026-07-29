@@ -69,6 +69,16 @@ public sealed class LiveStep
     public int? Limit { get; init; }
 
     /// <summary>
+    /// How many times the step is performed. One unless the scenario said
+    /// otherwise.
+    ///
+    /// Not an argument of the action: it changes how often the step is done,
+    /// never what is sent — some behaviour (a rate limiter) is only observable
+    /// by exhausting something.
+    /// </summary>
+    public int Repeat { get; init; } = 1;
+
+    /// <summary>
     /// The step exactly as the scenario wrote it.
     ///
     /// Kept because a reference (<see cref="LiveReference"/>) is resolved against
@@ -77,6 +87,25 @@ public sealed class LiveStep
     /// then, and the resolved form is parsed from a rewritten copy of it.
     /// </summary>
     public JsonObject Raw { get; init; } = new();
+
+    /// <summary>
+    /// The ids this step's observations are recorded under.
+    ///
+    /// A step done once keeps its own id; a repeated step numbers its
+    /// repetitions from zero (<c>flood.0</c>, <c>flood.1</c>, …) and records
+    /// nothing under the bare id. Every repetition is recorded, never just the
+    /// last: a scenario repeats a step because it expects the answers to stop
+    /// being the same, and which repetition changed is the measurement — only
+    /// the final answer would turn "the thirty-first request was refused" into
+    /// "a request was refused", which is a different claim about a budget.
+    ///
+    /// There is no <c>repeat</c> of one — the schema's floor is two, and the
+    /// harness holds every scenario to it before a driver sees it — so anything
+    /// under two is the same single observation a step with no <c>repeat</c>
+    /// makes, rather than a second spelling that renumbers everything.
+    /// </summary>
+    public IReadOnlyList<string> ObservationIds() =>
+        Repeat < 2 ? [Id] : [.. Enumerable.Range(0, Repeat).Select(index => $"{Id}.{index}")];
 }
 
 /// <summary>
@@ -206,6 +235,7 @@ public sealed class LiveScenario
             Keys = Str(obj, "keys"),
             InputMode = Str(obj, "input_mode"),
             Limit = Int(obj, "limit"),
+            Repeat = Int(obj, "repeat") ?? 1,
             // Deep-cloned: the parsed document is discarded, and a node still
             // owned by it cannot be attached to the request we build.
             Body = obj["body"]?.DeepClone(),

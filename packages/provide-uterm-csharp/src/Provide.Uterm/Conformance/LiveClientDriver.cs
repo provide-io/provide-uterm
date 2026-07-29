@@ -82,10 +82,17 @@ public static class LiveClientDriver
         {
             try
             {
+                // Resolved once, before the repetitions: a reference may never
+                // name a repeated step — the harness refuses that at load — so
+                // nothing it could read changes between them, and resolving
+                // inside the loop would only be a second place to differ.
                 var step = LiveReference.Resolve(written, seen);
-                var observed = await RunStepAsync(step, baseUrl, token, ct).ConfigureAwait(false);
-                seen[observed.Id] = observed.Fields();
-                steps.Add(observed);
+                foreach (var id in step.ObservationIds())
+                {
+                    var observed = await RunStepAsync(step, id, baseUrl, token, ct).ConfigureAwait(false);
+                    seen[observed.Id] = observed.Fields();
+                    steps.Add(observed);
+                }
             }
             catch (LiveDriverException ex)
             {
@@ -110,8 +117,15 @@ public static class LiveClientDriver
             Error = error,
         };
 
+    /// <summary>
+    /// One performance of a step, recorded under <paramref name="observedId"/>.
+    ///
+    /// The id is passed in rather than taken from the step because a repeated
+    /// step is performed several times and each repetition is its own
+    /// observation, under its own numbered id.
+    /// </summary>
     private static async Task<LiveStepResult> RunStepAsync(
-        LiveStep step, string baseUrl, string token, CancellationToken ct)
+        LiveStep step, string observedId, string baseUrl, string token, CancellationToken ct)
     {
         var recorder = new LiveStatusRecordingHandler();
         using var http = new HttpClient(recorder);
@@ -120,7 +134,7 @@ public static class LiveClientDriver
 
         if (step.Action is Actions.HttpGet or Actions.HttpPost)
         {
-            return await RunRawAsync(step, trimmed, headers, http, recorder, ct).ConfigureAwait(false);
+            return await RunRawAsync(step, observedId, trimmed, headers, http, recorder, ct).ConfigureAwait(false);
         }
 
         using var client = new HijackClient(trimmed, headers: headers, httpClient: http);
@@ -148,7 +162,7 @@ public static class LiveClientDriver
             error = Describe(ex);
         }
 
-        return Observe(step.Id, recorder, ok, error, () => JsonSerializer.SerializeToNode(value));
+        return Observe(observedId, recorder, ok, error, () => JsonSerializer.SerializeToNode(value));
     }
 
     /// <summary>
@@ -218,6 +232,7 @@ public static class LiveClientDriver
 
     private static async Task<LiveStepResult> RunRawAsync(
         LiveStep step,
+        string observedId,
         string baseUrl,
         IReadOnlyDictionary<string, string> headers,
         HttpClient http,
@@ -254,7 +269,7 @@ public static class LiveClientDriver
 
         // No client library is involved in a raw call: the response is the whole
         // observation, and 2xx is the whole of `ok`.
-        return Observe(step.Id, recorder, recorder.Successful, error, () => null);
+        return Observe(observedId, recorder, recorder.Successful, error, () => null);
     }
 
     /// <summary>

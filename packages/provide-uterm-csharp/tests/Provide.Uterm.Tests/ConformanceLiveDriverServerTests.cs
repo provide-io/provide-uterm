@@ -354,6 +354,85 @@ public sealed class ConformanceLiveDriverServerTests : IClassFixture<LiveDriverS
     }
 
     [Fact]
+    public async Task A_repeated_step_records_every_repetition_under_its_own_id()
+    {
+        // Every repetition, never just the last: a scenario repeats a step
+        // precisely when it expects the answers to stop being the same, so
+        // *which* repetition changed is the measurement.
+        var result = await RunAsync(
+            """{"id": "once", "action": "health"}""",
+            """{"id": "flood", "action": "list_sessions", "repeat": 3}""");
+
+        Assert.Equal("completed", (string?)result["status"]);
+        // The un-repeated step keeps its bare id; the repeated one numbers its
+        // repetitions from zero and records nothing under the bare `flood`.
+        Assert.Equal(["once", "flood.0", "flood.1", "flood.2"], Ids(result));
+        Assert.Equal(200, (int?)Fields(result, "once")["status"]);
+        foreach (var id in new[] { "flood.0", "flood.1", "flood.2" })
+        {
+            Assert.Equal(200, (int?)Fields(result, id)["status"]);
+            Assert.True((bool?)Fields(result, id)["ok"]);
+        }
+    }
+
+    [Fact]
+    public async Task A_step_carrying_no_repeat_keeps_its_bare_id()
+    {
+        // The case every committed scenario depends on: `repeat` is absent from
+        // all of them, and a driver that numbered those observations would fail
+        // every expectation in the matrix at once.
+        var result = await RunAsync(
+            """{"id": "health", "action": "health"}""",
+            """{"id": "listed", "action": "list_sessions"}""");
+
+        Assert.Equal(["health", "listed"], Ids(result));
+    }
+
+    [Fact]
+    public async Task A_repetition_that_failed_is_recorded_rather_than_ending_the_repetitions()
+    {
+        // Nothing is listening, so every repetition throws. The per-step error
+        // handling applies to each one unchanged: a repetition is an
+        // observation whatever it did, and the run goes on to the next.
+        var line = await ClientLineAsync(
+            ClosedBaseUrl(),
+            _server.Token,
+            ScenarioFile("""{"id": "flood", "action": "health", "repeat": 3}"""));
+        var result = JsonNode.Parse(line)!.AsObject();
+
+        Assert.Equal("completed", (string?)result["status"]);
+        Assert.Equal(["flood.0", "flood.1", "flood.2"], Ids(result));
+        foreach (var id in new[] { "flood.0", "flood.1", "flood.2" })
+        {
+            Assert.Null(Fields(result, id)["status"]);
+            Assert.False((bool?)Fields(result, id)["ok"]);
+            Assert.Null(Fields(result, id)["body"]);
+            Assert.NotNull((string?)Fields(result, id)["error"]);
+        }
+    }
+
+    [Fact]
+    public async Task A_reference_in_a_repeated_step_is_resolved_once_for_all_its_repetitions()
+    {
+        var id = "live" + Guid.NewGuid().ToString("N")[..8];
+        var result = await RunAsync(
+            $$$"""{"id": "create", "action": "http_post", "path": "/api/sessions", "body": {"session_id": "{{{id}}}"}}""",
+            """{"id": "read", "action": "get_session", "session_id": "${create.body.session_id}", "repeat": 2}""");
+
+        Assert.Equal("completed", (string?)result["status"]);
+        Assert.Equal(["create", "read.0", "read.1"], Ids(result));
+        foreach (var observed in new[] { "read.0", "read.1" })
+        {
+            // Resolved before the repetitions, so every one of them addresses
+            // the same session — a resolver run inside the loop would be asked
+            // to resolve `${create...}` against a record that has not changed,
+            // which is the point: the value cannot differ, so it is read once.
+            Assert.Equal(200, (int?)Fields(result, observed)["status"]);
+            Assert.Equal(id, (string?)Fields(result, observed)["body"]!["session_id"]);
+        }
+    }
+
+    [Fact]
     public async Task A_hijack_step_the_scenario_left_incomplete_records_its_own_error()
     {
         var result = await RunAsync(
@@ -376,6 +455,10 @@ public sealed class ConformanceLiveDriverServerTests : IClassFixture<LiveDriverS
         probe.Stop();
         return $"http://{IPAddress.Loopback}:{port}";
     }
+
+    /// <summary>The ids the run recorded, in order — repeated steps included.</summary>
+    private static IEnumerable<string?> Ids(JsonObject result) =>
+        result["steps"]!.AsArray().Select(s => (string?)s!["id"]);
 
     private static JsonObject Fields(JsonObject result, string stepId)
     {

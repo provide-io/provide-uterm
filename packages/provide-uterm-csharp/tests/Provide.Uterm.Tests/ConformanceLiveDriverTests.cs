@@ -78,6 +78,42 @@ public sealed class ConformanceLiveDriverScenarioTests
     }
 
     [Fact]
+    public void Parse_reads_repeat_and_leaves_a_step_without_one_at_a_single_run()
+    {
+        var scenario = LiveScenario.Parse("""
+        {"id": "060_flood", "title": "T", "steps": [
+          {"id": "once", "action": "health"},
+          {"id": "flood", "action": "list_sessions", "repeat": 3}
+        ], "expect": []}
+        """);
+
+        Assert.Equal(1, scenario.Steps[0].Repeat);
+        Assert.Equal(3, scenario.Steps[1].Repeat);
+    }
+
+    [Fact]
+    public void A_repeated_step_numbers_its_observations_from_zero()
+    {
+        var step = new LiveStep { Id = "flood", Action = "health", Repeat = 3 };
+
+        // The bare `flood` records nothing: an expectation naming it would be
+        // about a step nobody runs, which passes in every cell at once.
+        Assert.Equal(["flood.0", "flood.1", "flood.2"], step.ObservationIds());
+    }
+
+    [Theory]
+    [InlineData(1)]
+    // Below the schema's floor of two, which the harness enforces before a
+    // driver sees a scenario: one run under the bare id, not a renumbering.
+    [InlineData(0)]
+    public void A_step_that_runs_once_keeps_its_bare_id(int repeat)
+    {
+        var step = new LiveStep { Id = "health", Action = "health", Repeat = repeat };
+
+        Assert.Equal(["health"], step.ObservationIds());
+    }
+
+    [Fact]
     public void Parse_names_an_id_less_scenario_after_its_file()
     {
         var scenario = LiveScenario.Parse(
