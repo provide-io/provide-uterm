@@ -16,15 +16,24 @@ the real Python client library over the actual wire:
     read the hello handshake frame, send an input frame, and read the echoed
     terminal-data frames back.
 
-Architectural note (documented deviation from the Go->Python direction): the Go
-server's reference ``provide-shell`` session is an *in-process* registry
-connector, not a hub worker, so the hub-based hijack/browser machinery has no
-worker to drive on its own. This test therefore attaches a real Python *worker*
-to the Go hub over ``/ws/worker/<id>/term`` (reusing the ``provide-shell`` id,
-which exists in the registry so browser-role resolution passes while its
-in-process connector never auto-starts) and drives the round-trip from Python on
-both sides. That makes this a strictly richer proof: Python worker <-> Go hub <->
-Python browser, plus Python REST client <-> Go hub.
+Architectural note: to drive the hub-based hijack/browser machinery from Python
+this test attaches a real Python *worker* to the Go hub over
+``/ws/worker/<id>/term``, so the round-trip is Python on both sides: Python
+worker <-> Go hub <-> Python browser, plus Python REST client <-> Go hub.
+
+The worker is attached to a session this test *creates* (``POST /api/sessions``),
+never to the server's own auto-started ``provide-shell``. A hosted session is one
+the server runs a worker for itself: the reference's ``HostedSessionRuntime._run``
+starts the connector and then dials its own ``/ws/worker/{session_id}/term``, and
+the Go server does the same. Attaching a second, external worker to that id is
+therefore a two-workers-one-id collision, and the second worker's ``worker_hello``
+resets the hub's ``input_mode`` back to ``open`` -- silently undoing an operator's
+``hijack`` and making the acquire that follows fail with 409 ``open input mode``.
+That is the *reference's* behaviour too (verified live against the Python server),
+so it is faithful port behaviour rather than a Go defect. A test-created session
+is never auto-started and so never has a server-side worker, which is what makes
+the id ours to attach to. It still exists in the registry the moment it is
+created, so REST authorization and browser-role resolution resolve it normally.
 
 Skips gracefully (never fails) when the Go toolchain is unavailable or the binary
 cannot be built, mirroring the Go-side conformance/interop skip philosophy.
@@ -55,8 +64,10 @@ from provide.uterm.client.hijack import HijackClient
 pytestmark = pytest.mark.go_interop
 
 # The Go server ships this auto-registered reference session in its default
-# config; it exists the moment the server reports healthy.
-SESSION_ID = "provide-shell"
+# config; it exists the moment the server reports healthy. The REST listing
+# asserts on it, but nothing attaches to it -- the server hosts its own worker
+# there (see the module docstring).
+HOSTED_SESSION_ID = "provide-shell"
 
 # Substrings in a `go build` / early-exit log that read as "toolchain or deps
 # unavailable" (-> skip) rather than "the server is broken" (-> fail).
@@ -232,7 +243,24 @@ def go_server(tmp_path: Path):
             _terminate(proc)
 
 
-async def _run_echo_worker(ws_base: str, worker_token: str, stop: asyncio.Event) -> None:
+async def _create_session(client: HijackClient) -> str:
+    """Create a fresh, never-auto-started session and return its id.
+
+    This is the session the Python worker attaches to. It must not be one the
+    server hosts a worker for itself (see the module docstring), and a session
+    created over REST is seeded into the registry without being started, so no
+    server-side worker bridge is ever built for it.
+    """
+    session_id = f"interop-{secrets.token_hex(4)}"
+    ok, created = await client.post(
+        "/api/sessions",
+        json={"session_id": session_id, "connector_type": "shell", "input_mode": "open"},
+    )
+    assert ok, f"could not create interop session: {created}"
+    return session_id
+
+
+async def _run_echo_worker(ws_base: str, session_id: str, worker_token: str, stop: asyncio.Event) -> None:
     """A minimal Python worker on the Go hub that echoes input + serves snapshots.
 
     Connects the worker control WS, negotiates protocol via ``worker_hello``, then
@@ -242,7 +270,7 @@ async def _run_echo_worker(ws_base: str, worker_token: str, stop: asyncio.Event)
     answered with the current snapshot.
     """
     screen = {"text": ""}
-    url = f"{ws_base}/ws/worker/{SESSION_ID}/term"
+    url = f"{ws_base}/ws/worker/{session_id}/term"
     async with connect_async_ws(
         url,
         role="worker",
@@ -272,31 +300,36 @@ async def _run_echo_worker(ws_base: str, worker_token: str, stop: asyncio.Event)
                 await emit_snapshot()
 
 
-async def _wait_worker_registered(client: HijackClient) -> None:
-    """Poll until the hub worker is registered (set_input_mode(hijack) succeeds)."""
+async def _wait_worker_registered(client: HijackClient, session_id: str) -> None:
+    """Poll until the hub worker is registered (set_input_mode(hijack) succeeds).
+
+    On a session the server does not host, the hub has no worker state for the id
+    until our worker's WS registers, so ``set_input_mode`` 404s until then --
+    which is what makes this a real synchronisation point rather than a no-op.
+    """
     deadline = time.monotonic() + 15.0
     while time.monotonic() < deadline:
-        ok, _ = await client.set_input_mode(SESSION_ID, "hijack")
+        ok, _ = await client.set_input_mode(session_id, "hijack")
         if ok:
             return
         await asyncio.sleep(0.1)
     pytest.fail("Python worker never registered with the Go hub")
 
 
-async def _poll_snapshot_for(client: HijackClient, hijack_id: str, marker: str) -> bool:
+async def _poll_snapshot_for(client: HijackClient, session_id: str, hijack_id: str, marker: str) -> bool:
     """Poll the hijack snapshot until its screen text contains *marker*."""
     deadline = time.monotonic() + 10.0
     while time.monotonic() < deadline:
-        ok, snap = await client.snapshot(SESSION_ID, hijack_id, wait_ms=500)
+        ok, snap = await client.snapshot(session_id, hijack_id, wait_ms=500)
         if ok and marker in ((snap.get("snapshot") or {}).get("screen", "") or ""):
             return True
         await asyncio.sleep(0.1)
     return False
 
 
-async def _exercise_browser_ws(server: GoServer, headers: dict[str, str]) -> None:
+async def _exercise_browser_ws(server: GoServer, session_id: str, headers: dict[str, str]) -> None:
     """Dial the browser control WS, read the hello, send input, read the echo."""
-    url = f"{server.ws_base}/ws/browser/{SESSION_ID}/term"
+    url = f"{server.ws_base}/ws/browser/{session_id}/term"
     async with connect_async_ws(url, role="browser", additional_headers=headers) as ws:
         # The browser handshake opens with a hello control frame.
         got_hello = False
@@ -336,35 +369,41 @@ async def test_python_client_drives_live_go_server(go_server: GoServer) -> None:
         assert ok and health.get("status") == "ok", health
         ok, sessions = await client.list_sessions()
         assert ok, sessions
-        assert any(s.get("session_id") == SESSION_ID for s in sessions), sessions
+        assert any(s.get("session_id") == HOSTED_SESSION_ID for s in sessions), sessions
+
+        # --- REST: create the session this test owns a worker for -----------
+        session_id = await _create_session(client)
+        ok, sessions = await client.list_sessions()
+        assert ok, sessions
+        assert any(s.get("session_id") == session_id for s in sessions), sessions
 
         # Attach a Python worker to the Go hub for the hijack + browser flows.
         stop = asyncio.Event()
-        worker = asyncio.create_task(_run_echo_worker(go_server.ws_base, go_server.worker_token, stop))
+        worker = asyncio.create_task(_run_echo_worker(go_server.ws_base, session_id, go_server.worker_token, stop))
         try:
-            await _wait_worker_registered(client)
+            await _wait_worker_registered(client, session_id)
 
             # --- REST: operator hijack lease round-trip ---------------------
-            ok, acquire = await client.acquire(SESSION_ID, owner="operator")
+            ok, acquire = await client.acquire(session_id, owner="operator")
             assert ok, acquire
             hijack_id = acquire["hijack_id"]
             assert hijack_id, acquire
 
             marker = f"rest-interop-{secrets.token_hex(4)}"
-            ok, _ = await client.send(SESSION_ID, hijack_id, keys=f"echo {marker}\n")
+            ok, _ = await client.send(session_id, hijack_id, keys=f"echo {marker}\n")
             assert ok, "hijack send failed"
-            assert await _poll_snapshot_for(client, hijack_id, marker), (
+            assert await _poll_snapshot_for(client, session_id, hijack_id, marker), (
                 f"sent marker {marker!r} never appeared in the hijack snapshot"
             )
 
-            ok, _ = await client.release(SESSION_ID, hijack_id)
+            ok, _ = await client.release(session_id, hijack_id)
             assert ok, "hijack release failed"
 
             # --- WebSocket: inline control-channel input->echo round-trip ---
             # Back to open mode so a browser input frame reaches the worker.
-            ok, _ = await client.set_input_mode(SESSION_ID, "open")
+            ok, _ = await client.set_input_mode(session_id, "open")
             assert ok, "set_input_mode(open) failed"
-            await _exercise_browser_ws(go_server, headers)
+            await _exercise_browser_ws(go_server, session_id, headers)
         finally:
             stop.set()
             with contextlib.suppress(asyncio.TimeoutError, Exception):
