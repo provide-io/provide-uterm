@@ -42,6 +42,14 @@
               "list_sessions",
               "get_session",
               "session_snapshot",
+              "session_events",
+              "set_input_mode",
+              "hijack_acquire",
+              "hijack_heartbeat",
+              "hijack_send",
+              "hijack_step",
+              "hijack_snapshot",
+              "hijack_release",
               "http_get",
               "http_post"
             ]
@@ -54,6 +62,20 @@
           "path": { "type": "string", "description": "For http_get/http_post." },
           "session_id": { "type": "string" },
           "body": { "description": "For http_post: the JSON body to send." },
+          "worker_id": { "type": "string", "description": "For the hijack actions: the worker whose lease is at stake." },
+          "hijack_id": {
+            "type": "string",
+            "description": "The lease a hijack action acts on. Normally a reference to the acquiring step, e.g. ${acquire.body.hijack_id}."
+          },
+          "owner": { "type": "string", "description": "For hijack_acquire: who is taking the lease." },
+          "lease_s": { "type": "integer", "minimum": 1, "description": "For hijack_acquire/hijack_heartbeat: how long the lease runs." },
+          "keys": { "type": "string", "description": "For hijack_send: the input to send." },
+          "input_mode": {
+            "type": "string",
+            "enum": ["open", "hijack"],
+            "description": "For set_input_mode. The vocabulary is the reference's, from bridge/contracts."
+          },
+          "limit": { "type": "integer", "minimum": 0, "description": "For session_events." },
           "volatile": {
             "type": "array",
             "items": { "type": "string" },
