@@ -22,7 +22,7 @@ from provide.uterm.server.bridge.hub.limiter import (
     REST_CLIENT_EVICT_COUNT,
     RateLimiter,
 )
-from provide.uterm.server.bridge.ratelimit import TokenBucket
+from provide.uterm.server.bridge.ratelimit import MIN_RATE_PER_SEC, TokenBucket
 
 
 def _drain(bucket: TokenBucket) -> None:
@@ -43,10 +43,17 @@ def _drain(bucket: TokenBucket) -> None:
 
 
 def test_init_clamps_rates_to_minimum() -> None:
-    """Rates below 0.1/sec are clamped — protects against divide-by-zero and stuck buckets."""
+    """Rates below the floor are clamped — protects against divide-by-zero and stuck buckets.
+
+    The floor is ``MIN_RATE_PER_SEC``, the same constant the server config
+    refuses below. If this clamp ever moves off the shared constant the two
+    layers disagree: config would accept a rate the limiter then silently
+    raises, handing back a looser limit than the operator wrote. Asserting
+    against the constant rather than a literal keeps them pinned together.
+    """
     limiter = RateLimiter(rest_acquire_rate=0.0, rest_send_rate=-5.0)
-    assert limiter.rest_acquire_rate == 0.1
-    assert limiter.rest_send_rate == 0.1
+    assert limiter.rest_acquire_rate == MIN_RATE_PER_SEC
+    assert limiter.rest_send_rate == MIN_RATE_PER_SEC
 
 
 def test_init_preserves_normal_rates() -> None:
@@ -257,3 +264,22 @@ def test_evict_if_full_drops_oldest_half_on_overflow() -> None:
     assert len(per_client) == REST_CLIENT_CACHE_MAX + 1 - REST_CLIENT_EVICT_COUNT
     assert "c0" not in per_client
     assert f"c{REST_CLIENT_EVICT_COUNT}" in per_client
+
+
+def test_minimum_rate_is_the_smallest_rate_that_ever_admits_a_call() -> None:
+    """Why the floor is 1.0 and not something tighter.
+
+    ``TokenBucket``'s burst is one second of the rate, so a bucket configured
+    below 1.0 can never accumulate a whole token — it denies every call
+    forever, no matter how long the caller waits. Letting config accept such a
+    rate would silently brick the REST hijack API, which is exactly the
+    failure ``0`` is refused for being ambiguous about. This pins the floor to
+    the bucket behaviour that justifies it, so lowering one without the other
+    goes red.
+    """
+    assert MIN_RATE_PER_SEC == 1.0
+    assert TokenBucket(MIN_RATE_PER_SEC).allow() is True
+
+    starved = TokenBucket(MIN_RATE_PER_SEC - 0.01)
+    starved._last_refill -= 10_000.0  # ten thousand seconds of refill, still nothing
+    assert starved.allow() is False

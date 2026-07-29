@@ -8,6 +8,25 @@ from __future__ import annotations
 
 import time
 
+#: Tightest rate (tokens/sec) any bucket-backed policy may be configured with.
+#:
+#: This is 1.0 for a structural reason, not a taste one: :class:`TokenBucket`
+#: defaults ``burst`` to one second of the rate, so a bucket configured below
+#: 1.0 can never hold a whole token and therefore denies *every* call forever,
+#: however long the caller waits. A rate in ``[0, 1)`` is a bricked endpoint
+#: wearing the costume of a rate limit, so the server config refuses the whole
+#: band rather than accepting a number that silently means "never".
+#:
+#: :class:`~provide.uterm.server.bridge.hub.limiter.RateLimiter` also clamps to
+#: this floor. Config refusing below it keeps the clamp from quietly handing
+#: back a *looser* limit than the operator wrote.
+#:
+#: Making sub-1 rates meaningful would mean decoupling burst from rate
+#: (``burst = max(1.0, rate)``) — a change to token-bucket semantics across
+#: every port and their recorded goldens. Worth doing deliberately if a
+#: sub-1 policy is ever actually wanted; not worth doing by accident here.
+MIN_RATE_PER_SEC = 1.0
+
 
 class TokenBucket:
     """Simple token-bucket rate limiter.

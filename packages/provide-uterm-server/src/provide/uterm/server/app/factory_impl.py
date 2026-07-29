@@ -346,6 +346,8 @@ def create_server_app(
         resume_store=resume_store,
         on_resume=_on_resume,
         browser_rate_limit_per_sec=config.browser_rate_limit_per_sec,
+        rest_acquire_rate_limit_per_sec=config.rest_acquire_rate_limit_per_sec,
+        rest_send_rate_limit_per_sec=config.rest_send_rate_limit_per_sec,
         max_connections_per_principal=config.max_connections_per_principal,
         max_workers=config.max_workers,
         event_bus=EventBus(on_metric=_inc_metric),

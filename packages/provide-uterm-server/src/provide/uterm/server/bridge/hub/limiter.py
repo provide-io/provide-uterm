@@ -32,7 +32,7 @@ needed.
 
 from __future__ import annotations
 
-from provide.uterm.server.bridge.ratelimit import TokenBucket
+from provide.uterm.server.bridge.ratelimit import MIN_RATE_PER_SEC, TokenBucket
 
 # Maximum number of per-client rate-limit buckets held in memory at once.
 # On overflow the oldest (least-recently-used) half of entries are evicted,
@@ -70,8 +70,8 @@ class RateLimiter:
     )
 
     def __init__(self, rest_acquire_rate: float, rest_send_rate: float) -> None:
-        self._rest_acquire_rate = max(0.1, float(rest_acquire_rate))
-        self._rest_send_rate = max(0.1, float(rest_send_rate))
+        self._rest_acquire_rate = max(MIN_RATE_PER_SEC, float(rest_acquire_rate))
+        self._rest_send_rate = max(MIN_RATE_PER_SEC, float(rest_send_rate))
         self._rest_acquire_bucket = TokenBucket(self._rest_acquire_rate)
         self._rest_send_bucket = TokenBucket(self._rest_send_rate)
         self._rest_acquire_per_client: dict[str, TokenBucket] = {}

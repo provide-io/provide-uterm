@@ -51,6 +51,34 @@ async def test_factory_threads_max_workers_to_hub() -> None:
         await app.state.uterm_hub.shutdown()
 
 
+async def test_factory_threads_rest_hijack_rate_limits_to_hub() -> None:
+    """config.rest_{acquire,send}_rate_limit_per_sec reach the hub's REST limiter."""
+    config = default_server_config()
+    config.rest_acquire_rate_limit_per_sec = 2.5
+    config.rest_send_rate_limit_per_sec = 7.5
+
+    app = create_server_app(config, api_only=True)
+    try:
+        limiter = app.state.uterm_hub.limiter
+        assert limiter.rest_acquire_rate == 2.5
+        assert limiter.rest_send_rate == 7.5
+    finally:
+        await app.state.uterm_hub.shutdown()
+
+
+async def test_factory_default_rest_hijack_rate_limits_are_unchanged() -> None:
+    """A deployment that sets nothing keeps today's 5/s acquire and 20/s send."""
+    config = default_server_config()
+
+    app = create_server_app(config, api_only=True)
+    try:
+        limiter = app.state.uterm_hub.limiter
+        assert limiter.rest_acquire_rate == 5.0
+        assert limiter.rest_send_rate == 20.0
+    finally:
+        await app.state.uterm_hub.shutdown()
+
+
 @pytest.mark.asyncio
 async def test_factory_uses_explicit_hub_class() -> None:
     """hub_class=... takes the factory else-branch (not the default DeckMux hub)."""

@@ -420,6 +420,97 @@ def test_config_from_mapping_accepts_browser_rate_limit_per_sec() -> None:
     assert config.browser_rate_limit_per_sec == 50.0
 
 
+def test_rest_hijack_rate_limit_defaults_match_the_hub() -> None:
+    """The unset defaults are exactly the hub's built-in REST hijack ceilings."""
+    config = config_from_mapping({})
+    assert config.rest_acquire_rate_limit_per_sec == 5.0
+    assert config.rest_send_rate_limit_per_sec == 20.0
+
+
+def test_config_from_mapping_accepts_rest_acquire_rate_limit_per_sec() -> None:
+    config = config_from_mapping({"rest_acquire_rate_limit_per_sec": 2.0})
+    assert config.rest_acquire_rate_limit_per_sec == 2.0
+
+
+def test_config_from_mapping_accepts_rest_send_rate_limit_per_sec() -> None:
+    config = config_from_mapping({"rest_send_rate_limit_per_sec": 100.0})
+    assert config.rest_send_rate_limit_per_sec == 100.0
+
+
+def test_config_from_mapping_accepts_fractional_rest_rate_limits_above_the_floor() -> None:
+    """A fraction above the floor is a legitimate policy: 2.5/s is five calls every two seconds."""
+    config = config_from_mapping(
+        {"rest_acquire_rate_limit_per_sec": 1.5, "rest_send_rate_limit_per_sec": 2.5},
+    )
+    assert config.rest_acquire_rate_limit_per_sec == 1.5
+    assert config.rest_send_rate_limit_per_sec == 2.5
+
+
+def test_config_from_mapping_accepts_the_exact_rest_rate_limit_floor() -> None:
+    """1/s is the tightest rate that still admits anybody, so it must be accepted."""
+    config = config_from_mapping(
+        {"rest_acquire_rate_limit_per_sec": 1.0, "rest_send_rate_limit_per_sec": 1.0},
+    )
+    assert config.rest_acquire_rate_limit_per_sec == 1.0
+    assert config.rest_send_rate_limit_per_sec == 1.0
+
+
+def test_config_from_mapping_rejects_zero_rest_acquire_rate_limit() -> None:
+    """0 is ambiguous (unlimited? refuse everything?), so it is refused rather than guessed."""
+    with pytest.raises(ValueError, match="rest_acquire_rate_limit_per_sec must be >= 1.0"):
+        config_from_mapping({"rest_acquire_rate_limit_per_sec": 0})
+
+
+def test_config_from_mapping_rejects_zero_rest_send_rate_limit() -> None:
+    with pytest.raises(ValueError, match="rest_send_rate_limit_per_sec must be >= 1.0"):
+        config_from_mapping({"rest_send_rate_limit_per_sec": 0})
+
+
+def test_config_from_mapping_rejects_negative_rest_acquire_rate_limit() -> None:
+    with pytest.raises(ValueError, match="rest_acquire_rate_limit_per_sec must be >= 1.0"):
+        config_from_mapping({"rest_acquire_rate_limit_per_sec": -1})
+
+
+def test_config_from_mapping_rejects_negative_rest_send_rate_limit() -> None:
+    with pytest.raises(ValueError, match="rest_send_rate_limit_per_sec must be >= 1.0"):
+        config_from_mapping({"rest_send_rate_limit_per_sec": -0.5})
+
+
+def test_config_from_mapping_rejects_rest_rate_limit_below_the_floor() -> None:
+    """A sub-1/s bucket never holds a whole token, so it would refuse every call forever.
+
+    That is the same silent bricking ``0`` is refused for being ambiguous
+    about, so the band below the floor is refused for the same reason.
+    """
+    with pytest.raises(ValueError, match="rest_acquire_rate_limit_per_sec must be >= 1.0"):
+        config_from_mapping({"rest_acquire_rate_limit_per_sec": 0.5})
+    with pytest.raises(ValueError, match="rest_send_rate_limit_per_sec must be >= 1.0"):
+        config_from_mapping({"rest_send_rate_limit_per_sec": 0.99})
+
+
+def test_config_from_mapping_rejects_non_numeric_rest_rate_limit() -> None:
+    """A rate that is not a number is refused, never coerced to something permissive."""
+    with pytest.raises(ValueError, match="valid number"):
+        config_from_mapping({"rest_acquire_rate_limit_per_sec": "fast"})
+
+
+def test_config_from_mapping_rejects_nan_rest_rate_limit() -> None:
+    """NaN compares false against every bound, so the check is written to refuse it."""
+    with pytest.raises(ValueError, match="rest_send_rate_limit_per_sec must be a finite number >= 1.0"):
+        config_from_mapping({"rest_send_rate_limit_per_sec": float("nan")})
+
+
+def test_config_from_mapping_rejects_positive_infinity_rest_rate_limit() -> None:
+    """``inf`` passes every ``>=`` bound and would silently mean "no limit at all"."""
+    with pytest.raises(ValueError, match="rest_acquire_rate_limit_per_sec must be a finite number >= 1.0"):
+        config_from_mapping({"rest_acquire_rate_limit_per_sec": float("inf")})
+
+
+def test_config_from_mapping_rejects_negative_infinity_rest_rate_limit() -> None:
+    with pytest.raises(ValueError, match="rest_send_rate_limit_per_sec must be a finite number >= 1.0"):
+        config_from_mapping({"rest_send_rate_limit_per_sec": float("-inf")})
+
+
 def test_config_from_mapping_accepts_tunnel_section() -> None:
     config = config_from_mapping({"tunnel": {"token_ttl_s": 7200}})
     assert config.tunnel.token_ttl_s == 7200
