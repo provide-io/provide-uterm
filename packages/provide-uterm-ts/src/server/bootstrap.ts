@@ -21,6 +21,7 @@
 import { type AuthSettings, type DevIdpAuthConfig, setupDevIdp } from "../serverauth/index.ts";
 import { deepMerge, normalizeDocument, SERVER_CONFIG_DEFAULTS } from "../serverconfig/index.ts";
 import { createServerApp, type ServerApp } from "./app.ts";
+import { SessionHub } from "./session-hub.ts";
 import { SessionRegistry } from "./session-registry.ts";
 import { SessionRuntimes } from "./session-runtime.ts";
 import { sessionDefinitionFrom } from "./session-status.ts";
@@ -62,6 +63,14 @@ export interface BootstrapOptions {
 export interface BootstrappedServer {
   app: ServerApp;
   registry: SessionRegistry;
+  /**
+   * The hub this server's leases are arbitrated through.
+   *
+   * Exposed because a caller that wants to inspect who holds what has nowhere
+   * else to ask, and because the runtimes and the application share exactly
+   * this one — a second hub would arbitrate separately over the same terminal.
+   */
+  hub: SessionHub;
   /**
    * The sessions this server can bring up, and the thing that brings them.
    *
@@ -145,13 +154,21 @@ export function bootstrapServer(options: BootstrapOptions = {}): BootstrappedSer
     Boolean(section(config, "recording").enabled_by_default),
   );
 
+  // The hub is built before the application and the runtimes because both hold
+  // it: the lease routes arbitrate through it, and a session that starts
+  // attaches to it as a worker. One hub per server — two would arbitrate
+  // separately over the same terminal.
+  const hub = new SessionHub({ wallNow: options.now });
+  const runtimes = new SessionRuntimes(registry, hub, { now: options.now });
   const app = createServerApp({
     registry,
     auth,
+    hub,
+    connectors: runtimes,
     version: SERVER_VERSION,
     controlPlaneBackend: String(section(config, "control_plane").backend),
     startupTime: (options.now ?? (() => Date.now() / 1000))(),
     now: options.now,
   });
-  return { app, registry, runtimes: new SessionRuntimes(registry, { now: options.now }), auth, token, config };
+  return { app, registry, hub, runtimes, auth, token, config };
 }

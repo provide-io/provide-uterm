@@ -25,8 +25,22 @@ import { BAD_TOKEN } from "../conformance/transport.ts";
 import { encodeJwt } from "../serverauth/index.ts";
 import { createServerApp, parseListQuery, SERVED_ROUTES, UNAUTHENTICATED_DETAIL, unservedCapability } from "./app.ts";
 import { bootstrapServer, SERVER_BOOTSTRAP_HOST, SERVER_VERSION, ServerBootstrapError } from "./bootstrap.ts";
+import { SessionHub } from "./session-hub.ts";
 import { SessionRegistry } from "./session-registry.ts";
 import { sessionDefinitionFrom } from "./session-status.ts";
+
+/**
+ * The connectors of a server that has started none.
+ *
+ * Every app in this file is built to answer *reads*, and a read never reaches
+ * a connector. A mode change would, and the tests that make one build a server
+ * that has actually started something.
+ */
+const noConnectors = {
+  setMode: async () => {
+    // Nothing is running, so there is nothing to tell.
+  },
+};
 
 interface Probe {
   id: string;
@@ -167,7 +181,12 @@ describe("where this port answers differently, and why", () => {
     );
     expect(response.status).toBe(reference.status);
     expect(response.headers.get("allow")).toBe("GET");
-    expect(SERVED_ROUTES.map((route) => route.capability)).toEqual(["sessions.list", "sessions.get"]);
+    expect(SERVED_ROUTES.map((route) => route.capability)).toEqual([
+      "sessions.list",
+      "sessions.get",
+      "sessions.set_mode",
+      "sessions.snapshot",
+    ]);
   });
 
   it("matches the reference's Allow header where it binds the same verbs", async () => {
@@ -261,6 +280,8 @@ describe("listing sessions", () => {
     return createServerApp({
       registry,
       auth,
+      hub: new SessionHub(),
+      connectors: noConnectors,
       version: "0.0.0",
       controlPlaneBackend: "memory",
       startupTime: 1,
@@ -316,6 +337,8 @@ describe("listing sessions", () => {
     const app = createServerApp({
       registry,
       auth: shared.auth,
+      hub: new SessionHub(),
+      connectors: noConnectors,
       version: "0.0.0",
       controlPlaneBackend: "memory",
       startupTime: 1,
@@ -392,6 +415,8 @@ describe("fetching one session", () => {
     const app = createServerApp({
       registry,
       auth,
+      hub: new SessionHub(),
+      connectors: noConnectors,
       version: "0.0.0",
       controlPlaneBackend: "memory",
       startupTime: 0,
@@ -417,6 +442,8 @@ describe("fetching one session", () => {
     const app = createServerApp({
       registry: new SessionRegistry([], false),
       auth,
+      hub: new SessionHub(),
+      connectors: noConnectors,
       version: "0.0.0",
       controlPlaneBackend: "memory",
       startupTime: 0,

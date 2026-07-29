@@ -40,6 +40,7 @@ uv run python packages/provide-uterm-ts/testdata/gen_colors_golden.py
 | `defaults` | Constant-for-constant assertion against `TerminalDefaults` |
 | `pycompat` | CPython `round()` tie-breaking table |
 | `server` | 17 probes recorded off the **running** reference FastAPI server on an ephemeral port, in `dev_token` mode, with the default configuration — status, body and headers, masked only where the live scenarios declare a field volatile |
+| `server` (leases) | a 29-probe *sequence* recorded in order off the same running reference with its session's worker attached: the session snapshot, the input mode, and the whole hijack lease lifecycle with every way of being refused one. A sequence rather than a set because each answer depends on the ones before it, and a later probe quotes an earlier one's hijack id |
 | `serverauth` | 45 token vectors driven through the reference's own JWT path (every way a token can be right and every way it can be wrong), the bearer-header grammar, and what `setup_dev_idp` mints |
 | `server` (RBAC) | The whole `LocalAuthorizationProvider` decision table: what each role grants, how scopes narrow it, and who may read a session of each visibility |
 

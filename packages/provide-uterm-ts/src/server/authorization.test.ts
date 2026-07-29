@@ -17,6 +17,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   type AuthorizableSession,
+  canMutateSession,
   canReadSession,
   capabilitiesFor,
   isAdmin,
@@ -130,5 +131,63 @@ describe("the two cases a port gets wrong", () => {
   it("refuses a visibility nobody defined rather than falling open", () => {
     const principal = { subject_id: "x", roles: new Set(["operator"]), scopes: new Set<string>() };
     expect(canReadSession(principal, { session_id: "s", owner: null, visibility: "brand-new" })).toBe(false);
+  });
+});
+
+describe("who may change a session, as against who may watch it", () => {
+  /** A principal holding every capability its roles grant. */
+  function principal(roles: string[], subject = "x") {
+    return { subject_id: subject, roles: new Set(roles), scopes: new Set<string>() };
+  }
+
+  it("refuses a role that does not hold the action at all", () => {
+    // An operator may change the mode and may not take the lease. The two are
+    // separate capabilities precisely so that this is expressible.
+    const session = { session_id: "s", owner: "x", visibility: "public" };
+    expect(canMutateSession(principal(["operator"]), session, "session.control.mode")).toBe(true);
+    expect(canMutateSession(principal(["operator"]), session, "session.control.hijack")).toBe(false);
+  });
+
+  it("lets an administrator of the session through", () => {
+    expect(
+      canMutateSession(
+        principal(["admin"]),
+        { session_id: "s", owner: null, visibility: "private" },
+        "session.control.hijack",
+      ),
+    ).toBe(true);
+  });
+
+  it("lets the owner through without any administrative role", () => {
+    expect(
+      canMutateSession(
+        principal(["operator"], "owner"),
+        { session_id: "s", owner: "owner", visibility: "private" },
+        "session.control.mode",
+      ),
+    ).toBe(true);
+  });
+
+  it("refuses everyone else, however visible the session is", () => {
+    // Visibility says who may watch, never who may change: a public session
+    // is still writable only by its owner or an administrator of it.
+    expect(
+      canMutateSession(
+        principal(["operator"]),
+        { session_id: "s", owner: "someone-else", visibility: "public" },
+        "session.control.mode",
+      ),
+    ).toBe(false);
+  });
+
+  it("refuses an unowned session to anyone who is not an administrator of it", () => {
+    // Nobody's consent could be attributed to the change.
+    expect(
+      canMutateSession(
+        principal(["operator"]),
+        { session_id: "s", owner: null, visibility: "public" },
+        "session.control.mode",
+      ),
+    ).toBe(false);
   });
 });

@@ -17,6 +17,7 @@
 
 import {
   INITIAL_RUNTIME_STATE,
+  type InputMode,
   type SessionDefinition,
   type SessionRuntimeState,
   type SessionRuntimeStatus,
@@ -166,5 +167,25 @@ export class SessionRegistry {
       return;
     }
     this.#states.set(sessionId, { ...current, ...state });
+  }
+
+  /**
+   * Move a session between `open` and `hijack`.
+   *
+   * On the *definition* rather than the runtime state, because that is where
+   * the mode lives: it is how the session was configured, not something it
+   * discovered about itself while running. `GET /api/sessions/{id}` reads it
+   * straight back out, which is how a caller knows the change took.
+   *
+   * The definition is replaced rather than mutated: a caller holding one from
+   * before the change keeps reading what it read, and nothing can observe a
+   * half-applied definition.
+   */
+  setInputMode(sessionId: string, mode: InputMode): void {
+    const current = this.#definitions.get(sessionId);
+    if (current === undefined) {
+      return;
+    }
+    this.#definitions.set(sessionId, { ...current, input_mode: mode });
   }
 }

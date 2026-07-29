@@ -61,7 +61,7 @@ export interface HijackChangedOptions {
   /** Whether the worker is now hijacked. */
   enabled: boolean;
   /** Who holds it, when it is now hijacked. */
-  owner?: string;
+  owner?: string | undefined;
 }
 
 /** Whether `value` is a promise, matching the reference's isawaitable check. */
