@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Provide.Uterm.Conformance</RootNamespace>
+    <!--
+      Harness driver, not a ship binary: `make build-binaries` publishes only
+      uterm / uterm-manager. It sits beside the library rather than under cmd/
+      because this is the path the live harness registers
+      (conformance/live/harness/registry.py).
+    -->
+    <AssemblyName>uterm-live-driver</AssemblyName>
+    <Description>C# driver for the cross-language live conformance harness (conformance/live/PROTOCOL.md).</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Provide.Uterm/Provide.Uterm.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -4,6 +4,7 @@
     <Project Path="cmd/Uterm/Uterm.csproj" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/Provide.Uterm.LiveDriver/Provide.Uterm.LiveDriver.csproj" />
     <Project Path="src/Provide.Uterm/Provide.Uterm.csproj" />
   </Folder>
   <Folder Name="/tests/">
