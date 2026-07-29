@@ -23,6 +23,7 @@
  */
 
 import { type HijackAnswer, HijackClient } from "../client/hijack-client.ts";
+import { resolveStep } from "./references.ts";
 import { type AuthMode, errorMessage, FetchTransport } from "./transport.ts";
 
 /** What this driver calls itself in a result. */
@@ -42,7 +43,13 @@ export const NON_JSON = "<non-json>";
  */
 export const CLIENT_CAPABILITIES: readonly string[] = ["hijack.rest", "status.observed"];
 
-/** One step of a scenario, as `schema/scenario.schema.json` writes it. */
+/**
+ * One step of a scenario, as `schema/scenario.schema.json` writes it.
+ *
+ * A string field may be a reference to what an earlier step recorded — see
+ * {@link resolveStep} — so what a scenario wrote and what a request is built
+ * from are not always the same value.
+ */
 export interface ScenarioStep {
   id: string;
   action: string;
@@ -50,6 +57,20 @@ export interface ScenarioStep {
   path?: string;
   session_id?: string;
   body?: unknown;
+  /** The worker whose lease a hijack action acts on. */
+  worker_id?: string;
+  /** The lease itself. Normally a reference to the acquiring step. */
+  hijack_id?: string;
+  /** Who is taking a lease. */
+  owner?: string;
+  /** How long a lease runs. */
+  lease_s?: number;
+  /** What `hijack_send` types. */
+  keys?: string;
+  /** `open` or `hijack`, in the reference's own vocabulary. */
+  input_mode?: string;
+  /** How many events `session_events` reads. */
+  limit?: number;
   /**
    * Fields that differ legitimately between runs. Read by the harness, which
    * masks them before it compares; a driver records what it saw either way.
@@ -100,6 +121,15 @@ export interface ClientRunOptions {
 /** A step the driver can perform, or the reason it cannot. */
 type Plan = { run: () => Promise<HijackAnswer> } | { refuse: string };
 
+/** The actions that act on a lease somebody already holds. */
+const THROUGH_A_LEASE = new Set([
+  "hijack_heartbeat",
+  "hijack_send",
+  "hijack_step",
+  "hijack_snapshot",
+  "hijack_release",
+]);
+
 /** Perform a scenario's steps in order and write down what came back. */
 export async function runClientScenario(scenario: Scenario, options: ClientRunOptions): Promise<DriverResult> {
   const missing = (scenario.requires ?? []).filter((capability) => !CLIENT_CAPABILITIES.includes(capability));
@@ -110,7 +140,19 @@ export async function runClientScenario(scenario: Scenario, options: ClientRunOp
   }
 
   const steps: StepResult[] = [];
-  for (const step of scenario.steps) {
+  // What each step recorded, for the steps that refer to each other's answers.
+  const seen = new Map<string, StepFields>();
+  for (const written of scenario.steps) {
+    let step: ScenarioStep;
+    try {
+      step = resolveStep(written, seen);
+    } catch (error) {
+      // A reference nobody can resolve is a malformed scenario, not something
+      // a server did. Recording it as a field would let the harness compare it
+      // as though the server had answered.
+      return result(options.scenarioId, "error", steps, errorMessage(error));
+    }
+
     // One transport per step, because `auth` is per step and the transport's
     // record is of one request.
     const transport = new FetchTransport({
@@ -124,13 +166,30 @@ export async function runClientScenario(scenario: Scenario, options: ClientRunOp
       // What ran already is still reported, so a reader can see how far it got.
       return result(options.scenarioId, "error", steps, plan.refuse);
     }
-    steps.push({ id: step.id, fields: await observe(transport, plan.run) });
+    const fields = await observe(transport, plan.run);
+    seen.set(step.id, fields);
+    steps.push({ id: step.id, fields });
   }
   return result(options.scenarioId, "completed", steps, null);
 }
 
-/** Which call a step names, or why the driver cannot make it. */
+/**
+ * Which call a step names, or why the driver cannot make it.
+ *
+ * Every one of them goes through `HijackClient`, because what is under test is
+ * the client library a consumer would actually use — a hand-rolled request
+ * that happened to agree with it would prove only that the driver and the
+ * server agree.
+ */
 function planStep(client: HijackClient, step: ScenarioStep): Plan {
+  return (
+    planSession(client, step) ??
+    planHijack(client, step) ?? { refuse: `step ${step.id}: unknown action ${step.action}` }
+  );
+}
+
+/** The sessions half of the vocabulary, or null if the step is not one. */
+function planSession(client: HijackClient, step: ScenarioStep): Plan | null {
   switch (step.action) {
     case "health":
       return { run: () => client.health() };
@@ -148,6 +207,28 @@ function planStep(client: HijackClient, step: ScenarioStep): Plan {
         ? { refuse: refusal(step, "session_id") }
         : { run: () => client.sessionSnapshot(sessionId) };
     }
+    case "session_events": {
+      const sessionId = step.session_id;
+      // A limit nobody set is the library's own default, which is the
+      // reference client's: a driver holding a second copy of that number is a
+      // second place for it to drift.
+      return sessionId === undefined
+        ? { refuse: refusal(step, "session_id") }
+        : { run: () => client.sessionEvents(sessionId, { limit: step.limit }) };
+    }
+    case "set_input_mode": {
+      const sessionId = step.session_id;
+      const mode = step.input_mode;
+      if (sessionId === undefined) {
+        return { refuse: refusal(step, "session_id") };
+      }
+      // A mode nobody named has no sensible default: `open` and `hijack` are
+      // opposite instructions, and guessing one would put a session into a
+      // state the scenario never asked for.
+      return mode === undefined
+        ? { refuse: refusal(step, "input_mode") }
+        : { run: () => client.setSessionMode(sessionId, mode) };
+    }
     // The raw pair reaches the surfaces no client method covers. They go
     // through the library's own request primitive: one method, one path and
     // nothing built on top, which is what "a raw GET of `path`" asks for.
@@ -162,8 +243,67 @@ function planStep(client: HijackClient, step: ScenarioStep): Plan {
         : { run: () => client.request("POST", path, { json: step.body }) };
     }
     default:
-      return { refuse: `step ${step.id}: unknown action ${step.action}` };
+      return null;
   }
+}
+
+/** The hijack half of the vocabulary, or null if the step is not one. */
+function planHijack(client: HijackClient, step: ScenarioStep): Plan | null {
+  if (step.action === "hijack_acquire") {
+    const workerId = step.worker_id;
+    // An owner and a lease nobody set are the library's own defaults —
+    // `operator` and ninety seconds — which are the reference driver's.
+    return workerId === undefined
+      ? { refuse: refusal(step, "worker_id") }
+      : { run: () => client.acquire(workerId, { owner: step.owner, leaseS: step.lease_s }) };
+  }
+
+  const held = lease(step);
+  if (held === null) {
+    return null;
+  }
+  if ("refuse" in held) {
+    return held;
+  }
+  const { workerId, hijackId } = held;
+  switch (step.action) {
+    case "hijack_heartbeat":
+      return { run: () => client.heartbeat(workerId, hijackId, { leaseS: step.lease_s }) };
+    case "hijack_send":
+      // Nothing is what a step that names no keys sends, as the reference
+      // driver does: a driver inventing one would be typing at a terminal on
+      // its own account.
+      return { run: () => client.send(workerId, hijackId, { keys: step.keys ?? "" }) };
+    case "hijack_step":
+      return { run: () => client.step(workerId, hijackId) };
+    case "hijack_snapshot":
+      return { run: () => client.snapshot(workerId, hijackId) };
+    // `hijack_release`, and only it: the set in `lease` already settled which
+    // actions reach here, so a case naming it again would be a branch no
+    // scenario could take.
+    default:
+      return { run: () => client.release(workerId, hijackId) };
+  }
+}
+
+/**
+ * The worker and the lease a hijack action acts on.
+ *
+ * Null for a step that is not one of them, and a refusal for a step that is
+ * but does not say which lease: a hijack action without one has no route to
+ * ask for, and inventing an identifier would ask a server about a lease
+ * nobody holds.
+ */
+function lease(step: ScenarioStep): { workerId: string; hijackId: string } | { refuse: string } | null {
+  if (!THROUGH_A_LEASE.has(step.action)) {
+    return null;
+  }
+  const workerId = step.worker_id;
+  if (workerId === undefined) {
+    return { refuse: refusal(step, "worker_id") };
+  }
+  const hijackId = step.hijack_id;
+  return hijackId === undefined ? { refuse: refusal(step, "hijack_id") } : { workerId, hijackId };
 }
 
 /** Why a step cannot be performed as written. */

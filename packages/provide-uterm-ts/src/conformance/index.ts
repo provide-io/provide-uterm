@@ -19,5 +19,6 @@
 export * from "./cli.ts";
 export * from "./client-driver.ts";
 export * from "./flags.ts";
+export * from "./references.ts";
 export * from "./serve.ts";
 export * from "./transport.ts";

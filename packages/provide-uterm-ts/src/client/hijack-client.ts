@@ -76,6 +76,16 @@ export const DEFAULT_SNAPSHOT_WAIT_MS = 1500;
 /** How many events are read at once. */
 export const DEFAULT_EVENT_LIMIT = 200;
 
+/**
+ * How many of a session's events are read at once.
+ *
+ * Not the same number as a lease's events, and deliberately so: the reference
+ * reads a session's in hundreds and a lease's in two hundreds, and a port that
+ * shared one constant between them would ask for the wrong count on one of the
+ * two paths.
+ */
+export const DEFAULT_SESSION_EVENT_LIMIT = 100;
+
 /** What the client is built with. */
 export interface HijackClientOptions {
   transport: HijackTransport;
@@ -289,5 +299,23 @@ export class HijackClient {
   /** What one session's terminal shows. */
   async sessionSnapshot(sessionId: string): Promise<HijackAnswer> {
     return this.request("GET", `${sessionPath(sessionId)}/snapshot`);
+  }
+
+  /** What has lately happened in one session. */
+  async sessionEvents(sessionId: string, options: { limit?: number | undefined } = {}): Promise<HijackAnswer> {
+    return this.request("GET", `${sessionPath(sessionId)}/events`, {
+      params: { limit: options.limit ?? DEFAULT_SESSION_EVENT_LIMIT },
+    });
+  }
+
+  /**
+   * Say whether a session takes input from anybody or only from a holder.
+   *
+   * A session's mode, not a worker's: {@link setInputMode} is the same
+   * question asked of the worker behind one, and the two are different routes
+   * on the reference server.
+   */
+  async setSessionMode(sessionId: string, mode: string): Promise<HijackAnswer> {
+    return this.request("POST", `${sessionPath(sessionId)}/mode`, { json: { input_mode: mode } });
   }
 }

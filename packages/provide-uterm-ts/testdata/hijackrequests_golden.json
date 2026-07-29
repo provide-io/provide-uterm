@@ -502,6 +502,63 @@
       "no_json": false
     },
     {
+      "name": "a session's events",
+      "calls": [
+        {
+          "method": "GET",
+          "path": "/api/sessions/sess-1/events",
+          "json": null,
+          "params": {
+            "limit": 100
+          }
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "a session's events with a limit",
+      "calls": [
+        {
+          "method": "GET",
+          "path": "/api/sessions/sess-1/events",
+          "json": null,
+          "params": {
+            "limit": 5
+          }
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "setting a session's mode",
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/api/sessions/sess-1/mode",
+          "json": {
+            "input_mode": "hijack"
+          },
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
       "name": "a refusal",
       "calls": [
         {

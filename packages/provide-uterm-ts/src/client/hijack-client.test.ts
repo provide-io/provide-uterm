@@ -11,6 +11,7 @@ import {
   DEFAULT_LEASE_S,
   DEFAULT_POLL_INTERVAL_MS,
   DEFAULT_SEND_TIMEOUT_MS,
+  DEFAULT_SESSION_EVENT_LIMIT,
   DEFAULT_SNAPSHOT_WAIT_MS,
   HijackClient,
   type HijackTransport,
@@ -85,6 +86,9 @@ const INVOKE: Record<string, (client: HijackClient) => Promise<unknown>> = {
   "listing sessions": (c) => c.listSessions(),
   "one session": (c) => c.getSession("sess-1"),
   "a session snapshot": (c) => c.sessionSnapshot("sess-1"),
+  "a session's events": (c) => c.sessionEvents("sess-1"),
+  "a session's events with a limit": (c) => c.sessionEvents("sess-1", { limit: 5 }),
+  "setting a session's mode": (c) => c.setSessionMode("sess-1", "hijack"),
   "a refusal": (c) => c.step("w1", "h1"),
   "a server fault": (c) => c.step("w1", "h1"),
   "an answer that is not json": (c) => c.step("w1", "h1"),
@@ -141,6 +145,9 @@ describe("what the client asks for", () => {
     expect(DEFAULT_POLL_INTERVAL_MS).toBe(120);
     expect(DEFAULT_SNAPSHOT_WAIT_MS).toBe(1500);
     expect(DEFAULT_EVENT_LIMIT).toBe(200);
+    // A session's events and a lease's events are read in different sizes by
+    // the reference, and a port that shared one number would send the other.
+    expect(DEFAULT_SESSION_EVENT_LIMIT).toBe(100);
   });
 
   it("puts a worker's routes where it was told to", async () => {
