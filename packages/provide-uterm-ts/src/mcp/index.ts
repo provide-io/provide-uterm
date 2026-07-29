@@ -10,5 +10,6 @@
 
 export * from "./authorization.ts";
 export * from "./guards.ts";
+export * from "./hijack-tools.ts";
 export * from "./policy.ts";
 export * from "./tools.ts";
