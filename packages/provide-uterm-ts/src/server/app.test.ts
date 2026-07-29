@@ -25,7 +25,7 @@ import { BAD_TOKEN } from "../conformance/transport.ts";
 import { encodeJwt } from "../serverauth/index.ts";
 import { createServerApp, parseListQuery, SERVED_ROUTES, UNAUTHENTICATED_DETAIL, unservedCapability } from "./app.ts";
 import { bootstrapServer, SERVER_BOOTSTRAP_HOST, SERVER_VERSION, ServerBootstrapError } from "./bootstrap.ts";
-import { SessionHub } from "./session-hub.ts";
+import { SESSION_HUB_REST_ACQUIRE_RATE, SESSION_HUB_REST_SEND_RATE, SessionHub } from "./session-hub.ts";
 import { SessionRegistry } from "./session-registry.ts";
 import { sessionDefinitionFrom } from "./session-status.ts";
 
@@ -539,6 +539,24 @@ describe("bootstrapping", () => {
     const health = (await (await app.handle(new Request(`${BASE}/api/health`))).json()) as Record<string, unknown>;
     expect(health.control_plane_backend).toBe("sqlite");
     expect(health.active_sessions).toBe(1);
+  });
+
+  it("hands the hub the REST ceilings the configuration set", () => {
+    // The keys are the operator's, so they have to reach the limiter the
+    // routes charge against — a configured ceiling that stopped at the
+    // document would be a limit nobody applied.
+    const { hub } = bootstrapServer({
+      authMode: "jwt",
+      document: { rest_acquire_rate_limit_per_sec: 2, rest_send_rate_limit_per_sec: 7 },
+    });
+    expect(hub.limiter.restAcquireRate).toBe(2);
+    expect(hub.limiter.restSendRate).toBe(7);
+  });
+
+  it("leaves the hub on its own defaults when the configuration says nothing", () => {
+    const { hub } = bootstrapServer({ authMode: "jwt" });
+    expect(hub.limiter.restAcquireRate).toBe(SESSION_HUB_REST_ACQUIRE_RATE);
+    expect(hub.limiter.restSendRate).toBe(SESSION_HUB_REST_SEND_RATE);
   });
 
   it("reads the clock itself when nobody hands it one", () => {

@@ -101,6 +101,33 @@ describe("TokenBucket", () => {
     clock.advance(1000);
     expect(bucket.allow()).toBe(false);
   });
+
+  it("admits nothing below one per second, and one per second at one", () => {
+    // The property {@link MIN_RATE_PER_SEC} exists for, stated either side of
+    // the floor rather than in terms of the constant — so it goes on holding
+    // whatever the constant is, and fails the day somebody lowers the floor
+    // again.
+    //
+    // The default burst is one second of the rate, so a bucket below 1/s has a
+    // ceiling under the whole token a call costs and admits nothing however
+    // long the caller waits. That is why the configuration refuses the whole
+    // band rather than reading `0.5` as "one call every two seconds", and why
+    // making such a rate mean anything would take decoupling burst from rate
+    // (`burst = max(1, rate)`) across every port and its recorded goldens.
+    //
+    // Built straight rather than through {@link RateLimiter}: the limiter
+    // clamps to the floor, so a starved bucket is not otherwise reachable.
+    const clock = stubClock();
+    const starved = new TokenBucket(0.99, { now: clock.now });
+    expect(starved.allow()).toBe(false);
+    clock.advance(1000);
+    expect(starved.allow()).toBe(false);
+
+    const atFloor = new TokenBucket(1, { now: clock.now });
+    expect([atFloor.allow(), atFloor.allow()]).toStrictEqual([true, false]);
+    clock.advance(1);
+    expect([atFloor.allow(), atFloor.allow()]).toStrictEqual([true, false]);
+  });
 });
 
 describe("RateLimiter composition", () => {
@@ -215,13 +242,15 @@ describe("RateLimiter per-client cache", () => {
 
 describe("RateLimiter configuration", () => {
   it("floors a rate below the minimum rather than accepting zero", () => {
-    // A zero rate would deny every request forever, which is a
-    // configuration mistake rather than a policy anyone wants.
+    // Any rate under one per second would deny every request forever — the
+    // burst is one second of the rate, so the bucket never holds the whole
+    // token a call costs. That is a configuration mistake rather than a policy
+    // anyone wants, so it is floored here and refused outright at config load.
     const clock = stubClock();
     const limiter = new RateLimiter({ restAcquireRate: 0, restSendRate: -5, now: clock.now });
     expect({ acquire: limiter.restAcquireRate, send: limiter.restSendRate }).toStrictEqual({
-      acquire: 0.1,
-      send: 0.1,
+      acquire: 1,
+      send: 1,
     });
   });
 

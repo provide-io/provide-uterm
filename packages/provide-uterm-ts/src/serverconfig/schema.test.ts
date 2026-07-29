@@ -238,3 +238,52 @@ describe("what a whole document accepts", () => {
     expect(validateServerConfig({})).toEqual([]);
   });
 });
+
+describe("the REST hijack ceilings", () => {
+  /** The one complaint a document made of a single bad key produces. */
+  function complaint(field: string, value: number): string | undefined {
+    return validateServerConfig({ [field]: value })[0]?.msg;
+  }
+
+  // The corpus covers every value a JSON file can spell. These are the three
+  // it cannot — `json.dumps` writes them as bare `Infinity`/`NaN`, which
+  // `JSON.parse` refuses — so the corpus deliberately omits them and each port
+  // carries them itself. TOML *can* spell all three (`x = inf`, `x = nan`), so
+  // a deployment can reach them and the refusal has to be here.
+  it("refuses a rate that is not finite, whichever way it is not", () => {
+    // `inf` is the dangerous one: it passes every `>=` bound, so accepting it
+    // would silently mean no limit at all — the fail-open that makes a trusted
+    // limit worse than none. `-inf` and NaN go with it; none of the three is a
+    // rate anybody meant to write. They are named in the interpreter's own
+    // spelling rather than JavaScript's `Infinity`.
+    for (const field of ["rest_acquire_rate_limit_per_sec", "rest_send_rate_limit_per_sec"]) {
+      expect(complaint(field, Number.POSITIVE_INFINITY)).toBe(
+        `Value error, ${field} must be a finite number >= 1.0, got: inf`,
+      );
+      expect(complaint(field, Number.NEGATIVE_INFINITY)).toBe(
+        `Value error, ${field} must be a finite number >= 1.0, got: -inf`,
+      );
+      expect(complaint(field, Number.NaN)).toBe(`Value error, ${field} must be a finite number >= 1.0, got: nan`);
+    }
+  });
+
+  it("still refuses a NaN if the finite check is ever removed", () => {
+    // The bound is written `not value >= MIN` rather than `value < MIN` so a
+    // NaN — false against every comparison — falls into the refusal instead of
+    // sliding past a `<` test. With the finite check running first that form
+    // is no longer load-bearing on its own, which is exactly why it is worth
+    // pinning: it is the second line of defence, and the day someone deletes
+    // the first one the NaN must still be refused.
+    expect(validateServerConfig({ rest_send_rate_limit_per_sec: Number.NaN })).toHaveLength(1);
+  });
+
+  it("keeps the sign of a negative zero, which is a float and not an int", () => {
+    // A negative zero is finite, so it reaches the bound rather than the
+    // finite check. TOML can write `-0.0` and the interpreter's `repr` keeps
+    // the sign, so the message names the value the operator wrote rather than
+    // a different one that happens to compare equal to it.
+    expect(complaint("rest_acquire_rate_limit_per_sec", -0)).toBe(
+      "Value error, rest_acquire_rate_limit_per_sec must be >= 1.0, got: -0.0",
+    );
+  });
+});

@@ -67,14 +67,17 @@ export const SESSION_HUB_MAX_CONNECTIONS_PER_PRINCIPAL = 25;
 /**
  * Acquires per second one address may make — the reference's own default.
  *
- * Nothing configures it, there as here: the reference threads its browser
- * limit through from the configuration file and leaves both REST rates on the
- * constructor default, so a deployment that has never heard of this number
- * gets exactly this number.
+ * The configuration key `rest_acquire_rate_limit_per_sec` overrides it, as the
+ * reference's does; this is what a deployment that has never heard of the key
+ * gets, which is what it got before the key existed.
  */
 export const SESSION_HUB_REST_ACQUIRE_RATE = 5;
 
-/** Sends per second one address may make. Steps are charged against it too. */
+/**
+ * Sends per second one address may make. Steps are charged against it too.
+ *
+ * Overridden by `rest_send_rate_limit_per_sec`.
+ */
 export const SESSION_HUB_REST_SEND_RATE = 20;
 
 /** Options for {@link SessionHub}. Defaults are the real clocks. */
@@ -85,6 +88,10 @@ export interface SessionHubOptions {
   wallNow?: (() => number) | undefined;
   /** How a poll waits. Injected so a test need not spend the time. */
   sleep?: ((seconds: number) => Promise<void>) | undefined;
+  /** Acquires per second one address may make. The reference's default if unset. */
+  restAcquireRate?: number | undefined;
+  /** Sends — and steps — per second one address may make. */
+  restSendRate?: number | undefined;
 }
 
 /** Monotonic seconds, from a clock that cannot jump backwards. */
@@ -137,8 +144,8 @@ export class SessionHub {
     // against wall time would hand a flooding client a full budget the moment
     // the system clock stepped forward.
     this.limiter = new RateLimiter({
-      restAcquireRate: SESSION_HUB_REST_ACQUIRE_RATE,
-      restSendRate: SESSION_HUB_REST_SEND_RATE,
+      restAcquireRate: options.restAcquireRate ?? SESSION_HUB_REST_ACQUIRE_RATE,
+      restSendRate: options.restSendRate ?? SESSION_HUB_REST_SEND_RATE,
       now,
     });
     this.store = new StateStore({

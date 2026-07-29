@@ -931,6 +931,16 @@
       "optional": false,
       "required": false
     },
+    "rest_acquire_rate_limit_per_sec": {
+      "kind": "float",
+      "optional": false,
+      "required": false
+    },
+    "rest_send_rate_limit_per_sec": {
+      "kind": "float",
+      "optional": false,
+      "required": false
+    },
     "worker_frame_on_invalid": {
       "kind": "literal",
       "choices": [
@@ -3538,6 +3548,8 @@
         "session_idle_timeout_s": 0,
         "session_retention_s": 0,
         "browser_rate_limit_per_sec": 300.0,
+        "rest_acquire_rate_limit_per_sec": 5.0,
+        "rest_send_rate_limit_per_sec": 20.0,
         "worker_frame_on_invalid": "drop",
         "max_connections_per_principal": 25,
         "max_workers": 1
@@ -3730,6 +3742,8 @@
         "session_idle_timeout_s": 0,
         "session_retention_s": 0,
         "browser_rate_limit_per_sec": 300.0,
+        "rest_acquire_rate_limit_per_sec": 5.0,
+        "rest_send_rate_limit_per_sec": 20.0,
         "worker_frame_on_invalid": "drop",
         "max_connections_per_principal": 25,
         "max_workers": 10000
@@ -3922,6 +3936,8 @@
         "session_idle_timeout_s": 0,
         "session_retention_s": 0,
         "browser_rate_limit_per_sec": 300.0,
+        "rest_acquire_rate_limit_per_sec": 5.0,
+        "rest_send_rate_limit_per_sec": 20.0,
         "worker_frame_on_invalid": "reject",
         "max_connections_per_principal": 25,
         "max_workers": 10000
@@ -4099,10 +4115,818 @@
         "session_idle_timeout_s": 0,
         "session_retention_s": 0,
         "browser_rate_limit_per_sec": 10.0,
+        "rest_acquire_rate_limit_per_sec": 5.0,
+        "rest_send_rate_limit_per_sec": 20.0,
         "worker_frame_on_invalid": "drop",
         "max_connections_per_principal": 25,
         "max_workers": 10000
       }
+    },
+    {
+      "name": "a REST acquire ceiling",
+      "kwargs": {
+        "rest_acquire_rate_limit_per_sec": 2
+      },
+      "accepted": {
+        "environment": "production",
+        "server": {
+          "host": "127.0.0.1",
+          "port": 8780,
+          "public_base_url": "http://127.0.0.1:8780",
+          "title": "provide-uterm-server",
+          "node_id": "default",
+          "allowed_origins": [],
+          "max_sessions": null
+        },
+        "auth": {
+          "mode": "dev_token",
+          "principal_header": "x-uterm-principal",
+          "role_header": "x-uterm-role",
+          "tenant_header": "x-uterm-tenant",
+          "principal_cookie": "uterm_principal",
+          "role_cookie": "uterm_role",
+          "tenant_cookie": "uterm_tenant",
+          "surface_cookie": "uterm_surface",
+          "token_cookie": "uterm_token",
+          "jwt_issuer": "provide-uterm",
+          "jwt_audience": "provide-uterm-server",
+          "jwt_jwks_url": null,
+          "jwt_public_key_pem": null,
+          "jwt_algorithms": [
+            "HS256"
+          ],
+          "clock_skew_seconds": 15,
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_tenant_claim": "tenant_id",
+          "worker_bearer_token": null,
+          "api_keys_enabled": false,
+          "header_mode_acknowledged": false,
+          "require_jwt_in_production": false,
+          "trusted_proxy_ips": [],
+          "upstream_proxy_secret": null,
+          "require_upstream_proxy_secret": false,
+          "identity_provider": "local",
+          "delegate_roles": true,
+          "webhook_idp_url": null,
+          "webhook_idp_secret": null,
+          "webhook_idp_timeout_s": 2.0,
+          "webhook_idp_on_failure": "deny",
+          "webhook_idp_require_signed_response": true,
+          "webhook_idp_require_response_nonce": false,
+          "webhook_idp_forward_headers": [],
+          "webhook_idp_forward_cookies": [],
+          "allow_adhoc_browser_observers": false
+        },
+        "control_plane": {
+          "backend": "memory",
+          "database_url": null,
+          "reap_interval_s": 3600,
+          "reap_retention_s": 604800
+        },
+        "ui": {
+          "app_path": "/app",
+          "assets_path": "/_terminal",
+          "xterm_cdn": "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0",
+          "fitaddon_cdn": "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0",
+          "fonts_cdn": "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap",
+          "xterm_cdn_integrity": "",
+          "fitaddon_cdn_integrity": ""
+        },
+        "recording": {
+          "enabled_by_default": false,
+          "directory": ".uterm-recordings",
+          "max_bytes": 0,
+          "retention_s": 0,
+          "control_channel_mode": "exclude",
+          "redact_sensitive": true,
+          "store_type": "local",
+          "webhook_url": null,
+          "webhook_secret": null,
+          "webhook_timeout_s": 2.0,
+          "flush_interval_s": 5.0,
+          "flush_batch_size": 100
+        },
+        "profiles": {
+          "directory": ".uterm-profiles"
+        },
+        "security": {
+          "mode": "strict",
+          "dev_mode_acknowledged": false,
+          "csp": null,
+          "hsts": null,
+          "x_frame_options": null,
+          "x_content_type_options": null,
+          "referrer_policy": null,
+          "permissions_policy": null,
+          "block_private_connector_targets": false,
+          "metrics_require_auth": false,
+          "default_session_visibility": "public"
+        },
+        "tunnel": {
+          "token_ttl_s": 3600,
+          "token_transport": "cookie",
+          "cookie_secure": true,
+          "cookie_samesite": "lax",
+          "ip_binding": false
+        },
+        "webhooks": {
+          "allow_loopback_destinations": false
+        },
+        "pam": {
+          "notify_socket": null,
+          "mode": "notify",
+          "auto_session": false,
+          "auto_session_command": "/bin/bash",
+          "relay_url": null,
+          "relay_token": null,
+          "capture_socket_dir": null,
+          "require_peer_uids": null
+        },
+        "governance": {
+          "policy_webhook_url": null,
+          "policy_webhook_secret": null,
+          "policy_webhook_timeout_s": 2.0,
+          "discovery_provider": "webhook",
+          "registry_webhook_url": null,
+          "registry_webhook_secret": null,
+          "registry_webhook_interval_s": 60.0,
+          "authz_webhook_url": null,
+          "authz_webhook_secret": null,
+          "authz_webhook_timeout_s": 2.0,
+          "behavioral_audit_url": null,
+          "behavioral_audit_secret": null,
+          "behavioral_audit_interval_s": 30.0,
+          "behavioral_max_cps": null,
+          "behavioral_min_jitter": null,
+          "behavioral_fail_open": false,
+          "telemetry_webhook_url": null,
+          "telemetry_webhook_secret": null,
+          "telemetry_webhook_timeout_s": 2.0,
+          "external_connectors": []
+        },
+        "audit": {
+          "chain_enabled": false,
+          "chain_file": null
+        },
+        "sessions": [
+          {
+            "session_id": "provide-shell",
+            "display_name": "Provide Shell",
+            "connector_type": "shell",
+            "connector_config": {},
+            "input_mode": "open",
+            "auto_start": true,
+            "tags": [
+              "shell",
+              "reference"
+            ],
+            "recording_enabled": null,
+            "owner": null,
+            "visibility": "public",
+            "ephemeral": false,
+            "presence": false,
+            "auto_transfer_idle_s": 30,
+            "keystroke_queue": "display"
+          }
+        ],
+        "graphical_targets": [],
+        "session_idle_timeout_s": 0,
+        "session_retention_s": 0,
+        "browser_rate_limit_per_sec": 300.0,
+        "rest_acquire_rate_limit_per_sec": 2.0,
+        "rest_send_rate_limit_per_sec": 20.0,
+        "worker_frame_on_invalid": "drop",
+        "max_connections_per_principal": 25,
+        "max_workers": 10000
+      }
+    },
+    {
+      "name": "a REST send ceiling",
+      "kwargs": {
+        "rest_send_rate_limit_per_sec": 100
+      },
+      "accepted": {
+        "environment": "production",
+        "server": {
+          "host": "127.0.0.1",
+          "port": 8780,
+          "public_base_url": "http://127.0.0.1:8780",
+          "title": "provide-uterm-server",
+          "node_id": "default",
+          "allowed_origins": [],
+          "max_sessions": null
+        },
+        "auth": {
+          "mode": "dev_token",
+          "principal_header": "x-uterm-principal",
+          "role_header": "x-uterm-role",
+          "tenant_header": "x-uterm-tenant",
+          "principal_cookie": "uterm_principal",
+          "role_cookie": "uterm_role",
+          "tenant_cookie": "uterm_tenant",
+          "surface_cookie": "uterm_surface",
+          "token_cookie": "uterm_token",
+          "jwt_issuer": "provide-uterm",
+          "jwt_audience": "provide-uterm-server",
+          "jwt_jwks_url": null,
+          "jwt_public_key_pem": null,
+          "jwt_algorithms": [
+            "HS256"
+          ],
+          "clock_skew_seconds": 15,
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_tenant_claim": "tenant_id",
+          "worker_bearer_token": null,
+          "api_keys_enabled": false,
+          "header_mode_acknowledged": false,
+          "require_jwt_in_production": false,
+          "trusted_proxy_ips": [],
+          "upstream_proxy_secret": null,
+          "require_upstream_proxy_secret": false,
+          "identity_provider": "local",
+          "delegate_roles": true,
+          "webhook_idp_url": null,
+          "webhook_idp_secret": null,
+          "webhook_idp_timeout_s": 2.0,
+          "webhook_idp_on_failure": "deny",
+          "webhook_idp_require_signed_response": true,
+          "webhook_idp_require_response_nonce": false,
+          "webhook_idp_forward_headers": [],
+          "webhook_idp_forward_cookies": [],
+          "allow_adhoc_browser_observers": false
+        },
+        "control_plane": {
+          "backend": "memory",
+          "database_url": null,
+          "reap_interval_s": 3600,
+          "reap_retention_s": 604800
+        },
+        "ui": {
+          "app_path": "/app",
+          "assets_path": "/_terminal",
+          "xterm_cdn": "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0",
+          "fitaddon_cdn": "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0",
+          "fonts_cdn": "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap",
+          "xterm_cdn_integrity": "",
+          "fitaddon_cdn_integrity": ""
+        },
+        "recording": {
+          "enabled_by_default": false,
+          "directory": ".uterm-recordings",
+          "max_bytes": 0,
+          "retention_s": 0,
+          "control_channel_mode": "exclude",
+          "redact_sensitive": true,
+          "store_type": "local",
+          "webhook_url": null,
+          "webhook_secret": null,
+          "webhook_timeout_s": 2.0,
+          "flush_interval_s": 5.0,
+          "flush_batch_size": 100
+        },
+        "profiles": {
+          "directory": ".uterm-profiles"
+        },
+        "security": {
+          "mode": "strict",
+          "dev_mode_acknowledged": false,
+          "csp": null,
+          "hsts": null,
+          "x_frame_options": null,
+          "x_content_type_options": null,
+          "referrer_policy": null,
+          "permissions_policy": null,
+          "block_private_connector_targets": false,
+          "metrics_require_auth": false,
+          "default_session_visibility": "public"
+        },
+        "tunnel": {
+          "token_ttl_s": 3600,
+          "token_transport": "cookie",
+          "cookie_secure": true,
+          "cookie_samesite": "lax",
+          "ip_binding": false
+        },
+        "webhooks": {
+          "allow_loopback_destinations": false
+        },
+        "pam": {
+          "notify_socket": null,
+          "mode": "notify",
+          "auto_session": false,
+          "auto_session_command": "/bin/bash",
+          "relay_url": null,
+          "relay_token": null,
+          "capture_socket_dir": null,
+          "require_peer_uids": null
+        },
+        "governance": {
+          "policy_webhook_url": null,
+          "policy_webhook_secret": null,
+          "policy_webhook_timeout_s": 2.0,
+          "discovery_provider": "webhook",
+          "registry_webhook_url": null,
+          "registry_webhook_secret": null,
+          "registry_webhook_interval_s": 60.0,
+          "authz_webhook_url": null,
+          "authz_webhook_secret": null,
+          "authz_webhook_timeout_s": 2.0,
+          "behavioral_audit_url": null,
+          "behavioral_audit_secret": null,
+          "behavioral_audit_interval_s": 30.0,
+          "behavioral_max_cps": null,
+          "behavioral_min_jitter": null,
+          "behavioral_fail_open": false,
+          "telemetry_webhook_url": null,
+          "telemetry_webhook_secret": null,
+          "telemetry_webhook_timeout_s": 2.0,
+          "external_connectors": []
+        },
+        "audit": {
+          "chain_enabled": false,
+          "chain_file": null
+        },
+        "sessions": [
+          {
+            "session_id": "provide-shell",
+            "display_name": "Provide Shell",
+            "connector_type": "shell",
+            "connector_config": {},
+            "input_mode": "open",
+            "auto_start": true,
+            "tags": [
+              "shell",
+              "reference"
+            ],
+            "recording_enabled": null,
+            "owner": null,
+            "visibility": "public",
+            "ephemeral": false,
+            "presence": false,
+            "auto_transfer_idle_s": 30,
+            "keystroke_queue": "display"
+          }
+        ],
+        "graphical_targets": [],
+        "session_idle_timeout_s": 0,
+        "session_retention_s": 0,
+        "browser_rate_limit_per_sec": 300.0,
+        "rest_acquire_rate_limit_per_sec": 5.0,
+        "rest_send_rate_limit_per_sec": 100.0,
+        "worker_frame_on_invalid": "drop",
+        "max_connections_per_principal": 25,
+        "max_workers": 10000
+      }
+    },
+    {
+      "name": "a fractional REST acquire ceiling",
+      "kwargs": {
+        "rest_acquire_rate_limit_per_sec": 2.5
+      },
+      "accepted": {
+        "environment": "production",
+        "server": {
+          "host": "127.0.0.1",
+          "port": 8780,
+          "public_base_url": "http://127.0.0.1:8780",
+          "title": "provide-uterm-server",
+          "node_id": "default",
+          "allowed_origins": [],
+          "max_sessions": null
+        },
+        "auth": {
+          "mode": "dev_token",
+          "principal_header": "x-uterm-principal",
+          "role_header": "x-uterm-role",
+          "tenant_header": "x-uterm-tenant",
+          "principal_cookie": "uterm_principal",
+          "role_cookie": "uterm_role",
+          "tenant_cookie": "uterm_tenant",
+          "surface_cookie": "uterm_surface",
+          "token_cookie": "uterm_token",
+          "jwt_issuer": "provide-uterm",
+          "jwt_audience": "provide-uterm-server",
+          "jwt_jwks_url": null,
+          "jwt_public_key_pem": null,
+          "jwt_algorithms": [
+            "HS256"
+          ],
+          "clock_skew_seconds": 15,
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_tenant_claim": "tenant_id",
+          "worker_bearer_token": null,
+          "api_keys_enabled": false,
+          "header_mode_acknowledged": false,
+          "require_jwt_in_production": false,
+          "trusted_proxy_ips": [],
+          "upstream_proxy_secret": null,
+          "require_upstream_proxy_secret": false,
+          "identity_provider": "local",
+          "delegate_roles": true,
+          "webhook_idp_url": null,
+          "webhook_idp_secret": null,
+          "webhook_idp_timeout_s": 2.0,
+          "webhook_idp_on_failure": "deny",
+          "webhook_idp_require_signed_response": true,
+          "webhook_idp_require_response_nonce": false,
+          "webhook_idp_forward_headers": [],
+          "webhook_idp_forward_cookies": [],
+          "allow_adhoc_browser_observers": false
+        },
+        "control_plane": {
+          "backend": "memory",
+          "database_url": null,
+          "reap_interval_s": 3600,
+          "reap_retention_s": 604800
+        },
+        "ui": {
+          "app_path": "/app",
+          "assets_path": "/_terminal",
+          "xterm_cdn": "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0",
+          "fitaddon_cdn": "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0",
+          "fonts_cdn": "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap",
+          "xterm_cdn_integrity": "",
+          "fitaddon_cdn_integrity": ""
+        },
+        "recording": {
+          "enabled_by_default": false,
+          "directory": ".uterm-recordings",
+          "max_bytes": 0,
+          "retention_s": 0,
+          "control_channel_mode": "exclude",
+          "redact_sensitive": true,
+          "store_type": "local",
+          "webhook_url": null,
+          "webhook_secret": null,
+          "webhook_timeout_s": 2.0,
+          "flush_interval_s": 5.0,
+          "flush_batch_size": 100
+        },
+        "profiles": {
+          "directory": ".uterm-profiles"
+        },
+        "security": {
+          "mode": "strict",
+          "dev_mode_acknowledged": false,
+          "csp": null,
+          "hsts": null,
+          "x_frame_options": null,
+          "x_content_type_options": null,
+          "referrer_policy": null,
+          "permissions_policy": null,
+          "block_private_connector_targets": false,
+          "metrics_require_auth": false,
+          "default_session_visibility": "public"
+        },
+        "tunnel": {
+          "token_ttl_s": 3600,
+          "token_transport": "cookie",
+          "cookie_secure": true,
+          "cookie_samesite": "lax",
+          "ip_binding": false
+        },
+        "webhooks": {
+          "allow_loopback_destinations": false
+        },
+        "pam": {
+          "notify_socket": null,
+          "mode": "notify",
+          "auto_session": false,
+          "auto_session_command": "/bin/bash",
+          "relay_url": null,
+          "relay_token": null,
+          "capture_socket_dir": null,
+          "require_peer_uids": null
+        },
+        "governance": {
+          "policy_webhook_url": null,
+          "policy_webhook_secret": null,
+          "policy_webhook_timeout_s": 2.0,
+          "discovery_provider": "webhook",
+          "registry_webhook_url": null,
+          "registry_webhook_secret": null,
+          "registry_webhook_interval_s": 60.0,
+          "authz_webhook_url": null,
+          "authz_webhook_secret": null,
+          "authz_webhook_timeout_s": 2.0,
+          "behavioral_audit_url": null,
+          "behavioral_audit_secret": null,
+          "behavioral_audit_interval_s": 30.0,
+          "behavioral_max_cps": null,
+          "behavioral_min_jitter": null,
+          "behavioral_fail_open": false,
+          "telemetry_webhook_url": null,
+          "telemetry_webhook_secret": null,
+          "telemetry_webhook_timeout_s": 2.0,
+          "external_connectors": []
+        },
+        "audit": {
+          "chain_enabled": false,
+          "chain_file": null
+        },
+        "sessions": [
+          {
+            "session_id": "provide-shell",
+            "display_name": "Provide Shell",
+            "connector_type": "shell",
+            "connector_config": {},
+            "input_mode": "open",
+            "auto_start": true,
+            "tags": [
+              "shell",
+              "reference"
+            ],
+            "recording_enabled": null,
+            "owner": null,
+            "visibility": "public",
+            "ephemeral": false,
+            "presence": false,
+            "auto_transfer_idle_s": 30,
+            "keystroke_queue": "display"
+          }
+        ],
+        "graphical_targets": [],
+        "session_idle_timeout_s": 0,
+        "session_retention_s": 0,
+        "browser_rate_limit_per_sec": 300.0,
+        "rest_acquire_rate_limit_per_sec": 2.5,
+        "rest_send_rate_limit_per_sec": 20.0,
+        "worker_frame_on_invalid": "drop",
+        "max_connections_per_principal": 25,
+        "max_workers": 10000
+      }
+    },
+    {
+      "name": "the tightest REST ceiling there is",
+      "kwargs": {
+        "rest_acquire_rate_limit_per_sec": 1
+      },
+      "accepted": {
+        "environment": "production",
+        "server": {
+          "host": "127.0.0.1",
+          "port": 8780,
+          "public_base_url": "http://127.0.0.1:8780",
+          "title": "provide-uterm-server",
+          "node_id": "default",
+          "allowed_origins": [],
+          "max_sessions": null
+        },
+        "auth": {
+          "mode": "dev_token",
+          "principal_header": "x-uterm-principal",
+          "role_header": "x-uterm-role",
+          "tenant_header": "x-uterm-tenant",
+          "principal_cookie": "uterm_principal",
+          "role_cookie": "uterm_role",
+          "tenant_cookie": "uterm_tenant",
+          "surface_cookie": "uterm_surface",
+          "token_cookie": "uterm_token",
+          "jwt_issuer": "provide-uterm",
+          "jwt_audience": "provide-uterm-server",
+          "jwt_jwks_url": null,
+          "jwt_public_key_pem": null,
+          "jwt_algorithms": [
+            "HS256"
+          ],
+          "clock_skew_seconds": 15,
+          "jwt_roles_claim": "roles",
+          "jwt_scopes_claim": "scope",
+          "jwt_tenant_claim": "tenant_id",
+          "worker_bearer_token": null,
+          "api_keys_enabled": false,
+          "header_mode_acknowledged": false,
+          "require_jwt_in_production": false,
+          "trusted_proxy_ips": [],
+          "upstream_proxy_secret": null,
+          "require_upstream_proxy_secret": false,
+          "identity_provider": "local",
+          "delegate_roles": true,
+          "webhook_idp_url": null,
+          "webhook_idp_secret": null,
+          "webhook_idp_timeout_s": 2.0,
+          "webhook_idp_on_failure": "deny",
+          "webhook_idp_require_signed_response": true,
+          "webhook_idp_require_response_nonce": false,
+          "webhook_idp_forward_headers": [],
+          "webhook_idp_forward_cookies": [],
+          "allow_adhoc_browser_observers": false
+        },
+        "control_plane": {
+          "backend": "memory",
+          "database_url": null,
+          "reap_interval_s": 3600,
+          "reap_retention_s": 604800
+        },
+        "ui": {
+          "app_path": "/app",
+          "assets_path": "/_terminal",
+          "xterm_cdn": "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0",
+          "fitaddon_cdn": "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0",
+          "fonts_cdn": "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap",
+          "xterm_cdn_integrity": "",
+          "fitaddon_cdn_integrity": ""
+        },
+        "recording": {
+          "enabled_by_default": false,
+          "directory": ".uterm-recordings",
+          "max_bytes": 0,
+          "retention_s": 0,
+          "control_channel_mode": "exclude",
+          "redact_sensitive": true,
+          "store_type": "local",
+          "webhook_url": null,
+          "webhook_secret": null,
+          "webhook_timeout_s": 2.0,
+          "flush_interval_s": 5.0,
+          "flush_batch_size": 100
+        },
+        "profiles": {
+          "directory": ".uterm-profiles"
+        },
+        "security": {
+          "mode": "strict",
+          "dev_mode_acknowledged": false,
+          "csp": null,
+          "hsts": null,
+          "x_frame_options": null,
+          "x_content_type_options": null,
+          "referrer_policy": null,
+          "permissions_policy": null,
+          "block_private_connector_targets": false,
+          "metrics_require_auth": false,
+          "default_session_visibility": "public"
+        },
+        "tunnel": {
+          "token_ttl_s": 3600,
+          "token_transport": "cookie",
+          "cookie_secure": true,
+          "cookie_samesite": "lax",
+          "ip_binding": false
+        },
+        "webhooks": {
+          "allow_loopback_destinations": false
+        },
+        "pam": {
+          "notify_socket": null,
+          "mode": "notify",
+          "auto_session": false,
+          "auto_session_command": "/bin/bash",
+          "relay_url": null,
+          "relay_token": null,
+          "capture_socket_dir": null,
+          "require_peer_uids": null
+        },
+        "governance": {
+          "policy_webhook_url": null,
+          "policy_webhook_secret": null,
+          "policy_webhook_timeout_s": 2.0,
+          "discovery_provider": "webhook",
+          "registry_webhook_url": null,
+          "registry_webhook_secret": null,
+          "registry_webhook_interval_s": 60.0,
+          "authz_webhook_url": null,
+          "authz_webhook_secret": null,
+          "authz_webhook_timeout_s": 2.0,
+          "behavioral_audit_url": null,
+          "behavioral_audit_secret": null,
+          "behavioral_audit_interval_s": 30.0,
+          "behavioral_max_cps": null,
+          "behavioral_min_jitter": null,
+          "behavioral_fail_open": false,
+          "telemetry_webhook_url": null,
+          "telemetry_webhook_secret": null,
+          "telemetry_webhook_timeout_s": 2.0,
+          "external_connectors": []
+        },
+        "audit": {
+          "chain_enabled": false,
+          "chain_file": null
+        },
+        "sessions": [
+          {
+            "session_id": "provide-shell",
+            "display_name": "Provide Shell",
+            "connector_type": "shell",
+            "connector_config": {},
+            "input_mode": "open",
+            "auto_start": true,
+            "tags": [
+              "shell",
+              "reference"
+            ],
+            "recording_enabled": null,
+            "owner": null,
+            "visibility": "public",
+            "ephemeral": false,
+            "presence": false,
+            "auto_transfer_idle_s": 30,
+            "keystroke_queue": "display"
+          }
+        ],
+        "graphical_targets": [],
+        "session_idle_timeout_s": 0,
+        "session_retention_s": 0,
+        "browser_rate_limit_per_sec": 300.0,
+        "rest_acquire_rate_limit_per_sec": 1.0,
+        "rest_send_rate_limit_per_sec": 20.0,
+        "worker_frame_on_invalid": "drop",
+        "max_connections_per_principal": 25,
+        "max_workers": 10000
+      }
+    },
+    {
+      "name": "a REST acquire ceiling of zero",
+      "kwargs": {
+        "rest_acquire_rate_limit_per_sec": 0
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "rest_acquire_rate_limit_per_sec"
+          ],
+          "msg": "Value error, rest_acquire_rate_limit_per_sec must be >= 1.0, got: 0.0"
+        }
+      ]
+    },
+    {
+      "name": "a REST send ceiling of zero",
+      "kwargs": {
+        "rest_send_rate_limit_per_sec": 0
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "rest_send_rate_limit_per_sec"
+          ],
+          "msg": "Value error, rest_send_rate_limit_per_sec must be >= 1.0, got: 0.0"
+        }
+      ]
+    },
+    {
+      "name": "a negative REST acquire ceiling",
+      "kwargs": {
+        "rest_acquire_rate_limit_per_sec": -1
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "rest_acquire_rate_limit_per_sec"
+          ],
+          "msg": "Value error, rest_acquire_rate_limit_per_sec must be >= 1.0, got: -1.0"
+        }
+      ]
+    },
+    {
+      "name": "a REST send ceiling under the floor",
+      "kwargs": {
+        "rest_send_rate_limit_per_sec": 0.5
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "rest_send_rate_limit_per_sec"
+          ],
+          "msg": "Value error, rest_send_rate_limit_per_sec must be >= 1.0, got: 0.5"
+        }
+      ]
+    },
+    {
+      "name": "a REST acquire ceiling a hair under the floor",
+      "kwargs": {
+        "rest_acquire_rate_limit_per_sec": 0.99
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "rest_acquire_rate_limit_per_sec"
+          ],
+          "msg": "Value error, rest_acquire_rate_limit_per_sec must be >= 1.0, got: 0.99"
+        }
+      ]
+    },
+    {
+      "name": "a REST acquire ceiling that is not a number",
+      "kwargs": {
+        "rest_acquire_rate_limit_per_sec": "fast"
+      },
+      "errors": [
+        {
+          "type": "float_parsing",
+          "loc": [
+            "rest_acquire_rate_limit_per_sec"
+          ],
+          "msg": "Input should be a valid number, unable to parse string as a number"
+        }
+      ]
     },
     {
       "name": "a field nobody defined",
@@ -4393,6 +5217,8 @@
         "session_idle_timeout_s": 0,
         "session_retention_s": 0,
         "browser_rate_limit_per_sec": 300.0,
+        "rest_acquire_rate_limit_per_sec": 5.0,
+        "rest_send_rate_limit_per_sec": 20.0,
         "worker_frame_on_invalid": "drop",
         "max_connections_per_principal": 25,
         "max_workers": 10000
@@ -4609,6 +5435,8 @@
         "session_idle_timeout_s": 0,
         "session_retention_s": 0,
         "browser_rate_limit_per_sec": 300.0,
+        "rest_acquire_rate_limit_per_sec": 5.0,
+        "rest_send_rate_limit_per_sec": 20.0,
         "worker_frame_on_invalid": "drop",
         "max_connections_per_principal": 25,
         "max_workers": 10000
