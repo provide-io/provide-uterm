@@ -1,0 +1,159 @@
+{
+  "id": "006_hijack_lifecycle",
+  "title": "Taking the lease on a session, using it, and giving it back",
+  "timeout_ms": 30000,
+  "auth": "dev_token",
+  "steps": [
+    {
+      "id": "to_hijack",
+      "action": "set_input_mode",
+      "session_id": "provide-shell",
+      "input_mode": "hijack",
+      "auth": "token",
+      "volatile": [
+        "body.created_at",
+        "body.connected"
+      ]
+    },
+    {
+      "id": "acquire",
+      "action": "hijack_acquire",
+      "worker_id": "provide-shell",
+      "owner": "conformance",
+      "lease_s": 60,
+      "auth": "token",
+      "volatile": [
+        "body.hijack_id",
+        "body.lease_expires_at"
+      ]
+    },
+    {
+      "id": "heartbeat",
+      "action": "hijack_heartbeat",
+      "worker_id": "provide-shell",
+      "hijack_id": "${acquire.body.hijack_id}",
+      "lease_s": 60,
+      "auth": "token",
+      "volatile": [
+        "body.hijack_id",
+        "body.lease_expires_at"
+      ]
+    },
+    {
+      "id": "snapshot",
+      "action": "hijack_snapshot",
+      "worker_id": "provide-shell",
+      "hijack_id": "${acquire.body.hijack_id}",
+      "auth": "token",
+      "volatile": [
+        "body"
+      ]
+    },
+    {
+      "id": "release",
+      "action": "hijack_release",
+      "worker_id": "provide-shell",
+      "hijack_id": "${acquire.body.hijack_id}",
+      "auth": "token",
+      "volatile": [
+        "body.hijack_id"
+      ]
+    },
+    {
+      "id": "release_again",
+      "action": "hijack_release",
+      "worker_id": "provide-shell",
+      "hijack_id": "${acquire.body.hijack_id}",
+      "auth": "token"
+    }
+  ],
+  "expect": [
+    {
+      "step": "to_hijack",
+      "path": "body.input_mode",
+      "equals": "hijack",
+      "why": "A lease cannot be taken on a session in open mode, so every hijack scenario has to move it first. The mode is reported back, which is how a caller knows the change took."
+    },
+    {
+      "step": "acquire",
+      "path": "status",
+      "equals": 200,
+      "why": "The lease is granted. This is the single most load-bearing operation in the product: it decides who may type into somebody else's terminal."
+    },
+    {
+      "step": "acquire",
+      "path": "body.ok",
+      "equals": true,
+      "why": "A boolean, not a string and not the number one \u2014 the field a client branches on before it starts sending keystrokes."
+    },
+    {
+      "step": "acquire",
+      "path": "body.worker_id",
+      "equals": "provide-shell",
+      "why": "The answer names the worker whose lease was taken, so a client holding several cannot mix them up."
+    },
+    {
+      "step": "acquire",
+      "path": "body.owner",
+      "equals": "conformance",
+      "why": "The owner is echoed back as given. A port that substituted its own default would make the audit trail wrong about who took control."
+    },
+    {
+      "step": "acquire",
+      "path": "body.lease_expires_at",
+      "type": "number",
+      "why": "A lease has an expiry, and it is a number rather than a formatted time \u2014 clients compare it against their own clock. Its value is volatile; that it is a number is not."
+    },
+    {
+      "step": "heartbeat",
+      "path": "status",
+      "equals": 200,
+      "why": "Extending a lease is what stops a long operation being interrupted by its own timeout."
+    },
+    {
+      "step": "heartbeat",
+      "path": "body.ok",
+      "equals": true,
+      "why": "The heartbeat is acknowledged, so a client can tell an extension that worked from one that silently did not."
+    },
+    {
+      "step": "snapshot",
+      "path": "status",
+      "equals": 200,
+      "why": "The holder of the lease can read the screen. This is what an operator or an agent acts on, so a port that could take a lease but not read through it would be useless."
+    },
+    {
+      "step": "snapshot",
+      "path": "ok",
+      "equals": true,
+      "why": "The client library's own reading. The screen itself is volatile \u2014 it is a live terminal \u2014 but that the read succeeded is not."
+    },
+    {
+      "step": "release",
+      "path": "status",
+      "equals": 200,
+      "why": "Giving the lease back is what lets anyone else have it. A release that silently failed would strand the session until the lease expired."
+    },
+    {
+      "step": "release",
+      "path": "body.ok",
+      "equals": true,
+      "why": "Acknowledged, rather than accepted in silence."
+    },
+    {
+      "step": "release_again",
+      "path": "status",
+      "equals": 404,
+      "why": "A lease released twice is gone, not forbidden: the second call refers to something that no longer exists. 409 would suggest it is still held by somebody."
+    },
+    {
+      "step": "release_again",
+      "path": "body",
+      "equals": {
+        "error": "Invalid or expired hijack session."
+      },
+      "why": "The lease routes answer with an `error` key where the session routes answer with `detail`. Both envelopes are the reference's and a client has to know both \u2014 which is exactly what the Go client got wrong, reading only `error` and rendering the whole body as its message."
+    }
+  ],
+  "mutates": true
+}
