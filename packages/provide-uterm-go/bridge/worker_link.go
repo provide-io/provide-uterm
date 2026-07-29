@@ -103,6 +103,11 @@ type Config struct {
 	Encoding string
 	// DialTimeout bounds a single connection attempt (default 30s).
 	DialTimeout time.Duration
+	// BearerToken, when non-empty, is sent as "Authorization: Bearer <token>"
+	// on the worker handshake. A hub configured with a worker token closes the
+	// socket 1008 without it (Python passes the same header from
+	// HostedSessionRuntime._run).
+	BearerToken string
 	// Logger is the structured logger; nil falls back to the telemetry logger.
 	Logger *slog.Logger
 }
@@ -123,6 +128,7 @@ type TermBridge struct {
 	encoding          string
 	heartbeatInterval time.Duration
 	dialTimeout       time.Duration
+	bearerToken       string
 	logger            *slog.Logger
 
 	// reconnectBackoff is the backoff schedule (overridable in tests).
@@ -182,6 +188,7 @@ func New(cfg Config) *TermBridge {
 		encoding:          encoding,
 		heartbeatInterval: cfg.HeartbeatInterval,
 		dialTimeout:       dialTimeout,
+		bearerToken:       cfg.BearerToken,
 		logger:            logger,
 		reconnectBackoff:  defaultReconnectBackoff,
 		sendQ:             make(chan queuedFrame, 2000),
@@ -351,7 +358,7 @@ func (b *TermBridge) run(ctx context.Context) {
 func (b *TermBridge) dialAndServe(ctx context.Context, wsURL string, attempt *int) (status int, permanentURL bool) {
 	dialCtx, cancel := context.WithTimeout(ctx, b.dialTimeout)
 	defer cancel()
-	conn, resp, err := websocket.Dial(dialCtx, wsURL, nil)
+	conn, resp, err := websocket.Dial(dialCtx, wsURL, b.dialOptions())
 	if err != nil {
 		if resp != nil {
 			status = resp.StatusCode
@@ -364,6 +371,17 @@ func (b *TermBridge) dialAndServe(ctx context.Context, wsURL string, attempt *in
 	conn.SetReadLimit(int64(b.maxWSMessageBytes))
 	b.serveConnection(ctx, conn)
 	return 0, false
+}
+
+// dialOptions carries the worker bearer token on the handshake, or nil when
+// none is configured (the coder/websocket default).
+func (b *TermBridge) dialOptions() *websocket.DialOptions {
+	if b.bearerToken == "" {
+		return nil
+	}
+	return &websocket.DialOptions{
+		HTTPHeader: http.Header{"Authorization": []string{"Bearer " + b.bearerToken}},
+	}
 }
 
 // isMalformedWSURL reports whether wsURL cannot be a WebSocket URL and so a

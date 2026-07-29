@@ -158,6 +158,11 @@ func buildServerFromConfig(
 	registry := NewSessionRegistry(cfg)
 	// Long-poll events/watch uses the same EventBus as SSE.
 	registry.SetEventBus(bus)
+	// Every started session attaches itself to this hub as a worker, dialing
+	// back into this same server on public_base_url — the reference's
+	// HostedSessionRuntime arrangement, and what gives the hijack routes a
+	// worker to lease.
+	registry.SetHubLink(ctx, h, cfg.Server.PublicBaseURL, workerBearerToken(cfg))
 
 	// Runtime graphical targets live in the control plane, so a sqlite backend
 	// keeps them across restarts. A memory backend behaves as before.
@@ -202,6 +207,16 @@ func buildServerFromConfig(
 		}()
 	}
 	return &serverBundle{srv: srv, engine: engine, cfg: cfg, logger: logger, devToken: devToken, registry: registry}, nil
+}
+
+// workerBearerToken resolves the hub's worker token, which hosted sessions
+// present on their own worker handshake. Empty when the deployment configures
+// none (the default — the worker endpoint is then open on the bind address).
+func workerBearerToken(cfg *serverconfig.UtermServerConfig) string {
+	if cfg.Auth.WorkerBearerToken == nil {
+		return ""
+	}
+	return *cfg.Auth.WorkerBearerToken
 }
 
 // buildRecordingStore selects the recording store from config. Port of the

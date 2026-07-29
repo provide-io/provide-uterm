@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/bridge"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/connectors"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/server"
@@ -26,6 +27,10 @@ type sessionEntry struct {
 	lifecycle server.SessionLifecycleState
 	inputMode string
 	conn      connectors.Connector // nil when no live connector
+	// bridge is the worker-side link that attaches this session to the hub
+	// (nil when no hub is wired, or the session is stopped). See
+	// registry_worker.go.
+	bridge    *bridge.TermBridge
 	lastErr   *string
 	stoppedAt *float64
 	createdAt string
@@ -57,6 +62,14 @@ type SessionRegistryImpl struct {
 	blockPrivate bool
 	// eventBus is the hub EventBus for long-poll events/watch (optional).
 	eventBus *hub.EventBus
+	// hub, managerURL and workerToken are the hub link a started session
+	// attaches itself to; bridgeCtx bounds the worker bridges' lifetime. All
+	// four are wired once by SetHubLink (registry_worker.go) and are nil/empty
+	// in tests that drive the registry standalone.
+	hub         *hub.TermHub
+	managerURL  string
+	workerToken string
+	bridgeCtx   context.Context
 }
 
 var _ server.SessionRegistry = (*SessionRegistryImpl)(nil)

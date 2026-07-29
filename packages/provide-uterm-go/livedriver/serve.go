@@ -10,6 +10,7 @@ import (
 	"io"
 	"net"
 	"strings"
+	"time"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/cli"
 )
@@ -22,6 +23,11 @@ const DefaultAuthMode = "dev_token"
 // picks the port and the driver reports what it was given. No port number
 // appears anywhere in this driver.
 const ephemeralLoopback = "127.0.0.1:0"
+
+// readyTimeout bounds the wait for the configured sessions to come up. On
+// expiry the driver announces anyway and lets the scenario report what it
+// finds — a harness that fails says more than one that hangs.
+const readyTimeout = 30 * time.Second
 
 // ServeOptions configures a server-role run.
 type ServeOptions struct {
@@ -67,12 +73,24 @@ func RunServe(ctx context.Context, opts ServeOptions, stdin io.Reader, stdout io
 		}()
 	}
 
+	// Serve first, announce second. The announcement means "ready", not
+	// "bound": until the configured auto_start sessions have attached
+	// themselves to the hub there is a session no client can take a lease on,
+	// and a driver that announced before then would be announcing something
+	// the scenarios cannot rely on. The reference driver gates the same way.
+	served := make(chan error, 1)
+	go func() { served <- srv.Serve(serveCtx) }()
+
+	readyCtx, readyCancel := context.WithTimeout(serveCtx, readyTimeout)
+	srv.WaitReady(readyCtx)
+	readyCancel()
+
 	if err := writeHandshake(stdout, srv); err != nil {
-		// Serve never took the listener, so nothing else will close it.
-		_ = ln.Close()
+		cancel()
+		<-served
 		return err
 	}
-	return srv.Serve(serveCtx)
+	return <-served
 }
 
 // writeHandshake announces the bound server as one line of JSON.

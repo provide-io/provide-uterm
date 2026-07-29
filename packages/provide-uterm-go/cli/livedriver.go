@@ -11,6 +11,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
 )
@@ -93,6 +94,32 @@ func (l *LiveServer) AuthMode() string { return l.bundle.cfg.Auth.Mode }
 // Serve runs the server on its listener until ctx is cancelled, then drains.
 func (l *LiveServer) Serve(ctx context.Context) error {
 	return l.bundle.srv.Serve(ctx, l.ln)
+}
+
+// WaitReady blocks until the server's configured auto_start sessions are up and
+// attached to the hub, or ctx is done.
+//
+// The live-conformance handshake means "ready", not "bound". A client that
+// arrives before the configured sessions have attached finds a session with no
+// worker and cannot take a lease on it — a race that only ever fired for the
+// fast languages, which is the worst way for a harness to be wrong. The
+// reference driver gates its announcement the same way.
+//
+// Bounded by the caller's ctx and deliberately silent about giving up: a
+// harness that hangs says less than one that runs and reports what it found.
+func (l *LiveServer) WaitReady(ctx context.Context) {
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if l.bundle.registry.WorkersAttached() {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
 }
 
 // Close releases the control-plane engine. Serve must have returned first.
