@@ -7,3 +7,4 @@
 
 export * from "./auth.ts";
 export * from "./timeseries.ts";
+export * from "./supervision.ts";

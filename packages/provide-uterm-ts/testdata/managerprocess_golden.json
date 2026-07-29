@@ -1,0 +1,260 @@
+{
+  "operator_var": "UTERM_MANAGER_API_TOKEN",
+  "worker_var": "UTERM_MANAGER_WORKER_TOKEN",
+  "parsed": [
+    {
+      "id": "agent_000",
+      "index": 0
+    },
+    {
+      "id": "agent_001",
+      "index": 1
+    },
+    {
+      "id": "agent_042",
+      "index": 42
+    },
+    {
+      "id": "agent_999",
+      "index": 999
+    },
+    {
+      "id": "agent_1000",
+      "index": 1000
+    },
+    {
+      "id": "agent_0001",
+      "index": 1
+    },
+    {
+      "id": "agent_",
+      "index": null
+    },
+    {
+      "id": "agent",
+      "index": null
+    },
+    {
+      "id": "agent_abc",
+      "index": null
+    },
+    {
+      "id": "agent_-1",
+      "index": null
+    },
+    {
+      "id": "agent_ 1",
+      "index": null
+    },
+    {
+      "id": " agent_001 ",
+      "index": 1
+    },
+    {
+      "id": "AGENT_001",
+      "index": null
+    },
+    {
+      "id": "worker_001",
+      "index": null
+    },
+    {
+      "id": "",
+      "index": null
+    },
+    {
+      "id": "agent_001x",
+      "index": null
+    },
+    {
+      "id": "xagent_001",
+      "index": null
+    }
+  ],
+  "allocations": [
+    {
+      "name": "nothing known",
+      "agents": [],
+      "processes": [],
+      "allocated": [
+        "agent_000"
+      ],
+      "next_index": 0
+    },
+    {
+      "name": "one agent",
+      "agents": [
+        "agent_000"
+      ],
+      "processes": [],
+      "allocated": [
+        "agent_001"
+      ],
+      "next_index": 1
+    },
+    {
+      "name": "a gap in the middle",
+      "agents": [
+        "agent_000",
+        "agent_002"
+      ],
+      "processes": [],
+      "allocated": [
+        "agent_003"
+      ],
+      "next_index": 3
+    },
+    {
+      "name": "agents and processes",
+      "agents": [
+        "agent_000"
+      ],
+      "processes": [
+        "agent_001"
+      ],
+      "allocated": [
+        "agent_002"
+      ],
+      "next_index": 2
+    },
+    {
+      "name": "the same id in both",
+      "agents": [
+        "agent_000"
+      ],
+      "processes": [
+        "agent_000"
+      ],
+      "allocated": [
+        "agent_001"
+      ],
+      "next_index": 1
+    },
+    {
+      "name": "a high id",
+      "agents": [
+        "agent_120"
+      ],
+      "processes": [],
+      "allocated": [
+        "agent_121"
+      ],
+      "next_index": 121
+    },
+    {
+      "name": "ids nobody parses",
+      "agents": [
+        "worker-a",
+        "something"
+      ],
+      "processes": [],
+      "allocated": [
+        "agent_000"
+      ],
+      "next_index": 0
+    },
+    {
+      "name": "a mixture",
+      "agents": [
+        "agent_003",
+        "worker-a"
+      ],
+      "processes": [
+        "agent_007"
+      ],
+      "allocated": [
+        "agent_008"
+      ],
+      "next_index": 8
+    },
+    {
+      "name": "an id past three digits",
+      "agents": [
+        "agent_1000"
+      ],
+      "processes": [],
+      "allocated": [
+        "agent_1001"
+      ],
+      "next_index": 1001
+    }
+  ],
+  "scoped": [
+    {
+      "name": "a fleet secret configured",
+      "env": {
+        "UTERM_MANAGER_API_TOKEN": "omnipotent",
+        "UTERM_MANAGER_WORKER_TOKEN": "fleet-secret",
+        "PATH": "/usr/bin"
+      },
+      "agent_id": "agent_001",
+      "worker_token": "fleet-secret",
+      "scoped": {
+        "UTERM_MANAGER_API_TOKEN": "sha256=118a84a4d3237ab1826acc408c9b728a7cd00014afd9699130b0da67a8426349",
+        "PATH": "/usr/bin"
+      }
+    },
+    {
+      "name": "no fleet secret configured",
+      "env": {
+        "UTERM_MANAGER_API_TOKEN": "omnipotent",
+        "PATH": "/usr/bin"
+      },
+      "agent_id": "agent_001",
+      "worker_token": "",
+      "scoped": {
+        "UTERM_MANAGER_API_TOKEN": "omnipotent",
+        "PATH": "/usr/bin"
+      }
+    },
+    {
+      "name": "the raw secret in the environment but none configured",
+      "env": {
+        "UTERM_MANAGER_API_TOKEN": "omnipotent",
+        "UTERM_MANAGER_WORKER_TOKEN": "left-over"
+      },
+      "agent_id": "agent_001",
+      "worker_token": "",
+      "scoped": {
+        "UTERM_MANAGER_API_TOKEN": "omnipotent"
+      }
+    },
+    {
+      "name": "another agent",
+      "env": {
+        "UTERM_MANAGER_API_TOKEN": "omnipotent",
+        "UTERM_MANAGER_WORKER_TOKEN": "fleet-secret"
+      },
+      "agent_id": "agent_002",
+      "worker_token": "fleet-secret",
+      "scoped": {
+        "UTERM_MANAGER_API_TOKEN": "sha256=ad23d975807ad3549b9661cd8bed6f1996011b5b0e6025a397a1540068bb2916"
+      }
+    },
+    {
+      "name": "a secret that is only spaces",
+      "env": {
+        "UTERM_MANAGER_API_TOKEN": "omnipotent",
+        "UTERM_MANAGER_WORKER_TOKEN": "   "
+      },
+      "agent_id": "agent_001",
+      "worker_token": "   ",
+      "scoped": {
+        "UTERM_MANAGER_API_TOKEN": "omnipotent"
+      }
+    },
+    {
+      "name": "nothing in the environment at all",
+      "env": {},
+      "agent_id": "agent_001",
+      "worker_token": "fleet-secret",
+      "scoped": {
+        "UTERM_MANAGER_API_TOKEN": "sha256=118a84a4d3237ab1826acc408c9b728a7cd00014afd9699130b0da67a8426349"
+      }
+    }
+  ],
+  "derived": {
+    "agent_001": "sha256=118a84a4d3237ab1826acc408c9b728a7cd00014afd9699130b0da67a8426349",
+    "agent_002": "sha256=ad23d975807ad3549b9661cd8bed6f1996011b5b0e6025a397a1540068bb2916"
+  }
+}
