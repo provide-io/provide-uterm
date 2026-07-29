@@ -38,16 +38,22 @@ def test_scans_python_csharp_and_go(tmp_path: Path) -> None:
     _write(tmp_path / "big.py", 800)
     _write(tmp_path / "big.cs", 800)
     _write(tmp_path / "big.go", 800)
+    _write(tmp_path / "big.ts", 800)
     _write(tmp_path / "small.cs", 10)
 
     offenders = check_max_loc.find_loc_offenders([tmp_path], max_lines=777)
     names = sorted(p.name for p, _ in offenders)
-    assert names == ["big.cs", "big.go", "big.py"]
+    assert names == ["big.cs", "big.go", "big.py", "big.ts"]
 
 
 def test_ignores_unlisted_suffixes(tmp_path: Path) -> None:
-    """A language outside the configured suffixes is not measured."""
-    _write(tmp_path / "big.ts", 800)
+    """A language outside the configured suffixes is not measured.
+
+    The cap covers the four languages this repository ships. A suffix nobody
+    configured is not silently measured — the cap is a decision per language,
+    not a default applied to whatever happens to be in the tree.
+    """
+    _write(tmp_path / "big.rb", 800)
     assert check_max_loc.find_loc_offenders([tmp_path], max_lines=777) == []
 
 

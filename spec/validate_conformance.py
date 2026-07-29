@@ -37,6 +37,18 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 _SPEC_PATH = _REPO_ROOT / "spec" / "uterm-api.yaml"
 
 
+def csharp_satisfies(name: str, exports: set[str]) -> bool:
+    """Whether the C# source provides *name*, allowing the ``Async`` suffix.
+
+    C#'s Task-based Asynchronous Pattern requires that suffix on any method
+    returning a Task, so an asynchronous registry spells the spec's ``get`` as
+    ``GetAsync`` and has not diverged by doing so. Insisting on the bare name
+    would be asking the C# port to break its own language's convention to
+    satisfy a rule written for Go, which does not have one.
+    """
+    return name in exports or f"{name}Async" in exports
+
+
 def _load_spec() -> dict[str, object]:
     return yaml.safe_load(_SPEC_PATH.read_text(encoding="utf-8"))
 
@@ -69,7 +81,7 @@ def main() -> int:
             cs_name = go_name  # C# uses the same PascalCase convention as Go
             py_ok = name in python_exports
             go_ok = go_name in go_exports
-            cs_ok = cs_name in csharp_exports
+            cs_ok = csharp_satisfies(cs_name, csharp_exports)
 
             if not required:
                 continue
