@@ -26,6 +26,7 @@
 
 import { bootstrapServer } from "../server/bootstrap.ts";
 import { type RunningServer, serveApp } from "../server/node-http.ts";
+import type { SessionRuntimes } from "../server/session-runtime.ts";
 import { LANGUAGE } from "./client-driver.ts";
 import { parseFlags } from "./flags.ts";
 
@@ -111,11 +112,20 @@ export async function runServe(argv: readonly string[], options: ServeOptions = 
 
   let running: RunningServer;
   let token: string;
+  let runtimes: SessionRuntimes;
   try {
     const flags = parseFlags(argv);
     const bootstrapped = bootstrapServer({ authMode: flags.get("auth") ?? DEFAULT_AUTH_MODE });
     token = bootstrapped.token;
+    runtimes = bootstrapped.runtimes;
     running = await (options.listen ?? serveApp)(bootstrapped.app);
+    // Before the announcement, not after: the harness's first request arrives
+    // the instant the line is written, and a session brought up in a race with
+    // it would report `stopped` or `running` depending on the machine. The
+    // reference gets away with a background boot task because its own matrix
+    // rows are the ones that made `lifecycle_state` look volatile in the first
+    // place. This port has no reason to inherit the race.
+    await runtimes.startAutoStart();
   } catch (error) {
     // A driver that could not start must say so on stdout rather than dying
     // quietly: the harness waits for a line, and the only thing worse than a
@@ -136,5 +146,8 @@ export async function runServe(argv: readonly string[], options: ServeOptions = 
   write(announcement(running, token));
   await (options.until ?? shutdownRequested)();
   await running.close();
+  // The connectors go down after the socket does, so nothing is torn out from
+  // under a request that was already being served.
+  await runtimes.stopAll();
   return 0;
 }

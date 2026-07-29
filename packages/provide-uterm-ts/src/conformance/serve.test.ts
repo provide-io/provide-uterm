@@ -77,6 +77,26 @@ describe("announcing", () => {
     await finished;
   });
 
+  it("has already brought the auto_start sessions up when it announces", async () => {
+    // What `004_session_shape` cannot assert while it masks `lifecycle_state`,
+    // asserted here instead: the default configuration flags `provide-shell`
+    // `auto_start`, so the very first request the harness makes must find it
+    // running. Before the announcement rather than after, so this is a fact
+    // about the server and not about who won a race.
+    const { line, stop, finished } = await started();
+    const response = await fetch(`${String(line.base_url)}/api/sessions`, {
+      headers: { Authorization: `Bearer ${String(line.token)}` },
+    });
+    const sessions = (await response.json()) as { session_id: string; lifecycle_state: string; connected: boolean }[];
+    expect(sessions[0]?.session_id).toBe("provide-shell");
+    expect(sessions[0]?.lifecycle_state).toBe("running");
+    // And still not connected: the session is up, but this server binds no
+    // transport a client could attach through, and it does not pretend to.
+    expect(sessions[0]?.connected).toBe(false);
+    stop();
+    await finished;
+  });
+
   it("mints nothing in a mode that has no stub identity provider", async () => {
     const { line, stop, finished } = await started(["--auth", "jwt"]);
     expect(line.token).toBe("");

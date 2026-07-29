@@ -22,4 +22,5 @@ export * from "./bootstrap.ts";
 export * from "./health.ts";
 export * from "./route-binding.ts";
 export * from "./session-registry.ts";
+export * from "./session-runtime.ts";
 export * from "./session-status.ts";
