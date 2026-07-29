@@ -103,6 +103,17 @@ export function isRetryableTransportError(error: unknown): boolean {
  *   as its cause — the message alone tells an operator nothing about why.
  */
 export async function connectWithRetries<T>(connect: () => Promise<T>, options: ReconnectOptions<T> = {}): Promise<T> {
+  return connectWithin(connect, options, "connect retries exhausted");
+}
+
+/**
+ * Connect within the budget, failing with `message`.
+ *
+ * The message differs by path, and the difference is the whole diagnosis:
+ * "connect retries exhausted" is a server that never came up, and "reconnect
+ * retries exhausted" is one that was up and could not be got back.
+ */
+async function connectWithin<T>(connect: () => Promise<T>, options: ReconnectOptions<T>, message: string): Promise<T> {
   const policy = options.policy ?? {};
   const maxRetries = policy.maxRetries ?? RECONNECT_DEFAULTS.maxRetries;
   const sleep = options.sleep ?? realSleep;
@@ -112,7 +123,7 @@ export async function connectWithRetries<T>(connect: () => Promise<T>, options: 
       return await connect();
     } catch (error) {
       if (retries >= maxRetries) {
-        throw new Error("connect retries exhausted", { cause: error });
+        throw new Error(message, { cause: error });
       }
       retries += 1;
       const delay = policyDelay(policy, retries);
@@ -120,6 +131,27 @@ export async function connectWithRetries<T>(connect: () => Promise<T>, options: 
         await sleep(delay);
       }
     }
+  }
+}
+
+/**
+ * What a reconnecting session needs of the thing it wraps.
+ *
+ * Required rather than optional: the dead session is closed before another is
+ * built, and a wrapper that could skip that would leak a descriptor per drop
+ * on exactly the path that is hardest to notice.
+ */
+export interface ClosableSession {
+  close(): Promise<void>;
+}
+
+/** Close a session, ignoring the failure. */
+async function closeQuietly(session: { close(): Promise<void> }): Promise<void> {
+  try {
+    await session.close();
+  } catch {
+    // A socket already gone will fail to close, and that is not news: the
+    // point of the call is the descriptor, and the caller is mid-recovery.
   }
 }
 
@@ -138,7 +170,10 @@ export interface Reconnecting<T> {
  * the dead one would fail the same way forever. The reconnect hook runs
  * first, so application state is back before the retried call needs it.
  */
-export function reconnecting<T>(connect: () => Promise<T>, options: ReconnectOptions<T> = {}): Reconnecting<T> {
+export function reconnecting<T extends ClosableSession>(
+  connect: () => Promise<T>,
+  options: ReconnectOptions<T> = {},
+): Reconnecting<T> {
   const policy = options.policy ?? {};
   const maxRetries = policy.maxRetries ?? RECONNECT_DEFAULTS.maxRetries;
   const sleep = options.sleep ?? realSleep;
@@ -147,19 +182,25 @@ export function reconnecting<T>(connect: () => Promise<T>, options: ReconnectOpt
   /** Establish a session, or reuse the one already open. */
   const ensure = async (): Promise<T> => {
     if (session === undefined) {
-      session = await connectWithRetries(connect, options);
+      session = await connectWithin(connect, options, "connect retries exhausted");
     }
     return session;
   };
 
-  /** Drop the current session and build another. */
-  const rebuild = async (attempt: number): Promise<T> => {
+  /** Close the dead session and build another. */
+  const rebuild = async (dead: T, attempt: number): Promise<T> => {
     session = undefined;
+    // Before the backoff, not after: waiting thirty seconds with the dead
+    // socket still open is thirty seconds of a descriptor held and a peer left
+    // half-open.
+    await closeQuietly(dead);
     const delay = policyDelay(policy, attempt);
     if (delay > 0) {
       await sleep(delay);
     }
-    const fresh = await connectWithRetries(connect, options);
+    // A rebuild that runs out of budget reports getting *back* — not getting
+    // up, which is what the first connect reports.
+    const fresh = await connectWithin(connect, options, "reconnect retries exhausted");
     session = fresh;
     await options.onReconnect?.(fresh);
     return fresh;
@@ -180,10 +221,18 @@ export function reconnecting<T>(connect: () => Promise<T>, options: ReconnectOpt
             throw error;
           }
           if (retries >= maxRetries) {
+            // Closed on the way out, so a caller that gives up does not leave
+            // the socket behind for whoever notices next — and forgotten, so
+            // `session` never names a socket that has been closed. The
+            // reference leaves its own field pointing at it; a later call
+            // there fails against the dead session and rebuilds, where this
+            // one connects afresh.
+            await closeQuietly(current);
+            session = undefined;
             throw new Error("reconnect retries exhausted", { cause: error });
           }
           retries += 1;
-          current = await rebuild(retries);
+          current = await rebuild(current, retries);
         }
       }
     },
