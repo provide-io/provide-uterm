@@ -12,4 +12,5 @@
  * would be a new security surface wearing a port's clothes.
  */
 
+export * from "./dispatcher.ts";
 export * from "./output.ts";
