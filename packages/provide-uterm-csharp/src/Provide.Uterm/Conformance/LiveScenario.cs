@@ -46,6 +46,37 @@ public sealed class LiveStep
 
     /// <summary>Request body for <c>http_post</c>; null when the step carries none.</summary>
     public JsonNode? Body { get; init; }
+
+    /// <summary>The worker whose lease a hijack action acts on.</summary>
+    public string? WorkerId { get; init; }
+
+    /// <summary>The lease itself — normally a reference to the acquiring step.</summary>
+    public string? HijackId { get; init; }
+
+    /// <summary>Who is taking a lease. Null leaves the library's own default.</summary>
+    public string? Owner { get; init; }
+
+    /// <summary>How long a lease runs. Null leaves the library's own default.</summary>
+    public int? LeaseS { get; init; }
+
+    /// <summary>What <c>hijack_send</c> types.</summary>
+    public string? Keys { get; init; }
+
+    /// <summary><c>open</c> or <c>hijack</c>, in the reference's own vocabulary.</summary>
+    public string? InputMode { get; init; }
+
+    /// <summary>How many events <c>session_events</c> reads. Null leaves the default.</summary>
+    public int? Limit { get; init; }
+
+    /// <summary>
+    /// The step exactly as the scenario wrote it.
+    ///
+    /// Kept because a reference (<see cref="LiveReference"/>) is resolved against
+    /// what earlier steps recorded, at the moment the request is built rather
+    /// than when the file was read — so the written form has to survive until
+    /// then, and the resolved form is parsed from a rewritten copy of it.
+    /// </summary>
+    public JsonObject Raw { get; init; } = new();
 }
 
 /// <summary>
@@ -134,7 +165,15 @@ public sealed class LiveScenario
         return steps;
     }
 
-    private static LiveStep ParseStep(JsonNode? node)
+    /// <summary>
+    /// One step, read out of the JSON object a scenario wrote it as.
+    ///
+    /// Internal rather than private because <see cref="LiveReference"/> parses a
+    /// step a second time, from a copy with its references replaced: one parser
+    /// for the written form and the resolved form both, so a field a scenario
+    /// can write is a field a reference can fill.
+    /// </summary>
+    internal static LiveStep ParseStep(JsonNode? node)
     {
         if (node is not JsonObject obj)
         {
@@ -160,14 +199,37 @@ public sealed class LiveScenario
             Auth = Str(obj, "auth") ?? LiveStep.AuthToken,
             Path = Str(obj, "path"),
             SessionId = Str(obj, "session_id"),
+            WorkerId = Str(obj, "worker_id"),
+            HijackId = Str(obj, "hijack_id"),
+            Owner = Str(obj, "owner"),
+            LeaseS = Int(obj, "lease_s"),
+            Keys = Str(obj, "keys"),
+            InputMode = Str(obj, "input_mode"),
+            Limit = Int(obj, "limit"),
             // Deep-cloned: the parsed document is discarded, and a node still
             // owned by it cannot be attached to the request we build.
             Body = obj["body"]?.DeepClone(),
+            Raw = obj.DeepClone().AsObject(),
         };
     }
 
-    private static string? Str(JsonObject obj, string key) =>
-        obj[key] is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
+    /// <summary>
+    /// A string field, or the JSON text of a value that is not one.
+    ///
+    /// A reference may resolve to a number — an id a server answered as digits
+    /// is still that id — and rendering it is the only way a string field can
+    /// carry it to the wire. Go's <c>asText</c> is the same rule.
+    /// </summary>
+    private static string? Str(JsonObject obj, string key) => obj[key] switch
+    {
+        null => null,
+        JsonValue value when value.TryGetValue<string>(out var text) => text,
+        var other => other.ToJsonString(),
+    };
+
+    /// <summary>An integer field, or null when the step names none.</summary>
+    private static int? Int(JsonObject obj, string key) =>
+        obj[key] is JsonValue value && value.TryGetValue<int>(out var number) ? number : null;
 
     private static IReadOnlyList<string> Strings(JsonNode? node)
     {

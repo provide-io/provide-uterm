@@ -27,16 +27,25 @@ public sealed class LiveStepResult
     /// <summary>Set only when the step produced no response; a 500 is not an error.</summary>
     public string? Error { get; init; }
 
+    /// <summary>
+    /// What was observed, as the four fields the protocol names.
+    ///
+    /// Also what a later step's reference is resolved against, so the paths a
+    /// scenario writes (<c>body.hijack_id</c>, <c>status</c>) are the same paths
+    /// the harness reads out of the result.
+    /// </summary>
+    public JsonObject Fields() => new()
+    {
+        ["status"] = Status is null ? null : JsonValue.Create(Status.Value),
+        ["ok"] = Ok,
+        ["body"] = Body?.DeepClone(),
+        ["error"] = Error,
+    };
+
     public JsonObject ToJson() => new()
     {
         ["id"] = Id,
-        ["fields"] = new JsonObject
-        {
-            ["status"] = Status is null ? null : JsonValue.Create(Status.Value),
-            ["ok"] = Ok,
-            ["body"] = Body?.DeepClone(),
-            ["error"] = Error,
-        },
+        ["fields"] = Fields(),
     };
 }
 

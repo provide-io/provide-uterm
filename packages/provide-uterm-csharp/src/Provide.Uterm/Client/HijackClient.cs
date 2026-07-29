@@ -40,6 +40,12 @@ public sealed class HijackClient : IDisposable
     private readonly bool _ownsHttp;
 
     public const int DefaultLeaseS = 90;
+
+    /// <summary>How many session events a caller that names no limit asks for.</summary>
+    public const int DefaultSessionEventsLimit = 100;
+
+    /// <summary>Who a caller that names no owner takes a lease as.</summary>
+    public const string DefaultOwner = "operator";
     public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(20);
     public const string DefaultEntityPrefix = "/worker";
 
@@ -88,9 +94,9 @@ public sealed class HijackClient : IDisposable
     private string Sp(string sessionId) => "/api/sessions/" + SafeId(sessionId, "session_id");
 
     public Task<Dictionary<string, object?>> AcquireAsync(
-        string workerId, string owner = "operator", int leaseS = DefaultLeaseS, CancellationToken ct = default)
+        string workerId, string owner = DefaultOwner, int leaseS = DefaultLeaseS, CancellationToken ct = default)
     {
-        if (string.IsNullOrEmpty(owner)) owner = "operator";
+        if (string.IsNullOrEmpty(owner)) owner = DefaultOwner;
         if (leaseS <= 0) leaseS = DefaultLeaseS;
         return RequestObjectAsync(HttpMethod.Post, Wp(workerId) + "/hijack/acquire",
             new Dictionary<string, object?> { ["owner"] = owner, ["lease_s"] = leaseS }, ct);
@@ -274,16 +280,39 @@ public sealed class HijackClient : IDisposable
     /// <summary>
     /// The session's recent events, as the bare JSON array the endpoint answers
     /// (Python <c>list[dict]</c>, Go <c>SessionEvents() (any, error)</c>).
+    ///
+    /// A <paramref name="limit"/> of zero or less selects
+    /// <see cref="DefaultSessionEventsLimit"/>, which is where that number lives
+    /// for every caller — a driver or a CLI holding a second copy of it is a
+    /// second place for it to drift from the reference's.
     /// </summary>
+    public Task<object?> SessionEvents(string sessionId, int limit, CancellationToken ct = default) =>
+        RequestAnyAsync(
+            HttpMethod.Get,
+            Sp(sessionId) + "/events?limit=" + (limit <= 0 ? DefaultSessionEventsLimit : limit),
+            null,
+            ct);
+
+    /// <summary>The session's recent events at the default limit.</summary>
     public Task<object?> SessionEvents(string sessionId, CancellationToken ct = default) =>
-        RequestAnyAsync(HttpMethod.Get, Sp(sessionId) + "/events", null, ct);
+        SessionEvents(sessionId, 0, ct);
 
     public Task<Dictionary<string, object?>> WatchSessionEvents(string sessionId, CancellationToken ct = default) =>
         RequestObjectAsync(HttpMethod.Get, Sp(sessionId) + "/events/watch", null, ct);
 
+    /// <summary>
+    /// Put a session into <c>open</c> or <c>hijack</c> mode.
+    ///
+    /// The **session** route, <c>POST /api/sessions/{id}/mode</c> — not the
+    /// worker route <see cref="SetInputMode"/> reaches. It reads <c>input_mode</c>
+    /// from the body, in this port's server (<c>UtermServer.SessionControl</c>)
+    /// and in the reference's (<c>routes/sessions.py::set_mode</c>) alike; the
+    /// key used to be <c>mode</c> here, which every server in the matrix answers
+    /// with a 422 because it never sees a mode at all.
+    /// </summary>
     public Task<Dictionary<string, object?>> SetSessionMode(string sessionId, string mode, CancellationToken ct = default) =>
         RequestObjectAsync(HttpMethod.Post, Sp(sessionId) + "/mode",
-            new Dictionary<string, object?> { ["mode"] = mode }, ct);
+            new Dictionary<string, object?> { ["input_mode"] = mode }, ct);
 
     public Task<Dictionary<string, object?>> ConnectSession(
         string sessionId, object? body = null, CancellationToken ct = default) =>
