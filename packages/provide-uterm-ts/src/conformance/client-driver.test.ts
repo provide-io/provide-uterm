@@ -497,6 +497,146 @@ describe("a step that needs an earlier step's answer", () => {
   });
 });
 
+describe("a step done more than once", () => {
+  it("records each repetition as its own observation, numbered from zero", async () => {
+    // Some behaviour is only observable by exhausting something: a budget is
+    // invisible until it runs out, so the answers are expected to stop being
+    // the same and *which* repetition changed is the measurement.
+    let taken = 0;
+    const fake = server(() => {
+      taken += 1;
+      return taken <= 2
+        ? { status: 200, body: JSON.stringify({ hijack_id: `h${taken}` }) }
+        : { status: 429, body: '{"detail":"slow down"}' };
+    });
+
+    const result = await run([{ id: "flood", action: "hijack_acquire", worker_id: "w1", repeat: 3 }], fake.fetchImpl);
+
+    expect(result.status).toBe("completed");
+    // The bare `flood` records nothing: an expectation naming it would be
+    // about a step nobody ran, which passes in every cell at once.
+    expect(result.steps.map((step) => step.id)).toStrictEqual(["flood.0", "flood.1", "flood.2"]);
+    // Every repetition, never just the last. Keeping only the final answer
+    // would turn "the third request was refused" into "a request was
+    // refused", and those are different claims about a budget.
+    expect(result.steps.map((step) => step.fields.status)).toStrictEqual([200, 200, 429]);
+    expect(fake.asked).toHaveLength(3);
+  });
+
+  it("keeps its bare id for a step nobody repeated", async () => {
+    // There is no `repeat: 1`, so a step that runs once is recorded under the
+    // id the scenario gave it — which is what every committed scenario's
+    // expectations name.
+    const fake = ok();
+
+    const result = await run(
+      [
+        { id: "first", action: "health" },
+        { id: "second", action: "list_sessions" },
+      ],
+      fake.fetchImpl,
+    );
+
+    expect(result.steps.map((step) => step.id)).toStrictEqual(["first", "second"]);
+  });
+
+  it("records a repetition that failed rather than abandoning the rest", async () => {
+    // The per-step rule is unchanged by repetition: a server that could not be
+    // reached is an observation of that repetition, and the run carries on.
+    let call = 0;
+    const fetchImpl = (async () => {
+      call += 1;
+      if (call === 2) {
+        throw new Error("connect ECONNREFUSED 127.0.0.1:9");
+      }
+      return new Response('{"ok":true}', { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const result = await run([{ id: "flood", action: "health", repeat: 3 }], fetchImpl);
+
+    expect(result.status).toBe("completed");
+    expect(result.steps.map((step) => step.id)).toStrictEqual(["flood.0", "flood.1", "flood.2"]);
+    expect(result.steps[1]?.fields).toStrictEqual({
+      status: null,
+      ok: false,
+      body: null,
+      error: "connect ECONNREFUSED 127.0.0.1:9",
+    });
+    expect(result.steps[2]?.fields.status).toBe(200);
+  });
+
+  it("performs the repetitions one after another, not all at once", async () => {
+    // A scenario repeats a step to measure something order-dependent, so the
+    // repetitions are sequential: starting them together would answer "a
+    // request was refused" without saying which one.
+    let inFlight = 0;
+    let overlapped = false;
+    let started = 0;
+    const finished: number[] = [];
+    const fetchImpl = (async () => {
+      inFlight += 1;
+      if (inFlight > 1) {
+        overlapped = true;
+      }
+      started += 1;
+      const mine = started;
+      // A turn of the loop, which a driver that started every repetition at
+      // once would spend with all of them in flight.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      finished.push(mine);
+      inFlight -= 1;
+      return new Response(JSON.stringify({ n: mine }), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const result = await run([{ id: "flood", action: "health", repeat: 4 }], fetchImpl);
+
+    expect(overlapped).toBe(false);
+    expect(finished).toStrictEqual([1, 2, 3, 4]);
+    // And recorded in the order they happened, which is what an expectation
+    // naming `flood.30` is counting.
+    expect(result.steps.map((step) => (step.fields.body as { n: number }).n)).toStrictEqual([1, 2, 3, 4]);
+  });
+
+  it("resolves a reference once, before the repetitions", async () => {
+    // A reference can never name a repeated step, so nothing it could see
+    // changes between repetitions — every one of them is built from the value
+    // the earlier step recorded.
+    const fake = server((path) =>
+      path.endsWith("/acquire")
+        ? { status: 200, body: JSON.stringify({ hijack_id: "h-77" }) }
+        : { status: 200, body: "{}" },
+    );
+
+    const result = await run(
+      [
+        { id: "acquire", action: "hijack_acquire", worker_id: "w1" },
+        { id: "beat", action: "hijack_heartbeat", worker_id: "w1", hijack_id: "${acquire.body.hijack_id}", repeat: 2 },
+      ],
+      fake.fetchImpl,
+    );
+
+    expect(result.steps.map((step) => step.id)).toStrictEqual(["acquire", "beat.0", "beat.1"]);
+    expect(fake.asked.map((call) => call.path)).toStrictEqual([
+      "/worker/w1/hijack/acquire",
+      "/worker/w1/hijack/h-77/heartbeat",
+      "/worker/w1/hijack/h-77/heartbeat",
+    ]);
+  });
+
+  it("stops on a repeated step missing an argument, without performing any of it", async () => {
+    // A malformed step is a run error whatever its `repeat` says: the driver
+    // could not perform the step at all, so there is nothing to record.
+    const fake = ok();
+
+    const result = await run([{ id: "flood", action: "hijack_acquire", repeat: 3 }], fake.fetchImpl);
+
+    expect(result.status).toBe("error");
+    expect(result.error).toContain("worker_id");
+    expect(result.steps).toStrictEqual([]);
+    expect(fake.asked).toStrictEqual([]);
+  });
+});
+
 describe("capabilities", () => {
   it("runs a scenario that requires nothing", async () => {
     const fake = ok();
