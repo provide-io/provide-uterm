@@ -6,4 +6,5 @@
 /** Client libraries: talking to a session from the outside. */
 
 export * from "./control-ws.ts";
+export * from "./hijack-client.ts";
 export * from "./hijack-guards.ts";
