@@ -17,20 +17,27 @@
  * resolve to one host and connect to another.
  */
 
-import { createHash } from "node:crypto";
 import { MAX_PROTOCOL_VERSION, MIN_PROTOCOL_VERSION, PREFERRED_PROTOCOL_VERSION } from "../bridge/index.ts";
 import { TELNET_HOST, TELNET_REMOTE_PORT } from "../defaults/index.ts";
 import { assertIpAllowed } from "../egress/index.ts";
 import { pyInt } from "../pycompat/index.ts";
 import { decodeCp437, encodeCp437 } from "../screen/index.ts";
 import type { SessionConnector, WorkerMessage } from "./base.ts";
+import {
+  boundedBuffer,
+  controlBanner,
+  modeBanner,
+  OVERLAY_COLS,
+  OVERLAY_ROWS,
+  overlayScreen,
+  overlaySnapshot,
+  pyBool,
+  rejectUnknownConnectorKeys,
+} from "./overlay.ts";
 
 /** The screen the overlay is drawn for. */
-export const TELNET_COLS = 80;
-export const TELNET_ROWS = 25;
-
-/** How much output is kept behind the visible screen. */
-const SCREEN_LIMIT = 32_000;
+export const TELNET_COLS = OVERLAY_COLS;
+export const TELNET_ROWS = OVERLAY_ROWS;
 
 /** How much is read at a time, and how long a read waits. */
 const READ_SIZE = 4096;
@@ -94,12 +101,7 @@ export class TelnetSessionConnector implements SessionConnector {
     config: Readonly<Record<string, unknown>>,
     options: TelnetConnectorOptions,
   ) {
-    const unknown = Object.keys(config)
-      .filter((key) => !TELNET_CONNECTOR_KEYS.has(key))
-      .sort();
-    if (unknown.length > 0) {
-      throw new Error(`unknown telnet connector_config keys: [${unknown.map((key) => `'${key}'`).join(", ")}]`);
-    }
+    rejectUnknownConnectorKeys("telnet", config, TELNET_CONNECTOR_KEYS);
     this.#sessionId = sessionId;
     this.#displayName = displayName;
     this.#host = String(config.host ?? TELNET_HOST);
@@ -121,45 +123,18 @@ export class TelnetSessionConnector implements SessionConnector {
     this.#banner = `Connected to telnet://${this.#host}:${this.#port}`;
   }
 
-  /** The overlay, then whatever the endpoint has sent, cut to the screen. */
-  #screen(): string {
-    if (!this.#hubOverlay) {
-      return this.#screenBuffer;
-    }
-    const header = [
-      `\x1b[1;35m[${this.#displayName} (${this.#sessionId})]\x1b[0m`,
-      "-".repeat(60),
-      `\x1b[32mUpstream:\x1b[0m telnet://${this.#host}:${this.#port}`,
-      `\x1b[32mMode:\x1b[0m ${this.#inputMode === "open" ? "Shared input" : "Exclusive hijack"}`,
-      `\x1b[32mControl:\x1b[0m ${this.#paused ? "Paused for hijack" : "Live"}`,
-      `\x1b[33m${this.#banner}\x1b[0m`,
-      "",
-    ];
-    // The last screenful wins, overlay included: once the endpoint has sent
-    // more than a screen the header scrolls off with everything else, so a
-    // busy session shows only its output and a quiet one says what it is
-    // connected to. The reference's behaviour — a port that pinned the header
-    // instead would show a different screen than every other port does.
-    return [...header, ...splitLines(this.#screenBuffer)].slice(-TELNET_ROWS).join("\n");
-  }
-
   #snapshot(): WorkerMessage {
-    const screen = this.#screen();
-    const lines = splitLines(screen);
-    const shown = lines.length > 0 ? lines : [""];
-    const last = shown[shown.length - 1] as string;
-    return {
-      type: "snapshot",
-      screen,
-      cursor: { x: Math.min(last.length, TELNET_COLS - 1), y: Math.min(shown.length - 1, TELNET_ROWS - 1) },
-      cols: TELNET_COLS,
-      rows: TELNET_ROWS,
-      screen_hash: createHash("sha256").update(screen, "utf8").digest("hex").slice(0, 16),
-      cursor_at_end: true,
-      has_trailing_space: false,
-      prompt_detected: { prompt_id: "telnet_stream" },
-      ts: this.#now(),
-    };
+    const screen = overlayScreen({
+      sessionId: this.#sessionId,
+      displayName: this.#displayName,
+      upstream: `telnet://${this.#host}:${this.#port}`,
+      inputMode: this.#inputMode,
+      paused: this.#paused,
+      banner: this.#banner,
+      buffer: this.#screenBuffer,
+      hubOverlay: this.#hubOverlay,
+    });
+    return overlaySnapshot(screen, "telnet_stream", this.#now());
   }
 
   /**
@@ -223,7 +198,7 @@ export class TelnetSessionConnector implements SessionConnector {
     // its boxes with high bytes, and reading them as UTF-8 would replace every
     // one of them.
     const text = decodeCp437(data);
-    this.#screenBuffer = (this.#screenBuffer + text).slice(-SCREEN_LIMIT);
+    this.#screenBuffer = boundedBuffer(this.#screenBuffer, text);
     this.#banner = `Received ${this.#receivedBytes} bytes from telnet upstream.`;
     return [{ type: "term", data: text, ts: this.#now() }, this.#snapshot()];
   }
@@ -239,17 +214,10 @@ export class TelnetSessionConnector implements SessionConnector {
   async handleControl(action: string): Promise<WorkerMessage[]> {
     if (action === "pause") {
       this.#paused = true;
-      this.#banner = "Exclusive control active.";
     } else if (action === "resume") {
       this.#paused = false;
-      this.#banner = "Exclusive control released.";
-    } else if (action === "step") {
-      this.#banner = "Step requested. Awaiting upstream output.";
-    } else {
-      // Named rather than ignored silently, so an operator sees that whatever
-      // they pressed did nothing.
-      this.#banner = `Ignored control action: ${action}`;
     }
+    this.#banner = controlBanner(action);
     return [this.#snapshot()];
   }
 
@@ -273,9 +241,9 @@ export class TelnetSessionConnector implements SessionConnector {
       `host: ${this.#host}`,
       `port: ${this.#port}`,
       `input_mode: ${this.#inputMode}`,
-      `paused: ${this.#paused ? "True" : "False"}`,
+      `paused: ${pyBool(this.#paused)}`,
       `bytes_received: ${this.#receivedBytes}`,
-      `connected: ${this.isConnected() ? "True" : "False"}`,
+      `connected: ${pyBool(this.isConnected())}`,
     ].join("\n");
   }
 
@@ -301,21 +269,7 @@ export class TelnetSessionConnector implements SessionConnector {
     if (mode === "open") {
       this.#paused = false;
     }
-    this.#banner = `Input mode set to ${mode === "open" ? "Shared input" : "Exclusive hijack"}.`;
+    this.#banner = modeBanner(mode);
     return [this.#hello(), this.#snapshot()];
   }
-}
-
-/**
- * Split as Python's `str.splitlines()` does, which drops a trailing break.
- *
- * Nothing splits to nothing rather than to one empty line, which falls out of
- * dropping that trailing break.
- */
-function splitLines(text: string): string[] {
-  const lines = text.split(/\r\n|\r|\n/);
-  if (lines[lines.length - 1] === "") {
-    lines.pop();
-  }
-  return lines;
 }
