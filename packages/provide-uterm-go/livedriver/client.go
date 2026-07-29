@@ -58,20 +58,35 @@ func RunScenario(ctx context.Context, sc *Scenario, opts ClientOptions) Result {
 
 	result := newResult(sc.ID, StatusCompleted)
 	runner := newStepRunner(opts)
+	// What each step recorded, so a later step can refer to an earlier answer.
+	seen := make(map[string]StepFields, len(sc.Steps))
 	for _, step := range sc.Steps {
+		// A reference that cannot be resolved is a malformed scenario rather
+		// than something a server did, so it ends the run without leaving a
+		// step behind for the harness to compare.
+		if err := resolveStep(&step, seen); err != nil {
+			failRun(&result, step.ID, err)
+			break
+		}
 		fields, fatal := runner.run(runCtx, step)
+		seen[step.ID] = fields
 		result.Steps = append(result.Steps, StepResult{ID: step.ID, Fields: fields})
 		if fatal != nil {
 			// The driver could not perform this step. That is a driver failure,
 			// not an observation, so the run is reported as an error rather
 			// than silently skipping the step.
-			result.Status = StatusError
-			msg := "step " + step.ID + ": " + fatal.Error()
-			result.Error = &msg
+			failRun(&result, step.ID, fatal)
 			break
 		}
 	}
 	return result
+}
+
+// failRun marks a run as a driver failure, naming the step that ended it.
+func failRun(result *Result, stepID string, err error) {
+	result.Status = StatusError
+	msg := "step " + stepID + ": " + err.Error()
+	result.Error = &msg
 }
 
 // stepRunner performs steps against one server, recording every exchange.
@@ -145,31 +160,11 @@ func (r *stepRunner) run(ctx context.Context, step Step) (StepFields, error) {
 // library shapes ok and body; the observer underneath it supplies the status
 // the library drops.
 func (r *stepRunner) libraryAction(ctx context.Context, step Step, headers map[string]string) (StepFields, error) {
-	hc := r.libClient(headers)
-	var (
-		value   any
-		callErr error
-	)
-	switch step.Action {
-	case ActionHealth:
-		v, err := hc.Health(ctx)
-		value, callErr = v, err
-	case ActionListSessions:
-		value, callErr = hc.ListSessions(ctx)
-	case ActionGetSession:
-		if step.SessionID == "" {
-			return fatalf("action %s requires session_id", step.Action)
-		}
-		v, err := hc.GetSession(ctx, step.SessionID)
-		value, callErr = v, err
-	case ActionSessionSnapshot:
-		if step.SessionID == "" {
-			return fatalf("action %s requires session_id", step.Action)
-		}
-		value, callErr = hc.SessionSnapshot(ctx, step.SessionID)
-	default:
-		return fatalf("unknown action %q", step.Action)
+	perform, err := callFor(r.libClient(headers), step)
+	if err != nil {
+		return failFields(err.Error()), err
 	}
+	value, callErr := perform(ctx)
 	return r.obs.libFields(value, callErr), nil
 }
 
