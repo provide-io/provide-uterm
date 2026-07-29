@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
-/** Graphical console sessions and the screenshots they produce. */
+/** Graphical console sessions, and the REST surface that reaches them. */
 
+export * from "./routes.ts";
 export * from "./session.ts";

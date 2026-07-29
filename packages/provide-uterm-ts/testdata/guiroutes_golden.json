@@ -1,0 +1,1388 @@
+{
+  "mono_to_wall": {
+    "wall_now": 1700000000.5,
+    "mono_now": 500.0,
+    "samples": [
+      {
+        "mono": 500.0,
+        "wall": 1700000000.5
+      },
+      {
+        "mono": 560.25,
+        "wall": 1700000060.75
+      },
+      {
+        "mono": 0.0,
+        "wall": 1699999500.5
+      },
+      {
+        "mono": 499.5,
+        "wall": 1700000000.0
+      }
+    ]
+  },
+  "capability": "graphical.session.attach",
+  "key_syms": {
+    "Enter": 65293,
+    "Tab": 65289,
+    "Esc": 65307,
+    "Backspace": 65288,
+    "Up": 65362,
+    "Down": 65364,
+    "Left": 65361,
+    "Right": 65363
+  },
+  "button_masks": {
+    "left": 1,
+    "middle": 2,
+    "right": 4
+  },
+  "console": [
+    6,
+    4
+  ],
+  "paths": {
+    "attach": "/worker/{worker_id}/gui/attach",
+    "screenshot": "/worker/{worker_id}/hijack/{hijack_id}/gui/screenshot",
+    "click": "/worker/{worker_id}/hijack/{hijack_id}/gui/click",
+    "type": "/worker/{worker_id}/hijack/{hijack_id}/gui/type",
+    "key": "/worker/{worker_id}/hijack/{hijack_id}/gui/key",
+    "drag": "/worker/{worker_id}/hijack/{hijack_id}/gui/drag"
+  },
+  "int_fields": [
+    {
+      "raw": 7,
+      "value": 7
+    },
+    {
+      "raw": -3,
+      "value": -3
+    },
+    {
+      "raw": 0,
+      "value": 0
+    },
+    {
+      "raw": "7",
+      "value": 7
+    },
+    {
+      "raw": " 7 ",
+      "value": 7
+    },
+    {
+      "raw": "-3",
+      "value": -3
+    },
+    {
+      "raw": "",
+      "value": 0
+    },
+    {
+      "raw": "seven",
+      "value": 0
+    },
+    {
+      "raw": "7.5",
+      "value": 0
+    },
+    {
+      "raw": 7.5,
+      "value": 0
+    },
+    {
+      "raw": true,
+      "value": 0
+    },
+    {
+      "raw": false,
+      "value": 0
+    },
+    {
+      "raw": null,
+      "value": 0
+    },
+    {
+      "raw": [
+        7
+      ],
+      "value": 0
+    },
+    {
+      "raw": {
+        "a": 1
+      },
+      "value": 0
+    }
+  ],
+  "int_field_absent": 0,
+  "int_field_default": 5,
+  "int_field_default_used": 5,
+  "str_fields": [
+    {
+      "raw": "hi",
+      "value": "hi"
+    },
+    {
+      "raw": "",
+      "value": ""
+    },
+    {
+      "raw": "  hi  ",
+      "value": "  hi  "
+    },
+    {
+      "raw": 7,
+      "value": ""
+    },
+    {
+      "raw": 7.5,
+      "value": ""
+    },
+    {
+      "raw": true,
+      "value": ""
+    },
+    {
+      "raw": null,
+      "value": ""
+    },
+    {
+      "raw": [
+        "hi"
+      ],
+      "value": ""
+    },
+    {
+      "raw": {
+        "a": 1
+      },
+      "value": ""
+    }
+  ],
+  "str_field_absent": "",
+  "str_field_default": "d",
+  "str_field_default_used": "d",
+  "cases": [
+    {
+      "name": "attaching without the capability",
+      "path": "/worker/{worker_id}/gui/attach",
+      "allow": false,
+      "body": {
+        "target_id": "gt-mem"
+      },
+      "status": 403,
+      "response": {
+        "error": "insufficient privileges"
+      },
+      "calls": [],
+      "console": null,
+      "lit": []
+    },
+    {
+      "name": "attaching to nothing named",
+      "path": "/worker/{worker_id}/gui/attach",
+      "body": {},
+      "status": 422,
+      "response": {
+        "error": "target_id is required for gui attach"
+      },
+      "calls": [],
+      "console": null,
+      "lit": []
+    },
+    {
+      "name": "attaching to a name of spaces",
+      "path": "/worker/{worker_id}/gui/attach",
+      "body": {
+        "target_id": "   "
+      },
+      "status": 422,
+      "response": {
+        "error": "target_id is required for gui attach"
+      },
+      "calls": [],
+      "console": null,
+      "lit": []
+    },
+    {
+      "name": "attaching to a name that is not text",
+      "path": "/worker/{worker_id}/gui/attach",
+      "body": {
+        "target_id": 7
+      },
+      "status": 422,
+      "response": {
+        "error": "target_id is required for gui attach"
+      },
+      "calls": [],
+      "console": null,
+      "lit": []
+    },
+    {
+      "name": "attaching with an unreadable body",
+      "path": "/worker/{worker_id}/gui/attach",
+      "bad_json": true,
+      "status": 422,
+      "response": {
+        "error": "target_id is required for gui attach"
+      },
+      "calls": [],
+      "console": null,
+      "lit": []
+    },
+    {
+      "name": "attaching with a body that is a list",
+      "path": "/worker/{worker_id}/gui/attach",
+      "body": [
+        1,
+        2
+      ],
+      "status": 422,
+      "response": {
+        "error": "target_id is required for gui attach"
+      },
+      "calls": [],
+      "console": null,
+      "lit": []
+    },
+    {
+      "name": "attaching with no tenant at all",
+      "path": "/worker/{worker_id}/gui/attach",
+      "tenant": null,
+      "body": {
+        "target_id": "gt-mem"
+      },
+      "status": 403,
+      "response": {
+        "error": "graphical target access denied"
+      },
+      "calls": [],
+      "console": null,
+      "lit": []
+    },
+    {
+      "name": "attaching with a blank tenant",
+      "path": "/worker/{worker_id}/gui/attach",
+      "tenant": "  ",
+      "body": {
+        "target_id": "gt-mem"
+      },
+      "status": 403,
+      "response": {
+        "error": "graphical target access denied"
+      },
+      "calls": [],
+      "console": null,
+      "lit": []
+    },
+    {
+      "name": "attaching to a target nobody has",
+      "path": "/worker/{worker_id}/gui/attach",
+      "body": {
+        "target_id": "absent"
+      },
+      "status": 404,
+      "response": {
+        "error": "target not found"
+      },
+      "calls": [],
+      "console": null,
+      "lit": []
+    },
+    {
+      "name": "attaching to another tenant's target",
+      "path": "/worker/{worker_id}/gui/attach",
+      "body": {
+        "target_id": "gt-other"
+      },
+      "status": 404,
+      "response": {
+        "error": "target not found"
+      },
+      "calls": [],
+      "console": null,
+      "lit": []
+    },
+    {
+      "name": "attaching to a protocol nobody speaks yet",
+      "path": "/worker/{worker_id}/gui/attach",
+      "body": {
+        "target_id": "gt-rfb"
+      },
+      "status": 501,
+      "response": {
+        "error": "graphical protocol not supported: rfb"
+      },
+      "calls": [],
+      "console": null,
+      "lit": []
+    },
+    {
+      "name": "attaching to a console",
+      "path": "/worker/{worker_id}/gui/attach",
+      "body": {
+        "target_id": "gt-mem"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "target_id": "gt-mem"
+      },
+      "calls": [],
+      "console": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": []
+    },
+    {
+      "name": "attaching with the name padded",
+      "path": "/worker/{worker_id}/gui/attach",
+      "body": {
+        "target_id": "  gt-mem  "
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "target_id": "gt-mem"
+      },
+      "calls": [],
+      "console": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": []
+    },
+    {
+      "name": "attaching when the worker is already known",
+      "path": "/worker/{worker_id}/gui/attach",
+      "body": {
+        "target_id": "gt-mem"
+      },
+      "known_worker": true,
+      "status": 200,
+      "response": {
+        "ok": true,
+        "target_id": "gt-mem"
+      },
+      "calls": [],
+      "console": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": []
+    },
+    {
+      "name": "a screenshot with no lease",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/screenshot",
+      "has_lease": false,
+      "status": 404,
+      "response": {
+        "error": "Invalid or expired hijack session."
+      },
+      "calls": [],
+      "console": null,
+      "lit": []
+    },
+    {
+      "name": "a screenshot with no console",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/screenshot",
+      "status": 404,
+      "response": {
+        "error": "No graphical session attached."
+      },
+      "calls": [],
+      "console": null,
+      "lit": []
+    },
+    {
+      "name": "a screenshot",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/screenshot",
+      "attached": true,
+      "status": 200,
+      "response": {
+        "ok": true,
+        "worker_id": "gui-worker",
+        "hijack_id": "00000000-0000-0000-0000-000000000000",
+        "screenshot": "iVBORw0KGgoAAAANSUhEUgAAAAYAAAAECAYAAACtBE5DAAAADElEQVR42mNgoD0AAABkAAG4me+ZAAAAAElFTkSuQmCC",
+        "lease_expires_at": "<a time>"
+      },
+      "calls": [],
+      "console": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": []
+    },
+    {
+      "name": "a screenshot of a console somebody drew on",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/screenshot",
+      "attached": true,
+      "drawn": [
+        [
+          1,
+          1
+        ]
+      ],
+      "status": 200,
+      "response": {
+        "ok": true,
+        "worker_id": "gui-worker",
+        "hijack_id": "00000000-0000-0000-0000-000000000000",
+        "screenshot": "iVBORw0KGgoAAAANSUhEUgAAAAYAAAAECAYAAACtBE5DAAAAEUlEQVR42mNgwAf+AwEDxQAAEWED/VskJWgAAAAASUVORK5CYII=",
+        "lease_expires_at": "<a time>"
+      },
+      "calls": [],
+      "console": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": [
+        7
+      ]
+    },
+    {
+      "name": "clicking with no lease",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/click",
+      "has_lease": false,
+      "body": {
+        "x": 1,
+        "y": 1
+      },
+      "status": 404,
+      "response": {
+        "error": "Invalid or expired hijack session."
+      },
+      "calls": [],
+      "console": null,
+      "lit": []
+    },
+    {
+      "name": "clicking with no console",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/click",
+      "body": {
+        "x": 1,
+        "y": 1
+      },
+      "status": 404,
+      "response": {
+        "error": "No graphical session attached."
+      },
+      "calls": [],
+      "console": null,
+      "lit": []
+    },
+    {
+      "name": "clicking somebody else's lease",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/click",
+      "attached": true,
+      "acquired_by": "somebody",
+      "body": {
+        "x": 1,
+        "y": 1
+      },
+      "status": 403,
+      "response": {
+        "error": "hijack lease not owned by caller"
+      },
+      "calls": [],
+      "console": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": []
+    },
+    {
+      "name": "clicking a lease nobody claimed",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/click",
+      "attached": true,
+      "acquired_by": null,
+      "body": {
+        "x": 1,
+        "y": 1
+      },
+      "status": 200,
+      "response": {
+        "ok": true
+      },
+      "calls": [
+        [
+          "pointer",
+          1,
+          1,
+          1
+        ],
+        [
+          "pointer",
+          1,
+          1,
+          0
+        ]
+      ],
+      "console": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": [
+        7
+      ]
+    },
+    {
+      "name": "clicking one's own lease",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/click",
+      "attached": true,
+      "acquired_by": "u1",
+      "body": {
+        "x": 1,
+        "y": 1
+      },
+      "status": 200,
+      "response": {
+        "ok": true
+      },
+      "calls": [
+        [
+          "pointer",
+          1,
+          1,
+          1
+        ],
+        [
+          "pointer",
+          1,
+          1,
+          0
+        ]
+      ],
+      "console": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": [
+        7
+      ]
+    },
+    {
+      "name": "clicking",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/click",
+      "attached": true,
+      "body": {
+        "x": 2,
+        "y": 1
+      },
+      "status": 200,
+      "response": {
+        "ok": true
+      },
+      "calls": [
+        [
+          "pointer",
+          2,
+          1,
+          1
+        ],
+        [
+          "pointer",
+          2,
+          1,
+          0
+        ]
+      ],
+      "console": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": [
+        8
+      ]
+    },
+    {
+      "name": "clicking with no coordinates",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/click",
+      "attached": true,
+      "body": {},
+      "status": 200,
+      "response": {
+        "ok": true
+      },
+      "calls": [
+        [
+          "pointer",
+          0,
+          0,
+          1
+        ],
+        [
+          "pointer",
+          0,
+          0,
+          0
+        ]
+      ],
+      "console": "/////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": [
+        0
+      ]
+    },
+    {
+      "name": "clicking the middle button",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/click",
+      "attached": true,
+      "body": {
+        "x": 1,
+        "y": 1,
+        "button": "middle"
+      },
+      "status": 200,
+      "response": {
+        "ok": true
+      },
+      "calls": [
+        [
+          "pointer",
+          1,
+          1,
+          2
+        ],
+        [
+          "pointer",
+          1,
+          1,
+          0
+        ]
+      ],
+      "console": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": []
+    },
+    {
+      "name": "clicking the right button",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/click",
+      "attached": true,
+      "body": {
+        "x": 1,
+        "y": 1,
+        "button": "right"
+      },
+      "status": 200,
+      "response": {
+        "ok": true
+      },
+      "calls": [
+        [
+          "pointer",
+          1,
+          1,
+          4
+        ],
+        [
+          "pointer",
+          1,
+          1,
+          0
+        ]
+      ],
+      "console": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": []
+    },
+    {
+      "name": "clicking a button nobody has",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/click",
+      "attached": true,
+      "body": {
+        "x": 1,
+        "y": 1,
+        "button": "up"
+      },
+      "status": 422,
+      "response": {
+        "error": "invalid button: must be left, middle, or right"
+      },
+      "calls": [],
+      "console": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": []
+    },
+    {
+      "name": "clicking a button in capitals",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/click",
+      "attached": true,
+      "body": {
+        "x": 1,
+        "y": 1,
+        "button": "LEFT"
+      },
+      "status": 422,
+      "response": {
+        "error": "invalid button: must be left, middle, or right"
+      },
+      "calls": [],
+      "console": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": []
+    },
+    {
+      "name": "clicking with a button that is not text",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/click",
+      "attached": true,
+      "body": {
+        "button": 1
+      },
+      "status": 200,
+      "response": {
+        "ok": true
+      },
+      "calls": [
+        [
+          "pointer",
+          0,
+          0,
+          1
+        ],
+        [
+          "pointer",
+          0,
+          0,
+          0
+        ]
+      ],
+      "console": "/////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": [
+        0
+      ]
+    },
+    {
+      "name": "clicking at coordinates written as text",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/click",
+      "attached": true,
+      "body": {
+        "x": "2",
+        "y": "1"
+      },
+      "status": 200,
+      "response": {
+        "ok": true
+      },
+      "calls": [
+        [
+          "pointer",
+          2,
+          1,
+          1
+        ],
+        [
+          "pointer",
+          2,
+          1,
+          0
+        ]
+      ],
+      "console": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": [
+        8
+      ]
+    },
+    {
+      "name": "clicking at coordinates padded with spaces",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/click",
+      "attached": true,
+      "body": {
+        "x": " 2 ",
+        "y": "1"
+      },
+      "status": 200,
+      "response": {
+        "ok": true
+      },
+      "calls": [
+        [
+          "pointer",
+          2,
+          1,
+          1
+        ],
+        [
+          "pointer",
+          2,
+          1,
+          0
+        ]
+      ],
+      "console": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": [
+        8
+      ]
+    },
+    {
+      "name": "clicking at coordinates that are not numbers",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/click",
+      "attached": true,
+      "body": {
+        "x": "two",
+        "y": 1
+      },
+      "status": 200,
+      "response": {
+        "ok": true
+      },
+      "calls": [
+        [
+          "pointer",
+          0,
+          1,
+          1
+        ],
+        [
+          "pointer",
+          0,
+          1,
+          0
+        ]
+      ],
+      "console": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": [
+        6
+      ]
+    },
+    {
+      "name": "clicking at a coordinate that is true",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/click",
+      "attached": true,
+      "body": {
+        "x": true,
+        "y": 1
+      },
+      "status": 200,
+      "response": {
+        "ok": true
+      },
+      "calls": [
+        [
+          "pointer",
+          0,
+          1,
+          1
+        ],
+        [
+          "pointer",
+          0,
+          1,
+          0
+        ]
+      ],
+      "console": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": [
+        6
+      ]
+    },
+    {
+      "name": "clicking at a fractional coordinate",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/click",
+      "attached": true,
+      "body": {
+        "x": 1.9,
+        "y": 1
+      },
+      "status": 200,
+      "response": {
+        "ok": true
+      },
+      "calls": [
+        [
+          "pointer",
+          0,
+          1,
+          1
+        ],
+        [
+          "pointer",
+          0,
+          1,
+          0
+        ]
+      ],
+      "console": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": [
+        6
+      ]
+    },
+    {
+      "name": "clicking off the console",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/click",
+      "attached": true,
+      "body": {
+        "x": 99,
+        "y": 99
+      },
+      "status": 200,
+      "response": {
+        "ok": true
+      },
+      "calls": [
+        [
+          "pointer",
+          99,
+          99,
+          1
+        ],
+        [
+          "pointer",
+          99,
+          99,
+          0
+        ]
+      ],
+      "console": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": []
+    },
+    {
+      "name": "clicking with an unreadable body",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/click",
+      "attached": true,
+      "bad_json": true,
+      "status": 200,
+      "response": {
+        "ok": true
+      },
+      "calls": [
+        [
+          "pointer",
+          0,
+          0,
+          1
+        ],
+        [
+          "pointer",
+          0,
+          0,
+          0
+        ]
+      ],
+      "console": "/////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": [
+        0
+      ]
+    },
+    {
+      "name": "typing with no lease",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/type",
+      "has_lease": false,
+      "body": {
+        "text": "hi"
+      },
+      "status": 404,
+      "response": {
+        "error": "Invalid or expired hijack session."
+      },
+      "calls": [],
+      "console": null,
+      "lit": []
+    },
+    {
+      "name": "typing with no console",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/type",
+      "body": {
+        "text": "hi"
+      },
+      "status": 404,
+      "response": {
+        "error": "No graphical session attached."
+      },
+      "calls": [],
+      "console": null,
+      "lit": []
+    },
+    {
+      "name": "typing",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/type",
+      "attached": true,
+      "body": {
+        "text": "hi"
+      },
+      "status": 200,
+      "response": {
+        "ok": true
+      },
+      "calls": [
+        [
+          "key",
+          104,
+          true
+        ],
+        [
+          "key",
+          104,
+          false
+        ],
+        [
+          "key",
+          105,
+          true
+        ],
+        [
+          "key",
+          105,
+          false
+        ]
+      ],
+      "console": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": []
+    },
+    {
+      "name": "typing nothing",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/type",
+      "attached": true,
+      "body": {
+        "text": ""
+      },
+      "status": 200,
+      "response": {
+        "ok": true
+      },
+      "calls": [],
+      "console": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": []
+    },
+    {
+      "name": "typing something that is not text",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/type",
+      "attached": true,
+      "body": {
+        "text": 7
+      },
+      "status": 200,
+      "response": {
+        "ok": true
+      },
+      "calls": [],
+      "console": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": []
+    },
+    {
+      "name": "typing past the basic plane",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/type",
+      "attached": true,
+      "body": {
+        "text": "a\u00e9\ud83d\ude00"
+      },
+      "status": 200,
+      "response": {
+        "ok": true
+      },
+      "calls": [
+        [
+          "key",
+          97,
+          true
+        ],
+        [
+          "key",
+          97,
+          false
+        ],
+        [
+          "key",
+          233,
+          true
+        ],
+        [
+          "key",
+          233,
+          false
+        ],
+        [
+          "key",
+          128512,
+          true
+        ],
+        [
+          "key",
+          128512,
+          false
+        ]
+      ],
+      "console": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": []
+    },
+    {
+      "name": "a key with no lease",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/key",
+      "has_lease": false,
+      "body": {
+        "key_name": "Enter"
+      },
+      "status": 404,
+      "response": {
+        "error": "Invalid or expired hijack session."
+      },
+      "calls": [],
+      "console": null,
+      "lit": []
+    },
+    {
+      "name": "a key with no console",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/key",
+      "body": {
+        "key_name": "Enter"
+      },
+      "status": 404,
+      "response": {
+        "error": "No graphical session attached."
+      },
+      "calls": [],
+      "console": null,
+      "lit": []
+    },
+    {
+      "name": "a key",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/key",
+      "attached": true,
+      "body": {
+        "key_name": "Enter"
+      },
+      "status": 200,
+      "response": {
+        "ok": true
+      },
+      "calls": [
+        [
+          "key",
+          65293,
+          true
+        ],
+        [
+          "key",
+          65293,
+          false
+        ]
+      ],
+      "console": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": []
+    },
+    {
+      "name": "a key nobody named",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/key",
+      "attached": true,
+      "body": {},
+      "status": 200,
+      "response": {
+        "ok": true
+      },
+      "calls": [
+        [
+          "key",
+          0,
+          true
+        ],
+        [
+          "key",
+          0,
+          false
+        ]
+      ],
+      "console": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": []
+    },
+    {
+      "name": "a key nobody has",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/key",
+      "attached": true,
+      "body": {
+        "key_name": "F13"
+      },
+      "status": 200,
+      "response": {
+        "ok": true
+      },
+      "calls": [
+        [
+          "key",
+          0,
+          true
+        ],
+        [
+          "key",
+          0,
+          false
+        ]
+      ],
+      "console": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": []
+    },
+    {
+      "name": "a key in the wrong case",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/key",
+      "attached": true,
+      "body": {
+        "key_name": "enter"
+      },
+      "status": 200,
+      "response": {
+        "ok": true
+      },
+      "calls": [
+        [
+          "key",
+          0,
+          true
+        ],
+        [
+          "key",
+          0,
+          false
+        ]
+      ],
+      "console": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": []
+    },
+    {
+      "name": "a drag with no lease",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/drag",
+      "has_lease": false,
+      "body": {},
+      "status": 404,
+      "response": {
+        "error": "Invalid or expired hijack session."
+      },
+      "calls": [],
+      "console": null,
+      "lit": []
+    },
+    {
+      "name": "a drag with no console",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/drag",
+      "body": {},
+      "status": 404,
+      "response": {
+        "error": "No graphical session attached."
+      },
+      "calls": [],
+      "console": null,
+      "lit": []
+    },
+    {
+      "name": "a drag",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/drag",
+      "attached": true,
+      "body": {
+        "start_x": 0,
+        "start_y": 0,
+        "end_x": 3,
+        "end_y": 2
+      },
+      "status": 200,
+      "response": {
+        "ok": true
+      },
+      "calls": [
+        [
+          "pointer",
+          0,
+          0,
+          1
+        ],
+        [
+          "pointer",
+          3,
+          2,
+          1
+        ],
+        [
+          "pointer",
+          3,
+          2,
+          0
+        ]
+      ],
+      "console": "/////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": [
+        0,
+        15
+      ]
+    },
+    {
+      "name": "a drag from nowhere to nowhere",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/drag",
+      "attached": true,
+      "body": {},
+      "status": 200,
+      "response": {
+        "ok": true
+      },
+      "calls": [
+        [
+          "pointer",
+          0,
+          0,
+          1
+        ],
+        [
+          "pointer",
+          0,
+          0,
+          1
+        ],
+        [
+          "pointer",
+          0,
+          0,
+          0
+        ]
+      ],
+      "console": "/////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": [
+        0
+      ]
+    },
+    {
+      "name": "a drag written as text",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/drag",
+      "attached": true,
+      "body": {
+        "start_x": "1",
+        "start_y": "1",
+        "end_x": "2",
+        "end_y": "2"
+      },
+      "status": 200,
+      "response": {
+        "ok": true
+      },
+      "calls": [
+        [
+          "pointer",
+          1,
+          1,
+          1
+        ],
+        [
+          "pointer",
+          2,
+          2,
+          1
+        ],
+        [
+          "pointer",
+          2,
+          2,
+          0
+        ]
+      ],
+      "console": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": [
+        7,
+        14
+      ]
+    },
+    {
+      "name": "a drag off the console",
+      "path": "/worker/{worker_id}/hijack/{hijack_id}/gui/drag",
+      "attached": true,
+      "body": {
+        "start_x": 1,
+        "start_y": 1,
+        "end_x": 99,
+        "end_y": 99
+      },
+      "status": 200,
+      "response": {
+        "ok": true
+      },
+      "calls": [
+        [
+          "pointer",
+          1,
+          1,
+          1
+        ],
+        [
+          "pointer",
+          99,
+          99,
+          1
+        ],
+        [
+          "pointer",
+          99,
+          99,
+          0
+        ]
+      ],
+      "console": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "lit": [
+        7
+      ]
+    }
+  ]
+}
