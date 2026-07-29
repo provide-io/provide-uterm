@@ -1,0 +1,62 @@
+{
+  "backoff_schedule": [
+    1,
+    2,
+    5,
+    10,
+    30
+  ],
+  "delays": [
+    {
+      "attempt": 0,
+      "delay": 1
+    },
+    {
+      "attempt": 1,
+      "delay": 2
+    },
+    {
+      "attempt": 2,
+      "delay": 5
+    },
+    {
+      "attempt": 3,
+      "delay": 10
+    },
+    {
+      "attempt": 4,
+      "delay": 30
+    },
+    {
+      "attempt": 5,
+      "delay": 30
+    },
+    {
+      "attempt": 6,
+      "delay": 30
+    },
+    {
+      "attempt": 7,
+      "delay": 30
+    },
+    {
+      "attempt": 8,
+      "delay": 30
+    }
+  ],
+  "frames": {
+    "open": "\u0000\u0000{\"type\":\"open\",\"channel\":1,\"tunnel_type\":\"terminal\",\"term_size\":[80,25]}",
+    "open_other_size": "\u0000\u0000{\"type\":\"open\",\"channel\":1,\"tunnel_type\":\"terminal\",\"term_size\":[132,43]}",
+    "resize": "\u0000\u0000{\"type\":\"resize\",\"channel\":1,\"cols\":100,\"rows\":30}",
+    "data": "\u0001\u0000hello",
+    "data_other_channel": "\u0002\u0000hello",
+    "data_empty": "\u0001\u0000",
+    "eof": "\u0001\u0001",
+    "eof_other_channel": "\u0003\u0001"
+  },
+  "channels": {
+    "data": 1,
+    "eof_flag": 1
+  },
+  "auth_header": "Bearer a-token"
+}
