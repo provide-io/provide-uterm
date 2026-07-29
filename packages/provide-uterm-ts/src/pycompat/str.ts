@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
+import { floatRepr } from "./json.ts";
+
 /**
  * CPython string predicates that JavaScript spells differently.
  *
@@ -111,4 +113,84 @@ export function pyRepr(text: string): string {
     return `"${escaped}"`;
   }
   return `'${escaped.replaceAll("'", "\\'")}'`;
+}
+
+/**
+ * A value as CPython's `str()` writes it.
+ *
+ * `String(x)` agrees on strings and on most whole numbers and disagrees on
+ * nearly everything else: `None` is `None` rather than `null`, `True` is
+ * `True` rather than `true`, and the infinities are words rather than
+ * `Infinity`.
+ *
+ * That is only cosmetic until something *decides* from the text. It is used
+ * where a reference module renders an arbitrary value and then matches a
+ * caller's pattern against the result — a screen that is `None` becomes four
+ * characters a pattern can fire on, and reaching for the host runtime's
+ * `String` there would quietly change which sessions an agent is told about.
+ *
+ * One thing this cannot recover: JavaScript has a single numeric type, so an
+ * integral `float` and an `int` are the same value here and both render
+ * without the `.0` CPython gives the float. A negative zero and the
+ * non-finite values are floats in CPython whatever else they are, so those
+ * are exact.
+ */
+export function pyStr(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "None";
+  }
+  if (typeof value === "boolean") {
+    return value ? "True" : "False";
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return numberStr(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(pyReprValue).join(", ")}]`;
+  }
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+    return `{${entries.map(([key, item]) => `${pyRepr(key)}: ${pyReprValue(item)}`).join(", ")}}`;
+  }
+  return String(value);
+}
+
+/**
+ * A value as it is written *inside* a container.
+ *
+ * Which is `repr` rather than `str`, so a word in a list keeps its quotes.
+ * Every other kind renders the same either way.
+ */
+export function pyReprValue(value: unknown): string {
+  return typeof value === "string" ? pyRepr(value) : pyStr(value);
+}
+
+/** A number as CPython writes one. */
+function numberStr(value: number): string {
+  if (Number.isNaN(value)) {
+    return "nan";
+  }
+  if (value === Number.POSITIVE_INFINITY) {
+    return "inf";
+  }
+  if (value === Number.NEGATIVE_INFINITY) {
+    return "-inf";
+  }
+  // A negative zero is a float in CPython whatever else it is — there is no
+  // `-0` int — so this one integral value can be spelled exactly.
+  if (Object.is(value, -0)) {
+    return "-0.0";
+  }
+  // Everything else integral is ambiguous: an `int` and a whole-valued
+  // `float` are one value here. The int spelling is chosen, as everywhere
+  // else in this package.
+  return Number.isInteger(value) ? intStr(value) : floatRepr(value);
+}
+
+/** A whole number, in full rather than in exponent form. */
+function intStr(value: number): string {
+  return Number.isSafeInteger(value) ? String(value) : BigInt(value).toString();
 }

@@ -32,6 +32,7 @@ import {
   PROTOCOL_MEMORY,
   scopeForTenant,
 } from "../graphical/index.ts";
+import { pyStr } from "../pycompat/index.ts";
 import { encodeRgbaPng, type GraphicalSession, MemoryGraphicalSession } from "./session.ts";
 
 /** The capability attaching a console needs. */
@@ -256,7 +257,7 @@ async function requireSession(
  */
 function principalSubject(request: GuiRequest): string | null {
   const subject = request.principal?.subjectId ?? null;
-  return subject === null ? null : String(subject);
+  return subject === null ? null : pyStr(subject);
 }
 
 /** Whether a resolution came back as a refusal. */

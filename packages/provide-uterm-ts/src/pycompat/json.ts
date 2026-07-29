@@ -91,7 +91,7 @@ function encodeString(value: string, ensureAscii: boolean): string {
  * CPython uses fixed notation for exponents in `[-4, 16)` and pads the
  * exponent to two digits.
  */
-function floatRepr(value: number): string {
+export function floatRepr(value: number): string {
   const [mantissa, exponentText] = value.toExponential().split("e") as [string, string];
   const exponent = Number(exponentText);
   const negative = mantissa.startsWith("-");

@@ -63,7 +63,6 @@
       "data": {
         "sessions": []
       },
-      "diverges": false,
       "result": {
         "success": true,
         "sessions": []
@@ -82,7 +81,6 @@
       "data": {
         "error": "down"
       },
-      "diverges": false,
       "result": {
         "success": false,
         "error": "down"
@@ -103,7 +101,6 @@
       "data": {
         "status": "running"
       },
-      "diverges": false,
       "result": {
         "success": true,
         "status": "running"
@@ -123,7 +120,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": false,
         "error": "invalid_id",
@@ -150,7 +146,6 @@
           "extra": "kept"
         }
       },
-      "diverges": false,
       "result": {
         "success": true,
         "snapshot": {
@@ -184,7 +179,6 @@
           "extra": "kept"
         }
       },
-      "diverges": false,
       "result": {
         "success": true,
         "snapshot": {
@@ -225,7 +219,6 @@
           "extra": "kept"
         }
       },
-      "diverges": false,
       "result": {
         "success": true,
         "snapshot": {
@@ -265,7 +258,6 @@
           "extra": "kept"
         }
       },
-      "diverges": false,
       "result": {
         "success": true,
         "snapshot": {
@@ -289,7 +281,6 @@
       "data": {
         "snapshot": {}
       },
-      "diverges": false,
       "result": {
         "success": true,
         "snapshot": {}
@@ -313,7 +304,6 @@
           "screen": "\u001b[31mred\u001b[0m\nplain\nlast"
         }
       },
-      "diverges": false,
       "result": {
         "success": true,
         "snapshot": {
@@ -337,7 +327,6 @@
       "data": {
         "other": 1
       },
-      "diverges": false,
       "result": {
         "success": true,
         "other": 1
@@ -368,7 +357,6 @@
           "extra": "kept"
         }
       },
-      "diverges": false,
       "result": {
         "success": false,
         "snapshot": {
@@ -397,7 +385,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": false,
         "error": "invalid_id",
@@ -415,7 +402,6 @@
       "data": {
         "connected": true
       },
-      "diverges": false,
       "result": {
         "success": true,
         "connected": true
@@ -435,7 +421,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": false,
         "error": "invalid_id",
@@ -453,7 +438,6 @@
       "data": {
         "ok": true
       },
-      "diverges": false,
       "result": {
         "success": true,
         "ok": true
@@ -473,7 +457,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": false,
         "error": "invalid_id",
@@ -491,7 +474,6 @@
       "data": {
         "session_id": "s-9"
       },
-      "diverges": false,
       "result": {
         "success": false,
         "error": "invalid_connector_type",
@@ -513,7 +495,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": true
       },
@@ -541,7 +522,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": true
       },
@@ -561,7 +541,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": false,
         "error": "invalid_connector_type",
@@ -579,7 +558,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": false,
         "error": "invalid_port",
@@ -597,7 +575,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": false,
         "error": "invalid_host",
@@ -614,7 +591,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": false,
         "error": "invalid_url_scheme",
@@ -631,7 +607,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": false,
         "error": "invalid_host",
@@ -668,7 +643,6 @@
           }
         ]
       },
-      "diverges": false,
       "result": {
         "success": true,
         "events": [
@@ -733,7 +707,6 @@
           }
         ]
       },
-      "diverges": false,
       "result": {
         "success": true,
         "events": [
@@ -798,7 +771,6 @@
           }
         ]
       },
-      "diverges": false,
       "result": {
         "success": true,
         "events": [
@@ -863,7 +835,6 @@
           }
         ]
       },
-      "diverges": false,
       "result": {
         "success": false,
         "error": "invalid_pattern",
@@ -901,7 +872,6 @@
           }
         ]
       },
-      "diverges": false,
       "result": {
         "success": true,
         "events": [
@@ -966,7 +936,6 @@
           }
         ]
       },
-      "diverges": false,
       "result": {
         "success": true,
         "events": [
@@ -1031,7 +1000,6 @@
           }
         ]
       },
-      "diverges": false,
       "result": {
         "success": true,
         "events": [
@@ -1096,7 +1064,6 @@
           }
         ]
       },
-      "diverges": false,
       "result": {
         "success": true,
         "events": [
@@ -1161,7 +1128,6 @@
           }
         ]
       },
-      "diverges": false,
       "result": {
         "success": true,
         "events": [
@@ -1226,7 +1192,6 @@
           }
         ]
       },
-      "diverges": false,
       "result": {
         "success": true,
         "events": [
@@ -1291,7 +1256,6 @@
           }
         ]
       },
-      "diverges": false,
       "result": {
         "success": true,
         "events": [
@@ -1355,7 +1319,6 @@
           }
         ]
       },
-      "diverges": false,
       "result": {
         "success": false,
         "error": "invalid_id",
@@ -1392,7 +1355,6 @@
           }
         ]
       },
-      "diverges": false,
       "result": {
         "success": true,
         "events": [
@@ -1458,7 +1420,6 @@
           }
         ]
       },
-      "diverges": false,
       "result": {
         "success": true,
         "events": [
@@ -1524,7 +1485,6 @@
           }
         ]
       },
-      "diverges": false,
       "result": {
         "success": true,
         "events": [
@@ -1590,7 +1550,6 @@
           }
         ]
       },
-      "diverges": false,
       "result": {
         "success": false,
         "events": [
@@ -1656,7 +1615,6 @@
           }
         ]
       },
-      "diverges": false,
       "result": {
         "success": false,
         "error": "invalid_pattern",
@@ -1682,7 +1640,6 @@
           }
         ]
       },
-      "diverges": false,
       "result": {
         "success": true,
         "events": [
@@ -1725,7 +1682,6 @@
           }
         ]
       },
-      "diverges": false,
       "result": {
         "success": true,
         "events": [
@@ -1765,7 +1721,6 @@
           }
         ]
       },
-      "diverges": false,
       "result": {
         "success": true,
         "events": [
@@ -1804,7 +1759,6 @@
           }
         ]
       },
-      "diverges": false,
       "result": {
         "success": true,
         "events": [
@@ -1845,7 +1799,6 @@
           }
         ]
       },
-      "diverges": true,
       "result": {
         "success": true,
         "events": [
@@ -1883,7 +1836,6 @@
           }
         ]
       },
-      "diverges": false,
       "result": {
         "success": true,
         "events": [
@@ -1921,7 +1873,6 @@
           }
         ]
       },
-      "diverges": false,
       "result": {
         "success": true,
         "events": [
@@ -1953,7 +1904,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": true,
         "matched_pattern": false
@@ -1999,7 +1949,6 @@
           }
         ]
       },
-      "diverges": false,
       "result": {
         "success": true,
         "events": [
@@ -2065,7 +2014,6 @@
           }
         ]
       },
-      "diverges": false,
       "result": {
         "success": true,
         "events": [
@@ -2131,7 +2079,6 @@
           }
         ]
       },
-      "diverges": false,
       "result": {
         "success": true,
         "events": [
@@ -2197,7 +2144,6 @@
           }
         ]
       },
-      "diverges": false,
       "result": {
         "success": true,
         "events": [
@@ -2262,7 +2208,6 @@
           }
         ]
       },
-      "diverges": false,
       "result": {
         "success": false,
         "error": "invalid_id",
@@ -2283,7 +2228,6 @@
       "data": {
         "group_id": "g-1"
       },
-      "diverges": false,
       "result": {
         "success": true,
         "group_id": "g-1"
@@ -2315,7 +2259,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": true
       },
@@ -2341,7 +2284,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": true
       },
@@ -2368,7 +2310,6 @@
       "data": {
         "results": []
       },
-      "diverges": false,
       "result": {
         "success": true,
         "results": []
@@ -2396,7 +2337,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": true
       },
@@ -2421,7 +2361,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": false,
         "error": "invalid_id",
@@ -2440,7 +2379,6 @@
       "data": {
         "id": "a-1"
       },
-      "diverges": false,
       "result": {
         "success": true,
         "id": "a-1"
@@ -2468,7 +2406,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": true
       },
@@ -2493,7 +2430,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": false,
         "error": "invalid_id",
@@ -2511,7 +2447,6 @@
       "data": {
         "hijack_id": "h-1"
       },
-      "diverges": false,
       "result": {
         "success": true,
         "hijack_id": "h-1"
@@ -2535,7 +2470,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": true
       },
@@ -2556,7 +2490,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": false,
         "error": "invalid_id",
@@ -2573,7 +2506,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": true
       },
@@ -2594,7 +2526,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": false,
         "error": "invalid_id",
@@ -2613,7 +2544,6 @@
       "data": {
         "screenshot": "iVBOR"
       },
-      "diverges": false,
       "result": {
         "success": true,
         "screenshot": "iVBOR"
@@ -2635,7 +2565,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": false,
         "error": "invalid_id",
@@ -2656,7 +2585,6 @@
       "data": {
         "ok": true
       },
-      "diverges": false,
       "result": {
         "success": true,
         "ok": true
@@ -2684,7 +2612,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": true
       },
@@ -2710,7 +2637,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": false,
         "error": "invalid_id",
@@ -2728,7 +2654,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": true
       },
@@ -2751,7 +2676,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": true
       },
@@ -2774,7 +2698,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": false,
         "error": "invalid_id",
@@ -2792,7 +2715,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": true
       },
@@ -2815,7 +2737,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": false,
         "error": "invalid_id",
@@ -2836,7 +2757,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": true
       },
@@ -2865,7 +2785,6 @@
       },
       "ok": true,
       "data": {},
-      "diverges": false,
       "result": {
         "success": false,
         "error": "invalid_id",
