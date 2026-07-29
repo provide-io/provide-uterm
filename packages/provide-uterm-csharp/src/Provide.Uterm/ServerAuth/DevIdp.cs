@@ -43,11 +43,13 @@ public static class DevIdp
         }
 
         var now = DateTimeOffset.UtcNow;
+        // iss and aud are the JwtSecurityToken constructor's to write (below).
+        // Listing them here as well appended a second `aud` — verification is
+        // indifferent to it, but the token said its audience twice to anything
+        // that inspected it.
         var claims = new List<Claim>
         {
             new("sub", options.Subject),
-            new(JwtRegisteredClaimNames.Iss, auth.JwtIssuer),
-            new(JwtRegisteredClaimNames.Aud, auth.JwtAudience),
         };
         foreach (var role in options.Roles)
         {

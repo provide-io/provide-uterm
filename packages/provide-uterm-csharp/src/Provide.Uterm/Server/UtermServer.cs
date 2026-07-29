@@ -135,6 +135,7 @@ public sealed partial class UtermServer : IAsyncDisposable
         builder.Services.AddSingleton(this);
         var app = builder.Build();
         app.UseWebSockets();
+        UseFrameworkRefusalBodies(app);
         MapRoutes(app);
         _app = app;
         return app;
@@ -330,7 +331,7 @@ public sealed partial class UtermServer : IAsyncDisposable
         if (hubSt is not null)
         {
             // Keep registry WorkerOnline for REST-activated shell sessions without a WS.
-            st.WorkerOnline = st.WorkerOnline || hubSt.WorkerWs is not null;
+            st.Connected = st.Connected || hubSt.WorkerWs is not null;
             st.IsHijacked = _deps.Hub.State.IsHijacked(hubSt);
             st.InputMode = hubSt.InputMode;
         }
@@ -1400,7 +1401,7 @@ public static class ServerFactory
             MaxWorkers = cfg.MaxWorkers,
             BrowserRateLimitPerSec = cfg.BrowserRateLimitPerSec,
         });
-        var registry = new InMemorySessionRegistry(cfg.Sessions);
+        var registry = new InMemorySessionRegistry(cfg.Sessions, cfg.Recording.EnabledByDefault);
         graphicalTargets ??= SeedGraphicalTargets(cfg);
         var tunnelStore = new Tunnel.MemoryTunnelStore();
         var webhooks = new WebhookManager(allowLoopbackDestinations: true);

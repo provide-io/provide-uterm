@@ -140,7 +140,7 @@ public sealed partial class UtermServer
         var analysis = new Dictionary<string, object?>
         {
             ["lifecycle_state"] = st.LifecycleState,
-            ["worker_online"] = st.WorkerOnline,
+            ["worker_online"] = st.Connected,
             ["is_hijacked"] = st.IsHijacked,
             ["input_mode"] = st.InputMode,
             ["has_snapshot"] = snap is not null,

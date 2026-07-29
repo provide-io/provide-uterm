@@ -242,17 +242,20 @@ public sealed class HijackClient : IDisposable
 
     public Task<Dictionary<string, object?>> Health(CancellationToken ct = default) => HealthAsync(ct);
 
-    public async Task<Dictionary<string, object?>> ListSessionsAsync(CancellationToken ct = default)
-    {
-        var any = await RequestAnyAsync(HttpMethod.Get, "/api/sessions", null, ct).ConfigureAwait(false);
-        return any switch
-        {
-            Dictionary<string, object?> d => d,
-            _ => new Dictionary<string, object?> { ["sessions"] = any },
-        };
-    }
+    /// <summary>
+    /// The sessions the server listed, handed back as it sent them.
+    ///
+    /// <c>GET /api/sessions</c> answers a bare JSON array, so this returns one —
+    /// the same as Python's <c>list_sessions</c> and Go's
+    /// <c>ListSessions() (any, error)</c>. It used to be declared as a
+    /// dictionary, which an array cannot be, so it arrived wrapped in
+    /// <c>{"sessions": [...]}</c> and a caller of this client saw a different
+    /// shape from a caller of any other port's client against the same server.
+    /// </summary>
+    public Task<object?> ListSessionsAsync(CancellationToken ct = default) =>
+        RequestAnyAsync(HttpMethod.Get, "/api/sessions", null, ct);
 
-    public Task<Dictionary<string, object?>> ListSessions(CancellationToken ct = default) => ListSessionsAsync(ct);
+    public Task<object?> ListSessions(CancellationToken ct = default) => ListSessionsAsync(ct);
 
     public Task<Dictionary<string, object?>> GetSessionAsync(string sessionId, CancellationToken ct = default) =>
         RequestObjectAsync(HttpMethod.Get, Sp(sessionId), null, ct);
@@ -260,11 +263,20 @@ public sealed class HijackClient : IDisposable
     public Task<Dictionary<string, object?>> GetSession(string sessionId, CancellationToken ct = default) =>
         GetSessionAsync(sessionId, ct);
 
-    public Task<Dictionary<string, object?>> SessionSnapshot(string sessionId, CancellationToken ct = default) =>
-        RequestObjectAsync(HttpMethod.Get, Sp(sessionId) + "/snapshot", null, ct);
+    /// <summary>
+    /// The session's last snapshot, or null when nothing has been drawn yet —
+    /// the endpoint answers <c>dict | None</c> (Python <c>session_snapshot</c>),
+    /// and a dictionary cannot be a null, so this is not one.
+    /// </summary>
+    public Task<object?> SessionSnapshot(string sessionId, CancellationToken ct = default) =>
+        RequestAnyAsync(HttpMethod.Get, Sp(sessionId) + "/snapshot", null, ct);
 
-    public Task<Dictionary<string, object?>> SessionEvents(string sessionId, CancellationToken ct = default) =>
-        RequestObjectAsync(HttpMethod.Get, Sp(sessionId) + "/events", null, ct);
+    /// <summary>
+    /// The session's recent events, as the bare JSON array the endpoint answers
+    /// (Python <c>list[dict]</c>, Go <c>SessionEvents() (any, error)</c>).
+    /// </summary>
+    public Task<object?> SessionEvents(string sessionId, CancellationToken ct = default) =>
+        RequestAnyAsync(HttpMethod.Get, Sp(sessionId) + "/events", null, ct);
 
     public Task<Dictionary<string, object?>> WatchSessionEvents(string sessionId, CancellationToken ct = default) =>
         RequestObjectAsync(HttpMethod.Get, Sp(sessionId) + "/events/watch", null, ct);
@@ -293,12 +305,8 @@ public sealed class HijackClient : IDisposable
         HttpMethod method, string path, Dictionary<string, object?>? body, CancellationToken ct)
     {
         var any = await RequestAnyAsync(method, path, body, ct).ConfigureAwait(false);
-        return any switch
-        {
-            Dictionary<string, object?> d => d,
-            JsonElement je when je.ValueKind == JsonValueKind.Object => JsonElementToDict(je),
-            _ => new Dictionary<string, object?> { ["value"] = any },
-        };
+        return any as Dictionary<string, object?>
+               ?? new Dictionary<string, object?> { ["value"] = any };
     }
 
     private async Task<object?> RequestAnyAsync(
@@ -326,12 +334,11 @@ public sealed class HijackClient : IDisposable
             try
             {
                 using var doc = JsonDocument.Parse(raw);
-                parsed = doc.RootElement.ValueKind switch
-                {
-                    JsonValueKind.Object => JsonElementToDict(doc.RootElement.Clone()),
-                    JsonValueKind.Array => JsonSerializer.Deserialize<object>(raw),
-                    _ => raw,
-                };
+                // One decoding for every JSON shape: an object becomes a
+                // dictionary, an array a list, and a scalar itself. Decoding
+                // only objects and handing back the undecoded bytes for
+                // everything else made a null body arrive as the string "null".
+                parsed = JsonElementToObject(doc.RootElement.Clone());
             }
             catch
             {
