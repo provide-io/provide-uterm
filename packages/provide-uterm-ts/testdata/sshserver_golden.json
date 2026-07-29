@@ -1,0 +1,243 @@
+{
+  "default_max_connections_per_ip": 5,
+  "required_key_mode": 384,
+  "loopback": [
+    {
+      "name": "loopback, written out",
+      "host": "127.0.0.1",
+      "loopback": true
+    },
+    {
+      "name": "another loopback address",
+      "host": "127.0.0.53",
+      "loopback": true
+    },
+    {
+      "name": "loopback, by name",
+      "host": "localhost",
+      "loopback": true
+    },
+    {
+      "name": "loopback, by name in capitals",
+      "host": "LOCALHOST",
+      "loopback": false
+    },
+    {
+      "name": "loopback in IPv6",
+      "host": "::1",
+      "loopback": true
+    },
+    {
+      "name": "every address",
+      "host": "0.0.0.0",
+      "loopback": false
+    },
+    {
+      "name": "every address in IPv6",
+      "host": "::",
+      "loopback": false
+    },
+    {
+      "name": "a private address",
+      "host": "10.0.0.5",
+      "loopback": false
+    },
+    {
+      "name": "a public address",
+      "host": "93.184.216.34",
+      "loopback": false
+    },
+    {
+      "name": "a hostname",
+      "host": "ssh.example.com",
+      "loopback": false
+    },
+    {
+      "name": "nothing at all",
+      "host": "",
+      "loopback": false
+    },
+    {
+      "name": "a name that merely contains localhost",
+      "host": "notlocalhost",
+      "loopback": false
+    },
+    {
+      "name": "a name under the localhost subtree",
+      "host": "api.localhost",
+      "loopback": false
+    }
+  ],
+  "admission": [
+    {
+      "name": "no validators on loopback",
+      "has_password_validator": false,
+      "has_key_validator": false,
+      "allow_unauthenticated": false,
+      "host": "127.0.0.1",
+      "allowed": true
+    },
+    {
+      "name": "no validators on loopback by name",
+      "has_password_validator": false,
+      "has_key_validator": false,
+      "allow_unauthenticated": false,
+      "host": "localhost",
+      "allowed": true
+    },
+    {
+      "name": "no validators on every address",
+      "has_password_validator": false,
+      "has_key_validator": false,
+      "allow_unauthenticated": false,
+      "host": "0.0.0.0",
+      "allowed": false
+    },
+    {
+      "name": "no validators on a public address",
+      "has_password_validator": false,
+      "has_key_validator": false,
+      "allow_unauthenticated": false,
+      "host": "93.184.216.34",
+      "allowed": false
+    },
+    {
+      "name": "no validators on a hostname",
+      "has_password_validator": false,
+      "has_key_validator": false,
+      "allow_unauthenticated": false,
+      "host": "ssh.example.com",
+      "allowed": false
+    },
+    {
+      "name": "no validators, opted in, on a public address",
+      "has_password_validator": false,
+      "has_key_validator": false,
+      "allow_unauthenticated": true,
+      "host": "93.184.216.34",
+      "allowed": true
+    },
+    {
+      "name": "a password validator on a public address",
+      "has_password_validator": true,
+      "has_key_validator": false,
+      "allow_unauthenticated": false,
+      "host": "93.184.216.34",
+      "allowed": true
+    },
+    {
+      "name": "a key validator on a public address",
+      "has_password_validator": false,
+      "has_key_validator": true,
+      "allow_unauthenticated": false,
+      "host": "93.184.216.34",
+      "allowed": true
+    },
+    {
+      "name": "both validators on a public address",
+      "has_password_validator": true,
+      "has_key_validator": true,
+      "allow_unauthenticated": false,
+      "host": "93.184.216.34",
+      "allowed": true
+    },
+    {
+      "name": "no validators on an empty host",
+      "has_password_validator": false,
+      "has_key_validator": false,
+      "allow_unauthenticated": false,
+      "host": "",
+      "allowed": false
+    }
+  ],
+  "key_permissions": [
+    {
+      "name": "private to its owner",
+      "mode": 384,
+      "error": null
+    },
+    {
+      "name": "readable by the group",
+      "mode": 416,
+      "error": "refusing to load SSH host key with insecure mode 0o640 (expected 0o600)"
+    },
+    {
+      "name": "readable by everybody",
+      "mode": 420,
+      "error": "refusing to load SSH host key with insecure mode 0o644 (expected 0o600)"
+    },
+    {
+      "name": "writable by everybody",
+      "mode": 438,
+      "error": "refusing to load SSH host key with insecure mode 0o666 (expected 0o600)"
+    },
+    {
+      "name": "executable as well",
+      "mode": 448,
+      "error": "refusing to load SSH host key with insecure mode 0o700 (expected 0o600)"
+    },
+    {
+      "name": "read-only to its owner",
+      "mode": 256,
+      "error": "refusing to load SSH host key with insecure mode 0o400 (expected 0o600)"
+    },
+    {
+      "name": "nothing at all",
+      "mode": 0,
+      "error": "refusing to load SSH host key with insecure mode 0o0 (expected 0o600)"
+    }
+  ],
+  "connections": [
+    {
+      "limit": 1,
+      "existing": 0,
+      "allowed": true
+    },
+    {
+      "limit": 1,
+      "existing": 1,
+      "allowed": false
+    },
+    {
+      "limit": 1,
+      "existing": 2,
+      "allowed": false
+    },
+    {
+      "limit": 5,
+      "existing": 0,
+      "allowed": true
+    },
+    {
+      "limit": 5,
+      "existing": 1,
+      "allowed": true
+    },
+    {
+      "limit": 5,
+      "existing": 2,
+      "allowed": true
+    },
+    {
+      "limit": 5,
+      "existing": 3,
+      "allowed": true
+    },
+    {
+      "limit": 5,
+      "existing": 4,
+      "allowed": true
+    },
+    {
+      "limit": 5,
+      "existing": 5,
+      "allowed": false
+    },
+    {
+      "limit": 5,
+      "existing": 6,
+      "allowed": false
+    }
+  ],
+  "stat_mode_mask": 384
+}
