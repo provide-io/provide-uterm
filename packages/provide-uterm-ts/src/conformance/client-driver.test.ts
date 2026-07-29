@@ -3,6 +3,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
+// biome-ignore-all lint/suspicious/noTemplateCurlyInString: `${step.path}` is the protocol's own grammar for a step
+// that needs an earlier step's answer, and a scenario carries it as written.
+
 import { describe, expect, it } from "vitest";
 import {
   BAD_TOKEN,
@@ -213,6 +216,121 @@ describe("the action vocabulary", () => {
     expect(fake.asked[0]).toMatchObject({ path: "/api/sessions", method: "POST", body: null });
   });
 
+  it("asks the client library for a session's events", async () => {
+    const fake = ok();
+
+    await run([{ id: "s", action: "session_events", session_id: "abc" }], fake.fetchImpl);
+
+    // The reference driver's default, so a scenario that names no limit asks
+    // both servers for the same number of events.
+    expect(fake.asked[0]).toMatchObject({ path: "/api/sessions/abc/events?limit=100", method: "GET" });
+  });
+
+  it("asks for as many of a session's events as the step said", async () => {
+    const fake = ok();
+
+    await run([{ id: "s", action: "session_events", session_id: "abc", limit: 5 }], fake.fetchImpl);
+
+    expect(fake.asked[0]).toMatchObject({ path: "/api/sessions/abc/events?limit=5" });
+  });
+
+  it("asks the client library to put a session in a mode", async () => {
+    const fake = ok();
+
+    await run([{ id: "s", action: "set_input_mode", session_id: "abc", input_mode: "hijack" }], fake.fetchImpl);
+
+    expect(fake.asked[0]).toMatchObject({
+      path: "/api/sessions/abc/mode",
+      method: "POST",
+      body: '{"input_mode":"hijack"}',
+    });
+  });
+
+  it("takes a lease on a worker", async () => {
+    const fake = ok();
+
+    await run([{ id: "s", action: "hijack_acquire", worker_id: "w1" }], fake.fetchImpl);
+
+    // The reference driver's defaults: whoever a scenario does not name is
+    // `operator`, and a lease it does not size runs 90 seconds.
+    expect(fake.asked[0]).toMatchObject({
+      path: "/worker/w1/hijack/acquire",
+      method: "POST",
+      body: '{"owner":"operator","lease_s":90}',
+    });
+  });
+
+  it("takes a lease for the owner and the time the step named", async () => {
+    const fake = ok();
+
+    await run([{ id: "s", action: "hijack_acquire", worker_id: "w1", owner: "ada", lease_s: 30 }], fake.fetchImpl);
+
+    expect(fake.asked[0]).toMatchObject({ body: '{"owner":"ada","lease_s":30}' });
+  });
+
+  it("extends a lease", async () => {
+    const fake = ok();
+
+    await run([{ id: "s", action: "hijack_heartbeat", worker_id: "w1", hijack_id: "h1" }], fake.fetchImpl);
+
+    expect(fake.asked[0]).toMatchObject({
+      path: "/worker/w1/hijack/h1/heartbeat",
+      method: "POST",
+      body: '{"lease_s":90}',
+    });
+  });
+
+  it("extends a lease for the time the step named", async () => {
+    const fake = ok();
+
+    await run([{ id: "s", action: "hijack_heartbeat", worker_id: "w1", hijack_id: "h1", lease_s: 15 }], fake.fetchImpl);
+
+    expect(fake.asked[0]).toMatchObject({ body: '{"lease_s":15}' });
+  });
+
+  it("sends keys through a lease", async () => {
+    const fake = ok();
+
+    await run([{ id: "s", action: "hijack_send", worker_id: "w1", hijack_id: "h1", keys: "ls\n" }], fake.fetchImpl);
+
+    expect(fake.asked[0]).toMatchObject({ path: "/worker/w1/hijack/h1/send", method: "POST" });
+    expect(JSON.parse(fake.asked[0]?.body ?? "null")).toMatchObject({ keys: "ls\n" });
+  });
+
+  it("sends nothing at all when a step names no keys", async () => {
+    // The reference driver's default. Sending a key nobody asked for would be
+    // a driver typing at a terminal on its own account.
+    const fake = ok();
+
+    await run([{ id: "s", action: "hijack_send", worker_id: "w1", hijack_id: "h1" }], fake.fetchImpl);
+
+    expect(JSON.parse(fake.asked[0]?.body ?? "null")).toMatchObject({ keys: "" });
+  });
+
+  it("single-steps a hijacked worker", async () => {
+    const fake = ok();
+
+    await run([{ id: "s", action: "hijack_step", worker_id: "w1", hijack_id: "h1" }], fake.fetchImpl);
+
+    expect(fake.asked[0]).toMatchObject({ path: "/worker/w1/hijack/h1/step", method: "POST" });
+  });
+
+  it("reads the screen through a lease", async () => {
+    const fake = ok();
+
+    await run([{ id: "s", action: "hijack_snapshot", worker_id: "w1", hijack_id: "h1" }], fake.fetchImpl);
+
+    expect(fake.asked[0]).toMatchObject({ path: "/worker/w1/hijack/h1/snapshot?wait_ms=1500", method: "GET" });
+  });
+
+  it("gives a lease back", async () => {
+    const fake = ok();
+
+    await run([{ id: "s", action: "hijack_release", worker_id: "w1", hijack_id: "h1" }], fake.fetchImpl);
+
+    expect(fake.asked[0]).toMatchObject({ path: "/worker/w1/hijack/h1/release", method: "POST" });
+  });
+
   it("runs the steps in the order they are written", async () => {
     const fake = ok();
 
@@ -280,6 +398,16 @@ describe("a scenario the driver cannot run", () => {
   it.each([
     ["get_session", { id: "s", action: "get_session" }, "session_id"],
     ["session_snapshot", { id: "s", action: "session_snapshot" }, "session_id"],
+    ["session_events", { id: "s", action: "session_events" }, "session_id"],
+    ["set_input_mode", { id: "s", action: "set_input_mode", input_mode: "open" }, "session_id"],
+    ["set_input_mode", { id: "s", action: "set_input_mode", session_id: "abc" }, "input_mode"],
+    ["hijack_acquire", { id: "s", action: "hijack_acquire" }, "worker_id"],
+    ["hijack_heartbeat", { id: "s", action: "hijack_heartbeat", hijack_id: "h1" }, "worker_id"],
+    ["hijack_heartbeat", { id: "s", action: "hijack_heartbeat", worker_id: "w1" }, "hijack_id"],
+    ["hijack_send", { id: "s", action: "hijack_send", worker_id: "w1" }, "hijack_id"],
+    ["hijack_step", { id: "s", action: "hijack_step", worker_id: "w1" }, "hijack_id"],
+    ["hijack_snapshot", { id: "s", action: "hijack_snapshot", worker_id: "w1" }, "hijack_id"],
+    ["hijack_release", { id: "s", action: "hijack_release", worker_id: "w1" }, "hijack_id"],
     ["http_get", { id: "s", action: "http_get" }, "path"],
     ["http_post", { id: "s", action: "http_post" }, "path"],
   ] as Array<[string, ScenarioStep, string]>)("stops when %s has no %s", async (_action, step, field) => {
@@ -290,6 +418,82 @@ describe("a scenario the driver cannot run", () => {
     expect(result.status).toBe("error");
     expect(result.error).toContain(field);
     expect(fake.asked).toStrictEqual([]);
+  });
+});
+
+describe("a step that needs an earlier step's answer", () => {
+  it("sends what the step it names came back with", async () => {
+    // The one thing the harness cannot do for a driver: the driver performs
+    // the request, so only the driver holds the value in time to use it.
+    const fake = server((path) =>
+      path.endsWith("/acquire")
+        ? { status: 200, body: JSON.stringify({ hijack_id: "h-77" }) }
+        : { status: 200, body: "{}" },
+    );
+
+    const result = await run(
+      [
+        { id: "acquire", action: "hijack_acquire", worker_id: "w1" },
+        { id: "release", action: "hijack_release", worker_id: "w1", hijack_id: "${acquire.body.hijack_id}" },
+      ],
+      fake.fetchImpl,
+    );
+
+    expect(fake.asked[1]?.path).toBe("/worker/w1/hijack/h-77/release");
+    expect(result.status).toBe("completed");
+    expect(result.steps.map((step) => step.id)).toStrictEqual(["acquire", "release"]);
+  });
+
+  it("resolves against what was recorded, not against what the library concluded", async () => {
+    // The record holds the status the library drops, so a scenario may refer
+    // to it — and a driver that resolved against `(ok, body)` could not.
+    const fake = server(() => ({ status: 200, body: JSON.stringify({ input_mode: "hijack" }) }));
+
+    await run(
+      [
+        { id: "first", action: "list_sessions" },
+        { id: "second", action: "set_input_mode", session_id: "abc", input_mode: "${first.body.input_mode}" },
+      ],
+      fake.fetchImpl,
+    );
+
+    expect(fake.asked[1]?.body).toBe('{"input_mode":"hijack"}');
+  });
+
+  it("stops on a reference to a step that has not run", async () => {
+    // A malformed scenario, and a run error rather than a step observation:
+    // recording it as a field would let the harness compare it as though the
+    // server had done something.
+    const fake = ok();
+
+    const result = await run(
+      [
+        { id: "first", action: "health" },
+        { id: "second", action: "hijack_release", worker_id: "w1", hijack_id: "${nobody.body.hijack_id}" },
+      ],
+      fake.fetchImpl,
+    );
+
+    expect(result.status).toBe("error");
+    expect(result.error).toContain("has not run");
+    expect(result.steps.map((step) => step.id)).toStrictEqual(["first"]);
+    expect(fake.asked.map((call) => call.path)).toStrictEqual(["/api/health"]);
+  });
+
+  it("stops on a reference to something the step it names never recorded", async () => {
+    const fake = ok();
+
+    const result = await run(
+      [
+        { id: "first", action: "health" },
+        { id: "second", action: "hijack_release", worker_id: "w1", hijack_id: "${first.body.hijack_id}" },
+      ],
+      fake.fetchImpl,
+    );
+
+    expect(result.status).toBe("error");
+    expect(result.error).toContain("is not there");
+    expect(result.steps).toHaveLength(1);
   });
 });
 
