@@ -22,6 +22,7 @@ import { type AuthSettings, type DevIdpAuthConfig, setupDevIdp } from "../server
 import { deepMerge, normalizeDocument, SERVER_CONFIG_DEFAULTS } from "../serverconfig/index.ts";
 import { createServerApp, type ServerApp } from "./app.ts";
 import { SessionRegistry } from "./session-registry.ts";
+import { SessionRuntimes } from "./session-runtime.ts";
 import { sessionDefinitionFrom } from "./session-status.ts";
 
 /**
@@ -61,6 +62,17 @@ export interface BootstrapOptions {
 export interface BootstrappedServer {
   app: ServerApp;
   registry: SessionRegistry;
+  /**
+   * The sessions this server can bring up, and the thing that brings them.
+   *
+   * Assembled but not started: the reference starts its own from the
+   * application lifespan, once the process is committed to serving. Whoever
+   * binds the socket calls {@link SessionRuntimes.startAutoStart} — see
+   * `conformance/serve.ts` — and {@link SessionRuntimes.stopAll} on the way
+   * out. Bootstrapping stays synchronous, and a caller that only wants to
+   * *inspect* a configuration does not start connectors by doing so.
+   */
+  runtimes: SessionRuntimes;
   /** The `auth` section after the stub IdP rewrote it, if it did. */
   auth: DevIdpAuthConfig & AuthSettings;
   /**
@@ -141,5 +153,5 @@ export function bootstrapServer(options: BootstrapOptions = {}): BootstrappedSer
     startupTime: (options.now ?? (() => Date.now() / 1000))(),
     now: options.now,
   });
-  return { app, registry, auth, token, config };
+  return { app, registry, runtimes: new SessionRuntimes(registry, { now: options.now }), auth, token, config };
 }

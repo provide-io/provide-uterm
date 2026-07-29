@@ -17,8 +17,26 @@
  * say" only if the first is `null` and the second is nothing at all.
  */
 
-/** How far along a session is. */
-export type SessionLifecycle = "stopped" | "starting" | "running" | "paused" | "error";
+import type { SessionLifecycle } from "../bridge/contracts.ts";
+
+/**
+ * How far along a session is.
+ *
+ * The reference's own `SessionLifecycle`, imported rather than restated. There
+ * are two lifecycle machines in the reference that share this field's *name*,
+ * and only one of them reaches this wire: `bridge/contracts.py`'s
+ * `stopped|starting|running|error`, which `server/runtime.py` assigns and
+ * `SessionRuntimeStatus` carries. The other —
+ * `control/plane/session/types.py`'s `waiting|running|stopped|error|deleted` —
+ * belongs to the persisted record store and is a different subsystem.
+ *
+ * Restating either list here is how this port acquired a fifth name, `paused`,
+ * that neither machine has: no dashboard, no client and no other port knows
+ * how to read it, however sensible it sounds on its own. The one list is held
+ * to `get_args(SessionLifecycle)` by `contracts.test.ts`, so a name added to
+ * the reference arrives here and a name invented here cannot.
+ */
+export type { SessionLifecycle };
 
 /** Whether a viewer may type into a session. */
 export type InputMode = "open" | "hijack";
