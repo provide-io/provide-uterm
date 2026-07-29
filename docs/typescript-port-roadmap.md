@@ -151,7 +151,7 @@ corpus match CPython byte for byte.
 | `bridge` | `bridge` worker side | `bridge` | **done** — authorization matrix, hijack coordinator, protocol contract, hijackable primitives, the worker link and the hello protocol-range reader |
 | `fanout` | server `bridge/fanout` | `fanout` | **done** — divergence detection, group records, the in-memory store, the output collector, the controller and the REST routes |
 | `graphical` | graphical target registry | `graphical` | **done** — the definition and its validation, both endpoint grammars, the tenant scope, secret stripping, the wire shape and the whole in-memory registry |
-| `gui` | `vnc`, GUI ops | `gui` | **partial** — the framebuffer with its dimension cap, the in-memory console, and the PNG encoder byte-for-byte; the `/gui/` REST surface outstanding |
+| `gui` | `vnc`, GUI ops | `gui` | **done** — the framebuffer with its dimension cap, the in-memory console, the PNG encoder byte-for-byte, and all six `/gui/` handlers with their capability, tenant-scope and lease-ownership gates |
 
 ### Server and edge
 
