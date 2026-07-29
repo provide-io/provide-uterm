@@ -17,6 +17,7 @@ import {
 interface FieldSpec {
   kind: string;
   optional: boolean;
+  required: boolean;
   choices?: string[];
   item?: { kind: string; name?: string };
   name?: string;
@@ -42,9 +43,13 @@ const golden = loadGolden<SchemaGolden>("configschema_golden.json");
 /** The shorthand in the spec table, expanded into what the corpus records. */
 function expand(code: string | readonly string[]): FieldSpec {
   if (Array.isArray(code)) {
-    return { kind: "literal", optional: false, choices: [...code] };
+    return { kind: "literal", optional: false, required: false, choices: [...code] };
   }
   let text = code as string;
+  const required = text.endsWith("!");
+  if (required) {
+    text = text.slice(0, -1);
+  }
   const optional = text.endsWith("?");
   if (optional) {
     text = text.slice(0, -1);
@@ -52,12 +57,12 @@ function expand(code: string | readonly string[]): FieldSpec {
   if (text.endsWith("[]")) {
     const inner = text.slice(0, -2);
     const item = inner.startsWith("model:") ? { kind: "model", name: inner.slice(6) } : { kind: inner };
-    return { kind: "list", optional, item };
+    return { kind: "list", optional, required, item };
   }
   if (text.startsWith("model:")) {
-    return { kind: "model", optional, name: text.slice(6) };
+    return { kind: "model", optional, required, name: text.slice(6) };
   }
-  return { kind: text, optional };
+  return { kind: text, optional, required };
 }
 
 describe("the schema the port carries", () => {
@@ -75,12 +80,9 @@ describe("the schema the port carries", () => {
   });
 
   it("names every section the document references", () => {
-    // Except the session definitions, whose own validation is a separate
-    // unit — a document carrying one is checked as far as its shape and no
-    // further.
     for (const spec of Object.values(golden.top_level_spec)) {
       const referenced = spec.kind === "model" ? spec.name : spec.item?.name;
-      if (referenced !== undefined && referenced !== "SessionDefinition") {
+      if (referenced !== undefined) {
         expect(SECTION_FIELD_SPECS).toHaveProperty(referenced);
       }
     }
