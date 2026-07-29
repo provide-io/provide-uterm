@@ -22,6 +22,7 @@ interface ReconnectGolden {
     max_backoff_s: number;
     delays: number[];
   }>;
+  classification: Array<{ name: string; error: string; retryable: boolean }>;
   exhausted_message: string;
   connect_exhausted_message: string;
   sequences: Array<{
@@ -430,6 +431,77 @@ describe("reconnecting", () => {
  * that reconnects before closing the dead socket returns the same value and
  * leaves a descriptor behind.
  */
+describe("which failures are the transport", () => {
+  /**
+   * Each Python error as this runtime raises it. Node has no exception tree:
+   * a syscall failure is an `Error` carrying a `code`, so the code is what
+   * the port classifies on.
+   */
+  const AS_NODE: Record<string, Error> = {
+    ConnectionError: Object.assign(new Error("dropped"), { name: "ConnectionError" }),
+    BrokenPipeError: Object.assign(new Error("write EPIPE"), { code: "EPIPE" }),
+    ConnectionResetError: Object.assign(new Error("read ECONNRESET"), { code: "ECONNRESET" }),
+    ConnectionRefusedError: Object.assign(new Error("connect ECONNREFUSED"), { code: "ECONNREFUSED" }),
+    ConnectionAbortedError: Object.assign(new Error("ECONNABORTED"), { code: "ECONNABORTED" }),
+    OSError: Object.assign(new Error("EHOSTUNREACH"), { code: "EHOSTUNREACH" }),
+    TimeoutError: Object.assign(new Error("timed out"), { name: "TimeoutError" }),
+    FileNotFoundError: Object.assign(new Error("open ENOENT"), { code: "ENOENT" }),
+    PermissionError: Object.assign(new Error("EACCES"), { code: "EACCES" }),
+    InterruptedError: Object.assign(new Error("EINTR"), { code: "EINTR" }),
+    ValueError: new TypeError("bad value"),
+    TypeError: new TypeError("bad type"),
+    KeyError: new Error("missing"),
+    RuntimeError: new Error("broken"),
+    AssertionError: Object.assign(new Error("impossible"), { name: "AssertionError" }),
+    Exception: new Error("something"),
+  };
+
+  /**
+   * Where the port deliberately answers no and the reference yes.
+   *
+   * All three are `OSError` in Python, so the reference retries them for the
+   * whole budget. None is a transport that might come back: a missing file, a
+   * denied permission and an interrupted call are the same on the next
+   * attempt, and retrying only delays the report.
+   */
+  const NARROWED = new Set(["FileNotFoundError", "PermissionError", "InterruptedError"]);
+
+  it.each(golden.classification)("$name", (record) => {
+    const error = AS_NODE[record.error] as Error;
+    const expected = NARROWED.has(record.error) ? false : record.retryable;
+    expect(isRetryableTransportError(error)).toBe(expected);
+  });
+
+  it("retries a timeout, which is the transport and not the caller", () => {
+    // However it arrives: a code from a socket, or the name `AbortSignal`
+    // gives a timed-out fetch.
+    expect(isRetryableTransportError(Object.assign(new Error("x"), { code: "ETIMEDOUT" }))).toBe(true);
+    expect(isRetryableTransportError(Object.assign(new Error("x"), { name: "TimeoutError" }))).toBe(true);
+  });
+
+  it("retries what this runtime calls a drop, whatever Python calls it", () => {
+    // The corpus cannot reach these: `AbortError` is what an aborted socket
+    // raises here and has no Python counterpart, and `ConnectionClosed` is
+    // the websocket library's — the mirror of the reference's own
+    // `websockets.ConnectionClosed`.
+    for (const name of ["AbortError", "ConnectionClosed"]) {
+      expect(isRetryableTransportError(Object.assign(new Error("gone"), { name }))).toBe(true);
+    }
+  });
+
+  it("does not retry what only the caller can fix", () => {
+    for (const error of [new TypeError("bad"), new RangeError("bad"), new Error("plain"), new SyntaxError("bad")]) {
+      expect(isRetryableTransportError(error)).toBe(false);
+    }
+  });
+
+  it("does not retry something that is not an error at all", () => {
+    for (const value of [undefined, null, "ECONNRESET", 42, { code: "ECONNRESET" }]) {
+      expect(isRetryableTransportError(value)).toBe(false);
+    }
+  });
+});
+
 describe("telling the two exhaustions apart", () => {
   /** The exact message, since one of the two contains the other. */
   async function messageOf(run: () => Promise<unknown>): Promise<string> {

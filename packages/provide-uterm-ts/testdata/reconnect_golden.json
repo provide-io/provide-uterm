@@ -127,16 +127,87 @@
    ]
   }
  ],
- "retryable": [
-  "ConnectionError",
-  "OSError",
-  "websockets.ConnectionClosed"
- ],
- "not_retryable": [
-  "ValueError",
-  "TypeError",
-  "KeyError",
-  "RuntimeError"
+ "classification": [
+  {
+   "name": "a connection error",
+   "error": "ConnectionError",
+   "retryable": true
+  },
+  {
+   "name": "a broken pipe",
+   "error": "BrokenPipeError",
+   "retryable": true
+  },
+  {
+   "name": "a connection reset",
+   "error": "ConnectionResetError",
+   "retryable": true
+  },
+  {
+   "name": "a refused connection",
+   "error": "ConnectionRefusedError",
+   "retryable": true
+  },
+  {
+   "name": "an aborted connection",
+   "error": "ConnectionAbortedError",
+   "retryable": true
+  },
+  {
+   "name": "an OS error",
+   "error": "OSError",
+   "retryable": true
+  },
+  {
+   "name": "a timeout",
+   "error": "TimeoutError",
+   "retryable": true
+  },
+  {
+   "name": "a file that is not there",
+   "error": "FileNotFoundError",
+   "retryable": true
+  },
+  {
+   "name": "a permission error",
+   "error": "PermissionError",
+   "retryable": true
+  },
+  {
+   "name": "an interrupted call",
+   "error": "InterruptedError",
+   "retryable": true
+  },
+  {
+   "name": "a value error",
+   "error": "ValueError",
+   "retryable": false
+  },
+  {
+   "name": "a type error",
+   "error": "TypeError",
+   "retryable": false
+  },
+  {
+   "name": "a key error",
+   "error": "KeyError",
+   "retryable": false
+  },
+  {
+   "name": "a runtime error",
+   "error": "RuntimeError",
+   "retryable": false
+  },
+  {
+   "name": "an assertion",
+   "error": "AssertionError",
+   "retryable": false
+  },
+  {
+   "name": "a plain exception",
+   "error": "Exception",
+   "retryable": false
+  }
  ],
  "exhausted_message": "reconnect retries exhausted",
  "connect_exhausted_message": "connect retries exhausted",
