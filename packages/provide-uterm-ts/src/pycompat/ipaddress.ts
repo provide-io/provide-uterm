@@ -444,3 +444,77 @@ export function ipToString(address: IpAddress): string {
 export function networkToString(network: IpNetwork): string {
   return `${ipToString({ version: network.version, packed: network.packed })}/${network.prefixLength}`;
 }
+
+/**
+ * The C resolver's `inet_aton`, which takes far more than a dotted quad.
+ *
+ * A blocklist that only understands `127.0.0.1` is trivially bypassed:
+ * `2130706433`, `0177.0.0.1`, `0x7f.1` and `127.1` all reach loopback through
+ * any resolver that uses this, which is every one that matters. Anything this
+ * accepts has to be classified before it is allowed out.
+ *
+ * The grammar it actually implements, recorded rather than assumed: one to
+ * four dot-separated fields; each field decimal, octal with a leading zero, or
+ * hexadecimal with a leading `0x`; no sign; the last field holding whatever
+ * bytes the earlier ones did not, and truncated to thirty-two bits rather than
+ * refused when it overflows. Trailing whitespace is allowed and leading
+ * whitespace is not.
+ *
+ * @returns The address, or nothing for anything it refuses — which includes
+ *   every genuine hostname, and those are the resolver's business.
+ */
+export function inetAton(text: string): IpAddress | undefined {
+  // Trailing whitespace only. A leading space is refused, which is why this
+  // cannot simply trim.
+  const trimmed = text.replace(/\s+$/, "");
+  if (trimmed === "") {
+    return undefined;
+  }
+  const fields = trimmed.split(".");
+  if (fields.length > 4) {
+    return undefined;
+  }
+  const values: number[] = [];
+  for (const field of fields) {
+    const value = parseCNumber(field);
+    if (value === undefined) {
+      return undefined;
+    }
+    values.push(value);
+  }
+
+  // Every field but the last holds one byte; the last holds the rest.
+  const leading = values.slice(0, -1);
+  if (leading.some((value) => value > 0xff)) {
+    return undefined;
+  }
+  const last = values[values.length - 1] as number;
+  const remainingBytes = 4 - leading.length;
+  // Refused when it does not fit its own field — except the whole-address
+  // form, which wraps.
+  if (remainingBytes < 4 && last > 2 ** (8 * remainingBytes) - 1) {
+    return undefined;
+  }
+
+  // Not reduced modulo 2^32 first: the per-byte extraction below already
+  // discards everything above thirty-two bits, which is the same wrap.
+  let packed = last;
+  for (const [index, value] of leading.entries()) {
+    packed += value * 2 ** (8 * (3 - index));
+  }
+  return ipAddress([24, 16, 8, 0].map((shift) => Math.floor(packed / 2 ** shift) % 256).join("."));
+}
+
+/** One `strtoul`-style field: hexadecimal, octal or decimal, and unsigned. */
+function parseCNumber(field: string): number | undefined {
+  if (/^0[xX][0-9a-fA-F]+$/.test(field)) {
+    return Number.parseInt(field.slice(2), 16);
+  }
+  if (/^0[0-7]*$/.test(field)) {
+    return Number.parseInt(field, 8);
+  }
+  if (/^[1-9][0-9]*$/.test(field)) {
+    return Number.parseInt(field, 10);
+  }
+  return undefined;
+}
