@@ -42,6 +42,7 @@ export * as gateway from "./gateway/index.ts";
 export * as hub from "./hub/index.ts";
 export * as lineEditor from "./line-editor/index.ts";
 export * as policy from "./policy/index.ts";
+export * as pty from "./pty/index.ts";
 export * as pycompat from "./pycompat/index.ts";
 export * as ratelimit from "./ratelimit/index.ts";
 export * as recording from "./recording/index.ts";

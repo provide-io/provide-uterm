@@ -18,6 +18,7 @@
  * rather than falling back to one.
  */
 
+import { pyRepr as pyStrRepr } from "../pycompat/index.ts";
 import { SECTION_FIELD_SPECS, TOP_LEVEL_FIELD_SPEC } from "./schema-fields.ts";
 import {
   cleanPath,
@@ -370,16 +371,7 @@ function pyStr(value: unknown): string {
 
 /** A value as Python's `repr()` writes it. */
 function pyRepr(value: unknown): string {
-  if (typeof value !== "string") {
-    return pyStr(value);
-  }
-  const escaped = value.replace(/\\/g, "\\\\");
-  // Python switches quote style rather than escaping: a string with an
-  // apostrophe and no double quote is written in double quotes.
-  if (escaped.includes("'") && !escaped.includes('"')) {
-    return `"${escaped}"`;
-  }
-  return `'${escaped.replace(/'/g, "\\'")}'`;
+  return typeof value === "string" ? pyStrRepr(value) : pyStr(value);
 }
 
 /** The top-level scalars' own rules. */
