@@ -58,4 +58,5 @@ export * as sessionLogger from "./session-logger/index.ts";
 export * as shell from "./shell/index.ts";
 export * as telemetry from "./telemetry/index.ts";
 export * as transports from "./transports/index.ts";
+export * as vnc from "./vnc/index.ts";
 export * as vt from "./vt/index.ts";
