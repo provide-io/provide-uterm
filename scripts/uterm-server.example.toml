@@ -1,3 +1,33 @@
+# --- Top-level keys -----------------------------------------------------
+# These sit at the top of the document, before the first [section]. TOML
+# folds a bare key written after a table header into that table, so they
+# must stay above [server].
+
+# REST hijack rate limits (tokens/sec; burst = one second of the same rate).
+# Each ceiling is enforced twice — once globally and once per calling client —
+# so one client can never spend more than its own share of the global budget.
+#
+# rest_acquire_rate_limit_per_sec guards POST /hijack/acquire: the expensive,
+#   state-changing lease grab. Protects against a client that hammers acquire
+#   to steal or churn leases. Cost of lowering it: a legitimate operator or
+#   agent that reconnects in a tight loop starts getting 429s.
+# rest_send_rate_limit_per_sec is shared by the hijack send AND step
+#   endpoints — both are cheap keystroke-rate calls, which is why the budget
+#   is larger. Protects against an input flood driving the worker/PTY.
+#   Cost of lowering it: fast typing or a scripted agent gets throttled
+#   mid-session.
+#
+# Defaults are the hub's built-in values; leaving them unset changes nothing.
+# The minimum is 1. Anything under it — 0, a negative, or a fraction like
+# 0.5 — is REFUSED at startup rather than interpreted: a bucket's burst is
+# one second of its rate, so a sub-1/s limit never accumulates a whole token
+# and would refuse every call forever. Non-finite values (inf, nan) are
+# refused too, since inf would silently mean "no limit at all". Fractions at
+# or above 1 are fine (2.5 = five calls every two seconds). A rate limit that
+# silently fails open — or silently bricks the endpoint — is worse than none.
+# rest_acquire_rate_limit_per_sec = 5
+# rest_send_rate_limit_per_sec = 20
+
 [server]
 host = "127.0.0.1"
 port = 8780
