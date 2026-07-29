@@ -139,5 +139,523 @@
   "RuntimeError"
  ],
  "exhausted_message": "reconnect retries exhausted",
- "connect_exhausted_message": "connect retries exhausted"
+ "connect_exhausted_message": "connect retries exhausted",
+ "sequences": [
+  {
+   "name": "a send that works",
+   "log": [
+    [
+     "connect",
+     "ok"
+    ],
+    [
+     "send",
+     "session-0",
+     "ok"
+    ]
+   ],
+   "error": null,
+   "message": null
+  },
+  {
+   "name": "a socket that drops once",
+   "log": [
+    [
+     "connect",
+     "ok"
+    ],
+    [
+     "send",
+     "session-0",
+     "connection"
+    ],
+    [
+     "close",
+     "session-0"
+    ],
+    [
+     "sleep",
+     0.5
+    ],
+    [
+     "connect",
+     "ok"
+    ],
+    [
+     "hook",
+     "session-1"
+    ],
+    [
+     "send",
+     "session-1",
+     "ok"
+    ]
+   ],
+   "error": null,
+   "message": null
+  },
+  {
+   "name": "a socket that drops on an OSError",
+   "log": [
+    [
+     "connect",
+     "ok"
+    ],
+    [
+     "send",
+     "session-0",
+     "os"
+    ],
+    [
+     "close",
+     "session-0"
+    ],
+    [
+     "sleep",
+     0.5
+    ],
+    [
+     "connect",
+     "ok"
+    ],
+    [
+     "hook",
+     "session-1"
+    ],
+    [
+     "send",
+     "session-1",
+     "ok"
+    ]
+   ],
+   "error": null,
+   "message": null
+  },
+  {
+   "name": "the caller's own bug",
+   "log": [
+    [
+     "connect",
+     "ok"
+    ],
+    [
+     "send",
+     "session-0",
+     "value"
+    ]
+   ],
+   "error": "ValueError",
+   "message": "the caller's own bug"
+  },
+  {
+   "name": "a socket that drops twice",
+   "log": [
+    [
+     "connect",
+     "ok"
+    ],
+    [
+     "send",
+     "session-0",
+     "connection"
+    ],
+    [
+     "close",
+     "session-0"
+    ],
+    [
+     "sleep",
+     0.5
+    ],
+    [
+     "connect",
+     "ok"
+    ],
+    [
+     "hook",
+     "session-1"
+    ],
+    [
+     "send",
+     "session-1",
+     "connection"
+    ],
+    [
+     "close",
+     "session-1"
+    ],
+    [
+     "sleep",
+     1.0
+    ],
+    [
+     "connect",
+     "ok"
+    ],
+    [
+     "hook",
+     "session-2"
+    ],
+    [
+     "send",
+     "session-2",
+     "ok"
+    ]
+   ],
+   "error": null,
+   "message": null
+  },
+  {
+   "name": "a session that never stays up",
+   "log": [
+    [
+     "connect",
+     "ok"
+    ],
+    [
+     "send",
+     "session-0",
+     "connection"
+    ],
+    [
+     "close",
+     "session-0"
+    ],
+    [
+     "sleep",
+     0.5
+    ],
+    [
+     "connect",
+     "ok"
+    ],
+    [
+     "hook",
+     "session-1"
+    ],
+    [
+     "send",
+     "session-1",
+     "connection"
+    ],
+    [
+     "close",
+     "session-1"
+    ],
+    [
+     "sleep",
+     1.0
+    ],
+    [
+     "connect",
+     "ok"
+    ],
+    [
+     "hook",
+     "session-2"
+    ],
+    [
+     "send",
+     "session-2",
+     "connection"
+    ],
+    [
+     "close",
+     "session-2"
+    ]
+   ],
+   "error": "ConnectionError",
+   "message": "reconnect retries exhausted"
+  },
+  {
+   "name": "a server that is hard down",
+   "log": [
+    [
+     "connect",
+     "refused"
+    ],
+    [
+     "sleep",
+     0.5
+    ],
+    [
+     "connect",
+     "refused"
+    ],
+    [
+     "sleep",
+     1.0
+    ],
+    [
+     "connect",
+     "refused"
+    ]
+   ],
+   "error": "ConnectionError",
+   "message": "connect retries exhausted"
+  },
+  {
+   "name": "a server down for the first attempt only",
+   "log": [
+    [
+     "connect",
+     "refused"
+    ],
+    [
+     "sleep",
+     0.5
+    ],
+    [
+     "connect",
+     "ok"
+    ],
+    [
+     "send",
+     "session-1",
+     "ok"
+    ]
+   ],
+   "error": null,
+   "message": null
+  },
+  {
+   "name": "a drop, then a server that will not come back",
+   "log": [
+    [
+     "connect",
+     "ok"
+    ],
+    [
+     "send",
+     "session-0",
+     "connection"
+    ],
+    [
+     "close",
+     "session-0"
+    ],
+    [
+     "sleep",
+     0.5
+    ],
+    [
+     "connect",
+     "refused"
+    ],
+    [
+     "sleep",
+     0.5
+    ],
+    [
+     "connect",
+     "refused"
+    ]
+   ],
+   "error": "ConnectionError",
+   "message": "reconnect retries exhausted"
+  },
+  {
+   "name": "no retries allowed at all",
+   "log": [
+    [
+     "connect",
+     "ok"
+    ],
+    [
+     "send",
+     "session-0",
+     "connection"
+    ],
+    [
+     "close",
+     "session-0"
+    ]
+   ],
+   "error": "ConnectionError",
+   "message": "reconnect retries exhausted"
+  },
+  {
+   "name": "no backoff configured",
+   "log": [
+    [
+     "connect",
+     "ok"
+    ],
+    [
+     "send",
+     "session-0",
+     "connection"
+    ],
+    [
+     "close",
+     "session-0"
+    ],
+    [
+     "connect",
+     "ok"
+    ],
+    [
+     "hook",
+     "session-1"
+    ],
+    [
+     "send",
+     "session-1",
+     "ok"
+    ]
+   ],
+   "error": null,
+   "message": null
+  },
+  {
+   "name": "a ceiling below the base",
+   "log": [
+    [
+     "connect",
+     "ok"
+    ],
+    [
+     "send",
+     "session-0",
+     "connection"
+    ],
+    [
+     "close",
+     "session-0"
+    ],
+    [
+     "sleep",
+     1.0
+    ],
+    [
+     "connect",
+     "ok"
+    ],
+    [
+     "hook",
+     "session-1"
+    ],
+    [
+     "send",
+     "session-1",
+     "connection"
+    ],
+    [
+     "close",
+     "session-1"
+    ],
+    [
+     "sleep",
+     1.0
+    ],
+    [
+     "connect",
+     "ok"
+    ],
+    [
+     "hook",
+     "session-2"
+    ],
+    [
+     "send",
+     "session-2",
+     "connection"
+    ],
+    [
+     "close",
+     "session-2"
+    ],
+    [
+     "sleep",
+     1.0
+    ],
+    [
+     "connect",
+     "ok"
+    ],
+    [
+     "hook",
+     "session-3"
+    ],
+    [
+     "send",
+     "session-3",
+     "ok"
+    ]
+   ],
+   "error": null,
+   "message": null
+  },
+  {
+   "name": "a session whose close fails on the way out",
+   "log": [
+    [
+     "connect",
+     "ok"
+    ],
+    [
+     "send",
+     "session-0",
+     "connection"
+    ],
+    [
+     "close",
+     "session-0",
+     "raised"
+    ],
+    [
+     "sleep",
+     0.5
+    ],
+    [
+     "connect",
+     "ok"
+    ],
+    [
+     "hook",
+     "session-1"
+    ],
+    [
+     "send",
+     "session-1",
+     "ok"
+    ]
+   ],
+   "error": null,
+   "message": null
+  },
+  {
+   "name": "a drop with nobody watching for the reconnect",
+   "log": [
+    [
+     "connect",
+     "ok"
+    ],
+    [
+     "send",
+     "session-0",
+     "connection"
+    ],
+    [
+     "close",
+     "session-0"
+    ],
+    [
+     "sleep",
+     0.5
+    ],
+    [
+     "connect",
+     "ok"
+    ],
+    [
+     "send",
+     "session-1",
+     "ok"
+    ]
+   ],
+   "error": null,
+   "message": null
+  }
+ ]
 }
