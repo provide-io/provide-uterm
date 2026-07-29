@@ -9,6 +9,33 @@ using Provide.Uterm.ServerConfig;
 namespace Provide.Uterm.Server;
 
 /// <summary>
+/// The names a session's lifecycle can go by — the reference's vocabulary and
+/// no other: <c>bridge/contracts.py</c> declares
+/// <c>SessionLifecycle = Literal["stopped", "starting", "running", "error"]</c>
+/// and <c>server/runtime.py</c> is what assigns them.
+///
+/// A name outside this set is a name no dashboard, no client and no other port
+/// knows how to read, however sensible it sounds on its own.
+/// </summary>
+public static class SessionLifecycleState
+{
+    /// <summary>Registered but not brought up, or brought down again.</summary>
+    public const string Stopped = "stopped";
+
+    /// <summary>Asked to come up; the connector has not reported in yet.</summary>
+    public const string Starting = "starting";
+
+    /// <summary>Up.</summary>
+    public const string Running = "running";
+
+    /// <summary>The connector failed; <c>last_error</c> says how.</summary>
+    public const string Error = "error";
+
+    /// <summary>Every name, for validating what a port reports.</summary>
+    public static readonly IReadOnlyList<string> All = [Stopped, Starting, Running, Error];
+}
+
+/// <summary>
 /// Runtime session status returned by /api/sessions — the wire shape of
 /// Python's <c>SessionRuntimeStatus.model_dump</c> and Go's
 /// <c>server.SessionStatus</c>, property for property and in their order.
@@ -27,7 +54,7 @@ public sealed class SessionStatus
     public required string DisplayName { get; set; }
     public string CreatedAt { get; set; } = Timestamps.NowIso();
     public required string ConnectorType { get; set; }
-    public string LifecycleState { get; set; } = "created";
+    public string LifecycleState { get; set; } = SessionLifecycleState.Stopped;
     public string InputMode { get; set; } = "open";
     public bool Connected { get; set; }
     public bool AutoStart { get; set; } = true;
@@ -86,9 +113,9 @@ public interface ISessionRegistry
     IReadOnlyList<SessionItem> ListWithDefinitions();
     SessionDefinition Upsert(SessionDefinition def);
     bool Delete(string sessionId);
-    /// <summary>Lifecycle: created/disconnected → running.</summary>
+    /// <summary>Lifecycle: stopped → running.</summary>
     SessionStatus? StartSession(string sessionId);
-    /// <summary>Lifecycle: running → disconnected.</summary>
+    /// <summary>Lifecycle: running → stopped.</summary>
     SessionStatus? StopSession(string sessionId);
     SessionStatus? RestartSession(string sessionId);
     SessionStatus? ClearSession(string sessionId);
@@ -171,7 +198,7 @@ public sealed class InMemorySessionRegistry : ISessionRegistry
         lock (_gate)
         {
             if (!_status.TryGetValue(sessionId, out var st)) return null;
-            st.LifecycleState = "running";
+            st.LifecycleState = SessionLifecycleState.Running;
             st.Connected = true;
             st.StoppedAt = null;
             return CloneStatus(st);
@@ -183,7 +210,7 @@ public sealed class InMemorySessionRegistry : ISessionRegistry
         lock (_gate)
         {
             if (!_status.TryGetValue(sessionId, out var st)) return null;
-            st.LifecycleState = "disconnected";
+            st.LifecycleState = SessionLifecycleState.Stopped;
             st.Connected = false;
             st.IsHijacked = false;
             st.StoppedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0;
@@ -196,7 +223,7 @@ public sealed class InMemorySessionRegistry : ISessionRegistry
         lock (_gate)
         {
             if (!_status.TryGetValue(sessionId, out var st)) return null;
-            st.LifecycleState = "running";
+            st.LifecycleState = SessionLifecycleState.Running;
             st.Connected = true;
             st.IsHijacked = false;
             st.StoppedAt = null;
@@ -310,7 +337,7 @@ public sealed class InMemorySessionRegistry : ISessionRegistry
                     DisplayName = string.IsNullOrEmpty(def.DisplayName) ? def.SessionId : def.DisplayName,
                     CreatedAt = Timestamps.NowIso(),
                     ConnectorType = def.ConnectorType,
-                    LifecycleState = "created",
+                    LifecycleState = SessionLifecycleState.Stopped,
                     InputMode = def.InputMode,
                     AutoStart = def.AutoStart,
                     Tags = def.Tags.ToList(),
@@ -354,7 +381,7 @@ public sealed class InMemorySessionRegistry : ISessionRegistry
             st.Connected = online;
             st.IsHijacked = isHijacked;
             st.InputMode = inputMode;
-            st.LifecycleState = online ? "running" : "disconnected";
+            st.LifecycleState = online ? SessionLifecycleState.Running : SessionLifecycleState.Stopped;
         }
     }
 }

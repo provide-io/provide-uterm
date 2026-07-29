@@ -207,7 +207,7 @@ public sealed partial class UtermServer
             Visibility = profile.Visibility,
             Owner = p.SubjectId,
             Tags = profile.Tags.ToList(),
-            Config = connectorConfig,
+            ConnectorConfig = connectorConfig,
         };
         _deps.Registry.Upsert(def);
         var st = ActivateSession(sid, def);
@@ -640,7 +640,7 @@ public sealed partial class UtermServer
             ConnectorType = connectorType,
             Visibility = "private",
             Owner = p.SubjectId,
-            Config = connectorConfig,
+            ConnectorConfig = connectorConfig,
         };
         _deps.Registry.Upsert(def);
         var st = ActivateSession(sid, def);

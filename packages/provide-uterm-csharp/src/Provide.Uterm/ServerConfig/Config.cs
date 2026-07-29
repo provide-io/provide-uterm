@@ -126,7 +126,15 @@ public sealed class GovernanceConfig
     public double AuthzWebhookTimeoutS { get; set; } = 2.0;
 }
 
-/// <summary>Session definition from config or control plane.</summary>
+/// <summary>
+/// Session definition from config or control plane — the port of
+/// <c>config_schema_session.SessionDefinition</c> (and Go's
+/// <c>serverconfig.SessionDefinition</c>), field for field.
+///
+/// Every field here is one an operator can write in a <c>[[sessions]]</c>
+/// entry. A field this class does not carry is a setting that can be written
+/// down and silently not applied, which is worse than one that is refused.
+/// </summary>
 public sealed class SessionDefinition
 {
     public string SessionId { get; set; } = "";
@@ -135,7 +143,13 @@ public sealed class SessionDefinition
     public string Visibility { get; set; } = "public";
     public string? Owner { get; set; }
     public List<string> Tags { get; set; } = new();
-    public Dictionary<string, object?> Config { get; set; } = new();
+
+    /// <summary>
+    /// Connector-specific settings (<c>connector_config</c>). Any key the
+    /// reference's model does not define collects in here rather than being
+    /// refused — which is what defeats <c>extra="forbid"</c> for this section.
+    /// </summary>
+    public Dictionary<string, object?> ConnectorConfig { get; set; } = new();
 
     /// <summary>Whether a viewer may type. Reference default is <c>open</c>
     /// (config_schema_session.SessionDefinition.input_mode / Go InputMode).</summary>
@@ -147,6 +161,18 @@ public sealed class SessionDefinition
     /// <summary>Per-session recording override; null defers to
     /// <see cref="RecordingConfig.EnabledByDefault"/>, as the reference does.</summary>
     public bool? RecordingEnabled { get; set; }
+
+    /// <summary>Whether the session is discarded once nobody holds it.</summary>
+    public bool Ephemeral { get; set; }
+
+    /// <summary>Whether collaborative presence is published for this session.</summary>
+    public bool Presence { get; set; }
+
+    /// <summary>Idle seconds before an operator lease may transfer. Reference default is 30.</summary>
+    public int AutoTransferIdleS { get; set; } = 30;
+
+    /// <summary>How queued keystrokes are surfaced: <c>display</c> or <c>replay</c>.</summary>
+    public string KeystrokeQueue { get; set; } = "display";
 }
 
 public sealed class GraphicalTargetDefinition

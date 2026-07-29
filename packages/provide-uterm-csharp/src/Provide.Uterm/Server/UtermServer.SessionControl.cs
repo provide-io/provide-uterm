@@ -126,28 +126,35 @@ public sealed partial class UtermServer
         return StatusOrNotFound(sessionId, st);
     }
 
+    /// <summary>
+    /// What the connector makes of the session right now.
+    ///
+    /// The reference answers <c>{"session_id": ..., "analysis": &lt;string&gt;}</c>:
+    /// <c>registry.analyze_session()</c> is typed <c>-&gt; str</c> and hands back
+    /// <c>runtime.analyze()</c>, which is the connector's own prose — or the
+    /// words "connector offline" when the session has no connector running.
+    ///
+    /// Answering session status here instead would be a different question
+    /// under the same key: everything in a status object is already on
+    /// <c>GET /api/sessions/{id}</c>, and none of it is an analysis.
+    /// </summary>
     private async Task<IResult> HandleAnalyzeSession(HttpContext ctx, string sessionId)
     {
         var (_, err) = await TryReadableSession(ctx, sessionId).ConfigureAwait(false);
         if (err is not null) return err;
-        if (!_deps.Registry.TryGetStatus(sessionId, out var st))
+        if (!_deps.Registry.TryGetStatus(sessionId, out _))
         {
             return DetailError(404, "unknown session: " + sessionId);
         }
 
-        var snap = _deps.Hub.Router.GetLastSnapshot(sessionId);
-        var events = _deps.Hub.Router.GetRecentEvents(sessionId, 20);
-        var analysis = new Dictionary<string, object?>
-        {
-            ["lifecycle_state"] = st.LifecycleState,
-            ["worker_online"] = st.Connected,
-            ["is_hijacked"] = st.IsHijacked,
-            ["input_mode"] = st.InputMode,
-            ["has_snapshot"] = snap is not null,
-            ["recent_event_count"] = events.Count,
-        };
+        var analysis = _liveConnectors.TryGetValue(sessionId, out var connector)
+            ? connector.Analysis()
+            : ConnectorOffline;
         return Results.Json(new { session_id = sessionId, analysis }, JsonOpts);
     }
+
+    /// <summary>What the reference says when there is nothing to analyze.</summary>
+    internal const string ConnectorOffline = "connector offline";
 
     private async Task<IResult> HandleSessionSnapshot(HttpContext ctx, string sessionId)
     {

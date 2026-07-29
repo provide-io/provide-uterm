@@ -96,21 +96,7 @@ public static class ConfigLoader
             foreach (var item in sessions)
             {
                 if (item is not TomlTable t) continue;
-                var def = new SessionDefinition();
-                if (t.TryGetValue("session_id", out var sid) && sid is string sids) def.SessionId = sids;
-                if (t.TryGetValue("display_name", out var dn) && dn is string dns) def.DisplayName = dns;
-                if (t.TryGetValue("connector_type", out var ct) && ct is string cts) def.ConnectorType = cts;
-                if (t.TryGetValue("visibility", out var vis) && vis is string viss) def.Visibility = viss;
-                if (t.TryGetValue("owner", out var ow) && ow is string ows) def.Owner = ows;
-                if (t.TryGetValue("input_mode", out var im) && im is string ims) def.InputMode = ims;
-                if (t.TryGetValue("auto_start", out var au) && au is bool aub) def.AutoStart = aub;
-                if (t.TryGetValue("recording_enabled", out var re) && re is bool reb) def.RecordingEnabled = reb;
-                if (t.TryGetValue("tags", out var tg) && tg is TomlArray tga)
-                {
-                    def.Tags = tga.OfType<string>().ToList();
-                }
-
-                cfg.Sessions.Add(def);
+                cfg.Sessions.Add(SessionLoader.FromTable(t));
             }
         }
 
