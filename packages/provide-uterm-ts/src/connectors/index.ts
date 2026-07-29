@@ -10,6 +10,8 @@
  */
 
 export * from "./base.ts";
+export * from "./overlay.ts";
 export * from "./registry.ts";
 export * from "./shell.ts";
 export * from "./telnet.ts";
+export * from "./websocket.ts";
