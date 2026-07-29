@@ -1,0 +1,411 @@
+{
+  "telnet": [
+    {
+      "name": "nothing said",
+      "kwargs": {},
+      "construction": {
+        "args": [],
+        "kwargs": {}
+      },
+      "connected_with": {
+        "args": [
+          "bbs.example",
+          2323
+        ],
+        "kwargs": {
+          "cols": 80,
+          "rows": 25,
+          "term": "ANSI",
+          "timeout": 30.0
+        }
+      },
+      "sent": [
+        "h\r"
+      ],
+      "host": "bbs.example",
+      "port": 2323,
+      "closes": 1
+    },
+    {
+      "name": "a screen of its own",
+      "kwargs": {
+        "cols": 132,
+        "rows": 43
+      },
+      "construction": {
+        "args": [],
+        "kwargs": {}
+      },
+      "connected_with": {
+        "args": [
+          "bbs.example",
+          2323
+        ],
+        "kwargs": {
+          "cols": 132,
+          "rows": 43,
+          "term": "ANSI",
+          "timeout": 30.0
+        }
+      },
+      "sent": [
+        "h\r"
+      ],
+      "host": "bbs.example",
+      "port": 2323,
+      "closes": 1
+    },
+    {
+      "name": "a terminal type of its own",
+      "kwargs": {
+        "term": "xterm-256color"
+      },
+      "construction": {
+        "args": [],
+        "kwargs": {}
+      },
+      "connected_with": {
+        "args": [
+          "bbs.example",
+          2323
+        ],
+        "kwargs": {
+          "cols": 80,
+          "rows": 25,
+          "term": "xterm-256color",
+          "timeout": 30.0
+        }
+      },
+      "sent": [
+        "h\r"
+      ],
+      "host": "bbs.example",
+      "port": 2323,
+      "closes": 1
+    },
+    {
+      "name": "a connect timeout of its own",
+      "kwargs": {
+        "connect_timeout": 5.0
+      },
+      "construction": {
+        "args": [],
+        "kwargs": {}
+      },
+      "connected_with": {
+        "args": [
+          "bbs.example",
+          2323
+        ],
+        "kwargs": {
+          "cols": 80,
+          "rows": 25,
+          "term": "ANSI",
+          "timeout": 5.0
+        }
+      },
+      "sent": [
+        "h\r"
+      ],
+      "host": "bbs.example",
+      "port": 2323,
+      "closes": 1
+    },
+    {
+      "name": "a receive codec of its own",
+      "kwargs": {
+        "receive_encoding": "latin-1"
+      },
+      "construction": {
+        "args": [],
+        "kwargs": {}
+      },
+      "connected_with": {
+        "args": [
+          "bbs.example",
+          2323
+        ],
+        "kwargs": {
+          "cols": 80,
+          "rows": 25,
+          "term": "ANSI",
+          "timeout": 30.0
+        }
+      },
+      "sent": [
+        "h\r"
+      ],
+      "host": "bbs.example",
+      "port": 2323,
+      "closes": 1
+    },
+    {
+      "name": "control frames parsed out",
+      "kwargs": {
+        "control_frames": true
+      },
+      "construction": {
+        "args": [],
+        "kwargs": {}
+      },
+      "connected_with": {
+        "args": [
+          "bbs.example",
+          2323
+        ],
+        "kwargs": {
+          "cols": 80,
+          "rows": 25,
+          "term": "ANSI",
+          "timeout": 30.0
+        }
+      },
+      "sent": [
+        "h\r"
+      ],
+      "host": "bbs.example",
+      "port": 2323,
+      "closes": 1
+    }
+  ],
+  "websocket": [
+    {
+      "name": "nothing said",
+      "kwargs": {},
+      "construction": {
+        "args": [],
+        "kwargs": {
+          "text_frame_encoding": "latin-1"
+        }
+      },
+      "connected_with": {
+        "args": [],
+        "kwargs": {
+          "host": "",
+          "port": 0,
+          "url": "wss://feed.example/s",
+          "ping_interval": 20,
+          "ping_timeout": 20,
+          "close_timeout": 10
+        }
+      },
+      "sent": [
+        "hÃ©\r"
+      ],
+      "url": "wss://feed.example/s",
+      "closes": 1
+    },
+    {
+      "name": "a screen of its own",
+      "kwargs": {
+        "cols": 132,
+        "rows": 43
+      },
+      "construction": {
+        "args": [],
+        "kwargs": {
+          "text_frame_encoding": "latin-1"
+        }
+      },
+      "connected_with": {
+        "args": [],
+        "kwargs": {
+          "host": "",
+          "port": 0,
+          "url": "wss://feed.example/s",
+          "ping_interval": 20,
+          "ping_timeout": 20,
+          "close_timeout": 10
+        }
+      },
+      "sent": [
+        "hÃ©\r"
+      ],
+      "url": "wss://feed.example/s",
+      "closes": 1
+    },
+    {
+      "name": "an origin",
+      "kwargs": {
+        "origin": "https://app.example"
+      },
+      "construction": {
+        "args": [],
+        "kwargs": {
+          "text_frame_encoding": "latin-1"
+        }
+      },
+      "connected_with": {
+        "args": [],
+        "kwargs": {
+          "host": "",
+          "port": 0,
+          "url": "wss://feed.example/s",
+          "ping_interval": 20,
+          "ping_timeout": 20,
+          "close_timeout": 10,
+          "origin": "https://app.example"
+        }
+      },
+      "sent": [
+        "hÃ©\r"
+      ],
+      "url": "wss://feed.example/s",
+      "closes": 1
+    },
+    {
+      "name": "headers",
+      "kwargs": {
+        "additional_headers": {
+          "Authorization": "Bearer x"
+        }
+      },
+      "construction": {
+        "args": [],
+        "kwargs": {
+          "text_frame_encoding": "latin-1"
+        }
+      },
+      "connected_with": {
+        "args": [],
+        "kwargs": {
+          "host": "",
+          "port": 0,
+          "url": "wss://feed.example/s",
+          "ping_interval": 20,
+          "ping_timeout": 20,
+          "close_timeout": 10,
+          "additional_headers": {
+            "Authorization": "Bearer x"
+          }
+        }
+      },
+      "sent": [
+        "hÃ©\r"
+      ],
+      "url": "wss://feed.example/s",
+      "closes": 1
+    },
+    {
+      "name": "an origin and headers",
+      "kwargs": {
+        "origin": "https://app.example",
+        "additional_headers": {
+          "X-Trace": "1"
+        }
+      },
+      "construction": {
+        "args": [],
+        "kwargs": {
+          "text_frame_encoding": "latin-1"
+        }
+      },
+      "connected_with": {
+        "args": [],
+        "kwargs": {
+          "host": "",
+          "port": 0,
+          "url": "wss://feed.example/s",
+          "ping_interval": 20,
+          "ping_timeout": 20,
+          "close_timeout": 10,
+          "origin": "https://app.example",
+          "additional_headers": {
+            "X-Trace": "1"
+          }
+        }
+      },
+      "sent": [
+        "hÃ©\r"
+      ],
+      "url": "wss://feed.example/s",
+      "closes": 1
+    },
+    {
+      "name": "timings of its own",
+      "kwargs": {
+        "ping_interval": 5,
+        "ping_timeout": 6,
+        "close_timeout": 7
+      },
+      "construction": {
+        "args": [],
+        "kwargs": {
+          "text_frame_encoding": "latin-1"
+        }
+      },
+      "connected_with": {
+        "args": [],
+        "kwargs": {
+          "host": "",
+          "port": 0,
+          "url": "wss://feed.example/s",
+          "ping_interval": 5,
+          "ping_timeout": 6,
+          "close_timeout": 7
+        }
+      },
+      "sent": [
+        "hÃ©\r"
+      ],
+      "url": "wss://feed.example/s",
+      "closes": 1
+    },
+    {
+      "name": "a text frame codec of its own",
+      "kwargs": {
+        "text_frame_encoding": "cp437"
+      },
+      "construction": {
+        "args": [],
+        "kwargs": {
+          "text_frame_encoding": "cp437"
+        }
+      },
+      "connected_with": {
+        "args": [],
+        "kwargs": {
+          "host": "",
+          "port": 0,
+          "url": "wss://feed.example/s",
+          "ping_interval": 20,
+          "ping_timeout": 20,
+          "close_timeout": 10
+        }
+      },
+      "sent": [
+        "hÃ©\r"
+      ],
+      "url": "wss://feed.example/s",
+      "closes": 1
+    },
+    {
+      "name": "control frames parsed out",
+      "kwargs": {
+        "control_frames": true
+      },
+      "construction": {
+        "args": [],
+        "kwargs": {
+          "text_frame_encoding": "latin-1"
+        }
+      },
+      "connected_with": {
+        "args": [],
+        "kwargs": {
+          "host": "",
+          "port": 0,
+          "url": "wss://feed.example/s",
+          "ping_interval": 20,
+          "ping_timeout": 20,
+          "close_timeout": 10
+        }
+      },
+      "sent": [
+        "hÃ©\r"
+      ],
+      "url": "wss://feed.example/s",
+      "closes": 1
+    }
+  ]
+}

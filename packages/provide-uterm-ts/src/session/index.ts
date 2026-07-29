@@ -11,6 +11,7 @@
 
 export * from "./adapters.ts";
 export * from "./capture.ts";
+export * from "./connect.ts";
 export * from "./expect.ts";
 export * from "./io.ts";
 export * from "./transport-session.ts";
