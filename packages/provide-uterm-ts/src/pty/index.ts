@@ -9,6 +9,8 @@
  */
 
 export * from "./capture.ts";
+export * from "./connector.ts";
+export * from "./node-backend.ts";
 export * from "./pam-events.ts";
 export * from "./uid-map.ts";
 export * from "./validate.ts";
