@@ -253,6 +253,29 @@ tests did not catch it because every one of them built the registry up in the
 same process that read it — a suite that never resumes a component cannot see
 a resumption bug.
 
+### The VNC human relay has four ordering constraints
+
+`vnc/human_relay.py` runs three things at once — a pump copying upstream to
+the browser, a driver injecting periodic `FramebufferUpdateRequest` frames,
+and the client-input filter — and every one of the following is load-bearing
+and invisible in a naive port. TypeScript has no threads, so an async port
+has to reproduce them deliberately rather than inherit them.
+
+1. **The driver waits for the client's first update request.** The client's
+   `SetPixelFormat` and `SetEncodings` precede it; a driver that injected
+   earlier would have the server answer in its *own* pixel format and the
+   client render those frames with swapped colours. `rfb-filter.ts` already
+   exposes the signal (`onClientReady`).
+2. **Every write to upstream is guarded by one lock**, so the driver cannot
+   interleave halfway through a message the filter is forwarding. The ported
+   filter already writes each message in a single call, which is the half of
+   this that carries over; the lock is the other half.
+3. **Teardown stops the driver first**, then unblocks the pump, then joins —
+   so the driver cannot write to a stream already being torn down.
+4. **Pump errors that are `OSError` or `ValueError` are shutdown races and are
+   logged, not raised.** The filter's result is authoritative. A port that
+   propagated them would turn every ordinary disconnect into an error.
+
 ## Known cross-port misalignments
 
 ### A malformed prompt rule behaves differently in all three ports
