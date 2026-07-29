@@ -131,6 +131,23 @@ export function modeBanner(mode: string): string {
   return `Input mode set to ${mode === "open" ? "Shared input" : "Exclusive hijack"}.`;
 }
 
+/**
+ * Whether a value counts as true the way Python counts it.
+ *
+ * The difference that matters is containers: an empty list or an empty table
+ * is false in Python and *true* in JavaScript. A connector setting read with
+ * `Boolean()` would turn `insecure_no_host_check = []` into a switched-off
+ * host-key check.
+ */
+export function pyTruthy(value: unknown): boolean {
+  // Only containers need saying: JavaScript and Python already agree that a
+  // zero, an empty string, a false and a nothing are all false.
+  if (typeof value === "object" && value !== null) {
+    return Object.keys(value).length > 0;
+  }
+  return Boolean(value);
+}
+
 /** How a connector writes a boolean into its analysis, which is Python's way. */
 export function pyBool(value: boolean): string {
   return value ? "True" : "False";
