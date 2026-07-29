@@ -9,14 +9,14 @@
       "id": "listed",
       "action": "list_sessions",
       "auth": "token",
-      "volatile": ["body.*.created_at", "body.*.connected", "body.*.lifecycle_state"]
+      "volatile": ["body.*.created_at", "body.*.connected"]
     },
     {
       "id": "fetched",
       "action": "get_session",
       "session_id": "provide-shell",
       "auth": "token",
-      "volatile": ["body.created_at", "body.connected", "body.lifecycle_state"]
+      "volatile": ["body.created_at", "body.connected"]
     }
   ],
   "expect": [
@@ -65,8 +65,8 @@
     {
       "step": "listed",
       "path": "body.0.lifecycle_state",
-      "present": true,
-      "why": "Only presence, because the value cannot be compared yet — and not because it races. The reference and the C# port both report 'running' here, having brought the auto_start session up at boot; Go reports 'waiting' and TypeScript 'stopped', because neither acts on auto_start, and both use a vocabulary the reference does not (the reference's is stopped|starting|running|error, bridge/contracts.py). Masking it is what let three different answers pass. Drop it from the volatile lists and assert 'running' once Go and TypeScript honour auto_start; the mask is the only thing standing between this scenario and that assertion."
+      "equals": "running",
+      "why": "A session the configuration marks auto_start is up by the time the server answers at all — that is what auto_start means, and a port that bound its socket first and started the session afterwards would report something else here. The value was masked once, and the mask let three ports give three different answers: Go said 'waiting' and TypeScript 'stopped', both in vocabularies the reference does not use (its own is stopped|starting|running|error, bridge/contracts.py). Asserting the value is what keeps that from happening again."
     },
     {
       "step": "fetched",

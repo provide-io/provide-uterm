@@ -1,0 +1,48 @@
+{
+  "id": "005_step_references",
+  "title": "A step can act on what an earlier step was told",
+  "timeout_ms": 20000,
+  "auth": "dev_token",
+  "steps": [
+    {
+      "id": "listed",
+      "action": "list_sessions",
+      "auth": "token",
+      "volatile": ["body.*.created_at", "body.*.connected"]
+    },
+    {
+      "id": "fetched_by_reference",
+      "action": "get_session",
+      "session_id": "${listed.body.0.session_id}",
+      "auth": "token",
+      "volatile": ["body.created_at", "body.connected"]
+    },
+    {
+      "id": "snapshot_by_reference",
+      "action": "session_snapshot",
+      "session_id": "${fetched_by_reference.body.session_id}",
+      "auth": "token",
+      "volatile": ["body"]
+    }
+  ],
+  "expect": [
+    {
+      "step": "fetched_by_reference",
+      "path": "status",
+      "equals": 200,
+      "why": "The resolver is the one thing four drivers implement separately, so it gets a scenario of its own. A driver whose resolver silently matched nothing would send the literal ${...} as a session id and get a refusal here, rather than failing somewhere in the hijack flow where the cause would be much harder to see."
+    },
+    {
+      "step": "fetched_by_reference",
+      "path": "body.session_id",
+      "equals": "provide-shell",
+      "why": "The id came out of an array by index. Resolving through a list is the case a resolver is most likely to get wrong, because objects-by-key is the obvious half."
+    },
+    {
+      "step": "snapshot_by_reference",
+      "path": "status",
+      "equals": 200,
+      "why": "The second reference reads a plain object key, and reads it out of a step that was itself reached by reference — so a resolver that only worked against the first step would fail here."
+    }
+  ]
+}
