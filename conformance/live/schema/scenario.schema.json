@@ -140,6 +140,12 @@
             },
             "description": "Dotted paths within this step's fields whose value differs legitimately between runs and languages, and is masked before comparison.",
             "default": []
+          },
+          "repeat": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 200,
+            "description": "Do this step this many times, recording each repetition as its own observation under the id `<step id>.<0-based index>`. There is no repeat of 1: a step that runs once keeps its bare id, so that there are not two ways to write the same thing with different observation ids. The ceiling is there because a scenario is run in sixteen cells and this is the only field that can turn one into a load test."
           }
         }
       }
