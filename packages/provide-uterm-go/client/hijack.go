@@ -272,20 +272,36 @@ func (c *HijackClient) requestAny(
 // decodeBody parses raw response bytes into a JSON value, falling back to
 // {"raw": <text>} when the body is not valid JSON (matching Python's r.json()
 // / {"raw": r.text} fallback).
+//
+// The whole body must be one JSON value. Decoding straight from a stream would
+// accept a leading token and silently drop the rest: net/http's plain-text
+// "404 page not found" decodes as the number 404, so text becomes a number and
+// a caller cannot tell a JSON body from a non-JSON one. Python's r.json() —
+// json.loads on the full text — rejects trailing bytes, and so does this.
 func decodeBody(raw []byte) any {
+	if !json.Valid(raw) {
+		return map[string]any{"raw": string(raw)}
+	}
 	var v any
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.UseNumber()
-	if err := dec.Decode(&v); err != nil {
-		return map[string]any{"raw": string(raw)}
-	}
+	// Cannot fail: json.Valid already vetted the bytes.
+	_ = dec.Decode(&v)
 	return v
 }
 
-// extractError renders a short error message from a decoded body: the "error"
-// string field when present, else a compact JSON rendering.
+// extractError renders a short error message from a decoded body: the server's
+// message when the body carries one, else a compact JSON rendering.
+//
+// Both server envelopes are recognized: the /api routes raise
+// {"detail": <msg>} (FastAPI's HTTPException shape) and the bridge REST hijack
+// routes answer {"error": <msg>}. Without the "detail" arm every /api refusal
+// reported the whole re-marshalled blob as its message.
 func extractError(body any) string {
 	if m, ok := body.(map[string]any); ok {
+		if d, ok := m["detail"].(string); ok {
+			return d
+		}
 		if e, ok := m["error"].(string); ok {
 			return e
 		}
