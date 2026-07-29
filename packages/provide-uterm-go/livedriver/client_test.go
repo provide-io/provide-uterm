@@ -14,6 +14,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -277,6 +278,151 @@ func TestRunStopsAtTheFirstDriverFailure(t *testing.T) {
 	}
 	if r.Error == nil || !strings.Contains(*r.Error, "step broken:") {
 		t.Fatalf("error should name the step: %v", r.Error)
+	}
+}
+
+// countingHandler answers each successive request from answers, repeating the
+// last one once the list runs out, so a test can watch a budget run out.
+func countingHandler(answers ...int) http.HandlerFunc {
+	var mu sync.Mutex
+	calls := 0
+	return func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+		n := calls
+		calls++
+		mu.Unlock()
+		if n >= len(answers) {
+			n = len(answers) - 1
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(answers[n])
+		_, _ = io.WriteString(w, `{"n":`+strconv.Itoa(n)+`}`)
+	}
+}
+
+func TestRepeatRecordsEveryRepetitionUnderNumberedIDs(t *testing.T) {
+	// The rate-limiter case: a scenario repeats a step precisely because it
+	// expects the answers to stop being the same, so which repetition changed
+	// is the measurement. Keeping only the last would lose that.
+	fs := newFakeServer(t, countingHandler(200, 200, 429))
+	r := runOneStep(t, fs.URL, "tok", Step{ID: "flood", Action: ActionHealth, Repeat: 3})
+	if r.Status != StatusCompleted {
+		t.Fatalf("status = %s (%v)", r.Status, r.Error)
+	}
+	if len(r.Steps) != 3 {
+		t.Fatalf("recorded %d observations, want one per repetition: %+v", len(r.Steps), r.Steps)
+	}
+	wantIDs := []string{"flood.0", "flood.1", "flood.2"}
+	wantStatus := []int{200, 200, 429}
+	for i, want := range wantIDs {
+		if r.Steps[i].ID != want {
+			t.Fatalf("observation %d id = %q, want %q", i, r.Steps[i].ID, want)
+		}
+		if got := r.Steps[i].Fields.Status; got == nil || *got != wantStatus[i] {
+			t.Fatalf("observation %s status = %v, want %d", want, got, wantStatus[i])
+		}
+	}
+	if n := len(fs.requests()); n != 3 {
+		t.Fatalf("server saw %d requests, want 3", n)
+	}
+}
+
+func TestStepWithoutRepeatKeepsItsBareID(t *testing.T) {
+	// Every committed scenario depends on this: there is no repeat of 1, so a
+	// step that runs once must not renumber itself.
+	fs := newFakeServer(t, jsonHandler(200, `{"status":"ok"}`))
+	for _, step := range []Step{
+		{ID: "health", Action: ActionHealth},
+		{ID: "health", Action: ActionHealth, Repeat: 1},
+	} {
+		r := runOneStep(t, fs.URL, "tok", step)
+		if len(r.Steps) != 1 || r.Steps[0].ID != "health" {
+			t.Fatalf("repeat=%d recorded %+v, want the bare id once", step.Repeat, r.Steps)
+		}
+	}
+}
+
+func TestRepeatRecordsAFailedRepetitionAndKeepsGoing(t *testing.T) {
+	// A repetition that errors is an observation like any other: it is written
+	// down and the remaining repetitions still run.
+	var mu sync.Mutex
+	calls := 0
+	fs := newFakeServer(t, func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		n := calls
+		calls++
+		mu.Unlock()
+		if n == 0 {
+			// Drop the (brand new, so never retried) connection with no answer.
+			conn, _, err := w.(http.Hijacker).Hijack()
+			if err == nil {
+				_ = conn.Close()
+			}
+			return
+		}
+		jsonHandler(200, `{"status":"ok"}`)(w, r)
+	})
+
+	res := runOneStep(t, fs.URL, "tok", Step{ID: "flood", Action: ActionHealth, Repeat: 3})
+	if res.Status != StatusCompleted {
+		t.Fatalf("status = %s (%v), want completed", res.Status, res.Error)
+	}
+	if len(res.Steps) != 3 {
+		t.Fatalf("recorded %d observations, want 3: %+v", len(res.Steps), res.Steps)
+	}
+	failed := res.Steps[0]
+	if failed.ID != "flood.0" || failed.Fields.Status != nil || failed.Fields.OK ||
+		failed.Fields.Error == nil || failed.Fields.Body != nil {
+		t.Fatalf("failed repetition = %+v", failed)
+	}
+	for _, i := range []int{1, 2} {
+		f := res.Steps[i].Fields
+		if f.Status == nil || *f.Status != 200 || f.Error != nil {
+			t.Fatalf("repetition %d after the failure = %+v", i, f)
+		}
+	}
+}
+
+func TestRepeatedStepResolvesItsReferencesOnce(t *testing.T) {
+	// References are resolved before the repetitions, not inside them: every
+	// repetition sends the same resolved request.
+	fs := newFakeServer(t, jsonHandler(200, `{"session_id":"s-42"}`))
+	sc := &Scenario{ID: "010_t", Steps: []Step{
+		{ID: "list", Action: ActionListSessions},
+		{ID: "flood", Action: ActionGetSession, SessionID: "${list.body.session_id}", Repeat: 2},
+	}}
+	r := RunScenario(context.Background(), sc, ClientOptions{BaseURL: fs.URL, Token: "tok"})
+	if r.Status != StatusCompleted {
+		t.Fatalf("status = %s (%v)", r.Status, r.Error)
+	}
+	if len(r.Steps) != 3 || r.Steps[1].ID != "flood.0" || r.Steps[2].ID != "flood.1" {
+		t.Fatalf("steps = %+v", r.Steps)
+	}
+	paths := fs.requests()
+	for _, i := range []int{1, 2} {
+		if paths[i].path != "/api/sessions/s-42" {
+			t.Fatalf("request %d path = %q, want the resolved session", i, paths[i].path)
+		}
+	}
+}
+
+func TestARepetitionTheDriverCannotPerformEndsTheRun(t *testing.T) {
+	// A malformed step is a run error, not an observation series: it ends the
+	// run at the repetition that hit it, exactly as an unrepeated step does.
+	fs := newFakeServer(t, jsonHandler(200, `{}`))
+	sc := &Scenario{ID: "010_t", Steps: []Step{
+		{ID: "broken", Action: ActionGetSession, Repeat: 3},
+		{ID: "never", Action: ActionHealth},
+	}}
+	r := RunScenario(context.Background(), sc, ClientOptions{BaseURL: fs.URL})
+	if r.Status != StatusError {
+		t.Fatalf("status = %s, want error", r.Status)
+	}
+	if len(r.Steps) != 1 || r.Steps[0].ID != "broken.0" {
+		t.Fatalf("steps = %+v, want only the repetition that failed", r.Steps)
+	}
+	if r.Error == nil || !strings.Contains(*r.Error, "step broken.0:") {
+		t.Fatalf("error should name the repetition: %v", r.Error)
 	}
 }
 
