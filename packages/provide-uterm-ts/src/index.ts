@@ -43,6 +43,7 @@ export * as filters from "./filters/index.ts";
 export * as frames from "./frames/index.ts";
 export * as gateway from "./gateway/index.ts";
 export * as graphical from "./graphical/index.ts";
+export * as gui from "./gui/index.ts";
 export * as hub from "./hub/index.ts";
 export * as lineEditor from "./line-editor/index.ts";
 export * as manager from "./manager/index.ts";
