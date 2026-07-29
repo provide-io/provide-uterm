@@ -339,8 +339,13 @@ public class CoverageTo95Wave2Tests
         });
         var hub = new TermHub(new TermHubConfig
         {
+            // The acquire budget is the one this test spends on purpose. The send
+            // budget is left roomy because both /send and /step below are asserted
+            // for their *lease* refusal (404), and they share one bucket — at 1/s a
+            // step issued microseconds after a send would be answered 429 before the
+            // lease was ever looked up. HubHijackStepRateLimitTests owns that arm.
             RestAcquireRateLimitPerSec = 1,
-            RestSendRateLimitPerSec = 1,
+            RestSendRateLimitPerSec = 20,
         });
         hub.Conn.RegisterWorker("demo", new Echo());
 
