@@ -1,0 +1,51 @@
+{
+  "pump_chunk": 65536,
+  "join_timeout_s": 5.0,
+  "default_update_drive_interval_s": 0.04,
+  "drive_handshake_wait_s": 10.0,
+  "drive_fbur": [
+    3,
+    1,
+    0,
+    0,
+    0,
+    0,
+    255,
+    255,
+    255,
+    255
+  ],
+  "unblock": [
+    {
+      "name": "a buffer in memory",
+      "closed": false
+    },
+    {
+      "name": "a stream with no descriptor",
+      "closed": false
+    },
+    {
+      "name": "a real file descriptor",
+      "closed": true
+    }
+  ],
+  "close_failure_tolerated": true,
+  "pump_errors": [
+    {
+      "error": "OSError",
+      "reraised": false
+    },
+    {
+      "error": "ValueError",
+      "reraised": false
+    },
+    {
+      "error": "RuntimeError",
+      "reraised": true
+    },
+    {
+      "error": "KeyError",
+      "reraised": true
+    }
+  ]
+}

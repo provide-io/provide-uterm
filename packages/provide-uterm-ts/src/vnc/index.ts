@@ -11,4 +11,5 @@
  * that act on it are gated.
  */
 
+export * from "./human-relay.ts";
 export * from "./rfb-filter.ts";
