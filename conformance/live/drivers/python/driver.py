@@ -78,22 +78,63 @@ def serve(auth: str) -> int:
 
     app = create_server_app(config)
     token = read_dev_token(token_path) or ""
+    base_url = f"http://{host}:{port}"
+
+    # Serve first, announce second. The announcement means "ready", not
+    # "bound": a client that arrives before the configured sessions have come
+    # up finds a session with no worker and cannot take a lease on it. The
+    # reference is `stopped` for a fraction of a second after its socket is
+    # listening, which a Python client is too slow to catch and a compiled one
+    # is not — so the race only ever fired for some languages, which is the
+    # worst way for a harness to be wrong.
+    import threading
+
+    server = uvicorn.Server(uvicorn.Config(app, log_level="warning", access_log=False))
+    serving = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
+    serving.start()
+    _await_ready(server, base_url, token)
 
     _announce(
         {
             "role": "server",
             "language": LANGUAGE,
-            "base_url": f"http://{host}:{port}",
+            "base_url": base_url,
             "token": token,
             "capabilities": list(CAPABILITIES),
         }
     )
 
-    server = uvicorn.Server(uvicorn.Config(app, log_level="warning", access_log=False))
-    stopper = _stop_on_stdin_close(server)
-    server.run(sockets=[listener])
-    stopper.join(timeout=1.0)
+    _stop_on_stdin_close(server)
+    serving.join()
     return 0
+
+
+def _await_ready(server: Any, base_url: str, token: str, timeout_s: float = 30.0) -> None:
+    """Wait until the server is serving and its configured sessions have settled.
+
+    A session that says ``auto_start`` is one the deployment expects to be
+    running, so a driver that announced before they were would be announcing
+    something the scenario cannot rely on. Bounded: if a session never
+    settles, announce anyway and let the scenario report what it finds — a
+    harness that hangs says less than one that fails.
+    """
+    import time
+
+    deadline = time.monotonic() + timeout_s
+    while not server.started and time.monotonic() < deadline:
+        time.sleep(0.02)
+    headers = {"Authorization": f"Bearer {token}"}
+    while time.monotonic() < deadline:
+        try:
+            with httpx.Client(base_url=base_url, timeout=2.0) as client:
+                sessions = client.get("/api/sessions", headers=headers).json()
+        except (httpx.HTTPError, ValueError):
+            sessions = None
+        if isinstance(sessions, list) and all(
+            not entry.get("auto_start") or entry.get("lifecycle_state") != "stopped" for entry in sessions
+        ):
+            return
+        time.sleep(0.05)
 
 
 def _stop_on_stdin_close(server: Any) -> Any:

@@ -39,6 +39,25 @@ directory may name a port.
 Closing stdin is the ordinary shutdown. A driver that has not exited within
 the harness's grace period is killed.
 
+### The announcement means ready, not bound
+
+A driver must not announce until the server can actually serve the scenarios —
+which includes any session the configuration marks `auto_start` having come
+up. Binding the socket is not enough.
+
+This is not theoretical. The reference server reports its configured session
+as `stopped` for roughly two tenths of a second after its socket is listening.
+A Python client takes about a second to start, so it never sees that window; a
+compiled Go or C# client starts in milliseconds and lands inside it, finds a
+session with no worker attached, and cannot take a lease on it. The race fired
+for some client languages and not others — which is the worst way for a
+harness to be wrong, because it reads as a difference between the languages
+rather than as a difference in when they arrived.
+
+Waiting should be bounded. A session that never settles is worth announcing
+anyway and letting the scenario report what it finds: a harness that hangs
+says less than one that fails.
+
 ### `client`
 
 ```

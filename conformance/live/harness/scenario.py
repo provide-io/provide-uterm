@@ -81,6 +81,7 @@ class Scenario:
     timeout_ms: int
     requires: tuple[str, ...]
     auth: str
+    mutates: bool
     steps: tuple[Step, ...]
     expectations: tuple[Expectation, ...]
     raw: Mapping[str, Any]
@@ -112,6 +113,7 @@ def load_scenario(path: Path) -> Scenario:
         timeout_ms=int(raw.get("timeout_ms", 15000)),
         requires=tuple(raw.get("requires", ())),
         auth=raw.get("auth", "dev_token"),
+        mutates=bool(raw.get("mutates", False)),
         steps=steps,
         expectations=expectations,
         raw=raw,
