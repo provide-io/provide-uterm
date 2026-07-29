@@ -64,6 +64,28 @@ Expected values are never hand-guessed. Anything not covered by a generated
 corpus is taken from a recorded `uv run python -c ...` invocation and the
 source is noted in a comment beside the assertion.
 
+### Live conformance driver
+
+`src/conformance/` is this port's driver for the cross-language live harness
+(`conformance/live/PROTOCOL.md`). Node strips the types, so it runs from
+source:
+
+```bash
+node packages/provide-uterm-ts/bin/uterm-conformance.mjs \
+  client --base-url URL --token TOKEN --scenario FILE
+```
+
+It writes one line of JSON matching `conformance/live/schema/result.schema.json`
+and evaluates nothing: every expectation is the harness's to judge. The client
+role goes through the real `HijackClient`, with a `fetch`-backed transport
+underneath it that records the status code the library drops — so a 401, a 403
+and a 404 stay three different observations. The `serve` role reports that this
+port has no conformance server yet and exits non-zero, rather than standing up
+a stub that would make the matrix look complete.
+
+Like `src/react`, it is kept off the default entry: it reads files and writes to
+standard output, and `provide-uterm-ts/conformance` reaches it by name.
+
 ### Conventions
 
 - 100% line, branch and function coverage is enforced by

@@ -36,7 +36,7 @@ describe("the package root", () => {
     // importing the package by name failed outright while every subpath
     // import worked — the kind of break only a real consumer hits.
     const expected = subpackages()
-      .filter((name) => name !== "testing" && name !== "react")
+      .filter((name) => name !== "testing" && name !== "react" && name !== "conformance")
       .map(exportName)
       .sort();
     expect(Object.keys(uterm).sort()).toStrictEqual(expected);
@@ -50,6 +50,15 @@ describe("the package root", () => {
     // asks for them by name.
     expect(subpackages()).toContain("react");
     expect(Object.keys(uterm)).not.toContain("react");
+  });
+
+  it("keeps the conformance driver off the default entry", () => {
+    // It reads scenario files and writes to a process's standard output, and
+    // is run as an executable by the live harness rather than imported by a
+    // consumer. Re-exporting it here would put `node:fs` on the path of every
+    // browser and Worker build. `provide-uterm-ts/conformance` reaches it.
+    expect(subpackages()).toContain("conformance");
+    expect(Object.keys(uterm)).not.toContain("conformance");
   });
 
   it("does not export the testing helpers", () => {
