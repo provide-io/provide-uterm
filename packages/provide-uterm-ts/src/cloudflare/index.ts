@@ -25,4 +25,5 @@ export * from "./socket-registry.ts";
 export * from "./sse.ts";
 export * from "./store.ts";
 export * from "./webhook-crypto.ts";
+export * from "./worker-routes.ts";
 export * from "./ws-send.ts";
