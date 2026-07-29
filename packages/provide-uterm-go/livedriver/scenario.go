@@ -35,8 +35,29 @@ const (
 	ActionListSessions    = "list_sessions"
 	ActionGetSession      = "get_session"
 	ActionSessionSnapshot = "session_snapshot"
+	ActionSessionEvents   = "session_events"
+	ActionSetInputMode    = "set_input_mode"
+	ActionHijackAcquire   = "hijack_acquire"
+	ActionHijackHeartbeat = "hijack_heartbeat"
+	ActionHijackSend      = "hijack_send"
+	ActionHijackStep      = "hijack_step"
+	ActionHijackSnapshot  = "hijack_snapshot"
+	ActionHijackRelease   = "hijack_release"
 	ActionHTTPGet         = "http_get"
 	ActionHTTPPost        = "http_post"
+)
+
+// What a step means when it leaves an optional argument out. These are the
+// reference driver's defaults, restated here rather than left to the client
+// library, so the request a scenario produces is the same in every language
+// even where two libraries disagree about their own defaults.
+const (
+	// DefaultOwner is who takes a lease when a step does not say.
+	DefaultOwner = "operator"
+	// DefaultLeaseS is how long a lease runs when a step does not say.
+	DefaultLeaseS = 90
+	// DefaultEventsLimit is how many session events are asked for by default.
+	DefaultEventsLimit = 100
 )
 
 // Per-step auth selectors.
@@ -59,6 +80,10 @@ type Scenario struct {
 }
 
 // Step is one action to perform against the server under test.
+//
+// Every string field may hold a reference to what an earlier step saw
+// (${id.path}); see reference.go for the grammar and resolveStep for when the
+// substitution happens.
 type Step struct {
 	ID     string `json:"id"`
 	Action string `json:"action"`
@@ -66,11 +91,50 @@ type Step struct {
 	Auth string `json:"auth"`
 	// Path is the request path for http_get/http_post.
 	Path string `json:"path"`
-	// SessionID names the session for get_session/session_snapshot.
+	// SessionID names the session for the session actions.
 	SessionID string `json:"session_id"`
+	// WorkerID names the worker whose lease a hijack action acts on.
+	WorkerID string `json:"worker_id"`
+	// HijackID is the lease itself, normally a reference to the acquiring step.
+	HijackID string `json:"hijack_id"`
+	// Owner is who takes the lease in hijack_acquire; empty means [DefaultOwner].
+	Owner string `json:"owner"`
+	// LeaseS is how long an acquired or extended lease runs. A pointer so a
+	// step that omits it is distinguishable from one that asked for zero.
+	LeaseS *int `json:"lease_s"`
+	// Keys is the input hijack_send delivers.
+	Keys string `json:"keys"`
+	// InputMode is the mode set_input_mode puts a session in.
+	InputMode string `json:"input_mode"`
+	// Limit is how many events session_events asks for; nil means the default.
+	Limit *int `json:"limit"`
 	// Body is the http_post payload, kept as raw JSON so the bytes the
 	// scenario wrote are the bytes that go on the wire.
 	Body json.RawMessage `json:"body"`
+}
+
+// owner is who hijack_acquire takes the lease as.
+func (s *Step) owner() string {
+	if s.Owner == "" {
+		return DefaultOwner
+	}
+	return s.Owner
+}
+
+// leaseS is the lease length an acquire or heartbeat asks for.
+func (s *Step) leaseS() int {
+	if s.LeaseS == nil {
+		return DefaultLeaseS
+	}
+	return *s.LeaseS
+}
+
+// limit is how many events session_events asks for.
+func (s *Step) limit() int {
+	if s.Limit == nil {
+		return DefaultEventsLimit
+	}
+	return *s.Limit
 }
 
 // Timeout is the scenario's wall-clock budget for the whole run.

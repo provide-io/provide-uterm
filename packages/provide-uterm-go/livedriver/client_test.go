@@ -23,6 +23,7 @@ import (
 type recordedRequest struct {
 	method string
 	path   string
+	query  string
 	auth   string
 	body   string
 }
@@ -42,7 +43,7 @@ func newFakeServer(t *testing.T, handler http.HandlerFunc) *fakeServer {
 		body, _ := io.ReadAll(r.Body)
 		fs.mu.Lock()
 		fs.seen = append(fs.seen, recordedRequest{
-			method: r.Method, path: r.URL.Path,
+			method: r.Method, path: r.URL.Path, query: r.URL.RawQuery,
 			auth: r.Header.Get("Authorization"), body: string(body),
 		})
 		fs.mu.Unlock()
