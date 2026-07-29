@@ -36,3 +36,20 @@ def test_python_go_api_conformance() -> None:
     list) rather than silently drifting."""
     module = _load_validator()
     assert module.main() == 0
+
+
+def test_a_csharp_async_method_satisfies_the_synchronous_spec_name() -> None:
+    """``get`` is satisfied by ``GetAsync``.
+
+    C#'s Task-based Asynchronous Pattern requires the ``Async`` suffix on any
+    method returning a Task, so an asynchronous registry spells ``get`` as
+    ``GetAsync`` and has not diverged by doing so. Without this, the spec
+    would be asking the C# port to break its own language's convention to
+    satisfy a naming rule written for Go.
+    """
+    module = _load_validator()
+    assert module.csharp_satisfies("Get", {"GetAsync"})
+    assert module.csharp_satisfies("Get", {"Get"})
+    assert not module.csharp_satisfies("Get", {"GetSomethingElse"})
+    # The suffix is not a wildcard: it must be the whole of the difference.
+    assert not module.csharp_satisfies("Get", {"Asyncget"})
