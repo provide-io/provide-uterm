@@ -1,0 +1,116 @@
+{
+  "id": "009_open_while_held",
+  "title": "Opening a session someone holds the lease on — refused one way, and a release the other",
+  "timeout_ms": 30000,
+  "auth": "dev_token",
+  "mutates": true,
+  "steps": [
+    {
+      "id": "to_hijack",
+      "action": "set_input_mode",
+      "session_id": "provide-shell",
+      "input_mode": "hijack",
+      "auth": "token",
+      "volatile": ["body.created_at", "body.connected"]
+    },
+    {
+      "id": "acquire",
+      "action": "hijack_acquire",
+      "worker_id": "provide-shell",
+      "owner": "holder",
+      "lease_s": 60,
+      "auth": "token",
+      "volatile": ["body.hijack_id", "body.lease_expires_at"]
+    },
+    {
+      "id": "open_via_worker_route",
+      "action": "http_post",
+      "path": "/worker/provide-shell/input_mode",
+      "body": { "input_mode": "open" },
+      "auth": "token"
+    },
+    {
+      "id": "heartbeat_after_refusal",
+      "action": "hijack_heartbeat",
+      "worker_id": "provide-shell",
+      "hijack_id": "${acquire.body.hijack_id}",
+      "lease_s": 60,
+      "auth": "token",
+      "volatile": ["body.hijack_id", "body.lease_expires_at"]
+    },
+    {
+      "id": "rival_acquire",
+      "action": "hijack_acquire",
+      "worker_id": "provide-shell",
+      "owner": "rival",
+      "lease_s": 60,
+      "auth": "token"
+    },
+    {
+      "id": "open_via_session_route",
+      "action": "set_input_mode",
+      "session_id": "provide-shell",
+      "input_mode": "open",
+      "auth": "token",
+      "volatile": ["body.created_at", "body.connected"]
+    },
+    {
+      "id": "heartbeat_after_force_release",
+      "action": "hijack_heartbeat",
+      "worker_id": "provide-shell",
+      "hijack_id": "${acquire.body.hijack_id}",
+      "lease_s": 60,
+      "auth": "token"
+    }
+  ],
+  "expect": [
+    {
+      "step": "acquire",
+      "path": "status",
+      "equals": 200,
+      "why": "The lease is granted. Everything below is about what may happen to it while it is held."
+    },
+    {
+      "step": "open_via_worker_route",
+      "path": "status",
+      "equals": 409,
+      "why": "A worker may not open a session out from under the operator holding its lease. `open` means everyone may type, so honouring this would end the exclusivity the lease exists to provide while its holder still believed they had it — lease still valid, heartbeats still answered, and no way to observe that anyone can now type alongside them. 409 rather than 403: the request conflicts with the state the session is in, and would be fine once the lease is gone."
+    },
+    {
+      "step": "open_via_worker_route",
+      "path": "body",
+      "equals": { "error": "Cannot switch to open while hijack is active." },
+      "why": "The message names the lease as the obstacle, so a worker reconnecting into a hijacked session can tell this apart from being unauthorized or unknown."
+    },
+    {
+      "step": "heartbeat_after_refusal",
+      "path": "status",
+      "equals": 200,
+      "why": "The refusal left the lease alone. A guard that refused the mode change but disturbed the lease would fail the holder just as badly and more confusingly."
+    },
+    {
+      "step": "rival_acquire",
+      "path": "status",
+      "equals": 409,
+      "why": "And it is still exclusive. This is the assertion that catches a port whose guard returns a refusal while writing the mode anyway — the refusal alone proves what was answered, not what was stored."
+    },
+    {
+      "step": "open_via_session_route",
+      "path": "status",
+      "equals": 200,
+      "why": "The session route is deliberately not the worker route. An operator opening a session is entitled to take it back from whoever holds the lease — that is the arbitration this product exists for — so this succeeds where the worker's own attempt was refused. Two routes onto one field, and what separates them is authority, not mechanism."
+    },
+    {
+      "step": "open_via_session_route",
+      "path": "body.input_mode",
+      "equals": "open",
+      "why": "It really changed, rather than being accepted and ignored."
+    },
+    {
+      "step": "heartbeat_after_force_release",
+      "path": "status",
+      "equals": 404,
+      "why": "And the lease is gone rather than merely bypassed: opening the session force-releases it, so the holder's next heartbeat finds nothing. That is the honest answer — a lease left alive while the session accepted everyone's input would tell its holder they still had something they did not."
+    }
+  ]
+}
