@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 import { loadGolden } from "../testing/golden.ts";
-import { pyJsonDumps } from "./index.ts";
+import { asPyFloat, pyJsonDumps } from "./index.ts";
 
 interface PyJsonGolden {
   portable: Array<{ value: unknown; canonical: string; unsorted: string; unicode: string }>;
@@ -216,5 +216,32 @@ describe("differential parity with CPython", () => {
     expect(pyJsonDumps([1.0, 1.5])).toBe("[1,1.5]");
     // And CPython agrees with this port whenever the value really is an int.
     expect(pyJsonDumps(1e21)).toBe("1000000000000000000000");
+  });
+});
+
+describe("a number marked as a Python float", () => {
+  it("keeps its point, where an int does not have one", () => {
+    // JavaScript has one numeric type, so an integral float and an int are
+    // the same value here. Where the text is hashed, the difference is the
+    // difference between two runtimes agreeing and not.
+    expect(pyJsonDumps({ ts: asPyFloat(1_700_000_000) })).toBe('{"ts":1700000000.0}');
+    expect(pyJsonDumps({ ts: 1_700_000_000 })).toBe('{"ts":1700000000}');
+  });
+
+  it("renders a fractional one as CPython renders it", () => {
+    expect(pyJsonDumps({ x: asPyFloat(1.5) })).toBe('{"x":1.5}');
+    expect(pyJsonDumps({ x: asPyFloat(0.1) })).toBe('{"x":0.1}');
+    expect(pyJsonDumps({ x: asPyFloat(-2.25) })).toBe('{"x":-2.25}');
+  });
+
+  it("refuses one that is not a number at all", () => {
+    // As CPython's `json` refuses a NaN or an infinity by default.
+    for (const value of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(() => pyJsonDumps({ x: asPyFloat(value) })).toThrow(TypeError);
+    }
+  });
+
+  it("carries the value it was given", () => {
+    expect(asPyFloat(42).value).toBe(42);
   });
 });

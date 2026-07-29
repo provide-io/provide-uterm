@@ -19,6 +19,7 @@
 export * as annotation from "./annotation/index.ts";
 export * as ansi from "./ansi/index.ts";
 export * as apiRoutes from "./api-routes/index.ts";
+export * as audit from "./audit/index.ts";
 export * as auth from "./auth/index.ts";
 export * as bridge from "./bridge/index.ts";
 export * as channels from "./channels/index.ts";

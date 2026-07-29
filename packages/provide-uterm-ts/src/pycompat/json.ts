@@ -116,6 +116,35 @@ function floatRepr(value: number): string {
   return `${sign}${head}${tail === "" ? "" : `.${tail}`}e-${exponentDigits}`;
 }
 
+/**
+ * A number that is a Python `float`, whatever its value.
+ *
+ * JavaScript has one numeric type, so an integral float and an int are the
+ * same value here and render the same way — `1700000000` either way, where
+ * CPython writes `1700000000.0` for the float. Usually that is cosmetic. It is
+ * not when the text is hashed: a record whose timestamp is a float renders
+ * differently on the two runtimes, and the digests disagree.
+ *
+ * Wrapping a value marks it as one, so a serialiser that has to match CPython
+ * byte for byte can.
+ */
+export class PyFloat {
+  readonly value: number;
+
+  constructor(value: number) {
+    this.value = value;
+  }
+}
+
+/**
+ * Mark a number as a Python `float`.
+ *
+ * Named apart from `pyFloat`, which reads one out of a string.
+ */
+export function asPyFloat(value: number): PyFloat {
+  return new PyFloat(value);
+}
+
 /** Render a number, choosing CPython's int or float rules by integrality. */
 function encodeNumber(value: number): string {
   if (!Number.isFinite(value)) {
@@ -143,6 +172,13 @@ export function pyJsonDumps(value: unknown, options: PyJsonDumpsOptions = {}): s
     }
     if (typeof node === "number") {
       return encodeNumber(node);
+    }
+    if (node instanceof PyFloat) {
+      // Always float rules, so an integral one keeps its ".0".
+      if (!Number.isFinite(node.value)) {
+        throw new TypeError(`Object of type float is not JSON serializable: ${node.value}`);
+      }
+      return Number.isInteger(node.value) ? `${node.value}.0` : floatRepr(node.value);
     }
     if (typeof node === "string") {
       return encodeString(node, ensureAscii);
