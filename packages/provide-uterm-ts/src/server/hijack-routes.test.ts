@@ -22,7 +22,8 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { encodeJwt } from "../serverauth/index.ts";
 import { bootstrapServer } from "./bootstrap.ts";
-import { parseHijackPath } from "./hijack-routes.ts";
+import { handleHijackRequest, parseHijackPath } from "./hijack-routes.ts";
+import { SessionHub } from "./session-hub.ts";
 
 interface Probe {
   id: string;
@@ -536,5 +537,185 @@ describe("giving a lease back", () => {
     const sends = vi.spyOn(hub, "sendWorker");
     expect((await through("release")).status).toBe(200);
     expect(sends.mock.calls.filter(([, message]) => message.action === "resume")).toEqual([]);
+  });
+});
+
+/**
+ * The rate limiter, on a clock the test moves.
+ *
+ * Nothing here sleeps. A window that rolled over because a test waited out a
+ * real second is a test that fails on a loaded machine and passes on a quiet
+ * one; the hub's monotonic clock is injected, the limiter's buckets refill
+ * against it, and the window is therefore driven rather than waited for.
+ *
+ * These go through `handleHijackRequest` rather than the application, because
+ * the clock has to reach the hub and `bootstrapServer` builds its own.
+ */
+describe("charging a caller's address for what it asks", () => {
+  /** A hub whose clock only moves when the test moves it, worker attached. */
+  function metered() {
+    const clock = { mono: 1000 };
+    const hub = new SessionHub({
+      now: () => clock.mono,
+      wallNow: () => 1_700_000_000,
+      // A poll that waits spends the hub's own clock rather than the wall's,
+      // so a snapshot's wait finishes instead of hanging on a frozen one.
+      sleep: async (seconds) => {
+        clock.mono += seconds;
+      },
+    });
+    hub.registerWorker("provide-shell", { sendText: async () => {} }, "hijack");
+    const { registry } = bootstrapServer({ authMode: "jwt", now: () => 1_700_000_000 });
+    const principal = { subject_id: "someone", roles: new Set(["admin"]), scopes: new Set(["*"]) };
+    /** An asker fixed to one address, so an absent one stays absent. */
+    const from =
+      (clientAddress: string | undefined) =>
+      async (path: string): Promise<Response> => {
+        const reads = path.endsWith("snapshot");
+        const answer = await handleHijackRequest(
+          new Request(`${BASE}/worker/provide-shell/hijack/${path}`, {
+            method: reads ? "GET" : "POST",
+            ...(reads ? {} : { body: "{}" }),
+          }),
+          { hub, registry, principal, authenticated: true, clientAddress },
+        );
+        return answer as Response;
+      };
+    return { clock, hub, from, ask: from("10.0.0.1") };
+  }
+
+  /** The statuses one path answered with, asked `count` times over. */
+  async function statuses(ask: (path: string) => Promise<Response>, path: string, count: number): Promise<number[]> {
+    const seen: number[] = [];
+    for (let index = 0; index < count; index += 1) {
+      seen.push((await ask(path)).status);
+    }
+    return seen;
+  }
+
+  it("lets five acquires through and refuses the sixth", async () => {
+    const { ask } = metered();
+    // Five is the whole budget and the sixth is over it: the burst defaults to
+    // one second of capacity, so a caller that spends it in one instant has
+    // nothing left until the window moves. The four refusals in between are
+    // the lease's own — the first acquire took it — and each one still cost a
+    // token, which is what makes the sixth a 429 rather than a fifth 409.
+    expect(await statuses(ask, "acquire", 6)).toEqual([200, 409, 409, 409, 409, 429]);
+  });
+
+  it("says only that the caller was rate limited, in the lease routes' envelope", async () => {
+    const { ask } = metered();
+    await statuses(ask, "acquire", 5);
+    const refused = await ask("acquire");
+    expect(refused.status).toBe(429);
+    expect(await refused.json()).toEqual({ error: "rate_limited" });
+    // No `Retry-After`. The reference sends none, and inventing one here would
+    // name a time this server never agreed to.
+    expect(refused.headers.get("retry-after")).toBeNull();
+  });
+
+  it("restores the budget as the window moves, and not before", async () => {
+    const { ask, clock } = metered();
+    await statuses(ask, "acquire", 5);
+    expect((await ask("acquire")).status).toBe(429);
+    // A fifth of a second is one token at five a second, and not two.
+    clock.mono += 0.2;
+    expect((await ask("acquire")).status).not.toBe(429);
+    expect((await ask("acquire")).status).toBe(429);
+    clock.mono += 1;
+    expect(await statuses(ask, "acquire", 5)).not.toContain(429);
+    expect((await ask("acquire")).status).toBe(429);
+  });
+
+  it("refuses a second address that the first one's flood spent the budget on", async () => {
+    const { ask, from } = metered();
+    // Not isolation, and the reference is the same: there is a shared bucket
+    // behind the per-address ones and it is the same size, so it is always the
+    // binding limit. One noisy address does deny another one service.
+    await statuses(ask, "acquire", 5);
+    expect((await from("10.0.0.2")("acquire")).status).toBe(429);
+  });
+
+  it("hands the refilled budget to whoever asks for it, flooder or not", async () => {
+    const { ask, from, clock } = metered();
+    await statuses(ask, "acquire", 12);
+    clock.mono += 0.2;
+    // The flooder's own bucket ran out in the same instant the shared one did,
+    // so the one refilled token is not reserved for it.
+    expect((await from("10.0.0.2")("acquire")).status).not.toBe(429);
+    expect((await ask("acquire")).status).toBe(429);
+  });
+
+  it("charges sends and steps against one budget, and acquires against another", async () => {
+    const { ask } = metered();
+    // Twenty a second is the send policy, and a step spends from it — two
+    // names for one budget, which is what the reference does.
+    expect(await statuses(ask, "deadbeef/send", 20)).not.toContain(429);
+    expect((await ask("deadbeef/send")).status).toBe(429);
+    expect((await ask("deadbeef/step")).status).toBe(429);
+    // None of which touched the acquire budget.
+    expect((await ask("acquire")).status).toBe(200);
+  });
+
+  it("charges a step against the send budget rather than the acquire one", async () => {
+    const { ask } = metered();
+    expect(await statuses(ask, "deadbeef/step", 20)).not.toContain(429);
+    expect((await ask("deadbeef/step")).status).toBe(429);
+    expect((await ask("acquire")).status).toBe(200);
+  });
+
+  it("refuses over budget before it looks the lease up", async () => {
+    const { ask } = metered();
+    // A lease nobody holds is a 404 on its merits. Over the budget the same
+    // request is a 429, because the limiter runs first — and which of the two
+    // a caller gets is how the order becomes observable.
+    expect((await ask("deadbeef/send")).status).toBe(404);
+    await statuses(ask, "deadbeef/send", 19);
+    expect((await ask("deadbeef/send")).status).toBe(429);
+  });
+
+  it("charges nothing for the refusals the gate makes before it", async () => {
+    const { ask, hub } = metered();
+    const anonymous = await handleHijackRequest(
+      new Request(`${BASE}/worker/provide-shell/hijack/acquire`, { method: "POST" }),
+      {
+        hub,
+        registry: bootstrapServer({ authMode: "jwt" }).registry,
+        principal: { subject_id: "someone", roles: new Set(["admin"]), scopes: new Set(["*"]) },
+        authenticated: false,
+        clientAddress: "10.0.0.1",
+      },
+    );
+    // 401 and not 429, and no token spent: an unauthenticated flood would
+    // learn the budget only if the limiter ran in front of the gate, and it
+    // does not — the whole budget is still there afterwards.
+    expect(anonymous?.status).toBe(401);
+    expect(hub.limiter.restAcquireClientCount).toBe(0);
+    expect(await statuses(ask, "acquire", 5)).not.toContain(429);
+  });
+
+  it("leaves a lease the caller already holds alone when it refuses their send", async () => {
+    const { ask, hub } = metered();
+    const taken = (await (await ask("acquire")).json()) as { hijack_id: string };
+    await statuses(ask, `${taken.hijack_id}/send`, 20);
+    expect((await ask(`${taken.hijack_id}/send`)).status).toBe(429);
+    // Still held, still theirs, and still workable. A refusal refuses an
+    // action; it is not a reason to drop what the caller was granted — and
+    // none of heartbeat, snapshot or release is charged, so a held lease
+    // cannot be rate limited into expiring.
+    expect(hub.registry.get("provide-shell")?.hijackSession?.hijackId).toBe(taken.hijack_id);
+    expect((await ask(`${taken.hijack_id}/heartbeat`)).status).toBe(200);
+    expect((await ask(`${taken.hijack_id}/snapshot`)).status).toBe(200);
+    expect((await ask(`${taken.hijack_id}/release`)).status).toBe(200);
+  });
+
+  it("keys a caller whose address it was never told as one shared `unknown`", async () => {
+    const { from, hub } = metered();
+    // One bucket and not one per unnamed caller: a caller whose address the
+    // runtime could not report would otherwise be the one with no limit.
+    await from(undefined)("acquire");
+    expect(hub.limiter.hasRestAcquireClient("unknown")).toBe(true);
+    await from("")("acquire");
+    expect(hub.limiter.restAcquireClientCount).toBe(1);
   });
 });

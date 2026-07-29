@@ -36,13 +36,26 @@
  * depending on which side of the hub you stand on, and the message uses the
  * name the caller configured it under.
  *
+ * ## The budget, and where it sits
+ *
+ * Acquires, sends and steps are charged against the caller's address and
+ * answered `429 {"error": "rate_limited"}` over the limit. Three things about
+ * that are the reference's and are observable from outside:
+ *
+ * * **Behind the gate.** An unauthenticated flood gets 401, not 429, and a
+ *   caller who may not touch the session gets 403. Nobody learns the budget
+ *   without a credential that works.
+ * * **In front of the lease.** A send over the budget is 429 even when the
+ *   lease it names does not exist — the limiter runs before the lookup, so a
+ *   flood of guessed lease ids costs the guesser its budget rather than
+ *   telling it which guesses were wrong.
+ * * **Nothing else is charged.** `heartbeat`, `snapshot` and `release` are
+ *   free, which is what keeps a lease from being rate limited into expiring.
+ *
  * ## What is not here
  *
- * The reference rate-limits acquires and sends per client address and answers
- * `429 {"error": "rate_limited"}` over the limit; this port has no limiter
- * composed, so it does not. And the events poll
- * (`GET .../hijack/{id}/events`) is not bound. Both are stated in the roadmap
- * rather than approximated.
+ * The events poll (`GET .../hijack/{id}/events`) is not bound. That is stated
+ * in the roadmap rather than approximated.
  */
 
 import { extractPromptId, type HijackSession, type InputMode } from "../hub/index.ts";
@@ -64,6 +77,17 @@ export const ALREADY_HIJACKED_ERROR = "Worker is already hijacked.";
 
 /** What every lease route says when the worker's socket has gone. */
 export const NO_WORKER_ERROR = "No worker connected for this session.";
+
+/** All a caller over its budget is told. It names no window and no deadline. */
+export const RATE_LIMITED_ERROR = "rate_limited";
+
+/**
+ * The bucket a caller with no address of its own is charged to.
+ *
+ * One shared bucket rather than one apiece: a caller the runtime could not
+ * name would otherwise be the one caller with no limit.
+ */
+export const UNKNOWN_CLIENT = "unknown";
 
 /** What a worker id may be, as the reference's path pattern has it. */
 const WORKER_ID = /^[\w-]+$/;
@@ -96,6 +120,15 @@ export interface HijackRouteOptions {
   principal: HijackPrincipal;
   /** Whether the caller presented a credential that verified. */
   authenticated: boolean;
+  /**
+   * Where the request came from, as the socket reports it.
+   *
+   * The connection's own address and never a forwarded header: behind a proxy
+   * this collapses every caller into one bucket, which is a worse limit but a
+   * real one — a header a client writes is a budget a client picks. The
+   * reference says the same thing in the same place, and for the same reason.
+   */
+  clientAddress?: string | undefined;
 }
 
 /** One refusal, in the shape the framework — and so the gate — emits. */
@@ -149,6 +182,68 @@ const LEASED_VERBS: ReadonlyMap<string, string> = new Map([
   ["step", "POST"],
   ["release", "POST"],
 ]);
+
+/** What one charged verb spends from, and what it counts when it is refused. */
+interface RatePolicy {
+  /** Spend one token, and say whether there was one. */
+  charge(hub: SessionHub, clientId: string): boolean;
+  /** The counter a refusal increments. Per verb, though two share a budget. */
+  metric: string;
+}
+
+/**
+ * The verbs that cost something, and what each costs it against.
+ *
+ * `send` and `step` spend from one budget under two counters: they are the
+ * two ways of driving a held terminal, and a caller throttled on one that
+ * could carry on through the other would not be throttled at all.
+ */
+const RATE_LIMITED: ReadonlyMap<string, RatePolicy> = new Map([
+  [
+    "acquire",
+    {
+      charge: (hub: SessionHub, clientId: string) => hub.limiter.allowRestAcquire(clientId),
+      metric: "rest_acquire_rate_limited_total",
+    },
+  ],
+  [
+    "send",
+    {
+      charge: (hub: SessionHub, clientId: string) => hub.limiter.allowRestSend(clientId),
+      metric: "rest_send_rate_limited_total",
+    },
+  ],
+  [
+    "step",
+    {
+      charge: (hub: SessionHub, clientId: string) => hub.limiter.allowRestSend(clientId),
+      metric: "rest_step_rate_limited_total",
+    },
+  ],
+]);
+
+/** Which bucket a request is charged to, given the address it arrived from. */
+function clientIdOf(address: string | undefined): string {
+  return address === undefined || address === "" ? UNKNOWN_CLIENT : address;
+}
+
+/**
+ * Charge this request against its budget, and refuse it when it is over.
+ *
+ * @returns The refusal, or nothing when the verb is free or the caller had a
+ *   token left.
+ */
+function overBudget(verb: string, options: HijackRouteOptions): Response | undefined {
+  const policy = RATE_LIMITED.get(verb);
+  if (policy === undefined) {
+    return undefined;
+  }
+  if (policy.charge(options.hub, clientIdOf(options.clientAddress))) {
+    return undefined;
+  }
+  options.hub.store.metric(policy.metric);
+  return leaseError(429, RATE_LIMITED_ERROR);
+}
 
 /** The body of a request, or an empty object when there is not one. */
 export async function readJsonBody(request: Request): Promise<Record<string, unknown>> {
@@ -231,6 +326,14 @@ async function answer(request: Request, parsed: HijackPath, options: HijackRoute
     : canMutateSession(options.principal, session, "session.control.hijack");
   if (!allowed) {
     return detail(403, "insufficient privileges");
+  }
+
+  // After the gate and before anything is looked up: a caller who cannot get
+  // past the gate never spends a token, and a caller who is over the budget
+  // is told so rather than told whether the lease they named exists.
+  const refused = overBudget(parsed.verb, options);
+  if (refused !== undefined) {
+    return refused;
   }
 
   if (parsed.hijackId === undefined) {

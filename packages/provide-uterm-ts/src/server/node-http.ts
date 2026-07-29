@@ -120,7 +120,10 @@ export function serveApp(app: ServerApp, options: ListenOptions = {}): Promise<R
 /** One request, answered — or refused with a 500 nobody has to guess at. */
 async function handle(app: ServerApp, message: IncomingMessage, out: ServerResponse, base: string): Promise<void> {
   try {
-    await writeResponse(await app.handle(await toRequest(message, base)), out);
+    // The socket's own address, not `X-Forwarded-For`: what the rate limit is
+    // keyed on has to be something the caller cannot choose for itself.
+    const request = await toRequest(message, base);
+    await writeResponse(await app.handle(request, message.socket.remoteAddress), out);
   } catch {
     // A handler that threw is this server's fault, and the connection must
     // still be answered: a client left hanging cannot tell a crash from a

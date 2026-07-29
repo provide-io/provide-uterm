@@ -83,8 +83,16 @@ export interface ServerAppOptions {
 
 /** A built application. */
 export interface ServerApp {
-  /** Answer one request. */
-  handle(request: Request): Promise<Response>;
+  /**
+   * Answer one request.
+   *
+   * `clientAddress` is the connection's own remote address, which the lease
+   * routes charge their rate limit against. It is a second argument and not a
+   * header because a header is a thing the client writes: the reference reads
+   * the socket for exactly this reason, and a runtime that cannot say where a
+   * request came from passes nothing and shares one bucket with the others.
+   */
+  handle(request: Request, clientAddress?: string): Promise<Response>;
   /**
    * Whether startup finished.
    *
@@ -329,7 +337,7 @@ export function createServerApp(options: ServerAppOptions): ServerApp {
     return resolveJwtPrincipal(request.headers, options.auth, options.now);
   }
 
-  async function handle(request: Request): Promise<Response> {
+  async function handle(request: Request, clientAddress?: string): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
     const method = request.method.toUpperCase();
@@ -356,6 +364,7 @@ export function createServerApp(options: ServerAppOptions): ServerApp {
       registry: options.registry,
       principal,
       authenticated,
+      clientAddress,
     });
     if (lease !== undefined) {
       return lease;

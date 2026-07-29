@@ -21,11 +21,10 @@
  *
  * ## What is deliberately absent
  *
- * The reference hub also carries the approval store and the REST rate limiter.
- * Neither is composed here, and the difference is visible: a flood of acquires
- * that the reference answers `429 {"error": "rate_limited"}` this server
- * answers on its merits. That is a *gap*, not a decision — recorded here
- * rather than papered over with a limiter nothing configures.
+ * The reference hub also carries the approval store, which is not composed
+ * here. The REST rate limiter now is: {@link SessionHub.limiter} is built on
+ * this hub's own monotonic clock, so a test that drives the clock drives the
+ * window with it rather than waiting one out.
  *
  * Browsers are a different case. This server binds no WebSocket at all, so no
  * browser can attach: `broadcast` and `broadcastHijackState` run their real
@@ -48,6 +47,7 @@ import {
   type WorkerSocket,
   type WorkerTermState,
 } from "../hub/index.ts";
+import { RateLimiter } from "../ratelimit/index.ts";
 
 /** Longest dashboard lease this hub hands out, in seconds. */
 export const SESSION_HUB_DASHBOARD_LEASE_S = 30;
@@ -63,6 +63,19 @@ export const SESSION_HUB_MAX_INPUT_CHARS = 10000;
 
 /** How many browsers one authenticated principal may hold. */
 export const SESSION_HUB_MAX_CONNECTIONS_PER_PRINCIPAL = 25;
+
+/**
+ * Acquires per second one address may make — the reference's own default.
+ *
+ * Nothing configures it, there as here: the reference threads its browser
+ * limit through from the configuration file and leaves both REST rates on the
+ * constructor default, so a deployment that has never heard of this number
+ * gets exactly this number.
+ */
+export const SESSION_HUB_REST_ACQUIRE_RATE = 5;
+
+/** Sends per second one address may make. Steps are charged against it too. */
+export const SESSION_HUB_REST_SEND_RATE = 20;
 
 /** Options for {@link SessionHub}. Defaults are the real clocks. */
 export interface SessionHubOptions {
@@ -98,6 +111,15 @@ export class SessionHub {
   readonly presence: PresenceManager;
   readonly polling: PollingCoordinator;
   readonly connections: ConnectionManager;
+  /**
+   * What the lease routes charge a caller's address against.
+   *
+   * Composed here rather than per route so that a client's budget follows the
+   * client and not the endpoint: one address hammering `acquire` on one worker
+   * is refused on every other worker too, which is the point of a limit keyed
+   * on where the traffic comes from.
+   */
+  readonly limiter: RateLimiter;
   /** Cap on one REST send's keystrokes. */
   readonly maxInputChars = SESSION_HUB_MAX_INPUT_CHARS;
   readonly #now: () => number;
@@ -111,6 +133,14 @@ export class SessionHub {
     this.#wallNow = wallNow;
     this.#sleep = options.sleep ?? realSleep;
 
+    // The hub's own monotonic clock, not the wall one: a bucket that refilled
+    // against wall time would hand a flooding client a full budget the moment
+    // the system clock stepped forward.
+    this.limiter = new RateLimiter({
+      restAcquireRate: SESSION_HUB_REST_ACQUIRE_RATE,
+      restSendRate: SESSION_HUB_REST_SEND_RATE,
+      now,
+    });
     this.store = new StateStore({
       registry: this.registry,
       maxBufferChars: SESSION_HUB_MAX_BUFFER_CHARS,
