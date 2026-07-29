@@ -1,0 +1,96 @@
+{
+  "id": "008_rate_limits",
+  "title": "Spending the budget, and what is still refused for its own reason once it is gone",
+  "timeout_ms": 60000,
+  "auth": "dev_token",
+  "mutates": true,
+  "steps": [
+    {
+      "id": "spend_acquire",
+      "action": "hijack_acquire",
+      "worker_id": "provide-shell",
+      "owner": "conformance",
+      "lease_s": 60,
+      "repeat": 30,
+      "auth": "token",
+      "volatile": ["status", "ok", "body"]
+    },
+    {
+      "id": "unknown_worker_while_spent",
+      "action": "hijack_acquire",
+      "worker_id": "no-such-worker",
+      "owner": "conformance",
+      "lease_s": 60,
+      "auth": "token"
+    },
+    {
+      "id": "anonymous_while_spent",
+      "action": "http_post",
+      "path": "/worker/provide-shell/hijack/acquire",
+      "body": { "owner": "nobody", "lease_s": 60 },
+      "auth": "none"
+    },
+    {
+      "id": "read_while_spent",
+      "action": "list_sessions",
+      "auth": "token",
+      "volatile": ["body.*.created_at", "body.*.connected"]
+    }
+  ],
+  "expect": [
+    {
+      "step": "spend_acquire.0",
+      "path": "status",
+      "equals": 409,
+      "why": "The first of the flood is answered on its merits — the session is in open mode, so there is no lease to take. That is the baseline the refusal further down is measured against, and it is why this scenario never moves the session out of open mode: no lease is ever granted, so it leaves nothing behind for the next client."
+    },
+    {
+      "step": "spend_acquire.29",
+      "path": "status",
+      "equals": 429,
+      "why": "Thirty acquires against a budget of five a second. Written as overshoot rather than as a boundary: pinning 'the sixth is refused' would fail the moment one gap in the flood exceeded two hundred milliseconds, and a scenario that goes red on a loaded runner teaches nothing about the server. The send and step budget is twenty a second, which some client and server pairs cannot exceed at all — a budget that cannot be outrun cannot be observed, so this scenario does not pretend to test it."
+    },
+    {
+      "step": "spend_acquire.29",
+      "path": "body",
+      "equals": { "error": "rate_limited" },
+      "why": "The refusal names the reason and nothing else — no budget, no window, no Retry-After. A caller told when to come back would also be told the shape of the limit."
+    },
+    {
+      "step": "spend_acquire.29",
+      "path": "ok",
+      "equals": false,
+      "why": "The client library's own reading of a 429. A library that treated an unfamiliar refusal as success would have its caller carry on typing into a terminal the server has stopped listening to."
+    },
+    {
+      "step": "unknown_worker_while_spent",
+      "path": "status",
+      "equals": 404,
+      "why": "Authorization runs before the limiter, so a worker that does not exist is still absent rather than rate limited even with the budget gone. A 429 here would answer a question the caller was not entitled to ask: whether the worker exists."
+    },
+    {
+      "step": "unknown_worker_while_spent",
+      "path": "body",
+      "equals": { "detail": "unknown session: no-such-worker" },
+      "why": "And in the `detail` envelope, byte for byte the same refusal an unspent budget gives — the rate limit must not change what a refusal says, only whether the request got that far."
+    },
+    {
+      "step": "anonymous_while_spent",
+      "path": "status",
+      "equals": 401,
+      "why": "Authentication runs before the limiter too. An unauthenticated caller is told it is nobody even when the budget is gone; were it told 429 instead, a flood would become a way of learning that the worker is there."
+    },
+    {
+      "step": "anonymous_while_spent",
+      "path": "body",
+      "equals": { "detail": "authentication required" },
+      "why": "Two envelopes in one scenario, deliberately: the rate limit answers in `error` and authentication in `detail`. A client has to know both, and a port that picked one for everything would pass every other scenario in this directory."
+    },
+    {
+      "step": "read_while_spent",
+      "path": "status",
+      "equals": 200,
+      "why": "The budget is the lease routes', not the server's. Reading the session list still works with the acquire budget spent — a limiter that took the whole API down with it would turn one impatient client into an outage."
+    }
+  ]
+}
