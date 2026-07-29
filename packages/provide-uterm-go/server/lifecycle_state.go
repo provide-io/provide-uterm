@@ -25,13 +25,23 @@ package server
 type SessionLifecycleState string
 
 const (
-	// LifecycleStopped: registered but never brought up, or brought down again.
+	// LifecycleStopped: registered but never brought up, brought down again, or
+	// given up on after a start that failed — in that last case last_error says
+	// what failed and stopped_at says when. The state alone does not distinguish
+	// them, and in the reference it never did.
 	LifecycleStopped SessionLifecycleState = "stopped"
 	// LifecycleStarting: asked to come up; the connector has not reported in yet.
 	LifecycleStarting SessionLifecycleState = "starting"
 	// LifecycleRunning: up.
 	LifecycleRunning SessionLifecycleState = "running"
-	// LifecycleError: the connector failed; last_error says how.
+	// LifecycleError: a run failed and another attempt is coming. In the
+	// reference this is set inside HostedSessionRuntime._run's retry loop
+	// (runtime.py, ~443) and is only observable between attempts: a permanent
+	// failure breaks out of the loop and the following line assigns "stopped",
+	// and a transient one loops back round to "starting". It is not a resting
+	// state, and this port — which has no retry loop — therefore never assigns
+	// it. It stays in the vocabulary because it is in the reference's, and a
+	// client reading this field must be able to name what it may be sent.
 	LifecycleError SessionLifecycleState = "error"
 )
 

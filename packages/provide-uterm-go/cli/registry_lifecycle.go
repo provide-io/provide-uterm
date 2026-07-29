@@ -19,9 +19,20 @@ import (
 // telnet / websocket). Unknown id → 404.
 //
 // The states follow HostedSessionRuntime: "starting" for as long as the dial is
-// in flight, then "running", or "error" with the reason in last_error. A dial
-// failure is reported on the session rather than as a failed request, so one
-// unreachable target does not turn into an HTTP error for the operator who
+// in flight, then "running" — or, when the dial fails, "stopped" with the
+// reason in last_error and the instant in stopped_at.
+//
+// "stopped", not "error", is where the reference comes to rest. Its _run loop
+// (runtime.py, ~425-482) does assign _state = "error" on a failed run, but that
+// is a state *between retry attempts*: a permanent failure breaks out of the
+// loop and the line after it assigns "stopped" and _stopped_at, while a
+// transient one sleeps a backoff and sets "starting" again at the top. Nothing
+// ever rests at "error". A client tells a session that tried and failed apart
+// from one nobody asked to run by reading last_error, not the state — which is
+// why last_error and stopped_at are both written here.
+//
+// A dial failure is reported on the session rather than as a failed request, so
+// one unreachable target does not turn into an HTTP error for the operator who
 // asked for it — they get a session that says what went wrong.
 func (r *SessionRegistryImpl) StartSession(ctx context.Context, id string) (*server.SessionStatus, error) {
 	r.mu.Lock()
@@ -57,7 +68,12 @@ func (r *SessionRegistryImpl) StartSession(ctx context.Context, id string) (*ser
 	if err != nil {
 		msg := err.Error()
 		e.lastErr = &msg
-		e.lifecycle = server.LifecycleError
+		// Where the reference's run loop lands when it gives up: stopped, with
+		// the reason and the instant. See the doc comment above for why this is
+		// not "error".
+		e.lifecycle = server.LifecycleStopped
+		now := float64(time.Now().UnixNano()) / 1e9
+		e.stoppedAt = &now
 		return r.snapshotStatus(e), nil
 	}
 	e.lastErr = nil
@@ -72,7 +88,7 @@ func (r *SessionRegistryImpl) StartSession(ctx context.Context, id string) (*ser
 // never-started session to every client while still echoing auto_start: true on
 // the wire.
 //
-// Connector failures are recorded on each session by StartSession ("error" plus
+// Connector failures are recorded on each session by StartSession (stopped plus
 // last_error) rather than aborting the batch, so one bad session never blocks
 // the others.
 //

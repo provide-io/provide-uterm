@@ -32,11 +32,17 @@ func TestSeededSessionIsStoppedNotWaiting(t *testing.T) {
 	}
 }
 
-// A connector that will not come up leaves the session in "error" with the
-// reason in last_error, the way the reference's runtime records a failed run.
-// Reporting "stopped" would say the operator asked for nothing, when in fact
-// they asked for a session that failed.
-func TestFailedStartRecordsErrorAndTheReason(t *testing.T) {
+// A connector that will not come up leaves the session "stopped", with the
+// reason in last_error and the instant in stopped_at — which is where the
+// reference's runtime ends up.
+//
+// HostedSessionRuntime._run (runtime.py, ~425-482) does set _state = "error" on
+// a failed run, but only inside the retry loop: a permanent failure breaks out
+// of it and the line after the loop assigns "stopped" and _stopped_at. So
+// "error" is observable between attempts, never as the resting state of a start
+// that gave up. What tells a session that failed apart from one nobody asked to
+// run is last_error, not the state.
+func TestFailedStartComesToRestStoppedWithTheReason(t *testing.T) {
 	r := newTestRegistry(t)
 	ctx := context.Background()
 	if _, err := r.CreateSession(ctx, map[string]any{"session_id": "bad", "connector_type": "boom"}); err != nil {
@@ -46,11 +52,16 @@ func TestFailedStartRecordsErrorAndTheReason(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StartSession: %v", err)
 	}
-	if st.LifecycleState != server.LifecycleError {
-		t.Fatalf("lifecycle_state = %q, want %q", st.LifecycleState, server.LifecycleError)
+	if st.LifecycleState != server.LifecycleStopped {
+		t.Fatalf("lifecycle_state = %q, want %q", st.LifecycleState, server.LifecycleStopped)
 	}
 	if st.LastError == nil || *st.LastError != "dial failed" {
 		t.Fatalf("last_error = %v, want the connector's message", st.LastError)
+	}
+	// Without stopped_at, a client cannot tell this from a session that was
+	// seeded and never touched — which is the one thing last_error is for.
+	if st.StoppedAt == nil {
+		t.Fatal("stopped_at is unset; the reference writes it when the run loop gives up")
 	}
 	if st.Connected {
 		t.Fatal("a session that failed to start is not connected")
@@ -87,8 +98,11 @@ func TestBootToleratesOneFailingSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetSession broken: %v", err)
 	}
-	if brokenStatus.LifecycleState != server.LifecycleError {
-		t.Fatalf("broken lifecycle_state = %q, want %q", brokenStatus.LifecycleState, server.LifecycleError)
+	if brokenStatus.LifecycleState != server.LifecycleStopped {
+		t.Fatalf("broken lifecycle_state = %q, want %q", brokenStatus.LifecycleState, server.LifecycleStopped)
+	}
+	if brokenStatus.LastError == nil {
+		t.Fatal("broken last_error is unset; it is the only thing that says this one failed")
 	}
 	laterStatus, err := r.GetSession(ctx, "later")
 	if err != nil {
