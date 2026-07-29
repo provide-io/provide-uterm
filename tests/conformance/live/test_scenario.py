@@ -84,6 +84,88 @@ class TestLoad:
             load_scenario(_write(tmp_path, raw))
 
 
+class TestRepeat:
+    """A step done more than once, and the observations it leaves behind.
+
+    A rate limiter is only observable by exhausting it, and writing thirty-one
+    steps out by hand would put the budget in the scenario in a form nobody
+    could read. `repeat` says the count once; each repetition still records its
+    own observation, because the whole point is that they differ.
+    """
+
+    def _flood(self, count: int, expect: list[dict] | None = None) -> dict:
+        return {
+            **_MINIMAL,
+            "steps": [{"id": "flood", "action": "health", "repeat": count}],
+            "expect": expect if expect is not None else [],
+        }
+
+    def test_a_repeated_step_observes_once_per_repetition(self, tmp_path: Path) -> None:
+        scenario = load_scenario(_write(tmp_path, self._flood(3)))
+        assert scenario.steps[0].observation_ids == ("flood.0", "flood.1", "flood.2")
+
+    def test_a_step_that_is_not_repeated_keeps_its_bare_id(self, tmp_path: Path) -> None:
+        # The overwhelming majority of steps run once, and numbering those
+        # would rewrite every expectation already committed.
+        scenario = load_scenario(_write(tmp_path, _MINIMAL))
+        assert scenario.steps[0].observation_ids == ("health",)
+
+    def test_an_expectation_names_a_repetition(self, tmp_path: Path) -> None:
+        raw = self._flood(3, [{"step": "flood.2", "path": "status", "equals": 429, "why": "the budget is spent"}])
+        assert load_scenario(_write(tmp_path, raw)).expectations[0].step == "flood.2"
+
+    def test_an_expectation_naming_the_bare_step_is_refused(self, tmp_path: Path) -> None:
+        # There is no single answer to point at: the interesting one is the
+        # last, and a scenario that meant the last has to say so.
+        raw = self._flood(3, [{"step": "flood", "path": "status", "equals": 429, "why": "spent"}])
+        with pytest.raises(ValueError, match="repeated"):
+            load_scenario(_write(tmp_path, raw))
+
+    def test_an_expectation_past_the_last_repetition_is_refused(self, tmp_path: Path) -> None:
+        # Off by one in the scenario is the failure this guards: `flood.3` of
+        # three repetitions would name nothing, and an expectation about a step
+        # nobody runs passes in every cell at once.
+        raw = self._flood(3, [{"step": "flood.3", "path": "status", "equals": 429, "why": "spent"}])
+        with pytest.raises(ValueError, match="flood.3"):
+            load_scenario(_write(tmp_path, raw))
+
+    def test_volatile_paths_apply_to_every_repetition(self, tmp_path: Path) -> None:
+        raw = {
+            **_MINIMAL,
+            "steps": [{"id": "flood", "action": "health", "repeat": 2, "volatile": ["body.uptime_s"]}],
+            "expect": [],
+        }
+        volatile = load_scenario(_write(tmp_path, raw)).volatile_by_step
+        assert volatile == {"flood.0": ("body.uptime_s",), "flood.1": ("body.uptime_s",)}
+
+    def test_a_reference_to_a_repeated_step_is_refused(self, tmp_path: Path) -> None:
+        # `${flood.body.x}` cannot say which repetition it means, and the
+        # grammar has no room to say it — the step id may not contain a dot.
+        # Refused here rather than resolved differently by four drivers.
+        raw = {
+            **_MINIMAL,
+            "steps": [
+                {"id": "flood", "action": "hijack_acquire", "worker_id": "w", "repeat": 2},
+                {
+                    "id": "send",
+                    "action": "hijack_send",
+                    "worker_id": "w",
+                    "hijack_id": "${flood.body.hijack_id}",
+                    "keys": "x",
+                },
+            ],
+            "expect": [],
+        }
+        with pytest.raises(ValueError, match="repeated"):
+            load_scenario(_write(tmp_path, raw))
+
+    def test_a_repeat_of_one_is_refused(self, tmp_path: Path) -> None:
+        # Two ways to write the same thing, one of which changes every
+        # observation id. The schema permits only the plain form.
+        with pytest.raises(ValueError, match="does not match"):
+            load_scenario(_write(tmp_path, self._flood(1)))
+
+
 class TestCommittedScenarios:
     """The scenarios in the repository, which are the contract itself."""
 

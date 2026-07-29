@@ -315,23 +315,38 @@ async def _run_steps(scenario: dict[str, Any], base_url: str, token: str) -> lis
         # observation the harness would compare.
         step = _resolved(raw_step, seen)
         action = step["action"]
-        try:
-            if action in {"http_get", "http_post"}:
-                fields = await _raw_step(step, base_url, token)
-            else:
-                fields = await _library_step(step, base_url, token)
-        except KeyError as error:
-            raise ValueError(f"unknown action {action!r}") from error
-        except MalformedStepError:
-            # Not an observation: a scenario that asked for something it did
-            # not describe. The harness refuses these at load, so reaching one
-            # here means the scenario never went through it.
-            raise
-        except Exception as error:
-            fields = {"status": None, "ok": False, "body": None, "error": f"{type(error).__name__}: {error}"}
-        seen[step["id"]] = fields
-        steps.append({"id": step["id"], "fields": fields})
+        repeat = int(raw_step.get("repeat", 1))
+        for observed in _observation_ids(step["id"], repeat):
+            try:
+                if action in {"http_get", "http_post"}:
+                    fields = await _raw_step(step, base_url, token)
+                else:
+                    fields = await _library_step(step, base_url, token)
+            except KeyError as error:
+                raise ValueError(f"unknown action {action!r}") from error
+            except MalformedStepError:
+                # Not an observation: a scenario that asked for something it did
+                # not describe. The harness refuses these at load, so reaching one
+                # here means the scenario never went through it.
+                raise
+            except Exception as error:
+                fields = {"status": None, "ok": False, "body": None, "error": f"{type(error).__name__}: {error}"}
+            seen[observed] = fields
+            steps.append({"id": observed, "fields": fields})
     return steps
+
+
+def _observation_ids(step_id: str, repeat: int) -> list[str]:
+    """The ids one step's observations are recorded under.
+
+    A step that runs once keeps its own id; a repeated step numbers its
+    repetitions from zero. Every repetition is recorded, never just the last:
+    a scenario repeats a step because it expects the answers to stop being the
+    same, and which repetition changed is the thing being measured.
+    """
+    if repeat == 1:
+        return [step_id]
+    return [f"{step_id}.{index}" for index in range(repeat)]
 
 
 def run_client(base_url: str, token: str, scenario_path: Path) -> int:

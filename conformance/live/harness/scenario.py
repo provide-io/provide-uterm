@@ -70,6 +70,20 @@ class Step:
     keys: str | None = None
     input_mode: str | None = None
     limit: int | None = None
+    repeat: int = 1
+
+    @property
+    def observation_ids(self) -> tuple[str, ...]:
+        """The ids this step's observations are recorded under.
+
+        A step that runs once keeps its own id — numbering those would rewrite
+        every expectation already committed. A repeated step records one
+        observation per repetition, because a scenario repeats a step
+        precisely when it expects the answers to stop being the same.
+        """
+        if self.repeat == 1:
+            return (self.id,)
+        return tuple(f"{self.id}.{index}" for index in range(self.repeat))
 
 
 @dataclass(frozen=True)
@@ -89,8 +103,13 @@ class Scenario:
 
     @property
     def volatile_by_step(self) -> dict[str, tuple[str, ...]]:
-        """The paths each step declares volatile, for the comparison."""
-        return {step.id: step.volatile for step in self.steps if step.volatile}
+        """The paths each step declares volatile, for the comparison.
+
+        A repeated step declares them once and every repetition carries them:
+        what makes a field volatile is the field, not which time round it was
+        read.
+        """
+        return {observed: step.volatile for step in self.steps if step.volatile for observed in step.observation_ids}
 
 
 def schema(name: str) -> dict[str, Any]:
@@ -154,6 +173,7 @@ def _step(entry: Mapping[str, Any]) -> Step:
         keys=entry.get("keys"),
         input_mode=entry.get("input_mode"),
         limit=entry.get("limit"),
+        repeat=int(entry.get("repeat", 1)),
     )
     if action in _NEEDS_PATH and step.path is None:
         raise ValueError(f"step {step.id!r}: {action} needs a path")
@@ -176,14 +196,30 @@ def _refuse_unresolvable_references(steps: Sequence[Step], path: Path) -> None:
     scenario rather than anything a server did, so it is refused once, here.
     """
     ran: set[str] = set()
+    repeated: set[str] = set()
     for step in steps:
         for field in (step.hijack_id, step.session_id, step.worker_id, step.keys, step.owner):
             match = _REFERENCE.match(field) if isinstance(field, str) else None
-            if match is not None and match.group(1) not in ran:
+            if match is None:
+                continue
+            if match.group(1) not in ran:
                 raise ValueError(
                     f"{path.name}: step {step.id!r} refers to {match.group(1)!r}, which has not run by then"
                 )
+            if match.group(1) in repeated:
+                # A repeated step has as many answers as repetitions, and the
+                # grammar cannot say which is meant: the step id part admits no
+                # dot, so `${flood.2.body.x}` reads as step `flood`, path
+                # `2.body.x`. Rather than let four drivers each pick a reading,
+                # refuse it — and if a scenario ever needs the value, the step
+                # that produces it should not be the repeated one.
+                raise ValueError(
+                    f"{path.name}: step {step.id!r} refers to {match.group(1)!r}, which is repeated "
+                    f"and so has no single answer to refer to"
+                )
         ran.add(step.id)
+        if step.repeat > 1:
+            repeated.add(step.id)
 
 
 def _refuse_duplicates(steps: Sequence[Step], path: Path) -> None:
@@ -197,8 +233,17 @@ def _refuse_duplicates(steps: Sequence[Step], path: Path) -> None:
 
 def _refuse_unknown_steps(steps: Sequence[Step], expectations: Sequence[Expectation], path: Path) -> None:
     """An expectation about a step nobody runs would pass in every cell."""
-    known = {step.id for step in steps}
+    known = {observed for step in steps for observed in step.observation_ids}
+    repeated = {step.id for step in steps if step.repeat > 1}
     for expectation in expectations:
+        if expectation.step in repeated:
+            # The bare id of a repeated step records nothing. Left unrefused
+            # this reads as an expectation nobody runs, which is the one
+            # failure that passes everywhere at once.
+            raise ValueError(
+                f"{path.name}: expectation names step {expectation.step!r}, which is repeated — "
+                f"name the repetition it means, such as {expectation.step}.0"
+            )
         if expectation.step not in known:
             raise ValueError(
                 f"{path.name}: expectation names step {expectation.step!r}, which the scenario does not run"

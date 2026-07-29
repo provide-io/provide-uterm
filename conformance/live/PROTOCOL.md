@@ -209,6 +209,51 @@ does, since one of them has to be first:
 * a `body` written as a reference is substituted as **JSON**, not as text, so
   a step can post back an object it was handed.
 
+## A step done more than once
+
+Some behaviour is only observable by exhausting something. A rate limiter is
+the case that forced this: it is invisible until the budget runs out, and the
+only way to see it is to spend the budget.
+
+A step may therefore carry `repeat`:
+
+```json
+{ "id": "flood", "action": "hijack_acquire", "worker_id": "provide-shell", "repeat": 31 }
+```
+
+The driver performs the step that many times and records **each repetition as
+its own observation**, under `<step id>.<0-based index>` — `flood.0`,
+`flood.1`, and so on. The bare `flood` records nothing.
+
+Every repetition is recorded, never just the last. A scenario repeats a step
+precisely when it expects the answers to *stop being the same*, so which
+repetition changed is the measurement — a driver that recorded only the final
+answer would turn "the thirty-first request was refused" into "a request was
+refused", and those are different claims about a budget.
+
+Expectations name the repetition they mean:
+
+```json
+{ "step": "flood.30", "path": "status", "equals": 429 }
+```
+
+Three rules, all refused at load rather than left to four drivers:
+
+* **there is no `repeat: 1`.** A step that runs once keeps its bare id. Two
+  ways to write the same thing, where one of them renumbers every observation,
+  is a difference nobody would remember when reading a scenario;
+* **an expectation may not name the bare id** of a repeated step. It records
+  nothing, so the expectation would be about a step nobody runs — which passes
+  in every cell at once, the one failure mode this harness exists to prevent;
+* **a `${...}` reference may not name a repeated step.** It has as many answers
+  as repetitions and the grammar cannot say which is meant: the step id admits
+  no dot, so `${flood.2.body.x}` reads as step `flood`, path `2.body.x`. If a
+  scenario needs the value, the step producing it should not be the repeated
+  one.
+
+`repeat` is capped at 200. It is the only field that can turn one scenario
+into a load test, and a scenario runs in every cell of the matrix.
+
 ## Capabilities
 
 A scenario may require capabilities (`"requires": ["hijack.rest"]`). A driver

@@ -14,6 +14,7 @@ A harness nobody has watched fail is a harness nobody knows works.
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -21,7 +22,7 @@ import pytest
 from harness.drivers import DriverSpec
 from harness.matrix import run_matrix
 from harness.registry import REPO_ROOT, available
-from harness.scenario import SCENARIO_DIR, load_scenarios
+from harness.scenario import SCENARIO_DIR, load_scenario, load_scenarios
 
 pytestmark = pytest.mark.slow
 
@@ -80,6 +81,50 @@ class TestAgainstTheRealServer:
         found = available(REPO_ROOT, only=["python"])
         report = run_matrix([health_scenario], servers=found.servers, clients=found.clients)
         assert report.ok
+
+
+class TestARepeatedStep:
+    """`repeat` against the real driver, not against a stub of it."""
+
+    def _scenario(self, tmp_path: Path) -> object:
+        path = tmp_path / "900_repeated.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "id": "900_repeated",
+                    "title": "A step done three times observes three times",
+                    "steps": [
+                        {"id": "beat", "action": "health", "repeat": 3, "volatile": ["body.uptime_s"]},
+                    ],
+                    "expect": [
+                        {"step": "beat.0", "path": "status", "equals": 200, "why": "the first call answers"},
+                        {"step": "beat.1", "path": "status", "equals": 200, "why": "so does the second"},
+                        {"step": "beat.2", "path": "status", "equals": 200, "why": "and so does the last"},
+                    ],
+                }
+            )
+        )
+        return load_scenario(path)
+
+    def test_each_repetition_is_recorded_under_its_own_id(self, tmp_path: Path) -> None:
+        # The scenario asserts on all three repetitions by name, so a driver
+        # that recorded only the last — or that recorded one observation under
+        # the bare `beat` — leaves the other expectations pointing at nothing
+        # and the cell fails. That is the assertion; nothing needs to reach
+        # inside the cell to make it.
+        report = run_matrix([self._scenario(tmp_path)], servers=[_python()], clients=[_python()])
+        (cell,) = report.cells
+        assert cell.status == "pass", cell.failures
+
+    def test_a_repetition_that_diverges_is_caught(self, tmp_path: Path) -> None:
+        # The divergence is in the middle repetition, which nothing asserts on.
+        # Only the comparison against the reference cell can see it — and it
+        # can only see it because each repetition kept its own observation.
+        liar = _liar(tmp_path, "result['steps'][1]['fields']['body']['service'] = 'something-else'")
+        report = run_matrix([self._scenario(tmp_path)], servers=[_python()], clients=[_python(), liar])
+        divergent = next(cell for cell in report.cells if cell.client == "go")
+        assert divergent.status == "fail"
+        assert any(difference.path.startswith("beat.1") for difference in divergent.differences)
 
 
 class TestItCatchesADivergence:
