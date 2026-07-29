@@ -216,7 +216,7 @@ func (s *Server) buildHandler() http.Handler {
 	s.registerFanoutRoutes(mux)
 	s.registerWSRoutes(mux)
 	s.registerPageRoutes(mux)
-	return s.requestLogging(s.securityHeaders(s.corsAndOrigin(mux)))
+	return s.requestLogging(s.securityHeaders(s.corsAndOrigin(routeFallback(mux))))
 }
 
 // Handler returns the fully-wrapped HTTP handler for in-process testing via
