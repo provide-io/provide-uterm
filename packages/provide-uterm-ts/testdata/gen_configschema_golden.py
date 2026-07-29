@@ -41,6 +41,7 @@ from __future__ import annotations
 import json
 import types
 import typing
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -64,6 +65,7 @@ MODELS: dict[str, type[BaseModel]] = {
     "PamConfig": schema.PamConfig,
     "GovernanceConfig": schema.GovernanceConfig,
     "GraphicalTargetConfig": schema.GraphicalTargetConfig,
+    "SessionDefinition": schema.SessionDefinition,
 }
 
 
@@ -91,6 +93,8 @@ def _describe(annotation: Any) -> dict[str, Any]:
         return {"kind": "str"}
     if annotation is Path:
         return {"kind": "path"}
+    if annotation is datetime:
+        return {"kind": "datetime"}
     if isinstance(annotation, type) and issubclass(annotation, BaseModel):
         return {"kind": "model", "name": annotation.__name__}
     return {"kind": "unknown", "name": getattr(annotation, "__name__", str(annotation))}
@@ -102,6 +106,7 @@ def _spec(model: type[BaseModel]) -> dict[str, Any]:
     for name, field in model.model_fields.items():
         described = _describe(field.annotation)
         described.setdefault("optional", False)
+        described["required"] = field.is_required()
         fields[name] = described
     return fields
 

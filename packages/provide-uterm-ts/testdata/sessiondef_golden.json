@@ -1,0 +1,1188 @@
+{
+  "builtin_connector_types": [
+    "shell",
+    "ssh",
+    "telnet",
+    "ushell",
+    "websocket"
+  ],
+  "cases": [
+    {
+      "name": "the least an entry can say",
+      "kwargs": {
+        "session_id": "shell"
+      },
+      "accepted": {
+        "session_id": "shell",
+        "display_name": "shell",
+        "connector_type": "shell",
+        "connector_config": {},
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "no identifier at all",
+      "kwargs": {},
+      "errors": [
+        {
+          "type": "missing",
+          "loc": [
+            "session_id"
+          ],
+          "msg": "Field required"
+        }
+      ]
+    },
+    {
+      "name": "an empty identifier",
+      "kwargs": {
+        "session_id": ""
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "session_id"
+          ],
+          "msg": "Value error, session_id is required for each [[sessions]] entry"
+        }
+      ]
+    },
+    {
+      "name": "an identifier of only spaces",
+      "kwargs": {
+        "session_id": "   "
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "session_id"
+          ],
+          "msg": "Value error, session_id is required for each [[sessions]] entry"
+        }
+      ]
+    },
+    {
+      "name": "an identifier with spaces around it",
+      "kwargs": {
+        "session_id": "  shell  "
+      },
+      "accepted": {
+        "session_id": "shell",
+        "display_name": "shell",
+        "connector_type": "shell",
+        "connector_config": {},
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "an identifier with a space in it",
+      "kwargs": {
+        "session_id": "my shell"
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "session_id"
+          ],
+          "msg": "Value error, session_id must match ^[\\w\\-]+$, got: 'my shell'"
+        }
+      ]
+    },
+    {
+      "name": "an identifier with a dot in it",
+      "kwargs": {
+        "session_id": "my.shell"
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "session_id"
+          ],
+          "msg": "Value error, session_id must match ^[\\w\\-]+$, got: 'my.shell'"
+        }
+      ]
+    },
+    {
+      "name": "an identifier with a slash in it",
+      "kwargs": {
+        "session_id": "a/b"
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "session_id"
+          ],
+          "msg": "Value error, session_id must match ^[\\w\\-]+$, got: 'a/b'"
+        }
+      ]
+    },
+    {
+      "name": "an identifier with dashes and underscores",
+      "kwargs": {
+        "session_id": "my-shell_2"
+      },
+      "accepted": {
+        "session_id": "my-shell_2",
+        "display_name": "my-shell_2",
+        "connector_type": "shell",
+        "connector_config": {},
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "an identifier of digits",
+      "kwargs": {
+        "session_id": "12345"
+      },
+      "accepted": {
+        "session_id": "12345",
+        "display_name": "12345",
+        "connector_type": "shell",
+        "connector_config": {},
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "an identifier in French",
+      "kwargs": {
+        "session_id": "café"
+      },
+      "accepted": {
+        "session_id": "café",
+        "display_name": "café",
+        "connector_type": "shell",
+        "connector_config": {},
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "an identifier in Japanese",
+      "kwargs": {
+        "session_id": "端末"
+      },
+      "accepted": {
+        "session_id": "端末",
+        "display_name": "端末",
+        "connector_type": "shell",
+        "connector_config": {},
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "an identifier in Cyrillic",
+      "kwargs": {
+        "session_id": "сессия"
+      },
+      "accepted": {
+        "session_id": "сессия",
+        "display_name": "сессия",
+        "connector_type": "shell",
+        "connector_config": {},
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "an identifier with an Arabic-Indic digit",
+      "kwargs": {
+        "session_id": "shell٣"
+      },
+      "accepted": {
+        "session_id": "shell٣",
+        "display_name": "shell٣",
+        "connector_type": "shell",
+        "connector_config": {},
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "an identifier with a combining accent",
+      "kwargs": {
+        "session_id": "café"
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "session_id"
+          ],
+          "msg": "Value error, session_id must match ^[\\w\\-]+$, got: 'café'"
+        }
+      ]
+    },
+    {
+      "name": "an identifier with an emoji",
+      "kwargs": {
+        "session_id": "shell🐚"
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "session_id"
+          ],
+          "msg": "Value error, session_id must match ^[\\w\\-]+$, got: 'shell🐚'"
+        }
+      ]
+    },
+    {
+      "name": "an identifier with an apostrophe",
+      "kwargs": {
+        "session_id": "a'b"
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "session_id"
+          ],
+          "msg": "Value error, session_id must match ^[\\w\\-]+$, got: \"a'b\""
+        }
+      ]
+    },
+    {
+      "name": "an identifier with both kinds of quote",
+      "kwargs": {
+        "session_id": "a'b\"c"
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "session_id"
+          ],
+          "msg": "Value error, session_id must match ^[\\w\\-]+$, got: 'a\\'b\"c'"
+        }
+      ]
+    },
+    {
+      "name": "an identifier with a backslash",
+      "kwargs": {
+        "session_id": "a\\b"
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "session_id"
+          ],
+          "msg": "Value error, session_id must match ^[\\w\\-]+$, got: 'a\\\\b'"
+        }
+      ]
+    },
+    {
+      "name": "an identifier that is not a string",
+      "kwargs": {
+        "session_id": 5
+      },
+      "errors": [
+        {
+          "type": "string_type",
+          "loc": [
+            "session_id"
+          ],
+          "msg": "Input should be a valid string"
+        }
+      ]
+    },
+    {
+      "name": "an identifier given null",
+      "kwargs": {
+        "session_id": null
+      },
+      "errors": [
+        {
+          "type": "string_type",
+          "loc": [
+            "session_id"
+          ],
+          "msg": "Input should be a valid string"
+        }
+      ]
+    },
+    {
+      "name": "a display name of its own",
+      "kwargs": {
+        "session_id": "shell",
+        "display_name": "Provide Shell"
+      },
+      "accepted": {
+        "session_id": "shell",
+        "display_name": "Provide Shell",
+        "connector_type": "shell",
+        "connector_config": {},
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "no display name",
+      "kwargs": {
+        "session_id": "shell"
+      },
+      "accepted": {
+        "session_id": "shell",
+        "display_name": "shell",
+        "connector_type": "shell",
+        "connector_config": {},
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "an empty display name",
+      "kwargs": {
+        "session_id": "shell",
+        "display_name": ""
+      },
+      "accepted": {
+        "session_id": "shell",
+        "display_name": "shell",
+        "connector_type": "shell",
+        "connector_config": {},
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "a display name given null",
+      "kwargs": {
+        "session_id": "shell",
+        "display_name": null
+      },
+      "accepted": {
+        "session_id": "shell",
+        "display_name": "shell",
+        "connector_type": "shell",
+        "connector_config": {},
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "an empty display name on an entry whose identifier is bad",
+      "kwargs": {
+        "session_id": "my shell",
+        "display_name": ""
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "session_id"
+          ],
+          "msg": "Value error, session_id must match ^[\\w\\-]+$, got: 'my shell'"
+        }
+      ]
+    },
+    {
+      "name": "a connector type the server has",
+      "kwargs": {
+        "session_id": "s",
+        "connector_type": "ssh"
+      },
+      "accepted": {
+        "session_id": "s",
+        "display_name": "s",
+        "connector_type": "ssh",
+        "connector_config": {},
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "a connector type nobody registered",
+      "kwargs": {
+        "session_id": "s",
+        "connector_type": "carrier-pigeon"
+      },
+      "accepted": {
+        "session_id": "s",
+        "display_name": "s",
+        "connector_type": "carrier-pigeon",
+        "connector_config": {},
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "an empty connector type",
+      "kwargs": {
+        "session_id": "s",
+        "connector_type": ""
+      },
+      "accepted": {
+        "session_id": "s",
+        "display_name": "s",
+        "connector_type": "shell",
+        "connector_config": {},
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "a connector type with spaces around it",
+      "kwargs": {
+        "session_id": "s",
+        "connector_type": "  ssh  "
+      },
+      "accepted": {
+        "session_id": "s",
+        "display_name": "s",
+        "connector_type": "ssh",
+        "connector_config": {},
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "the hijack input mode",
+      "kwargs": {
+        "session_id": "s",
+        "input_mode": "hijack"
+      },
+      "accepted": {
+        "session_id": "s",
+        "display_name": "s",
+        "connector_type": "shell",
+        "connector_config": {},
+        "input_mode": "hijack",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "an input mode nobody defined",
+      "kwargs": {
+        "session_id": "s",
+        "input_mode": "readonly"
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "input_mode"
+          ],
+          "msg": "Value error, invalid input_mode for s: readonly"
+        }
+      ]
+    },
+    {
+      "name": "an input mode given true",
+      "kwargs": {
+        "session_id": "s",
+        "input_mode": true
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "input_mode"
+          ],
+          "msg": "Value error, invalid input_mode for s: True"
+        }
+      ]
+    },
+    {
+      "name": "a visibility given false",
+      "kwargs": {
+        "session_id": "s",
+        "visibility": false
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "visibility"
+          ],
+          "msg": "Value error, invalid visibility for s: False"
+        }
+      ]
+    },
+    {
+      "name": "a visibility given a number",
+      "kwargs": {
+        "session_id": "s",
+        "visibility": 3
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "visibility"
+          ],
+          "msg": "Value error, invalid visibility for s: 3"
+        }
+      ]
+    },
+    {
+      "name": "an input mode given null",
+      "kwargs": {
+        "session_id": "s",
+        "input_mode": null
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "input_mode"
+          ],
+          "msg": "Value error, invalid input_mode for s: None"
+        }
+      ]
+    },
+    {
+      "name": "an input mode on an entry with no identifier",
+      "kwargs": {
+        "input_mode": "readonly"
+      },
+      "errors": [
+        {
+          "type": "missing",
+          "loc": [
+            "session_id"
+          ],
+          "msg": "Field required"
+        },
+        {
+          "type": "value_error",
+          "loc": [
+            "input_mode"
+          ],
+          "msg": "Value error, invalid input_mode for <unknown>: readonly"
+        }
+      ]
+    },
+    {
+      "name": "a visibility the set has",
+      "kwargs": {
+        "session_id": "s",
+        "visibility": "private"
+      },
+      "accepted": {
+        "session_id": "s",
+        "display_name": "s",
+        "connector_type": "shell",
+        "connector_config": {},
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "private",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "a visibility nobody defined",
+      "kwargs": {
+        "session_id": "s",
+        "visibility": "everyone"
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "visibility"
+          ],
+          "msg": "Value error, invalid visibility for s: 'everyone'"
+        }
+      ]
+    },
+    {
+      "name": "a keystroke queue nobody defined",
+      "kwargs": {
+        "session_id": "s",
+        "keystroke_queue": "drop"
+      },
+      "errors": [
+        {
+          "type": "literal_error",
+          "loc": [
+            "keystroke_queue"
+          ],
+          "msg": "Input should be 'display' or 'replay'"
+        }
+      ]
+    },
+    {
+      "name": "the replay keystroke queue",
+      "kwargs": {
+        "session_id": "s",
+        "keystroke_queue": "replay"
+      },
+      "accepted": {
+        "session_id": "s",
+        "display_name": "s",
+        "connector_type": "shell",
+        "connector_config": {},
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "replay"
+      }
+    },
+    {
+      "name": "recording left unsaid",
+      "kwargs": {
+        "session_id": "s"
+      },
+      "accepted": {
+        "session_id": "s",
+        "display_name": "s",
+        "connector_type": "shell",
+        "connector_config": {},
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "recording turned on",
+      "kwargs": {
+        "session_id": "s",
+        "recording_enabled": true
+      },
+      "accepted": {
+        "session_id": "s",
+        "display_name": "s",
+        "connector_type": "shell",
+        "connector_config": {},
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": true,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "recording given null",
+      "kwargs": {
+        "session_id": "s",
+        "recording_enabled": null
+      },
+      "accepted": {
+        "session_id": "s",
+        "display_name": "s",
+        "connector_type": "shell",
+        "connector_config": {},
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "connector settings given outright",
+      "kwargs": {
+        "session_id": "s",
+        "connector_config": {
+          "host": "h",
+          "port": 22
+        }
+      },
+      "accepted": {
+        "session_id": "s",
+        "display_name": "s",
+        "connector_type": "shell",
+        "connector_config": {
+          "host": "h",
+          "port": 22
+        },
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "a name nobody defined",
+      "kwargs": {
+        "session_id": "s",
+        "host": "h.example"
+      },
+      "accepted": {
+        "session_id": "s",
+        "display_name": "s",
+        "connector_type": "shell",
+        "connector_config": {
+          "host": "h.example"
+        },
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "a mistyped field name",
+      "kwargs": {
+        "session_id": "s",
+        "recordign_enabled": true
+      },
+      "accepted": {
+        "session_id": "s",
+        "display_name": "s",
+        "connector_type": "shell",
+        "connector_config": {
+          "recordign_enabled": true
+        },
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "a name nobody defined alongside connector settings",
+      "kwargs": {
+        "session_id": "s",
+        "connector_config": {
+          "host": "h"
+        },
+        "port": 22
+      },
+      "accepted": {
+        "session_id": "s",
+        "display_name": "s",
+        "connector_type": "shell",
+        "connector_config": {
+          "host": "h",
+          "port": 22
+        },
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "a name nobody defined that the settings already have",
+      "kwargs": {
+        "session_id": "s",
+        "connector_config": {
+          "host": "given"
+        },
+        "host": "loose"
+      },
+      "accepted": {
+        "session_id": "s",
+        "display_name": "s",
+        "connector_type": "shell",
+        "connector_config": {
+          "host": "loose"
+        },
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "an idle transfer that is not a number",
+      "kwargs": {
+        "session_id": "s",
+        "auto_transfer_idle_s": "soon"
+      },
+      "errors": [
+        {
+          "type": "int_parsing",
+          "loc": [
+            "auto_transfer_idle_s"
+          ],
+          "msg": "Input should be a valid integer, unable to parse string as an integer"
+        }
+      ]
+    },
+    {
+      "name": "tags",
+      "kwargs": {
+        "session_id": "s",
+        "tags": [
+          "a",
+          "b"
+        ]
+      },
+      "accepted": {
+        "session_id": "s",
+        "display_name": "s",
+        "connector_type": "shell",
+        "connector_config": {},
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [
+          "a",
+          "b"
+        ],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "an owner",
+      "kwargs": {
+        "session_id": "s",
+        "owner": "alice"
+      },
+      "accepted": {
+        "session_id": "s",
+        "display_name": "s",
+        "connector_type": "shell",
+        "connector_config": {},
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": "alice",
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "an ephemeral session",
+      "kwargs": {
+        "session_id": "s",
+        "ephemeral": true,
+        "presence": true,
+        "auto_start": false
+      },
+      "accepted": {
+        "session_id": "s",
+        "display_name": "s",
+        "connector_type": "shell",
+        "connector_config": {},
+        "input_mode": "open",
+        "auto_start": false,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": true,
+        "presence": true,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    }
+  ],
+  "registered_cases": [
+    {
+      "name": "a connector type somebody registered",
+      "kwargs": {
+        "session_id": "s",
+        "connector_type": "recorded-fake"
+      },
+      "accepted": {
+        "session_id": "s",
+        "display_name": "s",
+        "connector_type": "recorded-fake",
+        "connector_config": {},
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "a built-in connector type",
+      "kwargs": {
+        "session_id": "s",
+        "connector_type": "ssh"
+      },
+      "accepted": {
+        "session_id": "s",
+        "display_name": "s",
+        "connector_type": "ssh",
+        "connector_config": {},
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "a connector type nobody registered",
+      "kwargs": {
+        "session_id": "s",
+        "connector_type": "carrier-pigeon"
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "connector_type"
+          ],
+          "msg": "Value error, invalid connector_type for 's': 'carrier-pigeon' — must be one of ['aaa-recorded', 'recorded-fake', 'shell', 'ssh', 'telnet', 'ushell', 'websocket']"
+        }
+      ]
+    },
+    {
+      "name": "a connector type on an entry with no identifier",
+      "kwargs": {
+        "connector_type": "carrier-pigeon"
+      },
+      "errors": [
+        {
+          "type": "missing",
+          "loc": [
+            "session_id"
+          ],
+          "msg": "Field required"
+        },
+        {
+          "type": "value_error",
+          "loc": [
+            "connector_type"
+          ],
+          "msg": "Value error, invalid connector_type for '<unknown>': 'carrier-pigeon' — must be one of ['aaa-recorded', 'recorded-fake', 'shell', 'ssh', 'telnet', 'ushell', 'websocket']"
+        }
+      ]
+    },
+    {
+      "name": "an empty connector type",
+      "kwargs": {
+        "session_id": "s",
+        "connector_type": "  "
+      },
+      "accepted": {
+        "session_id": "s",
+        "display_name": "s",
+        "connector_type": "shell",
+        "connector_config": {},
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    }
+  ]
+}

@@ -17,8 +17,8 @@
  *
  * The shorthand: `"str"`, `"int"`, `"float"`, `"bool"`, `"path"`, `"dict"`, a
  * `[]` suffix for a list of them, a `?` suffix for a field that may be null,
- * `"model:Name"` for a nested section, and an array of strings for a closed
- * set of choices.
+ * `"model:Name"` for a nested section, a `!` suffix for a field with no
+ * default at all, and an array of strings for a closed set of choices.
  */
 
 export const SECTION_FIELD_SPECS = {
@@ -107,7 +107,7 @@ export const SECTION_FIELD_SPECS = {
     default_session_visibility: ["public", "operator", "private"],
   },
   TunnelConfig: {
-    token_ttl_s: "int",
+    token_ttl_s: "int", // pragma: allowlist secret
     token_transport: ["query", "cookie", "both"], // pragma: allowlist secret
     cookie_secure: "bool",
     cookie_samesite: ["lax", "strict", "none"],
@@ -173,6 +173,23 @@ export const SECTION_FIELD_SPECS = {
     height: "int",
     is_static: "bool",
     config: "dict",
+  },
+  SessionDefinition: {
+    session_id: "str!",
+    display_name: "str",
+    connector_type: "str",
+    connector_config: "dict",
+    input_mode: ["hijack", "open"],
+    auto_start: "bool",
+    tags: "str[]",
+    recording_enabled: "bool?",
+    created_at: "datetime",
+    owner: "str?",
+    visibility: ["public", "operator", "private"],
+    ephemeral: "bool",
+    presence: "bool",
+    auto_transfer_idle_s: "int",
+    keystroke_queue: ["display", "replay"],
   },
 } as const;
 

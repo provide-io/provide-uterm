@@ -43,20 +43,26 @@ export interface ConfigError {
 export type SectionName = keyof typeof SECTION_FIELD_SPECS;
 
 /** A field holding one value of a known type. */
-type ScalarKind = "str" | "int" | "float" | "bool" | "path" | "dict";
+type ScalarKind = "str" | "int" | "float" | "bool" | "path" | "dict" | "datetime";
+
+/** What every spec carries, whatever its kind. */
+interface SpecBase {
+  optional: boolean;
+  /** No default at all, so leaving it out is itself a mistake. */
+  required: boolean;
+}
 
 /** A nested section. */
-interface ModelSpec {
+interface ModelSpec extends SpecBase {
   kind: "model";
-  optional: boolean;
   name: string;
 }
 
 /** What one field will accept, expanded from the shorthand in the spec table. */
 type FieldSpec =
-  | { kind: ScalarKind; optional: boolean }
-  | { kind: "literal"; optional: boolean; choices: readonly string[] }
-  | { kind: "list"; optional: boolean; item: { kind: ScalarKind; optional: false } | ModelSpec }
+  | (SpecBase & { kind: ScalarKind })
+  | (SpecBase & { kind: "literal"; choices: readonly string[] })
+  | (SpecBase & { kind: "list"; item: (SpecBase & { kind: ScalarKind }) | ModelSpec })
   | ModelSpec;
 
 /** Everything except a nested section, which is checked by a different route. */
@@ -65,9 +71,13 @@ type ValueSpec = Exclude<FieldSpec, ModelSpec>;
 /** Expand one shorthand code. See the spec table for the notation. */
 function expandSpec(code: string | readonly string[]): FieldSpec {
   if (Array.isArray(code)) {
-    return { kind: "literal", optional: false, choices: code as readonly string[] };
+    return { kind: "literal", optional: false, required: false, choices: code as readonly string[] };
   }
   let text = code as string;
+  const required = text.endsWith("!");
+  if (required) {
+    text = text.slice(0, -1);
+  }
   const optional = text.endsWith("?");
   if (optional) {
     text = text.slice(0, -1);
@@ -77,15 +87,16 @@ function expandSpec(code: string | readonly string[]): FieldSpec {
     return {
       kind: "list",
       optional,
+      required,
       item: inner.startsWith("model:")
-        ? { kind: "model", optional: false, name: inner.slice(6) }
-        : { kind: inner as ScalarKind, optional: false },
+        ? { kind: "model", optional: false, required: false, name: inner.slice(6) }
+        : { kind: inner as ScalarKind, optional: false, required: false },
     };
   }
   if (text.startsWith("model:")) {
-    return { kind: "model", optional, name: text.slice(6) };
+    return { kind: "model", optional, required, name: text.slice(6) };
   }
-  return { kind: text as ScalarKind, optional };
+  return { kind: text as ScalarKind, optional, required };
 }
 
 /** The shorthand table, expanded once. */
@@ -103,6 +114,7 @@ const TOP_LEVEL: ReadonlyMap<string, FieldSpec> = new Map(
 /** What each refusal says. The reference's wording, which operators read. */
 const MESSAGES: Readonly<Record<string, string>> = {
   extra_forbidden: "Extra inputs are not permitted",
+  missing: "Field required",
   string_type: "Input should be a valid string",
   int_type: "Input should be a valid integer",
   int_parsing: "Input should be a valid integer, unable to parse string as an integer",
@@ -215,6 +227,13 @@ function coerceValue(spec: ValueSpec, value: unknown): Coerced {
       return typeof value === "string" ? { value: normalizePath(value) } : { error: "path_type" };
     case "dict":
       return isTable(value) ? { value } : { error: "dict_type" };
+    case "datetime":
+      // A recorded divergence rather than a silent one: the reference parses
+      // this with Pydantic's own date-time grammar, and reproducing that
+      // grammar's error taxonomy is a unit of its own. What is checked here is
+      // that the field is a time at all and not a table or a list; a caller
+      // that needs the instant parses the value it gets.
+      return typeof value === "string" || typeof value === "number" ? { value } : { error: "datetime_type" };
     default:
       return Array.isArray(value) ? { value } : { error: "list_type" };
   }
@@ -229,16 +248,34 @@ function messageFor(error: string, spec: ValueSpec): string {
   return MESSAGES[error] as string;
 }
 
-/** A rule one field has to satisfy once its type is right. */
-type FieldRule = (value: unknown) => string | undefined;
+/**
+ * A rule one field has to satisfy.
+ *
+ * The second argument is the fields already accepted, in declaration order —
+ * the reference hands its validators the same thing, which is how a complaint
+ * about one field can name the session it belongs to.
+ */
+type FieldRule = (value: unknown, accepted: Readonly<Record<string, unknown>>) => string | undefined;
 
 /** A rule that rewrites a field rather than refusing it. */
-type FieldTransform = (value: unknown) => unknown;
+type FieldTransform = (value: unknown, accepted: Readonly<Record<string, unknown>>) => unknown;
 
 const FIELD_TRANSFORMS: Readonly<Record<string, Record<string, FieldTransform>>> = {
   UiConfig: {
     app_path: (value) => cleanPath(value as string, "/app"),
     assets_path: (value) => cleanPath(value as string, "/_terminal"),
+  },
+  SessionDefinition: {
+    // Stripped once, here, so everything downstream — the display name, the
+    // complaints that name the entry, the identifier a route is built from —
+    // sees the same string.
+    session_id: (value) => (value as string).trim(),
+    // An entry that names nothing is displayed by its identifier rather than
+    // by nothing at all.
+    display_name: (value, accepted) => (value === "" ? ((accepted.session_id as string) ?? "") : value),
+    // An empty type is the default rather than a refusal, so a commented-out
+    // line leaves a working entry behind.
+    connector_type: (value) => (value as string).trim() || "shell",
   },
 };
 
@@ -267,12 +304,163 @@ const FIELD_RULES: Readonly<Record<string, Record<string, FieldRule>>> = {
   TunnelConfig: {
     token_ttl_s: (value) => notBelow(value, 60, `tunnel.token_ttl_s must be >= 60, got: ${value as number}`),
   },
+  SessionDefinition: {
+    connector_type: (value, accepted) => connectorTypeComplaint(value as string, accepted),
+  },
 };
+
+/**
+ * Rules that run on the value as written, before its type is settled.
+ *
+ * The reference has these as `mode="before"` validators, and the difference
+ * shows: a bad input mode is refused in the entry's own words — naming the
+ * session — rather than by the generic complaint about a closed set.
+ */
+const BEFORE_RULES: Readonly<Record<string, Record<string, FieldRule>>> = {
+  SessionDefinition: {
+    input_mode: (value, accepted) =>
+      value === "hijack" || value === "open"
+        ? undefined
+        : `invalid input_mode for ${sessionLabel(accepted)}: ${pyStr(value)}`,
+    visibility: (value, accepted) =>
+      value === "public" || value === "operator" || value === "private"
+        ? undefined
+        : `invalid visibility for ${sessionLabel(accepted)}: ${pyRepr(value)}`,
+    session_id: (value) => {
+      if (typeof value !== "string") {
+        return undefined;
+      }
+      const sessionId = value.trim();
+      if (sessionId === "") {
+        return "session_id is required for each [[sessions]] entry";
+      }
+      // CPython's `\w` is Unicode-aware, so `café` and `端末` are identifiers
+      // and a JavaScript `\w` — ASCII-only — would refuse them. A combining
+      // accent is not a letter, so `cafe\u0301` is refused by both.
+      return SESSION_ID_PATTERN.test(sessionId)
+        ? undefined
+        : `session_id must match ^[\\w\\-]+$, got: ${pyRepr(sessionId)}`;
+    },
+  },
+};
+
+/** What the reference's `\w` matches: a letter, a number, or an underscore. */
+const SESSION_ID_PATTERN = /^[\p{L}\p{N}_-]+$/u;
+
+/** How the reference names the entry a complaint is about. */
+function sessionLabel(accepted: Readonly<Record<string, unknown>>): string {
+  // Already stripped by the time it is in `accepted`, which is the point of
+  // stripping it there.
+  return String(accepted.session_id ?? "") || "<unknown>";
+}
+
+/** A value as Python's `str()` writes it, which is what these messages carry. */
+function pyStr(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "None";
+  }
+  if (value === true) {
+    return "True";
+  }
+  if (value === false) {
+    return "False";
+  }
+  return String(value);
+}
+
+/** A value as Python's `repr()` writes it. */
+function pyRepr(value: unknown): string {
+  if (typeof value !== "string") {
+    return pyStr(value);
+  }
+  const escaped = value.replace(/\\/g, "\\\\");
+  // Python switches quote style rather than escaping: a string with an
+  // apostrophe and no double quote is written in double quotes.
+  if (escaped.includes("'") && !escaped.includes('"')) {
+    return `"${escaped}"`;
+  }
+  return `'${escaped.replace(/'/g, "\\'")}'`;
+}
 
 /** The top-level scalars' own rules. */
 const TOP_LEVEL_RULES: Readonly<Record<string, FieldRule>> = {
   max_workers: (value) => notBelow(value, 1, `max_workers must be >= 1, got: ${value as number}`),
 };
+
+/** The connector types every server has, whatever else is registered. */
+export const BUILTIN_CONNECTOR_TYPES: readonly string[] = ["shell", "ssh", "telnet", "ushell", "websocket"];
+
+/**
+ * The connector types registered so far.
+ *
+ * Empty until something registers, and that is load-bearing: during startup
+ * the registry has nothing in it, and refusing every type before the
+ * connectors load would leave the server unable to start on its own config.
+ */
+let registeredConnectorTypes: ReadonlySet<string> = new Set();
+
+/** Tell the schema which connector types exist. */
+export function setRegisteredConnectorTypes(types: Iterable<string>): void {
+  registeredConnectorTypes = new Set(types);
+}
+
+/** Whether this entry names a connector the server has, once any are known. */
+function connectorTypeComplaint(value: string, accepted: Readonly<Record<string, unknown>>): string | undefined {
+  if (registeredConnectorTypes.size === 0) {
+    return undefined;
+  }
+  const valid = new Set([...registeredConnectorTypes, ...BUILTIN_CONNECTOR_TYPES]);
+  if (valid.has(value)) {
+    return undefined;
+  }
+  const listed = [...valid]
+    .sort()
+    .map((type) => `'${type}'`)
+    .join(", ");
+  return `invalid connector_type for ${pyRepr(sessionLabel(accepted))}: ${pyRepr(value)} — must be one of [${listed}]`;
+}
+
+/**
+ * What a section does to a document before any of it is checked.
+ *
+ * Only session definitions have one, and it is the one place in this schema
+ * where a name nobody defined is *kept* rather than refused.
+ */
+const SECTION_PRE: Readonly<Record<string, (input: Record<string, unknown>) => Record<string, unknown>>> = {
+  SessionDefinition: foldConnectorConfig,
+};
+
+/**
+ * Fold every unrecognised key into the connector settings.
+ *
+ * Every other section forbids extras, so a typo there is a startup failure.
+ * Here it becomes a connector setting instead — which means a mistyped
+ * `recording_enabled` silently configures nothing and recording stays off.
+ * The reference's behaviour, carried over rather than corrected, because a
+ * connector's own options are open-ended and have to reach it somehow.
+ */
+function foldConnectorConfig(input: Record<string, unknown>): Record<string, unknown> {
+  const known = SECTIONS.get("SessionDefinition") as ReadonlyMap<string, FieldSpec>;
+  const data: Record<string, unknown> = {};
+  const connectorConfig: Record<string, unknown> = { ...((input.connector_config as Record<string, unknown>) ?? {}) };
+  for (const [key, value] of Object.entries(input)) {
+    if (known.has(key)) {
+      data[key] = value;
+    } else {
+      // A loose key wins over one already in the settings, as the reference's
+      // fold does.
+      connectorConfig[key] = value;
+    }
+  }
+  if (data.display_name === undefined || data.display_name === null) {
+    const sessionId = String(input.session_id ?? "").trim();
+    if (sessionId !== "") {
+      data.display_name = sessionId;
+    }
+  }
+  data.connector_config = connectorConfig;
+  return data;
+}
 
 /**
  * The rules that read more than one field at a time.
@@ -311,11 +499,20 @@ function checkFields(
   input: Record<string, unknown>,
   rules: Record<string, FieldRule>,
   transforms: Record<string, FieldTransform>,
+  beforeRules: Record<string, FieldRule> = {},
 ): { errors: ConfigError[]; values: Record<string, unknown> } {
   const errors: ConfigError[] = [];
   const values: Record<string, unknown> = {};
   for (const [field, spec] of specs) {
     if (!(field in input)) {
+      if (spec.required) {
+        errors.push({ type: "missing", loc: [field], msg: MESSAGES.missing as string });
+      }
+      continue;
+    }
+    const beforeComplaint = beforeRules[field]?.(input[field], values);
+    if (beforeComplaint !== undefined) {
+      errors.push({ type: "value_error", loc: [field], msg: `Value error, ${beforeComplaint}` });
       continue;
     }
     if (spec.kind === "model") {
@@ -346,8 +543,8 @@ function checkFields(
       continue;
     }
     const transform = transforms[field];
-    const value = transform === undefined ? coerced.value : transform(coerced.value);
-    const complaint = rules[field]?.(value);
+    const value = transform === undefined ? coerced.value : transform(coerced.value, values);
+    const complaint = rules[field]?.(value, values);
     if (complaint !== undefined) {
       errors.push({ type: "value_error", loc: [field], msg: `Value error, ${complaint}` });
       continue;
@@ -371,9 +568,10 @@ function checkFields(
 export function validateSection(section: string, input: Record<string, unknown>): ConfigError[] {
   const { errors, values } = checkFields(
     fieldsOf(section),
-    input,
+    SECTION_PRE[section]?.(input) ?? input,
     FIELD_RULES[section] ?? {},
     FIELD_TRANSFORMS[section] ?? {},
+    BEFORE_RULES[section] ?? {},
   );
   if (errors.length > 0) {
     return errors;
@@ -395,16 +593,16 @@ export function validateSection(section: string, input: Record<string, unknown>)
  * @throws {Error} When there is no such section.
  */
 export function coerceSection(section: string, input: Record<string, unknown>): Record<string, unknown> {
-  return checkFields(fieldsOf(section), input, FIELD_RULES[section] ?? {}, FIELD_TRANSFORMS[section] ?? {}).values;
+  return checkFields(
+    fieldsOf(section),
+    SECTION_PRE[section]?.(input) ?? input,
+    FIELD_RULES[section] ?? {},
+    FIELD_TRANSFORMS[section] ?? {},
+    BEFORE_RULES[section] ?? {},
+  ).values;
 }
 
-/**
- * Everything wrong with a whole document, said in terms of where it is.
- *
- * Session definitions are checked as far as their shape and no further; their
- * own validation — the identifier pattern, the connector types, the folding of
- * unknown keys into `connector_config` — is a separate unit.
- */
+/** Everything wrong with a whole document, said in terms of where it is. */
 export function validateServerConfig(document: Record<string, unknown>): ConfigError[] {
   return checkFields(TOP_LEVEL, document, TOP_LEVEL_RULES, {}).errors;
 }
@@ -413,12 +611,6 @@ export function validateServerConfig(document: Record<string, unknown>): ConfigE
 function sectionErrors(spec: ModelSpec, value: unknown, prefix: (string | number)[]): ConfigError[] {
   if (!isTable(value)) {
     return [{ type: "model_type", loc: prefix, msg: `Input should be a valid dictionary or instance of ${spec.name}` }];
-  }
-  if (spec.name === "SessionDefinition") {
-    // Checked as far as its shape and no further: its own rules — the
-    // identifier pattern, the connector types, the folding of unknown keys
-    // into `connector_config` — are a separate unit.
-    return [];
   }
   return validateSection(spec.name, value).map((error) => ({ ...error, loc: [...prefix, ...error.loc] }));
 }

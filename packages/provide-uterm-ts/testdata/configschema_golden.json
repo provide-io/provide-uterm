@@ -3,109 +3,134 @@
     "AuthConfig": {
       "mode": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "principal_header": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "role_header": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "tenant_header": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "principal_cookie": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "role_cookie": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "tenant_cookie": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "surface_cookie": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "token_cookie": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "jwt_issuer": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "jwt_audience": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "jwt_jwks_url": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "jwt_public_key_pem": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "jwt_algorithms": {
         "kind": "list",
         "item": {
           "kind": "str"
         },
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "clock_skew_seconds": {
         "kind": "int",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "jwt_roles_claim": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "jwt_scopes_claim": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "jwt_tenant_claim": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "worker_bearer_token": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "api_keys_enabled": {
         "kind": "bool",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "header_mode_acknowledged": {
         "kind": "bool",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "require_jwt_in_production": {
         "kind": "bool",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "trusted_proxy_ips": {
         "kind": "list",
         "item": {
           "kind": "str"
         },
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "upstream_proxy_secret": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "require_upstream_proxy_secret": {
         "kind": "bool",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "identity_provider": {
         "kind": "literal",
@@ -113,23 +138,28 @@
           "local",
           "webhook"
         ],
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "delegate_roles": {
         "kind": "bool",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "webhook_idp_url": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "webhook_idp_secret": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "webhook_idp_timeout_s": {
         "kind": "float",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "webhook_idp_on_failure": {
         "kind": "literal",
@@ -137,91 +167,110 @@
           "deny",
           "viewer"
         ],
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "webhook_idp_require_signed_response": {
         "kind": "bool",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "webhook_idp_require_response_nonce": {
         "kind": "bool",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "webhook_idp_forward_headers": {
         "kind": "list",
         "item": {
           "kind": "str"
         },
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "webhook_idp_forward_cookies": {
         "kind": "list",
         "item": {
           "kind": "str"
         },
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "allow_adhoc_browser_observers": {
         "kind": "bool",
-        "optional": false
+        "optional": false,
+        "required": false
       }
     },
     "AuditConfig": {
       "chain_enabled": {
         "kind": "bool",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "chain_file": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       }
     },
     "UiConfig": {
       "app_path": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "assets_path": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "xterm_cdn": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "fitaddon_cdn": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "fonts_cdn": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "xterm_cdn_integrity": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "fitaddon_cdn_integrity": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       }
     },
     "RecordingConfig": {
       "enabled_by_default": {
         "kind": "bool",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "directory": {
         "kind": "path",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "max_bytes": {
         "kind": "int",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "retention_s": {
         "kind": "int",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "control_channel_mode": {
         "kind": "literal",
@@ -229,11 +278,13 @@
           "exclude",
           "wire"
         ],
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "redact_sensitive": {
         "kind": "bool",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "store_type": {
         "kind": "literal",
@@ -243,27 +294,33 @@
           "null",
           "webhook"
         ],
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "webhook_url": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "webhook_secret": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "webhook_timeout_s": {
         "kind": "float",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "flush_interval_s": {
         "kind": "float",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "flush_batch_size": {
         "kind": "int",
-        "optional": false
+        "optional": false,
+        "required": false
       }
     },
     "ControlPlaneConfig": {
@@ -273,19 +330,23 @@
           "memory",
           "sqlite"
         ],
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "database_url": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "reap_interval_s": {
         "kind": "int",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "reap_retention_s": {
         "kind": "int",
-        "optional": false
+        "optional": false,
+        "required": false
       }
     },
     "SecurityConfig": {
@@ -295,43 +356,53 @@
           "strict",
           "dev"
         ],
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "dev_mode_acknowledged": {
         "kind": "bool",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "csp": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "hsts": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "x_frame_options": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "x_content_type_options": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "referrer_policy": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "permissions_policy": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "block_private_connector_targets": {
         "kind": "bool",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "metrics_require_auth": {
         "kind": "bool",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "default_session_visibility": {
         "kind": "literal",
@@ -340,13 +411,15 @@
           "operator",
           "private"
         ],
-        "optional": false
+        "optional": false,
+        "required": false
       }
     },
     "TunnelConfig": {
       "token_ttl_s": {
         "kind": "int",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "token_transport": {
         "kind": "literal",
@@ -355,11 +428,13 @@
           "cookie",
           "both"
         ],
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "cookie_secure": {
         "kind": "bool",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "cookie_samesite": {
         "kind": "literal",
@@ -368,62 +443,74 @@
           "strict",
           "none"
         ],
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "ip_binding": {
         "kind": "bool",
-        "optional": false
+        "optional": false,
+        "required": false
       }
     },
     "WebhooksConfig": {
       "allow_loopback_destinations": {
         "kind": "bool",
-        "optional": false
+        "optional": false,
+        "required": false
       }
     },
     "ProfileStoreConfig": {
       "directory": {
         "kind": "path",
-        "optional": false
+        "optional": false,
+        "required": false
       }
     },
     "ServerBindConfig": {
       "host": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "port": {
         "kind": "int",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "public_base_url": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "title": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "node_id": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "allowed_origins": {
         "kind": "list",
         "item": {
           "kind": "str"
         },
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "max_sessions": {
         "kind": "int",
-        "optional": true
+        "optional": true,
+        "required": false
       }
     },
     "PamConfig": {
       "notify_socket": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "mode": {
         "kind": "literal",
@@ -431,169 +518,301 @@
           "notify",
           "capture"
         ],
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "auto_session": {
         "kind": "bool",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "auto_session_command": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "relay_url": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "relay_token": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "capture_socket_dir": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "require_peer_uids": {
         "kind": "list",
         "item": {
           "kind": "int"
         },
-        "optional": true
+        "optional": true,
+        "required": false
       }
     },
     "GovernanceConfig": {
       "policy_webhook_url": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "policy_webhook_secret": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "policy_webhook_timeout_s": {
         "kind": "float",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "discovery_provider": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "registry_webhook_url": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "registry_webhook_secret": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "registry_webhook_interval_s": {
         "kind": "float",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "authz_webhook_url": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "authz_webhook_secret": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "authz_webhook_timeout_s": {
         "kind": "float",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "behavioral_audit_url": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "behavioral_audit_secret": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "behavioral_audit_interval_s": {
         "kind": "float",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "behavioral_max_cps": {
         "kind": "float",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "behavioral_min_jitter": {
         "kind": "float",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "behavioral_fail_open": {
         "kind": "bool",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "telemetry_webhook_url": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "telemetry_webhook_secret": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "telemetry_webhook_timeout_s": {
         "kind": "float",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "external_connectors": {
         "kind": "list",
         "item": {
           "kind": "str"
         },
-        "optional": false
+        "optional": false,
+        "required": false
       }
     },
     "GraphicalTargetConfig": {
       "target_id": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "tenant_id": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "protocol": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "target_address": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "vm_name": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "name": {
         "kind": "str",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "description": {
         "kind": "str",
-        "optional": true
+        "optional": true,
+        "required": false
       },
       "enabled": {
         "kind": "bool",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "width": {
         "kind": "int",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "height": {
         "kind": "int",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "is_static": {
         "kind": "bool",
-        "optional": false
+        "optional": false,
+        "required": false
       },
       "config": {
         "kind": "dict",
-        "optional": false
+        "optional": false,
+        "required": false
+      }
+    },
+    "SessionDefinition": {
+      "session_id": {
+        "kind": "str",
+        "optional": false,
+        "required": true
+      },
+      "display_name": {
+        "kind": "str",
+        "optional": false,
+        "required": false
+      },
+      "connector_type": {
+        "kind": "str",
+        "optional": false,
+        "required": false
+      },
+      "connector_config": {
+        "kind": "dict",
+        "optional": false,
+        "required": false
+      },
+      "input_mode": {
+        "kind": "literal",
+        "choices": [
+          "hijack",
+          "open"
+        ],
+        "optional": false,
+        "required": false
+      },
+      "auto_start": {
+        "kind": "bool",
+        "optional": false,
+        "required": false
+      },
+      "tags": {
+        "kind": "list",
+        "item": {
+          "kind": "str"
+        },
+        "optional": false,
+        "required": false
+      },
+      "recording_enabled": {
+        "kind": "bool",
+        "optional": true,
+        "required": false
+      },
+      "created_at": {
+        "kind": "datetime",
+        "optional": false,
+        "required": false
+      },
+      "owner": {
+        "kind": "str",
+        "optional": true,
+        "required": false
+      },
+      "visibility": {
+        "kind": "literal",
+        "choices": [
+          "public",
+          "operator",
+          "private"
+        ],
+        "optional": false,
+        "required": false
+      },
+      "ephemeral": {
+        "kind": "bool",
+        "optional": false,
+        "required": false
+      },
+      "presence": {
+        "kind": "bool",
+        "optional": false,
+        "required": false
+      },
+      "auto_transfer_idle_s": {
+        "kind": "int",
+        "optional": false,
+        "required": false
+      },
+      "keystroke_queue": {
+        "kind": "literal",
+        "choices": [
+          "display",
+          "replay"
+        ],
+        "optional": false,
+        "required": false
       }
     }
   },
@@ -604,67 +823,80 @@
         "dev",
         "production"
       ],
-      "optional": false
+      "optional": false,
+      "required": false
     },
     "server": {
       "kind": "model",
       "name": "ServerBindConfig",
-      "optional": false
+      "optional": false,
+      "required": false
     },
     "auth": {
       "kind": "model",
       "name": "AuthConfig",
-      "optional": false
+      "optional": false,
+      "required": false
     },
     "control_plane": {
       "kind": "model",
       "name": "ControlPlaneConfig",
-      "optional": false
+      "optional": false,
+      "required": false
     },
     "ui": {
       "kind": "model",
       "name": "UiConfig",
-      "optional": false
+      "optional": false,
+      "required": false
     },
     "recording": {
       "kind": "model",
       "name": "RecordingConfig",
-      "optional": false
+      "optional": false,
+      "required": false
     },
     "profiles": {
       "kind": "model",
       "name": "ProfileStoreConfig",
-      "optional": false
+      "optional": false,
+      "required": false
     },
     "security": {
       "kind": "model",
       "name": "SecurityConfig",
-      "optional": false
+      "optional": false,
+      "required": false
     },
     "tunnel": {
       "kind": "model",
       "name": "TunnelConfig",
-      "optional": false
+      "optional": false,
+      "required": false
     },
     "webhooks": {
       "kind": "model",
       "name": "WebhooksConfig",
-      "optional": false
+      "optional": false,
+      "required": false
     },
     "pam": {
       "kind": "model",
       "name": "PamConfig",
-      "optional": false
+      "optional": false,
+      "required": false
     },
     "governance": {
       "kind": "model",
       "name": "GovernanceConfig",
-      "optional": false
+      "optional": false,
+      "required": false
     },
     "audit": {
       "kind": "model",
       "name": "AuditConfig",
-      "optional": false
+      "optional": false,
+      "required": false
     },
     "sessions": {
       "kind": "list",
@@ -672,7 +904,8 @@
         "kind": "model",
         "name": "SessionDefinition"
       },
-      "optional": false
+      "optional": false,
+      "required": false
     },
     "graphical_targets": {
       "kind": "list",
@@ -680,19 +913,23 @@
         "kind": "model",
         "name": "GraphicalTargetConfig"
       },
-      "optional": false
+      "optional": false,
+      "required": false
     },
     "session_idle_timeout_s": {
       "kind": "int",
-      "optional": false
+      "optional": false,
+      "required": false
     },
     "session_retention_s": {
       "kind": "int",
-      "optional": false
+      "optional": false,
+      "required": false
     },
     "browser_rate_limit_per_sec": {
       "kind": "float",
-      "optional": false
+      "optional": false,
+      "required": false
     },
     "worker_frame_on_invalid": {
       "kind": "literal",
@@ -700,15 +937,18 @@
         "drop",
         "reject"
       ],
-      "optional": false
+      "optional": false,
+      "required": false
     },
     "max_connections_per_principal": {
       "kind": "int",
-      "optional": false
+      "optional": false,
+      "required": false
     },
     "max_workers": {
       "kind": "int",
-      "optional": false
+      "optional": false,
+      "required": false
     }
   },
   "cases": [
