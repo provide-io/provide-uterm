@@ -211,7 +211,7 @@ API_ROUTES: tuple[RouteDef, ...] = (
         "/api/sessions",
         RouteScope.GLOBAL,
         "sessions.bulk_delete",
-        frozenset({"admin"}),
+        ("admin",),
     ),
     RouteDef("sessions.get", HttpMethod.GET, "/api/sessions/{session_id}", RouteScope.SESSION, "sessions.get", ()),
     RouteDef(

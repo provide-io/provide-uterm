@@ -252,6 +252,7 @@ class RuntimeProtocol(Protocol):
     browser_hijack_owner: dict[str, str]
     _ushell: Any  # UshellConnector | None
     _ushell_started: bool
+    env: Any  # the Worker's bindings, supplied by the Durable Object runtime
 
     async def browser_role_for_request(self, request: object) -> str: ...
     async def browser_subject_for_request(self, request: object) -> str | None: ...

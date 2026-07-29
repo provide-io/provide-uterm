@@ -40,7 +40,6 @@ from __future__ import annotations
 
 import logging
 import time
-from numbers import Real
 from typing import TYPE_CHECKING, Any
 
 logger = logging.getLogger(__name__)
@@ -55,7 +54,7 @@ def _recording_available(runtime: Any) -> bool:
         event_seq = runtime.store.current_event_seq(runtime.worker_id)
     except Exception:
         return False
-    return isinstance(event_seq, Real) and event_seq > 0
+    return isinstance(event_seq, (int, float)) and event_seq > 0
 
 
 if TYPE_CHECKING:
