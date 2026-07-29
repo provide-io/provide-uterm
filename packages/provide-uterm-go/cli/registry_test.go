@@ -245,10 +245,11 @@ func TestRegistryStartErrorAndNoConnector(t *testing.T) {
 	if err != nil {
 		t.Fatalf("start boom: %v", err)
 	}
-	// A connector that would not dial is an error, not a stop: the operator
-	// asked for this session and it did not come up.
-	if st.LifecycleState != server.LifecycleError || st.LastError == nil {
-		t.Fatalf("expected error+lastError, got %+v", st)
+	// A connector that would not dial comes to rest stopped, with last_error
+	// saying so — the reference's retry loop breaks out and assigns exactly
+	// that. "error" is a state between attempts, not a resting one.
+	if st.LifecycleState != server.LifecycleStopped || st.LastError == nil || st.StoppedAt == nil {
+		t.Fatalf("expected stopped+lastError+stoppedAt, got %+v", st)
 	}
 
 	_, _ = r.CreateSession(ctx, map[string]any{"session_id": "none", "connector_type": "none"})

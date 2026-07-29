@@ -271,24 +271,29 @@ describe("bringing one session up", () => {
 });
 
 describe("a session that will not come up", () => {
-  it("records the error and what it was, rather than looking stopped", async () => {
+  it("comes to rest where the reference does, saying what failed", async () => {
     const registry = registryOf({ session_id: "one", connector_type: "no-such-connector" });
     const runtimes = new SessionRuntimes(registry);
 
     await runtimes.start("one");
-    const observed = observe(registry, "one");
 
-    // The message is the reference's, word for word: the same refusal, from
-    // the same kind of unregistered name.
-    expect(observed.last_error).toBe(golden.unsupported_connector.last_error);
-    // The state is *not* the reference's, and deliberately so. The reference
-    // reaches `stopped` here only by falling out of a retry loop this runtime
-    // does not have; with nothing left to retry, `error` is the name in the
-    // reference's own vocabulary for what happened, and the one the C# port
-    // reports. Asserted against the golden so the difference cannot go quiet.
-    expect(golden.unsupported_connector.lifecycle_state).toBe("stopped");
-    expect(observed.lifecycle_state).toBe("error");
-    expect(golden.lifecycles).toContain("error");
+    // Every runtime-owned field, against the reference's own recording of the
+    // same refusal: `stopped`, the message word for word, and `stopped_at`
+    // written. Nothing here is this port's own answer.
+    expect(observe(registry, "one")).toEqual(golden.unsupported_connector);
+  });
+
+  it("is told apart from a session nobody started by last_error, not by the state", async () => {
+    // The two reach the same `stopped`, which is the reference's behaviour and
+    // the reason `last_error` has to carry the difference. A test that let
+    // these two states diverge would be re-introducing the bug.
+    const never = registryOf({ session_id: "one" });
+    const failed = registryOf({ session_id: "one", connector_type: "no-such-connector" });
+    await new SessionRuntimes(failed).start("one");
+
+    expect(observe(never, "one").lifecycle_state).toBe(observe(failed, "one").lifecycle_state);
+    expect(observe(never, "one").last_error).toBeNull();
+    expect(observe(failed, "one").last_error).not.toBeNull();
   });
 
   it("says so for a failure that was not an Error at all", async () => {
@@ -313,10 +318,10 @@ describe("a session that will not come up", () => {
     await runtimes.start("one");
 
     expect(observe(registry, "one")).toEqual({
-      lifecycle_state: "error",
+      lifecycle_state: "stopped",
       connected: false,
       last_error: "upstream refused",
-      stopped_at_set: false,
+      stopped_at_set: true,
     });
   });
 
@@ -365,7 +370,12 @@ describe("honouring auto_start", () => {
 
     await runtimes.startAutoStart();
 
-    expect(observe(registry, "first").lifecycle_state).toBe("error");
+    // The one that failed says so in `last_error`; the one after it still came
+    // up, which is the whole point of not aborting the batch.
+    expect(observe(registry, "first")).toMatchObject({
+      lifecycle_state: "stopped",
+      last_error: "unsupported connector_type",
+    });
     expect(observe(registry, "second").lifecycle_state).toBe("running");
   });
 
@@ -474,6 +484,30 @@ describe("the vocabulary a session's state is named in", () => {
     expect(golden.lifecycles).not.toContain("paused");
     expect([...SESSION_LIFECYCLES]).toEqual(golden.lifecycles);
     expect(VOCABULARY_IS_THE_REFERENCES).toBe(true);
+  });
+
+  it("keeps `error`, which this runtime never assigns, because the reference has it", async () => {
+    // `error` lives inside the reference's retry loop and is observable only
+    // between attempts. With no retry loop here there is no such moment, so
+    // nothing this runtime does can produce it — start, fail, stop and start
+    // again, and the name never appears.
+    const registry = registryOf({ session_id: "one", connector_type: "no-such-connector" }, { session_id: "two" });
+    const runtimes = new SessionRuntimes(registry, {
+      build: (_id, _name, type) => {
+        if (type === "no-such-connector") {
+          throw new Error("unsupported connector_type");
+        }
+        return new FakeConnector();
+      },
+    });
+
+    await runtimes.startAutoStart();
+    await runtimes.stopAll();
+    await runtimes.start("one");
+
+    expect(registry.statuses().map((one) => one.lifecycle_state)).not.toContain("error");
+    // Still a name a client of this server has to know how to read.
+    expect(SESSION_LIFECYCLES).toContain("error");
   });
 
   it("names every state a status can actually hold", () => {

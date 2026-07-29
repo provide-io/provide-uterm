@@ -34,17 +34,28 @@
  * questions into one field and lose both answers; online and offline are not
  * lifecycle states.
  *
- * ## The one deliberate difference in a state name
+ * ## Where a failed start comes to rest, and why it is not `error`
  *
- * A start that fails is recorded as `error`, with the message. The reference
- * reaches `stopped` in the same situation — recorded in
- * `sessionruntime_golden.json` and asserted in the tests — but only because it
- * falls out of a *retry loop* on a permanent failure, and `error` is what it
- * reports for the whole time it is still retrying. This runtime does not
- * retry, so there is no "will try again" for `error` to mean and no
- * give-up-and-stop for `stopped` to mean either. `error` is the name in the
- * reference's own vocabulary for a connector that failed, and it is what the
- * C# port reports, so it is what this reports.
+ * A start that fails is recorded as `stopped`, with the message in
+ * `last_error` and the instant in `stopped_at`. That is the reference's own
+ * resting place, recorded in `sessionruntime_golden.json`.
+ *
+ * `error` looks like the obvious name and is the wrong one. In
+ * `HostedSessionRuntime._run` (runtime.py, ~425-482) `_state = "error"` is
+ * assigned *inside* the retry loop, so it is only ever observable between
+ * attempts: a failure classified permanent breaks out of the loop and the line
+ * after it assigns `stopped` and `_stopped_at`, while a transient one sleeps a
+ * backoff and comes round to `starting` again. Nothing ever rests at `error`.
+ *
+ * So the field that separates "stopped because nobody asked it to run" from
+ * "stopped because it tried and failed" is `last_error`, not the state — which
+ * is exactly why both are written here. Reporting `error` instead would have
+ * meant clients switching on `lifecycle_state` see a value the reference never
+ * leaves them looking at.
+ *
+ * `error` stays in the vocabulary because it is in the reference's, and a
+ * client must be able to name what it may be sent. This runtime has no retry
+ * loop, so it never assigns it.
  */
 
 import { buildConnector, type SessionConnector } from "../connectors/index.ts";
@@ -139,7 +150,13 @@ export class SessionRuntimes {
       this.#connectors.set(sessionId, connector);
       this.#registry.setState(sessionId, { lifecycle_state: "running" });
     } catch (error) {
-      this.#registry.setState(sessionId, { lifecycle_state: "error", last_error: errorText(error) });
+      // `stopped`, with the reason and the instant — where the reference's run
+      // loop comes to rest when it gives up. See the note on `error` above.
+      this.#registry.setState(sessionId, {
+        lifecycle_state: "stopped",
+        last_error: errorText(error),
+        stopped_at: this.#now(),
+      });
     }
   }
 
