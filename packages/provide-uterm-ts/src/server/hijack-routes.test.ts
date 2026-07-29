@@ -65,8 +65,17 @@ const VOLATILE_PATHS: Readonly<Record<string, readonly string[]>> = {
  * of its own and no scenario reads it, so the status is held exactly and the
  * body is this port's own one-string `detail` — the same divergence the query
  * validators already carry.
+ *
+ * `worker_mode_undefined` is the same thing one layer along: the worker mode
+ * route's body is validated by the reference's model rather than by hand, so
+ * a mode outside the two permitted values is refused with that same list.
  */
-const STATUS_ONLY: ReadonlySet<string> = new Set(["malformed_worker_id", "malformed_hijack_id"]);
+const STATUS_ONLY: ReadonlySet<string> = new Set([
+  "malformed_worker_id",
+  "malformed_hijack_id",
+  "worker_mode_malformed_worker_id",
+  "worker_mode_undefined",
+]);
 
 /** Replace every declared path, exactly as the generator and harness do. */
 function mask(value: unknown, paths: readonly string[]): unknown {
@@ -139,7 +148,7 @@ describe("the reference's own answers, in the order it gave them", () => {
   it("covers every probe the reference recorded", async () => {
     const { app, token } = await running();
     const seen = new Map<string, Record<string, unknown>>();
-    expect(CORPUS.probes.length).toBe(29);
+    expect(CORPUS.probes.length).toBe(38);
 
     for (const probe of CORPUS.probes) {
       const path = resolve(probe.path, seen);

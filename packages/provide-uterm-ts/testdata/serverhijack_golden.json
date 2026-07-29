@@ -200,6 +200,127 @@
       }
     },
     {
+      "id": "worker_mode_noop_hijack",
+      "method": "POST",
+      "path": "/worker/provide-shell/input_mode",
+      "auth": "token",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "ok": true,
+        "input_mode": "hijack",
+        "worker_id": "provide-shell"
+      },
+      "json": {
+        "input_mode": "hijack"
+      }
+    },
+    {
+      "id": "worker_mode_anonymous",
+      "method": "POST",
+      "path": "/worker/provide-shell/input_mode",
+      "auth": "none",
+      "status": 401,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "detail": "authentication required"
+      },
+      "json": {
+        "input_mode": "open"
+      }
+    },
+    {
+      "id": "worker_mode_unknown_worker",
+      "method": "POST",
+      "path": "/worker/no-such-worker/input_mode",
+      "auth": "token",
+      "status": 404,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "detail": "unknown session: no-such-worker"
+      },
+      "json": {
+        "input_mode": "open"
+      }
+    },
+    {
+      "id": "worker_mode_undefined",
+      "method": "POST",
+      "path": "/worker/provide-shell/input_mode",
+      "auth": "token",
+      "status": 422,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "detail": [
+          {
+            "type": "string_pattern_mismatch",
+            "loc": [
+              "body",
+              "input_mode"
+            ],
+            "msg": "String should match pattern '^(hijack|open)$'",
+            "input": "sideways",
+            "ctx": {
+              "pattern": "^(hijack|open)$"
+            }
+          }
+        ]
+      },
+      "json": {
+        "input_mode": "sideways"
+      }
+    },
+    {
+      "id": "worker_mode_malformed_worker_id",
+      "method": "POST",
+      "path": "/worker/not%20a%20worker/input_mode",
+      "auth": "token",
+      "status": 422,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "detail": [
+          {
+            "type": "string_pattern_mismatch",
+            "loc": [
+              "path",
+              "worker_id"
+            ],
+            "msg": "String should match pattern '^[\\w\\-]+$'",
+            "input": "not a worker",
+            "ctx": {
+              "pattern": "^[\\w\\-]+$"
+            }
+          }
+        ]
+      },
+      "json": {
+        "input_mode": "open"
+      }
+    },
+    {
+      "id": "worker_mode_wrong_method",
+      "method": "GET",
+      "path": "/worker/provide-shell/input_mode",
+      "auth": "token",
+      "status": 405,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "detail": "Method Not Allowed"
+      }
+    },
+    {
       "id": "acquire",
       "method": "POST",
       "path": "/worker/provide-shell/hijack/acquire",
@@ -218,6 +339,40 @@
       "json": {
         "owner": "conformance",
         "lease_s": 60
+      }
+    },
+    {
+      "id": "worker_mode_open_while_held",
+      "method": "POST",
+      "path": "/worker/provide-shell/input_mode",
+      "auth": "token",
+      "status": 409,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "error": "Cannot switch to open while hijack is active."
+      },
+      "json": {
+        "input_mode": "open"
+      }
+    },
+    {
+      "id": "worker_mode_hijack_while_held",
+      "method": "POST",
+      "path": "/worker/provide-shell/input_mode",
+      "auth": "token",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "ok": true,
+        "input_mode": "hijack",
+        "worker_id": "provide-shell"
+      },
+      "json": {
+        "input_mode": "hijack"
       }
     },
     {
@@ -546,6 +701,24 @@
         "visibility": "public",
         "stopped_at": null,
         "last_error": null
+      },
+      "json": {
+        "input_mode": "open"
+      }
+    },
+    {
+      "id": "worker_mode_noop_open",
+      "method": "POST",
+      "path": "/worker/provide-shell/input_mode",
+      "auth": "token",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "ok": true,
+        "input_mode": "open",
+        "worker_id": "provide-shell"
       },
       "json": {
         "input_mode": "open"
