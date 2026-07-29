@@ -35,6 +35,70 @@ func jsonError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]any{"error": msg})
 }
 
+// detailError writes the {"detail": msg} envelope. This is NOT the manager's
+// route-level shape — the routes raise {"error": ...} via jsonError. It is the
+// FastAPI default that the reference app emits for the refusals it answers
+// before any route runs, and it exists only for routeFallback. Verified
+// against the reference app (plain FastAPI, no custom exception handlers):
+//
+//	GET  /not-a-thing -> 404 {"detail":"Not Found"}
+//	POST /health      -> 405 {"detail":"Method Not Allowed"}
+//	GET  /agent/nope/status -> 404 {"error":"Agent nope not found"}
+//
+// The two envelopes are deliberately distinct; do not collapse them.
+func detailError(w http.ResponseWriter, status int, msg string) {
+	writeJSON(w, status, map[string]any{"detail": msg})
+}
+
+// routeFallback wraps the ServeMux so the two refusals the mux answers on its
+// own leave through detailError instead of net/http's plain-text defaults
+// ("404 page not found\n" / "Method Not Allowed\n").
+//
+// The 404-vs-405 decision (and the Allow header a 405 must carry) stays with
+// net/http: when Handler reports no matching pattern it hands back the very
+// handler it would have run, so we run that handler against a header-only
+// recorder and re-emit its verdict in the JSON envelope. That keeps one
+// implementation of the routing rules rather than a second, drifting copy.
+//
+// A matched request is dispatched through mux.ServeHTTP, not through the
+// handler Handler returned: only ServeHTTP populates the {wildcard} path values
+// that r.PathValue reads.
+func routeFallback(mux *http.ServeMux) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h, pattern := mux.Handler(r)
+		if pattern != "" {
+			mux.ServeHTTP(w, r)
+			return
+		}
+		rec := &headerOnlyRecorder{header: http.Header{}, status: http.StatusNotFound}
+		h.ServeHTTP(rec, r)
+		if allow := rec.header.Get("Allow"); allow != "" {
+			w.Header().Set("Allow", allow)
+		}
+		detailError(w, rec.status, http.StatusText(rec.status))
+	})
+}
+
+// headerOnlyRecorder is an http.ResponseWriter that captures the status and
+// headers of net/http's default not-found / method-not-allowed handlers and
+// discards their plain-text body.
+type headerOnlyRecorder struct {
+	header http.Header
+	status int
+	wrote  bool
+}
+
+func (rec *headerOnlyRecorder) Header() http.Header { return rec.header }
+
+func (rec *headerOnlyRecorder) WriteHeader(code int) {
+	if !rec.wrote {
+		rec.status = code
+		rec.wrote = true
+	}
+}
+
+func (rec *headerOnlyRecorder) Write(b []byte) (int, error) { return len(b), nil }
+
 // decodeJSONMap decodes the request body into a map. A missing/empty body
 // yields (nil-safe empty map, true); a malformed body yields (nil, false).
 func decodeJSONMap(r *http.Request) (map[string]any, bool) {
