@@ -34,9 +34,9 @@ the standard library alone.
 |---|---|---|
 | `ws` | WebSocket server | Node has a WebSocket *client* but no server |
 | `ssh2` | SSH transport and gateway | |
-| `node-pty` | PTY connector | Native. See the note below |
 | `@modelcontextprotocol/sdk` | MCP tools | The protocol's own SDK |
 | `smol-toml` | TOML server config | Spec-complete and dependency-free |
+| `node-pty` (approved 2026-07-29) | PTY connector | Native. npm extracts its `spawn-helper` without the execute bit, so every spawn fails with `posix_spawnp failed`; `npm run ensure:pty` (also a `pretest`) restores it |
 | `@noble/hashes` | Tunnel token hashing | Node's `createHash` offers only BLAKE2b-512, and truncating it gives a different digest — BLAKE2b mixes the output length into its parameter block. Audited and dependency-free |
 
 These are Node-facing. Nothing a Cloudflare Worker imports may reach them —
@@ -64,14 +64,11 @@ is part of BLAKE2b's parameter block, so the two disagree from the first byte.
 is pinned against CPython for eighteen inputs, including either side of the
 128-byte block boundary. `serverauth/token-hash` is the store on top of it.
 
-**`node-pty` needs one more step.** Its prebuilt `spawn-helper` ships
-non-executable and its post-install script, which is what marks it, is held
-by this repository's `npm approve-scripts` policy. Until that is resolved
-`spawn` fails with `posix_spawnp failed`. Approving a third-party install
-script is a decision for the repository owner, so it is recorded here rather
-than taken.
-
-## Status
+**`node-pty` is approved and working** (2026-07-29). npm extracts its
+prebuilt `spawn-helper` without the execute bit, so every spawn failed with
+`posix_spawnp failed` — a message that names nothing. `packages/provide-uterm-ts/scripts/ensure-pty-helper.mjs` restores it; it runs
+as `pretest` and can be run directly with `npm run ensure:pty`. It is
+idempotent and silent when there is nothing to do.
 
 Ordered bottom-up by dependency. The Python column names the reference
 module; the Go column names the sibling package for cross-checking.
@@ -130,7 +127,7 @@ corpus match CPython byte for byte.
 | `transports` | client `transports/*` | `transports` | **partial** — the transport interface, telnet RFC 854 framing and negotiation, the reconnect budget/backoff and the reconnecting session's full ordering — the dead socket closed before the backoff, the new session live before the reconnect hook, and the two exhaustion messages kept apart — the WebSocket client, the chaos wrapper, the full RFC 854 telnet client, the SSH session stream adapters, and the SSH server's admission rules — the loopback-bind test, the refusal to start unauthenticated on a routable address, the host-key permission check and the per-address connection cap. Binding the listener itself outstanding |
 | `egress` | server `egress`, `_net` | (inside `connectors`) | **done** — metadata always blocked, embedded-IPv4 wrappers decoded, resolution failures fail closed |
 | `connectors` | server `connectors/*` | `connectors` | **done** — the registry, the connector interface, the reference shell connector, and the telnet, WebSocket and SSH connectors with their closed settings, shared overlay, post-connect address guards and, for SSH, mandatory host-key verification. The transport each one drives is injected, so a caller supplies the socket |
-| `pty` | platform PTY connector | `pty` | **partial** — every guard that runs before the operating system is touched (null bytes, absolute paths, the `=` in an environment key, socket paths) and the uid map with its refusal of uid/gid 0. The passwd lookup is injected. PAM notification events with their parsing, line cap and peer-uid rule; and the capture socket's frame reader with its before-the-read length cap and its drop-oldest queue. The connector itself — the fork, the PTY and the PAM handshake — outstanding |
+| `pty` | platform PTY connector | `pty` | **done** — every guard that runs before the operating system is touched (null bytes, absolute paths, the `=` in an environment key, socket paths) and the uid map with its refusal of uid/gid 0; PAM notification events with their parsing, line cap and peer-uid rule; the capture socket's frame reader with its before-the-read length cap and its drop-oldest queue; and the connector itself — validation before any state is kept, the hijack pause and the backpressure signal kept apart, the buffer capped from the end, incremental decoding that survives a `clear`, and the end of the child noticed however it arrives. A real `node-pty` terminal sits behind the same interface the corpus drove, and is exercised live |
 | `embed` | `embed` | `embed` | **partial** — the client filter, the interceptor verdicts, the telnet policy and the upstream stream parser; the session and hub outstanding |
 
 ### Control plane and hub

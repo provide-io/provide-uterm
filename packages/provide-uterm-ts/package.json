@@ -18,7 +18,9 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "lint": "biome lint src/",
-    "fix": "biome check --write --unsafe src/"
+    "fix": "biome check --write --unsafe src/",
+    "ensure:pty": "node scripts/ensure-pty-helper.mjs",
+    "pretest": "node scripts/ensure-pty-helper.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
