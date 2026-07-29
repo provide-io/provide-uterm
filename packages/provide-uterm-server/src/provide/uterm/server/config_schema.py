@@ -13,14 +13,16 @@ behaviour-pinning kill-tests in ``tests/server/test_models_mutation_killing.py``
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
 from provide.uterm.bridge.contracts import Visibility  # noqa: TC001 — Pydantic needs it at runtime
 from provide.uterm.defaults import TerminalDefaults
+from provide.uterm.server.bridge.ratelimit import MIN_RATE_PER_SEC
 
 # CDN URLs for xterm.js and fonts loaded into the operator dashboard HTML.
 XTERM_CDN_DEFAULT = "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0"
@@ -498,6 +500,15 @@ class UtermServerConfig(ServerBaseModel):
     session_idle_timeout_s: int = 0
     session_retention_s: int = 0
     browser_rate_limit_per_sec: float = 300
+    # Ceilings for the REST hijack API's token buckets (tokens/sec, burst =
+    # one second of the same rate). Each is applied twice: once globally and
+    # once per calling client, so a single client can never consume more than
+    # its own share. ``acquire`` guards POST /hijack/acquire — the expensive,
+    # state-changing lease grab; ``send`` is shared by the hijack send *and*
+    # step endpoints, which are cheap keystroke-rate calls. Defaults are the
+    # hub's built-in values, so an unset deployment is unchanged.
+    rest_acquire_rate_limit_per_sec: float = 5
+    rest_send_rate_limit_per_sec: float = 20
     # Finding #5d: how the worker WS recv loop handles a malformed inbound
     # control frame (one whose fields fail the frame builder's type
     # validation, e.g. snapshot ``cursor.x="abc"``).  ``drop`` (default)
@@ -527,6 +538,44 @@ class UtermServerConfig(ServerBaseModel):
     def _validate_max_workers(cls, value: int) -> int:
         if value < 1:
             raise ValueError(f"max_workers must be >= 1, got: {value}")
+        return value
+
+    @field_validator("rest_acquire_rate_limit_per_sec", "rest_send_rate_limit_per_sec")
+    @classmethod
+    def _validate_rest_rate_limit(cls, value: float, info: ValidationInfo) -> float:
+        """Refuse any rate that would not behave as the operator wrote it.
+
+        A rate limit is trusted once configured, so every value that
+        cannot be honoured verbatim is refused rather than reinterpreted.
+
+        **Not finite.**  ``inf`` passes every ``>=`` bound, so accepting it
+        would silently mean "no limit at all" — the same fail-open that
+        makes a trusted limit worse than none.  ``-inf`` and ``NaN`` go
+        with it: none of the three is a rate anybody meant to write.
+
+        **Below :data:`MIN_RATE_PER_SEC`.**  ``0`` is ambiguous — read as
+        "unlimited" it disables the limit, read as "refuse everything" it
+        bricks the REST hijack API, and nothing in the file says which the
+        operator meant.  The whole band under the floor is refused for the
+        *second* of those reasons rather than for ambiguity: a token
+        bucket's burst is one second of its rate, so a sub-1/s bucket
+        never holds a whole token and denies every call forever.  ``0.5``
+        is not "one call every two seconds", it is "never" — so it is
+        refused exactly like ``0``.  Negatives go the same way, and the
+        floor also keeps the limiter's own clamp from handing back a
+        looser rate than was configured.
+
+        Fractions at or above the floor are a real policy and are kept.
+
+        The bound is written ``not value >= MIN`` rather than
+        ``value < MIN`` so a NaN — which compares false against
+        everything — falls into the refusal instead of sliding past a
+        ``<`` test.  Do not "simplify" it.
+        """
+        if not math.isfinite(value):
+            raise ValueError(f"{info.field_name} must be a finite number >= {MIN_RATE_PER_SEC}, got: {value}")
+        if not value >= MIN_RATE_PER_SEC:
+            raise ValueError(f"{info.field_name} must be >= {MIN_RATE_PER_SEC}, got: {value}")
         return value
 
 
