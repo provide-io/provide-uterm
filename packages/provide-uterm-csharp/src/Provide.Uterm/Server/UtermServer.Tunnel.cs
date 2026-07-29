@@ -360,6 +360,16 @@ public sealed partial class UtermServer
 
         using var ws = await ctx.WebSockets.AcceptWebSocketAsync().ConfigureAwait(false);
         var conn = new BrowserWsConn(ws);
+        // Same as the worker WS route: a configured session's own mode, seeded
+        // before registration creates the state with the unknown-worker
+        // default, so attaching a tunnel does not silently arbitrate a session
+        // configured as open. A tunnel that means `hijack` says so in its
+        // `open` control frame, which HandleTunnelControl applies.
+        if (_deps.Registry.TryGetDefinition(workerId, out var tdef))
+        {
+            _deps.Hub.Registry.SetDefault(workerId, new Hub.WorkerTermState { InputMode = tdef.InputMode });
+        }
+
         _deps.Hub.Conn.RegisterWorker(workerId, conn);
         var st = _deps.Hub.Registry.Get(workerId);
         if (st is not null)
@@ -369,7 +379,7 @@ public sealed partial class UtermServer
 
         if (_deps.Registry is InMemorySessionRegistry mem)
         {
-            mem.MarkWorker(workerId, true, false, InputModes.Hijack);
+            mem.MarkWorker(workerId, true, false);
         }
 
         await _deps.Hub.Conn.BroadcastToBrowsersAsync(
@@ -450,14 +460,17 @@ public sealed partial class UtermServer
         }
         finally
         {
+            // Inside the identity check, for the reason the worker WS route
+            // documents: a displaced tunnel socket closing says nothing about
+            // the session the socket that replaced it is still serving.
             var (shouldBroadcast, wasHijacked) = _deps.Hub.Conn.DeregisterWorker(workerId, conn);
-            if (_deps.Registry is InMemorySessionRegistry mem2)
-            {
-                mem2.MarkWorker(workerId, false, false, InputModes.Hijack);
-            }
-
             if (shouldBroadcast)
             {
+                if (_deps.Registry is InMemorySessionRegistry mem2)
+                {
+                    mem2.MarkWorker(workerId, false, false);
+                }
+
                 try
                 {
                     await _deps.Hub.Conn.BroadcastToBrowsersAsync(

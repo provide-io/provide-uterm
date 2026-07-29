@@ -88,6 +88,70 @@ public class HubServicesTests
         Assert.Equal(0, Convert.ToInt32(missing["seq"]));
     }
 
+    /// <summary>
+    /// A lease is an exclusive input path; <c>open</c> means everyone may
+    /// type. The reference refuses the one switch that would end the first
+    /// while the holder still believes they have it — in the hub, under the
+    /// same lock that writes the field, so every caller is refused and none
+    /// can write the mode past the guard
+    /// (<c>bridge/hub/router_impl.py:326-334</c>, Go
+    /// <c>hub/router.go:162</c>).
+    ///
+    /// "Hijacked" is the reference's own <c>is_hijacked</c>: a dashboard owner
+    /// or a REST lease that has *not expired*. The clock is driven by hand
+    /// here so the expiry arm is the assertion rather than a race.
+    /// </summary>
+    [Fact]
+    public async Task Router_SetInputMode_Refuses_Open_While_A_Lease_Is_Held()
+    {
+        var clock = new ManualClock(1000);
+        clock.SetMonotonic(10);
+        var hub = NewHub(clock);
+        hub.Conn.RegisterWorker("w1", new FakeWorker());
+        var (acquired, why) = await hub.TryAcquireRestHijackAsync("w1", "operator", 30, "h1", 10);
+        Assert.True(acquired, why);
+
+        var (ok, reason) = hub.Router.SetInputMode("w1", InputModes.Open);
+
+        Assert.False(ok);
+        Assert.Equal("active_hijack", reason);
+        // Refused before the write: the mode a refusal reports must be the
+        // mode the hub is actually in.
+        Assert.Equal(InputModes.Hijack, hub.Registry.Get("w1")!.InputMode);
+
+        // Only the switch to open is refused. Re-asserting the mode the lease
+        // already runs under changes nothing and is answered normally.
+        Assert.True(hub.Router.SetInputMode("w1", InputModes.Hijack).Ok);
+
+        // The guard reads the lease's expiry, not the mere presence of a
+        // session: once the clock is past it, open is free again.
+        clock.SetMonotonic(41);
+        Assert.True(hub.Router.SetInputMode("w1", InputModes.Open).Ok);
+        Assert.Equal(InputModes.Open, hub.Registry.Get("w1")!.InputMode);
+    }
+
+    /// <summary>
+    /// The guard holds a lease, not a session: released, open is allowed
+    /// again on the same clock instant the refusal was measured at.
+    /// </summary>
+    [Fact]
+    public async Task Router_SetInputMode_Opens_Once_The_Lease_Is_Released()
+    {
+        var clock = new ManualClock(1000);
+        clock.SetMonotonic(10);
+        var hub = NewHub(clock);
+        hub.Conn.RegisterWorker("w1", new FakeWorker());
+        var (acquired, why) = await hub.TryAcquireRestHijackAsync("w1", "operator", 30, "h1", 10);
+        Assert.True(acquired, why);
+        Assert.False(hub.Router.SetInputMode("w1", InputModes.Open).Ok);
+
+        var (released, _) = hub.ReleaseRestHijack("w1", "h1");
+
+        Assert.True(released);
+        Assert.True(hub.Router.SetInputMode("w1", InputModes.Open).Ok);
+        Assert.Equal(InputModes.Open, hub.Registry.Get("w1")!.InputMode);
+    }
+
     [Fact]
     public void Presence_And_BrowserRegistration()
     {
@@ -142,7 +206,7 @@ public class HubServicesTests
     }
 
     [Fact]
-    public void Conn_Deregister_Disconnect_ForceRelease()
+    public async Task Conn_Deregister_Disconnect_ForceRelease()
     {
         var clock = new ManualClock(1);
         clock.SetMonotonic(1);
@@ -163,7 +227,61 @@ public class HubServicesTests
         Assert.False(hub.Conn.DisconnectWorker("w1"));
 
         hub.Conn.RegisterWorker("w1", worker);
-        Assert.False(hub.Conn.ForceReleaseHijack("w1")); // nothing held
+        Assert.False(await hub.Conn.ForceReleaseHijackAsync("w1")); // nothing held
+        Assert.False(await hub.Conn.ForceReleaseHijackAsync("missing"));
+    }
+
+    /// <summary>
+    /// A forced release is announced, not silent. The reference sends the
+    /// worker a <c>resume</c> naming the owner it took the session from,
+    /// fires the hijack-changed callback and broadcasts the new hijack state
+    /// (<c>bridge/hub/connection_hijack.py:120-130</c>). Without that the
+    /// worker stays paused with nobody left to unpause it, and every browser
+    /// goes on showing a lease that no longer exists.
+    /// </summary>
+    [Fact]
+    public async Task Conn_ForceRelease_Resumes_The_Worker_And_Announces_It()
+    {
+        var clock = new ManualClock(1000);
+        clock.SetMonotonic(10);
+        var changes = new List<(string Worker, bool Enabled, string? Owner)>();
+        var hub = new TermHub(new TermHubConfig
+        {
+            Clock = clock,
+            RestAcquireRateLimitPerSec = 1000,
+            OnHijackChanged = (w, enabled, owner) => changes.Add((w, enabled, owner)),
+        });
+        var worker = new FakeWorker();
+        hub.Conn.RegisterWorker("w1", worker);
+        var (acquired, why) = await hub.TryAcquireRestHijackAsync("w1", "operator", 30, "h1", 10);
+        Assert.True(acquired, why);
+
+        Assert.True(await hub.Conn.ForceReleaseHijackAsync("w1"));
+
+        var resumed = Assert.Single(worker.Sent, s => s.Contains("resume", StringComparison.Ordinal));
+        // Named for the owner it was taken from, as the reference does.
+        Assert.Contains("operator", resumed, StringComparison.Ordinal);
+        Assert.Equal(("w1", false, (string?)null), Assert.Single(changes));
+        Assert.Null(hub.Registry.Get("w1")!.HijackSession);
+        // Nothing held now, so a second release is a no-op and says so.
+        Assert.False(await hub.Conn.ForceReleaseHijackAsync("w1"));
+
+        // A dashboard socket holds the lease under its own name, so the
+        // reference's stand-in owner is what the worker is told.
+        var browser = new object();
+        Assert.True(hub.Lease.TryAcquireWs("w1", browser).Ok);
+        Assert.True(await hub.Conn.ForceReleaseHijackAsync("w1"));
+        Assert.Contains(worker.Sent, s => s.Contains("server-forced", StringComparison.Ordinal));
+        Assert.Null(hub.Registry.Get("w1")!.HijackOwner);
+
+        // An owner whose lease already ran out was not holding anything, so
+        // clearing it is not announced as a release.
+        var st = hub.Registry.Get("w1")!;
+        st.HijackOwner = browser;
+        st.HijackOwnerExpiresAt = 5;
+        clock.SetMonotonic(100);
+        Assert.False(await hub.Conn.ForceReleaseHijackAsync("w1"));
+        Assert.Null(st.HijackOwner);
     }
 
     [Fact]
