@@ -45,7 +45,13 @@ async def authorize_pam_event_roles(request: Request, required_roles: tuple[str,
 def pam_event_capability_handlers() -> dict[str, Callable[..., object]]:
     """Return the FastAPI handler for the shared ``pam_events.ingest`` capability."""
 
-    async def ingest(request: Request) -> JSONResponse | dict[str, Any]:
+    # Deliberately ``Any`` rather than ``JSONResponse | dict[str, Any]``, which
+    # is what it answers with: FastAPI reads a handler's return annotation to
+    # build a response model, and a union of a Response and a mapping is not a
+    # Pydantic field. Annotating the union refuses the *whole application* at
+    # registration time — ``create_server_app`` raises FastAPIError and no
+    # route is served, which is the state main was left in by 1e146fe8.
+    async def ingest(request: Request) -> Any:
         p = principal(request)
         if not await authz(request).can_create_session(p):
             raise HTTPException(status_code=403, detail="insufficient privileges")
