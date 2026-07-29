@@ -16,8 +16,13 @@ import (
 )
 
 // StartSession builds and starts the session's real connector (shell PTY / ssh /
-// telnet / websocket). Unknown id → 404. A build/dial error is recorded as
-// last_error and leaves the session stopped rather than failing the request.
+// telnet / websocket). Unknown id → 404.
+//
+// The states follow HostedSessionRuntime: "starting" for as long as the dial is
+// in flight, then "running", or "error" with the reason in last_error. A dial
+// failure is reported on the session rather than as a failed request, so one
+// unreachable target does not turn into an HTTP error for the operator who
+// asked for it — they get a session that says what went wrong.
 func (r *SessionRegistryImpl) StartSession(ctx context.Context, id string) (*server.SessionStatus, error) {
 	r.mu.Lock()
 	e, ok := r.entries[id]
@@ -32,6 +37,9 @@ func (r *SessionRegistryImpl) StartSession(ctx context.Context, id string) (*ser
 	}
 	def := e.def
 	connect := r.connect
+	// Published before the lock is dropped, so a concurrent GET during a slow
+	// dial sees "starting" rather than the state the session had before.
+	e.lifecycle = server.LifecycleStarting
 	r.mu.Unlock()
 
 	conn, err := connect(ctx, def)
@@ -49,21 +57,29 @@ func (r *SessionRegistryImpl) StartSession(ctx context.Context, id string) (*ser
 	if err != nil {
 		msg := err.Error()
 		e.lastErr = &msg
-		e.lifecycle = "stopped"
+		e.lifecycle = server.LifecycleError
 		return r.snapshotStatus(e), nil
 	}
 	e.lastErr = nil
 	e.conn = conn // may be nil for "no live connector" types
-	e.lifecycle = "running"
+	e.lifecycle = server.LifecycleRunning
 	return r.snapshotStatus(e), nil
 }
 
-// StartAutoStartSessions starts every session flagged auto_start, mirroring the
-// Python registry bootstrap (registry.start_auto_start_sessions). Connector
-// failures are recorded as each session's last_error by StartSession rather than
-// aborting the batch, so one bad session never blocks the others. It is invoked
-// once at server boot (see runServer) — NewSessionRegistry only seeds sessions
-// as waiting; nothing spawns them until this runs.
+// StartAutoStartSessions brings up every session flagged auto_start, mirroring
+// the Python registry bootstrap (registry.start_auto_start_sessions) and the C#
+// port's boot step. A port that stores the flag and never acts on it reports a
+// never-started session to every client while still echoing auto_start: true on
+// the wire.
+//
+// Connector failures are recorded on each session by StartSession ("error" plus
+// last_error) rather than aborting the batch, so one bad session never blocks
+// the others.
+//
+// It runs once, when the server is listening — see server.Deps.OnStarted, which
+// is the single place both `uterm server` and the live-conformance server boot
+// through. NewSessionRegistry only seeds sessions as stopped; nothing spawns
+// them until this runs.
 func (r *SessionRegistryImpl) StartAutoStartSessions(ctx context.Context) {
 	r.mu.Lock()
 	ids := make([]string, 0, len(r.order))
@@ -88,7 +104,7 @@ func (r *SessionRegistryImpl) StopSession(ctx context.Context, id string) (*serv
 	}
 	conn := e.conn
 	e.conn = nil
-	e.lifecycle = "stopped"
+	e.lifecycle = server.LifecycleStopped
 	now := float64(time.Now().UnixNano()) / 1e9
 	e.stoppedAt = &now
 	st := r.snapshotStatus(e)

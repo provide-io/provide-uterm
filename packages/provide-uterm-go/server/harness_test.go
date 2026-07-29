@@ -123,7 +123,7 @@ func (f *fakeRegistry) CreateSession(_ context.Context, payload map[string]any) 
 	if id == "" {
 		id = "created"
 	}
-	st := &SessionStatus{SessionID: id, DisplayName: id, ConnectorType: stringField(payload, "connector_type"), LifecycleState: "waiting", InputMode: "hijack", Visibility: "private", Tags: []string{}}
+	st := &SessionStatus{SessionID: id, DisplayName: id, ConnectorType: stringField(payload, "connector_type"), LifecycleState: LifecycleStopped, InputMode: "hijack", Visibility: "private", Tags: []string{}}
 	f.mu.Lock()
 	f.statuses[id] = st
 	f.created = append(f.created, payload)

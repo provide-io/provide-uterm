@@ -63,7 +63,9 @@ func filterSessions(in []*SessionStatus, q map[string][]string) []*SessionStatus
 	tags := q["tag"]
 	connector := first(q, "connector_type")
 	visibility := first(q, "visibility")
-	state := first(q, "state")
+	// A caller-supplied ?state= is compared as the wire string; an unknown name
+	// simply matches nothing.
+	state := SessionLifecycleState(first(q, "state"))
 	search := strings.ToLower(first(q, "q"))
 	out := in[:0:0]
 	for _, st := range in {
@@ -289,9 +291,9 @@ func (s *Server) handleBulkDeleteSessions(w http.ResponseWriter, r *http.Request
 		return
 	}
 	filter, _ := body["filter"].(map[string]any)
-	stateFilter := ""
+	stateFilter := SessionLifecycleState("")
 	if sv, ok := filter["state"].(string); ok {
-		stateFilter = strings.TrimSpace(sv)
+		stateFilter = SessionLifecycleState(strings.TrimSpace(sv))
 	}
 	olderThan, hasOlder := floatField(filter, "older_than_s")
 	now := s.clock.Wall()

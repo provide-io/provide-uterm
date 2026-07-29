@@ -63,14 +63,14 @@ func TestStartAutoStartSessions(t *testing.T) {
 	r := newTestRegistry(t) // DefaultServerConfig seeds provide-shell with auto_start=true
 	ctx := context.Background()
 
-	// Bug baseline: a freshly seeded auto_start session is waiting/disconnected
+	// Baseline: a freshly seeded auto_start session is stopped/disconnected
 	// (NewSessionRegistry does not spawn it — the boot step is what does).
 	st, err := r.GetSession(ctx, "provide-shell")
 	if err != nil {
 		t.Fatalf("GetSession: %v", err)
 	}
-	if st.LifecycleState != "waiting" || st.Connected {
-		t.Fatalf("pre-boot want waiting/disconnected, got %s/%v", st.LifecycleState, st.Connected)
+	if st.LifecycleState != server.LifecycleStopped || st.Connected {
+		t.Fatalf("pre-boot want stopped/disconnected, got %s/%v", st.LifecycleState, st.Connected)
 	}
 
 	// A session without auto_start must be left untouched by the boot step.
@@ -92,8 +92,8 @@ func TestStartAutoStartSessions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetSession manual: %v", err)
 	}
-	if manual.LifecycleState != "waiting" || manual.Connected {
-		t.Fatalf("manual session should stay waiting, got %s/%v", manual.LifecycleState, manual.Connected)
+	if manual.LifecycleState != server.LifecycleStopped || manual.Connected {
+		t.Fatalf("manual session should stay stopped, got %s/%v", manual.LifecycleState, manual.Connected)
 	}
 }
 
@@ -132,7 +132,7 @@ func TestCreateSessionInternalBypassesEgress(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateSessionInternal: %v", err)
 	}
-	if st.SessionID != "tunnel-x" || st.LifecycleState != "waiting" {
+	if st.SessionID != "tunnel-x" || st.LifecycleState != server.LifecycleStopped {
 		t.Fatalf("unexpected status: %+v", st)
 	}
 }
@@ -245,8 +245,10 @@ func TestRegistryStartErrorAndNoConnector(t *testing.T) {
 	if err != nil {
 		t.Fatalf("start boom: %v", err)
 	}
-	if st.LifecycleState != "stopped" || st.LastError == nil {
-		t.Fatalf("expected stopped+lastError, got %+v", st)
+	// A connector that would not dial is an error, not a stop: the operator
+	// asked for this session and it did not come up.
+	if st.LifecycleState != server.LifecycleError || st.LastError == nil {
+		t.Fatalf("expected error+lastError, got %+v", st)
 	}
 
 	_, _ = r.CreateSession(ctx, map[string]any{"session_id": "none", "connector_type": "none"})

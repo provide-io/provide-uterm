@@ -17,21 +17,23 @@ import (
 // Nullable fields are pointers WITHOUT omitempty so they serialize as JSON
 // null (matching model_dump, which always emits the key).
 type SessionStatus struct {
-	SessionID          string   `json:"session_id"`
-	DisplayName        string   `json:"display_name"`
-	CreatedAt          string   `json:"created_at"` // ISO-8601
-	ConnectorType      string   `json:"connector_type"`
-	LifecycleState     string   `json:"lifecycle_state"`
-	InputMode          string   `json:"input_mode"`
-	Connected          bool     `json:"connected"`
-	AutoStart          bool     `json:"auto_start"`
-	Tags               []string `json:"tags"`
-	RecordingEnabled   bool     `json:"recording_enabled"`
-	RecordingAvailable bool     `json:"recording_available"`
-	Owner              *string  `json:"owner"`
-	Visibility         string   `json:"visibility"`
-	StoppedAt          *float64 `json:"stopped_at"`
-	LastError          *string  `json:"last_error"`
+	SessionID     string `json:"session_id"`
+	DisplayName   string `json:"display_name"`
+	CreatedAt     string `json:"created_at"` // ISO-8601
+	ConnectorType string `json:"connector_type"`
+	// LifecycleState is the runtime state, from the fixed vocabulary in
+	// lifecycle_state.go — never the control plane's.
+	LifecycleState     SessionLifecycleState `json:"lifecycle_state"`
+	InputMode          string                `json:"input_mode"`
+	Connected          bool                  `json:"connected"`
+	AutoStart          bool                  `json:"auto_start"`
+	Tags               []string              `json:"tags"`
+	RecordingEnabled   bool                  `json:"recording_enabled"`
+	RecordingAvailable bool                  `json:"recording_available"`
+	Owner              *string               `json:"owner"`
+	Visibility         string                `json:"visibility"`
+	StoppedAt          *float64              `json:"stopped_at"`
+	LastError          *string               `json:"last_error"`
 }
 
 // SessionListItem pairs a session's runtime status with its definition so the

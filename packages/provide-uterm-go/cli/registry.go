@@ -19,8 +19,11 @@ import (
 // sessionEntry is one managed session: its immutable definition plus the mutable
 // runtime state (lifecycle, input mode, live connector, last error).
 type sessionEntry struct {
-	def       serverconfig.SessionDefinition
-	lifecycle string // "waiting" | "running" | "stopped"
+	def serverconfig.SessionDefinition
+	// lifecycle is the wire runtime state; the names are declared once in
+	// server.SessionLifecycleStates, so this cannot drift into a vocabulary of
+	// its own.
+	lifecycle server.SessionLifecycleState
 	inputMode string
 	conn      connectors.Connector // nil when no live connector
 	lastErr   *string
@@ -58,11 +61,11 @@ type SessionRegistryImpl struct {
 
 var _ server.SessionRegistry = (*SessionRegistryImpl)(nil)
 
-// NewSessionRegistry seeds a registry from cfg.Sessions; every session starts in
-// the waiting state. Sessions flagged auto_start are spawned separately at server
-// boot via StartAutoStartSessions (mirroring the Python lifespan boot task) —
-// construction has no connector side effects. Recording defaults follow
-// cfg.Recording.EnabledByDefault.
+// NewSessionRegistry seeds a registry from cfg.Sessions; every session starts
+// stopped — configured, never brought up. Sessions flagged auto_start are
+// spawned separately once the server is listening, via StartAutoStartSessions
+// (mirroring the Python lifespan boot task) — construction has no connector
+// side effects. Recording defaults follow cfg.Recording.EnabledByDefault.
 func NewSessionRegistry(cfg *serverconfig.UtermServerConfig) *SessionRegistryImpl {
 	r := &SessionRegistryImpl{
 		entries:      map[string]*sessionEntry{},
@@ -92,7 +95,7 @@ func (r *SessionRegistryImpl) EventBus() *hub.EventBus {
 	return r.eventBus
 }
 
-// seed inserts a definition as a fresh entry (waiting, per-def input mode).
+// seed inserts a definition as a fresh entry (stopped, per-def input mode).
 func (r *SessionRegistryImpl) seed(def serverconfig.SessionDefinition) {
 	if _, ok := r.entries[def.SessionID]; ok {
 		return
@@ -104,7 +107,7 @@ func (r *SessionRegistryImpl) seed(def serverconfig.SessionDefinition) {
 	r.order = append(r.order, def.SessionID)
 	r.entries[def.SessionID] = &sessionEntry{
 		def:       def,
-		lifecycle: "waiting",
+		lifecycle: server.LifecycleStopped,
 		inputMode: def.InputMode,
 		createdAt: created.UTC().Format(time.RFC3339),
 	}
