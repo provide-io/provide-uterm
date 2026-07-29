@@ -1261,10 +1261,15 @@ public static class ServerFactory
 {
     /// <param name="graphicalTargets">Registry to use; defaults to a
     /// non-durable one seeded from config.</param>
+    /// <param name="clock">Time source for the hub (leases, rate-limit
+    /// refills) and the server. Defaults to <see cref="RealClock"/>; tests pass
+    /// a <see cref="ManualClock"/> so a spent budget stays spent for the length
+    /// of the test instead of refilling on a slow runner.</param>
     public static (UtermServer Server, string? DevToken) CreateFromConfig(
         UtermServerConfig cfg,
         string version = "0.0.0-dev",
-        IGraphicalTargetRegistry? graphicalTargets = null)
+        IGraphicalTargetRegistry? graphicalTargets = null,
+        IClock? clock = null)
     {
         var apiKeys = new ApiKeyStore();
         string? devToken = null;
@@ -1275,13 +1280,15 @@ public static class ServerFactory
 
         var auth = new LocalIdentityProvider(cfg.Auth, apiKeys);
         var authz = AuthorizationService.FromConfig(cfg);
-        var clock = new RealClock();
+        clock ??= new RealClock();
         var hub = new TermHub(new TermHubConfig
         {
             Clock = clock,
             WorkerToken = cfg.Auth.WorkerBearerToken,
             MaxWorkers = cfg.MaxWorkers,
             BrowserRateLimitPerSec = cfg.BrowserRateLimitPerSec,
+            RestAcquireRateLimitPerSec = cfg.RestAcquireRateLimitPerSec,
+            RestSendRateLimitPerSec = cfg.RestSendRateLimitPerSec,
         });
         var registry = new InMemorySessionRegistry(cfg.Sessions, cfg.Recording.EnabledByDefault);
         graphicalTargets ??= SeedGraphicalTargets(cfg);
