@@ -11,6 +11,7 @@
  * parity with it rather than a replacement for it.
  */
 
+export * from "./api-dispatch.ts";
 export * from "./attachment.ts";
 export * from "./config.ts";
 export * from "./flow-control.ts";
