@@ -22,6 +22,9 @@ export const TESTDATA_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", 
 /** Absolute path to the repository's cross-language `spec/` directory. */
 export const SPEC_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..", "spec");
 
+/** Absolute path to the repository's cross-language `conformance/` directory. */
+export const CONFORMANCE_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..", "conformance");
+
 /** Read and parse a JSON golden corpus by file name. */
 export function loadGolden<T>(name: string): T {
   return JSON.parse(readFileSync(join(TESTDATA_DIR, name), "utf-8")) as T;
@@ -36,4 +39,17 @@ export function loadGolden<T>(name: string): T {
  */
 export function loadSpec<T>(name: string): T {
   return JSON.parse(readFileSync(join(SPEC_DIR, name), "utf-8")) as T;
+}
+
+/**
+ * Read a shared cross-language corpus from `conformance/`, by relative path.
+ *
+ * Like {@link loadSpec}, these files live outside this package and are the
+ * contract every port replays; unlike `spec/`, they are generated fuzz
+ * corpora rather than hand-written contracts. The path is resolved from this
+ * module's own URL, so the loader works regardless of the process's working
+ * directory.
+ */
+export function loadConformance<T>(relativePath: string): T {
+  return JSON.parse(readFileSync(join(CONFORMANCE_DIR, relativePath), "utf-8")) as T;
 }
