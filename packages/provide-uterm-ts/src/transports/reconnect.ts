@@ -42,8 +42,15 @@ const RETRYABLE = new Set([
   "ENOTCONN",
 ]);
 
-/** Error names that mean the far end closed. */
-const RETRYABLE_NAMES = new Set(["ConnectionClosed", "ConnectionError", "AbortError"]);
+/**
+ * Error names that mean the far end went, not that the caller erred.
+ *
+ * `TimeoutError` is here because Python's is an `OSError`, so the reference
+ * retries it — and rightly: a transport that did not answer in time is the
+ * clearest case of something that might answer on the next attempt. On this
+ * runtime it arrives by name (an aborted fetch) as often as by `ETIMEDOUT`.
+ */
+const RETRYABLE_NAMES = new Set(["ConnectionClosed", "ConnectionError", "AbortError", "TimeoutError"]);
 
 /** Options for {@link connectWithRetries} and {@link reconnecting}. */
 export interface ReconnectOptions<T> {

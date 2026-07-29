@@ -265,8 +265,7 @@ def main() -> int:
             "max_backoff_s": default.max_backoff_s,
         },
         "schedules": schedules,
-        "retryable": ["ConnectionError", "OSError", "websockets.ConnectionClosed"],
-        "not_retryable": ["ValueError", "TypeError", "KeyError", "RuntimeError"],
+        "classification": _classification(),
         "exhausted_message": "reconnect retries exhausted",
         "connect_exhausted_message": "connect retries exhausted",
         "sequences": asyncio.run(_sequences()),
@@ -274,6 +273,39 @@ def main() -> int:
     OUT.write_text(json.dumps(payload, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     print(f"wrote {OUT} ({len(schedules)} policy cases)")
     return 0
+
+
+# Errors put to the real classifier rather than described. Python's exception
+# tree is the whole answer here: `TimeoutError`, `BrokenPipeError` and
+# `PermissionError` are all `OSError` underneath, so the reference retries
+# every one of them.
+CLASSIFIED: list[tuple[str, BaseException]] = [
+    ("a connection error", ConnectionError("dropped")),
+    ("a broken pipe", BrokenPipeError("pipe gone")),
+    ("a connection reset", ConnectionResetError("reset by peer")),
+    ("a refused connection", ConnectionRefusedError("refused")),
+    ("an aborted connection", ConnectionAbortedError("aborted")),
+    ("an OS error", OSError("host unreachable")),
+    ("a timeout", TimeoutError("took too long")),
+    ("a file that is not there", FileNotFoundError("no such file")),
+    ("a permission error", PermissionError("denied")),
+    ("an interrupted call", InterruptedError("signal")),
+    ("a value error", ValueError("bad value")),
+    ("a type error", TypeError("bad type")),
+    ("a key error", KeyError("missing")),
+    ("a runtime error", RuntimeError("broken")),
+    ("an assertion", AssertionError("impossible")),
+    ("a plain exception", Exception("something")),
+]
+
+
+def _classification() -> list[dict[str, Any]]:
+    """Ask the real classifier about each error rather than describing it."""
+    session = rc.ReconnectingSession.__new__(rc.ReconnectingSession)
+    return [
+        {"name": name, "error": type(error).__name__, "retryable": session._is_retryable_error(error)}
+        for name, error in CLASSIFIED
+    ]
 
 
 async def _sequences() -> list[dict[str, Any]]:
