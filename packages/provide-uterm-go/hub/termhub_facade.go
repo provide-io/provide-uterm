@@ -154,6 +154,19 @@ func (h *TermHub) SetWorkerHelloMode(ctx context.Context, workerID, mode string)
 	return h.Conn.SetWorkerHello(ctx, workerID, mode, nil)
 }
 
+// HasWorkerSocket reports whether workerID has a live worker socket attached.
+//
+// It is the condition every hijack turns on — [HijackLeaseManager.TryAcquireRest]
+// refuses with "no_worker" without it — so a caller that has just started a
+// session can tell "attached, ready to be leased" from "registered but not yet
+// connected". Read under the shared hub lock, like every other worker-state read.
+func (h *TermHub) HasWorkerSocket(workerID string) bool {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+	st := h.registry.Get(workerID)
+	return st != nil && st.WorkerWS != nil
+}
+
 // UpdateLastSnapshot stores the most recent snapshot for workerID.
 func (h *TermHub) UpdateLastSnapshot(ctx context.Context, workerID string, snapshot map[string]any) {
 	h.Conn.UpdateLastSnapshot(ctx, workerID, snapshot)

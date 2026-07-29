@@ -67,28 +67,43 @@ func (f *fakeTransport) IsConnected() bool {
 	return f.connected
 }
 
-// newFakeSession wraps a fakeTransport in a connected TransportSession.
-func newFakeSession() *termsession.TransportSession {
+// sentStrings returns everything written to the transport, as strings.
+func (f *fakeTransport) sentStrings() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]string, 0, len(f.sent))
+	for _, chunk := range f.sent {
+		out = append(out, string(chunk))
+	}
+	return out
+}
+
+// newFakeSession wraps a fakeTransport in a connected TransportSession,
+// returning both so a test can assert on what reached the wire.
+func newFakeSession() (*termsession.TransportSession, *fakeTransport) {
 	ft := newFakeTransport()
 	s := termsession.New(ft, func(ctx context.Context) error {
 		return ft.Connect(ctx, "", 0, transports.ConnectOptions{})
 	}, termsession.Options{})
 	_ = s.Connect(context.Background())
-	return s
+	return s, ft
 }
 
 // fakeConnector is an already-started connectors.Connector over a fake in-memory
 // session, so the registry lifecycle tests exercise real connector wiring
 // without needing a live shell/remote. It satisfies connectors.Connector.
 type fakeConnector struct {
-	mu   sync.Mutex
-	sess *termsession.TransportSession
-	mode string
+	mu       sync.Mutex
+	sess     *termsession.TransportSession
+	wire     *fakeTransport
+	mode     string
+	controls []string
 }
 
 // newFakeConnector returns a connected fake connector.
 func newFakeConnector() *fakeConnector {
-	return &fakeConnector{sess: newFakeSession(), mode: "open"}
+	sess, wire := newFakeSession()
+	return &fakeConnector{sess: sess, wire: wire, mode: "open"}
 }
 
 func (c *fakeConnector) Start(context.Context) error { return nil }
@@ -120,7 +135,19 @@ func (c *fakeConnector) HandleInput(ctx context.Context, data string) error {
 	return sess.Send(ctx, data)
 }
 
-func (c *fakeConnector) HandleControl(string) error { return nil }
+func (c *fakeConnector) HandleControl(action string) error {
+	c.mu.Lock()
+	c.controls = append(c.controls, action)
+	c.mu.Unlock()
+	return nil
+}
+
+// controlActions returns the control actions the connector was asked for.
+func (c *fakeConnector) controlActions() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.controls...)
+}
 
 func (c *fakeConnector) SetMode(mode string) error {
 	c.mu.Lock()

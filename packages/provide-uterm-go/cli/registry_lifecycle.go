@@ -79,6 +79,10 @@ func (r *SessionRegistryImpl) StartSession(ctx context.Context, id string) (*ser
 	e.lastErr = nil
 	e.conn = conn // may be nil for "no live connector" types
 	e.lifecycle = server.LifecycleRunning
+	// Attach the session to the hub, the second half of what the reference's
+	// HostedSessionRuntime does on start: without a worker socket the hub has
+	// nothing to pause, and every hijack acquire is refused "no_worker".
+	r.startWorkerBridge(e)
 	return r.snapshotStatus(e), nil
 }
 
@@ -119,12 +123,16 @@ func (r *SessionRegistryImpl) StopSession(ctx context.Context, id string) (*serv
 		return nil, server.ErrSessionNotFound
 	}
 	conn := e.conn
+	br := takeBridge(e)
 	e.conn = nil
 	e.lifecycle = server.LifecycleStopped
 	now := float64(time.Now().UnixNano()) / 1e9
 	e.stoppedAt = &now
 	st := r.snapshotStatus(e)
 	r.mu.Unlock()
+	// Detach from the hub before the connector goes: a worker whose socket
+	// outlived its terminal would still look leasable.
+	stopBridge(br)
 	if conn != nil {
 		_ = conn.Stop(ctx)
 	}
@@ -140,14 +148,20 @@ func (r *SessionRegistryImpl) RestartSession(ctx context.Context, id string) (*s
 }
 
 // SetMode switches a session's input mode ("hijack"/"open"). Unknown id → 404.
-func (r *SessionRegistryImpl) SetMode(_ context.Context, id, mode string) (*server.SessionStatus, error) {
+//
+// The hub is updated too, and synchronously: it holds its own copy of the mode,
+// and that is the copy the REST hijack acquire path reads. Leaving it to reach
+// the hub over the worker socket would make a lease taken right after a mode
+// change depend on how fast a WebSocket round-trip happened to be.
+func (r *SessionRegistryImpl) SetMode(ctx context.Context, id, mode string) (*server.SessionStatus, error) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	e, ok := r.entries[id]
 	if !ok {
+		r.mu.Unlock()
 		return nil, server.ErrSessionNotFound
 	}
 	if mode != "hijack" && mode != "open" {
+		r.mu.Unlock()
 		return nil, &server.SessionValidationError{Msg: "invalid input_mode: " + mode}
 	}
 	e.inputMode = mode
@@ -155,7 +169,10 @@ func (r *SessionRegistryImpl) SetMode(_ context.Context, id, mode string) (*serv
 	if e.conn != nil {
 		_ = e.conn.SetMode(mode) // mode already validated above
 	}
-	return r.snapshotStatus(e), nil
+	st := r.snapshotStatus(e)
+	r.mu.Unlock()
+	r.syncHubInputMode(ctx, id, mode)
+	return st, nil
 }
 
 // ClearSession clears the emulated screen when a live connector exists.
