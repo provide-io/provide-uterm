@@ -56,24 +56,47 @@ def split_shebang(text: str) -> tuple[str, str]:
     return "", text
 
 
-def strip_leading_comment_block(text: str) -> str:
+def _is_spdx_line(line: str) -> bool:
+    """Whether a line belongs to the header itself rather than to the author."""
+    stripped = line.strip()
+    return stripped == "#" or stripped.startswith(("# SPDX-FileCopyrightText", "# SPDX-License-Identifier"))
+
+
+def partition_leading_comments(text: str) -> tuple[list[str], str]:
+    """Split the top of a file into the comments worth keeping, and the rest.
+
+    Everything the header itself is made of — the two SPDX lines and the bare
+    ``#`` delimiters around them — is dropped, because a canonical block is
+    about to be written in its place. Every *other* leading comment is kept.
+
+    That distinction is the whole point. Two comments that live directly under
+    the header are read by tooling: ``# uv-package: <name>`` tells the
+    golden-corpus drift check which workspace package to run a generator
+    under, and ``# Mutation-enforced at killed==100`` records a file's
+    mutation perimeter. An earlier version of this stripped every leading
+    comment before rewriting the header, which deleted both — silently, since
+    the file still had a valid header afterwards.
+
+    Trailing blank lines are handed back with the body rather than swallowed,
+    so the separation an author put between the header and their code
+    survives being normalized.
+    """
     lines = text.splitlines(keepends=True)
     idx = 0
-    while idx < len(lines):
-        line = lines[idx]
-        if line.startswith("#") or line.strip() == "":
-            idx += 1
-            continue
-        break
-    while idx < len(lines) and lines[idx].strip() == "":
+    while idx < len(lines) and (lines[idx].startswith("#") or lines[idx].strip() == ""):
         idx += 1
-    return "".join(lines[idx:])
+    head = lines[:idx]
+    while head and head[-1].strip() == "":
+        head.pop()
+        idx -= 1
+    kept = [line for line in head if not _is_spdx_line(line) and line.strip() != ""]
+    return kept, "".join(lines[idx:])
 
 
 def normalize_python_text(text: str) -> str:
     shebang, rest = split_shebang(text)
-    body = strip_leading_comment_block(rest)
-    return shebang + "".join(CANONICAL_BLOCK) + body
+    kept, body = partition_leading_comments(rest)
+    return shebang + "".join(CANONICAL_BLOCK) + "".join(kept) + body
 
 
 def has_canonical_header(text: str) -> bool:
