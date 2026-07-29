@@ -82,17 +82,29 @@ func applyServerOverrides(cfg *serverconfig.UtermServerConfig, host string, port
 	}
 }
 
-// buildServer assembles a runnable server from config + CLI overrides. It sets
-// up telemetry (the app layer — the one place SetupTelemetry belongs), builds
-// the authenticator/authz, TermHub, control-plane engine, and a concrete
-// SessionRegistry, and returns the wired server without binding a socket.
+// buildServer assembles a runnable server from a config file + CLI overrides.
+// It is the `uterm server` entry point; buildServerFromConfig does the wiring
+// once the config is resolved, so callers that build a config another way (the
+// live conformance driver, see livedriver.go) reuse the same assembly.
 func buildServer(ctx context.Context, configPath, host string, port int, frontendDir string) (*serverBundle, error) {
 	cfg, err := serverconfig.LoadServerConfig(configPath)
 	if err != nil {
 		return nil, err
 	}
 	applyServerOverrides(cfg, host, port)
+	return buildServerFromConfig(ctx, cfg, frontendDir)
+}
 
+// buildServerFromConfig assembles a runnable server from an already-resolved
+// config. It sets up telemetry (the app layer — the one place SetupTelemetry
+// belongs), builds the authenticator/authz, TermHub, control-plane engine, and
+// a concrete SessionRegistry, and returns the wired server without binding a
+// socket.
+func buildServerFromConfig(
+	ctx context.Context,
+	cfg *serverconfig.UtermServerConfig,
+	frontendDir string,
+) (*serverBundle, error) {
 	// App layer: initialise telemetry once, then thread the logger through.
 	if _, err := ptel.SetupTelemetry(); err != nil {
 		return nil, err

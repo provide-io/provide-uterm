@@ -73,11 +73,17 @@ def _typescript(root: Path) -> DriverSpec:
 
 
 def _go(root: Path) -> DriverSpec:
-    return DriverSpec(
-        language="go",
-        command=("go", "run", "./cmd/uterm-live-driver"),
-        cwd=root / "packages/provide-uterm-go",
-    )
+    """The Go driver, preferring a built binary over building it every cell.
+
+    ``GOWORK=off`` because a contributor's repo-root ``go.work`` (untracked,
+    local-only) can point at sibling modules that are not on this machine, and
+    every ``go`` command in the module fails until it is ignored. The driver
+    must build from the module itself in any case.
+    """
+    package = root / "packages/provide-uterm-go"
+    built = package / "bin/uterm-live-driver"
+    command = (str(built),) if built.exists() else ("go", "run", "./cmd/uterm-live-driver")
+    return DriverSpec(language="go", command=command, cwd=package, env={"GOWORK": "off"})
 
 
 def _csharp(root: Path) -> DriverSpec:
