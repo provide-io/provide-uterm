@@ -66,7 +66,7 @@
       "step": "listed",
       "path": "body.0.lifecycle_state",
       "present": true,
-      "why": "Its value depends on how far startup got, but a port that never reports lifecycle at all has dropped the field a dashboard reads."
+      "why": "Only presence, because the value cannot be compared yet — and not because it races. The reference and the C# port both report 'running' here, having brought the auto_start session up at boot; Go reports 'waiting' and TypeScript 'stopped', because neither acts on auto_start, and both use a vocabulary the reference does not (the reference's is stopped|starting|running|error, bridge/contracts.py). Masking it is what let three different answers pass. Drop it from the volatile lists and assert 'running' once Go and TypeScript honour auto_start; the mask is the only thing standing between this scenario and that assertion."
     },
     {
       "step": "fetched",

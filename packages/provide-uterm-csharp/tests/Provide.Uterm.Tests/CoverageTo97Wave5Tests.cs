@@ -541,7 +541,7 @@ public class CoverageTo97Wave5Tests
             Visibility = "public",
             Owner = "o",
             Tags = new List<string> { "t" },
-            Config = new Dictionary<string, object?> { ["k"] = 1 },
+            ConnectorConfig = new Dictionary<string, object?> { ["k"] = 1 },
         };
         var cfg = new UtermServerConfig
         {

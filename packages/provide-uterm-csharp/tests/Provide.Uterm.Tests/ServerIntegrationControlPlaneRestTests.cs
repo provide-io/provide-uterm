@@ -103,7 +103,7 @@ public sealed class ServerIntegrationControlPlaneRestTests
             analyze.EnsureSuccessStatusCode();
             var analysis = await analyze.Content.ReadFromJsonAsync<JsonElement>();
             Assert.Equal("demo", analysis.GetProperty("session_id").GetString());
-            Assert.True(analysis.GetProperty("analysis").TryGetProperty("lifecycle_state", out _));
+            Assert.Equal(JsonValueKind.String, analysis.GetProperty("analysis").ValueKind); // prose, not status
 
             var snap = await http.GetAsync("/api/sessions/demo/snapshot");
             snap.EnsureSuccessStatusCode();
@@ -116,7 +116,7 @@ public sealed class ServerIntegrationControlPlaneRestTests
             var disc = await http.PostAsync("/api/sessions/demo/disconnect", null);
             disc.EnsureSuccessStatusCode();
             var discBody = await disc.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.Equal("disconnected", discBody.GetProperty("lifecycle_state").GetString());
+            Assert.Equal("stopped", discBody.GetProperty("lifecycle_state").GetString()); // reference vocabulary
 
             var badMode = await http.PostAsync(
                 "/api/sessions/demo/mode",

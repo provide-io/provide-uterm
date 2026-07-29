@@ -107,85 +107,6 @@ public sealed partial class UtermServer : IAsyncDisposable
     /// Exposed for tests that assert which backend the factory selected.</summary>
     internal IGraphicalTargetRegistry GraphicalTargets => _deps.GraphicalTargets;
 
-    public string? BaseAddress { get; private set; }
-
-    public void MarkReady() => _ready = true;
-
-    /// <summary>Build the host without binding. Used by in-process tests via <see cref="CreateHandler"/>.</summary>
-    public WebApplication Build(string[]? urls = null)
-    {
-        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
-        {
-            Args = Array.Empty<string>(),
-            ApplicationName = typeof(UtermServer).Assembly.FullName,
-        });
-        builder.Logging.ClearProviders(); // requires Microsoft.Extensions.Logging
-        builder.WebHost.UseKestrel();
-        if (urls is { Length: > 0 })
-        {
-            builder.WebHost.UseUrls(urls);
-        }
-        else
-        {
-            var host = _deps.Config.Server.Host;
-            var port = _deps.Config.Server.Port;
-            builder.WebHost.UseUrls($"http://{host}:{port}");
-        }
-
-        builder.Services.AddSingleton(this);
-        var app = builder.Build();
-        app.UseWebSockets();
-        UseFrameworkRefusalBodies(app);
-        MapRoutes(app);
-        _app = app;
-        return app;
-    }
-
-    /// <summary>Start listening and mark ready. Returns when the host stops.</summary>
-    public async Task RunAsync(CancellationToken cancellationToken = default)
-    {
-        var app = _app ?? Build();
-        await app.StartAsync(cancellationToken).ConfigureAwait(false);
-        BaseAddress = app.Urls.FirstOrDefault();
-        MarkReady();
-        _runTask = app.WaitForShutdownAsync(cancellationToken);
-        await _runTask.ConfigureAwait(false);
-    }
-
-    /// <summary>Start in background; useful for CLI and tests.</summary>
-    public async Task StartAsync(CancellationToken cancellationToken = default)
-    {
-        var app = _app ?? Build();
-        await app.StartAsync(cancellationToken).ConfigureAwait(false);
-        BaseAddress = app.Urls.FirstOrDefault();
-        MarkReady();
-    }
-
-    public async Task StopAsync(CancellationToken cancellationToken = default)
-    {
-        if (_app is not null)
-        {
-            await _app.StopAsync(cancellationToken).ConfigureAwait(false);
-        }
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        if (_app is not null)
-        {
-            await _app.DisposeAsync().ConfigureAwait(false);
-            _app = null;
-        }
-    }
-
-    /// <summary>Expose the request pipeline for in-process HttpClient tests.</summary>
-    public HttpMessageHandler CreateHandler()
-    {
-        var app = _app ?? Build(new[] { "http://127.0.0.1:0" });
-        // Ensure routes exist; for TestServer-style use we return a custom handler.
-        return new PipelineHandler(app);
-    }
-
     private void MapRoutes(WebApplication app)
     {
         app.MapGet("/api/health", HandleHealth);
@@ -336,9 +257,9 @@ public sealed partial class UtermServer : IAsyncDisposable
             st.InputMode = hubSt.InputMode;
         }
 
-        if (_deps.Registry.TryGetDefinition(st.SessionId, out var def) && def.Config.Count > 0)
+        if (_deps.Registry.TryGetDefinition(st.SessionId, out var def) && def.ConnectorConfig.Count > 0)
         {
-            st.ConnectorConfig = new Dictionary<string, object?>(def.Config);
+            st.ConnectorConfig = new Dictionary<string, object?>(def.ConnectorConfig);
         }
 
         return st;
@@ -358,9 +279,15 @@ public sealed partial class UtermServer : IAsyncDisposable
     {
         var st = _deps.Registry.StartSession(sessionId);
         if (st is null) return null;
-        st.ConnectorConfig = new Dictionary<string, object?>(def.Config);
+        st.ConnectorConfig = new Dictionary<string, object?>(def.ConnectorConfig);
         // Ensure hub worker state so ring-buffer events attach to a real worker id.
-        _deps.Hub.Registry.SetDefault(sessionId, new Hub.WorkerTermState());
+        // The state this creates carries the session's own input mode: a fresh
+        // WorkerTermState says "hijack" (what an unknown worker is assumed to
+        // be) and EnrichStatus reads the mode back off the hub, so the default
+        // would report every activated session as hijack-only whatever its
+        // configuration said. A worker already registered here keeps the mode
+        // it reported — the hub learns that from the worker, as the reference does.
+        _deps.Hub.Registry.SetDefault(sessionId, new Hub.WorkerTermState { InputMode = def.InputMode });
         var ct = def.ConnectorType.Trim().ToLowerInvariant();
         if (ct is "shell" or "ushell" or "pty")
         {
@@ -1338,40 +1265,6 @@ public sealed partial class UtermServer : IAsyncDisposable
         }
     }
 
-    /// <summary>Routes in-process HTTP through the WebApplication pipeline.</summary>
-    private sealed class PipelineHandler : HttpMessageHandler
-    {
-        private readonly WebApplication _app;
-        private readonly ConcurrentDictionary<string, byte> _started = new();
-
-        public PipelineHandler(WebApplication app) => _app = app;
-
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            // Use TestServer-like approach via HttpContext features is complex;
-            // instead start Kestrel on ephemeral port once and forward.
-            if (_started.TryAdd("1", 0))
-            {
-                await _app.StartAsync(cancellationToken).ConfigureAwait(false);
-            }
-
-            var baseUrl = _app.Urls.FirstOrDefault() ?? "http://127.0.0.1";
-            using var client = new HttpClient { BaseAddress = new Uri(baseUrl) };
-            // Rebuild request for HttpClient
-            var clone = new HttpRequestMessage(request.Method, request.RequestUri);
-            if (request.Content is not null)
-            {
-                clone.Content = request.Content;
-            }
-
-            foreach (var h in request.Headers)
-            {
-                clone.Headers.TryAddWithoutValidation(h.Key, h.Value);
-            }
-
-            return await client.SendAsync(clone, cancellationToken).ConfigureAwait(false);
-        }
-    }
 }
 
 /// <summary>Factory helpers for assembling a runnable server from config.</summary>
