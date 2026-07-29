@@ -88,6 +88,14 @@ silent skip.
 | `list_sessions` | the client library's session list | `status`, `ok`, `body` |
 | `get_session` | one session by id | `status`, `ok`, `body` |
 | `session_snapshot` | a session's snapshot | `status`, `ok`, `body` |
+| `session_events` | a session's recent events | `status`, `ok`, `body` |
+| `set_input_mode` | put a session in `open` or `hijack` mode | `status`, `ok`, `body` |
+| `hijack_acquire` | take the lease on a worker | `status`, `ok`, `body` |
+| `hijack_heartbeat` | extend the lease | `status`, `ok`, `body` |
+| `hijack_send` | send `keys` to a hijacked worker | `status`, `ok`, `body` |
+| `hijack_step` | single-step a hijacked worker | `status`, `ok`, `body` |
+| `hijack_snapshot` | the screen, through the lease | `status`, `ok`, `body` |
+| `hijack_release` | give the lease back | `status`, `ok`, `body` |
 | `http_get` | a raw GET of `path` | `status`, `ok`, `body` |
 | `http_post` | a raw POST of `path` with `body` | `status`, `ok`, `body` |
 
@@ -129,6 +137,39 @@ Each step may carry `auth`:
 `body` is the parsed JSON body, or — when the body was not JSON — the string
 `"<non-json>"`. A body nobody can parse is the same observation in every
 language; the bytes are not.
+
+## A step that needs an earlier step's answer
+
+`hijack_send` needs the `hijack_id` that `hijack_acquire` returned. Nothing in
+the first wave of actions had this shape — every step was independent.
+
+A string field in a step may therefore hold a **reference**:
+
+```json
+{ "id": "send", "action": "hijack_send", "hijack_id": "${acquire.body.hijack_id}", "keys": "echo hi\n" }
+```
+
+`${<step id>.<dotted path>}` is resolved by the driver, against the fields it
+has already recorded, at the moment it builds the request. The grammar is
+deliberately the smallest thing that works: one step id, one dotted path, no
+expressions, no defaults, no nesting, and the whole field must be the
+reference — `"a${x.y}b"` is not a reference and is sent as written.
+
+The harness cannot do this resolution, which is worth stating because it is
+the one place the "drivers observe, the harness judges" rule does not reach:
+the driver performs the request, so the driver must hold the value before
+anyone else could have seen it.
+
+Four implementations of one small thing is four chances to disagree, so the
+risk is paid down directly: the resolver gets a scenario of its own, whose
+steps do nothing but refer to each other's answers. A driver whose resolver is
+wrong then fails a cell that has nothing to do with hijacking, and the failure
+lands on the resolver rather than on whatever feature happened to use it.
+
+A reference that names a step that has not run, or a path that is not there,
+is a **run error** — not a step observation. It is a malformed scenario, and
+recording it as a field would let the harness compare it as though the server
+had done something.
 
 ## Capabilities
 

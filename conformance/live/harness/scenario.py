@@ -13,6 +13,7 @@ parity.
 from __future__ import annotations
 
 import json
+import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -31,9 +32,24 @@ SCENARIO_DIR: Final = _HERE.parent / "scenarios"
 SCHEMA_DIR: Final = _HERE.parent / "schema"
 
 #: Actions that address a session and are meaningless without one.
-_NEEDS_SESSION: Final = frozenset({"get_session", "session_snapshot"})
+_NEEDS_SESSION: Final = frozenset({"get_session", "session_snapshot", "session_events", "set_input_mode"})
 #: Actions that name a path themselves rather than deriving one.
 _NEEDS_PATH: Final = frozenset({"http_get", "http_post"})
+#: Actions that act on a worker's lease.
+_NEEDS_WORKER: Final = frozenset(
+    {
+        "hijack_acquire",
+        "hijack_heartbeat",
+        "hijack_send",
+        "hijack_step",
+        "hijack_snapshot",
+        "hijack_release",
+    }
+)
+#: Actions that act on a lease somebody already holds.
+_NEEDS_LEASE: Final = _NEEDS_WORKER - {"hijack_acquire"}
+#: A reference to what an earlier step observed, resolved by the driver.
+_REFERENCE: Final = re.compile(r"^\$\{([a-z0-9_]+)\.([A-Za-z0-9_.]+)\}$")
 
 
 @dataclass(frozen=True)
@@ -47,6 +63,13 @@ class Step:
     session_id: str | None
     body: Any
     volatile: tuple[str, ...]
+    worker_id: str | None = None
+    hijack_id: str | None = None
+    owner: str | None = None
+    lease_s: int | None = None
+    keys: str | None = None
+    input_mode: str | None = None
+    limit: int | None = None
 
 
 @dataclass(frozen=True)
@@ -82,6 +105,7 @@ def load_scenario(path: Path) -> Scenario:
     _refuse_duplicates(steps, path)
     expectations = tuple(parse_expectation(entry) for entry in raw["expect"])
     _refuse_unknown_steps(steps, expectations, path)
+    _refuse_unresolvable_references(steps, path)
     return Scenario(
         id=raw["id"],
         title=raw["title"],
@@ -121,12 +145,43 @@ def _step(entry: Mapping[str, Any]) -> Step:
         session_id=entry.get("session_id"),
         body=entry.get("body"),
         volatile=tuple(entry.get("volatile", ())),
+        worker_id=entry.get("worker_id"),
+        hijack_id=entry.get("hijack_id"),
+        owner=entry.get("owner"),
+        lease_s=entry.get("lease_s"),
+        keys=entry.get("keys"),
+        input_mode=entry.get("input_mode"),
+        limit=entry.get("limit"),
     )
     if action in _NEEDS_PATH and step.path is None:
         raise ValueError(f"step {step.id!r}: {action} needs a path")
     if action in _NEEDS_SESSION and step.session_id is None:
         raise ValueError(f"step {step.id!r}: {action} needs a session_id")
+    if action in _NEEDS_WORKER and step.worker_id is None:
+        raise ValueError(f"step {step.id!r}: {action} needs a worker_id")
+    if action in _NEEDS_LEASE and step.hijack_id is None:
+        raise ValueError(f"step {step.id!r}: {action} needs a hijack_id")
+    if action == "hijack_send" and step.keys is None:
+        raise ValueError(f"step {step.id!r}: hijack_send needs keys to send")
     return step
+
+
+def _refuse_unresolvable_references(steps: Sequence[Step], path: Path) -> None:
+    """A ``${step.path}`` reference must name a step that has already run.
+
+    Four drivers each resolve these for themselves, so each would discover a
+    bad one at run time and word the failure differently. It is a malformed
+    scenario rather than anything a server did, so it is refused once, here.
+    """
+    ran: set[str] = set()
+    for step in steps:
+        for field in (step.hijack_id, step.session_id, step.worker_id, step.keys, step.owner):
+            match = _REFERENCE.match(field) if isinstance(field, str) else None
+            if match is not None and match.group(1) not in ran:
+                raise ValueError(
+                    f"{path.name}: step {step.id!r} refers to {match.group(1)!r}, which has not run by then"
+                )
+        ran.add(step.id)
 
 
 def _refuse_duplicates(steps: Sequence[Step], path: Path) -> None:

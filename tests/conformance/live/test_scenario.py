@@ -109,3 +109,97 @@ class TestCommittedScenarios:
         for scenario in load_scenarios(SCENARIO_DIR):
             for expectation in scenario.expectations:
                 assert expectation.why, f"{scenario.id}: {expectation.step}.{expectation.path} says no why"
+
+
+class TestStepReferences:
+    """`${step.path}` — the one thing a driver has to resolve for itself."""
+
+    def test_a_reference_to_an_earlier_step_is_accepted(self, tmp_path: Path) -> None:
+        raw = {
+            **_MINIMAL,
+            "steps": [
+                {"id": "acquire", "action": "hijack_acquire", "worker_id": "w"},
+                {
+                    "id": "send",
+                    "action": "hijack_send",
+                    "worker_id": "w",
+                    "hijack_id": "${acquire.body.hijack_id}",
+                    "keys": "x",
+                },
+            ],
+            "expect": [],
+        }
+        scenario = load_scenario(_write(tmp_path, raw))
+        assert scenario.steps[1].hijack_id == "${acquire.body.hijack_id}"
+
+    def test_a_reference_to_a_step_that_does_not_exist_is_refused(self, tmp_path: Path) -> None:
+        # Four drivers would each discover this at run time, as four
+        # differently-worded errors. It is a malformed scenario, so it is
+        # refused once, here.
+        raw = {
+            **_MINIMAL,
+            "steps": [
+                {"id": "send", "action": "hijack_send", "worker_id": "w", "hijack_id": "${nope.body.x}", "keys": "x"}
+            ],
+            "expect": [],
+        }
+        with pytest.raises(ValueError, match="nope"):
+            load_scenario(_write(tmp_path, raw))
+
+    def test_a_reference_to_a_later_step_is_refused(self, tmp_path: Path) -> None:
+        # Steps run in order, so a forward reference can never resolve.
+        raw = {
+            **_MINIMAL,
+            "steps": [
+                {
+                    "id": "send",
+                    "action": "hijack_send",
+                    "worker_id": "w",
+                    "hijack_id": "${acquire.body.hijack_id}",
+                    "keys": "x",
+                },
+                {"id": "acquire", "action": "hijack_acquire", "worker_id": "w"},
+            ],
+            "expect": [],
+        }
+        with pytest.raises(ValueError, match="has not run"):
+            load_scenario(_write(tmp_path, raw))
+
+    def test_a_reference_to_itself_is_refused(self, tmp_path: Path) -> None:
+        raw = {
+            **_MINIMAL,
+            "steps": [
+                {"id": "send", "action": "hijack_send", "worker_id": "w", "hijack_id": "${send.body.x}", "keys": "x"}
+            ],
+            "expect": [],
+        }
+        with pytest.raises(ValueError, match="has not run"):
+            load_scenario(_write(tmp_path, raw))
+
+    def test_a_hijack_action_with_no_worker_is_refused(self, tmp_path: Path) -> None:
+        raw = {**_MINIMAL, "steps": [{"id": "one", "action": "hijack_acquire"}], "expect": []}
+        with pytest.raises(ValueError, match="worker_id"):
+            load_scenario(_write(tmp_path, raw))
+
+    def test_a_lease_action_with_no_lease_is_refused(self, tmp_path: Path) -> None:
+        raw = {**_MINIMAL, "steps": [{"id": "one", "action": "hijack_step", "worker_id": "w"}], "expect": []}
+        with pytest.raises(ValueError, match="hijack_id"):
+            load_scenario(_write(tmp_path, raw))
+
+    def test_sending_with_nothing_to_send_is_refused(self, tmp_path: Path) -> None:
+        raw = {
+            **_MINIMAL,
+            "steps": [{"id": "one", "action": "hijack_send", "worker_id": "w", "hijack_id": "h"}],
+            "expect": [],
+        }
+        with pytest.raises(ValueError, match="keys"):
+            load_scenario(_write(tmp_path, raw))
+
+    def test_setting_a_mode_nobody_defined_is_refused_by_the_schema(self, tmp_path: Path) -> None:
+        raw = {
+            **_MINIMAL,
+            "steps": [{"id": "one", "action": "set_input_mode", "session_id": "s", "input_mode": "sideways"}],
+            "expect": [],
+        }
+        with pytest.raises(ValueError, match="does not match"):
+            load_scenario(_write(tmp_path, raw))

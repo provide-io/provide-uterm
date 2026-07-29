@@ -25,6 +25,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import socket
 import sys
 import tempfile
@@ -40,6 +41,8 @@ CAPABILITIES = ("status.observed", "hijack.ws", "hijack.rest")
 FORGED_TOKEN = "not.a.real.token"  # noqa: S105  # pragma: allowlist secret
 #: What a body that is not JSON is recorded as, in every language.
 NON_JSON = "<non-json>"
+#: A step field that is entirely a reference to what an earlier step saw.
+REFERENCE = re.compile(r"^\$\{([a-z0-9_]+)\.([A-Za-z0-9_.]+)\}$")
 
 
 # --------------------------------------------------------------------------
@@ -152,21 +155,81 @@ def _headers(auth: str, token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+def _calls(client: Any, step: dict[str, Any]) -> dict[str, Any]:
+    """Every library action, bound to this step's arguments.
+
+    Each one is the method a consumer of the client library would call. The
+    point of going through the library rather than building the request here
+    is that the library is what is under test.
+    """
+    session = lambda: str(step.get("session_id"))  # noqa: E731
+    worker = lambda: str(step.get("worker_id"))  # noqa: E731
+    lease = lambda: str(step.get("hijack_id"))  # noqa: E731
+    return {
+        "health": lambda: client.health(),
+        "list_sessions": lambda: client.list_sessions(),
+        "get_session": lambda: client.get_session(session()),
+        "session_snapshot": lambda: client.session_snapshot(session()),
+        "session_events": lambda: client.session_events(session(), limit=int(step.get("limit", 100))),
+        "set_input_mode": lambda: client.set_session_mode(session(), str(step.get("input_mode"))),
+        "hijack_acquire": lambda: client.acquire(
+            worker(), owner=str(step.get("owner", "operator")), lease_s=int(step.get("lease_s", 90))
+        ),
+        "hijack_heartbeat": lambda: client.heartbeat(worker(), lease(), lease_s=int(step.get("lease_s", 90))),
+        "hijack_send": lambda: client.send(worker(), lease(), keys=str(step.get("keys", ""))),
+        "hijack_step": lambda: client.step(worker(), lease()),
+        "hijack_snapshot": lambda: client.snapshot(worker(), lease()),
+        "hijack_release": lambda: client.release(worker(), lease()),
+    }
+
+
 async def _library_step(step: dict[str, Any], base_url: str, token: str) -> dict[str, Any]:
     """One step performed through the client library a consumer would use."""
     from provide.uterm.client.hijack import HijackClient
 
     recorder = _Recorder()
     client = HijackClient(base_url, headers=_headers(step.get("auth", "token"), token), transport=recorder)
-    calls = {
-        "health": lambda: client.health(),
-        "list_sessions": lambda: client.list_sessions(),
-        "get_session": lambda: client.get_session(str(step.get("session_id"))),
-        "session_snapshot": lambda: client.session_snapshot(str(step.get("session_id"))),
-    }
     async with client:
-        ok, _ = await calls[step["action"]]()
+        ok, _ = await _calls(client, step)[step["action"]]()
     return {"status": recorder.status, "ok": bool(ok), "body": recorder.body, "error": None}
+
+
+def _resolved(step: dict[str, Any], seen: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """The step with every ``${id.path}`` replaced by what that step saw.
+
+    The harness cannot do this: the driver builds the request, so the driver
+    is the only thing holding the value in time to use it. The grammar is one
+    step id and one dotted path, and the whole field must be the reference —
+    anything else is sent as written.
+    """
+    resolved = dict(step)
+    for key, value in step.items():
+        match = REFERENCE.match(value) if isinstance(value, str) else None
+        if match is None:
+            continue
+        fields = seen.get(match.group(1))
+        if fields is None:
+            raise ValueError(f"step {step['id']!r} refers to {match.group(1)!r}, which has not run")
+        found = _dig(fields, match.group(2).split("."))
+        if found is _ABSENT:
+            raise ValueError(f"step {step['id']!r} refers to {value}, which is not there")
+        resolved[key] = found
+    return resolved
+
+
+def _dig(node: Any, segments: list[str]) -> Any:
+    """Read a dotted path out of what a step recorded."""
+    for segment in segments:
+        if isinstance(node, dict) and segment in node:
+            node = node[segment]
+        elif isinstance(node, list) and segment.isdigit() and int(segment) < len(node):
+            node = node[int(segment)]
+        else:
+            return _ABSENT
+    return node
+
+
+_ABSENT = object()
 
 
 async def _raw_step(step: dict[str, Any], base_url: str, token: str) -> dict[str, Any]:
@@ -188,17 +251,23 @@ async def _raw_step(step: dict[str, Any], base_url: str, token: str) -> dict[str
 async def _run_steps(scenario: dict[str, Any], base_url: str, token: str) -> list[dict[str, Any]]:
     """Every step in order, each recorded whatever it did."""
     steps: list[dict[str, Any]] = []
-    for step in scenario["steps"]:
+    seen: dict[str, dict[str, Any]] = {}
+    for raw_step in scenario["steps"]:
+        # A reference that cannot be resolved is a malformed scenario, not
+        # something a server did, so it ends the run rather than becoming an
+        # observation the harness would compare.
+        step = _resolved(raw_step, seen)
         action = step["action"]
         try:
             if action in {"http_get", "http_post"}:
                 fields = await _raw_step(step, base_url, token)
-            elif action in {"health", "list_sessions", "get_session", "session_snapshot"}:
-                fields = await _library_step(step, base_url, token)
             else:
-                raise ValueError(f"unknown action {action!r}")
+                fields = await _library_step(step, base_url, token)
+        except KeyError as error:
+            raise ValueError(f"unknown action {action!r}") from error
         except Exception as error:
             fields = {"status": None, "ok": False, "body": None, "error": f"{type(error).__name__}: {error}"}
+        seen[step["id"]] = fields
         steps.append({"id": step["id"], "fields": fields})
     return steps
 
