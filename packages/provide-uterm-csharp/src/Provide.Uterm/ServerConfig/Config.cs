@@ -136,6 +136,17 @@ public sealed class SessionDefinition
     public string? Owner { get; set; }
     public List<string> Tags { get; set; } = new();
     public Dictionary<string, object?> Config { get; set; } = new();
+
+    /// <summary>Whether a viewer may type. Reference default is <c>open</c>
+    /// (config_schema_session.SessionDefinition.input_mode / Go InputMode).</summary>
+    public string InputMode { get; set; } = "open";
+
+    /// <summary>Whether the session is brought up at boot. Reference default is true.</summary>
+    public bool AutoStart { get; set; } = true;
+
+    /// <summary>Per-session recording override; null defers to
+    /// <see cref="RecordingConfig.EnabledByDefault"/>, as the reference does.</summary>
+    public bool? RecordingEnabled { get; set; }
 }
 
 public sealed class GraphicalTargetDefinition
@@ -183,8 +194,27 @@ public sealed class UtermServerConfig
         {
             Environment = "production",
             Auth = new AuthConfig { Mode = "dev_token" },
+            Sessions = [DefaultShellSession()],
         };
         cfg.Server.DerivePublicBaseUrl();
         return cfg;
     }
+
+    /// <summary>
+    /// The one session the default configuration ships — the first thing anyone
+    /// who starts a server sees, so it is the same in every port: Python's
+    /// <c>config_schema.UtermServerConfig.sessions</c> default and Go's
+    /// <c>serverconfig.newDefaultShellSession</c>. Tag order is part of it.
+    /// </summary>
+    public static SessionDefinition DefaultShellSession() => new()
+    {
+        SessionId = "provide-shell",
+        DisplayName = "Provide Shell",
+        ConnectorType = "shell",
+        InputMode = "open",
+        AutoStart = true,
+        Tags = ["shell", "reference"],
+        Visibility = "public",
+        Owner = null,
+    };
 }

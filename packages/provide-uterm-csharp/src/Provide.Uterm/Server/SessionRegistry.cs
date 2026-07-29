@@ -3,26 +3,74 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
+using System.Text.Json.Serialization;
 using Provide.Uterm.ServerConfig;
 
 namespace Provide.Uterm.Server;
 
-/// <summary>Runtime session status returned by /api/sessions.</summary>
+/// <summary>
+/// Runtime session status returned by /api/sessions — the wire shape of
+/// Python's <c>SessionRuntimeStatus.model_dump</c> and Go's
+/// <c>server.SessionStatus</c>, property for property and in their order.
+///
+/// The three nullable fields opt out of the server's global
+/// "omit when null" so they serialize as JSON <c>null</c>: a client has to be
+/// able to tell "has not stopped" from "this port does not say".
+///
+/// <see cref="IsHijacked"/> and <see cref="ConnectorConfig"/> are runtime
+/// bookkeeping this port keeps on the same object; neither is part of the
+/// reference wire shape, so neither is serialized.
+/// </summary>
 public sealed class SessionStatus
 {
     public required string SessionId { get; set; }
     public required string DisplayName { get; set; }
+    public string CreatedAt { get; set; } = Timestamps.NowIso();
     public required string ConnectorType { get; set; }
-    public required string Visibility { get; set; }
     public string LifecycleState { get; set; } = "created";
-    public string CreatedAt { get; set; } = DateTimeOffset.UtcNow.ToString("O");
-    public string? Owner { get; set; }
+    public string InputMode { get; set; } = "open";
+    public bool Connected { get; set; }
+    public bool AutoStart { get; set; } = true;
     public List<string> Tags { get; set; } = new();
-    public bool WorkerOnline { get; set; }
+    public bool RecordingEnabled { get; set; }
+    public bool RecordingAvailable { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
+    public string? Owner { get; set; }
+
+    public required string Visibility { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
+    public double? StoppedAt { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
+    public string? LastError { get; set; }
+
+    /// <summary>Whether a hijack lease is held. Hub state, not wire state.</summary>
+    [JsonIgnore]
     public bool IsHijacked { get; set; }
-    public string InputMode { get; set; } = "hijack";
-    /// <summary>Connector config used at connect time (Go connector_config wire field).</summary>
+
+    /// <summary>Connector config used at connect time. Hub state, not wire state.</summary>
+    [JsonIgnore]
     public Dictionary<string, object?> ConnectorConfig { get; set; } = new();
+}
+
+/// <summary>
+/// The one place this port formats a wall-clock instant for the API.
+///
+/// The reference emits Python's <c>datetime.isoformat</c> of a UTC value —
+/// microsecond precision and a <c>Z</c> suffix. .NET's round-trip format
+/// ("O") writes seven fractional digits and <c>+00:00</c>, which is the same
+/// instant but not the same string, so it is not used here.
+/// </summary>
+public static class Timestamps
+{
+    /// <summary>Now, as the reference writes it.</summary>
+    public static string NowIso() => Iso(DateTimeOffset.UtcNow);
+
+    /// <summary>An instant, as the reference writes it.</summary>
+    public static string Iso(DateTimeOffset when) =>
+        when.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.ffffff") + "Z";
 }
 
 public sealed class SessionItem
@@ -57,9 +105,17 @@ public sealed class InMemorySessionRegistry : ISessionRegistry
     private readonly object _gate = new();
     private readonly Dictionary<string, SessionDefinition> _defs = new(StringComparer.Ordinal);
     private readonly Dictionary<string, SessionStatus> _status = new(StringComparer.Ordinal);
+    private readonly bool _recordingEnabledByDefault;
 
-    public InMemorySessionRegistry(IEnumerable<SessionDefinition>? seed = null)
+    /// <param name="seed">Config-declared sessions to register at boot.</param>
+    /// <param name="recordingEnabledByDefault">
+    /// What a definition that states no preference resolves to —
+    /// <c>recording.enabled_by_default</c>, as in the reference.
+    /// </param>
+    public InMemorySessionRegistry(
+        IEnumerable<SessionDefinition>? seed = null, bool recordingEnabledByDefault = false)
     {
+        _recordingEnabledByDefault = recordingEnabledByDefault;
         if (seed is null) return;
         foreach (var def in seed)
         {
@@ -116,7 +172,8 @@ public sealed class InMemorySessionRegistry : ISessionRegistry
         {
             if (!_status.TryGetValue(sessionId, out var st)) return null;
             st.LifecycleState = "running";
-            st.WorkerOnline = true;
+            st.Connected = true;
+            st.StoppedAt = null;
             return CloneStatus(st);
         }
     }
@@ -127,8 +184,9 @@ public sealed class InMemorySessionRegistry : ISessionRegistry
         {
             if (!_status.TryGetValue(sessionId, out var st)) return null;
             st.LifecycleState = "disconnected";
-            st.WorkerOnline = false;
+            st.Connected = false;
             st.IsHijacked = false;
+            st.StoppedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0;
             return CloneStatus(st);
         }
     }
@@ -139,8 +197,9 @@ public sealed class InMemorySessionRegistry : ISessionRegistry
         {
             if (!_status.TryGetValue(sessionId, out var st)) return null;
             st.LifecycleState = "running";
-            st.WorkerOnline = true;
+            st.Connected = true;
             st.IsHijacked = false;
+            st.StoppedAt = null;
             return CloneStatus(st);
         }
     }
@@ -220,15 +279,20 @@ public sealed class InMemorySessionRegistry : ISessionRegistry
     {
         SessionId = st.SessionId,
         DisplayName = st.DisplayName,
-        ConnectorType = st.ConnectorType,
-        Visibility = st.Visibility,
-        LifecycleState = st.LifecycleState,
         CreatedAt = st.CreatedAt,
-        Owner = st.Owner,
-        Tags = st.Tags.ToList(),
-        WorkerOnline = st.WorkerOnline,
-        IsHijacked = st.IsHijacked,
+        ConnectorType = st.ConnectorType,
+        LifecycleState = st.LifecycleState,
         InputMode = st.InputMode,
+        Connected = st.Connected,
+        AutoStart = st.AutoStart,
+        Tags = st.Tags.ToList(),
+        RecordingEnabled = st.RecordingEnabled,
+        RecordingAvailable = st.RecordingAvailable,
+        Owner = st.Owner,
+        Visibility = st.Visibility,
+        StoppedAt = st.StoppedAt,
+        LastError = st.LastError,
+        IsHijacked = st.IsHijacked,
         ConnectorConfig = new Dictionary<string, object?>(st.ConnectorConfig),
     };
 
@@ -237,18 +301,23 @@ public sealed class InMemorySessionRegistry : ISessionRegistry
         lock (_gate)
         {
             _defs[def.SessionId] = def;
+            var recording = def.RecordingEnabled ?? _recordingEnabledByDefault;
             if (!_status.ContainsKey(def.SessionId))
             {
                 _status[def.SessionId] = new SessionStatus
                 {
                     SessionId = def.SessionId,
                     DisplayName = string.IsNullOrEmpty(def.DisplayName) ? def.SessionId : def.DisplayName,
+                    CreatedAt = Timestamps.NowIso(),
                     ConnectorType = def.ConnectorType,
-                    Visibility = def.Visibility,
-                    Owner = def.Owner,
-                    Tags = def.Tags.ToList(),
                     LifecycleState = "created",
-                    CreatedAt = DateTimeOffset.UtcNow.ToString("O"),
+                    InputMode = def.InputMode,
+                    AutoStart = def.AutoStart,
+                    Tags = def.Tags.ToList(),
+                    RecordingEnabled = recording,
+                    RecordingAvailable = recording,
+                    Owner = def.Owner,
+                    Visibility = def.Visibility,
                 };
             }
             else
@@ -259,6 +328,9 @@ public sealed class InMemorySessionRegistry : ISessionRegistry
                 st.Visibility = def.Visibility;
                 st.Owner = def.Owner;
                 st.Tags = def.Tags.ToList();
+                st.AutoStart = def.AutoStart;
+                st.RecordingEnabled = recording;
+                st.RecordingAvailable = recording;
             }
 
             return def;
@@ -279,7 +351,7 @@ public sealed class InMemorySessionRegistry : ISessionRegistry
         lock (_gate)
         {
             if (!_status.TryGetValue(sessionId, out var st)) return;
-            st.WorkerOnline = online;
+            st.Connected = online;
             st.IsHijacked = isHijacked;
             st.InputMode = inputMode;
             st.LifecycleState = online ? "running" : "disconnected";

@@ -116,13 +116,19 @@ public static class LiveClientDriver
         return Observe(step.Id, recorder, ok, error, () => JsonSerializer.SerializeToNode(value));
     }
 
-    private static Task<Dictionary<string, object?>> InvokeLibraryAsync(
+    /// <summary>
+    /// What the client library answered, whatever shape that is. A list
+    /// endpoint answers a list and a snapshot may answer nothing at all, so
+    /// this is not narrowed to a dictionary — narrowing it is exactly the bug
+    /// scenario 002 caught in this port's client.
+    /// </summary>
+    private static async Task<object?> InvokeLibraryAsync(
         LiveStep step, HijackClient client, CancellationToken ct) => step.Action switch
         {
-            Actions.Health => client.HealthAsync(ct),
-            Actions.ListSessions => client.ListSessionsAsync(ct),
-            Actions.GetSession => client.GetSessionAsync(RequireSessionId(step), ct),
-            Actions.SessionSnapshot => client.SessionSnapshot(RequireSessionId(step), ct),
+            Actions.Health => await client.HealthAsync(ct).ConfigureAwait(false),
+            Actions.ListSessions => await client.ListSessionsAsync(ct).ConfigureAwait(false),
+            Actions.GetSession => await client.GetSessionAsync(RequireSessionId(step), ct).ConfigureAwait(false),
+            Actions.SessionSnapshot => await client.SessionSnapshot(RequireSessionId(step), ct).ConfigureAwait(false),
             _ => throw new LiveDriverException($"unknown action: {step.Action}"),
         };
 

@@ -182,11 +182,10 @@ public sealed class ConformanceLiveDriverServerTests : IClassFixture<LiveDriverS
         Assert.True((bool?)Fields(result, "create")["ok"]);
         Assert.Equal(id, (string?)Fields(result, "read")["body"]!["session_id"]);
         Assert.Equal(200, (int?)Fields(result, "snapshot")["status"]);
-        // The library's body, not the wire's: the C# HijackClient wraps the
-        // server's bare JSON array under "sessions", and the library is what is
-        // under test — so its reshaping is an observation, not something for a
-        // driver to smooth over.
-        var listed = Fields(result, "listed")["body"]!["sessions"]!.AsArray();
+        // The library's body, not the wire's — but the library hands the array
+        // back as the server sent it, so the two agree. A port that wrapped it
+        // would show up right here.
+        var listed = Fields(result, "listed")["body"]!.AsArray();
         Assert.Contains(listed, s => (string?)s!["session_id"] == id);
     }
 

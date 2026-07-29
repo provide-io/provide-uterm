@@ -222,12 +222,12 @@ public sealed class ServerIntegrationHostRestTests
             Assert.StartsWith("connect-", connectSid);
             Assert.Equal("shell", cbody.GetProperty("connector_type").GetString());
             Assert.Equal("/bin/sh", cbody.GetProperty("connector_config").GetProperty("shell").GetString());
-            // Listable after connect with connector_type + worker_online.
+            // Listable after connect with connector_type + connected.
             var got = await http.GetAsync("/api/sessions/" + connectSid);
             got.EnsureSuccessStatusCode();
             var gbody = await got.Content.ReadFromJsonAsync<JsonElement>();
             Assert.Equal("shell", gbody.GetProperty("connector_type").GetString());
-            Assert.True(gbody.GetProperty("worker_online").GetBoolean());
+            Assert.True(gbody.GetProperty("connected").GetBoolean());
             Assert.Equal("running", gbody.GetProperty("lifecycle_state").GetString());
 
             // Watch timeout with no new events → timed_out true.
@@ -386,7 +386,7 @@ public sealed class ServerIntegrationHostRestTests
             got.EnsureSuccessStatusCode();
             var st = await got.Content.ReadFromJsonAsync<JsonElement>();
             Assert.Equal("shell", st.GetProperty("connector_type").GetString());
-            Assert.True(st.GetProperty("worker_online").GetBoolean());
+            Assert.True(st.GetProperty("connected").GetBoolean());
             Assert.Equal("running", st.GetProperty("lifecycle_state").GetString());
 
             // Live ushell pump publishes session_started / term onto EventBus.
