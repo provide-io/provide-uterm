@@ -155,6 +155,22 @@ def _headers(auth: str, token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+class MalformedStepError(Exception):
+    """A step the scenario wrote wrong, which is not something a server did.
+
+    Ends the run rather than becoming an observation: recording it as a field
+    would let the harness compare it as though the server had answered.
+    """
+
+
+def _needed(step: dict[str, Any], field: str) -> str:
+    """One of a step's required arguments, or a refusal naming what is absent."""
+    value = step.get(field)
+    if value is None:
+        raise MalformedStepError(f"step {step['id']!r}: {step['action']} needs {field}")
+    return str(value)
+
+
 def _calls(client: Any, step: dict[str, Any]) -> dict[str, Any]:
     """Every library action, bound to this step's arguments.
 
@@ -162,21 +178,21 @@ def _calls(client: Any, step: dict[str, Any]) -> dict[str, Any]:
     point of going through the library rather than building the request here
     is that the library is what is under test.
     """
-    session = lambda: str(step.get("session_id"))  # noqa: E731
-    worker = lambda: str(step.get("worker_id"))  # noqa: E731
-    lease = lambda: str(step.get("hijack_id"))  # noqa: E731
+    session = lambda: _needed(step, "session_id")  # noqa: E731
+    worker = lambda: _needed(step, "worker_id")  # noqa: E731
+    lease = lambda: _needed(step, "hijack_id")  # noqa: E731
     return {
         "health": lambda: client.health(),
         "list_sessions": lambda: client.list_sessions(),
         "get_session": lambda: client.get_session(session()),
         "session_snapshot": lambda: client.session_snapshot(session()),
         "session_events": lambda: client.session_events(session(), limit=int(step.get("limit", 100))),
-        "set_input_mode": lambda: client.set_session_mode(session(), str(step.get("input_mode"))),
+        "set_input_mode": lambda: client.set_session_mode(session(), _needed(step, "input_mode")),
         "hijack_acquire": lambda: client.acquire(
             worker(), owner=str(step.get("owner", "operator")), lease_s=int(step.get("lease_s", 90))
         ),
         "hijack_heartbeat": lambda: client.heartbeat(worker(), lease(), lease_s=int(step.get("lease_s", 90))),
-        "hijack_send": lambda: client.send(worker(), lease(), keys=str(step.get("keys", ""))),
+        "hijack_send": lambda: client.send(worker(), lease(), keys=_needed(step, "keys")),
         "hijack_step": lambda: client.step(worker(), lease()),
         "hijack_snapshot": lambda: client.snapshot(worker(), lease()),
         "hijack_release": lambda: client.release(worker(), lease()),
@@ -265,6 +281,11 @@ async def _run_steps(scenario: dict[str, Any], base_url: str, token: str) -> lis
                 fields = await _library_step(step, base_url, token)
         except KeyError as error:
             raise ValueError(f"unknown action {action!r}") from error
+        except MalformedStepError:
+            # Not an observation: a scenario that asked for something it did
+            # not describe. The harness refuses these at load, so reaching one
+            # here means the scenario never went through it.
+            raise
         except Exception as error:
             fields = {"status": None, "ok": False, "body": None, "error": f"{type(error).__name__}: {error}"}
         seen[step["id"]] = fields
