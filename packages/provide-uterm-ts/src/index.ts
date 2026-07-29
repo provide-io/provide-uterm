@@ -22,6 +22,7 @@ export * as apiRoutes from "./api-routes/index.ts";
 export * as auth from "./auth/index.ts";
 export * as bridge from "./bridge/index.ts";
 export * as channels from "./channels/index.ts";
+export * as client from "./client/index.ts";
 export * as cloudflare from "./cloudflare/index.ts";
 export * as cli from "./cli/index.ts";
 export * as colors from "./colors/index.ts";
