@@ -4,7 +4,7 @@
 //
 
 import { describe, expect, it } from "vitest";
-import { golden, named } from "../testing/reconnect-harness.ts";
+import { golden, named, type ReconnectGolden } from "../testing/reconnect-harness.ts";
 import { connectWithRetries, isRetryableTransportError, reconnecting } from "./index.ts";
 
 describe("which failures are the transport", () => {
