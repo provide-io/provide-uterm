@@ -119,3 +119,28 @@ if Path(__file__).resolve().parent.name == "mutants" and (Path(__file__).resolve
             pass
 
     _logging.StreamHandler.emit = _mutmut_safe_emit  # type: ignore[method-assign]
+
+
+# --- Hypothesis: shared profiles + one repo-root example database -----------
+# See hypothesis_profiles.py for the full rationale. Loaded by file path rather
+# than ``import`` because the repo root is deliberately NOT on sys.path (it
+# holds a ``tests/`` and a ``scripts/`` directory that would shadow package
+# names). The ``.exists()`` check doubles as the mutmut guard: mutmut copies
+# this conftest into ``mutants/`` but not the profiles module, so the block
+# no-ops there and mutant-induced counterexamples never enter the shared corpus.
+def _activate_hypothesis_profiles(repo_root: Path) -> None:
+    import importlib.util
+
+    module_path = repo_root / "hypothesis_profiles.py"
+    if not module_path.exists():
+        return
+    spec = importlib.util.spec_from_file_location("uterm_hypothesis_profiles", module_path)
+    if spec is None or spec.loader is None:  # pragma: no cover - defensive
+        return
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    module.activate()
+
+
+_activate_hypothesis_profiles(Path(__file__).resolve().parent)

@@ -38,6 +38,12 @@ all = [
 dev = [
     "pytest>=9.0",
     "pytest-asyncio>=1.3",
+    # Six test modules under tests/ use @given / RuleBasedStateMachine
+    # (bridge/test_hypothesis*.py, server/test_auth_hypothesis.py,
+    # tunnel/test_token_hash_hypothesis.py, tunnel/test_*_stress.py). This was
+    # undeclared and only worked because CI installs the root dev group; an
+    # isolated `uv sync --package provide-uterm-server --extra dev` collect-errored.
+    "hypothesis>=6.151.9",
     "pytest-cov>=7.0",
     "pytest-timeout>=2.4.0",
     "pytest-randomly>=3.15.0",
