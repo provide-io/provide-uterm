@@ -35,6 +35,12 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12", "3.13", "3.14"]
     timeout-minutes: 60
+    env:
+      # Hypothesis settings profile (see hypothesis_profiles.py). Every CI run
+      # uses `ci` (250 examples, ~+1.7s over the previous default of 100); the
+      # nightly cron goes to `deep` (1000 examples, ~+11s) so the slow search
+      # happens off the PR critical path and its finds land in main's corpus.
+      HYPOTHESIS_PROFILE: ${{ github.event_name == 'schedule' && 'deep' || 'ci' }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
       - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
@@ -48,6 +54,22 @@ jobs:
       - run: npm run build:frontend
       - run: uv sync --frozen --group dev
       - run: uv run playwright install chromium
+      # Restore the Hypothesis example database — the corpus of counterexamples
+      # found by earlier runs. Without it every run starts from empty, so a
+      # falsifying example is found once and then forgotten. Pinned to
+      # <repo>/.hypothesis/examples by hypothesis_profiles.py so both pytest
+      # invocations below share one corpus. Cross-branch poisoning is prevented
+      # by GitHub's own cache scoping (a branch reads its own scope plus the
+      # default branch, and can only write its own) plus the ref_name in the
+      # key; a corpus that goes bad is purged with `gh cache delete <key>`.
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        id: hypothesis-corpus
+        with:
+          path: .hypothesis/examples
+          key: hypothesis-quality-${{ runner.os }}-py${{ matrix.python-version }}-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            hypothesis-quality-${{ runner.os }}-py${{ matrix.python-version }}-${{ github.ref_name }}-
+            hypothesis-quality-${{ runner.os }}-py${{ matrix.python-version }}-${{ github.event.repository.default_branch }}-
       # Static quality gate — single source of truth shared with local dev:
       # run `ci/quality_checks.sh` before pushing to catch these without CI.
       # Covers max-LOC, SPDX headers, codegen-frames drift, event literals,
@@ -67,6 +89,17 @@ jobs:
       - run: uv run --directory packages/provide-uterm pytest -q tests
       # Cloudflare worker / Durable Object test suite.
       - run: uv run pytest -q packages/provide-uterm-cloudflare/tests
+      # Save the corpus, INCLUDING when the job failed — this is the step that
+      # makes a red build reproducible. The all-in-one actions/cache declares
+      # `post-if: success()`, which would discard exactly the run that found a
+      # counterexample; restore+save with `if: always()` persists it, so
+      # re-running the job replays that example first and fails the same way
+      # instead of going green on a luckier search.
+      - if: always()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: .hypothesis/examples
+          key: ${{ steps.hypothesis-corpus.outputs.cache-primary-key }}
 
   # C# port quality gate. Single source of truth:
   # packages/provide-uterm-csharp/Makefile quality-gate.
@@ -215,6 +248,9 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12", "3.13", "3.14"]
     timeout-minutes: 30
+    env:
+      # See the `quality` job — same profile selection, its own corpus.
+      HYPOTHESIS_PROFILE: ${{ github.event_name == 'schedule' && 'deep' || 'ci' }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
       - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
@@ -228,8 +264,26 @@ jobs:
       - run: npm ci
       - run: npm run build:frontend
       - run: uv sync --frozen --group dev
+      # Restore this job's Hypothesis corpus. Deliberately a separate key
+      # namespace from the `quality` job: the two jobs exercise disjoint test
+      # sets on separate runners, so sharing one key would have each overwrite
+      # the other's corpus with a half-empty one.
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        id: hypothesis-corpus
+        with:
+          path: .hypothesis/examples
+          key: hypothesis-server-${{ runner.os }}-py${{ matrix.python-version }}-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            hypothesis-server-${{ runner.os }}-py${{ matrix.python-version }}-${{ github.ref_name }}-
+            hypothesis-server-${{ runner.os }}-py${{ matrix.python-version }}-${{ github.event.repository.default_branch }}-
       # Run server package tests with its own package coverage gate
       - run: uv run pytest -q packages/provide-uterm-server/tests/ --timeout=60 --timeout-method=thread
+      # Persist the corpus on failure too — see the `quality` job's save step.
+      - if: always()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: .hypothesis/examples
+          key: ${{ steps.hypothesis-corpus.outputs.cache-primary-key }}
 
   client-quality:
     runs-on: ubuntu-latest

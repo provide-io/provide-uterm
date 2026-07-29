@@ -28,3 +28,24 @@ def _load_part(name: str) -> None:
 
 _load_part("conftest_part1.py")
 _load_part("conftest_part2.py")
+
+
+# --- Hypothesis: shared profiles + one repo-root example database -----------
+# This package carries its own [tool.pytest.ini_options], so pytest sets rootdir
+# to the package directory and never loads the repo-root conftest — hence the
+# duplicated hook. Skips itself inside mutmut's mutants/ tree (the profiles
+# module is not copied there). See hypothesis_profiles.py for the rationale.
+def _activate_hypothesis_profiles(repo_root: Path) -> None:
+    module_path = repo_root / "hypothesis_profiles.py"
+    if not module_path.exists():
+        return
+    spec = importlib.util.spec_from_file_location("uterm_hypothesis_profiles", module_path)
+    if spec is None or spec.loader is None:  # pragma: no cover - defensive
+        return
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    module.activate()
+
+
+_activate_hypothesis_profiles(_HERE.parents[2])

@@ -108,6 +108,7 @@ The full service map (with one-line descriptions of each) is in the docstring of
 - Test markers: `playwright`, `mutant`, `memray`, `slow`, `e2e`, `real_cf`
 - Default testpaths: `packages/provide-uterm/tests`, `packages/provide-uterm-cloudflare/tests`
 - Root `conftest.py` handles mutmut source path manipulation — don't modify unless you understand mutation testing setup
+- **Hypothesis profiles** live in `hypothesis_profiles.py` (repo root), activated from `conftest.py`, `packages/provide-uterm/conftest.py`, and `packages/provide-uterm-server/tests/conftest.py` — the three pytest rootdirs. Profiles: `dev` (50 examples, the default off-CI), `ci` (250, auto-selected when `$CI` is set), `deep` (1000, the nightly cron), `repro` (derandomized + no database, for triaging a suspected flake). Override with `HYPOTHESIS_PROFILE=<name>`. All profiles set `print_blob=True`, so any failure prints a pasteable `@reproduce_failure(...)`. The example database is pinned to `<repo>/.hypothesis/examples` (one corpus regardless of cwd) and cached across CI runs by the `quality` and `server-quality` jobs — restore/save rather than `actions/cache`, so a *failing* run's counterexample is persisted and replayed on retry. Never force `--hypothesis-seed` in CI: `core.run_engine` sets `database_key = None` whenever a global seed is forced, silently disabling the cached corpus. Profiles are a no-op inside mutmut's `mutants/` tree so mutant-induced failures never enter the corpus.
 
 ## Pre-commit Hooks
 
