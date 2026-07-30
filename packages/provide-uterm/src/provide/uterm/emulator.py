@@ -29,6 +29,85 @@ _CP437 = "cp437"
 # Kept small so it rides every snapshot frame cheaply.
 _RAW_TAIL_MAX = 4096
 
+#: ``CO_VARARGS`` from CPython's code-flag set: the function declares ``*args``.
+_CO_VARARGS = 0x04
+
+
+def _tolerant_of_surplus_params(method: Any) -> Any:
+    """Wrap a pyte CSI handler so surplus parameters are dropped, not fatal.
+
+    pyte hands every parameter of a CSI sequence to its handler positionally
+    (``csi_dispatch[char](*params)``), and its handlers take fixed arities. So a
+    sequence carrying one parameter more than its handler accepts raises
+    ``TypeError`` out of ``Stream.feed``. Real terminals ignore parameters they
+    have no use for, and terminal output is untrusted — it is whatever the
+    session happens to run — so a crash is not an available answer.
+
+    Truncating to the handler's own arity, rather than dropping the parameters
+    altogether, is what keeps the sequence doing its job: ``ESC[3;9B`` still
+    moves down three lines, and ``ESC[2;5H`` still reaches row two column five.
+    """
+    # A handler declaring ``*args`` cannot overflow, so wrapping it is not merely
+    # unnecessary — it is destructive. ``select_graphic_rendition(self, *attrs)``
+    # has a ``co_argcount`` of one, so the limit below would compute to zero and
+    # every attribute would be truncated away: each SGR sequence would become a
+    # plain reset and all colour would silently vanish from the rendered screen.
+    # The recorded emulator corpus caught exactly that.
+    if method.__code__.co_flags & _CO_VARARGS:
+        return method
+
+    limit = method.__code__.co_argcount - 1  # minus `self`
+
+    def tolerant(self: Any, *params: Any) -> Any:
+        return method(self, *params[:limit])
+
+    tolerant.__name__ = method.__name__
+    tolerant.__qualname__ = method.__qualname__
+    tolerant.__doc__ = method.__doc__
+    return tolerant
+
+
+class _TolerantScreen(pyte.Screen):
+    """A :class:`pyte.Screen` that survives a CSI sequence with too many parameters.
+
+    Every handler reachable from pyte's CSI dispatch table is wrapped, rather
+    than the handful a sweep happened to find, so a pyte upgrade that tightens
+    another arity cannot reintroduce the crash. Sixty-two crashing shapes across
+    twenty-one final bytes existed before this: `ESC[1;2M`, `ESC[1;2A`,
+    `ESC[1;2;3H` and so on, each six or seven bytes long.
+    """
+
+
+for _name in (
+    "cursor_up",
+    "cursor_down",
+    "cursor_forward",
+    "cursor_back",
+    "cursor_down1",
+    "cursor_up1",
+    "cursor_to_column",
+    "cursor_to_line",
+    "cursor_position",
+    "erase_in_display",
+    "erase_in_line",
+    "insert_lines",
+    "delete_lines",
+    "insert_characters",
+    "delete_characters",
+    "erase_characters",
+    "report_device_attributes",
+    "report_device_status",
+    "set_margins",
+    "clear_tab_stop",
+    "set_mode",
+    "reset_mode",
+    "select_graphic_rendition",
+):
+    _inherited = getattr(pyte.Screen, _name, None)
+    if _inherited is not None and getattr(_inherited, "__code__", None) is not None:
+        setattr(_TolerantScreen, _name, _tolerant_of_surplus_params(_inherited))
+del _name
+
 
 def _parse_screen_text(screen: pyte.Screen) -> str:
     return "\n".join(screen.display)
@@ -66,7 +145,7 @@ class TerminalEmulator:
         self.rows = rows
         self.term = term
         self.receive_encoding = receive_encoding
-        self._screen = pyte.Screen(cols, rows)
+        self._screen = _TolerantScreen(cols, rows)
         self._stream = pyte.Stream(self._screen)
         self._dirty = True
         self._last_snapshot: dict[str, Any] | None = None
