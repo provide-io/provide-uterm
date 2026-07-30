@@ -8,6 +8,7 @@ package server
 import (
 	"context"
 	"errors"
+	"net"
 	"testing"
 	"time"
 )
@@ -210,6 +211,24 @@ func TestSessionEgressNonStringHost(t *testing.T) {
 	}
 }
 
+// TestSessionEgressNonStringHostIsActuallyChecked proves the stringified value
+// from the `connectorConfig["host"] != nil` branch is the value that gets
+// guarded, not silently dropped: a non-string host that stringifies to a
+// metadata address must be blocked. A test using only an allowed address (as
+// TestSessionEgressNonStringHost does) cannot distinguish "the branch ran and
+// derived targetHost" from "the branch was skipped and targetHost stayed empty
+// (vacuously allowed)", since both produce err == nil.
+func TestSessionEgressNonStringHostIsActuallyChecked(t *testing.T) {
+	guard := NewEgressGuard(func(context.Context, string) ([]string, error) {
+		return nil, errors.New("should reach literal-IP path only")
+	}, nil)
+	err := guard.AssertSessionEgressAllowed(context.Background(), "ssh",
+		map[string]any{"host": anyHost("169.254.169.254")}, false)
+	if !isEgressBlocked(err) {
+		t.Fatalf("a stringified metadata host must be blocked, got %v", err)
+	}
+}
+
 type anyHost string
 
 func (a anyHost) String() string { return string(a) }
@@ -269,8 +288,101 @@ func TestEgressGuardDefaults(t *testing.T) {
 	if g.resolver == nil || g.now == nil {
 		t.Fatal("defaults not injected")
 	}
-	if g.now() <= 0 {
-		t.Fatal("default clock returned non-positive time")
+	// A plain `> 0` check is satisfied even if the default clock's
+	// UnixNano()/1e9 conversion were mutated to UnixNano()*1e9 — the result is
+	// still positive, just off by 18 orders of magnitude. Bound it to a plausible
+	// epoch-*seconds* range (year 2001 .. year 5138) so a mutated divisor fails
+	// this assertion instead of merely surviving a non-negativity check.
+	now := g.now()
+	const minPlausibleEpochS = 1e9  // 2001-09-09
+	const maxPlausibleEpochS = 1e11 // 5138-11-16
+	if now < minPlausibleEpochS || now > maxPlausibleEpochS {
+		t.Fatalf("default clock = %v, want a plausible epoch-seconds value in [%v, %v]",
+			now, minPlausibleEpochS, maxPlausibleEpochS)
+	}
+}
+
+// TestEgressResolveTimeoutConstant pins computeEgressResolveTimeout's value.
+// The multiplication lives in a function (rather than a bare package-level
+// const) specifically so this assertion has a mutant to kill — see the
+// doc comment on egressResolveTimeout.
+func TestEgressResolveTimeoutConstant(t *testing.T) {
+	if got := computeEgressResolveTimeout(); got != 5*time.Second {
+		t.Errorf("computeEgressResolveTimeout() = %v, want 5s", got)
+	}
+}
+
+// TestResolveCachedTTLBoundary pins the exact TTL edge: a lookup exactly
+// ttlS old is a cache MISS (re-resolves), not a hit. This distinguishes
+// `(now-c.at) < g.ttlS` from a `<=` boundary mutant, which the earlier
+// "well past the TTL" assertion in TestWebhookDNSCacheTTL does not.
+func TestResolveCachedTTLBoundary(t *testing.T) {
+	var calls int
+	now := 1000.0
+	guard := NewEgressGuard(func(context.Context, string) ([]string, error) {
+		calls++
+		return []string{"93.184.216.34"}, nil
+	}, func() float64 { return now })
+	ctx := context.Background()
+
+	if err := guard.AssertWebhookTargetAllowed(ctx, "https://ttl.example/x"); err != nil {
+		t.Fatalf("initial resolve: %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("initial resolve: calls = %d, want 1", calls)
+	}
+
+	now += egressDNSTTLS // exactly at the boundary: (now-c.at) == ttlS
+	if err := guard.AssertWebhookTargetAllowed(ctx, "https://ttl.example/x"); err != nil {
+		t.Fatalf("at-boundary resolve: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("at exactly the TTL boundary: calls = %d, want 2 (a stale-by-exactly-ttlS "+
+			"entry must be treated as expired, not reused)", calls)
+	}
+}
+
+// TestSessionEgressWebsocketPlainSchemeAllowed pins that a valid ws:// URL
+// (not wss://) is not refused by the scheme guard. Every other websocket test
+// case uses wss:// or a scheme that is rejected regardless of which half of
+// `parsed.Scheme != "ws" && parsed.Scheme != "wss"` a mutant flips, so this is
+// the one case that actually needs the "ws" comparison to be correct.
+func TestSessionEgressWebsocketPlainSchemeAllowed(t *testing.T) {
+	guard := NewEgressGuard(fixedResolver("93.184.216.34"), nil)
+	err := guard.AssertSessionEgressAllowed(context.Background(), "websocket",
+		map[string]any{"url": "ws://public.example/x"}, true)
+	if err != nil {
+		t.Fatalf("a plain ws:// URL to a public host must be allowed, got %v", err)
+	}
+}
+
+// TestDecodeEmbeddedIPv4 exercises every branch of the IPv6-wrapper decoder
+// directly: 6to4, NAT64 well-known, the deprecated IPv4-compatible form (both
+// the ::/::1 exclusion and an ordinary payload), and a plain address that
+// carries nothing to decode.
+func TestDecodeEmbeddedIPv4(t *testing.T) {
+	cases := []struct {
+		name string
+		ip   net.IP
+		want net.IP // nil means "decodeEmbeddedIPv4 must return nil"
+	}{
+		{"6to4", net.ParseIP("2002:c000:0204::"), net.IPv4(192, 0, 2, 4)},
+		{"NAT64 well-known", net.ParseIP("64:ff9b::169.254.169.254"), net.IPv4(169, 254, 169, 254)},
+		{"deprecated IPv4-compatible, ordinary payload", net.IP{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5},
+			net.IPv4(0, 0, 0, 5)},
+		{"deprecated IPv4-compatible, unspecified (::)", net.IP{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, nil},
+		{"deprecated IPv4-compatible, loopback (::1)", net.IP{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, nil},
+		{"plain global IPv6, nothing embedded", net.ParseIP("2606:4700:4700::1111"), nil},
+		{"malformed IP (wrong byte length)", net.IP{1, 2, 3}, nil},
+	}
+	for _, c := range cases {
+		got := decodeEmbeddedIPv4(c.ip)
+		switch {
+		case c.want == nil && got != nil:
+			t.Errorf("%s: decodeEmbeddedIPv4(%v) = %v, want nil", c.name, c.ip, got)
+		case c.want != nil && !c.want.Equal(got):
+			t.Errorf("%s: decodeEmbeddedIPv4(%v) = %v, want %v", c.name, c.ip, got, c.want)
+		}
 	}
 }
 

@@ -106,7 +106,35 @@
       "blocked_private_reason": "private"
     },
     {
+      "ip": "100.64.0.0",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
       "ip": "100.64.0.1",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
+      "ip": "100.127.255.255",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": true,
+      "blocked_private_reason": "private"
+    },
+    {
+      "ip": "100.63.255.255",
+      "blocked_default": false,
+      "blocked_default_reason": "",
+      "blocked_private": false,
+      "blocked_private_reason": ""
+    },
+    {
+      "ip": "100.128.0.0",
       "blocked_default": false,
       "blocked_default_reason": "",
       "blocked_private": false,

@@ -12,6 +12,33 @@ import (
 
 func sp(s string) *string { return &s }
 
+// TestIsLoopbackHost pins the exact three-name set (not net.IP.IsLoopback):
+// case/whitespace-insensitive on the three literal names, and NOT loopback for
+// anything else — including addresses IsLoopback would accept (127.0.0.2) and
+// hostnames that only resolve to loopback (localhost.example is not the
+// literal "localhost").
+func TestIsLoopbackHost(t *testing.T) {
+	cases := []struct {
+		host string
+		want bool
+	}{
+		{"localhost", true},
+		{"127.0.0.1", true},
+		{"::1", true},
+		{" Localhost ", true}, // case/whitespace-insensitive
+		{"127.0.0.2", false},  // IsLoopback would say true; this set deliberately does not
+		{"0:0:0:0:0:0:0:1", false},
+		{"localhost.example", false},
+		{"example.com", false},
+		{"", false},
+	}
+	for _, c := range cases {
+		if got := IsLoopbackHost(c.host); got != c.want {
+			t.Errorf("IsLoopbackHost(%q) = %v, want %v", c.host, got, c.want)
+		}
+	}
+}
+
 func TestRequireSecureURL(t *testing.T) {
 	field := "auth.webhook_idp_url"
 	ok := []*string{nil, sp(""), sp("https://example.com/jwks"),

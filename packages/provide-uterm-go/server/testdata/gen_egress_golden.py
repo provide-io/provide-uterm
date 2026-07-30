@@ -43,7 +43,15 @@ IPS = [
     "0.0.0.0",
     "255.255.255.255",
     "169.254.1.1",
+    # RFC 6598 carrier-grade NAT (100.64.0.0/10). CPython does NOT call this
+    # private, so the classifier-derived deny list needs the range named
+    # explicitly. Boundaries either side are recorded too, so the mask itself is
+    # pinned rather than the single address.
+    "100.64.0.0",
     "100.64.0.1",
+    "100.127.255.255",
+    "100.63.255.255",  # public, immediately below the /10
+    "100.128.0.0",  # public, immediately above the /10
     "224.0.0.1",
     "239.1.2.3",
     "240.0.0.1",

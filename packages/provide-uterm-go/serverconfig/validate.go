@@ -18,6 +18,24 @@ import (
 // loopbackHosts mirrors _LOOPBACK_HOSTS in config_schema.py.
 var loopbackHosts = map[string]struct{}{"localhost": {}, "127.0.0.1": {}, "::1": {}}
 
+// IsLoopbackHost reports whether host names the loopback interface. Port of
+// app/auth.py's _is_loopback_host, over the same three-name set.
+//
+// Deriving permissiveness from the bind address is an established idiom in this
+// codebase — the reference gates require_jwt_in_production, auth.mode="header"
+// and security.mode="dev" on exactly this helper — because a loopback-bound
+// listener has no remote callers to defend against. The webhook egress guard
+// uses it for the same reason (conformance/EGRESS_GUARD.md §3).
+//
+// It is a literal set membership rather than net.IP.IsLoopback deliberately:
+// the reference is normative here, and the difference (127.0.0.2 counts as
+// loopback for IsLoopback, not for this set) errs toward *refusing* loopback
+// webhook destinations, which is the safe direction to differ in.
+func IsLoopbackHost(host string) bool {
+	_, ok := loopbackHosts[strings.ToLower(strings.TrimSpace(host))]
+	return ok
+}
+
 // requireSecureURL ports _require_secure_url: reject a cleartext http:// URL
 // unless its host is loopback; https:// is always allowed; any other scheme
 // raises. Mirrors the SSRF guard byte-for-byte including error messages.
@@ -205,12 +223,21 @@ func rateLimitError(field string, value float64) error {
 // pyFloat renders a float the way Python's repr does, so a refusal reads
 // identically across the two ports: 0 → "0.0", NaN → "nan".
 func pyFloat(v float64) string {
-	switch {
-	case math.IsNaN(v):
+	// Deliberately an if-chain rather than a tagless `switch { case ...: }`: Go's
+	// coverage instrumentation attributes a case body's counter starting *after*
+	// the case guard, so the guard expression itself sits in a gap no block
+	// covers — go-gremlins then reports any mutable literal inside a guard (the
+	// -1 sign below) as permanently NOT_COVERED regardless of test quality. An
+	// if-condition does not have this gap (its guard is part of the preceding
+	// block, which runs on every call), so TestPyFloat's -Inf case actually
+	// mutation-tests the sign literal.
+	if math.IsNaN(v) {
 		return "nan"
-	case math.IsInf(v, 1):
+	}
+	if math.IsInf(v, 1) {
 		return "inf"
-	case math.IsInf(v, -1):
+	}
+	if math.IsInf(v, -1) {
 		return "-inf"
 	}
 	s := strconv.FormatFloat(v, 'g', -1, 64)

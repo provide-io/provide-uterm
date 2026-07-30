@@ -44,15 +44,24 @@ type egressCacheEntry struct {
 // tests; nil selects the default net.DefaultResolver-backed resolver.
 type EgressResolver func(ctx context.Context, host string) ([]string, error)
 
-const (
-	// egressDNSTTLS bounds the per-host DNS cache. Port of _EGRESS_DNS_TTL_S: a
-	// rebind that flips a name to a metadata IP is caught on the next cache miss.
-	egressDNSTTLS = 60.0
-	// egressResolveTimeout bounds one DNS resolution so a slow/hostile resolver
-	// can't hang a session-create or webhook check. Port of
-	// _EGRESS_RESOLVE_TIMEOUT_S; a timeout flows through the fail-closed path.
-	egressResolveTimeout = 5 * time.Second
-)
+// egressDNSTTLS bounds the per-host DNS cache. Port of _EGRESS_DNS_TTL_S: a
+// rebind that flips a name to a metadata IP is caught on the next cache miss.
+const egressDNSTTLS = 60.0
+
+// egressResolveTimeout bounds one DNS resolution so a slow/hostile resolver
+// can't hang a session-create or webhook check. Port of
+// _EGRESS_RESOLVE_TIMEOUT_S; a timeout flows through the fail-closed path.
+//
+// Computed by a function (rather than a bare `const ... = 5 * time.Second`)
+// so the multiplication is a statement inside a function body: a package-level
+// const/var initializer executes before any test runs and carries no coverage
+// counter, so a mutation there is permanently NOT_COVERED regardless of test
+// quality. Wrapping it in a function gives the arithmetic a coverage counter
+// (it still runs exactly once, at package init) that TestEgressResolveTimeout
+// can then assert against.
+var egressResolveTimeout = computeEgressResolveTimeout()
+
+func computeEgressResolveTimeout() time.Duration { return 5 * time.Second }
 
 // NewEgressGuard builds a guard. A nil resolver uses net.DefaultResolver; a nil
 // clock uses the wall clock.
@@ -98,6 +107,13 @@ var blockedPrivateV4 = mustCIDRs(
 	"198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "240.0.0.0/4",
 	"255.255.255.255/32",
 	"224.0.0.0/4", // multicast
+	// RFC 6598 carrier-grade NAT. Deliberately NOT inherited from CPython:
+	// ipaddress.ip_address("100.64.0.1").is_private is False, so a set derived
+	// from is_private — as the rest of this list is — omits it. That is a gap in
+	// the derivation rather than an allowance. CGNAT space carries real
+	// infrastructure on carrier and container networks and is exactly what an
+	// SSRF pivot wants. See conformance/EGRESS_GUARD.md §1.
+	"100.64.0.0/10",
 )
 
 var blockedPrivateV6 = mustCIDRs(
@@ -143,12 +159,22 @@ func decodeEmbeddedIPv4(ip net.IP) net.IP {
 	if v6 == nil {
 		return nil
 	}
-	switch {
-	case v6[0] == 0x20 && v6[1] == 0x02: // 6to4 2002::/16
+	// Deliberately an if-chain rather than a tagless `switch { case ...: }`: Go's
+	// coverage instrumentation attributes a case body's counter starting *after*
+	// the case guard, so the guard expression itself sits in a gap no block
+	// covers — go-gremlins then reports a mutable comparison inside a guard
+	// (the 0x20/0x02 6to4 prefix check below) as permanently NOT_COVERED
+	// regardless of test quality. An if-condition does not have this gap (its
+	// guard is part of the preceding block, which runs on every call), so
+	// TestDecodeEmbeddedIPv4Forms's 6to4 case actually mutation-tests it. Every
+	// arm still returns, so the if-chain is behaviorally identical to the switch.
+	if v6[0] == 0x20 && v6[1] == 0x02 { // 6to4 2002::/16
 		return net.IPv4(v6[2], v6[3], v6[4], v6[5]).To4()
-	case nat64WellKnown.Contains(ip): // NAT64 well-known 64:ff9b::/96
+	}
+	if nat64WellKnown.Contains(ip) { // NAT64 well-known 64:ff9b::/96
 		return net.IPv4(v6[12], v6[13], v6[14], v6[15]).To4()
-	case isZeroPrefix(v6[:12]): // IPv4-compatible ::a.b.c.d (deprecated)
+	}
+	if isZeroPrefix(v6[:12]) { // IPv4-compatible ::a.b.c.d (deprecated)
 		if v6[12] == 0 && v6[13] == 0 && v6[14] == 0 && (v6[15] == 0 || v6[15] == 1) {
 			return nil // :: and ::1 handled by the normal v6 branches
 		}

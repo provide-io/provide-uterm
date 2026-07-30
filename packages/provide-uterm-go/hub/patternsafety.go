@@ -45,6 +45,18 @@ func compilePattern(pattern string, maxPatternLength int) (*regexp.Regexp, error
 	return re, nil
 }
 
+// ValidateWatchPattern reports whether pattern is accepted as a watch/guard
+// filter under the default bounds, without keeping the compiled regex. It is
+// the exported seam for callers that validate a pattern before the subscription
+// that will use it exists — webhook registration, which must reject a bad
+// pattern with a 422 rather than discovering it later inside a delivery
+// goroutine. Port of webhooks.validate_webhook_pattern, which likewise delegates
+// to the event bus's _compile_pattern so one ReDoS validator governs both.
+func ValidateWatchPattern(pattern string) error {
+	_, err := compilePattern(pattern, defaultMaxPatternLength)
+	return err
+}
+
 // validatePatternSafety scans pattern for ReDoS shapes (nested quantified
 // groups, quantified alternation groups) and returns an error naming the
 // offending shape. Port of event_bus._validate_pattern_safety — a pure string

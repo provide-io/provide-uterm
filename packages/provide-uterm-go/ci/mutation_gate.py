@@ -18,6 +18,18 @@ mutant that survives points at a genuine assertion gap — rather than the whole
 ~50-package module (which would be slow and dominated by integration packages
 whose residual lines need live sockets/PTYs to exercise).
 
+Most PERIMETER entries are a bare package name (gremlins mutates every file in
+it). Some packages are otherwise too large / I/O-heavy to mutate wholesale but
+still contain a handful of pure, well-isolated, security-critical files worth
+the same bar — for those, a ScopedPackage narrows gremlins to just those files
+via ``--exclude-files`` (confirmed by `gremlins unleash --help` to take a
+filepath regexp, repeatable). The exclude set is *computed from the package
+directory at gate run time* rather than hand-listed: a file later added to the
+package is excluded by default (narrowing), so silently pulling new,
+untested code into the mutated scope requires deliberately adding it to
+`only_files` here — the same "widen on purpose" discipline as adding a new
+bare-package entry.
+
 Gate rules (mirroring scripts/run_mutation_gate.py):
   * NOT_COVERED mutant  -> FAIL (coverage gap; the perimeter is 100% covered).
   * TIMED_OUT mutant    -> FAIL. A timeout can mask a real survivor (a
@@ -34,16 +46,38 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess  # nosec
 import sys
 import tempfile
 import tomllib
+from dataclasses import dataclass
 from pathlib import Path
+
+
+@dataclass(frozen=True)
+class ScopedPackage:
+    """A perimeter entry that mutates only `only_files` inside `package`.
+
+    Use this instead of a bare package-name string when the rest of the
+    package is integration code (HTTP routing, WS/PTY handling, live sockets)
+    that does not belong in the mutation perimeter. See the module docstring
+    for why the exclude set is computed rather than hand-listed.
+    """
+
+    package: str
+    only_files: tuple[str, ...]
+
+    @property
+    def label(self) -> str:
+        return f"{self.package}[{'+'.join(self.only_files)}]"
+
 
 # Perimeter: pure-function packages already at ~100% statement coverage with
 # real boundary/arithmetic logic. Keep this list short so a full run stays a
-# couple of minutes. Extend deliberately, one well-covered package at a time.
-PERIMETER = (
+# couple of minutes. Extend deliberately, one well-covered package (or scoped
+# file set) at a time.
+PERIMETER: tuple[str | ScopedPackage, ...] = (
     "sanitizer",
     "colors",
     "filters",
@@ -54,6 +88,18 @@ PERIMETER = (
     "policy",  # StrictPolicyEngine — cross-language behavior contract
     "defaults",  # TerminalDefaults pure constants/helpers at 100% cover
     "fileio",  # SecureOpenAppend modes + palette/ans pure helpers
+    # `server` is ~9k LOC of HTTP routing / WS / PTY-adjacent integration code
+    # needing live sockets — not perimeter material wholesale — but these three
+    # files are the SSRF egress classifier + the webhook manager (registry,
+    # delivery loop, retry ladder, HMAC signing, tunnel-share guard): pure
+    # classification/business logic, already unit-tested with injected
+    # resolver/clock/HTTP-client seams, no real network needed.
+    ScopedPackage("server", ("server_egress.go", "server_egress_webhook.go", "server_webhooks.go")),
+    # `serverconfig` also has file-based config loading (load.go) and a file-
+    # backed profile store (profiles.go) that don't belong here; validate.go
+    # (incl. IsLoopbackHost, the §3 webhook-loopback permission source) is pure
+    # validation logic and already ~100% unit-tested.
+    ScopedPackage("serverconfig", ("validate.go",)),
 )
 
 # Pinned like golangci-lint/govulncheck in the Makefile: invoked via `go run`
@@ -93,8 +139,26 @@ def load_allowlist() -> dict[tuple[str, str, int, int, str], str]:
     return out
 
 
-def run_gremlins(package: str, coefficient: int) -> dict:
-    """Run `gremlins unleash` on one package and return its parsed JSON report."""
+def exclude_file_args(package: str, only_files: tuple[str, ...]) -> list[str]:
+    """Build `-E <regexp>` args excluding every source file in `package` NOT in
+    `only_files`, scanned from disk right now (see ScopedPackage docstring for
+    why this is computed rather than hand-listed). Test files are skipped on
+    both sides: gremlins never mutates them, so excluding them is a no-op.
+    """
+    args: list[str] = []
+    for path in sorted((MODULE_ROOT / package).glob("*.go")):
+        if path.name.endswith("_test.go") or path.name in only_files:
+            continue
+        args += ["-E", re.escape(path.name) + "$"]
+    return args
+
+
+def run_gremlins(package: str, coefficient: int, only_files: tuple[str, ...] = ()) -> dict:
+    """Run `gremlins unleash` on one package and return its parsed JSON report.
+
+    only_files, when non-empty, narrows mutation to just those files via
+    --exclude-files (everything else in the package directory is excluded).
+    """
     with tempfile.NamedTemporaryFile("r", suffix=".json", delete=False) as tmp:
         out_path = Path(tmp.name)
     try:
@@ -105,6 +169,7 @@ def run_gremlins(package: str, coefficient: int) -> dict:
             "unleash",
             "--timeout-coefficient",
             str(coefficient),
+            *(exclude_file_args(package, only_files) if only_files else []),
             "-o",
             str(out_path),
             f"./{package}/",
@@ -168,18 +233,23 @@ def main() -> int:
     total_excused = 0
     all_failures: list[str] = []
 
-    print(f"Go mutation gate — perimeter: {', '.join(PERIMETER)}")
+    labels = [entry.label if isinstance(entry, ScopedPackage) else entry for entry in PERIMETER]
+    print(f"Go mutation gate — perimeter: {', '.join(labels)}")
     print(f"gremlins {GREMLINS.rsplit('@', 1)[1]}, timeout-coefficient {args.timeout_coefficient}\n")
 
-    for package in PERIMETER:
-        report = run_gremlins(package, args.timeout_coefficient)
+    for entry in PERIMETER:
+        if isinstance(entry, ScopedPackage):
+            package, only_files, label = entry.package, entry.only_files, entry.label
+        else:
+            package, only_files, label = entry, (), entry
+        report = run_gremlins(package, args.timeout_coefficient, only_files)
         killed, excused, failures = check_package(package, report, allowlist, used)
         total_killed += killed
         total_excused += excused
         all_failures.extend(failures)
         status = "FAIL" if failures else "ok"
         note = f", {excused} allowlisted-equivalent" if excused else ""
-        print(f"  [{status:>4}] {package}: {killed} killed{note}, {len(failures)} unexcused survivor(s)")
+        print(f"  [{status:>4}] {label}: {killed} killed{note}, {len(failures)} unexcused survivor(s)")
 
     stale = sorted(set(allowlist) - used)
     for key in stale:

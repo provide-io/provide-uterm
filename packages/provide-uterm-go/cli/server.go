@@ -24,6 +24,7 @@ import (
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/server"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverauth"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/tunnel"
 )
 
 // serverBundle is the assembled server plus the collaborators whose lifecycle
@@ -36,6 +37,12 @@ type serverBundle struct {
 	logger   *slog.Logger
 	devToken string
 	registry *SessionRegistryImpl
+	// webhooks is the session-webhook manager wired into server.Deps. The
+	// bundle keeps it so shutdown can release its delivery goroutines.
+	webhooks *server.WebhookRegistry
+	// tunnelStore is shared by the tunnel routes and the webhook deliverer's
+	// live-share check; the bundle keeps it so both see one store.
+	tunnelStore tunnel.Store
 }
 
 // newServerCmd registers the `server` subcommand — the primary command. It
@@ -83,6 +90,24 @@ func applyServerOverrides(cfg *serverconfig.UtermServerConfig, host string, port
 	}
 }
 
+// buildSeams holds the collaborators buildServerFromConfig would otherwise
+// resolve to a production default. It exists for one reason: the webhook egress
+// guard resolves DNS, and a test that proves "a name resolving into private
+// space is refused" must not depend on a real resolver's answer for a name
+// somebody else controls. Production callers pass nothing and get the defaults.
+type buildSeams struct {
+	// webhookResolver replaces net.DefaultResolver in the webhook egress guard.
+	webhookResolver server.EgressResolver
+}
+
+// buildOption mutates [buildSeams].
+type buildOption func(*buildSeams)
+
+// withWebhookResolver injects the DNS resolver the webhook egress guard uses.
+func withWebhookResolver(r server.EgressResolver) buildOption {
+	return func(s *buildSeams) { s.webhookResolver = r }
+}
+
 // buildServer assembles a runnable server from a config file + CLI overrides.
 // It is the `uterm server` entry point; buildServerFromConfig does the wiring
 // once the config is resolved, so callers that build a config another way (the
@@ -105,7 +130,12 @@ func buildServerFromConfig(
 	ctx context.Context,
 	cfg *serverconfig.UtermServerConfig,
 	frontendDir string,
+	opts ...buildOption,
 ) (*serverBundle, error) {
+	var seams buildSeams
+	for _, opt := range opts {
+		opt(&seams)
+	}
 	// App layer: initialise telemetry once, then thread the logger through.
 	if _, err := ptel.SetupTelemetry(); err != nil {
 		return nil, err
@@ -120,7 +150,9 @@ func buildServerFromConfig(
 
 	metrics := server.NewMetrics()
 	clock := hub.NewRealClock()
-	bus := hub.NewEventBus(hub.EventBusOptions{})
+	// The bus takes the same metric sink as the hub, or its subscriber-drop
+	// counter never reaches /api/metrics.
+	bus := hub.NewEventBus(hub.EventBusOptions{OnMetric: metrics.Inc})
 	h := hub.NewTermHub(hub.TermHubConfig{
 		Clock:                      clock,
 		Logger:                     logger,
@@ -133,6 +165,15 @@ func buildServerFromConfig(
 		RestSendRateLimitPerSec:    cfg.RestSendRateLimitPerSec,
 		MaxConnectionsPerPrincipal: cfg.MaxConnectionsPerPrincipal,
 		MaxWorkers:                 cfg.MaxWorkers,
+		// auth.delegate_roles is a privilege control (principal-role passthrough).
+		// The hub field is *bool where nil means "default true", so pass the
+		// address of the resolved config bool: an explicit false must not read as
+		// unset. serverconfig defaults it to true, matching the hub default.
+		DelegateRoles: &cfg.Auth.DelegateRoles,
+		// governance.behavioral_audit_interval_s, mirroring the Python factory.
+		// NOTE: no consumer reads this yet in the Go port — there is no port of
+		// run_behavioral_audit_loop, so the value is currently inert either way.
+		BehavioralAuditIntervalS: cfg.Governance.BehavioralAuditIntervalS,
 		// Match Python create_server_app: mint resume tokens on browser connect.
 		ResumeStore: hub.NewInMemoryResumeStore(clock, nil),
 		ResumeTTLS:  300,
@@ -158,6 +199,12 @@ func buildServerFromConfig(
 		return nil, err
 	}
 
+	// The tunnel store is built here rather than left to server.New's nil
+	// default because two collaborators have to share the *same* one: the tunnel
+	// routes that mint shares, and the webhook deliverer that has to know
+	// whether a session holds one (see webhookManagerFor).
+	tunnelStore := tunnel.NewMemStore()
+
 	registry := NewSessionRegistry(cfg)
 	// Long-poll events/watch uses the same EventBus as SSE.
 	registry.SetEventBus(bus)
@@ -175,6 +222,8 @@ func buildServerFromConfig(
 		return nil, err
 	}
 
+	webhooks := webhookManagerFor(cfg, bus, tunnelStore, clock, metrics, logger, seams.webhookResolver)
+
 	srv, err := server.New(server.Deps{
 		Hub:              h,
 		Auth:             auth,
@@ -183,6 +232,8 @@ func buildServerFromConfig(
 		Registry:         registry,
 		APIKeys:          apiKeys,
 		GraphicalTargets: graphicalTargets,
+		TunnelStore:      tunnelStore,
+		Webhooks:         webhooks,
 		Metrics:          metrics,
 		Clock:            clock,
 		Version:          Version,
@@ -212,7 +263,47 @@ func buildServerFromConfig(
 	return &serverBundle{
 		srv: srv, hub: h, engine: engine, cfg: cfg,
 		logger: logger, devToken: devToken, registry: registry,
+		webhooks: webhooks, tunnelStore: tunnelStore,
 	}, nil
+}
+
+// webhookManagerFor builds the session-webhook manager. Without this the
+// webhook routes answer 503 and `webhooks.allow_loopback_destinations` has
+// nowhere to arrive, so the egress contract it governs is never consulted.
+//
+// This is also where conformance/EGRESS_GUARD.md §3's effective permission is
+// computed — once, here, and never re-derived at a call site:
+//
+//	effective_allow_loopback = webhooks.allow_loopback_destinations
+//	                           OR is_loopback_host(server.host)
+//
+// The bind term is what keeps the default configuration usable. The default bind
+// is 127.0.0.1, so without it a stock deployment listens only on loopback *and*
+// refuses loopback webhook destinations: a guard that stops no attacker (there
+// is no remote caller to stop) while breaking every single-box deployment.
+func webhookManagerFor(
+	cfg *serverconfig.UtermServerConfig,
+	bus *hub.EventBus,
+	tunnelStore tunnel.Store,
+	clock hub.Clock,
+	metrics *server.Metrics,
+	logger *slog.Logger,
+	resolver server.EgressResolver,
+) *server.WebhookRegistry {
+	allowLoopback := cfg.Webhooks.AllowLoopbackDestinations || serverconfig.IsLoopbackHost(cfg.Server.Host)
+	return server.NewWebhookRegistry(server.WebhookOptions{
+		// A guard of its own, sharing the hub's clock: the webhook DNS cache is
+		// then bounded on the same timeline the tunnel-share expiry is read on.
+		Guard:                     server.NewEgressGuard(resolver, clock.Wall),
+		EventBus:                  bus,
+		AllowLoopbackDestinations: allowLoopback,
+		OnMetric:                  metrics.Inc,
+		Now:                       clock.Wall,
+		Logger:                    logger,
+		HasLiveTunnelShare: func(sessionID string) bool {
+			return server.LiveTunnelShare(tunnelStore, sessionID, clock.Wall())
+		},
+	})
 }
 
 // workerBearerToken resolves the hub's worker token, which hosted sessions
@@ -271,6 +362,10 @@ func runServer(ctx context.Context, configPath, host string, port int, frontendD
 	if bundle.devToken != "" {
 		bundle.logger.Info("uterm_dev_token_issued", "token", bundle.devToken)
 	}
+
+	// Release the webhook delivery loops on the way out, after the HTTP drain,
+	// so nothing POSTs to a third party once the server has stopped serving.
+	defer bundle.webhooks.Shutdown()
 
 	// auto_start sessions are spawned by the server's OnStarted hook, once the
 	// listener is bound (see buildServerFromConfig) — not here, so that this
