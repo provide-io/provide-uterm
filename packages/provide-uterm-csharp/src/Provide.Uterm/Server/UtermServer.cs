@@ -107,6 +107,14 @@ public sealed partial class UtermServer : IAsyncDisposable
     /// Exposed for tests that assert which backend the factory selected.</summary>
     internal IGraphicalTargetRegistry GraphicalTargets => _deps.GraphicalTargets;
 
+    /// <summary>The hub this server was built with.
+    /// Exposed so a test can assert what the factory wired onto it — a callback
+    /// the factory forgets is invisible from outside.</summary>
+    internal TermHub HubForTests => _deps.Hub;
+
+    /// <summary>The metric sink this server was built with, for the same reason.</summary>
+    internal ServerMetrics MetricsForTests => _deps.Metrics;
+
     private void MapRoutes(WebApplication app)
     {
         app.MapGet("/api/health", HandleHealth);
@@ -1245,10 +1253,10 @@ public sealed partial class UtermServer : IAsyncDisposable
         {
             await _deps.Hub.Conn.BroadcastHijackStateAsync(workerId, cancellationToken).ConfigureAwait(false);
         }
-        else
-        {
-            _deps.Hub.Metric("worker_hello_mode_blocked_total", 1);
-        }
+
+        // No `else` counting the refusal: `SetWorkerHello` counts its own
+        // decision, and counting it here as well would double every refusal
+        // that arrives over this route.
     }
 
     private static IResult DetailError(int status, string detail) =>
@@ -1379,7 +1387,8 @@ public static class ServerFactory
         UtermServerConfig cfg,
         string version = "0.0.0-dev",
         IGraphicalTargetRegistry? graphicalTargets = null,
-        IClock? clock = null)
+        IClock? clock = null,
+        TextWriter? logWriter = null)
     {
         var apiKeys = new ApiKeyStore();
         string? devToken = null;
@@ -1391,6 +1400,12 @@ public static class ServerFactory
         var auth = new LocalIdentityProvider(cfg.Auth, apiKeys);
         var authz = AuthorizationService.FromConfig(cfg);
         clock ??= new RealClock();
+        // Built before the hub, not after, because the hub needs it. This
+        // ordering is the whole reason `OnMetric` went unwired: the sink used to
+        // be created below, so there was nothing to hand the hub, and every
+        // counter it emitted was dropped while the emitting code looked correct.
+        var metrics = new ServerMetrics();
+        var log = logWriter ?? Console.Error;
         var hub = new TermHub(new TermHubConfig
         {
             Clock = clock,
@@ -1399,13 +1414,17 @@ public static class ServerFactory
             BrowserRateLimitPerSec = cfg.BrowserRateLimitPerSec,
             RestAcquireRateLimitPerSec = cfg.RestAcquireRateLimitPerSec,
             RestSendRateLimitPerSec = cfg.RestSendRateLimitPerSec,
+            OnMetric = (name, value) => metrics.Inc(name, value),
+            // stderr by default, matching the CLI's own convention: a hosted
+            // server with no sink configured should still say why it refused
+            // something, and a caller that wants the lines can pass a writer.
+            OnLog = (level, message) => log.WriteLine($"{level} {message}"),
         });
         var registry = new InMemorySessionRegistry(cfg.Sessions, cfg.Recording.EnabledByDefault);
         graphicalTargets ??= SeedGraphicalTargets(cfg);
         var tunnelStore = new Tunnel.MemoryTunnelStore();
         var webhooks = new WebhookManager(allowLoopbackDestinations: true);
         var profiles = new InMemoryProfileStore();
-        var metrics = new ServerMetrics();
         // Default enable API keys for hosted server (tests can disable).
         if (!cfg.Auth.ApiKeysEnabled)
         {
