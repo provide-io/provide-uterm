@@ -330,6 +330,11 @@ export class SessionHub {
       return { ok: false, reason: "active_hijack" };
     }
     state.inputMode = mode;
+    // Every caller of this is an authenticated route — the session routes and
+    // the worker-control route, which requires `session.control.mode`. Reaching
+    // here therefore means somebody *decided* the mode, and a later
+    // `worker_hello` may raise it but never lower it back.
+    state.inputModeSetByOperator = true;
     await this.router.broadcast(workerId, { type: "input_mode_changed", input_mode: mode, ts: this.#wallNow() });
     await this.router.broadcastHijackState(workerId);
     return { ok: true };

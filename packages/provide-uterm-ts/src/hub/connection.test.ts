@@ -305,6 +305,78 @@ describe("scanEventsForResume", () => {
   });
 });
 
+describe("a hello against a decided input mode", () => {
+  // A `worker_hello` announces what the worker process booted with;
+  // `setInputMode` is a decision made through an authenticated route. The hub
+  // has to tell them apart, because `inputMode` defaults to `hijack`: a rule
+  // refusing every hello that lowers hijack to open would refuse every worker
+  // that legitimately announces open, which is most of them.
+  function undecided() {
+    const { hub, manager } = build();
+    hub.registry.put("w1", new WorkerTermState({ now: () => NOW }));
+    return { hub, manager };
+  }
+
+  it("applies when nobody has decided a mode", () => {
+    const { hub, manager } = undecided();
+    expect(manager.setWorkerHello("w1", "open")).toBe(true);
+    expect(hub.registry.get("w1")?.inputMode).toBe("open");
+  });
+
+  it("cannot undo a decision, even with no lease held", () => {
+    // The window the lease-only guard left open: an operator sets hijack and
+    // then acquires, and a hello landing between the two used to revert the
+    // mode — so the acquire was refused for being in open mode, which says
+    // nothing about why.
+    const { hub, manager } = undecided();
+    const state = hub.registry.get("w1");
+    if (state === undefined) throw new Error("state");
+    state.inputMode = "hijack";
+    state.inputModeSetByOperator = true;
+
+    expect(manager.setWorkerHello("w1", "open")).toBe(false);
+    expect(hub.registry.get("w1")?.inputMode).toBe("hijack");
+  });
+
+  it("may still raise over a decision", () => {
+    // One-directional: a worker announcing hijack tells the hub something it
+    // does not otherwise know, that automation is driving the session.
+    const { hub, manager } = undecided();
+    const state = hub.registry.get("w1");
+    if (state === undefined) throw new Error("state");
+    state.inputMode = "open";
+    state.inputModeSetByOperator = true;
+
+    expect(manager.setWorkerHello("w1", "hijack")).toBe(true);
+    expect(hub.registry.get("w1")?.inputMode).toBe("hijack");
+  });
+
+  it("does not treat agreement with a decided open as a downgrade", () => {
+    const { hub, manager } = undecided();
+    const state = hub.registry.get("w1");
+    if (state === undefined) throw new Error("state");
+    state.inputMode = "open";
+    state.inputModeSetByOperator = true;
+
+    expect(manager.setWorkerHello("w1", "open")).toBe(true);
+  });
+
+  it("holds the decision across repeated reconnects", () => {
+    // Why the flag lives on the worker state rather than the connection:
+    // registry state outlives a worker socket.
+    const { hub, manager } = undecided();
+    const state = hub.registry.get("w1");
+    if (state === undefined) throw new Error("state");
+    state.inputMode = "hijack";
+    state.inputModeSetByOperator = true;
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      expect(manager.setWorkerHello("w1", "open")).toBe(false);
+    }
+    expect(hub.registry.get("w1")?.inputMode).toBe("hijack");
+  });
+});
+
 describe("ConnectionManager.setWorkerHello", () => {
   it.each(golden.hellos)("$name", (record) => {
     const { hub, manager } = build();

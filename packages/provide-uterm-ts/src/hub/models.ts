@@ -292,6 +292,22 @@ export class WorkerTermState {
   hijackPending: string | undefined;
   /** Whether input is gated behind the lease or open to operators. */
   inputMode: InputMode = "hijack";
+  /**
+   * Whether an authenticated caller has explicitly decided this session's input
+   * mode, as opposed to it merely holding the `"hijack"` default above.
+   *
+   * This tells two claims apart. A `worker_hello` announces what the worker
+   * process booted with; `setInputMode` is a decision made through an
+   * authenticated route by somebody holding `session.control.mode`. Without the
+   * distinction the hub cannot refuse a hello that lowers `hijack` to `open`,
+   * because `inputMode` defaults to `hijack` and refusing every lowering would
+   * refuse every worker that legitimately announces `open`.
+   *
+   * Held on the worker state rather than the connection deliberately: registry
+   * state outlives a worker socket, so a decision survives a reconnect.
+   * Internal only — nothing serialises it onto the wire.
+   */
+  inputModeSetByOperator = false;
   /** Most recent screen snapshot received from the worker. */
   lastSnapshot: Record<string, unknown> | undefined;
   /** Retained event log, bounded so a long-lived worker cannot grow forever. */
