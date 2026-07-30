@@ -247,6 +247,14 @@ class HostedSessionRuntime:
                 max_bytes=self._recording_cfg.max_bytes,
                 control_channel_mode=self._recording_cfg.control_channel_mode,
                 redactor=_build_recording_redactor(self._recording_cfg.redact_sensitive),
+                # Both flush knobs were previously omitted, so every hosted
+                # session recorded at the SessionLogger defaults no matter what
+                # the operator configured. It went unnoticed because the
+                # interval default (5.0) matches the config default, and because
+                # the config name (flush_batch_size) differs from the parameter
+                # name (batch_size) — so the mismatch never looked like one.
+                flush_interval_s=self._recording_cfg.flush_interval_s,
+                batch_size=self._recording_cfg.flush_batch_size,
             )
             await self._logger.start(self.definition.session_id)
             self._recording_path = await self._recording_store.get_path(self.definition.session_id)
