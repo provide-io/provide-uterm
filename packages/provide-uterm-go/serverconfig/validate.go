@@ -147,15 +147,19 @@ func validateAuth(a *AuthConfig) error {
 	return nil
 }
 
-// validateRestRateLimit ports config_schema._validate_rate_limit: refuse
-// any rate the limiter cannot honour verbatim.
+// validateRateLimit ports config_schema._validate_rate_limit: refuse any rate
+// the limiter cannot honour verbatim.
+//
+// It guards all three configured ceilings — the two REST hijack budgets and the
+// browser input budget. One validator, because they share one
+// [hub.TokenBucket]: same burst-equals-rate rule, therefore the same floor.
 //
 // A rate limit is trusted, so it must never end up looser than what the
 // operator wrote, and it must never be a limit the limiter cannot express.
 //
 // 0 is refused rather than interpreted: read as "unlimited" it would silently
 // disable the limit, read as "refuse everything" it would silently brick the
-// REST hijack API, and there is no way to tell which the operator meant.
+// surface it guards, and there is no way to tell which the operator meant.
 // Negative values are refused for the same reason.
 //
 // Anything below [hub.MinRatePerSec] is refused for both halves of that. The
@@ -166,24 +170,35 @@ func validateAuth(a *AuthConfig) error {
 // call every ten seconds" is not a stricter limit than one per second, it is
 // an outage, which is the same silent bricking 0 is refused to prevent.
 //
+// The browser key is the one that most needed this. The REST rates reach their
+// bucket through [hub.NewRateLimiter], which clamps them to the floor, so a
+// sub-floor value there was merely a silent loosening. The browser rate is
+// never clamped: the per-connection bucket is built straight from the hub
+// attribute (server.newBrowserBuckets → [hub.NewTokenBucket]), so a sub-floor
+// value arrived as written and denied every browser message for the life of the
+// process — an operator bricking their own deployment with a value that reads
+// like "no limit". Go accidentally softened only the exact-0 case, whose
+// zero-means-unset default in TermHubConfig substitutes 30; 0.5, 0.99,
+// negatives, NaN and +Inf all reached the bucket unclamped.
+//
 // Non-finite values are refused explicitly, because neither is caught by the
 // range test alone. +Inf compares true against every floor, and an unbounded
 // limit is the same silent disabling as 0. NaN compares false against
 // everything, which the `!(v >= min)` form below already refuses — that form
 // is deliberate: `v < min` would admit NaN.
-func validateRestRateLimit(field string, value float64) error {
+func validateRateLimit(field string, value float64) error {
 	if math.IsInf(value, 0) || math.IsNaN(value) {
-		return restRateError(field, value)
+		return rateLimitError(field, value)
 	}
 	if !(value >= hub.MinRatePerSec) { //nolint:staticcheck // QF1001: `!(x >= y)` is deliberate — it refuses NaN, `x < y` admits it
-		return restRateError(field, value)
+		return rateLimitError(field, value)
 	}
 	return nil
 }
 
-// restRateError is the single refusal message: it names the offending key,
+// rateLimitError is the single refusal message: it names the offending key,
 // states the floor, and echoes the value that was written.
-func restRateError(field string, value float64) error {
+func rateLimitError(field string, value float64) error {
 	return fmt.Errorf("%s must be >= %s, got: %s", field, pyFloat(hub.MinRatePerSec), pyFloat(value))
 }
 

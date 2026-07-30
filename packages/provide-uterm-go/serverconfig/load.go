@@ -319,10 +319,18 @@ func runValidators(cfg *UtermServerConfig) error {
 	}
 	// Refused at load, not at first use: a server that boots with a nonsense
 	// limit and discovers it later is a server running unprotected.
-	if err := validateRestRateLimit("rest_acquire_rate_limit_per_sec", cfg.RestAcquireRateLimitPerSec); err != nil {
+	if err := validateRateLimit("rest_acquire_rate_limit_per_sec", cfg.RestAcquireRateLimitPerSec); err != nil {
 		return err
 	}
-	return validateRestRateLimit("rest_send_rate_limit_per_sec", cfg.RestSendRateLimitPerSec)
+	if err := validateRateLimit("rest_send_rate_limit_per_sec", cfg.RestSendRateLimitPerSec); err != nil {
+		return err
+	}
+	// The browser ceiling shares the validator because it shares the bucket, and
+	// it needs it more than its REST siblings do: those are clamped to the floor
+	// by hub.NewRateLimiter, while this one reaches hub.TokenBucket unclamped
+	// from server.newBrowserBuckets, so a sub-floor value denied every browser
+	// message for the life of the process.
+	return validateRateLimit("browser_rate_limit_per_sec", cfg.BrowserRateLimitPerSec)
 }
 
 func asFloat(v any) float64 {
