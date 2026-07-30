@@ -48,7 +48,7 @@ var fuzzExpectedCounts = map[string]int{
 	"encode_control":         96,
 	"is_control_frame":       128,
 	"decode":                 192,
-	"regressions":            4,
+	"regressions":            5,
 	"serializer_divergences": 6,
 }
 
