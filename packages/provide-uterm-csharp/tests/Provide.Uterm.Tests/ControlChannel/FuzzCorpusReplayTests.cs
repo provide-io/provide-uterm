@@ -25,7 +25,7 @@ namespace Provide.Uterm.Tests.ControlChannel;
 ///
 /// Every <c>decode</c> case is driven twice — once through the recorded chunk
 /// boundaries and once with the whole stream in a single feed. The two drives are
-/// not required to agree with each other (38 of 192 do not), because the decoder
+/// not required to agree with each other (39 of 192 do not), because the decoder
 /// flushes buffered terminal data before it has resolved a trailing DLE. Driving
 /// only one of them would prove the port parses the same while saying nothing
 /// about whether it buffers the same, which is exactly where a live desync lives.
@@ -36,7 +36,7 @@ public class ControlChannelFuzzCorpusReplayTests
     private const int ExpectedEncodeControl = 96;
     private const int ExpectedIsControlFrame = 128;
     private const int ExpectedDecode = 192;
-    private const int ExpectedRegressions = 4;
+    private const int ExpectedRegressions = 5;
     private const int ExpectedSerializerDivergences = 6;
 
     private readonly ITestOutputHelper _out;
@@ -63,7 +63,7 @@ public class ControlChannelFuzzCorpusReplayTests
 
         var total = ExpectedEncodeData + ExpectedEncodeControl + ExpectedIsControlFrame +
                     ExpectedDecode + ExpectedRegressions + ExpectedSerializerDivergences;
-        Assert.Equal(522, total);
+        Assert.Equal(523, total);
         foreach (var (family, expected) in new[]
                  {
                      ("encode_data", ExpectedEncodeData),
@@ -175,9 +175,9 @@ public class ControlChannelFuzzCorpusReplayTests
         Assert.Equal(ExpectedDecode, cases);
         Assert.Equal(ExpectedDecode * 2, drives);
 
-        // README: 38 of the 192 generated cases differ between the two drives.
+        // README: 39 of the 192 generated cases differ between the two drives.
         // If this ever reads 0 the replay collapsed the two drives into one.
-        Assert.Equal(38, differing);
+        Assert.Equal(39, differing);
     }
 
     /// <summary>Permanently-numbered hand-written cases; same shape as decode.</summary>

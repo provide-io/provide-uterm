@@ -203,7 +203,9 @@ public static class ControlChannelCodec
 
         try
         {
-            var payloadEnd = Utf8PayloadEnd(bytes, HeaderBytes, payloadBytes);
+            // Narrowed only after the size guard above, for the reason in
+            // TryParseHex32: the header is unsigned and this argument is not.
+            var payloadEnd = Utf8PayloadEnd(bytes, HeaderBytes, (int)payloadBytes);
             return payloadEnd == bytes.Length;
         }
         catch (ProtocolException)
@@ -212,7 +214,26 @@ public static class ControlChannelCodec
         }
     }
 
-    internal static bool TryParseHex32(ReadOnlySpan<char> s, out int value)
+    /// <summary>
+    /// Parse the frame's eight-digit hex length header.
+    /// </summary>
+    /// <remarks>
+    /// The accumulator is <see cref="long"/>, not <see cref="int"/>, and that is
+    /// the whole point: the header is an <em>unsigned</em> 32-bit wire value, so
+    /// <c>80000000</c> through <c>ffffffff</c> overflow a signed 32-bit
+    /// accumulator and wrap negative. A negative length then slips past every
+    /// <c>&gt; MaxControlPayloadBytes</c> guard — which only ever looks upward —
+    /// and reaches an index or a slice, where it throws a raw
+    /// <see cref="IndexOutOfRangeException"/> instead of the protocol error a
+    /// caller is catching. Thirteen bytes from a peer were enough. The reference
+    /// parses the same header with arbitrary-precision arithmetic and reports
+    /// "control payload too large"; pinned as <c>CCF-REG-0005</c> in the
+    /// cross-language fuzz corpus, which is what found this.
+    ///
+    /// Callers must therefore keep the value wide until after the size guard,
+    /// and only then narrow it.
+    /// </remarks>
+    internal static bool TryParseHex32(ReadOnlySpan<char> s, out long value)
     {
         value = 0;
         if (s.Length != 8)
@@ -492,10 +513,14 @@ public class ControlFrameDecoder
         }
 
         var payloadStart = idx + ControlChannelCodec.HeaderBytes;
+        // Narrowed only here, after both size guards above have run. The header
+        // is an unsigned 32-bit value; narrowing before the guard is what let a
+        // negative length reach this index. See TryParseHex32.
+        var payloadLength = (int)payloadBytes;
         int end;
         try
         {
-            end = ControlChannelCodec.Utf8PayloadEnd(buf, payloadStart, payloadBytes);
+            end = ControlChannelCodec.Utf8PayloadEnd(buf, payloadStart, payloadLength);
         }
         catch (ProtocolException ex)
         {
@@ -512,7 +537,7 @@ public class ControlFrameDecoder
             return (null, 0, false);
         }
 
-        var payload = ParseFramePayload(buf.Slice(payloadStart, payloadBytes));
+        var payload = ParseFramePayload(buf.Slice(payloadStart, payloadLength));
         return (new ControlChunk(payload), end, true);
     }
 
