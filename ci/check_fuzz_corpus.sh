@@ -26,32 +26,46 @@ set -uo pipefail
 
 cd "$(dirname "$0")/.." || exit 2
 
-CORPUS="conformance/fuzz/control_channel_fuzz.json"
-GENERATOR="conformance/fuzz/gen_control_channel_fuzz.py"
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
 
-committed="$(shasum -a 256 "$CORPUS" | cut -d' ' -f1)"
+status=0
 
-# Two independent generations from the default (committed) seed.
-uv run python "$GENERATOR" --out "$scratch/a.json" >/dev/null || exit 1
-uv run python "$GENERATOR" --out "$scratch/b.json" >/dev/null || exit 1
+# Every committed corpus, checked the same two ways. Add a pair here when a new
+# surface gets one.
+check_corpus() {
+  local corpus="$1" generator="$2" name
+  name="$(basename "$corpus")"
 
-first="$(shasum -a 256 "$scratch/a.json" | cut -d' ' -f1)"
-second="$(shasum -a 256 "$scratch/b.json" | cut -d' ' -f1)"
+  local committed first second
+  committed="$(shasum -a 256 "$corpus" | cut -d' ' -f1)"
 
-if [[ "$first" != "$second" ]]; then
-  echo "FAIL: $GENERATOR is not deterministic — two runs from the same seed differ."
-  diff "$scratch/a.json" "$scratch/b.json" | head -20
-  exit 1
-fi
+  # Two independent generations from the default (committed) seed.
+  uv run python "$generator" --out "$scratch/$name.a" >/dev/null || return 1
+  uv run python "$generator" --out "$scratch/$name.b" >/dev/null || return 1
 
-if [[ "$first" != "$committed" ]]; then
-  echo "FAIL: $CORPUS is stale — the reference no longer produces what is recorded."
-  cp "$scratch/a.json" "$CORPUS"
-  echo "  The regenerated corpus has been written to the working tree; \`git diff\` shows the drift."
-  echo "  If the change is intended, review the diff and commit it."
-  exit 1
-fi
+  first="$(shasum -a 256 "$scratch/$name.a" | cut -d' ' -f1)"
+  second="$(shasum -a 256 "$scratch/$name.b" | cut -d' ' -f1)"
 
-echo "OK: $CORPUS is reproducible from its seed and matches the CPython reference."
+  if [[ "$first" != "$second" ]]; then
+    echo "FAIL: $generator is not deterministic — two runs from the same seed differ."
+    diff "$scratch/$name.a" "$scratch/$name.b" | head -20
+    return 1
+  fi
+
+  if [[ "$first" != "$committed" ]]; then
+    echo "FAIL: $corpus is stale — the reference no longer produces what is recorded."
+    cp "$scratch/$name.a" "$corpus"
+    echo "  The regenerated corpus has been written to the working tree; \`git diff\` shows the drift."
+    echo "  If the change is intended, review the diff and commit it."
+    return 1
+  fi
+
+  echo "OK: $corpus is reproducible from its seed and matches the CPython reference."
+  return 0
+}
+
+check_corpus "conformance/fuzz/control_channel_fuzz.json" "conformance/fuzz/gen_control_channel_fuzz.py" || status=1
+check_corpus "conformance/fuzz/ansi_emulator_fuzz.json" "conformance/fuzz/gen_ansi_emulator_fuzz.py" || status=1
+
+exit "$status"
