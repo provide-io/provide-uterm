@@ -56,9 +56,11 @@ step "pip-audit"          uv run python -m pip_audit --local
 step "licenses"           uv run python scripts/check_licenses.py
 step "performance-smoke"  uv run python scripts/run_performance_smoke.py --iterations 100000 --enforce
 step "cf-vendor-tree"     bash .ci/check_cf_vendor_tree.sh
-# Re-runs the TypeScript port's differential generators against the CPython
-# reference; a stale corpus means the TS tests are asserting old behaviour.
-step "ts-goldens"         bash .ci/check_ts_goldens.sh
+# Re-runs every port's differential generators against the CPython reference; a
+# stale corpus means that port's tests are asserting old behaviour. Covered only
+# the TypeScript testdata directory until the Go egress corpus was found to have
+# recorded an SSRF hole as expected behaviour, unguarded by anything.
+step "goldens"            bash .ci/check_goldens.sh
 # The cross-language fuzz corpus: reproducible from its committed seed, and
 # still matching what the CPython reference produces. Four ports replay it.
 step "fuzz-corpus"        bash ci/check_fuzz_corpus.sh

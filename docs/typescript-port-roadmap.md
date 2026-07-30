@@ -14,8 +14,8 @@ Last updated: 2026-07-29.
 
 Every module is ported test-first against a committed differential corpus
 generated from CPython. See `packages/provide-uterm-ts/README.md` for the
-workflow and `.ci/check_ts_goldens.sh` for the drift gate that keeps the
-corpora honest.
+workflow and `.ci/check_goldens.sh` for the drift gate that keeps the
+corpora honest. That gate covers every port, not just this one.
 
 Definition of done for a module:
 
