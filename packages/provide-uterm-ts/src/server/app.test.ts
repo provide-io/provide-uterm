@@ -497,6 +497,13 @@ describe("bootstrapping", () => {
     expect(() => bootstrapServer({ authMode: "dev_token", document: { server: { host: "0.0.0.0" } } })).toThrow(
       ServerBootstrapError,
     );
+    // The exact message, not just the error class: an operator reads this to
+    // know which line of their config to change, and a message emptied down
+    // to the class name would still throw the right type here.
+    expect(() => bootstrapServer({ authMode: "dev_token", document: { server: { host: "0.0.0.0" } } })).toThrow(
+      "auth.mode='dev_token' is only permitted when server.host is a loopback address " +
+        "(127.0.0.1, localhost, or ::1). Got: 0.0.0.0",
+    );
   });
 
   it("allows dev_token on each of the loopback names", () => {
@@ -505,10 +512,47 @@ describe("bootstrapping", () => {
     }
   });
 
+  it("allows dev_token on a loopback host written with surrounding whitespace", () => {
+    // The comparison is against a trimmed, lower-cased host. Without the
+    // trim, a document that (however unusually) wrote the bind with
+    // surrounding whitespace would fail the loopback membership check and
+    // refuse to start a perfectly loopback-bound server.
+    expect(() =>
+      bootstrapServer({ authMode: "dev_token", document: { server: { host: " 127.0.0.1 " } } }),
+    ).not.toThrow();
+  });
+
+  it("recognises dev_token written with surrounding whitespace", () => {
+    // Same trim, the other operand: an authMode override of " dev_token "
+    // must still be read as the mode it names.
+    expect(() => bootstrapServer({ authMode: " dev_token ", document: { server: { host: "127.0.0.1" } } })).not.toThrow();
+    expect(bootstrapServer({ authMode: " dev_token ", document: { server: { host: "127.0.0.1" } } }).token).not.toBe("");
+  });
+
   it("refuses the modes that were removed", () => {
     for (const mode of ["dev", "none"]) {
       expect(() => bootstrapServer({ authMode: mode })).toThrow(ServerBootstrapError);
     }
+    // The exact message too, naming both removed spellings and what to use
+    // instead — not just that some ServerBootstrapError was thrown.
+    expect(() => bootstrapServer({ authMode: "dev" })).toThrow(
+      "AUTH_MODE=dev and 'none' have been removed for security reasons. " +
+        "Use 'dev_token' for local development or 'jwt' for production.",
+    );
+  });
+
+  it("captures a real startup time when no now() is given, so uptime actually grows", async () => {
+    // Every other bootstrap test in this file injects `now`; without one,
+    // startupTime must come from a real clock. uptimeSeconds treats any
+    // non-positive (or undefined) startupTime as "no start recorded" and
+    // reports exactly zero — which a near-instant, correctly-captured
+    // startupTime could *also* round to, so the only assertion that actually
+    // tells the two apart is that uptime keeps moving once real time has
+    // passed.
+    const { app } = bootstrapServer({ authMode: "jwt" });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const health = (await (await app.handle(new Request(`${BASE}/api/health`))).json()) as { uptime_s: number };
+    expect(health.uptime_s).toBeGreaterThan(0);
   });
 
   it("runs in whatever mode the configuration named when nobody overrode it", () => {
@@ -564,5 +608,16 @@ describe("bootstrapping", () => {
     const { registry } = bootstrapServer({ authMode: "jwt" });
     const created = Date.parse(registry.definitions()[0]?.created_at as string) / 1000;
     expect(created).toBeGreaterThanOrEqual(before - 1);
+  });
+
+  it("threads its own clock into the session runtimes it builds", async () => {
+    // SessionRuntimes stamps `stopped_at` from whatever clock it was built
+    // with. If bootstrapServer stopped passing its own `now` through, the
+    // runtimes would fall back to a real wall clock instead — silently
+    // diverging from every other clock this server reports on.
+    const { registry, runtimes } = server(424242);
+    await runtimes.startAutoStart();
+    await runtimes.stopAll();
+    expect(registry.status(registry.definitions()[0]?.session_id ?? "")?.stopped_at).toBe(424242);
   });
 });

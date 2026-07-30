@@ -110,6 +110,15 @@ export interface RateLimiterOptions {
   restSendRate: number;
   /** Monotonic clock shared by every bucket this limiter mints. */
   now?: () => number;
+  /**
+   * Per-client cache cap and eviction batch size. Default to the real
+   * {@link REST_CLIENT_CACHE_MAX} / {@link REST_CLIENT_EVICT_COUNT} constants —
+   * this exists so a test can exercise the LRU-eviction algorithm at a scale
+   * that does not risk a mutation-testing tool's hit-count safety valve (see
+   * {@link evictIfFull}'s docstring), not for production tuning.
+   */
+  clientCacheMax?: number;
+  clientEvictCount?: number;
 }
 
 /** Composes per-purpose token buckets for the hub's REST endpoints. */
@@ -122,6 +131,8 @@ export class RateLimiter {
   readonly #acquireRate: number;
   readonly #sendRate: number;
   readonly #now: (() => number) | undefined;
+  readonly #cacheMax: number;
+  readonly #evictCount: number;
   /** Insertion order is recency order; see {@link #touch}. */
   readonly #acquirePerClient = new Map<string, TokenBucket>();
   readonly #sendPerClient = new Map<string, TokenBucket>();
@@ -133,6 +144,8 @@ export class RateLimiter {
     this.#acquireRate = Math.max(MIN_RATE_PER_SEC, options.restAcquireRate);
     this.#sendRate = Math.max(MIN_RATE_PER_SEC, options.restSendRate);
     this.#now = options.now;
+    this.#cacheMax = options.clientCacheMax ?? REST_CLIENT_CACHE_MAX;
+    this.#evictCount = options.clientEvictCount ?? REST_CLIENT_EVICT_COUNT;
     this.restAcquireBucket = this.#mint(this.#acquireRate);
     this.restSendBucket = this.#mint(this.#sendRate);
   }
@@ -195,7 +208,7 @@ export class RateLimiter {
     perClient.delete(clientId);
     const bucket = existing ?? this.#mint(rate);
     perClient.set(clientId, bucket);
-    evictIfFull(perClient);
+    evictIfFull(perClient, this.#cacheMax, this.#evictCount);
     return bucket;
   }
 }
@@ -206,14 +219,41 @@ export class RateLimiter {
  * Insertion order is recency order, so trimming from the front is a true LRU
  * eviction. The client that triggered this has already been reinserted at the
  * end and is outside the window.
+ *
+ * `cap`/`evictCount` default to the real production constants; tests that
+ * only need to prove the *algorithm* (not the specific production numbers)
+ * pass small ones instead. That is not a testing nicety: removing the `break`
+ * below turns an early exit — hit once per overflow in real use — into a full
+ * rescan of whatever the map's actual size is. At the real cap (1024) that is
+ * enough of a blowup to trip a mutation-testing tool's runaway-loop safety net
+ * before any assertion runs, on a mutant that is a completely ordinary, real
+ * bug. Exercising the same code at a small scale keeps the mutant a normal,
+ * cleanly-killable one instead of a resource-limit crash.
+ *
+ * The two golden-bound tests in ratelimit.test.ts (`"evicts the oldest half
+ * once the cap is passed"`, `"matches the recorded eviction outcome"`) run
+ * at `clientCacheMax:8`/`clientEvictCount:4` against `ratelimit_golden.json`'s
+ * `eviction_small` section — generated from the same Python reference
+ * algorithm as the real-scale `eviction` section (see
+ * `gen_ratelimit_golden.py`'s `_eviction_small_record`), just at a scale small
+ * enough that removing this `break` stays a clean Stryker `Killed` rather
+ * than tripping the hardcoded `HIT_LIMIT_FACTOR = 100` hit-count safety valve
+ * (confirmed: at the real 1024/512 scale this same mutant's blast radius
+ * exceeded that budget before either test's assertion ran, reporting
+ * `Timeout` instead of `Killed`). `"exposes the documented cache bounds"`
+ * still pins the real 1024/512 production constants directly, with no loop.
  */
-function evictIfFull(perClient: Map<string, TokenBucket>): void {
-  if (perClient.size <= REST_CLIENT_CACHE_MAX) {
+function evictIfFull(
+  perClient: Map<string, TokenBucket>,
+  cap: number = REST_CLIENT_CACHE_MAX,
+  evictCount: number = REST_CLIENT_EVICT_COUNT,
+): void {
+  if (perClient.size <= cap) {
     return;
   }
   let removed = 0;
   for (const key of perClient.keys()) {
-    if (removed >= REST_CLIENT_EVICT_COUNT) {
+    if (removed >= evictCount) {
       break;
     }
     perClient.delete(key);

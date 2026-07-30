@@ -3,13 +3,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { IpAddress } from "../pycompat/index.ts";
 import { ipAddress, ipToString } from "../pycompat/index.ts";
 import { loadGolden } from "../testing/golden.ts";
 import {
   assertConnectorTargetAllowed,
   assertIpAllowed,
   assertWebhookTargetAllowed,
+  classifyEgressAddress,
+  cleanEgressHost,
   clearEgressCache,
   decodeEmbeddedIPv4,
   EGRESS_DNS_TTL_S,
@@ -172,6 +175,14 @@ describe("assertIpAllowed", () => {
 
   it("raises the shared error type", () => {
     expect(() => assertIpAllowed("169.254.169.254", { blockPrivate: false })).toThrow(EgressBlockedError);
+    // The class name, not merely membership: a caller reading `.name` off a
+    // caught error (logs, an error-shape contract) must see the real one.
+    try {
+      assertIpAllowed("169.254.169.254", { blockPrivate: false });
+      expect.unreachable("expected assertIpAllowed to throw");
+    } catch (error) {
+      expect((error as Error).name).toBe("EgressBlockedError");
+    }
   });
 
   it("fails on something that is not an address at all, and not as a block", () => {
@@ -180,6 +191,57 @@ describe("assertIpAllowed", () => {
     expect(golden.malformed.peer_is_block).toBe(false);
     expect(() => assertIpAllowed("not-an-address", { blockPrivate: false })).toThrow(TypeError);
     expect(() => assertIpAllowed("not-an-address", { blockPrivate: false })).not.toThrow(EgressBlockedError);
+    // The exact message, not just the error class: a refusal that swapped its
+    // wording for an empty string would still be "a TypeError" and this test
+    // would not notice without pinning the text.
+    expect(() => assertIpAllowed("not-an-address", { blockPrivate: false })).toThrow(
+      "not an IP address: not-an-address",
+    );
+  });
+});
+
+describe("cleanEgressHost", () => {
+  it("strips a bracket only where it actually wraps the address", () => {
+    // A `[` or `]` elsewhere in the string is not the IPv6 wrapper and must
+    // survive — otherwise the anchors guarding each side of the regex are
+    // decoration rather than a rule.
+    expect(cleanEgressHost("a[b]c")).toBe("a[b]c");
+    expect(cleanEgressHost("[::1]")).toBe("::1");
+  });
+});
+
+describe("classifyEgressAddress", () => {
+  it("names each kind by its own word, not merely a truthy one", () => {
+    expect(classifyEgressAddress(ipAddress("169.254.169.254") as IpAddress)).toBe("metadata");
+    expect(classifyEgressAddress(ipAddress("127.0.0.1") as IpAddress)).toBe("loopback");
+    expect(classifyEgressAddress(ipAddress("10.0.0.1") as IpAddress)).toBe("internal");
+    expect(classifyEgressAddress(ipAddress("8.8.8.8") as IpAddress)).toBe("public");
+  });
+
+  it("does not let a version mismatch read as the same address", () => {
+    // 169.254.169.254 (one of the three metadata addresses) packs to exactly
+    // 4 bytes: A9:FE:A9:FE. A same-address check that dropped the version
+    // comparison would call `.every()` on that shorter *metadata* array,
+    // which only walks its own 4 indices — so a genuine v6 address whose
+    // first 4 bytes happen to be A9:FE:A9:FE would compare equal without ever
+    // looking at its remaining 12 bytes. a9fe:a9fe::1 is such an address: not
+    // itself a wrapped form of the v4 metadata address (no wrapper decodes
+    // it), yet reserved in its own right (a000::/3) rather than metadata.
+    expect(classifyEgressAddress(ipAddress("a9fe:a9fe::1") as IpAddress)).toBe("internal");
+  });
+
+  it("classifies a genuinely public IPv6 address as public", () => {
+    // Every other IPv6 case this suite exercises is loopback, link-local,
+    // private or a wrapped metadata address; nothing else reaches the plain
+    // "public" fallthrough for a v6 subject.
+    expect(classifyEgressAddress(ipAddress("2001:4860:4860::8888") as IpAddress)).toBe("public");
+  });
+
+  it("draws the CGNAT boundary on the second octet alone", () => {
+    // 100.64.0.0/10: the /10 puts the boundary inside the second octet, so an
+    // address whose *first* octet is not 100 must never be caught by it, even
+    // when the second octet is inside [64, 127].
+    expect(classifyEgressAddress(ipAddress("101.64.0.1") as IpAddress)).toBe("public");
   });
 });
 
@@ -365,6 +427,42 @@ describe("assertWebhookTargetAllowed", () => {
     // hostile resolver cannot hang the request.
     expect(EGRESS_DNS_TTL_S).toBe(golden.dns_ttl_s);
     expect(EGRESS_RESOLVE_TIMEOUT_S).toBe(golden.resolve_timeout_s);
+  });
+
+  it("treats the window edge as expired, not still valid", async () => {
+    // The comparison is a strict `<`: at exactly the TTL the cached entry must
+    // be treated as stale, not as one tick still inside the window.
+    clearEgressCache();
+    const { calls, resolve } = resolver();
+    let clock = 1000;
+    const options = { resolve, now: () => clock };
+    await assertWebhookTargetAllowed("https://policy.example.org/decide", options);
+    clock += EGRESS_DNS_TTL_S; // exactly at the boundary, not past it
+    await assertWebhookTargetAllowed("https://policy.example.org/decide", options);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("uses a real epoch-seconds clock when no now() is given", async () => {
+    // Every other test in this file injects `now`, which never exercises the
+    // default clock resolveCached falls back to. A default that forgot to
+    // divide by 1000 — or that returned nothing at all — would make every
+    // elapsed-time comparison against EGRESS_DNS_TTL_S wrong.
+    vi.useFakeTimers();
+    try {
+      clearEgressCache();
+      const { calls, resolve } = resolver();
+      vi.setSystemTime(1_700_000_000_000);
+      await assertWebhookTargetAllowed("https://policy.example.org/decide", { resolve });
+      vi.setSystemTime(1_700_000_000_000 + 10_000); // +10s, well inside the 60s window
+      await assertWebhookTargetAllowed("https://policy.example.org/decide", { resolve });
+      expect(calls).toStrictEqual(["policy.example.org"]);
+
+      vi.setSystemTime(1_700_000_000_000 + (EGRESS_DNS_TTL_S + 1) * 1000);
+      await assertWebhookTargetAllowed("https://policy.example.org/decide", { resolve });
+      expect(calls).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does not cache a failure", async () => {

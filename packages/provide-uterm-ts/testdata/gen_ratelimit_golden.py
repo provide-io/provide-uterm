@@ -111,6 +111,35 @@ def _eviction_record() -> dict[str, Any]:
         }
 
 
+def _eviction_small_record() -> dict[str, Any]:
+    """Same eviction rule as `_eviction_record`, at a scale small enough for a
+    mutation-testing tool's hit-count budget to exercise the loop's early-exit
+    without tripping a runaway-loop safety valve. See ratelimit.ts's
+    evictIfFull docstring.
+    """
+    now = 1000.0
+    with (
+        mock.patch("time.monotonic", side_effect=lambda: now),
+        mock.patch("provide.uterm.server.bridge.hub.limiter.REST_CLIENT_CACHE_MAX", 8),
+        mock.patch("provide.uterm.server.bridge.hub.limiter.REST_CLIENT_EVICT_COUNT", 4),
+    ):
+        limiter = RateLimiter(rest_acquire_rate=1000.0, rest_send_rate=1000.0)
+        for i in range(8):
+            limiter.allow_rest_acquire(f"c{i}")
+        at_cap = len(limiter.rest_acquire_per_client)
+        limiter.allow_rest_acquire("overflow")
+        after = limiter.rest_acquire_per_client
+        return {
+            "cache_max": 8,
+            "evict_count": 4,
+            "size_at_cap": at_cap,
+            "size_after_overflow": len(after),
+            "overflow_client_kept": "overflow" in after,
+            "oldest_evicted": "c0" not in after,
+            "newest_kept": "c7" in after,
+        }
+
+
 def _self_reset_record() -> dict[str, Any]:
     """A client churning the cache must not be able to reset its own limit."""
     now = 1000.0
@@ -142,6 +171,7 @@ def main() -> int:
         ],
         "limiter": _limiter_record(),
         "eviction": _eviction_record(),
+        "eviction_small": _eviction_small_record(),
         "self_reset": _self_reset_record(),
     }
     OUT.write_text(json.dumps(payload, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")

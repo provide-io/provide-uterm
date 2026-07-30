@@ -209,6 +209,78 @@ describe("what a section accepts", () => {
     expect(errors[0]?.loc).toEqual([]);
     expect(validateSection("ControlPlaneConfig", { backend: "sqlite", database_url: "sqlite:///x.db" })).toEqual([]);
   });
+
+  it("accepts a boolean written as 0, not only as 1", () => {
+    // `coerceBool`'s numeric branch is `value === 0 || value === 1`; a test
+    // that only ever wrote 1 (or any other number) could not tell "reads 0 as
+    // false" apart from "refuses every number that isn't 1".
+    expect(validateSection("AuthConfig", { api_keys_enabled: 0 })).toEqual([]);
+    expect(coerceSection("AuthConfig", { api_keys_enabled: 0 }).api_keys_enabled).toBe(false);
+  });
+
+  it("trims a boolean word before matching it", () => {
+    expect(coerceSection("AuthConfig", { api_keys_enabled: " true " }).api_keys_enabled).toBe(true);
+  });
+
+  it("accepts an explicit plus sign on an integer", () => {
+    // The sign class is `[+-]?`; a test that only ever wrote a bare or a
+    // minus-signed integer would not notice the plus sign specifically
+    // dropping out of the class.
+    expect(validateSection("AuthConfig", { clock_skew_seconds: "+5" })).toEqual([]);
+    expect(coerceSection("AuthConfig", { clock_skew_seconds: "+5" }).clock_skew_seconds).toBe(5);
+  });
+
+  it("trims a float string before matching and parsing it", () => {
+    expect(coerceSection("AuthConfig", { webhook_idp_timeout_s: " 5.5 " }).webhook_idp_timeout_s).toBe(5.5);
+  });
+
+  it("matches a float end to end, not merely somewhere inside the string", () => {
+    // Both anchors matter independently: dropping `^` lets a match start
+    // partway through leading garbage; dropping `$` lets one stop partway
+    // through trailing garbage. Neither is a number.
+    expect(validateSection("AuthConfig", { webhook_idp_timeout_s: "abc5.0" })[0]?.type).toBe("float_parsing");
+    expect(validateSection("AuthConfig", { webhook_idp_timeout_s: "5.0abc" })[0]?.type).toBe("float_parsing");
+  });
+
+  it("accepts every shape of float the grammar names", () => {
+    // Each of these pins one alternative in the float regex: a signed integer
+    // with no fractional part, a trailing bare dot, a leading bare dot, a
+    // multi-digit whole part, and an unsigned exponent with more than one
+    // digit. A regex that quietly narrowed any one of these still passes a
+    // suite that only ever wrote "5.0".
+    const cases: Array<[string, number]> = [
+      ["+5.0", 5],
+      ["5", 5],
+      ["5.", 5],
+      [".5", 0.5],
+      [".55", 0.55],
+      ["12.5", 12.5],
+      ["5e12", 5e12],
+      ["5e+12", 5e12],
+    ];
+    for (const [text, value] of cases) {
+      expect(validateSection("AuthConfig", { webhook_idp_timeout_s: text })).toEqual([]);
+      expect(coerceSection("AuthConfig", { webhook_idp_timeout_s: text }).webhook_idp_timeout_s).toBe(value);
+    }
+  });
+
+  it("falls back to its own default path, not app_path's", () => {
+    // Both `app_path` and `assets_path` route through the same `cleanPath`
+    // helper with their own fallback string; a test that only ever emptied
+    // `app_path` could not tell "assets_path's fallback broke" apart from
+    // "cleanPath's fallback parameter broke".
+    expect(coerceSection("UiConfig", { assets_path: "" }).assets_path).toBe("/_terminal");
+  });
+
+  it("keeps the coerced value of a field that passed, not an empty stand-in", () => {
+    // `coerceValue`'s datetime branch returns `{ value }` on success; a
+    // mutant that returned `{}` instead would still be "not an error" and
+    // would only show up in the coerced value itself.
+    expect(coerceSection("SessionDefinition", { session_id: "s", created_at: "2020-01-01T00:00:00Z" }).created_at).toBe(
+      "2020-01-01T00:00:00Z",
+    );
+    expect(coerceSection("SessionDefinition", { session_id: "s", created_at: 5 }).created_at).toBe(5);
+  });
 });
 
 describe("what a whole document accepts", () => {

@@ -17,6 +17,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:mutation": "stryker run",
     "lint": "biome lint src/",
     "fix": "biome check --write --unsafe src/",
     "ensure:pty": "node scripts/ensure-pty-helper.mjs",
@@ -34,6 +35,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.16",
+    "@stryker-mutator/core": "^9.6.1",
+    "@stryker-mutator/vitest-runner": "^9.6.1",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^24.10.1",

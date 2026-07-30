@@ -102,6 +102,31 @@
       "strict": "connector peer '0.0.0.0' is a blocked internal address"
     },
     {
+      "input": "100.64.0.0",
+      "permissive": null,
+      "strict": "connector peer '100.64.0.0' is a blocked internal address"
+    },
+    {
+      "input": "100.64.0.1",
+      "permissive": null,
+      "strict": "connector peer '100.64.0.1' is a blocked internal address"
+    },
+    {
+      "input": "100.127.255.255",
+      "permissive": null,
+      "strict": "connector peer '100.127.255.255' is a blocked internal address"
+    },
+    {
+      "input": "100.63.255.255",
+      "permissive": null,
+      "strict": null
+    },
+    {
+      "input": "100.128.0.0",
+      "permissive": null,
+      "strict": null
+    },
+    {
       "input": "::",
       "permissive": null,
       "strict": "connector peer '::' is a blocked internal address"

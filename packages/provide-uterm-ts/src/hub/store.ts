@@ -48,12 +48,18 @@ export interface StateStoreOptions {
   maxBufferChars: number;
   /** Monotonic clock in seconds. */
   now?: () => number;
+  // The three sinks below are spelled `| undefined` rather than merely
+  // optional so that a composing layer can thread its own possibly-unset
+  // option straight through under `exactOptionalPropertyTypes` — which is what
+  // `server/session-hub.ts` does. Without it the only way to pass one along is
+  // a conditional spread per sink, and a conditional that exists to satisfy the
+  // type checker is a branch a reader has to rule out and a test has to cover.
   /** Where callback failures are reported. */
-  logger?: Logger;
+  logger?: Logger | undefined;
   /** Metrics sink, if one is configured. */
-  onMetric?: (name: string, value: number) => void;
+  onMetric?: ((name: string, value: number) => void) | undefined;
   /** Notified when a worker's hijack state changes. */
-  onHijackChanged?: (workerId: string, enabled: boolean, owner?: string) => void | Promise<void>;
+  onHijackChanged?: ((workerId: string, enabled: boolean, owner?: string) => void | Promise<void>) | undefined;
 }
 
 /** Options for {@link StateStore.notifyHijackChanged}. */

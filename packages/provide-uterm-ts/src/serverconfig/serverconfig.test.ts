@@ -144,6 +144,14 @@ describe("cleanPath", () => {
   it("keeps the inner structure of a nested path", () => {
     expect(golden.paths.find((entry) => entry.name === "nested")?.cleaned).toBe("/a/b/c");
   });
+
+  it("falls back on an explicit undefined, not just on an empty string", () => {
+    // The ternary's first arm is `value === undefined`; a caller reaching
+    // this with no value at all (rather than an empty string) must take the
+    // same fallback branch, not fall through to `String(undefined)`, which
+    // is the literal text "undefined".
+    expect(cleanPath(undefined, "/fallback")).toBe("/fallback");
+  });
 });
 
 describe("the auth configuration", () => {
@@ -266,6 +274,30 @@ describe("the other configurations", () => {
 
   it("quotes the value it refused", () => {
     expect(golden.models.find((entry) => entry.name === "a negative recording size")?.error).toContain("-1");
+  });
+
+  it("only bounds a recording size that is actually a number", () => {
+    // The guard is `typeof === "number" && ... < 0`; a value of some other
+    // type must never reach the numeric comparison at all — not even one
+    // that a `<` coercion would happen to read as negative.
+    expect(() => validateRecordingConfig({ max_bytes: "-5" })).not.toThrow();
+    expect(() => validateRecordingConfig({ retention_s: "-5" })).not.toThrow();
+  });
+
+  it("names the recording webhook url specifically", () => {
+    expect(() => validateRecordingConfig({ webhook_url: "http://evil.example" })).toThrow("recording.webhook_url");
+  });
+
+  it("only bounds a reap interval or retention that is actually a number", () => {
+    expect(() => validateControlPlaneConfig({ reap_interval_s: "-5" })).not.toThrow();
+    expect(() => validateControlPlaneConfig({ reap_retention_s: "-5" })).not.toThrow();
+  });
+
+  it("does not refuse every reap interval, only a non-positive one", () => {
+    // A guard that always fired on any number, however positive, would still
+    // pass every existing "zero or negative" case — none of them exercise a
+    // value the reference actually accepts.
+    expect(() => validateControlPlaneConfig({ reap_interval_s: 3600 })).not.toThrow();
   });
 });
 

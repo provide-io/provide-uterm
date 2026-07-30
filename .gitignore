@@ -132,3 +132,7 @@ packages/provide-uterm-csharp/coverage-out/
 
 # TypeScript port: vitest coverage output
 packages/provide-uterm-ts/coverage/
+
+# TypeScript port: StrykerJS mutation-testing output and sandbox scratch dir
+packages/provide-uterm-ts/reports/
+packages/provide-uterm-ts/.stryker-tmp/

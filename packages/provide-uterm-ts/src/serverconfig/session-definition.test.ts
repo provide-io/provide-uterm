@@ -137,6 +137,44 @@ describe("a name nobody defined", () => {
   });
 });
 
+describe("the before-rules actually reach coerceSection", () => {
+  it("still refuses an identifier the pattern rule would refuse, even when only coercing", () => {
+    // `coerceSection` passes `BEFORE_RULES[section] ?? {}` to the same
+    // `checkFields` `validateSection` uses. For a section with no before-rules
+    // this is a no-op either way, but SessionDefinition is the one section
+    // that has them — so this is the one case where wiring the wrong (empty)
+    // set through would be observable: the pattern rule's own `continue`,
+    // which normally keeps a refused session_id out of the coerced result,
+    // would never run, and the field would coerce and land in the result
+    // unfiltered.
+    expect(coerceSection("SessionDefinition", { session_id: "not ok!" }).session_id).toBeUndefined();
+  });
+});
+
+describe("the display-name fallback", () => {
+  it("falls back to the empty string, not a literal placeholder, when the identifier itself was refused", () => {
+    // display_name's own fallback reads `accepted.session_id ?? ""` —
+    // `accepted` is the fields that already *passed*, and session_id is
+    // absent from it here because its own rule refused this value first.
+    expect(coerceSection("SessionDefinition", { session_id: "not ok!", display_name: "" }).display_name).toBe("");
+  });
+
+  it("leaves an all-whitespace identifier's display name unset, not set to it", () => {
+    // foldConnectorConfig's own fallback (`String(input.session_id ?? "")`)
+    // is a *different* place this could go wrong: an identifier that trims to
+    // nothing must not become the display name either.
+    expect(coerceSection("SessionDefinition", { session_id: "   " }).display_name).toBeUndefined();
+  });
+
+  it("leaves display_name unset when session_id is absent altogether, not set to a placeholder", () => {
+    // Here the `??` in `String(input.session_id ?? "")` is the one that
+    // actually fires — session_id is missing entirely, not merely blank, so
+    // this is the one case that distinguishes the real fallback ("") from
+    // any other stand-in text.
+    expect(coerceSection("SessionDefinition", {}).display_name).toBeUndefined();
+  });
+});
+
 describe("the rest of an entry", () => {
   it("displays an entry by its identifier when it names nothing", () => {
     for (const kwargs of [{ session_id: "shell" }, { session_id: "shell", display_name: "" }]) {
@@ -176,6 +214,29 @@ describe("the rest of an entry", () => {
     expect(validateSection("SessionDefinition", { session_id: "s", visibility: "everyone" })[0]?.msg).toBe(
       "Value error, invalid visibility for s: 'everyone'",
     );
+  });
+
+  it("writes an explicit undefined the same way it writes a missing value", () => {
+    // `pyStr`'s own null/undefined check, not the field-presence check in
+    // `checkFields`: a key written with no value at all (`{ input_mode:
+    // undefined }`, as opposed to the key being absent) still reaches this
+    // rule, and `str(None)` is what the reference calls it either way.
+    expect(validateSection("SessionDefinition", { session_id: "s", input_mode: undefined })[0]?.msg).toBe(
+      "Value error, invalid input_mode for s: None",
+    );
+  });
+
+  it("accepts the open input mode on its own term, not only by falling through from hijack", () => {
+    expect(validateSection("SessionDefinition", { session_id: "s", input_mode: "open" })).toEqual([]);
+  });
+
+  it("accepts each visibility on its own term in the three-way choice", () => {
+    // Each of "public", "operator" and "private" pins one specific term in
+    // the `||` chain; testing only one of them (or only combinations) leaves
+    // the other two mutable without anything noticing.
+    for (const visibility of ["public", "operator", "private"]) {
+      expect(validateSection("SessionDefinition", { session_id: "s", visibility })).toEqual([]);
+    }
   });
 
   it("refuses a creation time that is not a time at all", () => {

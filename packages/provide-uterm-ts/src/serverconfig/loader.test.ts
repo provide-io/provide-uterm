@@ -159,6 +159,14 @@ describe("the structural pass", () => {
     expect(() => normalizeDocument({ auth: () => undefined })).toThrow("[auth] must be a table (got dict)");
   });
 
+  it("names an explicit undefined the way it names a null", () => {
+    // A document that wrote the key with no value — as `{ auth: undefined }`
+    // rather than omitting `auth` altogether — is still present ("auth" in
+    // normalized is true), and reads as Python's None, not as whatever the
+    // fallthrough branch would call it.
+    expect(() => normalizeDocument({ auth: undefined })).toThrow("[auth] must be a table (got NoneType)");
+  });
+
   it("uses the reference's type names, not the engine's", () => {
     // The message is read against a TOML file, so it has to name the types
     // that file could hold.
@@ -196,6 +204,10 @@ describe("reading a config file", () => {
     // Named as a config problem rather than surfacing the parser's own error,
     // which says nothing about which file was being read.
     expect(() => parseTomlDocument("[auth\nmode = ")).toThrow(ConfigLoadError);
+    // The message must actually say "invalid TOML", not just be *some*
+    // ConfigLoadError — a refusal that swapped its wording for the empty
+    // string would still satisfy the assertion above.
+    expect(() => parseTomlDocument("[auth\nmode = ")).toThrow("invalid TOML:");
   });
 
   it("loads a file from disk", () => {
@@ -235,6 +247,16 @@ describe("reading a config file", () => {
     expect(loadServerDocument(path).recording).toBeUndefined();
   });
 
+  it("leaves a recording section with no directory key alone", () => {
+    // `[recording]` may be present without `directory` at all — nothing in
+    // this section is required. The type guard must skip resolution rather
+    // than hand a non-string (here, absent) value to `isAbsolute`, which
+    // throws on anything that is not a string.
+    const path = writeConfig("norec-dir.toml", "[recording]\nmax_bytes = 10\n");
+    expect(() => loadServerDocument(path)).not.toThrow();
+    expect(loadServerDocument(path).recording).toEqual({ max_bytes: 10 });
+  });
+
   it("applies the structural pass to what it read", () => {
     const path = writeConfig("bad.toml", 'auth = "nope"\n');
     expect(() => loadServerDocument(path)).toThrow("[auth] must be a table");
@@ -242,5 +264,10 @@ describe("reading a config file", () => {
 
   it("reports a file it cannot read", () => {
     expect(() => loadServerDocument(join(scratch, "missing.toml"))).toThrow(ConfigLoadError);
+    // The exact message, naming the path: an operator has to know which file
+    // it tried and failed to read, not just that reading one failed.
+    expect(() => loadServerDocument(join(scratch, "missing.toml"))).toThrow(
+      `cannot read config ${join(scratch, "missing.toml")}:`,
+    );
   });
 });
