@@ -172,11 +172,16 @@ public sealed class ServerConfigNestedKeyTests
     /// Every nested key set must match the reference's recorded field names.
     ///
     /// `configschema_golden.json` is generated from the reference's Pydantic
-    /// models and drift-checked against them by `.ci/check_ts_goldens.sh`, so it
+    /// models and drift-checked against them by `.ci/check_goldens.sh`, so it
     /// is the live surface rather than a second hand-maintained copy. If the
     /// reference gains a field and this port does not, this fails by name — the
     /// alternative is a stale set refusing a key the reference accepts, which
     /// breaks a working deployment on upgrade.
+    ///
+    /// <c>ConfigLoader.PortOnlyKeysForTests</c> is subtracted from our side
+    /// first: a small, documented set of keys this port accepts with no
+    /// reference-schema equivalent yet (see its own docstring), so a genuine
+    /// port-specific extension does not read as drift.
     /// </summary>
     [Fact]
     public void TheKeySetsMatchTheReferencesRecordedSchema()
@@ -185,6 +190,11 @@ public sealed class ServerConfigNestedKeyTests
         using var document = JsonDocument.Parse(File.ReadAllText(path));
         var specs = document.RootElement.GetProperty("specs");
 
+        // An empty map would make the loop below iterate zero times and pass
+        // vacuously — asserting a nonzero, known count is what keeps "nothing
+        // was compared" from reading as "everything matched".
+        Assert.Equal(ConfigLoader.KnownNestedKeysForTests.Count, ConfigLoader.SectionModelsForTests.Count);
+
         foreach (var (section, model) in ConfigLoader.SectionModelsForTests)
         {
             var recorded = specs.GetProperty(model)
@@ -192,7 +202,9 @@ public sealed class ServerConfigNestedKeyTests
                 .Select(property => property.Name)
                 .OrderBy(name => name, StringComparer.Ordinal)
                 .ToList();
+            var portOnly = ConfigLoader.PortOnlyKeysForTests.GetValueOrDefault(section, Array.Empty<string>());
             var ours = ConfigLoader.KnownNestedKeysForTests[section]
+                .Except(portOnly)
                 .OrderBy(name => name, StringComparer.Ordinal)
                 .ToList();
 

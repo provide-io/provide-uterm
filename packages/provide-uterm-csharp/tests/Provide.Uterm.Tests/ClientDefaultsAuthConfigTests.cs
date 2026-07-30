@@ -170,7 +170,12 @@ public class ClientDefaultsAuthConfigTests
         Assert.Equal("uterm_tenant", def.Auth.TenantCookie);
         Assert.Equal("tenant_id", def.Auth.JWTTenantClaim);
 
-        Assert.Throws<FileNotFoundException>(() => ConfigLoader.Load("/no/such/server.toml"));
+        // The type alone does not distinguish the explicit existence check from
+        // .NET's own FileNotFoundException on a bad read — both throw the same
+        // type — so the message (which names the path) is what proves this is
+        // the loader's own guard rather than an accidental fallthrough.
+        var missing = Assert.Throws<FileNotFoundException>(() => ConfigLoader.Load("/no/such/server.toml"));
+        Assert.Contains("/no/such/server.toml", missing.Message, StringComparison.Ordinal);
 
         var path = Path.Combine(Path.GetTempPath(), "sc-" + Guid.NewGuid().ToString("N") + ".toml");
         try

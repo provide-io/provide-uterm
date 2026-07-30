@@ -47,7 +47,7 @@ build:
 # ~300–400 tests in one process (native PTY/SSH residual). Fresh process per batch.
 # Filters use class-name prefixes from --list-tests (no catch-all ~Term/~Coverage).
 TEST_BATCH_1 := FullyQualifiedName~AnsiColors|FullyQualifiedName~ChannelsLineEditor|FullyQualifiedName~Conformance|FullyQualifiedName~CtrlMsg|FullyQualifiedName~Defaults|FullyQualifiedName~Filters|FullyQualifiedName~Frames|FullyQualifiedName~Policy|FullyQualifiedName~StrictPolicy|FullyQualifiedName~Redaction|FullyQualifiedName~Sanitizer|FullyQualifiedName~Screen|FullyQualifiedName~Vt|FullyQualifiedName~DeckMux|FullyQualifiedName~ServerRecordingHttp|FullyQualifiedName~ControlChannel|FullyQualifiedName~Egress|FullyQualifiedName~Sqlite|FullyQualifiedName~ControlPlaneGraphical
-TEST_BATCH_2 := FullyQualifiedName~Hub|FullyQualifiedName~ServerIntegration|FullyQualifiedName~ServerConfig|FullyQualifiedName~ServerAuth|FullyQualifiedName~WebhookAuthorization|FullyQualifiedName~JwksJwt|FullyQualifiedName~CfAccessJwt|FullyQualifiedName~Vnc|FullyQualifiedName~HumanRelay|FullyQualifiedName~HumanVnc|FullyQualifiedName~RfbInputFilter|FullyQualifiedName~ClientDefaults|FullyQualifiedName~Session|FullyQualifiedName~TermSession|FullyQualifiedName~ModuleSurface|FullyQualifiedName~SmokeSurface|FullyQualifiedName~MoreSurface|FullyQualifiedName~ServerFactoryControlPlane
+TEST_BATCH_2 := FullyQualifiedName~Hub|FullyQualifiedName~ServerIntegration|FullyQualifiedName~ServerConfig|FullyQualifiedName~ServerAuth|FullyQualifiedName~WebhookAuthorization|FullyQualifiedName~WebhookDelivery|FullyQualifiedName~JwksJwt|FullyQualifiedName~CfAccessJwt|FullyQualifiedName~Vnc|FullyQualifiedName~HumanRelay|FullyQualifiedName~HumanVnc|FullyQualifiedName~RfbInputFilter|FullyQualifiedName~ClientDefaults|FullyQualifiedName~Session|FullyQualifiedName~TermSession|FullyQualifiedName~ModuleSurface|FullyQualifiedName~SmokeSurface|FullyQualifiedName~MoreSurface|FullyQualifiedName~ServerFactoryControlPlane
 # Native-heavy classes get their own process (batch 3 crashed Ubuntu after ~18
 # tests when Cli+Pty+Gateway shared one host).
 TEST_BATCH_3A := FullyQualifiedName~Cli
@@ -92,11 +92,24 @@ _test_batch_3d:
 conformance-test:
 	$(DOTNET) test -c $(CONFIGURATION) --filter "FullyQualifiedName~ConformanceVectors" -v n
 
-# Mutation gate (Policy + DeckMux presence). Mirrors Go packages/provide-uterm-go
-# mutation-gate / Python mutmut perimeter. Requires python3 + dotnet.
+# Mutation gate. Mirrors Go packages/provide-uterm-go mutation-gate / Python
+# mutmut perimeter. Requires python3 + dotnet. Two stages:
+#   1. ci/mutation_gate.py    — the original hand-rolled &&/|| flipper, over
+#      its own small perimeter (Policy/DeckMux/Colors/Filters/Sanitizer/
+#      Redaction/Auth/Channels).
+#   2. ci/stryker_gate.py     — dotnet-stryker (a local tool; see
+#      .config/dotnet-tools.json), Roslyn-level mutation testing (boundary,
+#      arithmetic, conditional, string, statement, …) over the egress guards,
+#      webhook registry/delivery loop, and TOML config binder — see
+#      tests/Provide.Uterm.Tests/stryker-config.json for the perimeter and
+#      mutation_equivalents.toml for documented-equivalent survivors.
+# NOT part of `quality-gate`: a full Stryker run pays a ~10-20 minute fixed
+# whole-project instrumentation cost regardless of perimeter size (Go's
+# gremlins gate is likewise kept separate for the same reason).
 PYTHON ?= python3
 mutation-gate:
 	$(PYTHON) ci/mutation_gate.py
+	$(PYTHON) ci/stryker_gate.py
 
 define DOTNET_COVER_BATCH
 	@echo "=== cover batch: $(1) ==="

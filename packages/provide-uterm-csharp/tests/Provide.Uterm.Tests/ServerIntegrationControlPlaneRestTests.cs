@@ -775,8 +775,13 @@ public sealed class ServerIntegrationControlPlaneRestTests
         Assert.Throws<ArgumentException>(() => mgr.ValidateUrl("http://localhost/x"));
         Assert.Throws<ArgumentException>(() => mgr.ValidateUrl("not-a-url"));
         Assert.Throws<ArgumentException>(() => mgr.ValidateUrl(""));
-        Assert.Throws<ArgumentException>(() => mgr.ValidatePattern(new string('a', 201)));
-        Assert.Throws<ArgumentException>(() => mgr.ValidatePattern("["));
+        // Message content, not just the exception type: the two guards below
+        // it (regex compile failure, and every ValidateUrl row above) also
+        // throw plain ArgumentException, so only the text says which one fired.
+        var tooLong = Assert.Throws<ArgumentException>(() => mgr.ValidatePattern(new string('a', 201)));
+        Assert.Contains("max length 200", tooLong.Message, StringComparison.Ordinal);
+        var badRegex = Assert.Throws<ArgumentException>(() => mgr.ValidatePattern("["));
+        Assert.Contains("invalid pattern", badRegex.Message, StringComparison.Ordinal);
         mgr.ValidatePattern("ok");
         mgr.ValidatePattern(null);
         mgr.ValidatePattern("");

@@ -1431,12 +1431,16 @@ public static class ServerFactory
     /// refills) and the server. Defaults to <see cref="RealClock"/>; tests pass
     /// a <see cref="ManualClock"/> so a spent budget stays spent for the length
     /// of the test instead of refilling on a slow runner.</param>
+    /// <param name="hostResolver">DNS for the webhook egress guard. Defaults to
+    /// the platform resolver; tests inject one so the guard's DNS rows never
+    /// depend on a real answer (or on there being a network at all).</param>
     public static (UtermServer Server, string? DevToken) CreateFromConfig(
         UtermServerConfig cfg,
         string version = "0.0.0-dev",
         IGraphicalTargetRegistry? graphicalTargets = null,
         IClock? clock = null,
-        TextWriter? logWriter = null)
+        TextWriter? logWriter = null,
+        IHostResolver? hostResolver = null)
     {
         var apiKeys = new ApiKeyStore();
         string? devToken = null;
@@ -1448,6 +1452,10 @@ public static class ServerFactory
         var auth = new LocalIdentityProvider(cfg.Auth, apiKeys);
         var authz = AuthorizationService.FromConfig(cfg);
         clock ??= new RealClock();
+        // A definitely-non-null alias, because the webhook guard's tunnel
+        // predicate below is a closure: nullable flow state does not survive into
+        // a lambda body, so capturing `clock` there reads as possibly-null.
+        var serverClock = clock;
         // Built before the hub, not after, because the hub needs it. This
         // ordering is the whole reason `OnMetric` went unwired: the sink used to
         // be created below, so there was nothing to hand the hub, and every
@@ -1471,13 +1479,39 @@ public static class ServerFactory
         var registry = new InMemorySessionRegistry(cfg.Sessions, cfg.Recording.EnabledByDefault);
         graphicalTargets ??= SeedGraphicalTargets(cfg);
         var tunnelStore = new Tunnel.MemoryTunnelStore();
-        var webhooks = new WebhookManager(allowLoopbackDestinations: true);
+        // The egress guard's effective permission is decided once, here, where
+        // the server is built from config — not at each call site, and not from
+        // the config key alone (see EffectiveAllowLoopbackDestinations for why
+        // the bind address is half of it). The delivery-time tunnel predicate is
+        // handed the real store and the real clock, so an expired or revoked
+        // share stops closing the guard the moment it stops being live.
+        // The delivery workers are driven off the hub's event bus — the same bus
+        // the REST watch/SSE surfaces read, fed by MessageRouter.AppendEvent — so
+        // a webhook sees exactly the events an operator watching the session would
+        // see. Without this the registry recorded registrations and delivered
+        // nothing, which also left the delivery-time half of the egress guard
+        // wired to no caller.
+        var webhooks = new WebhookManager(
+            WebhookEgressPolicy.EffectiveAllowLoopbackDestinations(cfg),
+            hostResolver,
+            sessionId => tunnelStore.HasLiveShare(sessionId, serverClock.Wall()),
+            (name, value) => metrics.Inc(name, value),
+            new WebhookDeliveryOptions
+            {
+                EventBus = hub.EventBus,
+                // The server's clock, not the wall clock: the signature timestamp
+                // has to agree with whatever the rest of this server stamps, or a
+                // receiver's freshness window rejects deliveries for a reason
+                // that appears nowhere in either log.
+                Now = () => serverClock.Wall(),
+                OnLog = (level, message) => log.WriteLine($"{level} {message}"),
+            });
         var profiles = new InMemoryProfileStore();
-        // Default enable API keys for hosted server (tests can disable).
-        if (!cfg.Auth.ApiKeysEnabled)
-        {
-            cfg.Auth.ApiKeysEnabled = true;
-        }
+        // `api_keys_enabled` used to be forced on here whenever it was false,
+        // commented "tests can disable" — which had it backwards: a test can pass
+        // whatever it likes, and production was the only caller that could not say
+        // no. The reference defaults the key to False (config_schema.py:72), so
+        // honouring it as written also removes a divergence.
 
         var frontendDir = Environment.GetEnvironmentVariable("UTERM_FRONTEND_DIR");
         var server = new UtermServer(new ServerDeps

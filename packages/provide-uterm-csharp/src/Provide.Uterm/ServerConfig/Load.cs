@@ -138,6 +138,25 @@ public static class ConfigLoader
     /// </remarks>
     internal static IReadOnlyDictionary<string, HashSet<string>> KnownNestedKeysForTests => KnownNestedKeys;
 
+    /// <summary>
+    /// Keys this port accepts with no equivalent field in the reference's
+    /// Pydantic schema (yet). Real, tested behaviour — see
+    /// <see cref="ApplyAuth"/>'s <c>jwt_default_role</c>/<c>cf_access_team_domain</c>
+    /// binding and <c>LocalIdentity</c>'s default-role fallback — not dead
+    /// code; Go's <c>serverconfig</c> carries the same two fields. Excluded
+    /// from the drift-guard comparison in <c>ServerConfigNestedKeyTests</c>
+    /// rather than left to silently fail it or, worse, left unlisted in
+    /// <see cref="KnownNestedKeys"/> so the public TOML loader refuses them
+    /// outright. Closing this for real means either porting the fields into
+    /// the reference schema or dropping them; tracked separately, not
+    /// attempted here.
+    /// </summary>
+    internal static readonly IReadOnlyDictionary<string, string[]> PortOnlyKeysForTests =
+        new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["auth"] = new[] { "jwt_default_role", "cf_access_team_domain" },
+        };
+
     private static readonly Dictionary<string, HashSet<string>> KnownNestedKeys = new(StringComparer.Ordinal)
     {
         ["server"] = new(StringComparer.Ordinal)
@@ -154,7 +173,8 @@ public static class ConfigLoader
             "mode", "principal_cookie", "principal_header", "require_jwt_in_production",
             "require_upstream_proxy_secret", "role_cookie", "role_header", "surface_cookie",
             "tenant_cookie", "tenant_header", "token_cookie", "trusted_proxy_ips",
-            "upstream_proxy_secret", "webhook_idp_forward_cookies",
+            "upstream_proxy_secret", "jwt_default_role", "cf_access_team_domain",
+            "webhook_idp_forward_cookies",
             "webhook_idp_forward_headers", "webhook_idp_on_failure",
             "webhook_idp_require_response_nonce", "webhook_idp_require_signed_response",
             "webhook_idp_secret", "webhook_idp_timeout_s", "webhook_idp_url",
@@ -350,10 +370,27 @@ public static class ConfigLoader
             ApplyAuth(cfg.Auth, auth);
         }
 
+        if (root.TryGetValue("ui", out var uiObj) && uiObj is TomlTable ui)
+        {
+            ApplyUi(cfg.Ui, ui);
+        }
+
+        if (root.TryGetValue("recording", out var recObj) && recObj is TomlTable rec)
+        {
+            ApplyRecording(cfg.Recording, rec);
+        }
+
+        if (root.TryGetValue("tunnel", out var tunObj) && tunObj is TomlTable tun)
+        {
+            ApplyTunnel(cfg.Tunnel, tun);
+        }
+
         if (root.TryGetValue("control_plane", out var cpObj) && cpObj is TomlTable cp)
         {
             if (cp.TryGetValue("backend", out var b) && b is string bs) cfg.ControlPlane.Backend = bs;
             if (cp.TryGetValue("database_url", out var du) && du is string dus) cfg.ControlPlane.DatabaseUrl = dus;
+            if (cp.TryGetValue("reap_interval_s", out var ri)) cfg.ControlPlane.ReapIntervalS = ToInt(ri, cfg.ControlPlane.ReapIntervalS);
+            if (cp.TryGetValue("reap_retention_s", out var rr)) cfg.ControlPlane.ReapRetentionS = ToInt(rr, cfg.ControlPlane.ReapRetentionS);
         }
 
         if (root.TryGetValue("security", out var secObj) && secObj is TomlTable sec)
@@ -361,11 +398,24 @@ public static class ConfigLoader
             if (sec.TryGetValue("mode", out var m) && m is string ms) cfg.Security.Mode = ms;
             if (sec.TryGetValue("metrics_require_auth", out var mra) && mra is bool mrb) cfg.Security.MetricsRequireAuth = mrb;
             if (sec.TryGetValue("default_session_visibility", out var dsv) && dsv is string dss) cfg.Security.DefaultSessionVisibility = dss;
+            if (sec.TryGetValue("dev_mode_acknowledged", out var dma) && dma is bool dmab) cfg.Security.DevModeAcknowledged = dmab;
+            // The SSRF guard on connector and VNC dial-out targets. It had a
+            // property, three readers, and no way in from a file.
+            if (sec.TryGetValue("block_private_connector_targets", out var bpc) && bpc is bool bpcb)
+            {
+                cfg.Security.BlockPrivateConnectorTargets = bpcb;
+            }
         }
 
         if (root.TryGetValue("governance", out var govObj) && govObj is TomlTable gov)
         {
             ApplyGovernance(cfg.Governance, gov);
+        }
+
+        if (root.TryGetValue("webhooks", out var whObj) && whObj is TomlTable wh
+            && wh.TryGetValue("allow_loopback_destinations", out var loopback) && loopback is bool loopbackB)
+        {
+            cfg.Webhooks.AllowLoopbackDestinations = loopbackB;
         }
 
         if (root.TryGetValue("sessions", out var sessObj) && sessObj is TomlTableArray sessions)
@@ -418,10 +468,64 @@ public static class ConfigLoader
         if (t.TryGetValue("public_base_url", out var u) && u is string us) s.PublicBaseUrl = us;
         if (t.TryGetValue("title", out var title) && title is string ts) s.Title = ts;
         if (t.TryGetValue("node_id", out var n) && n is string ns) s.NodeId = ns;
+        if (t.TryGetValue("max_sessions", out var maxSessions)) s.MaxSessions = ToInt(maxSessions, s.MaxSessions ?? 0);
         if (t.TryGetValue("allowed_origins", out var ao) && ao is TomlArray arr)
         {
             s.AllowedOrigins = arr.OfType<string>().ToList();
         }
+    }
+
+    /// <summary>
+    /// The <c>[ui]</c> section, which was never read at all.
+    /// </summary>
+    /// <remarks>
+    /// Six keys with live readers in <c>UtermServer.StaticUi</c> — the two served
+    /// paths and the xterm/fit-addon CDN bases with their SRI hashes. An operator
+    /// pinning an integrity hash got the default unpinned CDN and no warning,
+    /// which is the failure mode SRI exists to prevent.
+    /// </remarks>
+    private static void ApplyUi(UiConfig ui, TomlTable t)
+    {
+        if (t.TryGetValue("app_path", out var app) && app is string apps) ui.AppPath = apps;
+        if (t.TryGetValue("assets_path", out var assets) && assets is string assetss) ui.AssetsPath = assetss;
+        if (t.TryGetValue("xterm_cdn", out var xc) && xc is string xcs) ui.XtermCdn = xcs;
+        if (t.TryGetValue("xterm_cdn_integrity", out var xi) && xi is string xis) ui.XtermCdnIntegrity = xis;
+        if (t.TryGetValue("fitaddon_cdn", out var fc) && fc is string fcs) ui.FitAddonCdn = fcs;
+        if (t.TryGetValue("fitaddon_cdn_integrity", out var fi) && fi is string fis) ui.FitAddonCdnIntegrity = fis;
+    }
+
+    /// <summary>
+    /// The <c>[recording]</c> section, which was never read at all.
+    /// </summary>
+    /// <remarks>
+    /// <c>enabled_by_default</c>, <c>directory</c> and <c>store_type</c> have
+    /// readers in the hosted factory, so a deployment that asked to record wrote
+    /// nothing, and one that asked not to could not say so.
+    /// </remarks>
+    private static void ApplyRecording(RecordingConfig r, TomlTable t)
+    {
+        if (t.TryGetValue("enabled_by_default", out var en) && en is bool enb) r.EnabledByDefault = enb;
+        if (t.TryGetValue("directory", out var dir) && dir is string dirs) r.Directory = dirs;
+        if (t.TryGetValue("control_channel_mode", out var ccm) && ccm is string ccms) r.ControlChannelMode = ccms;
+        if (t.TryGetValue("redact_sensitive", out var rs) && rs is bool rsb) r.RedactSensitive = rsb;
+        if (t.TryGetValue("store_type", out var st) && st is string sts) r.StoreType = sts;
+    }
+
+    /// <summary>
+    /// The <c>[tunnel]</c> section, which was never read at all.
+    /// </summary>
+    /// <remarks>
+    /// The share-link security knobs: <c>cookie_secure</c>, <c>cookie_samesite</c>
+    /// and <c>ip_binding</c> all have readers in <c>Tunnel.cs</c>, so an operator
+    /// hardening a public share got the defaults regardless of what they wrote.
+    /// </remarks>
+    private static void ApplyTunnel(TunnelConfig tunnel, TomlTable t)
+    {
+        if (t.TryGetValue("token_ttl_s", out var ttl)) tunnel.TokenTtlS = ToInt(ttl, tunnel.TokenTtlS);
+        if (t.TryGetValue("token_transport", out var tt) && tt is string tts) tunnel.TokenTransport = tts;
+        if (t.TryGetValue("cookie_secure", out var csec) && csec is bool csecb) tunnel.CookieSecure = csecb;
+        if (t.TryGetValue("cookie_samesite", out var css) && css is string csss) tunnel.CookieSamesite = csss;
+        if (t.TryGetValue("ip_binding", out var ipb) && ipb is bool ipbb) tunnel.IpBinding = ipbb;
     }
 
     private static void ApplyAuth(AuthConfig a, TomlTable t)
@@ -450,6 +554,26 @@ public static class ConfigLoader
             a.JwtAlgorithms = aarr.OfType<string>().ToList();
         }
 
+        // The cookie names header/cookie auth actually reads (LocalIdentity), and
+        // the JWT claim names that decide roles and scopes. All had properties and
+        // readers; none had a way in from a file, so a deployment whose IdP uses
+        // "groups" instead of "roles" resolved no roles at all and every operator
+        // was silently demoted to viewer.
+        if (t.TryGetValue("principal_cookie", out var pc) && pc is string pcs) a.PrincipalCookie = pcs;
+        if (t.TryGetValue("role_cookie", out var rc) && rc is string rcs) a.RoleCookie = rcs;
+        if (t.TryGetValue("surface_cookie", out var sc) && sc is string scs) a.SurfaceCookie = scs;
+        if (t.TryGetValue("token_cookie", out var tokc) && tokc is string tokcs) a.TokenCookie = tokcs;
+        if (t.TryGetValue("jwt_roles_claim", out var jrc) && jrc is string jrcs) a.JwtRolesClaim = jrcs;
+        if (t.TryGetValue("jwt_scopes_claim", out var jsc) && jsc is string jscs) a.JwtScopesClaim = jscs;
+        // The delegated-IdP group. No consumer in this port yet, so binding them
+        // does not switch anything on — but a discarded key and an unimplemented
+        // feature are different failures, and only the second one is honest.
+        if (t.TryGetValue("identity_provider", out var ip) && ip is string ips) a.IdentityProvider = ips;
+        if (t.TryGetValue("delegate_roles", out var dr) && dr is bool drb) a.DelegateRoles = drb;
+        if (t.TryGetValue("webhook_idp_url", out var wiu) && wiu is string wius) a.WebhookIdpUrl = wius;
+        if (t.TryGetValue("webhook_idp_secret", out var wis) && wis is string wiss) a.WebhookIdpSecret = wiss;
+        if (t.TryGetValue("webhook_idp_timeout_s", out var wit)) a.WebhookIdpTimeoutS = ToDouble(wit, a.WebhookIdpTimeoutS);
+        if (t.TryGetValue("webhook_idp_on_failure", out var wif) && wif is string wifs) a.WebhookIdpOnFailure = wifs;
         if (t.TryGetValue("jwt_default_role", out var jdr) && jdr is string jdrs) a.JwtDefaultRole = jdrs;
         if (t.TryGetValue("cf_access_team_domain", out var team) && team is string teams) a.CfAccessTeamDomain = teams;
         ApplyCfAccessTeamDomain(a);

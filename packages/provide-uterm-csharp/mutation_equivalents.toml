@@ -33,3 +33,340 @@ ParseChannelHello early exit: IsNullOrEmpty(raw) || !IsControlFrame(raw). \
 Flipping to && still returns null for empty and non-frame inputs because \
 DecodeFrames yields no ControlChunk hello — observationally equivalent. \
 """
+
+# ---------------------------------------------------------------------------
+# Stryker.NET gate (ci/stryker_gate.py). Format differs from the [[equivalent]]
+# entries above (that allowlist belongs to the older hand-rolled &&/|| gate,
+# ci/mutation_gate.py, and keys on line + mutator name only): Stryker reports
+# a (line, column) pair per mutant because several mutants often share a line,
+# and its mutatorName strings ("Boolean mutation", "Statement mutation", …)
+# come from Stryker's own vocabulary, not ours. Keyed by
+# (file relative to src/Provide.Uterm/, line, column, mutatorName) exactly as
+# ci/stryker_gate.py reads them out of mutation-report.json.
+# ---------------------------------------------------------------------------
+
+[[stryker_equivalent]]
+file = "Server/EgressAddressPolicy.cs"
+line = 142
+column = 37
+mutator = "Null coalescing mutation (remove left)"
+reason = """\
+IsLoopback: `IPAddress.IsLoopback(v4 ?? ip)`. .NET's own IPAddress.IsLoopback \
+already special-cases an IPv4-mapped IPv6 address internally (it maps to IPv4 \
+and asks IsLoopback of *that* before falling back to the ::1 comparison), so \
+passing the raw wrapper form instead of the pre-mapped v4 form produces an \
+identical answer for every address — confirmed by EgressAddressPolicyTests's \
+`::ffff:127.0.0.1` case passing unchanged under the mutant. The `v4` extraction \
+still matters to every other caller in this file (DecodeEmbeddedIPv4's own \
+logic, IsBlockedPrivate's CIDR match), which is why it is not deleted — only \
+this one call site's use of it is redundant."""
+
+[[stryker_equivalent]]
+file = "Server/EgressAddressPolicy.cs"
+line = 273
+column = 24
+mutator = "Boolean mutation"
+reason = """\
+Cidr.Contains: `if (address.Length != _network.Length) return false;`. `Cidr` \
+is a `private` nested struct (not `internal`), so it is unreachable from any \
+test regardless of InternalsVisibleTo. Its only two callers in the entire \
+codebase (`IsBlockedPrivate` for BlockedPrivateV4/V6, both length-homogeneous \
+lists compared against a same-family address) never construct a length \
+mismatch, so this defensive branch cannot be driven to either outcome from any \
+public entry point — a coverage gap that is also a reachability fact, not a \
+missing test."""
+
+[[stryker_equivalent]]
+file = "Server/WebhookEgress.cs"
+line = 35
+column = 81
+mutator = "Boolean mutation"
+reason = """\
+DnsHostResolver.ResolveAsync: `.ConfigureAwait(false)` on the one production \
+DNS call. ASP.NET Core (unlike ASP.NET Framework) installs no \
+SynchronizationContext, and the xUnit console runner installs none either, so \
+`ConfigureAwait(true)` and `(false)` resume on the same thread-pool context \
+either way — no test in or out of process can observe a difference. Same \
+reasoning applies to every other ConfigureAwait boolean on this allowlist \
+(Webhooks.Delivery.cs:249,309,362,420,435)."""
+
+[[stryker_equivalent]]
+file = "Server/WebhookEgress.cs"
+line = 241
+column = 61
+mutator = "Boolean mutation"
+reason = """\
+CheckAddresses' loopback refusal: `return new WebhookEgressDecision(false, \
+true, ReasonLoopback);` — the `Loopback` field on a *refused* decision. The \
+only reader of `.Loopback` is `WebhookManager.ClassifyDelivery`, which reads \
+it in a second `if` that only runs after an *earlier* `if (!decision.Allowed) \
+{ …; return RefusedDestination; }` has already returned — so `.Loopback` is \
+only ever consulted when `Allowed == true`. Every return that pairs \
+`Loopback == true` with `Allowed == false` (this one, and Refuse()'s Loopback \
+param below) therefore has a `.Loopback` value nothing ever reads. The only \
+other reader, `ValidateUrl`, reads `.Reason`, never `.Loopback`."""
+
+[[stryker_equivalent]]
+file = "Server/WebhookEgress.cs"
+line = 253
+column = 58
+mutator = "String mutation"
+reason = """\
+CheckAddresses' success path: `return new WebhookEgressDecision(true, \
+loopback, "");` — the empty `Reason` on an *allowed* decision. `.Reason` is \
+read in exactly one place, `WebhookManager.ValidateUrl`, and only inside \
+`if (!decision.Allowed) throw new ArgumentException(decision.Reason);` — so a \
+Reason attached to an Allowed=true decision is never read by anything in this \
+codebase. `ClassifyDelivery` does not read `.Reason` at all."""
+
+[[stryker_equivalent]]
+file = "Server/WebhookEgress.cs"
+line = 256
+column = 78
+mutator = "Boolean mutation"
+reason = """\
+`Refuse(reason) => new(false, false, reason)` — same reasoning as line 241: \
+`Refuse` always pairs `Allowed = false` with this `Loopback` value, and \
+`ClassifyDelivery` never reads `.Loopback` when `Allowed == false` (see the \
+241 entry for the exact control-flow proof)."""
+
+[[stryker_equivalent]]
+file = "Server/Webhooks.Delivery.cs"
+line = 249
+column = 77
+mutator = "Boolean mutation"
+reason = "ConfigureAwait boolean — see the WebhookEgress.cs:35 entry for the shared reasoning (no SynchronizationContext in this codebase's runtime or test host)."
+
+[[stryker_equivalent]]
+file = "Server/Webhooks.Delivery.cs"
+line = 309
+column = 37
+mutator = "Boolean mutation"
+reason = "ConfigureAwait boolean — see the WebhookEgress.cs:35 entry."
+
+[[stryker_equivalent]]
+file = "Server/Webhooks.Delivery.cs"
+line = 348
+column = 13
+mutator = "Logical mutation"
+reason = """\
+PostAsync's signing-header guard: `if (timestamp is not null && signature is \
+not null)`. The two locals are set together three lines earlier — `if \
+(!string.IsNullOrEmpty(cfg.Secret)) { timestamp = …; signature = …; }` — and \
+nowhere else, so they are always both null or both non-null; the `&&` can \
+never observe one true and the other false. Flipping to `||` is therefore \
+answer-identical for every reachable state. (The individual `is not null` \
+sub-expressions are NOT equivalent under negation/equality mutation — those \
+break the always-paired symmetry and are correctly killed.)"""
+
+[[stryker_equivalent]]
+file = "Server/Webhooks.Delivery.cs"
+line = 321
+column = 91
+mutator = "Boolean mutation"
+reason = "ConfigureAwait boolean (the retry-ladder Task.Delay) — see the WebhookEgress.cs:35 entry."
+
+[[stryker_equivalent]]
+file = "Server/Webhooks.Delivery.cs"
+line = 362
+column = 33
+mutator = "Boolean mutation"
+reason = "ConfigureAwait boolean — see the WebhookEgress.cs:35 entry."
+
+[[stryker_equivalent]]
+file = "Server/Webhooks.Delivery.cs"
+line = 428
+column = 72
+mutator = "Boolean mutation"
+reason = "ConfigureAwait boolean (the Task.WhenAll awaiting every worker's Loop) — see the WebhookEgress.cs:35 entry."
+
+[[stryker_equivalent]]
+file = "Server/Webhooks.Delivery.cs"
+line = 416
+column = 13
+mutator = "Statement mutation"
+reason = """\
+ShutdownAsync: `_workers.Clear();`, one statement before `_webhooks.Clear();` \
+(itself real and killed — a dedicated test asserts GetWebhook returns null \
+post-shutdown). `_workers` backs only `Unregister`'s `_workers.Remove(id, out \
+worker)` lookup; `Unregister`'s return value is `_webhooks.Remove(id)` alone, \
+so a stale `_workers` entry cannot change what any caller observes, and \
+`DeliveryWorker.Release()` is idempotent (guarded by an Interlocked flag), so \
+even re-invoking it via a stale entry is a silent no-op, not a crash."""
+
+[[stryker_equivalent]]
+file = "Server/Webhooks.Delivery.cs"
+line = 420
+column = 54
+mutator = "Boolean mutation"
+reason = "ConfigureAwait boolean — see the WebhookEgress.cs:35 entry."
+
+[[stryker_equivalent]]
+file = "Server/Webhooks.Delivery.cs"
+line = 423
+column = 13
+mutator = "Statement mutation"
+reason = """\
+ShutdownAsync's cleanup loop: `worker.Release();`. Proven redundant here (not \
+assumed): the *statement* mutant on the line above it — `await \
+_shutdown.CancelAsync().ConfigureAwait(false);` — was independently confirmed \
+KILLED by the existing test suite, meaning cancelling the shared `_shutdown` \
+token source is what actually unblocks every worker's `Task.Delay`/channel \
+read (each worker's own token is `CreateLinkedTokenSource(_shutdown.Token)`, \
+so the parent cancellation cascades to all of them). `worker.Release()`'s own \
+`_cancel.Cancel()` is therefore a second, redundant cancellation of a token \
+already cancelled by the line above, for every worker still present in the \
+captured `workers` list."""
+
+[[stryker_equivalent]]
+file = "Server/Webhooks.Delivery.cs"
+line = 430
+column = 9
+mutator = "Statement mutation"
+reason = """\
+ShutdownAsync: `_http?.Dispose();`. `_http` is a private field with no public \
+accessor and no caller that touches it after shutdown (the manager is done); \
+disposing the wrapping HttpClient — not the caller's injected handler, which \
+`disposeHandler: false` deliberately protects (see \
+TheInjectedTransportIsUsedWhenOneIsSupplied's Disposed assertion) — has no \
+externally observable effect through this type's public surface."""
+
+[[stryker_equivalent]]
+file = "Server/Webhooks.Delivery.cs"
+line = 431
+column = 9
+mutator = "Statement mutation"
+reason = """\
+ShutdownAsync: `_shutdown.Dispose();`. Same reasoning as line 430: a private \
+CancellationTokenSource with no public accessor; disposing it after every \
+descendant token has already been cancelled and every worker released has no \
+effect any test can observe."""
+
+[[stryker_equivalent]]
+file = "Server/Webhooks.Delivery.cs"
+line = 435
+column = 83
+mutator = "Boolean mutation"
+reason = "ConfigureAwait boolean (DisposeAsync's ShutdownAsync call) — see the WebhookEgress.cs:35 entry."
+
+[[stryker_equivalent]]
+file = "Server/Webhooks.Delivery.cs"
+line = 467
+column = 13
+mutator = "Statement mutation"
+reason = """\
+DeliveryWorker.Release: `_unsubscribe();`. EventBus.Enqueue takes a snapshot \
+of a worker's subscriber list under its own lock at publish time \
+(`targets = list.ToList()`), so once `_unsubscribe` has removed this \
+subscription no *later* Enqueue call can ever deliver to it again — the \
+existing UnregisteringStopsTheWorker test (publish-after-unregister, assert \
+no new delivery) already exercises exactly this guarantee and passes whether \
+or not the sibling `_cancel.Cancel()`/`_cancel.Dispose()` statements run, \
+because the bus-level removal alone accounts for every publicly-observable \
+effect a black-box test can assert on here."""
+
+[[stryker_equivalent]]
+file = "Server/Webhooks.Delivery.cs"
+line = 468
+column = 13
+mutator = "Statement mutation"
+reason = """\
+DeliveryWorker.Release: `_cancel.Cancel()`. Its only externally-relevant \
+effect — unblocking the worker's own delivery-loop Task, which is otherwise \
+parked on `sub.Channel.Reader.ReadAsync` — is not observable through any \
+public API (the Task itself is private and nothing awaits it outside \
+ShutdownAsync). Skipping it here leaves that one Task's cancellation to the \
+*next* full ShutdownAsync (its linked token is still a child of `_shutdown`, \
+cancelled by line 420's cascade — see that entry), which every test that \
+disposes the manager eventually triggers via `await using`. The only true \
+difference is cancellation *timing* for an already-unregistered worker \
+between Unregister and the manager's eventual disposal — not an outcome any \
+counter, log, or return value differs on."""
+
+[[stryker_equivalent]]
+file = "Server/Webhooks.Delivery.cs"
+line = 469
+column = 13
+mutator = "Statement mutation"
+reason = """\
+DeliveryWorker.Release: `_cancel.Dispose();`. A private CancellationTokenSource \
+with no accessor; disposing it after both this worker's and the parent's \
+cancellation have already been requested has no effect any test can observe \
+(same class as lines 430/431)."""
+
+[[stryker_equivalent]]
+file = "Server/Webhooks.Delivery.cs"
+line = 464
+column = 17
+mutator = "Statement mutation"
+reason = """\
+DeliveryWorker.Release's idempotency guard: `return;` inside \
+`if (Interlocked.Exchange(ref _released, 1) != 0)`. Removing it would only be \
+observable if `Release()` could run twice on the same worker, and it cannot: \
+the two call sites (`Webhooks.cs`'s `Unregister`, and this file's \
+`ShutdownAsync`) both remove the worker from `_workers` under the SAME \
+`_gate` lock before calling `Release()` outside that lock — whichever call \
+site's lock section runs first is the only one that ever sees a non-null \
+worker for that id, since `Dictionary.Remove` returns nothing once the key is \
+already gone. So the guard's true-branch is not merely untested, it is \
+unreachable through any interleaving of the current two call sites — an \
+equivalence claim about observability, not about coverage (see \
+ci/stryker_gate.py's own allowance for this). Confirmed empirically, not just \
+analytically: hand-removing the `return;` and running the full webhook test \
+suite (135 tests, `--filter FullyQualifiedName~Webhook`) leaves every test \
+green. If a third call site to `Release()` is ever added outside this lock \
+discipline, this entry should be revisited."""
+
+[[stryker_equivalent]]
+file = "ServerConfig/Load.cs"
+line = 471
+column = 100
+mutator = "Null coalescing mutation (remove left)"
+reason = """\
+ApplyServer: `s.MaxSessions = ToInt(maxSessions, s.MaxSessions ?? 0)` — the \
+fallback ToInt uses if the TOML value fails to parse as an int. `MaxSessions` \
+is `int?` with no default set anywhere (`Config.cs` declares it bare, and \
+`UtermServerConfig.Default()` never assigns it), and `ApplyServer` is the only \
+writer, called once per `Load()` on a fresh config — so `s.MaxSessions` is \
+provably `null` every time this line runs, making `s.MaxSessions ?? 0` always \
+evaluate to `0`, identically to the mutant's hardcoded `0`. Confirmed by \
+Load_FromToml_BindsMaxSessions using a *parseable* value, which is the only \
+way to observe this line at all — the fallback path itself is unreachable \
+with a different outcome."""
+
+[[stryker_equivalent]]
+file = "ServerConfig/Load.cs"
+line = 591
+column = 31
+mutator = "Statement mutation"
+reason = """\
+ApplyCfAccessTeamDomain: `if (team.Length == 0) return;`, the *first* of two \
+identical empty-string guards (the second is line 584, after the \
+scheme/slash/suffix strip). Every statement between them (`StartsWith`, \
+`IndexOf`, `EndsWith`, `Trim`) is a pure string query with no side effect on \
+`a`, and none of them can turn an empty `team` into a non-empty one — so if \
+`team` is already "" when line 571 is reached, it is still "" when line 584 \
+re-checks, and line 584 (not mutated by this mutant) returns in its place \
+with an identical outcome. If `team` is non-empty at line 571, the original \
+does not return there either. Either way, removing line 571's return changes \
+nothing any test can observe."""
+
+[[stryker_equivalent]]
+file = "ServerConfig/Load.cs"
+line = 265
+column = 71
+mutator = "Statement mutation"
+reason = """\
+RefuseUnknownNestedKeys: `if (!KnownNestedKeys.TryGetValue(section, out var \
+known)) continue;`. Every top-level key in `KnownTopLevelKeys` that is absent \
+from `KnownNestedKeys` (`environment`, and the seven scalar settings — \
+`session_idle_timeout_s`, `session_retention_s`, `browser_rate_limit_per_sec`, \
+`rest_acquire_rate_limit_per_sec`, `rest_send_rate_limit_per_sec`, \
+`worker_frame_on_invalid`, `max_connections_per_principal`, `max_workers`) is \
+a TOML scalar, never a table. `TablesIn(root, section)` — the only consumer \
+of the loop variable this `continue` skips ahead of — pattern-matches on \
+`TomlTable`/`TomlTableArray` and yields nothing for any other value, so the \
+foreach beneath it already iterates zero times for a scalar section whether \
+or not this `continue` fires. Every currently-known top-level key that maps \
+to a table (`server`, `auth`, …) *is* present in `KnownNestedKeys`, so this \
+branch is never reached for a table-valued section either."""

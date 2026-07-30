@@ -153,7 +153,7 @@ extra-paths = []
 
 [tool.codespell]
 skip = ".git,*.pyc,__pycache__,.venv,node_modules,uv.lock,package-lock.json,*.mmd,./packages/provide-uterm/src/provide/uterm/frontend/assets/*.js,packages/provide-uterm/src/provide/uterm/frontend/assets/*.js,./packages/provide-uterm-server/src/provide/uterm/server/frontend/assets/*.js,packages/provide-uterm-server/src/provide/uterm/server/frontend/assets/*.js,./packages/provide-uterm-cloudflare/python_modules/provide/uterm/frontend/assets/*.js,packages/provide-uterm-cloudflare/python_modules/provide/uterm/frontend/assets/*.js,packages/provide-uterm-cloudflare/python_modules/structlog/*,mutants"
-ignore-words-list = "ore,opps,wont,strat,nd,rade,ans,unparseable,cna,intoto,te,shiftin,shttp,defint,onws,alo,ahi,blo,bhi,fo,afterall"
+ignore-words-list = "ore,opps,wont,strat,nd,rade,ans,unparseable,cna,intoto,te,shiftin,shttp,defint,onws,alo,ahi,blo,bhi,fo,afterall,wit"
 
 [tool.bandit]
 exclude_dirs = [

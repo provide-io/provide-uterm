@@ -154,6 +154,10 @@ public sealed partial class UtermServer
 
     public async ValueTask DisposeAsync()
     {
+        // Before the app, not after: the workers POST outbound while the pipeline
+        // is still up, and stopping them first means nothing is mid-delivery
+        // against a half-disposed server.
+        await ShutdownWebhooksAsync().ConfigureAwait(false);
         if (_app is not null)
         {
             await _app.DisposeAsync().ConfigureAwait(false);

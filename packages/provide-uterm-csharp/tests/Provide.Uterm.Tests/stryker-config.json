@@ -1,0 +1,60 @@
+{
+  "stryker-config": {
+    "project-info": {
+      "name": "provide-uterm-csharp",
+      "module": "Provide.Uterm",
+      "version": ""
+    },
+    "concurrency": 4,
+    "mutation-level": "Standard",
+    "language-version": "latest",
+    "additional-timeout": 60000,
+    "mutate": [
+      "**/Server/EgressAddressPolicy.cs",
+      "**/Server/EgressGuard.cs",
+      "**/Server/WebhookEgress.cs",
+      "**/Server/Webhooks.cs",
+      "**/Server/Webhooks.Delivery.cs",
+      "**/ServerConfig/Load.cs"
+    ],
+    "solution": null,
+    "configuration": "Release",
+    "target-framework": null,
+    "project": "Provide.Uterm.csproj",
+    "coverage-analysis": "perTest",
+    "disable-bail": false,
+    "disable-mix-mutants": false,
+    "thresholds": {
+      "high": 80,
+      "low": 60,
+      "break": 0
+    },
+    "verbosity": "info",
+    "reporters": [
+      "Progress",
+      "Json"
+    ],
+    "since": {
+      "enabled": false,
+      "ignore-changes-in": [],
+      "target": "master"
+    },
+    "baseline": {
+      "enabled": false,
+      "provider": "disk",
+      "azure-fileshare-url": "",
+      "s3-bucket-name": "",
+      "s3-endpoint": "",
+      "s3-region": "",
+      "fallback-version": "master"
+    },
+    "dashboard-url": "https://dashboard.stryker-mutator.io",
+    "test-projects": [],
+    "test-case-filter": "FullyQualifiedName~Egress|FullyQualifiedName~Webhook|FullyQualifiedName~ServerConfig|FullyQualifiedName~HostedConfigSecurityDefaults|FullyQualifiedName~CfAccessJwt|FullyQualifiedName~ClientDefaultsAuthConfig|FullyQualifiedName~GraphicalTargetConfigCoverage|FullyQualifiedName~ServerIntegrationControlPlaneRest|FullyQualifiedName~CoverageTo95Wave3|FullyQualifiedName~CoverageTo99Wave9",
+    "test-runner": null,
+    "ignore-mutations": [],
+    "ignore-methods": [],
+    "report-file-name": "mutation-report",
+    "break-on-initial-test-failure": false
+  }
+}
