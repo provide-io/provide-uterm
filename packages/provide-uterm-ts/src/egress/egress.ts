@@ -83,8 +83,13 @@ export function clearEgressCache(): void {
   resolveCache.clear();
 }
 
-/** Strip the brackets and whitespace a peer address arrives with. */
-function cleanHost(text: string): string {
+/**
+ * Strip the brackets and whitespace a peer address arrives with.
+ *
+ * Exported because the webhook validator needs exactly this: a WHATWG URL
+ * reports an IPv6 host bracketed, and a bracketed string is not an address.
+ */
+export function cleanEgressHost(text: string): string {
   return text.trim().replace(/^\[|\]$/g, "");
 }
 
@@ -126,7 +131,79 @@ function sameAddress(left: IpAddress, right: IpAddress): boolean {
 }
 
 /**
+ * What one address is, as far as any egress policy is concerned.
+ *
+ * `loopback` is split out from `internal` because it is the only case any
+ * configuration key may re-open, and because it is re-opened by a *different*
+ * key for a *different* reason than the private ranges are — see §2 of
+ * `conformance/EGRESS_GUARD.md`. Every policy in this package decides over
+ * these four values, so there is one classifier to be wrong rather than two
+ * that can disagree.
+ */
+export type EgressAddressKind = "metadata" | "loopback" | "internal" | "public";
+
+/**
+ * Classify one address, wrapper and all.
+ *
+ * The wrapper is decoded first: a check applied to the outer address of
+ * `64:ff9b::169.254.169.254` sees an unremarkable IPv6 address, and in a
+ * NAT64 cluster that address reaches the v4 metadata service.
+ */
+export function classifyEgressAddress(address: IpAddress): EgressAddressKind {
+  const subject = decodeEmbeddedIPv4(address) ?? address;
+  if (METADATA_ADDRESSES.some((metadata) => sameAddress(metadata, subject))) {
+    return "metadata";
+  }
+  if (isLoopback(subject)) {
+    return "loopback";
+  }
+  // Link-local and unspecified are each *already* inside CPython's private
+  // tables, so dropping either changes nothing today. They are kept because
+  // the reference keeps them: the tables are CPython's to change, and this
+  // list is what the rule actually means. Reserved and multicast are not
+  // redundant — 100::/8 and ff00::/8 are outside the private list entirely.
+  if (
+    isPrivate(subject) ||
+    isLinkLocal(subject) ||
+    isMulticast(subject) ||
+    isUnspecified(subject) ||
+    isReserved(subject) ||
+    isSharedAddressSpace(subject)
+  ) {
+    return "internal";
+  }
+  return "public";
+}
+
+/** RFC 6598 carrier-grade NAT space, `100.64.0.0/10`. */
+function isSharedAddressSpace(address: IpAddress): boolean {
+  // Checked here rather than added to `pycompat/ipaddress.ts`, because that
+  // module is a deliberate mirror of CPython and CPython answers False:
+  //
+  //     >>> ipaddress.ip_address("100.64.0.1").is_private
+  //     False
+  //
+  // Making the mirror lie would break the thing it exists to guarantee. So the
+  // range is added by the *policy* that needs it, which is the layer entitled
+  // to be stricter than the classifier it borrows. CGNAT carries real
+  // infrastructure on carrier and container networks and is exactly what an
+  // SSRF pivot wants; every port blocks it. See EGRESS_GUARD.md §1.
+  if (address.version !== 4) {
+    return false;
+  }
+  // 100.64.0.0/10 — the /10 puts the boundary inside the second octet, so
+  // 100.63.255.255 and 100.128.0.0 are both outside it.
+  const second = address.packed[1] ?? 0;
+  return address.packed[0] === 100 && second >= 64 && second <= 127;
+}
+
+/**
  * Apply the metadata-always, private-when-asked policy to one address.
+ *
+ * Loopback lands in the `onPrivate` refusal rather than a case of its own:
+ * `127.0.0.0/8` and `::1` are inside CPython's private tables, so the
+ * reference refuses them under exactly that rule and with exactly that
+ * message. The connector guard has no loopback key — the webhook one does.
  *
  * @throws {EgressBlockedError} With the caller's message for whichever rule
  *   refused it — the two call for different operator responses.
@@ -135,26 +212,11 @@ function checkResolvedIp(
   address: IpAddress,
   options: { blockPrivate: boolean; onMetadata: string; onPrivate: string },
 ): void {
-  const embedded = decodeEmbeddedIPv4(address);
-  const subject = embedded ?? address;
-  if (METADATA_ADDRESSES.some((metadata) => sameAddress(metadata, subject))) {
+  const kind = classifyEgressAddress(address);
+  if (kind === "metadata") {
     throw new EgressBlockedError(options.onMetadata);
   }
-  // Loopback, link-local and unspecified are each *already* inside CPython's
-  // private tables, so dropping any one of them changes nothing today. They
-  // are kept because the reference keeps them: the tables are CPython's to
-  // change, and this list is what the rule actually means. Reserved and
-  // multicast are not redundant — 100::/8 and ff00::/8 are outside the
-  // private list entirely.
-  if (
-    options.blockPrivate &&
-    (isPrivate(subject) ||
-      isLoopback(subject) ||
-      isLinkLocal(subject) ||
-      isMulticast(subject) ||
-      isUnspecified(subject) ||
-      isReserved(subject))
-  ) {
+  if (options.blockPrivate && kind !== "public") {
     throw new EgressBlockedError(options.onPrivate);
   }
 }
@@ -170,7 +232,7 @@ function checkResolvedIp(
  * @throws {EgressBlockedError} If the peer is a blocked target.
  */
 export function assertIpAllowed(text: string, options: { blockPrivate: boolean }): void {
-  const address = ipAddress(cleanHost(text));
+  const address = ipAddress(cleanEgressHost(text));
   if (address === undefined) {
     throw new TypeError(`not an IP address: ${text}`);
   }
@@ -195,14 +257,14 @@ export async function assertConnectorTargetAllowed(
   host: string,
   options: { blockPrivate: boolean; resolve?: Resolver },
 ): Promise<void> {
-  const clean = cleanHost(host);
+  const clean = cleanEgressHost(host);
   const literal = ipAddress(clean);
   let addresses: string[];
   if (literal !== undefined) {
     // Nothing to look up, and a lookup would be a rebinding window.
     addresses = [ipToString(literal)];
   } else {
-    const resolve = options.resolve ?? defaultResolver;
+    const resolve = options.resolve ?? resolveThroughPlatform;
     try {
       addresses = await resolve(clean);
     } catch {
@@ -249,7 +311,7 @@ export async function assertWebhookTargetAllowed(
   if (host === "") {
     return;
   }
-  const clean = cleanHost(host);
+  const clean = cleanEgressHost(host);
   const literal = ipAddress(clean);
   let addresses: string[];
   if (literal !== undefined) {
@@ -265,9 +327,7 @@ export async function assertWebhookTargetAllowed(
     }
   }
   for (const text of addresses) {
-    const address = ipAddress(text) as IpAddress;
-    const subject = decodeEmbeddedIPv4(address) ?? address;
-    if (METADATA_ADDRESSES.some((metadata) => sameAddress(metadata, subject))) {
+    if (classifyEgressAddress(ipAddress(text) as IpAddress) === "metadata") {
       throw new EgressBlockedError(`webhook target '${url}' resolves to a blocked metadata address`);
     }
   }
@@ -281,14 +341,21 @@ async function resolveCached(host: string, options: { resolve?: Resolver; now?: 
   if (cached !== undefined && at - cached[0] < EGRESS_DNS_TTL_S) {
     return cached[1];
   }
-  const resolve = options.resolve ?? defaultResolver;
+  const resolve = options.resolve ?? resolveThroughPlatform;
   const addresses = await resolve(host);
   resolveCache.set(host, [at, addresses]);
   return addresses;
 }
 
-/** Resolve through the platform. */
-async function defaultResolver(host: string): Promise<string[]> {
+/**
+ * Resolve through the platform.
+ *
+ * Exported so the webhook validator resolves the way everything else in this
+ * module does. Two spellings of "ask the platform" is two places for one of
+ * them to start answering differently — over IPv4 only, say, which would hide
+ * a private AAAA record from the guard.
+ */
+export async function resolveThroughPlatform(host: string): Promise<string[]> {
   const { lookup } = await import("node:dns/promises");
   const answers = await lookup(host, { all: true });
   return answers.map((answer) => answer.address);

@@ -1,0 +1,260 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Documented equivalent-mutant allowlist for the TypeScript mutation gate
+# (StrykerJS, see stryker.config.mjs).
+#
+# It mirrors the Python-side `mutation_equivalents.toml` and the Go-side
+# `packages/provide-uterm-go/mutation_equivalents.toml`: some mutants are
+# *equivalent* -- the mutated code is behaviorally identical to the original
+# for every input reachable through the public API, so no test can ever
+# distinguish them. Such mutants survive forever and would pin an
+# otherwise-perfect file below 100%.
+#
+# Each [[equivalent]] entry is keyed by file + line + column + mutator
+# (exactly as Stryker reports them in its clear-text/HTML output). Rules
+# mirror the other two ports' gates:
+#   - `reason` MUST justify WHY the mutation is behaviorally equivalent. "I
+#     could not write a test" is NOT a reason -- that is a missing test, not
+#     equivalence.
+#   - A survivor is NEVER excused here just because it is inconvenient to
+#     kill; every entry below was verified either by direct execution (e.g.
+#     checking JS's own string/number coercion semantics in a REPL) or by a
+#     structural proof about the surrounding code (documented in the reason).
+#   - A stale entry (its mutant was later killed, or moved by a source edit)
+#     is not automatically detected -- there is no TS-side gate script wired
+#     to cross-check this file yet (see the mutation-testing report for the
+#     current status). Treat this file as a manually-curated record until
+#     one exists.
+#
+# StrykerJS has its own first-class mutant-exclusion mechanism
+# (`stryker.config.mjs`'s `mutate` ranges, or per-mutant `// Stryker disable`
+# comments) but neither fits this repo's established pattern of a single,
+# auditable, reasoned allowlist alongside the source it excuses -- this file
+# uses that shape instead, exactly as the Go port does.
+
+[[equivalent]]
+file = "src/egress/egress.ts"
+line = 104
+column = 7
+mutator = "ConditionalExpression"
+reason = """\
+decodeEmbeddedIPv4: `if (address.version !== 6) { return undefined; }` -> \
+`if (false) {}`. Removing this guard only matters if a v4-version address \
+can reach a *different* return value further down the function. It cannot: \
+every downstream helper (`ipv4Mapped`, `sixToFour`, `networkContains` against \
+NAT64_NETWORK) independently checks `address.version !== 6` (or the network's \
+version against the address's) and returns undefined/false for a v4 input on \
+its own. The final manual "compatible form" branch reads \
+`address.packed.slice(0, 12)` and `address.packed.slice(12)` -- for a v4 \
+address `packed` has exactly 4 bytes, so slice(0,12) returns those same 4 \
+bytes (never spuriously "more zero bytes"), and slice(12) is always the empty \
+array, so `lowValue` is always computed from `undefined` operands coerced to \
+0 by JS's `<<`/`|` operators, making `lowValue !== 0` always false and the \
+success branch permanently unreachable for any v4 input. So the function \
+returns `undefined` for every v4-version address whether or not the guard \
+runs. Verified in isolation: `ipAddress()`-produced v4 IpAddress objects \
+always have exactly a 4-byte `packed` (confirmed via a scratch script reading \
+actual `Uint8Array` lengths), so this holds for every real caller, not just \
+the specific values covered by this file's tests."""
+
+[[equivalent]]
+file = "src/egress/egress.ts"
+line = 104
+column = 30
+mutator = "BlockStatement"
+reason = """\
+Same location as the ConditionalExpression entry immediately above (removing \
+the `{ return undefined; }` block body has the identical effect to forcing \
+the `if` to `false` -- both skip the early return). See that entry's \
+reasoning."""
+
+[[equivalent]]
+file = "src/egress/egress.ts"
+line = 191
+column = 7
+mutator = "ConditionalExpression"
+reason = """\
+isSharedAddressSpace: `if (address.version !== 4) { return false; }` -> \
+`if (false) {}`. This function is only ever reached from \
+classifyEgressAddress's `isPrivate(subject) || isLinkLocal(subject) || \
+isMulticast(subject) || isUnspecified(subject) || isReserved(subject) || \
+isSharedAddressSpace(subject)` chain, and only for a `subject` that failed \
+every earlier predicate in that chain (`||` short-circuits). Removing the \
+version guard only matters if a v6 address can reach the numeric CGNAT check \
+(`address.packed[0] === 100 && ...`) and have that check answer differently \
+from `false`. But `packed[0] === 100` (0x64) means the address's first byte's \
+top 3 bits are exactly "011" (0110_0100), which is precisely the range CPython \
+mirrors as the IANA-reserved `6000::/3` block (`V6_RESERVED` in \
+pycompat/ipaddress.ts) -- so *any* v6 address with `packed[0] === 100` is \
+already caught by `isReserved` earlier in the `||` chain and never reaches \
+`isSharedAddressSpace` at runtime at all. There is therefore no v6 input for \
+which removing this guard changes the function's return value: it is either \
+short-circuited away before this function runs, or (packed[0] !== 100) the \
+numeric check answers `false` regardless of the guard."""
+
+[[equivalent]]
+file = "src/egress/egress.ts"
+line = 191
+column = 30
+mutator = "BlockStatement"
+reason = """\
+Same location as the ConditionalExpression entry immediately above (removing \
+the `{ return false; }` block body has the identical effect to forcing the \
+`if` to `false`). See that entry's reasoning."""
+
+[[equivalent]]
+file = "src/egress/webhook-url.ts"
+line = 394
+column = 47
+mutator = "StringLiteral"
+reason = """\
+withDeadline: `reject(new Error('resolving webhook host ... timed out'))` -> \
+`reject(new Error(''))`. This Error is constructed only to make Promise.race \
+settle when the deadline wins; its `.message` is never read anywhere. The \
+sole caller, resolveWebhookHost, wraps the whole `await withDeadline(...)` in \
+a bare `try { ... } catch { throw new WebhookUrlError(UNRESOLVED); }` -- every \
+property of the caught error, including its message, is discarded \
+unconditionally in favor of the fixed UNRESOLVED string. withDeadline is a \
+private, unexported function with this one call site, so there is no path by \
+which a test (or any caller) could ever observe this string's content."""
+
+[[equivalent]]
+file = "src/ratelimit/ratelimit.ts"
+line = 175
+column = 34
+mutator = "ConditionalExpression"
+reason = """\
+RateLimiter#mint: `this.#now === undefined ? {} : { now: this.#now }` -> \
+`false ? {} : { now: this.#now }` (always takes the `{ now: this.#now }` \
+branch). When `this.#now` actually is undefined, this passes \
+`{ now: undefined }` to `new TokenBucket(rate, options)` instead of `{}`. \
+TokenBucket's constructor reads `this.#now = options.now ?? monotonicNow` -- \
+`options.now` is `undefined` in both `{}` and `{ now: undefined }` (an \
+explicit `undefined` value is indistinguishable from an absent key under \
+`??`), so the resolved clock is identical either way. No test can observe a \
+difference between the two option objects because only the resolved value of \
+`options.now` is ever read, never the object's own shape."""
+
+[[equivalent]]
+file = "src/serverconfig/posture.ts"
+line = 89
+column = 48
+mutator = "StringLiteral"
+reason = """\
+computeSecurityPosture: `text(config.auth.webhook_idp_on_failure, "deny")` -> \
+`text(config.auth.webhook_idp_on_failure, "")`. The `fallback` parameter of \
+`text()` only has an effect when `config.auth.webhook_idp_on_failure` is \
+null/undefined (see `text`'s own `value ?? fallback`), and the resulting \
+string is used *only* in `=== "viewer"`. Neither "deny" nor "" equals \
+"viewer", so for every input where the fallback is actually consulted, the \
+`if` this feeds evaluates to `false` under both the original and the mutant \
+-- the fallback's specific text is never observable, only whether it happens \
+to equal "viewer" (which it does not, either way)."""
+
+[[equivalent]]
+file = "src/serverconfig/posture.ts"
+line = 94
+column = 64
+mutator = "StringLiteral"
+reason = """\
+computeSecurityPosture: `text(config.auth.identity_provider, "local")` -> \
+`text(config.auth.identity_provider, "")`. Same shape as the entry above: the \
+resulting `identityProvider` value is compared only against `"webhook"` \
+(twice, in the two `identityProvider === "webhook"` checks below) and is \
+never otherwise exposed (it is not a field of the returned SecurityPosture). \
+Neither "local" nor "" equals "webhook", so the fallback's specific text \
+cannot be observed by any test that only exercises the public \
+`computeSecurityPosture` return value."""
+
+[[equivalent]]
+file = "src/serverconfig/validators.ts"
+line = 68
+column = 54
+mutator = "Regex"
+reason = """\
+requireSecureUrl: `parsed.hostname.toLowerCase().replace(/^\\[|\\]$/g, "")` \
+with either anchor dropped (`/\\[|\\]$/` or `/^\\[|\\]/`). `parsed.hostname` \
+comes from the WHATWG `URL` constructor, which guarantees a hostname is \
+either bracket-free entirely or exactly one literal IPv6 address wrapped in \
+a single opening `[` at position 0 and a single closing `]` at the very end \
+(any other bracket placement makes the URL invalid and throws before \
+`requireSecureUrl` ever sees a hostname). Dropping either anchor only widens \
+where that single, already-uniquely-positioned bracket may be matched -- \
+since there is exactly one `[` (always at the start) and exactly one `]` \
+(always at the end) in any string this line ever receives, matching "the \
+first `[` anywhere" or "the last `]` anywhere" removes the identical \
+character the anchored pattern would have removed. No hostname `URL` can \
+produce ever distinguishes the anchored and unanchored forms here."""
+
+[[equivalent]]
+file = "src/serverconfig/schema.ts"
+line = 189
+column = 62
+mutator = "MethodExpression"
+reason = """\
+coerceInt's success branch: `Number(value.trim())` -> `Number(value)` (the \
+`.trim()` on the *argument to Number* is dropped; the regex test on the \
+previous line, `/^[+-]?\\d+$/.test(value.trim())`, is untouched and still \
+requires the trimmed content to be a bare signed integer with no interior \
+whitespace). ECMAScript's `ToNumber` on a string uses the same StrWhiteSpace \
+grammar to skip leading/trailing whitespace that `String.prototype.trim` \
+uses to strip it, so `Number(value)` and `Number(value.trim())` parse to the \
+identical number for any string whose only whitespace is leading/trailing \
+(verified directly: `Number(' 5 ') === Number('5') === 5`, and equivalently \
+for tabs/newlines). Since the regex already guarantees `value.trim()` has no \
+*interior* whitespace, the only difference `value` vs `value.trim()` could \
+ever carry into `Number()` is exactly the leading/trailing whitespace both \
+coercions already strip identically."""
+
+[[equivalent]]
+file = "src/serverconfig/schema.ts"
+line = 246
+column = 7
+mutator = "LogicalOperator"
+reason = """\
+messageFor: `if (spec.kind === "literal" && error === "literal_error")` -> \
+`if (spec.kind === "literal" || error === "literal_error")`. messageFor is \
+called from exactly one site, `checkFields`, as \
+`messageFor(coerced.error, spec)` where `coerced` came from \
+`coerceValue(spec, ...)` using that same `spec`. Inside coerceValue, the \
+*only* branch that can produce `error: "literal_error"` is the \
+`spec.kind === "literal"` case, and that branch's only possible non-value \
+result is `{ error: "literal_error" }` -- no other `spec.kind` ever produces \
+that error string, and the literal branch never produces any other error \
+string. So at this call site, `spec.kind === "literal"` and \
+`error === "literal_error"` are logically equivalent propositions (each \
+implies the other); for two propositions A and B where A iff B, `A && B`, \
+`A || B`, and `A` alone all agree on every input. Both the LogicalOperator \
+mutant (`&&` -> `||`) and the two ConditionalExpression mutants at the same \
+line (forcing one operand to `true`) collapse to this same tautology and \
+cannot be distinguished by any test that only reaches messageFor through \
+checkFields."""
+
+[[equivalent]]
+file = "src/serverconfig/schema.ts"
+line = 246
+column = 7
+mutator = "ConditionalExpression"
+reason = """\
+messageFor: `if (spec.kind === "literal" && error === "literal_error")` -> \
+`if (true && error === "literal_error")`. Same call-site invariant as the \
+LogicalOperator entry immediately above (spec.kind === "literal" iff \
+error === "literal_error" at every real call site) -- forcing the first \
+operand to `true` changes nothing because it was already implied whenever \
+the second operand was true, and the two operands can never disagree in \
+practice. See that entry's full reasoning."""
+
+[[equivalent]]
+file = "src/serverconfig/schema.ts"
+line = 246
+column = 34
+mutator = "ConditionalExpression"
+reason = """\
+messageFor: `if (spec.kind === "literal" && error === "literal_error")` -> \
+`if (spec.kind === "literal" && true)`. Same call-site invariant again: \
+whenever `spec.kind === "literal"` is true at this call site, \
+`error === "literal_error"` is *always* also true (coerceValue's literal \
+branch is the only source of that error string, and it always uses that \
+exact string), so forcing the second operand to `true` changes nothing \
+observable. See the LogicalOperator entry above for the full reasoning."""

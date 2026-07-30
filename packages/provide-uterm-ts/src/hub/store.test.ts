@@ -149,6 +149,23 @@ describe("StateStore hijack predicates", () => {
     expect(store.hasValidRestLease(state)).toBe(true);
   });
 
+  it("reads the default monotonic clock in seconds, not milliseconds", () => {
+    // The predicate test above only bounds the clock loosely — zero and
+    // MAX_SAFE_INTEGER survive dividing *or* multiplying performance.now() by
+    // 1000 alike. This brackets the default clock's actual return value
+    // against a real seconds-since-start reading taken around the same call,
+    // which a thousand-fold scale error cannot survive.
+    const store = new StateStore({
+      registry: new WorkerRegistry<WorkerTermState>(),
+      maxBufferChars: golden.max_buffer_chars,
+    });
+    const before = performance.now() / 1000;
+    const state = store.getOrCreate("clock-check");
+    const after = performance.now() / 1000;
+    expect(state.lastActivityAt).toBeGreaterThanOrEqual(before);
+    expect(state.lastActivityAt).toBeLessThanOrEqual(after + 0.5);
+  });
+
   it("treats an owner with no expiry as holding a perpetual hijack", () => {
     // The store and the lease view genuinely disagree here, and both answers
     // are in the reference: an owner with no expiry is active to the store
@@ -189,6 +206,17 @@ describe("StateStore worker lifecycle", () => {
     expect(state.lastActivityAt).toBe(NOW + 60);
   });
 
+  it("threads its own clock into every worker state it creates", () => {
+    // getOrCreate must pass this store's `now`, not let WorkerTermState fall
+    // back to its own default — otherwise a store built on a stub clock
+    // (every other test in this file) mints worker states whose
+    // lastActivityAt drifts from it from the very first tick.
+    const registry = new WorkerRegistry<WorkerTermState>();
+    const store = new StateStore({ registry, maxBufferChars: golden.max_buffer_chars, now: () => 424242 });
+    const state = store.getOrCreate("w1");
+    expect(state.lastActivityAt).toBe(424242);
+  });
+
   it("does nothing when stamping an unknown worker", () => {
     // The worker can disconnect between a frame arriving and being handled,
     // so this must not create state for a worker that has gone.
@@ -226,16 +254,34 @@ describe("StateStore metric fan-out", () => {
     expect(() => store.metric("raises")).not.toThrow();
   });
 
+  it("does not log a spurious failure when no callback is configured", () => {
+    // The "no callback" early return and the "callback threw" catch both end
+    // up not throwing, which is why "does nothing when no callback is
+    // configured" above cannot tell them apart. This checks the *other*
+    // observable: skipping the early return would call `this.#onMetric`, get
+    // a TypeError back because there is no callback to call, and log that as
+    // if a real subscriber had failed.
+    const warn = vi.fn();
+    const store = makeStore({ logger: { ...noopLogger, warn } });
+    store.metric("never_seen");
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it("reports a throwing callback through the logger", () => {
     const warn = vi.fn();
+    const thrown = new Error("callback exploded");
     const store = makeStore({
       onMetric: () => {
-        throw new Error("callback exploded");
+        throw thrown;
       },
       logger: { ...noopLogger, warn },
     });
     store.metric("raises");
-    expect(warn).toHaveBeenCalledOnce();
+    // The exact payload, not just that some warning happened: the metric
+    // name and the original error must both reach the logger, tagged with
+    // the reference's own event name.
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith({ metric: "raises", error: thrown }, "metric_callback_failed");
   });
 });
 
@@ -285,15 +331,19 @@ describe("StateStore hijack-changed fan-out", () => {
 
   it("reports a rejecting async callback through the logger", async () => {
     const warn = vi.fn();
+    const thrown = new Error("subscriber exploded");
     const store = makeStore({
-      onHijackChanged: () => Promise.reject(new Error("subscriber exploded")),
+      onHijackChanged: () => Promise.reject(thrown),
       logger: { ...noopLogger, warn },
     });
     store.notifyHijackChanged("w4", { enabled: true });
     await new Promise((resolve) => setTimeout(resolve, 0));
     // An unhandled rejection here would take down the process under Node's
     // default policy, so the fire-and-forget path has to attach a handler.
-    expect(warn).toHaveBeenCalledOnce();
+    // The exact payload too: the worker id and the original error must both
+    // reach the logger.
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith({ workerId: "w4", error: thrown }, "on_hijack_changed callback raised");
   });
 
   it("lets a synchronously throwing callback propagate", () => {

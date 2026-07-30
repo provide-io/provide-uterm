@@ -31,6 +31,15 @@ interface RateLimitGolden {
     oldest_evicted: boolean;
     newest_kept: boolean;
   };
+  eviction_small: {
+    cache_max: number;
+    evict_count: number;
+    size_at_cap: number;
+    size_after_overflow: number;
+    overflow_client_kept: boolean;
+    oldest_evicted: boolean;
+    newest_kept: boolean;
+  };
   self_reset: { first: boolean; second: boolean; after_churn: boolean };
 }
 
@@ -189,33 +198,61 @@ describe("RateLimiter composition", () => {
 
 describe("RateLimiter per-client cache", () => {
   it("evicts the oldest half once the cap is passed", () => {
+    // Small injected cap (see evictIfFull's docstring): this is the golden
+    // corpus's eviction_small section, generated from the same Python
+    // reference algorithm at cache_max=8/evict_count=4, not a hand-picked
+    // scale — proves the algorithm without looping to the real 1024/512
+    // production constants (see "exposes the documented cache bounds" for
+    // those).
     const clock = stubClock();
-    const limiter = new RateLimiter({ restAcquireRate: 1000, restSendRate: 1000, now: clock.now });
-    for (let i = 0; i < REST_CLIENT_CACHE_MAX; i += 1) {
+    const limiter = new RateLimiter({
+      restAcquireRate: 1000,
+      restSendRate: 1000,
+      now: clock.now,
+      clientCacheMax: 8,
+      clientEvictCount: 4,
+    });
+    for (let i = 0; i < 8; i += 1) {
       limiter.allowRestAcquire(`c${i}`);
     }
-    expect(limiter.restAcquireClientCount).toBe(golden.eviction.size_at_cap);
+    expect(limiter.restAcquireClientCount).toBe(golden.eviction_small.size_at_cap);
     limiter.allowRestAcquire("overflow");
-    expect(limiter.restAcquireClientCount).toBe(golden.eviction.size_after_overflow);
+    expect(limiter.restAcquireClientCount).toBe(golden.eviction_small.size_after_overflow);
   });
 
   it("never evicts the client it is currently serving", () => {
+    // A small injected cap, not the real REST_CLIENT_CACHE_MAX: this proves the
+    // algorithm's LRU-eviction property, which does not depend on the specific
+    // production cap size. See evictIfFull's docstring for why looping to the
+    // real 1024 here would make its `break` a mutation-testing hit-count trap.
     const clock = stubClock();
-    const limiter = new RateLimiter({ restAcquireRate: 1000, restSendRate: 1000, now: clock.now });
-    for (let i = 0; i < REST_CLIENT_CACHE_MAX; i += 1) {
+    const limiter = new RateLimiter({
+      restAcquireRate: 1000,
+      restSendRate: 1000,
+      now: clock.now,
+      clientCacheMax: 8,
+      clientEvictCount: 4,
+    });
+    for (let i = 0; i < 8; i += 1) {
       limiter.allowRestAcquire(`c${i}`);
     }
     limiter.allowRestAcquire("overflow");
     expect(limiter.hasRestAcquireClient("overflow")).toBe(true);
     expect(limiter.hasRestAcquireClient("c0")).toBe(false);
-    expect(limiter.hasRestAcquireClient(`c${REST_CLIENT_CACHE_MAX - 1}`)).toBe(true);
+    expect(limiter.hasRestAcquireClient("c7")).toBe(true);
   });
 
   it("refreshes recency on access rather than only on insert", () => {
     const clock = stubClock();
-    const limiter = new RateLimiter({ restAcquireRate: 1000, restSendRate: 1000, now: clock.now });
+    const limiter = new RateLimiter({
+      restAcquireRate: 1000,
+      restSendRate: 1000,
+      now: clock.now,
+      clientCacheMax: 8,
+      clientEvictCount: 4,
+    });
     limiter.allowRestAcquire("early");
-    for (let i = 0; i < REST_CLIENT_CACHE_MAX - 1; i += 1) {
+    for (let i = 0; i < 7; i += 1) {
       limiter.allowRestAcquire(`c${i}`);
     }
     // Touch the oldest client so it is no longer the oldest.
@@ -227,6 +264,19 @@ describe("RateLimiter per-client cache", () => {
   it("does not let a client reset its own limit by churning the cache", () => {
     // The security property: if eviction could drop a drained bucket, an
     // attacker would refill their own allowance by flooding new client ids.
+    //
+    // NOT shrunk like the two tests above: `restAcquireBucket` here is a
+    // SEPARATE, shared global bucket (1000 tokens) that every call — victim's
+    // and every noise client's — also draws from. At the real 1024/512 scale,
+    // ~1025 noise calls happen to exhaust that global bucket around the same
+    // point eviction happens, so `after_churn: false` is produced by the
+    // global bucket being drained, not solely by the per-client eviction
+    // property the comment above describes. Shrinking the cache without also
+    // reasoning about the global bucket's 1000-token budget changes which
+    // mechanism produces the recorded golden answer — verified directly: at
+    // cache_max=8 with only 9 noise calls, the global bucket is nowhere near
+    // drained, and `after_churn` flips to `true`. Left at real scale so this
+    // continues to test the same thing the golden corpus recorded.
     const clock = stubClock();
     const limiter = new RateLimiter({ restAcquireRate: 1, restSendRate: 1, now: clock.now });
     limiter.restAcquireBucket = new TokenBucket(1000, { now: clock.now });
@@ -272,6 +322,20 @@ describe("RateLimiter configuration", () => {
     await new Promise((resolve) => setTimeout(resolve, 5));
     expect(bucket.allow()).toBe(true);
   });
+
+  it("uses seconds, not milliseconds, for the default monotonic clock", () => {
+    // The test above only proves the default clock advances at all — a high
+    // rate (1000/s) refills within 5ms whichever scale is used. A rate of 1/s
+    // makes the scale itself observable: at the correct scale, two calls made
+    // back-to-back with no artificial delay have not had a whole second pass
+    // between them, so the second must be refused. A clock that multiplied
+    // performance.now() by 1000 instead of dividing turns even a
+    // microsecond's real gap into what looks like a full second, refilling
+    // the bucket before the second call.
+    const bucket = new TokenBucket(1);
+    expect(bucket.allow()).toBe(true);
+    expect(bucket.allow()).toBe(false);
+  });
 });
 
 describe("differential parity with CPython", () => {
@@ -311,9 +375,17 @@ describe("differential parity with CPython", () => {
   });
 
   it("matches the recorded eviction outcome", () => {
+    // Small injected cap — see the note on "evicts the oldest half..." above;
+    // same eviction_small golden section.
     const clock = stubClock();
-    const limiter = new RateLimiter({ restAcquireRate: 1000, restSendRate: 1000, now: clock.now });
-    for (let i = 0; i < REST_CLIENT_CACHE_MAX; i += 1) {
+    const limiter = new RateLimiter({
+      restAcquireRate: 1000,
+      restSendRate: 1000,
+      now: clock.now,
+      clientCacheMax: 8,
+      clientEvictCount: 4,
+    });
+    for (let i = 0; i < 8; i += 1) {
       limiter.allowRestAcquire(`c${i}`);
     }
     limiter.allowRestAcquire("overflow");
@@ -321,12 +393,12 @@ describe("differential parity with CPython", () => {
       size_after_overflow: limiter.restAcquireClientCount,
       overflow_client_kept: limiter.hasRestAcquireClient("overflow"),
       oldest_evicted: !limiter.hasRestAcquireClient("c0"),
-      newest_kept: limiter.hasRestAcquireClient(`c${REST_CLIENT_CACHE_MAX - 1}`),
+      newest_kept: limiter.hasRestAcquireClient("c7"),
     }).toStrictEqual({
-      size_after_overflow: golden.eviction.size_after_overflow,
-      overflow_client_kept: golden.eviction.overflow_client_kept,
-      oldest_evicted: golden.eviction.oldest_evicted,
-      newest_kept: golden.eviction.newest_kept,
+      size_after_overflow: golden.eviction_small.size_after_overflow,
+      overflow_client_kept: golden.eviction_small.overflow_client_kept,
+      oldest_evicted: golden.eviction_small.oldest_evicted,
+      newest_kept: golden.eviction_small.newest_kept,
     });
   });
 });

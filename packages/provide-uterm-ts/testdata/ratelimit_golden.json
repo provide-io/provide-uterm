@@ -309,6 +309,15 @@
   "oldest_evicted": true,
   "newest_kept": true
  },
+ "eviction_small": {
+  "cache_max": 8,
+  "evict_count": 4,
+  "size_at_cap": 8,
+  "size_after_overflow": 5,
+  "overflow_client_kept": true,
+  "oldest_evicted": true,
+  "newest_kept": true
+ },
  "self_reset": {
   "first": true,
   "second": false,

@@ -63,6 +63,16 @@ LITERAL_CASES: list[str] = [
     "224.0.0.1",
     "240.0.0.1",
     "0.0.0.0",  # the unspecified address
+    # RFC 6598 carrier-grade NAT. CPython does NOT call this private, so a
+    # deny list derived from its classifiers has a hole here unless the range
+    # is named. Recorded with an address either side of the /10 so a port that
+    # guesses the mask — 100.64.0.0/16, or the whole of 100.0.0.0/8 — is caught
+    # over-blocking rather than merely under-blocking.
+    "100.64.0.0",
+    "100.64.0.1",
+    "100.127.255.255",
+    "100.63.255.255",  # public, immediately below the /10
+    "100.128.0.0",  # public, immediately above the /10
     "::",
     "fe80::1",
     "fc00::1",

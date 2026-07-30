@@ -21,6 +21,7 @@
     "typecheck:ts": "npm run typecheck --workspace=packages/provide-uterm-ts",
     "test:ts": "npm run test --workspace=packages/provide-uterm-ts",
     "test:ts:coverage": "npm run test:coverage --workspace=packages/provide-uterm-ts",
+    "test:ts:mutation": "npm run test:mutation --workspace=packages/provide-uterm-ts",
     "lint:frontend": "npm run lint --workspace=packages/provide-uterm-frontend",
     "lint:app": "npm run lint --workspace=packages/provide-uterm-app",
     "lint:ts": "npm run lint --workspace=packages/provide-uterm-ts",

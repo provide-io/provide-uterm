@@ -48,6 +48,7 @@ import {
   type WorkerTermState,
 } from "../hub/index.ts";
 import { RateLimiter } from "../ratelimit/index.ts";
+import { getLogger, type Logger } from "../telemetry/index.ts";
 
 /** Longest dashboard lease this hub hands out, in seconds. */
 export const SESSION_HUB_DASHBOARD_LEASE_S = 30;
@@ -92,6 +93,37 @@ export interface SessionHubOptions {
   restAcquireRate?: number | undefined;
   /** Sends — and steps — per second one address may make. */
   restSendRate?: number | undefined;
+  /**
+   * Where a callback this hub invoked reports having failed.
+   *
+   * Defaults to a *real* logger, unlike the services in `../hub/`, which are
+   * library modules and are right to default to silence. This is the composed
+   * hub a server runs: the only two things written through it are a metrics
+   * sink that threw and a hijack subscriber that rejected, both of which are
+   * swallowed deliberately so observability cannot tear a session down — and
+   * swallowing them into a noop logger is how a sink that fails on every call
+   * fails forever with nothing written anywhere.
+   */
+  logger?: Logger | undefined;
+  /**
+   * Where this hub's counters go.
+   *
+   * Unset discards every one of them, which is what the store does with no
+   * sink. That is the right default for a hub somebody embedded — they have
+   * not asked for counters and must not be made to pay for them — but a
+   * *hosted* server has to supply one, and `bootstrapServer` does.
+   */
+  onMetric?: ((name: string, value: number) => void) | undefined;
+  /**
+   * Notified when a worker's hijack state changes.
+   *
+   * Deliberately unset by default, matching the reference: this is an
+   * embedder's extension point with no shipped consumer, and the transitions it
+   * reports are already observable through the events log and the hijack-state
+   * broadcast. What matters is that it is *reachable* from here — the reason
+   * this option exists is that a hook nothing can reach is not a hook.
+   */
+  onHijackChanged?: ((workerId: string, enabled: boolean, owner?: string) => void | Promise<void>) | undefined;
 }
 
 /** Monotonic seconds, from a clock that cannot jump backwards. */
@@ -148,10 +180,20 @@ export class SessionHub {
       restSendRate: options.restSendRate ?? SESSION_HUB_REST_SEND_RATE,
       now,
     });
+    // The sinks are threaded rather than left unset. Every counter this server
+    // emits is emitted *through the store* — the lease routes and the lease
+    // manager both go through `store.metric` — so a store built without
+    // `onMetric` is a server whose whole metrics surface is discarded at the
+    // last hop, by code that reads correctly at every call site. That is not a
+    // hypothetical: it is exactly how the C# port lost every counter, where the
+    // hosted factory never assigned `TermHubConfig.OnMetric`.
     this.store = new StateStore({
       registry: this.registry,
       maxBufferChars: SESSION_HUB_MAX_BUFFER_CHARS,
       now,
+      logger: options.logger ?? getLogger("provide.uterm.server.session_hub"),
+      onMetric: options.onMetric,
+      onHijackChanged: options.onHijackChanged,
     });
     // Every service below reaches back through `this`, so each callback is a
     // method reference rather than a copy of the predicate — one answer to

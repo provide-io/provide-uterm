@@ -186,6 +186,17 @@ describe("the server's security posture", () => {
     expect(posture.warnings.some((warning) => warning.includes("webhook IdP"))).toBe(false);
   });
 
+  it("treats a config that carries no audit section at all as unenabled", () => {
+    // `audit` is optional on PostureConfig — an embedder's config object may
+    // not carry the section at all, not merely carry it with the field unset.
+    // Reading `config.audit.chain_enabled` without the `?.` would throw on
+    // `undefined` instead of reporting the compliance gap.
+    const config = configFrom({}) as unknown as Record<string, unknown>;
+    delete config.audit;
+    expect(() => computeSecurityPosture(config as unknown as PostureConfig)).not.toThrow();
+    expect(computeSecurityPosture(config as unknown as PostureConfig).audit_chain_enabled).toBe(false);
+  });
+
   it("always reports replay protection as on", () => {
     // The per-instance cache is unconditional; the nonce binding that extends
     // it to several nodes is surfaced as a warning instead.
