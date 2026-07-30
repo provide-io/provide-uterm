@@ -695,6 +695,14 @@ public sealed partial class UtermServer : IAsyncDisposable
             ControlChannelCodec.EncodeControlFrame(presenceSync),
             ctx.RequestAborted).ConfigureAwait(false);
 
+        // One budget per connection, built here rather than on the hub: the
+        // reference builds both buckets inside its WebSocket handler, and sharing
+        // them per worker would let one browser starve every other viewer of the
+        // same session.
+        var budget = new BrowserBudget(
+            new TokenBucket(_deps.Hub.BrowserRateLimitPerSec, clock: _clock),
+            new TokenBucket(_deps.Hub.BrowserControlRateLimitPerSec, clock: _clock));
+
         var buffer = new byte[8192];
         try
         {
@@ -703,7 +711,7 @@ public sealed partial class UtermServer : IAsyncDisposable
                 var result = await ws.ReceiveAsync(buffer, ctx.RequestAborted).ConfigureAwait(false);
                 if (result.MessageType == WebSocketMessageType.Close) break;
                 var text = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                await HandleBrowserMessage(workerId, conn, role, text, ctx.RequestAborted).ConfigureAwait(false);
+                await HandleBrowserMessage(workerId, conn, role, text, budget, ctx.RequestAborted).ConfigureAwait(false);
             }
         }
         finally
@@ -738,8 +746,16 @@ public sealed partial class UtermServer : IAsyncDisposable
         }
     }
 
+    /// <summary>A browser connection's two rate budgets, one per kind of frame.</summary>
+    /// <remarks>
+    /// Built per connection, as the reference builds them inside its WebSocket
+    /// handler. Sharing them per worker would let one browser starve every other
+    /// viewer of the same session.
+    /// </remarks>
+    private sealed record BrowserBudget(TokenBucket Input, TokenBucket Control);
+
     private async Task HandleBrowserMessage(
-        string workerId, BrowserWsConn conn, string role, string text, CancellationToken ct)
+        string workerId, BrowserWsConn conn, string role, string text, BrowserBudget budget, CancellationToken ct)
     {
         if (ControlChannelCodec.IsControlFrame(text))
         {
@@ -748,6 +764,38 @@ public sealed partial class UtermServer : IAsyncDisposable
             {
                 if (chunk is not ControlChunk ctrl) continue;
                 var mtype = ctrl.Control.TryGetValue("type", out var t) ? t?.ToString() : null;
+
+                // Two budgets, checked before anything acts on the frame. `input`
+                // is the keystroke path into somebody's terminal and gets the
+                // larger allowance; every other control frame shares a tighter
+                // one, so neither kind of traffic can starve the other.
+                //
+                // Over budget the frame is *dropped* and the caller told, not
+                // disconnected: closing the socket would cost an operator their
+                // session for typing quickly. Matches
+                // bridge/routes/websockets_browser.py's dispatch_browser_event.
+                if (mtype is not null)
+                {
+                    var bucket = mtype == "input" ? budget.Input : budget.Control;
+                    if (!bucket.Allow())
+                    {
+                        _deps.Hub.Metric(
+                            mtype == "input"
+                                ? "ws_browser_rate_limited_total"
+                                : "ws_browser_control_rate_limited_total",
+                            1);
+                        _deps.Hub.Log("warning", $"ws_browser_rate_limited worker_id={workerId} type={mtype}");
+                        await conn.SendTextAsync(
+                            ControlChannelCodec.EncodeControlFrame(new Dictionary<string, object?>
+                            {
+                                ["type"] = "error",
+                                ["reason"] = "rate_limited",
+                            }),
+                            ct).ConfigureAwait(false);
+                        continue;
+                    }
+                }
+
                 switch (mtype)
                 {
                     case "hijack_request":
