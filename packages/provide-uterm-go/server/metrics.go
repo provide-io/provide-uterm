@@ -36,6 +36,11 @@ var metricKeys = []string{
 	"rest_send_rate_limited_total",
 	"rest_step_rate_limited_total",
 	"webhook_delivery_blocked_total",
+	// Go-only until the other ports land conformance/EGRESS_GUARD.md §4: the
+	// count of loopback deliveries refused because the session held a live
+	// tunnel share. Seeded to zero rather than created on first use so an
+	// operator can see the guard exists before it has ever fired.
+	"webhook_delivery_blocked_tunnel_total",
 	"webhook_auto_unregistered_total",
 	"webhook_delivery_failed_total",
 	"webhook_delivery_giving_up_total",
