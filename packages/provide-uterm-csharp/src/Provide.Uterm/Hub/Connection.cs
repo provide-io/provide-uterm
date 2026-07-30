@@ -44,6 +44,53 @@ public sealed class ConnectionManager
         }
     }
 
+    /// <summary>
+    /// Apply a <c>worker_hello</c>: record the announced input mode and the
+    /// negotiated protocol version. Port of
+    /// <c>ConnectionManager.set_worker_hello</c>.
+    /// </summary>
+    /// <remarks>
+    /// A hello may raise the mode and may never lower a decided one. Two
+    /// reasons to refuse and both are needed: a lease is actually held, or
+    /// somebody decided the mode through an authenticated route. The second is
+    /// the window a lease-only check leaves open — an operator sets
+    /// <c>hijack</c> and then acquires, and a hello landing between those steps
+    /// reverts the mode, so the acquire is refused for being in open mode and
+    /// the operator's only clue is a failure that looks like their own mistake.
+    ///
+    /// Keyed on whether the hello would actually lower the mode rather than on
+    /// its value, so a hello agreeing with a decided <c>open</c> is not a
+    /// downgrade. And the decision flag is what makes the rule expressible:
+    /// <c>InputMode</c> defaults to <c>hijack</c>, so refusing every lowering
+    /// would refuse every worker that legitimately announces <c>open</c>.
+    /// </remarks>
+    /// <returns>
+    /// <c>true</c> when the mode was applied, <c>false</c> for an unknown
+    /// worker or a hello that would lower a decided mode.
+    /// </returns>
+    public bool SetWorkerHello(string workerId, string mode, int? protocolVersion = null)
+    {
+        lock (_hub.SharedLock)
+        {
+            var st = _hub.Registry.Get(workerId);
+            if (st is null) return false;
+
+            var wouldLower = mode == InputModes.Open && st.InputMode == InputModes.Hijack;
+            if (wouldLower && (st.InputModeSetByOperator || _hub.State.IsHijacked(st)))
+            {
+                return false;
+            }
+
+            st.InputMode = mode;
+            if (protocolVersion is not null)
+            {
+                st.ProtocolVersion = protocolVersion;
+            }
+
+            return true;
+        }
+    }
+
     public void UpdateLastSnapshot(string workerId, Dictionary<string, object?> snapshot)
     {
         lock (_hub.SharedLock)

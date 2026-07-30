@@ -1011,6 +1011,17 @@ public sealed partial class UtermServer : IAsyncDisposable
                         {
                             _deps.Hub.Conn.UpdateLastSnapshot(workerId, ctrl.Control);
                         }
+                        else if (mtype == "worker_hello")
+                        {
+                            // Until now every frame but `snapshot` was fanned to
+                            // browsers and dropped, so a worker announcing its
+                            // input mode was never heard — the one thing a hello
+                            // is for. The reference applies it here
+                            // (bridge/routes/websockets_worker.py), and it may
+                            // raise the mode but never lower a decided one.
+                            await ApplyWorkerHelloAsync(workerId, ctrl.Control, ctx.RequestAborted)
+                                .ConfigureAwait(false);
+                        }
 
                         await _deps.Hub.Conn.BroadcastToBrowsersAsync(workerId, ctrl.Control, ctx.RequestAborted)
                             .ConfigureAwait(false);
@@ -1188,6 +1199,56 @@ public sealed partial class UtermServer : IAsyncDisposable
 
         error = null;
         return true;
+    }
+
+    /// <summary>
+    /// Apply a worker's <c>worker_hello</c> frame: its announced input mode and
+    /// negotiated protocol version.
+    /// </summary>
+    /// <remarks>
+    /// An unrecognised <c>input_mode</c> is counted and ignored rather than
+    /// refused, as the reference does — a worker that announces nonsense is not
+    /// a reason to drop a working session. A refused mode change is counted too,
+    /// because it means an operator's decision held against a reconnect and
+    /// somebody watching needs to see that rather than infer it.
+    ///
+    /// The reference logs both of these. This port has no logging surface on the
+    /// hub at all, so both become metrics — which is the actionable half, but a
+    /// port reading a counter cannot tell you *which* worker was refused. Worth
+    /// closing separately.
+    /// </remarks>
+    private async Task ApplyWorkerHelloAsync(
+        string workerId,
+        Dictionary<string, object?> hello,
+        CancellationToken cancellationToken)
+    {
+        var mode = hello.TryGetValue("input_mode", out var raw) ? raw?.ToString() : null;
+        if (mode is not (InputModes.Hijack or InputModes.Open))
+        {
+            if (mode is not null)
+            {
+                _deps.Hub.Metric("worker_hello_invalid_mode_total", 1);
+            }
+
+            return;
+        }
+
+        int? protocolVersion = null;
+        if (hello.TryGetValue("protocol_version", out var version) && version is not null
+            && int.TryParse(version.ToString(), out var parsed))
+        {
+            protocolVersion = parsed;
+        }
+
+        var applied = _deps.Hub.Conn.SetWorkerHello(workerId, mode, protocolVersion);
+        if (applied)
+        {
+            await _deps.Hub.Conn.BroadcastHijackStateAsync(workerId, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            _deps.Hub.Metric("worker_hello_mode_blocked_total", 1);
+        }
     }
 
     private static IResult DetailError(int status, string detail) =>

@@ -73,6 +73,26 @@ public sealed class WorkerTermState
     public HijackSession? HijackSession { get; set; }
     public string? HijackPending { get; set; }
     public string InputMode { get; set; } = InputModes.Hijack;
+
+    /// <summary>
+    /// Whether an authenticated caller has explicitly decided this session's
+    /// input mode, as opposed to it merely holding the <c>hijack</c> default.
+    /// </summary>
+    /// <remarks>
+    /// This tells two claims apart. A <c>worker_hello</c> announces what the
+    /// worker process booted with; <c>SetInputMode</c> is a decision made
+    /// through an authenticated route by somebody holding
+    /// <c>session.control.mode</c>. Without the distinction the hub cannot
+    /// refuse a hello that lowers <c>hijack</c> to <c>open</c>, because
+    /// <see cref="InputMode"/> defaults to <c>hijack</c> and refusing every
+    /// lowering would refuse every worker that legitimately announces
+    /// <c>open</c>.
+    ///
+    /// Held on the worker state rather than the connection deliberately:
+    /// registry state outlives a worker socket, so a decision survives a
+    /// reconnect. Internal only — nothing serialises it onto the wire.
+    /// </remarks>
+    public bool InputModeSetByOperator { get; set; }
     public Dictionary<string, object?>? LastSnapshot { get; set; }
     public List<Dictionary<string, object?>> Events { get; } = new();
     public int EventSeq { get; set; }
