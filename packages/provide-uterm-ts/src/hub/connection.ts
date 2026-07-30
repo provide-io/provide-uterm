@@ -237,7 +237,18 @@ export class ConnectionManager {
     if (state === undefined) {
       return false;
     }
-    if (mode === "open" && this.#hub.isHijacked(state)) {
+    // A hello may raise the mode, never lower a decided one. Two reasons to
+    // refuse and both are needed: a lease is actually held, or somebody decided
+    // the mode through an authenticated route. The second is the window the
+    // lease check alone left open — an operator sets `hijack` and then acquires,
+    // and a hello landing between those steps reverted the mode, so the acquire
+    // was refused for being in open mode and the operator's only clue was a
+    // failure that looked like their own mistake.
+    //
+    // Keyed on whether the hello would actually lower the mode rather than on
+    // its value, so a hello agreeing with a decided `open` is not a downgrade.
+    const wouldLower = mode === "open" && state.inputMode === "hijack";
+    if (wouldLower && (state.inputModeSetByOperator || this.#hub.isHijacked(state))) {
       return false;
     }
     state.inputMode = mode;
