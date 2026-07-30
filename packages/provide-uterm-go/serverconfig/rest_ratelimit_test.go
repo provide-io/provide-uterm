@@ -11,12 +11,21 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
 )
 
-// restRateKeys are the two top-level config keys that carry a REST hijack
-// token-bucket rate. Every refusal below must hold for both, so each case is
-// run once per key rather than written twice.
-var restRateKeys = []string{"rest_acquire_rate_limit_per_sec", "rest_send_rate_limit_per_sec"}
+// bucketRateKeys are the three top-level config keys that configure a
+// [hub.TokenBucket] rate: the two REST hijack budgets and the browser
+// input-frame budget. They share one validator because they share one bucket —
+// same burst-equals-rate rule, therefore the same floor — so every refusal
+// below must hold for all three and each case is run once per key rather than
+// written out three times.
+var bucketRateKeys = []string{
+	"rest_acquire_rate_limit_per_sec",
+	"rest_send_rate_limit_per_sec",
+	"browser_rate_limit_per_sec",
+}
 
 // TestRestRateLimitDefaults pins the defaults a deployment that sets neither
 // key gets: the hub's own built-in rates, so an unset config is unchanged.
@@ -49,20 +58,20 @@ func TestRestRateLimitParsed(t *testing.T) {
 	}
 }
 
-// TestRestRateLimitKeysAccepted pins that the keys are known top-level config
+// TestBucketRateLimitKeysAccepted pins that the keys are known top-level config
 // (extra="forbid" parity would otherwise refuse them outright).
-func TestRestRateLimitKeysAccepted(t *testing.T) {
-	for _, key := range restRateKeys {
+func TestBucketRateLimitKeysAccepted(t *testing.T) {
+	for _, key := range bucketRateKeys {
 		if _, err := ConfigFromMapping(map[string]any{key: 3.0}); err != nil {
 			t.Errorf("%s should be an accepted top-level key: %v", key, err)
 		}
 	}
 }
 
-// TestRestRateLimitRefusesUnhonourableRates covers every value the limiter
+// TestBucketRateLimitRefusesUnhonourableRates covers every value the limiter
 // cannot honour verbatim. Each is refused at load — a server that boots with a
 // nonsense limit and discovers it at first use is a server running unprotected.
-func TestRestRateLimitRefusesUnhonourableRates(t *testing.T) {
+func TestBucketRateLimitRefusesUnhonourableRates(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		value any
@@ -72,7 +81,7 @@ func TestRestRateLimitRefusesUnhonourableRates(t *testing.T) {
 		{
 			"zero", 0.0, "got: 0.0",
 			"read as unlimited it silently disables the limit; read as refuse-everything " +
-				"it silently bricks the REST hijack API, and nothing says which was meant",
+				"it silently bricks the surface it guards, and nothing says which was meant",
 		},
 		{
 			"zero_int", int64(0), "got: 0.0",
@@ -112,7 +121,7 @@ func TestRestRateLimitRefusesUnhonourableRates(t *testing.T) {
 			"not a rate under any reading",
 		},
 	} {
-		for _, key := range restRateKeys {
+		for _, key := range bucketRateKeys {
 			t.Run(tc.name+"/"+key, func(t *testing.T) {
 				_, err := ConfigFromMapping(map[string]any{key: tc.value})
 				if err == nil {
@@ -132,12 +141,12 @@ func TestRestRateLimitRefusesUnhonourableRates(t *testing.T) {
 	}
 }
 
-// TestRestRateLimitAcceptsFloorAndAbove pins that the floor itself is a real
+// TestBucketRateLimitAcceptsFloorAndAbove pins that the floor itself is a real
 // policy — one call per second is the tightest a bucket whose burst equals its
 // rate can honour — as is any rate above it, fractional or not.
-func TestRestRateLimitAcceptsFloorAndAbove(t *testing.T) {
+func TestBucketRateLimitAcceptsFloorAndAbove(t *testing.T) {
 	for _, value := range []float64{1, 1.5, 5, 20, 1000} {
-		for _, key := range restRateKeys {
+		for _, key := range bucketRateKeys {
 			if _, err := ConfigFromMapping(map[string]any{key: value}); err != nil {
 				t.Errorf("%s = %v should be accepted: %v", key, value, err)
 			}
@@ -145,24 +154,72 @@ func TestRestRateLimitAcceptsFloorAndAbove(t *testing.T) {
 	}
 }
 
-// TestRestRateLimitRefusedAtLoad pins that the refusal arrives when the TOML
+// TestBucketRateLimitRefusedAtLoad pins that the refusal arrives when the TOML
 // file is loaded — the boot path — not at first use. A server that boots with
 // a nonsense limit and discovers it later is a server running unprotected.
-func TestRestRateLimitRefusedAtLoad(t *testing.T) {
-	for _, literal := range []string{"0", "-1", "0.05", "0.99", "nan", "inf", "-inf"} {
-		path := filepath.Join(t.TempDir(), "server.toml")
-		body := "rest_acquire_rate_limit_per_sec = " + literal + "\n"
-		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
-			t.Fatalf("write config: %v", err)
+func TestBucketRateLimitRefusedAtLoad(t *testing.T) {
+	for _, key := range bucketRateKeys {
+		for _, literal := range []string{"0", "-1", "0.05", "0.99", "nan", "inf", "-inf"} {
+			path := filepath.Join(t.TempDir(), "server.toml")
+			body := key + " = " + literal + "\n"
+			if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+				t.Fatalf("write config: %v", err)
+			}
+			_, err := LoadServerConfig(path)
+			if err == nil {
+				t.Errorf("%s = %s loaded; want refusal", key, literal)
+				continue
+			}
+			if !strings.Contains(err.Error(), key+" must be >= 1.0") {
+				t.Errorf("%s = %s: unexpected error: %v", key, literal, err)
+			}
 		}
-		_, err := LoadServerConfig(path)
-		if err == nil {
-			t.Errorf("rest_acquire_rate_limit_per_sec = %s loaded; want refusal", literal)
-			continue
+	}
+}
+
+// TestBrowserRateLimitDefaultAdmitsTheFirstMessage is the browser key's half of
+// the floor argument, and the reason the default must stay well above it: the
+// configured rate becomes a [hub.TokenBucket] verbatim, so if the default sat
+// under 1.0 every deployment would deny its own browser traffic out of the box.
+//
+// It also records why this key was the more dangerous of the three. The REST
+// rates pass through [hub.NewRateLimiter], which clamps them to
+// [hub.MinRatePerSec]; the browser rate does not — newBrowserBuckets hands the
+// hub attribute straight to NewTokenBucket, unclamped — so a sub-floor value
+// reached the bucket as written and denied every browser message for the life
+// of the process. Go softened only the exact-0 case by accident:
+// TermHubConfig's zero-means-unset default substitutes 30 for a configured 0.
+// Every other sub-floor value (0.5, 0.99, negatives, NaN, and even +Inf, which
+// poisons the token count to NaN) bricked browser input outright.
+func TestBrowserRateLimitDefaultAdmitsTheFirstMessage(t *testing.T) {
+	for name, c := range map[string]*UtermServerConfig{
+		"DefaultServerConfig": DefaultServerConfig(),
+		"empty mapping":       mustConfig(t, map[string]any{}),
+	} {
+		if c.BrowserRateLimitPerSec != 300 {
+			t.Errorf("%s: browser_rate_limit_per_sec = %v, want 300", name, c.BrowserRateLimitPerSec)
 		}
-		if !strings.Contains(err.Error(), "rest_acquire_rate_limit_per_sec must be >= 1.0") {
-			t.Errorf("%s: unexpected error: %v", literal, err)
+		if c.BrowserRateLimitPerSec < hub.MinRatePerSec {
+			t.Errorf("%s: default %v is below the floor; every deployment would be bricked",
+				name, c.BrowserRateLimitPerSec)
 		}
+		b := hub.NewTokenBucket(c.BrowserRateLimitPerSec, nil, hub.NewManualClock(0))
+		if !b.Allow() {
+			t.Errorf("%s: a bucket at the default rate must admit its first message", name)
+		}
+	}
+}
+
+// TestBrowserRateLimitParsed pins that the key lands on its own field, from a
+// float and from an integer TOML literal.
+func TestBrowserRateLimitParsed(t *testing.T) {
+	c := mustConfig(t, map[string]any{"browser_rate_limit_per_sec": 1.5})
+	if c.BrowserRateLimitPerSec != 1.5 {
+		t.Errorf("browser_rate_limit_per_sec = %v, want 1.5", c.BrowserRateLimitPerSec)
+	}
+	c = mustConfig(t, map[string]any{"browser_rate_limit_per_sec": int64(50)})
+	if c.BrowserRateLimitPerSec != 50 {
+		t.Errorf("browser_rate_limit_per_sec = %v, want 50", c.BrowserRateLimitPerSec)
 	}
 }
 
