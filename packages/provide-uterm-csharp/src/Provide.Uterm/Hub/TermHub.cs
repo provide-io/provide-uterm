@@ -21,6 +21,27 @@ public sealed class TermHubConfig
     public int MaxWorkers { get; set; } = 10000;
     public Action<string, int>? OnMetric { get; set; }
     public Action<string, bool, string?>? OnHijackChanged { get; set; }
+
+    /// <summary>
+    /// Where the hub says which worker it refused, and why —
+    /// <c>(level, message)</c>, with the reference's own levels
+    /// (<c>"warning"</c>, <c>"info"</c>) and message text.
+    ///
+    /// The hub had no logging surface at all, so the decisions the reference
+    /// logs had to be metric counters here instead. A counter is the actionable
+    /// half — an operator can see that refusals are happening — but it cannot say
+    /// <em>which</em> worker was refused, which is the one fact somebody
+    /// debugging a session stuck in <c>hijack</c> needs. Both are now emitted:
+    /// the counter answers "how often", the line answers "which one".
+    ///
+    /// A callback rather than a logging framework, injected exactly as
+    /// <see cref="OnMetric"/> and <see cref="OnHijackChanged"/> are. The port
+    /// carries no logging dependency and this is not the place to introduce one:
+    /// a host that has a logger points this at it, and unset it is a no-op, so
+    /// every existing embedder behaves as before.
+    /// </summary>
+    public Action<string, string>? OnLog { get; set; }
+
     public IClock? Clock { get; set; }
 }
 
@@ -41,6 +62,8 @@ public sealed class TermHub : ILeaseHub
     /// <summary>Live event fanout for SSE/watch long-poll (Python/Go EventBus).</summary>
     public EventBus EventBus { get; }
 
+    private readonly Action<string, string>? _onLog;
+
     internal object SharedLock { get; } = new();
     internal IClock Clock { get; }
     internal int MaxEventDataChars { get; }
@@ -56,6 +79,7 @@ public sealed class TermHub : ILeaseHub
         MaxEventDataChars = Math.Max(256, config.MaxEventDataChars <= 0 ? 8192 : config.MaxEventDataChars);
         MaxWorkers = Math.Max(1, config.MaxWorkers <= 0 ? 10000 : config.MaxWorkers);
         WorkerToken = config.WorkerToken;
+        _onLog = config.OnLog;
 
         Limiter = new RateLimiter(
             config.RestAcquireRateLimitPerSec <= 0 ? 5 : config.RestAcquireRateLimitPerSec,
@@ -91,6 +115,17 @@ public sealed class TermHub : ILeaseHub
     public bool HasValidRestLease(WorkerTermState st) => State.HasValidRestLease(st);
     public bool CanSendInput(WorkerTermState st, object ws) => Presence.CanSendInput(st, ws);
     public void Metric(string name, int value) => State.Metric(name, value);
+
+    /// <summary>
+    /// Report a hub decision to the injected sink — see
+    /// <see cref="TermHubConfig.OnLog"/>. A no-op when nothing is injected, so a
+    /// call site may log unconditionally.
+    ///
+    /// Callers must invoke this <em>outside</em> <see cref="SharedLock"/>: the
+    /// sink is host code, and running it under the hub's lock would let a host
+    /// logger hold up every worker and browser on the server.
+    /// </summary>
+    public void Log(string level, string message) => _onLog?.Invoke(level, message);
     public void NotifyHijackChanged(string workerId, bool enabled, string? owner) =>
         State.NotifyHijackChanged(workerId, enabled, owner);
 

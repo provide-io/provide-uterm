@@ -70,25 +70,42 @@ public sealed class ConnectionManager
     /// </returns>
     public bool SetWorkerHello(string workerId, string mode, int? protocolVersion = null)
     {
+        bool blocked;
         lock (_hub.SharedLock)
         {
             var st = _hub.Registry.Get(workerId);
             if (st is null) return false;
 
             var wouldLower = mode == InputModes.Open && st.InputMode == InputModes.Hijack;
-            if (wouldLower && (st.InputModeSetByOperator || _hub.State.IsHijacked(st)))
+            blocked = wouldLower && (st.InputModeSetByOperator || _hub.State.IsHijacked(st));
+            if (!blocked)
             {
-                return false;
+                st.InputMode = mode;
+                if (protocolVersion is not null)
+                {
+                    st.ProtocolVersion = protocolVersion;
+                }
             }
-
-            st.InputMode = mode;
-            if (protocolVersion is not null)
-            {
-                st.ProtocolVersion = protocolVersion;
-            }
-
-            return true;
         }
+
+        if (blocked)
+        {
+            // Named, because a counter cannot be. The server also increments
+            // `worker_hello_mode_blocked_total`, which says refusals are
+            // happening; this says which worker is causing them, which is what
+            // somebody looking at a session stuck in hijack has to know. Same
+            // place and same text as the reference
+            // (bridge/hub/connection.py:set_worker_hello).
+            //
+            // Outside the lock: the sink is host code and must not run with the
+            // hub's lock held. The decision is captured inside it instead.
+            _hub.Log(
+                "warning",
+                $"worker_hello_mode_blocked worker_id={workerId} — a hello may not lower a decided mode to open");
+            return false;
+        }
+
+        return true;
     }
 
     public void UpdateLastSnapshot(string workerId, Dictionary<string, object?> snapshot)

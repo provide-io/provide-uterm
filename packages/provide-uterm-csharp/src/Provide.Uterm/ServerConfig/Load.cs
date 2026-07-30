@@ -35,24 +35,99 @@ public static class ConfigLoader
         return cfg;
     }
 
+    /// <summary>
+    /// Every top-level key the reference's model defines — its
+    /// <c>config_schema.UtermServerConfig.model_fields</c>. Anything else is a
+    /// mistake, and <see cref="RefuseUnknownTopLevelKeys"/> says so.
+    ///
+    /// The list is the <em>reference's</em> field set rather than this port's.
+    /// The C# model carries no <c>profiles</c>, <c>webhooks</c>, <c>pam</c> or
+    /// <c>audit</c> section, but the canonical server accepts all four, and one
+    /// server.toml is meant to be readable by any port. A C# server refusing to
+    /// start on a file the reference honours would be a worse divergence than
+    /// one that quietly does not implement a section, so those keys are
+    /// recognised and ignored.
+    ///
+    /// Ordinal comparison because the reference is a pydantic model: its field
+    /// names are case-sensitive, so <c>Environment</c> and <c>ENVIRONMENT</c>
+    /// are both as unknown as any outright typo.
+    /// </summary>
+    private static readonly HashSet<string> KnownTopLevelKeys = new(StringComparer.Ordinal)
+    {
+        "environment", "server", "auth", "control_plane", "ui", "recording",
+        "profiles", "security", "tunnel", "webhooks", "pam", "governance",
+        "audit", "sessions", "graphical_targets",
+        "session_idle_timeout_s", "session_retention_s",
+        "browser_rate_limit_per_sec",
+        "rest_acquire_rate_limit_per_sec", "rest_send_rate_limit_per_sec",
+        "worker_frame_on_invalid", "max_connections_per_principal", "max_workers",
+    };
+
+    /// <summary>
+    /// Refuse a top-level key nobody recognises — this port's stand-in for the
+    /// reference's <c>ServerBaseModel.model_config = ConfigDict(extra="forbid")</c>.
+    ///
+    /// Until this existed the loader read the keys it knew and dropped the rest
+    /// without a word, so a misspelled key name in a deployment was invisible:
+    /// the operator got the default and no warning, and a file the canonical
+    /// server refuses to start with booted here looking fine. A typo on a
+    /// security-relevant key is the case that matters —
+    /// <c>brwoser_rate_limit_per_sec</c> silently means "no rate limit
+    /// configured".
+    ///
+    /// The message carries the key. The reference's own error does too — it is
+    /// the <c>ValidationError</c>'s <c>loc</c> — but the formatter that
+    /// <c>config.config_from_mapping</c> uses keeps only the message text,
+    /// <c>"Extra inputs are not permitted"</c>, which tells an operator their
+    /// file is wrong without telling them where. Both halves are kept here: the
+    /// reference's sentence, so the two ports read alike, and the key, so the
+    /// operator can find the line.
+    ///
+    /// Checked before anything is applied, because the reference refuses at
+    /// model construction: nothing exists at all until the whole mapping
+    /// validates, so a rejected file must not leave half its keys installed.
+    ///
+    /// Scope is the top level. Extras inside a section (<c>[server] hsot = …</c>)
+    /// are refused by the reference too, since every section model derives from
+    /// the same strict base; that is a wider change — one key set per section,
+    /// each of which must also list the reference fields this port does not read
+    /// — and is deliberately left for its own pass.
+    /// </summary>
+    private static void RefuseUnknownTopLevelKeys(TomlTable root)
+    {
+        foreach (var key in root.Keys)
+        {
+            if (KnownTopLevelKeys.Contains(key)) continue;
+            throw new ArgumentException($"{key}: Extra inputs are not permitted");
+        }
+    }
+
     private static void ApplyToml(UtermServerConfig cfg, TomlTable root)
     {
+        RefuseUnknownTopLevelKeys(root);
+
         if (root.TryGetValue("environment", out var env) && env is string es)
         {
             cfg.Environment = es;
         }
 
-        if (root.TryGetValue("browser_rate_limit_per_sec", out var br) && br is double brd)
+        // The three configured rate ceilings. Written as "present ⇒ apply"
+        // rather than ToDouble's silent fallback: a rate that failed to parse and
+        // quietly reverted to the default would be indistinguishable from one
+        // never written, which is the exact silent-loosening these keys are
+        // validated against. The range check itself lives on the property
+        // setter, so configs built without a file get it too.
+        //
+        // The browser key used to be read with an `is double` type test, which
+        // meant a TOML `browser_rate_limit_per_sec = 300` — decoded as a `long`,
+        // and the spelling an operator is most likely to write — failed the test
+        // and was discarded without a word. RequireRate accepts an integer, a
+        // float and a numeric string alike, and refuses anything else by name.
+        if (root.TryGetValue("browser_rate_limit_per_sec", out var br))
         {
-            cfg.BrowserRateLimitPerSec = brd;
+            cfg.BrowserRateLimitPerSec = RequireRate("browser_rate_limit_per_sec", br);
         }
 
-        // The REST hijack ceilings. Written as "present ⇒ apply" rather than
-        // ToDouble's silent fallback: a rate that failed to parse and quietly
-        // reverted to the default would be indistinguishable from one never
-        // written, which is the exact silent-loosening these keys are validated
-        // against. The range check itself lives on the property setter, so
-        // configs built without a file get it too.
         if (root.TryGetValue("rest_acquire_rate_limit_per_sec", out var ra))
         {
             cfg.RestAcquireRateLimitPerSec = RequireRate("rest_acquire_rate_limit_per_sec", ra);
