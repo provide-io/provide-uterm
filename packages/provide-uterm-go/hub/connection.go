@@ -118,7 +118,21 @@ func (c *ConnectionManager) SetWorkerHello(_ context.Context, workerID, mode str
 	if st == nil {
 		return false, nil
 	}
-	if mode == InputModeOpen && hub.State.IsHijacked(st) {
+	// A hello may raise the mode, never lower it. Two reasons to refuse, both
+	// needed: a lease is actually held, or somebody has explicitly decided the
+	// mode through an authenticated route. The second is the window the lease
+	// check alone left open — an operator sets hijack and then acquires, and a
+	// hello landing between those two steps reverted the mode, so the acquire was
+	// refused for being in open mode and the operator's only clue was a failure
+	// that looked like their own mistake.
+	//
+	// Keyed on whether the hello would actually lower the mode, not on its value:
+	// a hello agreeing with a decided "open" is not a downgrade. And the decision
+	// flag is what makes this expressible at all, since InputMode defaults to
+	// hijack and refusing every lowering would refuse every worker announcing
+	// open.
+	wouldLower := mode == InputModeOpen && st.InputMode == InputModeHijack
+	if wouldLower && (st.InputModeSetByOperator || hub.State.IsHijacked(st)) {
 		hub.logger.Warn("worker_hello_mode_blocked", "worker_id", workerID)
 		return false, nil
 	}

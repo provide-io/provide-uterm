@@ -117,16 +117,31 @@ type WorkerTermState struct {
 	// HijackPending is a transient REST-acquire reservation held while the
 	// worker is paused OUTSIDE the hub lock. See
 	// [HijackLeaseManager.TryAcquireRest].
-	HijackPending    *string
-	InputMode        string
-	LastSnapshot     map[string]any
-	Events           []map[string]any
-	EventSeq         int
-	MinEventSeq      int
-	LastActivityAt   float64
-	ProtocolVersion  *int
-	IsTunnelWorker   bool
-	GraphicalSession gui.GraphicalSession
+	HijackPending *string
+	InputMode     string
+	// InputModeSetByOperator records whether an authenticated caller has
+	// explicitly decided this session's input mode, as opposed to it merely
+	// holding the "hijack" default.
+	//
+	// It exists to tell two claims apart: a worker_hello announces what the
+	// worker process booted with, while SetInputMode is a decision made through
+	// an authenticated route by somebody holding session.control.mode. Without
+	// the distinction the hub cannot refuse a hello that lowers hijack to open,
+	// because InputMode defaults to hijack and refusing every lowering would
+	// refuse every worker that legitimately announces open.
+	//
+	// Held on the worker state rather than the connection deliberately: registry
+	// state outlives a worker socket, so a decision survives a reconnect.
+	// Internal only — nothing serialises it onto the wire.
+	InputModeSetByOperator bool
+	LastSnapshot           map[string]any
+	Events                 []map[string]any
+	EventSeq               int
+	MinEventSeq            int
+	LastActivityAt         float64
+	ProtocolVersion        *int
+	IsTunnelWorker         bool
+	GraphicalSession       gui.GraphicalSession
 }
 
 // NewWorkerTermState creates a worker state with the Python dataclass
