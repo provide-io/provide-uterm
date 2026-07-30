@@ -166,7 +166,7 @@ public sealed class ServerConfigUnknownKeyTests
             enabled_by_default = true
 
             [profiles]
-            path = "profiles.json"
+            directory = "profiles.d"
 
             [security]
             mode = "strict"
@@ -175,16 +175,16 @@ public sealed class ServerConfigUnknownKeyTests
             token_ttl_s = 60
 
             [webhooks]
-            enabled = false
+            allow_loopback_destinations = false
 
             [pam]
-            enabled = false
+            mode = "off"
 
             [governance]
             authz_webhook_timeout_s = 1.0
 
             [audit]
-            enabled = false
+            chain_enabled = false
 
             [[sessions]]
             session_id = "s1"
@@ -212,11 +212,11 @@ public sealed class ServerConfigUnknownKeyTests
     {
         var cfg = LoadToml("""
             [pam]
-            enabled = true
-            service_name = "uterm"
+            mode = "off"
+            auto_session = false
 
             [audit]
-            enabled = true
+            chain_enabled = true
             """);
 
         Assert.Equal("production", cfg.Environment);

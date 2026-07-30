@@ -93,6 +93,189 @@ public static class ConfigLoader
     /// each of which must also list the reference fields this port does not read
     /// — and is deliberately left for its own pass.
     /// </summary>
+    /// <summary>
+    /// Which reference model validates each TOML section, so a test can tie the
+    /// key sets below to the recorded schema rather than to a transcription.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, string> SectionModelsForTests { get; } =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["server"] = "ServerBindConfig",
+        ["auth"] = "AuthConfig",
+        ["control_plane"] = "ControlPlaneConfig",
+        ["ui"] = "UiConfig",
+        ["recording"] = "RecordingConfig",
+        ["profiles"] = "ProfileStoreConfig",
+        ["security"] = "SecurityConfig",
+        ["tunnel"] = "TunnelConfig",
+        ["webhooks"] = "WebhooksConfig",
+        ["pam"] = "PamConfig",
+        ["governance"] = "GovernanceConfig",
+        ["audit"] = "AuditConfig",
+        ["graphical_targets"] = "GraphicalTargetConfig",
+        ["sessions"] = "SessionDefinition",
+    };
+
+    /// <summary>
+    /// Field names the reference accepts inside each section.
+    /// </summary>
+    /// <remarks>
+    /// The reference gets this from one place — <c>extra="forbid"</c> on
+    /// <c>ServerBaseModel</c>, which every section model inherits — so a typo one
+    /// line inside <c>[server]</c> is refused exactly like a bad top-level key.
+    /// This port refused only the top level, and a section is where the
+    /// security-relevant keys live.
+    ///
+    /// These are the <em>reference's</em> names rather than this port's, for the
+    /// same reason the top-level set is: one server.toml should be readable by
+    /// any port, so a section C# does not model is recognised and its contents
+    /// still validated.
+    ///
+    /// Generated from <c>configschema_golden.json</c> rather than typed out, and
+    /// held to it by a test. A hand-copied set rots, and a stale one would refuse
+    /// a key the reference accepts — which breaks a working deployment on
+    /// upgrade, a worse failure than the silence it replaces.
+    /// </remarks>
+    internal static IReadOnlyDictionary<string, HashSet<string>> KnownNestedKeysForTests => KnownNestedKeys;
+
+    private static readonly Dictionary<string, HashSet<string>> KnownNestedKeys = new(StringComparer.Ordinal)
+    {
+        ["server"] = new(StringComparer.Ordinal)
+        {
+            "allowed_origins", "host", "max_sessions", "node_id", "port", "public_base_url",
+            "title"
+        },
+        ["auth"] = new(StringComparer.Ordinal)
+        {
+            "allow_adhoc_browser_observers", "api_keys_enabled", "clock_skew_seconds",
+            "delegate_roles", "header_mode_acknowledged", "identity_provider",
+            "jwt_algorithms", "jwt_audience", "jwt_issuer", "jwt_jwks_url",
+            "jwt_public_key_pem", "jwt_roles_claim", "jwt_scopes_claim", "jwt_tenant_claim",
+            "mode", "principal_cookie", "principal_header", "require_jwt_in_production",
+            "require_upstream_proxy_secret", "role_cookie", "role_header", "surface_cookie",
+            "tenant_cookie", "tenant_header", "token_cookie", "trusted_proxy_ips",
+            "upstream_proxy_secret", "webhook_idp_forward_cookies",
+            "webhook_idp_forward_headers", "webhook_idp_on_failure",
+            "webhook_idp_require_response_nonce", "webhook_idp_require_signed_response",
+            "webhook_idp_secret", "webhook_idp_timeout_s", "webhook_idp_url",
+            "worker_bearer_token"
+        },
+        ["control_plane"] = new(StringComparer.Ordinal)
+        {
+            "backend", "database_url", "reap_interval_s", "reap_retention_s"
+        },
+        ["ui"] = new(StringComparer.Ordinal)
+        {
+            "app_path", "assets_path", "fitaddon_cdn", "fitaddon_cdn_integrity", "fonts_cdn",
+            "xterm_cdn", "xterm_cdn_integrity"
+        },
+        ["recording"] = new(StringComparer.Ordinal)
+        {
+            "control_channel_mode", "directory", "enabled_by_default", "flush_batch_size",
+            "flush_interval_s", "max_bytes", "redact_sensitive", "retention_s", "store_type",
+            "webhook_secret", "webhook_timeout_s", "webhook_url"
+        },
+        ["profiles"] = new(StringComparer.Ordinal)
+        {
+            "directory"
+        },
+        ["security"] = new(StringComparer.Ordinal)
+        {
+            "block_private_connector_targets", "csp", "default_session_visibility",
+            "dev_mode_acknowledged", "hsts", "metrics_require_auth", "mode",
+            "permissions_policy", "referrer_policy", "x_content_type_options",
+            "x_frame_options"
+        },
+        ["tunnel"] = new(StringComparer.Ordinal)
+        {
+            "cookie_samesite", "cookie_secure", "ip_binding", "token_transport", "token_ttl_s"
+        },
+        ["webhooks"] = new(StringComparer.Ordinal)
+        {
+            "allow_loopback_destinations"
+        },
+        ["pam"] = new(StringComparer.Ordinal)
+        {
+            "auto_session", "auto_session_command", "capture_socket_dir", "mode",
+            "notify_socket", "relay_token", "relay_url", "require_peer_uids"
+        },
+        ["governance"] = new(StringComparer.Ordinal)
+        {
+            "authz_webhook_secret", "authz_webhook_timeout_s", "authz_webhook_url",
+            "behavioral_audit_interval_s", "behavioral_audit_secret", "behavioral_audit_url",
+            "behavioral_fail_open", "behavioral_max_cps", "behavioral_min_jitter",
+            "discovery_provider", "external_connectors", "policy_webhook_secret",
+            "policy_webhook_timeout_s", "policy_webhook_url", "registry_webhook_interval_s",
+            "registry_webhook_secret", "registry_webhook_url", "telemetry_webhook_secret",
+            "telemetry_webhook_timeout_s", "telemetry_webhook_url"
+        },
+        ["audit"] = new(StringComparer.Ordinal)
+        {
+            "chain_enabled", "chain_file"
+        },
+        ["graphical_targets"] = new(StringComparer.Ordinal)
+        {
+            "config", "description", "enabled", "height", "is_static", "name", "protocol",
+            "target_address", "target_id", "tenant_id", "vm_name", "width"
+        },
+        ["sessions"] = new(StringComparer.Ordinal)
+        {
+            "auto_start", "auto_transfer_idle_s", "connector_config", "connector_type",
+            "created_at", "display_name", "ephemeral", "input_mode", "keystroke_queue",
+            "owner", "presence", "recording_enabled", "session_id", "tags", "visibility"
+        },
+    };
+
+    /// <summary>
+    /// Sections whose unrecognised keys are folded rather than refused.
+    /// </summary>
+    /// <remarks>
+    /// <c>[[sessions]]</c> only. The reference's own before-validator folds
+    /// unknown keys into <c>connector_config</c>, because a connector's options
+    /// are open-ended by design and have to reach it somehow. Everything else,
+    /// including the sibling list <c>[[graphical_targets]]</c>, is validated.
+    /// </remarks>
+    private static readonly HashSet<string> OpenEndedSections = new(StringComparer.Ordinal) { "sessions" };
+
+    private static void RefuseUnknownNestedKeys(TomlTable root)
+    {
+        foreach (var section in root.Keys)
+        {
+            if (OpenEndedSections.Contains(section)) continue;
+            if (!KnownNestedKeys.TryGetValue(section, out var known)) continue;
+
+            foreach (var table in TablesIn(root, section))
+            {
+                foreach (var key in table.Keys)
+                {
+                    if (known.Contains(key)) continue;
+                    // Named with its section: `hsot` alone would send an operator
+                    // hunting through the file. The reference's own formatter
+                    // drops the location, which is a shortcoming worth not
+                    // copying.
+                    throw new ArgumentException($"{section}.{key}: Extra inputs are not permitted");
+                }
+            }
+        }
+    }
+
+    /// <summary>Every table a section holds — one for a table, many for an array of them.</summary>
+    private static IEnumerable<TomlTable> TablesIn(TomlTable root, string section)
+    {
+        var value = root[section];
+        if (value is TomlTable table)
+        {
+            yield return table;
+        }
+        else if (value is TomlTableArray array)
+        {
+            foreach (var entry in array)
+            {
+                yield return entry;
+            }
+        }
+    }
+
     private static void RefuseUnknownTopLevelKeys(TomlTable root)
     {
         foreach (var key in root.Keys)
@@ -105,6 +288,10 @@ public static class ConfigLoader
     private static void ApplyToml(UtermServerConfig cfg, TomlTable root)
     {
         RefuseUnknownTopLevelKeys(root);
+        // Sections after the top level, and in that order: a file with both a bad
+        // section name and a bad key inside another should complain about the
+        // section, which is the larger mistake.
+        RefuseUnknownNestedKeys(root);
 
         if (root.TryGetValue("environment", out var env) && env is string es)
         {
