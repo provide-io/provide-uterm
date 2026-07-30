@@ -497,3 +497,105 @@ async def test_can_send_input_open_mode_roles_exact() -> None:
     ws_viewer = MagicMock()
     st.browsers[ws_viewer] = "viewer"
     assert not hub.can_send_input(st, ws_viewer)
+
+
+# ---------------------------------------------------------------------------
+# worker_hello vs. an explicit mode decision
+# ---------------------------------------------------------------------------
+
+
+async def test_a_hello_may_set_the_mode_when_nobody_has_decided_one() -> None:
+    """The ordinary case, and why the guard cannot simply refuse every lowering.
+
+    ``WorkerTermState.input_mode`` defaults to ``hijack``, so a freshly
+    registered worker is already in hijack mode. A rule that refused any
+    hello lowering hijack to open would therefore refuse *every* worker that
+    announces open — which is most of them.
+    """
+    hub = TermHub()
+    worker_id = "w-hello-undecided"
+    async with hub._lock:
+        from provide.uterm.server.bridge.models import WorkerTermState
+
+        hub.registry._workers[worker_id] = WorkerTermState()
+
+    assert await hub.set_worker_hello(worker_id, "open") is True
+    assert hub.registry.get(worker_id).input_mode == "open"
+
+
+async def test_a_hello_cannot_undo_an_explicit_mode_decision() -> None:
+    """Once a caller has set the mode, a worker's hello may not lower it.
+
+    This is the window the lease-only guard left open: an operator sets
+    ``hijack`` and then acquires, and a hello arriving between those two steps
+    reverted the mode — so the acquire was refused for being in open mode, a
+    message that says nothing about why, and the operator's only clue was a
+    failure that looked like their own mistake.
+    """
+    hub = TermHub()
+    worker_id = "w-hello-decided"
+    async with hub._lock:
+        from provide.uterm.server.bridge.models import WorkerTermState
+
+        hub.registry._workers[worker_id] = WorkerTermState()
+
+    ok, _ = await hub.set_input_mode(worker_id, "hijack")
+    assert ok is True
+
+    assert await hub.set_worker_hello(worker_id, "open") is False
+    assert hub.registry.get(worker_id).input_mode == "hijack"
+
+
+async def test_a_hello_may_still_raise_over_a_decision() -> None:
+    """The guard is one-directional. A worker announcing ``hijack`` is telling the
+    hub something it does not otherwise know — that automation is driving the
+    session — so raising is never refused."""
+    hub = TermHub()
+    worker_id = "w-hello-raise-over"
+    async with hub._lock:
+        from provide.uterm.server.bridge.models import WorkerTermState
+
+        hub.registry._workers[worker_id] = WorkerTermState()
+
+    ok, _ = await hub.set_input_mode(worker_id, "open")
+    assert ok is True
+
+    assert await hub.set_worker_hello(worker_id, "hijack") is True
+    assert hub.registry.get(worker_id).input_mode == "hijack"
+
+
+async def test_a_decision_survives_a_worker_reconnect() -> None:
+    """The point of holding this on the worker state rather than the connection:
+    registry state outlives a worker socket, so an operator's decision is not
+    undone by a reconnect."""
+    hub = TermHub()
+    worker_id = "w-hello-reconnect"
+    async with hub._lock:
+        from provide.uterm.server.bridge.models import WorkerTermState
+
+        hub.registry._workers[worker_id] = WorkerTermState()
+
+    ok, _ = await hub.set_input_mode(worker_id, "hijack")
+    assert ok is True
+
+    # Two reconnects in a row, each announcing what the worker booted with.
+    assert await hub.set_worker_hello(worker_id, "open") is False
+    assert await hub.set_worker_hello(worker_id, "open") is False
+    assert hub.registry.get(worker_id).input_mode == "hijack"
+
+
+async def test_deciding_open_is_a_decision_too() -> None:
+    """An operator returning a session to open has decided that as much as
+    deciding hijack, so a later hello cannot be refused for agreeing with it."""
+    hub = TermHub()
+    worker_id = "w-hello-open-decision"
+    async with hub._lock:
+        from provide.uterm.server.bridge.models import WorkerTermState
+
+        hub.registry._workers[worker_id] = WorkerTermState()
+
+    ok, _ = await hub.set_input_mode(worker_id, "open")
+    assert ok is True
+
+    assert await hub.set_worker_hello(worker_id, "open") is True
+    assert hub.registry.get(worker_id).input_mode == "open"

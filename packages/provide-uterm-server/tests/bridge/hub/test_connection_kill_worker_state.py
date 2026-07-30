@@ -109,7 +109,7 @@ class TestSetWorkerHello:
         # Mode was NOT changed to "open".
         assert hub.registry._workers[worker_id].input_mode == "hijack"
         logger.warning.assert_called_once_with(
-            "worker_hello_mode_blocked worker_id=%s — cannot switch to open while hijack active",
+            "worker_hello_mode_blocked worker_id=%s — a hello may not lower a decided mode to open",
             worker_id,
         )
         # No protocol_version supplied -> the protocol info log never fired.

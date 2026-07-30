@@ -324,7 +324,15 @@ class MessageRouter:
         )
 
     async def set_input_mode(self, worker_id: str, mode: InputMode) -> tuple[bool, str | None]:
-        """Set input_mode under lock. Rejects if active hijack when switching to "open"."""
+        """Set input_mode under lock. Rejects if active hijack when switching to "open".
+
+        Every caller of this is an authenticated route — the two session routes
+        and the worker-control route, which requires ``session.control.mode``. So
+        reaching here means somebody *decided* the mode, and the decision is
+        recorded: a worker's ``worker_hello`` may afterwards raise the mode but
+        never lower it back. See
+        :attr:`~provide.uterm.server.bridge.models.WorkerTermState.input_mode_set_by_operator`.
+        """
         hub = self._hub
         async with hub._lock:
             st = hub.registry.get(worker_id)
@@ -333,6 +341,7 @@ class MessageRouter:
             if mode == "open" and hub.is_hijacked(st):
                 return False, "active_hijack"
             st.input_mode = mode
+            st.input_mode_set_by_operator = True
         await self.broadcast(worker_id, {"type": "input_mode_changed", "input_mode": mode, "ts": time.time()})
         await self.broadcast_hijack_state(worker_id)
         return True, None
