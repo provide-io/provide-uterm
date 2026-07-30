@@ -147,7 +147,7 @@ func validateAuth(a *AuthConfig) error {
 	return nil
 }
 
-// validateRestRateLimit ports config_schema._validate_rest_rate_limit: refuse
+// validateRestRateLimit ports config_schema._validate_rate_limit: refuse
 // any rate the limiter cannot honour verbatim.
 //
 // A rate limit is trusted, so it must never end up looser than what the

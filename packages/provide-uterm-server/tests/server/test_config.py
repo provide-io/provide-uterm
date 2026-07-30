@@ -637,3 +637,50 @@ def test_loaded_max_sessions_is_enforced_by_app() -> None:
 
     assert response.status_code == 409
     assert response.json()["detail"] == "session limit reached: max_sessions=1"
+
+
+def test_config_from_mapping_rejects_zero_browser_rate_limit() -> None:
+    """0 bricks browser traffic, and worse here than on the REST keys.
+
+    The REST rates are clamped by ``RateLimiter.__init__``; the browser rate is
+    handed to ``TokenBucket`` unclamped (``websockets_impl`` builds it straight
+    from the hub attribute), so a configured 0 becomes ``TokenBucket(0)`` and
+    denies every browser message forever. An operator can brick their own
+    deployment with a value that looks like "no limit".
+    """
+    with pytest.raises(ValueError, match="browser_rate_limit_per_sec must be >= 1.0"):
+        config_from_mapping({"browser_rate_limit_per_sec": 0})
+
+
+def test_config_from_mapping_rejects_negative_browser_rate_limit() -> None:
+    with pytest.raises(ValueError, match="browser_rate_limit_per_sec must be >= 1.0"):
+        config_from_mapping({"browser_rate_limit_per_sec": -1})
+
+
+def test_config_from_mapping_rejects_browser_rate_limit_below_the_floor() -> None:
+    """Same bucket, same floor: burst is one second of the rate, so a sub-1/s
+    browser bucket never accumulates the whole token a message costs."""
+    with pytest.raises(ValueError, match="browser_rate_limit_per_sec must be >= 1.0"):
+        config_from_mapping({"browser_rate_limit_per_sec": 0.5})
+
+
+def test_config_from_mapping_rejects_non_finite_browser_rate_limit() -> None:
+    """``inf`` passes any lower bound, so it would silently mean "no limit"."""
+    with pytest.raises(ValueError, match="browser_rate_limit_per_sec must be a finite number"):
+        config_from_mapping({"browser_rate_limit_per_sec": float("inf")})
+    with pytest.raises(ValueError, match="browser_rate_limit_per_sec must be a finite number"):
+        config_from_mapping({"browser_rate_limit_per_sec": float("nan")})
+
+
+def test_config_from_mapping_accepts_the_browser_rate_limit_floor() -> None:
+    config = config_from_mapping({"browser_rate_limit_per_sec": 1.0})
+    assert config.browser_rate_limit_per_sec == 1.0
+
+
+def test_browser_rate_limit_default_still_admits_the_first_message() -> None:
+    """The default must sit above the floor, or every deployment is bricked."""
+    from provide.uterm.server.bridge.ratelimit import TokenBucket
+
+    default = config_from_mapping({}).browser_rate_limit_per_sec
+    assert default >= 1.0
+    assert TokenBucket(default).allow() is True
