@@ -1212,10 +1212,8 @@ public sealed partial class UtermServer : IAsyncDisposable
     /// because it means an operator's decision held against a reconnect and
     /// somebody watching needs to see that rather than infer it.
     ///
-    /// The reference logs both of these. This port has no logging surface on the
-    /// hub at all, so both become metrics — which is the actionable half, but a
-    /// port reading a counter cannot tell you *which* worker was refused. Worth
-    /// closing separately.
+    /// Both are logged as well as counted, through <see cref="TermHubConfig.OnLog"/>
+    /// — see there for why a counter alone was not enough to debug a stuck session.
     /// </remarks>
     private async Task ApplyWorkerHelloAsync(
         string workerId,
@@ -1228,6 +1226,8 @@ public sealed partial class UtermServer : IAsyncDisposable
             if (mode is not null)
             {
                 _deps.Hub.Metric("worker_hello_invalid_mode_total", 1);
+                _deps.Hub.Log("warning", $"worker_hello_invalid_mode worker_id={workerId} "
+                    + $"input_mode='{mode}' — expected 'hijack' or 'open', ignoring");
             }
 
             return;

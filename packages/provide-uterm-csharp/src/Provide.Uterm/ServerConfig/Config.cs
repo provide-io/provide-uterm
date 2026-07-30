@@ -211,10 +211,31 @@ public sealed class UtermServerConfig
     public List<GraphicalTargetDefinition> GraphicalTargets { get; set; } = new();
     public int SessionIdleTimeoutS { get; set; }
     public int SessionRetentionS { get; set; }
-    public double BrowserRateLimitPerSec { get; set; } = 300;
 
+    private double _browserRateLimitPerSec = 300;
     private double _restAcquireRateLimitPerSec = 5;
     private double _restSendRateLimitPerSec = 20;
+
+    /// <summary>
+    /// Ceiling for inbound browser WebSocket messages (tokens/sec, burst = one
+    /// second of the same rate). Default is the reference's 300, so an unset
+    /// deployment is unchanged.
+    ///
+    /// It shares <see cref="ValidateRateLimit"/> with the two REST keys because
+    /// it shares a <see cref="TokenBucket"/>: same burst-equals-rate rule, so
+    /// the same floor follows. It is in fact the most dangerous of the three in
+    /// the reference — <c>RateLimiter.__init__</c> clamps the REST rates, but the
+    /// browser rate reaches <c>TokenBucket</c> unclamped, so a configured
+    /// <c>0</c> denied every browser message for the life of the process. An
+    /// operator could brick their own deployment with a value that reads like
+    /// "no limit", and nothing would say so — not at startup, not in a log, only
+    /// in a terminal nobody can type into.
+    /// </summary>
+    public double BrowserRateLimitPerSec
+    {
+        get => _browserRateLimitPerSec;
+        set => _browserRateLimitPerSec = ValidateRateLimit("browser_rate_limit_per_sec", value);
+    }
 
     /// <summary>
     /// Ceiling for <c>POST /worker/{id}/hijack/acquire</c> (tokens/sec, burst =
@@ -226,7 +247,7 @@ public sealed class UtermServerConfig
     public double RestAcquireRateLimitPerSec
     {
         get => _restAcquireRateLimitPerSec;
-        set => _restAcquireRateLimitPerSec = ValidateRestRateLimit("rest_acquire_rate_limit_per_sec", value);
+        set => _restAcquireRateLimitPerSec = ValidateRateLimit("rest_acquire_rate_limit_per_sec", value);
     }
 
     /// <summary>
@@ -237,12 +258,17 @@ public sealed class UtermServerConfig
     public double RestSendRateLimitPerSec
     {
         get => _restSendRateLimitPerSec;
-        set => _restSendRateLimitPerSec = ValidateRestRateLimit("rest_send_rate_limit_per_sec", value);
+        set => _restSendRateLimitPerSec = ValidateRateLimit("rest_send_rate_limit_per_sec", value);
     }
 
     /// <summary>
     /// Refuses any rate that would not behave as the operator wrote it — the
     /// port of <c>config_schema._validate_rate_limit</c>.
+    ///
+    /// Guards all three configured ceilings — the two REST hijack budgets and
+    /// the browser one. They share a validator because they share a
+    /// <see cref="TokenBucket"/>, so the same burst rule and therefore the same
+    /// floor applies to each.
     ///
     /// A rate limit is trusted once configured, so every value that cannot be
     /// honoured verbatim is refused rather than reinterpreted.
@@ -254,7 +280,7 @@ public sealed class UtermServerConfig
     ///
     /// <em>Below <see cref="TokenBucket.MinRatePerSec"/>.</em> <c>0</c> is
     /// ambiguous — read as "unlimited" it disables the limit, read as "refuse
-    /// everything" it bricks the REST hijack API, and nothing in the file says
+    /// everything" it bricks the surface it guards, and nothing in the file says
     /// which the operator meant. The whole band under the floor is refused for
     /// the <em>second</em> of those reasons rather than for ambiguity: a token
     /// bucket's burst is one second of its rate, so a sub-1/s bucket never
@@ -277,7 +303,7 @@ public sealed class UtermServerConfig
     /// startup. A server that boots with a nonsense limit and discovers it at
     /// first use is a server that ran unprotected in between.
     /// </summary>
-    private static double ValidateRestRateLimit(string key, double value)
+    private static double ValidateRateLimit(string key, double value)
     {
         var floor = TokenBucket.MinRatePerSec.ToString("0.0##", CultureInfo.InvariantCulture);
         if (!double.IsFinite(value))
