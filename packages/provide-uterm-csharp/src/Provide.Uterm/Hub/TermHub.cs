@@ -14,6 +14,19 @@ public sealed class TermHubConfig
     public int MaxBufferChars { get; set; } = 40000;
     public int MaxEventDataChars { get; set; } = 8192;
     public double BrowserRateLimitPerSec { get; set; } = 30;
+
+    /// <summary>
+    /// Per-second ceiling for a browser's non-input control frames, on a budget
+    /// separate from <see cref="BrowserRateLimitPerSec"/>.
+    /// </summary>
+    /// <remarks>
+    /// Two budgets rather than one so the two kinds of traffic cannot starve
+    /// each other: a resize storm must not spend the keystroke allowance, and a
+    /// keystroke burst must not silence resizes. A hub-level default rather than
+    /// a config key, matching the reference, which takes it as a constructor
+    /// argument (`core_impl`, default 10) and exposes no TOML spelling for it.
+    /// </remarks>
+    public double BrowserControlRateLimitPerSec { get; set; } = 10;
     public double RestAcquireRateLimitPerSec { get; set; } = 5;
     public double RestSendRateLimitPerSec { get; set; } = 20;
     public string? WorkerToken { get; set; }
@@ -66,6 +79,18 @@ public sealed class TermHub : ILeaseHub
 
     internal object SharedLock { get; } = new();
     internal IClock Clock { get; }
+
+    /// <summary>Per-second ceiling for a browser's input frames.</summary>
+    /// <remarks>
+    /// Read by the browser WebSocket handler, which builds one bucket per
+    /// connection from it — a browser must not be able to spend another
+    /// viewer's allowance, so the budget cannot be shared per worker.
+    /// </remarks>
+    public double BrowserRateLimitPerSec { get; }
+
+    /// <summary>Per-second ceiling for a browser's non-input control frames.</summary>
+    public double BrowserControlRateLimitPerSec { get; }
+
     internal int MaxEventDataChars { get; }
     internal int MaxWorkers { get; }
 
@@ -80,6 +105,13 @@ public sealed class TermHub : ILeaseHub
         MaxWorkers = Math.Max(1, config.MaxWorkers <= 0 ? 10000 : config.MaxWorkers);
         WorkerToken = config.WorkerToken;
         _onLog = config.OnLog;
+        // Floored the way the reference floors them (`core_impl`: max(0.1, ...)),
+        // so a hub constructed directly with a nonsense rate still admits
+        // something. The operator-facing path is stricter: the config schema
+        // refuses anything below 1.0 outright, because a bucket whose burst is
+        // one second of its rate can never hold a whole token below that.
+        BrowserRateLimitPerSec = Math.Max(0.1, config.BrowserRateLimitPerSec);
+        BrowserControlRateLimitPerSec = Math.Max(0.1, config.BrowserControlRateLimitPerSec);
 
         Limiter = new RateLimiter(
             config.RestAcquireRateLimitPerSec <= 0 ? 5 : config.RestAcquireRateLimitPerSec,
