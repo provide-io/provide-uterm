@@ -120,6 +120,20 @@ public sealed class TunnelConfig
     public bool IpBinding { get; set; }
 }
 
+/// <summary>
+/// Webhook egress policy.
+/// </summary>
+/// <remarks>
+/// Defaults to refusing loopback destinations, matching the reference
+/// (<c>config_schema.py:319</c>) and <c>WebhookManager.__init__</c>. The factory
+/// used to hardcode the opposite, so a session webhook could be pointed at
+/// <c>127.0.0.1</c> and reach anything else listening on the host.
+/// </remarks>
+public sealed class WebhooksConfig
+{
+    public bool AllowLoopbackDestinations { get; set; }
+}
+
 /// <summary>Governance section — external policy/authz webhooks (Go GovernanceConfig subset).</summary>
 public sealed class GovernanceConfig
 {
@@ -207,6 +221,7 @@ public sealed class UtermServerConfig
     public SecurityConfig Security { get; set; } = new();
     public TunnelConfig Tunnel { get; set; } = new();
     public GovernanceConfig Governance { get; set; } = new();
+    public WebhooksConfig Webhooks { get; set; } = new();
     public List<SessionDefinition> Sessions { get; set; } = new();
     public List<GraphicalTargetDefinition> GraphicalTargets { get; set; } = new();
     public int SessionIdleTimeoutS { get; set; }

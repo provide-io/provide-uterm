@@ -237,5 +237,46 @@ public class CfAccessJwtTests
         ConfigLoader.ApplyCfAccessTeamDomain(a3);
         Assert.Equal("https://other.cloudflareaccess.com/cdn-cgi/access/certs", a3.JwtJwksUrl);
         Assert.Equal("https://other.cloudflareaccess.com", a3.JwtIssuer);
+
+        // The plain-http prefix is its own branch, separate from https:// —
+        // an operator who pastes a bare http:// team URL must not end up with
+        // it embedded verbatim in the derived https:// jwks/issuer.
+        var a4 = new AuthConfig
+        {
+            JwtIssuer = "",
+            JwtJwksUrl = null,
+            CfAccessTeamDomain = "http://other.cloudflareaccess.com",
+        };
+        ConfigLoader.ApplyCfAccessTeamDomain(a4);
+        Assert.Equal("https://other.cloudflareaccess.com/cdn-cgi/access/certs", a4.JwtJwksUrl);
+        Assert.Equal("https://other.cloudflareaccess.com", a4.JwtIssuer);
+
+        // A slash immediately after the scheme (an empty host) pins the
+        // boundary itself: `slash >= 0` strips down to "" and the function
+        // no-ops, whereas a loosened `slash > 0` would skip the strip and
+        // build a nonsense jwks/issuer URL out of the leftover "/path".
+        var a5 = new AuthConfig
+        {
+            JwtIssuer = "",
+            JwtJwksUrl = null,
+            CfAccessTeamDomain = "https:///no-host",
+        };
+        ConfigLoader.ApplyCfAccessTeamDomain(a5);
+        Assert.Null(a5.JwtJwksUrl);
+        Assert.Equal("", a5.JwtIssuer);
+
+        // Nothing left to fill from — a bare scheme reduces to "" only after
+        // the scheme/slash/suffix strips run, so this is the *second* empty
+        // check (line 584), not the first (line 571) that a5/team="" above
+        // would otherwise also satisfy.
+        var a6 = new AuthConfig
+        {
+            JwtIssuer = "",
+            JwtJwksUrl = null,
+            CfAccessTeamDomain = "https://",
+        };
+        ConfigLoader.ApplyCfAccessTeamDomain(a6);
+        Assert.Null(a6.JwtJwksUrl);
+        Assert.Equal("", a6.JwtIssuer);
     }
 }

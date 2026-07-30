@@ -127,6 +127,54 @@ public sealed class MemoryTunnelStore
         }
     }
 
+    /// <summary>
+    /// Does <paramref name="sessionId"/> hold a live tunnel share at
+    /// <paramref name="now"/>?
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Asked by the webhook egress guard (<c>conformance/EGRESS_GUARD.md</c> §4):
+    /// tunnel sharing exposes a loopback-bound server through a relay, so a
+    /// shared session must not also be allowed to drive the server at loopback
+    /// destinations.
+    /// </para>
+    /// <para>
+    /// In this port a tunnel <em>is</em> a session — <c>POST /api/tunnels</c>
+    /// mints <c>tunnel-&lt;id&gt;</c>, upserts a session definition under that
+    /// same id, and stores one <see cref="TokenRecord"/> against it holding the
+    /// share and control token hashes — so a token record for a session id is
+    /// exactly "a share exists for this session", and this store is the only
+    /// place the port tracks that fact.
+    /// </para>
+    /// <para>
+    /// Expiry is read from the record, never assumed: <c>ExpiresAt</c> comes from
+    /// the configured TTL at create, is refreshed on rotate, and the record is
+    /// removed outright on revoke. A record outlives its expiry until something
+    /// sweeps it, so "the key is present" is not the question being asked, and an
+    /// expired share must not keep the webhook guard closed.
+    /// </para>
+    /// <para>
+    /// The boundary is <c>now &lt; ExpiresAt</c>: at the exact instant of expiry
+    /// the share is <em>not</em> live. That is deliberately the opposite of
+    /// <see cref="ConsumeInviteValue"/>'s local convention (expired when
+    /// <c>now &gt; ExpiresAt</c>), and it is not a free choice —
+    /// <c>conformance/EGRESS_GUARD.md</c> §4 fixes the instant across all four
+    /// ports so a share's last moment cannot be live in one language and dead in
+    /// another (the reference writes <c>now &lt; expires_at</c>, Go writes
+    /// <c>rec.ExpiresAt &gt; now</c>). Following the invite convention here, as
+    /// this port originally did, made the share live one instant longer than
+    /// everywhere else. The instant is unobservable against a real float clock;
+    /// the agreement is the point.
+    /// </para>
+    /// </remarks>
+    public bool HasLiveShare(string sessionId, double now)
+    {
+        lock (_lock)
+        {
+            return _tokens.TryGetValue(sessionId, out var record) && now < record.ExpiresAt;
+        }
+    }
+
     public void DeleteToken(string tunnelId)
     {
         lock (_lock)

@@ -88,6 +88,31 @@ Embed/session cancel races, RFB attach catch arms, dual-OS
 `SetUnixFileMode` PlatformNotSupported, and rare codec/float fallbacks —
 not untested pure library logic.
 
+## Mutation testing
+
+```bash
+make mutation-gate   # NOT part of quality-gate — see below
+```
+
+Two stages: a small hand-rolled `&&`/`||` flipper (`ci/mutation_gate.py`, its
+own perimeter) and real Roslyn-level mutation testing via
+[Stryker.NET](https://stryker-mutator.io/docs/stryker-net/) (`ci/stryker_gate.py`,
+installed as a local tool — see `.config/dotnet-tools.json`). Stryker's
+perimeter (`tests/Provide.Uterm.Tests/stryker-config.json`) covers the egress
+CIDR classifier, the connector and webhook egress guards, the webhook
+registry/delivery loop (retry ladder, HMAC signing, auto-unregister), and the
+TOML config binder — security-critical and wire-format-adjacent surfaces,
+same philosophy as Python's `MUTATION_PATTERNS.md` and Go's
+`mutation_equivalents.toml`. Genuinely-equivalent survivors are documented in
+`mutation_equivalents.toml` (the `[[stryker_equivalent]]` entries).
+
+Not part of `quality-gate`: Stryker recompiles an instrumented copy of the
+*entire* mutated project regardless of how narrow the `mutate` glob is (C#
+compiles per-assembly, not per-file), so a full run pays a fixed ~10 minute
+analysis/build cost before any perimeter-specific testing even starts —
+~25-30 minutes wall clock in total. Go's gremlins gate is likewise kept
+separate from its own quality gate for the same reason.
+
 ## Conformance
 
 `spec/uterm-api.yaml` lists required integrator symbols. C# is registered as a
