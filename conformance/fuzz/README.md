@@ -25,7 +25,7 @@ inputs nobody thought of.
 | Corpus | `conformance/fuzz/control_channel_fuzz.json` |
 | Generator | `conformance/fuzz/gen_control_channel_fuzz.py` |
 | Seed | **20260729** (`CORPUS_SEED`), committed with the corpus |
-| Cases | 522 |
+| Cases | 523 |
 | Reference replay | `packages/provide-uterm/tests/terminal/test_control_channel_fuzz_corpus.py` |
 | Drift check | `ci/check_fuzz_corpus.sh` (runs in `make quality-gate`) |
 | Exploration | `conformance/fuzz/explore_control_channel_fuzz.py`, weekly via `.github/workflows/fuzz-explore.yml` |
@@ -138,7 +138,7 @@ there rather than by bumping the seed.
   "encode_control": [ /* 96  */ ],
   "is_control_frame": [ /* 128 */ ],
   "decode": [ /* 192 */ ],
-  "regressions": [ /* 4, hand-written, same shape as decode + "note" */ ],
+  "regressions": [ /* 5, hand-written, same shape as decode + "note" */ ],
   "serializer_divergences": [ /* 6, NOT asserted equal across ports */ ]
 }
 ```
@@ -229,7 +229,7 @@ before it has decided what the trailing DLE means, then emits `\x10b` — **two*
 data events. Fed as one chunk it emits `a\x10b` — **one**. Same bytes, different
 event boundaries. A port that buffers differently passes every single-shot test
 and still desynchronises a live session; recording both drives is what catches it.
-38 of the 192 generated cases differ between the two drives.
+39 of the 192 generated cases differ between the two drives.
 
 How to replay one case:
 
@@ -365,7 +365,7 @@ parser divergences with no agreed answer, not codec behaviour:
 
 ## What the corpus is sized for
 
-522 cases: 96 + 96 + 128 + 192 generated, plus 4 regressions and 6 divergences.
+523 cases: 96 + 96 + 128 + 192 generated, plus 5 regressions and 6 divergences.
 
 - **Weighted toward `decode` (192).** It is the only *stateful* surface. A port can
   be right about every single input to the other three and still desynchronise,
@@ -394,7 +394,7 @@ distribution. More of the same finds nothing new.
   stale corpus (the reference changed and the recording did not) and a
   non-deterministic generator.
 - `packages/provide-uterm/tests/terminal/test_control_channel_fuzz_corpus.py`
-  replays all 522 cases against the live CPython reference, in the normal pytest
+  replays all 523 cases against the live CPython reference, in the normal pytest
   run.
 - Each port adds its own replay test. That is the point of the file.
 

@@ -36,7 +36,7 @@ import json
 import random
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO_ROOT / "packages" / "provide-uterm" / "src"))
@@ -221,6 +221,48 @@ def _seg_lying_length(rng: random.Random) -> str:
     return f"{DLE}{STX}{len(body) + rng.randint(1, 64):08x}:{body}"
 
 
+#: Length headers chosen to break an implementation that parses this unsigned
+#: wire value into a signed 32-bit accumulator. ``80000000`` and above set the
+#: high bit, so a port accumulating into a signed int wraps *negative* — its
+#: "payload too large" guard then never fires, and the negative length reaches
+#: an index or a slice. That is not hypothetical: it is what the C# port did,
+#: throwing ``IndexOutOfRangeException`` where the reference reports
+#: ``control payload too large``.
+#:
+#: The corpus could not reach it before. ``_seg_oversize`` only ever produced
+#: values just above the ceiling, and every high-bit header the generator
+#: happened to emit came from ``_seg_bad_header``, which follows it with a
+#: separator other than ``:`` — so the header was rejected as malformed before
+#: its length was ever parsed. A header is only load-bearing when ``:`` follows.
+_BOUNDARY_LENGTH_HEX: Final = (
+    "7fffffff",  # the largest value a signed 32-bit accumulator still holds
+    "80000000",  # the first that wraps it, and the smallest negative result
+    "80000001",
+    "fffffffe",
+    "ffffffff",  # every bit set: wraps to -1
+    "00100001",  # one byte past the ceiling, overflowing nothing
+    "0010000f",
+)
+
+
+def _seg_boundary_length(rng: random.Random) -> str:
+    """A load-bearing length header at a signed-overflow boundary."""
+    return f"{DLE}{STX}{rng.choice(_BOUNDARY_LENGTH_HEX)}:" + '{"k":1}'
+
+
+def _seg_upper_hex_length(rng: random.Random) -> str:
+    """A valid frame whose length header uses upper-case hex digits.
+
+    CPython accepts these (``string.hexdigits`` spans both cases) and so do the
+    ports, but no generated case paired upper-case hex with ``:`` — so the
+    agreement was assumed rather than tested. The payload is padded until its
+    byte length has a hex digit above nine, or the header would be all digits
+    and prove nothing.
+    """
+    body = '{"k":"' + "a" * rng.randint(20, 24) + '"}'
+    return f"{DLE}{STX}{len(body.encode()):08X}:{body}"
+
+
 def _seg_split_code_point(_rng: random.Random) -> str:
     """A declared length that lands inside a multi-byte code point."""
     return f"{DLE}{STX}{1:08x}:é"
@@ -258,6 +300,8 @@ _SEGMENTS = (
     (_seg_empty_payload, 2),
     (_seg_bad_header, 3),
     (_seg_oversize, 2),
+    (_seg_boundary_length, 3),
+    (_seg_upper_hex_length, 2),
     (_seg_lying_length, 2),
     (_seg_split_code_point, 2),
     (_seg_deep, 1),
@@ -458,6 +502,21 @@ _REGRESSIONS: tuple[tuple[str, str, list[str], bool], ...] = (
         "stream arrives at once (the raise throws away the events built so "
         "far). Same bytes, same error, different delivery.",
         ["ab" + DLE + STX + "0000000c:" + '{"k"', ":1}xxxxx"],
+        True,
+    ),
+    (
+        "CCF-REG-0005",
+        "Found by the C# port replaying this corpus. A length header with the "
+        "high bit set is an unsigned wire value; a port that accumulates it "
+        "into a signed 32-bit integer wraps negative, its payload-size guard "
+        "then never fires, and the negative length reaches an index or a slice "
+        "— C# threw IndexOutOfRangeException where the reference reports "
+        "'control payload too large'. Thirteen bytes from a peer, and the "
+        "exception type is one no caller catches. The corpus missed it because "
+        "every high-bit header it generated was followed by a separator other "
+        "than ':', so the header was rejected as malformed before its length "
+        "was ever parsed: a length is only load-bearing when ':' follows it.",
+        [DLE + STX + "80000000:" + '{"k":1}'],
         True,
     ),
 )
