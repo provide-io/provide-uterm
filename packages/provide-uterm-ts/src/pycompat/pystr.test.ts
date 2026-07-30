@@ -16,7 +16,7 @@ interface StrGolden {
 const golden = loadGolden<StrGolden>("pystrvalue_golden.json");
 
 /** The corpus's stand-in for a value JSON cannot carry. */
-function valueOf(record: { value: unknown }): unknown {
+function recordedValue(record: { value: unknown }): unknown {
   const named: Record<string, number> = {
     "<nan>": Number.NaN,
     "<inf>": Number.POSITIVE_INFINITY,
@@ -27,7 +27,7 @@ function valueOf(record: { value: unknown }): unknown {
 
 describe("a value as the reference writes it", () => {
   it.each(golden.values)("$name", (record) => {
-    const value = valueOf(record);
+    const value = recordedValue(record);
     // A whole number is the one thing that cannot come back exactly: this
     // runtime has a single numeric type, so `1.0` and `1` are one value.
     // Where the reference has an int spelling for the same value, that is

@@ -198,7 +198,7 @@ describe("verifying a chain", () => {
   it("refuses a record missing any field it needs", () => {
     for (const field of ["seq", "ts", "action", "prev_hash", "record_hash", "detail"]) {
       const records = copyOf(golden.chain);
-      // biome-ignore lint/performance/noDelete: the absence is the test
+      // Deleting the field is the test: a record missing one must be refused.
       delete (records[1] as AuditRecord)[field];
       expect(verifyRecords(records).reason).toBe("malformed record");
     }

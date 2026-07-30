@@ -59,7 +59,11 @@ export function TerminalSession({ session, title }: TerminalSessionProps): JSX.E
         </p>
       ) : null}
 
-      <pre className="uterm-session__screen" aria-label="terminal output" data-testid="screen">
+      {/* role="log" rather than a bare <pre>: a <pre> has no ARIA role, and a
+          generic role does not support aria-label — assistive tech dropped the
+          label entirely. "log" is also the right semantics for output that is
+          appended to over time. */}
+      <pre className="uterm-session__screen" role="log" aria-label="terminal output" data-testid="screen">
         {state.screen}
       </pre>
 
