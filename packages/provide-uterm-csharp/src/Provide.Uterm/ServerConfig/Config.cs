@@ -242,7 +242,7 @@ public sealed class UtermServerConfig
 
     /// <summary>
     /// Refuses any rate that would not behave as the operator wrote it — the
-    /// port of <c>config_schema._validate_rest_rate_limit</c>.
+    /// port of <c>config_schema._validate_rate_limit</c>.
     ///
     /// A rate limit is trusted once configured, so every value that cannot be
     /// honoured verbatim is refused rather than reinterpreted.

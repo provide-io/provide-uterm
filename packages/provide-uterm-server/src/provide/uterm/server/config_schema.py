@@ -540,10 +540,27 @@ class UtermServerConfig(ServerBaseModel):
             raise ValueError(f"max_workers must be >= 1, got: {value}")
         return value
 
-    @field_validator("rest_acquire_rate_limit_per_sec", "rest_send_rate_limit_per_sec")
+    @field_validator(
+        "rest_acquire_rate_limit_per_sec",
+        "rest_send_rate_limit_per_sec",
+        # The browser ceiling shares this validator because it shares the
+        # bucket: same TokenBucket, same burst-equals-rate rule, so the same
+        # floor follows. It is in fact the more dangerous of the three —
+        # `RateLimiter.__init__` clamps the REST rates, but the browser rate
+        # reaches `TokenBucket` unclamped from `websockets_impl`, so a
+        # configured 0 denied every browser message for the life of the
+        # process.
+        "browser_rate_limit_per_sec",
+    )
     @classmethod
-    def _validate_rest_rate_limit(cls, value: float, info: ValidationInfo) -> float:
+    def _validate_rate_limit(cls, value: float, info: ValidationInfo) -> float:
         """Refuse any rate that would not behave as the operator wrote it.
+
+        Guards all three configured ceilings — the two REST hijack budgets and
+        the browser one. They share a validator because they share a
+        :class:`~provide.uterm.server.bridge.ratelimit.TokenBucket`, so the same
+        burst rule and therefore the same floor applies to each.
+
 
         A rate limit is trusted once configured, so every value that
         cannot be honoured verbatim is refused rather than reinterpreted.
@@ -555,7 +572,7 @@ class UtermServerConfig(ServerBaseModel):
 
         **Below :data:`MIN_RATE_PER_SEC`.**  ``0`` is ambiguous — read as
         "unlimited" it disables the limit, read as "refuse everything" it
-        bricks the REST hijack API, and nothing in the file says which the
+        bricks the surface it guards, and nothing in the file says which the
         operator meant.  The whole band under the floor is refused for the
         *second* of those reasons rather than for ambiguity: a token
         bucket's burst is one second of its rate, so a sub-1/s bucket

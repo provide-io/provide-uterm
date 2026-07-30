@@ -22,7 +22,7 @@ namespace Provide.Uterm.Tests;
 /// Burst is one second of the same rate, and each ceiling is applied twice —
 /// globally and per calling client. The reference is
 /// <c>config_schema.UtermServerConfig.rest_*_rate_limit_per_sec</c> plus its
-/// <c>_validate_rest_rate_limit</c> field validator.
+/// <c>_validate_rate_limit</c> field validator.
 ///
 /// The refusals are the point of the file. A rate limit is trusted once
 /// configured, so every value that cannot be honoured verbatim is refused
