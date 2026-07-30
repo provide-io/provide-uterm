@@ -104,10 +104,7 @@ function joined(...parts: readonly Uint8Array[]): Uint8Array {
  * "nobody said who may send them".
  */
 function allowed(options: RfbFilterOptions): boolean {
-  return (
-    options.canInject !== undefined &&
-    options.canInject(options.sessionId, options.leaseId, options.principalId, options.principalRole)
-  );
+  return options.canInject?.(options.sessionId, options.leaseId, options.principalId, options.principalRole) ?? false;
 }
 
 /**

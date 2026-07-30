@@ -124,7 +124,7 @@ export interface ClientFilter {
  * would make attaching a filter to say one thing stop every broadcast.
  */
 export function filterMatches(filter: ClientFilter, meta: ClientMetadata): boolean {
-  if (filter.excludeTags !== undefined && filter.excludeTags.some((tag) => meta.tags.has(tag))) {
+  if (filter.excludeTags?.some((tag) => meta.tags.has(tag))) {
     return false;
   }
   if (

@@ -80,7 +80,7 @@ export class TunnelClient {
 
   /** Whether there is a connection to send on. */
   get connected(): boolean {
-    return this.#socket !== undefined && this.#socket.isOpen();
+    return this.#socket?.isOpen() ?? false;
   }
 
   /**

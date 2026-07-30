@@ -121,7 +121,7 @@ function quote(value: string): string {
     .replaceAll("\n", "\\n")
     .replaceAll("\r", "\\r")
     .replaceAll("\t", "\\t")
-    // biome-ignore lint/suspicious/noControlCharactersInRegex: naming a control byte is the point
+    // Control bytes are named literally here: rendering them visibly is the point.
     .replaceAll(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, (character) => {
       return `\\x${character.charCodeAt(0).toString(16).padStart(2, "0")}`;
     });

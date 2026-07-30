@@ -204,7 +204,7 @@ describe("a server somebody connects to", () => {
 
   it("hands the connection over once it has said hello", async () => {
     await withServer({}, async (running, seen) => {
-      const { socket, received } = await client(running.port);
+      const { socket } = await client(running.port);
       expect(await until(() => seen.length === 1)).toBe(true);
       socket.destroy();
     });
@@ -225,7 +225,7 @@ describe("a server somebody connects to", () => {
       },
     });
     try {
-      const { socket, received } = await client(running.port);
+      const { socket } = await client(running.port);
       expect(await until(() => order.includes("handled"))).toBe(true);
       socket.destroy();
       expect(order).toEqual(["paused", "handled"]);
@@ -246,7 +246,7 @@ describe("a server somebody connects to", () => {
       handler: async () => {},
     });
     try {
-      const { socket, received } = await client(running.port);
+      const { socket } = await client(running.port);
       expect(await until(() => waits.length === 1)).toBe(true);
       socket.destroy();
       expect(waits).toEqual([2.5]);
@@ -291,7 +291,7 @@ describe("a server somebody connects to", () => {
 
   it("closes the connection when the handler is done", async () => {
     await withServer({ handler: async () => {} }, async (running) => {
-      const { socket, received } = await client(running.port);
+      const { socket } = await client(running.port);
       expect(await until(() => isEnded(socket))).toBe(true);
       socket.destroy();
     });
@@ -307,7 +307,7 @@ describe("a server somebody connects to", () => {
         },
       },
       async (running) => {
-        const { socket, received } = await client(running.port);
+        const { socket } = await client(running.port);
         expect(await until(() => isEnded(socket))).toBe(true);
         socket.destroy();
       },
@@ -339,7 +339,7 @@ describe("a server somebody connects to", () => {
 
   it("stops counting a client that has gone", async () => {
     await withServer({}, async (running) => {
-      const { socket, received } = await client(running.port);
+      const { socket } = await client(running.port);
       expect(await until(() => running.connections === 1)).toBe(true);
       socket.destroy();
       expect(await until(() => running.connections === 0)).toBe(true);
@@ -367,7 +367,7 @@ describe("a server somebody connects to", () => {
         await new Promise<void>((resolve) => socket.on("close", () => resolve()));
       },
     });
-    const { socket, received } = await client(running.port);
+    const { socket } = await client(running.port);
     await until(() => running.connections === 1);
     await running.close();
     expect(await until(() => isEnded(socket))).toBe(true);

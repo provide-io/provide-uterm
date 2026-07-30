@@ -6,5 +6,5 @@
 /** The External Management Tier: the swarm manager and its boundary. */
 
 export * from "./auth.ts";
-export * from "./timeseries.ts";
 export * from "./supervision.ts";
+export * from "./timeseries.ts";
