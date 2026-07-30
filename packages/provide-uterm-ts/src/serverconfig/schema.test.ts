@@ -4,11 +4,13 @@
 //
 
 import { describe, expect, it } from "vitest";
+import { TokenBucket } from "../ratelimit/index.ts";
 import { loadGolden } from "../testing/golden.ts";
 import {
   type ConfigError,
   coerceSection,
   SECTION_FIELD_SPECS,
+  SERVER_CONFIG_DEFAULTS,
   TOP_LEVEL_FIELD_SPEC,
   validateSection,
   validateServerConfig,
@@ -239,12 +241,12 @@ describe("what a whole document accepts", () => {
   });
 });
 
-describe("the REST hijack ceilings", () => {
-  /** The one complaint a document made of a single bad key produces. */
-  function complaint(field: string, value: number): string | undefined {
-    return validateServerConfig({ [field]: value })[0]?.msg;
-  }
+/** The one complaint a document made of a single bad key produces. */
+function complaint(field: string, value: number): string | undefined {
+  return validateServerConfig({ [field]: value })[0]?.msg;
+}
 
+describe("the REST hijack ceilings", () => {
   // The corpus covers every value a JSON file can spell. These are the three
   // it cannot — `json.dumps` writes them as bare `Infinity`/`NaN`, which
   // `JSON.parse` refuses — so the corpus deliberately omits them and each port
@@ -285,5 +287,63 @@ describe("the REST hijack ceilings", () => {
     expect(complaint("rest_acquire_rate_limit_per_sec", -0)).toBe(
       "Value error, rest_acquire_rate_limit_per_sec must be >= 1.0, got: -0.0",
     );
+  });
+});
+
+describe("the browser ceiling", () => {
+  const FIELD = "browser_rate_limit_per_sec";
+
+  it("refuses a zero, which reads like 'no limit' and means 'never'", () => {
+    // The corpus has no browser refusal in it — the reference's change altered
+    // only the validation of a field that already existed, so nothing was
+    // re-recorded. These tests are the only thing pinning the behaviour here.
+    expect(complaint(FIELD, 0)).toBe(`Value error, ${FIELD} must be >= 1.0, got: 0.0`);
+  });
+
+  it("refuses a negative", () => {
+    expect(complaint(FIELD, -1)).toBe(`Value error, ${FIELD} must be >= 1.0, got: -1.0`);
+  });
+
+  it("refuses the whole band under the floor, not just zero", () => {
+    // `0.5` is not "one message every two seconds", it is "never" — see the
+    // bucket test below — so the whole `(0, 1)` band goes with the zero.
+    expect(complaint(FIELD, 0.5)).toBe(`Value error, ${FIELD} must be >= 1.0, got: 0.5`);
+    expect(complaint(FIELD, 0.99)).toBe(`Value error, ${FIELD} must be >= 1.0, got: 0.99`);
+  });
+
+  it("refuses a rate that is not finite, whichever way it is not", () => {
+    expect(complaint(FIELD, Number.POSITIVE_INFINITY)).toBe(
+      `Value error, ${FIELD} must be a finite number >= 1.0, got: inf`,
+    );
+    expect(complaint(FIELD, Number.NEGATIVE_INFINITY)).toBe(
+      `Value error, ${FIELD} must be a finite number >= 1.0, got: -inf`,
+    );
+    expect(complaint(FIELD, Number.NaN)).toBe(`Value error, ${FIELD} must be a finite number >= 1.0, got: nan`);
+  });
+
+  it("accepts the floor itself, and the default that ships", () => {
+    expect(validateServerConfig({ [FIELD]: 1.0 })).toEqual([]);
+    expect(SERVER_CONFIG_DEFAULTS[FIELD]).toBe(300);
+    expect(validateServerConfig({ [FIELD]: SERVER_CONFIG_DEFAULTS[FIELD] })).toEqual([]);
+  });
+
+  it("has the floor the bucket forces, measured rather than assumed", () => {
+    // Why 1.0 and not a smaller number: `TokenBucket` defaults its burst to
+    // one second of the rate, so a bucket under 1.0 can never hold the single
+    // whole token a message costs. It denies the first call and keeps denying
+    // however long the caller waits — the bucket is already full at its cap.
+    let clock = 0;
+    const bucket = (rate: number) => new TokenBucket(rate, { now: () => clock });
+    for (const rate of [0, 0.5, 0.99]) {
+      clock = 0;
+      const denied = bucket(rate);
+      expect(denied.allow()).toBe(false);
+      clock = 3600;
+      expect(denied.allow()).toBe(false);
+    }
+    for (const rate of [1.0, 300]) {
+      clock = 0;
+      expect(bucket(rate).allow()).toBe(true);
+    }
   });
 });

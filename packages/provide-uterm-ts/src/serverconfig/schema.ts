@@ -400,7 +400,12 @@ function pyFloat(value: number): string {
 }
 
 /**
- * Refuse any REST hijack rate that would not behave as the operator wrote it.
+ * Refuse any configured rate that would not behave as the operator wrote it.
+ *
+ * Port of `config_schema._validate_rate_limit`. Guards all three configured
+ * ceilings — the two REST hijack budgets and the browser one. They share a
+ * rule because they share a `TokenBucket`, so the same burst-equals-rate
+ * relationship and therefore the same floor applies to each.
  *
  * A rate limit is trusted once configured, so every value that cannot be
  * honoured verbatim is refused rather than reinterpreted.
@@ -411,8 +416,8 @@ function pyFloat(value: number): string {
  * rate anybody meant to write.
  *
  * **Below {@link MIN_RATE_PER_SEC}.** `0` is ambiguous — read as "unlimited"
- * it disables the limit, read as "refuse everything" it bricks the REST hijack
- * API, and nothing in the file says which the operator meant. The whole band
+ * it disables the limit, read as "refuse everything" it bricks the surface it
+ * guards, and nothing in the file says which the operator meant. The whole band
  * under the floor is refused for the *second* of those reasons rather than for
  * ambiguity: a token bucket's burst is one second of its rate, so a sub-1/s
  * bucket never holds a whole token and denies every call forever. `0.5` is not
@@ -428,7 +433,7 @@ function pyFloat(value: number): string {
  * longer the only thing catching a NaN, but it is the second line of defence.
  * Do not "simplify" it.
  */
-function restRateComplaint(field: string, value: unknown): string | undefined {
+function rateComplaint(field: string, value: unknown): string | undefined {
   const rate = value as number;
   const floor = pyFloat(MIN_RATE_PER_SEC);
   if (!Number.isFinite(rate)) {
@@ -442,11 +447,22 @@ function restRateComplaint(field: string, value: unknown): string | undefined {
 
 /** The top-level scalars' own rules. */
 const TOP_LEVEL_RULES: Readonly<Record<string, FieldRule>> = {
+  // The browser ceiling shares the rule because it shares the bucket: same
+  // burst-equals-rate relationship, so the same floor follows. In the reference
+  // it is the more dangerous of the three — `RateLimiter.__init__` clamps the
+  // REST rates, but the browser rate reaches `TokenBucket` unclamped from
+  // `websockets_impl`, so a configured 0 denied every browser message for the
+  // life of the process. This port cannot reach that state by a different
+  // route: it binds no WebSocket, so nothing consumes the value at all and no
+  // browser bucket is ever minted from it. The refusal is here for parity and
+  // for the day a browser transport lands — a value that already means "never"
+  // must not be sitting in a config file waiting to take effect.
+  browser_rate_limit_per_sec: (value) => rateComplaint("browser_rate_limit_per_sec", value),
   max_workers: (value) => notBelow(value, 1, `max_workers must be >= 1, got: ${value as number}`),
   // Refused at load rather than at the first request: a server that boots with
   // a nonsense limit and discovers it later is a server running unprotected.
-  rest_acquire_rate_limit_per_sec: (value) => restRateComplaint("rest_acquire_rate_limit_per_sec", value),
-  rest_send_rate_limit_per_sec: (value) => restRateComplaint("rest_send_rate_limit_per_sec", value),
+  rest_acquire_rate_limit_per_sec: (value) => rateComplaint("rest_acquire_rate_limit_per_sec", value),
+  rest_send_rate_limit_per_sec: (value) => rateComplaint("rest_send_rate_limit_per_sec", value),
 };
 
 /** The connector types every server has, whatever else is registered. */
