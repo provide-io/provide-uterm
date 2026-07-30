@@ -24,6 +24,7 @@ delivery test patches the httpx client + ``asyncio.sleep``. That matters twice:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import socket
 import time
@@ -40,9 +41,11 @@ from provide.uterm.server.webhooks import (
     WebhookManager,
     _address_allowed,
     _delivery_url_allowed,
+    _delivery_url_is_loopback_only,
     _literal_or_resolved_addresses,
     _resolve_host,
     _resolve_hostname_sync,
+    _tunnel_share_active,
     validate_webhook_pattern,
     validate_webhook_url,
 )
@@ -323,6 +326,28 @@ class TestAddressAllowed:
     def test_public_ips_allowed(self, ip: str) -> None:
         assert _address_allowed(ip) is True
 
+    @pytest.mark.parametrize("ip", ["100.64.0.0", "100.64.0.1", "100.127.255.255"])
+    def test_cgnat_denied(self, ip: str) -> None:
+        """Kills the dropped ``ip in _CGNAT_V4`` check.
+
+        RFC 6598 space is the one range in the refusal set that CPython does not
+        classify for us — ``ipaddress.ip_address("100.64.0.1").is_private`` is
+        ``False`` — so it is checked explicitly rather than inherited, and the
+        explicit check is exactly what a mutant can delete without any of the
+        ranges above noticing.
+        """
+        assert _address_allowed(ip) is False
+
+    @pytest.mark.parametrize("ip", ["100.63.255.255", "100.128.0.0"])
+    def test_cgnat_neighbours_allowed(self, ip: str) -> None:
+        """Pins the /10 netmask, killing a widened prefix.
+
+        Without these, ``100.64.0.0/10`` could be mutated to ``/8`` — swallowing
+        the whole of ``100.0.0.0/8`` — and every deny case above would still
+        pass. These two addresses sit immediately either side of the boundary.
+        """
+        assert _address_allowed(ip) is True
+
     @pytest.mark.parametrize(
         "ip",
         [
@@ -367,6 +392,43 @@ class TestLiteralOrResolvedAddresses:
 # ===========================================================================
 # _delivery_url_allowed — delivery-time SSRF guard (async, injected resolver)
 # ===========================================================================
+
+
+class TestDeliveryUrlIsLoopbackOnly:
+    """`_delivery_url_is_loopback_only` is a one-line wrapper around
+    `_delivery_url_allowed`, and every call site in this suite that reaches it
+    through `_refuse_loopback_while_tunnel_shared` patches it away with an
+    `AsyncMock` — so without a test that calls it directly and unpatched, its
+    own body (the `allow_loopback_destinations=False` argument, the `not`) has
+    no coverage at all and every one of its mutants reports `no tests`, which
+    the mutation gate cannot pass no matter how well the *caller* is tested.
+    """
+
+    async def test_loopback_destination_is_loopback_only(self) -> None:
+        assert await _delivery_url_is_loopback_only("http://127.0.0.1/x", lambda _h: (_PUBLIC_IP,)) is True
+
+    async def test_public_destination_is_not_loopback_only(self) -> None:
+        assert await _delivery_url_is_loopback_only("https://h.example", lambda _h: (_PUBLIC_IP,)) is False
+
+    async def test_hostname_resolving_to_loopback_is_loopback_only(self) -> None:
+        # Confirms the wrapper reuses the full parse/resolve/classify chain — a
+        # hostname the resolver answers with 127.0.0.1, not just a literal
+        # 127.0.0.1 URL — rather than a narrower private re-implementation.
+        # `_delivery_url_allowed` resolves "localhost" like any other hostname
+        # (the literal-string special case lives in `validate_webhook_url`, a
+        # different, registration-time function), so this is what actually
+        # exercises resolution rather than accidentally testing the wrong path.
+        assert await _delivery_url_is_loopback_only("http://h.example/x", lambda _h: ("127.0.0.1",)) is True
+
+    async def test_forwards_the_given_resolver_for_hostnames(self) -> None:
+        calls: list[str] = []
+
+        def resolver(host: str) -> tuple[str, ...]:
+            calls.append(host)
+            return (_PUBLIC_IP,)
+
+        await _delivery_url_is_loopback_only("https://h.example", resolver)
+        assert calls == ["h.example"]
 
 
 class TestDeliveryUrlAllowed:
@@ -452,6 +514,53 @@ class TestManagerConstruction:
     def test_validate_pattern_delegates(self) -> None:
         assert WebhookManager.validate_pattern(r"\$") == r"\$"
         assert WebhookManager.validate_pattern(None) is None
+
+    def test_tunnel_tokens_stored_verbatim_not_copied(self) -> None:
+        # Deliberately the live store reference, not a copy — a share created or
+        # revoked after construction must still be visible to the guard. `is`
+        # rather than `==` is the assertion that actually distinguishes them.
+        store = {"s1": {"expires_at": 1.0}}
+        assert WebhookManager(tunnel_tokens=store)._tunnel_tokens is store
+
+    def test_tunnel_tokens_defaults_to_none(self) -> None:
+        assert WebhookManager()._tunnel_tokens is None
+
+    def test_on_metric_stored(self) -> None:
+        sink = MagicMock(name="on_metric")
+        assert WebhookManager(on_metric=sink)._on_metric is sink
+
+
+class TestTunnelShareActive:
+    """`_tunnel_share_active` is a pure function; no mocking needed."""
+
+    def test_no_store_is_never_active(self) -> None:
+        assert _tunnel_share_active(None, "s1", now=0.0) is False
+
+    def test_unknown_session_is_never_active(self) -> None:
+        assert _tunnel_share_active({}, "s1", now=0.0) is False
+
+    def test_active_before_expiry(self) -> None:
+        assert _tunnel_share_active({"s1": {"expires_at": 100.0}}, "s1", now=50.0) is True
+
+    def test_inactive_after_expiry(self) -> None:
+        assert _tunnel_share_active({"s1": {"expires_at": 100.0}}, "s1", now=150.0) is False
+
+    def test_exact_expiry_instant_is_not_active(self) -> None:
+        # Pinned by conformance/EGRESS_GUARD.md §4: `now == expires_at` counts as
+        # expired here, the opposite of sweep_expired_tunnel_tokens' `now >
+        # expires_at`. A `<` weakened to `<=` would flip only this one instant.
+        assert _tunnel_share_active({"s1": {"expires_at": 100.0}}, "s1", now=100.0) is False
+
+    def test_missing_expiry_fails_closed(self) -> None:
+        assert _tunnel_share_active({"s1": {}}, "s1", now=0.0) is True
+
+    def test_non_numeric_expiry_fails_closed(self) -> None:
+        assert _tunnel_share_active({"s1": {"expires_at": "soon"}}, "s1", now=0.0) is True
+
+    def test_looks_up_the_given_session_only(self) -> None:
+        store = {"s1": {"expires_at": 100.0}, "s2": {"expires_at": 0.0}}
+        assert _tunnel_share_active(store, "s1", now=50.0) is True
+        assert _tunnel_share_active(store, "s2", now=50.0) is False
 
 
 class TestRegistryCrud:
@@ -688,6 +797,96 @@ def denv() -> Any:
         patch("httpx.AsyncClient", env.client_cls),
     ):
         yield env
+
+
+class TestRefuseLoopbackWhileTunnelShared:
+    """`_refuse_loopback_while_tunnel_shared` — the two collaborators it calls
+    (`_tunnel_share_active`, `_delivery_url_is_loopback_only`) are patched
+    directly rather than driven through real tunnel-token/DNS state, so every
+    branch of the guard itself is reachable and observable independent of them.
+    """
+
+    @staticmethod
+    @contextlib.contextmanager
+    def _patches(*, share_active: bool, loopback_only: bool):
+        # Both collaborators are yielded as their own mocks (not just entered
+        # and discarded): the first round of this suite patched them with plain
+        # `return_value=...`/`AsyncMock(return_value=...)` and asserted only the
+        # boolean outcome, so a mutant that scrambled *which* argument each
+        # collaborator was called with — `self._tunnel_tokens` swapped for
+        # `None`, `cfg.session_id` dropped, `cfg.url`/`self._resolver` swapped —
+        # was invisible to every test here and survived. Returning the mocks
+        # lets each test assert `assert_called_once_with(...)` on the exact
+        # arguments, closing that gap.
+        with (
+            patch("provide.uterm.server.webhooks._tunnel_share_active", return_value=share_active) as share_mock,
+            patch(
+                "provide.uterm.server.webhooks._delivery_url_is_loopback_only",
+                AsyncMock(return_value=loopback_only),
+            ) as loopback_mock,
+            patch("provide.uterm.server.webhooks.logger") as log,
+        ):
+            yield share_mock, loopback_mock, log
+
+    async def test_no_share_is_never_refused(self) -> None:
+        metric = MagicMock(name="on_metric")
+        mgr = _make_manager(tunnel_tokens={}, on_metric=metric)
+        cfg = _cfg()
+        with self._patches(share_active=False, loopback_only=True) as (share_mock, loopback_mock, _log):
+            assert await mgr._refuse_loopback_while_tunnel_shared(cfg) is False
+        share_mock.assert_called_once_with(mgr._tunnel_tokens, cfg.session_id, now=pytest.approx(time.time(), abs=5))
+        loopback_mock.assert_not_awaited()
+        metric.assert_not_called()
+
+    async def test_share_active_but_destination_not_loopback_only_is_not_refused(self) -> None:
+        metric = MagicMock(name="on_metric")
+        mgr = _make_manager(tunnel_tokens={}, on_metric=metric)
+        cfg = _cfg()
+        with self._patches(share_active=True, loopback_only=False) as (_share_mock, loopback_mock, _log):
+            assert await mgr._refuse_loopback_while_tunnel_shared(cfg) is False
+        loopback_mock.assert_awaited_once_with(cfg.url, mgr._resolver)
+        metric.assert_not_called()
+
+    async def test_share_active_and_loopback_only_is_refused_and_counted(self) -> None:
+        metric = MagicMock(name="on_metric")
+        mgr = _make_manager(tunnel_tokens={}, on_metric=metric)
+        with self._patches(share_active=True, loopback_only=True):
+            assert await mgr._refuse_loopback_while_tunnel_shared(_cfg()) is True
+        # The dedicated counter, not the generic one that feeds auto-unregister —
+        # a share can be revoked, so this refusal must not retire the webhook.
+        metric.assert_called_once_with("webhook_delivery_blocked_tunnel_total", 1)
+
+    async def test_refusal_logs_the_exact_share_reason_with_webhook_and_session_ids(self) -> None:
+        mgr = _make_manager(tunnel_tokens={})
+        cfg = _cfg(webhook_id="wh-x", session_id="sess-y")
+        with self._patches(share_active=True, loopback_only=True) as (_share_mock, _loopback_mock, log):
+            await mgr._refuse_loopback_while_tunnel_shared(cfg)
+        # The exact message, not a substring: an earlier version of this test
+        # checked only `"...tunnel_shared" in args.args[0]`, which a mutant that
+        # corrupted the *other* half of the (two-literal, implicitly
+        # concatenated) message satisfied without being caught.
+        log.warning.assert_called_once_with(
+            "webhook_delivery_blocked webhook_id=%s url=%s session_id=%s "
+            "reason=loopback_destination_while_tunnel_shared",
+            cfg.webhook_id,
+            cfg.url,
+            cfg.session_id,
+        )
+
+    async def test_no_metric_sink_does_not_raise(self) -> None:
+        mgr = _make_manager(tunnel_tokens={})
+        with self._patches(share_active=True, loopback_only=True):
+            assert await mgr._refuse_loopback_while_tunnel_shared(_cfg()) is True
+
+    async def test_refusal_does_not_touch_blocked_counts(self) -> None:
+        # A share retiring itself must not feed the SSRF-guard kill switch: only
+        # `_deliver`'s destination-safety branch may increment `_blocked_counts`.
+        mgr = _make_manager(tunnel_tokens={})
+        cfg = _cfg()
+        mgr._blocked_counts[cfg.webhook_id] = 2
+        with self._patches(share_active=True, loopback_only=True):
+            await mgr._refuse_loopback_while_tunnel_shared(cfg)
+        assert mgr._blocked_counts[cfg.webhook_id] == 2
 
 
 class TestDeliver:

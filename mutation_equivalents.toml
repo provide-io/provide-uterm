@@ -700,3 +700,41 @@ mutant = "provide.uterm.ws_bytes.x_ws_frame_to_channel_str__mutmut_8"
 reason = """\
 errors=\"strict\" -> \"STRICT\". Error handler names are case-normalized / latin-1 never errors. \
 """
+
+[[equivalent]]
+mutant = "provide.uterm.server.webhooks.x__address_allowed__mutmut_12"
+reason = """\
+Final return line: `ip.is_private or ip.is_loopback or ip.is_link_local or ...` mutated to \
+`ip.is_private or ip.is_loopback and ip.is_link_local or ...`. By this point in the function \
+ip.is_loopback is always False (an earlier `if ip.is_loopback: return ...` already handled that \
+case), so `is_loopback and is_link_local` collapses to False regardless of is_link_local — the \
+mutant drops the is_link_local check entirely. No input distinguishes it: on current CPython \
+every is_link_local address (169.254.0.0/16, fe80::/10) is ALSO is_private (verified directly: \
+ipaddress.ip_address("169.254.1.1").is_private is True, same for "fe80::1"), so is_private already \
+refuses everything is_link_local would have. Kept in the source for the reader ("this branch \
+mirrors `ip.is_reserved`'s own comment listing every category by name"), not because it changes \
+behavior — a future CPython that stops treating link-local as private would need the explicit \
+check back, which is why it stays rather than being deleted.\
+"""
+
+[[equivalent]]
+mutant = "provide.uterm.server.webhooks.x__delivery_url_is_loopback_only__mutmut_4"
+reason = """\
+`return not await _delivery_url_allowed(url, resolver, allow_loopback_destinations=False)` mutated \
+to pass `=None` instead of `=False`. Traced through every consumer of that value: `_address_allowed` \
+returns it verbatim only from `if ip.is_loopback: return allow_loopback_destinations` (None or False, \
+unchanged), which reaches `_delivery_url_allowed`'s `all(_address_allowed(...) for address in \
+addresses)` — `all()` uses truthiness, and None and False are both falsy — then this function's own \
+`not ...`, which is likewise truthiness-only. No comparison anywhere on this path is `is True` / \
+`is False`; every point of use treats None and False identically, so no input distinguishes them.\
+"""
+
+[[equivalent]]
+mutant = "provide.uterm.server.webhooks.x__delivery_url_is_loopback_only__mutmut_7"
+reason = """\
+The explicit `allow_loopback_destinations=False` keyword argument dropped from the call to \
+`_delivery_url_allowed(url, resolver, )`. `_delivery_url_allowed`'s own signature is \
+`allow_loopback_destinations: bool = False` — omitting the keyword falls back to the identical \
+default value. Passing `False` explicitly and letting it default to `False` are the same call; \
+no input can tell them apart.\
+"""

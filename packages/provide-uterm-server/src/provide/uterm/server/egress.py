@@ -12,7 +12,7 @@ import time
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
-from provide.uterm.server._net import _METADATA_IPS, _resolve_host
+from provide.uterm.server._net import _CGNAT_V4, _METADATA_IPS, _resolve_host
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -150,8 +150,19 @@ def _check_resolved_ip(
     IPv4 so a wrapped metadata/private address can't slip past the membership
     checks.  Cloud-metadata IPs are ALWAYS blocked (raising ``EgressBlockedError``
     with the *on_metadata* message); private / loopback / link-local / reserved /
-    multicast / unspecified are blocked only when *block_private* is True (raising
-    with the *on_private* message).
+    multicast / unspecified / RFC 6598 CGNAT are blocked only when *block_private*
+    is True (raising with the *on_private* message).
+
+    CGNAT (``100.64.0.0/10``) is named explicitly rather than inherited from
+    ``is_private``, which does not cover it — see the ``_CGNAT_V4`` comment in
+    ``_net.py``.  It is gated on *block_private* like the rest of the set it
+    joins, NOT made unconditional: reaching internal hosts is what a connector is
+    *for*, ``block_private`` is the multi-tenant posture that withdraws that, and
+    only the cloud-metadata addresses are refused on every posture.  Blocking
+    CGNAT unconditionally here would break every deployment whose terminals sit
+    behind a carrier NAT — a different policy change from the one
+    ``conformance/EGRESS_GUARD.md`` §1 asks for.  (The webhook guard's copy of
+    this check IS unconditional, because its whole deny list is.)
     """
     if isinstance(ip, ipaddress.IPv6Address):
         embedded = _decode_embedded_ipv4(ip)
@@ -160,7 +171,13 @@ def _check_resolved_ip(
     if ip in _METADATA_IPS:
         raise EgressBlockedError(on_metadata)
     if block_private and (
-        ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_unspecified or ip.is_reserved
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_unspecified
+        or ip.is_reserved
+        or ip in _CGNAT_V4
     ):
         raise EgressBlockedError(on_private)
 

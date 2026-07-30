@@ -20,6 +20,7 @@ from starlette.requests import HTTPConnection  # noqa: TC002
 from provide.telemetry import get_logger
 from provide.uterm.server.api_keys import ApiKeyStore
 from provide.uterm.server.app.auth import (
+    _is_loopback_host,
     _validate_auth_config,
     _validate_environment_profile,
     _validate_security_config,
@@ -363,9 +364,44 @@ def create_server_app(
     from provide.uterm.server.bridge.fanout import FanOutController, InMemoryFanOutStore
 
     setattr(hub, "fan_out_controller", FanOutController(hub=hub, store=InMemoryFanOutStore()))  # noqa: B010
+    # Effective loopback-destination permission = explicit opt-in OR "we are
+    # bound to loopback".
+    #
+    # Why the bind participates: the default bind is 127.0.0.1
+    # (``TerminalDefaults.SERVER_HOST``). With ``allow_loopback_destinations``
+    # defaulting to False, an out-of-the-box server listened *only* on loopback
+    # and simultaneously *refused* loopback webhook destinations. A single-box
+    # operator pointing a webhook at their own receiver got a 422 from a
+    # listener no remote caller could even reach — the refusal protected
+    # nothing and only cost UX. On a routable bind the calculus is different
+    # (a loopback destination there means "POST to whatever else is listening
+    # on this shared host", a genuine SSRF pivot), so there the key is still
+    # required.
+    #
+    # This is deliberately the same shape as the auth/security posture gates in
+    # ``app/auth.py`` — ``_is_loopback_host`` decides how permissive a default
+    # may be at ``require_jwt_in_production``, header mode, and
+    # ``security.mode='dev'``. Same question, same answer source.
+    #
+    # The schema is intentionally NOT changed: ``allow_loopback_destinations``
+    # stays ``bool = False`` and its *meaning* narrows to "ALSO allow loopback
+    # on a routable bind". The key's shape is drift-checked against the Go/C#/TS
+    # ports via ``configschema_golden.json``, so changing its ``kind`` would
+    # churn all three for no behavioural gain. An explicit ``false`` therefore
+    # cannot subtract the bind-derived permission — it is an opt-in, not an
+    # opt-out.
+    effective_allow_loopback_destinations = config.webhooks.allow_loopback_destinations or _is_loopback_host(
+        config.server.host
+    )
     webhook_manager = WebhookManager(
-        allow_loopback_destinations=config.webhooks.allow_loopback_destinations,
+        allow_loopback_destinations=effective_allow_loopback_destinations,
         on_metric=_inc_metric,
+        # Live reference (NOT a copy) to the tunnel-share token store, so each
+        # delivery can ask "is this session shared through a tunnel right now?".
+        # Sharing re-exposes a loopback-bound server through a public relay, at
+        # which point a loopback webhook destination stops being local-only —
+        # see ``WebhookManager._deliver``.
+        tunnel_tokens=tunnel_tokens,
     )
     # Annotation detector scans snapshot/send text for security-relevant patterns.
     # Imported lazily — annotation lives in the separate provide-uterm-annotation

@@ -68,6 +68,12 @@ def initial_metrics() -> dict[str, int]:
         "rest_step_rate_limited_total": 0,
         # Webhook delivery failure counters
         "webhook_delivery_blocked_total": 0,
+        # Loopback destination refused because the session is tunnel-shared
+        # right now. Separate from ``webhook_delivery_blocked_total`` on purpose:
+        # this one is transient (it clears when the share expires) and never
+        # auto-unregisters the webhook, so an operator seeing deliveries stop
+        # can tell "suppressed while shared" from "destination has gone bad".
+        "webhook_delivery_blocked_tunnel_total": 0,
         "webhook_auto_unregistered_total": 0,
         "webhook_delivery_failed_total": 0,
         "webhook_delivery_giving_up_total": 0,

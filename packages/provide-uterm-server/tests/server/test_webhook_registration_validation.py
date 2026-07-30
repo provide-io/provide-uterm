@@ -45,9 +45,15 @@ def client() -> TestClient:
     "url",
     [
         "ftp://example.com/hook",
-        "https://localhost/hook",
-        "https://127.0.0.1/hook",
-        "https://[::1]/hook",
+        # NOTE: the loopback destinations (localhost / 127.0.0.1 / ::1) are NOT
+        # listed here. This fixture binds 127.0.0.1, and the effective loopback
+        # permission is now ``allow_loopback_destinations or
+        # _is_loopback_host(server.host)`` — a loopback-bound server accepts
+        # loopback destinations because refusing them protected nothing (no
+        # remote caller can reach that listener at all). The bind-dependent
+        # loopback behaviour, on both loopback and routable binds, is covered by
+        # tests/server/test_webhook_loopback_bind_default.py. Every refusal
+        # below is bind-independent and must never be re-openable.
         "https://10.0.0.1/hook",
         "https://172.16.0.1/hook",
         "https://192.168.1.1/hook",
@@ -124,6 +130,9 @@ def test_register_webhook_rejects_dns_name_resolving_to_metadata_ip(client: Test
 
 
 def test_register_webhook_allows_loopback_when_explicitly_configured() -> None:
+    # This bind is loopback, so the permission would also be granted by the
+    # bind alone; the assertion that the *key* is load-bearing lives in
+    # test_webhook_loopback_bind_default.py (routable bind + key set).
     cfg = config_from_mapping(
         {
             "server": {"host": "127.0.0.1", "port": 8780},

@@ -16,6 +16,20 @@ Usage::
     # background delivery starts immediately
     await manager.shutdown()  # cancels all delivery tasks
 
+Two destination guards run, both fail-closed:
+
+  * ``validate_webhook_url`` at registration; and
+  * ``_delivery_url_allowed`` again at every delivery (re-resolving DNS, so a
+    rebind after registration is caught), followed by
+    ``_refuse_loopback_while_tunnel_shared``, which withdraws the loopback
+    permission for as long as the session has a live tunnel share. That order —
+    destination safety first, share second — is fixed by
+    ``conformance/EGRESS_GUARD.md`` §4; see ``_deliver``.
+
+Loopback is the only refusal any config can relax, and the effective loopback
+permission is computed by the app factory (config key OR loopback bind) — see
+``validate_webhook_url`` and ``app/factory_impl.py``.
+
 Mutation-enforced at killed==100 (see [tool.mutmut].source_paths). The bound
 suite is tests/server/test_webhooks_mutation_killing.py, which mocks ALL egress
 (socket.getaddrinfo + httpx + asyncio.sleep) so mutmut's forked workers never drive
@@ -34,7 +48,7 @@ import re
 import socket
 import time
 import uuid
-from collections.abc import Awaitable, Callable, Iterable, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
@@ -42,7 +56,7 @@ from urllib.parse import urlparse
 import httpx
 
 from provide.telemetry import get_logger
-from provide.uterm.server._net import _METADATA_IPS, _resolve_host
+from provide.uterm.server._net import _CGNAT_V4, _METADATA_IPS, _resolve_host
 from provide.uterm.server.tracing import inject_trace_context
 
 if TYPE_CHECKING:
@@ -102,6 +116,14 @@ def validate_webhook_url(url: str, *, allow_loopback_destinations: bool = False)
     returned address is checked against the deny list — this blocks DNS
     rebinding-style SSRF attempts where a name resolves to e.g. the cloud
     metadata IP. DNS failures are treated as "not allowed".
+
+    ``allow_loopback_destinations`` is the *effective* permission, not the raw
+    config key: the app factory ORs ``webhooks.allow_loopback_destinations``
+    with "the server is bound to loopback" before it reaches this module (see
+    ``app/factory_impl.py``). Loopback is the ONLY refusal this flag relaxes —
+    private, link-local, multicast, unspecified, reserved and cloud-metadata
+    destinations are refused unconditionally and there is deliberately no
+    config key that re-opens any of them.
     """
     try:
         parsed = urlparse(url)
@@ -184,12 +206,30 @@ class WebhookManager:
         resolver: Resolver | None = None,
         allow_loopback_destinations: bool = False,
         on_metric: _OnMetric = None,
+        tunnel_tokens: Mapping[str, Mapping[str, object]] | None = None,
     ) -> None:
+        """Build a webhook registry.
+
+        Args:
+            resolver: DNS resolver for delivery-time re-validation.
+            allow_loopback_destinations: The *effective* loopback permission
+                (config key OR loopback bind — computed by the app factory).
+            on_metric: Counter sink, ``callable(name, value)``.
+            tunnel_tokens: A **live reference** to the server's tunnel-share
+                token store (``app.state.uterm_tunnel_tokens``) — the same
+                object the tunnel routes mutate, deliberately not a copy, so
+                shares created/revoked after construction are visible. Used
+                only by the delivery-time share guard (see ``_deliver``).
+                ``None`` disables that guard, for embedders and unit tests that
+                have no tunnel state. Same injection idiom as
+                ``SessionRegistry(tunnel_tokens=...)``.
+        """
         self._webhooks: dict[str, WebhookConfig] = {}  # webhook_id → config
         self._tasks: dict[str, asyncio.Task[None]] = {}  # webhook_id → task
         self._resolver = resolver if resolver is not None else _resolve_host
         self._allow_loopback_destinations = bool(allow_loopback_destinations)
         self._on_metric = on_metric
+        self._tunnel_tokens = tunnel_tokens
         # Per-webhook count of consecutive deliveries blocked by the SSRF
         # guard. After ``_MAX_BLOCKED_DELIVERIES`` the webhook is auto-
         # unregistered to avoid burning CPU re-evaluating it forever.
@@ -307,8 +347,69 @@ class WebhookManager:
                     return
                 await self._deliver(cfg, item)
 
+    async def _refuse_loopback_while_tunnel_shared(self, cfg: WebhookConfig) -> bool:
+        """Refuse (and count) a loopback delivery while this session is shared.
+
+        A loopback destination is permitted at all only because "the server is
+        bound to loopback" was read as "only local callers exist" (see
+        ``validate_webhook_url``). An active tunnel share falsifies that: the
+        share relays this loopback-bound server to remote viewers through a
+        public relay, so a loopback webhook destination becomes a
+        reachable-from-outside SSRF pivot into whatever else happens to be
+        listening on 127.0.0.1. Shares are issued at runtime
+        (``POST /api/tunnels``), so this can only be decided per delivery — it
+        cannot be folded into the load-time default.
+
+        Refused regardless of the effective permission: an explicit
+        ``webhooks.allow_loopback_destinations = true`` is an operator's
+        judgement about a *non-shared* server, and must not survive the server
+        being shared.
+
+        Deliberately does NOT touch ``_blocked_counts``: a share retires itself
+        on expiry, so feeding its refusals into the ``_MAX_BLOCKED_DELIVERIES``
+        kill switch would let a few minutes of sharing silently delete a
+        perfectly healthy webhook. It gets its own counter for the same reason —
+        an operator needs to tell "suppressed while you are sharing" apart from
+        "this destination has gone bad".
+
+        Runs AFTER destination safety (see ``_deliver``), which is what makes the
+        exemption above safe: by the time this is reached the destination is
+        already known to be deliverable under the current configuration, so
+        exempting it from the kill switch cannot keep a permanently-dead webhook
+        alive.
+
+        Returns True when the delivery was refused (caller must stop).
+        """
+        if not _tunnel_share_active(self._tunnel_tokens, cfg.session_id, now=time.time()):
+            return False
+        if not await _delivery_url_is_loopback_only(cfg.url, self._resolver):
+            return False
+        self._on_metric and self._on_metric("webhook_delivery_blocked_tunnel_total", 1)
+        logger.warning(
+            "webhook_delivery_blocked webhook_id=%s url=%s session_id=%s "
+            "reason=loopback_destination_while_tunnel_shared",
+            cfg.webhook_id,
+            cfg.url,
+            cfg.session_id,
+        )
+        return True
+
     async def _deliver(self, cfg: WebhookConfig, event: dict[str, Any]) -> None:
-        """POST *event* to *cfg.url* with retries."""
+        """POST *event* to *cfg.url* with retries.
+
+        The two delivery guards run in a fixed order: destination safety FIRST,
+        the tunnel share SECOND (``conformance/EGRESS_GUARD.md`` §4, and matching
+        the Go and C# ports).
+
+        The orders differ in exactly one state — the configuration refuses
+        loopback, a share is live, and the destination is loopback-only. Such a
+        destination can never deliver under the current configuration, so it
+        belongs on the generic counter, which eventually retires the webhook via
+        ``_MAX_BLOCKED_DELIVERIES``. The share guard exists for destinations that
+        would otherwise be fine, and it is deliberately exempt from that kill
+        switch; booking a permanently-dead webhook there would keep it alive
+        forever, re-evaluated on every event for as long as the process runs.
+        """
         if not await _delivery_url_allowed(
             cfg.url,
             self._resolver,
@@ -339,8 +440,13 @@ class WebhookManager:
             return
         # Successful guard pass — reset the consecutive-block counter so a
         # webhook that's been intermittently safe-then-unsafe-then-safe isn't
-        # killed by a stale count.
+        # killed by a stale count. Reset here, before the share guard, because
+        # the count belongs to the guard that just passed; a share refusal is
+        # not evidence that the destination has gone bad.
         self._blocked_counts.pop(cfg.webhook_id, None)
+
+        if await self._refuse_loopback_while_tunnel_shared(cfg):
+            return
 
         payload = {
             "webhook_id": cfg.webhook_id,
@@ -389,6 +495,70 @@ class WebhookManager:
             cfg.webhook_id,
             cfg.url,
         )
+
+
+def _tunnel_share_active(
+    tunnel_tokens: Mapping[str, Mapping[str, object]] | None,
+    session_id: str,
+    *,
+    now: float,
+) -> bool:
+    """True when *session_id* currently has a live (unexpired) tunnel share.
+
+    The share store is keyed by session id — ``POST /api/tunnels`` creates a
+    session whose id *is* the tunnel id — so presence in the store is the whole
+    question, plus expiry.
+
+    Expiry is re-checked here rather than trusted to the sweeper: that sweep
+    (``sweep_expired_tunnel_tokens``) only ticks once a minute, so a lapsed
+    share lingers in the store for up to 60s. Reading presence alone would let
+    one short share keep the webhook guard shut long after the share stopped
+    exposing anything.
+
+    ``now == expires_at`` counts as **expired** here. That is deliberately the
+    opposite of the ``now > expires_at`` convention in
+    ``sweep_expired_tunnel_tokens`` / ``consume_tunnel_invite``, and it is fixed
+    by the cross-port contract (``conformance/EGRESS_GUARD.md`` §4) so all four
+    ports agree on the boundary. The instant is unobservable in practice (float
+    clock equality); parity is the point.
+
+    A record whose ``expires_at`` is missing or non-numeric cannot be *proven*
+    lapsed, so it is treated as live (fail closed — refuse the webhook). The
+    store is typed ``Mapping[str, object]``, so this narrowing is required in
+    any case; both writers (``create_tunnel``/``rotate_tunnel_tokens``) always
+    store a float.
+    """
+    if tunnel_tokens is None:
+        return False
+    state = tunnel_tokens.get(session_id)
+    if state is None:
+        return False
+    expires_at = state.get("expires_at")
+    if not isinstance(expires_at, (int, float)):
+        return True
+    return now < float(expires_at)
+
+
+async def _delivery_url_is_loopback_only(url: str, resolver: Resolver) -> bool:
+    """True when *url*'s destination is loopback.
+
+    Answered by asking the existing delivery guard with loopback refused: a
+    destination it turns down under that setting is a loopback one. Reusing the
+    guard rather than re-implementing parse -> resolve -> classify keeps exactly
+    one answer to "what does this URL actually reach" — including hostnames that
+    resolve to 127.0.0.1, and every embedded-IPv4 loopback form — and adds no
+    second classifier that could drift from the first.
+
+    Only ever called after destination safety has already passed (see
+    ``_deliver``), and that ordering is what makes the single question
+    sufficient. It used to ask twice, refusing then permitting loopback, to tell
+    "loopback and otherwise fine" apart from "unsafe for some other reason";
+    with safety checked first, "some other reason" can no longer be standing
+    here, so the second call could only ever answer True. It was removed rather
+    than kept as a defensive re-check: an always-true branch is untestable, and
+    an untestable branch is one nothing would notice going wrong.
+    """
+    return not await _delivery_url_allowed(url, resolver, allow_loopback_destinations=False)
 
 
 async def _delivery_url_allowed(
@@ -450,6 +620,16 @@ def _address_allowed(address: str, *, allow_loopback_destinations: bool = False)
     # carrying redundant, untestable-on-supported-Pythons code.
     ip = ipaddress.ip_address(address)
     if ip in _METADATA_IPS:
+        return False
+    # RFC 6598 carrier-grade NAT (100.64.0.0/10). Checked explicitly because the
+    # rest of this function derives its deny list from CPython's classifiers and
+    # CPython does not consider CGNAT private (see the _CGNAT_V4 comment in
+    # _net.py) — so without this line the whole /10 is silently permitted.
+    # Unconditional, deliberately placed above the loopback branch so it reads as
+    # what it is: a member of the always-refused set, not of the one conditional
+    # case. Loopback is the ONLY refusal a config key relaxes, and CGNAT is not
+    # loopback. (conformance/EGRESS_GUARD.md §1)
+    if ip in _CGNAT_V4:
         return False
     if ip.is_loopback:
         return allow_loopback_destinations
