@@ -102,6 +102,11 @@ public sealed class ConnectionManager
             _hub.Log(
                 "warning",
                 $"worker_hello_mode_blocked worker_id={workerId} — a hello may not lower a decided mode to open");
+            // Counted here rather than only at the WebSocket route, because the
+            // refusal is this method's decision. Counting it upstream left any
+            // other caller of this method logged but uncounted, so the two
+            // signals disagreed about how often it happens.
+            _hub.Metric("worker_hello_mode_blocked_total", 1);
             return false;
         }
 
