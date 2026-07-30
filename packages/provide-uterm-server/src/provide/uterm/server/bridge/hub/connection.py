@@ -221,9 +221,22 @@ class ConnectionManager:
             st = hub.registry.get(worker_id)
             if st is None:
                 return False
-            if mode == "open" and hub.is_hijacked(st):
+            # A hello may raise the mode, never lower it. Two reasons to refuse,
+            # and both are needed: a lease is actually held, or somebody has
+            # explicitly decided the mode through an authenticated route. The
+            # second is the window the lease check alone left open — an operator
+            # sets `hijack` and then acquires, and a hello landing between those
+            # two steps used to revert the mode, so the acquire was refused for
+            # being in open mode. The operator's only clue was a failure that
+            # looked like their own mistake.
+            #
+            # The decision flag is what makes this expressible at all:
+            # `input_mode` defaults to `hijack`, so refusing every lowering would
+            # refuse every worker that legitimately announces `open`.
+            would_lower = mode == "open" and st.input_mode == "hijack"
+            if would_lower and (st.input_mode_set_by_operator or hub.is_hijacked(st)):
                 logger.warning(
-                    "worker_hello_mode_blocked worker_id=%s — cannot switch to open while hijack active",
+                    "worker_hello_mode_blocked worker_id=%s — a hello may not lower a decided mode to open",
                     worker_id,
                 )
                 return False

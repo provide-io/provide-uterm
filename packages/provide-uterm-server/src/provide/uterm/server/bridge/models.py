@@ -145,6 +145,20 @@ class WorkerTermState:
     # ``HijackLeaseManager.try_acquire_rest``.
     hijack_pending: str | None = None
     input_mode: InputMode = "hijack"
+    # Whether an authenticated caller has explicitly decided this session's
+    # input mode, as opposed to it merely holding the default above.
+    #
+    # This exists to tell two claims apart. A `worker_hello` announces what the
+    # worker process booted with; `set_input_mode` is a decision made through an
+    # authenticated route by somebody holding `session.control.mode`. Without
+    # the distinction the hub cannot refuse a hello that lowers `hijack` to
+    # `open`, because `input_mode` defaults to `hijack` and refusing every
+    # lowering would refuse every worker that legitimately announces `open`.
+    #
+    # It lives on the worker state rather than on the connection deliberately:
+    # registry state outlives a worker socket, so a decision is not undone by a
+    # reconnect. Internal only — nothing serialises it onto the wire.
+    input_mode_set_by_operator: bool = False
     last_snapshot: dict[str, Any] | None = None
     events: deque[dict[str, Any]] = field(default_factory=lambda: deque(maxlen=2000))
     event_seq: int = 0
