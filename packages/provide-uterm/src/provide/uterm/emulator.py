@@ -47,19 +47,40 @@ def _tolerant_of_surplus_params(method: Any) -> Any:
     altogether, is what keeps the sequence doing its job: ``ESC[3;9B`` still
     moves down three lines, and ``ESC[2;5H`` still reaches row two column five.
     """
-    # A handler declaring ``*args`` cannot overflow, so wrapping it is not merely
-    # unnecessary — it is destructive. ``select_graphic_rendition(self, *attrs)``
-    # has a ``co_argcount`` of one, so the limit below would compute to zero and
-    # every attribute would be truncated away: each SGR sequence would become a
-    # plain reset and all colour would silently vanish from the rendered screen.
-    # The recorded emulator corpus caught exactly that.
-    if method.__code__.co_flags & _CO_VARARGS:
-        return method
+    # A handler declaring ``*args`` cannot overflow on *count*, so it is never
+    # truncated — and truncating it would be destructive, not merely useless.
+    # ``select_graphic_rendition(self, *attrs)`` has a ``co_argcount`` of one, so
+    # the limit below computes to zero: wrapping it truncated away every
+    # attribute, turning each SGR sequence into a plain reset and silently
+    # draining all colour from the rendered screen. The recorded emulator corpus
+    # caught exactly that. Such a handler is still guarded against *raising*,
+    # which is a separate failure from arity.
+    varargs = bool(method.__code__.co_flags & _CO_VARARGS)
+    limit = None if varargs else method.__code__.co_argcount - 1  # minus `self`
 
-    limit = method.__code__.co_argcount - 1  # minus `self`
-
-    def tolerant(self: Any, *params: Any) -> Any:
-        return method(self, *params[:limit])
+    def tolerant(self: Any, *params: Any, **options: Any) -> Any:
+        # ``**options`` is not decoration: pyte dispatches a private-mode
+        # sequence as ``handler(*params, private=True)``, so a wrapper taking
+        # positional arguments only turns ``ESC[?25h`` — hide the cursor, which
+        # any full-screen program sends — into a TypeError. The wrapper would
+        # have introduced a crash of exactly the kind it exists to prevent.
+        try:
+            if limit is None:
+                return method(self, *params, **options)
+            return method(self, *params[:limit], **options)
+        except Exception:
+            # A handler that raises is treated as a sequence this terminal does
+            # not implement, which is what a real terminal does with one. pyte
+            # reaches here in at least two ways beyond arity: an erase handler
+            # selects its interval by parameter value and leaves the local
+            # unbound when the value is outside the set it implements, so
+            # ``ESC[3K`` — four bytes — raised ``UnboundLocalError``.
+            #
+            # Swallowing is bounded to pyte's own dispatch, on input that is
+            # untrusted by definition: terminal output is whatever the session
+            # runs. The alternative is letting it reach a read loop that catches
+            # only cancellation and connection errors, which killed the task.
+            return None
 
     tolerant.__name__ = method.__name__
     tolerant.__qualname__ = method.__qualname__
@@ -106,6 +127,9 @@ for _name in (
     _inherited = getattr(pyte.Screen, _name, None)
     if _inherited is not None and getattr(_inherited, "__code__", None) is not None:
         setattr(_TolerantScreen, _name, _tolerant_of_surplus_params(_inherited))
+    # A name pyte does not define is not an error: the list is written against a
+    # dispatch table that a version bump may reshape, and a missing handler
+    # simply has nothing to guard.
 del _name
 
 

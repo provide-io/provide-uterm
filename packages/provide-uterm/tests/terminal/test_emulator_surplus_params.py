@@ -106,3 +106,75 @@ def test_a_stream_continues_past_a_surplus_parameter_sequence() -> None:
     screen = emulator.get_snapshot()["screen"]
     assert "before" in screen
     assert "after" in screen
+
+
+# ---------------------------------------------------------------------------
+# A parameter *value* the handler does not implement
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "sequence",
+    ["\x1b[4J", "\x1b[9J", "\x1b[99J", "\x1b[3K", "\x1b[4K", "\x1b[9K", "\x1b[99K"],
+)
+def test_an_unimplemented_parameter_value_does_not_raise(sequence: str) -> None:
+    """A second crash class, with a different mechanism from surplus count.
+
+    pyte's erase handlers select an interval by parameter value and leave the
+    local unbound when the value is outside the set they implement, so the
+    sequence raises ``UnboundLocalError`` rather than doing nothing. `ESC[3K` is
+    four bytes and reaches this.
+
+    A real terminal ignores a sequence it does not implement. Found by the ANSI
+    fuzz corpus generator on its second run, after the surplus-parameter fix let
+    it get further.
+    """
+    emulator = TerminalEmulator(cols=20, rows=6)
+
+    emulator.process(sequence.encode())
+
+    emulator.process(b"after")
+    assert "after" in emulator.get_snapshot()["screen"]
+
+
+def test_a_handler_that_cannot_act_leaves_the_screen_alone() -> None:
+    """Ignoring the sequence must not mean clearing the screen by accident.
+
+    The failure to guard against is a guard that swallows the error *after* the
+    handler has half-run: an erase that cleared some rows and then raised would
+    leave the screen in a state no terminal would produce.
+    """
+    emulator = TerminalEmulator(cols=20, rows=6)
+    emulator.process(b"keep me")
+    before = emulator.get_snapshot()["screen"]
+
+    emulator.process(b"\x1b[9K")
+
+    assert emulator.get_snapshot()["screen"] == before
+
+
+def test_the_erase_values_that_are_implemented_still_work() -> None:
+    """Tolerating the unimplemented values must not blunt the implemented ones."""
+    emulator = TerminalEmulator(cols=20, rows=6)
+    emulator.process(b"hello world")
+    emulator.process(b"\x1b[H\x1b[2K")  # home, then erase the whole line
+
+    assert emulator.get_snapshot()["screen"].splitlines()[0].strip() == ""
+
+
+def test_a_private_mode_sequence_survives_the_guard() -> None:
+    """pyte dispatches a private-mode sequence with a keyword argument.
+
+    ``csi_dispatch[char](*params, private=True)`` is how ``ESC[?25h`` arrives, so
+    a wrapper accepting positional arguments only turns hiding the cursor — which
+    every full-screen program does — into a ``TypeError``. The guard would have
+    introduced a crash of exactly the kind it exists to prevent. Found by the
+    fuzz generator on its third run.
+    """
+    emulator = TerminalEmulator(cols=20, rows=6)
+
+    for sequence in (b"\x1b[?25l", b"\x1b[?25h", b"\x1b[?1049h", b"\x1b[?7l"):
+        emulator.process(sequence)
+
+    emulator.process(b"after")
+    assert "after" in emulator.get_snapshot()["screen"]

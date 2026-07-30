@@ -26,6 +26,50 @@ inputs nobody thought of.
 | Generator | `conformance/fuzz/gen_control_channel_fuzz.py` |
 | Seed | **20260729** (`CORPUS_SEED`), committed with the corpus |
 | Cases | 523 |
+
+## A second corpus: the ANSI layer and the emulator
+
+`ansi_emulator_fuzz.json` (generator `gen_ansi_emulator_fuzz.py`, seed
+`20260730`, 435 cases) covers the other large parsing surface, under the same
+format rules as this document describes: seeded generation, base64 payloads,
+ASCII document, grep-able ids, per-family counts.
+
+Its families split into two kinds, and the difference decides how to read a
+failure:
+
+* `normalize`, `upgrade_256`, `upgrade_truecolor` are **pure string
+  transforms** over generated SGR text. Nothing but the port's own code decides
+  the answer, so a divergence is unambiguously a port bug.
+* `emulator` drives a real terminal emulator, and the reference's is built on
+  **pyte**. Parity here means reproducing pyte's semantics, which the ports
+  already claim for the nineteen hand-written cases in `emulator_golden.json`. A
+  divergence is a genuine finding, but it may be a disagreement about an obscure
+  corner of a third-party implementation rather than a defect anybody chose.
+  Read the case before assuming the port is wrong.
+
+Each `emulator` case records two drives, `chunked` and `single`, exactly as the
+decode family here does — and for the same reason, since an emulator holds a
+partial escape sequence across a feed. Only **one** generated case currently
+distinguishes them, which is worth knowing rather than treating as a gap: pyte
+buffers partial sequences properly, so where a chunk boundary falls rarely
+changes the screen. A port that buffered naively would fail that one case and
+nothing else would notice.
+
+The comparison is the snapshot a consumer actually reads — screen text, cursor,
+geometry, the two prompt-detection flags — plus `ansi_screen`, which is where an
+SGR disagreement surfaces even when the plain text agrees. Screen *hash* is
+deliberately not compared: it is a function of the text, so it would only ever
+restate a failure the text already reported.
+
+Geometry is recorded in the corpus (20×6) and asserted by the replay. A port
+replaying at a different size would disagree about wrapping for reasons that
+have nothing to do with its parser.
+
+**This corpus found three crash classes in the reference before it produced a
+single case**, each of which killed the transport read loop that feeds a
+session's own output — see `AEF-REG-*` and the emulator's own tests. That is the
+argument for generating inputs rather than choosing them.
+
 | Reference replay | `packages/provide-uterm/tests/terminal/test_control_channel_fuzz_corpus.py` |
 | Drift check | `ci/check_fuzz_corpus.sh` (runs in `make quality-gate`) |
 | Exploration | `conformance/fuzz/explore_control_channel_fuzz.py`, weekly via `.github/workflows/fuzz-explore.yml` |
