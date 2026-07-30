@@ -7,12 +7,12 @@
   ],
   "allow_over_limit": {
     "scripts/record_uterm_vnc_demo_video.py": 900,
-    "packages/provide-uterm-csharp/src/Provide.Uterm/Server/UtermServer.cs": 1562,
+    "packages/provide-uterm-csharp/src/Provide.Uterm/Server/UtermServer.cs": 1423,
     "packages/provide-uterm-csharp/src/Provide.Uterm/Vt/CharsetTables.cs": 1051,
     "packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/CoverageTo95Tests.cs": 1196,
     "packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/CoverageTo97Wave5Tests.cs": 783,
     "packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/HighCoverageBoostTests.cs": 1032,
-    "packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/ServerIntegrationControlPlaneRestTests.cs": 836,
+    "packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/ServerIntegrationControlPlaneRestTests.cs": 841,
     "packages/provide-uterm-go/embed/embed.go": 831
   }
 }
