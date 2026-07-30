@@ -124,12 +124,13 @@ for _name in (
     "reset_mode",
     "select_graphic_rendition",
 ):
-    _inherited = getattr(pyte.Screen, _name, None)
-    if _inherited is not None and getattr(_inherited, "__code__", None) is not None:
-        setattr(_TolerantScreen, _name, _tolerant_of_surplus_params(_inherited))
-    # A name pyte does not define is not an error: the list is written against a
-    # dispatch table that a version bump may reshape, and a missing handler
-    # simply has nothing to guard.
+    # Deliberately no "if it exists" guard. A pyte version that renamed or
+    # removed one of these would silently lose its crash protection, and the
+    # handler would go back to raising out of a read loop — the failure this
+    # whole shim exists to prevent, reintroduced quietly by an upgrade. An
+    # AttributeError at import names the handler instead, which is the moment to
+    # look at what else moved.
+    setattr(_TolerantScreen, _name, _tolerant_of_surplus_params(getattr(pyte.Screen, _name)))
 del _name
 
 
