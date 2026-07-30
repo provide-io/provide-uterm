@@ -39,7 +39,14 @@ _PYTEST_SUITES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
     ("provide-uterm (core, coverage gate)", ("--directory", "packages/provide-uterm"), ("tests",)),
     ("provide-uterm-annotation", (), ("packages/provide-uterm-annotation/tests/",)),
     ("provide-uterm-server", (), ("packages/provide-uterm-server/tests/",)),
-    ("provide-uterm-client", (), ("packages/provide-uterm-client/tests/",)),
+    # `-m "not go_interop"` mirrors what CI's client-quality job does
+    # (.github/workflows/ci.yml). The go_interop test builds and runs a real Go
+    # `uterm server` binary, so CI gives it a job of its own where the Go
+    # toolchain is set up; running it here made a clean local tree look broken —
+    # an untracked `go.work` naming an absent sibling module fails `go build`
+    # before the test can start, and the runner stops at the first failure, so
+    # every suite after this one silently never ran.
+    ("provide-uterm-client", (), ("packages/provide-uterm-client/tests/", "-m", "not go_interop")),
     (
         "provide-uterm-platform/manager",
         (),
