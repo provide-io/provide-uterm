@@ -29,6 +29,7 @@ internal sealed class ResumeTokenStore
 
     private readonly object _gate = new();
     private readonly Dictionary<string, ResumeTokenSession> _tokens = new(StringComparer.Ordinal);
+    private readonly SortedSet<ResumeTokenSession> _expiryIndex = new(ExpiryComparer.Instance);
     private readonly IClock _clock;
     private readonly int _capacity;
     private readonly Func<string> _tokenGenerator;
@@ -48,6 +49,11 @@ internal sealed class ResumeTokenStore
         get { lock (_gate) return _tokens.Count; }
     }
 
+    internal int ExpiryIndexCount
+    {
+        get { lock (_gate) return _expiryIndex.Count; }
+    }
+
     public string Mint(string workerId, string role)
     {
         lock (_gate)
@@ -58,12 +64,14 @@ internal sealed class ResumeTokenStore
 
             string token;
             do token = _tokenGenerator(); while (_tokens.ContainsKey(token));
-            _tokens[token] = new ResumeTokenSession(
+            var session = new ResumeTokenSession(
                 token,
                 workerId,
                 role,
                 now,
                 now + LifetimeSeconds);
+            _tokens[token] = session;
+            _expiryIndex.Add(session);
             return token;
         }
     }
@@ -75,6 +83,7 @@ internal sealed class ResumeTokenStore
             var now = _clock.Monotonic();
             SweepExpired(now);
             if (!_tokens.Remove(token, out var session)) return null;
+            _expiryIndex.Remove(session);
             return session;
         }
     }
@@ -99,28 +108,46 @@ internal sealed class ResumeTokenStore
 
     public bool Revoke(string token)
     {
-        lock (_gate) return _tokens.Remove(token);
+        lock (_gate)
+        {
+            if (!_tokens.Remove(token, out var session)) return false;
+            _expiryIndex.Remove(session);
+            return true;
+        }
     }
 
     private void SweepExpired(double now)
     {
-        foreach (var token in _tokens
-                     .Where(pair => pair.Value.ExpiresAt <= now)
-                     .Select(pair => pair.Key)
-                     .ToArray())
+        while (_expiryIndex.Min is { } oldest && oldest.ExpiresAt <= now)
         {
-            _tokens.Remove(token);
+            _expiryIndex.Remove(oldest);
+            _tokens.Remove(oldest.Token);
         }
     }
 
     private void EvictOldestExpiry()
     {
-        var oldest = _tokens.Values
-            .OrderBy(session => session.ExpiresAt)
-            .ThenBy(session => session.CreatedAt)
-            .ThenBy(session => session.Token, StringComparer.Ordinal)
-            .First();
+        var oldest = _expiryIndex.Min!;
+        _expiryIndex.Remove(oldest);
         _tokens.Remove(oldest.Token);
+    }
+
+    private sealed class ExpiryComparer : IComparer<ResumeTokenSession>
+    {
+        public static ExpiryComparer Instance { get; } = new();
+
+        public int Compare(ResumeTokenSession? left, ResumeTokenSession? right)
+        {
+            if (ReferenceEquals(left, right)) return 0;
+            if (left is null) return -1;
+            if (right is null) return 1;
+            var byExpiry = left.ExpiresAt.CompareTo(right.ExpiresAt);
+            if (byExpiry != 0) return byExpiry;
+            var byCreation = left.CreatedAt.CompareTo(right.CreatedAt);
+            return byCreation != 0
+                ? byCreation
+                : StringComparer.Ordinal.Compare(left.Token, right.Token);
+        }
     }
 
     private static string GenerateToken() =>

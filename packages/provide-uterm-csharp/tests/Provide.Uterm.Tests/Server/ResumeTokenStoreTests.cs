@@ -81,6 +81,20 @@ public sealed class ResumeTokenStoreTests
         Assert.Equal(7, session.OwnershipVersion);
     }
 
+    [Fact]
+    public void ExpiryIndexTracksConsumeAndRevokeWithoutStaleEntries()
+    {
+        var store = Store(out _);
+        var consumed = store.Mint("w1", "viewer");
+        var revoked = store.Mint("w2", "viewer");
+        Assert.Equal(2, store.ExpiryIndexCount);
+
+        Assert.NotNull(store.Consume(consumed));
+        Assert.Equal(1, store.ExpiryIndexCount);
+        Assert.True(store.Revoke(revoked));
+        Assert.Equal(0, store.ExpiryIndexCount);
+    }
+
     private static ResumeTokenStore Store(out ManualClock clock)
     {
         clock = new ManualClock();
