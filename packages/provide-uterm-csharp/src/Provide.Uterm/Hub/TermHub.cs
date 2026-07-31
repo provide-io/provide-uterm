@@ -91,6 +91,9 @@ public sealed class TermHub : ILeaseHub
     /// <summary>Per-second ceiling for a browser's non-input control frames.</summary>
     public double BrowserControlRateLimitPerSec { get; }
 
+    /// <summary>Maximum payload bytes accepted for one complete inbound WebSocket message.</summary>
+    public int MaxWsMessageBytes { get; }
+
     internal int MaxEventDataChars { get; }
     internal int MaxWorkers { get; }
 
@@ -103,6 +106,7 @@ public sealed class TermHub : ILeaseHub
         Registry = new WorkerRegistry();
         MaxEventDataChars = Math.Max(256, config.MaxEventDataChars <= 0 ? 8192 : config.MaxEventDataChars);
         MaxWorkers = Math.Max(1, config.MaxWorkers <= 0 ? 10000 : config.MaxWorkers);
+        MaxWsMessageBytes = Math.Max(1024, config.MaxWsMessageBytes <= 0 ? 1_048_576 : config.MaxWsMessageBytes);
         WorkerToken = config.WorkerToken;
         _onLog = config.OnLog;
         // Floored the way the reference floors them (`core_impl`: max(0.1, ...)),

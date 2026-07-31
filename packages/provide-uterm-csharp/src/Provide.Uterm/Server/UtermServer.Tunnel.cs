@@ -392,19 +392,29 @@ public sealed partial class UtermServer
             },
             CancellationToken.None).ConfigureAwait(false);
 
-        var buffer = new byte[65536];
         try
         {
             while (ws.State == WebSocketState.Open)
             {
-                var result = await ws.ReceiveAsync(buffer, ctx.RequestAborted).ConfigureAwait(false);
-                if (result.MessageType == WebSocketMessageType.Close) break;
-                if (result.Count < 2) continue;
+                WebSocketMessage message;
+                try
+                {
+                    message = await WebSocketMessageReader.ReadAsync(
+                        ws, _deps.Hub.MaxWsMessageBytes, ctx.RequestAborted).ConfigureAwait(false);
+                }
+                catch (WebSocketMessageException ex)
+                {
+                    await ws.CloseAsync(ex.CloseStatus, ex.Message, CancellationToken.None).ConfigureAwait(false);
+                    break;
+                }
+
+                if (message.IsClose) break;
+                if (message.Payload.Length < 2) continue;
 
                 TunnelFrame frame;
                 try
                 {
-                    frame = TunnelCodec.DecodeFrame(buffer.AsSpan(0, result.Count));
+                    frame = TunnelCodec.DecodeFrame(message.Payload);
                 }
                 catch
                 {
