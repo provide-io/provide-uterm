@@ -170,6 +170,15 @@ def _run_cell(
     seen: dict[Pair, dict[str, Any]],
 ) -> Cell:
     """One client against one running server, judged against the scenario."""
+    missing = _missing_capabilities(scenario.requires, running.capabilities)
+    if missing:
+        return Cell(
+            scenario.id,
+            server.language,
+            client.language,
+            UNSUPPORTED,
+            detail=f"{server.language} server does not serve required capabilities: {', '.join(missing)}",
+        )
     try:
         result = mechanics.run_client(
             client,
@@ -192,6 +201,15 @@ def _judge(
     seen: dict[Pair, dict[str, Any]],
 ) -> Cell:
     """A cell's own verdict, before it is compared with anything."""
+    missing = _missing_capabilities(scenario.requires, result.get("capabilities", ()))
+    if missing:
+        return Cell(
+            scenario.id,
+            server,
+            client,
+            UNSUPPORTED,
+            detail=f"{client} client does not support required capabilities: {', '.join(missing)}",
+        )
     reported = result.get("status")
     if reported in {UNSUPPORTED, ERROR}:
         return Cell(scenario.id, server, client, str(reported), detail=result.get("error"))
@@ -204,6 +222,12 @@ def _judge(
     seen[(server, client)] = observations(result, scenario.volatile_by_step)
     failures = tuple(found for found in (check(one, watched) for one in scenario.expectations) if found is not None)
     return Cell(scenario.id, server, client, FAIL if failures else PASS, failures=failures)
+
+
+def _missing_capabilities(required: Sequence[str], offered: Iterable[str]) -> tuple[str, ...]:
+    """Required capabilities absent from one side of a live cell."""
+    available = frozenset(offered)
+    return tuple(capability for capability in required if capability not in available)
 
 
 def _with_agreement(cells: Sequence[Cell], seen: dict[Pair, dict[str, Any]]) -> list[Cell]:

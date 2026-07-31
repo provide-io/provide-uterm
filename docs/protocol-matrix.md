@@ -45,24 +45,34 @@ revoked, deleted, or still-dormant member is reported as failed and receives no
 input or observer notification.
 
 The shared configuration key is `fanout_allow_unknown_members`. It defaults to
-`false`. Setting it to `true` permits an operator to create a group containing
-dormant IDs, but it does not weaken send-time authorization.
+`false`. Setting it to `true` permits a global administrator to create a group
+containing dormant IDs, but it does not weaken send-time authorization.
+
+All five REST operations — create, list, delete, send, and grant — require an
+authenticated global administrator. Session-scoped admins are rejected before
+request parsing or group lookup.
 
 | Capability | Python FastAPI | Go | C# | TypeScript |
 |---|:---:|:---:|:---:|:---:|
 | Fan-out REST surface served | Y | Y | Y | N (route module only) |
+| Global admin required for create/list/delete/send/grant | Y | Y | Y | Y (unserved module) |
+| Browser-WS fan-out send served | Y | Y | N | N |
 | Reject unknown members by default | Y | Y | Y | Y (module) |
 | Explicit dormant-member opt-in | Y | Y | Y | Y (module) |
 | Reauthorize every member on send | Y (REST + browser WS) | Y (REST + browser WS) | Y (REST) | Y (route/controller module) |
 | Reauthorize approval release | Y | N/A (no fan-out approval store) | N/A (no fan-out approval store) | Y (controller module) |
 | Group grant cannot bypass session authz | Y | Y | Y | Y (module) |
-| Configured governance behavior | Webhook deny/hold/release; errors fail closed | Deterministic 501; no input | Deterministic 501; no input | Policy-gate module; not served |
+| Configured governance behavior | Served webhook deny/hold/release; errors fail closed | Explicitly unsupported: deterministic 501, no input | Explicitly unsupported: deterministic 501, no input | Policy-gate module implemented; unserved |
 | Parallel/sequential collection and divergence | Y | Y | Y | Y (module) |
 | Live `fanout.rest.strict` server cell | Y | Y | Y | unsupported/unadvertised |
 
 `conformance/live/scenarios/010_fanout_strict_admission.json` executes the
 strict-default REST contract across the served Python, Go, and C# backends
 with clients from all four languages.
+The harness requires both the selected client result and the running server's
+announcement to contain `fanout.rest.strict`. A manually selected TypeScript
+server therefore produces an explicit unsupported/unserved cell before any
+client process is launched.
 The richer cases that require mid-scenario authorization mutation or policy
 infrastructure are backend-local executable tests indexed by
 `spec/fanout_security_coverage.json`; its validator rejects missing evidence

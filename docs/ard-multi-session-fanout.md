@@ -14,7 +14,8 @@ provide-uterm controls the input path for every managed session. A fan-out primi
 - Capture per-session output for a configurable window after each fanned-out input.
 - Detect and surface divergence: sessions whose output differs significantly from the majority.
 - Support dynamic fan-out groups (ad-hoc sets) and persistent named groups.
-- Gate fan-out on admin role and require explicit opt-in from session owners (or admin override).
+- Gate every fan-out operation on an authenticated global administrator and
+  reauthorize every target session at send time.
 - Emit a structured `FanOutEvent` to the audit trail for each command sent and each response captured.
 - Impose no additional latency on non-fan-out sessions.
 
@@ -136,18 +137,22 @@ POST /api/fanout/groups/{group_id}/send
     Body: {"data": "kubectl rollout status ...", "response_window_ms": 3000}
     → FanOutResult
 
-GET /api/fanout/groups/{group_id}/history?limit=20
-    → list[FanOutResult]
+POST /api/fanout/groups/{group_id}/grants
+    Body: {"grantee": "alice"}
+    → 204 No Content
 ```
 
-All endpoints require admin role. `created_by` is set from the resolved `Principal`.
+Create, list, delete, send, and grant all require an authenticated **global
+administrator**. A session-scoped admin is not a global administrator and is
+rejected before request parsing or group lookup. `created_by` is set from the
+resolved `Principal`.
 
 > **As-built (2026-06):** the shipped routes
 > (`server/bridge/fanout/_routes.py`) are `POST/GET /api/fanout/groups`,
 > `DELETE /api/fanout/groups/{group_id}`,
 > `POST /api/fanout/groups/{group_id}/send`, and
 > `POST /api/fanout/groups/{group_id}/grants` (grant a principal access to a
-> group). There is **no** `/history` route. `POST groups` returns
+> group). There is no `/history` route. `POST groups` returns
 > `{group_id, name, session_count}` and `GET groups` returns
 > `[{group_id, name, session_count, mode}]` — not full `FanOutGroup` objects.
 > The send body carries `quiesce_ms`/`max_response_ms`, not
@@ -155,7 +160,7 @@ All endpoints require admin role. `created_by` is set from the resolved `Princip
 
 ### Browser WS Protocol
 
-A controlling admin browser can initiate fan-out via WS (in addition to REST):
+A controlling global-admin browser can initiate fan-out via WS (in addition to REST):
 
 ```json
 // Browser → hub
@@ -174,7 +179,7 @@ A controlling admin browser can initiate fan-out via WS (in addition to REST):
 > frame is now built — `FanOutController._notify_fanout_observers` broadcasts
 > `{type: fanout_input, group_id, send_id, command, from_principal}` to each
 > target session's observers on every send (parallel + sequential + the
-> approved-release path), so observers can distinguish fan-out input from a
+> approved-release path), so viewers can distinguish fan-out input from a
 > local hijack.
 
 ### Sequential Mode
@@ -204,9 +209,14 @@ No changes to `TermHub.__init__` signature. The REST and WS routes check `hub.fa
 
 ## CF Backend Parity
 
-Fan-out in the CF backend operates at the KV + DO level: the Default worker fans the send request to each session's DO instance via HTTP fetch. Per-session DO instances receive the input via their existing `push_worker_input` path. Response aggregation is collected by polling `GET /hijack/{id}/snapshot` for each DO.
+The Cloudflare backend does **not** currently serve fan-out. A future port
+could operate at the KV + DO level: the Default worker would fan the send
+request to each session's DO instance via HTTP fetch, with response aggregation
+through each DO's snapshot surface. That is an unimplemented design, not an
+advertised capability.
 
-The `RuntimeProtocol` does not gain new methods for v1 CF fan-out — it is orchestrated at the Default worker layer.
+If implemented, it need not add methods to `RuntimeProtocol`; orchestration can
+remain at the Default worker layer.
 
 ---
 
@@ -219,23 +229,26 @@ Two new MCP tools:
 
 This enables AI agents (Claude via MCP) to coordinate fleet-wide terminal operations with full result aggregation — a capability not available in any current MCP terminal tool.
 
+The tools call the server REST surface and do not weaken its boundary:
+creating a group and sending input both require an authenticated global
+administrator at the server, regardless of any client-side tool visibility.
+
 ---
 
 ## Security Considerations
 
-- Fan-out requires admin role. There is no operator-level fan-out.
+- Every fan-out operation — create, list, delete, send, and grant — requires an
+  authenticated global administrator. Session-scoped admins are rejected.
 - `created_by` is recorded on every group and every send operation and is non-spoofable (set from `Principal`, not from request body).
 - Sessions in a group that do not have a connected worker are reported as `failed` but do not block the fan-out to other sessions.
-- The `fanout_input` broadcast to observer browsers includes `from_principal` so operators watching a session can see that input came from a fan-out operation, not from a local hijack.
+- The `fanout_input` broadcast to observer browsers includes `from_principal` so viewers can see that input came from a fan-out operation, not from a local hijack.
 - Groups may not contain sessions to which the creating principal does not have `can_read_session` access. This is enforced at group creation time by checking `authz.can_read_session(principal, session_def)` for each `worker_id`.
 - Maximum group size is configurable (default 50 sessions) to prevent inadvertent fleet-wide destructive commands.
 
-> **As-built (2026-06):** the role split diverged. In the MCP authz policy
-> (`provide-uterm-client/.../ai/policy.py`), `fanout_group_create` is an
-> **operator**-level tool while `fanout_send` is admin — so operators *can*
-> create groups; only broadcasting input is admin-gated. The non-spoofable
-> `created_by` and configurable max group size shipped as described.
-> **Update (2026-07-31):** the per-worker `can_read_session` check is enforced
+> **As-built (2026-07-31):** all five REST operations enforce the global-admin
+> boundary before parsing or group lookup; browser-WS send and approval release
+> enforce the same boundary. The non-spoofable `created_by` and configurable
+> max group size shipped as described. The per-worker `can_read_session` check is enforced
 > at group creation and again on every send and approval release. Unknown IDs
 > are rejected by default; deployments that require create-then-connect must
 > explicitly set `fanout_allow_unknown_members = true`. That option affects
@@ -252,7 +265,8 @@ This enables AI agents (Claude via MCP) to coordinate fleet-wide terminal operat
 - `test_fanout_partial_failure.py` — 2 of 5 workers not connected; `failed_sessions` populated, others succeed.
 - `test_fanout_sequential_stop_on_error.py` — sequential mode halts after first session output matches error pattern.
 - `test_fanout_divergence_detection.py` — sessions with differing output are flagged as divergent.
-- `test_fanout_authz.py` — operator cannot create groups; groups may not include sessions the principal cannot read.
+- `test_fanout_authz.py` — non-global-admin principals cannot create groups;
+  groups may not include sessions the principal cannot read.
 - `test_fanout_mcp.py` — `fanout_send` MCP tool returns structured results consumable by an AI agent.
 
 ---
