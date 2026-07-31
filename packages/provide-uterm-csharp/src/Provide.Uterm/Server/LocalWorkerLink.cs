@@ -65,7 +65,8 @@ public sealed class LocalWorkerLink : IWorkerWs
     /// </summary>
     public async Task<bool> AttachAsync(string inputMode, CancellationToken cancellationToken = default)
     {
-        if (!_hub.Conn.RegisterWorker(_workerId, this))
+        if (!await _hub.Conn.RegisterWorkerAsync(_workerId, this, cancellationToken)
+                .ConfigureAwait(false))
         {
             return false;
         }

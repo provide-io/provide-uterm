@@ -537,6 +537,171 @@ public sealed class ResumeLifecycleIntegrationTests
     }
 
     [Fact]
+    public async Task DashboardReleaseResumeBlocksSuccessorUntilSendCompletes()
+    {
+        var fixture = await BootAsync();
+        await using var server = fixture.Server;
+        using var browser = await ConnectAsync(fixture);
+        await DrainHandshakeAsync(browser);
+        await SendControlAsync(browser, "hijack_request");
+        await ReceiveUntilAsync(browser, frame => Type(frame) == "hijack_state" && Bool(frame, "hijacked"));
+        fixture.Worker.DelayNextResume();
+
+        await SendControlAsync(browser, "hijack_release");
+        await fixture.Worker.ResumeAttempted.WaitAsync(TimeSpan.FromSeconds(5));
+        (bool Ok, string Reason) successor;
+        try
+        {
+            successor = await fixture.Hub.Lease.TryAcquireRestAsync(
+                "resume-worker", "successor", 30, "after-dashboard-release", 10);
+        }
+        finally
+        {
+            fixture.Worker.ReleaseResume();
+        }
+
+        Assert.False(successor.Ok);
+        await ReceiveUntilAsync(browser, frame => Type(frame) == "hijack_state" && !Bool(frame, "hijacked"));
+        Assert.True((await fixture.Hub.Lease.TryAcquireRestAsync(
+            "resume-worker", "successor", 30, "after-dashboard-release", 11)).Ok);
+        Assert.Equal(["pause", "resume", "pause"], fixture.Worker.Actions);
+    }
+
+    [Fact]
+    public async Task RestReleaseResumeBlocksSuccessorUntilSendCompletes()
+    {
+        var fixture = await BootAsync();
+        await using var server = fixture.Server;
+        Assert.True((await fixture.Hub.Lease.TryAcquireRestAsync(
+            "resume-worker", "rest-owner", 30, "released-rest", 10)).Ok);
+        var successor = new object();
+        fixture.Hub.Conn.RegisterBrowser("resume-worker", successor, "admin");
+        fixture.Worker.DelayNextResume();
+        using var http = new HttpClient { BaseAddress = new Uri(server.BaseAddress!) };
+        http.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", "Bearer " + fixture.Token);
+
+        var release = http.PostAsync(
+            "/worker/resume-worker/hijack/released-rest/release", new StringContent(""));
+        await fixture.Worker.ResumeAttempted.WaitAsync(TimeSpan.FromSeconds(5));
+        var raced = fixture.Hub.Lease.TryAcquireWsAsync("resume-worker", successor);
+        try
+        {
+            await Task.Delay(50);
+            Assert.False(raced.IsCompleted);
+            Assert.Null(fixture.Hub.Registry.Get("resume-worker")!.HijackOwner);
+        }
+        finally
+        {
+            fixture.Worker.ReleaseResume();
+        }
+
+        (await release).EnsureSuccessStatusCode();
+        Assert.True((await raced).Ok);
+        Assert.Equal(["pause", "resume", "pause"], fixture.Worker.Actions);
+    }
+
+    [Fact]
+    public async Task ForceReleaseResumeBlocksSuccessorUntilSendCompletes()
+    {
+        var fixture = await BootAsync();
+        await using var server = fixture.Server;
+        Assert.True((await fixture.Hub.Lease.TryAcquireRestAsync(
+            "resume-worker", "rest-owner", 30, "forced-rest", 10)).Ok);
+        fixture.Worker.DelayNextResume();
+
+        var release = fixture.Hub.Conn.ForceReleaseHijackAsync("resume-worker");
+        await fixture.Worker.ResumeAttempted.WaitAsync(TimeSpan.FromSeconds(5));
+        (bool Ok, string Reason) raced;
+        try
+        {
+            raced = await fixture.Hub.Lease.TryAcquireRestAsync(
+                "resume-worker", "successor", 30, "after-force", 11);
+        }
+        finally
+        {
+            fixture.Worker.ReleaseResume();
+        }
+
+        Assert.False(raced.Ok);
+        Assert.True(await release);
+        Assert.True((await fixture.Hub.Lease.TryAcquireRestAsync(
+            "resume-worker", "successor", 30, "after-force", 12)).Ok);
+        Assert.Equal(["pause", "resume", "pause"], fixture.Worker.Actions);
+    }
+
+    [Fact]
+    public async Task WorkerReplacementFencesOldTransportAndClearsInheritedLease()
+    {
+        var clock = new ManualClock(100);
+        clock.SetMonotonic(10);
+        var hub = new TermHub(new TermHubConfig { Clock = clock });
+        var oldWorker = new RecordingWorker();
+        var replacement = new RecordingWorker();
+        Assert.True(hub.Conn.RegisterWorker("replace", oldWorker));
+        Assert.True((await hub.Lease.TryAcquireRestAsync(
+            "replace", "old-owner", 30, "old-lease", 10)).Ok);
+        oldWorker.DelayNextResume();
+
+        var replacing = Task.Run(() => hub.Conn.RegisterWorker("replace", replacement));
+        await oldWorker.ResumeAttempted.WaitAsync(TimeSpan.FromSeconds(5));
+        var state = hub.Registry.Get("replace")!;
+        Assert.Same(replacement, state.WorkerWs);
+        Assert.Null(state.HijackSession);
+        Assert.NotNull(state.HijackPending);
+        Assert.False((await hub.Lease.TryAcquireRestAsync(
+            "replace", "new-owner", 30, "new-lease", 11)).Ok);
+        oldWorker.ReleaseResume();
+
+        Assert.True(await replacing);
+        Assert.False(oldWorker.IsActive);
+        Assert.Null(state.HijackPending);
+        var identityAwareSnapshot = typeof(ConnectionManager).GetMethod(
+            "UpdateLastSnapshot",
+            [typeof(string), typeof(IWorkerWs), typeof(Dictionary<string, object?>)]);
+        Assert.NotNull(identityAwareSnapshot);
+        var accepted = (bool)identityAwareSnapshot!.Invoke(
+            hub.Conn,
+            ["replace", oldWorker, new Dictionary<string, object?> { ["screen"] = "stale" }])!;
+        Assert.False(accepted);
+        Assert.Null(state.LastSnapshot);
+        Assert.Equal(["pause", "resume"], oldWorker.Actions);
+        Assert.Empty(replacement.Actions);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ExpiredLeaseResumesWorkerWithoutAnotherAcquisition(bool restLease)
+    {
+        var clock = new GatedClock();
+        var hub = new TermHub(new TermHubConfig { Clock = clock, DashboardHijackLeaseS = 1 });
+        var worker = new RecordingWorker();
+        hub.Conn.RegisterWorker("expiring", worker);
+        if (restLease)
+        {
+            Assert.True((await hub.Lease.TryAcquireRestAsync(
+                "expiring", "rest-owner", 1, "expiring-rest", 0)).Ok);
+        }
+        else
+        {
+            var browser = new object();
+            hub.Conn.RegisterBrowser("expiring", browser, "admin");
+            Assert.True((await hub.Lease.TryAcquireWsAsync("expiring", browser)).Ok);
+        }
+
+        await clock.SleepAttempted.WaitAsync(TimeSpan.FromSeconds(2));
+        clock.SetMonotonic(2);
+        clock.ReleaseSleep();
+
+        await WaitUntilAsync(() => worker.Actions.Count == 2);
+        var state = hub.Registry.Get("expiring")!;
+        Assert.Null(state.HijackOwner);
+        Assert.Null(state.HijackSession);
+        Assert.Null(state.HijackPending);
+        Assert.Equal(["pause", "resume"], worker.Actions);
+    }
+
+    [Fact]
     public async Task ForceReleaseDuringDelayedResumeReclaimDoesNotAdvertiseOwnerAndCompensates()
     {
         var fixture = await BootAsync();
@@ -954,6 +1119,27 @@ public sealed class ResumeLifecycleIntegrationTests
         {
             SendCount++;
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class GatedClock : IClock
+    {
+        private readonly TaskCompletionSource _sleepAttempted =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _sleepRelease =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private double _monotonic;
+
+        public Task SleepAttempted => _sleepAttempted.Task;
+        public double Monotonic() => _monotonic;
+        public double Wall() => 100 + _monotonic;
+        public void SetMonotonic(double value) => _monotonic = value;
+        public void ReleaseSleep() => _sleepRelease.TrySetResult();
+
+        public async Task SleepAsync(double seconds, CancellationToken cancellationToken = default)
+        {
+            _sleepAttempted.TrySetResult();
+            await _sleepRelease.Task.WaitAsync(cancellationToken);
         }
     }
 }

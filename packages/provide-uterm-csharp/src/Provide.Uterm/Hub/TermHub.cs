@@ -164,6 +164,7 @@ public sealed class TermHub : ILeaseHub
     public bool HasValidRestLease(WorkerTermState st) => State.HasValidRestLease(st);
     public bool CanSendInput(WorkerTermState st, object ws) => Presence.CanSendInput(st, ws);
     public void Metric(string name, int value) => State.Metric(name, value);
+    public TimeSpan ResumeSendTimeout => BrowserSendTimeout;
 
     /// <summary>
     /// Report a hub decision to the injected sink — see
@@ -210,8 +211,11 @@ public sealed class TermHub : ILeaseHub
     public double? ExtendHijackLease(string workerId, string hijackId, string owner, int leaseS, double monoNow) =>
         Lease.ExtendLease(workerId, hijackId, owner, leaseS, monoNow);
 
-    public (bool Released, bool ShouldResume) ReleaseRestHijack(string workerId, string hijackId) =>
-        Lease.ReleaseRest(workerId, hijackId);
+    public Task<(bool Released, bool ShouldResume)> ReleaseRestHijackAsync(
+        string workerId,
+        string hijackId,
+        CancellationToken ct = default) =>
+        Lease.ReleaseRestAsync(workerId, hijackId, ct);
 
     public HijackSession? GetRestSession(string workerId, string hijackId)
     {
@@ -235,8 +239,10 @@ public sealed class TermHub : ILeaseHub
     public Dictionary<string, object?> AppendEventData(string workerId, string eventType, Dictionary<string, object?>? data) =>
         Router.AppendEvent(workerId, eventType, data);
 
-    public (bool BrowserExpired, bool RestExpired) CleanupExpiredHijack(string workerId) =>
-        Lease.CleanupExpired(workerId);
+    public Task<(bool BrowserExpired, bool RestExpired)> CleanupExpiredHijackAsync(
+        string workerId,
+        CancellationToken ct = default) =>
+        Lease.CleanupExpiredAsync(workerId, ct);
 
     public int Shutdown() => State.Shutdown();
 }

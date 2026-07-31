@@ -539,10 +539,10 @@ public class HighCoverageBoostTests
         Assert.NotNull(hub.Lease.TouchOwner("w1", 30));
         Assert.Null(hub.Lease.TouchOwner("missing"));
         Assert.True(hub.Lease.PrepareBrowserInput("w1", browser) || !hub.Lease.PrepareBrowserInput("w1", browser));
-        var (relWs, restActive) = hub.Lease.TryReleaseWs("w1", browser);
+        var (relWs, restActive) = await hub.Lease.TryReleaseWsAsync("w1", browser);
         Assert.True(relWs);
         _ = restActive;
-        Assert.False(hub.Lease.TryReleaseWs("w1", browser).Released);
+        Assert.False((await hub.Lease.TryReleaseWsAsync("w1", browser)).Released);
 
         // REST path
         hub.Router.SetInputMode("w1", InputModes.Hijack);
@@ -561,9 +561,9 @@ public class HighCoverageBoostTests
         Assert.False(okFail);
         Assert.Equal("no_worker", reasonFail);
 
-        hub.ReleaseRestHijack("w1", "h1");
-        hub.CleanupExpiredHijack("w1");
-        hub.CleanupExpiredHijack("nope");
+        await hub.ReleaseRestHijackAsync("w1", "h1");
+        await hub.CleanupExpiredHijackAsync("w1");
+        await hub.CleanupExpiredHijackAsync("nope");
     }
 
     // ---------- DeckMux Identity ----------

@@ -145,7 +145,7 @@ public class HubServicesTests
         Assert.True(acquired, why);
         Assert.False(hub.Router.SetInputMode("w1", InputModes.Open).Ok);
 
-        var (released, _) = hub.ReleaseRestHijack("w1", "h1");
+        var (released, _) = await hub.ReleaseRestHijackAsync("w1", "h1");
 
         Assert.True(released);
         Assert.True(hub.Router.SetInputMode("w1", InputModes.Open).Ok);
@@ -199,7 +199,7 @@ public class HubServicesTests
         Assert.Equal(true, st["hijacked"]);
 
         clock.SetMonotonic(1000);
-        var (browserExpired, restExpired) = hub.CleanupExpiredHijack("w1");
+        var (browserExpired, restExpired) = await hub.CleanupExpiredHijackAsync("w1");
         Assert.True(restExpired || browserExpired || hub.GetRestSession("w1", "h1") is null);
 
         Assert.Equal(0, hub.Shutdown());

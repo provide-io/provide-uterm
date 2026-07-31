@@ -356,15 +356,15 @@ public class CoverageTo97Wave5Tests
         Assert.Equal("no_worker", noWorker.Reason);
 
         hub.Conn.RegisterWorker("w4", bad);
-        // TryAcquireRest will fail on pause send for FailWs — still exercises send_failed via CheckValid + fail send
-        // Seed a lease manually after a successful acquire with good, then swap to bad.
+        // Replacing the worker invalidates the old worker's lease. The replacement
+        // starts unowned rather than inheriting a lease whose pause it never saw.
         hub.Conn.RegisterWorker("w5", good);
         var (ok5, _) = await hub.TryAcquireRestHijackAsync("w5", "op", 60, "h5", 20);
         Assert.True(ok5);
         // replace worker with failing one while lease valid
         hub.Conn.RegisterWorker("w5", bad);
         var fail = await hub.Conn.SendRestInputAsync("w5", "h5", "x");
-        Assert.Equal("send_failed", fail.Reason);
+        Assert.Equal("invalid_hijack", fail.Reason);
     }
 
     private sealed class EchoWs : IWorkerWs
