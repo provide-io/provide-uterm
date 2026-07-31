@@ -137,6 +137,9 @@ public sealed class WebhooksConfig
 /// <summary>Governance section — external policy/authz webhooks (Go GovernanceConfig subset).</summary>
 public sealed class GovernanceConfig
 {
+    public string? PolicyWebhookUrl { get; set; }
+    public string? PolicyWebhookSecret { get; set; }
+    public double PolicyWebhookTimeoutS { get; set; } = 2.0;
     public string? AuthzWebhookUrl { get; set; }
     public string? AuthzWebhookSecret { get; set; }
     public double AuthzWebhookTimeoutS { get; set; } = 2.0;
@@ -224,6 +227,8 @@ public sealed class UtermServerConfig
     public WebhooksConfig Webhooks { get; set; } = new();
     public List<SessionDefinition> Sessions { get; set; } = new();
     public List<GraphicalTargetDefinition> GraphicalTargets { get; set; } = new();
+    /// <summary>Permit dormant fan-out members at creation; send-time authz still applies.</summary>
+    public bool FanoutAllowUnknownMembers { get; set; }
     public int SessionIdleTimeoutS { get; set; }
     public int SessionRetentionS { get; set; }
 

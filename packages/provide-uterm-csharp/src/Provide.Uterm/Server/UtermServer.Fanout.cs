@@ -54,6 +54,44 @@ public sealed partial class UtermServer
                 : msg.ToDictionary(kv => kv.Key, kv => kv.Value);
             return _hub.Conn.BroadcastToBrowsersAsync(workerId, dict, ct);
         }
+
+        public IFanoutOutputSubscription SubscribeOutput(string workerId)
+        {
+            var (subscription, unsubscribe) = _hub.EventBus.Watch(workerId, ["term", "snapshot"]);
+            return new HubOutputSubscription(subscription, unsubscribe);
+        }
+
+        private sealed class HubOutputSubscription : IFanoutOutputSubscription
+        {
+            private readonly Hub.EventBus.Subscription _subscription;
+            private readonly Action _unsubscribe;
+
+            public HubOutputSubscription(Hub.EventBus.Subscription subscription, Action unsubscribe)
+            {
+                _subscription = subscription;
+                _unsubscribe = unsubscribe;
+            }
+
+            public async ValueTask<FanoutOutputEvent?> ReadAsync(CancellationToken ct)
+            {
+                var item = await _subscription.Channel.Reader.ReadAsync(ct).ConfigureAwait(false);
+                if (item is null) return null;
+                var type = item.TryGetValue("type", out var typeValue) ? typeValue?.ToString() ?? "" : "";
+                var text = "";
+                if (item.TryGetValue("data", out var dataValue) && dataValue is Dictionary<string, object?> data)
+                {
+                    var key = type == "term" ? "data" : "screen";
+                    if (data.TryGetValue(key, out var textValue)) text = textValue?.ToString() ?? "";
+                }
+                return new FanoutOutputEvent(type, text);
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                _unsubscribe();
+                return ValueTask.CompletedTask;
+            }
+        }
     }
 
     private static List<string> StringList(JsonElement el)
@@ -80,7 +118,15 @@ public sealed partial class UtermServer
         var name = Str(body, "name");
         foreach (var wid in workerIds)
         {
-            if (_deps.Registry.TryGetDefinition(wid, out var def) && !_deps.Authz.CanReadSession(p, def))
+            if (!_deps.Registry.TryGetDefinition(wid, out var def))
+            {
+                if (!_deps.Config.FanoutAllowUnknownMembers)
+                {
+                    return BridgeError(400, "unknown fan-out session: " + wid);
+                }
+                continue;
+            }
+            if (!_deps.Authz.CanReadSession(p, def))
             {
                 return BridgeError(403, "forbidden: no read access to session " + wid);
             }
@@ -153,17 +199,26 @@ public sealed partial class UtermServer
     {
         var p = await Authenticate(ctx).ConfigureAwait(false);
         var fanout = EnsureFanout();
-        if (fanout.GetGroup(groupId, p.SubjectId) is null)
+        var group = fanout.GetGroup(groupId, p.SubjectId);
+        if (group is null)
         {
             return BridgeError(404, "group not found");
         }
 
+        if (!string.IsNullOrWhiteSpace(_deps.Config.Governance.PolicyWebhookUrl))
+        {
+            return BridgeError(501, "fanout governance is not supported by this server");
+        }
+
         var body = await ReadJson(ctx).ConfigureAwait(false);
         var data = Str(body, "data");
-        var result = await fanout.SendAsync(
+        var (allowed, refused) = AuthorizedFanoutMembers(p, group.WorkerIds);
+        var result = await fanout.SendAuthorizedAsync(
             groupId,
             data,
             p.SubjectId,
+            allowed,
+            refused,
             Int(body, "quiesce_ms", 0),
             Int(body, "max_response_ms", 0),
             ctx.RequestAborted).ConfigureAwait(false);
@@ -177,6 +232,27 @@ public sealed partial class UtermServer
             divergent_sessions = result.DivergentSessions,
             failed_sessions = result.FailedSessions,
         }, JsonOpts);
+    }
+
+    internal (List<string> Allowed, List<string> Refused) AuthorizedFanoutMembers(
+        Provide.Uterm.ServerAuth.Principal principal,
+        IEnumerable<string> workerIds)
+    {
+        var allowed = new List<string>();
+        var refused = new List<string>();
+        foreach (var workerId in workerIds)
+        {
+            if (!_deps.Registry.TryGetDefinition(workerId, out var definition) ||
+                !_deps.Authz.CanReadSession(principal, definition))
+            {
+                refused.Add(workerId);
+            }
+            else
+            {
+                allowed.Add(workerId);
+            }
+        }
+        return (allowed, refused);
     }
 
     private async Task<IResult> HandleFanoutGrant(HttpContext ctx, string groupId)
