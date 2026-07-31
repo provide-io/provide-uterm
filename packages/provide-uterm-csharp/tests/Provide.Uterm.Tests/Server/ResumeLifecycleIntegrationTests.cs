@@ -30,7 +30,7 @@ public sealed class ResumeLifecycleIntegrationTests
 
         original.Abort();
         await WaitUntilAsync(() => fixture.Hub.Registry.Get("resume-worker")!.Browsers.Count == 0);
-        await Task.Delay(50);
+        await WaitUntilAsync(() => fixture.Worker.Actions.SequenceEqual(["pause", "resume"]));
 
         using var resumedSocket = await ConnectAsync(fixture);
         await DrainHandshakeAsync(resumedSocket);
@@ -42,6 +42,8 @@ public sealed class ResumeLifecycleIntegrationTests
         Assert.True(Bool(resumedHello, "hijacked_by_me"));
         Assert.NotEqual(oldToken, resumedHello["resume_token"]?.ToString());
         Assert.NotNull(fixture.Hub.Registry.Get("resume-worker")!.HijackOwner);
+        await WaitUntilAsync(() => fixture.Worker.Actions.Count == 3);
+        Assert.Equal(["pause", "resume", "pause"], fixture.Worker.Actions);
     }
 
     [Fact]
@@ -89,6 +91,29 @@ public sealed class ResumeLifecycleIntegrationTests
 
         Assert.False(Bool(hello, "resumed"));
         Assert.NotEqual(oldToken, hello["resume_token"]?.ToString());
+    }
+
+    [Fact]
+    public async Task DisconnectedNonOwnerTokenResumesOnNewSocketWithoutPausingWorker()
+    {
+        var fixture = await BootAsync();
+        await using var server = fixture.Server;
+        using var original = await ConnectAsync(fixture);
+        var oldToken = (await DrainHandshakeAsync(original))["resume_token"]!.ToString()!;
+
+        original.Abort();
+        await WaitUntilAsync(() => fixture.Hub.Registry.Get("resume-worker")!.Browsers.Count == 0);
+        Assert.Empty(fixture.Worker.Actions);
+
+        using var resumedSocket = await ConnectAsync(fixture);
+        await DrainHandshakeAsync(resumedSocket);
+        await SendControlAsync(resumedSocket, "resume", oldToken);
+        var hello = await ReceiveUntilAsync(
+            resumedSocket, frame => Type(frame) == "hello" && frame.ContainsKey("resumed"));
+
+        Assert.True(Bool(hello, "resumed"));
+        Assert.False(Bool(hello, "hijacked_by_me"));
+        Assert.Empty(fixture.Worker.Actions);
     }
 
     private static async Task<Dictionary<string, object?>> DrainHandshakeAsync(ClientWebSocket socket)
@@ -181,7 +206,8 @@ public sealed class ResumeLifecycleIntegrationTests
         });
         var clock = new RealClock();
         var hub = new TermHub(new TermHubConfig { Clock = clock });
-        hub.Conn.RegisterWorker("resume-worker", new NoopSocket());
+        var worker = new RecordingWorker();
+        hub.Conn.RegisterWorker("resume-worker", worker);
         var server = new UtermServer(new ServerDeps
         {
             Hub = hub,
@@ -196,15 +222,40 @@ public sealed class ResumeLifecycleIntegrationTests
         return new Fixture(
             server,
             hub,
+            worker,
             token,
             new Uri($"ws://127.0.0.1:{port}/ws/browser/resume-worker/term"));
     }
 
-    private sealed record Fixture(UtermServer Server, TermHub Hub, string Token, Uri Uri);
+    private sealed record Fixture(
+        UtermServer Server,
+        TermHub Hub,
+        RecordingWorker Worker,
+        string Token,
+        Uri Uri);
 
-    private sealed class NoopSocket : IWorkerWs
+    private sealed class RecordingWorker : IWorkerWs
     {
-        public Task SendTextAsync(string payload, CancellationToken cancellationToken = default) =>
-            Task.CompletedTask;
+        private readonly object _gate = new();
+        private readonly List<string> _actions = [];
+
+        public IReadOnlyList<string> Actions
+        {
+            get { lock (_gate) return _actions.ToArray(); }
+        }
+
+        public Task SendTextAsync(string payload, CancellationToken cancellationToken = default)
+        {
+            var action = new ControlFrameDecoder().Feed(payload)
+                .OfType<ControlChunk>()
+                .Select(chunk => chunk.Control.GetValueOrDefault("action")?.ToString())
+                .FirstOrDefault(value => value is not null);
+            if (action is not null)
+            {
+                lock (_gate) _actions.Add(action);
+            }
+
+            return Task.CompletedTask;
+        }
     }
 }

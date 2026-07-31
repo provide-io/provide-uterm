@@ -16,6 +16,7 @@ internal sealed record ResumeTokenSession(
     double CreatedAt,
     double ExpiresAt)
 {
+    public bool WasDisconnected { get; set; }
     public bool WasHijackOwner { get; set; }
     public long? OwnershipVersion { get; set; }
 }
@@ -78,16 +79,23 @@ internal sealed class ResumeTokenStore
         }
     }
 
-    public bool MarkHijackOwner(string token, long ownershipVersion)
+    public bool MarkDisconnected(string token, long? ownershipVersion = null)
     {
         lock (_gate)
         {
             if (!_tokens.TryGetValue(token, out var session)) return false;
-            session.WasHijackOwner = true;
-            session.OwnershipVersion = ownershipVersion;
+            session.WasDisconnected = true;
+            if (ownershipVersion is { } version)
+            {
+                session.WasHijackOwner = true;
+                session.OwnershipVersion = version;
+            }
             return true;
         }
     }
+
+    public bool MarkHijackOwner(string token, long ownershipVersion) =>
+        MarkDisconnected(token, ownershipVersion);
 
     public bool Revoke(string token)
     {
