@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from provide.uterm.server.bridge.hub.ext import (
         BehavioralThresholds,
         WebhookBehavioralAuditGate,
+        WebhookFanOutPolicyGate,
         WebhookPolicyGate,
         WebhookTelemetrySink,
     )
@@ -152,6 +153,7 @@ class GovernanceGates:
     """The optional governance webhook gates wired into the hub."""
 
     policy_gate: WebhookPolicyGate | None
+    fanout_policy_gate: WebhookFanOutPolicyGate | None
     behavioral_audit_gate: WebhookBehavioralAuditGate | None
     behavioral_thresholds: BehavioralThresholds
     telemetry_sink: WebhookTelemetrySink | None
@@ -162,13 +164,20 @@ def build_governance_gates(config: ServerConfig) -> GovernanceGates:
     from provide.uterm.server.bridge.hub.ext import (
         BehavioralThresholds,
         WebhookBehavioralAuditGate,
+        WebhookFanOutPolicyGate,
         WebhookPolicyGate,
         WebhookTelemetrySink,
     )
 
     policy_gate = None
+    fanout_policy_gate = None
     if config.governance.policy_webhook_url:
         policy_gate = WebhookPolicyGate(
+            url=config.governance.policy_webhook_url,
+            secret=config.governance.policy_webhook_secret,
+            timeout_s=config.governance.policy_webhook_timeout_s,
+        )
+        fanout_policy_gate = WebhookFanOutPolicyGate(
             url=config.governance.policy_webhook_url,
             secret=config.governance.policy_webhook_secret,
             timeout_s=config.governance.policy_webhook_timeout_s,
@@ -196,6 +205,7 @@ def build_governance_gates(config: ServerConfig) -> GovernanceGates:
 
     return GovernanceGates(
         policy_gate=policy_gate,
+        fanout_policy_gate=fanout_policy_gate,
         behavioral_audit_gate=behavioral_audit_gate,
         behavioral_thresholds=behavioral_thresholds,
         telemetry_sink=telemetry_sink,

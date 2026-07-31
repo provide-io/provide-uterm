@@ -313,6 +313,7 @@ def create_server_app(
     idp: IdentityProvider = build_identity_provider(config, api_key_store)
     _gates = build_governance_gates(config)
     policy_gate = _gates.policy_gate
+    fanout_policy_gate = _gates.fanout_policy_gate
     behavioral_audit_gate = _gates.behavioral_audit_gate
     behavioral_thresholds = _gates.behavioral_thresholds
     telemetry_sink = _gates.telemetry_sink
@@ -363,7 +364,24 @@ def create_server_app(
     # Attach the fan-out controller so routes and WS dispatch can find it.
     from provide.uterm.server.bridge.fanout import FanOutController, InMemoryFanOutStore
 
-    setattr(hub, "fan_out_controller", FanOutController(hub=hub, store=InMemoryFanOutStore()))  # noqa: B010
+    async def _resolve_fanout_session(worker_id: str):
+        return await registry.get_definition(worker_id) if registry is not None else None
+
+    async def _authorize_fanout_session(principal: Principal, session: object) -> bool:
+        return await authz.can_read_session(principal, session)  # type: ignore[arg-type]
+
+    setattr(  # noqa: B010
+        hub,
+        "fan_out_controller",
+        FanOutController(
+            hub=hub,
+            store=InMemoryFanOutStore(),
+            fanout_policy_gate=fanout_policy_gate,
+            resolve_session=_resolve_fanout_session,
+            can_read_session=_authorize_fanout_session,
+            allow_unknown_members=config.fanout_allow_unknown_members,
+        ),
+    )
     # Effective loopback-destination permission = explicit opt-in OR "we are
     # bound to loopback".
     #
@@ -533,7 +551,7 @@ def create_server_app(
             # Release the pooled HTTP clients held by the governance webhook gates.
             # Delegated to a module-level helper so the branchy close loop is
             # tracked correctly on Python 3.11 (see ``_aclose_webhook_gates``).
-            await _aclose_webhook_gates(policy_gate, behavioral_audit_gate, telemetry_sink)
+            await _aclose_webhook_gates(policy_gate, fanout_policy_gate, behavioral_audit_gate, telemetry_sink)
             await registry.shutdown()
             await control_plane.close()
 

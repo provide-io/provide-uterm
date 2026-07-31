@@ -26,7 +26,7 @@ def test_app_initializes_webhook_authz() -> None:
 
 
 def test_app_initializes_webhook_policy() -> None:
-    from provide.uterm.server.bridge.hub.ext import WebhookPolicyGate
+    from provide.uterm.server.bridge.hub.ext import WebhookFanOutPolicyGate, WebhookPolicyGate
 
     config = default_server_config()
     config.governance.policy_webhook_url = "https://fleet.example.com/policy"
@@ -36,6 +36,8 @@ def test_app_initializes_webhook_policy() -> None:
 
     assert isinstance(hub._policy_gate, WebhookPolicyGate)
     assert hub._policy_gate.url == "https://fleet.example.com/policy"
+    assert isinstance(hub.fan_out_controller._fanout_policy_gate, WebhookFanOutPolicyGate)
+    assert hub.fan_out_controller._fanout_policy_gate.url == "https://fleet.example.com/policy"
 
 
 @pytest.mark.asyncio

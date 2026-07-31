@@ -63,16 +63,19 @@ def register_fanout_routes(hub: TermHub, router: APIRouter) -> None:
         max_response_ms = body.get("max_response_ms", 10_000)
         divergence_threshold = body.get("divergence_threshold", 0.8)
 
-        # A group may only contain sessions the creating principal can read
-        # (ARD multi-session-fanout). Enforced at creation time: any *known*
-        # session the principal cannot read is rejected (unknown worker_ids that
-        # have no registered definition are not gated here).
-        authz = request.app.state.uterm_authz
-        registry = request.app.state.uterm_registry
-        for wid in worker_ids:
-            session_def = await registry.get_definition(wid)
-            if session_def is not None and not await authz.can_read_session(principal, session_def):
-                return JSONResponse({"error": f"forbidden: no read access to session {wid}"}, status_code=403)
+        _, refused = await ctrl.validate_members(list(worker_ids), principal)
+        if refused:
+            unknown = [wid for wid in refused if await request.app.state.uterm_registry.get_definition(wid) is None]
+            if unknown and not ctrl.allow_unknown_members:
+                return JSONResponse({"error": f"unknown fan-out session: {unknown[0]}"}, status_code=400)
+            forbidden = [wid for wid in refused if wid not in unknown]
+            if forbidden:
+                return JSONResponse(
+                    {"error": f"forbidden: no read access to session {forbidden[0]}"},
+                    status_code=403,
+                )
+            # Explicit dormant-member mode permits unknown members only.
+            assert ctrl.allow_unknown_members
 
         group = FanOutGroup(
             group_id=uuid.uuid4().hex,
@@ -88,7 +91,7 @@ def register_fanout_routes(hub: TermHub, router: APIRouter) -> None:
             divergence_threshold=divergence_threshold,
         )
         try:
-            group_id = await ctrl.create_group(group, principal=principal.subject_id)
+            group_id = await ctrl.create_group(group, principal=principal)
         except ValueError as exc:
             return JSONResponse({"error": str(exc)}, status_code=400)
         audit_event("fanout.create_group", principal=principal.subject_id, detail={"group_id": group_id, "name": name})
@@ -132,7 +135,7 @@ def register_fanout_routes(hub: TermHub, router: APIRouter) -> None:
         result = await ctrl.send(
             group_id,
             data,
-            principal=principal.subject_id,
+            principal=principal,
             quiesce_ms=quiesce_ms,
             max_response_ms=max_response_ms,
         )
