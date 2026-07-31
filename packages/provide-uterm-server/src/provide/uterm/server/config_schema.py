@@ -84,6 +84,18 @@ class AuthConfig(ServerBaseModel):
     upstream_proxy_secret: str | None = None
     require_upstream_proxy_secret: bool = False
 
+    # Applied when a verified JWT carries no known roles (typical Cloudflare
+    # Access JWTs have no roles claim) — see _apply_cf_access_team_domain and
+    # server.auth._roles_from_claims. Empty means fall through to the
+    # viewer-fallback every role resolver already has. Go and C# already had
+    # this field; ported here for parity.
+    jwt_default_role: str | None = None
+    # When set, auto-fills empty jwt_jwks_url / jwt_issuer from a Cloudflare
+    # Access team domain (see _apply_cf_access_team_domain below). Explicit
+    # operator values always win. Go and C# already had this field; ported
+    # here for parity.
+    cf_access_team_domain: str | None = None
+
     identity_provider: Literal["local", "webhook"] = "local"
     delegate_roles: bool = True
     webhook_idp_url: str | None = None
@@ -126,6 +138,30 @@ class AuthConfig(ServerBaseModel):
     def _validate_proxy_secret(self) -> AuthConfig:
         if self.require_upstream_proxy_secret and not str(self.upstream_proxy_secret or "").strip():
             raise ValueError("auth.upstream_proxy_secret is required when auth.require_upstream_proxy_secret=True")
+        return self
+
+    @model_validator(mode="after")
+    def _apply_cf_access_team_domain(self) -> AuthConfig:
+        """Fill empty jwt_jwks_url / jwt_issuer from a Cloudflare Access team domain.
+
+        Explicit operator values always win. jwt_issuer defaults to the
+        non-empty "provide-uterm", so operators must clear it for the
+        team-domain issuer fill to apply — same as Go and C#. Runs before
+        _validate_outbound_url_schemes so a filled jwt_jwks_url is validated
+        too.
+        """
+        team = str(self.cf_access_team_domain or "").strip()
+        if not team:
+            return self
+        team = team.removeprefix("https://").removeprefix("http://")
+        team = team.split("/", 1)[0]
+        team = team.removesuffix(".cloudflareaccess.com").strip()
+        if not team:
+            return self
+        if not str(self.jwt_jwks_url or "").strip():
+            self.jwt_jwks_url = f"https://{team}.cloudflareaccess.com/cdn-cgi/access/certs"
+        if not str(self.jwt_issuer or "").strip():
+            self.jwt_issuer = f"https://{team}.cloudflareaccess.com"
         return self
 
     @model_validator(mode="after")

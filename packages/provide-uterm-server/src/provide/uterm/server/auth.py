@@ -18,7 +18,7 @@ from provide.uterm.server.api_keys import canonical_tenant_id
 from provide.uterm.server.audit import audit_event
 from provide.uterm.server.auth_roles import (
     _DEFAULT_ROLE,  # noqa: F401  # re-exported for legacy server.auth import surface
-    _KNOWN_ROLES,  # noqa: F401  # re-exported for legacy server.auth import surface
+    _KNOWN_ROLES,
     _filter_known_roles,
 )
 from provide.uterm.server.auth_webhook import (
@@ -222,6 +222,17 @@ class LocalIdentityProvider(IdentityProvider):
             pieces = [str(part).strip().lower() for part in raw if str(part).strip()]
         else:
             pieces = []
+        # Prefer claim roles when any known role is present. When the claim is
+        # empty or only unknown values (typical Cloudflare Access JWTs have no
+        # roles claim), apply jwt_default_role if configured, else
+        # _filter_known_roles falls back to viewer. Matches Go's
+        # rolesFromClaims / C#'s RolesFromClaimList.
+        known = frozenset(role for role in pieces if role in _KNOWN_ROLES)
+        if known:
+            return known
+        default_role = str(self.auth.jwt_default_role or "").strip()
+        if default_role:
+            return _filter_known_roles([default_role])
         return _filter_known_roles(pieces)
 
     def _scopes_from_claims(self, claims: dict[str, Any]) -> frozenset[str]:

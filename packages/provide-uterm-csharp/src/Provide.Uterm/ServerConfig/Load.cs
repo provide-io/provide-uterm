@@ -138,25 +138,6 @@ public static class ConfigLoader
     /// </remarks>
     internal static IReadOnlyDictionary<string, HashSet<string>> KnownNestedKeysForTests => KnownNestedKeys;
 
-    /// <summary>
-    /// Keys this port accepts with no equivalent field in the reference's
-    /// Pydantic schema (yet). Real, tested behaviour — see
-    /// <see cref="ApplyAuth"/>'s <c>jwt_default_role</c>/<c>cf_access_team_domain</c>
-    /// binding and <c>LocalIdentity</c>'s default-role fallback — not dead
-    /// code; Go's <c>serverconfig</c> carries the same two fields. Excluded
-    /// from the drift-guard comparison in <c>ServerConfigNestedKeyTests</c>
-    /// rather than left to silently fail it or, worse, left unlisted in
-    /// <see cref="KnownNestedKeys"/> so the public TOML loader refuses them
-    /// outright. Closing this for real means either porting the fields into
-    /// the reference schema or dropping them; tracked separately, not
-    /// attempted here.
-    /// </summary>
-    internal static readonly IReadOnlyDictionary<string, string[]> PortOnlyKeysForTests =
-        new Dictionary<string, string[]>(StringComparer.Ordinal)
-        {
-            ["auth"] = new[] { "jwt_default_role", "cf_access_team_domain" },
-        };
-
     private static readonly Dictionary<string, HashSet<string>> KnownNestedKeys = new(StringComparer.Ordinal)
     {
         ["server"] = new(StringComparer.Ordinal)

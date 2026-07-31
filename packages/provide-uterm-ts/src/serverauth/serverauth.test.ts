@@ -6,13 +6,16 @@
 import { describe, expect, it } from "vitest";
 import { loadGolden } from "../testing/golden.ts";
 import {
+  type AuthSettings,
   ApiKeyStore,
+  applyCfAccessTeamDomain,
   buildWebhookSignature,
   canonicalTenantId,
   DEFAULT_ROLE,
   filterKnownRoles,
   INVALID_TENANT_MESSAGE,
   KNOWN_ROLES,
+  rolesFromClaims,
   verifyWebhookSignature,
   WEBHOOK_MAX_AGE_S,
 } from "./index.ts";
@@ -252,6 +255,80 @@ describe("filterKnownRoles", () => {
   it("knows exactly three roles", () => {
     expect([...KNOWN_ROLES].sort()).toStrictEqual(golden.known_roles);
     expect(golden.known_roles).toStrictEqual(["admin", "operator", "viewer"]);
+  });
+});
+
+describe("rolesFromClaims", () => {
+  function settings(jwt_default_role: string | null): AuthSettings {
+    return {
+      jwt_public_key_pem: null,
+      jwt_algorithms: ["HS256"],
+      jwt_issuer: "provide-uterm",
+      jwt_audience: "provide-uterm-server",
+      jwt_roles_claim: "roles",
+      jwt_scopes_claim: "scope",
+      jwt_tenant_claim: "tenant_id",
+      clock_skew_seconds: 15,
+      jwt_default_role,
+    };
+  }
+
+  it("applies the configured default role when the claim is missing", () => {
+    // Typical Cloudflare Access JWTs carry no roles claim at all — the gap
+    // this default exists for. Go, C# and Python already have this fallback.
+    expect([...rolesFromClaims({}, settings("operator"))]).toStrictEqual(["operator"]);
+  });
+
+  it("applies the configured default role when the claim has only unknown roles", () => {
+    expect([...rolesFromClaims({ roles: ["superuser"] }, settings("operator"))]).toStrictEqual(["operator"]);
+  });
+
+  it("prefers a known claim role over the configured default", () => {
+    expect([...rolesFromClaims({ roles: ["admin"] }, settings("operator"))]).toStrictEqual(["admin"]);
+  });
+
+  it("falls back to viewer when the configured default is not itself a known role", () => {
+    expect([...rolesFromClaims({}, settings("superuser"))]).toStrictEqual([DEFAULT_ROLE]);
+  });
+
+  it("falls back to viewer when no default role is configured", () => {
+    expect([...rolesFromClaims({}, settings(null))]).toStrictEqual([DEFAULT_ROLE]);
+  });
+});
+
+describe("applyCfAccessTeamDomain", () => {
+  // Mirrors Go's TestCfAccessTeamDomainAutoFill, C#'s
+  // Load_FromToml_BindsCfAccessTeamDomainAndAppliesItsFill, and Python's
+  // test_cf_access_team_domain_* tests in test_config_schema.py.
+
+  it("fills empty jwt_jwks_url and jwt_issuer", () => {
+    const auth: Record<string, unknown> = { cf_access_team_domain: "myteam", jwt_issuer: "" };
+    applyCfAccessTeamDomain(auth);
+    expect(auth.jwt_jwks_url).toBe("https://myteam.cloudflareaccess.com/cdn-cgi/access/certs");
+    expect(auth.jwt_issuer).toBe("https://myteam.cloudflareaccess.com");
+  });
+
+  it("does not override explicit values", () => {
+    const auth: Record<string, unknown> = {
+      cf_access_team_domain: "myteam",
+      jwt_issuer: "https://custom.example",
+      jwt_jwks_url: "https://custom.example/jwks",
+    };
+    applyCfAccessTeamDomain(auth);
+    expect(auth.jwt_issuer).toBe("https://custom.example");
+    expect(auth.jwt_jwks_url).toBe("https://custom.example/jwks");
+  });
+
+  it("strips scheme and path from the team domain", () => {
+    const auth: Record<string, unknown> = { cf_access_team_domain: "https://other.cloudflareaccess.com/", jwt_issuer: "" };
+    applyCfAccessTeamDomain(auth);
+    expect(auth.jwt_issuer).toBe("https://other.cloudflareaccess.com");
+  });
+
+  it("does nothing when no team domain is configured", () => {
+    const auth: Record<string, unknown> = { jwt_issuer: "provide-uterm" };
+    applyCfAccessTeamDomain(auth);
+    expect(auth).toStrictEqual({ jwt_issuer: "provide-uterm" });
   });
 });
 

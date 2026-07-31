@@ -19,7 +19,43 @@
 
 import { canonicalTenantId } from "./api-keys.ts";
 import { decodeJwt, type JwtClaims, JwtError } from "./jwt.ts";
-import { filterKnownRoles } from "./roles.ts";
+import { filterKnownRoles, KNOWN_ROLES } from "./roles.ts";
+
+const KNOWN_ROLE_SET = new Set(KNOWN_ROLES);
+
+/**
+ * Fill empty `jwt_jwks_url` / `jwt_issuer` from a Cloudflare Access team
+ * domain, in place. Explicit operator values always win. `jwt_issuer`
+ * defaults to the non-empty `"provide-uterm"`, so operators must clear it
+ * for the team-domain issuer fill to apply — same as Go, C# and Python.
+ *
+ * Takes the raw parsed `auth` section rather than {@link AuthSettings}
+ * because `jwt_jwks_url` is not part of the JWT verification path this port
+ * implements yet; the fill still runs so a server.toml using
+ * `cf_access_team_domain` produces the same resulting config every port
+ * would.
+ */
+export function applyCfAccessTeamDomain(auth: Record<string, unknown>): void {
+  let team = String(auth.cf_access_team_domain ?? "").trim();
+  if (team === "") {
+    return;
+  }
+  team = team.replace(/^https?:\/\//, "");
+  const slash = team.indexOf("/");
+  if (slash >= 0) {
+    team = team.slice(0, slash);
+  }
+  team = team.replace(/\.cloudflareaccess\.com$/, "").trim();
+  if (team === "") {
+    return;
+  }
+  if (String(auth.jwt_jwks_url ?? "").trim() === "") {
+    auth.jwt_jwks_url = `https://${team}.cloudflareaccess.com/cdn-cgi/access/certs`;
+  }
+  if (String(auth.jwt_issuer ?? "").trim() === "") {
+    auth.jwt_issuer = `https://${team}.cloudflareaccess.com`;
+  }
+}
 
 /** The subset of `auth.*` configuration the JWT path reads. */
 export interface AuthSettings {
@@ -32,6 +68,12 @@ export interface AuthSettings {
   jwt_scopes_claim: string;
   jwt_tenant_claim: string;
   clock_skew_seconds: number;
+  /**
+   * Applied when a verified JWT carries no known roles (typical Cloudflare
+   * Access JWTs have no roles claim). Go, C# and Python already have this
+   * field; ported here for parity.
+   */
+  jwt_default_role?: string | null | undefined;
 }
 
 /** Who the server decided a request is. */
@@ -105,6 +147,19 @@ export function rolesFromClaims(claims: JwtClaims, settings: AuthSettings): Read
     // number there has said nothing about roles, and the allow-list stands in
     // with the least privileged one.
     pieces = [];
+  }
+  // Prefer claim roles when any known role is present. When the claim is
+  // empty or only unknown values (typical Cloudflare Access JWTs have no
+  // roles claim), apply jwt_default_role if configured, else
+  // filterKnownRoles falls back to viewer. Matches Go's rolesFromClaims /
+  // C#'s RolesFromClaimList / Python's _roles_from_claims.
+  const known = new Set(pieces.filter((role) => KNOWN_ROLE_SET.has(role)));
+  if (known.size > 0) {
+    return known;
+  }
+  const defaultRole = (settings.jwt_default_role ?? "").trim();
+  if (defaultRole !== "") {
+    return filterKnownRoles([defaultRole]);
   }
   return filterKnownRoles(pieces);
 }

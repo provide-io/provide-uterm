@@ -47,3 +47,40 @@ def test_max_workers_rejects_below_one():
     """Fix 2b: a max_workers < 1 is rejected by the validator."""
     with pytest.raises(ValueError, match="max_workers must be >= 1"):
         UtermServerConfig(max_workers=0)
+
+
+def test_jwt_default_role_is_a_known_toml_key():
+    # Was refused with "Extra inputs are not permitted" before this field
+    # existed on AuthConfig — Go and C# already had it (LocalIdentityProvider's
+    # default-role fallback), Python didn't.
+    config = config_from_mapping({"auth": {"jwt_default_role": "operator"}})
+    assert config.auth.jwt_default_role == "operator"
+
+
+def test_cf_access_team_domain_fills_empty_issuer_and_jwks_url():
+    # Mirrors Go's TestCfAccessTeamDomainAutoFill and C#'s
+    # Load_FromToml_BindsCfAccessTeamDomainAndAppliesItsFill.
+    config = config_from_mapping({"auth": {"cf_access_team_domain": "myteam", "jwt_issuer": ""}})
+    assert config.auth.jwt_jwks_url == "https://myteam.cloudflareaccess.com/cdn-cgi/access/certs"
+    assert config.auth.jwt_issuer == "https://myteam.cloudflareaccess.com"
+
+
+def test_cf_access_team_domain_does_not_override_explicit_values():
+    config = config_from_mapping(
+        {
+            "auth": {
+                "cf_access_team_domain": "myteam",
+                "jwt_issuer": "https://custom.example",
+                "jwt_jwks_url": "https://custom.example/jwks",
+            }
+        }
+    )
+    assert config.auth.jwt_issuer == "https://custom.example"
+    assert config.auth.jwt_jwks_url == "https://custom.example/jwks"
+
+
+def test_cf_access_team_domain_strips_scheme_and_path():
+    config = config_from_mapping(
+        {"auth": {"cf_access_team_domain": "https://other.cloudflareaccess.com/", "jwt_issuer": ""}}
+    )
+    assert config.auth.jwt_issuer == "https://other.cloudflareaccess.com"

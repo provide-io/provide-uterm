@@ -35,6 +35,8 @@ export const SECTION_FIELD_SPECS = {
     jwt_issuer: "str",
     jwt_audience: "str",
     jwt_jwks_url: "str?",
+    jwt_default_role: "str?",
+    cf_access_team_domain: "str?",
     jwt_public_key_pem: "str?",
     jwt_algorithms: "str[]",
     clock_skew_seconds: "int",

@@ -7,6 +7,7 @@
     "auth": {
       "allow_adhoc_browser_observers": false,
       "api_keys_enabled": false,
+      "cf_access_team_domain": null,
       "clock_skew_seconds": 15,
       "delegate_roles": true,
       "header_mode_acknowledged": false,
@@ -15,6 +16,7 @@
         "HS256"
       ],
       "jwt_audience": "provide-uterm-server",
+      "jwt_default_role": null,
       "jwt_issuer": "provide-uterm",
       "jwt_jwks_url": null,
       "jwt_public_key_pem": null,

@@ -142,6 +142,42 @@ class TestRolesFromClaims:
         result = _roles_from_claims({"roles": None}, self._auth())
         assert result == frozenset({"viewer"})
 
+    def _auth_with_default_role(self, default_role: str):  # type: ignore[return]
+        from provide.uterm.server.models import AuthConfig
+
+        return AuthConfig(
+            mode="jwt",
+            jwt_public_key_pem=_TEST_KEY,
+            worker_bearer_token=_make_token(),
+            jwt_default_role=default_role,
+        )
+
+    def test_missing_roles_applies_configured_default_role(self) -> None:
+        # Typical Cloudflare Access JWTs carry no roles claim at all — the
+        # gap this default exists for. Go and C# already had this fallback.
+        from provide.uterm.server.auth import _roles_from_claims
+
+        result = _roles_from_claims({}, self._auth_with_default_role("operator"))
+        assert result == frozenset({"operator"})
+
+    def test_only_unknown_roles_applies_configured_default_role(self) -> None:
+        from provide.uterm.server.auth import _roles_from_claims
+
+        result = _roles_from_claims({"roles": ["superuser"]}, self._auth_with_default_role("operator"))
+        assert result == frozenset({"operator"})
+
+    def test_a_known_claim_role_wins_over_the_configured_default(self) -> None:
+        from provide.uterm.server.auth import _roles_from_claims
+
+        result = _roles_from_claims({"roles": ["admin"]}, self._auth_with_default_role("operator"))
+        assert result == frozenset({"admin"})
+
+    def test_an_unknown_configured_default_role_falls_back_to_viewer(self) -> None:
+        from provide.uterm.server.auth import _roles_from_claims
+
+        result = _roles_from_claims({}, self._auth_with_default_role("superuser"))
+        assert result == frozenset({"viewer"})
+
 
 class TestScopesFromClaims:
     def _auth(self):  # type: ignore[return]
