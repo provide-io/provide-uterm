@@ -283,7 +283,7 @@ public class HubServicesTests
             [
                 ("w1", true, "operator"),
                 ("w1", false, (string?)null),
-                ("w1", true, (string?)null),
+                ("w1", true, "dashboard"),
                 ("w1", false, (string?)null),
             ],
             changes);

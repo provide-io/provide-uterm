@@ -24,8 +24,9 @@ public sealed class ResumeLifecycleIntegrationTests
     [Fact]
     public async Task ProductionDashboardAcquireReleasePublishesExactlyOnce()
     {
-        var changes = new List<bool>();
-        var fixture = await BootAsync(enabled => changes.Add(enabled));
+        var changes = new List<(bool Enabled, string? Owner)>();
+        var fixture = await BootAsync(
+            (enabled, owner) => changes.Add((enabled, owner)));
         await using var server = fixture.Server;
         using var browser = await ConnectAsync(fixture);
         await DrainHandshakeAsync(browser);
@@ -41,14 +42,20 @@ public sealed class ResumeLifecycleIntegrationTests
 
         Assert.Equal("me", acquired["owner"]?.ToString());
         Assert.False(Bool(released, "hijacked"));
-        Assert.Equal([true, false], changes);
+        Assert.Equal(
+            [
+                (true, "dashboard"),
+                (false, (string?)null),
+            ],
+            changes);
     }
 
     [Fact]
     public async Task ProductionDashboardResumePublishesRestoredOwnershipExactlyOnce()
     {
-        var changes = new List<bool>();
-        var fixture = await BootAsync(enabled => changes.Add(enabled));
+        var changes = new List<(bool Enabled, string? Owner)>();
+        var fixture = await BootAsync(
+            (enabled, owner) => changes.Add((enabled, owner)));
         await using var server = fixture.Server;
         using var original = await ConnectAsync(fixture);
         var oldToken = (await DrainHandshakeAsync(original))["resume_token"]!.ToString()!;
@@ -73,7 +80,13 @@ public sealed class ResumeLifecycleIntegrationTests
 
         Assert.True(Bool(resumedHello, "resumed"));
         Assert.Equal("me", restored["owner"]?.ToString());
-        Assert.Equal([true, true], changes);
+        Assert.Equal(
+            [
+                (true, "dashboard"),
+                (false, (string?)null),
+                (true, "dashboard"),
+            ],
+            changes);
     }
 
     [Fact]
@@ -1270,7 +1283,7 @@ public sealed class ResumeLifecycleIntegrationTests
         Assert.Equal(SessionLifecycleState.Stopped, offline.LifecycleState);
         Assert.Equal(1, DecodeBrowserFrames(observer).Count(frame =>
             Type(frame) == "worker_disconnected"));
-        Assert.Equal([true], ownershipChanges);
+        Assert.Equal([true, false], ownershipChanges);
 
         if (replaceImmediately)
         {
@@ -1283,7 +1296,47 @@ public sealed class ResumeLifecycleIntegrationTests
         Assert.Equal(replaceImmediately, afterReplay.Connected);
         Assert.Equal(1, DecodeBrowserFrames(observer).Count(frame =>
             Type(frame) == "worker_disconnected"));
-        Assert.Equal([true], ownershipChanges);
+        Assert.Equal([true, false], ownershipChanges);
+    }
+
+    [Fact]
+    public async Task DeferredDashboardDisconnectPublishesAtExactOwnerClear()
+    {
+        const string workerId = "deferred-dashboard-disconnect";
+        var changes = new List<(bool Enabled, string? Owner)>();
+        var hub = new TermHub(new TermHubConfig
+        {
+            OnHijackChanged = (_, enabled, owner) => changes.Add((enabled, owner)),
+        });
+        var worker = new RecordingWorker();
+        var browser = new RecordingBrowser();
+        Assert.True(hub.Conn.RegisterWorker(workerId, worker));
+        hub.Conn.RegisterBrowser(workerId, browser, "admin");
+        Assert.True((await hub.Lease.TryAcquireWsAsync(workerId, browser)).Ok);
+        worker.DelayNextInput();
+        var server = NewUnstartedServer(hub);
+        var input = server.SendBrowserInputAsync(workerId, browser, "deferred-input");
+        await worker.InputAttempted.WaitAsync(TimeSpan.FromSeconds(1));
+
+        var ownershipVersion = Assert.IsType<long>(
+            hub.Conn.CleanupBrowser(workerId, browser));
+        var resume = hub.Conn.ResumeWorkerIfOwnershipUnchangedAsync(
+            workerId,
+            ownershipVersion,
+            HijackLeaseManager.ResumeFrame("dashboard", 100));
+
+        Assert.False(resume.IsCompleted);
+        Assert.Equal([(true, "dashboard")], changes);
+        worker.ReleaseInput();
+
+        Assert.True(await input.WaitAsync(TimeSpan.FromSeconds(1)));
+        Assert.True((await resume.WaitAsync(TimeSpan.FromSeconds(1))).Resumed);
+        Assert.Equal(
+            [
+                (true, "dashboard"),
+                (false, (string?)null),
+            ],
+            changes);
     }
 
     [Theory]
@@ -1545,6 +1598,7 @@ public sealed class ResumeLifecycleIntegrationTests
 
     [Theory]
     [InlineData("acquire")]
+    [InlineData("disconnect")]
     [InlineData("release")]
     [InlineData("restore")]
     public async Task DelayedDashboardPublicationCannotOverwriteSuccessor(string operation)
@@ -1575,6 +1629,16 @@ public sealed class ResumeLifecycleIntegrationTests
                 var ownershipVersion = hub.Conn.CleanupBrowser(workerId, original)!.Value;
                 Assert.True(hub.Lease.TryRestoreWsOwnership(
                     workerId, resumed, ownershipVersion));
+                break;
+            case "disconnect":
+                var disconnectVersion = state.HijackOwnershipVersion;
+                Assert.Equal(
+                    disconnectVersion,
+                    hub.Conn.CleanupBrowser(workerId, original));
+                delayed = OwnershipPublicationToken.Released(
+                    workerId, disconnectVersion);
+                Assert.True(hub.Lease.TryRestoreWsOwnership(
+                    workerId, resumed, disconnectVersion));
                 break;
             case "release":
                 Assert.True((await hub.Lease.TryReleaseWsAsync(workerId, original)).Released);
@@ -1902,7 +1966,8 @@ public sealed class ResumeLifecycleIntegrationTests
         return socket;
     }
 
-    private static async Task<Fixture> BootAsync(Action<bool>? onHijackChanged = null)
+    private static async Task<Fixture> BootAsync(
+        Action<bool, string?>? onHijackChanged = null)
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
@@ -1934,7 +1999,7 @@ public sealed class ResumeLifecycleIntegrationTests
             Clock = clock,
             OnHijackChanged = onHijackChanged is null
                 ? null
-                : (_, enabled, _) => onHijackChanged(enabled),
+                : (_, enabled, owner) => onHijackChanged(enabled, owner),
         });
         var worker = new RecordingWorker();
         hub.Conn.RegisterWorker("resume-worker", worker);

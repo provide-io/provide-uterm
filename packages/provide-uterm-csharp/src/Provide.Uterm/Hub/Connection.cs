@@ -26,6 +26,10 @@ public sealed class ConnectionManager
         CallerCancelled,
     }
 
+    private sealed record BrowserCleanupResult(
+        long? OwnershipVersion,
+        OwnershipPublicationToken? Publication = null);
+
     private readonly TermHub _hub;
     private Action<string>? _markWorkerOffline;
 
@@ -668,8 +672,22 @@ public sealed class ConnectionManager
 
     public long? CleanupBrowser(string workerId, object ws, bool retainOwnershipVersion = false)
     {
+        var result = CleanupBrowserCore(workerId, ws, retainOwnershipVersion);
+        if (result.Publication is not null)
+        {
+            PublishOwnershipTransition(result.Publication);
+        }
+        return result.OwnershipVersion;
+    }
+
+    private BrowserCleanupResult CleanupBrowserCore(
+        string workerId,
+        object ws,
+        bool retainOwnershipVersion)
+    {
         lock (_hub.SharedLock)
         {
+            OwnershipPublicationToken? publication = null;
             long? ownershipVersion = _hub.PendingBrowserOwnershipVersions.Remove(ws, out var pendingVersion)
                 ? pendingVersion
                 : null;
@@ -716,6 +734,11 @@ public sealed class ConnectionManager
                     {
                         st.HijackOwner = null;
                         st.HijackOwnerExpiresAt = null;
+                        if (ownershipVersion is not null)
+                        {
+                            publication = OwnershipPublicationToken.Released(
+                                workerId, st.HijackOwnershipVersion);
+                        }
                     }
                 }
             }
@@ -729,7 +752,7 @@ public sealed class ConnectionManager
                 // can resume the worker and mark the matching resume token.
                 _hub.PendingBrowserOwnershipVersions[ws] = ownershipVersion.Value;
             }
-            return ownershipVersion;
+            return new(ownershipVersion, publication);
         }
     }
 
@@ -791,6 +814,7 @@ public sealed class ConnectionManager
         var reservation = "disconnect-resume-" + Guid.NewGuid().ToString("N");
         PendingLifecycleTransition? transition = null;
         IWorkerWs? worker = null;
+        OwnershipPublicationToken? ownershipPublication = null;
         var transitionReady = false;
         try
         {
@@ -828,6 +852,8 @@ public sealed class ConnectionManager
                         {
                             st.HijackOwner = null;
                             st.HijackOwnerExpiresAt = null;
+                            ownershipPublication = OwnershipPublicationToken.Released(
+                                workerId, st.HijackOwnershipVersion);
                         }
                         if (st.WorkerWs is null
                             || st.HijackOwnershipVersion != ownershipVersion
@@ -849,8 +875,22 @@ public sealed class ConnectionManager
         {
             if (!transitionReady && transition is not null)
             {
-                CompleteLifecycleTransition(workerId, transition);
+                try
+                {
+                    if (ownershipPublication is not null)
+                    {
+                        PublishOwnershipTransition(ownershipPublication);
+                    }
+                }
+                finally
+                {
+                    CompleteLifecycleTransition(workerId, transition);
+                }
             }
+        }
+        if (ownershipPublication is not null)
+        {
+            PublishOwnershipTransition(ownershipPublication);
         }
         var resumed = false;
         Exception? error = null;
@@ -895,6 +935,8 @@ public sealed class ConnectionManager
         string workerId,
         PendingLifecycleTransition transition)
     {
+        OwnershipPublicationToken? ownershipPublication = null;
+        var completeAfterPublication = false;
         lock (_hub.SharedLock)
         {
             var st = _hub.Registry.Get(workerId);
@@ -905,12 +947,45 @@ public sealed class ConnectionManager
                 {
                     st.HijackOwner = null;
                     st.HijackOwnerExpiresAt = null;
+                    ownershipPublication = OwnershipPublicationToken.Released(
+                        workerId, st.HijackOwnershipVersion);
                 }
-                LifecycleTransitionCoordinator.Complete(st, transition);
+                completeAfterPublication = ownershipPublication is not null;
+                if (!completeAfterPublication)
+                {
+                    LifecycleTransitionCoordinator.Complete(st, transition);
+                }
+            }
+        }
+        if (ownershipPublication is not null)
+        {
+            PublishOwnershipTransition(ownershipPublication);
+        }
+        if (completeAfterPublication)
+        {
+            lock (_hub.SharedLock)
+            {
+                var st = _hub.Registry.Get(workerId);
+                if (st is not null)
+                {
+                    LifecycleTransitionCoordinator.Complete(st, transition);
+                }
             }
         }
         transition.Activated.TrySetResult();
         transition.Completion.TrySetResult();
+    }
+
+    private void PublishOwnershipTransition(OwnershipPublicationToken publication)
+    {
+        try
+        {
+            _hub.State.NotifyHijackChanged(publication);
+        }
+        catch
+        {
+            // Ownership mutation and lifecycle fences remain authoritative.
+        }
     }
 
     public async Task BroadcastHijackStateAsync(string workerId, CancellationToken ct = default)

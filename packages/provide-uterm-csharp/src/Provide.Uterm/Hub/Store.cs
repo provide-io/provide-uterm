@@ -60,13 +60,12 @@ public sealed record OwnershipPublicationToken
     public static OwnershipPublicationToken DashboardHeld(
         string workerId,
         long ownershipVersion,
-        object owner,
-        string? publishedOwner = null) => new(
+        object owner) => new(
             workerId,
             ownershipVersion,
             OwnershipPublicationExpectation.DashboardHeld,
             true,
-            publishedOwner,
+            "dashboard",
             null,
             null,
             owner);
@@ -145,7 +144,7 @@ public sealed class StateStore
             var st = _registry.Get(workerId);
             token = st is null
                 ? null
-                : CurrentPublicationToken(workerId, st, enabled, owner);
+                : CurrentPublicationToken(workerId, st, enabled);
         }
         if (token is not null) NotifyHijackChanged(token);
     }
@@ -180,8 +179,7 @@ public sealed class StateStore
     private OwnershipPublicationToken? CurrentPublicationToken(
         string workerId,
         WorkerTermState st,
-        bool enabled,
-        string? owner)
+        bool enabled)
     {
         if (!enabled)
         {
@@ -196,7 +194,7 @@ public sealed class StateStore
         if (IsDashboardHijackActive(st) && st.HijackOwner is { } dashboard)
         {
             return OwnershipPublicationToken.DashboardHeld(
-                workerId, st.HijackOwnershipVersion, dashboard, owner);
+                workerId, st.HijackOwnershipVersion, dashboard);
         }
         return null;
     }
