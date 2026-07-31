@@ -377,55 +377,70 @@ class FanOutController:
         send_id = uuid.uuid4().hex
         sent_at = time.time()
         frame = {"type": "input", "data": data, "ts": sent_at}
-        await self._notify_fanout_observers(group, data, send_id, principal)
+        captures: dict[str, Any] = {}
+        open_failures: set[str] = set()
 
-        # Send to all workers in parallel
-        send_results = await asyncio.gather(
-            *(self._hub.send_worker(wid, frame) for wid in group.worker_ids),
-            return_exceptions=True,
-        )
+        try:
+            # Preparation is complete for every member before any notification
+            # or input, so synchronous worker output cannot race subscription.
+            for worker_id in group.worker_ids:
+                try:
+                    captures[worker_id] = await OutputCollector().open(self._hub, worker_id)
+                except Exception:
+                    open_failures.add(worker_id)
 
-        # Collect output from workers that accepted the send
-        async def _collect(wid: str) -> tuple[str, int]:
-            collector = OutputCollector()
-            return await collector.collect(self._hub, wid, quiesce_ms=quiesce_ms, max_ms=max_response_ms)
+            ready_ids = [worker_id for worker_id in group.worker_ids if worker_id in captures]
+            ready_group = replace(group, worker_ids=ready_ids)
+            if ready_ids:
+                await self._notify_fanout_observers(ready_group, data, send_id, principal)
 
-        tasks: list[asyncio.Task[tuple[str, int]]] = []
-        for wid, ok in zip(group.worker_ids, send_results, strict=True):
-            if ok is True:
-                tasks.append(asyncio.create_task(_collect(wid)))
+            async def _send(worker_id: str) -> tuple[bool | BaseException, float]:
+                try:
+                    accepted = await self._hub.send_worker(worker_id, frame)
+                    return accepted, time.monotonic()
+                except Exception as exc:
+                    return exc, time.monotonic()
 
-        collected: list[tuple[str, int] | BaseException] = (
-            await asyncio.gather(*tasks, return_exceptions=True) if tasks else []
-        )
+            dispatched = await asyncio.gather(*(_send(worker_id) for worker_id in ready_ids))
+            send_results = dict(zip(ready_ids, dispatched, strict=True))
 
-        # Build per-session results
-        results: list[SessionFanOutResult] = []
-        failed_sessions: list[str] = []
-        successful_outputs: list[str] = []
-        successful_indices: list[int] = []
-        collect_idx = 0
+            async def _collect(worker_id: str, started_at: float) -> tuple[str, int]:
+                return await captures[worker_id].collect(
+                    quiesce_ms=quiesce_ms,
+                    max_ms=max_response_ms,
+                    started_at=started_at,
+                )
 
-        for wid, ok in zip(group.worker_ids, send_results, strict=True):
-            if ok is True:
-                item = collected[collect_idx]
-                collect_idx += 1
-                if isinstance(item, BaseException):
-                    results.append(
-                        SessionFanOutResult(
-                            worker_id=wid,
-                            ok=False,
-                            output_delta=None,
-                            elapsed_ms=0,
-                            divergent=False,
-                        )
-                    )
-                    failed_sessions.append(wid)
+            collect_ids: list[str] = []
+            tasks: list[asyncio.Task[tuple[str, int]]] = []
+            for worker_id in ready_ids:
+                accepted, started_at = send_results[worker_id]
+                if accepted is True:
+                    collect_ids.append(worker_id)
+                    tasks.append(asyncio.create_task(_collect(worker_id, started_at)))
+
+            collected_items: list[tuple[str, int] | BaseException] = (
+                await asyncio.gather(*tasks, return_exceptions=True) if tasks else []
+            )
+            collected = dict(zip(collect_ids, collected_items, strict=True))
+
+            # Build per-session results
+            results: list[SessionFanOutResult] = []
+            failed_sessions: list[str] = []
+            successful_outputs: list[str] = []
+            successful_indices: list[int] = []
+
+            for worker_id in group.worker_ids:
+                if worker_id in open_failures:
+                    item: tuple[str, int] | BaseException | None = None
                 else:
+                    accepted, _started_at = send_results[worker_id]
+                    item = collected.get(worker_id) if accepted is True else None
+                if isinstance(item, tuple):
                     delta, elapsed = item
                     results.append(
                         SessionFanOutResult(
-                            worker_id=wid,
+                            worker_id=worker_id,
                             ok=True,
                             output_delta=delta,
                             elapsed_ms=elapsed,
@@ -434,36 +449,39 @@ class FanOutController:
                     )
                     successful_outputs.append(delta)
                     successful_indices.append(len(results) - 1)
-            else:
-                results.append(
-                    SessionFanOutResult(
-                        worker_id=wid,
-                        ok=False,
-                        output_delta=None,
-                        elapsed_ms=0,
-                        divergent=False,
+                else:
+                    results.append(
+                        SessionFanOutResult(
+                            worker_id=worker_id,
+                            ok=False,
+                            output_delta=None,
+                            elapsed_ms=0,
+                            divergent=False,
+                        )
                     )
-                )
-                failed_sessions.append(wid)
+                    failed_sessions.append(worker_id)
 
-        # Compute divergence on successful outputs
-        divergent_sessions: list[str] = []
-        if successful_outputs:
-            flags = compute_divergence(successful_outputs, threshold=group.divergence_threshold)
-            for flag, idx in zip(flags, successful_indices, strict=True):
-                if flag:
-                    results[idx].divergent = True
-                    divergent_sessions.append(results[idx].worker_id)
+            # Compute divergence on successful outputs
+            divergent_sessions: list[str] = []
+            if successful_outputs:
+                flags = compute_divergence(successful_outputs, threshold=group.divergence_threshold)
+                for flag, idx in zip(flags, successful_indices, strict=True):
+                    if flag:
+                        results[idx].divergent = True
+                        divergent_sessions.append(results[idx].worker_id)
 
-        return FanOutResult(
-            group_id=group.group_id,
-            send_id=send_id,
-            command=data,
-            sent_at=sent_at,
-            results=results,
-            divergent_sessions=divergent_sessions,
-            failed_sessions=failed_sessions,
-        )
+            return FanOutResult(
+                group_id=group.group_id,
+                send_id=send_id,
+                command=data,
+                sent_at=sent_at,
+                results=results,
+                divergent_sessions=divergent_sessions,
+                failed_sessions=failed_sessions,
+            )
+        finally:
+            if captures:
+                await asyncio.gather(*(capture.close() for capture in captures.values()), return_exceptions=True)
 
     # -- Sequential --------------------------------------------------------
 
@@ -479,7 +497,6 @@ class FanOutController:
         send_id = uuid.uuid4().hex
         sent_at = time.time()
         frame = {"type": "input", "data": data, "ts": sent_at}
-        await self._notify_fanout_observers(group, data, send_id, principal)
 
         results: list[SessionFanOutResult] = []
         failed_sessions: list[str] = []
@@ -501,8 +518,9 @@ class FanOutController:
                 failed_sessions.append(wid)
                 continue
 
-            ok = await self._hub.send_worker(wid, frame)
-            if not ok:
+            try:
+                capture = await OutputCollector().open(self._hub, wid)
+            except Exception:
                 results.append(
                     SessionFanOutResult(
                         worker_id=wid,
@@ -514,24 +532,59 @@ class FanOutController:
                 )
                 failed_sessions.append(wid)
                 continue
+            try:
+                await self._notify_fanout_observers(replace(group, worker_ids=[wid]), data, send_id, principal)
+                ok = await self._hub.send_worker(wid, frame)
+                started_at = time.monotonic()
+                if not ok:
+                    results.append(
+                        SessionFanOutResult(
+                            worker_id=wid,
+                            ok=False,
+                            output_delta=None,
+                            elapsed_ms=0,
+                            divergent=False,
+                        )
+                    )
+                    failed_sessions.append(wid)
+                    continue
 
-            collector = OutputCollector()
-            delta, elapsed = await collector.collect(self._hub, wid, quiesce_ms=quiesce_ms, max_ms=max_response_ms)
-            results.append(
-                SessionFanOutResult(
-                    worker_id=wid,
-                    ok=True,
-                    output_delta=delta,
-                    elapsed_ms=elapsed,
-                    divergent=False,
+                delta, elapsed = await capture.collect(
+                    quiesce_ms=quiesce_ms,
+                    max_ms=max_response_ms,
+                    started_at=started_at,
                 )
-            )
-            successful_outputs.append(delta)
-            successful_indices.append(len(results) - 1)
+                results.append(
+                    SessionFanOutResult(
+                        worker_id=wid,
+                        ok=True,
+                        output_delta=delta,
+                        elapsed_ms=elapsed,
+                        divergent=False,
+                    )
+                )
+                successful_outputs.append(delta)
+                successful_indices.append(len(results) - 1)
 
-            # Check error pattern
-            if group.stop_on_first_error and group.error_pattern is not None and re.search(group.error_pattern, delta):
-                stopped = True
+                if (
+                    group.stop_on_first_error
+                    and group.error_pattern is not None
+                    and re.search(group.error_pattern, delta)
+                ):
+                    stopped = True
+            except Exception:
+                results.append(
+                    SessionFanOutResult(
+                        worker_id=wid,
+                        ok=False,
+                        output_delta=None,
+                        elapsed_ms=0,
+                        divergent=False,
+                    )
+                )
+                failed_sessions.append(wid)
+            finally:
+                await capture.close()
 
         # Compute divergence on successful outputs
         divergent_sessions: list[str] = []

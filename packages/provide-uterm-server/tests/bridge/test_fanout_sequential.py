@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import asyncio
 import time
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from provide.uterm.server.bridge.fanout._controller import FanOutController
 from provide.uterm.server.bridge.fanout._models import FanOutGroup
@@ -73,7 +75,7 @@ async def test_sequential_iterates_in_order() -> None:
 
     hub.send_worker = _tracking_send  # type: ignore[assignment]
 
-    result = await ctrl.send("g1", "cmd\n", principal="admin")
+    result = await ctrl._send_sequential(group, "cmd\n", 300, 5_000, principal="admin")
     for t in _bg_tasks:
         await t
 
@@ -83,6 +85,42 @@ async def test_sequential_iterates_in_order() -> None:
     assert result.results[0].output_delta == "output-w1"
     assert result.results[1].output_delta == "output-w2"
     assert result.results[2].output_delta == "output-w3"
+
+
+async def test_sequential_captures_output_emitted_inside_send() -> None:
+    hub = await _make_hub_with_workers("w1", "w2")
+    ctrl = FanOutController(hub)
+    group = _make_group(["w1", "w2"])
+
+    async def _send_with_immediate_output(worker_id: str, frame: dict[str, object]) -> bool:
+        await hub.append_event(worker_id, "term", {"data": f"immediate-{worker_id}"})
+        return True
+
+    hub.send_worker = _send_with_immediate_output  # type: ignore[assignment]
+
+    result = await ctrl._send_sequential(group, "id\n", 10, 100, principal="admin")
+
+    assert [item.output_delta for item in result.results] == ["immediate-w1", "immediate-w2"]
+
+
+async def test_sequential_rejected_send_closes_capture_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    hub = MagicMock()
+    hub.broadcast = AsyncMock()
+    hub.send_worker = AsyncMock(return_value=False)
+    handle = MagicMock()
+    handle.close = AsyncMock()
+    handle.collect = AsyncMock(return_value=("", 0))
+
+    class Collector:
+        async def open(self, hub: object, worker_id: str) -> MagicMock:
+            return handle
+
+    monkeypatch.setattr("provide.uterm.server.bridge.fanout._controller.OutputCollector", Collector)
+    result = await FanOutController(hub)._send_sequential(_make_group(["w1"]), "id\n", 10, 100, principal="admin")
+
+    assert result.failed_sessions == ["w1"]
+    handle.collect.assert_not_awaited()
+    handle.close.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------
@@ -118,7 +156,7 @@ async def test_sequential_stop_on_first_error() -> None:
 
     hub.send_worker = _send_with_output  # type: ignore[assignment]
 
-    result = await ctrl.send("g1", "deploy\n", principal="admin")
+    result = await ctrl._send_sequential(group, "deploy\n", 300, 5_000, principal="admin")
     for t in _bg_tasks:
         await t
 
