@@ -41,7 +41,7 @@ export const NON_JSON = "<non-json>";
  * to record `status: null` and leave this capability out, so that the gap
  * showed up in the matrix rather than hiding in it.
  */
-export const CLIENT_CAPABILITIES: readonly string[] = ["hijack.rest", "status.observed"];
+export const CLIENT_CAPABILITIES: readonly string[] = ["hijack.rest", "status.observed", "fanout.rest.strict"];
 
 /**
  * One step of a scenario, as `schema/scenario.schema.json` writes it.

@@ -36,7 +36,7 @@ import httpx
 
 LANGUAGE = "python"
 #: What this driver can do, in the vocabulary scenarios use to require things.
-CAPABILITIES = ("status.observed", "hijack.ws", "hijack.rest")
+CAPABILITIES = ("status.observed", "hijack.ws", "hijack.rest", "fanout.rest.strict")
 #: A token no server issued, for steps that ask what an impostor gets.
 FORGED_TOKEN = "not.a.real.token"  # noqa: S105  # pragma: allowlist secret
 #: What a body that is not JSON is recorded as, in every language.

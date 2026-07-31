@@ -29,6 +29,8 @@ public static class LiveDriver
     /// <item><c>status.observed</c> — the status a client-library call returned is recorded
     /// rather than collapsed into the library's <c>(ok, body)</c>, because
     /// <see cref="Client.HijackClient"/> takes an injected <see cref="HttpClient"/>.</item>
+    /// <item><c>fanout.rest.strict</c> — the served fan-out REST surface rejects
+    /// dormant members by default.</item>
     /// </list>
     /// </summary>
     public static readonly IReadOnlyList<string> Capabilities =
@@ -38,6 +40,7 @@ public static class LiveDriver
         "http.raw",
         "auth.dev_token",
         "status.observed",
+        "fanout.rest.strict",
     ];
 
     public const int UsageExitCode = 2;

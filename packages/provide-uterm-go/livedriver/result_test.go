@@ -135,7 +135,7 @@ func TestCapabilitiesAreCopied(t *testing.T) {
 	}
 	want := map[string]bool{
 		"hijack.rest": false, "sessions.rest": false, "http.raw": false,
-		"auth.dev_token": false, "status.observed": false,
+		"auth.dev_token": false, "status.observed": false, "fanout.rest.strict": false,
 	}
 	for _, c := range Capabilities() {
 		if _, ok := want[c]; !ok {

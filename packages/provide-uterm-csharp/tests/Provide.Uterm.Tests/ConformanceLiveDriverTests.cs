@@ -289,5 +289,6 @@ public sealed class ConformanceLiveDriverScenarioTests
         // The capability is the promise that a 401, a 403 and a 404 arrive as
         // three observations rather than one `ok: false`.
         Assert.Contains("status.observed", LiveDriver.Capabilities);
+        Assert.Contains("fanout.rest.strict", LiveDriver.Capabilities);
     }
 }
