@@ -191,6 +191,37 @@ func (c *Controller) Send(ctx context.Context, groupID, data, principal string, 
 	return c.sendParallel(ctx, group, data, qMS, mMS, principal)
 }
 
+// SendAuthorized executes against the caller-authorized member subset and
+// records every refused member as a per-session failure. The server resolves
+// definitions and authorization immediately before calling this method.
+func (c *Controller) SendAuthorized(ctx context.Context, groupID, data, principal string, quiesceMS, maxResponseMS int, workerIDs, refused []string) Result {
+	group := c.authorizedGroup(groupID, principal)
+	if group == nil {
+		return c.Send(ctx, groupID, data, principal, quiesceMS, maxResponseMS)
+	}
+	dispatchGroup := *group
+	dispatchGroup.WorkerIDs = append([]string(nil), workerIDs...)
+	qMS := quiesceMS
+	if qMS <= 0 {
+		qMS = group.QuiesceMS
+	}
+	mMS := maxResponseMS
+	if mMS <= 0 {
+		mMS = group.MaxResponseMS
+	}
+	var result Result
+	if group.Mode == "sequential" {
+		result = c.sendSequential(ctx, &dispatchGroup, data, qMS, mMS, principal)
+	} else {
+		result = c.sendParallel(ctx, &dispatchGroup, data, qMS, mMS, principal)
+	}
+	for _, wid := range refused {
+		result.Results = append(result.Results, SessionResult{WorkerID: wid, OK: false})
+		result.FailedSessions = append(result.FailedSessions, wid)
+	}
+	return result
+}
+
 // notifyObservers tells each target session's observers that this input is
 // fan-out-originated so they can distinguish it from a local hijack. Port of
 // _notify_fanout_observers.

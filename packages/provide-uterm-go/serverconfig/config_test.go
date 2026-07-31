@@ -32,6 +32,9 @@ func TestDefaultServerConfig(t *testing.T) {
 	if c.MaxWorkers != 10000 || c.MaxConnectionsPerPrincipal != 25 || c.BrowserRateLimitPerSec != 300 {
 		t.Errorf("top scalar defaults wrong")
 	}
+	if c.FanoutAllowUnknownMembers {
+		t.Error("fanout_allow_unknown_members must default false")
+	}
 }
 
 func mustConfig(t *testing.T, data map[string]any) *UtermServerConfig {
@@ -75,9 +78,15 @@ func TestConfigFromMappingSessionsAndPaths(t *testing.T) {
 }
 
 func TestPartialOverridesPreserveDefaults(t *testing.T) {
-	c := mustConfig(t, map[string]any{"auth": map[string]any{"principal_header": "x-user"}})
+	c := mustConfig(t, map[string]any{
+		"auth":                         map[string]any{"principal_header": "x-user"},
+		"fanout_allow_unknown_members": true,
+	})
 	if c.Auth.Mode != "dev_token" || c.Auth.PrincipalHeader != "x-user" {
 		t.Errorf("auth partial override lost defaults: %+v", c.Auth)
+	}
+	if !c.FanoutAllowUnknownMembers {
+		t.Error("fanout_allow_unknown_members override was not loaded")
 	}
 	// Parity with Python: the default's already-derived public_base_url is carried
 	// through the merge, so overriding only the port keeps the default URL.

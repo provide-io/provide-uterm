@@ -319,20 +319,23 @@ type GraphicalTargetConfig struct {
 
 // UtermServerConfig ports config_schema.UtermServerConfig, the top-level model.
 type UtermServerConfig struct {
-	Environment  string              `json:"environment" toml:"environment"`
-	Server       ServerBindConfig    `json:"server" toml:"server"`
-	Auth         AuthConfig          `json:"auth" toml:"auth"`
-	ControlPlane ControlPlaneConfig  `json:"control_plane" toml:"control_plane"`
-	UI           UiConfig            `json:"ui" toml:"ui"`
-	Recording    RecordingConfig     `json:"recording" toml:"recording"`
-	Profiles     ProfileStoreConfig  `json:"profiles" toml:"profiles"`
-	Security     SecurityConfig      `json:"security" toml:"security"`
-	Tunnel       TunnelConfig        `json:"tunnel" toml:"tunnel"`
-	Webhooks     WebhooksConfig      `json:"webhooks" toml:"webhooks"`
-	Pam          PamConfig           `json:"pam" toml:"pam"`
-	Governance   GovernanceConfig    `json:"governance" toml:"governance"`
-	Audit        AuditConfig         `json:"audit" toml:"audit"`
-	Sessions     []SessionDefinition `json:"sessions" toml:"sessions"`
+	Environment  string             `json:"environment" toml:"environment"`
+	Server       ServerBindConfig   `json:"server" toml:"server"`
+	Auth         AuthConfig         `json:"auth" toml:"auth"`
+	ControlPlane ControlPlaneConfig `json:"control_plane" toml:"control_plane"`
+	UI           UiConfig           `json:"ui" toml:"ui"`
+	Recording    RecordingConfig    `json:"recording" toml:"recording"`
+	Profiles     ProfileStoreConfig `json:"profiles" toml:"profiles"`
+	Security     SecurityConfig     `json:"security" toml:"security"`
+	Tunnel       TunnelConfig       `json:"tunnel" toml:"tunnel"`
+	Webhooks     WebhooksConfig     `json:"webhooks" toml:"webhooks"`
+	Pam          PamConfig          `json:"pam" toml:"pam"`
+	Governance   GovernanceConfig   `json:"governance" toml:"governance"`
+	Audit        AuditConfig        `json:"audit" toml:"audit"`
+	// FanoutAllowUnknownMembers permits dormant group members at creation.
+	// Send-time session authorization remains mandatory.
+	FanoutAllowUnknownMembers bool                `json:"fanout_allow_unknown_members" toml:"fanout_allow_unknown_members"`
+	Sessions                  []SessionDefinition `json:"sessions" toml:"sessions"`
 
 	// GraphicalTargets are seeded as immutable system targets at boot.
 	GraphicalTargets []GraphicalTargetConfig `json:"graphical_targets" toml:"graphical_targets"`

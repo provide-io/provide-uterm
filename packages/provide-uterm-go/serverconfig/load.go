@@ -29,6 +29,7 @@ var knownTopLevel = map[string]struct{}{
 	"session_idle_timeout_s": {}, "session_retention_s": {}, "browser_rate_limit_per_sec": {},
 	"rest_acquire_rate_limit_per_sec": {}, "rest_send_rate_limit_per_sec": {},
 	"worker_frame_on_invalid": {}, "max_connections_per_principal": {}, "max_workers": {},
+	"fanout_allow_unknown_members": {},
 }
 
 // errExtraInputs returns the exact Pydantic extra="forbid" message; the leading
@@ -202,6 +203,9 @@ func applyTopScalars(cfg *UtermServerConfig, data map[string]any) error {
 	}
 	if v, ok := asInt(data["max_workers"]); ok {
 		cfg.MaxWorkers = v
+	}
+	if v, ok := data["fanout_allow_unknown_members"].(bool); ok {
+		cfg.FanoutAllowUnknownMembers = v
 	}
 	return nil
 }

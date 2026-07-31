@@ -6,10 +6,14 @@
 package server
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/fanout"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverauth"
 )
+
+const unsupportedFanoutGovernance = "fanout governance is not supported by this server"
 
 // registerFanoutRoutes wires the fan-out group CRUD + send + grant routes. Port
 // of fanout/_routes.register_fanout_routes. Every route requires an
@@ -33,11 +37,18 @@ func (s *Server) handleFanoutCreate(w http.ResponseWriter, r *http.Request) {
 	workerIDs := stringList(body["worker_ids"])
 	name := stringField(body, "name")
 
-	// A group may only contain sessions the creating principal can read. Any
-	// KNOWN session the principal cannot read is rejected; unknown worker ids
-	// (no registered definition) are not gated here.
+	// Strict by default: unknown members require an explicit dormant-member
+	// opt-in, while known members always require current session access.
 	for _, wid := range workerIDs {
-		if def, ok := s.deps.Registry.GetDefinition(r.Context(), wid); ok && !s.deps.Authz.CanReadSession(p, def) {
+		def, ok := s.deps.Registry.GetDefinition(r.Context(), wid)
+		if !ok {
+			if !s.cfg.FanoutAllowUnknownMembers {
+				bridgeError(w, http.StatusBadRequest, "unknown fan-out session: "+wid)
+				return
+			}
+			continue
+		}
+		if !s.deps.Authz.CanReadSession(p, def) {
 			bridgeError(w, http.StatusForbidden, "forbidden: no read access to session "+wid)
 			return
 		}
@@ -112,15 +123,21 @@ func (s *Server) handleFanoutDelete(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleFanoutSend(w http.ResponseWriter, r *http.Request) {
 	p := principalOf(r)
 	groupID := r.PathValue("group_id")
-	if s.fanout.GetGroup(groupID, p.SubjectID) == nil {
+	group := s.fanout.GetGroup(groupID, p.SubjectID)
+	if group == nil {
 		bridgeError(w, http.StatusNotFound, "group not found")
+		return
+	}
+	if s.fanoutGovernanceUnsupported() {
+		bridgeError(w, http.StatusNotImplemented, unsupportedFanoutGovernance)
 		return
 	}
 	body, _ := decodeJSONBody(r)
 	data := stringField(body, "data")
 	// Absent quiesce/max (0) fall back to the group defaults inside Send.
-	result := s.fanout.Send(r.Context(), groupID, data, p.SubjectID,
-		intField(body, "quiesce_ms", 0), intField(body, "max_response_ms", 0))
+	allowed, refused := s.authorizedFanoutMembers(r.Context(), p, group.WorkerIDs)
+	result := s.fanout.SendAuthorized(r.Context(), groupID, data, p.SubjectID,
+		intField(body, "quiesce_ms", 0), intField(body, "max_response_ms", 0), allowed, refused)
 	s.audit(r, "fanout.send", map[string]any{"group_id": groupID, "send_id": result.SendID})
 	writeJSON(w, http.StatusOK, map[string]any{
 		"group_id":           result.GroupID,
@@ -131,6 +148,24 @@ func (s *Server) handleFanoutSend(w http.ResponseWriter, r *http.Request) {
 		"divergent_sessions": result.DivergentSessions,
 		"failed_sessions":    result.FailedSessions,
 	})
+}
+
+func (s *Server) authorizedFanoutMembers(ctx context.Context, p *serverauth.Principal, workerIDs []string) ([]string, []string) {
+	allowed := make([]string, 0, len(workerIDs))
+	refused := make([]string, 0)
+	for _, wid := range workerIDs {
+		def, ok := s.deps.Registry.GetDefinition(ctx, wid)
+		if !ok || !s.deps.Authz.CanReadSession(p, def) {
+			refused = append(refused, wid)
+			continue
+		}
+		allowed = append(allowed, wid)
+	}
+	return allowed, refused
+}
+
+func (s *Server) fanoutGovernanceUnsupported() bool {
+	return s.cfg.Governance.PolicyWebhookURL != nil && *s.cfg.Governance.PolicyWebhookURL != ""
 }
 
 // handleFanoutGrant grants another principal access to a group (creator only).
