@@ -44,6 +44,16 @@ public sealed class ServerFanoutTests
         Assert.Equal(["w1"], initial.Allowed);
         Assert.Equal(["missing"], initial.Refused);
 
+        var fanout = new Provide.Uterm.Fanout.Controller();
+        fanout.CreateGroup(new Provide.Uterm.Fanout.Group
+        {
+            GroupId = "g1",
+            Name = "g",
+            WorkerIds = ["w1"],
+        }, "alice");
+        fanout.GrantAccess("g1", "bob", "alice");
+        Assert.NotNull(fanout.GetGroup("g1", "bob"));
+
         definition.Visibility = "private";
         registry.Upsert(definition);
         var revoked = server.AuthorizedFanoutMembers(viewer, ["w1"]);

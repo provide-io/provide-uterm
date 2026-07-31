@@ -237,6 +237,44 @@ async def test_send_rechecks_current_session_authorization() -> None:
     assert result.results[0].ok is False
 
 
+@pytest.mark.asyncio
+async def test_group_grant_does_not_bypass_session_authorization() -> None:
+    from provide.uterm.server.bridge.fanout._controller import FanOutController
+    from provide.uterm.server.bridge.fanout._models import FanOutGroup
+    from provide.uterm.server.bridge.identity import Principal
+
+    hub = MagicMock()
+    hub.broadcast = AsyncMock()
+    hub.send_worker = AsyncMock(return_value=True)
+    hub.approval_store = None
+    definition = _sess("w1", owner="alice", visibility="private")
+
+    ctrl = FanOutController(
+        hub,
+        resolve_session=AsyncMock(return_value=definition),
+        can_read_session=AsyncMock(return_value=False),
+    )
+    group = FanOutGroup(
+        group_id="g1",
+        name="g",
+        worker_ids=["w1"],
+        created_by="alice",
+        created_at=0.0,
+        grants=["bob"],
+    )
+    await ctrl.create_group(group, principal="alice")
+
+    result = await ctrl.send(
+        "g1",
+        "whoami\n",
+        principal=Principal(subject_id="bob", roles=frozenset({"admin"})),
+    )
+
+    hub.send_worker.assert_not_awaited()
+    hub.broadcast.assert_not_awaited()
+    assert result.failed_sessions == ["w1"]
+
+
 class TestSendToNonexistentGroup:
     def test_send_to_nonexistent_group(self) -> None:
         app = _make_app()

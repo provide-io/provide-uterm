@@ -193,6 +193,32 @@ func TestAuthorizedFanoutMembersRechecksCurrentAuthorization(t *testing.T) {
 	}
 }
 
+func TestFanoutGroupGrantDoesNotBypassSessionAuthorization(t *testing.T) {
+	ts := newTestServer(t, nil)
+	ts.reg.add("w1", "admin1", "private")
+	creator := adminHeaders()
+	grantee := map[string]string{"X-Subject": "admin2", "X-Role": "admin"}
+
+	rec := ts.do("POST", "/api/fanout/groups", `{"name":"g","worker_ids":["w1"]}`, creator)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("create status/body = %d %s", rec.Code, rec.Body.String())
+	}
+	groupID := decodeBody(t, rec.Body.String()).(map[string]any)["group_id"].(string)
+	if rec = ts.do("POST", "/api/fanout/groups/"+groupID+"/grants", `{"grantee":"admin2"}`, creator); rec.Code != http.StatusNoContent {
+		t.Fatalf("grant status/body = %d %s", rec.Code, rec.Body.String())
+	}
+
+	rec = ts.do("POST", "/api/fanout/groups/"+groupID+"/send", `{"data":"id"}`, grantee)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("grantee send status/body = %d %s", rec.Code, rec.Body.String())
+	}
+	result := decodeBody(t, rec.Body.String()).(map[string]any)
+	failed := result["failed_sessions"].([]any)
+	if len(failed) != 1 || failed[0] != "w1" {
+		t.Fatalf("failed_sessions = %v, want [w1]", failed)
+	}
+}
+
 func TestFanoutRefusesConfiguredUnsupportedGovernance(t *testing.T) {
 	ts := newTestServer(t, func(cfg *serverconfig.UtermServerConfig, _ *Deps) {
 		cfg.FanoutAllowUnknownMembers = true
