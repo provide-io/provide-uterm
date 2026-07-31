@@ -908,6 +908,11 @@
       "optional": false,
       "required": false
     },
+    "fanout_allow_unknown_members": {
+      "kind": "bool",
+      "optional": false,
+      "required": false
+    },
     "sessions": {
       "kind": "list",
       "item": {
@@ -3559,6 +3564,7 @@
           "chain_enabled": false,
           "chain_file": null
         },
+        "fanout_allow_unknown_members": false,
         "sessions": [
           {
             "session_id": "provide-shell",
@@ -3755,6 +3761,7 @@
           "chain_enabled": false,
           "chain_file": null
         },
+        "fanout_allow_unknown_members": false,
         "sessions": [
           {
             "session_id": "provide-shell",
@@ -3951,6 +3958,7 @@
           "chain_enabled": false,
           "chain_file": null
         },
+        "fanout_allow_unknown_members": false,
         "sessions": [
           {
             "session_id": "provide-shell",
@@ -4132,6 +4140,7 @@
           "chain_enabled": false,
           "chain_file": null
         },
+        "fanout_allow_unknown_members": false,
         "sessions": [
           {
             "session_id": "provide-shell",
@@ -4313,6 +4322,7 @@
           "chain_enabled": false,
           "chain_file": null
         },
+        "fanout_allow_unknown_members": false,
         "sessions": [
           {
             "session_id": "provide-shell",
@@ -4494,6 +4504,7 @@
           "chain_enabled": false,
           "chain_file": null
         },
+        "fanout_allow_unknown_members": false,
         "sessions": [
           {
             "session_id": "provide-shell",
@@ -4675,6 +4686,7 @@
           "chain_enabled": false,
           "chain_file": null
         },
+        "fanout_allow_unknown_members": false,
         "sessions": [
           {
             "session_id": "provide-shell",
@@ -4856,6 +4868,7 @@
           "chain_enabled": false,
           "chain_file": null
         },
+        "fanout_allow_unknown_members": false,
         "sessions": [
           {
             "session_id": "provide-shell",
@@ -5244,6 +5257,7 @@
           "chain_enabled": false,
           "chain_file": null
         },
+        "fanout_allow_unknown_members": false,
         "sessions": [
           {
             "session_id": "provide-shell",
@@ -5467,6 +5481,7 @@
           "chain_enabled": false,
           "chain_file": null
         },
+        "fanout_allow_unknown_members": false,
         "sessions": [
           {
             "session_id": "s1",

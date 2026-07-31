@@ -209,6 +209,7 @@ export const TOP_LEVEL_FIELD_SPEC = {
   pam: "model:PamConfig",
   governance: "model:GovernanceConfig",
   audit: "model:AuditConfig",
+  fanout_allow_unknown_members: "bool",
   sessions: "model:SessionDefinition[]",
   graphical_targets: "model:GraphicalTargetConfig[]",
   session_idle_timeout_s: "int",

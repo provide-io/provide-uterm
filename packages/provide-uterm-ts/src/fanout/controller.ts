@@ -78,6 +78,10 @@ export interface FanOutControllerOptions {
   now?: () => number;
   /** Identifier source for sends and approvals. */
   newId?: () => string;
+  /** Resolve the current definition of a group member before delivery. */
+  resolveSession?: (workerId: string) => Promise<unknown | undefined>;
+  /** Check current session read access for a principal. */
+  canReadSession?: (principal: string, definition: unknown) => Promise<boolean>;
 }
 
 /** Per-send overrides for the group's timings. */
@@ -86,6 +90,10 @@ export interface SendOptions {
   quiesceMs?: number;
   /** Hard cap on how long to wait for any one session. */
   maxResponseMs?: number;
+  /** Route-authorized members. Internal route/controller integration option. */
+  memberWorkerIds?: string[];
+  /** Members refused by current route authorization. */
+  refusedWorkerIds?: string[];
 }
 
 /** A command held awaiting approval. */
@@ -111,6 +119,8 @@ export class FanOutController {
   readonly #policyGate: FanOutPolicyGate | undefined;
   readonly #now: () => number;
   readonly #newId: () => string;
+  readonly #resolveSession: ((workerId: string) => Promise<unknown | undefined>) | undefined;
+  readonly #canReadSession: ((principal: string, definition: unknown) => Promise<boolean>) | undefined;
   readonly #pending = new Map<string, PendingApproval>();
 
   constructor(options: FanOutControllerOptions) {
@@ -120,6 +130,8 @@ export class FanOutController {
     this.#policyGate = options.policyGate;
     this.#now = options.now ?? (() => Date.now() / 1000);
     this.#newId = options.newId ?? (() => crypto.randomUUID().replaceAll("-", ""));
+    this.#resolveSession = options.resolveSession;
+    this.#canReadSession = options.canReadSession;
     // A held command that is never decided would otherwise sit in memory for
     // the life of the process, and stay releasable long after its window.
     this.#hub.onApprovalExpired = (requestId) => {
@@ -207,7 +219,8 @@ export class FanOutController {
     if (decision.action === "hold") {
       return this.#hold(group, data, principal, options);
     }
-    return this.#dispatch(group, data, principal, options);
+    const authorized = await this.#authorizedMembers(group, principal, options);
+    return this.#dispatch(group, data, principal, { ...options, ...authorized });
   }
 
   /**
@@ -228,10 +241,12 @@ export class FanOutController {
     if (group === undefined) {
       return undefined;
     }
-    return this.#dispatch(group, pending.command, pending.principal, {
+    const options: SendOptions = {
       ...(pending.quiesceMs === undefined ? {} : { quiesceMs: pending.quiesceMs }),
       ...(pending.maxResponseMs === undefined ? {} : { maxResponseMs: pending.maxResponseMs }),
-    });
+    };
+    const authorized = await this.#authorizedMembers(group, pending.principal, options);
+    return this.#dispatch(group, pending.command, pending.principal, { ...options, ...authorized });
   }
 
   /** The group, if `principal` created it or was granted it. */
@@ -241,6 +256,39 @@ export class FanOutController {
       return undefined;
     }
     return group.createdBy === principal || group.grants.includes(principal) ? group : undefined;
+  }
+
+  async #authorizedMembers(
+    group: FanOutGroup,
+    principal: string,
+    options: SendOptions,
+  ): Promise<Pick<SendOptions, "memberWorkerIds" | "refusedWorkerIds">> {
+    if (this.#resolveSession === undefined || this.#canReadSession === undefined) {
+      return {
+        memberWorkerIds: options.memberWorkerIds ?? [...group.workerIds],
+        refusedWorkerIds: options.refusedWorkerIds ?? [],
+      };
+    }
+    const routeAllowed = new Set(options.memberWorkerIds ?? group.workerIds);
+    const refused = new Set(options.refusedWorkerIds ?? []);
+    const allowed: string[] = [];
+    for (const workerId of group.workerIds) {
+      if (!routeAllowed.has(workerId)) {
+        refused.add(workerId);
+        continue;
+      }
+      try {
+        const definition = await this.#resolveSession(workerId);
+        if (definition !== undefined && (await this.#canReadSession(principal, definition))) {
+          allowed.push(workerId);
+        } else {
+          refused.add(workerId);
+        }
+      } catch {
+        refused.add(workerId);
+      }
+    }
+    return { memberWorkerIds: allowed, refusedWorkerIds: [...refused] };
   }
 
   /** Ask the policy gate, defaulting to allow when none is configured. */
@@ -310,9 +358,18 @@ export class FanOutController {
     };
     // Compared against the literal, matching the reference: an unrecognised
     // mode fans out rather than failing closed.
-    return group.mode === "sequential"
-      ? this.#sendSequential(group, data, principal, timings)
-      : this.#sendParallel(group, data, principal, timings);
+    const dispatchGroup = { ...group, workerIds: options.memberWorkerIds ?? [...group.workerIds] };
+    const result =
+      group.mode === "sequential"
+        ? await this.#sendSequential(dispatchGroup, data, principal, timings)
+        : await this.#sendParallel(dispatchGroup, data, principal, timings);
+    for (const workerId of options.refusedWorkerIds ?? []) {
+      if (!result.failedSessions.includes(workerId)) {
+        result.results.push(this.#failedRow(workerId));
+        result.failedSessions.push(workerId);
+      }
+    }
+    return result;
   }
 
   /** An outcome carrying no sessions, for the refusal paths. */

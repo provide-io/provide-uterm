@@ -309,6 +309,23 @@ describe("FanOutController policy", () => {
     expect(await controller.releaseApprovedCommand(held.approvalId ?? "")).toBeUndefined();
   });
 
+  it("re-checks every member's session authorization when an approval is released", async () => {
+    let readable = true;
+    const { controller, hub } = build({
+      policyGate: { interceptFanout: async () => ({ action: "hold" }) },
+      resolveSession: async (workerId) => ({ workerId }),
+      canReadSession: async () => readable,
+    });
+    await controller.createGroup(group(["w1"]), "alice");
+    const held = await controller.send("g1", "reboot", "alice");
+
+    readable = false;
+    const released = await controller.releaseApprovedCommand(held.approvalId ?? "");
+
+    expect(hub.sent).toStrictEqual([]);
+    expect(released?.failedSessions).toStrictEqual(["w1"]);
+  });
+
   it("forgets a pending command when its approval expires", async () => {
     // Otherwise a held command lingers in memory for the life of the process
     // and could still be released long after the window closed.
