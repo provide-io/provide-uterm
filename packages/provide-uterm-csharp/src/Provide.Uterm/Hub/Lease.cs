@@ -131,12 +131,12 @@ public sealed class HijackLeaseManager
             var delivery = await SendPauseAsync(workerWs, encoded, ct).ConfigureAwait(false);
             if (delivery.Outcome != PauseDeliveryOutcome.Delivered)
             {
-                if (delivery.Outcome == PauseDeliveryOutcome.PossiblyDelivered)
-                {
-                    await ResolvePauseObligationAsync(
-                        workerId, reservation, workerWs, pausePossiblyLanded: true)
-                        .ConfigureAwait(false);
-                }
+                await ResolvePauseObligationAsync(
+                    workerId,
+                    reservation,
+                    workerWs,
+                    pausePossiblyLanded: delivery.Outcome == PauseDeliveryOutcome.PossiblyDelivered)
+                    .ConfigureAwait(false);
                 if (delivery.Error is OperationCanceledException canceled)
                 {
                     throw canceled;
@@ -309,12 +309,12 @@ public sealed class HijackLeaseManager
             var delivery = await SendPauseAsync(workerWs, encoded, ct).ConfigureAwait(false);
             if (delivery.Outcome != PauseDeliveryOutcome.Delivered)
             {
-                if (delivery.Outcome == PauseDeliveryOutcome.PossiblyDelivered)
-                {
-                    await ResolvePauseObligationAsync(
-                        workerId, reservation, workerWs, pausePossiblyLanded: true)
-                        .ConfigureAwait(false);
-                }
+                await ResolvePauseObligationAsync(
+                    workerId,
+                    reservation,
+                    workerWs,
+                    pausePossiblyLanded: delivery.Outcome == PauseDeliveryOutcome.PossiblyDelivered)
+                    .ConfigureAwait(false);
                 if (delivery.Error is OperationCanceledException canceled) throw canceled;
                 return (false, "no_worker");
             }
