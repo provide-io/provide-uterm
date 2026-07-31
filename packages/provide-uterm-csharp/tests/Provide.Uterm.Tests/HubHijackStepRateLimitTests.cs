@@ -6,6 +6,7 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
+using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using Provide.Uterm.Hub;
@@ -37,7 +38,7 @@ namespace Provide.Uterm.Tests;
 /// </summary>
 public sealed class HubHijackStepRateLimitTests
 {
-    private const string Worker = "provide-shell";
+    private const string Worker = "provideshell";
 
     private static int FreePort()
     {
@@ -52,8 +53,10 @@ public sealed class HubHijackStepRateLimitTests
     {
         public required UtermServer Server { get; init; }
         public required HttpClient Http { get; init; }
+        public required TermHub Hub { get; init; }
         public required ManualClock Clock { get; init; }
         public required ConcurrentQueue<string> Metrics { get; init; }
+        public required StepWorker WorkerSocket { get; init; }
         public string HijackId { get; set; } = "";
 
         public int MetricCount(string name) => Metrics.Count(m => string.Equals(m, name, StringComparison.Ordinal));
@@ -77,6 +80,19 @@ public sealed class HubHijackStepRateLimitTests
         }
     }
 
+    private sealed class StepWorker : IWorkerWs
+    {
+        public bool FailStep { get; set; }
+
+        public Task SendTextAsync(string payload, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (FailStep)
+                throw new WebSocketException("worker disconnected");
+            return Task.CompletedTask;
+        }
+    }
+
     private static StringContent Json(string body) => new(body, Encoding.UTF8, "application/json");
 
     /// <summary>
@@ -93,21 +109,36 @@ public sealed class HubHijackStepRateLimitTests
         cfg.Server.Port = port;
         cfg.Server.PublicBaseUrl = $"http://127.0.0.1:{port}";
         cfg.Auth.Mode = "dev_token";
+        cfg.Sessions =
+        [
+            new SessionDefinition
+            {
+                SessionId = Worker,
+                DisplayName = "Step fixture",
+                AutoStart = false,
+                InputMode = InputModes.Hijack,
+                Visibility = "public",
+            },
+        ];
         var token = DevIdp.Setup(cfg.Auth, new DevIdp.Options
         {
             TokenPath = Path.Combine(Path.GetTempPath(), "step-limit-" + Guid.NewGuid().ToString("N")),
             Subject = "admin",
             Roles = ["admin"],
         });
+        var hub = new TermHub(new TermHubConfig
+        {
+            RestAcquireRateLimitPerSec = acquireRate,
+            RestSendRateLimitPerSec = sendRate,
+            Clock = clock,
+            OnMetric = (name, _) => metrics.Enqueue(name),
+        });
+        var worker = new StepWorker();
+        hub.Conn.RegisterWorker(Worker, worker);
+        hub.Registry.Get(Worker)!.InputMode = InputModes.Hijack;
         var server = new UtermServer(new ServerDeps
         {
-            Hub = new TermHub(new TermHubConfig
-            {
-                RestAcquireRateLimitPerSec = acquireRate,
-                RestSendRateLimitPerSec = sendRate,
-                Clock = clock,
-                OnMetric = (name, _) => metrics.Enqueue(name),
-            }),
+            Hub = hub,
             Auth = new LocalIdentityProvider(cfg.Auth, new ApiKeyStore()),
             Authz = new AuthorizationService(),
             Config = cfg,
@@ -117,15 +148,59 @@ public sealed class HubHijackStepRateLimitTests
         });
         server.Build([$"http://127.0.0.1:{port}"]);
         await server.StartAsync();
+        hub.Registry.Get(Worker)!.InputMode = InputModes.Hijack;
         var http = new HttpClient { BaseAddress = new Uri(server.BaseAddress!) };
         http.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", "Bearer " + token);
-        var h = new Harness { Server = server, Http = http, Clock = clock, Metrics = metrics };
-        (await http.PostAsync($"/api/sessions/{Worker}/mode", Json("""{"input_mode": "hijack"}""")))
-            .EnsureSuccessStatusCode();
+        var h = new Harness
+        {
+            Server = server,
+            Http = http,
+            Hub = hub,
+            Clock = clock,
+            Metrics = metrics,
+            WorkerSocket = worker,
+        };
         var acquire = await h.Acquire();
-        acquire.EnsureSuccessStatusCode();
+        Assert.True(
+            acquire.IsSuccessStatusCode,
+            $"Acquire failed with {(int)acquire.StatusCode}: {await acquire.Content.ReadAsStringAsync()}");
         h.HijackId = (await acquire.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("hijack_id").GetString()!;
         return h;
+    }
+
+    [Fact]
+    public async Task ValidLeaseWithFailedWorkerDeliveryReturnsConflictWithoutSuccessEffects()
+    {
+        await using var h = await StartAsync(acquireRate: 50, sendRate: 50);
+        h.WorkerSocket.FailStep = true;
+        var beforeMetric = h.MetricCount("hijack_steps_total");
+
+        var response = await h.Step();
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal(
+            "No worker connected for this session.",
+            (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetString());
+        Assert.Equal(beforeMetric, h.MetricCount("hijack_steps_total"));
+        Assert.DoesNotContain(
+            h.Hub.Router.GetRecentEvents(Worker, 100),
+            evt => Equals(evt.GetValueOrDefault("type"), "hijack_step"));
+    }
+
+    [Fact]
+    public async Task SuccessfulDeliveryReportsLeaseAndRecordsSuccessEffects()
+    {
+        await using var h = await StartAsync(acquireRate: 50, sendRate: 50);
+
+        var response = await h.Step();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(1600, body.GetProperty("lease_expires_at").GetDouble());
+        Assert.Equal(1, h.MetricCount("hijack_steps_total"));
+        Assert.Contains(
+            h.Hub.Router.GetRecentEvents(Worker, 100),
+            evt => Equals(evt.GetValueOrDefault("type"), "hijack_step"));
     }
 
     /// <summary>The refusal itself: 429, that body, and nothing else.</summary>

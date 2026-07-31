@@ -87,6 +87,9 @@ public sealed partial class UtermServer : IAsyncDisposable
         _startTime = _clock.Wall();
         _resumeTokens = new ResumeTokenStore(_clock);
         _deckMux = new DeckMuxPresence(new HubDeckMuxBroadcaster(_deps.Hub));
+        _lazyFanout = new Lazy<Fanout.Controller>(
+            CreateDefaultFanout,
+            System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
         if (deps.Registry is InMemorySessionRegistry memoryRegistry)
         {
             deps.Hub.Conn.ConfigureWorkerOfflineMarker(workerId =>
@@ -499,19 +502,39 @@ public sealed partial class UtermServer : IAsyncDisposable
             return limited!;
         }
 
-        if (_deps.Hub.GetRestSession(workerId, hijackId) is null)
+        var hs = _deps.Hub.GetRestSession(workerId, hijackId);
+        if (hs is null)
         {
             return BridgeError(404, "Invalid or expired hijack session.");
         }
 
-        await _deps.Hub.SendWorkerAsync(workerId, new Dictionary<string, object?>
+        var (sent, _) = await _deps.Hub.SendWorkerAsync(workerId, new Dictionary<string, object?>
         {
             ["type"] = "control",
             ["action"] = "step",
             ["hijack_id"] = hijackId,
             ["ts"] = _clock.Wall(),
         }, ctx.RequestAborted).ConfigureAwait(false);
-        return Results.Json(new { ok = true, worker_id = workerId, hijack_id = hijackId }, JsonOpts);
+        if (!sent)
+        {
+            return BridgeError(409, "No worker connected for this session.");
+        }
+
+        _deps.Hub.AppendEventData(workerId, "hijack_step", new Dictionary<string, object?>
+        {
+            ["hijack_id"] = hijackId,
+        });
+        _deps.Hub.Metric("hijack_steps_total", 1);
+        var fresh = _deps.Hub.GetRestSession(workerId, hijackId);
+        var freshExpires = fresh?.LeaseExpiresAt ?? hs.LeaseExpiresAt;
+        var leaseExpiresAt = _clock.Wall() + (freshExpires - _clock.Monotonic());
+        return Results.Json(new
+        {
+            ok = true,
+            worker_id = workerId,
+            hijack_id = hijackId,
+            lease_expires_at = leaseExpiresAt,
+        }, JsonOpts);
     }
 
     private async Task<IResult> HandleHijackRelease(HttpContext ctx, string workerId, string hijackId)
