@@ -244,6 +244,9 @@ def _parse_event(line: bytes) -> PamEvent | None:
     except Exception:
         logger.warning("pam_notify_listener bad_json line=%r", line[:80])
         return None
+    if not isinstance(data, dict):
+        logger.warning("pam_notify_listener non_object_json line=%r", line[:80])
+        return None
 
     ev = data.get("event")
     if ev not in ("open", "close"):

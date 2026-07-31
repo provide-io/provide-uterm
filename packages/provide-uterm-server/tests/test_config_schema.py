@@ -84,3 +84,12 @@ def test_cf_access_team_domain_strips_scheme_and_path():
         {"auth": {"cf_access_team_domain": "https://other.cloudflareaccess.com/", "jwt_issuer": ""}}
     )
     assert config.auth.jwt_issuer == "https://other.cloudflareaccess.com"
+
+
+def test_cf_access_empty_team_subdomain_does_not_synthesize_jwt_urls():
+    config = config_from_mapping(
+        {"auth": {"cf_access_team_domain": "https://.cloudflareaccess.com/", "jwt_issuer": ""}}
+    )
+
+    assert config.auth.jwt_jwks_url is None
+    assert config.auth.jwt_issuer == ""

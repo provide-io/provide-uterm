@@ -181,7 +181,10 @@ class _SessionRuntimeIoMixin:
         if len(body) > _MAX_REQUEST_BODY:
             logger.warning("request_json: body too large (%d bytes), rejecting", len(body))
             return {}
-        value = json.loads(body)
+        try:
+            value = json.loads(body)
+        except json.JSONDecodeError:
+            return {}
         if not isinstance(value, dict):
             return {}
         return value
