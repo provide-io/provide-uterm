@@ -44,6 +44,14 @@ export interface CollectedOutput {
   elapsedMs: number;
 }
 
+/** An output subscription opened before worker dispatch. */
+export interface OutputCapture {
+  /** Collect from the already-open subscription. */
+  collect(options: Omit<CollectOutputOptions, "subscribe"> & { startedAt?: number }): Promise<CollectedOutput>;
+  /** Close the subscription exactly once. */
+  close(): Promise<void>;
+}
+
 /** Monotonic seconds, from a clock that cannot jump backwards. */
 function monotonicNow(): number {
   return performance.now() / 1000;
@@ -77,49 +85,62 @@ function textField(event: Record<string, unknown>, key: string): string {
  * With no subscription there is no bus, which is a valid configuration rather
  * than an error.
  */
-export async function collectOutput(options: CollectOutputOptions): Promise<CollectedOutput> {
+export async function openOutputCapture(options: Pick<CollectOutputOptions, "subscribe" | "now">): Promise<OutputCapture | undefined> {
   if (options.subscribe === undefined) {
-    return { output: "", elapsedMs: 0 };
+    return undefined;
   }
   const now = options.now ?? monotonicNow;
-  const start = now();
-  const termChunks: string[] = [];
-  let lastSnapshotScreen = "";
-
   const subscription = await options.subscribe();
-  try {
-    for (;;) {
-      const remainingMs = options.maxMs - (now() - start) * 1000;
-      if (remainingMs <= 0) {
-        break;
-      }
-      // Never wait past the hard cap, however long the quiesce window is.
-      const event = await subscription.next(Math.min(remainingMs, options.quiesceMs));
-      if (event === undefined || event === null) {
-        break;
-      }
-      if (event.type === "term") {
-        const text = textField(event, "data");
-        if (text !== "") {
-          termChunks.push(text);
-        }
-        continue;
-      }
-      // The subscription filters to term and snapshot, so anything else is
-      // the snapshot path.
-      const screen = textField(event, "screen");
-      if (screen !== "") {
-        lastSnapshotScreen = screen;
-      }
-    }
-  } finally {
-    // The bus keeps a queue per subscriber; leaving one open leaks it for the
-    // life of the worker, including when collection fails.
-    await subscription.close();
-  }
-
+  let closed = false;
   return {
-    output: termChunks.length > 0 ? termChunks.join("") : lastSnapshotScreen,
-    elapsedMs: Math.trunc((now() - start) * 1000),
+    async collect(collectOptions): Promise<CollectedOutput> {
+      const start = collectOptions.startedAt ?? now();
+      const termChunks: string[] = [];
+      let lastSnapshotScreen = "";
+      for (;;) {
+        const remainingMs = collectOptions.maxMs - (now() - start) * 1000;
+        if (remainingMs <= 0) {
+          break;
+        }
+        const event = await subscription.next(Math.min(remainingMs, collectOptions.quiesceMs));
+        if (event === undefined || event === null) {
+          break;
+        }
+        if (event.type === "term") {
+          const text = textField(event, "data");
+          if (text !== "") {
+            termChunks.push(text);
+          }
+          continue;
+        }
+        const screen = textField(event, "screen");
+        if (screen !== "") {
+          lastSnapshotScreen = screen;
+        }
+      }
+      return {
+        output: termChunks.length > 0 ? termChunks.join("") : lastSnapshotScreen,
+        elapsedMs: Math.trunc((now() - start) * 1000),
+      };
+    },
+    async close(): Promise<void> {
+      if (closed) {
+        return;
+      }
+      closed = true;
+      await subscription.close();
+    },
   };
+}
+
+export async function collectOutput(options: CollectOutputOptions): Promise<CollectedOutput> {
+  const capture = await openOutputCapture(options);
+  if (capture === undefined) {
+    return { output: "", elapsedMs: 0 };
+  }
+  try {
+    return await capture.collect(options);
+  } finally {
+    await capture.close();
+  }
 }

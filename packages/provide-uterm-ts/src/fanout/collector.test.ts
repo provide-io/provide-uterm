@@ -4,7 +4,7 @@
 //
 
 import { describe, expect, it } from "vitest";
-import { collectOutput, type EventSubscription } from "./index.ts";
+import { collectOutput, type EventSubscription, openOutputCapture } from "./index.ts";
 
 /**
  * A subscription the test drives step by step.
@@ -83,6 +83,22 @@ function snapshot(screen: unknown) {
 }
 
 describe("collectOutput", () => {
+  it("closes an explicitly opened capture exactly once", async () => {
+    let closes = 0;
+    const capture = await openOutputCapture({
+      subscribe: async () => ({
+        next: async () => undefined,
+        close: async () => {
+          closes += 1;
+        },
+      }),
+    });
+
+    await capture?.close();
+    await capture?.close();
+
+    expect(closes).toBe(1);
+  });
   it("returns nothing when there is no event bus", async () => {
     // A hub without one is a valid configuration, not an error.
     expect(await collectOutput({ quiesceMs: 500, maxMs: 10_000 })).toStrictEqual({ output: "", elapsedMs: 0 });

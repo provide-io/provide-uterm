@@ -94,11 +94,11 @@ export interface FanOutResult {
   /** Sessions the send did not reach or that reported failure. */
   failedSessions: string[];
   /** Why the send as a whole failed, when it did. */
-  error?: string | undefined;
+  error: string | null;
   /** Whether the command is held pending approval. */
   approvalRequired: boolean;
   /** The approval to resolve, when one is required. */
-  approvalId?: string | undefined;
+  approvalId: string | null;
 }
 
 /** Options for {@link fanOutResult}. */
@@ -151,9 +151,9 @@ export function fanOutResult(options: FanOutResultOptions): FanOutResult {
     results: options.results,
     divergentSessions: options.divergentSessions,
     failedSessions: options.failedSessions,
-    error: options.error,
+    error: options.error ?? null,
     approvalRequired: options.approvalRequired ?? false,
-    approvalId: options.approvalId,
+    approvalId: options.approvalId ?? null,
   };
 }
 
