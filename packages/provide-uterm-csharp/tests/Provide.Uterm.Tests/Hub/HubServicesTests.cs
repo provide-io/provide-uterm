@@ -261,7 +261,12 @@ public class HubServicesTests
         var resumed = Assert.Single(worker.Sent, s => s.Contains("resume", StringComparison.Ordinal));
         // Named for the owner it was taken from, as the reference does.
         Assert.Contains("operator", resumed, StringComparison.Ordinal);
-        Assert.Equal(("w1", false, (string?)null), Assert.Single(changes));
+        Assert.Equal(
+            [
+                ("w1", true, "operator"),
+                ("w1", false, (string?)null),
+            ],
+            changes);
         Assert.Null(hub.Registry.Get("w1")!.HijackSession);
         // Nothing held now, so a second release is a no-op and says so.
         Assert.False(await hub.Conn.ForceReleaseHijackAsync("w1"));
@@ -274,6 +279,8 @@ public class HubServicesTests
         Assert.True(await hub.Conn.ForceReleaseHijackAsync("w1"));
         Assert.Contains(worker.Sent, s => s.Contains("server-forced", StringComparison.Ordinal));
         Assert.Null(hub.Registry.Get("w1")!.HijackOwner);
+        Assert.Equal(3, changes.Count);
+        Assert.Equal(("w1", false, (string?)null), changes[2]);
 
         // An owner whose lease already ran out was not holding anything, so
         // clearing it is not announced as a release.

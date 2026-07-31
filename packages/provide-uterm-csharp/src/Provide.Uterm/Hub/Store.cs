@@ -5,6 +5,85 @@
 
 namespace Provide.Uterm.Hub;
 
+public enum OwnershipPublicationExpectation
+{
+    RestHeld,
+    DashboardHeld,
+    Released,
+}
+
+public sealed record OwnershipPublicationToken
+{
+    private OwnershipPublicationToken(
+        string workerId,
+        long ownershipVersion,
+        OwnershipPublicationExpectation expectation,
+        bool enabled,
+        string? publishedOwner,
+        string? restHijackId,
+        string? restOwner,
+        object? dashboardOwner)
+    {
+        WorkerId = workerId;
+        OwnershipVersion = ownershipVersion;
+        Expectation = expectation;
+        Enabled = enabled;
+        PublishedOwner = publishedOwner;
+        RestHijackId = restHijackId;
+        RestOwner = restOwner;
+        DashboardOwner = dashboardOwner;
+    }
+
+    public string WorkerId { get; }
+    public long OwnershipVersion { get; }
+    public OwnershipPublicationExpectation Expectation { get; }
+    public bool Enabled { get; }
+    public string? PublishedOwner { get; }
+    public string? RestHijackId { get; }
+    public string? RestOwner { get; }
+    public object? DashboardOwner { get; }
+
+    public static OwnershipPublicationToken RestHeld(
+        string workerId,
+        long ownershipVersion,
+        string hijackId,
+        string owner) => new(
+            workerId,
+            ownershipVersion,
+            OwnershipPublicationExpectation.RestHeld,
+            true,
+            owner,
+            hijackId,
+            owner,
+            null);
+
+    public static OwnershipPublicationToken DashboardHeld(
+        string workerId,
+        long ownershipVersion,
+        object owner,
+        string? publishedOwner = null) => new(
+            workerId,
+            ownershipVersion,
+            OwnershipPublicationExpectation.DashboardHeld,
+            true,
+            publishedOwner,
+            null,
+            null,
+            owner);
+
+    public static OwnershipPublicationToken Released(
+        string workerId,
+        long ownershipVersion) => new(
+            workerId,
+            ownershipVersion,
+            OwnershipPublicationExpectation.Released,
+            false,
+            null,
+            null,
+            null,
+            null);
+}
+
 /// <summary>Input-buffer + lifecycle/policy helper service.</summary>
 public sealed class StateStore
 {
@@ -60,38 +139,84 @@ public sealed class StateStore
 
     public void NotifyHijackChanged(string workerId, bool enabled, string? owner)
     {
-        lock (HijackNotificationGate(workerId))
+        OwnershipPublicationToken? token;
+        lock (_lock)
         {
-            _onHijackChanged?.Invoke(workerId, enabled, owner);
+            var st = _registry.Get(workerId);
+            token = st is null
+                ? null
+                : CurrentPublicationToken(workerId, st, enabled, owner);
         }
+        if (token is not null) NotifyHijackChanged(token);
     }
 
     /// <summary>
-    /// Publish a teardown ownership loss only while its captured generation is
-    /// still current and no successor has acquired ownership. The per-worker
-    /// notification gate linearizes this check with ordinary true publication:
-    /// false either completes first or is suppressed after the newer owner.
+    /// Publish a captured ownership transition only while its generation,
+    /// ownership kind, and owner identity still match current state. The
+    /// per-worker notification gate establishes one callback order for all
+    /// acquisition, release, force-release, expiry, and disconnect publishers.
     /// </summary>
-    public bool NotifyOwnershipLostIfCurrent(string workerId, long ownershipVersion)
+    public bool NotifyHijackChanged(OwnershipPublicationToken token)
     {
-        lock (HijackNotificationGate(workerId))
+        lock (HijackNotificationGate(token.WorkerId))
         {
             lock (_lock)
             {
-                var st = _registry.Get(workerId);
+                var st = _registry.Get(token.WorkerId);
                 if (st is null
-                    || st.HijackOwnershipVersion != ownershipVersion
-                    || IsDashboardHijackActive(st)
-                    || HasValidRestLease(st))
+                    || st.HijackOwnershipVersion != token.OwnershipVersion
+                    || !MatchesExpectedOwnership(st, token))
                 {
                     return false;
                 }
             }
 
-            _onHijackChanged?.Invoke(workerId, false, null);
+            _onHijackChanged?.Invoke(
+                token.WorkerId, token.Enabled, token.PublishedOwner);
             return true;
         }
     }
+
+    private OwnershipPublicationToken? CurrentPublicationToken(
+        string workerId,
+        WorkerTermState st,
+        bool enabled,
+        string? owner)
+    {
+        if (!enabled)
+        {
+            return OwnershipPublicationToken.Released(
+                workerId, st.HijackOwnershipVersion);
+        }
+        if (HasValidRestLease(st) && st.HijackSession is { } rest)
+        {
+            return OwnershipPublicationToken.RestHeld(
+                workerId, st.HijackOwnershipVersion, rest.HijackId, rest.Owner);
+        }
+        if (IsDashboardHijackActive(st) && st.HijackOwner is { } dashboard)
+        {
+            return OwnershipPublicationToken.DashboardHeld(
+                workerId, st.HijackOwnershipVersion, dashboard, owner);
+        }
+        return null;
+    }
+
+    private bool MatchesExpectedOwnership(
+        WorkerTermState st,
+        OwnershipPublicationToken token) => token.Expectation switch
+    {
+        OwnershipPublicationExpectation.RestHeld =>
+            HasValidRestLease(st)
+            && st.HijackSession is { } rest
+            && rest.HijackId == token.RestHijackId
+            && rest.Owner == token.RestOwner,
+        OwnershipPublicationExpectation.DashboardHeld =>
+            IsDashboardHijackActive(st)
+            && ReferenceEquals(st.HijackOwner, token.DashboardOwner),
+        OwnershipPublicationExpectation.Released =>
+            !IsDashboardHijackActive(st) && !HasValidRestLease(st),
+        _ => false,
+    };
 
     private object HijackNotificationGate(string workerId)
     {

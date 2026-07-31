@@ -65,7 +65,7 @@ public sealed class ResumeOwnershipTests
         Assert.NotNull(hub.ExtendHijackLease("w", "rest-hijack", "rest-owner", 30, 11));
         Assert.Equal(restVersion, hub.Registry.Get("w")!.HijackOwnershipVersion);
         Assert.True((await hub.ReleaseRestHijackAsync("w", "rest-hijack")).Released);
-        Assert.Equal(restVersion, hub.Registry.Get("w")!.HijackOwnershipVersion);
+        Assert.Equal(restVersion + 1, hub.Registry.Get("w")!.HijackOwnershipVersion);
 
         Assert.False(hub.Lease.TryRestoreWsOwnership("w", resumed, oldVersion));
         Assert.Null(hub.Registry.Get("w")!.HijackOwner);

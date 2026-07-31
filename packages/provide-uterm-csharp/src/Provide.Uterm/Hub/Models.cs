@@ -85,6 +85,7 @@ public sealed class WorkerTermState
     internal long? PendingDashboardOwnershipVersion { get; set; }
     internal string? PendingPauseReservation { get; set; }
     internal string? PendingPauseObligation { get; set; }
+    internal TaskCompletionSource? PendingPauseCompletion { get; set; }
     internal Task? DisconnectResumeCompletion { get; set; }
     internal long? DisconnectResumeOwnershipVersion { get; set; }
     internal PendingLifecycleTransition? ActiveLifecycleTransition { get; set; }

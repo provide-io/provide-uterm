@@ -16,7 +16,7 @@ public interface ILeaseHub
     bool HasValidRestLease(WorkerTermState st);
     bool CanSendInput(WorkerTermState st, object ws);
     void Metric(string name, int value);
-    void NotifyHijackChanged(string workerId, bool enabled, string? owner);
+    bool NotifyHijackChanged(OwnershipPublicationToken token);
     /// <summary>Authoritative bound for worker-bound control and input writes.</summary>
     TimeSpan ResumeSendTimeout { get; }
     Task<(bool Ok, Exception? Error)> SendWorkerAsync(string workerId, Dictionary<string, object?> msg, CancellationToken ct = default);
@@ -105,6 +105,24 @@ public sealed class HijackLeaseManager
         double now,
         CancellationToken ct = default)
     {
+        var result = await TryAcquireRestCoreAsync(
+            workerId, owner, leaseS, hijackId, now, ct).ConfigureAwait(false);
+        if (result.Publication is not null)
+        {
+            _hub.NotifyHijackChanged(result.Publication);
+        }
+        return (result.Ok, result.Reason);
+    }
+
+    private async Task<(bool Ok, string Reason, OwnershipPublicationToken? Publication)>
+        TryAcquireRestCoreAsync(
+        string workerId,
+        string owner,
+        int leaseS,
+        string hijackId,
+        double now,
+        CancellationToken ct)
+    {
         var reservation = "rest-pause-" + Guid.NewGuid().ToString("N");
         IWorkerWs? workerWs;
         lock (_lock)
@@ -112,12 +130,12 @@ public sealed class HijackLeaseManager
             var st = _registry.Get(workerId);
             if (st is null || st.WorkerWs is null)
             {
-                return (false, "no_worker");
+                return (false, "no_worker", null);
             }
 
             if (st.InputMode == InputModes.Open)
             {
-                return (false, "open_mode");
+                return (false, "open_mode", null);
             }
 
             if (_hub.IsDashboardHijackActive(st)
@@ -125,12 +143,13 @@ public sealed class HijackLeaseManager
                 || st.HijackPending is not null
                 || st.InputSendPending is not null)
             {
-                return (false, "already_hijacked");
+                return (false, "already_hijacked", null);
             }
 
             workerWs = st.WorkerWs;
             st.HijackPending = reservation;
             st.PendingPauseReservation = reservation;
+            st.PendingPauseCompletion ??= NewPauseCompletion();
         }
 
         try
@@ -145,6 +164,7 @@ public sealed class HijackLeaseManager
                     workerWs,
                     pausePossiblyLanded: delivery.Outcome == PauseDeliveryOutcome.PossiblyDelivered)
                     .ConfigureAwait(false);
+                await ReconcileFailedWorkerSendAsync(workerId, workerWs).ConfigureAwait(false);
                 if (delivery.Error is OperationCanceledException canceled)
                 {
                     throw canceled;
@@ -162,10 +182,11 @@ public sealed class HijackLeaseManager
                     }
                 }
 
-                return (false, "no_worker");
+                return (false, "no_worker", null);
             }
 
             var committed = false;
+            OwnershipPublicationToken? publication = null;
             lock (_lock)
             {
                 var st = _registry.Get(workerId);
@@ -182,6 +203,8 @@ public sealed class HijackLeaseManager
                         LastHeartbeat = now,
                     };
                     st.HijackOwnershipVersion++;
+                    publication = OwnershipPublicationToken.RestHeld(
+                        workerId, st.HijackOwnershipVersion, hijackId, owner);
                     if (st.PendingPauseObligation == reservation)
                     {
                         st.PendingPauseObligation = null;
@@ -194,13 +217,16 @@ public sealed class HijackLeaseManager
             if (!committed)
             {
                 await ResolvePauseObligationAsync(
-                    workerId, reservation, workerWs, pausePossiblyLanded: true)
+                    workerId,
+                    reservation,
+                    workerWs,
+                    pausePossiblyLanded: true)
                     .ConfigureAwait(false);
-                return (false, "no_worker");
+                return (false, "no_worker", null);
             }
 
             ArmExpiry(workerId, now + leaseS);
-            return (true, "");
+            return (true, "", publication);
         }
         finally
         {
@@ -209,6 +235,7 @@ public sealed class HijackLeaseManager
                 var st = _registry.Get(workerId);
                 if (st is not null) ClearPauseReservation(st, reservation);
             }
+            CompletePauseSequenceIfIdle(workerId);
         }
     }
 
@@ -301,6 +328,7 @@ public sealed class HijackLeaseManager
                     workerWs = st.WorkerWs;
                     st.HijackPending = reservation;
                     st.PendingPauseReservation = reservation;
+                    st.PendingPauseCompletion ??= NewPauseCompletion();
                     st.PendingDashboardBrowser = ws;
                     st.PendingDashboardOwnershipVersion = ownershipVersion;
                     break;
@@ -329,6 +357,7 @@ public sealed class HijackLeaseManager
                     workerWs,
                     pausePossiblyLanded: delivery.Outcome == PauseDeliveryOutcome.PossiblyDelivered)
                     .ConfigureAwait(false);
+                await ReconcileFailedWorkerSendAsync(workerId, workerWs).ConfigureAwait(false);
                 if (delivery.Error is OperationCanceledException canceled) throw canceled;
                 return (false, "no_worker");
             }
@@ -375,6 +404,7 @@ public sealed class HijackLeaseManager
                 var st = _registry.Get(workerId);
                 if (st is not null) ClearPauseReservation(st, reservation);
             }
+            CompletePauseSequenceIfIdle(workerId);
         }
     }
 
@@ -387,7 +417,7 @@ public sealed class HijackLeaseManager
         st.PendingDashboardOwnershipVersion = null;
     }
 
-    private static async Task<PauseDeliveryResult> SendPauseAsync(
+    private async Task<PauseDeliveryResult> SendPauseAsync(
         IWorkerWs worker,
         string encodedPause,
         CancellationToken ct)
@@ -397,16 +427,22 @@ public sealed class HijackLeaseManager
             return new PauseDeliveryResult(PauseDeliveryOutcome.NotDelivered);
         }
 
+        Task? sendTask = null;
+        using var bounded = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        bounded.CancelAfter(_hub.ResumeSendTimeout);
         try
         {
-            await worker.SendTextAsync(encodedPause, ct).ConfigureAwait(false);
+            sendTask = worker.SendTextAsync(encodedPause, bounded.Token);
+            await sendTask.WaitAsync(_hub.ResumeSendTimeout, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException ex)
         {
+            ObserveEventualSendFault(sendTask);
             return new PauseDeliveryResult(PauseDeliveryOutcome.PossiblyDelivered, ex);
         }
         catch (Exception ex)
         {
+            ObserveEventualSendFault(sendTask);
             return new PauseDeliveryResult(PauseDeliveryOutcome.PossiblyDelivered, ex);
         }
 
@@ -464,9 +500,7 @@ public sealed class HijackLeaseManager
                     st.PendingPauseObligation = st.HijackPending;
                     return;
                 }
-
                 if (st.HijackPending is not null) return;
-
                 st.PendingPauseObligation = null;
                 st.HijackPending = resumeReservation;
                 reservedResume = true;
@@ -476,6 +510,9 @@ public sealed class HijackLeaseManager
 
         if (!shouldResume) return;
 
+        var resumed = false;
+        Task? sendTask = null;
+        using var bounded = new CancellationTokenSource(_hub.ResumeSendTimeout);
         try
         {
             var encodedResume = ControlChannelCodec.EncodeControlFrame(new Dictionary<string, object?>
@@ -485,14 +522,21 @@ public sealed class HijackLeaseManager
                 ["source"] = "dashboard",
                 ["ts"] = _clock.Wall(),
             });
-            await pausedWorker.SendTextAsync(encodedResume, CancellationToken.None).ConfigureAwait(false);
+            sendTask = pausedWorker.SendTextAsync(encodedResume, bounded.Token);
+            await sendTask.WaitAsync(_hub.ResumeSendTimeout, CancellationToken.None)
+                .ConfigureAwait(false);
+            resumed = pausedWorker is not IAbortableBrowserWs { IsActive: false };
         }
         catch
         {
-            // Best-effort state repair after an acquisition that cannot own.
+            ObserveEventualSendFault(sendTask);
         }
         finally
         {
+            if (!resumed)
+            {
+                await ReconcileFailedWorkerSendAsync(workerId, pausedWorker).ConfigureAwait(false);
+            }
             lock (_lock)
             {
                 var st = _registry.Get(workerId);
@@ -503,6 +547,42 @@ public sealed class HijackLeaseManager
             }
         }
     }
+
+    private async Task ReconcileFailedWorkerSendAsync(string workerId, IWorkerWs worker)
+    {
+        if (worker is IAbortableBrowserWs abortable)
+        {
+            try
+            {
+                abortable.Abort();
+            }
+            catch
+            {
+                // Identity-gated reconciliation remains authoritative.
+            }
+        }
+        await _hub.ReconcileWorkerDisconnectAsync(workerId, worker).ConfigureAwait(false);
+    }
+
+    private void CompletePauseSequenceIfIdle(string workerId)
+    {
+        TaskCompletionSource? completion = null;
+        lock (_lock)
+        {
+            var st = _registry.Get(workerId);
+            if (st is not null
+                && st.PendingPauseReservation is null
+                && st.PendingPauseObligation is null)
+            {
+                completion = st.PendingPauseCompletion;
+                st.PendingPauseCompletion = null;
+            }
+        }
+        completion?.TrySetResult();
+    }
+
+    private static TaskCompletionSource NewPauseCompletion() =>
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     /// <summary>Restore the same logical dashboard owner only if no later owner has existed.</summary>
     public bool TryRestoreWsOwnership(string workerId, object ws, long ownershipVersion)
@@ -565,6 +645,7 @@ public sealed class HijackLeaseManager
         PendingLifecycleTransition? lifecycleTransition = null;
         IWorkerWs? worker = null;
         var shouldResume = false;
+        OwnershipPublicationToken? publication = null;
         var transitionReady = false;
         try
         {
@@ -606,6 +687,9 @@ public sealed class HijackLeaseManager
                         else
                         {
                             st.HijackSession = null;
+                            st.HijackOwnershipVersion++;
+                            publication = OwnershipPublicationToken.Released(
+                                workerId, st.HijackOwnershipVersion);
                             shouldResume = !_hub.IsDashboardHijackActive(st);
                             worker = shouldResume ? st.WorkerWs : null;
                             break;
@@ -627,6 +711,7 @@ public sealed class HijackLeaseManager
 
         await CompleteResumeAsync(workerId, reservation, completion!, worker, "operator", ct)
             .ConfigureAwait(false);
+        if (publication is not null) _hub.NotifyHijackChanged(publication);
         return (true, shouldResume);
     }
 
@@ -712,6 +797,7 @@ public sealed class HijackLeaseManager
                         {
                             st.HijackOwner = null;
                             st.HijackOwnerExpiresAt = null;
+                            st.HijackOwnershipVersion++;
                             restActive = _hub.HasValidRestLease(st);
                             worker = restActive ? null : st.WorkerWs;
                             break;
@@ -984,7 +1070,7 @@ public sealed class HijackLeaseManager
         IWorkerWs? worker = null;
         var browserExpired = false;
         var restExpired = false;
-        var publishOwnershipLoss = false;
+        OwnershipPublicationToken? publication = null;
         var transitionReady = false;
         try
         {
@@ -1049,9 +1135,11 @@ public sealed class HijackLeaseManager
                         else
                         {
                             st.ApplyLease(lease);
+                            st.HijackOwnershipVersion++;
                             browserExpired = dash;
                             restExpired = rest;
-                            publishOwnershipLoss = true;
+                            publication = OwnershipPublicationToken.Released(
+                                workerId, st.HijackOwnershipVersion);
                             worker = st.WorkerWs;
                             break;
                         }
@@ -1076,9 +1164,21 @@ public sealed class HijackLeaseManager
                 completion!,
                 worker,
                 "lease-expired",
-                ct,
-                publishOwnershipLoss ? () => PublishOwnershipLostAsync(workerId) : null)
+                ct)
             .ConfigureAwait(false);
+        if (publication is not null)
+        {
+            _hub.NotifyHijackChanged(publication);
+            try
+            {
+                await _hub.BroadcastHijackStateAsync(workerId, CancellationToken.None)
+                    .ConfigureAwait(false);
+            }
+            catch
+            {
+                // Expiry publication is best-effort after lifecycle release.
+            }
+        }
         return (browserExpired, restExpired);
     }
 
@@ -1092,6 +1192,7 @@ public sealed class HijackLeaseManager
         PendingLifecycleTransition? lifecycleTransition = null;
         IWorkerWs? worker = null;
         var had = false;
+        OwnershipPublicationToken? publication = null;
         var transitionReady = false;
         try
         {
@@ -1136,6 +1237,12 @@ public sealed class HijackLeaseManager
                         if (_hub.IsDashboardHijackActive(st)) had = true;
                         st.HijackOwner = null;
                         st.HijackOwnerExpiresAt = null;
+                        if (had)
+                        {
+                            st.HijackOwnershipVersion++;
+                            publication = OwnershipPublicationToken.Released(
+                                workerId, st.HijackOwnershipVersion);
+                        }
 
                         if (st.PendingDashboardBrowser is not null)
                         {
@@ -1163,7 +1270,7 @@ public sealed class HijackLeaseManager
 
                         if (!had || st.WorkerWs is null)
                         {
-                            if (completion is null) return (had, owner);
+                            if (!had && completion is null) return (false, owner);
                             worker = null;
                             break;
                         }
@@ -1188,8 +1295,12 @@ public sealed class HijackLeaseManager
             }
         }
 
-        await CompleteResumeAsync(workerId, reservation, completion!, worker, owner, ct)
-            .ConfigureAwait(false);
+        if (completion is not null)
+        {
+            await CompleteResumeAsync(workerId, reservation, completion, worker, owner, ct)
+                .ConfigureAwait(false);
+        }
+        if (publication is not null) _hub.NotifyHijackChanged(publication);
         return (had, owner);
     }
 
@@ -1218,8 +1329,7 @@ public sealed class HijackLeaseManager
         TaskCompletionSource completion,
         IWorkerWs? worker,
         string owner,
-        CancellationToken ct,
-        Func<Task>? beforeReservationRelease = null)
+        CancellationToken ct)
     {
         var sent = false;
         using var bounded = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -1239,10 +1349,6 @@ public sealed class HijackLeaseManager
         }
         finally
         {
-            if (beforeReservationRelease is not null)
-            {
-                await beforeReservationRelease().ConfigureAwait(false);
-            }
             if (!sent && worker is IAbortableBrowserWs abortable) abortable.Abort();
             lock (_lock)
             {
@@ -1284,28 +1390,6 @@ public sealed class HijackLeaseManager
         return st.LifecycleTransitionQueue.FirstOrDefault(candidate =>
             candidate.Reservation == reservation
             && ReferenceEquals(candidate.Completion, completion));
-    }
-
-    private async Task PublishOwnershipLostAsync(string workerId)
-    {
-        try
-        {
-            _hub.NotifyHijackChanged(workerId, false, null);
-        }
-        catch
-        {
-            // Publication failures must not strand the expiry transition fence.
-        }
-
-        try
-        {
-            await _hub.BroadcastHijackStateAsync(workerId, CancellationToken.None)
-                .ConfigureAwait(false);
-        }
-        catch
-        {
-            // A failed peer must not strand the expiry transition fence.
-        }
     }
 
     private void ArmExpiry(string workerId, double expiration)

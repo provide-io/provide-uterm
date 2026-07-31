@@ -178,6 +178,8 @@ public sealed class TermHub : ILeaseHub
     public void Log(string level, string message) => _onLog?.Invoke(level, message);
     public void NotifyHijackChanged(string workerId, bool enabled, string? owner) =>
         State.NotifyHijackChanged(workerId, enabled, owner);
+    public bool NotifyHijackChanged(OwnershipPublicationToken token) =>
+        State.NotifyHijackChanged(token);
 
     public Task<(bool Ok, Exception? Error)> SendWorkerAsync(string workerId, Dictionary<string, object?> msg, CancellationToken ct = default) =>
         Conn.SendWorkerAsync(workerId, msg, ct);
