@@ -358,6 +358,7 @@ jobs:
       # The TypeScript runtime port typechecks under tsc 7 and holds itself
       # to 100% line/branch/function coverage, enforced by its vitest config.
       - run: npm run typecheck:ts
+      - run: npm run build --workspace=packages/provide-uterm-ts
       - run: npm run lint:ts
       - run: npm run test:ts:coverage
 
