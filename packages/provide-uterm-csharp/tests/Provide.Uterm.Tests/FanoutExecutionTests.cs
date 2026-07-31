@@ -267,6 +267,32 @@ public sealed class FanoutExecutionTests
     }
 
     [Fact]
+    public async Task Throwing_Global_Admin_Authorizer_Is_Typed_And_Has_No_Delivery_Side_Effects()
+    {
+        await AssertThrowingAuthorizerFailsBeforeDelivery("global");
+    }
+
+    [Fact]
+    public async Task Throwing_Member_Authorizer_Is_Typed_And_Has_No_Delivery_Side_Effects()
+    {
+        await AssertThrowingAuthorizerFailsBeforeDelivery("member");
+    }
+
+    private static async Task AssertThrowingAuthorizerFailsBeforeDelivery(string stage)
+    {
+        var hub = new SideEffectTrackingHub();
+        var controller = NewController(hub, "parallel", ["w1"], authorizer: new ThrowingAuthorizer(stage));
+
+        var error = await Assert.ThrowsAsync<FanoutAuthorizationException>(() =>
+            controller.SendAsync("g", "id", Admin("alice"), 5, 100));
+
+        Assert.Contains("authorization", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, hub.SubscriptionCount);
+        Assert.Equal(0, hub.ObserverCount);
+        Assert.Equal(0, hub.SendCount);
+    }
+
+    [Fact]
     public async Task Group_Grant_Does_Not_Bypass_Current_Member_Authorization()
     {
         var hub = new EventHub(new Dictionary<string, string> { ["w1"] = "unexpected" });
@@ -328,6 +354,42 @@ public sealed class FanoutExecutionTests
         {
             CheckedMembers.Add(workerId);
             return !DeniedMembers.Contains(workerId);
+        }
+    }
+
+    private sealed class ThrowingAuthorizer(string stage) : IFanoutAuthorizer
+    {
+        public bool IsGlobalAdmin(Principal principal) =>
+            stage == "global" ? throw new InvalidOperationException("global auth unavailable") : true;
+
+        public bool CanReadMember(Principal principal, string workerId) =>
+            stage == "member" ? throw new InvalidOperationException("member auth unavailable") : true;
+    }
+
+    private sealed class SideEffectTrackingHub : IFanoutHub
+    {
+        public int SubscriptionCount { get; private set; }
+        public int ObserverCount { get; private set; }
+        public int SendCount { get; private set; }
+
+        public Task<bool> SendWorkerAsync(
+            string workerId, IReadOnlyDictionary<string, object?> msg, CancellationToken ct = default)
+        {
+            SendCount++;
+            return Task.FromResult(true);
+        }
+
+        public Task BroadcastAsync(
+            string workerId, IReadOnlyDictionary<string, object?> msg, CancellationToken ct = default)
+        {
+            ObserverCount++;
+            return Task.CompletedTask;
+        }
+
+        public IFanoutOutputSubscription SubscribeOutput(string workerId)
+        {
+            SubscriptionCount++;
+            return new TrackingSubscription(workerId, new ConcurrentDictionary<string, int>());
         }
     }
 
