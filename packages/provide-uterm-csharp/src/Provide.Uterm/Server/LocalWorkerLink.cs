@@ -35,7 +35,7 @@ namespace Provide.Uterm.Server;
 /// animation frames, so this port answers input synchronously and leaves the
 /// loop out rather than run a thread per session for frames that do not come.</para>
 /// </summary>
-public sealed class LocalWorkerLink : IWorkerWs
+public sealed class LocalWorkerLink : IAbortableBrowserWs
 {
     private readonly TermHub _hub;
     private readonly string _workerId;
@@ -44,6 +44,7 @@ public sealed class LocalWorkerLink : IWorkerWs
 
     /// <summary>Serialises decoder + connector, which the hub may reach concurrently.</summary>
     private readonly object _gate = new();
+    private bool _isActive;
 
     public LocalWorkerLink(TermHub hub, string workerId, UshellConnector connector)
     {
@@ -65,28 +66,47 @@ public sealed class LocalWorkerLink : IWorkerWs
     /// </summary>
     public async Task<bool> AttachAsync(string inputMode, CancellationToken cancellationToken = default)
     {
+        lock (_gate) _isActive = true;
         if (!await _hub.Conn.RegisterWorkerAsync(_workerId, this, cancellationToken)
                 .ConfigureAwait(false))
         {
+            Abort();
             return false;
         }
 
         var opening = new List<Dictionary<string, object?>>(_connector.SetMode(inputMode)) { _connector.GetSnapshot() };
         await PublishAsync(opening, cancellationToken).ConfigureAwait(false);
-        await _hub.Conn.BroadcastToBrowsersAsync(
-            _workerId,
-            new Dictionary<string, object?>
-            {
-                ["type"] = "worker_connected",
-                ["worker_id"] = _workerId,
-                ["ts"] = ShellFrames.NowTs(),
-            },
-            cancellationToken).ConfigureAwait(false);
+        if (_hub.Conn.TryAcceptWorkerFrame(_workerId, this))
+        {
+            await _hub.Conn.BroadcastToBrowsersAsync(
+                _workerId,
+                new Dictionary<string, object?>
+                {
+                    ["type"] = "worker_connected",
+                    ["worker_id"] = _workerId,
+                    ["ts"] = ShellFrames.NowTs(),
+                },
+                cancellationToken).ConfigureAwait(false);
+        }
         return true;
     }
 
     /// <summary>Take the worker away again, as a dropped WebSocket would.</summary>
-    public void Detach() => _hub.Conn.DeregisterWorker(_workerId, this);
+    public void Detach()
+    {
+        _hub.Conn.DeregisterWorker(_workerId, this);
+        Abort();
+    }
+
+    public bool IsActive
+    {
+        get { lock (_gate) return _isActive; }
+    }
+
+    public void Abort()
+    {
+        lock (_gate) _isActive = false;
+    }
 
     /// <summary>
     /// The hub writing to the worker. The payload is whatever a WebSocket worker
@@ -107,6 +127,7 @@ public sealed class LocalWorkerLink : IWorkerWs
         var responses = new List<Dictionary<string, object?>>();
         lock (_gate)
         {
+            if (!_isActive) return responses;
             foreach (var chunk in _decoder.Feed(payload))
             {
                 switch (chunk)
@@ -160,19 +181,21 @@ public sealed class LocalWorkerLink : IWorkerWs
         foreach (var frame in frames)
         {
             var type = frame.TryGetValue("type", out var t) ? t?.ToString() ?? "term" : "term";
+            bool accepted;
             if (type == "snapshot")
             {
-                _hub.Conn.UpdateLastSnapshot(_workerId, frame);
+                accepted = _hub.Conn.UpdateLastSnapshot(_workerId, this, frame);
             }
             else if (type == "term")
             {
-                _hub.AppendEventData(_workerId, "term", new Dictionary<string, object?>
+                accepted = _hub.Conn.TryAppendWorkerEvent(_workerId, this, "term", new Dictionary<string, object?>
                 {
                     ["data"] = frame.TryGetValue("data", out var data) ? data : "",
                 });
-                _hub.State.TouchActivity(_workerId);
             }
+            else accepted = _hub.Conn.TryAcceptWorkerFrame(_workerId, this);
 
+            if (!accepted) return;
             await _hub.Conn.BroadcastToBrowsersAsync(_workerId, frame, cancellationToken).ConfigureAwait(false);
         }
     }

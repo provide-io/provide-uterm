@@ -151,16 +151,23 @@ public sealed class ConnectionManager
     /// worker or a hello that would lower a decided mode.
     /// </returns>
     public bool SetWorkerHello(string workerId, string mode, int? protocolVersion = null) =>
-        SetWorkerHelloCore(workerId, null, mode, protocolVersion);
+        SetWorkerHelloCore(workerId, null, mode, protocolVersion).Applied;
 
     public bool SetWorkerHello(
         string workerId,
         IWorkerWs worker,
         string mode,
         int? protocolVersion = null) =>
+        SetWorkerHelloCore(workerId, worker, mode, protocolVersion).Applied;
+
+    internal (bool Current, bool Applied) SetWorkerHelloFrame(
+        string workerId,
+        IWorkerWs worker,
+        string mode,
+        int? protocolVersion = null) =>
         SetWorkerHelloCore(workerId, worker, mode, protocolVersion);
 
-    private bool SetWorkerHelloCore(
+    private (bool Current, bool Applied) SetWorkerHelloCore(
         string workerId,
         IWorkerWs? expectedWorker,
         string mode,
@@ -173,7 +180,7 @@ public sealed class ConnectionManager
             if (st is null
                 || expectedWorker is not null && !ReferenceEquals(st.WorkerWs, expectedWorker))
             {
-                return false;
+                return (false, false);
             }
 
             var wouldLower = mode == InputModes.Open && st.InputMode == InputModes.Hijack;
@@ -207,10 +214,23 @@ public sealed class ConnectionManager
             // other caller of this method logged but uncounted, so the two
             // signals disagreed about how often it happens.
             _hub.Metric("worker_hello_mode_blocked_total", 1);
-            return false;
+            return (true, false);
         }
 
-        return true;
+        return (true, true);
+    }
+
+    /// <summary>
+    /// Linearize acceptance of a decoded worker frame against worker replacement.
+    /// A caller may fan out the frame only when this returns <c>true</c>.
+    /// </summary>
+    public bool TryAcceptWorkerFrame(string workerId, IWorkerWs worker)
+    {
+        lock (_hub.SharedLock)
+        {
+            var st = _hub.Registry.Get(workerId);
+            return st is not null && ReferenceEquals(st.WorkerWs, worker);
+        }
     }
 
     public void UpdateLastSnapshot(string workerId, Dictionary<string, object?> snapshot)
@@ -234,6 +254,37 @@ public sealed class ConnectionManager
             var st = _hub.Registry.Get(workerId);
             if (st is null || !ReferenceEquals(st.WorkerWs, worker)) return false;
             st.LastSnapshot = new Dictionary<string, object?>(snapshot);
+            st.LastActivityAt = _hub.Clock.Monotonic();
+            return true;
+        }
+    }
+
+    /// <summary>Apply a tunnel worker's announced mode only while that transport is current.</summary>
+    public bool TrySetWorkerInputMode(string workerId, IWorkerWs worker, string mode)
+    {
+        lock (_hub.SharedLock)
+        {
+            var st = _hub.Registry.Get(workerId);
+            if (st is null || !ReferenceEquals(st.WorkerWs, worker)) return false;
+            st.InputMode = mode;
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Append an event and touch activity in the same worker-identity critical section.
+    /// </summary>
+    public bool TryAppendWorkerEvent(
+        string workerId,
+        IWorkerWs worker,
+        string eventType,
+        Dictionary<string, object?> data)
+    {
+        lock (_hub.SharedLock)
+        {
+            var st = _hub.Registry.Get(workerId);
+            if (st is null || !ReferenceEquals(st.WorkerWs, worker)) return false;
+            _hub.Router.AppendEvent(workerId, eventType, data);
             st.LastActivityAt = _hub.Clock.Monotonic();
             return true;
         }
