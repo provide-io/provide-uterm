@@ -182,6 +182,12 @@ public sealed class HijackLeaseManager
                 return (false, "no_worker");
             }
 
+            if (!st.Browsers.ContainsKey(ws)
+                || ws is IAbortableBrowserWs { IsActive: false })
+            {
+                return (false, "inactive_browser");
+            }
+
             // HijackPending: REST two-phase reserve — treat as already taken so
             // the dashboard WS cannot dual-own during the pause I/O window.
             if (_hub.IsDashboardHijackActive(st) || _hub.HasValidRestLease(st) || st.HijackPending is not null)
@@ -307,7 +313,9 @@ public sealed class HijackLeaseManager
         lock (_lock)
         {
             var st = _registry.Get(workerId);
-            if (st is null) return false;
+            if (st is null
+                || !st.Browsers.ContainsKey(ws)
+                || ws is IAbortableBrowserWs { IsActive: false }) return false;
             var allowed = _hub.CanSendInput(st, ws);
             if (_hub.IsDashboardHijackActive(st) && ReferenceEquals(st.HijackOwner, ws))
             {

@@ -822,6 +822,8 @@ public sealed partial class UtermServer : IAsyncDisposable
     private async Task HandleBrowserMessage(
         string workerId, BrowserWsConn conn, string role, string text, BrowserBudget budget, CancellationToken ct)
     {
+        if (!_deps.Hub.Conn.IsBrowserRegistered(workerId, conn)) return;
+
         if (ControlChannelCodec.IsControlFrame(text))
         {
             var dec = new ControlFrameDecoder();
@@ -1518,12 +1520,16 @@ public sealed partial class UtermServer : IAsyncDisposable
     }
 
     /// <summary>WebSocket adapter implementing <see cref="IWorkerWs"/>.</summary>
-    private sealed class BrowserWsConn : IWorkerWs
+    private sealed class BrowserWsConn : IAbortableBrowserWs
     {
         private readonly WebSocket _ws;
         private readonly SemaphoreSlim _sendGate = new(1, 1);
 
         public BrowserWsConn(WebSocket ws) => _ws = ws;
+
+        public bool IsActive => _ws.State == WebSocketState.Open;
+
+        public void Abort() => _ws.Abort();
 
         public async Task SendTextAsync(string payload, CancellationToken cancellationToken = default)
         {

@@ -20,6 +20,13 @@ public interface IWorkerWs
     Task SendTextAsync(string payload, CancellationToken cancellationToken = default);
 }
 
+/// <summary>Browser transport that the hub can actively terminate after a failed send.</summary>
+public interface IAbortableBrowserWs : IWorkerWs
+{
+    bool IsActive { get; }
+    void Abort();
+}
+
 /// <summary>Live REST hijack lease. Port of HijackSession.</summary>
 public sealed class HijackSession
 {
