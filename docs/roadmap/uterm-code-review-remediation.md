@@ -79,15 +79,15 @@ Design: `docs/superpowers/specs/2026-07-31-code-review-remediation-design.md`
 
 ## Python robustness and quality
 
-- [ ] **PY-PAM-001 (low): non-object JSON.** PAM listener rejects arrays, strings,
+- [x] **PY-PAM-001 (low): non-object JSON.** PAM listener rejects arrays, strings,
   numbers, booleans, and null without terminating the connection handler.
-- [ ] **PY-GRAPH-001 (low): endpoint parser errors.** Malformed bracketed IPv6 and
+- [x] **PY-GRAPH-001 (low): endpoint parser errors.** Malformed bracketed IPv6 and
   related URL parser errors become `GraphicalTargetError` with a client-error shape.
-- [ ] **PY-CF-001 (low): invalid JSON body.** Cloudflare request decoding handles
+- [x] **PY-CF-001 (low): invalid JSON body.** Cloudflare request decoding handles
   `JSONDecodeError` consistently with other invalid request bodies.
-- [ ] **PY-TEST-001 (medium): thread cleanup.** The VNC relay regression test emits
+- [x] **PY-TEST-001 (medium): thread cleanup.** The VNC relay regression test emits
   no `PytestUnhandledThreadExceptionWarning`.
-- [ ] **PY-COV-001 (medium): restore server coverage gate.** The normalized-empty
+- [~] **PY-COV-001 (medium): restore server coverage gate.** The normalized-empty
   Cloudflare team-domain path is tested and server coverage returns to 100%.
 
 ## Architecture and documentation
@@ -113,4 +113,4 @@ Design: `docs/superpowers/specs/2026-07-31-code-review-remediation-design.md`
 | 2026-07-31 | Known red | `npm run build --workspace=packages/provide-uterm-ts` | fails: build config drops ES2023 library |
 | 2026-07-31 | Known red | `npm run test:ts:coverage` | tests pass; strict coverage threshold fails |
 | 2026-07-31 | Known red | `uv run pytest -q packages/provide-uterm-server/tests/` | tests pass; strict coverage threshold fails at `config_schema.py:160` |
-
+| 2026-07-31 | Python robustness | Focused PAM, graphical endpoint, Cloudflare JSON, config-schema, and VNC warning-as-error suites | 137 passed, 1 optional-vendor skip; ruff passed |
