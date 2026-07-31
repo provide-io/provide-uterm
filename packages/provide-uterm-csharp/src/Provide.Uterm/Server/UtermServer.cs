@@ -888,35 +888,9 @@ public sealed partial class UtermServer : IAsyncDisposable
                             break;
                         }
 
-                        // Pause worker (same control frame as Python/Go dashboard hijack).
-                        _ = await _deps.Hub.Conn.SendWorkerAsync(
-                            workerId,
-                            new Dictionary<string, object?>
-                            {
-                                ["type"] = "control",
-                                ["action"] = "pause",
-                                ["source"] = "dashboard",
-                                ["ts"] = _clock.Wall(),
-                            },
-                            ct).ConfigureAwait(false);
-
                         var (ok, reason) = _deps.Hub.Lease.TryAcquireWs(workerId, conn);
                         if (!ok)
                         {
-                            if (reason != "already_hijacked")
-                            {
-                                _ = await _deps.Hub.Conn.SendWorkerAsync(
-                                    workerId,
-                                    new Dictionary<string, object?>
-                                    {
-                                        ["type"] = "control",
-                                        ["action"] = "resume",
-                                        ["source"] = "dashboard",
-                                        ["ts"] = _clock.Wall(),
-                                    },
-                                    ct).ConfigureAwait(false);
-                            }
-
                             await conn.SendTextAsync(
                                 ControlChannelCodec.EncodeControlFrame(new Dictionary<string, object?>
                                 {
@@ -928,6 +902,20 @@ public sealed partial class UtermServer : IAsyncDisposable
                                 ct).ConfigureAwait(false);
                             break;
                         }
+
+                        // Never pause for a request that did not acquire
+                        // ownership. In particular, disconnect-resume holds a
+                        // HijackPending reservation across its worker send.
+                        _ = await _deps.Hub.Conn.SendWorkerAsync(
+                            workerId,
+                            new Dictionary<string, object?>
+                            {
+                                ["type"] = "control",
+                                ["action"] = "pause",
+                                ["source"] = "dashboard",
+                                ["ts"] = _clock.Wall(),
+                            },
+                            ct).ConfigureAwait(false);
 
                         await _deps.Hub.BroadcastHijackStateAsync(workerId, ct).ConfigureAwait(false);
                         break;
