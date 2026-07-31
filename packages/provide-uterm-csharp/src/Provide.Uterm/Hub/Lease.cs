@@ -948,6 +948,28 @@ public sealed class HijackLeaseManager
         string keys,
         CancellationToken ct = default)
     {
+        var result = await SendRestPayloadAsync(workerId, hijackId, keys, ct).ConfigureAwait(false);
+        return (result.Ok, result.Reason);
+    }
+
+    /// <summary>Atomically authorize and deliver a control frame for the exact REST lease.</summary>
+    public Task<(bool Ok, string Reason, double? LeaseExpiresAt)> SendRestControlAsync(
+        string workerId,
+        string hijackId,
+        IReadOnlyDictionary<string, object?> message,
+        CancellationToken ct = default) =>
+        SendRestPayloadAsync(
+            workerId,
+            hijackId,
+            ControlChannelCodec.EncodeControlFrame(message),
+            ct);
+
+    private async Task<(bool Ok, string Reason, double? LeaseExpiresAt)> SendRestPayloadAsync(
+        string workerId,
+        string hijackId,
+        string payload,
+        CancellationToken ct)
+    {
         PendingInputSend? pending = null;
         while (true)
         {
@@ -955,7 +977,7 @@ public sealed class HijackLeaseManager
             lock (_lock)
             {
                 var st = _registry.Get(workerId);
-                if (st is null) return (false, "invalid_hijack");
+                if (st is null) return (false, "invalid_hijack", null);
                 if (st.HijackPending is not null
                     && st.DisconnectResumeCompletion is { IsCompleted: false } lifecycleCompletion)
                 {
@@ -966,11 +988,11 @@ public sealed class HijackLeaseManager
                     || st.HijackSession.LeaseExpiresAt <= _clock.Monotonic()
                     || st.HijackPending is not null)
                 {
-                    return (false, "invalid_hijack");
+                    return (false, "invalid_hijack", null);
                 }
                 else if (st.WorkerWs is null)
                 {
-                    return (false, "no_worker");
+                    return (false, "no_worker", null);
                 }
                 else if (st.InputSendPending is not null)
                 {
@@ -981,6 +1003,7 @@ public sealed class HijackLeaseManager
                     pending = NewInputReservation(
                         st.WorkerWs,
                         restHijackId: hijackId,
+                        restLeaseExpiresAt: st.HijackSession.LeaseExpiresAt,
                         dashboardOwner: null,
                         dashboardOwnershipVersion: null);
                     st.InputSendPending = pending;
@@ -991,9 +1014,9 @@ public sealed class HijackLeaseManager
             await pendingCompletion!.WaitAsync(ct).ConfigureAwait(false);
         }
 
-        return await DeliverReservedInputAsync(workerId, pending!, keys, ct).ConfigureAwait(false)
-            ? (true, "")
-            : (false, "send_failed");
+        return await DeliverReservedInputAsync(workerId, pending!, payload, ct).ConfigureAwait(false)
+            ? (true, "", pending!.RestLeaseExpiresAt)
+            : (false, "send_failed", null);
     }
 
     /// <summary>Atomically authorize browser input and reserve its exact owner generation and worker.</summary>
@@ -1040,6 +1063,7 @@ public sealed class HijackLeaseManager
                     pending = NewInputReservation(
                         st.WorkerWs,
                         restHijackId: null,
+                        restLeaseExpiresAt: null,
                         dashboardOwner: browser,
                         dashboardOwnershipVersion: st.HijackOwnershipVersion);
                     st.InputSendPending = pending;
@@ -1057,6 +1081,7 @@ public sealed class HijackLeaseManager
     private static PendingInputSend NewInputReservation(
         IWorkerWs worker,
         string? restHijackId,
+        double? restLeaseExpiresAt,
         object? dashboardOwner,
         long? dashboardOwnershipVersion) =>
         new()
@@ -1064,6 +1089,7 @@ public sealed class HijackLeaseManager
             Reservation = "input-send-" + Guid.NewGuid().ToString("N"),
             Worker = worker,
             RestHijackId = restHijackId,
+            RestLeaseExpiresAt = restLeaseExpiresAt,
             DashboardOwner = dashboardOwner,
             DashboardOwnershipVersion = dashboardOwnershipVersion,
             Completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously),
@@ -1115,6 +1141,11 @@ public sealed class HijackLeaseManager
                     if (sent && ReferenceEquals(st.WorkerWs, pending.Worker))
                     {
                         st.LastActivityAt = _clock.Monotonic();
+                        if (pending.RestHijackId is not null
+                            && st.HijackSession?.HijackId == pending.RestHijackId)
+                        {
+                            pending.RestLeaseExpiresAt = st.HijackSession.LeaseExpiresAt;
+                        }
                     }
                 }
                 reconcileWorker = !sent;

@@ -82,14 +82,30 @@ public sealed class HubHijackStepRateLimitTests
 
     private sealed class StepWorker : IWorkerWs
     {
+        private int _delayNext;
+        private readonly TaskCompletionSource _sendAttempted =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _releaseSend =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public bool FailStep { get; set; }
 
-        public Task SendTextAsync(string payload, CancellationToken cancellationToken = default)
+        public Task SendAttempted => _sendAttempted.Task;
+
+        public void DelayNextSend() => Interlocked.Exchange(ref _delayNext, 1);
+
+        public void ReleaseSend() => _releaseSend.TrySetResult();
+
+        public async Task SendTextAsync(string payload, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (FailStep)
                 throw new WebSocketException("worker disconnected");
-            return Task.CompletedTask;
+            if (Interlocked.Exchange(ref _delayNext, 0) == 1)
+            {
+                _sendAttempted.TrySetResult();
+                await _releaseSend.Task.WaitAsync(cancellationToken);
+            }
         }
     }
 
@@ -201,6 +217,46 @@ public sealed class HubHijackStepRateLimitTests
         Assert.Contains(
             h.Hub.Router.GetRecentEvents(Worker, 100),
             evt => Equals(evt.GetValueOrDefault("type"), "hijack_step"));
+    }
+
+    [Theory]
+    [InlineData("release")]
+    [InlineData("expiry")]
+    [InlineData("replacement")]
+    public async Task ConcurrentLifecycleTransitionWaitsForReservedStepDelivery(string transitionKind)
+    {
+        await using var h = await StartAsync(acquireRate: 50, sendRate: 50);
+        h.WorkerSocket.DelayNextSend();
+
+        var step = h.Step();
+        await h.WorkerSocket.SendAttempted.WaitAsync(TimeSpan.FromSeconds(5));
+        var transition = RunTransitionAsync();
+        await Task.Delay(50);
+
+        Assert.False(transition.IsCompleted);
+        h.WorkerSocket.ReleaseSend();
+        Assert.Equal(HttpStatusCode.OK, (await step).StatusCode);
+        await transition;
+
+        async Task RunTransitionAsync()
+        {
+            switch (transitionKind)
+            {
+                case "release":
+                    Assert.Equal(HttpStatusCode.OK, (await h.Release()).StatusCode);
+                    break;
+                case "expiry":
+                    h.Clock.SetMonotonic(601);
+                    var expired = await h.Hub.CleanupExpiredHijackAsync(Worker);
+                    Assert.True(expired.RestExpired);
+                    break;
+                case "replacement":
+                    Assert.True(await h.Hub.Conn.RegisterWorkerAsync(Worker, new StepWorker()));
+                    break;
+                default:
+                    throw new Xunit.Sdk.XunitException("unknown transition kind");
+            }
+        }
     }
 
     /// <summary>The refusal itself: 429, that body, and nothing else.</summary>
