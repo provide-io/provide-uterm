@@ -202,6 +202,77 @@ public sealed class ResumeLifecycleIntegrationTests
         Assert.Equal(["pause", "resume"], fixture.Worker.Actions);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FailedOrCanceledSuccessorDischargesCanceledPredecessorPauseObligation(
+        bool cancelSuccessor)
+    {
+        var fixture = await BootAsync();
+        await using var server = fixture.Server;
+        using var predecessor = await ConnectAsync(fixture);
+        await DrainHandshakeAsync(predecessor);
+        using var successor = await ConnectAsync(fixture);
+        await DrainHandshakeAsync(successor);
+        var predecessorPause = fixture.Worker.DelayNextPause();
+
+        await SendControlAsync(predecessor, "hijack_request");
+        await predecessorPause.Attempted.WaitAsync(TimeSpan.FromSeconds(5));
+        var state = fixture.Hub.Registry.Get("resume-worker")!;
+        fixture.Hub.Conn.CleanupBrowser("resume-worker", state.PendingDashboardBrowser!);
+        var successorPause = fixture.Worker.DelayNextPause(
+            fail: !cancelSuccessor,
+            cancel: cancelSuccessor);
+        await SendControlAsync(successor, "hijack_request");
+        await successorPause.Attempted.WaitAsync(TimeSpan.FromSeconds(5));
+
+        predecessorPause.Release();
+        await WaitUntilAsync(() => fixture.Worker.Actions.SequenceEqual(["pause"]));
+        await ReceiveUntilAsync(predecessor, frame => Type(frame) == "error");
+        successorPause.Release();
+        if (!cancelSuccessor)
+        {
+            await ReceiveUntilAsync(successor, frame => Type(frame) == "error");
+        }
+
+        await WaitUntilAsync(() => fixture.Worker.Actions.Count == 2);
+        Assert.Null(state.HijackOwner);
+        Assert.Null(state.PendingDashboardPauseObligation);
+        Assert.Equal(["pause", "resume"], fixture.Worker.Actions);
+    }
+
+    [Fact]
+    public async Task SuccessfulSuccessorCommitDischargesCanceledPredecessorPauseObligation()
+    {
+        var fixture = await BootAsync();
+        await using var server = fixture.Server;
+        using var predecessor = await ConnectAsync(fixture);
+        await DrainHandshakeAsync(predecessor);
+        using var successor = await ConnectAsync(fixture);
+        await DrainHandshakeAsync(successor);
+        var predecessorPause = fixture.Worker.DelayNextPause();
+
+        await SendControlAsync(predecessor, "hijack_request");
+        await predecessorPause.Attempted.WaitAsync(TimeSpan.FromSeconds(5));
+        var state = fixture.Hub.Registry.Get("resume-worker")!;
+        fixture.Hub.Conn.CleanupBrowser("resume-worker", state.PendingDashboardBrowser!);
+        var successorPause = fixture.Worker.DelayNextPause();
+        await SendControlAsync(successor, "hijack_request");
+        await successorPause.Attempted.WaitAsync(TimeSpan.FromSeconds(5));
+
+        predecessorPause.Release();
+        await ReceiveUntilAsync(predecessor, frame => Type(frame) == "error");
+        Assert.NotNull(state.PendingDashboardPauseObligation);
+        Assert.Equal(state.HijackPending, state.PendingDashboardPauseObligation);
+        successorPause.Release();
+        await ReceiveUntilAsync(
+            successor, frame => Type(frame) == "hijack_state" && Bool(frame, "hijacked"));
+
+        Assert.NotNull(state.HijackOwner);
+        Assert.Null(state.PendingDashboardPauseObligation);
+        Assert.Equal(["pause", "pause"], fixture.Worker.Actions);
+    }
+
     [Fact]
     public async Task ForceReleaseDuringDelayedResumeReclaimDoesNotAdvertiseOwnerAndCompensates()
     {
@@ -390,11 +461,10 @@ public sealed class ResumeLifecycleIntegrationTests
     {
         private readonly object _gate = new();
         private readonly List<string> _actions = [];
-        private TaskCompletionSource? _pauseAttempted;
-        private TaskCompletionSource? _pauseRelease;
+        private readonly Queue<PauseGate> _pauseGates = new();
+        private PauseGate? _lastPauseGate;
         private TaskCompletionSource? _resumeAttempted;
         private TaskCompletionSource? _resumeRelease;
-        private bool _failNextPause;
 
         public Func<Task>? AfterResume { get; set; }
 
@@ -405,7 +475,7 @@ public sealed class ResumeLifecycleIntegrationTests
 
         public Task PauseAttempted
         {
-            get { lock (_gate) return (_pauseAttempted ??= NewSignal()).Task; }
+            get { lock (_gate) return (_lastPauseGate ??= EnqueuePauseGate()).Attempted; }
         }
 
         public Task ResumeAttempted
@@ -415,25 +485,20 @@ public sealed class ResumeLifecycleIntegrationTests
 
         public void FailNextPause()
         {
-            lock (_gate)
-            {
-                _failNextPause = true;
-                _pauseAttempted = NewSignal();
-            }
+            lock (_gate) _lastPauseGate = EnqueuePauseGate(fail: true, delayed: false);
         }
 
-        public void DelayNextPause()
+        public PauseGate DelayNextPause(bool fail = false, bool cancel = false)
         {
             lock (_gate)
             {
-                _pauseAttempted = NewSignal();
-                _pauseRelease = NewSignal();
+                return _lastPauseGate = EnqueuePauseGate(fail, cancel, delayed: true);
             }
         }
 
         public void ReleasePause()
         {
-            lock (_gate) _pauseRelease?.TrySetResult();
+            lock (_gate) _lastPauseGate?.Release();
         }
 
         public void DelayNextResume()
@@ -458,18 +523,15 @@ public sealed class ResumeLifecycleIntegrationTests
                 .FirstOrDefault(value => value is not null);
             if (action is not null)
             {
+                PauseGate? pauseGate = null;
                 Task? release = null;
                 TaskCompletionSource? releaseSignal = null;
-                var fail = false;
                 lock (_gate)
                 {
                     if (action == "pause")
                     {
-                        _pauseAttempted?.TrySetResult();
-                        releaseSignal = _pauseRelease;
-                        release = releaseSignal?.Task;
-                        fail = _failNextPause;
-                        _failNextPause = false;
+                        if (_pauseGates.Count > 0) pauseGate = _pauseGates.Dequeue();
+                        pauseGate?.MarkAttempted();
                     }
                     else if (action == "resume")
                     {
@@ -479,19 +541,20 @@ public sealed class ResumeLifecycleIntegrationTests
                     }
                 }
 
+                if (pauseGate is not null) await pauseGate.WaitAsync(cancellationToken);
                 if (release is not null) await release.WaitAsync(cancellationToken);
                 lock (_gate)
                 {
-                    if (action == "pause" && ReferenceEquals(_pauseRelease, releaseSignal))
-                    {
-                        _pauseRelease = null;
-                    }
-                    else if (action == "resume" && ReferenceEquals(_resumeRelease, releaseSignal))
+                    if (action == "resume" && ReferenceEquals(_resumeRelease, releaseSignal))
                     {
                         _resumeRelease = null;
                     }
                 }
-                if (fail) throw new IOException("deterministic pause failure");
+                if (pauseGate?.Cancel is true)
+                {
+                    throw new OperationCanceledException("deterministic pause cancellation", cancellationToken);
+                }
+                if (pauseGate?.Fail is true) throw new IOException("deterministic pause failure");
                 lock (_gate) _actions.Add(action);
                 if (action == "resume" && AfterResume is not null) await AfterResume();
             }
@@ -499,5 +562,34 @@ public sealed class ResumeLifecycleIntegrationTests
 
         private static TaskCompletionSource NewSignal() =>
             new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        private PauseGate EnqueuePauseGate(bool fail = false, bool cancel = false, bool delayed = true)
+        {
+            var gate = new PauseGate(fail, cancel, delayed);
+            _pauseGates.Enqueue(gate);
+            return gate;
+        }
+
+        public sealed class PauseGate
+        {
+            private readonly TaskCompletionSource _attempted = NewSignal();
+            private readonly TaskCompletionSource? _release;
+
+            internal PauseGate(bool fail, bool cancel, bool delayed)
+            {
+                Fail = fail;
+                Cancel = cancel;
+                if (delayed) _release = NewSignal();
+            }
+
+            public bool Fail { get; }
+            public bool Cancel { get; }
+            public Task Attempted => _attempted.Task;
+            internal void MarkAttempted() => _attempted.TrySetResult();
+            public void Release() => _release?.TrySetResult();
+
+            internal Task WaitAsync(CancellationToken cancellationToken) =>
+                _release?.Task.WaitAsync(cancellationToken) ?? Task.CompletedTask;
+        }
     }
 }
