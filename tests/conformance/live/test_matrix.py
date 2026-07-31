@@ -56,15 +56,23 @@ def _result(language: str, status: int = 200, extra: Any = None) -> dict[str, An
 class _Runner:
     """A stand-in for the process mechanics, answering whatever a test says."""
 
-    def __init__(self, answers: dict[tuple[str, str], Any]) -> None:
+    def __init__(
+        self,
+        answers: dict[tuple[str, str], Any],
+        *,
+        server_capabilities: dict[str, tuple[str, ...]] | None = None,
+    ) -> None:
         self.answers = answers
         self.started: list[str] = []
+        self.ran: list[tuple[str, str]] = []
+        self.server_capabilities = server_capabilities or {}
 
     def start_server(self, spec: DriverSpec, **_: Any) -> Any:
         self.started.append(spec.language)
-        return _Server(spec.language)
+        return _Server(spec.language, self.server_capabilities.get(spec.language, ("status.observed",)))
 
     def run_client(self, spec: DriverSpec, *, server_language: str, **_: Any) -> dict[str, Any]:
+        self.ran.append((server_language, spec.language))
         answer = self.answers[(server_language, spec.language)]
         if isinstance(answer, Exception):
             raise answer
@@ -72,11 +80,11 @@ class _Runner:
 
 
 class _Server:
-    def __init__(self, language: str) -> None:
+    def __init__(self, language: str, capabilities: tuple[str, ...] = ("status.observed",)) -> None:
         self.language = language
         self.base_url = f"http://127.0.0.1:0/{language}"
         self.token = "t"
-        self.capabilities = ("status.observed",)
+        self.capabilities = capabilities
 
     def __enter__(self) -> _Server:
         return self
@@ -109,6 +117,56 @@ class TestEveryCell:
             runner=runner,
         )
         assert runner.started == ["python"]
+
+
+class TestCapabilities:
+    @staticmethod
+    def _fanout_scenario(tmp_path: Path) -> Any:
+        raw = {**_SCENARIO, "requires": ["fanout.rest.strict"]}
+        path = tmp_path / "001_example.json"
+        path.write_text(json.dumps(raw))
+        return load_scenario(path)
+
+    def test_fanout_requires_the_announced_server_capability(self, tmp_path: Path) -> None:
+        scenario = self._fanout_scenario(tmp_path)
+        runner = _Runner(
+            {("typescript", "python"): _result("python")},
+            server_capabilities={"typescript": ("status.observed",)},
+        )
+
+        report = run_matrix(
+            [scenario],
+            servers=[_spec("typescript")],
+            clients=[_spec("python")],
+            runner=runner,
+        )
+
+        (cell,) = report.cells
+        assert cell.status == "unsupported"
+        assert "typescript server" in str(cell.detail)
+        assert "fanout.rest.strict" in str(cell.detail)
+        assert runner.ran == []
+
+    def test_fanout_requires_the_selected_client_capability(self, tmp_path: Path) -> None:
+        scenario = self._fanout_scenario(tmp_path)
+        completed_without_fanout = _result("typescript")
+        completed_without_fanout["capabilities"] = ["status.observed"]
+        runner = _Runner(
+            {("python", "typescript"): completed_without_fanout},
+            server_capabilities={"python": ("status.observed", "fanout.rest.strict")},
+        )
+
+        report = run_matrix(
+            [scenario],
+            servers=[_spec("python")],
+            clients=[_spec("typescript")],
+            runner=runner,
+        )
+
+        (cell,) = report.cells
+        assert cell.status == "unsupported"
+        assert "typescript client" in str(cell.detail)
+        assert "fanout.rest.strict" in str(cell.detail)
 
 
 class TestVerdicts:

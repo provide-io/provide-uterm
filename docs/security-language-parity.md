@@ -5,8 +5,8 @@ Last updated: 2026-07-31.
 This matrix is the **authoritative product-scope statement** for security
 controls that are not automatically identical across languages. Wire
 goldens and `spec/behavior.json` cover framing/policy strings; this doc
-covers **identity, authorization webhooks, SPA asset integrity, and
-graphical human-relay**.
+covers **identity, authorization webhooks, SPA asset integrity, graphical
+human-relay, and fan-out authorization/governance**.
 
 | Surface | Python FastAPI | Cloudflare Worker | Go | C# | Notes |
 |---|:---:|:---:|:---:|:---:|---|
@@ -27,25 +27,36 @@ Cloudflare has no fan-out surface. TypeScript has a tested route/controller
 module but its Node server does not mount it, so it is not a served security
 capability.
 
+The five group operations — create, list, delete, send, and grant — are
+global-admin-only. Session-scoped admins and all other authenticated
+principals are rejected before request parsing or group lookup. Group access
+never substitutes for current authorization to each target session.
+
 | Control | Python FastAPI | Go | C# | TypeScript module |
 |---|:---:|:---:|:---:|:---:|
+| REST routes served by a running server | Y | Y | Y | N; module unserved |
+| Global admin required for create/list/delete/send/grant | Y | Y | Y | Y; module unserved |
+| Browser-WS fan-out send served | Y | Y | N | N |
 | Unknown members rejected by default | Y | Y | Y | Y |
 | Opt-in key `fanout_allow_unknown_members` | Y | Y | Y | Y |
 | Current session authz checked on every send | Y | Y | Y | Y |
 | Current session authz checked on approval release | Y | N/A | N/A | Y |
 | Group grantee without session access receives input | N | N | N | N |
 | Configured policy may be silently bypassed | N | N | N | N |
-| Policy deny / hold / release | Y | unsupported; 501 | unsupported; 501 | implemented, unserved |
-| Policy transport/error failure | fail closed | 501, no input | 501, no input | fail closed when gate supplied |
+| Policy deny / hold / release surface | served | explicitly unsupported; 501, no input | explicitly unsupported; 501, no input | implemented module; unserved |
+| Policy transport/error failure | fail closed | explicitly unsupported; 501, no input | explicitly unsupported; 501, no input | fail closed in module; unserved |
 
 The dormant-member option changes creation only. A dormant ID that later
 registers is still resolved and authorized against the principal who performs
 the send. Revocation after group creation has the same result: that member is
 reported as failed and no input or `fanout_input` observer event is emitted.
 
-The live matrix advertises the `fanout.rest.strict` server capability only for
-Python, Go, and C#. The TypeScript client participates through raw HTTP, but
-the TypeScript server capability remains absent.
+The live matrix intersects each scenario's requirements with both the client
+result and the running server's announced capabilities. Python, Go, and C#
+announce `fanout.rest.strict`; the TypeScript client participates through raw
+HTTP, but its server announces no fan-out capability. A manually selected
+TypeScript fan-out server cell is therefore reported as explicit
+`unsupported`/unserved and the client is not launched.
 Policy and authorization-mutation cases are indexed in the machine-readable
 fan-out coverage manifest because the live harness cannot yet inject a policy
 service or mutate authorization during a scenario.
