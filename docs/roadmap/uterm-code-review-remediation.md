@@ -30,25 +30,25 @@ Design: `docs/superpowers/specs/2026-07-31-code-review-remediation-design.md`
 
 ## C# WebSocket and connection lifecycle
 
-- [ ] **CSHARP-WS-001 (high): fragmented browser messages.** Browser control and
+- [x] **CSHARP-WS-001 (high): fragmented browser messages.** Browser control and
   input messages are accumulated through `EndOfMessage` with a bounded size.
-- [ ] **CSHARP-WS-002 (high): fragmented worker messages.** Worker snapshots and
+- [x] **CSHARP-WS-002 (high): fragmented worker messages.** Worker snapshots and
   control frames retain decoder state across receive fragments.
-- [ ] **CSHARP-WS-003 (high): fragmented tunnel messages.** Tunnel frames are
+- [x] **CSHARP-WS-003 (high): fragmented tunnel messages.** Tunnel frames are
   decoded only after a complete bounded WebSocket message is assembled.
-- [ ] **CSHARP-CONN-001 (medium): worker admission.** Both worker and tunnel routes
+- [x] **CSHARP-CONN-001 (medium): worker admission.** Both worker and tunnel routes
   honor failed `RegisterWorker` results and do not mark rejected workers online.
-- [ ] **CSHARP-CONN-002 (medium): browser quotas.** Enforce
+- [x] **CSHARP-CONN-002 (medium): browser quotas.** Enforce
   `MaxConnectionsPerPrincipal`, including rollback on setup and disconnect.
-- [ ] **CSHARP-CONN-003 (medium): handshake ordering.** Deferred browser activation
+- [x] **CSHARP-CONN-003 (medium): handshake ordering.** Deferred browser activation
   prevents normal broadcasts before `hello` and initial state frames.
-- [ ] **CSHARP-CONN-004 (medium): bounded broadcast.** Browser sends are concurrent
+- [x] **CSHARP-CONN-004 (medium): bounded broadcast.** Browser sends are concurrent
   or isolated, have a timeout, and prune failed sockets.
-- [ ] **CSHARP-RESUME-001 (medium): bounded token storage.** Expired or abandoned
+- [x] **CSHARP-RESUME-001 (medium): bounded token storage.** Expired or abandoned
   resume tokens are swept and total storage is capped.
-- [ ] **CSHARP-RESUME-002 (medium): truthful resume semantics.** Successful resume
+- [x] **CSHARP-RESUME-002 (medium): truthful resume semantics.** Successful resume
   restores documented ownership/state; otherwise the capability is not advertised.
-- [ ] **CSHARP-AUTH-001 (low): constant-time worker credential comparison.** Worker
+- [x] **CSHARP-AUTH-001 (low): constant-time worker credential comparison.** Worker
   and tunnel bearer validation use a constant-time byte comparison.
 
 ## TypeScript readiness and CI
@@ -116,3 +116,4 @@ Design: `docs/superpowers/specs/2026-07-31-code-review-remediation-design.md`
 | 2026-07-31 | Python robustness | Focused PAM, graphical endpoint, Cloudflare JSON, config-schema, and VNC warning-as-error suites | 137 passed, 1 optional-vendor skip; ruff passed |
 | 2026-07-31 | TypeScript readiness | clean emit, native Node 22 root-import smoke, typecheck, Biome, SSH tests, strict coverage | 10,470 tests; 100% statements/branches/functions/lines; pass |
 | 2026-07-31 | Native capture | `make clean && make test && make all`; UBSan; symbol gate; real macOS injection | 13 writer tests and injection pass; Linux LD_PRELOAD execution added to CI |
+| 2026-07-31 | C# lifecycle | Full C# suite plus focused fragmentation, admission, quota, broadcast, resume, ownership, replacement, timeout, and teardown matrices | 1,330 passed, 0 failed; final spec and quality reviews approved |
