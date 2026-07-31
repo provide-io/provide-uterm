@@ -2,11 +2,10 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Validation tests for the cross-language fan-out security evidence map."""
+"""Executable cross-language fan-out security contract tests."""
 
 from __future__ import annotations
 
-import copy
 import importlib.util
 import json
 import subprocess
@@ -15,25 +14,57 @@ from pathlib import Path
 from types import ModuleType
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-MANIFEST_PATH = REPO_ROOT / "spec/fanout_security_coverage.json"
+SCENARIOS_PATH = REPO_ROOT / "spec/fanout_security_scenarios.json"
+RUNNER_PATH = REPO_ROOT / "scripts/run_fanout_security_scenarios.py"
+BACKENDS = {"python", "go", "csharp", "typescript"}
+STATUSES = {"execute", "unsupported_fail_closed", "component_execute", "unserved"}
+EXPECTED_FIELDS = {
+    "status_code",
+    "error",
+    "approval_required",
+    "approval_id",
+    "delivered_workers",
+    "observer_notifications",
+    "failed_members",
+    "output",
+}
 
 
-def _load_validator() -> ModuleType:
-    path = REPO_ROOT / "scripts/validate_fanout_security_coverage.py"
-    spec = importlib.util.spec_from_file_location("fanout_security_coverage_validator", path)
+def _contract() -> dict[str, object]:
+    return json.loads(SCENARIOS_PATH.read_text(encoding="utf-8"))
+
+
+def _runner() -> ModuleType:
+    spec = importlib.util.spec_from_file_location("fanout_security_scenario_runner", RUNNER_PATH)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-def _manifest() -> dict[str, object]:
-    return json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+def test_contract_contains_semantic_inputs_expectations_and_exact_status_matrix() -> None:
+    contract = _contract()
+
+    assert contract["schema_version"] == 1
+    assert set(contract["backends"]) == BACKENDS  # type: ignore[arg-type]
+    scenarios = contract["scenarios"]
+    assert isinstance(scenarios, list) and scenarios
+    for scenario in scenarios:
+        assert set(scenario) >= {"id", "input", "expected", "backends"}
+        assert set(scenario["expected"]) == EXPECTED_FIELDS
+        assert set(scenario["backends"]) == BACKENDS
+        for backend in BACKENDS:
+            claim = scenario["backends"][backend]
+            assert set(claim) == {"status", "expected"}
+            assert claim["status"] in STATUSES
+            assert set(claim["expected"]) <= EXPECTED_FIELDS
+            assert set(scenario["expected"] | claim["expected"]) == EXPECTED_FIELDS
+        assert "file" not in scenario and "test" not in scenario
 
 
-def test_repository_fanout_security_manifest_is_valid() -> None:
+def test_real_runner_executes_and_compares_native_observations() -> None:
     result = subprocess.run(
-        [sys.executable, "scripts/validate_fanout_security_coverage.py"],
+        [sys.executable, str(RUNNER_PATH), "--root", str(REPO_ROOT)],
         cwd=REPO_ROOT,
         check=False,
         capture_output=True,
@@ -43,78 +74,53 @@ def test_repository_fanout_security_manifest_is_valid() -> None:
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_missing_applicable_behavior_is_rejected() -> None:
-    validator = _load_validator()
-    manifest = _manifest()
-    del manifest["backends"]["go"]["coverage"]["partial_failures"]  # type: ignore[index]
+def test_comparator_rejects_missing_extra_skip_and_mismatched_results() -> None:
+    runner = _runner()
+    contract = _contract()
+    backend = "python"
+    expected_ids = runner.applicable_ids(contract, backend)
+    valid = [
+        {
+            "id": scenario["id"],
+            "status": scenario["backends"][backend]["status"],
+            **runner.expected_for(scenario, backend),
+        }
+        for scenario in contract["scenarios"]
+        if scenario["id"] in expected_ids
+    ]
 
-    errors = validator.validate_manifest(REPO_ROOT, manifest)
-
-    assert any("go: coverage must contain every required behavior" in error for error in errors)
-
-
-def test_false_served_capability_claim_is_rejected() -> None:
-    validator = _load_validator()
-    manifest = _manifest()
-    typescript = manifest["backends"]["typescript"]  # type: ignore[index]
-    typescript["capabilities"]["delivery"] = "served"  # type: ignore[index]
-
-    errors = validator.validate_manifest(REPO_ROOT, manifest)
-
-    assert any("typescript.served_evidence" in error for error in errors)
-    assert any("served delivery cannot claim component-only policy" in error for error in errors)
-
-
-def test_internally_consistent_but_false_server_claim_is_rejected() -> None:
-    validator = _load_validator()
-    manifest = _manifest()
-    typescript = manifest["backends"]["typescript"]  # type: ignore[index]
-    typescript["capabilities"] = {"delivery": "served", "policy": "implemented"}  # type: ignore[index]
-    typescript["served_evidence"] = copy.deepcopy(  # type: ignore[index]
-        typescript["coverage"]["unknown_members_default_reject"]["evidence"]  # type: ignore[index]
+    assert runner.compare_observations(contract, backend, valid) == []
+    assert any("missing" in error for error in runner.compare_observations(contract, backend, valid[1:]))
+    assert any(
+        "extra" in error
+        for error in runner.compare_observations(contract, backend, [*valid, {**valid[0], "id": "not-a-case"}])
     )
-    for claim in typescript["coverage"].values():  # type: ignore[union-attr]
-        claim["status"] = "covered"
-
-    errors = validator.validate_manifest(REPO_ROOT, manifest)
-
-    assert any("typescript: capabilities do not match repository support matrix" in error for error in errors)
-
-
-def test_policy_capability_and_coverage_status_must_agree() -> None:
-    validator = _load_validator()
-    manifest = _manifest()
-    manifest["backends"]["go"]["coverage"]["policy_deny"]["status"] = "covered"  # type: ignore[index]
-
-    errors = validator.validate_manifest(REPO_ROOT, manifest)
-
-    assert any("go.policy_deny" in error and "expected 'unsupported'" in error for error in errors)
-
-
-def test_missing_test_file_and_identifier_are_rejected() -> None:
-    validator = _load_validator()
-    manifest = _manifest()
-    bad_file = copy.deepcopy(manifest)
-    bad_file["backends"]["python"]["coverage"]["partial_failures"]["evidence"][0]["file"] = (  # type: ignore[index]
-        "packages/provide-uterm-server/tests/bridge/does_not_exist.py"
+    assert any(
+        "skip" in error
+        for error in runner.compare_observations(contract, backend, [{**valid[0], "skipped": True}, *valid[1:]])
     )
-    bad_identifier = copy.deepcopy(manifest)
-    bad_identifier["backends"]["go"]["coverage"]["partial_failures"]["evidence"][0]["test"] = (  # type: ignore[index]
-        "TestThatDoesNotExist"
+    assert any(
+        "mismatch" in error
+        for error in runner.compare_observations(
+            contract, backend, [{**valid[0], "delivered_workers": ["wrong"]}, *valid[1:]]
+        )
     )
 
-    file_errors = validator.validate_manifest(REPO_ROOT, bad_file)
-    identifier_errors = validator.validate_manifest(REPO_ROOT, bad_identifier)
 
-    assert any("missing test file" in error for error in file_errors)
-    assert any("test declaration 'TestThatDoesNotExist' not found" in error for error in identifier_errors)
+def test_false_typescript_server_capability_claim_is_rejected() -> None:
+    runner = _runner()
+    contract = _contract()
+    contract["backends"]["typescript"]["surface"] = "server"
+    contract["backends"]["typescript"]["advertised"] = True
+
+    errors = runner.validate_contract(contract)
+
+    assert any("typescript" in error and "unserved component" in error for error in errors)
 
 
-def test_evidence_requires_a_real_test_declaration_not_a_loose_substring() -> None:
-    validator = _load_validator()
-    manifest = _manifest()
-    manifest["backends"]["typescript"]["coverage"]["partial_failures"]["evidence"][0]["test"] = "fanout"  # type: ignore[index]
+def test_native_command_failure_is_not_reported_as_coverage() -> None:
+    runner = _runner()
 
-    errors = validator.validate_manifest(REPO_ROOT, manifest)
+    errors = runner.command_errors("python", subprocess.CompletedProcess(["bad"], 2, "", "boom"))
 
-    assert any("test declaration 'fanout' not found" in error for error in errors)
+    assert any("command failed" in error and "boom" in error for error in errors)

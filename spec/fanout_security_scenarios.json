@@ -1,0 +1,171 @@
+{
+  "schema_version": 1,
+  "status_vocabulary": [
+    "execute",
+    "unsupported_fail_closed",
+    "component_execute",
+    "unserved"
+  ],
+  "backends": {
+    "python": {"surface": "server", "advertised": true},
+    "go": {"surface": "server", "advertised": true},
+    "csharp": {"surface": "server", "advertised": true},
+    "typescript": {"surface": "component", "advertised": false}
+  },
+  "scenarios": [
+    {
+      "id": "unauthenticated_refusal",
+      "input": {"operation": "send", "principal": "anonymous", "members": ["w1"], "command": "id"},
+      "expected": {"status_code": 401, "error": "authentication_required", "approval_required": false, "approval_id": null, "delivered_workers": [], "observer_notifications": [], "failed_members": [], "output": {}},
+      "backends": {
+        "python": {"status": "execute", "expected": {}},
+        "go": {"status": "execute", "expected": {}},
+        "csharp": {"status": "execute", "expected": {}},
+        "typescript": {"status": "component_execute", "expected": {}}
+      }
+    },
+    {
+      "id": "viewer_public_session_refusal",
+      "input": {"operation": "send", "principal": "viewer", "visibility": "public", "members": ["w1"], "command": "id"},
+      "expected": {"status_code": 403, "error": "global_admin_required", "approval_required": false, "approval_id": null, "delivered_workers": [], "observer_notifications": [], "failed_members": [], "output": {}},
+      "backends": {
+        "python": {"status": "execute", "expected": {}},
+        "go": {"status": "execute", "expected": {}},
+        "csharp": {"status": "execute", "expected": {}},
+        "typescript": {"status": "component_execute", "expected": {}}
+      }
+    },
+    {
+      "id": "dormant_member_default_reject",
+      "input": {"operation": "create", "principal": "admin", "members": ["missing"], "allow_unknown_members": false},
+      "expected": {"status_code": 400, "error": "unknown_member", "approval_required": false, "approval_id": null, "delivered_workers": [], "observer_notifications": [], "failed_members": [], "output": {}},
+      "backends": {
+        "python": {"status": "execute", "expected": {}},
+        "go": {"status": "execute", "expected": {}},
+        "csharp": {"status": "execute", "expected": {}},
+        "typescript": {"status": "component_execute", "expected": {}}
+      }
+    },
+    {
+      "id": "dormant_member_permissive_admission",
+      "input": {"operation": "create", "principal": "admin", "members": ["missing"], "allow_unknown_members": true},
+      "expected": {"status_code": 200, "error": null, "approval_required": false, "approval_id": null, "delivered_workers": [], "observer_notifications": [], "failed_members": [], "output": {}},
+      "backends": {
+        "python": {"status": "execute", "expected": {}},
+        "go": {"status": "execute", "expected": {}},
+        "csharp": {"status": "execute", "expected": {}},
+        "typescript": {"status": "component_execute", "expected": {}}
+      }
+    },
+    {
+      "id": "current_authorization_revocation",
+      "input": {"operation": "send", "principal": "admin", "members": ["w1", "w2"], "revoked_members": ["w2"], "command": "id"},
+      "expected": {"status_code": 200, "error": null, "approval_required": false, "approval_id": null, "delivered_workers": ["w1"], "observer_notifications": ["w1"], "failed_members": ["w2"], "output": {"w1": "ok"}},
+      "backends": {
+        "python": {"status": "execute", "expected": {}},
+        "go": {"status": "execute", "expected": {}},
+        "csharp": {"status": "execute", "expected": {}},
+        "typescript": {"status": "component_execute", "expected": {}}
+      }
+    },
+    {
+      "id": "group_grant_non_bypass",
+      "input": {"operation": "send", "principal": "admin", "members": ["w1"], "grants": ["admin"], "revoked_members": ["w1"], "command": "id"},
+      "expected": {"status_code": 200, "error": null, "approval_required": false, "approval_id": null, "delivered_workers": [], "observer_notifications": [], "failed_members": ["w1"], "output": {}},
+      "backends": {
+        "python": {"status": "execute", "expected": {}},
+        "go": {"status": "execute", "expected": {}},
+        "csharp": {"status": "execute", "expected": {}},
+        "typescript": {"status": "component_execute", "expected": {}}
+      }
+    },
+    {
+      "id": "partial_member_failure",
+      "input": {"operation": "send", "principal": "admin", "members": ["w1", "w2"], "failed_members": ["w2"], "command": "id"},
+      "expected": {"status_code": 200, "error": null, "approval_required": false, "approval_id": null, "delivered_workers": ["w1"], "observer_notifications": ["w1", "w2"], "failed_members": ["w2"], "output": {"w1": "ok"}},
+      "backends": {
+        "python": {"status": "execute", "expected": {}},
+        "go": {"status": "execute", "expected": {}},
+        "csharp": {"status": "execute", "expected": {}},
+        "typescript": {"status": "component_execute", "expected": {}}
+      }
+    },
+    {
+      "id": "policy_deny",
+      "input": {"operation": "send", "principal": "admin", "members": ["w1"], "policy": "deny", "command": "rm -rf /"},
+      "expected": {"status_code": 403, "error": "policy_denied", "approval_required": false, "approval_id": null, "delivered_workers": [], "observer_notifications": [], "failed_members": [], "output": {}},
+      "backends": {
+        "python": {"status": "execute", "expected": {}},
+        "go": {"status": "unsupported_fail_closed", "expected": {"status_code": 501, "error": "unsupported_fail_closed"}},
+        "csharp": {"status": "unsupported_fail_closed", "expected": {"status_code": 501, "error": "unsupported_fail_closed"}},
+        "typescript": {"status": "component_execute", "expected": {}}
+      }
+    },
+    {
+      "id": "policy_hold_release",
+      "input": {"operation": "send", "principal": "admin", "members": ["w1"], "policy": "hold_release", "command": "reboot"},
+      "expected": {"status_code": 202, "error": null, "approval_required": true, "approval_id": "approval", "delivered_workers": ["w1"], "observer_notifications": ["w1"], "failed_members": [], "output": {"w1": "ok"}},
+      "backends": {
+        "python": {"status": "execute", "expected": {}},
+        "go": {"status": "unsupported_fail_closed", "expected": {"status_code": 501, "error": "unsupported_fail_closed", "approval_required": false, "approval_id": null, "delivered_workers": [], "observer_notifications": [], "output": {}}},
+        "csharp": {"status": "unsupported_fail_closed", "expected": {"status_code": 501, "error": "unsupported_fail_closed", "approval_required": false, "approval_id": null, "delivered_workers": [], "observer_notifications": [], "output": {}}},
+        "typescript": {"status": "component_execute", "expected": {}}
+      }
+    },
+    {
+      "id": "missing_controller_dependencies",
+      "input": {"operation": "direct_send", "principal": "admin", "members": ["w1"], "omit_authorizers": true, "command": "id"},
+      "expected": {"status_code": 403, "error": "authorization_unavailable", "approval_required": false, "approval_id": null, "delivered_workers": [], "observer_notifications": [], "failed_members": [], "output": {}},
+      "backends": {
+        "python": {"status": "execute", "expected": {}},
+        "go": {"status": "execute", "expected": {}},
+        "csharp": {"status": "execute", "expected": {}},
+        "typescript": {"status": "component_execute", "expected": {}}
+      }
+    },
+    {
+      "id": "immediate_output_capture",
+      "input": {"operation": "send", "principal": "admin", "members": ["w1"], "immediate_output": {"w1": "immediate"}, "command": "id"},
+      "expected": {"status_code": 200, "error": null, "approval_required": false, "approval_id": null, "delivered_workers": ["w1"], "observer_notifications": ["w1"], "failed_members": [], "output": {"w1": "immediate"}},
+      "backends": {
+        "python": {"status": "execute", "expected": {}},
+        "go": {"status": "execute", "expected": {}},
+        "csharp": {"status": "execute", "expected": {}},
+        "typescript": {"status": "component_execute", "expected": {}}
+      }
+    },
+    {
+      "id": "store_read_isolation",
+      "input": {"operation": "store_read_isolation", "members": ["w1"], "mutation": "append_w2"},
+      "expected": {"status_code": 200, "error": null, "approval_required": false, "approval_id": null, "delivered_workers": [], "observer_notifications": [], "failed_members": [], "output": {}},
+      "backends": {
+        "python": {"status": "unserved", "expected": {"status_code": 0, "error": "unserved"}},
+        "go": {"status": "execute", "expected": {}},
+        "csharp": {"status": "execute", "expected": {}},
+        "typescript": {"status": "unserved", "expected": {"status_code": 0, "error": "unserved"}}
+      }
+    },
+    {
+      "id": "store_atomic_update",
+      "input": {"operation": "store_atomic_update", "members": ["w1"], "concurrent_grants": ["alice", "bob"]},
+      "expected": {"status_code": 200, "error": null, "approval_required": false, "approval_id": null, "delivered_workers": [], "observer_notifications": [], "failed_members": [], "output": {}},
+      "backends": {
+        "python": {"status": "unserved", "expected": {"status_code": 0, "error": "unserved"}},
+        "go": {"status": "execute", "expected": {}},
+        "csharp": {"status": "execute", "expected": {}},
+        "typescript": {"status": "unserved", "expected": {"status_code": 0, "error": "unserved"}}
+      }
+    },
+    {
+      "id": "total_response_deadline",
+      "input": {"operation": "send", "principal": "admin", "members": ["w1"], "continuous_output": true, "max_response_ms": 20, "command": "tail -f"},
+      "expected": {"status_code": 200, "error": null, "approval_required": false, "approval_id": null, "delivered_workers": ["w1"], "observer_notifications": ["w1"], "failed_members": ["w1"], "output": {}},
+      "backends": {
+        "python": {"status": "unserved", "expected": {"status_code": 0, "error": "unserved", "delivered_workers": [], "observer_notifications": [], "failed_members": []}},
+        "go": {"status": "unserved", "expected": {"status_code": 0, "error": "unserved", "delivered_workers": [], "observer_notifications": [], "failed_members": []}},
+        "csharp": {"status": "execute", "expected": {}},
+        "typescript": {"status": "unserved", "expected": {"status_code": 0, "error": "unserved", "delivered_workers": [], "observer_notifications": [], "failed_members": []}}
+      }
+    }
+  ]
+}
