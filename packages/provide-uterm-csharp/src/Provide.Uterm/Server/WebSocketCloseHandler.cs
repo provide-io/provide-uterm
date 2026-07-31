@@ -34,6 +34,21 @@ internal static class WebSocketCloseHandler
             }
         }
 
+        if (socket.State == WebSocketState.CloseSent)
+        {
+            Task<WebSocketReceiveResult>? acknowledgement = null;
+            try
+            {
+                acknowledgement = socket.ReceiveAsync(
+                    new ArraySegment<byte>(new byte[1]), CancellationToken.None);
+                await acknowledgement.WaitAsync(timeout ?? DefaultTimeout).ConfigureAwait(false);
+            }
+            catch
+            {
+                ObserveEventualFault(acknowledgement);
+            }
+        }
+
         if (socket.State is not (WebSocketState.Closed or WebSocketState.Aborted))
         {
             socket.Abort();

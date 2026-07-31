@@ -269,6 +269,7 @@ public class HubServicesTests
         // A dashboard socket holds the lease under its own name, so the
         // reference's stand-in owner is what the worker is told.
         var browser = new object();
+        hub.Conn.RegisterBrowser("w1", browser, "admin");
         Assert.True(hub.Lease.TryAcquireWs("w1", browser).Ok);
         Assert.True(await hub.Conn.ForceReleaseHijackAsync("w1"));
         Assert.Contains(worker.Sent, s => s.Contains("server-forced", StringComparison.Ordinal));
@@ -295,8 +296,10 @@ public class HubServicesTests
         hub.Conn.RegisterWorker("w1", worker);
         var st = hub.Registry.Get("w1")!;
         st.HijackPending = "pending-h1";
+        var browser = new object();
+        hub.Conn.RegisterBrowser("w1", browser, "admin");
 
-        var (ok, reason) = hub.Lease.TryAcquireWs("w1", new object());
+        var (ok, reason) = hub.Lease.TryAcquireWs("w1", browser);
         Assert.False(ok);
         Assert.Equal("already_hijacked", reason);
         Assert.Null(st.HijackOwner);
