@@ -247,7 +247,7 @@ public sealed class FanoutSecurityScenarioTests
         {
             GroupId = Text(group, "id"), Name = "fixture-group", WorkerIds = Strings(group["members"]),
             CreatedBy = Text(group, "creator"), Grants = Strings(group["grants"]), Mode = "parallel",
-            QuiesceMs = 1, MaxResponseMs = Number(input, "max_response_ms") is > 0 and var value ? value : 100,
+            QuiesceMs = 25, MaxResponseMs = Number(input, "max_response_ms") is > 0 and var value ? value : 100,
             DivergenceThreshold = 0.8,
         };
     }
