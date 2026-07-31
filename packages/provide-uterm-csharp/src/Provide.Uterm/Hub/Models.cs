@@ -83,7 +83,8 @@ public sealed class WorkerTermState
     public string? HijackPending { get; set; }
     internal object? PendingDashboardBrowser { get; set; }
     internal long? PendingDashboardOwnershipVersion { get; set; }
-    internal string? PendingDashboardPauseObligation { get; set; }
+    internal string? PendingPauseReservation { get; set; }
+    internal string? PendingPauseObligation { get; set; }
     internal Task? DisconnectResumeCompletion { get; set; }
     internal long? DisconnectResumeOwnershipVersion { get; set; }
     public string InputMode { get; set; } = InputModes.Hijack;
