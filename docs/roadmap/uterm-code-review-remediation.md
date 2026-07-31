@@ -53,17 +53,17 @@ Design: `docs/superpowers/specs/2026-07-31-code-review-remediation-design.md`
 
 ## TypeScript readiness and CI
 
-- [ ] **TS-BUILD-001 (high): emit build.** `npm run build --workspace=packages/provide-uterm-ts`
+- [x] **TS-BUILD-001 (high): emit build.** `npm run build --workspace=packages/provide-uterm-ts`
   succeeds with the intended ES2023 library declarations.
-- [ ] **TS-CI-001 (high): build gate.** CI invokes the TypeScript emit build in
+- [x] **TS-CI-001 (high): build gate.** CI invokes the TypeScript emit build in
   addition to typecheck, lint, and coverage.
-- [ ] **TS-COV-001 (medium): restore strict coverage.** Focused tests cover the
+- [x] **TS-COV-001 (medium): restore strict coverage.** Focused tests cover the
   empty normalized Cloudflare team-domain branch and all current branch gaps;
   the 100% threshold passes without exclusions.
-- [ ] **TS-DOC-001 (medium): accurate maturity labels.** README, roadmap, capability
+- [x] **TS-DOC-001 (medium): accurate maturity labels.** README, roadmap, capability
   declarations, and CI matrices consistently distinguish completed modules from
   integrated server surfaces.
-- [ ] **TS-E2E-001 (medium): integration eligibility.** Document the concrete
+- [x] **TS-E2E-001 (medium): integration eligibility.** Document the concrete
   WebSocket/lifecycle prerequisites for joining multi-backend Playwright testing.
 
 ## Native capture
@@ -114,3 +114,4 @@ Design: `docs/superpowers/specs/2026-07-31-code-review-remediation-design.md`
 | 2026-07-31 | Known red | `npm run test:ts:coverage` | tests pass; strict coverage threshold fails |
 | 2026-07-31 | Known red | `uv run pytest -q packages/provide-uterm-server/tests/` | tests pass; strict coverage threshold fails at `config_schema.py:160` |
 | 2026-07-31 | Python robustness | Focused PAM, graphical endpoint, Cloudflare JSON, config-schema, and VNC warning-as-error suites | 137 passed, 1 optional-vendor skip; ruff passed |
+| 2026-07-31 | TypeScript readiness | clean emit, native Node 22 root-import smoke, typecheck, Biome, SSH tests, strict coverage | 10,470 tests; 100% statements/branches/functions/lines; pass |
