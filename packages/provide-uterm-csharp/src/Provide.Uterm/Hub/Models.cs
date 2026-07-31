@@ -87,6 +87,7 @@ public sealed class WorkerTermState
     internal string? PendingPauseObligation { get; set; }
     internal Task? DisconnectResumeCompletion { get; set; }
     internal long? DisconnectResumeOwnershipVersion { get; set; }
+    internal PendingInputSend? InputSendPending { get; set; }
     public string InputMode { get; set; } = InputModes.Hijack;
 
     /// <summary>
@@ -132,4 +133,15 @@ public sealed class WorkerTermState
         HijackOwnerExpiresAt = l.WsExpiresAt;
         HijackSession = l.Session;
     }
+}
+
+/// <summary>One input delivery linearized against lease and worker lifecycle transitions.</summary>
+internal sealed class PendingInputSend
+{
+    internal required string Reservation { get; init; }
+    internal required IWorkerWs Worker { get; init; }
+    internal string? RestHijackId { get; init; }
+    internal object? DashboardOwner { get; init; }
+    internal long? DashboardOwnershipVersion { get; init; }
+    internal required TaskCompletionSource Completion { get; init; }
 }

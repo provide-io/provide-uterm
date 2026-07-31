@@ -778,6 +778,119 @@ public sealed class ResumeLifecycleIntegrationTests
     }
 
     [Theory]
+    [InlineData(true, "release")]
+    [InlineData(true, "expiry")]
+    [InlineData(true, "replacement")]
+    [InlineData(false, "release")]
+    [InlineData(false, "expiry")]
+    [InlineData(false, "replacement")]
+    public async Task AuthorizedInputSerializesWithLifecycleTransition(
+        bool restInput,
+        string transitionKind)
+    {
+        var clock = new ManualClock(100);
+        clock.SetMonotonic(0);
+        var hub = new TermHub(new TermHubConfig { Clock = clock, DashboardHijackLeaseS = 1 });
+        var oldWorker = new RecordingWorker();
+        var replacement = new RecordingWorker();
+        var browser = new RecordingBrowser();
+        Assert.True(hub.Conn.RegisterWorker("input-race", oldWorker));
+        hub.Conn.RegisterBrowser("input-race", browser, "admin");
+        var leaseS = transitionKind == "expiry" ? 1 : 30;
+        if (restInput)
+        {
+            Assert.True((await hub.Lease.TryAcquireRestAsync(
+                "input-race", "rest-owner", leaseS, "input-lease", 0)).Ok);
+        }
+        else
+        {
+            Assert.True((await hub.Lease.TryAcquireWsAsync("input-race", browser)).Ok);
+        }
+
+        oldWorker.DelayNextInput();
+        var server = NewUnstartedServer(hub);
+        var input = restInput
+            ? SendRestInputAsync()
+            : server.SendBrowserInputAsync("input-race", browser, "old-owner-input");
+        await oldWorker.InputAttempted.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var transition = RunTransitionAsync();
+        var completedBeforeInput = transition.IsCompleted;
+        oldWorker.ReleaseInput();
+        Assert.True(await input);
+        await transition;
+
+        Assert.False(completedBeforeInput);
+        Assert.Contains("old-owner-input", oldWorker.Inputs);
+        Assert.DoesNotContain("old-owner-input", replacement.Inputs);
+
+        async Task<bool> SendRestInputAsync() =>
+            (await hub.Conn.SendRestInputAsync(
+                "input-race", "input-lease", "old-owner-input")).Ok;
+
+        async Task RunTransitionAsync()
+        {
+            switch (transitionKind)
+            {
+                case "release" when restInput:
+                    _ = await hub.Lease.ReleaseRestAsync("input-race", "input-lease");
+                    break;
+                case "release":
+                    _ = await hub.Lease.TryReleaseWsAsync("input-race", browser);
+                    break;
+                case "expiry":
+                    clock.SetMonotonic(2);
+                    _ = await hub.Lease.CleanupExpiredAsync("input-race");
+                    break;
+                case "replacement":
+                    Assert.True(await hub.Conn.RegisterWorkerAsync("input-race", replacement));
+                    break;
+                default:
+                    throw new Xunit.Sdk.XunitException("unknown transition kind");
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData("expiry")]
+    [InlineData("replacement")]
+    public async Task AutonomousOwnershipLossPublishesExactlyOnce(string transitionKind)
+    {
+        var clock = new ManualClock(100);
+        clock.SetMonotonic(0);
+        var changes = new List<(string WorkerId, bool Enabled, string? Owner)>();
+        var hub = new TermHub(new TermHubConfig
+        {
+            Clock = clock,
+            OnHijackChanged = (workerId, enabled, owner) => changes.Add((workerId, enabled, owner)),
+        });
+        var worker = new RecordingWorker();
+        var browser = new RecordingBrowser();
+        Assert.True(hub.Conn.RegisterWorker("publish-loss", worker));
+        hub.Conn.RegisterBrowser("publish-loss", browser, "viewer");
+        Assert.True((await hub.Lease.TryAcquireRestAsync(
+            "publish-loss", "rest-owner", 1, "publish-lease", 0)).Ok);
+        browser.Clear();
+
+        if (transitionKind == "expiry")
+        {
+            clock.SetMonotonic(2);
+            _ = await hub.Lease.CleanupExpiredAsync("publish-loss");
+        }
+        else
+        {
+            Assert.True(await hub.Conn.RegisterWorkerAsync("publish-loss", new RecordingWorker()));
+        }
+
+        var change = Assert.Single(changes);
+        Assert.Equal(("publish-loss", false, null), change);
+        var stateFrame = Assert.Single(
+            DecodeBrowserFrames(browser),
+            frame => Type(frame) == "hijack_state");
+        Assert.False(Bool(stateFrame, "hijacked"));
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task ExpiredLeaseResumesWorkerWithoutAnotherAcquisition(bool restLease)
@@ -914,6 +1027,13 @@ public sealed class ResumeLifecycleIntegrationTests
     private static string? Type(IReadOnlyDictionary<string, object?> frame) =>
         frame.TryGetValue("type", out var value) ? value?.ToString() : null;
 
+    private static IReadOnlyList<Dictionary<string, object?>> DecodeBrowserFrames(RecordingBrowser browser) =>
+        browser.Payloads
+            .SelectMany(payload => new ControlFrameDecoder().Feed(payload))
+            .OfType<ControlChunk>()
+            .Select(chunk => chunk.Control)
+            .ToArray();
+
     private static bool Bool(IReadOnlyDictionary<string, object?> frame, string key) =>
         frame.TryGetValue(key, out var value) && value is true;
 
@@ -1016,8 +1136,11 @@ public sealed class ResumeLifecycleIntegrationTests
         private PauseGate? _lastPauseGate;
         private TaskCompletionSource? _resumeAttempted;
         private TaskCompletionSource? _resumeRelease;
+        private TaskCompletionSource? _inputAttempted;
+        private TaskCompletionSource? _inputRelease;
         private ActiveCheckGate? _nextActiveCheck;
         private bool _isActive = true;
+        private readonly List<string> _inputs = [];
 
         public Func<Task>? AfterResume { get; set; }
 
@@ -1042,6 +1165,16 @@ public sealed class ResumeLifecycleIntegrationTests
         public IReadOnlyList<string> Actions
         {
             get { lock (_gate) return _actions.ToArray(); }
+        }
+
+        public IReadOnlyList<string> Inputs
+        {
+            get { lock (_gate) return _inputs.ToArray(); }
+        }
+
+        public Task InputAttempted
+        {
+            get { lock (_gate) return (_inputAttempted ??= NewSignal()).Task; }
         }
 
         public Task PauseAttempted
@@ -1096,6 +1229,20 @@ public sealed class ResumeLifecycleIntegrationTests
         public void ReleaseResume()
         {
             lock (_gate) _resumeRelease?.TrySetResult();
+        }
+
+        public void DelayNextInput()
+        {
+            lock (_gate)
+            {
+                _inputAttempted = NewSignal();
+                _inputRelease = NewSignal();
+            }
+        }
+
+        public void ReleaseInput()
+        {
+            lock (_gate) _inputRelease?.TrySetResult();
         }
 
         public ActiveCheckGate BlockNextActiveCheck()
@@ -1179,6 +1326,24 @@ public sealed class ResumeLifecycleIntegrationTests
                     lock (_gate) _actions.Add(action);
                 }
                 if (action == "resume" && AfterResume is not null) await AfterResume();
+            }
+            else
+            {
+                Task? release;
+                TaskCompletionSource? releaseSignal;
+                lock (_gate)
+                {
+                    _inputAttempted?.TrySetResult();
+                    releaseSignal = _inputRelease;
+                    release = releaseSignal?.Task;
+                }
+
+                if (release is not null) await release.WaitAsync(cancellationToken);
+                lock (_gate)
+                {
+                    _inputs.Add(payload);
+                    if (ReferenceEquals(_inputRelease, releaseSignal)) _inputRelease = null;
+                }
             }
         }
 
