@@ -19,7 +19,12 @@
  */
 
 import { effectiveAllowLoopbackDestinations, type WebhookEgressConfig } from "../egress/index.ts";
-import { type AuthSettings, type DevIdpAuthConfig, setupDevIdp } from "../serverauth/index.ts";
+import {
+  applyCfAccessTeamDomain,
+  type AuthSettings,
+  type DevIdpAuthConfig,
+  setupDevIdp,
+} from "../serverauth/index.ts";
 import { deepMerge, normalizeDocument, SERVER_CONFIG_DEFAULTS } from "../serverconfig/index.ts";
 import type { Logger } from "../telemetry/index.ts";
 import { createServerApp, type ServerApp } from "./app.ts";
@@ -173,6 +178,10 @@ export function bootstrapServer(options: BootstrapOptions = {}): BootstrappedSer
   // next one's configuration.
   const auth = { ...section(config, "auth") } as unknown as DevIdpAuthConfig & AuthSettings;
   config.auth = auth;
+  // Runs unconditionally, before the mode branch below — matching Go, C#
+  // and Python, which all apply the Cloudflare Access team-domain fill as
+  // part of AuthConfig validation regardless of auth.mode.
+  applyCfAccessTeamDomain(auth as unknown as Record<string, unknown>);
   if (options.authMode !== undefined) {
     auth.mode = options.authMode;
   }

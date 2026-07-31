@@ -177,11 +177,6 @@ public sealed class ServerConfigNestedKeyTests
     /// reference gains a field and this port does not, this fails by name — the
     /// alternative is a stale set refusing a key the reference accepts, which
     /// breaks a working deployment on upgrade.
-    ///
-    /// <c>ConfigLoader.PortOnlyKeysForTests</c> is subtracted from our side
-    /// first: a small, documented set of keys this port accepts with no
-    /// reference-schema equivalent yet (see its own docstring), so a genuine
-    /// port-specific extension does not read as drift.
     /// </summary>
     [Fact]
     public void TheKeySetsMatchTheReferencesRecordedSchema()
@@ -202,9 +197,7 @@ public sealed class ServerConfigNestedKeyTests
                 .Select(property => property.Name)
                 .OrderBy(name => name, StringComparer.Ordinal)
                 .ToList();
-            var portOnly = ConfigLoader.PortOnlyKeysForTests.GetValueOrDefault(section, Array.Empty<string>());
             var ours = ConfigLoader.KnownNestedKeysForTests[section]
-                .Except(portOnly)
                 .OrderBy(name => name, StringComparer.Ordinal)
                 .ToList();
 
