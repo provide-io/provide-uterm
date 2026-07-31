@@ -24,7 +24,7 @@ Design: `docs/superpowers/specs/2026-07-31-code-review-remediation-design.md`
 - [x] **FANOUT-004 (medium): C# semantic parity.** Parallel/sequential execution,
   response collection, elapsed time, stop-on-first-error, and divergence behave as
   advertised or the surface explicitly reports unsupported behavior.
-- [ ] **FANOUT-005 (high): shared parity coverage.** Cross-language behavioral
+- [x] **FANOUT-005 (high): shared parity coverage.** Cross-language behavioral
   scenarios cover unknown IDs, revoked authorization, group grants, policy deny,
   policy hold/release, and partial member failures.
 
@@ -122,3 +122,4 @@ Design: `docs/superpowers/specs/2026-07-31-code-review-remediation-design.md`
 | 2026-07-31 | C# fan-out | Full serial Release suite plus focused execution/server/config tests | 1,338 passed, 0 failed; Release build passed |
 | 2026-07-31 | TypeScript fan-out | Full TypeScript suite, typecheck, and Biome lint | 10,474 tests passed; typecheck and lint passed |
 | 2026-07-31 | Live fan-out strict admission | Python/Go/C# servers × Python/Go/C#/TypeScript clients | 12 of 12 cells passed; TypeScript server explicitly unadvertised |
+| 2026-07-31 | Fan-out coverage manifest | `uv run python scripts/validate_fanout_security_coverage.py`; focused validator tests | manifest valid; 7 tests passed; unsupported and unserved cells explicit |

@@ -64,10 +64,10 @@ dormant IDs, but it does not weaken send-time authorization.
 strict-default REST contract across the served Python, Go, and C# backends
 with clients from all four languages.
 The richer cases that require mid-scenario authorization mutation or policy
-infrastructure are backend-local executable tests indexed by the shared
-fan-out coverage manifest; its validator rejects missing evidence and false
-capability claims. TypeScript deliberately does not advertise live fan-out
-until the Node server mounts the route module.
+infrastructure are backend-local executable tests indexed by
+`spec/fanout_security_coverage.json`; its validator rejects missing evidence
+and false capability claims. TypeScript deliberately does not advertise live
+fan-out until the Node server mounts the route module.
 
 ## Hijack control
 
