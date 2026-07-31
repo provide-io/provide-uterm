@@ -9,11 +9,31 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverauth"
 )
+
+type blockingParallelHub struct {
+	bus          *hub.EventBus
+	blockedStart chan struct{}
+}
+
+func (h *blockingParallelHub) SendWorker(ctx context.Context, workerID string, _ map[string]any) (bool, error) {
+	if workerID == "fast" {
+		h.bus.Enqueue(workerID, map[string]any{"type": "term", "data": map[string]any{"data": "fast-output"}})
+		return true, nil
+	}
+	close(h.blockedStart)
+	<-ctx.Done()
+	return false, ctx.Err()
+}
+
+func (h *blockingParallelHub) Broadcast(context.Context, string, map[string]any) error { return nil }
+func (h *blockingParallelHub) EventBus() *hub.EventBus                                 { return h.bus }
 
 func newCtrl(h Hub) *Controller {
 	return NewController(h, Config{
@@ -23,7 +43,12 @@ func newCtrl(h Hub) *Controller {
 
 func mustSend(t *testing.T, ctrl *Controller, groupID, data, subject string, quiesceMS, maxResponseMS int) Result {
 	t.Helper()
-	result, err := ctrl.Send(context.Background(), groupID, data, adminPrincipal(subject), quiesceMS, maxResponseMS)
+	return mustSendContext(t, context.Background(), ctrl, groupID, data, subject, quiesceMS, maxResponseMS)
+}
+
+func mustSendContext(t *testing.T, ctx context.Context, ctrl *Controller, groupID, data, subject string, quiesceMS, maxResponseMS int) Result {
+	t.Helper()
+	result, err := ctrl.Send(ctx, groupID, data, adminPrincipal(subject), quiesceMS, maxResponseMS)
 	if err != nil {
 		t.Fatalf("Send: %v", err)
 	}
@@ -302,6 +327,30 @@ func TestFanoutParallelCapturesImmediateOutput(t *testing.T) {
 	}
 }
 
+func TestFanoutParallelCollectionDeadlineStartsAtAcceptedDispatch(t *testing.T) {
+	bus := hub.NewEventBus(hub.EventBusOptions{})
+	h := &blockingParallelHub{bus: bus, blockedStart: make(chan struct{})}
+	ctrl := newCtrl(h)
+	_, _ = ctrl.CreateGroup(newGroup(t, []string{"fast", "blocked"}, nil), "admin")
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+	defer cancel()
+
+	result := mustSendContext(t, ctx, ctrl, "g1", "id\n", "admin", 1000, 40)
+	select {
+	case <-h.blockedStart:
+	default:
+		t.Fatal("blocking member was not dispatched")
+	}
+
+	fast := result.Results[0]
+	if !fast.OK || derefStr(fast.OutputDelta) != "fast-output" {
+		t.Fatalf("fast result = %+v, want captured accepted output", fast)
+	}
+	if fast.ElapsedMS < 25 {
+		t.Fatalf("fast elapsed_ms = %d, want its ~40ms hard cap independent of blocked send", fast.ElapsedMS)
+	}
+}
+
 func TestFanoutSequentialCapturesImmediateOutput(t *testing.T) {
 	bus := hub.NewEventBus(hub.EventBusOptions{})
 	fh := newFakeHub(bus, "w1", "w2")
@@ -340,6 +389,42 @@ func TestFanoutCaptureOpenFailureBlocksMemberInput(t *testing.T) {
 	}
 	if !contains(result.FailedSessions, "w1") {
 		t.Fatalf("failed sessions = %v, want w1", result.FailedSessions)
+	}
+}
+
+func TestFanoutControllerClosesEveryPreparedCaptureExactlyOnce(t *testing.T) {
+	for _, mode := range []string{"parallel", "sequential"} {
+		t.Run(mode, func(t *testing.T) {
+			fh := newFakeHub(nil, "connected")
+			ctrl := newCtrl(fh)
+			var mu sync.Mutex
+			closed := map[string]int{}
+			ctrl.openCapture = func(_ *hub.EventBus, workerID string) (*Capture, error) {
+				return &Capture{
+					sub: &hub.Subscription{Queue: make(chan map[string]any)},
+					remove: func() {
+						mu.Lock()
+						closed[workerID]++
+						mu.Unlock()
+					},
+				}, nil
+			}
+			_, _ = ctrl.CreateGroup(newGroup(t, []string{"connected", "refused"}, func(group *Group) {
+				group.Mode = mode
+			}), "admin")
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			_ = mustSendContext(t, ctx, ctrl, "g1", "id\n", "admin", 1000, 1000)
+
+			mu.Lock()
+			defer mu.Unlock()
+			for _, workerID := range []string{"connected", "refused"} {
+				if closed[workerID] != 1 {
+					t.Fatalf("%s capture close count = %d, want exactly 1", workerID, closed[workerID])
+				}
+			}
+		})
 	}
 }
 
