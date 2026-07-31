@@ -674,29 +674,41 @@ public sealed class HijackLeaseManager
         string keys,
         CancellationToken ct = default)
     {
-        PendingInputSend pending;
-        lock (_lock)
+        PendingInputSend? pending = null;
+        while (true)
         {
-            var st = _registry.Get(workerId);
-            if (st?.HijackSession is null
-                || st.HijackSession.HijackId != hijackId
-                || st.HijackSession.LeaseExpiresAt <= _clock.Monotonic()
-                || st.HijackPending is not null)
+            Task? inputCompletion = null;
+            lock (_lock)
             {
-                return (false, "invalid_hijack");
+                var st = _registry.Get(workerId);
+                if (st?.HijackSession is null
+                    || st.HijackSession.HijackId != hijackId
+                    || st.HijackSession.LeaseExpiresAt <= _clock.Monotonic()
+                    || st.HijackPending is not null)
+                {
+                    return (false, "invalid_hijack");
+                }
+                if (st.WorkerWs is null) return (false, "no_worker");
+                if (st.InputSendPending is not null)
+                {
+                    inputCompletion = st.InputSendPending.Completion.Task;
+                }
+                else
+                {
+                    pending = NewInputReservation(
+                        st.WorkerWs,
+                        restHijackId: hijackId,
+                        dashboardOwner: null,
+                        dashboardOwnershipVersion: null);
+                    st.InputSendPending = pending;
+                    break;
+                }
             }
-            if (st.WorkerWs is null) return (false, "no_worker");
-            if (st.InputSendPending is not null) return (false, "input_busy");
 
-            pending = NewInputReservation(
-                st.WorkerWs,
-                restHijackId: hijackId,
-                dashboardOwner: null,
-                dashboardOwnershipVersion: null);
-            st.InputSendPending = pending;
+            await inputCompletion!.WaitAsync(ct).ConfigureAwait(false);
         }
 
-        return await DeliverReservedInputAsync(workerId, pending, keys, ct).ConfigureAwait(false)
+        return await DeliverReservedInputAsync(workerId, pending!, keys, ct).ConfigureAwait(false)
             ? (true, "")
             : (false, "send_failed");
     }
@@ -708,37 +720,49 @@ public sealed class HijackLeaseManager
         string text,
         CancellationToken ct = default)
     {
-        PendingInputSend pending;
+        PendingInputSend? pending = null;
         double? expiration = null;
-        lock (_lock)
+        while (true)
         {
-            var st = _registry.Get(workerId);
-            if (st?.WorkerWs is null
-                || !st.Browsers.ContainsKey(browser)
-                || browser is IAbortableBrowserWs { IsActive: false }
-                || st.HijackPending is not null
-                || st.InputSendPending is not null
-                || !_hub.CanSendInput(st, browser))
+            Task? inputCompletion = null;
+            lock (_lock)
             {
-                return false;
+                var st = _registry.Get(workerId);
+                if (st?.WorkerWs is null
+                    || !st.Browsers.ContainsKey(browser)
+                    || browser is IAbortableBrowserWs { IsActive: false }
+                    || st.HijackPending is not null
+                    || !_hub.CanSendInput(st, browser))
+                {
+                    return false;
+                }
+                if (st.InputSendPending is not null)
+                {
+                    inputCompletion = st.InputSendPending.Completion.Task;
+                }
+                else
+                {
+                    if (_hub.IsDashboardHijackActive(st) && ReferenceEquals(st.HijackOwner, browser))
+                    {
+                        st.HijackOwnerExpiresAt = _clock.Monotonic() + _dashboardLeaseS;
+                        expiration = st.HijackOwnerExpiresAt;
+                    }
+
+                    pending = NewInputReservation(
+                        st.WorkerWs,
+                        restHijackId: null,
+                        dashboardOwner: browser,
+                        dashboardOwnershipVersion: st.HijackOwnershipVersion);
+                    st.InputSendPending = pending;
+                    break;
+                }
             }
 
-            if (_hub.IsDashboardHijackActive(st) && ReferenceEquals(st.HijackOwner, browser))
-            {
-                st.HijackOwnerExpiresAt = _clock.Monotonic() + _dashboardLeaseS;
-                expiration = st.HijackOwnerExpiresAt;
-            }
-
-            pending = NewInputReservation(
-                st.WorkerWs,
-                restHijackId: null,
-                dashboardOwner: browser,
-                dashboardOwnershipVersion: st.HijackOwnershipVersion);
-            st.InputSendPending = pending;
+            await inputCompletion!.WaitAsync(ct).ConfigureAwait(false);
         }
 
         if (expiration is not null) ArmExpiry(workerId, expiration.Value);
-        return await DeliverReservedInputAsync(workerId, pending, text, ct).ConfigureAwait(false);
+        return await DeliverReservedInputAsync(workerId, pending!, text, ct).ConfigureAwait(false);
     }
 
     private static PendingInputSend NewInputReservation(

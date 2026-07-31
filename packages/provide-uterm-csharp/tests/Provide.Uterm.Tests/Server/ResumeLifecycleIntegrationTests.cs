@@ -851,6 +851,60 @@ public sealed class ResumeLifecycleIntegrationTests
         }
     }
 
+    [Fact]
+    public async Task ConcurrentValidRestInputWaitsForPriorInputAndThenSends()
+    {
+        var hub = new TermHub();
+        var worker = new RecordingWorker();
+        Assert.True(hub.Conn.RegisterWorker("rest-input-queue", worker));
+        Assert.True((await hub.Lease.TryAcquireRestAsync(
+            "rest-input-queue", "rest-owner", 30, "rest-input-lease", 0)).Ok);
+
+        worker.DelayNextInput();
+        var first = hub.Conn.SendRestInputAsync(
+            "rest-input-queue", "rest-input-lease", "first-rest-input");
+        await worker.InputAttempted.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var second = hub.Conn.SendRestInputAsync(
+            "rest-input-queue", "rest-input-lease", "second-rest-input");
+        var secondCompletedBeforeFirst = second.IsCompleted;
+        worker.ReleaseInput();
+
+        Assert.True((await first).Ok);
+        Assert.True((await second).Ok);
+        Assert.False(secondCompletedBeforeFirst);
+        Assert.Equal(["first-rest-input", "second-rest-input"], worker.Inputs);
+    }
+
+    [Fact]
+    public async Task ConcurrentValidOpenModeBrowserInputWaitsForPriorInputAndThenSends()
+    {
+        var hub = new TermHub();
+        var worker = new RecordingWorker();
+        var firstBrowser = new RecordingBrowser();
+        var secondBrowser = new RecordingBrowser();
+        Assert.True(hub.Conn.RegisterWorker("browser-input-queue", worker));
+        hub.Conn.RegisterBrowser("browser-input-queue", firstBrowser, "operator");
+        hub.Conn.RegisterBrowser("browser-input-queue", secondBrowser, "admin");
+        Assert.True(hub.Router.SetInputMode("browser-input-queue", InputModes.Open).Ok);
+
+        worker.DelayNextInput();
+        var server = NewUnstartedServer(hub);
+        var first = server.SendBrowserInputAsync(
+            "browser-input-queue", firstBrowser, "first-browser-input");
+        await worker.InputAttempted.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var second = server.SendBrowserInputAsync(
+            "browser-input-queue", secondBrowser, "second-browser-input");
+        var secondCompletedBeforeFirst = second.IsCompleted;
+        worker.ReleaseInput();
+
+        Assert.True(await first);
+        Assert.True(await second);
+        Assert.False(secondCompletedBeforeFirst);
+        Assert.Equal(["first-browser-input", "second-browser-input"], worker.Inputs);
+    }
+
     [Theory]
     [InlineData("expiry")]
     [InlineData("replacement")]
