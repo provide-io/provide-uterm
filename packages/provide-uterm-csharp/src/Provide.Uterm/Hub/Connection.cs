@@ -52,6 +52,7 @@ public sealed class ConnectionManager
         IWorkerWs? predecessor = null;
         var mustResume = false;
         var ownershipLost = false;
+        OwnershipPublicationToken? ownershipPublication = null;
         var replacementReady = false;
         try
         {
@@ -80,6 +81,10 @@ public sealed class ConnectionManager
                             st, reservation, preserveOnWorkerClear: true);
                         completion ??= lifecycleTransition.Completion;
                         pendingCompletion = lifecycleTransition.Activated.Task;
+                    }
+                    else if (st.PendingPauseCompletion is { Task.IsCompleted: false } pauseCompletion)
+                    {
+                        pendingCompletion = pauseCompletion.Task;
                     }
                     else if (st.InputSendPending is not null)
                     {
@@ -110,6 +115,11 @@ public sealed class ConnectionManager
                             st.PendingPauseReservation = null;
                             st.PendingPauseObligation = null;
                             st.HijackOwnershipVersion++;
+                            if (ownershipLost)
+                            {
+                                ownershipPublication = OwnershipPublicationToken.Released(
+                                    workerId, st.HijackOwnershipVersion);
+                            }
                             if (completion is null)
                             {
                                 lifecycleTransition = LifecycleTransitionCoordinator.ReserveActive(
@@ -164,9 +174,9 @@ public sealed class ConnectionManager
         }
         finally
         {
-            if (ownershipLost)
+            if (ownershipPublication is not null)
             {
-                await PublishOwnershipLostAsync(workerId).ConfigureAwait(false);
+                await PublishOwnershipLostAsync(ownershipPublication).ConfigureAwait(false);
             }
             if (predecessor is IAbortableBrowserWs abortable) abortable.Abort();
             lock (_hub.SharedLock)
@@ -220,11 +230,11 @@ public sealed class ConnectionManager
             && ReferenceEquals(candidate.Completion, completion));
     }
 
-    private async Task PublishOwnershipLostAsync(string workerId)
+    private async Task PublishOwnershipLostAsync(OwnershipPublicationToken publication)
     {
         try
         {
-            _hub.State.NotifyHijackChanged(workerId, false, null);
+            _hub.State.NotifyHijackChanged(publication);
         }
         catch
         {
@@ -233,7 +243,8 @@ public sealed class ConnectionManager
 
         try
         {
-            await BroadcastHijackStateAsync(workerId, CancellationToken.None).ConfigureAwait(false);
+            await BroadcastHijackStateAsync(
+                publication.WorkerId, CancellationToken.None).ConfigureAwait(false);
         }
         catch
         {
@@ -433,11 +444,11 @@ public sealed class ConnectionManager
         IWorkerWs ws)
     {
         (bool Reconciled, bool WasHijacked) result;
-        long ownershipVersion;
+        OwnershipPublicationToken? ownershipPublication;
         lock (_hub.SharedLock)
         {
             result = DeregisterWorkerLocked(
-                workerId, ws, markOffline: true, out ownershipVersion);
+                workerId, ws, markOffline: true, out ownershipPublication);
         }
         if (!result.Reconciled) return result;
 
@@ -460,7 +471,10 @@ public sealed class ConnectionManager
 
         try
         {
-            _hub.State.NotifyOwnershipLostIfCurrent(workerId, ownershipVersion);
+            if (ownershipPublication is not null)
+            {
+                _hub.State.NotifyHijackChanged(ownershipPublication);
+            }
         }
         catch
         {
@@ -482,16 +496,15 @@ public sealed class ConnectionManager
         string workerId,
         IWorkerWs ws,
         bool markOffline,
-        out long ownershipVersion)
+        out OwnershipPublicationToken? ownershipPublication)
     {
         var st = _hub.Registry.Get(workerId);
         if (st is null || !ReferenceEquals(st.WorkerWs, ws))
         {
-            ownershipVersion = 0;
+            ownershipPublication = null;
             return (false, false);
         }
 
-        ownershipVersion = st.HijackOwnershipVersion;
         var wasHijacked = st.HijackSession is not null || st.HijackOwner is not null;
         st.WorkerWs = null;
         st.HijackSession = null;
@@ -501,6 +514,18 @@ public sealed class ConnectionManager
         st.PendingDashboardOwnershipVersion = null;
         st.PendingPauseReservation = null;
         st.PendingPauseObligation = null;
+        var pendingPauseCompletion = st.PendingPauseCompletion;
+        st.PendingPauseCompletion = null;
+        if (wasHijacked)
+        {
+            st.HijackOwnershipVersion++;
+            ownershipPublication = OwnershipPublicationToken.Released(
+                workerId, st.HijackOwnershipVersion);
+        }
+        else
+        {
+            ownershipPublication = null;
+        }
         if (markOffline)
         {
             try
@@ -515,6 +540,7 @@ public sealed class ConnectionManager
         // Mark the captured worker offline before activating a queued
         // replacement. Its route's subsequent online mark therefore wins.
         LifecycleTransitionCoordinator.Clear(st);
+        pendingPauseCompletion?.TrySetResult();
         return (true, wasHijacked);
     }
 
@@ -552,7 +578,6 @@ public sealed class ConnectionManager
     {
         var (had, _) = await _hub.Lease.ForceReleaseAsync(workerId, ct).ConfigureAwait(false);
         if (!had) return false;
-        _hub.State.NotifyHijackChanged(workerId, false, null);
         await BroadcastHijackStateAsync(workerId, ct).ConfigureAwait(false);
         return true;
     }

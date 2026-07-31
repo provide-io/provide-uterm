@@ -426,7 +426,7 @@ public sealed class ResumeLifecycleIntegrationTests
     }
 
     [Fact]
-    public async Task RestAcquireDoesNotCommitAfterWorkerReplacement()
+    public async Task WorkerReplacementWaitsForRestAcquirePauseFence()
     {
         var fixture = await BootAsync();
         await using var server = fixture.Server;
@@ -435,14 +435,18 @@ public sealed class ResumeLifecycleIntegrationTests
             "resume-worker", "old-owner", 30, "replace-worker", 10);
         await pause.Attempted.WaitAsync(TimeSpan.FromSeconds(5));
         var replacement = new RecordingWorker();
-        fixture.Hub.Conn.RegisterWorker("resume-worker", replacement);
+        var replacementTransition = fixture.Hub.Conn.RegisterWorkerAsync(
+            "resume-worker", replacement);
+        Assert.False(replacementTransition.IsCompleted);
 
         pause.Release();
         var result = await acquire;
+        Assert.True(await replacementTransition.WaitAsync(TimeSpan.FromSeconds(1)));
 
         await WaitUntilAsync(() => fixture.Worker.Actions.Count == 2);
-        Assert.False(result.Ok);
+        Assert.True(result.Ok);
         Assert.Null(fixture.Hub.Registry.Get("resume-worker")!.HijackSession);
+        Assert.Same(replacement, fixture.Hub.Registry.Get("resume-worker")!.WorkerWs);
         Assert.Equal(["pause", "resume"], fixture.Worker.Actions);
         Assert.Empty(replacement.Actions);
     }
@@ -1163,15 +1167,11 @@ public sealed class ResumeLifecycleIntegrationTests
         bool replaceImmediately)
     {
         const string workerId = "failed-disconnect-resume";
-        var ownershipLost = new TaskCompletionSource(
-            TaskCreationOptions.RunContinuationsAsynchronously);
+        var ownershipChanges = new List<bool>();
         var hub = new TermHub(new TermHubConfig
         {
             BrowserSendTimeout = TimeSpan.FromMilliseconds(40),
-            OnHijackChanged = (_, enabled, _) =>
-            {
-                if (!enabled) ownershipLost.TrySetResult();
-            },
+            OnHijackChanged = (_, enabled, _) => ownershipChanges.Add(enabled),
         });
         var worker = new FaultingWorker(FaultTarget.Resume, hangs);
         var replacement = new RecordingWorker();
@@ -1215,7 +1215,7 @@ public sealed class ResumeLifecycleIntegrationTests
         Assert.Equal(SessionLifecycleState.Stopped, offline.LifecycleState);
         Assert.Equal(1, DecodeBrowserFrames(observer).Count(frame =>
             Type(frame) == "worker_disconnected"));
-        await ownershipLost.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        Assert.Empty(ownershipChanges);
 
         if (replaceImmediately)
         {
@@ -1228,6 +1228,7 @@ public sealed class ResumeLifecycleIntegrationTests
         Assert.Equal(replaceImmediately, afterReplay.Connected);
         Assert.Equal(1, DecodeBrowserFrames(observer).Count(frame =>
             Type(frame) == "worker_disconnected"));
+        Assert.Empty(ownershipChanges);
     }
 
     [Theory]
@@ -1312,6 +1313,70 @@ public sealed class ResumeLifecycleIntegrationTests
         }
     }
 
+    [Theory]
+    [InlineData("rest", "pause", false)]
+    [InlineData("rest", "pause", true)]
+    [InlineData("dashboard", "pause", false)]
+    [InlineData("dashboard", "pause", true)]
+    [InlineData("rest", "resume", false)]
+    [InlineData("rest", "resume", true)]
+    [InlineData("dashboard", "resume", false)]
+    [InlineData("dashboard", "resume", true)]
+    public async Task FailedAcquireWorkerSendReconcilesAndReleasesReplacement(
+        string acquireKind,
+        string failedAction,
+        bool hangs)
+    {
+        const string workerId = "failed-acquire-send";
+        var hub = new TermHub(new TermHubConfig
+        {
+            BrowserSendTimeout = TimeSpan.FromMilliseconds(40),
+        });
+        var worker = new AcquisitionFaultWorker(failedAction, hangs);
+        var replacement = new RecordingWorker();
+        var browser = new RecordingBrowser();
+        _ = NewUnstartedServer(hub, workerId, out var registry);
+        Assert.True(hub.Conn.RegisterWorker(workerId, worker));
+        registry.MarkWorker(workerId, true, false);
+        worker.IsAuthoritative = () => ReferenceEquals(
+            hub.Registry.Get(workerId)?.WorkerWs, worker);
+        hub.Conn.RegisterBrowser(workerId, browser, "admin");
+
+        var acquire = acquireKind == "rest"
+            ? hub.Lease.TryAcquireRestAsync(
+                workerId, "rest-owner", 30, "failed-acquire", hub.Clock.Monotonic())
+            : hub.Lease.TryAcquireWsAsync(workerId, browser);
+
+        if (failedAction == "resume")
+        {
+            await worker.PauseAttempted.WaitAsync(TimeSpan.FromSeconds(1));
+            lock (hub.SharedLock)
+            {
+                var state = hub.Registry.Get(workerId)!;
+                state.HijackPending = null;
+                state.PendingPauseReservation = null;
+                state.PendingDashboardBrowser = null;
+                state.PendingDashboardOwnershipVersion = null;
+            }
+            worker.ReleasePause();
+        }
+        await worker.FailureAttempted.WaitAsync(TimeSpan.FromSeconds(1));
+        var replacementTransition = hub.Conn.RegisterWorkerAsync(workerId, replacement);
+        worker.ReleaseThrow();
+
+        var result = await acquire.WaitAsync(TimeSpan.FromSeconds(1));
+        Assert.True(await replacementTransition.WaitAsync(TimeSpan.FromSeconds(1)));
+
+        Assert.False(result.Ok);
+        Assert.True(worker.Aborted);
+        Assert.Same(replacement, hub.Registry.Get(workerId)!.WorkerWs);
+        Assert.True(registry.TryGetStatus(workerId, out var status));
+        Assert.False(status.Connected);
+        Assert.Null(hub.Registry.Get(workerId)!.HijackPending);
+        Assert.Null(hub.Registry.Get(workerId)!.HijackOwner);
+        Assert.Null(hub.Registry.Get(workerId)!.HijackSession);
+    }
+
     [Fact]
     public async Task DelayedDisconnectPublicationCannotOverwriteReplacementOwnership()
     {
@@ -1360,6 +1425,89 @@ public sealed class ResumeLifecycleIntegrationTests
         Assert.NotEmpty(hijackStates);
         Assert.All(hijackStates, item => Assert.True(Bool(item.Frame, "hijacked")));
         Assert.All(hijackStates, item => Assert.True(item.Index > disconnectedIndex));
+    }
+
+    [Theory]
+    [InlineData("acquire")]
+    [InlineData("release")]
+    [InlineData("force")]
+    public async Task DelayedOwnershipPublicationCannotOverwriteSuccessor(string operation)
+    {
+        const string workerId = "delayed-ownership-publication";
+        var changes = new List<bool>();
+        var hub = new TermHub(new TermHubConfig
+        {
+            OnHijackChanged = (_, enabled, _) => changes.Add(enabled),
+        });
+        var worker = new RecordingWorker();
+        Assert.True(hub.Conn.RegisterWorker(workerId, worker));
+
+        Assert.True((await hub.Lease.TryAcquireRestAsync(
+            workerId, "first-owner", 30, "first-hijack", hub.Clock.Monotonic())).Ok);
+        var state = hub.Registry.Get(workerId)!;
+        OwnershipPublicationToken delayed;
+        switch (operation)
+        {
+            case "acquire":
+                delayed = OwnershipPublicationToken.RestHeld(
+                    workerId,
+                    state.HijackOwnershipVersion,
+                    "first-hijack",
+                    "first-owner");
+                Assert.True((await hub.Lease.ReleaseRestAsync(
+                    workerId, "first-hijack")).Released);
+                break;
+            case "release":
+                Assert.True((await hub.Lease.ReleaseRestAsync(
+                    workerId, "first-hijack")).Released);
+                delayed = OwnershipPublicationToken.Released(
+                    workerId, state.HijackOwnershipVersion);
+                Assert.True((await hub.Lease.TryAcquireRestAsync(
+                    workerId,
+                    "successor-owner",
+                    30,
+                    "successor-hijack",
+                    hub.Clock.Monotonic())).Ok);
+                break;
+            case "force":
+                Assert.True((await hub.Lease.ForceReleaseAsync(workerId)).Released);
+                delayed = OwnershipPublicationToken.Released(
+                    workerId, state.HijackOwnershipVersion);
+                Assert.True((await hub.Lease.TryAcquireRestAsync(
+                    workerId,
+                    "successor-owner",
+                    30,
+                    "successor-hijack",
+                    hub.Clock.Monotonic())).Ok);
+                break;
+            default:
+                throw new Xunit.Sdk.XunitException("unknown operation");
+        }
+
+        changes.Clear();
+        Assert.False(hub.State.NotifyHijackChanged(delayed));
+        Assert.Empty(changes);
+    }
+
+    [Fact]
+    public async Task NeverHijackedDisconnectDoesNotPublishOwnershipLoss()
+    {
+        const string workerId = "never-hijacked-disconnect";
+        var changes = new List<bool>();
+        var hub = new TermHub(new TermHubConfig
+        {
+            OnHijackChanged = (_, enabled, _) => changes.Add(enabled),
+        });
+        var worker = new RecordingWorker();
+        var browser = new RecordingBrowser();
+        Assert.True(hub.Conn.RegisterWorker(workerId, worker));
+        hub.Conn.RegisterBrowser(workerId, browser, "viewer");
+
+        Assert.True((await hub.Conn.ReconcileWorkerDisconnectAsync(workerId, worker)).Reconciled);
+
+        Assert.Empty(changes);
+        Assert.Equal(1, DecodeBrowserFrames(browser).Count(frame =>
+            Type(frame) == "worker_disconnected"));
     }
 
     [Fact]
@@ -1447,8 +1595,12 @@ public sealed class ResumeLifecycleIntegrationTests
             Assert.True(await hub.Conn.RegisterWorkerAsync("publish-loss", new RecordingWorker()));
         }
 
-        var change = Assert.Single(changes);
-        Assert.Equal(("publish-loss", false, null), change);
+        Assert.Equal(
+            [
+                ("publish-loss", true, "rest-owner"),
+                ("publish-loss", false, (string?)null),
+            ],
+            changes);
         var stateFrame = Assert.Single(
             DecodeBrowserFrames(browser),
             frame => Type(frame) == "hijack_state");
@@ -1796,6 +1948,71 @@ public sealed class ResumeLifecycleIntegrationTests
 
             await _throwRelease.Task.ConfigureAwait(false);
             throw new IOException("deterministic worker send failure");
+        }
+
+        private static TaskCompletionSource NewSignal() =>
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
+    private sealed class AcquisitionFaultWorker : IAbortableBrowserWs
+    {
+        private readonly string _failedAction;
+        private readonly bool _hangs;
+        private readonly TaskCompletionSource _pauseAttempted = NewSignal();
+        private readonly TaskCompletionSource _pauseRelease = NewSignal();
+        private readonly TaskCompletionSource _failureAttempted = NewSignal();
+        private readonly TaskCompletionSource _throwRelease = NewSignal();
+        private readonly TaskCompletionSource _never = NewSignal();
+
+        internal AcquisitionFaultWorker(string failedAction, bool hangs)
+        {
+            _failedAction = failedAction;
+            _hangs = hangs;
+        }
+
+        public bool IsActive { get; private set; } = true;
+        internal bool Aborted { get; private set; }
+        internal Func<bool>? IsAuthoritative { get; set; }
+        internal Task PauseAttempted => _pauseAttempted.Task;
+        internal Task FailureAttempted => _failureAttempted.Task;
+
+        public void Abort()
+        {
+            Aborted = true;
+            IsActive = false;
+        }
+
+        internal void ReleasePause() => _pauseRelease.TrySetResult();
+        internal void ReleaseThrow() => _throwRelease.TrySetResult();
+
+        public async Task SendTextAsync(
+            string payload,
+            CancellationToken cancellationToken = default)
+        {
+            var action = new ControlFrameDecoder().Feed(payload)
+                .OfType<ControlChunk>()
+                .Select(chunk => chunk.Control.GetValueOrDefault("action")?.ToString())
+                .FirstOrDefault(value => value is not null);
+            if (action == "pause")
+            {
+                _pauseAttempted.TrySetResult();
+                if (_failedAction == "resume")
+                {
+                    await _pauseRelease.Task.ConfigureAwait(false);
+                    return;
+                }
+            }
+            if (action != _failedAction) return;
+
+            _failureAttempted.TrySetResult();
+            if (_hangs)
+            {
+                await _never.Task.ConfigureAwait(false);
+                return;
+            }
+
+            await _throwRelease.Task.ConfigureAwait(false);
+            throw new IOException($"deterministic {action} failure");
         }
 
         private static TaskCompletionSource NewSignal() =>

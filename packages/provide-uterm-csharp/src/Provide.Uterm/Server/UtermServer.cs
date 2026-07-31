@@ -401,7 +401,6 @@ public sealed partial class UtermServer : IAsyncDisposable
         }
 
         _deps.Hub.Metric("hijack_acquires_total", 1);
-        _deps.Hub.NotifyHijackChanged(workerId, true, owner);
         _deps.Hub.AppendEventData(workerId, "hijack_acquired", new Dictionary<string, object?>
         {
             ["hijack_id"] = hijackId,
@@ -528,7 +527,6 @@ public sealed partial class UtermServer : IAsyncDisposable
             return BridgeError(404, "Invalid or expired hijack session.");
         }
 
-        _deps.Hub.NotifyHijackChanged(workerId, false, null);
         _deps.Hub.AppendEventData(workerId, "hijack_released", new Dictionary<string, object?>
         {
             ["hijack_id"] = hijackId,
