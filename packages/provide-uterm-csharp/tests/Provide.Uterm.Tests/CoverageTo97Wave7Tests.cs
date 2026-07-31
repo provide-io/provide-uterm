@@ -112,9 +112,12 @@ public class CoverageTo97Wave7Tests
 
         var good = new EchoWs();
         hub.Conn.RegisterWorker("w2", good);
+        hub.Conn.RegisterBrowser("w2", good, "admin");
         var (ok3, _) = hub.Lease.TryAcquireWs("w2", good);
         Assert.True(ok3);
-        var (ok4, r4) = hub.Lease.TryAcquireWs("w2", new object());
+        var contender = new object();
+        hub.Conn.RegisterBrowser("w2", contender, "admin");
+        var (ok4, r4) = hub.Lease.TryAcquireWs("w2", contender);
         Assert.False(ok4);
         Assert.Equal("already_hijacked", r4);
 

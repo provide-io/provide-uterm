@@ -202,6 +202,190 @@ public sealed class HijackLeaseManager
         }
     }
 
+    /// <summary>
+    /// Reserve a dashboard acquisition, pause the captured worker, then publish
+    /// ownership only if the reservation and browser are still current.
+    /// </summary>
+    public async Task<(bool Ok, string Reason)> TryAcquireWsAsync(
+        string workerId,
+        object ws,
+        long? ownershipVersion = null,
+        CancellationToken ct = default)
+    {
+        var reservation = "dashboard-pause-" + Guid.NewGuid().ToString("N");
+        IWorkerWs workerWs;
+
+        while (true)
+        {
+            Task? disconnectResume = null;
+            lock (_lock)
+            {
+                var st = _registry.Get(workerId);
+                if (st?.WorkerWs is null) return (false, "no_worker");
+                if (!st.Browsers.ContainsKey(ws)
+                    || ws is IAbortableBrowserWs { IsActive: false })
+                {
+                    return (false, "inactive_browser");
+                }
+
+                if (ownershipVersion is { } expected
+                    && st.HijackOwnershipVersion != expected)
+                {
+                    return (false, "ownership_changed");
+                }
+
+                if (st.DisconnectResumeCompletion is { IsCompleted: false } completion)
+                {
+                    if (ownershipVersion == st.DisconnectResumeOwnershipVersion)
+                    {
+                        disconnectResume = completion;
+                    }
+                    else
+                    {
+                        return (false, "already_hijacked");
+                    }
+                }
+                else if (_hub.IsDashboardHijackActive(st)
+                    || _hub.HasValidRestLease(st)
+                    || st.HijackPending is not null)
+                {
+                    return (false, "already_hijacked");
+                }
+                else
+                {
+                    workerWs = st.WorkerWs;
+                    st.HijackPending = reservation;
+                    st.PendingDashboardBrowser = ws;
+                    st.PendingDashboardOwnershipVersion = ownershipVersion;
+                    break;
+                }
+            }
+
+            await disconnectResume.WaitAsync(ct).ConfigureAwait(false);
+        }
+
+        var pauseLanded = false;
+        try
+        {
+            var encoded = ControlChannelCodec.EncodeControlFrame(new Dictionary<string, object?>
+            {
+                ["type"] = "control",
+                ["action"] = "pause",
+                ["source"] = "dashboard",
+                ["ts"] = _clock.Wall(),
+            });
+            try
+            {
+                await workerWs.SendTextAsync(encoded, ct).ConfigureAwait(false);
+                pauseLanded = true;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch
+            {
+                return (false, "no_worker");
+            }
+
+            lock (_lock)
+            {
+                var st = _registry.Get(workerId);
+                var versionMatches = ownershipVersion is not { } expected
+                    || st?.HijackOwnershipVersion == expected;
+                if (st is not null
+                    && ReferenceEquals(st.WorkerWs, workerWs)
+                    && st.HijackPending == reservation
+                    && ReferenceEquals(st.PendingDashboardBrowser, ws)
+                    && st.PendingDashboardOwnershipVersion == ownershipVersion
+                    && st.Browsers.ContainsKey(ws)
+                    && ws is not IAbortableBrowserWs { IsActive: false }
+                    && versionMatches
+                    && !_hub.IsDashboardHijackActive(st)
+                    && !_hub.HasValidRestLease(st))
+                {
+                    st.HijackOwner = ws;
+                    st.HijackOwnerExpiresAt = _clock.Monotonic() + _dashboardLeaseS;
+                    if (ownershipVersion is null) st.HijackOwnershipVersion++;
+                    ClearDashboardReservation(st, reservation);
+                    return (true, "");
+                }
+            }
+
+            await CompensateCanceledPauseAsync(workerId, reservation, workerWs)
+                .ConfigureAwait(false);
+            return (false, "inactive_browser");
+        }
+        finally
+        {
+            lock (_lock)
+            {
+                var st = _registry.Get(workerId);
+                if (st is not null) ClearDashboardReservation(st, reservation);
+            }
+        }
+
+        async Task CompensateCanceledPauseAsync(
+            string id,
+            string canceledReservation,
+            IWorkerWs pausedWorker)
+        {
+            if (!pauseLanded) return;
+            var resumeReservation = "dashboard-resume-" + Guid.NewGuid().ToString("N");
+            lock (_lock)
+            {
+                var st = _registry.Get(id);
+                if (st is null) return;
+                ClearDashboardReservation(st, canceledReservation);
+                if (!ReferenceEquals(st.WorkerWs, pausedWorker)
+                    || _hub.IsDashboardHijackActive(st)
+                    || _hub.HasValidRestLease(st)
+                    || st.HijackPending is not null
+                    || st.DisconnectResumeCompletion is { IsCompleted: false })
+                {
+                    return;
+                }
+
+                st.HijackPending = resumeReservation;
+            }
+
+            try
+            {
+                var encodedResume = ControlChannelCodec.EncodeControlFrame(new Dictionary<string, object?>
+                {
+                    ["type"] = "control",
+                    ["action"] = "resume",
+                    ["source"] = "dashboard",
+                    ["ts"] = _clock.Wall(),
+                });
+                // State repair must outlive the browser request that was pruned
+                // while its worker send was in flight.
+                await pausedWorker.SendTextAsync(encodedResume, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch
+            {
+                // The ownership transaction is still canceled; worker failure
+                // is reported by the caller as an unsuccessful acquisition.
+            }
+            finally
+            {
+                lock (_lock)
+                {
+                    var st = _registry.Get(id);
+                    if (st?.HijackPending == resumeReservation) st.HijackPending = null;
+                }
+            }
+        }
+    }
+
+    private static void ClearDashboardReservation(WorkerTermState st, string reservation)
+    {
+        if (st.HijackPending != reservation) return;
+        st.HijackPending = null;
+        st.PendingDashboardBrowser = null;
+        st.PendingDashboardOwnershipVersion = null;
+    }
+
     /// <summary>Restore the same logical dashboard owner only if no later owner has existed.</summary>
     public bool TryRestoreWsOwnership(string workerId, object ws, long ownershipVersion)
     {

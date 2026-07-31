@@ -157,6 +157,10 @@ public sealed class ConnectionManager
             st.HijackOwner = null;
             st.HijackOwnerExpiresAt = null;
             st.HijackPending = null;
+            st.PendingDashboardBrowser = null;
+            st.PendingDashboardOwnershipVersion = null;
+            st.DisconnectResumeCompletion = null;
+            st.DisconnectResumeOwnershipVersion = null;
             return (true, wasHijacked);
         }
     }
@@ -218,11 +222,20 @@ public sealed class ConnectionManager
             // sweep runs.
             st.HijackOwner = null;
             st.HijackOwnerExpiresAt = null;
-            // A reserve mid-flight is dropped too: TryAcquireRestAsync only
-            // installs its session while its own pending marker is still
-            // there, so clearing it makes an acquire racing this release fail
-            // rather than land a lease on a session that is being opened.
-            st.HijackPending = null;
+            // Cancel acquisitions that have not committed. A disconnect-resume
+            // is different: it is already releasing the old owner, so keep its
+            // reservation until the send finishes and let a matching token
+            // reclaim wait for that completion.
+            if (st.PendingDashboardBrowser is not null)
+            {
+                st.HijackPending = null;
+                st.PendingDashboardBrowser = null;
+                st.PendingDashboardOwnershipVersion = null;
+            }
+            else if (st.DisconnectResumeCompletion is not { IsCompleted: false })
+            {
+                st.HijackPending = null;
+            }
         }
 
         if (!had) return false;
@@ -328,6 +341,12 @@ public sealed class ConnectionManager
             if (st is not null)
             {
                 st.Browsers.Remove(ws);
+                if (ReferenceEquals(st.PendingDashboardBrowser, ws))
+                {
+                    st.HijackPending = null;
+                    st.PendingDashboardBrowser = null;
+                    st.PendingDashboardOwnershipVersion = null;
+                }
                 if (ReferenceEquals(st.HijackOwner, ws))
                 {
                     if (_hub.State.IsDashboardHijackActive(st))
@@ -400,6 +419,7 @@ public sealed class ConnectionManager
         CancellationToken ct = default)
     {
         var reservation = "disconnect-resume-" + Guid.NewGuid().ToString("N");
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         IWorkerWs worker;
         lock (_hub.SharedLock)
         {
@@ -418,6 +438,8 @@ public sealed class ConnectionManager
             // owner cannot appear after the generation check but before the
             // worker observes the resume.
             st.HijackPending = reservation;
+            st.DisconnectResumeCompletion = completion.Task;
+            st.DisconnectResumeOwnershipVersion = ownershipVersion;
             worker = st.WorkerWs;
         }
 
@@ -437,7 +459,13 @@ public sealed class ConnectionManager
             {
                 var st = _hub.Registry.Get(workerId);
                 if (st?.HijackPending == reservation) st.HijackPending = null;
+                if (st is not null && ReferenceEquals(st.DisconnectResumeCompletion, completion.Task))
+                {
+                    st.DisconnectResumeCompletion = null;
+                    st.DisconnectResumeOwnershipVersion = null;
+                }
             }
+            completion.TrySetResult();
         }
     }
 
