@@ -577,7 +577,7 @@ public sealed class ResumeLifecycleIntegrationTests
         await using var server = fixture.Server;
         Assert.True((await fixture.Hub.Lease.TryAcquireRestAsync(
             "resume-worker", "rest-owner", 30, "released-rest", 10)).Ok);
-        var successor = new object();
+        var successor = new RecordingBrowser();
         fixture.Hub.Conn.RegisterBrowser("resume-worker", successor, "admin");
         fixture.Worker.DelayNextResume();
         using var http = new HttpClient { BaseAddress = new Uri(server.BaseAddress!) };
@@ -978,6 +978,43 @@ public sealed class ResumeLifecycleIntegrationTests
 
         worker.ReleaseInput();
         Assert.True(await input);
+    }
+
+    [Fact]
+    public async Task WorkerDeregistrationCancelsQueuedDisconnectResume()
+    {
+        var hub = new TermHub();
+        var worker = new RecordingWorker();
+        var replacement = new RecordingWorker();
+        var browser = new RecordingBrowser();
+        Assert.True(hub.Conn.RegisterWorker("disconnect-clear", worker));
+        hub.Conn.RegisterBrowser("disconnect-clear", browser, "admin");
+        Assert.True((await hub.Lease.TryAcquireWsAsync("disconnect-clear", browser)).Ok);
+
+        worker.DelayNextInput();
+        var server = NewUnstartedServer(hub);
+        var input = server.SendBrowserInputAsync(
+            "disconnect-clear", browser, "disconnect-clear-input");
+        await worker.InputAttempted.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var replacementTransition = hub.Conn.RegisterWorkerAsync(
+            "disconnect-clear", replacement);
+        var ownershipVersion = Assert.IsType<long>(
+            hub.Conn.CleanupBrowser("disconnect-clear", browser));
+        var resume = hub.Conn.ResumeWorkerIfOwnershipUnchangedAsync(
+            "disconnect-clear",
+            ownershipVersion,
+            HijackLeaseManager.ResumeFrame("dashboard", 100));
+        Assert.Equal(1, QueuedLifecycleTransitionCount(
+            hub.Registry.Get("disconnect-clear")!));
+
+        Assert.True(hub.Conn.DeregisterWorker("disconnect-clear", worker).ShouldBroadcast);
+        var result = await resume.WaitAsync(TimeSpan.FromSeconds(1));
+
+        Assert.False(result.Resumed);
+        worker.ReleaseInput();
+        Assert.True(await input);
+        Assert.True(await replacementTransition);
     }
 
     [Fact]
