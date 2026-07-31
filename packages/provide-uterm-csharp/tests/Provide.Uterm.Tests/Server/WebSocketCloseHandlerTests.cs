@@ -38,16 +38,37 @@ public sealed class WebSocketCloseHandlerTests
         Assert.Equal(WebSocketState.Closed, socket.State);
     }
 
+    [Fact]
+    public async Task MissingPeerAcknowledgementIsWaitedForOnlyUntilDeadline()
+    {
+        using var socket = new CloseSocket(completeClose: true, closeOutputEndsSocket: false);
+        var watch = Stopwatch.StartNew();
+
+        await WebSocketCloseHandler.CloseAndTerminateAsync(
+            socket, WebSocketCloseStatus.NormalClosure, "bye", TimeSpan.FromMilliseconds(40));
+
+        Assert.True(watch.Elapsed >= TimeSpan.FromMilliseconds(30), $"close took {watch.Elapsed}");
+        Assert.True(watch.Elapsed < TimeSpan.FromMilliseconds(500), $"close took {watch.Elapsed}");
+        Assert.True(socket.Aborted);
+    }
+
     private sealed class CloseSocket : WebSocket
     {
         private readonly bool _completeClose;
         private readonly TaskCompletionSource _never = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<WebSocketReceiveResult> _neverReceive =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly bool _closeOutputEndsSocket;
         private WebSocketState _state;
 
-        public CloseSocket(bool completeClose, WebSocketState state = WebSocketState.Open)
+        public CloseSocket(
+            bool completeClose,
+            WebSocketState state = WebSocketState.Open,
+            bool closeOutputEndsSocket = true)
         {
             _completeClose = completeClose;
             _state = state;
+            _closeOutputEndsSocket = closeOutputEndsSocket;
         }
 
         public bool CloseOutputCalled { get; private set; }
@@ -71,14 +92,14 @@ public sealed class WebSocketCloseHandlerTests
         {
             CloseOutputCalled = true;
             if (!_completeClose) return _never.Task;
-            _state = WebSocketState.Closed;
+            _state = _closeOutputEndsSocket ? WebSocketState.Closed : WebSocketState.CloseSent;
             return Task.CompletedTask;
         }
 
         public override void Dispose() => _state = WebSocketState.Closed;
 
         public override Task<WebSocketReceiveResult> ReceiveAsync(ArraySegment<byte> buffer,
-            CancellationToken cancellationToken) => throw new NotSupportedException();
+            CancellationToken cancellationToken) => _neverReceive.Task;
 
         public override Task SendAsync(ArraySegment<byte> buffer, WebSocketMessageType messageType,
             bool endOfMessage, CancellationToken cancellationToken) => throw new NotSupportedException();
