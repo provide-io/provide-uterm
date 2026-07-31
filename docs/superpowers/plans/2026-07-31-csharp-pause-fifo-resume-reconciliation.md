@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Replacement FIFO across successful pause/repair
+## Task 1: Replacement FIFO across successful pause/repair
 
 **Files:**
 - Modify: `packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Server/ResumeLifecycleIntegrationTests.cs`
@@ -45,7 +45,7 @@ dotnet test packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Provide.Uter
 
 Expected: all pass.
 
-### Task 2: Release/expiry/force resume failure matrix
+## Task 2: Release/expiry/force resume failure matrix
 
 **Files:**
 - Modify: `packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Server/ResumeLifecycleIntegrationTests.cs`
@@ -76,7 +76,7 @@ dotnet test packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Provide.Uter
 
 Expected: local workers are merely nulled and remain registered online; WebSocket cleanup/publication depends on an external receive-loop finalizer; hanging/faulted send tasks are not centrally observed.
 
-### Task 3: Centralize bounded resume failure teardown
+## Task 3: Centralize bounded resume failure teardown
 
 **Files:**
 - Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Hub/Lease.cs`
@@ -101,7 +101,7 @@ dotnet test packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Provide.Uter
 
 Expected: all pass, with exact once-only publication and successor progress.
 
-### Task 4: Full verification and implementation commit
+## Task 4: Full verification and implementation commit
 
 **Files:**
 - Verify all modified C# production/test files and committed design/plan documents

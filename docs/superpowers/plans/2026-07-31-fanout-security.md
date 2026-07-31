@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Python strict admission and send-time authorization
+## Task 1: Python strict admission and send-time authorization
 
 **Files:**
 - Modify: `packages/provide-uterm-server/src/provide/uterm/server/config_schema.py`
@@ -73,7 +73,7 @@ git add packages/provide-uterm-server
 git commit -m "fix(server): enforce fanout authorization and policy"
 ```
 
-### Task 2: Go strict admission, current authorization, and fail-closed governance
+## Task 2: Go strict admission, current authorization, and fail-closed governance
 
 **Files:**
 - Modify: `packages/provide-uterm-go/serverconfig/config.go`
@@ -112,7 +112,7 @@ git add packages/provide-uterm-go
 git commit -m "fix(go): authorize fanout members at send time"
 ```
 
-### Task 3: C# strict admission and current authorization
+## Task 3: C# strict admission and current authorization
 
 **Files:**
 - Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/ServerConfig/Config.cs`
@@ -146,7 +146,7 @@ git add packages/provide-uterm-csharp
 git commit -m "fix(csharp): enforce fanout session authorization"
 ```
 
-### Task 4: Complete C# fan-out execution semantics
+## Task 4: Complete C# fan-out execution semantics
 
 **Files:**
 - Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Fanout/Controller.cs`
@@ -189,7 +189,7 @@ git add packages/provide-uterm-csharp
 git commit -m "feat(csharp): complete fanout execution semantics"
 ```
 
-### Task 5: TypeScript route-module parity
+## Task 5: TypeScript route-module parity
 
 **Files:**
 - Modify: `packages/provide-uterm-ts/src/fanout/routes.ts`
@@ -219,7 +219,7 @@ git add packages/provide-uterm-ts/src/fanout
 git commit -m "fix(ts): enforce fanout member authorization"
 ```
 
-### Task 6: Cross-language contract and tracker
+## Task 6: Cross-language contract and tracker
 
 **Files:**
 - Modify: `docs/protocol-matrix.md`

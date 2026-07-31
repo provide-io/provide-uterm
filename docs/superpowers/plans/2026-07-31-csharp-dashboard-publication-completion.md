@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Production dashboard callback contract
+## Task 1: Production dashboard callback contract
 
 **Files:**
 - Modify: `packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Server/ResumeLifecycleIntegrationTests.cs`
@@ -33,7 +33,7 @@ dotnet test packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Provide.Uter
 
 Expected: callback assertions fail because dashboard mutations currently produce no host callback.
 
-### Task 2: Typed dashboard acquisition and release cores
+## Task 2: Typed dashboard acquisition and release cores
 
 **Files:**
 - Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Hub/Lease.cs`
@@ -75,7 +75,7 @@ Move the current release state machine into `TryReleaseWsCoreAsync`. Capture a `
 
 Run the Task 1 command. Expected: both tests pass, including received browser state frames.
 
-### Task 3: Direct restore and stale ordering
+## Task 3: Direct restore and stale ordering
 
 **Files:**
 - Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Hub/Lease.cs`
@@ -112,7 +112,7 @@ Refactor `TryAcquireWs` through the same typed acquisition result pattern so its
 
 Run the Task 3 command and the 92-test lifecycle/hub filter. Expected: all pass with exact callback sequences.
 
-### Task 4: Full verification and commit
+## Task 4: Full verification and commit
 
 **Files:**
 - Verify all modified production, test, spec, and plan files

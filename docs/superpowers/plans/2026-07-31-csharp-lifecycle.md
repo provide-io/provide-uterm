@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Shared bounded WebSocket message receiver
+## Task 1: Shared bounded WebSocket message receiver
 
 **Files:**
 - Create: `packages/provide-uterm-csharp/src/Provide.Uterm/Server/WebSocketMessageReader.cs`
@@ -42,7 +42,7 @@ git add packages/provide-uterm-csharp
 git commit -m "fix(csharp): assemble fragmented websocket messages"
 ```
 
-### Task 2: Worker and browser admission
+## Task 2: Worker and browser admission
 
 **Files:**
 - Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Hub/Connection.cs`
@@ -70,7 +70,7 @@ git add packages/provide-uterm-csharp
 git commit -m "fix(csharp): enforce websocket admission limits"
 ```
 
-### Task 3: Deferred activation and bounded broadcast
+## Task 3: Deferred activation and bounded broadcast
 
 **Files:**
 - Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Hub/Connection.cs`
@@ -97,7 +97,7 @@ git add packages/provide-uterm-csharp
 git commit -m "fix(csharp): isolate browser broadcasts"
 ```
 
-### Task 4: Bounded truthful resume storage
+## Task 4: Bounded truthful resume storage
 
 **Files:**
 - Create: `packages/provide-uterm-csharp/src/Provide.Uterm/Server/ResumeTokenStore.cs`
@@ -125,7 +125,7 @@ git add packages/provide-uterm-csharp
 git commit -m "fix(csharp): bound and restore resume state"
 ```
 
-### Task 5: Constant-time worker credentials and final C# gate
+## Task 5: Constant-time worker credentials and final C# gate
 
 **Files:**
 - Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Server/UtermServer.cs`
@@ -150,7 +150,7 @@ dotnet build -c Release
 
 Record counts and check `CSHARP-*` entries only when the commands exit zero, then commit.
 
-### Task 6: Serialize explicit and forced release resumes
+## Task 6: Serialize explicit and forced release resumes
 
 **Files:**
 - Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Hub/Models.cs`
@@ -182,7 +182,7 @@ in `finally`. Update server callers to await release completion.
 
 - [ ] **Step 4: Run the focused tests and commit with the remaining lifecycle work**
 
-### Task 7: Fence worker replacement and stale frames
+## Task 7: Fence worker replacement and stale frames
 
 **Files:**
 - Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Hub/Connection.cs`
@@ -213,7 +213,7 @@ Use the async API in WebSocket and local-worker production paths. Check
 
 - [ ] **Step 4: Run the focused tests**
 
-### Task 8: Actively settle lease expiry
+## Task 8: Actively settle lease expiry
 
 **Files:**
 - Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Hub/Lease.cs`
@@ -242,7 +242,7 @@ the REST acquire route.
 
 - [ ] **Step 4: Run expiry and release tests**
 
-### Task 9: Fail closed for unknown browser sessions
+## Task 9: Fail closed for unknown browser sessions
 
 **Files:**
 - Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Server/UtermServer.cs`
@@ -262,7 +262,7 @@ authorization and role resolution.
 
 - [ ] **Step 4: Run browser and worker admission integration tests**
 
-### Task 10: Restore process-wide test mode and verify
+## Task 10: Restore process-wide test mode and verify
 
 **Files:**
 - Modify: `packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/SessionReferenceParityTests.cs`

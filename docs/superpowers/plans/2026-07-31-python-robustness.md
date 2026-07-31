@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: PAM non-object JSON
+## Task 1: PAM non-object JSON
 
 **Files:**
 - Modify: `packages/provide-uterm-platform/src/provide/uterm/pty/pam_listener.py`
@@ -32,7 +32,7 @@ After `json.loads`, return `None` with the existing warning when `not isinstance
 
 Run the focused test again and commit the source/test pair.
 
-### Task 2: Graphical endpoint parser errors and server coverage
+## Task 2: Graphical endpoint parser errors and server coverage
 
 **Files:**
 - Modify: `packages/provide-uterm-server/src/provide/uterm/server/graphical_targets.py`
@@ -59,7 +59,7 @@ git add packages/provide-uterm-server
 git commit -m "fix(server): normalize malformed endpoint errors"
 ```
 
-### Task 3: Cloudflare invalid JSON body
+## Task 3: Cloudflare invalid JSON body
 
 **Files:**
 - Modify: `packages/provide-uterm-cloudflare/src/provide/uterm/cloudflare/do/session_runtime/io.py`
@@ -81,7 +81,7 @@ git add packages/provide-uterm-cloudflare
 git commit -m "fix(cloudflare): reject malformed request json"
 ```
 
-### Task 4: VNC thread cleanup hygiene
+## Task 4: VNC thread cleanup hygiene
 
 **Files:**
 - Modify: `packages/provide-uterm/tests/test_vnc_human_relay_driver.py`

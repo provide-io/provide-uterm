@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Extract and test frame emission
+## Task 1: Extract and test frame emission
 
 **Files:**
 - Create: `packages/provide-uterm-platform/native/capture/capture_writer.h`
@@ -40,7 +40,7 @@ git add packages/provide-uterm-platform/native/capture
 git commit -m "fix(native): make capture emission nonblocking"
 ```
 
-### Task 2: Integrate the writer into both interposition backends
+## Task 2: Integrate the writer into both interposition backends
 
 **Files:**
 - Modify: `packages/provide-uterm-platform/native/capture/capture.c`
@@ -67,4 +67,3 @@ make clean test all
 ```
 
 Complete `NATIVE-001` through `NATIVE-004` only with recorded build/test evidence.
-

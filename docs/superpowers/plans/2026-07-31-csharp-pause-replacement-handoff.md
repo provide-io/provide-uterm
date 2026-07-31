@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Deterministic handoff regression
+## Task 1: Deterministic handoff regression
 
 **Files:**
 - Modify: `packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Server/ResumeLifecycleIntegrationTests.cs`
@@ -58,7 +58,7 @@ Run the Step 2 command again.
 
 Expected: `laterInput` completes immediately and/or `original.Inputs` contains the input because `HijackPending` is null during the frozen handoff.
 
-### Task 2: Atomic active-reservation handoff
+## Task 2: Atomic active-reservation handoff
 
 **Files:**
 - Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Hub/Lease.cs`
@@ -90,7 +90,7 @@ dotnet test packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Provide.Uter
 
 Expected: all selected tests pass.
 
-### Task 3: Completion-path and full verification
+## Task 3: Completion-path and full verification
 
 **Files:**
 - Verify: `packages/provide-uterm-csharp/src/Provide.Uterm/Hub/Connection.cs`

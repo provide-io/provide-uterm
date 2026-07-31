@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Restore the emit build
+## Task 1: Restore the emit build
 
 **Files:**
 - Modify: `packages/provide-uterm-ts/tsconfig.build.json`
@@ -41,7 +41,7 @@ git add packages/provide-uterm-ts/tsconfig.build.json
 git commit -m "fix(ts): restore ES2023 emit build"
 ```
 
-### Task 2: Restore strict coverage
+## Task 2: Restore strict coverage
 
 **Files:**
 - Modify: `packages/provide-uterm-ts/src/serverauth/serverauth.test.ts`
@@ -67,7 +67,7 @@ git add packages/provide-uterm-ts/src
 git commit -m "test(ts): restore strict coverage gate"
 ```
 
-### Task 3: Make build mandatory and maturity claims accurate
+## Task 3: Make build mandatory and maturity claims accurate
 
 **Files:**
 - Modify: `.github/workflows/ci.yml`
@@ -96,4 +96,3 @@ npm run test:ts:coverage
 - [ ] **Step 4: Update tracker and commit**
 
 Record results and complete `TS-BUILD-001`, `TS-CI-001`, `TS-COV-001`, `TS-DOC-001`, and `TS-E2E-001`.
-
