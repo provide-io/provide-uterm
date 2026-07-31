@@ -25,14 +25,17 @@ public sealed partial class UtermServer
     private Fanout.Controller EnsureFanout()
     {
         if (_deps.Fanout is not null) return _deps.Fanout;
-        // Lazy default so factories without explicit wiring still work.
-        return _lazyFanout ??= new Fanout.Controller(new HubFanoutAdapter(_deps.Hub), new ControllerConfig
+        // One publication-safe default for every concurrent first request.
+        return _lazyFanout.Value;
+    }
+
+    private Fanout.Controller CreateDefaultFanout() =>
+        new(new HubFanoutAdapter(_deps.Hub), new ControllerConfig
         {
             Authorizer = new ServerFanoutAuthorizer(_deps.Registry, _deps.Authz),
         });
-    }
 
-    private Fanout.Controller? _lazyFanout;
+    private readonly Lazy<Fanout.Controller> _lazyFanout;
 
     private sealed class ServerFanoutAuthorizer : IFanoutAuthorizer
     {

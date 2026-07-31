@@ -213,6 +213,30 @@ public sealed class ServerIntegrationControlPlaneRestTests
     }
 
     [Fact]
+    public async Task Fanout_ConcurrentFirstUseSharesOneControllerAndStore()
+    {
+        var (server, http, _) = await StartServerAsync();
+        await using (server)
+        using (http)
+        {
+            const int requests = 64;
+            var creates = Enumerable.Range(0, requests).Select(index => http.PostAsync(
+                "/api/fanout/groups",
+                new StringContent(
+                    $$"""{"name":"g{{index}}","worker_ids":["demo"]}""",
+                    Encoding.UTF8,
+                    "application/json")));
+            var responses = await Task.WhenAll(creates);
+            Assert.All(responses, response => response.EnsureSuccessStatusCode());
+
+            var list = await http.GetAsync("/api/fanout/groups");
+            list.EnsureSuccessStatusCode();
+            var body = await list.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(requests, body.GetArrayLength());
+        }
+    }
+
+    [Fact]
     public async Task Fanout_Unknown_Members_Are_Strict_By_Default_And_Configurable()
     {
         var (strictServer, strictHttp, _) = await StartServerAsync();
