@@ -170,6 +170,12 @@ public static class ControlChannelCodec
     public static bool IsControlFrame(string message)
     {
         var bytes = Encoding.UTF8.GetBytes(message);
+        return IsControlFrame(bytes);
+    }
+
+    /// <summary>Structural control-frame check over the original wire bytes.</summary>
+    public static bool IsControlFrame(ReadOnlySpan<byte> bytes)
+    {
         if (bytes.Length < HeaderBytes)
         {
             return false;
@@ -185,7 +191,7 @@ public static class ControlChannelCodec
             return false;
         }
 
-        var lengthHex = Encoding.ASCII.GetString(bytes, 2, 8);
+        var lengthHex = Encoding.ASCII.GetString(bytes.Slice(2, 8));
         if (!TryParseHex32(lengthHex, out var payloadBytes))
         {
             return false;
@@ -392,17 +398,26 @@ public class ControlFrameDecoder
     public IReadOnlyList<Chunk> Feed(string chunk)
     {
         var bytes = Encoding.UTF8.GetBytes(chunk);
-        if (_bufferedLen + bytes.Length > _maxBufferBytes)
+        return FeedBytes(bytes);
+    }
+
+    /// <summary>
+    /// Decode directly from wire bytes. Binary terminal data can request a
+    /// one-byte-to-one-character mapping while control JSON remains UTF-8.
+    /// </summary>
+    public IReadOnlyList<Chunk> FeedBytes(ReadOnlySpan<byte> chunk, bool preserveRawData = false)
+    {
+        if (_bufferedLen + chunk.Length > _maxBufferBytes)
         {
-            var total = _bufferedLen + bytes.Length;
+            var total = _bufferedLen + chunk.Length;
             Reset();
             throw ReportError($"control frame buffer overflow: {total} > {_maxBufferBytes}");
         }
 
-        Append(bytes);
+        Append(chunk);
         try
         {
-            return Drain(final: false);
+            return Drain(final: false, preserveRawData: preserveRawData);
         }
         catch
         {
@@ -416,7 +431,7 @@ public class ControlFrameDecoder
     {
         try
         {
-            return Drain(final: true);
+            return Drain(final: true, preserveRawData: false);
         }
         catch
         {
@@ -541,7 +556,7 @@ public class ControlFrameDecoder
         return (new ControlChunk(payload), end, true);
     }
 
-    private List<Chunk> Drain(bool final)
+    private List<Chunk> Drain(bool final, bool preserveRawData)
     {
         var events = new List<Chunk>();
         // Copy to array so local functions can capture without ref-struct issues.
@@ -564,7 +579,10 @@ public class ControlFrameDecoder
 
             if (dataParts.Count > 0)
             {
-                events.Add(new DataChunk(Encoding.UTF8.GetString(dataParts.ToArray())));
+                var data = dataParts.ToArray();
+                events.Add(new DataChunk(preserveRawData
+                    ? Encoding.Latin1.GetString(data)
+                    : Encoding.UTF8.GetString(data)));
                 dataParts.Clear();
             }
         }

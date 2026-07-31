@@ -770,8 +770,9 @@ public sealed partial class UtermServer : IAsyncDisposable
                     break;
                 }
                 var text = message.MessageType == WebSocketMessageType.Binary
-                    ? WsBytes.WsBytesToChannelStr(message.Payload)
-                    : Encoding.UTF8.GetString(message.Payload);
+                    && !ControlChannelCodec.IsControlFrame(message.Payload)
+                        ? WsBytes.WsBytesToChannelStr(message.Payload)
+                        : Encoding.UTF8.GetString(message.Payload);
                 await HandleBrowserMessage(workerId, conn, role, text, budget, ctx.RequestAborted).ConfigureAwait(false);
             }
         }
@@ -1193,10 +1194,9 @@ public sealed partial class UtermServer : IAsyncDisposable
                         .ConfigureAwait(false);
                     break;
                 }
-                var channelText = message.MessageType == WebSocketMessageType.Binary
-                    ? WsBytes.WsBytesToChannelStr(message.Payload)
-                    : Encoding.UTF8.GetString(message.Payload);
-                foreach (var chunk in decoder.Feed(channelText))
+                foreach (var chunk in decoder.FeedBytes(
+                             message.Payload,
+                             preserveRawData: message.MessageType == WebSocketMessageType.Binary))
                 {
                     if (chunk is ControlChunk ctrl)
                     {
