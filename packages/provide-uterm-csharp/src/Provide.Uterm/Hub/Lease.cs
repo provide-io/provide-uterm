@@ -619,6 +619,10 @@ public sealed class HijackLeaseManager
                 && st.PendingPauseReservation is null
                 && st.PendingPauseObligation is null)
             {
+                if (st.ActiveLifecycleTransition is { } activeTransition)
+                {
+                    st.HijackPending = activeTransition.Reservation;
+                }
                 completion = st.PendingPauseCompletion;
                 st.PendingPauseCompletion = null;
             }

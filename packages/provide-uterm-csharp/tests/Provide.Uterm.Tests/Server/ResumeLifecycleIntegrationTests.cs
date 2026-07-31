@@ -1182,6 +1182,52 @@ public sealed class ResumeLifecycleIntegrationTests
     }
 
     [Fact]
+    public async Task InputWaitsWhilePauseFenceHandsOffToReplacement()
+    {
+        const string workerId = "pause-replacement-handoff";
+        var hub = new TermHub();
+        var original = new RecordingWorker();
+        var replacement = new RecordingWorker();
+        var owner = new RecordingBrowser();
+        var inputBrowser = new RecordingBrowser();
+        Assert.True(hub.Conn.RegisterWorker(workerId, original));
+        hub.Conn.RegisterBrowser(workerId, owner, "admin");
+        hub.Conn.RegisterBrowser(workerId, inputBrowser, "admin");
+        Assert.True(hub.Router.SetInputMode(workerId, InputModes.Open).Ok);
+        var pause = original.DelayNextPause();
+        var continuationAttempted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var continuationRelease = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        hub.Conn.AfterReplacementPauseFenceWait = _ =>
+        {
+            continuationAttempted.TrySetResult();
+            return continuationRelease.Task;
+        };
+
+        var acquire = hub.Lease.TryAcquireWsAsync(workerId, owner);
+        await pause.Attempted.WaitAsync(TimeSpan.FromSeconds(1));
+        var replacing = hub.Conn.RegisterWorkerAsync(workerId, replacement);
+        pause.Release();
+
+        await continuationAttempted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        Assert.True((await acquire.WaitAsync(TimeSpan.FromSeconds(1))).Ok);
+        var server = NewUnstartedServer(hub);
+        var laterInput = server.SendBrowserInputAsync(
+            workerId, inputBrowser, "handoff-input");
+
+        Assert.False(laterInput.IsCompleted);
+        Assert.Empty(original.Inputs);
+
+        continuationRelease.TrySetResult();
+        Assert.True(await replacing.WaitAsync(TimeSpan.FromSeconds(1)));
+        Assert.True(await laterInput.WaitAsync(TimeSpan.FromSeconds(1)));
+        Assert.Same(replacement, hub.Registry.Get(workerId)!.WorkerWs);
+        Assert.Empty(original.Inputs);
+        Assert.Equal(["handoff-input"], replacement.Inputs);
+    }
+
+    [Fact]
     public async Task QueuedReplacementsKeepFifoPriorityOverLaterOpenModeInput()
     {
         var hub = new TermHub();

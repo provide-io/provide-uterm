@@ -33,6 +33,8 @@ public sealed class ConnectionManager
     private readonly TermHub _hub;
     private Action<string>? _markWorkerOffline;
 
+    internal Func<string, Task>? AfterReplacementPauseFenceWait { get; set; }
+
     internal ConnectionManager(TermHub hub) => _hub = hub;
 
     internal void ConfigureWorkerOfflineMarker(Action<string> marker) =>
@@ -63,6 +65,7 @@ public sealed class ConnectionManager
             while (true)
             {
                 Task? pendingCompletion = null;
+                var waitedForPause = false;
                 lock (_hub.SharedLock)
                 {
                     if (_hub.Registry.Count >= _hub.MaxWorkers && !_hub.Registry.Contains(workerId))
@@ -96,6 +99,7 @@ public sealed class ConnectionManager
                             RestorePendingPauseReservation(st);
                         }
                         pendingCompletion = pauseCompletion.Task;
+                        waitedForPause = true;
                     }
                     else if (st.InputSendPending is not null)
                     {
@@ -145,6 +149,11 @@ public sealed class ConnectionManager
                 }
 
                 await pendingCompletion!.WaitAsync(ct).ConfigureAwait(false);
+                if (waitedForPause
+                    && AfterReplacementPauseFenceWait is { } afterPauseWait)
+                {
+                    await afterPauseWait(workerId).ConfigureAwait(false);
+                }
             }
             replacementReady = true;
         }
