@@ -32,4 +32,13 @@ public sealed class WorkerBearerAuthenticationTests
     {
         Assert.True(WorkerBearerAuthentication.IsAuthorized("anything", expectedToken));
     }
+
+    [Fact]
+    public void ComparisonDigestsAlwaysHaveEqualSha256Length()
+    {
+        Assert.Equal(32, WorkerBearerAuthentication.DigestToken("").Length);
+        Assert.Equal(
+            WorkerBearerAuthentication.DigestToken("x").Length,
+            WorkerBearerAuthentication.DigestToken(new string('y', 4096)).Length);
+    }
 }

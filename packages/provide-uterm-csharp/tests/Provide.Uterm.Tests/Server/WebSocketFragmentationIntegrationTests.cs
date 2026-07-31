@@ -31,8 +31,17 @@ public sealed class WebSocketFragmentationIntegrationTests
         await SendFragmentedAsync(browser, ping, WebSocketMessageType.Text);
         Assert.Contains("\"type\":\"pong\"", await ReceiveTextAsync(browser));
 
+        var unicodePing = Encoding.UTF8.GetBytes(ControlChannelCodec.EncodeControlFrame(
+            new Dictionary<string, object?> { ["type"] = "ping", ["label"] = "café 東京" }));
+        await SendFragmentedAsync(browser, unicodePing, WebSocketMessageType.Binary);
+        Assert.Contains("\"type\":\"pong\"", await ReceiveTextAsync(browser));
+
         await SendFragmentedAsync(browser, Encoding.UTF8.GetBytes("typed"), WebSocketMessageType.Text);
         Assert.Equal("typed", await capture.NextAsync());
+
+        byte[] rawInput = [0xff, 0x80, (byte)'A'];
+        await SendFragmentedAsync(browser, rawInput, WebSocketMessageType.Binary);
+        Assert.Equal(rawInput, Encoding.Latin1.GetBytes(await capture.NextAsync()));
     }
 
     [Fact]
@@ -51,8 +60,19 @@ public sealed class WebSocketFragmentationIntegrationTests
         await WaitUntilAsync(() => fixture.Hub.Registry.Get(fixture.WorkerId)?.LastSnapshot is not null);
         Assert.Equal("whole", fixture.Hub.Registry.Get(fixture.WorkerId)!.LastSnapshot!["text"]?.ToString());
 
+        var unicodeSnapshot = Encoding.UTF8.GetBytes(ControlChannelCodec.EncodeControlFrame(
+            new Dictionary<string, object?> { ["type"] = "snapshot", ["text"] = "café 東京" }));
+        await SendFragmentedAsync(worker, unicodeSnapshot, WebSocketMessageType.Binary);
+        await WaitUntilAsync(() =>
+            fixture.Hub.Registry.Get(fixture.WorkerId)?.LastSnapshot?["text"]?.ToString() == "café 東京");
+
         await SendFragmentedAsync(worker, Encoding.UTF8.GetBytes("terminal"), WebSocketMessageType.Text);
         Assert.Contains("terminal", await ReceiveUntilAsync(browser, "terminal"));
+
+        byte[] rawTerminal = [0xff, 0x80, (byte)'B'];
+        await SendFragmentedAsync(worker, rawTerminal, WebSocketMessageType.Binary);
+        var rawTermMessage = await ReceiveUntilAsync(browser, "ÿ");
+        Assert.Contains("ÿ", rawTermMessage);
     }
 
     [Fact]

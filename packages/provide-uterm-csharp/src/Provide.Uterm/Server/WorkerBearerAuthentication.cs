@@ -25,7 +25,10 @@ internal static class WorkerBearerAuthentication
                 : string.Empty;
 
         return CryptographicOperations.FixedTimeEquals(
-            Encoding.UTF8.GetBytes(provided),
-            Encoding.UTF8.GetBytes(expectedToken));
+            DigestToken(provided),
+            DigestToken(expectedToken));
     }
+
+    internal static byte[] DigestToken(string token) =>
+        SHA256.HashData(Encoding.UTF8.GetBytes(token));
 }
