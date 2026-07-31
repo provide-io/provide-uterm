@@ -5,6 +5,7 @@
 
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
+using Provide.Uterm.ServerAuth;
 
 namespace Provide.Uterm.Fanout;
 
@@ -13,6 +14,17 @@ public interface IFanoutHub
     Task<bool> SendWorkerAsync(string workerId, IReadOnlyDictionary<string, object?> msg, CancellationToken ct = default);
     Task BroadcastAsync(string workerId, IReadOnlyDictionary<string, object?> msg, CancellationToken ct = default);
     IFanoutOutputSubscription SubscribeOutput(string workerId) => EmptyFanoutOutputSubscription.Instance;
+}
+
+public interface IFanoutAuthorizer
+{
+    bool IsGlobalAdmin(Principal principal);
+    bool CanReadMember(Principal principal, string workerId);
+}
+
+public sealed class FanoutAuthorizationException : InvalidOperationException
+{
+    public FanoutAuthorizationException(string message) : base(message) { }
 }
 
 public interface IGroupStore
@@ -66,6 +78,7 @@ public sealed class InMemoryGroupStore : IGroupStore
 public sealed class ControllerConfig
 {
     public IGroupStore? Store { get; set; }
+    public IFanoutAuthorizer? Authorizer { get; set; }
     public int MaxGroupSize { get; set; } = 50;
     public Func<string>? IdGen { get; set; }
 }
@@ -79,6 +92,7 @@ public sealed class Controller
     private const int MaxErrorPatternLen = 200;
     private readonly IFanoutHub? _hub;
     private readonly IGroupStore _store;
+    private readonly IFanoutAuthorizer? _authorizer;
     private readonly int _maxGroupSize;
     private readonly Func<string> _newId;
 
@@ -87,6 +101,7 @@ public sealed class Controller
         cfg ??= new ControllerConfig();
         _hub = hub;
         _store = cfg.Store ?? new InMemoryGroupStore();
+        _authorizer = cfg.Authorizer;
         _maxGroupSize = cfg.MaxGroupSize <= 0 ? 50 : cfg.MaxGroupSize;
         _newId = cfg.IdGen ?? NewHexId;
     }
@@ -151,17 +166,42 @@ public sealed class Controller
     public async Task<Result> SendAsync(
         string groupId,
         string data,
-        string principal,
+        Principal? principal,
         int quiesceMs = 0,
         int maxResponseMs = 0,
         CancellationToken ct = default)
     {
-        var group = AuthorizedGroup(groupId, principal);
+        if (principal is null || string.IsNullOrWhiteSpace(principal.SubjectId) ||
+            string.Equals(principal.SubjectId, "anonymous", StringComparison.Ordinal))
+        {
+            throw new FanoutAuthorizationException("fanout requires an authenticated principal");
+        }
+        if (_authorizer is null)
+        {
+            throw new FanoutAuthorizationException("fanout member authorizer is unavailable");
+        }
+        if (!_authorizer.IsGlobalAdmin(principal))
+        {
+            throw new FanoutAuthorizationException("fanout requires a global admin principal");
+        }
+        ct.ThrowIfCancellationRequested();
+        var group = AuthorizedGroup(groupId, principal.SubjectId);
         if (group is null)
         {
             return EmptyResult(groupId, data);
         }
-        return await SendGroupAsync(group, data, principal, quiesceMs, maxResponseMs, ct).ConfigureAwait(false);
+        var allowed = new List<string>();
+        var refused = new List<string>();
+        foreach (var workerId in group.WorkerIds)
+        {
+            if (_authorizer.CanReadMember(principal, workerId)) allowed.Add(workerId);
+            else refused.Add(workerId);
+        }
+        var dispatchGroup = CopyGroupWithWorkers(group, allowed);
+        var result = await SendGroupAsync(
+            dispatchGroup, data, principal.SubjectId, quiesceMs, maxResponseMs, ct).ConfigureAwait(false);
+        AddFailures(result, refused);
+        return result;
     }
 
     private async Task<Result> SendGroupAsync(
@@ -202,23 +242,13 @@ public sealed class Controller
         return result;
     }
 
-    public async Task<Result> SendAuthorizedAsync(
-        string groupId,
-        string data,
-        string principal,
-        IReadOnlyCollection<string> allowedWorkerIds,
-        IReadOnlyCollection<string> refusedWorkerIds,
-        int quiesceMs = 0,
-        int maxResponseMs = 0,
-        CancellationToken ct = default)
+    private static Group CopyGroupWithWorkers(Group group, IEnumerable<string> workerIds)
     {
-        var group = AuthorizedGroup(groupId, principal);
-        if (group is null) return await SendAsync(groupId, data, principal, quiesceMs, maxResponseMs, ct).ConfigureAwait(false);
-        var dispatchGroup = new Group
+        return new Group
         {
             GroupId = group.GroupId,
             Name = group.Name,
-            WorkerIds = allowedWorkerIds.ToList(),
+            WorkerIds = workerIds.ToList(),
             CreatedBy = group.CreatedBy,
             CreatedAt = group.CreatedAt,
             Mode = group.Mode,
@@ -229,9 +259,6 @@ public sealed class Controller
             DivergenceThreshold = group.DivergenceThreshold,
             Grants = group.Grants.ToList(),
         };
-        var result = await SendGroupAsync(dispatchGroup, data, principal, quiesceMs, maxResponseMs, ct).ConfigureAwait(false);
-        AddFailures(result, refusedWorkerIds);
-        return result;
     }
 
     private Result EmptyResult(string groupId, string data) => new()

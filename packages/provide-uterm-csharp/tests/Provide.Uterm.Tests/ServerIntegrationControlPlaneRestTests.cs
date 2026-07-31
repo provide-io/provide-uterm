@@ -777,8 +777,8 @@ public sealed class ServerIntegrationControlPlaneRestTests
 
         // Fan-out Send: missing group + hub throw
         var throwHub = new ThrowingFanoutHub();
-        var ctrl = new Controller(throwHub);
-        var empty = await ctrl.SendAsync("missing", "cmd", "p");
+        var ctrl = new Controller(throwHub, new ControllerConfig { Authorizer = new AllowFanoutAuthorizer() });
+        var empty = await ctrl.SendAsync("missing", "cmd", FanoutAdmin("p"));
         Assert.Empty(empty.Results);
 
         var gid = ctrl.CreateGroup(new Group
@@ -788,13 +788,13 @@ public sealed class ServerIntegrationControlPlaneRestTests
             QuiesceMs = 10,
             MaxResponseMs = 20,
         }, "creator");
-        var sent = await ctrl.SendAsync(gid, "look", "creator", quiesceMs: 1, maxResponseMs: 1);
+        var sent = await ctrl.SendAsync(gid, "look", FanoutAdmin("creator"), quiesceMs: 1, maxResponseMs: 1);
         Assert.Equal(2, sent.FailedSessions.Count);
 
         // No hub → ok=false for each worker
-        var noHub = new Controller();
+        var noHub = new Controller(null, new ControllerConfig { Authorizer = new AllowFanoutAuthorizer() });
         var gid2 = noHub.CreateGroup(new Group { Name = "n", WorkerIds = new List<string> { "a" } }, "c");
-        var sent2 = await noHub.SendAsync(gid2, "x", "c");
+        var sent2 = await noHub.SendAsync(gid2, "x", FanoutAdmin("c"));
         Assert.Single(sent2.FailedSessions);
 
         // Divergence pure (miss residual)
@@ -811,6 +811,19 @@ public sealed class ServerIntegrationControlPlaneRestTests
         public Task BroadcastAsync(
             string workerId, IReadOnlyDictionary<string, object?> msg, CancellationToken ct = default) =>
             throw new InvalidOperationException("boom");
+    }
+
+    private static Principal FanoutAdmin(string subject) => new()
+    {
+        SubjectId = subject,
+        Roles = StringSet.Of("admin"),
+        Scopes = StringSet.Of("*"),
+    };
+
+    private sealed class AllowFanoutAuthorizer : IFanoutAuthorizer
+    {
+        public bool IsGlobalAdmin(Principal principal) => true;
+        public bool CanReadMember(Principal principal, string workerId) => true;
     }
 
     [Fact]
