@@ -35,6 +35,22 @@ EXPECTED_SURFACES = {
     "typescript": {"surface": "component", "advertised": False},
 }
 INPUT_FIELDS = {"surface", "operation", "actor", "group", "visibility", "policy", "workers", "command"}
+REQUIRED_CATEGORY_CARDINALITY = {
+    "authentication refusal": 1,
+    "viewer refusal": 1,
+    "strict dormant-member rejection": 1,
+    "permissive dormant-member admission": 1,
+    "current authorization revocation": 1,
+    "group grant non-bypass": 1,
+    "partial member failure": 1,
+    "policy deny": 1,
+    "policy hold and release": 1,
+    "missing authorization dependencies": 1,
+    "immediate output capture": 1,
+    "store read isolation": 1,
+    "store atomic update": 1,
+    "total response deadline": 1,
+}
 
 
 def _dict(value: object) -> dict[str, Any]:
@@ -74,6 +90,53 @@ def semantic_status(scenario: dict[str, Any], backend: str) -> str:
     return "unsupported_fail_closed" if governed else "execute"
 
 
+def semantic_categories(scenario: dict[str, Any]) -> set[str]:
+    """Classify required security behaviors solely from executable input data."""
+    input_data = _dict(scenario.get("input"))
+    actor = _dict(input_data.get("actor"))
+    group = _dict(input_data.get("group"))
+    visibility = _dict(input_data.get("visibility"))
+    policy = _dict(input_data.get("policy"))
+    workers = _dict(input_data.get("workers"))
+    operation = input_data.get("operation")
+    roles = set(actor.get("roles", [])) if isinstance(actor.get("roles"), list) else set()
+    members = set(group.get("members", [])) if isinstance(group.get("members"), list) else set()
+    grants = group.get("grants", []) if isinstance(group.get("grants"), list) else []
+    revoked = visibility.get("revoke_before_send", []) if isinstance(visibility.get("revoke_before_send"), list) else []
+    accepted = set(workers.get("accepted_members", [])) if isinstance(workers.get("accepted_members"), list) else set()
+    immediate = _dict(workers.get("immediate_output"))
+    categories: set[str] = set()
+    if actor.get("authenticated") is False:
+        categories.add("authentication refusal")
+    if actor.get("authenticated") is True and "admin" not in roles:
+        categories.add("viewer refusal")
+    if operation == "create" and group.get("allow_unknown_members") is False:
+        categories.add("strict dormant-member rejection")
+    if operation == "create" and group.get("allow_unknown_members") is True:
+        categories.add("permissive dormant-member admission")
+    if revoked and not grants:
+        categories.add("current authorization revocation")
+    if revoked and grants:
+        categories.add("group grant non-bypass")
+    if operation == "send" and not revoked and accepted < members:
+        categories.add("partial member failure")
+    if policy.get("action") == "deny":
+        categories.add("policy deny")
+    if policy.get("action") == "hold_release":
+        categories.add("policy hold and release")
+    if input_data.get("omit_authorizers") is True:
+        categories.add("missing authorization dependencies")
+    if "immediate" in immediate.values():
+        categories.add("immediate output capture")
+    if operation == "store_read_isolation":
+        categories.add("store read isolation")
+    if operation == "store_atomic_update":
+        categories.add("store atomic update")
+    if workers.get("continuous_output") is True and input_data.get("max_response_ms"):
+        categories.add("total response deadline")
+    return categories
+
+
 def validate_contract(contract: dict[str, Any]) -> list[str]:
     """Validate the semantic contract and backend support claims."""
     errors: list[str] = []
@@ -95,8 +158,12 @@ def validate_contract(contract: dict[str, Any]) -> list[str]:
     if not isinstance(scenarios, list):
         return [*errors, "scenarios must be a list"]
     seen: set[str] = set()
+    category_counts = dict.fromkeys(REQUIRED_CATEGORY_CARDINALITY, 0)
     for raw_scenario in scenarios:
         scenario = _dict(raw_scenario)
+        for category in semantic_categories(scenario):
+            if category in category_counts:
+                category_counts[category] += 1
         scenario_id = scenario.get("id")
         if not isinstance(scenario_id, str) or not scenario_id:
             errors.append("scenario id must be a non-empty string")
@@ -128,6 +195,9 @@ def validate_contract(contract: dict[str, Any]) -> list[str]:
             overrides = _dict(claim.get("expected"))
             if set(overrides) - RESULT_FIELDS or set(expected_for(scenario, backend)) != RESULT_FIELDS:
                 errors.append(f"{scenario_id}.{backend}: invalid expected result fields")
+    for category, minimum in REQUIRED_CATEGORY_CARDINALITY.items():
+        if category_counts[category] < minimum:
+            errors.append(f"missing required semantic category: {category}")
     return errors
 
 
