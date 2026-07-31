@@ -279,8 +279,14 @@ public class HubServicesTests
         Assert.True(await hub.Conn.ForceReleaseHijackAsync("w1"));
         Assert.Contains(worker.Sent, s => s.Contains("server-forced", StringComparison.Ordinal));
         Assert.Null(hub.Registry.Get("w1")!.HijackOwner);
-        Assert.Equal(3, changes.Count);
-        Assert.Equal(("w1", false, (string?)null), changes[2]);
+        Assert.Equal(
+            [
+                ("w1", true, "operator"),
+                ("w1", false, (string?)null),
+                ("w1", true, (string?)null),
+                ("w1", false, (string?)null),
+            ],
+            changes);
 
         // An owner whose lease already ran out was not holding anything, so
         // clearing it is not announced as a release.

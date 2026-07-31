@@ -22,6 +22,61 @@ namespace Provide.Uterm.Tests.Server;
 public sealed class ResumeLifecycleIntegrationTests
 {
     [Fact]
+    public async Task ProductionDashboardAcquireReleasePublishesExactlyOnce()
+    {
+        var changes = new List<bool>();
+        var fixture = await BootAsync(enabled => changes.Add(enabled));
+        await using var server = fixture.Server;
+        using var browser = await ConnectAsync(fixture);
+        await DrainHandshakeAsync(browser);
+
+        await SendControlAsync(browser, "hijack_request");
+        var acquired = await ReceiveUntilAsync(
+            browser,
+            frame => Type(frame) == "hijack_state" && Bool(frame, "hijacked"));
+        await SendControlAsync(browser, "hijack_release");
+        var released = await ReceiveUntilAsync(
+            browser,
+            frame => Type(frame) == "hijack_state" && !Bool(frame, "hijacked"));
+
+        Assert.Equal("me", acquired["owner"]?.ToString());
+        Assert.False(Bool(released, "hijacked"));
+        Assert.Equal([true, false], changes);
+    }
+
+    [Fact]
+    public async Task ProductionDashboardResumePublishesRestoredOwnershipExactlyOnce()
+    {
+        var changes = new List<bool>();
+        var fixture = await BootAsync(enabled => changes.Add(enabled));
+        await using var server = fixture.Server;
+        using var original = await ConnectAsync(fixture);
+        var oldToken = (await DrainHandshakeAsync(original))["resume_token"]!.ToString()!;
+        await SendControlAsync(original, "hijack_request");
+        await ReceiveUntilAsync(
+            original,
+            frame => Type(frame) == "hijack_state" && Bool(frame, "hijacked"));
+
+        original.Abort();
+        await WaitUntilAsync(() => fixture.Hub.Registry.Get("resume-worker")!.Browsers.Count == 0);
+        await WaitUntilAsync(() => fixture.Worker.Actions.SequenceEqual(["pause", "resume"]));
+
+        using var resumedSocket = await ConnectAsync(fixture);
+        await DrainHandshakeAsync(resumedSocket);
+        await SendControlAsync(resumedSocket, "resume", oldToken);
+        var resumedHello = await ReceiveUntilAsync(
+            resumedSocket,
+            frame => Type(frame) == "hello" && frame.ContainsKey("resumed"));
+        var restored = await ReceiveUntilAsync(
+            resumedSocket,
+            frame => Type(frame) == "hijack_state" && Bool(frame, "hijacked"));
+
+        Assert.True(Bool(resumedHello, "resumed"));
+        Assert.Equal("me", restored["owner"]?.ToString());
+        Assert.Equal([true, true], changes);
+    }
+
+    [Fact]
     public async Task CurrentOwnerTokenRestoresHijackAndReportsResumedTrue()
     {
         var fixture = await BootAsync();
@@ -1215,7 +1270,7 @@ public sealed class ResumeLifecycleIntegrationTests
         Assert.Equal(SessionLifecycleState.Stopped, offline.LifecycleState);
         Assert.Equal(1, DecodeBrowserFrames(observer).Count(frame =>
             Type(frame) == "worker_disconnected"));
-        Assert.Empty(ownershipChanges);
+        Assert.Equal([true], ownershipChanges);
 
         if (replaceImmediately)
         {
@@ -1228,7 +1283,7 @@ public sealed class ResumeLifecycleIntegrationTests
         Assert.Equal(replaceImmediately, afterReplay.Connected);
         Assert.Equal(1, DecodeBrowserFrames(observer).Count(frame =>
             Type(frame) == "worker_disconnected"));
-        Assert.Empty(ownershipChanges);
+        Assert.Equal([true], ownershipChanges);
     }
 
     [Theory]
@@ -1407,7 +1462,6 @@ public sealed class ResumeLifecycleIntegrationTests
         Assert.True(await hub.Conn.RegisterWorkerAsync(workerId, replacement));
         registry.MarkWorker(workerId, true, false);
         Assert.True((await hub.Lease.TryAcquireWsAsync(workerId, owner)).Ok);
-        hub.NotifyHijackChanged(workerId, true, "replacement-owner");
         await hub.BroadcastHijackStateAsync(workerId);
 
         delayedObserver.ReleaseDisconnect();
@@ -1479,6 +1533,62 @@ public sealed class ResumeLifecycleIntegrationTests
                     30,
                     "successor-hijack",
                     hub.Clock.Monotonic())).Ok);
+                break;
+            default:
+                throw new Xunit.Sdk.XunitException("unknown operation");
+        }
+
+        changes.Clear();
+        Assert.False(hub.State.NotifyHijackChanged(delayed));
+        Assert.Empty(changes);
+    }
+
+    [Theory]
+    [InlineData("acquire")]
+    [InlineData("release")]
+    [InlineData("restore")]
+    public async Task DelayedDashboardPublicationCannotOverwriteSuccessor(string operation)
+    {
+        const string workerId = "delayed-dashboard-publication";
+        var changes = new List<bool>();
+        var hub = new TermHub(new TermHubConfig
+        {
+            OnHijackChanged = (_, enabled, _) => changes.Add(enabled),
+        });
+        var worker = new RecordingWorker();
+        var original = new RecordingBrowser();
+        var resumed = new RecordingBrowser();
+        var successor = new RecordingBrowser();
+        Assert.True(hub.Conn.RegisterWorker(workerId, worker));
+        hub.Conn.RegisterBrowser(workerId, original, "admin");
+        hub.Conn.RegisterBrowser(workerId, resumed, "admin");
+        hub.Conn.RegisterBrowser(workerId, successor, "admin");
+        Assert.True((await hub.Lease.TryAcquireWsAsync(workerId, original)).Ok);
+        var state = hub.Registry.Get(workerId)!;
+        OwnershipPublicationToken delayed;
+
+        switch (operation)
+        {
+            case "acquire":
+                delayed = OwnershipPublicationToken.DashboardHeld(
+                    workerId, state.HijackOwnershipVersion, original);
+                var ownershipVersion = hub.Conn.CleanupBrowser(workerId, original)!.Value;
+                Assert.True(hub.Lease.TryRestoreWsOwnership(
+                    workerId, resumed, ownershipVersion));
+                break;
+            case "release":
+                Assert.True((await hub.Lease.TryReleaseWsAsync(workerId, original)).Released);
+                delayed = OwnershipPublicationToken.Released(
+                    workerId, state.HijackOwnershipVersion);
+                Assert.True((await hub.Lease.TryAcquireWsAsync(workerId, successor)).Ok);
+                break;
+            case "restore":
+                var restoredVersion = hub.Conn.CleanupBrowser(workerId, original)!.Value;
+                Assert.True(hub.Lease.TryRestoreWsOwnership(
+                    workerId, resumed, restoredVersion));
+                delayed = OwnershipPublicationToken.DashboardHeld(
+                    workerId, state.HijackOwnershipVersion, resumed);
+                Assert.True((await hub.Lease.TryReleaseWsAsync(workerId, resumed)).Released);
                 break;
             default:
                 throw new Xunit.Sdk.XunitException("unknown operation");
@@ -1792,7 +1902,7 @@ public sealed class ResumeLifecycleIntegrationTests
         return socket;
     }
 
-    private static async Task<Fixture> BootAsync()
+    private static async Task<Fixture> BootAsync(Action<bool>? onHijackChanged = null)
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
@@ -1819,7 +1929,13 @@ public sealed class ResumeLifecycleIntegrationTests
             Roles = ["admin"],
         });
         var clock = new RealClock();
-        var hub = new TermHub(new TermHubConfig { Clock = clock });
+        var hub = new TermHub(new TermHubConfig
+        {
+            Clock = clock,
+            OnHijackChanged = onHijackChanged is null
+                ? null
+                : (_, enabled, _) => onHijackChanged(enabled),
+        });
         var worker = new RecordingWorker();
         hub.Conn.RegisterWorker("resume-worker", worker);
         var server = new UtermServer(new ServerDeps
