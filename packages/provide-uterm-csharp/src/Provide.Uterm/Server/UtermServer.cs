@@ -1149,45 +1149,11 @@ public sealed partial class UtermServer : IAsyncDisposable
                              message.Payload,
                              preserveRawData: message.MessageType == WebSocketMessageType.Binary))
                 {
-                    if (!_deps.Hub.Conn.IsActiveWorker(workerId, conn)) break;
-                    if (chunk is ControlChunk ctrl)
+                    if (!await ProcessWorkerChunkAsync(workerId, conn, chunk, ctx.RequestAborted)
+                            .ConfigureAwait(false))
                     {
-                        var mtype = ctrl.Control.TryGetValue("type", out var t) ? t?.ToString() : null;
-                        if (mtype == "snapshot")
-                        {
-                            _deps.Hub.Conn.UpdateLastSnapshot(workerId, conn, ctrl.Control);
-                        }
-                        else if (mtype == "worker_hello")
-                        {
-                            // Until now every frame but `snapshot` was fanned to
-                            // browsers and dropped, so a worker announcing its
-                            // input mode was never heard — the one thing a hello
-                            // is for. The reference applies it here
-                            // (bridge/routes/websockets_worker.py), and it may
-                            // raise the mode but never lower a decided one.
-                            await ApplyWorkerHelloAsync(workerId, conn, ctrl.Control, ctx.RequestAborted)
-                                .ConfigureAwait(false);
-                        }
-
-                        await _deps.Hub.Conn.BroadcastToBrowsersAsync(workerId, ctrl.Control, ctx.RequestAborted)
-                            .ConfigureAwait(false);
-                        continue;
+                        return;
                     }
-
-                    if (chunk is not DataChunk data || string.IsNullOrEmpty(data.Data)) continue;
-
-                    // Raw terminal bytes → term control frames for every browser (Python/Go).
-                    _deps.Hub.AppendEventData(workerId, "term", new Dictionary<string, object?> { ["data"] = data.Data });
-                    _deps.Hub.State.TouchActivity(workerId);
-                    await _deps.Hub.Conn.BroadcastToBrowsersAsync(
-                        workerId,
-                        new Dictionary<string, object?>
-                        {
-                            ["type"] = "term",
-                            ["data"] = data.Data,
-                            ["ts"] = _clock.Wall(),
-                        },
-                        ctx.RequestAborted).ConfigureAwait(false);
                 }
             }
         }
@@ -1241,6 +1207,66 @@ public sealed partial class UtermServer : IAsyncDisposable
                     ws, WebSocketCloseStatus.NormalClosure, "bye")
                 .ConfigureAwait(false);
         }
+    }
+
+    /// <summary>Apply one already-decoded frame from the normal worker transport.</summary>
+    internal async Task<bool> ProcessWorkerChunkAsync(
+        string workerId,
+        IWorkerWs worker,
+        Chunk chunk,
+        CancellationToken cancellationToken = default)
+    {
+        if (chunk is ControlChunk ctrl)
+        {
+            var mtype = ctrl.Control.TryGetValue("type", out var t) ? t?.ToString() : null;
+            bool accepted;
+            if (mtype == "snapshot")
+            {
+                accepted = _deps.Hub.Conn.UpdateLastSnapshot(workerId, worker, ctrl.Control);
+            }
+            else if (mtype == "worker_hello")
+            {
+                // Until now every frame but `snapshot` was fanned to
+                // browsers and dropped, so a worker announcing its
+                // input mode was never heard — the one thing a hello
+                // is for. The reference applies it here
+                // (bridge/routes/websockets_worker.py), and it may
+                // raise the mode but never lower a decided one.
+                accepted = await ApplyWorkerHelloAsync(workerId, worker, ctrl.Control, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            else accepted = _deps.Hub.Conn.TryAcceptWorkerFrame(workerId, worker);
+
+            if (!accepted) return false;
+            await _deps.Hub.Conn.BroadcastToBrowsersAsync(workerId, ctrl.Control, cancellationToken)
+                .ConfigureAwait(false);
+            return true;
+        }
+
+        if (chunk is not DataChunk data || string.IsNullOrEmpty(data.Data))
+        {
+            return _deps.Hub.Conn.TryAcceptWorkerFrame(workerId, worker);
+        }
+
+        // Raw terminal bytes → term control frames for every browser (Python/Go).
+        if (!_deps.Hub.Conn.TryAppendWorkerEvent(
+                workerId,
+                worker,
+                "term",
+                new Dictionary<string, object?> { ["data"] = data.Data }))
+        {
+            return false;
+        }
+        await _deps.Hub.Conn.BroadcastToBrowsersAsync(
+            workerId,
+            new Dictionary<string, object?>
+            {
+                ["type"] = "term",
+                ["data"] = data.Data,
+                ["ts"] = _clock.Wall(),
+            },
+            cancellationToken).ConfigureAwait(false);
+        return true;
     }
 
     private async Task<Principal> Authenticate(HttpContext ctx)
@@ -1366,7 +1392,7 @@ public sealed partial class UtermServer : IAsyncDisposable
     /// Both are logged as well as counted, through <see cref="TermHubConfig.OnLog"/>
     /// — see there for why a counter alone was not enough to debug a stuck session.
     /// </remarks>
-    private async Task ApplyWorkerHelloAsync(
+    private async Task<bool> ApplyWorkerHelloAsync(
         string workerId,
         IWorkerWs worker,
         Dictionary<string, object?> hello,
@@ -1375,6 +1401,7 @@ public sealed partial class UtermServer : IAsyncDisposable
         var mode = hello.TryGetValue("input_mode", out var raw) ? raw?.ToString() : null;
         if (mode is not (InputModes.Hijack or InputModes.Open))
         {
+            if (!_deps.Hub.Conn.TryAcceptWorkerFrame(workerId, worker)) return false;
             if (mode is not null)
             {
                 _deps.Hub.Metric("worker_hello_invalid_mode_total", 1);
@@ -1382,7 +1409,7 @@ public sealed partial class UtermServer : IAsyncDisposable
                     + $"input_mode='{mode}' — expected 'hijack' or 'open', ignoring");
             }
 
-            return;
+            return true;
         }
 
         int? protocolVersion = null;
@@ -1392,8 +1419,8 @@ public sealed partial class UtermServer : IAsyncDisposable
             protocolVersion = parsed;
         }
 
-        var applied = _deps.Hub.Conn.SetWorkerHello(workerId, worker, mode, protocolVersion);
-        if (applied)
+        var result = _deps.Hub.Conn.SetWorkerHelloFrame(workerId, worker, mode, protocolVersion);
+        if (result.Applied)
         {
             await _deps.Hub.Conn.BroadcastHijackStateAsync(workerId, cancellationToken).ConfigureAwait(false);
         }
@@ -1401,6 +1428,7 @@ public sealed partial class UtermServer : IAsyncDisposable
         // No `else` counting the refusal: `SetWorkerHello` counts its own
         // decision, and counting it here as well would double every refusal
         // that arrives over this route.
+        return result.Current;
     }
 
     private static IResult DetailError(int status, string detail) =>

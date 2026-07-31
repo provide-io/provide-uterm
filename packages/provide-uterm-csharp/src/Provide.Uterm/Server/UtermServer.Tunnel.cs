@@ -423,7 +423,6 @@ public sealed partial class UtermServer
                         .ConfigureAwait(false);
                     break;
                 }
-                if (!_deps.Hub.Conn.IsActiveWorker(workerId, conn)) break;
                 if (message.Payload.Length < 2) continue;
 
                 TunnelFrame frame;
@@ -437,49 +436,10 @@ public sealed partial class UtermServer
                 }
 
                 if (frame.IsEof) continue;
-                if (frame.IsControl)
+                if (!await ProcessTunnelFrameAsync(workerId, conn, frame, ctx.RequestAborted)
+                        .ConfigureAwait(false))
                 {
-                    HandleTunnelControl(workerId, frame.Payload);
-                    continue;
-                }
-
-                if (frame.Channel == TunnelProtocol.ChannelHttp)
-                {
-                    Dictionary<string, object?>? httpMsg;
-                    try
-                    {
-                        httpMsg = TunnelCodec.DecodeControl(frame.Payload);
-                    }
-                    catch
-                    {
-                        continue;
-                    }
-
-                    httpMsg["_channel"] = "http";
-                    _deps.Hub.AppendEventData(
-                        workerId,
-                        httpMsg.TryGetValue("type", out var t) ? t?.ToString() ?? "http" : "http",
-                        httpMsg);
-                    _deps.Hub.State.TouchActivity(workerId);
-                    await _deps.Hub.Conn.BroadcastToBrowsersAsync(workerId, httpMsg, ctx.RequestAborted)
-                        .ConfigureAwait(false);
-                    continue;
-                }
-
-                if (frame.Channel >= TunnelProtocol.ChannelData && frame.Payload.Length > 0)
-                {
-                    var text = Encoding.UTF8.GetString(frame.Payload);
-                    _deps.Hub.AppendEventData(workerId, "term", new Dictionary<string, object?> { ["data"] = text });
-                    _deps.Hub.State.TouchActivity(workerId);
-                    await _deps.Hub.Conn.BroadcastToBrowsersAsync(
-                        workerId,
-                        new Dictionary<string, object?>
-                        {
-                            ["type"] = "term",
-                            ["data"] = text,
-                            ["ts"] = _clock.Wall(),
-                        },
-                        ctx.RequestAborted).ConfigureAwait(false);
+                    break;
                 }
             }
         }
@@ -525,7 +485,76 @@ public sealed partial class UtermServer
         }
     }
 
-    private void HandleTunnelControl(string workerId, byte[] payload)
+    /// <summary>Apply one already-decoded frame from the tunnel worker transport.</summary>
+    internal async Task<bool> ProcessTunnelFrameAsync(
+        string workerId,
+        IWorkerWs worker,
+        TunnelFrame frame,
+        CancellationToken cancellationToken = default)
+    {
+        if (frame.IsControl)
+        {
+            return await HandleTunnelControlAsync(workerId, worker, frame.Payload, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        if (frame.Channel == TunnelProtocol.ChannelHttp)
+        {
+            Dictionary<string, object?> httpMsg;
+            try
+            {
+                httpMsg = TunnelCodec.DecodeControl(frame.Payload);
+            }
+            catch
+            {
+                return _deps.Hub.Conn.TryAcceptWorkerFrame(workerId, worker);
+            }
+
+            httpMsg["_channel"] = "http";
+            if (!_deps.Hub.Conn.TryAppendWorkerEvent(
+                    workerId,
+                    worker,
+                    httpMsg.TryGetValue("type", out var t) ? t?.ToString() ?? "http" : "http",
+                    httpMsg))
+            {
+                return false;
+            }
+            await _deps.Hub.Conn.BroadcastToBrowsersAsync(workerId, httpMsg, cancellationToken)
+                .ConfigureAwait(false);
+            return true;
+        }
+
+        if (frame.Channel >= TunnelProtocol.ChannelData && frame.Payload.Length > 0)
+        {
+            var text = Encoding.UTF8.GetString(frame.Payload);
+            if (!_deps.Hub.Conn.TryAppendWorkerEvent(
+                    workerId,
+                    worker,
+                    "term",
+                    new Dictionary<string, object?> { ["data"] = text }))
+            {
+                return false;
+            }
+            await _deps.Hub.Conn.BroadcastToBrowsersAsync(
+                workerId,
+                new Dictionary<string, object?>
+                {
+                    ["type"] = "term",
+                    ["data"] = text,
+                    ["ts"] = _clock.Wall(),
+                },
+                cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+
+        return _deps.Hub.Conn.TryAcceptWorkerFrame(workerId, worker);
+    }
+
+    private async Task<bool> HandleTunnelControlAsync(
+        string workerId,
+        IWorkerWs worker,
+        byte[] payload,
+        CancellationToken cancellationToken)
     {
         Dictionary<string, object?> msg;
         try
@@ -534,7 +563,7 @@ public sealed partial class UtermServer
         }
         catch
         {
-            return;
+            return _deps.Hub.Conn.TryAcceptWorkerFrame(workerId, worker);
         }
 
         var mtype = msg.TryGetValue("type", out var t) ? t?.ToString() : null;
@@ -543,8 +572,7 @@ public sealed partial class UtermServer
             var mode = msg.TryGetValue("input_mode", out var m) ? m?.ToString() : null;
             if (mode is "hijack" or "open")
             {
-                var st = _deps.Hub.Registry.Get(workerId);
-                if (st is not null) st.InputMode = mode;
+                return _deps.Hub.Conn.TrySetWorkerInputMode(workerId, worker, mode);
             }
         }
         else if (mtype == "snapshot")
@@ -556,8 +584,12 @@ public sealed partial class UtermServer
                 ["screen"] = screen,
                 ["ts"] = _clock.Wall(),
             };
-            _deps.Hub.Conn.UpdateLastSnapshot(workerId, snap);
-            _ = _deps.Hub.Conn.BroadcastToBrowsersAsync(workerId, snap, CancellationToken.None);
+            if (!_deps.Hub.Conn.UpdateLastSnapshot(workerId, worker, snap)) return false;
+            await _deps.Hub.Conn.BroadcastToBrowsersAsync(workerId, snap, cancellationToken)
+                .ConfigureAwait(false);
+            return true;
         }
+
+        return _deps.Hub.Conn.TryAcceptWorkerFrame(workerId, worker);
     }
 }

@@ -13,6 +13,9 @@ using Provide.Uterm.Hub;
 using Provide.Uterm.Server;
 using Provide.Uterm.ServerAuth;
 using Provide.Uterm.ServerConfig;
+using Provide.Uterm.Shell;
+using Provide.Uterm.Tunnel;
+using Provide.Uterm.TunnelClient;
 
 namespace Provide.Uterm.Tests.Server;
 
@@ -668,6 +671,112 @@ public sealed class ResumeLifecycleIntegrationTests
         Assert.Empty(replacement.Actions);
     }
 
+    [Fact]
+    public async Task StaleLocalWorkerProductionPathCannotPublishAfterReplacement()
+    {
+        var hub = new TermHub();
+        var browser = new RecordingBrowser();
+        hub.Conn.RegisterBrowser("stale-local", browser, "viewer");
+        var connector = new UshellConnector("stale-local", new UshellConnectorConfig
+        {
+            PollSleep = _ => { },
+        });
+        connector.Start();
+        var oldWorker = new LocalWorkerLink(hub, "stale-local", connector);
+        Assert.True(await oldWorker.AttachAsync(InputModes.Open));
+        var state = hub.Registry.Get("stale-local")!;
+        var originalSnapshot = state.LastSnapshot!["screen"]?.ToString();
+        var originalEventSeq = state.EventSeq;
+        browser.Clear();
+
+        Assert.True(hub.Conn.RegisterWorker("stale-local", new RecordingWorker()));
+        Assert.False(Assert.IsAssignableFrom<IAbortableBrowserWs>(oldWorker).IsActive);
+        await oldWorker.SendTextAsync("stale-local-output");
+
+        Assert.Equal(originalSnapshot, state.LastSnapshot!["screen"]?.ToString());
+        Assert.Equal(originalEventSeq, state.EventSeq);
+        Assert.Empty(browser.Payloads);
+        connector.Stop();
+    }
+
+    [Fact]
+    public async Task StaleTunnelProductionPathCannotMutateOrPublishAfterReplacement()
+    {
+        var hub = new TermHub();
+        var oldWorker = new RecordingWorker();
+        var browser = new RecordingBrowser();
+        Assert.True(hub.Conn.RegisterWorker("stale-tunnel", oldWorker));
+        hub.Conn.RegisterBrowser("stale-tunnel", browser, "viewer");
+        Assert.True(hub.Conn.RegisterWorker("stale-tunnel", new RecordingWorker()));
+        var server = NewUnstartedServer(hub);
+        var state = hub.Registry.Get("stale-tunnel")!;
+
+        await server.ProcessTunnelFrameAsync(
+            "stale-tunnel",
+            oldWorker,
+            TunnelCodec.DecodeFrame(TunnelCodec.EncodeControl(new Dictionary<string, object?>
+            {
+                ["type"] = "open",
+                ["input_mode"] = InputModes.Open,
+            })));
+        await server.ProcessTunnelFrameAsync(
+            "stale-tunnel",
+            oldWorker,
+            TunnelCodec.DecodeFrame(TunnelCodec.EncodeControl(new Dictionary<string, object?>
+            {
+                ["type"] = "snapshot",
+                ["screen"] = "stale-tunnel-screen",
+            })));
+        await server.ProcessTunnelFrameAsync(
+            "stale-tunnel",
+            oldWorker,
+            TunnelCodec.DecodeFrame(TunnelCodec.EncodeFrame(
+                TunnelProtocol.ChannelData,
+                Encoding.UTF8.GetBytes("stale-tunnel-output"))));
+
+        Assert.Equal(InputModes.Hijack, state.InputMode);
+        Assert.Null(state.LastSnapshot);
+        Assert.Equal(0, state.EventSeq);
+        Assert.Empty(browser.Payloads);
+    }
+
+    [Fact]
+    public async Task StaleNormalWorkerProductionPathCannotMutateOrPublishAfterReplacement()
+    {
+        var hub = new TermHub();
+        var oldWorker = new RecordingWorker();
+        var browser = new RecordingBrowser();
+        Assert.True(hub.Conn.RegisterWorker("stale-normal", oldWorker));
+        hub.Conn.RegisterBrowser("stale-normal", browser, "viewer");
+        Assert.True(hub.Conn.RegisterWorker("stale-normal", new RecordingWorker()));
+        var server = NewUnstartedServer(hub);
+        var state = hub.Registry.Get("stale-normal")!;
+
+        await server.ProcessWorkerChunkAsync(
+            "stale-normal",
+            oldWorker,
+            new ControlChunk(new Dictionary<string, object?>
+            {
+                ["type"] = "snapshot",
+                ["screen"] = "stale-normal-screen",
+            }));
+        await server.ProcessWorkerChunkAsync(
+            "stale-normal",
+            oldWorker,
+            new ControlChunk(new Dictionary<string, object?>
+            {
+                ["type"] = "worker_hello",
+                ["input_mode"] = InputModes.Open,
+            }));
+        await server.ProcessWorkerChunkAsync(
+            "stale-normal", oldWorker, new DataChunk("stale-normal-output"));
+
+        Assert.Equal(InputModes.Hijack, state.InputMode);
+        Assert.Null(state.LastSnapshot);
+        Assert.Equal(0, state.EventSeq);
+        Assert.Empty(browser.Payloads);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -876,6 +985,20 @@ public sealed class ResumeLifecycleIntegrationTests
             worker,
             token,
             new Uri($"ws://127.0.0.1:{port}/ws/browser/resume-worker/term"));
+    }
+
+    private static UtermServer NewUnstartedServer(TermHub hub)
+    {
+        var cfg = UtermServerConfig.Default();
+        return new UtermServer(new ServerDeps
+        {
+            Hub = hub,
+            Auth = new LocalIdentityProvider(cfg.Auth, new ApiKeyStore()),
+            Authz = new AuthorizationService(),
+            Config = cfg,
+            Registry = new InMemorySessionRegistry(cfg.Sessions),
+            Clock = new RealClock(),
+        });
     }
 
     private sealed record Fixture(
@@ -1106,6 +1229,28 @@ public sealed class ResumeLifecycleIntegrationTests
             internal void MarkAttempted() => _attempted.TrySetResult();
             internal void Wait() => _release.Task.GetAwaiter().GetResult();
             public void Release() => _release.TrySetResult();
+        }
+    }
+
+    private sealed class RecordingBrowser : IWorkerWs
+    {
+        private readonly object _gate = new();
+        private readonly List<string> _payloads = [];
+
+        public IReadOnlyList<string> Payloads
+        {
+            get { lock (_gate) return _payloads.ToArray(); }
+        }
+
+        public void Clear()
+        {
+            lock (_gate) _payloads.Clear();
+        }
+
+        public Task SendTextAsync(string payload, CancellationToken cancellationToken = default)
+        {
+            lock (_gate) _payloads.Add(payload);
+            return Task.CompletedTask;
         }
     }
 
