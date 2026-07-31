@@ -703,14 +703,26 @@ public sealed partial class UtermServer : IAsyncDisposable
             new TokenBucket(_deps.Hub.BrowserRateLimitPerSec, clock: _clock),
             new TokenBucket(_deps.Hub.BrowserControlRateLimitPerSec, clock: _clock));
 
-        var buffer = new byte[8192];
         try
         {
             while (ws.State == WebSocketState.Open)
             {
-                var result = await ws.ReceiveAsync(buffer, ctx.RequestAborted).ConfigureAwait(false);
-                if (result.MessageType == WebSocketMessageType.Close) break;
-                var text = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                WebSocketMessage message;
+                try
+                {
+                    message = await WebSocketMessageReader.ReadAsync(
+                        ws, _deps.Hub.MaxWsMessageBytes, ctx.RequestAborted).ConfigureAwait(false);
+                }
+                catch (WebSocketMessageException ex)
+                {
+                    await ws.CloseAsync(ex.CloseStatus, ex.Message, CancellationToken.None).ConfigureAwait(false);
+                    break;
+                }
+
+                if (message.IsClose) break;
+                var text = message.MessageType == WebSocketMessageType.Binary
+                    ? WsBytes.WsBytesToChannelStr(message.Payload)
+                    : Encoding.UTF8.GetString(message.Payload);
                 await HandleBrowserMessage(workerId, conn, role, text, budget, ctx.RequestAborted).ConfigureAwait(false);
             }
         }
@@ -1047,21 +1059,35 @@ public sealed partial class UtermServer : IAsyncDisposable
             },
             CancellationToken.None).ConfigureAwait(false);
 
-        var buffer = new byte[16384];
+        var decoder = new ControlFrameDecoder(new DecoderOptions
+        {
+            MaxControlPayloadBytes = _deps.Hub.MaxWsMessageBytes,
+            MaxBufferBytes = _deps.Hub.MaxWsMessageBytes,
+        });
         try
         {
             while (ws.State == WebSocketState.Open)
             {
-                var result = await ws.ReceiveAsync(buffer, ctx.RequestAborted).ConfigureAwait(false);
-                if (result.MessageType == WebSocketMessageType.Close) break;
-                var text = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                if (ControlChannelCodec.IsControlFrame(text))
+                WebSocketMessage message;
+                try
                 {
-                    // Fan-out snapshot/control to browsers (color e2e + resume paths).
-                    var dec = new ControlFrameDecoder();
-                    foreach (var chunk in dec.Feed(text))
+                    message = await WebSocketMessageReader.ReadAsync(
+                        ws, _deps.Hub.MaxWsMessageBytes, ctx.RequestAborted).ConfigureAwait(false);
+                }
+                catch (WebSocketMessageException ex)
+                {
+                    await ws.CloseAsync(ex.CloseStatus, ex.Message, CancellationToken.None).ConfigureAwait(false);
+                    break;
+                }
+
+                if (message.IsClose) break;
+                var channelText = message.MessageType == WebSocketMessageType.Binary
+                    ? WsBytes.WsBytesToChannelStr(message.Payload)
+                    : Encoding.UTF8.GetString(message.Payload);
+                foreach (var chunk in decoder.Feed(channelText))
+                {
+                    if (chunk is ControlChunk ctrl)
                     {
-                        if (chunk is not ControlChunk ctrl) continue;
                         var mtype = ctrl.Control.TryGetValue("type", out var t) ? t?.ToString() : null;
                         if (mtype == "snapshot")
                         {
@@ -1081,23 +1107,24 @@ public sealed partial class UtermServer : IAsyncDisposable
 
                         await _deps.Hub.Conn.BroadcastToBrowsersAsync(workerId, ctrl.Control, ctx.RequestAborted)
                             .ConfigureAwait(false);
+                        continue;
                     }
 
-                    continue;
-                }
+                    if (chunk is not DataChunk data || string.IsNullOrEmpty(data.Data)) continue;
 
-                // Raw terminal bytes → term control frames for every browser (Python/Go).
-                _deps.Hub.AppendEventData(workerId, "term", new Dictionary<string, object?> { ["data"] = text });
-                _deps.Hub.State.TouchActivity(workerId);
-                await _deps.Hub.Conn.BroadcastToBrowsersAsync(
-                    workerId,
-                    new Dictionary<string, object?>
-                    {
-                        ["type"] = "term",
-                        ["data"] = text,
-                        ["ts"] = _clock.Wall(),
-                    },
-                    ctx.RequestAborted).ConfigureAwait(false);
+                    // Raw terminal bytes → term control frames for every browser (Python/Go).
+                    _deps.Hub.AppendEventData(workerId, "term", new Dictionary<string, object?> { ["data"] = data.Data });
+                    _deps.Hub.State.TouchActivity(workerId);
+                    await _deps.Hub.Conn.BroadcastToBrowsersAsync(
+                        workerId,
+                        new Dictionary<string, object?>
+                        {
+                            ["type"] = "term",
+                            ["data"] = data.Data,
+                            ["ts"] = _clock.Wall(),
+                        },
+                        ctx.RequestAborted).ConfigureAwait(false);
+                }
             }
         }
         finally
