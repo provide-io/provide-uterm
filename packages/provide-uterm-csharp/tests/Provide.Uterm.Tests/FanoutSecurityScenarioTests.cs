@@ -120,6 +120,9 @@ public sealed class FanoutSecurityScenarioTests
     private static async Task<Observation> ExecuteRoute(JsonObject scenario, JsonObject input)
     {
         var groupInput = input["group"]!.AsObject();
+        var actor = input["actor"]!.AsObject();
+        var isAdmin = Flag(actor, "authenticated") && Strings(actor["roles"]).Contains("admin");
+        var (controller, fanoutHub) = BuildRoute(input, preseedGroup: !isAdmin);
         var config = UtermServerConfig.Default();
         config.FanoutAllowUnknownMembers = Flag(groupInput, "allow_unknown_members");
         if (Text(input["policy"]!.AsObject(), "action") != "allow")
@@ -127,12 +130,11 @@ public sealed class FanoutSecurityScenarioTests
         await using var server = new UtermServer(new ServerDeps
         {
             Hub = new TermHub(), Auth = new ScenarioAuthenticator(), Authz = new AuthorizationService(),
-            Config = config, Registry = new InMemorySessionRegistry(),
+            Config = config, Registry = new InMemorySessionRegistry(), Fanout = controller,
         });
         server.Build(["http://127.0.0.1:0"]);
         await server.StartAsync();
         using var http = new HttpClient { BaseAddress = new Uri(server.BaseAddress!) };
-        var actor = input["actor"]!.AsObject();
         if (Text(input, "operation") == "create")
         {
             using var response = await Send(http, HttpMethod.Post, "/api/fanout/groups",
@@ -142,7 +144,7 @@ public sealed class FanoutSecurityScenarioTests
         }
 
         var groupId = Text(groupInput, "id");
-        if (Flag(actor, "authenticated") && Strings(actor["roles"]).Contains("admin"))
+        if (isAdmin)
         {
             var creator = new JsonObject
             {
@@ -151,16 +153,29 @@ public sealed class FanoutSecurityScenarioTests
             };
             using var created = await Send(http, HttpMethod.Post, "/api/fanout/groups",
                 JsonSerializer.Serialize(new { name = "fixture-group", worker_ids = Strings(groupInput["members"]) }), creator);
-            if (created.StatusCode == HttpStatusCode.OK)
-            {
-                var body = JsonNode.Parse(await created.Content.ReadAsStringAsync())!.AsObject();
-                groupId = body["group_id"]!.GetValue<string>();
-            }
+            Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+            var body = JsonNode.Parse(await created.Content.ReadAsStringAsync())!.AsObject();
+            groupId = body["group_id"]!.GetValue<string>();
         }
         using var sent = await Send(http, HttpMethod.Post, $"/api/fanout/groups/{groupId}/send",
             JsonSerializer.Serialize(new { data = Text(input, "command") }), actor);
         var sentBody = await sent.Content.ReadAsStringAsync();
-        return Empty(scenario, (int)sent.StatusCode, Text(input, "command"), CanonicalRouteError(sent.StatusCode, sentBody));
+        var observation = Empty(
+            scenario, (int)sent.StatusCode, Text(input, "command"), CanonicalRouteError(sent.StatusCode, sentBody));
+        observation.DeliveredWorkers.AddRange(fanoutHub.Delivered);
+        observation.ObserverNotifications.AddRange(fanoutHub.Observers);
+
+        if (Text(input["policy"]!.AsObject(), "action") != "allow")
+        {
+            var stored = controller.GetGroup(groupId, Text(actor, "subject"));
+            Assert.NotNull(stored);
+            Assert.Equal(Strings(groupInput["members"]), stored.WorkerIds);
+            Assert.All(stored.WorkerIds, member => Assert.Contains(member, fanoutHub.ConnectedMembers));
+            Assert.Empty(fanoutHub.SendAttempts);
+            Assert.Empty(fanoutHub.Observers);
+        }
+
+        return observation;
     }
 
     private static async Task<HttpResponseMessage> Send(
@@ -202,6 +217,26 @@ public sealed class FanoutSecurityScenarioTests
         var controller = new Controller(hub, config);
         var group = Group(input);
         controller.CreateGroup(group, group.CreatedBy);
+        return (controller, hub);
+    }
+
+    private static (Controller Controller, ScenarioHub Hub) BuildRoute(JsonObject input, bool preseedGroup)
+    {
+        var workers = input["workers"]!.AsObject();
+        var members = Strings(input["group"]!["members"]);
+        var hub = new ScenarioHub(
+            Strings(workers["accepted_members"]), StringMap(workers["immediate_output"]),
+            Flag(workers, "continuous_output"));
+        var controller = new Controller(hub, new ControllerConfig
+        {
+            IdGen = () => "route-group",
+            Authorizer = new ScenarioAuthorizer(members),
+        });
+        if (preseedGroup)
+        {
+            var group = Group(input);
+            controller.CreateGroup(group, group.CreatedBy);
+        }
         return (controller, hub);
     }
 
@@ -302,12 +337,15 @@ public sealed class FanoutSecurityScenarioTests
         private readonly IReadOnlyDictionary<string, string> _output = output;
         private readonly bool _hangReads = hangReads;
         private readonly ConcurrentDictionary<string, ScenarioSubscription> _subscriptions = new();
+        public IReadOnlySet<string> ConnectedMembers => _accepted;
+        public List<string> SendAttempts { get; } = [];
         public List<string> Delivered { get; } = [];
         public List<string> Observers { get; } = [];
 
         public Task<bool> SendWorkerAsync(
             string workerId, IReadOnlyDictionary<string, object?> message, CancellationToken cancellationToken = default)
         {
+            lock (SendAttempts) SendAttempts.Add(workerId);
             if (!_accepted.Contains(workerId)) return Task.FromResult(false);
             lock (Delivered) Delivered.Add(workerId);
             if (_hangReads)

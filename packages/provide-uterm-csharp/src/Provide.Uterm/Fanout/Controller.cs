@@ -26,6 +26,7 @@ public interface IFanoutAuthorizer
 public sealed class FanoutAuthorizationException : InvalidOperationException
 {
     public FanoutAuthorizationException(string message) : base(message) { }
+    public FanoutAuthorizationException(string message, Exception innerException) : base(message, innerException) { }
 }
 
 public interface IGroupStore
@@ -196,7 +197,20 @@ public sealed class Controller
         {
             throw new FanoutAuthorizationException("fanout member authorizer is unavailable");
         }
-        if (!_authorizer.IsGlobalAdmin(principal))
+        bool isGlobalAdmin;
+        try
+        {
+            isGlobalAdmin = _authorizer.IsGlobalAdmin(principal);
+        }
+        catch (FanoutAuthorizationException)
+        {
+            throw;
+        }
+        catch (Exception error)
+        {
+            throw new FanoutAuthorizationException("fanout global-admin authorization failed", error);
+        }
+        if (!isGlobalAdmin)
         {
             throw new FanoutAuthorizationException("fanout requires a global admin principal");
         }
@@ -208,10 +222,21 @@ public sealed class Controller
         }
         var allowed = new List<string>();
         var refused = new List<string>();
-        foreach (var workerId in group.WorkerIds)
+        try
         {
-            if (_authorizer.CanReadMember(principal, workerId)) allowed.Add(workerId);
-            else refused.Add(workerId);
+            foreach (var workerId in group.WorkerIds)
+            {
+                if (_authorizer.CanReadMember(principal, workerId)) allowed.Add(workerId);
+                else refused.Add(workerId);
+            }
+        }
+        catch (FanoutAuthorizationException)
+        {
+            throw;
+        }
+        catch (Exception error)
+        {
+            throw new FanoutAuthorizationException("fanout member authorization failed", error);
         }
         var dispatchGroup = CopyGroupWithWorkers(group, allowed);
         var result = await SendGroupAsync(
