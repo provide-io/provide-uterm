@@ -10,6 +10,28 @@ namespace Provide.Uterm.Tests.Hub;
 public sealed class ResumeOwnershipTests
 {
     [Fact]
+    public void DirectRestorePublishesDashboardOwnershipExactlyOnce()
+    {
+        var changes = new List<(bool Enabled, string? Owner)>();
+        var hub = new TermHub(new TermHubConfig
+        {
+            OnHijackChanged = (_, enabled, owner) => changes.Add((enabled, owner)),
+        });
+        Assert.True(hub.Conn.RegisterWorker("w", new Socket()));
+        var original = new Socket();
+        var resumed = new Socket();
+        hub.Conn.RegisterBrowser("w", original, "admin");
+        hub.Conn.RegisterBrowser("w", resumed, "admin");
+        Assert.True(hub.Lease.TryAcquireWs("w", original).Ok);
+        var ownershipVersion = hub.Conn.CleanupBrowser("w", original)!.Value;
+        changes.Clear();
+
+        Assert.True(hub.Lease.TryRestoreWsOwnership("w", resumed, ownershipVersion));
+
+        Assert.Equal([(true, (string?)null)], changes);
+    }
+
+    [Fact]
     public void DisconnectedCurrentOwnerCanRestoreSameOwnershipVersion()
     {
         var hub = HubWithWorker();
