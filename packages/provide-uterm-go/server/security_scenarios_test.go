@@ -89,6 +89,10 @@ type semanticObservation struct {
 	ObserverNotifications []string          `json:"observer_notifications"`
 	FailedMembers         []string          `json:"failed_members"`
 	Output                map[string]string `json:"output"`
+	routeMemberStored     bool
+	routeGroupStored      bool
+	routeWorkerConnected  bool
+	routeObserverAttached bool
 }
 
 func semanticError(value string) *string { return &value }
@@ -143,6 +147,98 @@ func (h *semanticHub) Broadcast(_ context.Context, workerID string, message map[
 }
 
 func (h *semanticHub) EventBus() *hub.EventBus { return h.bus }
+
+type semanticRouteRecorder struct {
+	mu   sync.Mutex
+	sent []string
+}
+
+func (r *semanticRouteRecorder) SendText(_ context.Context, payload string) error {
+	r.mu.Lock()
+	r.sent = append(r.sent, payload)
+	r.mu.Unlock()
+	return nil
+}
+
+func (r *semanticRouteRecorder) count() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.sent)
+}
+
+type semanticRouteTracking struct {
+	workers          map[string]*semanticRouteRecorder
+	observers        map[string]*semanticRouteRecorder
+	memberStored     bool
+	workerConnected  bool
+	observerAttached bool
+}
+
+func trackSemanticRouteFanout(t *testing.T, ts *testServer, input semanticInput) *semanticRouteTracking {
+	t.Helper()
+	tracking := &semanticRouteTracking{
+		workers:          map[string]*semanticRouteRecorder{},
+		observers:        map[string]*semanticRouteRecorder{},
+		memberStored:     len(input.Group.Members) > 0,
+		workerConnected:  len(input.Workers.AcceptedMembers) > 0,
+		observerAttached: len(input.Group.Members) > 0,
+	}
+	accepted := map[string]bool{}
+	for _, workerID := range input.Workers.AcceptedMembers {
+		accepted[workerID] = true
+	}
+	for _, workerID := range input.Group.Members {
+		ts.reg.add(workerID, input.Group.Creator, "public")
+		if _, ok := ts.reg.GetDefinition(context.Background(), workerID); !ok {
+			tracking.memberStored = false
+		}
+		if accepted[workerID] {
+			worker := &semanticRouteRecorder{}
+			if _, err := ts.hub.RegisterWorker(context.Background(), workerID, worker); err != nil {
+				t.Fatalf("register semantic route worker %s: %v", workerID, err)
+			}
+			tracking.workers[workerID] = worker
+			state := ts.hub.Registry.Get(workerID)
+			if state == nil || state.WorkerWS != worker {
+				tracking.workerConnected = false
+			}
+		}
+		observer := &semanticRouteRecorder{}
+		if _, err := ts.hub.RegisterBrowser(context.Background(), workerID, observer, "admin", false); err != nil {
+			t.Fatalf("register semantic route observer %s: %v", workerID, err)
+		}
+		tracking.observers[workerID] = observer
+		state := ts.hub.Registry.Get(workerID)
+		if state == nil {
+			tracking.observerAttached = false
+		} else if _, ok := state.Browsers[observer]; !ok {
+			tracking.observerAttached = false
+		}
+	}
+	return tracking
+}
+
+func observeSemanticRoute(
+	s semanticScenario, recorderCode int, recorderBody string, tracking *semanticRouteTracking, groupStored bool,
+) semanticObservation {
+	observation := emptySemanticObservation(s, recorderCode, canonicalGoRouteError(recorderCode, recorderBody))
+	if tracking == nil {
+		return observation
+	}
+	observation.routeMemberStored = tracking.memberStored
+	observation.routeGroupStored = groupStored
+	observation.routeWorkerConnected = tracking.workerConnected
+	observation.routeObserverAttached = tracking.observerAttached
+	for _, workerID := range s.Input.Group.Members {
+		if worker := tracking.workers[workerID]; worker != nil && worker.count() > 0 {
+			observation.DeliveredWorkers = append(observation.DeliveredWorkers, workerID)
+		}
+		if observer := tracking.observers[workerID]; observer != nil && observer.count() > 0 {
+			observation.ObserverNotifications = append(observation.ObserverNotifications, workerID)
+		}
+	}
+	return observation
+}
 
 type semanticAuthorizer struct {
 	readable map[string]bool
@@ -247,6 +343,10 @@ func executeSemanticRoute(t *testing.T, s semanticScenario) semanticObservation 
 			cfg.Governance.PolicyWebhookURL = &url
 		}
 	})
+	var tracking *semanticRouteTracking
+	if input.Operation == "send" && input.Policy.Action != "allow" {
+		tracking = trackSemanticRouteFanout(t, ts, input)
+	}
 	if input.Operation == "create" {
 		body, _ := json.Marshal(map[string]any{"name": "fixture-group", "worker_ids": input.Group.Members})
 		recorder := ts.do("POST", "/api/fanout/groups", string(body), semanticHeaders(input.Actor))
@@ -263,9 +363,53 @@ func executeSemanticRoute(t *testing.T, s semanticScenario) semanticObservation 
 			input.Group.ID = response["group_id"].(string)
 		}
 	}
+	groupStored := ts.srv.fanout.GetGroup(input.Group.ID, input.Group.Creator) != nil
 	body, _ := json.Marshal(map[string]any{"data": input.Command})
 	recorder := ts.do("POST", "/api/fanout/groups/"+input.Group.ID+"/send", string(body), semanticHeaders(input.Actor))
-	return emptySemanticObservation(s, recorder.Code, canonicalGoRouteError(recorder.Code, recorder.Body.String()))
+	return observeSemanticRoute(s, recorder.Code, recorder.Body.String(), tracking, groupStored)
+}
+
+func TestSemanticConfiguredGovernanceRouteUsesLiveFanoutState(t *testing.T) {
+	scenario := semanticScenario{
+		ID: "configured-governance-live-state",
+		Input: semanticInput{
+			Operation: "send",
+			Actor: semanticActor{
+				Subject:       "admin",
+				Authenticated: true,
+				Roles:         []string{"admin"},
+			},
+			Group: semanticGroup{
+				ID:      "g1",
+				Creator: "admin",
+				Members: []string{"w1"},
+			},
+			Command: "rm -rf /",
+		},
+		Backends: map[string]semanticClaim{
+			"go": {Status: "unsupported_fail_closed"},
+		},
+	}
+	scenario.Input.Policy.Action = "deny"
+	scenario.Input.Workers.AcceptedMembers = []string{"w1"}
+
+	observation := executeSemanticRoute(t, scenario)
+
+	if !observation.routeMemberStored || !observation.routeGroupStored ||
+		!observation.routeWorkerConnected || !observation.routeObserverAttached {
+		t.Fatalf("route evidence = member stored:%t group stored:%t worker connected:%t observer attached:%t",
+			observation.routeMemberStored, observation.routeGroupStored,
+			observation.routeWorkerConnected, observation.routeObserverAttached)
+	}
+	if observation.StatusCode != 501 {
+		t.Fatalf("status = %d, want 501", observation.StatusCode)
+	}
+	if len(observation.DeliveredWorkers) != 0 {
+		t.Fatalf("delivered workers = %v, want none", observation.DeliveredWorkers)
+	}
+	if len(observation.ObserverNotifications) != 0 {
+		t.Fatalf("observer notifications = %v, want none", observation.ObserverNotifications)
+	}
 }
 
 func executeSemanticStore(t *testing.T, s semanticScenario) semanticObservation {
