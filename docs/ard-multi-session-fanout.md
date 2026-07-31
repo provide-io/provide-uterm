@@ -261,6 +261,11 @@ administrator at the server, regardless of any client-side tool visibility.
 
 ## Testing
 
+The cross-language security contract is data in
+`spec/fanout_security_scenarios.json`. The executable comparator
+`scripts/run_fanout_security_scenarios.py` runs every applicable native adapter
+and rejects missing, extra, skipped, or mismatched observations.
+
 - `test_fanout_parallel_send.py` — fan-out to 5 sessions, all workers connected, all receive input, results aggregated correctly.
 - `test_fanout_partial_failure.py` — 2 of 5 workers not connected; `failed_sessions` populated, others succeed.
 - `test_fanout_sequential_stop_on_error.py` — sequential mode halts after first session output matches error pattern.

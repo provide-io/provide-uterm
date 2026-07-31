@@ -151,6 +151,22 @@ public sealed class FanoutExecutionTests
     }
 
     [Fact]
+    public async Task Parallel_Subscription_Preparation_Failure_Is_Isolated_And_Closes_All_Opened_Handles_Once()
+    {
+        var hub = new PreparationFailureHub("w2");
+        var controller = NewController(hub, "parallel", ["w1", "w2", "w3"]);
+
+        var result = await controller.SendAsync("g", "id", Admin("alice"), 5, 100);
+
+        Assert.Equal(["w2"], result.FailedSessions);
+        Assert.Equal(["w1", "w3"], hub.SentWorkers);
+        Assert.DoesNotContain("w2", hub.SentWorkers);
+        Assert.Equal(["w1", "w2", "w3"], hub.SubscriptionAttempts);
+        Assert.Equal(1, hub.DisposeCounts["w1"]);
+        Assert.Equal(1, hub.DisposeCounts["w3"]);
+    }
+
+    [Fact]
     public async Task Sequential_Collects_Each_Before_Sending_Next_And_Stops_On_Error()
     {
         var hub = new EventHub(new Dictionary<string, string> { ["w1"] = "ERROR", ["w2"] = "never" });
@@ -362,6 +378,58 @@ public sealed class FanoutExecutionTests
         }
 
         public void Fault(Exception error) => _never.TrySetException(error);
+    }
+
+    private sealed class PreparationFailureHub : IFanoutHub
+    {
+        private readonly string _failedWorker;
+        public List<string> SubscriptionAttempts { get; } = [];
+        public List<string> SentWorkers { get; } = [];
+        public ConcurrentDictionary<string, int> DisposeCounts { get; } = new();
+
+        public PreparationFailureHub(string failedWorker) => _failedWorker = failedWorker;
+
+        public Task<bool> SendWorkerAsync(
+            string workerId, IReadOnlyDictionary<string, object?> msg, CancellationToken ct = default)
+        {
+            SentWorkers.Add(workerId);
+            return Task.FromResult(true);
+        }
+
+        public Task BroadcastAsync(
+            string workerId, IReadOnlyDictionary<string, object?> msg, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public IFanoutOutputSubscription SubscribeOutput(string workerId)
+        {
+            SubscriptionAttempts.Add(workerId);
+            if (workerId == _failedWorker)
+            {
+                throw new InvalidOperationException("capture unavailable");
+            }
+            return new TrackingSubscription(workerId, DisposeCounts);
+        }
+    }
+
+    private sealed class TrackingSubscription : IFanoutOutputSubscription
+    {
+        private readonly string _workerId;
+        private readonly ConcurrentDictionary<string, int> _disposeCounts;
+
+        public TrackingSubscription(string workerId, ConcurrentDictionary<string, int> disposeCounts)
+        {
+            _workerId = workerId;
+            _disposeCounts = disposeCounts;
+        }
+
+        public ValueTask<FanoutOutputEvent?> ReadAsync(CancellationToken ct) =>
+            ValueTask.FromResult<FanoutOutputEvent?>(null);
+
+        public ValueTask DisposeAsync()
+        {
+            _disposeCounts.AddOrUpdate(_workerId, 1, (_, count) => count + 1);
+            return ValueTask.CompletedTask;
+        }
     }
 
     private sealed class SlowReadHub : IFanoutHub

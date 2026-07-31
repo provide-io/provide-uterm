@@ -61,6 +61,7 @@ def _python(root: Path) -> DriverSpec:
         language="python",
         command=(sys.executable, str(root / "conformance/live/drivers/python/driver.py")),
         cwd=root,
+        client_capabilities=("status.observed", "hijack.ws", "hijack.rest", "fanout.rest.strict"),
     )
 
 
@@ -69,6 +70,7 @@ def _typescript(root: Path) -> DriverSpec:
         language="typescript",
         command=("node", str(root / "packages/provide-uterm-ts/bin/uterm-conformance.mjs")),
         cwd=root,
+        client_capabilities=("hijack.rest", "status.observed", "fanout.rest.strict"),
     )
 
 
@@ -83,7 +85,20 @@ def _go(root: Path) -> DriverSpec:
     package = root / "packages/provide-uterm-go"
     built = package / "bin/uterm-live-driver"
     command = (str(built),) if built.exists() else ("go", "run", "./cmd/uterm-live-driver")
-    return DriverSpec(language="go", command=command, cwd=package, env={"GOWORK": "off"})
+    return DriverSpec(
+        language="go",
+        command=command,
+        cwd=package,
+        env={"GOWORK": "off"},
+        client_capabilities=(
+            "hijack.rest",
+            "sessions.rest",
+            "http.raw",
+            "auth.dev_token",
+            "status.observed",
+            "fanout.rest.strict",
+        ),
+    )
 
 
 def _csharp(root: Path) -> DriverSpec:
@@ -91,6 +106,14 @@ def _csharp(root: Path) -> DriverSpec:
         language="csharp",
         command=("dotnet", "run", "--project", "src/Provide.Uterm.LiveDriver", "-c", "Release", "--"),
         cwd=root / "packages/provide-uterm-csharp",
+        client_capabilities=(
+            "hijack.rest",
+            "sessions.rest",
+            "http.raw",
+            "auth.dev_token",
+            "status.observed",
+            "fanout.rest.strict",
+        ),
     )
 
 

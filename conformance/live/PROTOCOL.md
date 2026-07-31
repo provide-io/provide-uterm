@@ -256,11 +256,13 @@ into a load test, and a scenario runs in every cell of the matrix.
 
 ## Capabilities
 
-A scenario may require capabilities (`"requires": ["hijack.rest"]`). A driver
-reports what it has in its `serve` line and in its result. When a required
-capability is missing the driver reports `unsupported` and the harness records
-the cell as unsupported rather than failing it — and prints it, because a
-silently skipped cell is how a matrix comes to mean nothing.
+A scenario may require capabilities (`"requires": ["hijack.rest"]`). Each
+registered client has a static capability set, a server reports its set in the
+`serve` line, and the client repeats its set in its result. The harness checks
+the static client set and announced server set before launching the client, then
+validates the returned client set again. When a required capability is missing,
+the harness records the cell as unsupported rather than failing it — and prints
+it, because a silently skipped cell is how a matrix comes to mean nothing.
 
 ## Registration
 

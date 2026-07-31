@@ -69,15 +69,16 @@ request parsing or group lookup.
 `conformance/live/scenarios/010_fanout_strict_admission.json` executes the
 strict-default REST contract across the served Python, Go, and C# backends
 with clients from all four languages.
-The harness requires both the selected client result and the running server's
-announcement to contain `fanout.rest.strict`. A manually selected TypeScript
-server therefore produces an explicit unsupported/unserved cell before any
-client process is launched.
-The richer cases that require mid-scenario authorization mutation or policy
-infrastructure are backend-local executable tests indexed by
-`spec/fanout_security_coverage.json`; its validator rejects missing evidence
-and false capability claims. TypeScript deliberately does not advertise live
-fan-out until the Node server mounts the route module.
+The harness requires the selected client's registered static capabilities and
+the running server's announcement to contain `fanout.rest.strict` before it
+launches the client. It validates the returned client capabilities again after
+the run. A manually selected TypeScript server therefore produces an explicit
+unsupported/unserved cell before any client process is launched.
+The richer cases that require mid-scenario authorization mutation, policy
+infrastructure, capture lifecycle checks, store concurrency, or deadline
+control are defined by `spec/fanout_security_scenarios.json` and executed by
+`scripts/run_fanout_security_scenarios.py`. TypeScript deliberately does not
+advertise live fan-out until the Node server mounts the route module.
 
 ## Hijack control
 

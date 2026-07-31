@@ -179,6 +179,15 @@ def _run_cell(
             UNSUPPORTED,
             detail=f"{server.language} server does not serve required capabilities: {', '.join(missing)}",
         )
+    missing = _missing_capabilities(scenario.requires, client.client_capabilities)
+    if missing:
+        return Cell(
+            scenario.id,
+            server.language,
+            client.language,
+            UNSUPPORTED,
+            detail=f"{client.language} client does not support required capabilities: {', '.join(missing)}",
+        )
     try:
         result = mechanics.run_client(
             client,
