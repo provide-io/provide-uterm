@@ -85,9 +85,25 @@ class FakeController implements FanoutRoutesController {
     groupId: string,
     data: string,
     principal: string,
-    options: { quiesceMs?: number | undefined; maxResponseMs?: number | undefined },
+    options: {
+      quiesceMs?: number | undefined;
+      maxResponseMs?: number | undefined;
+      memberWorkerIds?: string[] | undefined;
+      refusedWorkerIds?: string[] | undefined;
+    },
   ): Promise<FanOutResult> {
-    this.calls.push(["send", groupId, data, principal, options.quiesceMs ?? null, options.maxResponseMs ?? null]);
+    const call: unknown[] = [
+      "send",
+      groupId,
+      data,
+      principal,
+      options.quiesceMs ?? null,
+      options.maxResponseMs ?? null,
+    ];
+    if (options.memberWorkerIds !== undefined || options.refusedWorkerIds !== undefined) {
+      call.push(options.memberWorkerIds ?? null, options.refusedWorkerIds ?? null);
+    }
+    this.calls.push(call);
     return {
       groupId,
       sendId: "send-1",
@@ -105,7 +121,9 @@ class FakeController implements FanoutRoutesController {
 }
 
 /** The routes, plus everything behind them. */
-function harness(options: { controller?: FanoutRoutesController; readable?: string[] } = {}) {
+function harness(
+  options: { controller?: FanoutRoutesController; readable?: string[]; allowUnknownMembers?: boolean } = {},
+) {
   const controller = options.controller ?? new FakeController();
   const known = new Set([...(options.readable ?? ["w1", "w2", "w3"]), "secret"]);
   const allowed = new Set(options.readable ?? ["w1", "w2", "w3"]);
@@ -119,6 +137,9 @@ function harness(options: { controller?: FanoutRoutesController; readable?: stri
     authz: {
       canReadSession: async (_principal, definition) => allowed.has((definition as { workerId: string }).workerId),
     },
+    ...(options.allowUnknownMembers === undefined
+      ? {}
+      : { allowUnknownMembers: options.allowUnknownMembers }),
     audit: (event, record) => audited.push({ event, ...record }),
     now: () => 1000.0,
     newId: () => {
@@ -233,10 +254,15 @@ describe("creating a group", () => {
     expect(golden.create_forbidden.body.error).toContain("secret");
   });
 
-  it("does not gate a session it has never heard of", async () => {
-    // An unregistered id has no definition to authorise against, and the
-    // reference lets it through rather than guessing.
-    const { routes } = harness();
+  it("rejects a session it has never heard of by default", async () => {
+    const { routes, controller } = harness();
+    const response = await routes.createGroup(request(PRINCIPAL, { worker_ids: ["never-registered"] }));
+    expect(response).toStrictEqual({ status: 400, body: { error: "unknown fan-out session: never-registered" } });
+    expect(controller.groups.size).toBe(0);
+  });
+
+  it("allows dormant members only when explicitly configured", async () => {
+    const { routes } = harness({ allowUnknownMembers: true });
     const response = await routes.createGroup(request(PRINCIPAL, { worker_ids: ["never-registered"] }));
     expect(response.status).toBe(golden.create_unknown_session.status);
     expect((response.body as Record<string, unknown>).session_count).toBe(
@@ -440,7 +466,7 @@ describe("sending to a group", () => {
   it("passes the caller's timing overrides through", async () => {
     const { routes, controller } = withGroup();
     await routes.sendToGroup(request(PRINCIPAL, { data: "x", quiesce_ms: 50, max_response_ms: 900 }), "g1");
-    expect(controller.calls.at(-1)).toStrictEqual(["send", "g1", "x", PRINCIPAL, 50, 900]);
+    expect(controller.calls.at(-1)).toStrictEqual(["send", "g1", "x", PRINCIPAL, 50, 900, ["w1", "w2"], []]);
   });
 
   it("leaves the timings unset when the caller gives none", async () => {
@@ -454,6 +480,35 @@ describe("sending to a group", () => {
       PRINCIPAL,
       golden.send_defaults_call[4],
       golden.send_defaults_call[5],
+      ["w1", "w2"],
+      [],
+    ]);
+  });
+
+  it("re-resolves and authorizes every member before dispatch", async () => {
+    const harnessed = harness({ readable: ["w1"] });
+    harnessed.controller.groups.set(
+      "g1",
+      fanOutGroup({
+        groupId: "g1",
+        name: "private-member",
+        workerIds: ["w1", "secret"],
+        createdBy: PRINCIPAL,
+        createdAt: 1000,
+      }),
+    );
+
+    await harnessed.routes.sendToGroup(request(PRINCIPAL, { data: "id" }), "g1");
+
+    expect(harnessed.controller.calls.at(-1)).toStrictEqual([
+      "send",
+      "g1",
+      "id",
+      PRINCIPAL,
+      null,
+      null,
+      ["w1"],
+      ["secret"],
     ]);
   });
 });

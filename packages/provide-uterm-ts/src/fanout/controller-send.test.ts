@@ -63,6 +63,24 @@ async function seed(
 }
 
 describe("FanOutController parallel send", () => {
+  it("never sends to a member whose current session authorization was revoked", async () => {
+    const hub = new FakeHub();
+    const readable = new Set(["w1"]);
+    const controller = new FanOutController({
+      hub,
+      now: () => NOW,
+      newId: () => "id-1",
+      resolveSession: async (workerId) => ({ workerId }),
+      canReadSession: async (_principal, definition) => readable.has((definition as { workerId: string }).workerId),
+    });
+    await seed(controller, ["w1", "w2"]);
+
+    const result = await controller.send("g1", "uptime", "alice");
+
+    expect(hub.sent.map((entry) => entry.workerId)).toStrictEqual(["w1"]);
+    expect(result.failedSessions).toStrictEqual(["w2"]);
+  });
+
   it("sends to every session and reports each one", async () => {
     const { hub, controller } = build();
     await seed(controller, ["w1", "w2"]);

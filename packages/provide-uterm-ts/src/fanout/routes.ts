@@ -55,7 +55,12 @@ export interface FanoutRoutesController {
     groupId: string,
     data: string,
     principal: string,
-    options: { quiesceMs?: number | undefined; maxResponseMs?: number | undefined },
+    options: {
+      quiesceMs?: number | undefined;
+      maxResponseMs?: number | undefined;
+      memberWorkerIds?: string[] | undefined;
+      refusedWorkerIds?: string[] | undefined;
+    },
   ): Promise<FanOutResult>;
 }
 
@@ -73,6 +78,8 @@ export interface FanoutRoutesOptions {
   now?: () => number;
   /** Identifier source for new groups. */
   newId?: () => string;
+  /** Permit dormant unknown members at creation. Defaults to strict refusal. */
+  allowUnknownMembers?: boolean;
 }
 
 /** The handlers, one per route. */
@@ -200,15 +207,16 @@ export function createFanoutRoutes(options: FanoutRoutesOptions): FanoutRoutes {
       const workerIds = field(body, "worker_ids", isStringArray) ?? [];
       const name = field(body, "name", isString) ?? "";
 
-      // Per session, and only for sessions that are actually known: an
-      // unregistered id has no definition to authorise against, and the
-      // reference lets it through rather than guessing.
+      // Strict by default: dormant members require an explicit opt-in, while
+      // every known member always requires current session access.
       for (const workerId of workerIds) {
         const definition = await options.registry.getDefinition(workerId);
-        if (definition !== undefined && definition !== null) {
-          if (!(await options.authz.canReadSession(request.principal, definition))) {
-            return refusal(403, `forbidden: no read access to session ${workerId}`);
+        if (definition === undefined || definition === null) {
+          if (options.allowUnknownMembers !== true) {
+            return refusal(400, `unknown fan-out session: ${workerId}`);
           }
+        } else if (!(await options.authz.canReadSession(request.principal, definition))) {
+          return refusal(403, `forbidden: no read access to session ${workerId}`);
         }
       }
 
@@ -296,11 +304,31 @@ export function createFanoutRoutes(options: FanoutRoutesOptions): FanoutRoutes {
       }
       const body = request.body;
       const data = field(body, "data", isString) ?? "";
+      const memberWorkerIds: string[] = [];
+      const refusedWorkerIds: string[] = [];
+      for (const workerId of existing.workerIds) {
+        try {
+          const definition = await options.registry.getDefinition(workerId);
+          if (
+            definition !== undefined &&
+            definition !== null &&
+            (await options.authz.canReadSession(request.principal, definition))
+          ) {
+            memberWorkerIds.push(workerId);
+          } else {
+            refusedWorkerIds.push(workerId);
+          }
+        } catch {
+          refusedWorkerIds.push(workerId);
+        }
+      }
       // Left unset rather than defaulted: unset means "use the group's own",
       // which is not the same as zero.
       const result = await ctrl.send(groupId, data, principal, {
         quiesceMs: field(body, "quiesce_ms", isNumber),
         maxResponseMs: field(body, "max_response_ms", isNumber),
+        memberWorkerIds,
+        refusedWorkerIds,
       });
       record("fanout.send", principal, {
         group_id: groupId,

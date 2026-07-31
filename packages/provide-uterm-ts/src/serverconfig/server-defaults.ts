@@ -78,6 +78,7 @@ export const SERVER_CONFIG_DEFAULTS: ServerConfigDocument = deepFreeze({
     reap_retention_s: 604800,
   },
   environment: "production",
+  fanout_allow_unknown_members: false,
   governance: {
     authz_webhook_secret: null,
     authz_webhook_timeout_s: 2.0,
@@ -227,6 +228,7 @@ export const SERVER_CONFIG_SECTIONS: readonly string[] = [
 export const SERVER_CONFIG_TOP_LEVEL: readonly string[] = [
   "browser_rate_limit_per_sec",
   "environment",
+  "fanout_allow_unknown_members",
   "max_connections_per_principal",
   "max_workers",
   "rest_acquire_rate_limit_per_sec",
