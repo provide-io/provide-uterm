@@ -1,2 +1,3 @@
 libuterm_capture.so
 libuterm_capture.dylib
+test_capture_writer
