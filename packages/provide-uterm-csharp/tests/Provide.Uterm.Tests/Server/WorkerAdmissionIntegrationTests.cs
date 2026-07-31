@@ -18,6 +18,28 @@ public sealed class WorkerAdmissionIntegrationTests
     [Theory]
     [InlineData("/ws/worker/rejected/term")]
     [InlineData("/tunnel/rejected")]
+    public async Task InvalidBearerRemainsHttp401BeforeUpgrade(string path)
+    {
+        var fixture = await BootAtCapacityAsync();
+        await using var server = fixture.Server;
+        using var http = new HttpClient();
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            new Uri(fixture.WsBase.Replace("ws://", "http://", StringComparison.Ordinal) + path));
+        request.Headers.TryAddWithoutValidation("Connection", "Upgrade");
+        request.Headers.TryAddWithoutValidation("Upgrade", "websocket");
+        request.Headers.TryAddWithoutValidation("Sec-WebSocket-Version", "13");
+        request.Headers.TryAddWithoutValidation("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==");
+        request.Headers.TryAddWithoutValidation("Authorization", "Bearer wrong");
+
+        using var response = await http.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("/ws/worker/rejected/term")]
+    [InlineData("/tunnel/rejected")]
     public async Task Endpoint_ClosesWhenWorkerRegistrationIsRefused(string path)
     {
         var fixture = await BootAtCapacityAsync();

@@ -347,15 +347,12 @@ public sealed partial class UtermServer
             return;
         }
 
-        if (!string.IsNullOrEmpty(_deps.Hub.WorkerToken))
+        if (!WorkerBearerAuthentication.IsAuthorized(
+                ctx.Request.Headers.Authorization.ToString(),
+                _deps.Hub.WorkerToken))
         {
-            var auth = ctx.Request.Headers.Authorization.ToString();
-            var expected = "Bearer " + _deps.Hub.WorkerToken;
-            if (!string.Equals(auth, expected, StringComparison.Ordinal))
-            {
-                ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                return;
-            }
+            ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return;
         }
 
         using var ws = await ctx.WebSockets.AcceptWebSocketAsync().ConfigureAwait(false);
