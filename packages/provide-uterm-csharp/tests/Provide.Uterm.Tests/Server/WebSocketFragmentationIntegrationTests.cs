@@ -74,6 +74,26 @@ public sealed class WebSocketFragmentationIntegrationTests
         Assert.Contains("tunnel-data", await ReceiveUntilAsync(browser, "tunnel-data"));
     }
 
+    [Theory]
+    [InlineData("browser")]
+    [InlineData("worker")]
+    [InlineData("tunnel")]
+    public async Task ReceiveLoopsAcknowledgePeerClose(string endpoint)
+    {
+        var fixture = await BootAsync("close-ack-" + endpoint);
+        await using var server = fixture.Server;
+        using var socket = endpoint == "browser"
+            ? await ConnectBrowserAsync(fixture)
+            : await ConnectWorkerEndpointAsync(fixture, endpoint);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        await socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "bye", timeout.Token);
+        var response = await WebSocketMessageReader.ReadAsync(socket, 1024, timeout.Token);
+
+        Assert.True(response.IsClose);
+        Assert.Equal(WebSocketCloseStatus.NormalClosure, response.CloseStatus);
+    }
+
     private static async Task SendFragmentedAsync(
         ClientWebSocket socket, byte[] payload, WebSocketMessageType messageType)
     {
@@ -106,6 +126,16 @@ public sealed class WebSocketFragmentationIntegrationTests
         socket.Options.SetRequestHeader("Authorization", "Bearer " + fixture.BrowserToken);
         await socket.ConnectAsync(fixture.BrowserUri, CancellationToken.None);
         for (var i = 0; i < 3; i++) await ReceiveTextAsync(socket);
+        return socket;
+    }
+
+    private static async Task<ClientWebSocket> ConnectWorkerEndpointAsync(Fixture fixture, string endpoint)
+    {
+        var socket = new ClientWebSocket();
+        socket.Options.SetRequestHeader("Authorization", "Bearer " + fixture.WorkerToken);
+        await socket.ConnectAsync(
+            endpoint == "worker" ? fixture.WorkerUri : fixture.TunnelUri,
+            CancellationToken.None);
         return socket;
     }
 

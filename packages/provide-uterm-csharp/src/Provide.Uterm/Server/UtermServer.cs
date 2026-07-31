@@ -682,7 +682,8 @@ public sealed partial class UtermServer : IAsyncDisposable
         }
         catch (BrowserRegistrationException ex)
         {
-            await ws.CloseAsync((WebSocketCloseStatus)ex.CloseCode, ex.Message, CancellationToken.None)
+            await WebSocketCloseHandler.CloseAndTerminateAsync(
+                    ws, (WebSocketCloseStatus)ex.CloseCode, ex.Message)
                 .ConfigureAwait(false);
             return;
         }
@@ -754,11 +755,20 @@ public sealed partial class UtermServer : IAsyncDisposable
                 }
                 catch (WebSocketMessageException ex)
                 {
-                    await ws.CloseAsync(ex.CloseStatus, ex.Message, CancellationToken.None).ConfigureAwait(false);
+                    await WebSocketCloseHandler.CloseAndTerminateAsync(ws, ex.CloseStatus, ex.Message)
+                        .ConfigureAwait(false);
                     break;
                 }
 
-                if (message.IsClose) break;
+                if (message.IsClose)
+                {
+                    await WebSocketCloseHandler.CloseAndTerminateAsync(
+                            ws,
+                            message.CloseStatus ?? WebSocketCloseStatus.NormalClosure,
+                            message.CloseStatusDescription)
+                        .ConfigureAwait(false);
+                    break;
+                }
                 var text = message.MessageType == WebSocketMessageType.Binary
                     ? WsBytes.WsBytesToChannelStr(message.Payload)
                     : Encoding.UTF8.GetString(message.Payload);
@@ -803,11 +813,9 @@ public sealed partial class UtermServer : IAsyncDisposable
                 // best-effort on disconnect
             }
 
-            if (ws.State == WebSocketState.Open)
-            {
-                await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye", CancellationToken.None)
-                    .ConfigureAwait(false);
-            }
+            await WebSocketCloseHandler.CloseAndTerminateAsync(
+                    ws, WebSocketCloseStatus.NormalClosure, "bye")
+                .ConfigureAwait(false);
         }
     }
 
@@ -1127,10 +1135,9 @@ public sealed partial class UtermServer : IAsyncDisposable
         var hadWorkerState = _deps.Hub.Registry.Contains(workerId);
         if (!_deps.Hub.Conn.RegisterWorker(workerId, conn))
         {
-            await ws.CloseAsync(
-                WebSocketCloseStatus.PolicyViolation,
-                "worker registration rejected",
-                CancellationToken.None).ConfigureAwait(false);
+            await WebSocketCloseHandler.CloseAndTerminateAsync(
+                    ws, WebSocketCloseStatus.PolicyViolation, "worker registration rejected")
+                .ConfigureAwait(false);
             return;
         }
 
@@ -1172,11 +1179,20 @@ public sealed partial class UtermServer : IAsyncDisposable
                 }
                 catch (WebSocketMessageException ex)
                 {
-                    await ws.CloseAsync(ex.CloseStatus, ex.Message, CancellationToken.None).ConfigureAwait(false);
+                    await WebSocketCloseHandler.CloseAndTerminateAsync(ws, ex.CloseStatus, ex.Message)
+                        .ConfigureAwait(false);
                     break;
                 }
 
-                if (message.IsClose) break;
+                if (message.IsClose)
+                {
+                    await WebSocketCloseHandler.CloseAndTerminateAsync(
+                            ws,
+                            message.CloseStatus ?? WebSocketCloseStatus.NormalClosure,
+                            message.CloseStatusDescription)
+                        .ConfigureAwait(false);
+                    break;
+                }
                 var channelText = message.MessageType == WebSocketMessageType.Binary
                     ? WsBytes.WsBytesToChannelStr(message.Payload)
                     : Encoding.UTF8.GetString(message.Payload);
@@ -1268,6 +1284,10 @@ public sealed partial class UtermServer : IAsyncDisposable
                     // best-effort on worker teardown
                 }
             }
+
+            await WebSocketCloseHandler.CloseAndTerminateAsync(
+                    ws, WebSocketCloseStatus.NormalClosure, "bye")
+                .ConfigureAwait(false);
         }
     }
 
