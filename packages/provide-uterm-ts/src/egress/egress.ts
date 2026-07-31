@@ -193,7 +193,9 @@ function isSharedAddressSpace(address: IpAddress): boolean {
   }
   // 100.64.0.0/10 — the /10 puts the boundary inside the second octet, so
   // 100.63.255.255 and 100.128.0.0 are both outside it.
-  const second = address.packed[1] ?? 0;
+  // `IpAddress` guarantees four packed bytes for IPv4, so there is no
+  // meaningful short-array fallback to exercise here.
+  const second = address.packed[1] as number;
   return address.packed[0] === 100 && second >= 64 && second <= 127;
 }
 

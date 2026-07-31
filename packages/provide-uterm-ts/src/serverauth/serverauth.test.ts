@@ -301,8 +301,8 @@ describe("applyCfAccessTeamDomain", () => {
   // Load_FromToml_BindsCfAccessTeamDomainAndAppliesItsFill, and Python's
   // test_cf_access_team_domain_* tests in test_config_schema.py.
 
-  it("fills empty jwt_jwks_url and jwt_issuer", () => {
-    const auth: Record<string, unknown> = { cf_access_team_domain: "myteam", jwt_issuer: "" };
+  it("fills omitted jwt_jwks_url and jwt_issuer", () => {
+    const auth: Record<string, unknown> = { cf_access_team_domain: "myteam" };
     applyCfAccessTeamDomain(auth);
     expect(auth.jwt_jwks_url).toBe("https://myteam.cloudflareaccess.com/cdn-cgi/access/certs");
     expect(auth.jwt_issuer).toBe("https://myteam.cloudflareaccess.com");
@@ -323,6 +323,18 @@ describe("applyCfAccessTeamDomain", () => {
     const auth: Record<string, unknown> = { cf_access_team_domain: "https://other.cloudflareaccess.com/", jwt_issuer: "" };
     applyCfAccessTeamDomain(auth);
     expect(auth.jwt_issuer).toBe("https://other.cloudflareaccess.com");
+  });
+
+  it("does not synthesize endpoints when normalization removes the whole team", () => {
+    const auth: Record<string, unknown> = {
+      cf_access_team_domain: "https://.cloudflareaccess.com/",
+      jwt_issuer: "",
+    };
+    applyCfAccessTeamDomain(auth);
+    expect(auth).toStrictEqual({
+      cf_access_team_domain: "https://.cloudflareaccess.com/",
+      jwt_issuer: "",
+    });
   });
 
   it("does nothing when no team domain is configured", () => {

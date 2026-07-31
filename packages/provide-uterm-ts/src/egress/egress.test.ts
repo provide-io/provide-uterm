@@ -241,6 +241,10 @@ describe("classifyEgressAddress", () => {
     // 100.64.0.0/10: the /10 puts the boundary inside the second octet, so an
     // address whose *first* octet is not 100 must never be caught by it, even
     // when the second octet is inside [64, 127].
+    expect(classifyEgressAddress(ipAddress("100.64.0.0") as IpAddress)).toBe("internal");
+    expect(classifyEgressAddress(ipAddress("100.127.255.255") as IpAddress)).toBe("internal");
+    expect(classifyEgressAddress(ipAddress("100.63.255.255") as IpAddress)).toBe("public");
+    expect(classifyEgressAddress(ipAddress("100.128.0.0") as IpAddress)).toBe("public");
     expect(classifyEgressAddress(ipAddress("101.64.0.1") as IpAddress)).toBe("public");
   });
 });
