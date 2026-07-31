@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Reproduce unbounded pause and compensation
+## Task 1: Reproduce unbounded pause and compensation
 
 **Files:**
 - Modify: `packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Server/ResumeLifecycleIntegrationTests.cs`
@@ -26,7 +26,7 @@ dotnet test packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Provide.Uter
 
 Expected: FAIL because cancellation-ignoring sends do not complete within the test deadline.
 
-### Task 2: Bound lease worker sends and reconcile failures
+## Task 2: Bound lease worker sends and reconcile failures
 
 **Files:**
 - Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Hub/Lease.cs`
@@ -50,7 +50,7 @@ private async Task ReconcileFailedWorkerSendAsync(string workerId, IWorkerWs wor
 - [ ] In `ResolvePauseObligationAsync`, bound compensating resume; on failure observe the eventual task, abort/reconcile the captured worker, and always clear only the matching repair reservation.
 - [ ] Run the eight acquisition rows and the complete `ResumeLifecycleIntegrationTests`; expect all green.
 
-### Task 3: Reproduce stale ordinary ownership notifications
+## Task 3: Reproduce stale ordinary ownership notifications
 
 **Files:**
 - Modify: `packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Server/ResumeLifecycleIntegrationTests.cs`
@@ -61,7 +61,7 @@ private async Task ReconcileFailedWorkerSendAsync(string workerId, IWorkerWs wor
 - [ ] Add a never-hijacked worker reconciliation test asserting `worker_disconnected` is emitted but `OnHijackChanged(false)` is not.
 - [ ] Run the four notification tests and verify at least one fails against unconditional handler/connection notification.
 
-### Task 4: Introduce typed publication tokens and validate every callback
+## Task 4: Introduce typed publication tokens and validate every callback
 
 **Files:**
 - Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Hub/Store.cs`
@@ -78,7 +78,7 @@ private async Task ReconcileFailedWorkerSendAsync(string workerId, IWorkerWs wor
 - [ ] For disconnect, create/publish a released token only when `WasHijacked` is true.
 - [ ] Run notification tests, prior delayed-disconnect coverage, and all lifecycle tests; expect green.
 
-### Task 5: Verify and commit
+## Task 5: Verify and commit
 
 **Files:**
 - Verify all modified files.

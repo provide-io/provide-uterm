@@ -498,6 +498,11 @@ jobs:
       # are compared, and which drivers exist. A broken harness would agree
       # with itself in every cell.
       - run: uv run pytest -q tests/conformance/live/ -o addopts=--import-mode=importlib
+      # Security-sensitive cross-language contracts execute their native
+      # adapters here. Keeping these outside the default Python testpaths must
+      # not let a missing scenario category or a backend observation drift
+      # pass CI unnoticed.
+      - run: uv run pytest -q tests/conformance/test_fanout_security_coverage.py -o addopts=--import-mode=importlib
       # Every client against every server. Prints every gap before it runs.
       - run: bash ci/live_matrix.sh
 

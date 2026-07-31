@@ -33,7 +33,7 @@ diff with no open findings.
 
 ---
 
-### Task 1: Python controller-owned authorization and transport gates
+## Task 1: Python controller-owned authorization and transport gates
 
 **Files:**
 - Modify: `packages/provide-uterm-server/src/provide/uterm/server/bridge/fanout/_controller.py`
@@ -107,7 +107,7 @@ git add packages/provide-uterm-server
 git commit -m "fix(server): make fanout authorization controller-owned"
 ```
 
-### Task 2: Python pre-send output capture
+## Task 2: Python pre-send output capture
 
 **Files:**
 - Modify: `packages/provide-uterm-server/src/provide/uterm/server/bridge/fanout/_collector.py`
@@ -149,7 +149,7 @@ git add packages/provide-uterm-server
 git commit -m "fix(server): subscribe before fanout dispatch"
 ```
 
-### Task 3: Go controller-owned authorization and admin-only surfaces
+## Task 3: Go controller-owned authorization and admin-only surfaces
 
 **Files:**
 - Modify: `packages/provide-uterm-go/fanout/controller.go`
@@ -194,7 +194,7 @@ git add packages/provide-uterm-go
 git commit -m "fix(go): enforce admin fanout in the controller"
 ```
 
-### Task 4: Go capture lifecycle and immutable atomic store
+## Task 4: Go capture lifecycle and immutable atomic store
 
 **Files:**
 - Modify: `packages/provide-uterm-go/fanout/collector.go`
@@ -244,7 +244,7 @@ git add packages/provide-uterm-go
 git commit -m "fix(go): harden fanout capture and group storage"
 ```
 
-### Task 5: C# controller-owned authorization and admin-only REST
+## Task 5: C# controller-owned authorization and admin-only REST
 
 **Files:**
 - Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Fanout/Controller.cs`
@@ -282,7 +282,7 @@ git add packages/provide-uterm-csharp
 git commit -m "fix(csharp): enforce admin fanout in the controller"
 ```
 
-### Task 6: C# immutable atomic store and one operation deadline
+## Task 6: C# immutable atomic store and one operation deadline
 
 **Files:**
 - Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Fanout/Controller.cs`
@@ -332,7 +332,7 @@ git add packages/provide-uterm-csharp
 git commit -m "fix(csharp): bound fanout and isolate group state"
 ```
 
-### Task 7: TypeScript component security, result shape, and capture
+## Task 7: TypeScript component security, result shape, and capture
 
 **Files:**
 - Modify: `packages/provide-uterm-ts/src/fanout/controller.ts`
@@ -382,7 +382,7 @@ git add packages/provide-uterm-ts
 git commit -m "fix(ts): secure fanout component execution"
 ```
 
-### Task 8: Shared executable semantic scenarios
+## Task 8: Shared executable semantic scenarios
 
 **Files:**
 - Delete: `spec/fanout_security_coverage.json`
@@ -443,7 +443,7 @@ git add spec scripts tests/conformance packages/provide-uterm-server/tests/bridg
 git commit -m "test(conformance): execute fanout security scenarios"
 ```
 
-### Task 9: Live capability intersection and documentation truth
+## Task 9: Live capability intersection and documentation truth
 
 **Files:**
 - Modify: `conformance/live/harness/matrix.py`
@@ -484,7 +484,7 @@ git add conformance tests/conformance docs
 git commit -m "docs: align fanout security and live capabilities"
 ```
 
-### Task 10: Full verification and independent approval gate
+## Task 10: Full verification and independent approval gate
 
 **Files:**
 - Modify only if needed: `docs/roadmap/uterm-code-review-remediation.md`

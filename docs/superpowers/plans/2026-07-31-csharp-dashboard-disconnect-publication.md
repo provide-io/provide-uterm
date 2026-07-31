@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Exact production callback contract
+## Task 1: Exact production callback contract
 
 **Files:**
 - Modify: `packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Server/ResumeLifecycleIntegrationTests.cs`
@@ -45,7 +45,7 @@ dotnet test packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Provide.Uter
 
 Expected: current callbacks use null owner, and resume lacks the disconnect `false` transition.
 
-### Task 2: Dashboard owner payload
+## Task 2: Dashboard owner payload
 
 **Files:**
 - Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Hub/Store.cs`
@@ -75,7 +75,7 @@ Remove the legacy optional public-owner argument and update current-token captur
 
 Run the Task 1 command. Expected: acquire/release owner payload passes; resume still fails because disconnect false is missing.
 
-### Task 3: Immediate and deferred disconnect release
+## Task 3: Immediate and deferred disconnect release
 
 **Files:**
 - Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Hub/Connection.cs`
@@ -111,7 +111,7 @@ When `ResumeWorkerIfOwnershipUnchangedAsync` clears `transition.DisconnectOwner`
 
 Expected: exact production and deferred sequences pass.
 
-### Task 4: Same-generation stale disconnect suppression
+## Task 4: Same-generation stale disconnect suppression
 
 **Files:**
 - Modify: `packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Server/ResumeLifecycleIntegrationTests.cs`
@@ -128,7 +128,7 @@ dotnet test packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Provide.Uter
 
 Expected: all pass after updating exact owner/sequence assertions affected by the documented dashboard payload.
 
-### Task 5: Full verification and commit
+## Task 5: Full verification and commit
 
 **Files:**
 - Verify all modified production, tests, spec, and plan files
