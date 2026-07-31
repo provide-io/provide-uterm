@@ -353,19 +353,14 @@ public sealed class ConnectionManager
             }
         }
 
-        foreach (var (wsObj, msg) in fanout)
+        var results = await Task.WhenAll(fanout.Select(async item =>
         {
-            if (wsObj is not IWorkerWs browser) continue;
-            try
-            {
-                var encoded = ControlChannelCodec.EncodeControlFrame(msg);
-                await browser.SendTextAsync(encoded, ct).ConfigureAwait(false);
-            }
-            catch
-            {
-                // drop failed sockets; cleanup happens on next receive error
-            }
-        }
+            var encoded = ControlChannelCodec.EncodeControlFrame(item.Msg);
+            return await SendBrowserBoundedAsync(item.Ws, encoded, ct).ConfigureAwait(false)
+                ? null
+                : item.Ws;
+        })).ConfigureAwait(false);
+        PruneBrowsers(workerId, results.OfType<object>());
     }
 
     /// <summary>Fan-out one control payload to every browser on the worker (worker_connected etc.).</summary>
@@ -381,18 +376,35 @@ public sealed class ConnectionManager
         }
 
         var encoded = ControlChannelCodec.EncodeControlFrame(msg);
-        foreach (var wsObj in browsers)
+        var results = await Task.WhenAll(browsers.Select(async wsObj =>
+            await SendBrowserBoundedAsync(wsObj, encoded, ct).ConfigureAwait(false)
+                ? null
+                : wsObj)).ConfigureAwait(false);
+        PruneBrowsers(workerId, results.OfType<object>());
+    }
+
+    private async Task<bool> SendBrowserBoundedAsync(object wsObj, string payload, CancellationToken ct)
+    {
+        if (wsObj is not IWorkerWs browser) return false;
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(_hub.BrowserSendTimeout);
+        try
         {
-            if (wsObj is not IWorkerWs browser) continue;
-            try
-            {
-                await browser.SendTextAsync(encoded, ct).ConfigureAwait(false);
-            }
-            catch
-            {
-                // drop failed sockets
-            }
+            // WaitAsync enforces our deadline even if a broken transport
+            // ignores the cancellation token passed into SendTextAsync.
+            await browser.SendTextAsync(payload, timeout.Token)
+                .WaitAsync(timeout.Token).ConfigureAwait(false);
+            return true;
         }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void PruneBrowsers(string workerId, IEnumerable<object> dead)
+    {
+        foreach (var ws in dead) CleanupBrowser(workerId, ws);
     }
 
     /// <summary>Send terminal bytes / control to REST hijack path target worker.</summary>
