@@ -6,10 +6,15 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverauth"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
 )
 
 // decodeBody unmarshals a recorder body into a generic value.
@@ -22,8 +27,15 @@ func decodeBody(t *testing.T, body string) any {
 	return v
 }
 
+func permissiveFanoutTestServer(t *testing.T) *testServer {
+	t.Helper()
+	return newTestServer(t, func(cfg *serverconfig.UtermServerConfig, _ *Deps) {
+		cfg.FanoutAllowUnknownMembers = true
+	})
+}
+
 func TestFanoutCreateListSendDelete(t *testing.T) {
-	ts := newTestServer(t, nil)
+	ts := permissiveFanoutTestServer(t)
 	adm := adminHeaders()
 
 	// Create a group with two (unconnected) worker ids.
@@ -90,7 +102,7 @@ func TestFanoutCreateListSendDelete(t *testing.T) {
 }
 
 func TestFanoutCreateExceedsMaxSize(t *testing.T) {
-	ts := newTestServer(t, nil)
+	ts := permissiveFanoutTestServer(t)
 	ids := make([]string, 0, 60)
 	for i := 0; i < 60; i++ {
 		ids = append(ids, fmt.Sprintf(`"w%d"`, i))
@@ -107,7 +119,7 @@ func TestFanoutCreateExceedsMaxSize(t *testing.T) {
 }
 
 func TestFanoutCreateInvalidErrorPattern(t *testing.T) {
-	ts := newTestServer(t, nil)
+	ts := permissiveFanoutTestServer(t)
 	rec := ts.do("POST", "/api/fanout/groups",
 		`{"name":"g","worker_ids":["w1"],"error_pattern":"(unterminated"}`, adminHeaders())
 	if rec.Code != 400 {
@@ -116,7 +128,7 @@ func TestFanoutCreateInvalidErrorPattern(t *testing.T) {
 }
 
 func TestFanoutGrant(t *testing.T) {
-	ts := newTestServer(t, nil)
+	ts := permissiveFanoutTestServer(t)
 	adm := adminHeaders()
 	rec := ts.do("POST", "/api/fanout/groups", `{"name":"grant-test","worker_ids":["w1"]}`, adm)
 	groupID := decodeBody(t, rec.Body.String()).(map[string]any)["group_id"].(string)
@@ -149,8 +161,54 @@ func TestFanoutReadAuthz(t *testing.T) {
 	}
 }
 
-func TestFanoutRequiresAuth(t *testing.T) {
+func TestFanoutRejectsUnknownMembersByDefault(t *testing.T) {
 	ts := newTestServer(t, nil)
+	rec := ts.do("POST", "/api/fanout/groups", `{"name":"g","worker_ids":["future-worker"]}`, adminHeaders())
+	if rec.Code != 400 || !strings.Contains(rec.Body.String(), "future-worker") {
+		t.Fatalf("status/body = %d %s, want unknown-member refusal", rec.Code, rec.Body.String())
+	}
+}
+
+func TestFanoutExplicitlyAllowsDormantMembers(t *testing.T) {
+	ts := permissiveFanoutTestServer(t)
+	rec := ts.do("POST", "/api/fanout/groups", `{"name":"g","worker_ids":["future-worker"]}`, adminHeaders())
+	if rec.Code != 200 {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAuthorizedFanoutMembersRechecksCurrentAuthorization(t *testing.T) {
+	ts := newTestServer(t, nil)
+	ts.reg.add("w1", "alice", "public")
+	p := &serverauth.Principal{SubjectID: "bob", Roles: serverauth.NewSet("viewer"), Scopes: serverauth.NewSet("*")}
+
+	allowed, refused := ts.srv.authorizedFanoutMembers(context.Background(), p, []string{"w1", "missing"})
+	if len(allowed) != 1 || allowed[0] != "w1" || len(refused) != 1 || refused[0] != "missing" {
+		t.Fatalf("initial allowed/refused = %v/%v", allowed, refused)
+	}
+	ts.reg.add("w1", "alice", "private")
+	allowed, refused = ts.srv.authorizedFanoutMembers(context.Background(), p, []string{"w1"})
+	if len(allowed) != 0 || len(refused) != 1 || refused[0] != "w1" {
+		t.Fatalf("revoked allowed/refused = %v/%v", allowed, refused)
+	}
+}
+
+func TestFanoutRefusesConfiguredUnsupportedGovernance(t *testing.T) {
+	ts := newTestServer(t, func(cfg *serverconfig.UtermServerConfig, _ *Deps) {
+		cfg.FanoutAllowUnknownMembers = true
+		url := "https://policy.example.test/fanout"
+		cfg.Governance.PolicyWebhookURL = &url
+	})
+	rec := ts.do("POST", "/api/fanout/groups", `{"name":"g","worker_ids":["w1"]}`, adminHeaders())
+	groupID := decodeBody(t, rec.Body.String()).(map[string]any)["group_id"].(string)
+	rec = ts.do("POST", "/api/fanout/groups/"+groupID+"/send", `{"data":"id"}`, adminHeaders())
+	if rec.Code != http.StatusNotImplemented || !strings.Contains(rec.Body.String(), "governance is not supported") {
+		t.Fatalf("status/body = %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestFanoutRequiresAuth(t *testing.T) {
+	ts := permissiveFanoutTestServer(t)
 	// No X-Subject header → anonymous → 401.
 	for _, tc := range []struct{ method, path string }{
 		{"POST", "/api/fanout/groups"},
@@ -165,7 +223,7 @@ func TestFanoutRequiresAuth(t *testing.T) {
 }
 
 func TestFanoutSendNotFound(t *testing.T) {
-	ts := newTestServer(t, nil)
+	ts := permissiveFanoutTestServer(t)
 	rec := ts.do("POST", "/api/fanout/groups/does-not-exist/send", `{"data":"x"}`, adminHeaders())
 	if rec.Code != 404 {
 		t.Fatalf("status = %d, want 404", rec.Code)
@@ -177,7 +235,7 @@ func TestFanoutSendNotFound(t *testing.T) {
 }
 
 func TestFanoutDeleteBranches(t *testing.T) {
-	ts := newTestServer(t, nil)
+	ts := permissiveFanoutTestServer(t)
 	adm := adminHeaders()
 
 	// Missing group → 404.
@@ -198,7 +256,7 @@ func TestFanoutDeleteBranches(t *testing.T) {
 }
 
 func TestFanoutGrantBranches(t *testing.T) {
-	ts := newTestServer(t, nil)
+	ts := permissiveFanoutTestServer(t)
 	adm := adminHeaders()
 
 	// Missing group → 404.

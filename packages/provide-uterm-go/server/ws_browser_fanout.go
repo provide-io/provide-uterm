@@ -9,6 +9,9 @@ import (
 	"context"
 
 	"github.com/coder/websocket"
+
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/frames"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverauth"
 )
 
 // browserFanoutSend handles a browser fanout_send frame. Port of the
@@ -19,18 +22,25 @@ import (
 // nothing (matching the Python bare `continue` — no response frame, socket
 // stays live).
 func (s *Server) browserFanoutSend(ctx context.Context, conn *websocket.Conn, bc *browserConn, msg map[string]any) {
-	subject := "anonymous"
-	if bc.principal != nil {
-		subject = bc.principal.SubjectID
+	p := bc.principal
+	if p == nil {
+		p = serverauth.AnonymousPrincipal()
 	}
+	subject := p.SubjectID
 	groupID, _ := msg["group_id"].(string)
 	data, _ := msg["data"].(string)
 
 	// Ownership / access check: nil == caller doesn't own or have access.
-	if s.fanout.GetGroup(groupID, subject) == nil {
+	group := s.fanout.GetGroup(groupID, subject)
+	if group == nil {
 		return
 	}
-	result := s.fanout.Send(ctx, groupID, data, subject, 0, 0)
+	if s.fanoutGovernanceUnsupported() {
+		s.writeFrame(ctx, conn, frames.MakeErrorFrame(unsupportedFanoutGovernance))
+		return
+	}
+	allowed, refused := s.authorizedFanoutMembers(ctx, p, group.WorkerIDs)
+	result := s.fanout.SendAuthorized(ctx, groupID, data, subject, 0, 0, allowed, refused)
 	frame := map[string]any{
 		"type":               "fanout_result",
 		"group_id":           result.GroupID,
