@@ -47,6 +47,31 @@ public sealed class ResumeOwnershipTests
     }
 
     [Fact]
+    public async Task LaterRestOwnerPreventsOldDashboardTokenFromRestoringAfterRelease()
+    {
+        var hub = HubWithWorker();
+        var original = new Socket();
+        var resumed = new Socket();
+        hub.Conn.RegisterBrowser("w", original, "admin");
+        hub.Conn.RegisterBrowser("w", resumed, "admin");
+        Assert.True(hub.Lease.TryAcquireWs("w", original).Ok);
+        var oldVersion = hub.Conn.CleanupBrowser("w", original)!.Value;
+
+        var (acquired, reason) = await hub.TryAcquireRestHijackAsync(
+            "w", "rest-owner", 30, "rest-hijack", 10);
+        Assert.True(acquired, reason);
+        var restVersion = hub.Registry.Get("w")!.HijackOwnershipVersion;
+        Assert.Equal(oldVersion + 1, restVersion);
+        Assert.NotNull(hub.ExtendHijackLease("w", "rest-hijack", "rest-owner", 30, 11));
+        Assert.Equal(restVersion, hub.Registry.Get("w")!.HijackOwnershipVersion);
+        Assert.True(hub.ReleaseRestHijack("w", "rest-hijack").Released);
+        Assert.Equal(restVersion, hub.Registry.Get("w")!.HijackOwnershipVersion);
+
+        Assert.False(hub.Lease.TryRestoreWsOwnership("w", resumed, oldVersion));
+        Assert.Null(hub.Registry.Get("w")!.HijackOwner);
+    }
+
+    [Fact]
     public void NonOwnerDisconnectHasNoRestorableOwnership()
     {
         var hub = HubWithWorker();
