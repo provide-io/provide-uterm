@@ -110,12 +110,7 @@ class FanOutController:
 
     async def grant_access(self, group_id: str, grantee: str, *, principal: str) -> None:
         """Add *grantee* to the group's grants list. Only the creator can grant."""
-        group = await self._store.get(group_id)
-        if group is None or group.created_by != principal:
-            return
-        if grantee not in group.grants:
-            group.grants.append(grantee)
-            await self._store.save(group)
+        await self._store.grant_access(group_id, grantee, principal)
 
     @staticmethod
     def _principal_id(principal: str | Principal) -> str:

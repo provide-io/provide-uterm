@@ -193,4 +193,42 @@ describe("InMemoryFanOutStore", () => {
     await store.save(group("g5", "alice"));
     expect(listing.map((entry) => entry.groupId).sort()).toStrictEqual(golden.store.alice);
   });
+
+  it("deeply isolates saved groups and every read surface", async () => {
+    const store = new InMemoryFanOutStore();
+    const original = group("isolated", "alice", ["bob"]);
+    original.workerIds = ["w1"];
+    await store.save(original);
+
+    original.workerIds.push("input-injected");
+    original.createdBy = "mallory";
+    original.grants.push("mallory");
+
+    const fetched = await store.get("isolated");
+    expect(fetched).toMatchObject({ workerIds: ["w1"], createdBy: "alice", grants: ["bob"] });
+    fetched?.workerIds.push("get-injected");
+    if (fetched) fetched.createdBy = "eve";
+    fetched?.grants.splice(0);
+
+    const listed = await store.listForPrincipal("alice");
+    expect(listed).toHaveLength(1);
+    listed[0]?.workerIds.push("list-injected");
+    listed[0]?.grants.push("eve");
+
+    expect(await store.get("isolated")).toMatchObject({
+      workerIds: ["w1"],
+      createdBy: "alice",
+      grants: ["bob"],
+    });
+  });
+
+  it("preserves concurrent grants atomically", async () => {
+    const store = new InMemoryFanOutStore();
+    await store.save(group("atomic", "alice"));
+
+    await Promise.all([store.grantAccess("atomic", "bob", "alice"), store.grantAccess("atomic", "carol", "alice")]);
+
+    expect((await store.get("atomic"))?.grants.sort()).toStrictEqual(["bob", "carol"]);
+    await expect(store.grantAccess("atomic", "mallory", "not-alice")).resolves.toBe(false);
+  });
 });

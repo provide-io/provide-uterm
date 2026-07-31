@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import time
@@ -18,6 +19,7 @@ from fastapi.testclient import TestClient
 from provide.uterm.server import create_server_app, default_server_config
 from provide.uterm.server.bridge.fanout._controller import FanOutController
 from provide.uterm.server.bridge.fanout._models import FanOutGroup, FanOutResult
+from provide.uterm.server.bridge.fanout._store import InMemoryFanOutStore
 from provide.uterm.server.bridge.hub import EventBus, TermHub
 from provide.uterm.server.bridge.hub.ext import PolicyContext, PolicyDecision
 from provide.uterm.server.bridge.identity import Principal
@@ -253,12 +255,58 @@ async def _execute_controller(scenario: dict[str, Any]) -> dict[str, Any]:
     return observation
 
 
+async def _execute_store(scenario: dict[str, Any]) -> dict[str, Any]:
+    """Exercise the real store boundary and reject every mutable alias."""
+    input_data = scenario["input"]
+    group_data = input_data["group"]
+    store = InMemoryFanOutStore()
+    original = FanOutGroup(
+        group_id=group_data["id"],
+        name="fixture-group",
+        worker_ids=list(group_data["members"]),
+        created_by=group_data["creator"],
+        created_at=1,
+        grants=list(group_data["grants"]),
+    )
+    await store.save(original)
+    if input_data["operation"] == "store_atomic_update":
+        grants = input_data["concurrent_grants"]
+        await asyncio.gather(*(store.grant_access(group_data["id"], grant, group_data["creator"]) for grant in grants))
+        persisted = await store.get(group_data["id"])
+        assert persisted is not None
+        assert set(persisted.grants) == set(group_data["grants"]) | set(grants)
+        return _base(scenario, 200, input_data["command"], None)
+    mutation = input_data["mutation_member"]
+    original.worker_ids.append(mutation)
+    original.created_by = "mutated-creator"
+    original.grants.append("mutated-grant")
+    fetched = await store.get(group_data["id"])
+    assert fetched is not None
+    assert fetched.worker_ids == group_data["members"]
+    assert fetched.created_by == group_data["creator"]
+    assert fetched.grants == group_data["grants"]
+    fetched.worker_ids.append(mutation)
+    fetched.grants.append("mutated-read")
+    listed = await store.list_for_principal(group_data["creator"])
+    assert len(listed) == 1
+    listed[0].created_by = "mutated-list"
+    listed[0].worker_ids.append(mutation)
+    persisted = await store.get(group_data["id"])
+    assert persisted is not None
+    assert persisted.worker_ids == group_data["members"]
+    assert persisted.created_by == group_data["creator"]
+    assert persisted.grants == group_data["grants"]
+    return _base(scenario, 200, input_data["command"], None)
+
+
 async def _execute(scenario: dict[str, Any]) -> dict[str, Any]:
     surface = scenario["input"]["surface"]
     if surface in {"rest", "rest_release"}:
         return await _execute_rest(scenario)
     if surface == "controller":
         return await _execute_controller(scenario)
+    if surface == "store":
+        return await _execute_store(scenario)
     raise AssertionError(f"Python backend does not serve {surface}")
 
 

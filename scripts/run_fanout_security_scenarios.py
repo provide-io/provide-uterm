@@ -76,13 +76,12 @@ def applicable_ids(contract: dict[str, Any], backend: str) -> set[str]:
 def semantic_status(scenario: dict[str, Any], backend: str) -> str:
     """Derive backend support from scenario semantics rather than its opaque ID."""
     input_data = _dict(scenario.get("input"))
-    surface = input_data.get("surface")
     continuous_output = _dict(input_data.get("workers")).get("continuous_output") is True
     governed = _dict(input_data.get("policy")).get("action") != "allow"
     if backend == "typescript":
-        return "unserved" if surface == "store" or continuous_output else "component_execute"
+        return "unserved" if continuous_output else "component_execute"
     if backend == "python":
-        return "unserved" if surface == "store" or continuous_output else "execute"
+        return "unserved" if continuous_output else "execute"
     if backend == "go":
         if continuous_output:
             return "unserved"

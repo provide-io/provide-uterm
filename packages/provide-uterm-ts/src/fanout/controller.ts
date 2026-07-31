@@ -186,14 +186,7 @@ export class FanOutController {
    * access spread without the owner ever seeing it.
    */
   async grantAccess(groupId: string, grantee: string, principal: string): Promise<void> {
-    const group = await this.#store.get(groupId);
-    if (group === undefined || group.createdBy !== principal) {
-      return;
-    }
-    if (!group.grants.includes(grantee)) {
-      group.grants.push(grantee);
-      await this.#store.save(group);
-    }
+    await this.#store.grantAccess(groupId, grantee, principal);
   }
 
   /**
@@ -268,7 +261,11 @@ export class FanOutController {
     return group.createdBy === principal || group.grants.includes(principal) ? group : undefined;
   }
 
-  async #authorizedMembers(groupId: string, data: string, principal: AuthorizablePrincipal | undefined): Promise<
+  async #authorizedMembers(
+    groupId: string,
+    data: string,
+    principal: AuthorizablePrincipal | undefined,
+  ): Promise<
     | {
         group: FanOutGroup;
         dispatchGroup: FanOutGroup;
