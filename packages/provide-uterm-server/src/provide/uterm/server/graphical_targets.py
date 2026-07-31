@@ -226,8 +226,14 @@ def parse_rfb_endpoint(raw_endpoint: str | None) -> tuple[str, int]:
             )
         endpoint = "rfb://" + endpoint
 
-    parsed = urlparse(endpoint)
-    if not parsed.hostname:
+    try:
+        parsed = urlparse(endpoint)
+        host = parsed.hostname
+    except ValueError:
+        raise GraphicalTargetError(
+            GraphicalTargetErrorCode.INVALID, "invalid endpoint; expected host:port or rfb://host:port"
+        ) from None
+    if not host:
         raise GraphicalTargetError(
             GraphicalTargetErrorCode.INVALID, "invalid endpoint; expected host:port or rfb://host:port"
         )
@@ -239,7 +245,7 @@ def parse_rfb_endpoint(raw_endpoint: str | None) -> tuple[str, int]:
     if port is None or port < 1 or port > 65535:
         raise GraphicalTargetError(GraphicalTargetErrorCode.INVALID, "invalid endpoint port")
 
-    return parsed.hostname, port
+    return host, port
 
 
 def parse_litevirt_endpoint(raw_endpoint: str | None) -> tuple[str, int]:
@@ -258,8 +264,12 @@ def parse_litevirt_endpoint(raw_endpoint: str | None) -> tuple[str, int]:
         endpoint = endpoint[len("dns:///") :]
 
     # Wrap in a throwaway scheme purely to lean on urlparse's host:port parsing.
-    parsed = urlparse("grpc://" + endpoint)
-    if not parsed.hostname:
+    try:
+        parsed = urlparse("grpc://" + endpoint)
+        host = parsed.hostname
+    except ValueError:
+        raise GraphicalTargetError(GraphicalTargetErrorCode.INVALID, "invalid endpoint; expected host:port") from None
+    if not host:
         raise GraphicalTargetError(GraphicalTargetErrorCode.INVALID, "invalid endpoint; expected host:port")
 
     try:
@@ -269,7 +279,7 @@ def parse_litevirt_endpoint(raw_endpoint: str | None) -> tuple[str, int]:
     if port is None or port < 1 or port > 65535:
         raise GraphicalTargetError(GraphicalTargetErrorCode.INVALID, "invalid endpoint port")
 
-    return parsed.hostname, port
+    return host, port
 
 
 # --- Scope (GraphicalTargetScope) -------------------------------------------

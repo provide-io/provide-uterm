@@ -56,6 +56,11 @@ def test_parse_bad_json_returns_none() -> None:
     assert _parse_event(b"not-json\n") is None
 
 
+@pytest.mark.parametrize("value", [[], "text", 42, True, None])
+def test_parse_non_object_json_returns_none(value: object) -> None:
+    assert _parse_event(json.dumps(value).encode()) is None
+
+
 def test_parse_unknown_event_returns_none() -> None:
     assert _parse_event(b'{"event":"reboot","username":"root","tty":"","pid":1}\n') is None
 
@@ -175,6 +180,25 @@ async def test_bad_json_line_skipped_gracefully() -> None:
 
         await listener.stop()
         assert len(events) == 1  # bad line skipped, good one still received
+
+
+async def test_non_object_json_line_does_not_stop_listener() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        path = str(Path(td) / "notify.sock")
+        listener = PamNotifyListener(path)
+        events: list[PamEvent] = []
+        await listener.start(lambda e: _collect(events, e))
+
+        reader, writer = await asyncio.open_unix_connection(path)
+        writer.write(b"[]\n")
+        writer.write(b'{"event":"open","username":"alice","tty":"","pid":9}\n')
+        await writer.drain()
+        writer.close()
+        await writer.wait_closed()
+        await asyncio.sleep(0.05)
+
+        await listener.stop()
+        assert [event.username for event in events] == ["alice"]
 
 
 async def test_handler_exception_does_not_kill_listener() -> None:

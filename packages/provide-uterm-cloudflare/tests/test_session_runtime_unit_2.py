@@ -420,6 +420,12 @@ async def test_request_json_non_dict() -> None:
     assert await rt.request_json(_make_mock_request(body="[1, 2]")) == {}
 
 
+async def test_request_json_invalid_syntax() -> None:
+    """Malformed JSON is treated as an empty request body."""
+    rt = _make_runtime()
+    assert await rt.request_json(_make_mock_request(body='{"incomplete":')) == {}
+
+
 async def test_request_json_invalid_content_type() -> None:
     """request_json rejects requests without application/json Content-Type."""
     rt = _make_runtime()

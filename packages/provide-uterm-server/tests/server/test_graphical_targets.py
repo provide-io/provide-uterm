@@ -92,6 +92,12 @@ class TestParseRfbEndpoint:
             parse_rfb_endpoint("host:0")
         assert exc.value.message == "invalid endpoint port"
 
+    @pytest.mark.parametrize("endpoint", ["rfb://[::1", "rfb://[not-ip]:5900"])
+    def test_malformed_bracketed_host_raises_invalid(self, endpoint: str) -> None:
+        with pytest.raises(GraphicalTargetError) as exc:
+            parse_rfb_endpoint(endpoint)
+        assert exc.value.code is GraphicalTargetErrorCode.INVALID
+
 
 # ---------------------------------------------------------------------------
 # parse_litevirt_endpoint (plain host:port, no rfb:// scheme)
@@ -134,6 +140,12 @@ class TestParseLitevirtEndpoint:
         with pytest.raises(GraphicalTargetError) as exc:
             parse_litevirt_endpoint("host:0")
         assert exc.value.message == "invalid endpoint port"
+
+    @pytest.mark.parametrize("endpoint", ["[::1", "[not-ip]:9000"])
+    def test_malformed_bracketed_host_raises_invalid(self, endpoint: str) -> None:
+        with pytest.raises(GraphicalTargetError) as exc:
+            parse_litevirt_endpoint(endpoint)
+        assert exc.value.code is GraphicalTargetErrorCode.INVALID
 
 
 # ---------------------------------------------------------------------------
