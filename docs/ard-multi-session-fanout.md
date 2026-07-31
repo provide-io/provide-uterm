@@ -256,6 +256,9 @@ administrator at the server, regardless of any client-side tool visibility.
 > observer broadcast and are returned as failed. Group grants never substitute
 > for session authorization. The `fanout_input` observer broadcast is also
 > built (see the Browser WS Protocol note above).
+> The unserved TypeScript route component has no mounted server setting; callers
+> constructing that component use its default-false `allowUnknownMembers`
+> option instead.
 
 ---
 
@@ -266,13 +269,25 @@ The cross-language security contract is data in
 `scripts/run_fanout_security_scenarios.py` runs every applicable native adapter
 and rejects missing, extra, skipped, or mismatched observations.
 
-- `test_fanout_parallel_send.py` — fan-out to 5 sessions, all workers connected, all receive input, results aggregated correctly.
-- `test_fanout_partial_failure.py` — 2 of 5 workers not connected; `failed_sessions` populated, others succeed.
-- `test_fanout_sequential_stop_on_error.py` — sequential mode halts after first session output matches error pattern.
-- `test_fanout_divergence_detection.py` — sessions with differing output are flagged as divergent.
-- `test_fanout_authz.py` — non-global-admin principals cannot create groups;
-  groups may not include sessions the principal cannot read.
-- `test_fanout_mcp.py` — `fanout_send` MCP tool returns structured results consumable by an AI agent.
+The native semantic adapters are:
+
+- Python: `packages/provide-uterm-server/tests/bridge/test_fanout_security_scenarios.py::test_shared_fanout_security_scenarios`
+- Go: `packages/provide-uterm-go/server/security_scenarios_test.go::TestFanoutSecurityScenarios`
+- C#: `packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/FanoutSecurityScenarioTests.cs::Interprets_Every_Applicable_CSharp_Scenario`
+- TypeScript: `packages/provide-uterm-ts/src/fanout/security-scenarios.test.ts`, test `interprets every applicable scenario input through real component surfaces`
+
+Focused Python regression coverage includes:
+
+- `packages/provide-uterm-server/tests/bridge/test_fanout_parallel.py::test_parallel_send_all_connected`
+- `packages/provide-uterm-server/tests/bridge/test_fanout_partial_failure.py::test_partial_failure_disconnected_workers`
+- `packages/provide-uterm-server/tests/bridge/test_fanout_sequential.py::test_sequential_stop_on_first_error`
+- `packages/provide-uterm-server/tests/bridge/test_fanout_divergence.py::test_three_identical_one_different`
+- `packages/provide-uterm-server/tests/bridge/test_fanout_authz.py::test_fanout_routes_reject_non_admin_before_parsing_or_lookup`
+- `packages/provide-uterm-server/tests/bridge/test_fanout_authz.py::test_fanout_routes_reject_session_scoped_admin_before_parsing_or_lookup`
+- `packages/provide-uterm-server/tests/bridge/test_fanout_mcp.py::test_fanout_group_create_tool_exists` and `::test_fanout_send_tool_exists`
+
+The comparator and metamorphic checks live in
+`tests/conformance/test_fanout_security_coverage.py`.
 
 ---
 

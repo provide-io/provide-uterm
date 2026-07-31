@@ -44,9 +44,12 @@ member and checks the calling principal's current session authorization. A
 revoked, deleted, or still-dormant member is reported as failed and receives no
 input or observer notification.
 
-The shared configuration key is `fanout_allow_unknown_members`. It defaults to
-`false`. Setting it to `true` permits a global administrator to create a group
-containing dormant IDs, but it does not weaken send-time authorization.
+The served Python, Go, and C# backends use the configuration key
+`fanout_allow_unknown_members`, which defaults to `false`. Setting it to `true`
+permits a global administrator to create a group containing dormant IDs, but
+it does not weaken send-time authorization. The unserved TypeScript route
+component instead accepts the default-false `allowUnknownMembers` option; there
+is no mounted TypeScript server setting for this surface.
 
 All five REST operations — create, list, delete, send, and grant — require an
 authenticated global administrator. Session-scoped admins are rejected before
@@ -58,7 +61,7 @@ request parsing or group lookup.
 | Global admin required for create/list/delete/send/grant | Y | Y | Y | Y (unserved module) |
 | Browser-WS fan-out send served | Y | Y | N | N |
 | Reject unknown members by default | Y | Y | Y | Y (module) |
-| Explicit dormant-member opt-in | Y | Y | Y | Y (module) |
+| Explicit dormant-member opt-in | `fanout_allow_unknown_members` | `fanout_allow_unknown_members` | `fanout_allow_unknown_members` | component option `allowUnknownMembers`; server integration N/A |
 | Reauthorize every member on send | Y (REST + browser WS) | Y (REST + browser WS) | Y (REST) | Y (route/controller module) |
 | Reauthorize approval release | Y | N/A (no fan-out approval store) | N/A (no fan-out approval store) | Y (controller module) |
 | Group grant cannot bypass session authz | Y | Y | Y | Y (module) |
