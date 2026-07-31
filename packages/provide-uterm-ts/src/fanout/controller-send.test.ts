@@ -81,6 +81,24 @@ describe("FanOutController parallel send", () => {
     expect(result.failedSessions).toStrictEqual(["w2"]);
   });
 
+  it("a group grant does not bypass current session authorization", async () => {
+    const hub = new FakeHub();
+    const controller = new FanOutController({
+      hub,
+      now: () => NOW,
+      newId: () => "id-1",
+      resolveSession: async (workerId) => ({ workerId }),
+      canReadSession: async () => false,
+    });
+    await seed(controller, ["w1"], { grants: ["bob"] });
+
+    const result = await controller.send("g1", "uptime", "bob");
+
+    expect(hub.sent).toStrictEqual([]);
+    expect(hub.broadcasts).toStrictEqual([]);
+    expect(result.failedSessions).toStrictEqual(["w1"]);
+  });
+
   it("sends to every session and reports each one", async () => {
     const { hub, controller } = build();
     await seed(controller, ["w1", "w2"]);
