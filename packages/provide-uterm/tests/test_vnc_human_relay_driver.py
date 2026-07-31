@@ -39,7 +39,7 @@ def _run_relay_thread(**kwargs: Any) -> threading.Thread:
         with suppress(Exception):
             run_human_relay_streams(**kwargs)
         for key in ("browser_r", "browser_w", "upstream_r", "upstream_w"):
-            with suppress(Exception):
+            with suppress(OSError):
                 close = getattr(kwargs[key], "close", None)
                 if callable(close):
                     close()
