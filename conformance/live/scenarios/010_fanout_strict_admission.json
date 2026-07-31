@@ -1,0 +1,40 @@
+{
+  "id": "010_fanout_strict_admission",
+  "title": "Fan-out rejects dormant members unless explicitly configured",
+  "timeout_ms": 30000,
+  "requires": [
+    "fanout.rest.strict"
+  ],
+  "auth": "dev_token",
+  "steps": [
+    {
+      "id": "unknown_member",
+      "action": "http_post",
+      "path": "/api/fanout/groups",
+      "body": {
+        "name": "must-not-exist",
+        "worker_ids": [
+          "future-worker"
+        ]
+      },
+      "auth": "token"
+    }
+  ],
+  "expect": [
+    {
+      "step": "unknown_member",
+      "path": "status",
+      "equals": 400,
+      "why": "Unknown fan-out members are rejected unless the deployment explicitly opts into dormant group membership."
+    },
+    {
+      "step": "unknown_member",
+      "path": "body",
+      "equals": {
+        "error": "unknown fan-out session: future-worker"
+      },
+      "why": "All served fan-out implementations use the bridge error envelope and identify the refused member."
+    }
+  ],
+  "mutates": false
+}

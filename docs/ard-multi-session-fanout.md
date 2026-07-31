@@ -235,12 +235,14 @@ This enables AI agents (Claude via MCP) to coordinate fleet-wide terminal operat
 > **operator**-level tool while `fanout_send` is admin — so operators *can*
 > create groups; only broadcasting input is admin-gated. The non-spoofable
 > `created_by` and configurable max group size shipped as described.
-> **Update (2026-06-06):** the per-worker `can_read_session` check at
-> group-creation time is now enforced — the create-group route
-> (`server/bridge/fanout/_routes.py`) rejects (403) any *known* session the
-> creating principal cannot read (unknown/unregistered `worker_id`s stay
-> ungated, preserving create-then-connect). The `fanout_input` observer
-> broadcast is also now built (see the Browser WS Protocol note above).
+> **Update (2026-07-31):** the per-worker `can_read_session` check is enforced
+> at group creation and again on every send and approval release. Unknown IDs
+> are rejected by default; deployments that require create-then-connect must
+> explicitly set `fanout_allow_unknown_members = true`. That option affects
+> admission only: dormant, deleted, or revoked members receive no input or
+> observer broadcast and are returned as failed. Group grants never substitute
+> for session authorization. The `fanout_input` observer broadcast is also
+> built (see the Browser WS Protocol note above).
 
 ---
 

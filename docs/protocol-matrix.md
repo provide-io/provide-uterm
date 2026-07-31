@@ -36,6 +36,39 @@ lifecycle from session creation and start/attach through status, stop, and
 deletion. Those surfaces need focused live integration tests before the
 Playwright backend selector and CI matrix are expanded.
 
+## Multi-session fan-out
+
+Fan-out has a stricter security contract than ordinary group access: access to
+a group never implies access to the sessions in it. Every send re-resolves each
+member and checks the calling principal's current session authorization. A
+revoked, deleted, or still-dormant member is reported as failed and receives no
+input or observer notification.
+
+The shared configuration key is `fanout_allow_unknown_members`. It defaults to
+`false`. Setting it to `true` permits an operator to create a group containing
+dormant IDs, but it does not weaken send-time authorization.
+
+| Capability | Python FastAPI | Go | C# | TypeScript |
+|---|:---:|:---:|:---:|:---:|
+| Fan-out REST surface served | Y | Y | Y | N (route module only) |
+| Reject unknown members by default | Y | Y | Y | Y (module) |
+| Explicit dormant-member opt-in | Y | Y | Y | Y (module) |
+| Reauthorize every member on send | Y (REST + browser WS) | Y (REST + browser WS) | Y (REST) | Y (route/controller module) |
+| Reauthorize approval release | Y | N/A (no fan-out approval store) | N/A (no fan-out approval store) | Y (controller module) |
+| Group grant cannot bypass session authz | Y | Y | Y | Y (module) |
+| Configured governance behavior | Webhook deny/hold/release; errors fail closed | Deterministic 501; no input | Deterministic 501; no input | Policy-gate module; not served |
+| Parallel/sequential collection and divergence | Y | Y | Y | Y (module) |
+| Live `fanout.rest.strict` server cell | Y | Y | Y | unsupported/unadvertised |
+
+`conformance/live/scenarios/010_fanout_strict_admission.json` executes the
+strict-default REST contract across the served Python, Go, and C# backends
+with clients from all four languages.
+The richer cases that require mid-scenario authorization mutation or policy
+infrastructure are backend-local executable tests indexed by the shared
+fan-out coverage manifest; its validator rejects missing evidence and false
+capability claims. TypeScript deliberately does not advertise live fan-out
+until the Node server mounts the route module.
+
 ## Hijack control
 
 | Capability | FastAPI backend | Cloudflare backend |

@@ -86,10 +86,12 @@ type ServerLine struct {
 //     recorded, not just the library's (ok, body) — the Go HijackClient takes
 //     an injected *http.Client (WithHTTPClient), so an http.RoundTripper can
 //     write down the status the library discards
+//   - fanout.rest.strict  the served fan-out REST surface rejects dormant
+//     members by default
 //
 // It returns a fresh slice so a caller cannot mutate the driver's answer.
 func Capabilities() []string {
-	return []string{"hijack.rest", "sessions.rest", "http.raw", "auth.dev_token", "status.observed"}
+	return []string{"hijack.rest", "sessions.rest", "http.raw", "auth.dev_token", "status.observed", "fanout.rest.strict"}
 }
 
 // newResult seeds a result with the fields every outcome shares.

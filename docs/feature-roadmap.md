@@ -17,7 +17,7 @@ Automatic summarization of terminal sessions using LLMs. Generates searchable "C
 
 ### 3. Multi-Session Fan-Out (AGPL-3.0-or-later)
 Managed fleet control UI. Broadcast input to N sessions simultaneously with group management and status aggregation.
-*   **Status:** **Server-Side Complete (2026-04-22)** — `FanOutController` with parallel/sequential broadcast, Levenshtein-based divergence detection, `FanOutStore` protocol + in-memory implementation, REST routes (CRUD groups, send, grants), `FanOutPolicyGate` with webhook support, distributed command approval integration, RBAC authorization, audit events, `fanout_group_create` and `fanout_send` MCP tools, E2E tests (13 Docker SSH + 15 full-stack scenarios). Enterprise hardening pass completed 2026-04-22 (memory leak fixes, approval expiration pruning).
+*   **Status:** **Server-Side Complete; Cross-Language Hardened (2026-07-31)** — `FanOutController` with parallel/sequential broadcast, divergence detection, group storage, REST routes (CRUD groups, send, grants), audit events, and MCP tooling. Unknown members are rejected by default (`fanout_allow_unknown_members = true` is an admission-only opt-in), and every send re-resolves current session authorization. Python serves webhook deny/hold/release; Go and C# refuse configured governance explicitly instead of bypassing it. TypeScript's equivalent route/controller behavior is tested as a module but is not mounted by its partial Node server.
 *   **Parked:** "Fleet Console" browser UI has no implementation. All fan-out interaction is currently REST API and MCP tooling only.
 
 ## Tier 2 — Infrastructure & Security (All AGPL)

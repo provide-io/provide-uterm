@@ -1,6 +1,6 @@
-# Security surface parity — Python / Go / C# / Cloudflare
+# Security surface parity — Python / Go / C# / Cloudflare / TypeScript
 
-Last updated: 2026-07-21.
+Last updated: 2026-07-31.
 
 This matrix is the **authoritative product-scope statement** for security
 controls that are not automatically identical across languages. Wire
@@ -20,6 +20,35 @@ graphical human-relay**.
 | Human VNC relay (WS + RFB input filter) | **Y** (filter + WS route) | N | **Y** (`ServeHumanRelay` + mounted `/gui/vnc`) | **Y** (`HumanRelay` + `/gui/vnc`, RFB TCP) | Path: `WS /worker/{id}/hijack/{hid}/gui/vnc`; inject fail-closed |
 | GUI inject principal-bound (`acquired_by`) | Y | N/A | Y | Y | Cross-language |
 | Hijack `pending` blocks WS acquire | Y | N/A (REST hijack) | Y | Y | Cross-language |
+
+## Fan-out authorization and governance
+
+Cloudflare has no fan-out surface. TypeScript has a tested route/controller
+module but its Node server does not mount it, so it is not a served security
+capability.
+
+| Control | Python FastAPI | Go | C# | TypeScript module |
+|---|:---:|:---:|:---:|:---:|
+| Unknown members rejected by default | Y | Y | Y | Y |
+| Opt-in key `fanout_allow_unknown_members` | Y | Y | Y | Y |
+| Current session authz checked on every send | Y | Y | Y | Y |
+| Current session authz checked on approval release | Y | N/A | N/A | Y |
+| Group grantee without session access receives input | N | N | N | N |
+| Configured policy may be silently bypassed | N | N | N | N |
+| Policy deny / hold / release | Y | unsupported; 501 | unsupported; 501 | implemented, unserved |
+| Policy transport/error failure | fail closed | 501, no input | 501, no input | fail closed when gate supplied |
+
+The dormant-member option changes creation only. A dormant ID that later
+registers is still resolved and authorized against the principal who performs
+the send. Revocation after group creation has the same result: that member is
+reported as failed and no input or `fanout_input` observer event is emitted.
+
+The live matrix advertises the `fanout.rest.strict` server capability only for
+Python, Go, and C#. The TypeScript client participates through raw HTTP, but
+the TypeScript server capability remains absent.
+Policy and authorization-mutation cases are indexed in the machine-readable
+fan-out coverage manifest because the live harness cannot yet inject a policy
+service or mutate authorization during a scenario.
 
 ## Intentional de-scopes (not bugs)
 
@@ -91,3 +120,4 @@ Security regressions for these surfaces live in:
 - Python: `test_gui_principal_bind.py`, `test_vnc_rfb_filter.py`, `test_vnc_human_relay.py`, `test_ws_gui_vnc.py`, CF auth/webhook/SPA tests, lease pending
 - Go: `serverauth` CF Access JWT + `webhook_authz_test.go`, GUI attach/ops/vnc route, lease pending, vnc filter, UI SRI
 - C#: `CfAccessJwtTests`, `JwksJwtTests`, `WebhookAuthorizationTests`, `RfbInputFilterTests`, `HumanRelayTests`, GUI inject principal-bind, shell SRI
+- Fan-out: `conformance/live/scenarios/010_fanout_strict_admission.json` plus the shared fan-out coverage manifest and its validator

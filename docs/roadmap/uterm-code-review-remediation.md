@@ -11,17 +11,17 @@ Design: `docs/superpowers/specs/2026-07-31-code-review-remediation-design.md`
 
 ## Cross-language fan-out security
 
-- [ ] **FANOUT-001 (high): configurable unknown-member admission.** Python, Go,
+- [x] **FANOUT-001 (high): configurable unknown-member admission.** Python, Go,
   C#, and TypeScript reject unknown worker IDs by default; one consistently named
   option permits dormant IDs. Acceptance: strict/default and permissive tests exist
   in each served implementation.
-- [ ] **FANOUT-002 (high): send-time session authorization.** Every group member is
+- [x] **FANOUT-002 (high): send-time session authorization.** Every group member is
   resolved and authorized on every send and approval release. Unknown or revoked
   members receive a failure and no input. Group grants do not bypass session authz.
-- [ ] **FANOUT-003 (high): governance policy enforcement.** Python factory wiring
+- [x] **FANOUT-003 (high): governance policy enforcement.** Python factory wiring
   supplies a real fan-out policy adapter and fails closed when configured policy is
   unavailable. Go and C# cannot silently bypass configured governance.
-- [ ] **FANOUT-004 (medium): C# semantic parity.** Parallel/sequential execution,
+- [x] **FANOUT-004 (medium): C# semantic parity.** Parallel/sequential execution,
   response collection, elapsed time, stop-on-first-error, and divergence behave as
   advertised or the surface explicitly reports unsupported behavior.
 - [ ] **FANOUT-005 (high): shared parity coverage.** Cross-language behavioral
@@ -117,3 +117,8 @@ Design: `docs/superpowers/specs/2026-07-31-code-review-remediation-design.md`
 | 2026-07-31 | TypeScript readiness | clean emit, native Node 22 root-import smoke, typecheck, Biome, SSH tests, strict coverage | 10,470 tests; 100% statements/branches/functions/lines; pass |
 | 2026-07-31 | Native capture | `make clean && make test && make all`; UBSan; symbol gate; real macOS injection | 13 writer tests and injection pass; Linux LD_PRELOAD execution added to CI |
 | 2026-07-31 | C# lifecycle | Full C# suite plus focused fragmentation, admission, quota, broadcast, resume, ownership, replacement, timeout, and teardown matrices | 1,330 passed, 0 failed; final spec and quality reviews approved |
+| 2026-07-31 | Python fan-out | Focused authorization, approval release, route coverage, governance factory, and Ruff gates | 48 tests passed; Ruff passed |
+| 2026-07-31 | Go fan-out | `GOWORK=off go test ./...`; `GOWORK=off go vet ./...` | pass |
+| 2026-07-31 | C# fan-out | Full serial Release suite plus focused execution/server/config tests | 1,338 passed, 0 failed; Release build passed |
+| 2026-07-31 | TypeScript fan-out | Full TypeScript suite, typecheck, and Biome lint | 10,474 tests passed; typecheck and lint passed |
+| 2026-07-31 | Live fan-out strict admission | Python/Go/C# servers × Python/Go/C#/TypeScript clients | 12 of 12 cells passed; TypeScript server explicitly unadvertised |

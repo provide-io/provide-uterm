@@ -116,6 +116,7 @@ describe("the shape of a result", () => {
 
     expect(seen).toStrictEqual(refusals);
     expect(CLIENT_CAPABILITIES).toContain("status.observed");
+    expect(CLIENT_CAPABILITIES).toContain("fanout.rest.strict");
   });
 
   it("records a body nobody can parse as the same observation everywhere", async () => {
