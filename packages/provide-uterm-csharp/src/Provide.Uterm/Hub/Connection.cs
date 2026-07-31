@@ -159,7 +159,8 @@ public sealed class ConnectionManager
             st.HijackPending = null;
             st.PendingDashboardBrowser = null;
             st.PendingDashboardOwnershipVersion = null;
-            st.PendingDashboardPauseObligation = null;
+            st.PendingPauseReservation = null;
+            st.PendingPauseObligation = null;
             st.DisconnectResumeCompletion = null;
             st.DisconnectResumeOwnershipVersion = null;
             return (true, wasHijacked);
@@ -214,7 +215,7 @@ public sealed class ConnectionManager
             if (_hub.State.IsDashboardHijackActive(st))
             {
                 had = true;
-                st.PendingDashboardPauseObligation = null;
+                st.PendingPauseObligation = null;
             }
 
             // Only a live owner is a release worth announcing, but the fields
@@ -230,13 +231,23 @@ public sealed class ConnectionManager
             // reclaim wait for that completion.
             if (st.PendingDashboardBrowser is not null)
             {
+                var canceledReservation = st.HijackPending;
                 st.HijackPending = null;
+                if (st.PendingPauseReservation == canceledReservation)
+                {
+                    st.PendingPauseReservation = null;
+                }
                 st.PendingDashboardBrowser = null;
                 st.PendingDashboardOwnershipVersion = null;
             }
             else if (st.DisconnectResumeCompletion is not { IsCompleted: false })
             {
+                var canceledReservation = st.HijackPending;
                 st.HijackPending = null;
+                if (st.PendingPauseReservation == canceledReservation)
+                {
+                    st.PendingPauseReservation = null;
+                }
             }
         }
 
@@ -345,7 +356,12 @@ public sealed class ConnectionManager
                 st.Browsers.Remove(ws);
                 if (ReferenceEquals(st.PendingDashboardBrowser, ws))
                 {
+                    var canceledReservation = st.HijackPending;
                     st.HijackPending = null;
+                    if (st.PendingPauseReservation == canceledReservation)
+                    {
+                        st.PendingPauseReservation = null;
+                    }
                     st.PendingDashboardBrowser = null;
                     st.PendingDashboardOwnershipVersion = null;
                 }

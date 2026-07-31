@@ -110,6 +110,7 @@ public sealed class HijackLeaseManager
 
             workerWs = st.WorkerWs;
             st.HijackPending = hijackId;
+            st.PendingPauseReservation = hijackId;
         }
 
         try
@@ -121,10 +122,14 @@ public sealed class HijackLeaseManager
             }
             catch (OperationCanceledException)
             {
+                await ResolvePauseObligationAsync(
+                    workerId, hijackId, workerWs, pauseLanded: false).ConfigureAwait(false);
                 throw;
             }
             catch
             {
+                await ResolvePauseObligationAsync(
+                    workerId, hijackId, workerWs, pauseLanded: false).ConfigureAwait(false);
                 lock (_lock)
                 {
                     var st = _registry.Get(workerId);
@@ -137,24 +142,35 @@ public sealed class HijackLeaseManager
                 return (false, "no_worker");
             }
 
+            var committed = false;
             lock (_lock)
             {
                 var st = _registry.Get(workerId);
-                if (st is null || st.HijackPending != hijackId)
+                if (st is not null && st.HijackPending == hijackId)
                 {
-                    return (false, "no_worker");
+                    st.HijackSession = new HijackSession
+                    {
+                        HijackId = hijackId,
+                        Owner = owner,
+                        AcquiredAt = now,
+                        LeaseExpiresAt = now + leaseS,
+                        LastHeartbeat = now,
+                    };
+                    st.HijackOwnershipVersion++;
+                    if (st.PendingPauseObligation == hijackId)
+                    {
+                        st.PendingPauseObligation = null;
+                    }
+                    ClearPauseReservation(st, hijackId);
+                    committed = true;
                 }
+            }
 
-                st.HijackSession = new HijackSession
-                {
-                    HijackId = hijackId,
-                    Owner = owner,
-                    AcquiredAt = now,
-                    LeaseExpiresAt = now + leaseS,
-                    LastHeartbeat = now,
-                };
-                st.HijackOwnershipVersion++;
-                st.HijackPending = null;
+            if (!committed)
+            {
+                await ResolvePauseObligationAsync(
+                    workerId, hijackId, workerWs, pauseLanded: true).ConfigureAwait(false);
+                return (false, "no_worker");
             }
 
             return (true, "");
@@ -164,10 +180,7 @@ public sealed class HijackLeaseManager
             lock (_lock)
             {
                 var st = _registry.Get(workerId);
-                if (st is not null && st.HijackPending == hijackId)
-                {
-                    st.HijackPending = null;
-                }
+                if (st is not null) ClearPauseReservation(st, hijackId);
             }
         }
     }
@@ -255,6 +268,7 @@ public sealed class HijackLeaseManager
                 {
                     workerWs = st.WorkerWs;
                     st.HijackPending = reservation;
+                    st.PendingPauseReservation = reservation;
                     st.PendingDashboardBrowser = ws;
                     st.PendingDashboardOwnershipVersion = ownershipVersion;
                     break;
@@ -281,13 +295,15 @@ public sealed class HijackLeaseManager
             }
             catch (OperationCanceledException)
             {
-                await ResolvePauseObligationAsync(workerId, reservation, workerWs)
+                await ResolvePauseObligationAsync(
+                    workerId, reservation, workerWs, pauseLanded)
                     .ConfigureAwait(false);
                 throw;
             }
             catch
             {
-                await ResolvePauseObligationAsync(workerId, reservation, workerWs)
+                await ResolvePauseObligationAsync(
+                    workerId, reservation, workerWs, pauseLanded)
                     .ConfigureAwait(false);
                 return (false, "no_worker");
             }
@@ -311,16 +327,17 @@ public sealed class HijackLeaseManager
                     st.HijackOwner = ws;
                     st.HijackOwnerExpiresAt = _clock.Monotonic() + _dashboardLeaseS;
                     if (ownershipVersion is null) st.HijackOwnershipVersion++;
-                    if (st.PendingDashboardPauseObligation == reservation)
+                    if (st.PendingPauseObligation == reservation)
                     {
-                        st.PendingDashboardPauseObligation = null;
+                        st.PendingPauseObligation = null;
                     }
-                    ClearDashboardReservation(st, reservation);
+                    ClearPauseReservation(st, reservation);
                     return (true, "");
                 }
             }
 
-            await ResolvePauseObligationAsync(workerId, reservation, workerWs)
+            await ResolvePauseObligationAsync(
+                workerId, reservation, workerWs, pauseLanded)
                 .ConfigureAwait(false);
             return (false, "inactive_browser");
         }
@@ -329,92 +346,95 @@ public sealed class HijackLeaseManager
             lock (_lock)
             {
                 var st = _registry.Get(workerId);
-                if (st is not null) ClearDashboardReservation(st, reservation);
-            }
-        }
-
-        async Task ResolvePauseObligationAsync(
-            string id,
-            string canceledReservation,
-            IWorkerWs pausedWorker)
-        {
-            var resumeReservation = "dashboard-resume-" + Guid.NewGuid().ToString("N");
-            lock (_lock)
-            {
-                var st = _registry.Get(id);
-                if (st is null) return;
-                ClearDashboardReservation(st, canceledReservation);
-                var resumeRequired = pauseLanded
-                    || st.PendingDashboardPauseObligation == canceledReservation;
-                if (!resumeRequired) return;
-
-                if (_hub.IsDashboardHijackActive(st) || _hub.HasValidRestLease(st))
-                {
-                    st.PendingDashboardPauseObligation = null;
-                    return;
-                }
-
-                if (st.HijackPending is not null
-                    && st.PendingDashboardBrowser is not null)
-                {
-                    // A newer dashboard pause transaction now owns the right
-                    // to keep the worker paused. If it fails, it must discharge
-                    // this inherited obligation with a resume.
-                    st.PendingDashboardPauseObligation = st.HijackPending;
-                    return;
-                }
-
-                if (!ReferenceEquals(st.WorkerWs, pausedWorker))
-                {
-                    st.PendingDashboardPauseObligation = null;
-                    return;
-                }
-
-                if (st.HijackPending is not null
-                    || st.DisconnectResumeCompletion is { IsCompleted: false })
-                {
-                    return;
-                }
-
-                st.PendingDashboardPauseObligation = null;
-                st.HijackPending = resumeReservation;
-            }
-
-            try
-            {
-                var encodedResume = ControlChannelCodec.EncodeControlFrame(new Dictionary<string, object?>
-                {
-                    ["type"] = "control",
-                    ["action"] = "resume",
-                    ["source"] = "dashboard",
-                    ["ts"] = _clock.Wall(),
-                });
-                // State repair must outlive the browser request that was pruned
-                // while its worker send was in flight.
-                await pausedWorker.SendTextAsync(encodedResume, CancellationToken.None).ConfigureAwait(false);
-            }
-            catch
-            {
-                // The ownership transaction is still canceled; worker failure
-                // is reported by the caller as an unsuccessful acquisition.
-            }
-            finally
-            {
-                lock (_lock)
-                {
-                    var st = _registry.Get(id);
-                    if (st?.HijackPending == resumeReservation) st.HijackPending = null;
-                }
+                if (st is not null) ClearPauseReservation(st, reservation);
             }
         }
     }
 
-    private static void ClearDashboardReservation(WorkerTermState st, string reservation)
+    private static void ClearPauseReservation(WorkerTermState st, string reservation)
     {
         if (st.HijackPending != reservation) return;
         st.HijackPending = null;
+        if (st.PendingPauseReservation == reservation) st.PendingPauseReservation = null;
         st.PendingDashboardBrowser = null;
         st.PendingDashboardOwnershipVersion = null;
+    }
+
+    private async Task ResolvePauseObligationAsync(
+        string workerId,
+        string canceledReservation,
+        IWorkerWs pausedWorker,
+        bool pauseLanded)
+    {
+        var resumeReservation = "pause-obligation-resume-" + Guid.NewGuid().ToString("N");
+        lock (_lock)
+        {
+            var st = _registry.Get(workerId);
+            if (st is null) return;
+            ClearPauseReservation(st, canceledReservation);
+            var resumeRequired = pauseLanded
+                || st.PendingPauseObligation == canceledReservation;
+            if (!resumeRequired) return;
+
+            if (_hub.IsDashboardHijackActive(st) || _hub.HasValidRestLease(st))
+            {
+                st.PendingPauseObligation = null;
+                return;
+            }
+
+            if (!ReferenceEquals(st.WorkerWs, pausedWorker))
+            {
+                st.PendingPauseObligation = null;
+                return;
+            }
+
+            if (st.DisconnectResumeCompletion is { IsCompleted: false })
+            {
+                // This resume was sent after the canceled owner's pause and
+                // therefore discharges the obligation when it completes.
+                st.PendingPauseObligation = null;
+                return;
+            }
+
+            if (st.HijackPending is not null
+                && st.PendingPauseReservation == st.HijackPending)
+            {
+                // A newer dashboard or REST pause acquisition inherits the
+                // obligation. Its commit keeps the worker paused; its failure
+                // or cancellation must resume it.
+                st.PendingPauseObligation = st.HijackPending;
+                return;
+            }
+
+            if (st.HijackPending is not null) return;
+
+            st.PendingPauseObligation = null;
+            st.HijackPending = resumeReservation;
+        }
+
+        try
+        {
+            var encodedResume = ControlChannelCodec.EncodeControlFrame(new Dictionary<string, object?>
+            {
+                ["type"] = "control",
+                ["action"] = "resume",
+                ["source"] = "dashboard",
+                ["ts"] = _clock.Wall(),
+            });
+            await pausedWorker.SendTextAsync(encodedResume, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Best-effort state repair after an acquisition that cannot own.
+        }
+        finally
+        {
+            lock (_lock)
+            {
+                var st = _registry.Get(workerId);
+                if (st?.HijackPending == resumeReservation) st.HijackPending = null;
+            }
+        }
     }
 
     /// <summary>Restore the same logical dashboard owner only if no later owner has existed.</summary>

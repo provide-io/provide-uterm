@@ -237,7 +237,7 @@ public sealed class ResumeLifecycleIntegrationTests
 
         await WaitUntilAsync(() => fixture.Worker.Actions.Count == 2);
         Assert.Null(state.HijackOwner);
-        Assert.Null(state.PendingDashboardPauseObligation);
+        Assert.Null(state.PendingPauseObligation);
         Assert.Equal(["pause", "resume"], fixture.Worker.Actions);
     }
 
@@ -262,14 +262,86 @@ public sealed class ResumeLifecycleIntegrationTests
 
         predecessorPause.Release();
         await ReceiveUntilAsync(predecessor, frame => Type(frame) == "error");
-        Assert.NotNull(state.PendingDashboardPauseObligation);
-        Assert.Equal(state.HijackPending, state.PendingDashboardPauseObligation);
+        Assert.NotNull(state.PendingPauseObligation);
+        Assert.Equal(state.HijackPending, state.PendingPauseObligation);
         successorPause.Release();
         await ReceiveUntilAsync(
             successor, frame => Type(frame) == "hijack_state" && Bool(frame, "hijacked"));
 
         Assert.NotNull(state.HijackOwner);
-        Assert.Null(state.PendingDashboardPauseObligation);
+        Assert.Null(state.PendingPauseObligation);
+        Assert.Equal(["pause", "pause"], fixture.Worker.Actions);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FailedOrCanceledRestSuccessorDischargesDashboardPauseObligation(
+        bool cancelSuccessor)
+    {
+        var fixture = await BootAsync();
+        await using var server = fixture.Server;
+        using var predecessor = await ConnectAsync(fixture);
+        await DrainHandshakeAsync(predecessor);
+        var predecessorPause = fixture.Worker.DelayNextPause();
+
+        await SendControlAsync(predecessor, "hijack_request");
+        await predecessorPause.Attempted.WaitAsync(TimeSpan.FromSeconds(5));
+        var state = fixture.Hub.Registry.Get("resume-worker")!;
+        fixture.Hub.Conn.CleanupBrowser("resume-worker", state.PendingDashboardBrowser!);
+        var successorPause = fixture.Worker.DelayNextPause(
+            fail: !cancelSuccessor,
+            cancel: cancelSuccessor);
+        var restAcquire = fixture.Hub.Lease.TryAcquireRestAsync(
+            "resume-worker", "rest-owner", 30, "rest-successor", 10);
+        await successorPause.Attempted.WaitAsync(TimeSpan.FromSeconds(5));
+
+        predecessorPause.Release();
+        await ReceiveUntilAsync(predecessor, frame => Type(frame) == "error");
+        successorPause.Release();
+        if (cancelSuccessor)
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => restAcquire);
+        }
+        else
+        {
+            Assert.False((await restAcquire).Ok);
+        }
+
+        await WaitUntilAsync(() => fixture.Worker.Actions.Count == 2);
+        Assert.Null(state.HijackOwner);
+        Assert.Null(state.HijackSession);
+        Assert.Null(state.PendingPauseObligation);
+        Assert.Equal(["pause", "resume"], fixture.Worker.Actions);
+    }
+
+    [Fact]
+    public async Task SuccessfulRestSuccessorCommitDischargesDashboardPauseObligation()
+    {
+        var fixture = await BootAsync();
+        await using var server = fixture.Server;
+        using var predecessor = await ConnectAsync(fixture);
+        await DrainHandshakeAsync(predecessor);
+        var predecessorPause = fixture.Worker.DelayNextPause();
+
+        await SendControlAsync(predecessor, "hijack_request");
+        await predecessorPause.Attempted.WaitAsync(TimeSpan.FromSeconds(5));
+        var state = fixture.Hub.Registry.Get("resume-worker")!;
+        fixture.Hub.Conn.CleanupBrowser("resume-worker", state.PendingDashboardBrowser!);
+        var successorPause = fixture.Worker.DelayNextPause();
+        var restAcquire = fixture.Hub.Lease.TryAcquireRestAsync(
+            "resume-worker", "rest-owner", 30, "rest-successor", 10);
+        await successorPause.Attempted.WaitAsync(TimeSpan.FromSeconds(5));
+
+        predecessorPause.Release();
+        await ReceiveUntilAsync(predecessor, frame => Type(frame) == "error");
+        Assert.Equal("rest-successor", state.PendingPauseObligation);
+        successorPause.Release();
+        var acquired = await restAcquire;
+
+        Assert.True(acquired.Ok);
+        Assert.NotNull(state.HijackSession);
+        Assert.Null(state.PendingPauseObligation);
         Assert.Equal(["pause", "pause"], fixture.Worker.Actions);
     }
 
