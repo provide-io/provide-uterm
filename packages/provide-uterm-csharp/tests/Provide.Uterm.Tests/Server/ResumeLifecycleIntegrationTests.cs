@@ -1153,6 +1153,122 @@ public sealed class ResumeLifecycleIntegrationTests
         Assert.Equal(["input-i"], finalReplacement.Inputs);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FailedDisconnectResumeFencesWorkerAndReleasesReplacement(bool hangs)
+    {
+        var ownershipLost = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var hub = new TermHub(new TermHubConfig
+        {
+            BrowserSendTimeout = TimeSpan.FromMilliseconds(40),
+            OnHijackChanged = (_, enabled, _) =>
+            {
+                if (!enabled) ownershipLost.TrySetResult();
+            },
+        });
+        var worker = new FaultingWorker(FaultTarget.Resume, hangs);
+        var replacement = new RecordingWorker();
+        var browser = new RecordingBrowser();
+        Assert.True(hub.Conn.RegisterWorker("failed-disconnect-resume", worker));
+        worker.IsAuthoritative = () => ReferenceEquals(
+            hub.Registry.Get("failed-disconnect-resume")?.WorkerWs, worker);
+        hub.Conn.RegisterBrowser("failed-disconnect-resume", browser, "admin");
+        Assert.True((await hub.Lease.TryAcquireWsAsync(
+            "failed-disconnect-resume", browser)).Ok);
+
+        var ownershipVersion = Assert.IsType<long>(
+            hub.Conn.CleanupBrowser("failed-disconnect-resume", browser));
+        var resume = hub.Conn.ResumeWorkerIfOwnershipUnchangedAsync(
+            "failed-disconnect-resume",
+            ownershipVersion,
+            HijackLeaseManager.ResumeFrame("dashboard", 100));
+        await worker.FailureAttempted.WaitAsync(TimeSpan.FromSeconds(5));
+        var replacementTransition = hub.Conn.RegisterWorkerAsync(
+            "failed-disconnect-resume", replacement);
+        worker.ReleaseThrow();
+
+        var result = await resume.WaitAsync(TimeSpan.FromSeconds(1));
+        Assert.True(await replacementTransition.WaitAsync(TimeSpan.FromSeconds(1)));
+
+        Assert.False(result.Resumed);
+        Assert.NotNull(result.Error);
+        Assert.True(worker.Aborted);
+        Assert.True(worker.AbortedWhileAuthoritative);
+        Assert.Same(replacement, hub.Registry.Get("failed-disconnect-resume")!.WorkerWs);
+        await ownershipLost.Task.WaitAsync(TimeSpan.FromSeconds(1));
+    }
+
+    [Theory]
+    [InlineData("rest", false)]
+    [InlineData("rest", true)]
+    [InlineData("browser", false)]
+    [InlineData("browser", true)]
+    public async Task FailedReservedInputFencesWorkerAndReleasesReplacement(
+        string inputKind,
+        bool hangs)
+    {
+        var ownershipLost = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var hub = new TermHub(new TermHubConfig
+        {
+            BrowserSendTimeout = TimeSpan.FromMilliseconds(40),
+            OnHijackChanged = (_, enabled, _) =>
+            {
+                if (!enabled) ownershipLost.TrySetResult();
+            },
+        });
+        var worker = new FaultingWorker(FaultTarget.Input, hangs);
+        var replacement = new RecordingWorker();
+        var browser = new RecordingBrowser();
+        Assert.True(hub.Conn.RegisterWorker("failed-reserved-input", worker));
+        worker.IsAuthoritative = () => ReferenceEquals(
+            hub.Registry.Get("failed-reserved-input")?.WorkerWs, worker);
+        hub.Conn.RegisterBrowser("failed-reserved-input", browser, "admin");
+
+        Task<(bool Ok, string Reason)>? restInput = null;
+        Task<bool>? browserInput = null;
+        if (inputKind == "rest")
+        {
+            Assert.True((await hub.Lease.TryAcquireRestAsync(
+                "failed-reserved-input",
+                "rest-owner",
+                30,
+                "failed-input-lease",
+                hub.Clock.Monotonic())).Ok);
+            restInput = hub.Conn.SendRestInputAsync(
+                "failed-reserved-input", "failed-input-lease", "input-a");
+        }
+        else
+        {
+            Assert.True(hub.Router.SetInputMode(
+                "failed-reserved-input", InputModes.Open).Ok);
+            browserInput = NewUnstartedServer(hub).SendBrowserInputAsync(
+                "failed-reserved-input", browser, "input-a");
+        }
+
+        await worker.FailureAttempted.WaitAsync(TimeSpan.FromSeconds(5));
+        var replacementTransition = hub.Conn.RegisterWorkerAsync(
+            "failed-reserved-input", replacement);
+        worker.ReleaseThrow();
+
+        var inputOk = restInput is not null
+            ? (await restInput.WaitAsync(TimeSpan.FromSeconds(1))).Ok
+            : await browserInput!.WaitAsync(TimeSpan.FromSeconds(1));
+        Assert.True(await replacementTransition.WaitAsync(TimeSpan.FromSeconds(1)));
+
+        Assert.False(inputOk);
+        Assert.True(worker.Aborted);
+        Assert.True(worker.AbortedWhileAuthoritative);
+        Assert.Same(replacement, hub.Registry.Get("failed-reserved-input")!.WorkerWs);
+        Assert.Null(hub.Registry.Get("failed-reserved-input")!.HijackSession);
+        if (inputKind == "rest")
+        {
+            await ownershipLost.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        }
+    }
+
     [Fact]
     public async Task ConcurrentValidRestInputWaitsForPriorInputAndThenSends()
     {
@@ -1493,6 +1609,72 @@ public sealed class ResumeLifecycleIntegrationTests
         RecordingWorker Worker,
         string Token,
         Uri Uri);
+
+    private enum FaultTarget
+    {
+        Resume,
+        Input,
+    }
+
+    private sealed class FaultingWorker : IAbortableBrowserWs
+    {
+        private readonly FaultTarget _target;
+        private readonly bool _hangs;
+        private readonly TaskCompletionSource _failureAttempted = NewSignal();
+        private readonly TaskCompletionSource _throwRelease = NewSignal();
+        private readonly TaskCompletionSource _never = NewSignal();
+
+        internal FaultingWorker(FaultTarget target, bool hangs)
+        {
+            _target = target;
+            _hangs = hangs;
+        }
+
+        public bool IsActive { get; private set; } = true;
+
+        internal bool Aborted { get; private set; }
+
+        internal bool AbortedWhileAuthoritative { get; private set; }
+
+        internal Func<bool>? IsAuthoritative { get; set; }
+
+        internal Task FailureAttempted => _failureAttempted.Task;
+
+        public void Abort()
+        {
+            AbortedWhileAuthoritative = IsAuthoritative?.Invoke() is true;
+            Aborted = true;
+            IsActive = false;
+        }
+
+        internal void ReleaseThrow() => _throwRelease.TrySetResult();
+
+        public async Task SendTextAsync(
+            string payload,
+            CancellationToken cancellationToken = default)
+        {
+            var action = new ControlFrameDecoder().Feed(payload)
+                .OfType<ControlChunk>()
+                .Select(chunk => chunk.Control.GetValueOrDefault("action")?.ToString())
+                .FirstOrDefault(value => value is not null);
+            var shouldFail = _target == FaultTarget.Resume && action == "resume"
+                || _target == FaultTarget.Input && action is null;
+            if (!shouldFail) return;
+
+            _failureAttempted.TrySetResult();
+            if (_hangs)
+            {
+                await _never.Task.ConfigureAwait(false);
+                return;
+            }
+
+            await _throwRelease.Task.ConfigureAwait(false);
+            throw new IOException("deterministic worker send failure");
+        }
+
+        private static TaskCompletionSource NewSignal() =>
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
 
     private sealed class RecordingWorker : IAbortableBrowserWs
     {
