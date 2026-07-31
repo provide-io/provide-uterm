@@ -414,10 +414,19 @@ public sealed class ConnectionManager
             return (false, null);
         }
 
+        if (ws is IAbortableBrowserWs { IsActive: false })
+        {
+            return (false, null);
+        }
+
         try
         {
             var encoded = ControlChannelCodec.EncodeControlFrame(msg);
             await ws.SendTextAsync(encoded, ct).ConfigureAwait(false);
+            if (ws is IAbortableBrowserWs { IsActive: false })
+            {
+                return (false, null);
+            }
             return (true, null);
         }
         catch (Exception ex)

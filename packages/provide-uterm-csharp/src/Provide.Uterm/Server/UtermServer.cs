@@ -1522,7 +1522,10 @@ public sealed partial class UtermServer : IAsyncDisposable
             await _sendGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                if (_ws.State != WebSocketState.Open) return;
+                if (_ws.State != WebSocketState.Open)
+                {
+                    throw new WebSocketException("WebSocket is not open for send.");
+                }
                 await _ws.SendAsync(bytes, WebSocketMessageType.Text, true, cancellationToken).ConfigureAwait(false);
             }
             finally
