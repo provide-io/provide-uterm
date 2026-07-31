@@ -73,7 +73,7 @@ public sealed class ConnectionManager
                             || !ReferenceEquals(lifecycleCompletion, completion.Task)))
                     {
                         lifecycleTransition ??= LifecycleTransitionCoordinator.EnqueueSuccessor(
-                            st, reservation);
+                            st, reservation, preserveOnWorkerClear: true);
                         completion ??= lifecycleTransition.Completion;
                         pendingCompletion = lifecycleTransition.Activated.Task;
                     }
@@ -82,7 +82,7 @@ public sealed class ConnectionManager
                         if (completion is null)
                         {
                             lifecycleTransition = LifecycleTransitionCoordinator.ReserveActive(
-                                st, reservation);
+                                st, reservation, preserveOnWorkerClear: true);
                             completion = lifecycleTransition.Completion;
                         }
                         pendingCompletion = Task.WhenAny(
@@ -109,7 +109,7 @@ public sealed class ConnectionManager
                             if (completion is null)
                             {
                                 lifecycleTransition = LifecycleTransitionCoordinator.ReserveActive(
-                                    st, reservation);
+                                    st, reservation, preserveOnWorkerClear: true);
                                 completion = lifecycleTransition.Completion;
                             }
                         }
@@ -131,7 +131,14 @@ public sealed class ConnectionManager
             }
         }
 
-        if (predecessor is null) return true;
+        if (predecessor is null)
+        {
+            if (completion is not null)
+            {
+                CompleteWorkerReplacementReservation(workerId, reservation, completion);
+            }
+            return true;
+        }
         try
         {
             if (mustResume)
