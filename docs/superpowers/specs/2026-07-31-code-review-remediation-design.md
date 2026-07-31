@@ -71,6 +71,37 @@ browser state needed to rebind ownership, is single-use, and is swept on mint an
 consume. If full ownership restoration cannot be guaranteed, the server advertises
 resume as unsupported rather than sending a misleading successful response.
 
+### C# lease-transition follow-up
+
+Pause and resume I/O is serialized per worker through the existing reservation
+state. A release that must resume first clears the departing logical owner and
+installs a unique resume reservation against the captured worker transport. The
+reservation remains until the resume send completes or fails, so neither REST nor
+dashboard acquisition can publish a successor that a stale resume would undo.
+Dashboard disconnect resumes, explicit dashboard and REST release, forced release,
+and expiry settlement share this ordering contract.
+
+Lease expiry is active rather than field-only. Successful acquire, heartbeat, and
+lease extension arm an expiry check. When the current expiration is observed, the
+manager clears only the expired owner and uses the same bounded resume transition.
+An obsolete timer is harmless because it rechecks the current owner and expiration.
+If a newer pause reservation already exists, the expired owner's landed-pause
+obligation transfers to that reservation instead of racing it with a resume.
+
+Worker replacement is an identity fence. Registration publishes a unique
+replacement reservation, clears and invalidates inherited lease ownership, resumes
+the captured predecessor on a bounded best-effort path, aborts an abortable
+predecessor, and only then clears the fence. The worker receive loop verifies the
+captured transport identity before accepting every decoded frame, so a displaced
+socket cannot mutate snapshots, hello state, events, or browser output. The
+replacement starts with truthful unowned, unpaused state.
+
+Browser WebSocket admission requires a configured `SessionDefinition` outside the
+explicit test-mode escape hatch. Missing definitions receive HTTP 404 before the
+upgrade, matching REST's unknown-session default. Tests that enable
+`UTERM_TEST_MODE` own a scoped previous value and restore it in `finally`; no helper
+may leave process-wide authentication state behind.
+
 C# fan-out must either implement the accepted parallel/sequential, output
 collection, timing, stop-on-error, and divergence semantics or explicitly return
 an unsupported response. Because its API already advertises these fields, the
@@ -135,4 +166,3 @@ is intentional: strict unknown-member rejection is the default, authorization is
 rechecked at execution time, and governance failures are fail-closed. Operators
 requiring pre-provisioned fan-out groups must explicitly enable dormant members and
 still receive send-time authorization enforcement.
-
