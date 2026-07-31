@@ -38,7 +38,7 @@ never substitutes for current authorization to each target session.
 | Global admin required for create/list/delete/send/grant | Y | Y | Y | Y; module unserved |
 | Browser-WS fan-out send served | Y | Y | N | N |
 | Unknown members rejected by default | Y | Y | Y | Y |
-| Opt-in key `fanout_allow_unknown_members` | Y | Y | Y | Y |
+| Dormant-member opt-in | `fanout_allow_unknown_members` | `fanout_allow_unknown_members` | `fanout_allow_unknown_members` | component option `allowUnknownMembers`; server integration N/A |
 | Current session authz checked on every send | Y | Y | Y | Y |
 | Current session authz checked on approval release | Y | N/A | N/A | Y |
 | Group grantee without session access receives input | N | N | N | N |

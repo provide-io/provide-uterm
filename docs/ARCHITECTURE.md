@@ -105,7 +105,7 @@ AI models (like Claude) can securely participate in terminal sessions using the 
 ---
 
 ## 9. Fleet Orchestration: Multi-Session Fan-Out
-The Fan-Out controller allows an operator to broadcast input to N target sessions simultaneously.
+The Fan-Out controller allows an authenticated global administrator to broadcast input to N target sessions simultaneously. Session-scoped administrators and operators cannot invoke fan-out.
 - **Divergence Detection**: Uses `difflib.SequenceMatcher` ratio (gestalt pattern-matching similarity) to compare output deltas across sessions, immediately flagging servers where the response differs from the majority.
 - **Sequential Mode**: Supports rolling deployments with automatic halting on detected failures.
 
