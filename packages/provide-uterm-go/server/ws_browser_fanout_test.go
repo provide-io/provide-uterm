@@ -101,28 +101,38 @@ func TestWSBrowserFanoutSendRequiresGlobalAdminWithoutWorkerInput(t *testing.T) 
 
 	httpSrv := httptest.NewServer(ts.srv.Handler())
 	defer httpSrv.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	bc := dialBrowserWithHeaders(t, ctx, "ws"+strings.TrimPrefix(httpSrv.URL, "http")+"/ws/browser/fo-view/term", http.Header{
-		"X-Subject":             {"scoped1"},
-		"X-Role":                {"admin"},
-		"X-Admin-Session-Scope": {"fo-view"},
-	})
-	defer func() { _ = bc.conn.Close(websocket.StatusNormalClosure, "") }()
-	bc.waitFrame(t, "hello", 5*time.Second)
-
-	worker.mu.Lock()
-	before := len(worker.sent)
-	worker.mu.Unlock()
-	bc.send(t, ctx, map[string]any{"type": "fanout_send", "group_id": "viewer-group", "data": "id\n"})
-	errFrame := bc.waitFrame(t, "error", 5*time.Second)
-	if !strings.Contains(errFrame["message"].(string), "admin role required") {
-		t.Fatalf("error frame = %#v", errFrame)
+	callers := []struct {
+		name    string
+		headers http.Header
+	}{
+		{name: "viewer", headers: http.Header{"X-Subject": {"view1"}, "X-Role": {"viewer"}}},
+		{name: "operator", headers: http.Header{"X-Subject": {"op1"}, "X-Role": {"operator"}}},
+		{name: "session-scoped-admin", headers: http.Header{
+			"X-Subject": {"scoped1"}, "X-Role": {"admin"}, "X-Admin-Session-Scope": {"fo-view"},
+		}},
 	}
-	worker.mu.Lock()
-	after := len(worker.sent)
-	worker.mu.Unlock()
-	if after != before {
-		t.Fatalf("non-admin fanout wrote %d worker frames", after-before)
+	for _, caller := range callers {
+		t.Run(caller.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			bc := dialBrowserWithHeaders(t, ctx, "ws"+strings.TrimPrefix(httpSrv.URL, "http")+"/ws/browser/fo-view/term", caller.headers)
+			defer func() { _ = bc.conn.Close(websocket.StatusNormalClosure, "") }()
+			bc.waitFrame(t, "hello", 5*time.Second)
+
+			worker.mu.Lock()
+			before := len(worker.sent)
+			worker.mu.Unlock()
+			bc.send(t, ctx, map[string]any{"type": "fanout_send", "group_id": "viewer-group", "data": "id\n"})
+			errFrame := bc.waitFrame(t, "error", 5*time.Second)
+			if !strings.Contains(errFrame["message"].(string), "admin role required") {
+				t.Fatalf("error frame = %#v", errFrame)
+			}
+			worker.mu.Lock()
+			after := len(worker.sent)
+			worker.mu.Unlock()
+			if after != before {
+				t.Fatalf("non-admin fanout wrote %d worker frames", after-before)
+			}
+		})
 	}
 }

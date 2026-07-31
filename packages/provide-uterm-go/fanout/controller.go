@@ -74,6 +74,7 @@ type Controller struct {
 	clock        hub.Clock
 	maxGroupSize int
 	newID        func() string
+	openCapture  func(*hub.EventBus, string) (*Capture, error)
 }
 
 // Config configures a [Controller]. Zero values select production defaults.
@@ -112,7 +113,7 @@ func NewController(h Hub, cfg Config) *Controller {
 	}
 	return &Controller{
 		hub: h, store: store, authorizer: cfg.Authorizer, clock: clock,
-		maxGroupSize: maxSize, newID: idGen,
+		maxGroupSize: maxSize, newID: idGen, openCapture: OpenCapture,
 	}
 }
 
@@ -275,7 +276,7 @@ func (c *Controller) sendParallel(ctx context.Context, group *Group, data string
 	readyGroup := *group
 	readyGroup.WorkerIDs = make([]string, 0, n)
 	for i, wid := range group.WorkerIDs {
-		capture, err := OpenCapture(c.hub.EventBus(), wid)
+		capture, err := c.openCapture(c.hub.EventBus(), wid)
 		if err != nil {
 			continue
 		}
@@ -283,43 +284,28 @@ func (c *Controller) sendParallel(ctx context.Context, group *Group, data string
 		captureOK[i] = true
 		readyGroup.WorkerIDs = append(readyGroup.WorkerIDs, wid)
 	}
-	defer func() {
-		for _, capture := range captures {
-			capture.Close()
-		}
-	}()
 	c.notifyObservers(ctx, &readyGroup, data, sendID, principal)
 
 	sendOK := make([]bool, n)
-	var sg sync.WaitGroup
+	deltas := make([]string, n)
+	elapsed := make([]int, n)
+	var workers sync.WaitGroup
 	for i, wid := range group.WorkerIDs {
 		if !captureOK[i] {
 			continue
 		}
-		sg.Add(1)
+		workers.Add(1)
 		go func(i int, wid string) {
-			defer sg.Done()
+			defer workers.Done()
+			defer captures[i].Close()
 			ok, _ := c.hub.SendWorker(ctx, wid, frame)
 			sendOK[i] = ok
+			if ok {
+				deltas[i], elapsed[i] = captures[i].Collect(ctx, quiesceMS, maxMS)
+			}
 		}(i, wid)
 	}
-	sg.Wait()
-
-	deltas := make([]string, n)
-	elapsed := make([]int, n)
-	var cg sync.WaitGroup
-	for i, wid := range group.WorkerIDs {
-		if !sendOK[i] {
-			continue
-		}
-		cg.Add(1)
-		go func(i int, wid string) {
-			defer cg.Done()
-			d, e := captures[i].Collect(ctx, quiesceMS, maxMS)
-			deltas[i], elapsed[i] = d, e
-		}(i, wid)
-	}
-	cg.Wait()
+	workers.Wait()
 
 	results := make([]SessionResult, 0, n)
 	failed := []string{}
@@ -371,7 +357,7 @@ func (c *Controller) sendSequential(ctx context.Context, group *Group, data stri
 			failed = append(failed, wid)
 			continue
 		}
-		capture, err := OpenCapture(c.hub.EventBus(), wid)
+		capture, err := c.openCapture(c.hub.EventBus(), wid)
 		if err != nil {
 			results = append(results, SessionResult{WorkerID: wid, OK: false})
 			failed = append(failed, wid)
