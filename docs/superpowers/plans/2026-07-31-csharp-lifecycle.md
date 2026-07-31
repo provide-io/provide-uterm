@@ -150,3 +150,145 @@ dotnet build -c Release
 
 Record counts and check `CSHARP-*` entries only when the commands exit zero, then commit.
 
+### Task 6: Serialize explicit and forced release resumes
+
+**Files:**
+- Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Hub/Models.cs`
+- Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Hub/Lease.cs`
+- Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Hub/Connection.cs`
+- Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Hub/TermHub.cs`
+- Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Server/UtermServer.cs`
+- Test: `packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Server/ResumeLifecycleIntegrationTests.cs`
+
+- [ ] **Step 1: Add deterministic stale-resume races**
+
+Delay the worker's next resume for dashboard release, REST release, and forced
+release. Start a successor acquisition while the resume is blocked and assert no
+successor owner is published. Release the send and assert a later acquisition can
+own the worker without receiving a stale resume.
+
+- [ ] **Step 2: Observe the three tests fail**
+
+```bash
+dotnet test packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Provide.Uterm.Tests.csproj --filter "FullyQualifiedName~ReleaseResumeBlocksSuccessor" --no-restore
+```
+
+- [ ] **Step 3: Add the resume transition**
+
+Rename the disconnect-only completion fields to generic pending-resume fields.
+Each async release reserves `HijackPending`, captures `WorkerWs`, clears the old
+owner, sends resume to that captured transport, and clears only its own reservation
+in `finally`. Update server callers to await release completion.
+
+- [ ] **Step 4: Run the focused tests and commit with the remaining lifecycle work**
+
+### Task 7: Fence worker replacement and stale frames
+
+**Files:**
+- Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Hub/Connection.cs`
+- Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Server/UtermServer.cs`
+- Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Server/LocalWorkerLink.cs`
+- Test: `packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Server/ResumeLifecycleIntegrationTests.cs`
+
+- [ ] **Step 1: Add a deterministic replacement test**
+
+Acquire against an old abortable worker, delay its reconciliation resume, register
+a replacement, and assert the old identity is fenced, stale state updates are
+rejected, ownership is cleared, and new acquisition is blocked until old resume
+and abort complete.
+
+- [ ] **Step 2: Observe the test fail**
+
+```bash
+dotnet test packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Provide.Uterm.Tests.csproj --filter "FullyQualifiedName~WorkerReplacement" --no-restore
+```
+
+- [ ] **Step 3: Implement async replacement registration**
+
+Add `RegisterWorkerAsync`. Under `SharedLock`, replace the identity, invalidate
+ownership, and install a replacement reservation. Outside the lock, send a bounded
+resume to the captured old worker and abort it. Clear only the matching reservation.
+Use the async API in WebSocket and local-worker production paths. Check
+`IsActiveWorker` before accepting each decoded worker frame.
+
+- [ ] **Step 4: Run the focused tests**
+
+### Task 8: Actively settle lease expiry
+
+**Files:**
+- Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Hub/Lease.cs`
+- Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Hub/TermHub.cs`
+- Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Server/UtermServer.cs`
+- Test: `packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Server/ResumeLifecycleIntegrationTests.cs`
+
+- [ ] **Step 1: Add gated-clock REST and dashboard expiry tests**
+
+Arm a one-second owner, wait for the timer sleep, advance past expiration, and
+release the gate. Assert the expired owner is cleared and the captured worker sees
+exactly `pause,resume` with no indefinite pending reservation.
+
+- [ ] **Step 2: Observe both tests fail**
+
+```bash
+dotnet test packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Provide.Uterm.Tests.csproj --filter "FullyQualifiedName~ExpiredLeaseResumesWorker" --no-restore
+```
+
+- [ ] **Step 3: Arm and settle expiry**
+
+Arm a fire-and-forget check after acquire, touch, and extend. The check sleeps via
+`IClock`, revalidates current expiration and ownership, then invokes the same
+captured-worker resume reservation. Make explicit cleanup async and await it from
+the REST acquire route.
+
+- [ ] **Step 4: Run expiry and release tests**
+
+### Task 9: Fail closed for unknown browser sessions
+
+**Files:**
+- Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Server/UtermServer.cs`
+- Test: `packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Server/WorkerAdmissionIntegrationTests.cs`
+
+- [ ] **Step 1: Add an HTTP-upgrade admission test**
+
+Send a valid authenticated browser WebSocket upgrade for an unknown safe ID and
+assert HTTP 404 with no hub browser state created.
+
+- [ ] **Step 2: Observe the test fail with an upgrade/200 path**
+
+- [ ] **Step 3: Require `TryGetDefinition` outside explicit test mode**
+
+Return 404 before `AcceptWebSocketAsync`; for known sessions retain current read
+authorization and role resolution.
+
+- [ ] **Step 4: Run browser and worker admission integration tests**
+
+### Task 10: Restore process-wide test mode and verify
+
+**Files:**
+- Modify: `packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/SessionReferenceParityTests.cs`
+- Modify: `packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/ServerIntegrationHostRestTests.cs`
+
+- [ ] **Step 1: Add an isolated contamination assertion**
+
+Run the test-mode fixtures followed by viewer/unknown-session authorization and
+assert the environment has its original value and viewer access remains denied.
+
+- [ ] **Step 2: Remove unnecessary test-mode mutation and scope the required one**
+
+The reference-parity helper does not use the browser bypass, so remove its write.
+For the SSE heartbeat test, capture the previous value, set `1` only while the
+handler selects its interval, and restore in `finally`.
+
+- [ ] **Step 3: Run isolated, impacted, and full batches**
+
+```bash
+dotnet test packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Provide.Uterm.Tests.csproj --filter "FullyQualifiedName~ResumeLifecycleIntegrationTests|FullyQualifiedName~WorkerAdmissionIntegrationTests|FullyQualifiedName~SessionReferenceParityTests|FullyQualifiedName~ServerIntegrationHostRestTests" --no-restore
+dotnet test packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Provide.Uterm.Tests.csproj --no-restore
+```
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add docs/superpowers packages/provide-uterm-csharp
+git commit -m "fix(csharp): serialize lease lifecycle transitions"
+```
