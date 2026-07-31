@@ -68,13 +68,13 @@ Design: `docs/superpowers/specs/2026-07-31-code-review-remediation-design.md`
 
 ## Native capture
 
-- [ ] **NATIVE-001 (medium): nonblocking bounded delivery.** Capture consumer
+- [x] **NATIVE-001 (medium): nonblocking bounded delivery.** Capture consumer
   backpressure cannot block intercepted application I/O.
-- [ ] **NATIVE-002 (medium): complete serialized writes.** Short writes, `EINTR`,
+- [x] **NATIVE-002 (medium): complete serialized writes.** Short writes, `EINTR`,
   concurrency, and disconnects cannot corrupt subsequent frame boundaries.
-- [ ] **NATIVE-003 (medium): payload bounds.** Length conversion and allocation are
+- [x] **NATIVE-003 (medium): payload bounds.** Length conversion and allocation are
   checked before building a frame.
-- [ ] **NATIVE-004 (medium): automated native coverage.** Deterministic tests cover
+- [x] **NATIVE-004 (medium): automated native coverage.** Deterministic tests cover
   framing/backpressure behavior; CI builds or tests the native targets where viable.
 
 ## Python robustness and quality
@@ -115,3 +115,4 @@ Design: `docs/superpowers/specs/2026-07-31-code-review-remediation-design.md`
 | 2026-07-31 | Known red | `uv run pytest -q packages/provide-uterm-server/tests/` | tests pass; strict coverage threshold fails at `config_schema.py:160` |
 | 2026-07-31 | Python robustness | Focused PAM, graphical endpoint, Cloudflare JSON, config-schema, and VNC warning-as-error suites | 137 passed, 1 optional-vendor skip; ruff passed |
 | 2026-07-31 | TypeScript readiness | clean emit, native Node 22 root-import smoke, typecheck, Biome, SSH tests, strict coverage | 10,470 tests; 100% statements/branches/functions/lines; pass |
+| 2026-07-31 | Native capture | `make clean && make test && make all`; UBSan; symbol gate; real macOS injection | 13 writer tests and injection pass; Linux LD_PRELOAD execution added to CI |
