@@ -558,6 +558,7 @@ public sealed class HijackLeaseManager
     {
         var reservation = "rest-release-resume-" + Guid.NewGuid().ToString("N");
         TaskCompletionSource? completion = null;
+        PendingLifecycleTransition? queuedTransition = null;
         IWorkerWs? worker = null;
         var shouldResume = false;
         var transitionReady = false;
@@ -577,7 +578,10 @@ public sealed class HijackLeaseManager
                         && (completion is null
                             || !ReferenceEquals(lifecycleCompletion, completion.Task)))
                     {
-                        pendingCompletion = lifecycleCompletion;
+                        queuedTransition ??= LifecycleTransitionCoordinator.EnqueueSuccessor(
+                            st, reservation);
+                        completion ??= queuedTransition.Completion;
+                        pendingCompletion = queuedTransition.Activated.Task;
                     }
                     else
                     {
@@ -641,6 +645,7 @@ public sealed class HijackLeaseManager
     {
         var reservation = "dashboard-release-resume-" + Guid.NewGuid().ToString("N");
         TaskCompletionSource? completion = null;
+        PendingLifecycleTransition? queuedTransition = null;
         IWorkerWs? worker = null;
         var restActive = false;
         var transitionReady = false;
@@ -669,7 +674,10 @@ public sealed class HijackLeaseManager
                         && (completion is null
                             || !ReferenceEquals(lifecycleCompletion, completion.Task)))
                     {
-                        pendingCompletion = lifecycleCompletion;
+                        queuedTransition ??= LifecycleTransitionCoordinator.EnqueueSuccessor(
+                            st, reservation);
+                        completion ??= queuedTransition.Completion;
+                        pendingCompletion = queuedTransition.Activated.Task;
                     }
                     else
                     {
@@ -910,6 +918,7 @@ public sealed class HijackLeaseManager
     {
         var reservation = "expiry-release-resume-" + Guid.NewGuid().ToString("N");
         TaskCompletionSource? completion = null;
+        PendingLifecycleTransition? queuedTransition = null;
         IWorkerWs? worker = null;
         var browserExpired = false;
         var restExpired = false;
@@ -928,7 +937,10 @@ public sealed class HijackLeaseManager
                         && (completion is null
                             || !ReferenceEquals(lifecycleCompletion, completion.Task)))
                     {
-                        pendingCompletion = lifecycleCompletion;
+                        queuedTransition ??= LifecycleTransitionCoordinator.EnqueueSuccessor(
+                            st, reservation);
+                        completion ??= queuedTransition.Completion;
+                        pendingCompletion = queuedTransition.Activated.Task;
                     }
                     else
                     {
@@ -1006,6 +1018,7 @@ public sealed class HijackLeaseManager
         var owner = "server-forced";
         var reservation = "forced-release-resume-" + Guid.NewGuid().ToString("N");
         TaskCompletionSource? completion = null;
+        PendingLifecycleTransition? queuedTransition = null;
         IWorkerWs? worker = null;
         var had = false;
         var transitionReady = false;
@@ -1022,7 +1035,10 @@ public sealed class HijackLeaseManager
                         && (completion is null
                             || !ReferenceEquals(lifecycleCompletion, completion.Task)))
                     {
-                        pendingCompletion = lifecycleCompletion;
+                        queuedTransition ??= LifecycleTransitionCoordinator.EnqueueSuccessor(
+                            st, reservation);
+                        completion ??= queuedTransition.Completion;
+                        pendingCompletion = queuedTransition.Activated.Task;
                     }
                     else if (st.InputSendPending is not null)
                     {
@@ -1043,8 +1059,11 @@ public sealed class HijackLeaseManager
 
                         if (st.PendingDashboardBrowser is not null)
                         {
-                            var canceledReservation = st.HijackPending;
-                            st.HijackPending = null;
+                            var canceledReservation = st.PendingPauseReservation;
+                            if (st.HijackPending == canceledReservation)
+                            {
+                                st.HijackPending = null;
+                            }
                             if (st.PendingPauseReservation == canceledReservation)
                             {
                                 st.PendingPauseReservation = null;
@@ -1094,14 +1113,8 @@ public sealed class HijackLeaseManager
 
     private static TaskCompletionSource ReserveLifecycleTransition(
         WorkerTermState st,
-        string reservation)
-    {
-        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        st.HijackPending = reservation;
-        st.DisconnectResumeCompletion = completion.Task;
-        st.DisconnectResumeOwnershipVersion = null;
-        return completion;
-    }
+        string reservation) =>
+        LifecycleTransitionCoordinator.ReserveActive(st, reservation).Completion;
 
     private void CompleteTransitionReservation(
         string workerId,
@@ -1111,11 +1124,12 @@ public sealed class HijackLeaseManager
         lock (_lock)
         {
             var st = _registry.Get(workerId);
-            if (st?.HijackPending == reservation) st.HijackPending = null;
-            if (st is not null && ReferenceEquals(st.DisconnectResumeCompletion, completion.Task))
+            var transition = st is null
+                ? null
+                : FindLifecycleTransition(st, reservation, completion);
+            if (st is not null && transition is not null)
             {
-                st.DisconnectResumeCompletion = null;
-                st.DisconnectResumeOwnershipVersion = null;
+                LifecycleTransitionCoordinator.Complete(st, transition);
             }
         }
         completion.TrySetResult();
@@ -1167,15 +1181,32 @@ public sealed class HijackLeaseManager
                 {
                     st.WorkerWs = null;
                 }
-                if (st?.HijackPending == reservation) st.HijackPending = null;
-                if (st is not null && ReferenceEquals(st.DisconnectResumeCompletion, completion.Task))
+                var transition = st is null
+                    ? null
+                    : FindLifecycleTransition(st, reservation, completion);
+                if (st is not null && transition is not null)
                 {
-                    st.DisconnectResumeCompletion = null;
-                    st.DisconnectResumeOwnershipVersion = null;
+                    LifecycleTransitionCoordinator.Complete(st, transition);
                 }
             }
             completion.TrySetResult();
         }
+    }
+
+    private static PendingLifecycleTransition? FindLifecycleTransition(
+        WorkerTermState st,
+        string reservation,
+        TaskCompletionSource completion)
+    {
+        if (st.ActiveLifecycleTransition is { } active
+            && active.Reservation == reservation
+            && ReferenceEquals(active.Completion, completion))
+        {
+            return active;
+        }
+        return st.LifecycleTransitionQueue.FirstOrDefault(candidate =>
+            candidate.Reservation == reservation
+            && ReferenceEquals(candidate.Completion, completion));
     }
 
     private async Task PublishOwnershipLostAsync(string workerId)

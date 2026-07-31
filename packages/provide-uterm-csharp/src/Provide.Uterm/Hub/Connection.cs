@@ -44,6 +44,7 @@ public sealed class ConnectionManager
     {
         var reservation = "worker-replacement-" + Guid.NewGuid().ToString("N");
         TaskCompletionSource? completion = null;
+        PendingLifecycleTransition? queuedTransition = null;
         IWorkerWs? predecessor = null;
         var mustResume = false;
         var ownershipLost = false;
@@ -66,17 +67,17 @@ public sealed class ConnectionManager
                         && (completion is null
                             || !ReferenceEquals(lifecycleCompletion, completion.Task)))
                     {
-                        pendingCompletion = lifecycleCompletion;
+                        queuedTransition ??= LifecycleTransitionCoordinator.EnqueueSuccessor(
+                            st, reservation);
+                        completion ??= queuedTransition.Completion;
+                        pendingCompletion = queuedTransition.Activated.Task;
                     }
                     else if (st.InputSendPending is not null)
                     {
                         if (completion is null)
                         {
-                            completion = new TaskCompletionSource(
-                                TaskCreationOptions.RunContinuationsAsynchronously);
-                            st.HijackPending = reservation;
-                            st.DisconnectResumeCompletion = completion.Task;
-                            st.DisconnectResumeOwnershipVersion = null;
+                            completion = LifecycleTransitionCoordinator.ReserveActive(
+                                st, reservation).Completion;
                         }
                         pendingCompletion = st.InputSendPending.Completion.Task;
                     }
@@ -99,11 +100,8 @@ public sealed class ConnectionManager
                             st.HijackOwnershipVersion++;
                             if (completion is null)
                             {
-                                completion = new TaskCompletionSource(
-                                    TaskCreationOptions.RunContinuationsAsynchronously);
-                                st.HijackPending = reservation;
-                                st.DisconnectResumeCompletion = completion.Task;
-                                st.DisconnectResumeOwnershipVersion = null;
+                                completion = LifecycleTransitionCoordinator.ReserveActive(
+                                    st, reservation).Completion;
                             }
                         }
                         st.WorkerWs = ws;
@@ -154,12 +152,12 @@ public sealed class ConnectionManager
             lock (_hub.SharedLock)
             {
                 var st = _hub.Registry.Get(workerId);
-                if (st?.HijackPending == reservation) st.HijackPending = null;
-                if (st is not null && completion is not null
-                    && ReferenceEquals(st.DisconnectResumeCompletion, completion.Task))
+                var transition = st is null || completion is null
+                    ? null
+                    : FindLifecycleTransition(st, reservation, completion);
+                if (st is not null && transition is not null)
                 {
-                    st.DisconnectResumeCompletion = null;
-                    st.DisconnectResumeOwnershipVersion = null;
+                    LifecycleTransitionCoordinator.Complete(st, transition);
                 }
             }
             completion?.TrySetResult();
@@ -175,14 +173,31 @@ public sealed class ConnectionManager
         lock (_hub.SharedLock)
         {
             var st = _hub.Registry.Get(workerId);
-            if (st?.HijackPending == reservation) st.HijackPending = null;
-            if (st is not null && ReferenceEquals(st.DisconnectResumeCompletion, completion.Task))
+            var transition = st is null
+                ? null
+                : FindLifecycleTransition(st, reservation, completion);
+            if (st is not null && transition is not null)
             {
-                st.DisconnectResumeCompletion = null;
-                st.DisconnectResumeOwnershipVersion = null;
+                LifecycleTransitionCoordinator.Complete(st, transition);
             }
         }
         completion.TrySetResult();
+    }
+
+    private static PendingLifecycleTransition? FindLifecycleTransition(
+        WorkerTermState st,
+        string reservation,
+        TaskCompletionSource completion)
+    {
+        if (st.ActiveLifecycleTransition is { } active
+            && active.Reservation == reservation
+            && ReferenceEquals(active.Completion, completion))
+        {
+            return active;
+        }
+        return st.LifecycleTransitionQueue.FirstOrDefault(candidate =>
+            candidate.Reservation == reservation
+            && ReferenceEquals(candidate.Completion, completion));
     }
 
     private async Task PublishOwnershipLostAsync(string workerId)
@@ -396,13 +411,11 @@ public sealed class ConnectionManager
             st.HijackSession = null;
             st.HijackOwner = null;
             st.HijackOwnerExpiresAt = null;
-            st.HijackPending = null;
             st.PendingDashboardBrowser = null;
             st.PendingDashboardOwnershipVersion = null;
             st.PendingPauseReservation = null;
             st.PendingPauseObligation = null;
-            st.DisconnectResumeCompletion = null;
-            st.DisconnectResumeOwnershipVersion = null;
+            LifecycleTransitionCoordinator.Clear(st);
             return (true, wasHijacked);
         }
     }
@@ -543,8 +556,11 @@ public sealed class ConnectionManager
                 st.Browsers.Remove(ws);
                 if (ReferenceEquals(st.PendingDashboardBrowser, ws))
                 {
-                    var canceledReservation = st.HijackPending;
-                    st.HijackPending = null;
+                    var canceledReservation = st.PendingPauseReservation;
+                    if (st.HijackPending == canceledReservation)
+                    {
+                        st.HijackPending = null;
+                    }
                     if (st.PendingPauseReservation == canceledReservation)
                     {
                         st.PendingPauseReservation = null;
@@ -558,9 +574,26 @@ public sealed class ConnectionManager
                     {
                         ownershipVersion = st.HijackOwnershipVersion;
                     }
-
-                    st.HijackOwner = null;
-                    st.HijackOwnerExpiresAt = null;
+                    if (ownershipVersion is not null
+                        && (st.InputSendPending is not null
+                            || st.DisconnectResumeCompletion is { IsCompleted: false }))
+                    {
+                        if (st.PendingDisconnectTransition is null)
+                        {
+                            var reservation = "disconnect-resume-" + Guid.NewGuid().ToString("N");
+                            st.PendingDisconnectTransition =
+                                st.DisconnectResumeCompletion is { IsCompleted: false }
+                                    ? LifecycleTransitionCoordinator.EnqueueSuccessor(
+                                        st, reservation, ownershipVersion, ws)
+                                    : LifecycleTransitionCoordinator.ReserveActive(
+                                        st, reservation, ownershipVersion, ws);
+                        }
+                    }
+                    else
+                    {
+                        st.HijackOwner = null;
+                        st.HijackOwnerExpiresAt = null;
+                    }
                 }
             }
 
@@ -633,34 +666,70 @@ public sealed class ConnectionManager
         CancellationToken ct = default)
     {
         var reservation = "disconnect-resume-" + Guid.NewGuid().ToString("N");
-        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        IWorkerWs worker;
-        lock (_hub.SharedLock)
+        PendingLifecycleTransition? transition = null;
+        IWorkerWs? worker = null;
+        var transitionReady = false;
+        try
         {
-            var st = _hub.Registry.Get(workerId);
-            if (st?.WorkerWs is null
-                || st.HijackOwnershipVersion != ownershipVersion
-                || _hub.State.IsDashboardHijackActive(st)
-                || _hub.State.HasValidRestLease(st)
-                || st.HijackPending is not null)
+            while (true)
             {
-                return (false, null);
+                Task? pendingCompletion = null;
+                lock (_hub.SharedLock)
+                {
+                    var st = _hub.Registry.Get(workerId);
+                    if (st is null) return (false, null);
+                    transition ??= st.PendingDisconnectTransition is { } pendingDisconnect
+                        && pendingDisconnect.OwnershipVersion == ownershipVersion
+                            ? pendingDisconnect
+                            : st.DisconnectResumeCompletion is { IsCompleted: false }
+                                ? LifecycleTransitionCoordinator.EnqueueSuccessor(
+                                    st, reservation, ownershipVersion)
+                                : LifecycleTransitionCoordinator.ReserveActive(
+                                    st, reservation, ownershipVersion);
+
+                    if (!ReferenceEquals(st.ActiveLifecycleTransition, transition))
+                    {
+                        pendingCompletion = transition.Activated.Task;
+                    }
+                    else if (st.InputSendPending is not null)
+                    {
+                        pendingCompletion = st.InputSendPending.Completion.Task;
+                    }
+                    else
+                    {
+                        if (transition.DisconnectOwner is not null
+                            && ReferenceEquals(st.HijackOwner, transition.DisconnectOwner))
+                        {
+                            st.HijackOwner = null;
+                            st.HijackOwnerExpiresAt = null;
+                        }
+                        if (st.WorkerWs is null
+                            || st.HijackOwnershipVersion != ownershipVersion
+                            || _hub.State.IsDashboardHijackActive(st)
+                            || _hub.State.HasValidRestLease(st))
+                        {
+                            return (false, null);
+                        }
+                        worker = st.WorkerWs;
+                        transitionReady = true;
+                        break;
+                    }
+                }
+
+                await pendingCompletion!.WaitAsync(ct).ConfigureAwait(false);
             }
-
-            // Both dashboard and REST acquisition paths reject HijackPending.
-            // Hold this reservation until the resume send completes so an
-            // owner cannot appear after the generation check but before the
-            // worker observes the resume.
-            st.HijackPending = reservation;
-            st.DisconnectResumeCompletion = completion.Task;
-            st.DisconnectResumeOwnershipVersion = ownershipVersion;
-            worker = st.WorkerWs;
         }
-
+        finally
+        {
+            if (!transitionReady && transition is not null)
+            {
+                CompleteLifecycleTransition(workerId, transition);
+            }
+        }
         try
         {
             var encoded = ControlChannelCodec.EncodeControlFrame(msg);
-            await worker.SendTextAsync(encoded, ct).ConfigureAwait(false);
+            await worker!.SendTextAsync(encoded, ct).ConfigureAwait(false);
             return (true, null);
         }
         catch (Exception ex)
@@ -669,18 +738,30 @@ public sealed class ConnectionManager
         }
         finally
         {
-            lock (_hub.SharedLock)
-            {
-                var st = _hub.Registry.Get(workerId);
-                if (st?.HijackPending == reservation) st.HijackPending = null;
-                if (st is not null && ReferenceEquals(st.DisconnectResumeCompletion, completion.Task))
-                {
-                    st.DisconnectResumeCompletion = null;
-                    st.DisconnectResumeOwnershipVersion = null;
-                }
-            }
-            completion.TrySetResult();
+            CompleteLifecycleTransition(workerId, transition!);
         }
+    }
+
+    private void CompleteLifecycleTransition(
+        string workerId,
+        PendingLifecycleTransition transition)
+    {
+        lock (_hub.SharedLock)
+        {
+            var st = _hub.Registry.Get(workerId);
+            if (st is not null)
+            {
+                if (transition.DisconnectOwner is not null
+                    && ReferenceEquals(st.HijackOwner, transition.DisconnectOwner))
+                {
+                    st.HijackOwner = null;
+                    st.HijackOwnerExpiresAt = null;
+                }
+                LifecycleTransitionCoordinator.Complete(st, transition);
+            }
+        }
+        transition.Activated.TrySetResult();
+        transition.Completion.TrySetResult();
     }
 
     public async Task BroadcastHijackStateAsync(string workerId, CancellationToken ct = default)
