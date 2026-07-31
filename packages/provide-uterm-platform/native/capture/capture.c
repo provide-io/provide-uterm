@@ -41,9 +41,18 @@
 #define CHANNEL_STDIN   0x02
 #define CHANNEL_CONNECT 0x03
 
+#if defined(__GNUC__)
+#define UTERM_EXPORT __attribute__((visibility("default")))
+#else
+#define UTERM_EXPORT
+#endif
+
 static atomic_int g_capture_fd = ATOMIC_VAR_INIT(-1);
-static atomic_bool g_writer_ready = ATOMIC_VAR_INIT(0);
-static struct capture_writer g_writer;
+static atomic_uint g_writer_ready = ATOMIC_VAR_INIT(0U);
+static struct capture_writer g_writer = CAPTURE_WRITER_INITIALIZER;
+
+_Static_assert(ATOMIC_INT_LOCK_FREE == 2,
+               "capture hooks require lock-free integer atomics");
 
 typedef ssize_t (*fn_write)(int, const void *, size_t);
 typedef ssize_t (*fn_read)(int, void *, size_t);
@@ -243,7 +252,7 @@ static void uterm_capture_init(void) {
     (void)capture_writer_start(capture_fd);
 }
 
-ssize_t write(int fd, const void *buf, size_t count) {
+UTERM_EXPORT ssize_t write(int fd, const void *buf, size_t count) {
     ssize_t ret = orig_write(fd, buf, count);
     if (ret > 0 && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
         send_frame(CHANNEL_STDOUT, buf, (size_t)ret);
@@ -251,7 +260,7 @@ ssize_t write(int fd, const void *buf, size_t count) {
     return ret;
 }
 
-ssize_t read(int fd, void *buf, size_t count) {
+UTERM_EXPORT ssize_t read(int fd, void *buf, size_t count) {
     ssize_t ret = orig_read(fd, buf, count);
     if (ret > 0 && fd == STDIN_FILENO) {
         send_frame(CHANNEL_STDIN, buf, (size_t)ret);
@@ -259,7 +268,7 @@ ssize_t read(int fd, void *buf, size_t count) {
     return ret;
 }
 
-int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
+UTERM_EXPORT int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
     if (sockfd == atomic_load_explicit(&g_capture_fd, memory_order_acquire)) {
         return orig_connect(sockfd, addr, addrlen);
     }
