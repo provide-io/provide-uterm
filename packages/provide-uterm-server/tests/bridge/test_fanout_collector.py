@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 from provide.uterm.server.bridge.fanout._collector import OutputCollector
@@ -37,6 +38,27 @@ async def test_collector_returns_empty_when_no_event_bus() -> None:
     collector = OutputCollector()
     result = await collector.collect(hub, "w1", quiesce_ms=100, max_ms=1_000)
     assert result == ("", 0)
+
+
+async def test_capture_close_unsubscribes_exactly_once() -> None:
+    class Watch:
+        exits = 0
+
+        async def __aenter__(self):
+            return SimpleNamespace(queue=asyncio.Queue())
+
+        async def __aexit__(self, *args: object) -> None:
+            self.exits += 1
+
+    watch = Watch()
+    bus = SimpleNamespace(watch=lambda *args, **kwargs: watch)
+    hub = SimpleNamespace(event_bus=bus)
+    capture = await OutputCollector().open(hub, "w1")  # type: ignore[arg-type]
+
+    await capture.close()
+    await capture.close()
+
+    assert watch.exits == 1
 
 
 # ---------------------------------------------------------------------------

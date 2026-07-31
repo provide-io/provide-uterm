@@ -28,8 +28,78 @@ if TYPE_CHECKING:
     from provide.uterm.server.bridge.hub import TermHub
 
 
+class OutputCapture:
+    """One explicitly opened EventBus subscription with idempotent cleanup."""
+
+    def __init__(self, hub: TermHub, worker_id: str) -> None:
+        self._hub = hub
+        self._worker_id = worker_id
+        self._watch: Any = None
+        self._subscription: Any = None
+        self._closed = False
+
+    async def open(self) -> OutputCapture:
+        """Subscribe now, before any observer notification or worker input."""
+        if self._hub.event_bus is not None:
+            self._watch = self._hub.event_bus.watch(self._worker_id, event_types=["term", "snapshot"])
+            self._subscription = await self._watch.__aenter__()
+        return self
+
+    async def collect(
+        self,
+        *,
+        quiesce_ms: int = 500,
+        max_ms: int = 10_000,
+        started_at: float | None = None,
+    ) -> tuple[str, int]:
+        """Consume output from the already-open subscription."""
+        if self._subscription is None:
+            return ("", 0)
+
+        quiesce_s = quiesce_ms / 1000.0
+        max_s = max_ms / 1000.0
+        term_chunks: list[str] = []
+        last_snapshot_screen = ""
+        start = started_at if started_at is not None else time.monotonic()
+
+        while True:
+            elapsed = time.monotonic() - start
+            remaining = max_s - elapsed
+            if remaining <= 0:
+                break
+            try:
+                event: dict[str, Any] | None = await asyncio.wait_for(
+                    self._subscription.queue.get(), timeout=min(remaining, quiesce_s)
+                )
+            except TimeoutError:
+                break
+            if event is None:
+                break
+            event_type = event.get("type")
+            data = event.get("data") or {}
+            if event_type == "term":
+                text = data.get("data", "") if isinstance(data, dict) else ""
+                if text:
+                    term_chunks.append(text)
+            else:
+                screen = data.get("screen", "") if isinstance(data, dict) else ""
+                if screen:
+                    last_snapshot_screen = screen
+
+        elapsed_ms = int((time.monotonic() - start) * 1000)
+        return ("".join(term_chunks) if term_chunks else last_snapshot_screen, elapsed_ms)
+
+    async def close(self) -> None:
+        """Unsubscribe exactly once; repeated cleanup calls are harmless."""
+        if self._closed:
+            return
+        self._closed = True
+        if self._watch is not None:
+            await self._watch.__aexit__(None, None, None)
+
+
 class OutputCollector:
-    """Collect terminal output from a single session via the EventBus.
+    """Open and collect terminal output from a single session via EventBus.
 
     Subscribes to both ``term`` and ``snapshot`` events, returning when:
 
@@ -46,6 +116,10 @@ class OutputCollector:
 
     If *hub* has no EventBus attached, returns ``("", 0)`` immediately.
     """
+
+    async def open(self, hub: TermHub, worker_id: str) -> OutputCapture:
+        """Create and open a capture handle for *worker_id*."""
+        return await OutputCapture(hub, worker_id).open()
 
     async def collect(
         self,
@@ -67,50 +141,8 @@ class OutputCollector:
             A ``(delta_string, elapsed_ms)`` tuple.  *delta_string* contains
             all text received; *elapsed_ms* is the total wall-clock time spent.
         """
-        if hub.event_bus is None:
-            return ("", 0)
-
-        quiesce_s = quiesce_ms / 1000.0
-        max_s = max_ms / 1000.0
-        term_chunks: list[str] = []
-        last_snapshot_screen: str = ""
-        start = time.monotonic()
-
-        async with hub.event_bus.watch(worker_id, event_types=["term", "snapshot"]) as sub:
-            while True:
-                elapsed = time.monotonic() - start
-                remaining = max_s - elapsed
-                if remaining <= 0:
-                    break
-                # Wait at most quiesce_s for the next event
-                timeout = min(remaining, quiesce_s)
-                try:
-                    event: dict[str, Any] | None = await asyncio.wait_for(sub.queue.get(), timeout=timeout)
-                except TimeoutError:
-                    # No new output — stream quiesced
-                    break
-                if event is None:
-                    # Worker disconnected sentinel
-                    break
-                event_type = event.get("type")
-                data = event.get("data") or {}
-                # The EventBus filter at line 79 restricts to {"term", "snapshot"},
-                # so the else branch is the snapshot path — no further type check
-                # needed (and coverage would treat ``elif event_type == "snapshot"``
-                # as a partially-covered branch because the False path is
-                # unreachable given the filter).
-                if event_type == "term":
-                    text = data.get("data", "") if isinstance(data, dict) else ""
-                    if text:
-                        term_chunks.append(text)
-                else:
-                    # Track last snapshot screen as fallback for snapshot-only connectors.
-                    screen = data.get("screen", "") if isinstance(data, dict) else ""
-                    if screen:
-                        last_snapshot_screen = screen
-
-        elapsed_ms = int((time.monotonic() - start) * 1000)
-        # Use term deltas when present; fall back to last snapshot screen for
-        # connectors (e.g. shell, SSH control) that never emit term events.
-        output = "".join(term_chunks) if term_chunks else last_snapshot_screen
-        return (output, elapsed_ms)
+        capture = await self.open(hub, worker_id)
+        try:
+            return await capture.collect(quiesce_ms=quiesce_ms, max_ms=max_ms)
+        finally:
+            await capture.close()
