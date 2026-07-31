@@ -15,6 +15,8 @@ import sys
 import tomllib
 from pathlib import Path
 
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+
 try:
     from scripts.mutation_gate_config import (
         BAD_MUTANT_STATES,
@@ -185,7 +187,7 @@ def _changed_python_paths(base_ref: str, staged_only: bool, roots: tuple[str, ..
 
 def _configured_mutation_tests() -> tuple[str, ...]:
     try:
-        cfg = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+        cfg = tomllib.loads((REPOSITORY_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     except Exception:
         return ()
     selection = cfg.get("tool", {}).get("mutmut", {}).get("pytest_add_cli_args_test_selection", [])
