@@ -159,6 +159,7 @@ public sealed class ConnectionManager
             st.HijackPending = null;
             st.PendingDashboardBrowser = null;
             st.PendingDashboardOwnershipVersion = null;
+            st.PendingDashboardPauseObligation = null;
             st.DisconnectResumeCompletion = null;
             st.DisconnectResumeOwnershipVersion = null;
             return (true, wasHijacked);
@@ -213,6 +214,7 @@ public sealed class ConnectionManager
             if (_hub.State.IsDashboardHijackActive(st))
             {
                 had = true;
+                st.PendingDashboardPauseObligation = null;
             }
 
             // Only a live owner is a release worth announcing, but the fields
