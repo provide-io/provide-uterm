@@ -34,7 +34,8 @@ public sealed class ServerIntegrationControlPlaneRestTests
         return p;
     }
 
-    private static async Task<(UtermServer Server, HttpClient Http, string Token)> StartServerAsync()
+    private static async Task<(UtermServer Server, HttpClient Http, string Token)> StartServerAsync(
+        Action<UtermServerConfig>? configure = null)
     {
         var port = FreePort();
         var cfg = UtermServerConfig.Default();
@@ -51,6 +52,7 @@ public sealed class ServerIntegrationControlPlaneRestTests
             Visibility = "public",
             Owner = "admin",
         });
+        configure?.Invoke(cfg);
 
         var token = DevIdp.Setup(cfg.Auth, new DevIdp.Options
         {
@@ -207,6 +209,50 @@ public sealed class ServerIntegrationControlPlaneRestTests
 
             Assert.Equal(HttpStatusCode.NotFound,
                 (await http.DeleteAsync("/api/fanout/groups/nope")).StatusCode);
+        }
+    }
+
+    [Fact]
+    public async Task Fanout_Unknown_Members_Are_Strict_By_Default_And_Configurable()
+    {
+        var (strictServer, strictHttp, _) = await StartServerAsync();
+        await using (strictServer)
+        using (strictHttp)
+        {
+            var strict = await strictHttp.PostAsync(
+                "/api/fanout/groups",
+                new StringContent("""{"name":"g","worker_ids":["future-worker"]}""", Encoding.UTF8, "application/json"));
+            Assert.Equal(HttpStatusCode.BadRequest, strict.StatusCode);
+        }
+
+        var (permissiveServer, permissiveHttp, _) = await StartServerAsync(cfg => cfg.FanoutAllowUnknownMembers = true);
+        await using (permissiveServer)
+        using (permissiveHttp)
+        {
+            var permissive = await permissiveHttp.PostAsync(
+                "/api/fanout/groups",
+                new StringContent("""{"name":"g","worker_ids":["future-worker"]}""", Encoding.UTF8, "application/json"));
+            permissive.EnsureSuccessStatusCode();
+        }
+    }
+
+    [Fact]
+    public async Task Fanout_Configured_Unsupported_Governance_Fails_Closed()
+    {
+        var (server, http, _) = await StartServerAsync(cfg => cfg.Governance.PolicyWebhookUrl = "https://policy.example.test");
+        await using (server)
+        using (http)
+        {
+            var create = await http.PostAsync(
+                "/api/fanout/groups",
+                new StringContent("""{"name":"g","worker_ids":["demo"]}""", Encoding.UTF8, "application/json"));
+            create.EnsureSuccessStatusCode();
+            var body = await create.Content.ReadFromJsonAsync<JsonElement>();
+            var groupId = body.GetProperty("group_id").GetString();
+            var send = await http.PostAsync(
+                $"/api/fanout/groups/{groupId}/send",
+                new StringContent("""{"data":"id"}""", Encoding.UTF8, "application/json"));
+            Assert.Equal(HttpStatusCode.NotImplemented, send.StatusCode);
         }
     }
 

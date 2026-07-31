@@ -61,6 +61,7 @@ public static class ConfigLoader
         "browser_rate_limit_per_sec",
         "rest_acquire_rate_limit_per_sec", "rest_send_rate_limit_per_sec",
         "worker_frame_on_invalid", "max_connections_per_principal", "max_workers",
+        "fanout_allow_unknown_members",
     };
 
     /// <summary>
@@ -341,6 +342,11 @@ public static class ConfigLoader
             cfg.WorkerFrameOnInvalid = wfs;
         }
 
+        if (root.TryGetValue("fanout_allow_unknown_members", out var fanoutUnknown) && fanoutUnknown is bool allowUnknown)
+        {
+            cfg.FanoutAllowUnknownMembers = allowUnknown;
+        }
+
         if (root.TryGetValue("server", out var serverObj) && serverObj is TomlTable server)
         {
             ApplyServer(cfg.Server, server);
@@ -593,6 +599,9 @@ public static class ConfigLoader
 
     private static void ApplyGovernance(GovernanceConfig g, TomlTable t)
     {
+        if (t.TryGetValue("policy_webhook_url", out var policyUrl) && policyUrl is string policyUrls) g.PolicyWebhookUrl = policyUrls;
+        if (t.TryGetValue("policy_webhook_secret", out var policySecret) && policySecret is string policySecrets) g.PolicyWebhookSecret = policySecrets;
+        if (t.TryGetValue("policy_webhook_timeout_s", out var policyTimeout)) g.PolicyWebhookTimeoutS = ToDouble(policyTimeout, g.PolicyWebhookTimeoutS);
         if (t.TryGetValue("authz_webhook_url", out var url) && url is string urls) g.AuthzWebhookUrl = urls;
         if (t.TryGetValue("authz_webhook_secret", out var secret) && secret is string secrets) g.AuthzWebhookSecret = secrets;
         if (t.TryGetValue("authz_webhook_timeout_s", out var timeout)) g.AuthzWebhookTimeoutS = ToDouble(timeout, g.AuthzWebhookTimeoutS);
