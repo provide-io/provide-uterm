@@ -158,7 +158,7 @@ public sealed class ResumeLifecycleIntegrationTests
 
         Assert.Equal("Hijack failed: no_worker", error["message"]?.ToString());
         Assert.Null(fixture.Hub.Registry.Get("resume-worker")!.HijackOwner);
-        Assert.Empty(fixture.Worker.Actions);
+        Assert.Equal(["resume"], fixture.Worker.Actions);
     }
 
     [Fact]
@@ -335,7 +335,8 @@ public sealed class ResumeLifecycleIntegrationTests
 
         predecessorPause.Release();
         await ReceiveUntilAsync(predecessor, frame => Type(frame) == "error");
-        Assert.Equal("rest-successor", state.PendingPauseObligation);
+        Assert.NotNull(state.PendingPauseObligation);
+        Assert.Equal(state.HijackPending, state.PendingPauseObligation);
         successorPause.Release();
         var acquired = await restAcquire;
 
@@ -343,6 +344,120 @@ public sealed class ResumeLifecycleIntegrationTests
         Assert.NotNull(state.HijackSession);
         Assert.Null(state.PendingPauseObligation);
         Assert.Equal(["pause", "pause"], fixture.Worker.Actions);
+    }
+
+    [Fact]
+    public async Task RestAcquireDoesNotCommitAfterWorkerReplacement()
+    {
+        var fixture = await BootAsync();
+        await using var server = fixture.Server;
+        var pause = fixture.Worker.DelayNextPause();
+        var acquire = fixture.Hub.Lease.TryAcquireRestAsync(
+            "resume-worker", "old-owner", 30, "replace-worker", 10);
+        await pause.Attempted.WaitAsync(TimeSpan.FromSeconds(5));
+        var replacement = new RecordingWorker();
+        fixture.Hub.Conn.RegisterWorker("resume-worker", replacement);
+
+        pause.Release();
+        var result = await acquire;
+
+        await WaitUntilAsync(() => fixture.Worker.Actions.Count == 2);
+        Assert.False(result.Ok);
+        Assert.Null(fixture.Hub.Registry.Get("resume-worker")!.HijackSession);
+        Assert.Equal(["pause", "resume"], fixture.Worker.Actions);
+        Assert.Empty(replacement.Actions);
+    }
+
+    [Fact]
+    public async Task RestAcquireInternalReservationPreventsHijackIdAbaCommit()
+    {
+        var fixture = await BootAsync();
+        await using var server = fixture.Server;
+        var predecessorPause = fixture.Worker.DelayNextPause();
+        var predecessor = fixture.Hub.Lease.TryAcquireRestAsync(
+            "resume-worker", "predecessor", 30, "shared-id", 10);
+        await predecessorPause.Attempted.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.False(await fixture.Hub.Conn.ForceReleaseHijackAsync("resume-worker"));
+        var successorPause = fixture.Worker.DelayNextPause();
+        var successor = fixture.Hub.Lease.TryAcquireRestAsync(
+            "resume-worker", "successor", 30, "shared-id", 20);
+        await successorPause.Attempted.WaitAsync(TimeSpan.FromSeconds(5));
+
+        predecessorPause.Release();
+        Assert.False((await predecessor).Ok);
+        successorPause.Release();
+        Assert.True((await successor).Ok);
+
+        var session = fixture.Hub.Registry.Get("resume-worker")!.HijackSession;
+        Assert.NotNull(session);
+        Assert.Equal("successor", session.Owner);
+        Assert.Equal(["pause", "pause"], fixture.Worker.Actions);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ClosedWorkerFailsPauseAcquisitionWithoutPublishingOwner(bool restAcquire)
+    {
+        var hub = new TermHub(new TermHubConfig());
+        var worker = new ClosedWorker();
+        hub.Conn.RegisterWorker("closed", worker);
+        var (sent, _) = await hub.Conn.SendWorkerAsync(
+            "closed", new Dictionary<string, object?> { ["type"] = "control", ["action"] = "pause" });
+        Assert.False(sent);
+
+        bool acquired;
+        if (restAcquire)
+        {
+            (acquired, _) = await hub.Lease.TryAcquireRestAsync(
+                "closed", "rest-owner", 30, "closed-rest", 10);
+        }
+        else
+        {
+            var browser = new object();
+            hub.Conn.RegisterBrowser("closed", browser, "admin");
+            (acquired, _) = await hub.Lease.TryAcquireWsAsync("closed", browser);
+        }
+
+        Assert.False(acquired);
+        Assert.Null(hub.Registry.Get("closed")!.HijackOwner);
+        Assert.Null(hub.Registry.Get("closed")!.HijackSession);
+        Assert.Equal(0, worker.SendCount);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task PossiblyDeliveredPauseIsCompensatedAfterThrowOrCancellation(
+        bool restAcquire,
+        bool cancelSend)
+    {
+        var hub = new TermHub(new TermHubConfig());
+        var worker = new RecordingWorker();
+        worker.ThrowAfterNextPause(cancelSend);
+        hub.Conn.RegisterWorker("uncertain", worker);
+
+        if (restAcquire)
+        {
+            var acquire = hub.Lease.TryAcquireRestAsync(
+                "uncertain", "rest-owner", 30, "uncertain-rest", 10);
+            if (cancelSend) await Assert.ThrowsAnyAsync<OperationCanceledException>(() => acquire);
+            else Assert.False((await acquire).Ok);
+        }
+        else
+        {
+            var browser = new object();
+            hub.Conn.RegisterBrowser("uncertain", browser, "admin");
+            var acquire = hub.Lease.TryAcquireWsAsync("uncertain", browser);
+            if (cancelSend) await Assert.ThrowsAnyAsync<OperationCanceledException>(() => acquire);
+            else Assert.False((await acquire).Ok);
+        }
+
+        Assert.Null(hub.Registry.Get("uncertain")!.HijackOwner);
+        Assert.Null(hub.Registry.Get("uncertain")!.HijackSession);
+        Assert.Equal(["pause", "resume"], worker.Actions);
     }
 
     [Fact]
@@ -560,6 +675,18 @@ public sealed class ResumeLifecycleIntegrationTests
             lock (_gate) _lastPauseGate = EnqueuePauseGate(fail: true, delayed: false);
         }
 
+        public void ThrowAfterNextPause(bool cancel)
+        {
+            lock (_gate)
+            {
+                _lastPauseGate = EnqueuePauseGate(
+                    fail: !cancel,
+                    cancel: cancel,
+                    delayed: false,
+                    landBeforeFailure: true);
+            }
+        }
+
         public PauseGate DelayNextPause(bool fail = false, bool cancel = false)
         {
             lock (_gate)
@@ -622,12 +749,21 @@ public sealed class ResumeLifecycleIntegrationTests
                         _resumeRelease = null;
                     }
                 }
+                var recorded = false;
+                if (pauseGate?.LandBeforeFailure is true)
+                {
+                    lock (_gate) _actions.Add(action);
+                    recorded = true;
+                }
                 if (pauseGate?.Cancel is true)
                 {
                     throw new OperationCanceledException("deterministic pause cancellation", cancellationToken);
                 }
                 if (pauseGate?.Fail is true) throw new IOException("deterministic pause failure");
-                lock (_gate) _actions.Add(action);
+                if (!recorded)
+                {
+                    lock (_gate) _actions.Add(action);
+                }
                 if (action == "resume" && AfterResume is not null) await AfterResume();
             }
         }
@@ -635,9 +771,13 @@ public sealed class ResumeLifecycleIntegrationTests
         private static TaskCompletionSource NewSignal() =>
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        private PauseGate EnqueuePauseGate(bool fail = false, bool cancel = false, bool delayed = true)
+        private PauseGate EnqueuePauseGate(
+            bool fail = false,
+            bool cancel = false,
+            bool delayed = true,
+            bool landBeforeFailure = false)
         {
-            var gate = new PauseGate(fail, cancel, delayed);
+            var gate = new PauseGate(fail, cancel, delayed, landBeforeFailure);
             _pauseGates.Enqueue(gate);
             return gate;
         }
@@ -647,21 +787,36 @@ public sealed class ResumeLifecycleIntegrationTests
             private readonly TaskCompletionSource _attempted = NewSignal();
             private readonly TaskCompletionSource? _release;
 
-            internal PauseGate(bool fail, bool cancel, bool delayed)
+            internal PauseGate(bool fail, bool cancel, bool delayed, bool landBeforeFailure)
             {
                 Fail = fail;
                 Cancel = cancel;
+                LandBeforeFailure = landBeforeFailure;
                 if (delayed) _release = NewSignal();
             }
 
             public bool Fail { get; }
             public bool Cancel { get; }
+            public bool LandBeforeFailure { get; }
             public Task Attempted => _attempted.Task;
             internal void MarkAttempted() => _attempted.TrySetResult();
             public void Release() => _release?.TrySetResult();
 
             internal Task WaitAsync(CancellationToken cancellationToken) =>
                 _release?.Task.WaitAsync(cancellationToken) ?? Task.CompletedTask;
+        }
+    }
+
+    private sealed class ClosedWorker : IAbortableBrowserWs
+    {
+        public bool IsActive => false;
+        public int SendCount { get; private set; }
+        public void Abort() { }
+
+        public Task SendTextAsync(string payload, CancellationToken cancellationToken = default)
+        {
+            SendCount++;
+            return Task.CompletedTask;
         }
     }
 }
