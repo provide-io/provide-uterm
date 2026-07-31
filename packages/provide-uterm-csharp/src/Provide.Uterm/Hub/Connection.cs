@@ -44,7 +44,7 @@ public sealed class ConnectionManager
     {
         var reservation = "worker-replacement-" + Guid.NewGuid().ToString("N");
         TaskCompletionSource? completion = null;
-        PendingLifecycleTransition? queuedTransition = null;
+        PendingLifecycleTransition? lifecycleTransition = null;
         IWorkerWs? predecessor = null;
         var mustResume = false;
         var ownershipLost = false;
@@ -62,24 +62,32 @@ public sealed class ConnectionManager
                     }
 
                     var st = _hub.State.GetOrCreate(workerId);
+                    if (lifecycleTransition?.IsTerminal == true)
+                    {
+                        lifecycleTransition = null;
+                        completion = null;
+                    }
                     if (ReferenceEquals(st.WorkerWs, ws)) return true;
                     if (st.DisconnectResumeCompletion is { IsCompleted: false } lifecycleCompletion
                         && (completion is null
                             || !ReferenceEquals(lifecycleCompletion, completion.Task)))
                     {
-                        queuedTransition ??= LifecycleTransitionCoordinator.EnqueueSuccessor(
+                        lifecycleTransition ??= LifecycleTransitionCoordinator.EnqueueSuccessor(
                             st, reservation);
-                        completion ??= queuedTransition.Completion;
-                        pendingCompletion = queuedTransition.Activated.Task;
+                        completion ??= lifecycleTransition.Completion;
+                        pendingCompletion = lifecycleTransition.Activated.Task;
                     }
                     else if (st.InputSendPending is not null)
                     {
                         if (completion is null)
                         {
-                            completion = LifecycleTransitionCoordinator.ReserveActive(
-                                st, reservation).Completion;
+                            lifecycleTransition = LifecycleTransitionCoordinator.ReserveActive(
+                                st, reservation);
+                            completion = lifecycleTransition.Completion;
                         }
-                        pendingCompletion = st.InputSendPending.Completion.Task;
+                        pendingCompletion = Task.WhenAny(
+                            st.InputSendPending.Completion.Task,
+                            lifecycleTransition!.Completion.Task);
                     }
                     else
                     {
@@ -100,8 +108,9 @@ public sealed class ConnectionManager
                             st.HijackOwnershipVersion++;
                             if (completion is null)
                             {
-                                completion = LifecycleTransitionCoordinator.ReserveActive(
-                                    st, reservation).Completion;
+                                lifecycleTransition = LifecycleTransitionCoordinator.ReserveActive(
+                                    st, reservation);
+                                completion = lifecycleTransition.Completion;
                             }
                         }
                         st.WorkerWs = ws;
@@ -678,6 +687,7 @@ public sealed class ConnectionManager
                 {
                     var st = _hub.Registry.Get(workerId);
                     if (st is null) return (false, null);
+                    if (transition?.IsTerminal == true) return (false, null);
                     transition ??= st.PendingDisconnectTransition is { } pendingDisconnect
                         && pendingDisconnect.OwnershipVersion == ownershipVersion
                             ? pendingDisconnect
@@ -693,7 +703,9 @@ public sealed class ConnectionManager
                     }
                     else if (st.InputSendPending is not null)
                     {
-                        pendingCompletion = st.InputSendPending.Completion.Task;
+                        pendingCompletion = Task.WhenAny(
+                            st.InputSendPending.Completion.Task,
+                            transition.Completion.Task);
                     }
                     else
                     {

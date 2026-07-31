@@ -150,6 +150,14 @@ internal sealed class PendingInputSend
 }
 
 /// <summary>A lifecycle successor waiting for atomic promotion to the active fence.</summary>
+internal enum LifecycleTransitionState
+{
+    Queued,
+    Active,
+    Completed,
+    Cleared,
+}
+
 internal sealed class PendingLifecycleTransition
 {
     internal required string Reservation { get; init; }
@@ -157,6 +165,10 @@ internal sealed class PendingLifecycleTransition
     internal object? DisconnectOwner { get; init; }
     internal required TaskCompletionSource Activated { get; init; }
     internal required TaskCompletionSource Completion { get; init; }
+    internal LifecycleTransitionState State { get; set; }
+
+    internal bool IsTerminal =>
+        State is LifecycleTransitionState.Completed or LifecycleTransitionState.Cleared;
 }
 
 /// <summary>FIFO handoff for the active lifecycle fields retained for compatibility.</summary>
@@ -211,6 +223,7 @@ internal static class LifecycleTransitionCoordinator
         {
             st.PendingDisconnectTransition = null;
         }
+        transition.State = LifecycleTransitionState.Completed;
         transition.Activated.TrySetResult();
         transition.Completion.TrySetResult();
     }
@@ -225,6 +238,8 @@ internal static class LifecycleTransitionCoordinator
         st.DisconnectResumeCompletion = null;
         st.DisconnectResumeOwnershipVersion = null;
         st.PendingDisconnectTransition = null;
+        if (active is not null) active.State = LifecycleTransitionState.Cleared;
+        foreach (var transition in pending) transition.State = LifecycleTransitionState.Cleared;
         active?.Activated.TrySetResult();
         active?.Completion.TrySetResult();
         foreach (var transition in pending)
@@ -244,10 +259,12 @@ internal static class LifecycleTransitionCoordinator
             DisconnectOwner = disconnectOwner,
             Activated = NewSignal(),
             Completion = NewSignal(),
+            State = LifecycleTransitionState.Queued,
         };
 
     private static void Activate(WorkerTermState st, PendingLifecycleTransition transition)
     {
+        transition.State = LifecycleTransitionState.Active;
         st.ActiveLifecycleTransition = transition;
         st.HijackPending = transition.Reservation;
         st.DisconnectResumeCompletion = transition.Completion.Task;
