@@ -87,6 +87,9 @@ public sealed class WorkerTermState
     internal string? PendingPauseObligation { get; set; }
     internal Task? DisconnectResumeCompletion { get; set; }
     internal long? DisconnectResumeOwnershipVersion { get; set; }
+    internal PendingLifecycleTransition? ActiveLifecycleTransition { get; set; }
+    internal readonly List<PendingLifecycleTransition> LifecycleTransitionQueue = [];
+    internal PendingLifecycleTransition? PendingDisconnectTransition { get; set; }
     internal PendingInputSend? InputSendPending { get; set; }
     public string InputMode { get; set; } = InputModes.Hijack;
 
@@ -144,4 +147,114 @@ internal sealed class PendingInputSend
     internal object? DashboardOwner { get; init; }
     internal long? DashboardOwnershipVersion { get; init; }
     internal required TaskCompletionSource Completion { get; init; }
+}
+
+/// <summary>A lifecycle successor waiting for atomic promotion to the active fence.</summary>
+internal sealed class PendingLifecycleTransition
+{
+    internal required string Reservation { get; init; }
+    internal long? OwnershipVersion { get; init; }
+    internal object? DisconnectOwner { get; init; }
+    internal required TaskCompletionSource Activated { get; init; }
+    internal required TaskCompletionSource Completion { get; init; }
+}
+
+/// <summary>FIFO handoff for the active lifecycle fields retained for compatibility.</summary>
+internal static class LifecycleTransitionCoordinator
+{
+    internal static PendingLifecycleTransition ReserveActive(
+        WorkerTermState st,
+        string reservation,
+        long? ownershipVersion = null,
+        object? disconnectOwner = null)
+    {
+        var transition = NewTransition(reservation, ownershipVersion, disconnectOwner);
+        Activate(st, transition);
+        return transition;
+    }
+
+    internal static PendingLifecycleTransition EnqueueSuccessor(
+        WorkerTermState st,
+        string reservation,
+        long? ownershipVersion = null,
+        object? disconnectOwner = null)
+    {
+        var transition = NewTransition(reservation, ownershipVersion, disconnectOwner);
+        st.LifecycleTransitionQueue.Add(transition);
+        return transition;
+    }
+
+    internal static void Complete(WorkerTermState st, PendingLifecycleTransition transition)
+    {
+        if (ReferenceEquals(st.ActiveLifecycleTransition, transition))
+        {
+            if (st.LifecycleTransitionQueue.Count == 0)
+            {
+                st.ActiveLifecycleTransition = null;
+                st.HijackPending = null;
+                st.DisconnectResumeCompletion = null;
+                st.DisconnectResumeOwnershipVersion = null;
+            }
+            else
+            {
+                var successor = st.LifecycleTransitionQueue[0];
+                st.LifecycleTransitionQueue.RemoveAt(0);
+                Activate(st, successor);
+            }
+        }
+        else
+        {
+            st.LifecycleTransitionQueue.Remove(transition);
+        }
+
+        if (ReferenceEquals(st.PendingDisconnectTransition, transition))
+        {
+            st.PendingDisconnectTransition = null;
+        }
+        transition.Activated.TrySetResult();
+        transition.Completion.TrySetResult();
+    }
+
+    internal static void Clear(WorkerTermState st)
+    {
+        var pending = st.LifecycleTransitionQueue.ToArray();
+        var active = st.ActiveLifecycleTransition;
+        st.LifecycleTransitionQueue.Clear();
+        st.ActiveLifecycleTransition = null;
+        st.HijackPending = null;
+        st.DisconnectResumeCompletion = null;
+        st.DisconnectResumeOwnershipVersion = null;
+        st.PendingDisconnectTransition = null;
+        active?.Activated.TrySetResult();
+        active?.Completion.TrySetResult();
+        foreach (var transition in pending)
+        {
+            transition.Activated.TrySetResult();
+            transition.Completion.TrySetResult();
+        }
+    }
+
+    private static PendingLifecycleTransition NewTransition(
+        string reservation,
+        long? ownershipVersion,
+        object? disconnectOwner) => new()
+        {
+            Reservation = reservation,
+            OwnershipVersion = ownershipVersion,
+            DisconnectOwner = disconnectOwner,
+            Activated = NewSignal(),
+            Completion = NewSignal(),
+        };
+
+    private static void Activate(WorkerTermState st, PendingLifecycleTransition transition)
+    {
+        st.ActiveLifecycleTransition = transition;
+        st.HijackPending = transition.Reservation;
+        st.DisconnectResumeCompletion = transition.Completion.Task;
+        st.DisconnectResumeOwnershipVersion = transition.OwnershipVersion;
+        transition.Activated.TrySetResult();
+    }
+
+    private static TaskCompletionSource NewSignal() =>
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
 }

@@ -915,6 +915,161 @@ public sealed class ResumeLifecycleIntegrationTests
     }
 
     [Fact]
+    public async Task DisconnectResumeWaitsForReservedBrowserInputToDrain()
+    {
+        var hub = new TermHub();
+        var worker = new RecordingWorker();
+        var browser = new RecordingBrowser();
+        Assert.True(hub.Conn.RegisterWorker("disconnect-input", worker));
+        hub.Conn.RegisterBrowser("disconnect-input", browser, "admin");
+        Assert.True((await hub.Lease.TryAcquireWsAsync("disconnect-input", browser)).Ok);
+
+        worker.DelayNextInput();
+        var server = NewUnstartedServer(hub);
+        var input = server.SendBrowserInputAsync(
+            "disconnect-input", browser, "disconnect-owner-input");
+        await worker.InputAttempted.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var ownershipVersion = Assert.IsType<long>(
+            hub.Conn.CleanupBrowser("disconnect-input", browser));
+        var resume = hub.Conn.ResumeWorkerIfOwnershipUnchangedAsync(
+            "disconnect-input",
+            ownershipVersion,
+            HijackLeaseManager.ResumeFrame("dashboard", 100));
+        var resumeCompletedBeforeInput = resume.IsCompleted;
+
+        worker.ReleaseInput();
+        Assert.True(await input);
+        Assert.True((await resume).Resumed);
+
+        Assert.False(resumeCompletedBeforeInput);
+        Assert.Equal(["pause", "resume"], worker.Actions);
+        Assert.Equal(["disconnect-owner-input"], worker.Inputs);
+    }
+
+    [Fact]
+    public async Task CancelledDisconnectResumeClearsDeferredBrowserOwner()
+    {
+        var hub = new TermHub();
+        var worker = new RecordingWorker();
+        var browser = new RecordingBrowser();
+        Assert.True(hub.Conn.RegisterWorker("disconnect-cancel", worker));
+        hub.Conn.RegisterBrowser("disconnect-cancel", browser, "admin");
+        Assert.True((await hub.Lease.TryAcquireWsAsync("disconnect-cancel", browser)).Ok);
+
+        worker.DelayNextInput();
+        var server = NewUnstartedServer(hub);
+        var input = server.SendBrowserInputAsync(
+            "disconnect-cancel", browser, "disconnect-cancel-input");
+        await worker.InputAttempted.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var ownershipVersion = Assert.IsType<long>(
+            hub.Conn.CleanupBrowser("disconnect-cancel", browser));
+        using var cancelled = new CancellationTokenSource();
+        var resume = hub.Conn.ResumeWorkerIfOwnershipUnchangedAsync(
+            "disconnect-cancel",
+            ownershipVersion,
+            HijackLeaseManager.ResumeFrame("dashboard", 100),
+            cancelled.Token);
+        cancelled.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => resume);
+        Assert.Null(hub.Registry.Get("disconnect-cancel")!.HijackOwner);
+
+        worker.ReleaseInput();
+        Assert.True(await input);
+    }
+
+    [Fact]
+    public async Task QueuedReplacementsKeepFifoPriorityOverLaterOpenModeInput()
+    {
+        var hub = new TermHub();
+        var original = new RecordingWorker();
+        var firstReplacement = new RecordingWorker();
+        var secondReplacement = new RecordingWorker();
+        var thirdReplacement = new RecordingWorker();
+        var browser = new RecordingBrowser();
+        Assert.True(hub.Conn.RegisterWorker("transition-fifo", original));
+        hub.Conn.RegisterBrowser("transition-fifo", browser, "admin");
+        Assert.True(hub.Router.SetInputMode("transition-fifo", InputModes.Open).Ok);
+
+        original.DelayNextInput();
+        var server = NewUnstartedServer(hub);
+        var firstInput = server.SendBrowserInputAsync(
+            "transition-fifo", browser, "input-a");
+        await original.InputAttempted.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var firstTransition = hub.Conn.RegisterWorkerAsync(
+            "transition-fifo", firstReplacement);
+        var secondTransition = hub.Conn.RegisterWorkerAsync(
+            "transition-fifo", secondReplacement);
+        var thirdTransition = hub.Conn.RegisterWorkerAsync(
+            "transition-fifo", thirdReplacement);
+        Assert.Equal(2, QueuedLifecycleTransitionCount(
+            hub.Registry.Get("transition-fifo")!));
+
+        var laterInput = server.SendBrowserInputAsync(
+            "transition-fifo", browser, "input-i");
+        original.ReleaseInput();
+
+        Assert.True(await firstInput);
+        Assert.True(await firstTransition);
+        Assert.True(await secondTransition);
+        Assert.True(await thirdTransition);
+        Assert.True(await laterInput);
+        Assert.Equal(["input-a"], original.Inputs);
+        Assert.Empty(firstReplacement.Inputs);
+        Assert.Empty(secondReplacement.Inputs);
+        Assert.Equal(["input-i"], thirdReplacement.Inputs);
+    }
+
+    [Fact]
+    public async Task CancelledQueuedReplacementDoesNotStrandItsFifoSuccessor()
+    {
+        var hub = new TermHub();
+        var original = new RecordingWorker();
+        var firstReplacement = new RecordingWorker();
+        var cancelledReplacement = new RecordingWorker();
+        var finalReplacement = new RecordingWorker();
+        var browser = new RecordingBrowser();
+        Assert.True(hub.Conn.RegisterWorker("transition-cancel", original));
+        hub.Conn.RegisterBrowser("transition-cancel", browser, "admin");
+        Assert.True(hub.Router.SetInputMode("transition-cancel", InputModes.Open).Ok);
+
+        original.DelayNextInput();
+        var server = NewUnstartedServer(hub);
+        var firstInput = server.SendBrowserInputAsync(
+            "transition-cancel", browser, "input-a");
+        await original.InputAttempted.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var firstTransition = hub.Conn.RegisterWorkerAsync(
+            "transition-cancel", firstReplacement);
+        using var cancelled = new CancellationTokenSource();
+        var cancelledTransition = hub.Conn.RegisterWorkerAsync(
+            "transition-cancel", cancelledReplacement, cancelled.Token);
+        var finalTransition = hub.Conn.RegisterWorkerAsync(
+            "transition-cancel", finalReplacement);
+        Assert.Equal(2, QueuedLifecycleTransitionCount(
+            hub.Registry.Get("transition-cancel")!));
+
+        cancelled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => cancelledTransition);
+        Assert.Equal(1, QueuedLifecycleTransitionCount(
+            hub.Registry.Get("transition-cancel")!));
+
+        var laterInput = server.SendBrowserInputAsync(
+            "transition-cancel", browser, "input-i");
+        original.ReleaseInput();
+
+        Assert.True(await firstInput);
+        Assert.True(await firstTransition);
+        Assert.True(await finalTransition);
+        Assert.True(await laterInput);
+        Assert.Empty(cancelledReplacement.Inputs);
+        Assert.Equal(["input-i"], finalReplacement.Inputs);
+    }
+
+    [Fact]
     public async Task ConcurrentValidRestInputWaitsForPriorInputAndThenSends()
     {
         var hub = new TermHub();
@@ -1153,6 +1308,16 @@ public sealed class ResumeLifecycleIntegrationTests
 
     private static bool Bool(IReadOnlyDictionary<string, object?> frame, string key) =>
         frame.TryGetValue(key, out var value) && value is true;
+
+    private static int QueuedLifecycleTransitionCount(WorkerTermState state)
+    {
+        var field = typeof(WorkerTermState).GetField(
+            "LifecycleTransitionQueue",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        var queue = Assert.IsAssignableFrom<System.Collections.ICollection>(field.GetValue(state));
+        return queue.Count;
+    }
 
     private static async Task WaitUntilAsync(Func<bool> predicate)
     {
