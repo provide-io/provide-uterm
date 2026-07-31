@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using Provide.Uterm.ServerAuth;
@@ -32,6 +33,7 @@ public interface IGroupStore
     void Save(Group group);
     bool TryGet(string groupId, out Group group);
     void Delete(string groupId);
+    bool GrantAccess(string groupId, string grantee, string principal);
     IReadOnlyList<Group> ListForPrincipal(string principal);
 }
 
@@ -44,7 +46,7 @@ public sealed class InMemoryGroupStore : IGroupStore
     {
         lock (_lock)
         {
-            _groups[group.GroupId] = group;
+            _groups[group.GroupId] = group.DeepClone();
         }
     }
 
@@ -52,7 +54,13 @@ public sealed class InMemoryGroupStore : IGroupStore
     {
         lock (_lock)
         {
-            return _groups.TryGetValue(groupId, out group!);
+            if (!_groups.TryGetValue(groupId, out var stored))
+            {
+                group = null!;
+                return false;
+            }
+            group = stored.DeepClone();
+            return true;
         }
     }
 
@@ -64,12 +72,26 @@ public sealed class InMemoryGroupStore : IGroupStore
         }
     }
 
+    public bool GrantAccess(string groupId, string grantee, string principal)
+    {
+        lock (_lock)
+        {
+            if (!_groups.TryGetValue(groupId, out var group) || group.CreatedBy != principal)
+            {
+                return false;
+            }
+            if (!group.Grants.Contains(grantee)) group.Grants.Add(grantee);
+            return true;
+        }
+    }
+
     public IReadOnlyList<Group> ListForPrincipal(string principal)
     {
         lock (_lock)
         {
             return _groups.Values
                 .Where(g => g.CreatedBy == principal || g.Grants.Contains(principal))
+                .Select(g => g.DeepClone())
                 .ToList();
         }
     }
@@ -81,6 +103,7 @@ public sealed class ControllerConfig
     public IFanoutAuthorizer? Authorizer { get; set; }
     public int MaxGroupSize { get; set; } = 50;
     public Func<string>? IdGen { get; set; }
+    public Action<Exception>? LateFaultObserver { get; set; }
 }
 
 /// <summary>
@@ -95,6 +118,7 @@ public sealed class Controller
     private readonly IFanoutAuthorizer? _authorizer;
     private readonly int _maxGroupSize;
     private readonly Func<string> _newId;
+    private readonly Action<Exception>? _lateFaultObserver;
 
     public Controller(IFanoutHub? hub = null, ControllerConfig? cfg = null)
     {
@@ -104,6 +128,7 @@ public sealed class Controller
         _authorizer = cfg.Authorizer;
         _maxGroupSize = cfg.MaxGroupSize <= 0 ? 50 : cfg.MaxGroupSize;
         _newId = cfg.IdGen ?? NewHexId;
+        _lateFaultObserver = cfg.LateFaultObserver;
     }
 
     private static string NewHexId()
@@ -150,16 +175,7 @@ public sealed class Controller
 
     public void GrantAccess(string groupId, string grantee, string principal)
     {
-        if (!_store.TryGet(groupId, out var g) || g.CreatedBy != principal)
-        {
-            return;
-        }
-
-        if (!g.Grants.Contains(grantee))
-        {
-            g.Grants.Add(grantee);
-            _store.Save(g);
-        }
+        _store.GrantAccess(groupId, grantee, principal);
     }
 
     /// <summary>Broadcast input and collect bounded output using the group's advertised mode.</summary>
@@ -229,13 +245,14 @@ public sealed class Controller
 
         var qMs = quiesceMs > 0 ? quiesceMs : Math.Max(1, group.QuiesceMs);
         var mMs = maxResponseMs > 0 ? maxResponseMs : Math.Max(1, group.MaxResponseMs);
+        using var budget = new OperationBudget(ct, mMs);
         if (string.Equals(group.Mode, "sequential", StringComparison.Ordinal))
         {
-            await SendSequentialAsync(group, result, data, principal, qMs, mMs, ct).ConfigureAwait(false);
+            await SendSequentialAsync(group, result, data, principal, qMs, budget, ct).ConfigureAwait(false);
         }
         else
         {
-            await SendParallelAsync(group, result, data, principal, qMs, mMs, ct).ConfigureAwait(false);
+            await SendParallelAsync(group, result, data, principal, qMs, budget, ct).ConfigureAwait(false);
         }
 
         ApplySuccessfulDivergence(result, group.DivergenceThreshold);
@@ -244,21 +261,9 @@ public sealed class Controller
 
     private static Group CopyGroupWithWorkers(Group group, IEnumerable<string> workerIds)
     {
-        return new Group
-        {
-            GroupId = group.GroupId,
-            Name = group.Name,
-            WorkerIds = workerIds.ToList(),
-            CreatedBy = group.CreatedBy,
-            CreatedAt = group.CreatedAt,
-            Mode = group.Mode,
-            StopOnFirstError = group.StopOnFirstError,
-            ErrorPattern = group.ErrorPattern,
-            QuiesceMs = group.QuiesceMs,
-            MaxResponseMs = group.MaxResponseMs,
-            DivergenceThreshold = group.DivergenceThreshold,
-            Grants = group.Grants.ToList(),
-        };
+        var copy = group.DeepClone();
+        copy.WorkerIds = workerIds.ToList();
+        return copy;
     }
 
     private Result EmptyResult(string groupId, string data) => new()
@@ -270,28 +275,18 @@ public sealed class Controller
     };
 
     private async Task SendParallelAsync(
-        Group group, Result result, string data, string principal, int quiesceMs, int maxResponseMs, CancellationToken ct)
+        Group group, Result result, string data, string principal, int quiesceMs,
+        OperationBudget budget, CancellationToken callerCancellation)
     {
         var subscriptions = group.WorkerIds.Select(wid => _hub!.SubscribeOutput(wid)).ToArray();
         try
         {
-            var sends = group.WorkerIds.Select(async wid =>
-            {
-                try
-                {
-                    await NotifyAsync(group, result, wid, data, principal, ct).ConfigureAwait(false);
-                    return await _hub!.SendWorkerAsync(wid, InputFrame(data, result.SentAt), ct).ConfigureAwait(false);
-                }
-                catch when (!ct.IsCancellationRequested)
-                {
-                    return false;
-                }
-            }).ToArray();
+            var sends = group.WorkerIds.Select(wid => ExecuteParallelSendAsync(
+                group, result, wid, data, principal, budget, callerCancellation)).ToArray();
             var accepted = await Task.WhenAll(sends).ConfigureAwait(false);
-            var collects = group.WorkerIds.Select((wid, index) =>
-                accepted[index]
-                    ? CollectRowAsync(wid, subscriptions[index], quiesceMs, maxResponseMs, ct)
-                    : Task.FromResult(new SessionResult { WorkerId = wid, Ok = false })).ToArray();
+            var collects = group.WorkerIds.Select((wid, index) => accepted[index]
+                ? ExecuteParallelCollectAsync(wid, subscriptions[index], quiesceMs, budget, callerCancellation)
+                : Task.FromResult(new SessionResult { WorkerId = wid, Ok = false })).ToArray();
             result.Results.AddRange(await Task.WhenAll(collects).ConfigureAwait(false));
             result.FailedSessions.AddRange(result.Results.Where(row => !row.Ok).Select(row => row.WorkerId));
         }
@@ -299,66 +294,121 @@ public sealed class Controller
         {
             foreach (var subscription in subscriptions)
             {
-                await subscription.DisposeAsync().ConfigureAwait(false);
+                await DisposeBoundedAsync(subscription, budget).ConfigureAwait(false);
             }
         }
     }
 
+    private async Task<bool> ExecuteParallelSendAsync(
+        Group group, Result result, string workerId, string data, string principal, OperationBudget budget,
+        CancellationToken callerCancellation)
+    {
+        try
+        {
+            await AwaitBoundedAsync(
+                token => NotifyAsync(group, result, workerId, data, principal, token), budget).ConfigureAwait(false);
+            var accepted = await AwaitBoundedAsync(
+                token => _hub!.SendWorkerAsync(workerId, InputFrame(data, result.SentAt), token), budget)
+                .ConfigureAwait(false);
+            return accepted;
+        }
+        catch (OperationCanceledException) when (callerCancellation.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private async Task<SessionResult> ExecuteParallelCollectAsync(
+        string workerId, IFanoutOutputSubscription subscription, int quiesceMs,
+        OperationBudget budget, CancellationToken callerCancellation)
+    {
+        try
+        {
+            return await CollectRowAsync(workerId, subscription, quiesceMs, budget).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (callerCancellation.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            return new SessionResult { WorkerId = workerId, Ok = false };
+        }
+    }
+
     private async Task SendSequentialAsync(
-        Group group, Result result, string data, string principal, int quiesceMs, int maxResponseMs, CancellationToken ct)
+        Group group, Result result, string data, string principal, int quiesceMs,
+        OperationBudget budget, CancellationToken callerCancellation)
     {
         var stopped = false;
         Regex? errorPattern = string.IsNullOrEmpty(group.ErrorPattern)
             ? null
             : new Regex(group.ErrorPattern, RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
-        foreach (var wid in group.WorkerIds)
+        for (var index = 0; index < group.WorkerIds.Count; index++)
         {
+            var wid = group.WorkerIds[index];
             if (stopped)
             {
                 AddFailures(result, [wid]);
                 continue;
             }
 
-            await using var subscription = _hub!.SubscribeOutput(wid);
-            var ok = false;
+            if (budget.IsExpired)
+            {
+                AddFailures(result, group.WorkerIds.Skip(index));
+                break;
+            }
+
+            var subscription = _hub!.SubscribeOutput(wid);
             try
             {
-                await NotifyAsync(group, result, wid, data, principal, ct).ConfigureAwait(false);
-                ok = await _hub.SendWorkerAsync(wid, InputFrame(data, result.SentAt), ct).ConfigureAwait(false);
-            }
-            catch when (!ct.IsCancellationRequested)
-            {
-                ok = false;
-            }
+                await AwaitBoundedAsync(
+                    token => NotifyAsync(group, result, wid, data, principal, token), budget).ConfigureAwait(false);
+                var ok = await AwaitBoundedAsync(
+                    token => _hub.SendWorkerAsync(wid, InputFrame(data, result.SentAt), token), budget)
+                    .ConfigureAwait(false);
+                if (!ok)
+                {
+                    AddFailures(result, [wid]);
+                    continue;
+                }
 
-            if (!ok)
+                var row = await CollectRowAsync(wid, subscription, quiesceMs, budget).ConfigureAwait(false);
+                result.Results.Add(row);
+                if (!row.Ok) result.FailedSessions.Add(wid);
+                if (group.StopOnFirstError && row.Ok && errorPattern is not null && errorPattern.IsMatch(row.OutputDelta ?? ""))
+                {
+                    stopped = true;
+                }
+            }
+            catch (OperationCanceledException) when (callerCancellation.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch
             {
                 AddFailures(result, [wid]);
-                continue;
             }
-
-            var row = await CollectRowAsync(wid, subscription, quiesceMs, maxResponseMs, ct).ConfigureAwait(false);
-            result.Results.Add(row);
-            if (group.StopOnFirstError && errorPattern is not null && errorPattern.IsMatch(row.OutputDelta ?? ""))
+            finally
             {
-                stopped = true;
+                await DisposeBoundedAsync(subscription, budget).ConfigureAwait(false);
             }
         }
     }
 
     private async Task<SessionResult> CollectRowAsync(
-        string workerId, IFanoutOutputSubscription subscription, int quiesceMs, int maxResponseMs, CancellationToken ct)
+        string workerId, IFanoutOutputSubscription subscription, int quiesceMs, OperationBudget budget)
     {
-        try
-        {
-            var (output, elapsed) = await OutputCollector.CollectAsync(subscription, quiesceMs, maxResponseMs, ct)
-                .ConfigureAwait(false);
-            return new SessionResult { WorkerId = workerId, Ok = true, OutputDelta = output, ElapsedMs = elapsed };
-        }
-        catch when (!ct.IsCancellationRequested)
-        {
-            return new SessionResult { WorkerId = workerId, Ok = false };
-        }
+        var remainingMs = budget.RemainingMs;
+        if (remainingMs <= 0) return new SessionResult { WorkerId = workerId, Ok = false };
+        var (output, elapsed) = await AwaitBoundedAsync(
+            token => OutputCollector.CollectAsync(subscription, quiesceMs, remainingMs, token), budget)
+            .ConfigureAwait(false);
+        return new SessionResult { WorkerId = workerId, Ok = true, OutputDelta = output, ElapsedMs = elapsed };
     }
 
     private Task NotifyAsync(Group group, Result result, string wid, string data, string principal, CancellationToken ct) =>
@@ -370,6 +420,95 @@ public sealed class Controller
             ["command"] = data,
             ["from_principal"] = principal,
         }, ct);
+
+    private async Task AwaitBoundedAsync(
+        Func<CancellationToken, Task> start, OperationBudget budget)
+    {
+        budget.CallerCancellation.ThrowIfCancellationRequested();
+        if (budget.IsExpired) throw new FanoutDeadlineExceededException();
+        var task = start(budget.Token);
+        try
+        {
+            await task.WaitAsync(budget.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            if (!task.IsCompleted) ObserveLateFault(task);
+            budget.CallerCancellation.ThrowIfCancellationRequested();
+            throw new FanoutDeadlineExceededException();
+        }
+    }
+
+    private async Task<T> AwaitBoundedAsync<T>(
+        Func<CancellationToken, Task<T>> start, OperationBudget budget)
+    {
+        budget.CallerCancellation.ThrowIfCancellationRequested();
+        if (budget.IsExpired) throw new FanoutDeadlineExceededException();
+        var task = start(budget.Token);
+        try
+        {
+            return await task.WaitAsync(budget.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            if (!task.IsCompleted) ObserveLateFault(task);
+            budget.CallerCancellation.ThrowIfCancellationRequested();
+            throw new FanoutDeadlineExceededException();
+        }
+    }
+
+    private async Task DisposeBoundedAsync(IFanoutOutputSubscription subscription, OperationBudget budget)
+    {
+        Task task;
+        try
+        {
+            task = subscription.DisposeAsync().AsTask();
+        }
+        catch
+        {
+            return;
+        }
+
+        if (task.IsCompleted)
+        {
+            try { await task.ConfigureAwait(false); } catch { _ = task.Exception; }
+            return;
+        }
+        if (budget.IsExpired)
+        {
+            ObserveLateFault(task);
+            return;
+        }
+        try
+        {
+            await task.WaitAsync(budget.Token).ConfigureAwait(false);
+        }
+        catch
+        {
+            if (!task.IsCompleted) ObserveLateFault(task);
+            else _ = task.Exception;
+        }
+    }
+
+    private void ObserveLateFault(Task task)
+    {
+        _ = task.ContinueWith(completed =>
+        {
+            var aggregate = completed.Exception;
+            if (aggregate is null) return;
+            try
+            {
+                _lateFaultObserver?.Invoke(aggregate.InnerExceptions.Count == 1
+                    ? aggregate.InnerExceptions[0]
+                    : aggregate);
+            }
+            catch
+            {
+                // Observation hooks must never create another unobserved fault.
+            }
+        }, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+    }
 
     private static Dictionary<string, object?> InputFrame(string data, double sentAt) => new()
     {
@@ -446,5 +585,30 @@ public sealed class Controller
         }
 
         _ = new Regex(pattern, RegexOptions.Compiled, TimeSpan.FromSeconds(1));
+    }
+
+    private sealed class FanoutDeadlineExceededException : TimeoutException { }
+
+    private sealed class OperationBudget : IDisposable
+    {
+        private readonly Stopwatch _clock = Stopwatch.StartNew();
+        private readonly int _maxResponseMs;
+        private readonly CancellationTokenSource _deadline;
+
+        public OperationBudget(CancellationToken callerCancellation, int maxResponseMs)
+        {
+            CallerCancellation = callerCancellation;
+            _maxResponseMs = Math.Max(1, maxResponseMs);
+            _deadline = CancellationTokenSource.CreateLinkedTokenSource(callerCancellation);
+            _deadline.CancelAfter(_maxResponseMs);
+        }
+
+        public CancellationToken CallerCancellation { get; }
+        public CancellationToken Token => _deadline.Token;
+        public int RemainingMs => Math.Max(0, _maxResponseMs - (int)_clock.ElapsedMilliseconds);
+        public bool IsExpired =>
+            RemainingMs <= 0 || (_deadline.IsCancellationRequested && !CallerCancellation.IsCancellationRequested);
+
+        public void Dispose() => _deadline.Dispose();
     }
 }

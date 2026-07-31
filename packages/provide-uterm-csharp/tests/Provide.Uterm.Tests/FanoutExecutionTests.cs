@@ -4,6 +4,7 @@
 //
 
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using Provide.Uterm.Fanout;
 using Provide.Uterm.ServerAuth;
 using Xunit;
@@ -12,6 +13,130 @@ namespace Provide.Uterm.Tests;
 
 public sealed class FanoutExecutionTests
 {
+    [Fact]
+    public void Store_Does_Not_Alias_Saved_Get_Or_List_Records()
+    {
+        var store = new InMemoryGroupStore();
+        var original = new Group
+        {
+            GroupId = "g", Name = "original", CreatedBy = "owner", WorkerIds = ["w1"], Grants = ["alice"],
+        };
+        store.Save(original);
+        original.Name = "mutated-input";
+        original.WorkerIds[0] = "mutated-input-worker";
+        original.Grants[0] = "mutated-input-grant";
+
+        Assert.True(store.TryGet("g", out var fetched));
+        fetched.Name = "mutated-get";
+        fetched.WorkerIds[0] = "mutated-get-worker";
+        fetched.Grants[0] = "mutated-get-grant";
+        var listed = Assert.Single(store.ListForPrincipal("owner"));
+        listed.Name = "mutated-list";
+        listed.WorkerIds[0] = "mutated-list-worker";
+        listed.Grants[0] = "mutated-list-grant";
+
+        Assert.True(store.TryGet("g", out var stored));
+        Assert.Equal("original", stored.Name);
+        Assert.Equal(["w1"], stored.WorkerIds);
+        Assert.Equal(["alice"], stored.Grants);
+    }
+
+    [Fact]
+    public async Task Store_Grants_Distinct_Principals_Atomically_While_Listing()
+    {
+        var store = new InMemoryGroupStore();
+        store.Save(new Group { GroupId = "g", CreatedBy = "owner" });
+        var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var grants = Enumerable.Range(0, 100).Select(index => "member-" + index).ToArray();
+        var grantTasks = grants.Select(grantee => Task.Run(async () =>
+        {
+            await start.Task;
+            Assert.True(store.GrantAccess("g", grantee, "owner"));
+        })).ToArray();
+        var listTask = Task.Run(async () =>
+        {
+            await start.Task;
+            for (var i = 0; i < 100; i++)
+            {
+                var listed = Assert.Single(store.ListForPrincipal("owner"));
+                listed.Grants.Add("caller-only");
+            }
+        });
+
+        start.TrySetResult();
+        await Task.WhenAll(grantTasks.Append(listTask));
+
+        Assert.True(store.TryGet("g", out var stored));
+        Assert.Equal(grants.Order(), stored.Grants.Order());
+        Assert.DoesNotContain("caller-only", stored.Grants);
+    }
+
+    [Theory]
+    [InlineData("broadcast")]
+    [InlineData("send")]
+    public async Task Noncooperative_Observer_And_Worker_Tasks_Are_Bounded_By_One_Operation_Deadline(string stage)
+    {
+        var hub = new HangingStageHub(stage);
+        var controller = NewController(hub, "parallel", ["w1"]);
+        var clock = Stopwatch.StartNew();
+
+        var pending = controller.SendAsync("g", "id", Admin("alice"), 5, 60);
+        await hub.Started.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        var result = await pending.WaitAsync(TimeSpan.FromMilliseconds(500));
+
+        Assert.True(clock.ElapsedMilliseconds < 400, $"operation took {clock.ElapsedMilliseconds}ms");
+        Assert.Equal(["w1"], result.FailedSessions);
+        await hub.CancellationObserved.Task.WaitAsync(TimeSpan.FromMilliseconds(100));
+    }
+
+    [Fact]
+    public async Task Caller_Cancellation_Propagates_Through_Noncooperative_Work()
+    {
+        var hub = new HangingStageHub("send");
+        var controller = NewController(hub, "parallel", ["w1"]);
+        using var cancellation = new CancellationTokenSource();
+        var pending = controller.SendAsync("g", "id", Admin("alice"), 5, 5000, cancellation.Token);
+        await hub.Started.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await pending.WaitAsync(TimeSpan.FromMilliseconds(500)));
+        await hub.CancellationObserved.Task.WaitAsync(TimeSpan.FromMilliseconds(100));
+    }
+
+    [Fact]
+    public async Task Late_Fault_From_Abandoned_Task_Is_Observed()
+    {
+        var hub = new HangingStageHub("send");
+        var observed = new TaskCompletionSource<Exception>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var controller = NewController(hub, "parallel", ["w1"], lateFaultObserver: error => observed.TrySetResult(error));
+
+        var result = await controller.SendAsync("g", "id", Admin("alice"), 5, 40)
+            .WaitAsync(TimeSpan.FromMilliseconds(500));
+        Assert.Equal(["w1"], result.FailedSessions);
+        hub.Fault(new InvalidOperationException("late boom"));
+
+        var error = await observed.Task.WaitAsync(TimeSpan.FromMilliseconds(500));
+        Assert.Equal("late boom", error.Message);
+    }
+
+    [Fact]
+    public async Task Sequential_Members_Share_One_Total_Response_Budget()
+    {
+        var hub = new SlowReadHub(55);
+        var controller = NewController(hub, "sequential", ["w1", "w2", "w3"]);
+        var clock = Stopwatch.StartNew();
+
+        var result = await controller.SendAsync("g", "id", Admin("alice"), 1000, 80)
+            .WaitAsync(TimeSpan.FromMilliseconds(500));
+
+        Assert.True(clock.ElapsedMilliseconds < 250, $"sequential operation took {clock.ElapsedMilliseconds}ms");
+        Assert.Contains("w2", result.FailedSessions);
+        Assert.Contains("w3", result.FailedSessions);
+        Assert.DoesNotContain("send:w3", hub.Trace);
+    }
+
     [Fact]
     public async Task Parallel_Sends_All_Before_Collecting_And_Returns_Output()
     {
@@ -72,11 +197,14 @@ public sealed class FanoutExecutionTests
     public async Task Send_Cannot_Expand_Stored_Membership()
     {
         var hub = new EventHub(new Dictionary<string, string> { ["outside"] = "unexpected" });
-        var controller = NewController(hub, "parallel", ["w1"]);
+        var authorizer = new TestAuthorizer();
+        var controller = NewController(hub, "parallel", ["w1"], authorizer: authorizer);
 
         _ = await controller.SendAsync("g", "id", Admin("alice"), 5, 100);
 
         Assert.DoesNotContain("send:outside", hub.Trace);
+        Assert.Equal(["w1"], authorizer.CheckedMembers);
+        Assert.DoesNotContain(typeof(Controller).GetMethods(), method => method.Name == "SendAuthorizedAsync");
     }
 
     [Fact]
@@ -128,10 +256,14 @@ public sealed class FanoutExecutionTests
         List<string> workers,
         bool stopOnError = false,
         double threshold = 0.8,
-        IFanoutAuthorizer? authorizer = default)
+        IFanoutAuthorizer? authorizer = default,
+        Action<Exception>? lateFaultObserver = null)
     {
         authorizer ??= new TestAuthorizer();
-        var controller = new Controller(hub, new ControllerConfig { IdGen = () => "send", Authorizer = authorizer });
+        var controller = new Controller(hub, new ControllerConfig
+        {
+            IdGen = () => "send", Authorizer = authorizer, LateFaultObserver = lateFaultObserver,
+        });
         controller.CreateGroup(new Group
         {
             GroupId = "g",
@@ -200,6 +332,71 @@ public sealed class FanoutExecutionTests
             _subscriptions[workerId] = sub;
             return sub;
         }
+    }
+
+    private sealed class HangingStageHub : IFanoutHub
+    {
+        private readonly string _stage;
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource CancellationObserved { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<bool> _never = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public HangingStageHub(string stage) => _stage = stage;
+
+        public Task<bool> SendWorkerAsync(
+            string workerId, IReadOnlyDictionary<string, object?> msg, CancellationToken ct = default)
+        {
+            if (_stage != "send") return Task.FromResult(true);
+            ct.Register(() => CancellationObserved.TrySetResult());
+            Started.TrySetResult();
+            return _never.Task;
+        }
+
+        public Task BroadcastAsync(
+            string workerId, IReadOnlyDictionary<string, object?> msg, CancellationToken ct = default)
+        {
+            if (_stage != "broadcast") return Task.CompletedTask;
+            ct.Register(() => CancellationObserved.TrySetResult());
+            Started.TrySetResult();
+            return _never.Task;
+        }
+
+        public void Fault(Exception error) => _never.TrySetException(error);
+    }
+
+    private sealed class SlowReadHub : IFanoutHub
+    {
+        private readonly int _delayMs;
+        public List<string> Trace { get; } = [];
+
+        public SlowReadHub(int delayMs) => _delayMs = delayMs;
+
+        public Task<bool> SendWorkerAsync(
+            string workerId, IReadOnlyDictionary<string, object?> msg, CancellationToken ct = default)
+        {
+            Trace.Add("send:" + workerId);
+            return Task.FromResult(true);
+        }
+
+        public Task BroadcastAsync(
+            string workerId, IReadOnlyDictionary<string, object?> msg, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public IFanoutOutputSubscription SubscribeOutput(string workerId) => new SlowReadSubscription(_delayMs);
+    }
+
+    private sealed class SlowReadSubscription : IFanoutOutputSubscription
+    {
+        private readonly int _delayMs;
+        public SlowReadSubscription(int delayMs) => _delayMs = delayMs;
+
+        public async ValueTask<FanoutOutputEvent?> ReadAsync(CancellationToken ct)
+        {
+            await Task.Delay(_delayMs, ct);
+            return null;
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
     private sealed class EventSubscription : IFanoutOutputSubscription

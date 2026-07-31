@@ -20,6 +20,22 @@ public sealed class Group
     public int MaxResponseMs { get; set; }
     public double DivergenceThreshold { get; set; } = 0.8;
     public List<string> Grants { get; set; } = new();
+
+    internal Group DeepClone() => new()
+    {
+        GroupId = GroupId,
+        Name = Name,
+        WorkerIds = WorkerIds.ToList(),
+        CreatedBy = CreatedBy,
+        CreatedAt = CreatedAt,
+        Mode = Mode,
+        StopOnFirstError = StopOnFirstError,
+        ErrorPattern = ErrorPattern,
+        QuiesceMs = QuiesceMs,
+        MaxResponseMs = MaxResponseMs,
+        DivergenceThreshold = DivergenceThreshold,
+        Grants = Grants.ToList(),
+    };
 }
 
 public sealed class SessionResult
