@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import FastAPI
@@ -174,19 +174,19 @@ class TestParallelCollectTaskException:
         group = _make_group(["w1", "w2"])
         await ctrl.create_group(group, principal="admin")
 
-        # Patch OutputCollector.collect so it raises for w1 and succeeds for w2.
-        from provide.uterm.server.bridge.fanout._collector import OutputCollector
+        # Patch OutputCapture.collect so it raises for w1 and succeeds for w2.
+        from provide.uterm.server.bridge.fanout._collector import OutputCapture
 
-        original_collect = OutputCollector.collect
+        original_collect = OutputCapture.collect
 
-        async def _patched_collect(self: object, hub: object, wid: str, **kw: object) -> tuple[str, int]:
-            if wid == "w1":
+        async def _patched_collect(self: OutputCapture, **kw: object) -> tuple[str, int]:
+            if self._worker_id == "w1":
                 raise RuntimeError("simulated collection failure")
-            return await original_collect(self, hub, wid, **kw)  # type: ignore[arg-type]
+            return await original_collect(self, **kw)  # type: ignore[arg-type]
 
         import unittest.mock as _mock
 
-        with _mock.patch.object(OutputCollector, "collect", _patched_collect):
+        with _mock.patch.object(OutputCapture, "collect", _patched_collect):
             # We need send_worker to succeed for both so both enter the collect phase.
             _orig_send = hub.send_worker
             bg: list[asyncio.Task[None]] = []
@@ -204,7 +204,7 @@ class TestParallelCollectTaskException:
 
             hub.send_worker = _send_and_emit  # type: ignore[assignment]
 
-            result = await ctrl.send("g1", "cmd\n", principal="admin")
+            result = await ctrl._send_parallel(group, "cmd\n", 300, 5_000, principal="admin")
             for t in bg:
                 await t
 
@@ -250,6 +250,7 @@ class TestDeleteGroupForbidden:
                 return await call_next(request)  # type: ignore[operator]
 
         app.add_middleware(_SetPrincipal)
+        app.state.uterm_authz = MagicMock(is_admin=AsyncMock(return_value=True))
         app.include_router(hub.create_router(extra_route_registrars=[register_fanout_routes]))
 
         # Create a group owned by "bob" (not "alice").
@@ -306,6 +307,7 @@ class TestGrantAccessForbidden:
                 return await call_next(request)  # type: ignore[operator]
 
         app.add_middleware(_SetPrincipal)
+        app.state.uterm_authz = MagicMock(is_admin=AsyncMock(return_value=True))
         app.include_router(hub.create_router(extra_route_registrars=[register_fanout_routes]))
 
         import asyncio

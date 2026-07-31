@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -234,7 +234,7 @@ class TestParallelDivergence:
 
         hub.send_worker = _send_and_emit  # type: ignore[assignment]
 
-        result = await ctrl.send("g1", "ls\n", principal="admin")
+        result = await ctrl._send_parallel(group, "ls\n", 300, 5_000, principal="admin")
         for t in _bg:
             await t
 
@@ -277,7 +277,7 @@ class TestSequentialSendFailure:
 
         hub.send_worker = _send_or_fail  # type: ignore[assignment]
 
-        result = await ctrl.send("g1", "cmd\n", principal="admin")
+        result = await ctrl._send_sequential(group, "cmd\n", 300, 5_000, principal="admin")
         for t in _bg:
             await t
 
@@ -310,7 +310,7 @@ class TestSequentialDivergence:
 
         hub.send_worker = _always_fail  # type: ignore[assignment]
 
-        result = await ctrl.send("g1", "cmd\n", principal="admin")
+        result = await ctrl._send_sequential(group, "cmd\n", 300, 5_000, principal="admin")
 
         assert len(result.results) == 2
         assert all(not r.ok for r in result.results)
@@ -347,6 +347,13 @@ class TestGetControllerNo501:
         if hasattr(hub, "fan_out_controller"):
             del hub.fan_out_controller
         app = FastAPI()
+        app.state.uterm_authz = MagicMock(is_admin=AsyncMock(return_value=True))
+
+        @app.middleware("http")
+        async def _set_principal(request: object, call_next: object) -> object:
+            request.state.uterm_principal = MagicMock(subject_id="admin")  # type: ignore[attr-defined]
+            return await call_next(request)  # type: ignore[operator]
+
         app.include_router(hub.create_router(extra_route_registrars=[register_fanout_routes]))
         return app
 
@@ -428,12 +435,10 @@ class TestFanoutSendWsDispatch:
                 }
             )
 
-            # Should receive a fanout_result control frame.
+            # A browser without a full authenticated global-admin principal is refused.
             msg = browser.receive_json()
-            assert msg["type"] == "fanout_result"
-            assert msg["group_id"] == "g1"
-            assert "results" in msg
-            assert "failed_sessions" in msg
+            assert msg["type"] == "error"
+            assert "admin" in msg["message"]
 
     def test_fanout_send_ws_no_controller_continues(self) -> None:
         """When hub has no fan_out_controller, fanout_send is silently ignored
