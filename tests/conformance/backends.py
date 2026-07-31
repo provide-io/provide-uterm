@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 # A 32-byte+ HMAC secret shared by both backends for HS256 round-trips.
-HS256_SECRET = "uterm-test-secret-32-byte-minimum-key"  # noqa: S105  # pragma: allowlist secret
+HS256_SECRET = "uterm-test-secret-32-byte-minimum-key"  # pragma: allowlist secret
 # A throwaway RSA public key (PEM) used only to exercise the algorithm-confusion
 # guard — never used to verify a token.
 DUMMY_RSA_PUBLIC_PEM = (

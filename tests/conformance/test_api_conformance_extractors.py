@@ -16,7 +16,7 @@ _SPEC_DIR = _REPO_ROOT / "spec"
 if str(_SPEC_DIR) not in sys.path:
     sys.path.insert(0, str(_SPEC_DIR))
 
-from _conformance_extractors import (  # noqa: E402
+from _conformance_extractors import (
     get_go_exports,
     get_python_exports,
     to_pascal_case,
