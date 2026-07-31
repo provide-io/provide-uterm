@@ -153,6 +153,7 @@ public sealed class HijackLeaseManager
                     LeaseExpiresAt = now + leaseS,
                     LastHeartbeat = now,
                 };
+                st.HijackOwnershipVersion++;
                 st.HijackPending = null;
             }
 
