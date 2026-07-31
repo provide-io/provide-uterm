@@ -27,8 +27,12 @@ public sealed class ConnectionManager
     }
 
     private readonly TermHub _hub;
+    private Action<string>? _markWorkerOffline;
 
     internal ConnectionManager(TermHub hub) => _hub = hub;
+
+    internal void ConfigureWorkerOfflineMarker(Action<string> marker) =>
+        _markWorkerOffline = marker;
 
     public bool AllowRestAcquireFor(string clientId) => _hub.Limiter.AllowRestAcquire(clientId);
 
@@ -414,26 +418,98 @@ public sealed class ConnectionManager
     {
         lock (_hub.SharedLock)
         {
-            var st = _hub.Registry.Get(workerId);
-            if (st is null || !ReferenceEquals(st.WorkerWs, ws))
-            {
-                return (false, false);
-            }
-
-            // Match Go/Python: drop hijack leases when the worker dies so
-            // reconnect does not leave browsers stuck in "Hijacked (you)".
-            var wasHijacked = st.HijackSession is not null || st.HijackOwner is not null;
-            st.WorkerWs = null;
-            st.HijackSession = null;
-            st.HijackOwner = null;
-            st.HijackOwnerExpiresAt = null;
-            st.PendingDashboardBrowser = null;
-            st.PendingDashboardOwnershipVersion = null;
-            st.PendingPauseReservation = null;
-            st.PendingPauseObligation = null;
-            LifecycleTransitionCoordinator.Clear(st);
-            return (true, wasHijacked);
+            return DeregisterWorkerLocked(workerId, ws, markOffline: false);
         }
+    }
+
+    /// <summary>
+    /// Reconcile one captured worker transport exactly once. The worker identity
+    /// check gates the registry update, lifecycle release, and publications, so
+    /// a later receive-loop finalizer cannot tear down a replacement.
+    /// </summary>
+    public async Task<(bool Reconciled, bool WasHijacked)> ReconcileWorkerDisconnectAsync(
+        string workerId,
+        IWorkerWs ws)
+    {
+        (bool Reconciled, bool WasHijacked) result;
+        lock (_hub.SharedLock)
+        {
+            result = DeregisterWorkerLocked(workerId, ws, markOffline: true);
+        }
+        if (!result.Reconciled) return result;
+
+        try
+        {
+            await BroadcastToBrowsersAsync(
+                workerId,
+                new Dictionary<string, object?>
+                {
+                    ["type"] = "worker_disconnected",
+                    ["worker_id"] = workerId,
+                    ["ts"] = _hub.Clock.Wall(),
+                },
+                CancellationToken.None).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Teardown publication is best-effort and must not strand successors.
+        }
+
+        try
+        {
+            _hub.State.NotifyHijackChanged(workerId, false, null);
+        }
+        catch
+        {
+            // Host callbacks cannot make authoritative teardown fail.
+        }
+
+        try
+        {
+            await BroadcastHijackStateAsync(workerId, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Teardown publication is best-effort and must not strand successors.
+        }
+        return result;
+    }
+
+    private (bool Reconciled, bool WasHijacked) DeregisterWorkerLocked(
+        string workerId,
+        IWorkerWs ws,
+        bool markOffline)
+    {
+        var st = _hub.Registry.Get(workerId);
+        if (st is null || !ReferenceEquals(st.WorkerWs, ws))
+        {
+            return (false, false);
+        }
+
+        var wasHijacked = st.HijackSession is not null || st.HijackOwner is not null;
+        st.WorkerWs = null;
+        st.HijackSession = null;
+        st.HijackOwner = null;
+        st.HijackOwnerExpiresAt = null;
+        st.PendingDashboardBrowser = null;
+        st.PendingDashboardOwnershipVersion = null;
+        st.PendingPauseReservation = null;
+        st.PendingPauseObligation = null;
+        if (markOffline)
+        {
+            try
+            {
+                _markWorkerOffline?.Invoke(workerId);
+            }
+            catch
+            {
+                // Host registry failures cannot strand lifecycle successors.
+            }
+        }
+        // Mark the captured worker offline before activating a queued
+        // replacement. Its route's subsequent online mark therefore wins.
+        LifecycleTransitionCoordinator.Clear(st);
+        return (true, wasHijacked);
     }
 
     public bool DisconnectWorker(string workerId)
@@ -746,7 +822,6 @@ public sealed class ConnectionManager
             }
         }
         var resumed = false;
-        var fenced = false;
         Exception? error = null;
         Task? sendTask = null;
         using var bounded = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -778,13 +853,9 @@ public sealed class ConnectionManager
                         // Registry fencing below is authoritative even if transport abort fails.
                     }
                 }
-                fenced = DeregisterWorker(workerId, worker!).ShouldBroadcast;
+                await ReconcileWorkerDisconnectAsync(workerId, worker!).ConfigureAwait(false);
             }
             CompleteLifecycleTransition(workerId, transition!);
-        }
-        if (fenced)
-        {
-            await PublishOwnershipLostAsync(workerId).ConfigureAwait(false);
         }
         return resumed ? (true, null) : (false, error);
     }

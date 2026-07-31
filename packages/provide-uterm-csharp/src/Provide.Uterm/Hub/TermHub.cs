@@ -182,6 +182,10 @@ public sealed class TermHub : ILeaseHub
     public Task<(bool Ok, Exception? Error)> SendWorkerAsync(string workerId, Dictionary<string, object?> msg, CancellationToken ct = default) =>
         Conn.SendWorkerAsync(workerId, msg, ct);
 
+    public Task<(bool Reconciled, bool WasHijacked)> ReconcileWorkerDisconnectAsync(
+        string workerId,
+        IWorkerWs worker) => Conn.ReconcileWorkerDisconnectAsync(workerId, worker);
+
     public Task BroadcastHijackStateAsync(string workerId, CancellationToken ct = default) =>
         Conn.BroadcastHijackStateAsync(workerId, ct);
 

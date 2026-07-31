@@ -1154,10 +1154,15 @@ public sealed class ResumeLifecycleIntegrationTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task FailedDisconnectResumeFencesWorkerAndReleasesReplacement(bool hangs)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task FailedDisconnectResumeReconcilesOfflineExactlyOnce(
+        bool hangs,
+        bool replaceImmediately)
     {
+        const string workerId = "failed-disconnect-resume";
         var ownershipLost = new TaskCompletionSource(
             TaskCreationOptions.RunContinuationsAsynchronously);
         var hub = new TermHub(new TermHubConfig
@@ -1171,33 +1176,58 @@ public sealed class ResumeLifecycleIntegrationTests
         var worker = new FaultingWorker(FaultTarget.Resume, hangs);
         var replacement = new RecordingWorker();
         var browser = new RecordingBrowser();
-        Assert.True(hub.Conn.RegisterWorker("failed-disconnect-resume", worker));
+        var observer = new RecordingBrowser();
+        _ = NewUnstartedServer(hub, workerId, out var registry);
+        Assert.True(hub.Conn.RegisterWorker(workerId, worker));
+        registry.MarkWorker(workerId, true, false);
         worker.IsAuthoritative = () => ReferenceEquals(
-            hub.Registry.Get("failed-disconnect-resume")?.WorkerWs, worker);
-        hub.Conn.RegisterBrowser("failed-disconnect-resume", browser, "admin");
+            hub.Registry.Get(workerId)?.WorkerWs, worker);
+        hub.Conn.RegisterBrowser(workerId, browser, "admin");
+        hub.Conn.RegisterBrowser(workerId, observer, "viewer");
         Assert.True((await hub.Lease.TryAcquireWsAsync(
-            "failed-disconnect-resume", browser)).Ok);
+            workerId, browser)).Ok);
 
         var ownershipVersion = Assert.IsType<long>(
-            hub.Conn.CleanupBrowser("failed-disconnect-resume", browser));
+            hub.Conn.CleanupBrowser(workerId, browser));
         var resume = hub.Conn.ResumeWorkerIfOwnershipUnchangedAsync(
-            "failed-disconnect-resume",
+            workerId,
             ownershipVersion,
             HijackLeaseManager.ResumeFrame("dashboard", 100));
         await worker.FailureAttempted.WaitAsync(TimeSpan.FromSeconds(5));
-        var replacementTransition = hub.Conn.RegisterWorkerAsync(
-            "failed-disconnect-resume", replacement);
+        var replacementTransition = replaceImmediately
+            ? hub.Conn.RegisterWorkerAsync(workerId, replacement)
+            : null;
         worker.ReleaseThrow();
 
         var result = await resume.WaitAsync(TimeSpan.FromSeconds(1));
-        Assert.True(await replacementTransition.WaitAsync(TimeSpan.FromSeconds(1)));
+        if (replacementTransition is not null)
+        {
+            Assert.True(await replacementTransition.WaitAsync(TimeSpan.FromSeconds(1)));
+        }
 
         Assert.False(result.Resumed);
         Assert.NotNull(result.Error);
         Assert.True(worker.Aborted);
         Assert.True(worker.AbortedWhileAuthoritative);
-        Assert.Same(replacement, hub.Registry.Get("failed-disconnect-resume")!.WorkerWs);
+        Assert.Same(replaceImmediately ? replacement : null, hub.Registry.Get(workerId)!.WorkerWs);
+        Assert.True(registry.TryGetStatus(workerId, out var offline));
+        Assert.False(offline.Connected);
+        Assert.Equal(SessionLifecycleState.Stopped, offline.LifecycleState);
+        Assert.Equal(1, DecodeBrowserFrames(observer).Count(frame =>
+            Type(frame) == "worker_disconnected"));
         await ownershipLost.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+        if (replaceImmediately)
+        {
+            // This is the route's post-registration online mark. A replayed
+            // finalizer for the failed worker must not overwrite it.
+            registry.MarkWorker(workerId, true, false);
+        }
+        Assert.False((await hub.Conn.ReconcileWorkerDisconnectAsync(workerId, worker)).Reconciled);
+        Assert.True(registry.TryGetStatus(workerId, out var afterReplay));
+        Assert.Equal(replaceImmediately, afterReplay.Connected);
+        Assert.Equal(1, DecodeBrowserFrames(observer).Count(frame =>
+            Type(frame) == "worker_disconnected"));
     }
 
     [Theory]
@@ -1209,6 +1239,7 @@ public sealed class ResumeLifecycleIntegrationTests
         string inputKind,
         bool hangs)
     {
+        const string workerId = "failed-reserved-input";
         var ownershipLost = new TaskCompletionSource(
             TaskCreationOptions.RunContinuationsAsynchronously);
         var hub = new TermHub(new TermHubConfig
@@ -1222,35 +1253,37 @@ public sealed class ResumeLifecycleIntegrationTests
         var worker = new FaultingWorker(FaultTarget.Input, hangs);
         var replacement = new RecordingWorker();
         var browser = new RecordingBrowser();
-        Assert.True(hub.Conn.RegisterWorker("failed-reserved-input", worker));
+        var server = NewUnstartedServer(hub, workerId, out var registry);
+        Assert.True(hub.Conn.RegisterWorker(workerId, worker));
+        registry.MarkWorker(workerId, true, false);
         worker.IsAuthoritative = () => ReferenceEquals(
-            hub.Registry.Get("failed-reserved-input")?.WorkerWs, worker);
-        hub.Conn.RegisterBrowser("failed-reserved-input", browser, "admin");
+            hub.Registry.Get(workerId)?.WorkerWs, worker);
+        hub.Conn.RegisterBrowser(workerId, browser, "admin");
 
         Task<(bool Ok, string Reason)>? restInput = null;
         Task<bool>? browserInput = null;
         if (inputKind == "rest")
         {
             Assert.True((await hub.Lease.TryAcquireRestAsync(
-                "failed-reserved-input",
+                workerId,
                 "rest-owner",
                 30,
                 "failed-input-lease",
                 hub.Clock.Monotonic())).Ok);
             restInput = hub.Conn.SendRestInputAsync(
-                "failed-reserved-input", "failed-input-lease", "input-a");
+                workerId, "failed-input-lease", "input-a");
         }
         else
         {
             Assert.True(hub.Router.SetInputMode(
-                "failed-reserved-input", InputModes.Open).Ok);
-            browserInput = NewUnstartedServer(hub).SendBrowserInputAsync(
-                "failed-reserved-input", browser, "input-a");
+                workerId, InputModes.Open).Ok);
+            browserInput = server.SendBrowserInputAsync(
+                workerId, browser, "input-a");
         }
 
         await worker.FailureAttempted.WaitAsync(TimeSpan.FromSeconds(5));
         var replacementTransition = hub.Conn.RegisterWorkerAsync(
-            "failed-reserved-input", replacement);
+            workerId, replacement);
         worker.ReleaseThrow();
 
         var inputOk = restInput is not null
@@ -1261,8 +1294,18 @@ public sealed class ResumeLifecycleIntegrationTests
         Assert.False(inputOk);
         Assert.True(worker.Aborted);
         Assert.True(worker.AbortedWhileAuthoritative);
-        Assert.Same(replacement, hub.Registry.Get("failed-reserved-input")!.WorkerWs);
-        Assert.Null(hub.Registry.Get("failed-reserved-input")!.HijackSession);
+        Assert.Same(replacement, hub.Registry.Get(workerId)!.WorkerWs);
+        Assert.Null(hub.Registry.Get(workerId)!.HijackSession);
+        Assert.True(registry.TryGetStatus(workerId, out var offline));
+        Assert.False(offline.Connected);
+        Assert.Equal(1, DecodeBrowserFrames(browser).Count(frame =>
+            Type(frame) == "worker_disconnected"));
+        registry.MarkWorker(workerId, true, false);
+        Assert.False((await hub.Conn.ReconcileWorkerDisconnectAsync(workerId, worker)).Reconciled);
+        Assert.True(registry.TryGetStatus(workerId, out var afterReplay));
+        Assert.True(afterReplay.Connected);
+        Assert.Equal(1, DecodeBrowserFrames(browser).Count(frame =>
+            Type(frame) == "worker_disconnected"));
         if (inputKind == "rest")
         {
             await ownershipLost.Task.WaitAsync(TimeSpan.FromSeconds(1));
@@ -1599,6 +1642,32 @@ public sealed class ResumeLifecycleIntegrationTests
             Authz = new AuthorizationService(),
             Config = cfg,
             Registry = new InMemorySessionRegistry(cfg.Sessions),
+            Clock = new RealClock(),
+        });
+    }
+
+    private static UtermServer NewUnstartedServer(
+        TermHub hub,
+        string sessionId,
+        out InMemorySessionRegistry registry)
+    {
+        var cfg = UtermServerConfig.Default();
+        cfg.Sessions.Add(new SessionDefinition
+        {
+            SessionId = sessionId,
+            DisplayName = sessionId,
+            Visibility = "public",
+            InputMode = InputModes.Hijack,
+            AutoStart = false,
+        });
+        registry = new InMemorySessionRegistry(cfg.Sessions);
+        return new UtermServer(new ServerDeps
+        {
+            Hub = hub,
+            Auth = new LocalIdentityProvider(cfg.Auth, new ApiKeyStore()),
+            Authz = new AuthorizationService(),
+            Config = cfg,
+            Registry = registry,
             Clock = new RealClock(),
         });
     }
