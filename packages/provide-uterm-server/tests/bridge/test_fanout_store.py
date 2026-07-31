@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from provide.uterm.server.bridge.fanout._models import FanOutGroup
 from provide.uterm.server.bridge.fanout._store import InMemoryFanOutStore
 
@@ -75,6 +77,52 @@ class TestInMemoryFanOutStoreCRUD:
         r2 = await store.get("g2")
         assert r1 is not None and r1.name == "Group One"
         assert r2 is not None and r2.name == "Group Two"
+
+    async def test_save_get_and_list_are_deeply_isolated(self) -> None:
+        store = InMemoryFanOutStore()
+        original = _make_group(worker_ids=["w1"], created_by="alice", grants=["bob"])
+        await store.save(original)
+
+        # A caller retaining the input must not be able to bypass controller
+        # validation or rewrite authorization after save.
+        original.worker_ids.append("injected")
+        original.created_by = "mallory"
+        original.grants.append("mallory")
+
+        fetched = await store.get("g1")
+        assert fetched is not None
+        assert fetched.worker_ids == ["w1"]
+        assert fetched.created_by == "alice"
+        assert fetched.grants == ["bob"]
+
+        # Mutating either read surface must not alter persisted state.
+        fetched.worker_ids.append("get-injected")
+        fetched.created_by = "eve"
+        fetched.grants.clear()
+        listed = await store.list_for_principal("alice")
+        assert len(listed) == 1
+        listed[0].worker_ids.append("list-injected")
+        listed[0].grants.append("eve")
+
+        persisted = await store.get("g1")
+        assert persisted is not None
+        assert persisted.worker_ids == ["w1"]
+        assert persisted.created_by == "alice"
+        assert persisted.grants == ["bob"]
+
+    async def test_concurrent_grants_are_atomic(self) -> None:
+        store = InMemoryFanOutStore()
+        await store.save(_make_group(created_by="alice"))
+
+        await asyncio.gather(
+            store.grant_access("g1", "bob", "alice"),
+            store.grant_access("g1", "carol", "alice"),
+        )
+
+        persisted = await store.get("g1")
+        assert persisted is not None
+        assert set(persisted.grants) == {"bob", "carol"}
+        assert await store.grant_access("g1", "mallory", "not-alice") is False
 
 
 class TestInMemoryFanOutStoreListForPrincipal:

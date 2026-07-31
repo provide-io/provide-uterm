@@ -167,6 +167,17 @@ export interface FanOutStore {
   delete(groupId: string): Promise<void>;
   /** Every group this principal may see. */
   listForPrincipal(principal: string): Promise<FanOutGroup[]>;
+  /** Atomically grant access when `creator` still owns the group. */
+  grantAccess(groupId: string, grantee: string, creator: string): Promise<boolean>;
+}
+
+/** Copy every mutable field across the persistence trust boundary. */
+function cloneGroup(group: FanOutGroup): FanOutGroup {
+  return {
+    ...group,
+    workerIds: [...group.workerIds],
+    grants: [...group.grants],
+  };
 }
 
 /** Ephemeral store. Groups are lost on restart. */
@@ -175,12 +186,13 @@ export class InMemoryFanOutStore implements FanOutStore {
 
   /** Insert or replace the group with this id. */
   async save(group: FanOutGroup): Promise<void> {
-    this.#groups.set(group.groupId, group);
+    this.#groups.set(group.groupId, cloneGroup(group));
   }
 
   /** The group with this id, if it exists. */
   async get(groupId: string): Promise<FanOutGroup | undefined> {
-    return this.#groups.get(groupId);
+    const group = this.#groups.get(groupId);
+    return group === undefined ? undefined : cloneGroup(group);
   }
 
   /** Remove a group. An id that is not held is ignored rather than an error. */
@@ -199,8 +211,16 @@ export class InMemoryFanOutStore implements FanOutStore {
    * does not observe the mutation.
    */
   async listForPrincipal(principal: string): Promise<FanOutGroup[]> {
-    return [...this.#groups.values()].filter(
-      (group) => group.createdBy === principal || group.grants.includes(principal),
-    );
+    return [...this.#groups.values()]
+      .filter((group) => group.createdBy === principal || group.grants.includes(principal))
+      .map(cloneGroup);
+  }
+
+  /** Add a grant without a detached read/modify/write race. */
+  async grantAccess(groupId: string, grantee: string, creator: string): Promise<boolean> {
+    const group = this.#groups.get(groupId);
+    if (group === undefined || group.createdBy !== creator) return false;
+    if (!group.grants.includes(grantee)) group.grants.push(grantee);
+    return true;
   }
 }

@@ -170,7 +170,7 @@
         "workers": {"accepted_members": [], "immediate_output": {}}, "command": "", "mutation_member": "w2"
       },
       "expected": {"status_code": 200, "error": null, "approval_required": false, "approval_id": null, "command": "", "delivered_workers": [], "observer_notifications": [], "failed_members": [], "output": {}},
-      "backends": {"python": {"status": "unserved", "expected": {"status_code": 0, "error": "unserved"}}, "go": {"status": "execute", "expected": {}}, "csharp": {"status": "execute", "expected": {}}, "typescript": {"status": "unserved", "expected": {"status_code": 0, "error": "unserved"}}}
+      "backends": {"python": {"status": "execute", "expected": {}}, "go": {"status": "execute", "expected": {}}, "csharp": {"status": "execute", "expected": {}}, "typescript": {"status": "component_execute", "expected": {}}}
     },
     {
       "id": "store_atomic_update",
@@ -182,7 +182,7 @@
         "workers": {"accepted_members": [], "immediate_output": {}}, "command": "", "concurrent_grants": ["alice", "bob"]
       },
       "expected": {"status_code": 200, "error": null, "approval_required": false, "approval_id": null, "command": "", "delivered_workers": [], "observer_notifications": [], "failed_members": [], "output": {}},
-      "backends": {"python": {"status": "unserved", "expected": {"status_code": 0, "error": "unserved"}}, "go": {"status": "execute", "expected": {}}, "csharp": {"status": "execute", "expected": {}}, "typescript": {"status": "unserved", "expected": {"status_code": 0, "error": "unserved"}}}
+      "backends": {"python": {"status": "execute", "expected": {}}, "go": {"status": "execute", "expected": {}}, "csharp": {"status": "execute", "expected": {}}, "typescript": {"status": "component_execute", "expected": {}}}
     },
     {
       "id": "total_response_deadline",
