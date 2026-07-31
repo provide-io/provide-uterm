@@ -32,6 +32,7 @@ public sealed class TermHubConfig
     public string? WorkerToken { get; set; }
     public int EventDequeMaxlen { get; set; } = 2000;
     public int MaxWorkers { get; set; } = 10000;
+    public int MaxConnectionsPerPrincipal { get; set; } = 25;
     public Action<string, int>? OnMetric { get; set; }
     public Action<string, bool, string?>? OnHijackChanged { get; set; }
 
@@ -96,6 +97,10 @@ public sealed class TermHub : ILeaseHub
 
     internal int MaxEventDataChars { get; }
     internal int MaxWorkers { get; }
+    internal int MaxConnectionsPerPrincipal { get; }
+    internal Dictionary<string, int> PrincipalBrowserCounts { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<object, string> BrowserPrincipals { get; } = new();
+    internal HashSet<object> StartupPendingBrowsers { get; } = new();
 
     public string? WorkerToken { get; }
 
@@ -106,6 +111,8 @@ public sealed class TermHub : ILeaseHub
         Registry = new WorkerRegistry();
         MaxEventDataChars = Math.Max(256, config.MaxEventDataChars <= 0 ? 8192 : config.MaxEventDataChars);
         MaxWorkers = Math.Max(1, config.MaxWorkers <= 0 ? 10000 : config.MaxWorkers);
+        MaxConnectionsPerPrincipal = Math.Max(1,
+            config.MaxConnectionsPerPrincipal <= 0 ? 25 : config.MaxConnectionsPerPrincipal);
         MaxWsMessageBytes = Math.Max(1024, config.MaxWsMessageBytes <= 0 ? 1_048_576 : config.MaxWsMessageBytes);
         WorkerToken = config.WorkerToken;
         _onLog = config.OnLog;

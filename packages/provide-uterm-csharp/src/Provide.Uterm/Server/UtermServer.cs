@@ -648,63 +648,76 @@ public sealed partial class UtermServer : IAsyncDisposable
         using var ws = await ctx.WebSockets.AcceptWebSocketAsync().ConfigureAwait(false);
         var conn = new BrowserWsConn(ws);
         // Match Python/Go: register, then hello from registry state + immediate hijack_state.
-        var state = _deps.Hub.Conn.RegisterBrowser(workerId, conn, role);
-        var canHijack = role is "admin";
-        static bool StateBool(IReadOnlyDictionary<string, object?> d, string key) =>
-            d.TryGetValue(key, out var v) && v is true;
-        static string StateStr(IReadOnlyDictionary<string, object?> d, string key, string fallback) =>
-            d.TryGetValue(key, out var v) && v is string s && !string.IsNullOrEmpty(s) ? s : fallback;
-
-        var resumeToken = MintResumeToken(workerId, role);
-        // Capability defaults match spec/behavior.json hello_defaults.csharp.
-        var hello = ControlChannelCodec.EncodeControlFrame(new Dictionary<string, object?>
+        Dictionary<string, object?> state;
+        try
         {
-            ["type"] = "hello",
-            ["role"] = role,
-            ["worker_id"] = workerId,
-            ["ts"] = _clock.Wall(),
-            ["can_hijack"] = canHijack,
-            // RegisterBrowser uses is_hijacked (hub internal); wire hello uses hijacked.
-            ["hijacked"] = StateBool(state, "is_hijacked"),
-            ["hijacked_by_me"] = StateBool(state, "hijacked_by_me"),
-            ["worker_online"] = StateBool(state, "worker_online"),
-            ["input_mode"] = StateStr(state, "input_mode", InputModes.Hijack),
-            ["hijack_control"] = "ws",
-            ["hijack_step_supported"] = true,
-            ["capabilities"] = new Dictionary<string, object?>
-            {
-                ["hijack_control"] = "ws",
-                ["hijack_step_supported"] = true,
-            },
-            ["mcp_supported"] = false, // spec/behavior.json hello_defaults.csharp
-            ["vnc_supported"] = true,
-            ["resume_supported"] = true,
-            ["resume_token"] = resumeToken,
-        });
-        await conn.SendTextAsync(hello, ctx.RequestAborted).ConfigureAwait(false);
-        // Per-browser owner="me"/"other" — required for second-browser tests.
-        var hijackState = _deps.Hub.Router.HijackStateMsgFor(workerId, conn);
-        await conn.SendTextAsync(
-            ControlChannelCodec.EncodeControlFrame(hijackState),
-            ctx.RequestAborted).ConfigureAwait(false);
-
-        // DeckMux: presence_sync on join (+ fan-out when others present).
-        var presenceSync = await _deckMux.OnBrowserConnectAsync(workerId, conn, role, ctx.RequestAborted)
-            .ConfigureAwait(false);
-        await conn.SendTextAsync(
-            ControlChannelCodec.EncodeControlFrame(presenceSync),
-            ctx.RequestAborted).ConfigureAwait(false);
-
-        // One budget per connection, built here rather than on the hub: the
-        // reference builds both buckets inside its WebSocket handler, and sharing
-        // them per worker would let one browser starve every other viewer of the
-        // same session.
-        var budget = new BrowserBudget(
-            new TokenBucket(_deps.Hub.BrowserRateLimitPerSec, clock: _clock),
-            new TokenBucket(_deps.Hub.BrowserControlRateLimitPerSec, clock: _clock));
+            state = _deps.Hub.Conn.RegisterBrowser(
+                workerId, conn, role, deferBroadcast: true, principalSubjectId: p.SubjectId);
+        }
+        catch (BrowserRegistrationException ex)
+        {
+            await ws.CloseAsync((WebSocketCloseStatus)ex.CloseCode, ex.Message, CancellationToken.None)
+                .ConfigureAwait(false);
+            return;
+        }
 
         try
         {
+            var canHijack = role is "admin";
+            static bool StateBool(IReadOnlyDictionary<string, object?> d, string key) =>
+                d.TryGetValue(key, out var v) && v is true;
+            static string StateStr(IReadOnlyDictionary<string, object?> d, string key, string fallback) =>
+                d.TryGetValue(key, out var v) && v is string s && !string.IsNullOrEmpty(s) ? s : fallback;
+
+            var resumeToken = MintResumeToken(workerId, role);
+            // Capability defaults match spec/behavior.json hello_defaults.csharp.
+            var hello = ControlChannelCodec.EncodeControlFrame(new Dictionary<string, object?>
+            {
+                ["type"] = "hello",
+                ["role"] = role,
+                ["worker_id"] = workerId,
+                ["ts"] = _clock.Wall(),
+                ["can_hijack"] = canHijack,
+                // RegisterBrowser uses is_hijacked (hub internal); wire hello uses hijacked.
+                ["hijacked"] = StateBool(state, "is_hijacked"),
+                ["hijacked_by_me"] = StateBool(state, "hijacked_by_me"),
+                ["worker_online"] = StateBool(state, "worker_online"),
+                ["input_mode"] = StateStr(state, "input_mode", InputModes.Hijack),
+                ["hijack_control"] = "ws",
+                ["hijack_step_supported"] = true,
+                ["capabilities"] = new Dictionary<string, object?>
+                {
+                    ["hijack_control"] = "ws",
+                    ["hijack_step_supported"] = true,
+                },
+                ["mcp_supported"] = false, // spec/behavior.json hello_defaults.csharp
+                ["vnc_supported"] = true,
+                ["resume_supported"] = true,
+                ["resume_token"] = resumeToken,
+            });
+            await conn.SendTextAsync(hello, ctx.RequestAborted).ConfigureAwait(false);
+            // Per-browser owner="me"/"other" — required for second-browser tests.
+            var hijackState = _deps.Hub.Router.HijackStateMsgFor(workerId, conn);
+            await conn.SendTextAsync(
+                ControlChannelCodec.EncodeControlFrame(hijackState),
+                ctx.RequestAborted).ConfigureAwait(false);
+
+            // DeckMux: presence_sync on join (+ fan-out when others present).
+            var presenceSync = await _deckMux.OnBrowserConnectAsync(workerId, conn, role, ctx.RequestAborted)
+                .ConfigureAwait(false);
+            await conn.SendTextAsync(
+                ControlChannelCodec.EncodeControlFrame(presenceSync),
+                ctx.RequestAborted).ConfigureAwait(false);
+            _deps.Hub.Conn.ActivateBrowserBroadcasts(workerId, conn);
+
+            // One budget per connection, built here rather than on the hub: the
+            // reference builds both buckets inside its WebSocket handler, and sharing
+            // them per worker would let one browser starve every other viewer of the
+            // same session.
+            var budget = new BrowserBudget(
+                new TokenBucket(_deps.Hub.BrowserRateLimitPerSec, clock: _clock),
+                new TokenBucket(_deps.Hub.BrowserControlRateLimitPerSec, clock: _clock));
+
             while (ws.State == WebSocketState.Open)
             {
                 WebSocketMessage message;
@@ -1036,12 +1049,20 @@ public sealed partial class UtermServer : IAsyncDisposable
         // connector's input_mode). Without this, connecting a socket is enough
         // to turn a session the operator configured as `open` into one only a
         // lease holder may type at — an arbitration nobody asked for.
-        if (_deps.Registry.TryGetDefinition(workerId, out var wdef))
+        var hadWorkerState = _deps.Hub.Registry.Contains(workerId);
+        if (!_deps.Hub.Conn.RegisterWorker(workerId, conn))
         {
-            _deps.Hub.Registry.SetDefault(workerId, new Hub.WorkerTermState { InputMode = wdef.InputMode });
+            await ws.CloseAsync(
+                WebSocketCloseStatus.PolicyViolation,
+                "worker registration rejected",
+                CancellationToken.None).ConfigureAwait(false);
+            return;
         }
 
-        _deps.Hub.Conn.RegisterWorker(workerId, conn);
+        if (!hadWorkerState && _deps.Registry.TryGetDefinition(workerId, out var wdef))
+        {
+            _deps.Hub.Registry.Get(workerId)!.InputMode = wdef.InputMode;
+        }
         if (_deps.Registry is InMemorySessionRegistry mem)
         {
             // Online, and nothing else: a worker arriving is not a mode change.
