@@ -562,6 +562,7 @@ describe("sending to a group", () => {
 
     const response = await routes.sendToGroup(request(PRINCIPAL, { data: "id" }), "g1");
 
+    expect(response.status).toBe(200);
     expect(response.body).toMatchObject({
       error,
       approval_required: approvalRequired,

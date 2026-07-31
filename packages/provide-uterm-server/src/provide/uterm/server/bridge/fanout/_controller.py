@@ -180,6 +180,9 @@ class FanOutController:
         group = await self._store.get(group_id)
         if group is None:
             return None, [], self._error_result(group_id, data, "fan-out group not found")
+        principal_id = self._principal_id(principal)
+        if group.created_by != principal_id and principal_id not in group.grants:
+            return None, [], self._error_result(group_id, data, "fan-out group not found")
 
         allowed: list[str] = []
         refused: list[str] = []
@@ -259,16 +262,6 @@ class FanOutController:
 
         if decision.action == "hold":
             request_id = uuid.uuid4().hex
-            # Track pending approval
-            self._pending_approvals[request_id] = {
-                "group_id": group_id,
-                "command": data,
-                "quiesce_ms": quiesce_ms,
-                "max_response_ms": max_response_ms,
-                "principal": principal,
-            }
-
-            # Create Approval Request in Hub
             approval = ApprovalRequest(
                 id=request_id,
                 worker_id=f"group:{group_id}",
@@ -280,12 +273,6 @@ class FanOutController:
                 group_id=group_id,
                 is_fanout=True,
             )
-            # Use getattr to avoid hard circular dependency if hub isn't fully typed here
-            hub_approvals = getattr(self._hub, "approval_store", None)
-            if hub_approvals:  # pragma: no branch — production hub always wires approval_store; defensive guard
-                hub_approvals.add(approval)
-
-            # 1.3 Audit the hold event
             await self._hub.append_event(
                 f"group:{group_id}",
                 "terminal.fanout.hold",
@@ -296,6 +283,18 @@ class FanOutController:
                     "principal": principal.subject_id,
                 },
             )
+            hub_approvals = getattr(self._hub, "approval_store", None)
+            if hub_approvals is None:
+                msg = "fan-out approval store is unavailable"
+                raise RuntimeError(msg)
+            hub_approvals.add(approval)
+            self._pending_approvals[request_id] = {
+                "group_id": group_id,
+                "command": data,
+                "quiesce_ms": quiesce_ms,
+                "max_response_ms": max_response_ms,
+                "principal": principal,
+            }
 
             return FanOutResult(
                 group_id=group_id,
