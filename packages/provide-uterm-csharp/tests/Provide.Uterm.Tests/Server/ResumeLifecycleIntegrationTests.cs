@@ -1018,6 +1018,50 @@ public sealed class ResumeLifecycleIntegrationTests
     }
 
     [Fact]
+    public async Task WorkerDeregistrationPreservesQueuedReplacementOrder()
+    {
+        var hub = new TermHub();
+        var original = new RecordingWorker();
+        var firstReplacement = new RecordingWorker();
+        var finalReplacement = new RecordingWorker();
+        var browser = new RecordingBrowser();
+        Assert.True(hub.Conn.RegisterWorker("replacement-clear", original));
+        hub.Conn.RegisterBrowser("replacement-clear", browser, "admin");
+        Assert.True(hub.Router.SetInputMode("replacement-clear", InputModes.Open).Ok);
+
+        original.DelayNextInput();
+        var server = NewUnstartedServer(hub);
+        var firstInput = server.SendBrowserInputAsync(
+            "replacement-clear", browser, "input-a");
+        await original.InputAttempted.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var firstTransition = hub.Conn.RegisterWorkerAsync(
+            "replacement-clear", firstReplacement);
+        var finalTransition = hub.Conn.RegisterWorkerAsync(
+            "replacement-clear", finalReplacement);
+        var state = hub.Registry.Get("replacement-clear")!;
+        var firstNode = state.ActiveLifecycleTransition;
+        var finalNode = Assert.Single(state.LifecycleTransitionQueue);
+
+        Assert.True(hub.Conn.DeregisterWorker("replacement-clear", original).ShouldBroadcast);
+        var activeWasPreserved = ReferenceEquals(firstNode, state.ActiveLifecycleTransition);
+        var queuedWasPreserved = state.LifecycleTransitionQueue.Count == 1
+            && ReferenceEquals(finalNode, state.LifecycleTransitionQueue[0]);
+
+        original.ReleaseInput();
+        Assert.True(await firstInput.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.True(await firstTransition.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.True(await finalTransition.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.True(await server.SendBrowserInputAsync(
+            "replacement-clear", browser, "input-i"));
+
+        Assert.True(activeWasPreserved);
+        Assert.True(queuedWasPreserved);
+        Assert.Empty(firstReplacement.Inputs);
+        Assert.Equal(["input-i"], finalReplacement.Inputs);
+    }
+
+    [Fact]
     public async Task QueuedReplacementsKeepFifoPriorityOverLaterOpenModeInput()
     {
         var hub = new TermHub();
@@ -1061,7 +1105,7 @@ public sealed class ResumeLifecycleIntegrationTests
     }
 
     [Fact]
-    public async Task CancelledQueuedReplacementDoesNotStrandItsFifoSuccessor()
+    public async Task CancelledRebasedQueuedReplacementDoesNotStrandItsFifoSuccessor()
     {
         var hub = new TermHub();
         var original = new RecordingWorker();
@@ -1089,6 +1133,9 @@ public sealed class ResumeLifecycleIntegrationTests
         Assert.Equal(2, QueuedLifecycleTransitionCount(
             hub.Registry.Get("transition-cancel")!));
 
+        Assert.True(hub.Conn.DeregisterWorker("transition-cancel", original).ShouldBroadcast);
+        Assert.Equal(2, QueuedLifecycleTransitionCount(
+            hub.Registry.Get("transition-cancel")!));
         cancelled.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => cancelledTransition);
         Assert.Equal(1, QueuedLifecycleTransitionCount(

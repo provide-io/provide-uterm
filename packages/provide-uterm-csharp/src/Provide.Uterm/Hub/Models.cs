@@ -163,6 +163,7 @@ internal sealed class PendingLifecycleTransition
     internal required string Reservation { get; init; }
     internal long? OwnershipVersion { get; init; }
     internal object? DisconnectOwner { get; init; }
+    internal bool PreserveOnWorkerClear { get; init; }
     internal required TaskCompletionSource Activated { get; init; }
     internal required TaskCompletionSource Completion { get; init; }
     internal LifecycleTransitionState State { get; set; }
@@ -178,9 +179,11 @@ internal static class LifecycleTransitionCoordinator
         WorkerTermState st,
         string reservation,
         long? ownershipVersion = null,
-        object? disconnectOwner = null)
+        object? disconnectOwner = null,
+        bool preserveOnWorkerClear = false)
     {
-        var transition = NewTransition(reservation, ownershipVersion, disconnectOwner);
+        var transition = NewTransition(
+            reservation, ownershipVersion, disconnectOwner, preserveOnWorkerClear);
         Activate(st, transition);
         return transition;
     }
@@ -189,9 +192,11 @@ internal static class LifecycleTransitionCoordinator
         WorkerTermState st,
         string reservation,
         long? ownershipVersion = null,
-        object? disconnectOwner = null)
+        object? disconnectOwner = null,
+        bool preserveOnWorkerClear = false)
     {
-        var transition = NewTransition(reservation, ownershipVersion, disconnectOwner);
+        var transition = NewTransition(
+            reservation, ownershipVersion, disconnectOwner, preserveOnWorkerClear);
         st.LifecycleTransitionQueue.Add(transition);
         return transition;
     }
@@ -230,20 +235,30 @@ internal static class LifecycleTransitionCoordinator
 
     internal static void Clear(WorkerTermState st)
     {
-        var pending = st.LifecycleTransitionQueue.ToArray();
         var active = st.ActiveLifecycleTransition;
+        var ordered = active is null
+            ? st.LifecycleTransitionQueue.ToArray()
+            : new[] { active }.Concat(st.LifecycleTransitionQueue).ToArray();
+        var preserved = ordered.Where(transition => transition.PreserveOnWorkerClear).ToArray();
+        var cleared = ordered.Where(transition => !transition.PreserveOnWorkerClear).ToArray();
         st.LifecycleTransitionQueue.Clear();
         st.ActiveLifecycleTransition = null;
         st.HijackPending = null;
         st.DisconnectResumeCompletion = null;
         st.DisconnectResumeOwnershipVersion = null;
         st.PendingDisconnectTransition = null;
-        if (active is not null) active.State = LifecycleTransitionState.Cleared;
-        foreach (var transition in pending) transition.State = LifecycleTransitionState.Cleared;
-        active?.Activated.TrySetResult();
-        active?.Completion.TrySetResult();
-        foreach (var transition in pending)
+        if (preserved.Length > 0)
         {
+            Activate(st, preserved[0]);
+            foreach (var transition in preserved.Skip(1))
+            {
+                transition.State = LifecycleTransitionState.Queued;
+                st.LifecycleTransitionQueue.Add(transition);
+            }
+        }
+        foreach (var transition in cleared)
+        {
+            transition.State = LifecycleTransitionState.Cleared;
             transition.Activated.TrySetResult();
             transition.Completion.TrySetResult();
         }
@@ -252,11 +267,13 @@ internal static class LifecycleTransitionCoordinator
     private static PendingLifecycleTransition NewTransition(
         string reservation,
         long? ownershipVersion,
-        object? disconnectOwner) => new()
+        object? disconnectOwner,
+        bool preserveOnWorkerClear) => new()
         {
             Reservation = reservation,
             OwnershipVersion = ownershipVersion,
             DisconnectOwner = disconnectOwner,
+            PreserveOnWorkerClear = preserveOnWorkerClear,
             Activated = NewSignal(),
             Completion = NewSignal(),
             State = LifecycleTransitionState.Queued,
