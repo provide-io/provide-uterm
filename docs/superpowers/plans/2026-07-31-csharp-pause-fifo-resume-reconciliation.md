@@ -14,6 +14,7 @@
 
 **Files:**
 - Modify: `packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Server/ResumeLifecycleIntegrationTests.cs`
+- Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Server/LocalWorkerLink.cs`
 - Modify: `packages/provide-uterm-csharp/src/Provide.Uterm/Hub/Connection.cs`
 
 - [ ] **Step 1: Add the deterministic FIFO regression test**
@@ -51,7 +52,7 @@ Expected: all pass.
 
 - [ ] **Step 1: Add local and WebSocket-like failure fixtures**
 
-Use a real `LocalWorkerLink` path for local-worker rows and an abortable WebSocket-like worker for WebSocket rows. Both fixtures support resume throw and cancellation-ignoring hang, expose the send attempt, and allow a late fault/completion/finalizer replay after replacement.
+Use a real `LocalWorkerLink` path for local-worker rows and an abortable WebSocket-like worker for WebSocket rows. Add an internal nullable `SendOverride` delegate to the sealed local link and consult it from `SendTextAsync`; the existing `InternalsVisibleTo` test assembly sets the hook, while the default null path retains production behavior exactly. Both fixtures support resume throw and cancellation-ignoring hang, expose the send attempt, and allow a late fault/completion/finalizer replay after replacement.
 
 - [ ] **Step 2: Add all twelve theory rows**
 
@@ -123,6 +124,6 @@ Expected: all tests pass with zero failures.
 - [ ] **Step 3: Commit implementation**
 
 ```bash
-git add packages/provide-uterm-csharp/src/Provide.Uterm/Hub/Connection.cs packages/provide-uterm-csharp/src/Provide.Uterm/Hub/Lease.cs packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Server/ResumeLifecycleIntegrationTests.cs
+git add packages/provide-uterm-csharp/src/Provide.Uterm/Hub/Connection.cs packages/provide-uterm-csharp/src/Provide.Uterm/Hub/Lease.cs packages/provide-uterm-csharp/src/Provide.Uterm/Server/LocalWorkerLink.cs packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Server/ResumeLifecycleIntegrationTests.cs
 git commit -m "fix(csharp): reconcile resume failure lifecycle"
 ```
