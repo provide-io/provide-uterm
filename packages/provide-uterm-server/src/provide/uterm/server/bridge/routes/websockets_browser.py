@@ -97,20 +97,30 @@ async def dispatch_browser_event(
         return role, can_hijack, owned_hijack
 
     if mtype == "fanout_send":
+        _fo_principal = getattr(getattr(websocket, "state", None), "uterm_principal", None)
+        _fo_authz = getattr(getattr(websocket, "app", None), "state", None)
+        _fo_authz = getattr(_fo_authz, "uterm_authz", None)
+        try:
+            _fo_is_admin = (
+                _fo_principal is not None
+                and _fo_principal.subject_id != "anonymous"
+                and _fo_authz is not None
+                and await _fo_authz.is_admin(_fo_principal)
+            )
+        except Exception:
+            _fo_is_admin = False
+        if not _fo_is_admin:
+            await websocket.send_text(encode_control_frame(make_error_frame("global admin role required")))
+            return role, can_hijack, owned_hijack
         _fo_ctrl: Any = getattr(hub, "fan_out_controller", None)
         if _fo_ctrl is not None:
             _fo_group_id = msg_b.get("group_id", "")
             _fo_data = msg_b.get("data", "")
-            _fo_principal = getattr(getattr(websocket, "state", None), "uterm_principal", None)
-            _fo_subj = _fo_principal.subject_id if _fo_principal else "anonymous"
+            _fo_subj = _fo_principal.subject_id
             # Verify caller has access to the group
             _fo_group = await _fo_ctrl.get_group(_fo_group_id, principal=_fo_subj)
             if _fo_group is None:
                 return role, can_hijack, owned_hijack  # caller doesn't own/have access
-            if _fo_principal is None:
-                from provide.uterm.server.bridge.identity import Principal
-
-                _fo_principal = Principal(subject_id="anonymous", roles=frozenset({"viewer"}))
             _fo_result = await _fo_ctrl.send(
                 _fo_group_id,
                 _fo_data,
@@ -122,9 +132,14 @@ async def dispatch_browser_event(
                         "type": "fanout_result",
                         "group_id": _fo_result.group_id,
                         "send_id": _fo_result.send_id,
+                        "command": _fo_result.command,
+                        "sent_at": _fo_result.sent_at,
                         "results": [asdict(r) for r in _fo_result.results],
                         "divergent_sessions": _fo_result.divergent_sessions,
                         "failed_sessions": _fo_result.failed_sessions,
+                        "error": _fo_result.error,
+                        "approval_required": _fo_result.approval_required,
+                        "approval_id": _fo_result.approval_id,
                     }
                 )
             )

@@ -13,9 +13,89 @@ import pytest
 from fastapi.testclient import TestClient
 
 from provide.uterm.server import create_server_app, default_server_config
+from provide.uterm.server.bridge.fanout._controller import FanOutController
+from provide.uterm.server.bridge.fanout._models import FanOutGroup
+from provide.uterm.server.bridge.identity import Principal
 from provide.uterm.server.config_schema import SessionDefinition
 
 VIEWER = {"X-Uterm-Principal": "bob", "X-Uterm-Role": "viewer"}
+ADMIN = Principal(subject_id="admin", roles=frozenset({"admin"}))
+
+
+def _authorized_controller(hub: Any, **overrides: Any) -> FanOutController:
+    async def _is_admin(principal: Principal) -> bool:
+        return "admin" in principal.roles and principal.admin_session_scope is None
+
+    async def _resolve(worker_id: str) -> SessionDefinition:
+        return _sess(worker_id, owner="admin", visibility="public")
+
+    async def _can_read(principal: Principal, session: SessionDefinition) -> bool:
+        return True
+
+    kwargs = {
+        "is_global_admin": _is_admin,
+        "resolve_session": _resolve,
+        "can_read_session": _can_read,
+    }
+    kwargs.update(overrides)
+    return FanOutController(hub, **kwargs)
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("POST", "/api/fanout/groups"),
+        ("GET", "/api/fanout/groups"),
+        ("DELETE", "/api/fanout/groups/not-disclosed"),
+        ("POST", "/api/fanout/groups/not-disclosed/send"),
+        ("POST", "/api/fanout/groups/not-disclosed/grants"),
+    ],
+)
+@pytest.mark.parametrize(
+    ("headers", "expected"),
+    [
+        ({"X-Uterm-Principal": "anonymous", "X-Uterm-Role": "viewer"}, 401),
+        (VIEWER, 403),
+        ({"X-Uterm-Principal": "operator", "X-Uterm-Role": "operator"}, 403),
+    ],
+)
+def test_fanout_routes_reject_non_admin_before_parsing_or_lookup(
+    method: str,
+    path: str,
+    headers: dict[str, str],
+    expected: int,
+) -> None:
+    app = _make_app(allow_unknown_members=True)
+    client = TestClient(app, raise_server_exceptions=False)
+
+    response = client.request(method, path, content=b"{", headers=headers)
+
+    assert response.status_code == expected
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("POST", "/api/fanout/groups"),
+        ("GET", "/api/fanout/groups"),
+        ("DELETE", "/api/fanout/groups/not-disclosed"),
+        ("POST", "/api/fanout/groups/not-disclosed/send"),
+        ("POST", "/api/fanout/groups/not-disclosed/grants"),
+    ],
+)
+def test_fanout_routes_reject_session_scoped_admin_before_parsing_or_lookup(method: str, path: str) -> None:
+    app = _make_app(allow_unknown_members=True)
+    app.state.uterm_authz = MagicMock(is_admin=AsyncMock(return_value=False))
+    client = TestClient(app, raise_server_exceptions=False)
+
+    response = client.request(
+        method,
+        path,
+        content=b"{",
+        headers={"X-Uterm-Principal": "scoped-admin", "X-Uterm-Role": "admin"},
+    )
+
+    assert response.status_code == 403
 
 
 def _make_app(
@@ -75,6 +155,9 @@ class TestCreateGroupAndSend:
         assert len(result["results"]) == 2
         assert all(not r["ok"] for r in result["results"])
         assert set(result["failed_sessions"]) == {"w1", "w2"}
+        assert result["error"] is None
+        assert result["approval_required"] is False
+        assert result["approval_id"] is None
 
         # Delete group
         resp = client.delete(f"/api/fanout/groups/{group_id}")
@@ -147,7 +230,7 @@ class TestCreateGroupReadAuthz:
         assert resp.status_code == 200
 
     def test_rejects_session_principal_cannot_read(self) -> None:
-        # A private session owned by alice; a viewer (bob) cannot read it → 403.
+        # Fan-out rejects viewers before disclosing private-session membership.
         app = _make_app([_sess("priv1", owner="alice", visibility="private")])
         client = TestClient(app)
         resp = client.post(
@@ -156,10 +239,10 @@ class TestCreateGroupReadAuthz:
             headers=VIEWER,
         )
         assert resp.status_code == 403
-        assert "priv1" in resp.json()["error"]
+        assert "admin" in resp.json()["detail"]
 
     def test_allows_readable_session(self) -> None:
-        # A public session is readable by anyone → group creation succeeds.
+        # Public visibility does not let a viewer create a global fan-out group.
         app = _make_app([_sess("pub1", owner="alice", visibility="public")])
         client = TestClient(app)
         resp = client.post(
@@ -167,25 +250,26 @@ class TestCreateGroupReadAuthz:
             json={"name": "g", "worker_ids": ["pub1"]},
             headers=VIEWER,
         )
-        assert resp.status_code == 200
+        assert resp.status_code == 403
 
 
 class TestFanOutObserverTransparency:
     async def test_send_broadcasts_fanout_input_to_each_target(self) -> None:
         """Each target session's observers get a fanout_input frame carrying the
         originating principal, so they can distinguish it from a local hijack."""
-        from provide.uterm.server.bridge.fanout._controller import FanOutController
-        from provide.uterm.server.bridge.fanout._models import FanOutGroup
-
         hub = MagicMock()
         hub.broadcast = AsyncMock()
         hub.send_worker = AsyncMock(return_value=False)  # no workers connected
         hub.approval_store = None
-        ctrl = FanOutController(hub, fanout_policy_gate=None)
+        ctrl = _authorized_controller(hub, fanout_policy_gate=None)
         group = FanOutGroup(group_id="g1", name="g", worker_ids=["wa", "wb"], created_by="alice", created_at=0.0)
         await ctrl._store.save(group)
 
-        await ctrl.send("g1", "uptime\n", principal="alice")
+        await ctrl.send(
+            "g1",
+            "uptime\n",
+            principal=Principal(subject_id="alice", roles=frozenset({"admin"})),
+        )
 
         sent = {call.args[0]: call.args[1] for call in hub.broadcast.await_args_list}
         assert set(sent) == {"wa", "wb"}
@@ -198,10 +282,6 @@ class TestFanOutObserverTransparency:
 
 @pytest.mark.asyncio
 async def test_send_rechecks_current_session_authorization() -> None:
-    from provide.uterm.server.bridge.fanout._controller import FanOutController
-    from provide.uterm.server.bridge.fanout._models import FanOutGroup
-    from provide.uterm.server.bridge.identity import Principal
-
     hub = MagicMock()
     hub.broadcast = AsyncMock()
     hub.send_worker = AsyncMock(return_value=True)
@@ -218,6 +298,7 @@ async def test_send_rechecks_current_session_authorization() -> None:
 
     ctrl = FanOutController(
         hub,
+        is_global_admin=AsyncMock(return_value=True),
         resolve_session=resolve_session,
         can_read_session=can_read_session,
     )
@@ -239,10 +320,6 @@ async def test_send_rechecks_current_session_authorization() -> None:
 
 @pytest.mark.asyncio
 async def test_group_grant_does_not_bypass_session_authorization() -> None:
-    from provide.uterm.server.bridge.fanout._controller import FanOutController
-    from provide.uterm.server.bridge.fanout._models import FanOutGroup
-    from provide.uterm.server.bridge.identity import Principal
-
     hub = MagicMock()
     hub.broadcast = AsyncMock()
     hub.send_worker = AsyncMock(return_value=True)
@@ -251,6 +328,7 @@ async def test_group_grant_does_not_bypass_session_authorization() -> None:
 
     ctrl = FanOutController(
         hub,
+        is_global_admin=AsyncMock(return_value=True),
         resolve_session=AsyncMock(return_value=definition),
         can_read_session=AsyncMock(return_value=False),
     )
@@ -273,6 +351,66 @@ async def test_group_grant_does_not_bypass_session_authorization() -> None:
     hub.send_worker.assert_not_awaited()
     hub.broadcast.assert_not_awaited()
     assert result.failed_sessions == ["w1"]
+
+
+@pytest.mark.parametrize(
+    "principal",
+    [None, "admin", Principal(subject_id="viewer", roles=frozenset({"viewer"}))],
+)
+async def test_direct_send_rejects_missing_string_and_non_admin_principals(principal: Any) -> None:
+    hub = MagicMock()
+    hub.broadcast = AsyncMock()
+    hub.send_worker = AsyncMock(return_value=True)
+    hub.approval_store = None
+    ctrl = _authorized_controller(hub)
+    await ctrl._store.save(FanOutGroup(group_id="g", name="G", worker_ids=["w1"], created_by="admin", created_at=0.0))
+
+    result = await ctrl.send("g", "id\n", principal=principal)
+
+    assert result.error
+    hub.broadcast.assert_not_awaited()
+    hub.send_worker.assert_not_awaited()
+
+
+@pytest.mark.parametrize("missing", ["admin", "resolve", "read"])
+async def test_direct_send_fails_closed_when_authorizer_dependency_is_missing(missing: str) -> None:
+    hub = MagicMock()
+    hub.broadcast = AsyncMock()
+    hub.send_worker = AsyncMock(return_value=True)
+    hub.approval_store = None
+    kwargs: dict[str, Any] = {
+        "is_global_admin": AsyncMock(return_value=True),
+        "resolve_session": AsyncMock(return_value=_sess("w1", owner="admin", visibility="public")),
+        "can_read_session": AsyncMock(return_value=True),
+    }
+    kwargs[{"admin": "is_global_admin", "resolve": "resolve_session", "read": "can_read_session"}[missing]] = None
+    ctrl = FanOutController(hub, **kwargs)
+    await ctrl._store.save(FanOutGroup(group_id="g", name="G", worker_ids=["w1"], created_by="admin", created_at=0.0))
+
+    result = await ctrl.send("g", "id\n", principal=ADMIN)
+
+    assert result.error == "fan-out authorization is unavailable"
+    hub.broadcast.assert_not_awaited()
+    hub.send_worker.assert_not_awaited()
+
+
+async def test_policy_context_uses_actual_strongest_role() -> None:
+    hub = MagicMock()
+    hub.broadcast = AsyncMock()
+    hub.send_worker = AsyncMock(return_value=False)
+    hub.approval_store = None
+    gate = AsyncMock()
+    gate.intercept_fanout = AsyncMock(return_value=MagicMock(action="deny", reason="blocked"))
+    ctrl = _authorized_controller(hub, fanout_policy_gate=gate, is_global_admin=AsyncMock(return_value=True))
+    await ctrl._store.save(
+        FanOutGroup(group_id="g", name="G", worker_ids=["w1"], created_by="operator", created_at=0.0)
+    )
+    principal = Principal(subject_id="operator", roles=frozenset({"operator", "viewer"}))
+
+    await ctrl.send("g", "id\n", principal=principal)
+
+    context = gate.intercept_fanout.await_args.args[1]
+    assert context.role == "operator"
 
 
 class TestSendToNonexistentGroup:

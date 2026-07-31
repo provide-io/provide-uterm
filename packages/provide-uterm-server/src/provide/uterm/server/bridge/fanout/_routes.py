@@ -20,7 +20,7 @@ from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
 try:
-    from fastapi import APIRouter, Request  # noqa: TC002
+    from fastapi import APIRouter, HTTPException, Request
     from fastapi.responses import JSONResponse
 except ImportError as _e:  # pragma: no cover
     raise ImportError("fastapi is required for fanout routes: pip install 'provide-uterm[websocket]'") from _e
@@ -34,6 +34,21 @@ if TYPE_CHECKING:
     from provide.uterm.server.bridge.hub import TermHub
 
 logger = get_logger(__name__)
+
+
+async def _require_global_admin(request: Request) -> Any:
+    """Reject before parsing or looking up any fan-out resource."""
+    principal = getattr(request.state, "uterm_principal", None)
+    if principal is None or principal.subject_id == "anonymous":
+        raise HTTPException(status_code=401, detail="authentication required")
+    authz = getattr(request.app.state, "uterm_authz", None)
+    try:
+        is_admin = authz is not None and await authz.is_admin(principal)
+    except Exception:
+        is_admin = False
+    if not is_admin:
+        raise HTTPException(status_code=403, detail="global admin role required")
+    return principal
 
 
 def _get_controller(hub: TermHub) -> FanOutController:
@@ -51,8 +66,8 @@ def register_fanout_routes(hub: TermHub, router: APIRouter) -> None:
 
     @router.post("/api/fanout/groups")
     async def create_group(request: Request) -> Any:
+        principal = await _require_global_admin(request)
         ctrl = _get_controller(hub)
-        principal = request.state.uterm_principal
         body = await request.json()
         worker_ids = body.get("worker_ids", [])
         name = body.get("name", "")
@@ -100,8 +115,8 @@ def register_fanout_routes(hub: TermHub, router: APIRouter) -> None:
 
     @router.get("/api/fanout/groups")
     async def list_groups(request: Request) -> Any:
+        principal = await _require_global_admin(request)
         ctrl = _get_controller(hub)
-        principal = request.state.uterm_principal
         groups = await ctrl.list_groups(principal.subject_id)
         return [
             {"group_id": g.group_id, "name": g.name, "session_count": len(g.worker_ids), "mode": g.mode} for g in groups
@@ -109,8 +124,8 @@ def register_fanout_routes(hub: TermHub, router: APIRouter) -> None:
 
     @router.delete("/api/fanout/groups/{group_id}")
     async def delete_group(request: Request, group_id: str) -> Any:
+        principal = await _require_global_admin(request)
         ctrl = _get_controller(hub)
-        principal = request.state.uterm_principal
         existing = await ctrl.get_group(group_id, principal=principal.subject_id)
         if existing is None:
             return JSONResponse({"error": "group not found"}, status_code=404)
@@ -123,8 +138,8 @@ def register_fanout_routes(hub: TermHub, router: APIRouter) -> None:
 
     @router.post("/api/fanout/groups/{group_id}/send")
     async def send_to_group(request: Request, group_id: str) -> Any:
+        principal = await _require_global_admin(request)
         ctrl = _get_controller(hub)
-        principal = request.state.uterm_principal
         existing = await ctrl.get_group(group_id, principal=principal.subject_id)
         if existing is None:
             return JSONResponse({"error": "group not found"}, status_code=404)
@@ -153,12 +168,15 @@ def register_fanout_routes(hub: TermHub, router: APIRouter) -> None:
             "results": [asdict(r) for r in result.results],
             "divergent_sessions": result.divergent_sessions,
             "failed_sessions": result.failed_sessions,
+            "error": result.error,
+            "approval_required": result.approval_required,
+            "approval_id": result.approval_id,
         }
 
     @router.post("/api/fanout/groups/{group_id}/grants")
     async def grant_access(request: Request, group_id: str) -> Any:
+        principal = await _require_global_admin(request)
         ctrl = _get_controller(hub)
-        principal = request.state.uterm_principal
         existing = await ctrl.get_group(group_id, principal=principal.subject_id)
         if existing is None:
             return JSONResponse({"error": "group not found"}, status_code=404)

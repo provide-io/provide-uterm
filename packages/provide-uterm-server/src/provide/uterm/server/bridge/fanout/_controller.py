@@ -40,6 +40,7 @@ class FanOutController:
         store: FanOutStore | None = None,
         max_group_size: int = 50,
         fanout_policy_gate: FanOutPolicyGate | None = None,
+        is_global_admin: Callable[[Principal], Awaitable[bool]] | None = None,
         resolve_session: Callable[[str], Awaitable[SessionDefinition | None]] | None = None,
         can_read_session: Callable[[Principal, SessionDefinition], Awaitable[bool]] | None = None,
         allow_unknown_members: bool = False,
@@ -48,6 +49,7 @@ class FanOutController:
         self._store: FanOutStore = store if store is not None else InMemoryFanOutStore()
         self._max_group_size = max_group_size
         self._fanout_policy_gate = fanout_policy_gate
+        self._is_global_admin = is_global_admin
         self._resolve_session = resolve_session
         self._can_read_session = can_read_session
         self.allow_unknown_members = allow_unknown_members
@@ -144,6 +146,61 @@ class FanOutController:
         return allowed, refused
 
     @staticmethod
+    def _error_result(group_id: str, data: str, error: str) -> FanOutResult:
+        """Build an explicit fail-closed result without dispatch side effects."""
+        return FanOutResult(
+            group_id=group_id,
+            send_id=uuid.uuid4().hex,
+            command=data,
+            sent_at=time.time(),
+            results=[],
+            divergent_sessions=[],
+            failed_sessions=[],
+            error=error,
+        )
+
+    async def _authorized_dispatch_snapshot(
+        self,
+        group_id: str,
+        data: str,
+        principal: Principal | None,
+    ) -> tuple[FanOutGroup | None, list[str], FanOutResult | None]:
+        """Authorize a caller and create the only snapshot accepted by dispatch."""
+        if principal is None or isinstance(principal, str):
+            return None, [], self._error_result(group_id, data, "authenticated principal required")
+        if self._is_global_admin is None or self._resolve_session is None or self._can_read_session is None:
+            return None, [], self._error_result(group_id, data, "fan-out authorization is unavailable")
+        try:
+            is_admin = await self._is_global_admin(principal)
+        except Exception:
+            return None, [], self._error_result(group_id, data, "fan-out authorization failed")
+        if not is_admin:
+            return None, [], self._error_result(group_id, data, "global admin role required")
+
+        group = await self._store.get(group_id)
+        if group is None:
+            return None, [], self._error_result(group_id, data, "fan-out group not found")
+
+        allowed: list[str] = []
+        refused: list[str] = []
+        for worker_id in tuple(group.worker_ids):
+            try:
+                definition = await self._resolve_session(worker_id)
+                readable = definition is not None and await self._can_read_session(principal, definition)
+            except Exception:
+                readable = False
+            (allowed if readable else refused).append(worker_id)
+        return replace(group, worker_ids=allowed), refused, None
+
+    @staticmethod
+    def _strongest_role(principal: Principal) -> str:
+        """Return the principal's strongest normalized policy role."""
+        for role in ("admin", "operator", "viewer"):
+            if role in principal.roles:
+                return role
+        return "viewer"
+
+    @staticmethod
     def _append_refused(result: FanOutResult, refused: list[str]) -> FanOutResult:
         for worker_id in refused:
             result.results.append(
@@ -159,28 +216,17 @@ class FanOutController:
         group_id: str,
         data: str,
         *,
-        principal: str | Principal,
+        principal: Principal | None,
         quiesce_ms: int | None = None,
         max_response_ms: int | None = None,
     ) -> FanOutResult:
         """Broadcast *data* to all workers in the group and collect results."""
-        group = await self._authorized_group(group_id, principal)
-        if group is None:
-            return FanOutResult(
-                group_id=group_id,
-                send_id=uuid.uuid4().hex,
-                command=data,
-                sent_at=time.time(),
-                results=[],
-                divergent_sessions=[],
-                failed_sessions=[],
-            )
-
-        refused: list[str] = []
-        dispatch_group = group
-        if not isinstance(principal, str):
-            allowed, refused = await self.validate_members(group.worker_ids, principal)
-            dispatch_group = replace(group, worker_ids=allowed)
+        dispatch_group, refused, auth_error = await self._authorized_dispatch_snapshot(group_id, data, principal)
+        if auth_error is not None:
+            return auth_error
+        if dispatch_group is None:  # pragma: no cover - narrowed by auth_error
+            return self._error_result(group_id, data, "fan-out authorization failed")
+        group = dispatch_group
 
         # 1. Check Policy for Fan-Out
         from provide.uterm.server.bridge.hub.approvals import ApprovalRequest, ApprovalStatus
@@ -190,8 +236,8 @@ class FanOutController:
         # so we pass a dummy or use the principal for context.
         context = PolicyContext(
             worker_id=f"group:{group_id}",
-            client_id=self._principal_id(principal),
-            role="admin",  # Defaulting to admin for fan-out senders for now
+            client_id=principal.subject_id,
+            role=self._strongest_role(principal),
             action="fanout_send",
             metadata={"is_fanout": True, "group_id": group_id},
         )
@@ -226,7 +272,7 @@ class FanOutController:
             approval = ApprovalRequest(
                 id=request_id,
                 worker_id=f"group:{group_id}",
-                submitter_id=self._principal_id(principal),
+                submitter_id=principal.subject_id,
                 command=data,
                 status=ApprovalStatus.PENDING,
                 created_at=time.time(),
@@ -247,7 +293,7 @@ class FanOutController:
                     "group_id": group_id,
                     "command": data[:500],
                     "request_id": request_id,
-                    "principal": self._principal_id(principal),
+                    "principal": principal.subject_id,
                 },
             )
 
@@ -268,13 +314,9 @@ class FanOutController:
         m_ms = max_response_ms if max_response_ms is not None else group.max_response_ms
 
         if group.mode == "sequential":
-            result = await self._send_sequential(
-                dispatch_group, data, q_ms, m_ms, principal=self._principal_id(principal)
-            )
+            result = await self._send_sequential(dispatch_group, data, q_ms, m_ms, principal=principal.subject_id)
         else:
-            result = await self._send_parallel(
-                dispatch_group, data, q_ms, m_ms, principal=self._principal_id(principal)
-            )
+            result = await self._send_parallel(dispatch_group, data, q_ms, m_ms, principal=principal.subject_id)
         return self._append_refused(result, refused)
 
     async def release_approved_command(self, request_id: str) -> FanOutResult | None:
@@ -291,27 +333,19 @@ class FanOutController:
 
         # Note: This executes the send *again* but now with approval bypass logic
         # For simplicity, we just call the underlying send helpers directly.
-        group = await self._authorized_group(group_id, principal)
-        if group is None:
-            return None
+        dispatch_group, refused, auth_error = await self._authorized_dispatch_snapshot(group_id, command, principal)
+        if auth_error is not None:
+            return auth_error
+        if dispatch_group is None:  # pragma: no cover - narrowed by auth_error
+            return self._error_result(group_id, command, "fan-out authorization failed")
 
-        q_ms = q_ms if q_ms is not None else group.quiesce_ms
-        m_ms = m_ms if m_ms is not None else group.max_response_ms
+        q_ms = q_ms if q_ms is not None else dispatch_group.quiesce_ms
+        m_ms = m_ms if m_ms is not None else dispatch_group.max_response_ms
 
-        refused: list[str] = []
-        dispatch_group = group
-        if not isinstance(principal, str):
-            allowed, refused = await self.validate_members(group.worker_ids, principal)
-            dispatch_group = replace(group, worker_ids=allowed)
-
-        if group.mode == "sequential":
-            result = await self._send_sequential(
-                dispatch_group, command, q_ms, m_ms, principal=self._principal_id(principal)
-            )
+        if dispatch_group.mode == "sequential":
+            result = await self._send_sequential(dispatch_group, command, q_ms, m_ms, principal=principal.subject_id)
         else:
-            result = await self._send_parallel(
-                dispatch_group, command, q_ms, m_ms, principal=self._principal_id(principal)
-            )
+            result = await self._send_parallel(dispatch_group, command, q_ms, m_ms, principal=principal.subject_id)
         return self._append_refused(result, refused)
 
     async def _notify_fanout_observers(self, group: FanOutGroup, data: str, send_id: str, principal: str) -> None:

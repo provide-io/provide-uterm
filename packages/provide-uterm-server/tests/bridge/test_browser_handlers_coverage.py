@@ -11,12 +11,15 @@ objects, isolating the handler logic without requiring a full ASGI server.
 from __future__ import annotations
 
 import time
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 from provide.uterm.server.bridge.hub import TermHub
+from provide.uterm.server.bridge.identity import Principal
 from provide.uterm.server.bridge.models import WorkerTermState
 from provide.uterm.server.bridge.routes.browser_handlers import handle_browser_message
+from provide.uterm.server.bridge.routes.websockets_browser import dispatch_browser_event
 
 from .control_channel_helpers import decode_control_payload
 
@@ -239,3 +242,48 @@ class TestUnknownType:
         result = await handle_browser_message(hub, ws, "w1", "admin", {"type": "unknown_future_type"}, True)
         assert result is True
         ws.send_text.assert_not_called()
+
+
+class TestFanOutAdminBoundary:
+    async def test_fanout_send_rejects_non_admin_before_group_lookup(self) -> None:
+        hub = _make_hub()
+        ctrl = MagicMock()
+        ctrl.get_group = AsyncMock()
+        ctrl.send = AsyncMock()
+        hub.fan_out_controller = ctrl  # type: ignore[attr-defined]
+        ws = _make_ws()
+        ws.state = SimpleNamespace(uterm_principal=Principal(subject_id="operator", roles=frozenset({"operator"})))
+        ws.app = SimpleNamespace(state=SimpleNamespace(uterm_authz=MagicMock(is_admin=AsyncMock(return_value=False))))
+        bucket = MagicMock(allow=MagicMock(return_value=True))
+        event = SimpleNamespace(control={"type": "fanout_send", "group_id": "secret", "data": "id\n"})
+
+        await dispatch_browser_event(hub, ws, "w1", "operator", False, False, event, bucket, bucket)
+
+        ctrl.get_group.assert_not_awaited()
+        ctrl.send.assert_not_awaited()
+        sent = decode_control_payload(ws.send_text.await_args.args[0])
+        assert sent["type"] == "error"
+        assert "admin" in sent["message"]
+
+    async def test_fanout_send_rejects_session_scoped_admin_before_group_lookup(self) -> None:
+        hub = _make_hub()
+        ctrl = MagicMock()
+        ctrl.get_group = AsyncMock()
+        ctrl.send = AsyncMock()
+        hub.fan_out_controller = ctrl  # type: ignore[attr-defined]
+        ws = _make_ws()
+        ws.state = SimpleNamespace(
+            uterm_principal=Principal(
+                subject_id="scoped",
+                roles=frozenset({"admin"}),
+                admin_session_scope="w1",
+            )
+        )
+        ws.app = SimpleNamespace(state=SimpleNamespace(uterm_authz=MagicMock(is_admin=AsyncMock(return_value=False))))
+        bucket = MagicMock(allow=MagicMock(return_value=True))
+        event = SimpleNamespace(control={"type": "fanout_send", "group_id": "secret", "data": "id\n"})
+
+        await dispatch_browser_event(hub, ws, "w1", "admin", True, False, event, bucket, bucket)
+
+        ctrl.get_group.assert_not_awaited()
+        ctrl.send.assert_not_awaited()
