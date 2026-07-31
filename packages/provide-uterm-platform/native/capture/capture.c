@@ -23,11 +23,12 @@
  */
 
 #define _GNU_SOURCE
+#include "capture_writer.h"
+
 #include <arpa/inet.h>
 #include <dlfcn.h>
 #include <errno.h>
 #include <netinet/in.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -40,29 +41,61 @@
 #define CHANNEL_STDIN   0x02
 #define CHANNEL_CONNECT 0x03
 
-/* 1B channel + 4B big-endian length. */
-#define FRAME_HEADER_LEN 5
-
-/* Frames whose combined size (header + payload) fits this cap are assembled on
- * the stack; larger ones fall back to malloc.  Sized to cover typical terminal
- * write()s without heap traffic while keeping stack usage bounded. */
-#define FRAME_STACK_CAP 4096
-
-static int g_capture_fd = -1;
+static atomic_int g_capture_fd = ATOMIC_VAR_INIT(-1);
+static atomic_bool g_writer_ready = ATOMIC_VAR_INIT(0);
+static struct capture_writer g_writer;
 
 typedef ssize_t (*fn_write)(int, const void *, size_t);
 typedef ssize_t (*fn_read)(int, void *, size_t);
 typedef int     (*fn_connect)(int, const struct sockaddr *, socklen_t);
 
-/* Shared by both backends: closes the capture socket so subsequent frames are
- * dropped.  Defined here (not inside the __APPLE__ block) because the Linux
- * send_frame() calls it too — with -Werror an implicit declaration would fail
- * the Linux build. */
-static void capture_disable(void) {
-    if (g_capture_fd >= 0) {
-        close(g_capture_fd);
-        g_capture_fd = -1;
+static ssize_t capture_socket_send(int fd, const void *buffer, size_t length,
+                                   int flags, void *context) {
+    (void)context;
+    return send(fd, buffer, length, flags);
+}
+
+static void capture_socket_close(int fd, void *context) {
+    (void)context;
+    atomic_store_explicit(&g_capture_fd, -1, memory_order_release);
+    (void)close(fd);
+}
+
+static int capture_socket_open(void) {
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+
+    if (fd < 0) {
+        return -1;
     }
+    if (capture_socket_set_nonblocking(fd) < 0) {
+        (void)close(fd);
+        return -1;
+    }
+    return fd;
+}
+
+static int capture_writer_start(int fd) {
+#ifdef __APPLE__
+    const int send_flags = 0;
+#else
+    const int send_flags = MSG_NOSIGNAL;
+#endif
+
+    if (capture_writer_init(&g_writer, fd, send_flags, capture_socket_send,
+                            capture_socket_close, NULL) < 0) {
+        (void)close(fd);
+        return -1;
+    }
+    atomic_store_explicit(&g_capture_fd, fd, memory_order_release);
+    atomic_store_explicit(&g_writer_ready, 1, memory_order_release);
+    return 0;
+}
+
+static void send_frame(uint8_t channel, const void *data, size_t len) {
+    if (!atomic_load_explicit(&g_writer_ready, memory_order_acquire)) {
+        return;
+    }
+    (void)capture_writer_emit(&g_writer, channel, data, len);
 }
 
 #ifdef __APPLE__
@@ -100,45 +133,6 @@ static fn_write   g_real_write;
 static fn_read    g_real_read;
 static fn_connect g_real_connect;
 
-static void send_frame(uint8_t channel, const void *data, size_t len) {
-    if (g_capture_fd < 0 || !g_real_write) return;
-
-    /* Header [1B channel][4B big-endian length] and payload are concatenated
-     * into one buffer and emitted with a SINGLE write() so the framing cannot
-     * be torn apart by a concurrent send_frame() on another thread.  Two
-     * separate syscalls (header, then payload) on the shared, unlocked
-     * g_capture_fd would let one thread's header interleave with another's
-     * payload, corrupting the length-prefixed framing the Python reader
-     * (CaptureSocket) relies on.  A single write() is the atomic unit here. */
-    uint32_t n = (uint32_t)len;
-    size_t total = FRAME_HEADER_LEN + len;
-
-    uint8_t stack_buf[FRAME_STACK_CAP];
-    uint8_t *frame = stack_buf;
-    if (total > FRAME_STACK_CAP) {
-        frame = (uint8_t *)malloc(total);
-        if (!frame) return;  /* drop frame rather than risk a partial write */
-    }
-
-    frame[0] = channel;
-    frame[1] = (n >> 24) & 0xff;
-    frame[2] = (n >> 16) & 0xff;
-    frame[3] = (n >>  8) & 0xff;
-    frame[4] = (n      ) & 0xff;
-    memcpy(frame + FRAME_HEADER_LEN, data, len);
-
-    /* Call real write directly (g_capture_fd > 2 so no recursion even if
-     * g_real_write ended up as our hook — but it won't, per the above).
-     * If the capture socket is dead, disable capture permanently so we
-     * don't spin-loop on failing syscalls. */
-    ssize_t rc = g_real_write(g_capture_fd, frame, total);
-    if (rc < 0 && (errno == EPIPE || errno == ECONNRESET || errno == EBADF)) {
-        capture_disable();
-    }
-
-    if (frame != stack_buf) free(frame);
-}
-
 __attribute__((constructor))
 static void uterm_capture_init(void) {
     /* Read originals from the interpose structs — these hold link-time addresses
@@ -150,25 +144,30 @@ static void uterm_capture_init(void) {
     const char *path = getenv("UTERM_CAPTURE_SOCKET");
     if (!path || !*path) return;
 
-    g_capture_fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (g_capture_fd < 0) return;
+    int capture_fd = capture_socket_open();
+    if (capture_fd < 0) return;
 
     /* Suppress SIGPIPE on write() to a closed capture socket — otherwise a
      * disconnected capture consumer would kill the *captured* process. macOS
      * has no MSG_NOSIGNAL for send(), so set the socket option (the Linux
      * backend uses send(..., MSG_NOSIGNAL) on send_frame instead). */
     int nosigpipe = 1;
-    setsockopt(g_capture_fd, SOL_SOCKET, SO_NOSIGPIPE, &nosigpipe, sizeof(nosigpipe));
+    if (setsockopt(capture_fd, SOL_SOCKET, SO_NOSIGPIPE, &nosigpipe,
+                   sizeof(nosigpipe)) < 0) {
+        (void)close(capture_fd);
+        return;
+    }
 
     struct sockaddr_un addr;
     memset(&addr, 0, sizeof(addr));
     addr.sun_family = AF_UNIX;
     strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
 
-    if (g_real_connect(g_capture_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        close(g_capture_fd);
-        g_capture_fd = -1;
+    if (g_real_connect(capture_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        (void)close(capture_fd);
+        return;
     }
+    (void)capture_writer_start(capture_fd);
 }
 
 static ssize_t uterm_write(int fd, const void *buf, size_t count) {
@@ -188,8 +187,11 @@ static ssize_t uterm_read(int fd, void *buf, size_t count) {
 }
 
 static int uterm_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
-    if (sockfd == g_capture_fd) return g_real_connect(sockfd, addr, addrlen);
+    if (sockfd == atomic_load_explicit(&g_capture_fd, memory_order_acquire)) {
+        return g_real_connect(sockfd, addr, addrlen);
+    }
     int ret = g_real_connect(sockfd, addr, addrlen);
+    int application_errno = errno;
     if (ret == 0 && addr) {
         char addrstr[256] = {0};
         if (addr->sa_family == AF_INET) {
@@ -207,6 +209,7 @@ static int uterm_connect(int sockfd, const struct sockaddr *addr, socklen_t addr
         }
         if (addrstr[0]) send_frame(CHANNEL_CONNECT, addrstr, strlen(addrstr));
     }
+    errno = application_errno;
     return ret;
 }
 
@@ -215,44 +218,6 @@ static int uterm_connect(int sockfd, const struct sockaddr *addr, socklen_t addr
 static fn_write   orig_write;
 static fn_read    orig_read;
 static fn_connect orig_connect;
-
-static void send_frame(uint8_t channel, const void *data, size_t len) {
-    if (g_capture_fd < 0 || !orig_write) return;
-
-    /* Header [1B channel][4B big-endian length] and payload are concatenated
-     * into one buffer and emitted with a SINGLE send() so the framing cannot
-     * be torn apart by a concurrent send_frame() on another thread.  Two
-     * separate syscalls (header, then payload) on the shared, unlocked
-     * g_capture_fd would let one thread's header interleave with another's
-     * payload, corrupting the length-prefixed framing the Python reader
-     * (CaptureSocket) relies on.  A single send() is the atomic unit here. */
-    uint32_t n = (uint32_t)len;
-    size_t total = FRAME_HEADER_LEN + len;
-
-    uint8_t stack_buf[FRAME_STACK_CAP];
-    uint8_t *frame = stack_buf;
-    if (total > FRAME_STACK_CAP) {
-        frame = (uint8_t *)malloc(total);
-        if (!frame) return;  /* drop frame rather than risk a partial write */
-    }
-
-    frame[0] = channel;
-    frame[1] = (n >> 24) & 0xff;
-    frame[2] = (n >> 16) & 0xff;
-    frame[3] = (n >>  8) & 0xff;
-    frame[4] = (n      ) & 0xff;
-    memcpy(frame + FRAME_HEADER_LEN, data, len);
-
-    /* Use send() with MSG_NOSIGNAL instead of write() to suppress SIGPIPE
-     * per-call rather than globally — avoids changing signal handling for the
-     * entire host process. */
-    ssize_t rc = send(g_capture_fd, frame, total, MSG_NOSIGNAL);
-    if (rc < 0 && (errno == EPIPE || errno == ECONNRESET || errno == EBADF)) {
-        capture_disable();
-    }
-
-    if (frame != stack_buf) free(frame);
-}
 
 __attribute__((constructor))
 static void uterm_capture_init(void) {
@@ -263,18 +228,19 @@ static void uterm_capture_init(void) {
     const char *path = getenv("UTERM_CAPTURE_SOCKET");
     if (!path || !*path) return;
 
-    g_capture_fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (g_capture_fd < 0) return;
+    int capture_fd = capture_socket_open();
+    if (capture_fd < 0) return;
 
     struct sockaddr_un addr;
     memset(&addr, 0, sizeof(addr));
     addr.sun_family = AF_UNIX;
     strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
 
-    if (orig_connect(g_capture_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        close(g_capture_fd);
-        g_capture_fd = -1;
+    if (orig_connect(capture_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        (void)close(capture_fd);
+        return;
     }
+    (void)capture_writer_start(capture_fd);
 }
 
 ssize_t write(int fd, const void *buf, size_t count) {
@@ -294,8 +260,11 @@ ssize_t read(int fd, void *buf, size_t count) {
 }
 
 int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
-    if (sockfd == g_capture_fd) return orig_connect(sockfd, addr, addrlen);
+    if (sockfd == atomic_load_explicit(&g_capture_fd, memory_order_acquire)) {
+        return orig_connect(sockfd, addr, addrlen);
+    }
     int ret = orig_connect(sockfd, addr, addrlen);
+    int application_errno = errno;
     if (ret == 0 && addr) {
         char addrstr[256] = {0};
         if (addr->sa_family == AF_INET) {
@@ -313,6 +282,7 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
         }
         if (addrstr[0]) send_frame(CHANNEL_CONNECT, addrstr, strlen(addrstr));
     }
+    errno = application_errno;
     return ret;
 }
 

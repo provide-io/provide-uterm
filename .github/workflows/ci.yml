@@ -335,6 +335,9 @@ jobs:
       - run: uv sync --frozen --package provide-uterm-platform --extra dev
       - name: Run PTY unit tests (no PAM/root/native)
         run: uv run pytest packages/provide-uterm-platform/tests/pty/ -q --no-cov --timeout=10 --ignore=packages/provide-uterm-platform/tests/pty/e2e -o "addopts=--import-mode=importlib"
+      - name: Build and self-test native capture library
+        if: matrix.python-version == '3.11'
+        run: make -C packages/provide-uterm-platform/native/capture clean test all
 
   npm-quality:
     # Frontend unit tests + typecheck for both npm workspaces. Previously only
