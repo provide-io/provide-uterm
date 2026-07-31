@@ -61,6 +61,23 @@ public sealed class ConnectionAdmissionTests
         Assert.Single(pending.Messages);
     }
 
+    [Fact]
+    public void CleanedUpSocketCannotBypassQuotaOrReacquireOwnership()
+    {
+        var hub = new TermHub(new TermHubConfig { MaxConnectionsPerPrincipal = 1 });
+        var stale = new CaptureSocket();
+        var replacement = new CaptureSocket();
+        hub.Conn.RegisterWorker("w", new CaptureSocket());
+        hub.Conn.RegisterBrowser("w", stale, "admin", principalSubjectId: "alice");
+
+        hub.Conn.CleanupBrowser("w", stale);
+        hub.Conn.RegisterBrowser("w", replacement, "admin", principalSubjectId: "alice");
+
+        Assert.False(hub.Lease.TryAcquireWs("w", stale).Ok);
+        Assert.False(hub.Lease.PrepareBrowserInput("w", stale));
+        Assert.True(hub.Lease.TryAcquireWs("w", replacement).Ok);
+    }
+
     private sealed class CaptureSocket : IWorkerWs
     {
         public List<string> Messages { get; } = new();

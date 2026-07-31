@@ -19,6 +19,13 @@ public sealed class BrowserRegistrationException : Exception
 /// <summary>Worker/browser registration and REST rate-limit facade.</summary>
 public sealed class ConnectionManager
 {
+    private enum BrowserSendOutcome
+    {
+        Sent,
+        PeerFailed,
+        CallerCancelled,
+    }
+
     private readonly TermHub _hub;
 
     internal ConnectionManager(TermHub hub) => _hub = hub;
@@ -301,11 +308,22 @@ public sealed class ConnectionManager
         }
     }
 
-    public long? CleanupBrowser(string workerId, object ws)
+    public bool IsBrowserRegistered(string workerId, object ws)
     {
         lock (_hub.SharedLock)
         {
-            long? ownershipVersion = null;
+            var registered = _hub.Registry.Get(workerId)?.Browsers.ContainsKey(ws) is true;
+            return registered && (ws is not IAbortableBrowserWs browser || browser.IsActive);
+        }
+    }
+
+    public long? CleanupBrowser(string workerId, object ws, bool retainOwnershipVersion = false)
+    {
+        lock (_hub.SharedLock)
+        {
+            long? ownershipVersion = _hub.PendingBrowserOwnershipVersions.Remove(ws, out var pendingVersion)
+                ? pendingVersion
+                : null;
             var st = _hub.Registry.Get(workerId);
             if (st is not null)
             {
@@ -324,6 +342,13 @@ public sealed class ConnectionManager
 
             _hub.StartupPendingBrowsers.Remove(ws);
             RollbackBrowserQuota(ws);
+            if (retainOwnershipVersion && ownershipVersion is not null)
+            {
+                // A broadcast timeout aborts the transport before its receive-loop
+                // finally block runs. Preserve the generation for that block so it
+                // can resume the worker and mark the matching resume token.
+                _hub.PendingBrowserOwnershipVersions[ws] = ownershipVersion.Value;
+            }
             return ownershipVersion;
         }
     }
@@ -381,11 +406,15 @@ public sealed class ConnectionManager
         var results = await Task.WhenAll(fanout.Select(async item =>
         {
             var encoded = ControlChannelCodec.EncodeControlFrame(item.Msg);
-            return await SendBrowserBoundedAsync(item.Ws, encoded, ct).ConfigureAwait(false)
-                ? null
-                : item.Ws;
+            var outcome = await SendBrowserBoundedAsync(item.Ws, encoded, ct).ConfigureAwait(false);
+            return (item.Ws, Outcome: outcome);
         })).ConfigureAwait(false);
-        PruneBrowsers(workerId, results.OfType<object>());
+        PruneBrowsers(workerId, results.Where(result => result.Outcome == BrowserSendOutcome.PeerFailed)
+            .Select(result => result.Ws));
+        if (results.Any(result => result.Outcome == BrowserSendOutcome.CallerCancelled))
+        {
+            ct.ThrowIfCancellationRequested();
+        }
     }
 
     /// <summary>Fan-out one control payload to every browser on the worker (worker_connected etc.).</summary>
@@ -402,34 +431,59 @@ public sealed class ConnectionManager
 
         var encoded = ControlChannelCodec.EncodeControlFrame(msg);
         var results = await Task.WhenAll(browsers.Select(async wsObj =>
-            await SendBrowserBoundedAsync(wsObj, encoded, ct).ConfigureAwait(false)
-                ? null
-                : wsObj)).ConfigureAwait(false);
-        PruneBrowsers(workerId, results.OfType<object>());
+            (Ws: wsObj, Outcome: await SendBrowserBoundedAsync(wsObj, encoded, ct).ConfigureAwait(false))))
+            .ConfigureAwait(false);
+        PruneBrowsers(workerId, results.Where(result => result.Outcome == BrowserSendOutcome.PeerFailed)
+            .Select(result => result.Ws));
+        if (results.Any(result => result.Outcome == BrowserSendOutcome.CallerCancelled))
+        {
+            ct.ThrowIfCancellationRequested();
+        }
     }
 
-    private async Task<bool> SendBrowserBoundedAsync(object wsObj, string payload, CancellationToken ct)
+    private async Task<BrowserSendOutcome> SendBrowserBoundedAsync(
+        object wsObj,
+        string payload,
+        CancellationToken ct)
     {
-        if (wsObj is not IWorkerWs browser) return false;
+        if (wsObj is not IWorkerWs browser) return BrowserSendOutcome.PeerFailed;
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(_hub.BrowserSendTimeout);
+        Task? sendTask = null;
         try
         {
             // WaitAsync enforces our deadline even if a broken transport
             // ignores the cancellation token passed into SendTextAsync.
-            await browser.SendTextAsync(payload, timeout.Token)
-                .WaitAsync(timeout.Token).ConfigureAwait(false);
-            return true;
+            sendTask = browser.SendTextAsync(payload, timeout.Token);
+            await sendTask.WaitAsync(timeout.Token).ConfigureAwait(false);
+            return BrowserSendOutcome.Sent;
         }
         catch
         {
-            return false;
+            ObserveEventualFault(sendTask);
+            return ct.IsCancellationRequested
+                ? BrowserSendOutcome.CallerCancelled
+                : BrowserSendOutcome.PeerFailed;
         }
+    }
+
+    private static void ObserveEventualFault(Task? task)
+    {
+        if (task is null) return;
+        _ = task.ContinueWith(
+            static completed => _ = completed.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
 
     private void PruneBrowsers(string workerId, IEnumerable<object> dead)
     {
-        foreach (var ws in dead) CleanupBrowser(workerId, ws);
+        foreach (var ws in dead)
+        {
+            if (ws is IAbortableBrowserWs browser) browser.Abort();
+            CleanupBrowser(workerId, ws, retainOwnershipVersion: ws is IAbortableBrowserWs);
+        }
     }
 
     /// <summary>Send terminal bytes / control to REST hijack path target worker.</summary>

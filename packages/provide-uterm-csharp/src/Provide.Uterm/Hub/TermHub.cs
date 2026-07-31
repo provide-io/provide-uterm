@@ -102,6 +102,7 @@ public sealed class TermHub : ILeaseHub
     internal Dictionary<string, int> PrincipalBrowserCounts { get; } = new(StringComparer.Ordinal);
     internal Dictionary<object, string> BrowserPrincipals { get; } = new();
     internal HashSet<object> StartupPendingBrowsers { get; } = new();
+    internal Dictionary<object, long> PendingBrowserOwnershipVersions { get; } = new();
     internal TimeSpan BrowserSendTimeout { get; }
 
     public string? WorkerToken { get; }

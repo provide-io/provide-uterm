@@ -71,6 +71,63 @@ public sealed class BroadcastIsolationTests
         Assert.DoesNotContain(broken, hub.Registry.Get("w")!.Browsers.Keys);
     }
 
+    [Fact]
+    public async Task CallerCancellationPropagatesWithoutPruningHealthyPeers()
+    {
+        var hub = new TermHub();
+        var first = new CaptureSocket();
+        var second = new CaptureSocket();
+        hub.Conn.RegisterBrowser("w", first, "viewer");
+        hub.Conn.RegisterBrowser("w", second, "viewer");
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            hub.Conn.BroadcastToBrowsersAsync(
+                "w", new Dictionary<string, object?> { ["type"] = "term" }, cancelled.Token));
+
+        Assert.Contains(first, hub.Registry.Get("w")!.Browsers.Keys);
+        Assert.Contains(second, hub.Registry.Get("w")!.Browsers.Keys);
+    }
+
+    [Fact]
+    public async Task TimedOutPeerIsAbortedAndItsEventualFaultIsContained()
+    {
+        var hub = new TermHub(new TermHubConfig
+        {
+            BrowserSendTimeout = TimeSpan.FromMilliseconds(40),
+        });
+        var broken = new AbortFaultSocket();
+        hub.Conn.RegisterBrowser("w", broken, "viewer");
+
+        await hub.Conn.BroadcastToBrowsersAsync(
+            "w", new Dictionary<string, object?> { ["type"] = "term" });
+
+        Assert.True(broken.Aborted);
+        Assert.True(broken.SendTask.IsFaulted);
+        Assert.DoesNotContain(broken, hub.Registry.Get("w")!.Browsers.Keys);
+    }
+
+    [Fact]
+    public async Task TimedOutOwnerCleanupPreservesResumeGenerationForSocketHandler()
+    {
+        var hub = new TermHub(new TermHubConfig
+        {
+            BrowserSendTimeout = TimeSpan.FromMilliseconds(40),
+        });
+        var worker = new CaptureSocket();
+        var owner = new AbortFaultSocket();
+        hub.Conn.RegisterWorker("w", worker);
+        hub.Conn.RegisterBrowser("w", owner, "admin");
+        Assert.True(hub.Lease.TryAcquireWs("w", owner).Ok);
+        var ownershipVersion = hub.Registry.Get("w")!.HijackOwnershipVersion;
+
+        await hub.Conn.BroadcastToBrowsersAsync(
+            "w", new Dictionary<string, object?> { ["type"] = "term" });
+
+        Assert.Equal(ownershipVersion, hub.Conn.CleanupBrowser("w", owner));
+    }
+
     private sealed class CaptureSocket : IWorkerWs
     {
         public List<string> Messages { get; } = new();
@@ -96,5 +153,24 @@ public sealed class BroadcastIsolationTests
 
         public Task SendTextAsync(string payload, CancellationToken cancellationToken = default) =>
             _never.Task;
+    }
+
+    private sealed class AbortFaultSocket : IAbortableBrowserWs
+    {
+        private readonly TaskCompletionSource _send = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool Aborted { get; private set; }
+        public bool IsActive => !Aborted;
+        public Task SendTask => _send.Task;
+
+        public Task SendTextAsync(string payload, CancellationToken cancellationToken = default) =>
+            _send.Task;
+
+        public void Abort()
+        {
+            Aborted = true;
+            _send.TrySetException(new IOException("transport aborted"));
+        }
     }
 }
