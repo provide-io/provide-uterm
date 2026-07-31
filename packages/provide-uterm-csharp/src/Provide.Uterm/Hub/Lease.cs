@@ -190,7 +190,31 @@ public sealed class HijackLeaseManager
 
             st.HijackOwner = ws;
             st.HijackOwnerExpiresAt = _clock.Monotonic() + _dashboardLeaseS;
+            st.HijackOwnershipVersion++;
             return (true, "");
+        }
+    }
+
+    /// <summary>Restore the same logical dashboard owner only if no later owner has existed.</summary>
+    public bool TryRestoreWsOwnership(string workerId, object ws, long ownershipVersion)
+    {
+        lock (_lock)
+        {
+            var st = _registry.Get(workerId);
+            if (st is null
+                || st.WorkerWs is null
+                || !st.Browsers.ContainsKey(ws)
+                || st.HijackOwnershipVersion != ownershipVersion
+                || _hub.IsDashboardHijackActive(st)
+                || _hub.HasValidRestLease(st)
+                || st.HijackPending is not null)
+            {
+                return false;
+            }
+
+            st.HijackOwner = ws;
+            st.HijackOwnerExpiresAt = _clock.Monotonic() + _dashboardLeaseS;
+            return true;
         }
     }
 

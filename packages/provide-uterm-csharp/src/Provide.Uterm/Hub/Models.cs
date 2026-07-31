@@ -70,6 +70,8 @@ public sealed class WorkerTermState
     public Dictionary<object, string> Browsers { get; } = new();
     public object? HijackOwner { get; set; }
     public double? HijackOwnerExpiresAt { get; set; }
+    /// <summary>Monotonic identity for dashboard ownership, used to reject stale resume tokens.</summary>
+    public long HijackOwnershipVersion { get; set; }
     public HijackSession? HijackSession { get; set; }
     public string? HijackPending { get; set; }
     public string InputMode { get; set; } = InputModes.Hijack;

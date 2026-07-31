@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
-using System.Collections.Concurrent;
 using System.Net.WebSockets;
 using System.Security.Cryptography;
 using System.Text;
@@ -75,8 +74,9 @@ public sealed partial class UtermServer : IAsyncDisposable
     private WebApplication? _app;
     private Task? _runTask;
 
-    // In-process resume tokens (Python ControlPlaneResumeStore / Go InMemoryResumeStore).
-    private readonly ConcurrentDictionary<string, (string WorkerId, string Role, double ExpiresAt)> _resumeTokens = new();
+    private readonly ResumeTokenStore _resumeTokens;
+    private readonly object _resumeGate = new();
+    private readonly Dictionary<object, string> _browserResumeTokens = new();
     private readonly DeckMuxPresence _deckMux;
 
     public UtermServer(ServerDeps deps)
@@ -85,6 +85,7 @@ public sealed partial class UtermServer : IAsyncDisposable
         _clock = deps.Clock ?? new RealClock();
         _recording = deps.Recording ?? new NullStore();
         _startTime = _clock.Wall();
+        _resumeTokens = new ResumeTokenStore(_clock);
         _deckMux = new DeckMuxPresence(new HubDeckMuxBroadcaster(_deps.Hub));
     }
 
@@ -96,11 +97,37 @@ public sealed partial class UtermServer : IAsyncDisposable
             _hub.Conn.BroadcastToBrowsersAsync(workerId, msg, ct);
     }
 
-    private string MintResumeToken(string workerId, string role)
+    private string MintResumeToken(string workerId, string role, object connection)
     {
-        var tok = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
-        _resumeTokens[tok] = (workerId, role, _clock.Monotonic() + 300);
-        return tok;
+        var token = _resumeTokens.Mint(workerId, role);
+        lock (_resumeGate)
+        {
+            if (_browserResumeTokens.Remove(connection, out var previous)) _resumeTokens.Revoke(previous);
+            _browserResumeTokens[connection] = token;
+        }
+
+        return token;
+    }
+
+    private string? CurrentResumeToken(object connection)
+    {
+        lock (_resumeGate)
+        {
+            return _browserResumeTokens.GetValueOrDefault(connection);
+        }
+    }
+
+    private void FinishResumeToken(object connection, long? ownershipVersion)
+    {
+        string? token;
+        lock (_resumeGate)
+        {
+            _browserResumeTokens.Remove(connection, out token);
+        }
+
+        if (token is null) return;
+        if (ownershipVersion is { } version) _resumeTokens.MarkHijackOwner(token, version);
+        else _resumeTokens.Revoke(token);
     }
 
     /// <summary>The graphical-target registry this server was built with.
@@ -669,7 +696,7 @@ public sealed partial class UtermServer : IAsyncDisposable
             static string StateStr(IReadOnlyDictionary<string, object?> d, string key, string fallback) =>
                 d.TryGetValue(key, out var v) && v is string s && !string.IsNullOrEmpty(s) ? s : fallback;
 
-            var resumeToken = MintResumeToken(workerId, role);
+            var resumeToken = MintResumeToken(workerId, role, conn);
             // Capability defaults match spec/behavior.json hello_defaults.csharp.
             var hello = ControlChannelCodec.EncodeControlFrame(new Dictionary<string, object?>
             {
@@ -741,7 +768,8 @@ public sealed partial class UtermServer : IAsyncDisposable
         }
         finally
         {
-            _deps.Hub.Conn.CleanupBrowser(workerId, conn);
+            var ownershipVersion = _deps.Hub.Conn.CleanupBrowser(workerId, conn);
+            FinishResumeToken(conn, ownershipVersion);
             try
             {
                 await _deckMux.OnBrowserDisconnectAsync(workerId, conn, CancellationToken.None)
@@ -943,16 +971,25 @@ public sealed partial class UtermServer : IAsyncDisposable
                         var oldTok = ctrl.Control.TryGetValue("token", out var tokObj)
                             ? tokObj?.ToString() ?? ""
                             : "";
-                        if (string.IsNullOrEmpty(oldTok)
-                            || !_resumeTokens.TryRemove(oldTok, out var rec)
-                            || rec.WorkerId != workerId
-                            || rec.ExpiresAt < _clock.Monotonic())
+                        if (string.IsNullOrEmpty(oldTok))
                         {
                             break;
                         }
 
-                        var newTok = MintResumeToken(workerId, role);
-                        var stSnap = _deps.Hub.Conn.RegisterBrowser(workerId, conn, role);
+                        var rec = _resumeTokens.Consume(oldTok);
+                        if (rec is null || rec.WorkerId != workerId) break;
+
+                        var restored = rec.WasHijackOwner
+                            && rec.OwnershipVersion is { } version
+                            && rec.Role == role
+                            && _deps.Hub.Lease.TryRestoreWsOwnership(workerId, conn, version);
+                        var currentTok = CurrentResumeToken(conn);
+                        var newTok = restored
+                            || currentTok is null
+                            || string.Equals(currentTok, oldTok, StringComparison.Ordinal)
+                                ? MintResumeToken(workerId, role, conn)
+                                : currentTok;
+                        var stSnap = _deps.Hub.Conn.GetBrowserState(workerId, conn);
                         await conn.SendTextAsync(
                             ControlChannelCodec.EncodeControlFrame(new Dictionary<string, object?>
                             {
@@ -969,14 +1006,17 @@ public sealed partial class UtermServer : IAsyncDisposable
                                     : InputModes.Hijack,
                                 ["resume_supported"] = true,
                                 ["resume_token"] = newTok,
-                                ["resumed"] = true,
+                                ["resumed"] = restored,
                                 ["hijack_control"] = "ws",
                                 ["hijack_step_supported"] = true,
                                 ["mcp_supported"] = false, // spec/behavior.json hello_defaults.csharp
                                 ["vnc_supported"] = true,
                             }),
                             ct).ConfigureAwait(false);
-                        await _deps.Hub.BroadcastHijackStateAsync(workerId, ct).ConfigureAwait(false);
+                        if (restored)
+                        {
+                            await _deps.Hub.BroadcastHijackStateAsync(workerId, ct).ConfigureAwait(false);
+                        }
                         break;
                     }
                     case "presence_update":

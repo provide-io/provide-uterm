@@ -283,16 +283,40 @@ public sealed class ConnectionManager
         }
     }
 
-    public void CleanupBrowser(string workerId, object ws)
+    public Dictionary<string, object?> GetBrowserState(string workerId, object ws)
     {
         lock (_hub.SharedLock)
         {
+            var st = _hub.Registry.Get(workerId)
+                ?? throw new InvalidOperationException("browser worker state is missing");
+            return new Dictionary<string, object?>
+            {
+                ["is_hijacked"] = _hub.State.IsHijacked(st),
+                ["hijacked_by_me"] = _hub.State.IsDashboardHijackActive(st)
+                    && ReferenceEquals(st.HijackOwner, ws),
+                ["worker_online"] = st.WorkerWs is not null,
+                ["input_mode"] = st.InputMode,
+                ["role"] = st.Browsers.GetValueOrDefault(ws, "viewer"),
+            };
+        }
+    }
+
+    public long? CleanupBrowser(string workerId, object ws)
+    {
+        lock (_hub.SharedLock)
+        {
+            long? ownershipVersion = null;
             var st = _hub.Registry.Get(workerId);
             if (st is not null)
             {
                 st.Browsers.Remove(ws);
                 if (ReferenceEquals(st.HijackOwner, ws))
                 {
+                    if (_hub.State.IsDashboardHijackActive(st))
+                    {
+                        ownershipVersion = st.HijackOwnershipVersion;
+                    }
+
                     st.HijackOwner = null;
                     st.HijackOwnerExpiresAt = null;
                 }
@@ -300,6 +324,7 @@ public sealed class ConnectionManager
 
             _hub.StartupPendingBrowsers.Remove(ws);
             RollbackBrowserQuota(ws);
+            return ownershipVersion;
         }
     }
 
