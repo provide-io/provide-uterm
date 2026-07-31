@@ -125,15 +125,15 @@ func TestBrowserControlMessages(t *testing.T) {
 	defer func() { _ = bc.conn.Close(websocket.StatusNormalClosure, "") }()
 	bc.waitFrame(t, "hello", 5*time.Second)
 
-	// snapshot_req + hijack_step are fire-and-forget (no error response).
+	// snapshot_req is fire-and-forget (no error response).
 	bc.send(t, ctx, map[string]any{"type": "snapshot_req"})
-	bc.send(t, ctx, map[string]any{"type": "hijack_step"})
 
-	// Acquire hijack then heartbeat → heartbeat_ack.
+	// Acquire hijack before owner-only controls, then step and heartbeat.
 	bc.send(t, ctx, map[string]any{"type": "hijack_request"})
 	bc.waitFrameWhere(t, "hijack_state", 5*time.Second, func(f map[string]any) bool {
 		return f["hijacked"] == true
 	})
+	bc.send(t, ctx, map[string]any{"type": "hijack_step"})
 	bc.send(t, ctx, map[string]any{"type": "heartbeat"})
 	bc.waitFrame(t, "heartbeat_ack", 5*time.Second)
 
