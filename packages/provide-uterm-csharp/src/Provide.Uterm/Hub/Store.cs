@@ -16,6 +16,9 @@ public sealed class StateStore
     private readonly Action<string, bool, string?>? _onHijackChanged;
     private readonly object _buffersGate = new();
     private readonly Dictionary<object, string> _inputBuffers = new();
+    private readonly object _hijackNotificationGatesLock = new();
+    private readonly Dictionary<string, object> _hijackNotificationGates =
+        new(StringComparer.Ordinal);
 
     public StateStore(
         WorkerRegistry registry,
@@ -55,8 +58,53 @@ public sealed class StateStore
 
     public void Metric(string name, int value = 1) => _onMetric?.Invoke(name, value);
 
-    public void NotifyHijackChanged(string workerId, bool enabled, string? owner) =>
-        _onHijackChanged?.Invoke(workerId, enabled, owner);
+    public void NotifyHijackChanged(string workerId, bool enabled, string? owner)
+    {
+        lock (HijackNotificationGate(workerId))
+        {
+            _onHijackChanged?.Invoke(workerId, enabled, owner);
+        }
+    }
+
+    /// <summary>
+    /// Publish a teardown ownership loss only while its captured generation is
+    /// still current and no successor has acquired ownership. The per-worker
+    /// notification gate linearizes this check with ordinary true publication:
+    /// false either completes first or is suppressed after the newer owner.
+    /// </summary>
+    public bool NotifyOwnershipLostIfCurrent(string workerId, long ownershipVersion)
+    {
+        lock (HijackNotificationGate(workerId))
+        {
+            lock (_lock)
+            {
+                var st = _registry.Get(workerId);
+                if (st is null
+                    || st.HijackOwnershipVersion != ownershipVersion
+                    || IsDashboardHijackActive(st)
+                    || HasValidRestLease(st))
+                {
+                    return false;
+                }
+            }
+
+            _onHijackChanged?.Invoke(workerId, false, null);
+            return true;
+        }
+    }
+
+    private object HijackNotificationGate(string workerId)
+    {
+        lock (_hijackNotificationGatesLock)
+        {
+            if (!_hijackNotificationGates.TryGetValue(workerId, out var gate))
+            {
+                gate = new object();
+                _hijackNotificationGates[workerId] = gate;
+            }
+            return gate;
+        }
+    }
 
     public void TouchActivity(string workerId)
     {

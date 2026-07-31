@@ -418,7 +418,8 @@ public sealed class ConnectionManager
     {
         lock (_hub.SharedLock)
         {
-            return DeregisterWorkerLocked(workerId, ws, markOffline: false);
+            return DeregisterWorkerLocked(
+                workerId, ws, markOffline: false, out _);
         }
     }
 
@@ -432,9 +433,11 @@ public sealed class ConnectionManager
         IWorkerWs ws)
     {
         (bool Reconciled, bool WasHijacked) result;
+        long ownershipVersion;
         lock (_hub.SharedLock)
         {
-            result = DeregisterWorkerLocked(workerId, ws, markOffline: true);
+            result = DeregisterWorkerLocked(
+                workerId, ws, markOffline: true, out ownershipVersion);
         }
         if (!result.Reconciled) return result;
 
@@ -457,7 +460,7 @@ public sealed class ConnectionManager
 
         try
         {
-            _hub.State.NotifyHijackChanged(workerId, false, null);
+            _hub.State.NotifyOwnershipLostIfCurrent(workerId, ownershipVersion);
         }
         catch
         {
@@ -478,14 +481,17 @@ public sealed class ConnectionManager
     private (bool Reconciled, bool WasHijacked) DeregisterWorkerLocked(
         string workerId,
         IWorkerWs ws,
-        bool markOffline)
+        bool markOffline,
+        out long ownershipVersion)
     {
         var st = _hub.Registry.Get(workerId);
         if (st is null || !ReferenceEquals(st.WorkerWs, ws))
         {
+            ownershipVersion = 0;
             return (false, false);
         }
 
+        ownershipVersion = st.HijackOwnershipVersion;
         var wasHijacked = st.HijackSession is not null || st.HijackOwner is not null;
         st.WorkerWs = null;
         st.HijackSession = null;
