@@ -120,4 +120,4 @@ Security regressions for these surfaces live in:
 - Python: `test_gui_principal_bind.py`, `test_vnc_rfb_filter.py`, `test_vnc_human_relay.py`, `test_ws_gui_vnc.py`, CF auth/webhook/SPA tests, lease pending
 - Go: `serverauth` CF Access JWT + `webhook_authz_test.go`, GUI attach/ops/vnc route, lease pending, vnc filter, UI SRI
 - C#: `CfAccessJwtTests`, `JwksJwtTests`, `WebhookAuthorizationTests`, `RfbInputFilterTests`, `HumanRelayTests`, GUI inject principal-bind, shell SRI
-- Fan-out: `conformance/live/scenarios/010_fanout_strict_admission.json` plus the shared fan-out coverage manifest and its validator
+- Fan-out: `conformance/live/scenarios/010_fanout_strict_admission.json`, `spec/fanout_security_coverage.json`, and `scripts/validate_fanout_security_coverage.py`
