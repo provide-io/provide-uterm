@@ -1037,16 +1037,17 @@ public sealed partial class UtermServer : IAsyncDisposable
             return;
         }
 
-        if (_deps.Hub.Lease.PrepareBrowserInput(workerId, conn))
-        {
-            await _deps.Hub.Conn.SendRestInputAsync(workerId, "", text, ct).ConfigureAwait(false);
-            var st = _deps.Hub.Registry.Get(workerId);
-            if (st?.WorkerWs is not null)
-            {
-                await st.WorkerWs.SendTextAsync(text, ct).ConfigureAwait(false);
-            }
-        }
+        _ = await SendBrowserInputAsync(workerId, conn, text, ct).ConfigureAwait(false);
     }
+
+    /// <summary>Authorize and deliver one raw browser-input frame.</summary>
+    internal async Task<bool> SendBrowserInputAsync(
+        string workerId,
+        object browser,
+        string text,
+        CancellationToken cancellationToken = default) =>
+        await _deps.Hub.Lease.SendBrowserInputAsync(workerId, browser, text, cancellationToken)
+            .ConfigureAwait(false);
 
     private async Task HandleWorkerWs(HttpContext ctx, string workerId)
     {
