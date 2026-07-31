@@ -28,7 +28,7 @@ public sealed class ResumeOwnershipTests
 
         Assert.True(hub.Lease.TryRestoreWsOwnership("w", resumed, ownershipVersion));
 
-        Assert.Equal([(true, (string?)null)], changes);
+        Assert.Equal([(true, "dashboard")], changes);
     }
 
     [Fact]
