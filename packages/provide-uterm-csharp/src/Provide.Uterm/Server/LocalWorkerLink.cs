@@ -46,6 +46,8 @@ public sealed class LocalWorkerLink : IAbortableBrowserWs
     private readonly object _gate = new();
     private bool _isActive;
 
+    internal Func<string, CancellationToken, Task>? SendOverride { get; set; }
+
     public LocalWorkerLink(TermHub hub, string workerId, UshellConnector connector)
     {
         _hub = hub;
@@ -116,7 +118,8 @@ public sealed class LocalWorkerLink : IAbortableBrowserWs
     /// assumed to be one or the other.
     /// </summary>
     public Task SendTextAsync(string payload, CancellationToken cancellationToken = default) =>
-        PublishAsync(Answer(payload), cancellationToken);
+        SendOverride?.Invoke(payload, cancellationToken)
+        ?? PublishAsync(Answer(payload), cancellationToken);
 
     /// <summary>
     /// What the connector answers to one inbound payload. Mirrors the

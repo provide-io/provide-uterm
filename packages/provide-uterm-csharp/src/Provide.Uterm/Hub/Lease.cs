@@ -591,7 +591,7 @@ public sealed class HijackLeaseManager
         }
     }
 
-    private async Task ReconcileFailedWorkerSendAsync(string workerId, IWorkerWs worker)
+    private async Task<bool> ReconcileFailedWorkerSendAsync(string workerId, IWorkerWs worker)
     {
         if (worker is IAbortableBrowserWs abortable)
         {
@@ -604,7 +604,9 @@ public sealed class HijackLeaseManager
                 // Identity-gated reconciliation remains authoritative.
             }
         }
-        await _hub.ReconcileWorkerDisconnectAsync(workerId, worker).ConfigureAwait(false);
+        var (reconciled, _) = await _hub.ReconcileWorkerDisconnectAsync(workerId, worker)
+            .ConfigureAwait(false);
+        return reconciled;
     }
 
     private void CompletePauseSequenceIfIdle(string workerId)
@@ -1232,7 +1234,7 @@ public sealed class HijackLeaseManager
             }
         }
 
-        await CompleteResumeAsync(
+        var workerReconciled = await CompleteResumeAsync(
                 workerId,
                 reservation,
                 completion!,
@@ -1245,8 +1247,11 @@ public sealed class HijackLeaseManager
             _hub.NotifyHijackChanged(publication);
             try
             {
-                await _hub.BroadcastHijackStateAsync(workerId, CancellationToken.None)
-                    .ConfigureAwait(false);
+                if (!workerReconciled)
+                {
+                    await _hub.BroadcastHijackStateAsync(workerId, CancellationToken.None)
+                        .ConfigureAwait(false);
+                }
             }
             catch
             {
@@ -1397,7 +1402,7 @@ public sealed class HijackLeaseManager
         completion.TrySetResult();
     }
 
-    private async Task CompleteResumeAsync(
+    private async Task<bool> CompleteResumeAsync(
         string workerId,
         string reservation,
         TaskCompletionSource completion,
@@ -1406,38 +1411,36 @@ public sealed class HijackLeaseManager
         CancellationToken ct)
     {
         var sent = false;
+        var reconciled = false;
+        Task? sendTask = null;
         using var bounded = CancellationTokenSource.CreateLinkedTokenSource(ct);
         bounded.CancelAfter(_hub.ResumeSendTimeout);
         try
         {
-            if (worker is null) return;
-            if (worker is IAbortableBrowserWs { IsActive: false }) return;
-            var encoded = ControlChannelCodec.EncodeControlFrame(ResumeFrame(owner, _clock.Wall()));
-            await worker.SendTextAsync(encoded, bounded.Token)
-                .WaitAsync(_hub.ResumeSendTimeout, ct).ConfigureAwait(false);
-            sent = worker is not IAbortableBrowserWs { IsActive: false };
+            if (worker is not null
+                && worker is not IAbortableBrowserWs { IsActive: false })
+            {
+                var encoded = ControlChannelCodec.EncodeControlFrame(
+                    ResumeFrame(owner, _clock.Wall()));
+                sendTask = worker.SendTextAsync(encoded, bounded.Token);
+                await sendTask.WaitAsync(_hub.ResumeSendTimeout, ct).ConfigureAwait(false);
+                sent = worker is not IAbortableBrowserWs { IsActive: false };
+            }
         }
         catch
         {
-            // A failed resume makes this captured transport unfit for a new lease.
+            ObserveEventualSendFault(sendTask);
         }
         finally
         {
-            if (!sent && worker is IAbortableBrowserWs abortable) abortable.Abort();
+            if (!sent && worker is not null)
+            {
+                reconciled = await ReconcileFailedWorkerSendAsync(workerId, worker)
+                    .ConfigureAwait(false);
+            }
             lock (_lock)
             {
                 var st = _registry.Get(workerId);
-                // Abortable server transports deregister themselves from their
-                // receive-loop finally block, which also publishes offline
-                // state. Only a non-abortable failed transport must be removed
-                // here directly.
-                if (!sent
-                    && worker is not IAbortableBrowserWs
-                    && st is not null
-                    && ReferenceEquals(st.WorkerWs, worker))
-                {
-                    st.WorkerWs = null;
-                }
                 var transition = st is null
                     ? null
                     : FindLifecycleTransition(st, reservation, completion);
@@ -1448,6 +1451,7 @@ public sealed class HijackLeaseManager
             }
             completion.TrySetResult();
         }
+        return reconciled;
     }
 
     private static PendingLifecycleTransition? FindLifecycleTransition(
