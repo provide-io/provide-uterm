@@ -10,11 +10,13 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from provide.uterm.server import create_server_app, default_server_config
 from provide.uterm.server.bridge.fanout._controller import FanOutController
 from provide.uterm.server.bridge.fanout._models import FanOutGroup
+from provide.uterm.server.bridge.fanout._routes import _require_global_admin
 from provide.uterm.server.bridge.identity import Principal
 from provide.uterm.server.config_schema import SessionDefinition
 
@@ -277,6 +279,104 @@ class TestCreateGroupReadAuthz:
             headers=VIEWER,
         )
         assert resp.status_code == 403
+
+    def test_global_admin_creates_group_for_known_readable_session(self) -> None:
+        app = _make_app([_sess("pub1", owner="admin", visibility="public")])
+        client = TestClient(app)
+
+        response = client.post(
+            "/api/fanout/groups",
+            json={"name": "known", "worker_ids": ["pub1"]},
+        )
+
+        assert response.status_code == 200
+        assert client.get("/api/fanout/groups").json()[0]["session_count"] == 1
+
+    @pytest.mark.parametrize("missing", ["resolve", "read"])
+    def test_default_reject_missing_controller_authorizer_dependency_creates_no_group(self, missing: str) -> None:
+        app = _make_app([_sess("pub1", owner="admin", visibility="public")])
+        controller = app.state.uterm_hub.fan_out_controller
+        setattr(controller, {"resolve": "_resolve_session", "read": "_can_read_session"}[missing], None)
+        client = TestClient(app)
+
+        response = client.post(
+            "/api/fanout/groups",
+            json={"name": "must-not-exist", "worker_ids": ["pub1"]},
+        )
+
+        assert response.status_code == 403
+        assert client.get("/api/fanout/groups").json() == []
+
+
+async def test_route_admin_requirement_rejects_missing_principal() -> None:
+    request = MagicMock()
+    request.state = MagicMock(spec=[])
+
+    with pytest.raises(HTTPException) as error:
+        await _require_global_admin(request)
+
+    assert error.value.status_code == 401
+
+
+async def test_route_admin_requirement_fails_closed_when_authorizer_raises() -> None:
+    request = MagicMock()
+    request.state = MagicMock(uterm_principal=ADMIN)
+    request.app.state.uterm_authz.is_admin = AsyncMock(side_effect=RuntimeError("authz unavailable"))
+
+    with pytest.raises(HTTPException) as error:
+        await _require_global_admin(request)
+
+    assert error.value.status_code == 403
+
+
+async def test_validate_members_reports_readable_member_as_allowed() -> None:
+    controller = _authorized_controller(MagicMock())
+
+    allowed, refused = await controller.validate_members(["w1"], ADMIN)
+
+    assert allowed == ["w1"]
+    assert refused == []
+
+
+async def test_direct_send_fails_closed_when_global_admin_check_raises() -> None:
+    hub = MagicMock(broadcast=AsyncMock(), send_worker=AsyncMock())
+    hub.approval_store = None
+    controller = _authorized_controller(hub, is_global_admin=AsyncMock(side_effect=RuntimeError("down")))
+
+    result = await controller.send("missing", "id", principal=ADMIN)
+
+    assert result.error == "fan-out authorization failed"
+    hub.send_worker.assert_not_awaited()
+
+
+async def test_direct_send_reports_unknown_group_after_successful_admin_check() -> None:
+    hub = MagicMock(broadcast=AsyncMock(), send_worker=AsyncMock())
+    hub.approval_store = None
+    controller = _authorized_controller(hub)
+
+    result = await controller.send("missing", "id", principal=ADMIN)
+
+    assert result.error == "fan-out group not found"
+
+
+async def test_direct_send_fails_member_when_session_resolution_raises() -> None:
+    hub = MagicMock(broadcast=AsyncMock(), send_worker=AsyncMock())
+    hub.approval_store = None
+    controller = _authorized_controller(hub, resolve_session=AsyncMock(side_effect=RuntimeError("registry down")))
+    await controller._store.save(
+        FanOutGroup(group_id="g", name="G", worker_ids=["w1"], created_by="admin", created_at=0.0)
+    )
+
+    result = await controller.send("g", "id", principal=ADMIN)
+
+    assert result.failed_sessions == ["w1"]
+    hub.send_worker.assert_not_awaited()
+
+
+def test_unrecognized_policy_role_normalizes_to_viewer() -> None:
+    principal = Principal(subject_id="custom", roles=frozenset({"custom"}))
+
+    assert FanOutController._strongest_role(principal) == "viewer"
 
 
 class TestFanOutObserverTransparency:

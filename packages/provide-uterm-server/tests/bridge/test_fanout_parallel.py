@@ -88,6 +88,34 @@ async def test_parallel_captures_output_emitted_inside_send() -> None:
     assert [item.output_delta for item in result.results] == ["immediate-w1", "immediate-w2"]
 
 
+async def test_parallel_duplicate_members_keep_distinct_captures_and_close_each_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    hub = MagicMock()
+    hub.broadcast = AsyncMock()
+    hub.send_worker = AsyncMock(return_value=True)
+    group = _make_group(["w1", "w1"])
+    handles: list[MagicMock] = []
+
+    class Collector:
+        async def open(self, hub: object, worker_id: str) -> MagicMock:
+            handle = MagicMock()
+            handle.collect = AsyncMock(return_value=(f"capture-{len(handles) + 1}", 1))
+            handle.close = AsyncMock()
+            handles.append(handle)
+            return handle
+
+    monkeypatch.setattr("provide.uterm.server.bridge.fanout._controller.OutputCollector", Collector)
+
+    result = await FanOutController(hub)._send_parallel(group, "id\n", 10, 100, principal="admin")
+
+    assert [item.output_delta for item in result.results] == ["capture-1", "capture-2"]
+    assert len(handles) == 2
+    for handle in handles:
+        handle.collect.assert_awaited_once()
+        handle.close.assert_awaited_once()
+
+
 async def test_parallel_capture_open_failure_blocks_member_input(monkeypatch: pytest.MonkeyPatch) -> None:
     hub = MagicMock()
     hub.broadcast = AsyncMock()
@@ -113,6 +141,26 @@ async def test_parallel_capture_open_failure_blocks_member_input(monkeypatch: py
     assert hub.send_worker.await_args_list[0].args[0] == "w2"
     assert all(call.args[0] != "w1" for call in hub.send_worker.await_args_list)
     assert result.failed_sessions == ["w1", "w2"]
+
+
+async def test_parallel_worker_send_exception_marks_only_that_member_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    hub = MagicMock()
+    hub.broadcast = AsyncMock()
+    hub.send_worker = AsyncMock(side_effect=RuntimeError("worker vanished"))
+    handle = MagicMock()
+    handle.collect = AsyncMock(return_value=("unused", 0))
+    handle.close = AsyncMock()
+    collector = MagicMock()
+    collector.open = AsyncMock(return_value=handle)
+    monkeypatch.setattr("provide.uterm.server.bridge.fanout._controller.OutputCollector", lambda: collector)
+
+    result = await FanOutController(hub)._send_parallel(_make_group(["w1"]), "id\n", 10, 100, principal="admin")
+
+    assert result.failed_sessions == ["w1"]
+    handle.collect.assert_not_awaited()
+    handle.close.assert_awaited_once()
 
 
 async def test_parallel_rejected_send_closes_all_prepared_captures_once(monkeypatch: pytest.MonkeyPatch) -> None:

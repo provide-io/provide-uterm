@@ -354,6 +354,33 @@ async def test_hold_approval_failure_leaves_nothing_releasable_or_duplicable(hub
 
 
 @pytest.mark.asyncio
+async def test_hold_fails_atomically_when_hub_has_no_approval_store(gate):
+    hub = MagicMock()
+    hub.broadcast = AsyncMock()
+    hub.send_worker = AsyncMock()
+    hub.append_event = AsyncMock(return_value={"ts": time.time()})
+    hub.approval_store = None
+    ctrl = FanOutController(
+        hub=hub,
+        fanout_policy_gate=gate,
+        is_global_admin=AsyncMock(return_value=True),
+        resolve_session=AsyncMock(return_value=object()),
+        can_read_session=AsyncMock(return_value=True),
+    )
+    await ctrl.create_group(
+        FanOutGroup(group_id="missing-store", name="G", worker_ids=["w1"], created_by="admin", created_at=0),
+        principal=ADMIN,
+    )
+    gate.next_decision = PolicyDecision(action="hold")
+
+    with pytest.raises(RuntimeError, match="approval store is unavailable"):
+        await ctrl.send("missing-store", "reboot", principal=ADMIN)
+
+    assert ctrl._pending_approvals == {}
+    hub.send_worker.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_fanout_approval_expiration_cleanup(controller, hub, gate):
     """Checklist 5.1: Controller Memory Leak (Cleanup on Expiration)."""
     group_id = await controller.create_group(
@@ -489,7 +516,7 @@ async def test_fanout_approval_rbac_admin_only(controller, hub, gate):
     mock_principal = MagicMock()
     mock_authz = MagicMock()
     # authz.is_admin returns False
-    mock_authz.is_admin = asyncio.iscoroutinefunction(lambda p: None)  # Make it async
+    mock_authz.is_admin = asyncio.iscoroutinefunction(lambda _p: None)  # Make it async
 
     async def is_admin_false(p):
         return False
@@ -503,7 +530,7 @@ async def test_fanout_approval_rbac_admin_only(controller, hub, gate):
 
     # Extract the endpoint function from router
     # Note: prefix might or might not be present in r.path depending on how FastAPI internalizes it
-    approve_route = [r for r in router.routes if "/approve" in r.path][0]
+    approve_route = next(r for r in router.routes if "/approve" in r.path)
 
     with pytest.raises(HTTPException) as exc:
         await approve_route.endpoint(req_id, mock_request)

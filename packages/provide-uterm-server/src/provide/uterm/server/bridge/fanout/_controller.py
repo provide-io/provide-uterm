@@ -134,7 +134,7 @@ class FanOutController:
     async def validate_members(self, worker_ids: list[str], principal: Principal) -> tuple[list[str], list[str]]:
         """Return currently authorized and refused members for a principal."""
         if self._resolve_session is None or self._can_read_session is None:
-            return list(worker_ids), []
+            return [], list(worker_ids)
         allowed: list[str] = []
         refused: list[str] = []
         for worker_id in worker_ids:
@@ -376,19 +376,19 @@ class FanOutController:
         send_id = uuid.uuid4().hex
         sent_at = time.time()
         frame = {"type": "input", "data": data, "ts": sent_at}
-        captures: dict[str, Any] = {}
-        open_failures: set[str] = set()
+        captures: list[Any | None] = []
 
         try:
             # Preparation is complete for every member before any notification
             # or input, so synchronous worker output cannot race subscription.
             for worker_id in group.worker_ids:
                 try:
-                    captures[worker_id] = await OutputCollector().open(self._hub, worker_id)
+                    captures.append(await OutputCollector().open(self._hub, worker_id))
                 except Exception:
-                    open_failures.add(worker_id)
+                    captures.append(None)
 
-            ready_ids = [worker_id for worker_id in group.worker_ids if worker_id in captures]
+            ready_indices = [index for index, capture in enumerate(captures) if capture is not None]
+            ready_ids = [group.worker_ids[index] for index in ready_indices]
             ready_group = replace(group, worker_ids=ready_ids)
             if ready_ids:
                 await self._notify_fanout_observers(ready_group, data, send_id, principal)
@@ -401,27 +401,33 @@ class FanOutController:
                     return exc, time.monotonic()
 
             dispatched = await asyncio.gather(*(_send(worker_id) for worker_id in ready_ids))
-            send_results = dict(zip(ready_ids, dispatched, strict=True))
+            send_results: list[tuple[bool | BaseException, float] | None] = [None] * len(group.worker_ids)
+            for index, dispatched_item in zip(ready_indices, dispatched, strict=True):
+                send_results[index] = dispatched_item
 
-            async def _collect(worker_id: str, started_at: float) -> tuple[str, int]:
-                return await captures[worker_id].collect(
+            async def _collect(capture: Any, started_at: float) -> tuple[str, int]:
+                return await capture.collect(
                     quiesce_ms=quiesce_ms,
                     max_ms=max_response_ms,
                     started_at=started_at,
                 )
 
-            collect_ids: list[str] = []
+            collect_indices: list[int] = []
             tasks: list[asyncio.Task[tuple[str, int]]] = []
-            for worker_id in ready_ids:
-                accepted, started_at = send_results[worker_id]
+            for index in ready_indices:
+                dispatched_item = send_results[index]
+                assert dispatched_item is not None
+                accepted, started_at = dispatched_item
                 if accepted is True:
-                    collect_ids.append(worker_id)
-                    tasks.append(asyncio.create_task(_collect(worker_id, started_at)))
+                    collect_indices.append(index)
+                    tasks.append(asyncio.create_task(_collect(captures[index], started_at)))
 
             collected_items: list[tuple[str, int] | BaseException] = (
                 await asyncio.gather(*tasks, return_exceptions=True) if tasks else []
             )
-            collected = dict(zip(collect_ids, collected_items, strict=True))
+            collected: list[tuple[str, int] | BaseException | None] = [None] * len(group.worker_ids)
+            for index, collected_item in zip(collect_indices, collected_items, strict=True):
+                collected[index] = collected_item
 
             # Build per-session results
             results: list[SessionFanOutResult] = []
@@ -429,12 +435,13 @@ class FanOutController:
             successful_outputs: list[str] = []
             successful_indices: list[int] = []
 
-            for worker_id in group.worker_ids:
-                if worker_id in open_failures:
+            for index, worker_id in enumerate(group.worker_ids):
+                dispatched_item = send_results[index]
+                if dispatched_item is None:
                     item: tuple[str, int] | BaseException | None = None
                 else:
-                    accepted, _started_at = send_results[worker_id]
-                    item = collected.get(worker_id) if accepted is True else None
+                    accepted, _started_at = dispatched_item
+                    item = collected[index] if accepted is True else None
                 if isinstance(item, tuple):
                     delta, elapsed = item
                     results.append(
@@ -480,7 +487,10 @@ class FanOutController:
             )
         finally:
             if captures:
-                await asyncio.gather(*(capture.close() for capture in captures.values()), return_exceptions=True)
+                await asyncio.gather(
+                    *(capture.close() for capture in captures if capture is not None),
+                    return_exceptions=True,
+                )
 
     # -- Sequential --------------------------------------------------------
 
