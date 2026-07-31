@@ -5,10 +5,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 # TypeScript port roadmap
 
-Tracks `packages/provide-uterm-ts`, the fourth full port of the platform,
-towards feature parity with the Python reference and the Go and C# ports.
+Tracks `packages/provide-uterm-ts`, a high-coverage partial runtime port of the
+platform, towards feature parity with the Python reference and the Go and C#
+ports. A completed library is not automatically an integrated server surface.
 
-Last updated: 2026-07-29.
+Last updated: 2026-07-31.
 
 ## Contract
 
@@ -24,6 +25,25 @@ Definition of done for a module:
 3. Implementation, then 100% line/branch/function coverage.
 4. `tsc` 7 strict clean, biome clean, corpus drift check clean.
 5. Any dialect divergence recorded as an executable assertion, not a comment.
+
+## Integrated runtime status
+
+The package has many completed, differential-tested libraries, including the
+foundation, wire-format, terminal, policy, hub, connector, gateway,
+authentication, and configuration layers listed below. The running Node server
+currently exposes only four capabilities from the shared HTTP registry:
+
+| Capability | Route |
+|---|---|
+| `sessions.list` | `GET /api/sessions` |
+| `sessions.get` | `GET /api/sessions/{session_id}` |
+| `sessions.snapshot` | `GET /api/sessions/{session_id}/snapshot` |
+| `sessions.set_mode` | `POST /api/sessions/{session_id}/mode` |
+
+Operational probes (`/api/health`, `/healthz`, `/readyz`) and the REST hijack
+lease actions are also served. That does not close the server port: session
+writes and remaining lifecycle/data routes, the hijack events poll, REST
+rate-limit wiring, and browser/worker WebSockets remain outstanding.
 
 ## Runtime dependencies
 
@@ -227,6 +247,28 @@ loading noVNC and the panel machinery into every page's bundle to serve two
 pages that are opened directly. They stay as they are unless the bootstrap
 starts routing to them.
 
+### Multi-backend Playwright eligibility
+
+TypeScript must not be added to the Python/Go/C# Playwright backend selector
+until the Node server can support the fixtures rather than merely start. The
+entry criteria are:
+
+1. Serve authenticated worker WebSockets at `/ws/worker/{worker_id}/term`,
+   including attachment to the hub, control-frame decoding, worker state, and
+   disconnect cleanup.
+2. Serve authenticated browser WebSockets at `/ws/browser/{worker_id}/term`,
+   including the `hello` capability frame, terminal/control broadcast,
+   browser identity, and disconnect cleanup.
+3. Implement the session lifecycle needed by the fixtures: create/configure,
+   start/attach, read status, stop/disconnect, and delete, with a test-mode
+   credential handoff equivalent to the existing backends.
+4. Pass focused live WebSocket and lifecycle integration tests before adding
+   `typescript` to `UTERM_TEST_BACKEND` and the multi-backend CI matrix.
+
+Until all four are true, Playwright coverage of the browser packages and the
+TypeScript unit/live-client coverage remain useful but are not evidence that
+the TypeScript server is backend-equivalent.
+
 ## Traps for the modules still to be ported
 
 Found by auditing shipped work against the reference rather than by a failing
@@ -369,10 +411,10 @@ learn about a fourth implementation:
 | `spec/behavior.json` | add a `typescript` entry to `hello_defaults` | todo — waits on the TS server, which has to *have* the capabilities before it can claim them |
 | `docs/security-language-parity.md` | add a TypeScript column | todo |
 | `docs/protocol-matrix.md` | add a TypeScript column | todo |
-| `conformance/live` | run the live scenarios against the TS server | **done** — `typescript` is registered in both roles and passes every cell of the full four-language matrix (seven scenarios × four servers × four clients = 112), serving Python, Go and C# clients and calling Python, Go and C# servers, including `005_step_references`, `006_hijack_lifecycle` and `007_hijack_refusals` |
+| `conformance/live` | run the live scenarios against the TS server | **partial** — TypeScript is registered in both roles and its client drives complete backends. Its server announces no named hijack capability, so capability-gated hijack scenarios are skipped rather than evidence of full backend parity; complete server cells wait on the WebSocket and lifecycle prerequisites above |
 | `scripts/check_max_loc.py` | 777-line cap covers `.ts` | **done** |
 | `ci/quality_checks.sh` | golden-corpus drift gate | **done** |
-| `.github/workflows/ci.yml` | typecheck, lint and coverage in `npm-quality` | **done** |
+| `.github/workflows/ci.yml` | typecheck, emit build, lint and coverage in `npm-quality` | **done** |
 
 ## Telemetry: fixed upstream, waiting on a release
 

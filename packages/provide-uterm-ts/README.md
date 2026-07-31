@@ -5,18 +5,41 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 # provide-uterm-ts
 
-TypeScript port of the provide-uterm terminal session platform, wire-compatible
-with the Python implementation. Runs on Node.js >= 22 and is built with
-TypeScript 7.
+A high-coverage partial runtime port of the provide-uterm terminal session
+platform. Its completed libraries are wire-compatible with the Python
+reference and are held to 100% line, branch, and function coverage. The
+integrated Node server is not yet a full backend. It runs on Node.js >= 22 and
+is built with TypeScript 7.
 
-This is the fourth full port, alongside `provide-uterm-go` and
-`provide-uterm-csharp`. It is distinct from the two browser packages:
+It is distinct from the two browser packages:
 
 | Package | Scope |
 |---|---|
 | `provide-uterm-frontend` | Browser widgets (lit + xterm.js), shipped to the SPA |
 | `provide-uterm-app` | Browser SPA shell (React) |
-| **`provide-uterm-ts`** | **Runtime port: core library, hub, server, client, CLI** |
+| **`provide-uterm-ts`** | **Partial runtime port: completed libraries plus an incomplete Node server, client, and CLI** |
+
+## Runtime maturity
+
+Library completion and server integration are separate milestones. Foundation,
+wire-format, terminal, policy, hub, connector, gateway, authentication, and
+configuration libraries can be complete and fully tested without every one of
+them being reachable through the running server.
+
+The Node server currently binds these four shared HTTP capabilities:
+
+| Capability | Route |
+|---|---|
+| `sessions.list` | `GET /api/sessions` |
+| `sessions.get` | `GET /api/sessions/{session_id}` |
+| `sessions.snapshot` | `GET /api/sessions/{session_id}/snapshot` |
+| `sessions.set_mode` | `POST /api/sessions/{session_id}/mode` |
+
+It also serves `/api/health`, `/healthz`, and `/readyz`, plus the REST hijack
+lease operations (`acquire`, `heartbeat`, `snapshot`, `send`, `step`, and
+`release`). Session create/update/delete and the remaining lifecycle/data
+routes, the hijack events poll, REST rate-limit wiring, and browser/worker
+WebSocket endpoints are still outstanding.
 
 ## Compatibility contract
 
@@ -50,6 +73,7 @@ uv run python packages/provide-uterm-ts/testdata/gen_colors_golden.py
 npm run test:ts            # vitest
 npm run test:ts:coverage   # vitest + 100% line/branch/function gate
 npm run typecheck:ts       # tsc 7, strict
+npm run build --workspace=packages/provide-uterm-ts  # emit dist/
 npm run lint:ts            # biome
 ```
 
@@ -79,7 +103,7 @@ node packages/provide-uterm-ts/bin/uterm-conformance.mjs \
   client --base-url URL --token TOKEN --scenario FILE
 ```
 
-Both roles are real:
+Both roles are runnable:
 
 ```bash
 node packages/provide-uterm-ts/bin/uterm-conformance.mjs serve --auth dev_token
@@ -94,12 +118,18 @@ expectation is the harness's to judge. It goes through the real
 status code the library drops — so a 401, a 403 and a 404 stay three different
 observations.
 
-The **server** role stands `src/server/` up on an ephemeral port (bind zero,
+The **server** role stands the current partial `src/server/` integration up on
+an ephemeral port (bind zero,
 report what the operating system gave you — nothing in this repository may
 name a port), announces its base URL and a token, and serves until stdin
 closes or the process is signalled. The token is minted by the `dev_token`
 stub identity provider and verified by the ordinary `jwt` path, so a forged
 one is refused by exactly the code a production deployment runs.
+
+The server accurately announces no named live-conformance capability yet:
+the protocol's server capabilities describe complete hijack surfaces, while
+this server still lacks WebSockets and part of the HTTP lifecycle. The
+TypeScript client role can still exercise complete Python, Go, and C# servers.
 
 Run the matrix from the repository root:
 

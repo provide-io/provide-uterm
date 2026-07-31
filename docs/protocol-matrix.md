@@ -7,6 +7,35 @@ human VNC relay) are documented in
 [`docs/security-language-parity.md`](./security-language-parity.md) — that doc is
 the scope/de-scope source of truth for multi-language security parity.
 
+## TypeScript runtime status
+
+`packages/provide-uterm-ts` is a high-coverage partial runtime port, not yet a
+third backend column for this matrix. Completed protocol, policy, hub,
+connector, gateway, authentication, and configuration libraries are tested as
+libraries; only these four shared HTTP capabilities are currently integrated
+into its running Node server:
+
+| Capability | TypeScript route |
+|---|---|
+| `sessions.list` | `GET /api/sessions` |
+| `sessions.get` | `GET /api/sessions/{session_id}` |
+| `sessions.snapshot` | `GET /api/sessions/{session_id}/snapshot` |
+| `sessions.set_mode` | `POST /api/sessions/{session_id}/mode` |
+
+The Node server also exposes health/liveness/readiness probes and REST hijack
+lease actions, but it does not yet serve browser or worker WebSockets, the
+complete session lifecycle, the hijack events poll, or every shared HTTP
+route. Consequently it must not be read as supporting the FastAPI or
+Cloudflare columns below.
+
+Before TypeScript joins the Python/Go/C# multi-backend Playwright matrix, it
+must serve authenticated `/ws/worker/{worker_id}/term` and
+`/ws/browser/{worker_id}/term` flows with hub attachment, hello/control
+frames, broadcast, and disconnect cleanup; it must also serve the fixture
+lifecycle from session creation and start/attach through status, stop, and
+deletion. Those surfaces need focused live integration tests before the
+Playwright backend selector and CI matrix are expanded.
+
 ## Hijack control
 
 | Capability | FastAPI backend | Cloudflare backend |
