@@ -15,11 +15,29 @@ import tempfile
 from pathlib import Path
 from types import ModuleType
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCENARIOS_PATH = REPO_ROOT / "spec/fanout_security_scenarios.json"
 RUNNER_PATH = REPO_ROOT / "scripts/run_fanout_security_scenarios.py"
 BACKENDS = {"python", "go", "csharp", "typescript"}
 STATUSES = {"execute", "unsupported_fail_closed", "component_execute", "unserved"}
+REQUIRED_CATEGORIES = {
+    "authentication refusal",
+    "viewer refusal",
+    "strict dormant-member rejection",
+    "permissive dormant-member admission",
+    "current authorization revocation",
+    "group grant non-bypass",
+    "partial member failure",
+    "policy deny",
+    "policy hold and release",
+    "missing authorization dependencies",
+    "immediate output capture",
+    "store read isolation",
+    "store atomic update",
+    "total response deadline",
+}
 EXPECTED_FIELDS = {
     "status_code",
     "error",
@@ -142,6 +160,63 @@ def test_scenario_ids_are_opaque_and_statuses_derive_from_semantic_inputs() -> N
     governed = next(scenario for scenario in contract["scenarios"] if scenario["input"]["policy"]["action"] == "deny")
     governed["backends"]["go"]["status"] = "execute"
     assert any("false capability status" in error for error in runner.validate_contract(contract))
+
+
+def _categories(scenario: dict[str, object]) -> set[str]:
+    input_data = scenario["input"]
+    actor = input_data["actor"]
+    group = input_data["group"]
+    visibility = input_data["visibility"]
+    policy = input_data["policy"]
+    workers = input_data["workers"]
+    operation = input_data["operation"]
+    categories: set[str] = set()
+    if not actor["authenticated"]:
+        categories.add("authentication refusal")
+    if actor["authenticated"] and "admin" not in actor["roles"]:
+        categories.add("viewer refusal")
+    if operation == "create" and not group["allow_unknown_members"]:
+        categories.add("strict dormant-member rejection")
+    if operation == "create" and group["allow_unknown_members"]:
+        categories.add("permissive dormant-member admission")
+    if visibility["revoke_before_send"] and not group["grants"]:
+        categories.add("current authorization revocation")
+    if visibility["revoke_before_send"] and group["grants"]:
+        categories.add("group grant non-bypass")
+    if (
+        operation == "send"
+        and not visibility["revoke_before_send"]
+        and set(workers["accepted_members"]) < set(group["members"])
+    ):
+        categories.add("partial member failure")
+    if policy["action"] == "deny":
+        categories.add("policy deny")
+    if policy["action"] == "hold_release":
+        categories.add("policy hold and release")
+    if input_data.get("omit_authorizers") is True:
+        categories.add("missing authorization dependencies")
+    if "immediate" in workers["immediate_output"].values():
+        categories.add("immediate output capture")
+    if operation == "store_read_isolation":
+        categories.add("store read isolation")
+    if operation == "store_atomic_update":
+        categories.add("store atomic update")
+    if workers.get("continuous_output") is True and input_data.get("max_response_ms"):
+        categories.add("total response deadline")
+    return categories
+
+
+@pytest.mark.parametrize("category", sorted(REQUIRED_CATEGORIES))
+def test_contract_rejects_removal_of_each_required_semantic_category(category: str) -> None:
+    runner = _runner()
+    contract = copy.deepcopy(_contract())
+    matching = [scenario for scenario in contract["scenarios"] if category in _categories(scenario)]
+    assert len(matching) == 1
+    contract["scenarios"] = [scenario for scenario in contract["scenarios"] if category not in _categories(scenario)]
+
+    errors = runner.validate_contract(contract)
+
+    assert any(category in error for error in errors)
 
 
 def test_native_command_failure_is_not_reported_as_coverage() -> None:
