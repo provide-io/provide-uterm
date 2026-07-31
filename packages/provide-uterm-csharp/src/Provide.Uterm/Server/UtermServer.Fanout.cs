@@ -26,10 +26,38 @@ public sealed partial class UtermServer
     {
         if (_deps.Fanout is not null) return _deps.Fanout;
         // Lazy default so factories without explicit wiring still work.
-        return _lazyFanout ??= new Fanout.Controller(new HubFanoutAdapter(_deps.Hub));
+        return _lazyFanout ??= new Fanout.Controller(new HubFanoutAdapter(_deps.Hub), new ControllerConfig
+        {
+            Authorizer = new ServerFanoutAuthorizer(_deps.Registry, _deps.Authz),
+        });
     }
 
     private Fanout.Controller? _lazyFanout;
+
+    private sealed class ServerFanoutAuthorizer : IFanoutAuthorizer
+    {
+        private readonly ISessionRegistry _registry;
+        private readonly Provide.Uterm.ServerAuth.AuthorizationService _authz;
+
+        public ServerFanoutAuthorizer(ISessionRegistry registry, Provide.Uterm.ServerAuth.AuthorizationService authz)
+        {
+            _registry = registry;
+            _authz = authz;
+        }
+
+        public bool IsGlobalAdmin(Provide.Uterm.ServerAuth.Principal principal) => _authz.IsAdmin(principal);
+
+        public bool CanReadMember(Provide.Uterm.ServerAuth.Principal principal, string workerId) =>
+            _registry.TryGetDefinition(workerId, out var definition) && _authz.CanReadSession(principal, definition);
+    }
+
+    private async Task<(Provide.Uterm.ServerAuth.Principal Principal, IResult? Error)> RequireFanoutAdmin(HttpContext ctx)
+    {
+        var (principal, error) = await RequireAuthenticated(ctx).ConfigureAwait(false);
+        if (error is not null) return (principal, error);
+        if (!_deps.Authz.IsAdmin(principal)) return (principal, BridgeError(403, "admin role required"));
+        return (principal, null);
+    }
 
     private sealed class HubFanoutAdapter : IFanoutHub
     {
@@ -112,7 +140,8 @@ public sealed partial class UtermServer
 
     private async Task<IResult> HandleFanoutCreate(HttpContext ctx)
     {
-        var p = await Authenticate(ctx).ConfigureAwait(false);
+        var (p, authError) = await RequireFanoutAdmin(ctx).ConfigureAwait(false);
+        if (authError is not null) return authError;
         var body = await ReadJson(ctx).ConfigureAwait(false);
         var workerIds = body.TryGetValue("worker_ids", out var w) ? StringList(w) : new List<string>();
         var name = Str(body, "name");
@@ -169,7 +198,8 @@ public sealed partial class UtermServer
 
     private async Task<IResult> HandleFanoutList(HttpContext ctx)
     {
-        var p = await Authenticate(ctx).ConfigureAwait(false);
+        var (p, authError) = await RequireFanoutAdmin(ctx).ConfigureAwait(false);
+        if (authError is not null) return authError;
         var groups = EnsureFanout().ListGroups(p.SubjectId).Select(g => new
         {
             group_id = g.GroupId,
@@ -182,7 +212,8 @@ public sealed partial class UtermServer
 
     private async Task<IResult> HandleFanoutDelete(HttpContext ctx, string groupId)
     {
-        var p = await Authenticate(ctx).ConfigureAwait(false);
+        var (p, authError) = await RequireFanoutAdmin(ctx).ConfigureAwait(false);
+        if (authError is not null) return authError;
         var fanout = EnsureFanout();
         var existing = fanout.GetGroup(groupId, p.SubjectId);
         if (existing is null) return BridgeError(404, "group not found");
@@ -197,7 +228,8 @@ public sealed partial class UtermServer
 
     private async Task<IResult> HandleFanoutSend(HttpContext ctx, string groupId)
     {
-        var p = await Authenticate(ctx).ConfigureAwait(false);
+        var (p, authError) = await RequireFanoutAdmin(ctx).ConfigureAwait(false);
+        if (authError is not null) return authError;
         var fanout = EnsureFanout();
         var group = fanout.GetGroup(groupId, p.SubjectId);
         if (group is null)
@@ -212,13 +244,10 @@ public sealed partial class UtermServer
 
         var body = await ReadJson(ctx).ConfigureAwait(false);
         var data = Str(body, "data");
-        var (allowed, refused) = AuthorizedFanoutMembers(p, group.WorkerIds);
-        var result = await fanout.SendAuthorizedAsync(
+        var result = await fanout.SendAsync(
             groupId,
             data,
-            p.SubjectId,
-            allowed,
-            refused,
+            p,
             Int(body, "quiesce_ms", 0),
             Int(body, "max_response_ms", 0),
             ctx.RequestAborted).ConfigureAwait(false);
@@ -234,30 +263,10 @@ public sealed partial class UtermServer
         }, JsonOpts);
     }
 
-    internal (List<string> Allowed, List<string> Refused) AuthorizedFanoutMembers(
-        Provide.Uterm.ServerAuth.Principal principal,
-        IEnumerable<string> workerIds)
-    {
-        var allowed = new List<string>();
-        var refused = new List<string>();
-        foreach (var workerId in workerIds)
-        {
-            if (!_deps.Registry.TryGetDefinition(workerId, out var definition) ||
-                !_deps.Authz.CanReadSession(principal, definition))
-            {
-                refused.Add(workerId);
-            }
-            else
-            {
-                allowed.Add(workerId);
-            }
-        }
-        return (allowed, refused);
-    }
-
     private async Task<IResult> HandleFanoutGrant(HttpContext ctx, string groupId)
     {
-        var p = await Authenticate(ctx).ConfigureAwait(false);
+        var (p, authError) = await RequireFanoutAdmin(ctx).ConfigureAwait(false);
+        if (authError is not null) return authError;
         var fanout = EnsureFanout();
         var existing = fanout.GetGroup(groupId, p.SubjectId);
         if (existing is null) return BridgeError(404, "group not found");

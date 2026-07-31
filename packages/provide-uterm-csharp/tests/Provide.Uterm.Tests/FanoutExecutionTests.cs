@@ -5,6 +5,7 @@
 
 using System.Collections.Concurrent;
 using Provide.Uterm.Fanout;
+using Provide.Uterm.ServerAuth;
 using Xunit;
 
 namespace Provide.Uterm.Tests;
@@ -17,7 +18,7 @@ public sealed class FanoutExecutionTests
         var hub = new EventHub(new Dictionary<string, string> { ["w1"] = "same", ["w2"] = "same" });
         var controller = NewController(hub, "parallel", ["w1", "w2"]);
 
-        var result = await controller.SendAsync("g", "id", "alice", 5, 100);
+        var result = await controller.SendAsync("g", "id", Admin("alice"), 5, 100);
 
         Assert.All(result.Results, row => Assert.True(row.Ok));
         Assert.Equal(["same", "same"], result.Results.Select(row => row.OutputDelta));
@@ -30,7 +31,7 @@ public sealed class FanoutExecutionTests
         var hub = new EventHub(new Dictionary<string, string> { ["w1"] = "ERROR", ["w2"] = "never" });
         var controller = NewController(hub, "sequential", ["w1", "w2"], stopOnError: true);
 
-        var result = await controller.SendAsync("g", "deploy", "alice", 5, 100);
+        var result = await controller.SendAsync("g", "deploy", Admin("alice"), 5, 100);
 
         Assert.DoesNotContain("send:w2", hub.Trace);
         Assert.Equal(["w2"], result.FailedSessions);
@@ -48,7 +49,7 @@ public sealed class FanoutExecutionTests
         });
         var controller = NewController(hub, "parallel", ["w1", "w2", "w3"], threshold: 0.8);
 
-        var result = await controller.SendAsync("g", "status", "alice", 50, 100);
+        var result = await controller.SendAsync("g", "status", Admin("alice"), 50, 100);
 
         Assert.Contains("w3", result.DivergentSessions);
         Assert.All(result.Results, row => Assert.InRange(row.ElapsedMs, 0, 250));
@@ -58,12 +59,67 @@ public sealed class FanoutExecutionTests
     public async Task Authorized_Send_Never_Delivers_To_Refused_Members()
     {
         var hub = new EventHub(new Dictionary<string, string> { ["w1"] = "forbidden" });
-        var controller = NewController(hub, "parallel", ["w1"]);
+        var authorizer = new TestAuthorizer { DeniedMembers = ["w1"] };
+        var controller = NewController(hub, "parallel", ["w1"], authorizer: authorizer);
 
-        var result = await controller.SendAuthorizedAsync("g", "id", "alice", [], ["w1"], 5, 100);
+        var result = await controller.SendAsync("g", "id", Admin("alice"), 5, 100);
 
         Assert.DoesNotContain("send:w1", hub.Trace);
         Assert.Equal(["w1"], result.FailedSessions);
+    }
+
+    [Fact]
+    public async Task Send_Cannot_Expand_Stored_Membership()
+    {
+        var hub = new EventHub(new Dictionary<string, string> { ["outside"] = "unexpected" });
+        var controller = NewController(hub, "parallel", ["w1"]);
+
+        _ = await controller.SendAsync("g", "id", Admin("alice"), 5, 100);
+
+        Assert.DoesNotContain("send:outside", hub.Trace);
+    }
+
+    [Fact]
+    public async Task Send_Fails_Closed_For_Missing_Dependencies_And_Invalid_Principals()
+    {
+        var hub = new EventHub(new Dictionary<string, string> { ["w1"] = "unexpected" });
+        var withoutAuthorizer = new Controller(hub, new ControllerConfig { IdGen = () => "send" });
+        withoutAuthorizer.CreateGroup(new Group { GroupId = "g", WorkerIds = ["w1"] }, "alice");
+        await Assert.ThrowsAsync<FanoutAuthorizationException>(() =>
+            withoutAuthorizer.SendAsync("g", "id", Admin("alice"), 5, 100));
+
+        var controller = NewController(hub, "parallel", ["w1"]);
+        await Assert.ThrowsAsync<FanoutAuthorizationException>(() =>
+            controller.SendAsync("g", "id", null, 5, 100));
+        await Assert.ThrowsAsync<FanoutAuthorizationException>(() =>
+            controller.SendAsync("g", "id", Principal.Anonymous(), 5, 100));
+        await Assert.ThrowsAsync<FanoutAuthorizationException>(() =>
+            controller.SendAsync("g", "id", new Principal
+            {
+                SubjectId = "alice", Roles = StringSet.Of("viewer"), Scopes = StringSet.Of("*"),
+            }, 5, 100));
+        await Assert.ThrowsAsync<FanoutAuthorizationException>(() =>
+            controller.SendAsync("g", "id", new Principal
+            {
+                SubjectId = "alice", Roles = StringSet.Of("admin"), Scopes = StringSet.Of("*"),
+                AdminSessionScope = "w1",
+            }, 5, 100));
+        Assert.DoesNotContain(hub.Trace, entry => entry.StartsWith("send:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Group_Grant_Does_Not_Bypass_Current_Member_Authorization()
+    {
+        var hub = new EventHub(new Dictionary<string, string> { ["w1"] = "unexpected" });
+        var authorizer = new TestAuthorizer { DeniedMembers = ["w1"] };
+        var controller = NewController(hub, "parallel", ["w1"], authorizer: authorizer);
+        controller.GrantAccess("g", "bob", "alice");
+
+        var result = await controller.SendAsync("g", "id", Admin("bob"), 5, 100);
+
+        Assert.Equal(["w1"], result.FailedSessions);
+        Assert.DoesNotContain("send:w1", hub.Trace);
+        Assert.Equal(["w1"], authorizer.CheckedMembers);
     }
 
     private static Controller NewController(
@@ -71,9 +127,11 @@ public sealed class FanoutExecutionTests
         string mode,
         List<string> workers,
         bool stopOnError = false,
-        double threshold = 0.8)
+        double threshold = 0.8,
+        IFanoutAuthorizer? authorizer = default)
     {
-        var controller = new Controller(hub, new ControllerConfig { IdGen = () => "send" });
+        authorizer ??= new TestAuthorizer();
+        var controller = new Controller(hub, new ControllerConfig { IdGen = () => "send", Authorizer = authorizer });
         controller.CreateGroup(new Group
         {
             GroupId = "g",
@@ -86,6 +144,28 @@ public sealed class FanoutExecutionTests
             DivergenceThreshold = threshold,
         }, "alice");
         return controller;
+    }
+
+    private static Principal Admin(string subject) => new()
+    {
+        SubjectId = subject,
+        Roles = StringSet.Of("admin"),
+        Scopes = StringSet.Of("*"),
+    };
+
+    private sealed class TestAuthorizer : IFanoutAuthorizer
+    {
+        public HashSet<string> DeniedMembers { get; init; } = [];
+        public List<string> CheckedMembers { get; } = [];
+
+        public bool IsGlobalAdmin(Principal principal) =>
+            principal.Roles.Has("admin") && principal.AdminSessionScope is null;
+
+        public bool CanReadMember(Principal principal, string workerId)
+        {
+            CheckedMembers.Add(workerId);
+            return !DeniedMembers.Contains(workerId);
+        }
     }
 
     private sealed class EventHub : IFanoutHub
