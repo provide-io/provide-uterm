@@ -389,6 +389,58 @@ public sealed class ConnectionManager
         }
     }
 
+    /// <summary>
+    /// Resume a worker after dashboard-owner cleanup only while that exact
+    /// ownership generation is still the most recent one.
+    /// </summary>
+    public async Task<(bool Resumed, Exception? Error)> ResumeWorkerIfOwnershipUnchangedAsync(
+        string workerId,
+        long ownershipVersion,
+        Dictionary<string, object?> msg,
+        CancellationToken ct = default)
+    {
+        var reservation = "disconnect-resume-" + Guid.NewGuid().ToString("N");
+        IWorkerWs worker;
+        lock (_hub.SharedLock)
+        {
+            var st = _hub.Registry.Get(workerId);
+            if (st?.WorkerWs is null
+                || st.HijackOwnershipVersion != ownershipVersion
+                || _hub.State.IsDashboardHijackActive(st)
+                || _hub.State.HasValidRestLease(st)
+                || st.HijackPending is not null)
+            {
+                return (false, null);
+            }
+
+            // Both dashboard and REST acquisition paths reject HijackPending.
+            // Hold this reservation until the resume send completes so an
+            // owner cannot appear after the generation check but before the
+            // worker observes the resume.
+            st.HijackPending = reservation;
+            worker = st.WorkerWs;
+        }
+
+        try
+        {
+            var encoded = ControlChannelCodec.EncodeControlFrame(msg);
+            await worker.SendTextAsync(encoded, ct).ConfigureAwait(false);
+            return (true, null);
+        }
+        catch (Exception ex)
+        {
+            return (false, ex);
+        }
+        finally
+        {
+            lock (_hub.SharedLock)
+            {
+                var st = _hub.Registry.Get(workerId);
+                if (st?.HijackPending == reservation) st.HijackPending = null;
+            }
+        }
+    }
+
     public async Task BroadcastHijackStateAsync(string workerId, CancellationToken ct = default)
     {
         List<(object Ws, Dictionary<string, object?> Msg)> fanout = new();

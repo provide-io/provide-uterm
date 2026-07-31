@@ -781,8 +781,9 @@ public sealed partial class UtermServer : IAsyncDisposable
             var ownershipVersion = _deps.Hub.Conn.CleanupBrowser(workerId, conn);
             if (ownershipVersion is not null)
             {
-                _ = await _deps.Hub.Conn.SendWorkerAsync(
+                _ = await _deps.Hub.Conn.ResumeWorkerIfOwnershipUnchangedAsync(
                     workerId,
+                    ownershipVersion.Value,
                     new Dictionary<string, object?>
                     {
                         ["type"] = "control",
