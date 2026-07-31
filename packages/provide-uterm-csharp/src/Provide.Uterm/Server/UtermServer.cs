@@ -126,8 +126,7 @@ public sealed partial class UtermServer : IAsyncDisposable
         }
 
         if (token is null) return;
-        if (ownershipVersion is { } version) _resumeTokens.MarkHijackOwner(token, version);
-        else _resumeTokens.Revoke(token);
+        _resumeTokens.MarkDisconnected(token, ownershipVersion);
     }
 
     /// <summary>The graphical-target registry this server was built with.
@@ -769,6 +768,19 @@ public sealed partial class UtermServer : IAsyncDisposable
         finally
         {
             var ownershipVersion = _deps.Hub.Conn.CleanupBrowser(workerId, conn);
+            if (ownershipVersion is not null)
+            {
+                _ = await _deps.Hub.Conn.SendWorkerAsync(
+                    workerId,
+                    new Dictionary<string, object?>
+                    {
+                        ["type"] = "control",
+                        ["action"] = "resume",
+                        ["source"] = "dashboard",
+                        ["ts"] = _clock.Wall(),
+                    },
+                    CancellationToken.None).ConfigureAwait(false);
+            }
             FinishResumeToken(conn, ownershipVersion);
             try
             {
@@ -979,12 +991,36 @@ public sealed partial class UtermServer : IAsyncDisposable
                         var rec = _resumeTokens.Consume(oldTok);
                         if (rec is null || rec.WorkerId != workerId) break;
 
-                        var restored = rec.WasHijackOwner
+                        var roleMatches = rec.Role == role;
+                        var restored = rec.WasDisconnected
+                            && roleMatches
+                            && rec.WasHijackOwner
                             && rec.OwnershipVersion is { } version
-                            && rec.Role == role
                             && _deps.Hub.Lease.TryRestoreWsOwnership(workerId, conn, version);
+                        if (restored)
+                        {
+                            var (paused, _) = await _deps.Hub.Conn.SendWorkerAsync(
+                                workerId,
+                                new Dictionary<string, object?>
+                                {
+                                    ["type"] = "control",
+                                    ["action"] = "pause",
+                                    ["source"] = "dashboard",
+                                    ["ts"] = _clock.Wall(),
+                                },
+                                ct).ConfigureAwait(false);
+                            if (!paused)
+                            {
+                                _deps.Hub.Lease.TryReleaseWs(workerId, conn);
+                                restored = false;
+                            }
+                        }
+
+                        var resumed = rec.WasDisconnected
+                            && roleMatches
+                            && (!rec.WasHijackOwner || restored);
                         var currentTok = CurrentResumeToken(conn);
-                        var newTok = restored
+                        var newTok = resumed
                             || currentTok is null
                             || string.Equals(currentTok, oldTok, StringComparison.Ordinal)
                                 ? MintResumeToken(workerId, role, conn)
@@ -1006,7 +1042,7 @@ public sealed partial class UtermServer : IAsyncDisposable
                                     : InputModes.Hijack,
                                 ["resume_supported"] = true,
                                 ["resume_token"] = newTok,
-                                ["resumed"] = restored,
+                                ["resumed"] = resumed,
                                 ["hijack_control"] = "ws",
                                 ["hijack_step_supported"] = true,
                                 ["mcp_supported"] = false, // spec/behavior.json hello_defaults.csharp
