@@ -352,6 +352,16 @@ async def _handle_input(
                     )
                 )
             return
+        if part_decision.action != "allow":
+            logger.debug(
+                "input_blocked_by_policy worker_id=%s action=%s reason=%s part=%s",
+                worker_id,
+                part_decision.action,
+                part_decision.reason,
+                part,
+            )
+            await ws.send_text(encode_control_frame(make_error_frame(f"Command part blocked by policy: {part}")))
+            return
 
     ok = await hub.send_worker(worker_id, {"type": "input", "data": command, "ts": time.time()}, source=ws)
 

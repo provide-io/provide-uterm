@@ -64,6 +64,34 @@ async def test_policy_gate_deny_all() -> None:
     worker_ws.send_text.assert_not_called()
 
 
+@pytest.mark.parametrize("terminator", ["\n", "\r"])
+@pytest.mark.asyncio
+async def test_policy_gate_deny_blocks_completed_command(terminator: str) -> None:
+    """A deny decision must not be bypassed when input completes a command."""
+
+    class DenyPolicyGate:
+        async def intercept_input(self, _data: str, _context: PolicyContext) -> PolicyDecision:
+            return PolicyDecision(action="deny")
+
+    hub = TermHub(policy_gate=DenyPolicyGate())
+    browser_ws = AsyncMock()
+    worker_ws = AsyncMock()
+    worker_id = "w-completed-deny"
+    await hub.register_worker(worker_id, worker_ws)
+    await hub.register_browser(worker_id, browser_ws, "admin")
+    await hub.try_acquire_ws_hijack(worker_id, browser_ws)
+
+    await _handle_input(
+        hub,
+        browser_ws,
+        worker_id,
+        {"type": "input", "data": f"blocked-command{terminator}"},
+    )
+
+    worker_ws.send_text.assert_not_called()
+    browser_ws.send_text.assert_awaited_once()
+
+
 @pytest.mark.asyncio
 async def test_policy_context_fields() -> None:
     """Context contains correct worker_id, client_id (principal), and role."""
