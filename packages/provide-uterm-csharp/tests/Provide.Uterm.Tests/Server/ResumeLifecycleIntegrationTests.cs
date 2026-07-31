@@ -851,6 +851,69 @@ public sealed class ResumeLifecycleIntegrationTests
         }
     }
 
+    [Theory]
+    [InlineData("release")]
+    [InlineData("expiry")]
+    [InlineData("replacement")]
+    public async Task LifecycleTransitionIntentPrecedesLaterAuthorizedInput(string transitionKind)
+    {
+        var clock = new ManualClock(100);
+        clock.SetMonotonic(0);
+        var hub = new TermHub(new TermHubConfig { Clock = clock });
+        var oldWorker = new RecordingWorker();
+        var replacement = new RecordingWorker();
+        Assert.True(hub.Conn.RegisterWorker("transition-priority", oldWorker));
+        Assert.True((await hub.Lease.TryAcquireRestAsync(
+            "transition-priority",
+            "rest-owner",
+            transitionKind == "expiry" ? 1 : 30,
+            "transition-lease",
+            0)).Ok);
+
+        oldWorker.DelayNextInput();
+        var first = hub.Conn.SendRestInputAsync(
+            "transition-priority", "transition-lease", "input-a");
+        await oldWorker.InputAttempted.WaitAsync(TimeSpan.FromSeconds(5));
+
+        if (transitionKind == "expiry") clock.SetMonotonic(2);
+        var transition = RunTransitionAsync();
+        var transitionFenceRegistered = hub.Registry.Get("transition-priority")!.HijackPending is not null;
+        var second = hub.Conn.SendRestInputAsync(
+            "transition-priority", "transition-lease", "input-b");
+        var secondCompletedBeforeFirst = second.IsCompleted;
+
+        oldWorker.ReleaseInput();
+        Assert.True((await first).Ok);
+        await transition;
+        var secondResult = await second;
+
+        Assert.True(transitionFenceRegistered);
+        Assert.False(secondCompletedBeforeFirst);
+        Assert.False(secondResult.Ok);
+        Assert.Equal(["input-a"], oldWorker.Inputs);
+        Assert.Empty(replacement.Inputs);
+
+        async Task RunTransitionAsync()
+        {
+            switch (transitionKind)
+            {
+                case "release":
+                    _ = await hub.Lease.ReleaseRestAsync(
+                        "transition-priority", "transition-lease");
+                    break;
+                case "expiry":
+                    _ = await hub.Lease.CleanupExpiredAsync("transition-priority");
+                    break;
+                case "replacement":
+                    Assert.True(await hub.Conn.RegisterWorkerAsync(
+                        "transition-priority", replacement));
+                    break;
+                default:
+                    throw new Xunit.Sdk.XunitException("unknown transition kind");
+            }
+        }
+    }
+
     [Fact]
     public async Task ConcurrentValidRestInputWaitsForPriorInputAndThenSends()
     {

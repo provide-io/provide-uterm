@@ -47,55 +47,81 @@ public sealed class ConnectionManager
         IWorkerWs? predecessor = null;
         var mustResume = false;
         var ownershipLost = false;
-        while (true)
+        var replacementReady = false;
+        try
         {
-            Task? pendingCompletion = null;
-            lock (_hub.SharedLock)
+            while (true)
             {
-                if (_hub.Registry.Count >= _hub.MaxWorkers && !_hub.Registry.Contains(workerId))
+                Task? pendingCompletion = null;
+                lock (_hub.SharedLock)
                 {
-                    return false;
-                }
-
-                var st = _hub.State.GetOrCreate(workerId);
-                if (ReferenceEquals(st.WorkerWs, ws)) return true;
-                if (st.DisconnectResumeCompletion is { IsCompleted: false } lifecycleCompletion)
-                {
-                    pendingCompletion = lifecycleCompletion;
-                }
-                else if (st.InputSendPending is not null)
-                {
-                    pendingCompletion = st.InputSendPending.Completion.Task;
-                }
-                else
-                {
-                    predecessor = st.WorkerWs;
-                    if (predecessor is not null)
+                    if (_hub.Registry.Count >= _hub.MaxWorkers && !_hub.Registry.Contains(workerId))
                     {
-                        mustResume = st.HijackSession is not null
-                            || st.HijackOwner is not null
-                            || st.PendingPauseObligation is not null;
-                        ownershipLost = st.HijackSession is not null || st.HijackOwner is not null;
-                        st.HijackSession = null;
-                        st.HijackOwner = null;
-                        st.HijackOwnerExpiresAt = null;
-                        st.PendingDashboardBrowser = null;
-                        st.PendingDashboardOwnershipVersion = null;
-                        st.PendingPauseReservation = null;
-                        st.PendingPauseObligation = null;
-                        st.HijackOwnershipVersion++;
-                        completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-                        st.HijackPending = reservation;
-                        st.DisconnectResumeCompletion = completion.Task;
-                        st.DisconnectResumeOwnershipVersion = null;
+                        return false;
                     }
-                    st.WorkerWs = ws;
-                    st.LastActivityAt = _hub.Clock.Monotonic();
-                    break;
-                }
-            }
 
-            await pendingCompletion!.WaitAsync(ct).ConfigureAwait(false);
+                    var st = _hub.State.GetOrCreate(workerId);
+                    if (ReferenceEquals(st.WorkerWs, ws)) return true;
+                    if (st.DisconnectResumeCompletion is { IsCompleted: false } lifecycleCompletion
+                        && (completion is null
+                            || !ReferenceEquals(lifecycleCompletion, completion.Task)))
+                    {
+                        pendingCompletion = lifecycleCompletion;
+                    }
+                    else if (st.InputSendPending is not null)
+                    {
+                        if (completion is null)
+                        {
+                            completion = new TaskCompletionSource(
+                                TaskCreationOptions.RunContinuationsAsynchronously);
+                            st.HijackPending = reservation;
+                            st.DisconnectResumeCompletion = completion.Task;
+                            st.DisconnectResumeOwnershipVersion = null;
+                        }
+                        pendingCompletion = st.InputSendPending.Completion.Task;
+                    }
+                    else
+                    {
+                        predecessor = st.WorkerWs;
+                        if (predecessor is not null)
+                        {
+                            mustResume = st.HijackSession is not null
+                                || st.HijackOwner is not null
+                                || st.PendingPauseObligation is not null;
+                            ownershipLost = st.HijackSession is not null || st.HijackOwner is not null;
+                            st.HijackSession = null;
+                            st.HijackOwner = null;
+                            st.HijackOwnerExpiresAt = null;
+                            st.PendingDashboardBrowser = null;
+                            st.PendingDashboardOwnershipVersion = null;
+                            st.PendingPauseReservation = null;
+                            st.PendingPauseObligation = null;
+                            st.HijackOwnershipVersion++;
+                            if (completion is null)
+                            {
+                                completion = new TaskCompletionSource(
+                                    TaskCreationOptions.RunContinuationsAsynchronously);
+                                st.HijackPending = reservation;
+                                st.DisconnectResumeCompletion = completion.Task;
+                                st.DisconnectResumeOwnershipVersion = null;
+                            }
+                        }
+                        st.WorkerWs = ws;
+                        st.LastActivityAt = _hub.Clock.Monotonic();
+                        break;
+                    }
+                }
+
+                await pendingCompletion!.WaitAsync(ct).ConfigureAwait(false);
+            }
+            replacementReady = true;
+        }
+        finally
+        {
+            if (!replacementReady && completion is not null)
+            {
+                CompleteWorkerReplacementReservation(workerId, reservation, completion);
+            }
         }
 
         if (predecessor is null) return true;
@@ -139,6 +165,24 @@ public sealed class ConnectionManager
             completion?.TrySetResult();
         }
         return true;
+    }
+
+    private void CompleteWorkerReplacementReservation(
+        string workerId,
+        string reservation,
+        TaskCompletionSource completion)
+    {
+        lock (_hub.SharedLock)
+        {
+            var st = _hub.Registry.Get(workerId);
+            if (st?.HijackPending == reservation) st.HijackPending = null;
+            if (st is not null && ReferenceEquals(st.DisconnectResumeCompletion, completion.Task))
+            {
+                st.DisconnectResumeCompletion = null;
+                st.DisconnectResumeOwnershipVersion = null;
+            }
+        }
+        completion.TrySetResult();
     }
 
     private async Task PublishOwnershipLostAsync(string workerId)
