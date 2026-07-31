@@ -370,6 +370,9 @@ def create_server_app(
     async def _authorize_fanout_session(principal: Principal, session: object) -> bool:
         return await authz.can_read_session(principal, session)  # type: ignore[arg-type]
 
+    async def _authorize_fanout_admin(principal: Principal) -> bool:
+        return await authz.is_admin(principal)
+
     setattr(  # noqa: B010
         hub,
         "fan_out_controller",
@@ -377,6 +380,7 @@ def create_server_app(
             hub=hub,
             store=InMemoryFanOutStore(),
             fanout_policy_gate=fanout_policy_gate,
+            is_global_admin=_authorize_fanout_admin,
             resolve_session=_resolve_fanout_session,
             can_read_session=_authorize_fanout_session,
             allow_unknown_members=config.fanout_allow_unknown_members,

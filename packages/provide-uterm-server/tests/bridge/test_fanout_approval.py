@@ -5,6 +5,7 @@
 import asyncio
 import time
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -12,6 +13,9 @@ from provide.uterm.server.bridge.fanout._controller import FanOutController
 from provide.uterm.server.bridge.fanout._models import FanOutGroup, FanOutResult
 from provide.uterm.server.bridge.hub.core import TermHub
 from provide.uterm.server.bridge.hub.ext import FanOutPolicyGate, PolicyContext, PolicyDecision
+from provide.uterm.server.bridge.identity import Principal
+
+ADMIN = Principal(subject_id="admin", roles=frozenset({"admin"}))
 
 
 class MockFanOutGate(FanOutPolicyGate):
@@ -51,7 +55,13 @@ def gate():
 
 @pytest.fixture
 def controller(hub, gate):
-    ctrl = FanOutController(hub=hub, fanout_policy_gate=gate)
+    ctrl = FanOutController(
+        hub=hub,
+        fanout_policy_gate=gate,
+        is_global_admin=AsyncMock(return_value=True),
+        resolve_session=AsyncMock(return_value=object()),
+        can_read_session=AsyncMock(return_value=True),
+    )
     hub.fan_out_controller = ctrl  # Wire it up like app.py does
     return ctrl
 
@@ -83,7 +93,7 @@ async def test_fanout_passthrough_allow(controller, hub, gate):
 
     controller._send_parallel = fake_send_parallel
 
-    res = await controller.send(group_id, "ls", principal="admin")
+    res = await controller.send(group_id, "ls", principal=ADMIN)
 
     assert gate.calls[0][0] == "ls"
     assert called is True
@@ -109,7 +119,7 @@ async def test_fanout_rejection_deny(controller, hub, gate):
 
     controller._send_parallel = fake_send_parallel
 
-    res = await controller.send(group_id, "rm -rf /", principal="admin")
+    res = await controller.send(group_id, "rm -rf /", principal=ADMIN)
 
     assert called is False
     assert res.error == "Forbidden command"
@@ -143,7 +153,7 @@ async def test_fanout_approval_lifecycle(controller, hub, gate):
     controller._send_parallel = fake_send_parallel
 
     # 1. Send the command -> Should be intercepted
-    res = await controller.send(group_id, "apt-get upgrade", principal="admin")
+    res = await controller.send(group_id, "apt-get upgrade", principal=ADMIN)
 
     assert called_with is None
     assert getattr(res, "approval_required", False) is True
@@ -185,6 +195,7 @@ async def test_approval_release_rechecks_current_session_authorization(hub, gate
     ctrl = FanOutController(
         hub=hub,
         fanout_policy_gate=gate,
+        is_global_admin=AsyncMock(return_value=True),
         resolve_session=resolve_session,
         can_read_session=can_read_session,
     )
@@ -206,6 +217,43 @@ async def test_approval_release_rechecks_current_session_authorization(hub, gate
 
 
 @pytest.mark.asyncio
+async def test_approval_release_rechecks_global_admin_and_keeps_full_principal(hub, gate):
+    admin_allowed = True
+
+    async def is_admin(principal: Principal) -> bool:
+        return admin_allowed
+
+    ctrl = FanOutController(
+        hub=hub,
+        fanout_policy_gate=gate,
+        is_global_admin=is_admin,
+        resolve_session=AsyncMock(return_value=object()),
+        can_read_session=AsyncMock(return_value=True),
+    )
+    hub.fan_out_controller = ctrl
+    principal = Principal(
+        subject_id="admin",
+        roles=frozenset({"admin"}),
+        scopes=frozenset({"session.read"}),
+        claims={"issuer": "test"},
+    )
+    group_id = await ctrl.create_group(
+        FanOutGroup(group_id="g-admin-revoke", name="G", worker_ids=["w1"], created_by="admin", created_at=0.0),
+        principal=principal,
+    )
+    gate.next_decision = PolicyDecision(action="hold")
+    held = await ctrl.send(group_id, "id", principal=principal)
+    assert ctrl._pending_approvals[held.approval_id]["principal"] is principal
+
+    admin_allowed = False
+    result = await ctrl.release_approved_command(held.approval_id)
+
+    assert result is not None
+    assert result.error == "global admin role required"
+    assert not hub.sent_messages
+
+
+@pytest.mark.asyncio
 async def test_fanout_approval_expiration_cleanup(controller, hub, gate):
     """Checklist 5.1: Controller Memory Leak (Cleanup on Expiration)."""
     group_id = await controller.create_group(
@@ -214,7 +262,7 @@ async def test_fanout_approval_expiration_cleanup(controller, hub, gate):
     )
     gate.next_decision = PolicyDecision(action="hold")
 
-    res = await controller.send(group_id, "long-task", principal="admin")
+    res = await controller.send(group_id, "long-task", principal=ADMIN)
     req_id = res.approval_id
 
     assert req_id in controller._pending_approvals
@@ -239,7 +287,7 @@ async def test_fanout_approval_rejection_cleanup(controller, hub, gate):
     )
     gate.next_decision = PolicyDecision(action="hold")
 
-    res = await controller.send(group_id, "dangerous-command", principal="admin")
+    res = await controller.send(group_id, "dangerous-command", principal=ADMIN)
     req_id = res.approval_id
 
     assert req_id in controller._pending_approvals
@@ -290,7 +338,7 @@ async def test_fanout_sequential_release(controller, hub, gate):
 
     controller._send_sequential = fake_send_sequential
 
-    res = await controller.send(group_id, "rollout", principal="admin")
+    res = await controller.send(group_id, "rollout", principal=ADMIN)
     req_id = res.approval_id
 
     # Approve
@@ -308,7 +356,7 @@ async def test_fanout_audit_trail(controller, hub, gate):
     )
     gate.next_decision = PolicyDecision(action="hold")
 
-    await controller.send(group_id, "sensitive-task", principal="admin")
+    await controller.send(group_id, "sensitive-task", principal=ADMIN)
 
     # Verify terminal.fanout.hold event
     hold_events = [e for e in hub.events if e[1] == "terminal.fanout.hold"]
@@ -332,7 +380,7 @@ async def test_fanout_approval_rbac_admin_only(controller, hub, gate):
         principal="admin",
     )
     gate.next_decision = PolicyDecision(action="hold")
-    res = await controller.send(group_id, "secure-cmd", principal="admin")
+    res = await controller.send(group_id, "secure-cmd", principal=ADMIN)
     req_id = res.approval_id
 
     router = create_approvals_router()
