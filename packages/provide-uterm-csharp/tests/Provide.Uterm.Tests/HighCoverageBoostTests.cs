@@ -528,9 +528,12 @@ public class HighCoverageBoostTests
 
         // WS acquire
         var browser = new object();
+        hub.Conn.RegisterBrowser("w1", browser, "admin");
         var (wok, _) = hub.Lease.TryAcquireWs("w1", browser);
         Assert.True(wok);
-        var (wok2, r2) = hub.Lease.TryAcquireWs("w1", new object());
+        var contender = new object();
+        hub.Conn.RegisterBrowser("w1", contender, "admin");
+        var (wok2, r2) = hub.Lease.TryAcquireWs("w1", contender);
         Assert.False(wok2);
         Assert.Equal("already_hijacked", r2);
         Assert.NotNull(hub.Lease.TouchOwner("w1", 30));

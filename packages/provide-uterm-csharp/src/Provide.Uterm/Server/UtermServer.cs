@@ -779,6 +779,10 @@ public sealed partial class UtermServer : IAsyncDisposable
         finally
         {
             var ownershipVersion = _deps.Hub.Conn.CleanupBrowser(workerId, conn);
+            // Make the single-use token reclaimable before the worker resume
+            // can block. A matching reclaim coordinates with that in-flight
+            // resume through the hub reservation.
+            FinishResumeToken(conn, ownershipVersion);
             if (ownershipVersion is not null)
             {
                 _ = await _deps.Hub.Conn.ResumeWorkerIfOwnershipUnchangedAsync(
@@ -793,7 +797,6 @@ public sealed partial class UtermServer : IAsyncDisposable
                     },
                     CancellationToken.None).ConfigureAwait(false);
             }
-            FinishResumeToken(conn, ownershipVersion);
             try
             {
                 await _deckMux.OnBrowserDisconnectAsync(workerId, conn, CancellationToken.None)
@@ -888,7 +891,8 @@ public sealed partial class UtermServer : IAsyncDisposable
                             break;
                         }
 
-                        var (ok, reason) = _deps.Hub.Lease.TryAcquireWs(workerId, conn);
+                        var (ok, reason) = await _deps.Hub.Lease.TryAcquireWsAsync(
+                            workerId, conn, ct: ct).ConfigureAwait(false);
                         if (!ok)
                         {
                             await conn.SendTextAsync(
@@ -902,20 +906,6 @@ public sealed partial class UtermServer : IAsyncDisposable
                                 ct).ConfigureAwait(false);
                             break;
                         }
-
-                        // Never pause for a request that did not acquire
-                        // ownership. In particular, disconnect-resume holds a
-                        // HijackPending reservation across its worker send.
-                        _ = await _deps.Hub.Conn.SendWorkerAsync(
-                            workerId,
-                            new Dictionary<string, object?>
-                            {
-                                ["type"] = "control",
-                                ["action"] = "pause",
-                                ["source"] = "dashboard",
-                                ["ts"] = _clock.Wall(),
-                            },
-                            ct).ConfigureAwait(false);
 
                         await _deps.Hub.BroadcastHijackStateAsync(workerId, ct).ConfigureAwait(false);
                         break;
@@ -992,28 +982,14 @@ public sealed partial class UtermServer : IAsyncDisposable
                         if (rec is null || rec.WorkerId != workerId) break;
 
                         var roleMatches = rec.Role == role;
-                        var restored = rec.WasDisconnected
+                        var restored = false;
+                        if (rec.WasDisconnected
                             && roleMatches
                             && rec.WasHijackOwner
-                            && rec.OwnershipVersion is { } version
-                            && _deps.Hub.Lease.TryRestoreWsOwnership(workerId, conn, version);
-                        if (restored)
+                            && rec.OwnershipVersion is { } version)
                         {
-                            var (paused, _) = await _deps.Hub.Conn.SendWorkerAsync(
-                                workerId,
-                                new Dictionary<string, object?>
-                                {
-                                    ["type"] = "control",
-                                    ["action"] = "pause",
-                                    ["source"] = "dashboard",
-                                    ["ts"] = _clock.Wall(),
-                                },
-                                ct).ConfigureAwait(false);
-                            if (!paused)
-                            {
-                                _deps.Hub.Lease.TryReleaseWs(workerId, conn);
-                                restored = false;
-                            }
+                            (restored, _) = await _deps.Hub.Lease.TryAcquireWsAsync(
+                                workerId, conn, version, ct).ConfigureAwait(false);
                         }
 
                         var resumed = rec.WasDisconnected

@@ -6,6 +6,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Net.WebSockets;
+using System.Reflection;
 using System.Text;
 using Provide.Uterm.ControlChannel;
 using Provide.Uterm.Hub;
@@ -142,6 +143,124 @@ public sealed class ResumeLifecycleIntegrationTests
         Assert.Equal(["pause", "resume"], fixture.Worker.Actions);
     }
 
+    [Fact]
+    public async Task FailedFreshDashboardPauseDoesNotPublishOwnership()
+    {
+        var fixture = await BootAsync();
+        await using var server = fixture.Server;
+        using var browser = await ConnectAsync(fixture);
+        await DrainHandshakeAsync(browser);
+        fixture.Worker.FailNextPause();
+
+        await SendControlAsync(browser, "hijack_request");
+        await fixture.Worker.PauseAttempted.WaitAsync(TimeSpan.FromSeconds(5));
+        var error = await ReceiveUntilAsync(browser, frame => Type(frame) == "error");
+
+        Assert.Equal("Hijack failed: no_worker", error["message"]?.ToString());
+        Assert.Null(fixture.Hub.Registry.Get("resume-worker")!.HijackOwner);
+        Assert.Empty(fixture.Worker.Actions);
+    }
+
+    [Fact]
+    public async Task ForceReleaseDuringDelayedFreshPauseEndsResumedWithoutOwner()
+    {
+        var fixture = await BootAsync();
+        await using var server = fixture.Server;
+        using var browser = await ConnectAsync(fixture);
+        await DrainHandshakeAsync(browser);
+        fixture.Worker.DelayNextPause();
+
+        await SendControlAsync(browser, "hijack_request");
+        await fixture.Worker.PauseAttempted.WaitAsync(TimeSpan.FromSeconds(5));
+        var released = await fixture.Hub.Conn.ForceReleaseHijackAsync("resume-worker");
+        fixture.Worker.ReleasePause();
+
+        await WaitUntilAsync(() => fixture.Worker.Actions.Count == 2);
+        Assert.False(released);
+        Assert.Null(fixture.Hub.Registry.Get("resume-worker")!.HijackOwner);
+        Assert.Equal(["pause", "resume"], fixture.Worker.Actions);
+    }
+
+    [Fact]
+    public async Task CleanupDuringDelayedFreshPauseEndsResumedWithoutOwner()
+    {
+        var fixture = await BootAsync();
+        await using var server = fixture.Server;
+        using var browser = await ConnectAsync(fixture);
+        await DrainHandshakeAsync(browser);
+        fixture.Worker.DelayNextPause();
+
+        await SendControlAsync(browser, "hijack_request");
+        await fixture.Worker.PauseAttempted.WaitAsync(TimeSpan.FromSeconds(5));
+        var browserConnection = Assert.Single(
+            fixture.Hub.Registry.Get("resume-worker")!.Browsers.Keys);
+        fixture.Hub.Conn.CleanupBrowser("resume-worker", browserConnection);
+        fixture.Worker.ReleasePause();
+
+        await WaitUntilAsync(() => fixture.Worker.Actions.Count == 2);
+        Assert.Null(fixture.Hub.Registry.Get("resume-worker")!.HijackOwner);
+        Assert.Equal(["pause", "resume"], fixture.Worker.Actions);
+    }
+
+    [Fact]
+    public async Task ForceReleaseDuringDelayedResumeReclaimDoesNotAdvertiseOwnerAndCompensates()
+    {
+        var fixture = await BootAsync();
+        await using var server = fixture.Server;
+        using var original = await ConnectAsync(fixture);
+        var oldToken = (await DrainHandshakeAsync(original))["resume_token"]!.ToString()!;
+        await SendControlAsync(original, "hijack_request");
+        await ReceiveUntilAsync(original, frame => Type(frame) == "hijack_state" && Bool(frame, "hijacked"));
+        original.Abort();
+        await WaitUntilAsync(() => fixture.Worker.Actions.SequenceEqual(["pause", "resume"]));
+
+        using var resumedSocket = await ConnectAsync(fixture);
+        await DrainHandshakeAsync(resumedSocket);
+        fixture.Worker.DelayNextPause();
+        await SendControlAsync(resumedSocket, "resume", oldToken);
+        await fixture.Worker.PauseAttempted.WaitAsync(TimeSpan.FromSeconds(5));
+        var ownerWhilePending = fixture.Hub.Registry.Get("resume-worker")!.HijackOwner;
+        var released = await fixture.Hub.Conn.ForceReleaseHijackAsync("resume-worker");
+        fixture.Worker.ReleasePause();
+        var hello = await ReceiveUntilAsync(
+            resumedSocket, frame => Type(frame) == "hello" && frame.ContainsKey("resumed"));
+
+        await WaitUntilAsync(() => fixture.Worker.Actions.Count == 4);
+        Assert.Null(ownerWhilePending);
+        Assert.False(released);
+        Assert.False(Bool(hello, "resumed"));
+        Assert.Null(fixture.Hub.Registry.Get("resume-worker")!.HijackOwner);
+        Assert.Equal(["pause", "resume", "pause", "resume"], fixture.Worker.Actions);
+    }
+
+    [Fact]
+    public async Task ImmediateReconnectDoesNotBurnTokenWhileDisconnectResumeIsPending()
+    {
+        var fixture = await BootAsync();
+        await using var server = fixture.Server;
+        using var original = await ConnectAsync(fixture);
+        var oldToken = (await DrainHandshakeAsync(original))["resume_token"]!.ToString()!;
+        await SendControlAsync(original, "hijack_request");
+        await ReceiveUntilAsync(original, frame => Type(frame) == "hijack_state" && Bool(frame, "hijacked"));
+        fixture.Worker.DelayNextResume();
+
+        original.Abort();
+        await fixture.Worker.ResumeAttempted.WaitAsync(TimeSpan.FromSeconds(5));
+        using var resumedSocket = await ConnectAsync(fixture);
+        await DrainHandshakeAsync(resumedSocket);
+        await SendControlAsync(resumedSocket, "resume", oldToken);
+        await WaitUntilAsync(() => ResumeTokenCount(fixture.Server) == 1);
+        fixture.Worker.ReleaseResume();
+        var hello = await ReceiveUntilAsync(
+            resumedSocket, frame => Type(frame) == "hello" && frame.ContainsKey("resumed"));
+
+        await WaitUntilAsync(() => fixture.Worker.Actions.Count == 3);
+        Assert.True(Bool(hello, "resumed"));
+        Assert.True(Bool(hello, "hijacked_by_me"));
+        Assert.NotNull(fixture.Hub.Registry.Get("resume-worker")!.HijackOwner);
+        Assert.Equal(["pause", "resume", "pause"], fixture.Worker.Actions);
+    }
+
     private static async Task<Dictionary<string, object?>> DrainHandshakeAsync(ClientWebSocket socket)
     {
         Dictionary<string, object?>? hello = null;
@@ -194,6 +313,13 @@ public sealed class ResumeLifecycleIntegrationTests
     {
         for (var i = 0; i < 200 && !predicate(); i++) await Task.Delay(10);
         Assert.True(predicate());
+    }
+
+    private static int ResumeTokenCount(UtermServer server)
+    {
+        var field = typeof(UtermServer).GetField("_resumeTokens", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new Xunit.Sdk.XunitException("resume-token store field was not found");
+        return ((ResumeTokenStore)field.GetValue(server)!).Count;
     }
 
     private static async Task<ClientWebSocket> ConnectAsync(Fixture fixture)
@@ -264,12 +390,64 @@ public sealed class ResumeLifecycleIntegrationTests
     {
         private readonly object _gate = new();
         private readonly List<string> _actions = [];
+        private TaskCompletionSource? _pauseAttempted;
+        private TaskCompletionSource? _pauseRelease;
+        private TaskCompletionSource? _resumeAttempted;
+        private TaskCompletionSource? _resumeRelease;
+        private bool _failNextPause;
 
         public Func<Task>? AfterResume { get; set; }
 
         public IReadOnlyList<string> Actions
         {
             get { lock (_gate) return _actions.ToArray(); }
+        }
+
+        public Task PauseAttempted
+        {
+            get { lock (_gate) return (_pauseAttempted ??= NewSignal()).Task; }
+        }
+
+        public Task ResumeAttempted
+        {
+            get { lock (_gate) return (_resumeAttempted ??= NewSignal()).Task; }
+        }
+
+        public void FailNextPause()
+        {
+            lock (_gate)
+            {
+                _failNextPause = true;
+                _pauseAttempted = NewSignal();
+            }
+        }
+
+        public void DelayNextPause()
+        {
+            lock (_gate)
+            {
+                _pauseAttempted = NewSignal();
+                _pauseRelease = NewSignal();
+            }
+        }
+
+        public void ReleasePause()
+        {
+            lock (_gate) _pauseRelease?.TrySetResult();
+        }
+
+        public void DelayNextResume()
+        {
+            lock (_gate)
+            {
+                _resumeAttempted = NewSignal();
+                _resumeRelease = NewSignal();
+            }
+        }
+
+        public void ReleaseResume()
+        {
+            lock (_gate) _resumeRelease?.TrySetResult();
         }
 
         public async Task SendTextAsync(string payload, CancellationToken cancellationToken = default)
@@ -280,9 +458,46 @@ public sealed class ResumeLifecycleIntegrationTests
                 .FirstOrDefault(value => value is not null);
             if (action is not null)
             {
+                Task? release = null;
+                TaskCompletionSource? releaseSignal = null;
+                var fail = false;
+                lock (_gate)
+                {
+                    if (action == "pause")
+                    {
+                        _pauseAttempted?.TrySetResult();
+                        releaseSignal = _pauseRelease;
+                        release = releaseSignal?.Task;
+                        fail = _failNextPause;
+                        _failNextPause = false;
+                    }
+                    else if (action == "resume")
+                    {
+                        _resumeAttempted?.TrySetResult();
+                        releaseSignal = _resumeRelease;
+                        release = releaseSignal?.Task;
+                    }
+                }
+
+                if (release is not null) await release.WaitAsync(cancellationToken);
+                lock (_gate)
+                {
+                    if (action == "pause" && ReferenceEquals(_pauseRelease, releaseSignal))
+                    {
+                        _pauseRelease = null;
+                    }
+                    else if (action == "resume" && ReferenceEquals(_resumeRelease, releaseSignal))
+                    {
+                        _resumeRelease = null;
+                    }
+                }
+                if (fail) throw new IOException("deterministic pause failure");
                 lock (_gate) _actions.Add(action);
                 if (action == "resume" && AfterResume is not null) await AfterResume();
             }
         }
+
+        private static TaskCompletionSource NewSignal() =>
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 }
