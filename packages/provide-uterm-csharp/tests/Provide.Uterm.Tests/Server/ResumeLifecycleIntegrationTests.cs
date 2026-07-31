@@ -273,6 +273,44 @@ public sealed class ResumeLifecycleIntegrationTests
         Assert.Equal(["pause", "pause"], fixture.Worker.Actions);
     }
 
+    [Fact]
+    public async Task NotDeliveredDashboardSuccessorDischargesInheritedPauseObligation()
+    {
+        var fixture = await BootAsync();
+        await using var server = fixture.Server;
+        using var predecessor = await ConnectAsync(fixture);
+        await DrainHandshakeAsync(predecessor);
+        using var successor = await ConnectAsync(fixture);
+        await DrainHandshakeAsync(successor);
+        var predecessorPause = fixture.Worker.DelayNextPause();
+
+        await SendControlAsync(predecessor, "hijack_request");
+        await predecessorPause.Attempted.WaitAsync(TimeSpan.FromSeconds(5));
+        var state = fixture.Hub.Registry.Get("resume-worker")!;
+        fixture.Hub.Conn.CleanupBrowser("resume-worker", state.PendingDashboardBrowser!);
+        var inactiveCheck = fixture.Worker.BlockNextActiveCheck();
+        await SendControlAsync(successor, "hijack_request");
+        await inactiveCheck.Attempted.WaitAsync(TimeSpan.FromSeconds(5));
+
+        predecessorPause.Release();
+        await ReceiveUntilAsync(predecessor, frame => Type(frame) == "error");
+        try
+        {
+            await WaitUntilAsync(() => state.PendingPauseObligation == state.HijackPending);
+            fixture.Worker.Deactivate();
+        }
+        finally
+        {
+            inactiveCheck.Release();
+        }
+        await ReceiveUntilAsync(successor, frame => Type(frame) == "error");
+
+        await WaitUntilAsync(() => fixture.Worker.Actions.Count == 2);
+        Assert.Null(state.HijackOwner);
+        Assert.Null(state.PendingPauseObligation);
+        Assert.Equal(["pause", "resume"], fixture.Worker.Actions);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -344,6 +382,44 @@ public sealed class ResumeLifecycleIntegrationTests
         Assert.NotNull(state.HijackSession);
         Assert.Null(state.PendingPauseObligation);
         Assert.Equal(["pause", "pause"], fixture.Worker.Actions);
+    }
+
+    [Fact]
+    public async Task NotDeliveredRestSuccessorDischargesInheritedPauseObligation()
+    {
+        var fixture = await BootAsync();
+        await using var server = fixture.Server;
+        using var predecessor = await ConnectAsync(fixture);
+        await DrainHandshakeAsync(predecessor);
+        var predecessorPause = fixture.Worker.DelayNextPause();
+
+        await SendControlAsync(predecessor, "hijack_request");
+        await predecessorPause.Attempted.WaitAsync(TimeSpan.FromSeconds(5));
+        var state = fixture.Hub.Registry.Get("resume-worker")!;
+        fixture.Hub.Conn.CleanupBrowser("resume-worker", state.PendingDashboardBrowser!);
+        var inactiveCheck = fixture.Worker.BlockNextActiveCheck();
+        var restAcquire = Task.Run(async () => await fixture.Hub.Lease.TryAcquireRestAsync(
+            "resume-worker", "rest-owner", 30, "rest-successor", 10));
+        await inactiveCheck.Attempted.WaitAsync(TimeSpan.FromSeconds(5));
+
+        predecessorPause.Release();
+        await ReceiveUntilAsync(predecessor, frame => Type(frame) == "error");
+        try
+        {
+            await WaitUntilAsync(() => state.PendingPauseObligation == state.HijackPending);
+            fixture.Worker.Deactivate();
+        }
+        finally
+        {
+            inactiveCheck.Release();
+        }
+        Assert.False((await restAcquire).Ok);
+
+        await WaitUntilAsync(() => fixture.Worker.Actions.Count == 2);
+        Assert.Null(state.HijackOwner);
+        Assert.Null(state.HijackSession);
+        Assert.Null(state.PendingPauseObligation);
+        Assert.Equal(["pause", "resume"], fixture.Worker.Actions);
     }
 
     [Fact]
@@ -644,7 +720,7 @@ public sealed class ResumeLifecycleIntegrationTests
         string Token,
         Uri Uri);
 
-    private sealed class RecordingWorker : IWorkerWs
+    private sealed class RecordingWorker : IAbortableBrowserWs
     {
         private readonly object _gate = new();
         private readonly List<string> _actions = [];
@@ -652,8 +728,28 @@ public sealed class ResumeLifecycleIntegrationTests
         private PauseGate? _lastPauseGate;
         private TaskCompletionSource? _resumeAttempted;
         private TaskCompletionSource? _resumeRelease;
+        private ActiveCheckGate? _nextActiveCheck;
+        private bool _isActive = true;
 
         public Func<Task>? AfterResume { get; set; }
+
+        public bool IsActive
+        {
+            get
+            {
+                ActiveCheckGate? activeCheck;
+                lock (_gate)
+                {
+                    activeCheck = _nextActiveCheck;
+                    _nextActiveCheck = null;
+                    if (activeCheck is null) return _isActive;
+                }
+
+                activeCheck.MarkAttempted();
+                activeCheck.Wait();
+                lock (_gate) return _isActive;
+            }
+        }
 
         public IReadOnlyList<string> Actions
         {
@@ -712,6 +808,36 @@ public sealed class ResumeLifecycleIntegrationTests
         public void ReleaseResume()
         {
             lock (_gate) _resumeRelease?.TrySetResult();
+        }
+
+        public ActiveCheckGate BlockNextActiveCheck()
+        {
+            lock (_gate)
+            {
+                if (_nextActiveCheck is not null)
+                {
+                    throw new InvalidOperationException("an active check is already blocked");
+                }
+
+                return _nextActiveCheck = new ActiveCheckGate();
+            }
+        }
+
+        public void Deactivate()
+        {
+            lock (_gate) _isActive = false;
+        }
+
+        public void Abort()
+        {
+            ActiveCheckGate? activeCheck;
+            lock (_gate)
+            {
+                _isActive = false;
+                activeCheck = _nextActiveCheck;
+                _nextActiveCheck = null;
+            }
+            activeCheck?.Release();
         }
 
         public async Task SendTextAsync(string payload, CancellationToken cancellationToken = default)
@@ -804,6 +930,17 @@ public sealed class ResumeLifecycleIntegrationTests
 
             internal Task WaitAsync(CancellationToken cancellationToken) =>
                 _release?.Task.WaitAsync(cancellationToken) ?? Task.CompletedTask;
+        }
+
+        public sealed class ActiveCheckGate
+        {
+            private readonly TaskCompletionSource _attempted = NewSignal();
+            private readonly TaskCompletionSource _release = NewSignal();
+
+            public Task Attempted => _attempted.Task;
+            internal void MarkAttempted() => _attempted.TrySetResult();
+            internal void Wait() => _release.Task.GetAwaiter().GetResult();
+            public void Release() => _release.TrySetResult();
         }
     }
 
