@@ -117,7 +117,7 @@ public sealed class ResumeLifecycleIntegrationTests
     }
 
     [Fact]
-    public async Task DisconnectResumeCannotRaceWithNewDashboardOwner()
+    public async Task RejectedDashboardRequestDuringDisconnectResumeDoesNotPauseWorker()
     {
         var fixture = await BootAsync();
         await using var server = fixture.Server;
@@ -125,16 +125,19 @@ public sealed class ResumeLifecycleIntegrationTests
         await DrainHandshakeAsync(original);
         await SendControlAsync(original, "hijack_request");
         await ReceiveUntilAsync(original, frame => Type(frame) == "hijack_state" && Bool(frame, "hijacked"));
-        var contender = new NoopSocket();
-        fixture.Hub.Conn.RegisterBrowser("resume-worker", contender, "admin");
-        bool? acquiredDuringResume = null;
-        fixture.Worker.BeforeResume = () =>
-            acquiredDuringResume = fixture.Hub.Lease.TryAcquireWs("resume-worker", contender).Ok;
+        using var contender = await ConnectAsync(fixture);
+        await DrainHandshakeAsync(contender);
+        var requestRejected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.Worker.AfterResume = async () =>
+        {
+            await SendControlAsync(contender, "hijack_request");
+            await ReceiveUntilAsync(contender, frame => Type(frame) == "error");
+            requestRejected.TrySetResult();
+        };
 
         original.Abort();
-        await WaitUntilAsync(() => acquiredDuringResume is not null);
+        await requestRejected.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-        Assert.False(acquiredDuringResume);
         Assert.Null(fixture.Hub.Registry.Get("resume-worker")!.HijackOwner);
         Assert.Equal(["pause", "resume"], fixture.Worker.Actions);
     }
@@ -262,14 +265,14 @@ public sealed class ResumeLifecycleIntegrationTests
         private readonly object _gate = new();
         private readonly List<string> _actions = [];
 
-        public Action? BeforeResume { get; set; }
+        public Func<Task>? AfterResume { get; set; }
 
         public IReadOnlyList<string> Actions
         {
             get { lock (_gate) return _actions.ToArray(); }
         }
 
-        public Task SendTextAsync(string payload, CancellationToken cancellationToken = default)
+        public async Task SendTextAsync(string payload, CancellationToken cancellationToken = default)
         {
             var action = new ControlFrameDecoder().Feed(payload)
                 .OfType<ControlChunk>()
@@ -277,17 +280,9 @@ public sealed class ResumeLifecycleIntegrationTests
                 .FirstOrDefault(value => value is not null);
             if (action is not null)
             {
-                if (action == "resume") BeforeResume?.Invoke();
                 lock (_gate) _actions.Add(action);
+                if (action == "resume" && AfterResume is not null) await AfterResume();
             }
-
-            return Task.CompletedTask;
         }
-    }
-
-    private sealed class NoopSocket : IWorkerWs
-    {
-        public Task SendTextAsync(string payload, CancellationToken cancellationToken = default) =>
-            Task.CompletedTask;
     }
 }
