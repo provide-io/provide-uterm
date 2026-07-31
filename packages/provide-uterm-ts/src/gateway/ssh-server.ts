@@ -17,7 +17,8 @@
  * to for real.
  */
 
-import { Server, type Server as SshServerType } from "ssh2";
+import ssh2 from "ssh2";
+import type { Server as SshServerType } from "ssh2";
 import { BIND_ALL, SSH_PORT } from "../defaults/index.ts";
 import { type SshProcess, SshStreamReader, SshStreamWriter } from "../transports/index.ts";
 import { getOrCreateHostKey } from "./host-key.ts";
@@ -29,6 +30,11 @@ import {
   validatePassword,
   validatePublicKey,
 } from "./ssh-policy.ts";
+
+// `ssh2` is CommonJS. Node's native ESM loader exposes its complete API on
+// the default export; named imports only appear to work to TypeScript because
+// the declaration package models the CommonJS properties as named exports.
+const { Server } = ssh2;
 
 /** What a session does with its two halves. */
 export type SshConnectionHandler = (reader: SshStreamReader, writer: SshStreamWriter) => Promise<void>;
