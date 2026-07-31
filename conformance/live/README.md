@@ -63,10 +63,12 @@ between runs — a clock, a generated id — is named by the scenario in a step'
 
 ## Capabilities, and never skipping silently
 
-A scenario may require capabilities (`"requires": ["hijack.rest"]`). A driver
-that lacks one reports `unsupported`, and the harness records the cell as
-unsupported rather than failing it — and prints it. A driver that is not built
-is printed too, with the reason.
+A scenario may require capabilities (`"requires": ["hijack.rest"]`). The
+harness checks the selected client's registered static capabilities and the
+running server's announced capabilities before launching the client, then
+validates the capabilities returned by the client as well. A missing capability
+produces an explicit `unsupported` cell rather than a silent skip. A driver that
+is not built is printed too, with the reason.
 
 Four green cells and sixteen green cells produce the same summary line in
 every report ever written. So the count, and every gap, is always printed.

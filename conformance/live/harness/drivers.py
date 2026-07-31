@@ -52,6 +52,7 @@ class DriverSpec:
     command: tuple[str, ...]
     cwd: Path | None = None
     env: dict[str, str] = field(default_factory=dict)
+    client_capabilities: tuple[str, ...] = ()
 
 
 @dataclass

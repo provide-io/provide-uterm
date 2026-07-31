@@ -38,6 +38,30 @@ class TestTheRealRegistry:
         assert [spec.language for spec in found.servers] == ["typescript"]
         assert found.gaps == ()
 
+    def test_each_client_registration_declares_its_static_capabilities(self) -> None:
+        specs = {registration.language: registration.build(REPO_ROOT) for registration in REGISTRY}
+
+        assert specs["python"].client_capabilities == (
+            "status.observed",
+            "hijack.ws",
+            "hijack.rest",
+            "fanout.rest.strict",
+        )
+        assert specs["go"].client_capabilities == (
+            "hijack.rest",
+            "sessions.rest",
+            "http.raw",
+            "auth.dev_token",
+            "status.observed",
+            "fanout.rest.strict",
+        )
+        assert specs["csharp"].client_capabilities == specs["go"].client_capabilities
+        assert specs["typescript"].client_capabilities == (
+            "hijack.rest",
+            "status.observed",
+            "fanout.rest.strict",
+        )
+
     def test_a_language_that_is_only_a_client_says_so_rather_than_vanishing(self, tmp_path: Path) -> None:
         # Written against a driver made up here rather than a real one: every
         # language in the repository now has both roles, and the case this

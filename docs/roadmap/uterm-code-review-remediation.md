@@ -26,7 +26,10 @@ Design: `docs/superpowers/specs/2026-07-31-code-review-remediation-design.md`
   advertised or the surface explicitly reports unsupported behavior.
 - [~] **FANOUT-005 (high): shared parity coverage.** Cross-language behavioral
   scenarios cover unknown IDs, revoked authorization, group grants, policy deny,
-  policy hold/release, and partial member failures.
+  policy hold/release, partial member failures, capture lifecycle, store safety,
+  and operation deadlines. The contract is
+  `spec/fanout_security_scenarios.json`; native adapters are executed and
+  compared by `scripts/run_fanout_security_scenarios.py`.
 
 ## C# WebSocket and connection lifecycle
 
@@ -122,7 +125,7 @@ Design: `docs/superpowers/specs/2026-07-31-code-review-remediation-design.md`
 | 2026-07-31 | C# fan-out | Full serial Release suite plus focused execution/server/config tests | 1,338 passed, 0 failed; Release build passed |
 | 2026-07-31 | TypeScript fan-out | Full TypeScript suite, typecheck, and Biome lint | 10,474 tests passed; typecheck and lint passed |
 | 2026-07-31 | Live fan-out strict admission | Python/Go/C# servers × Python/Go/C#/TypeScript clients | 12 of 12 cells passed; TypeScript server explicitly unadvertised |
-| 2026-07-31 | Fan-out coverage manifest | `uv run python scripts/validate_fanout_security_coverage.py`; focused validator tests | manifest valid; 7 tests passed; unsupported and unserved cells explicit |
+| 2026-07-31 | Historical fan-out coverage manifest (superseded) | `uv run python scripts/validate_fanout_security_coverage.py`; focused validator tests | Historical checkpoint only: the declaration/regex approach passed 7 tests, then independent review rejected it; it was replaced by the executable semantic fixture and runner |
 | 2026-07-31 | Fan-out independent review | Security, controller-invariant, fast-output, store-concurrency, timeout, and semantic-conformance review | rejected; FANOUT-001 through FANOUT-005 reopened pending corrected implementation and re-review |
 | 2026-07-31 | Live capability intersection | `uv run pytest -q tests/conformance/live/test_matrix.py` | 18 passed; required client/server capabilities enforced; TypeScript fan-out server explicit unsupported/unserved |
 | 2026-07-31 | Combined fan-out conformance checkpoint | `uv run pytest -q tests/conformance/live/test_matrix.py tests/conformance/test_fanout_security_coverage.py` | 22 passed, 1 failed in sibling-owned semantic runner; Go inherited invalid `go.work` and C# adapter had not yet produced observations |

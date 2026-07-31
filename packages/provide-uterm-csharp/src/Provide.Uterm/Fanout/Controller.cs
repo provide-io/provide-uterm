@@ -278,14 +278,28 @@ public sealed class Controller
         Group group, Result result, string data, string principal, int quiesceMs,
         OperationBudget budget, CancellationToken callerCancellation)
     {
-        var subscriptions = group.WorkerIds.Select(wid => _hub!.SubscribeOutput(wid)).ToArray();
+        var subscriptions = new IFanoutOutputSubscription?[group.WorkerIds.Count];
         try
         {
-            var sends = group.WorkerIds.Select(wid => ExecuteParallelSendAsync(
-                group, result, wid, data, principal, budget, callerCancellation)).ToArray();
+            for (var index = 0; index < group.WorkerIds.Count; index++)
+            {
+                try
+                {
+                    subscriptions[index] = _hub!.SubscribeOutput(group.WorkerIds[index]);
+                }
+                catch
+                {
+                    subscriptions[index] = null;
+                }
+            }
+
+            var sends = group.WorkerIds.Select((wid, index) => subscriptions[index] is null
+                ? Task.FromResult(false)
+                : ExecuteParallelSendAsync(
+                    group, result, wid, data, principal, budget, callerCancellation)).ToArray();
             var accepted = await Task.WhenAll(sends).ConfigureAwait(false);
             var collects = group.WorkerIds.Select((wid, index) => accepted[index]
-                ? ExecuteParallelCollectAsync(wid, subscriptions[index], quiesceMs, budget, callerCancellation)
+                ? ExecuteParallelCollectAsync(wid, subscriptions[index]!, quiesceMs, budget, callerCancellation)
                 : Task.FromResult(new SessionResult { WorkerId = wid, Ok = false })).ToArray();
             result.Results.AddRange(await Task.WhenAll(collects).ConfigureAwait(false));
             result.FailedSessions.AddRange(result.Results.Where(row => !row.Ok).Select(row => row.WorkerId));
@@ -294,6 +308,7 @@ public sealed class Controller
         {
             foreach (var subscription in subscriptions)
             {
+                if (subscription is null) continue;
                 await DisposeBoundedAsync(subscription, budget).ConfigureAwait(false);
             }
         }

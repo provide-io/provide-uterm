@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -149,17 +150,24 @@ class TestCapabilities:
 
     def test_fanout_requires_the_selected_client_capability(self, tmp_path: Path) -> None:
         scenario = self._fanout_scenario(tmp_path)
-        completed_without_fanout = _result("typescript")
-        completed_without_fanout["capabilities"] = ["status.observed"]
+        completed_with_fanout = _result("typescript")
+        completed_with_fanout["capabilities"] = ["status.observed", "fanout.rest.strict"]
         runner = _Runner(
-            {("python", "typescript"): completed_without_fanout},
+            {("python", "typescript"): completed_with_fanout},
             server_capabilities={"python": ("status.observed", "fanout.rest.strict")},
+        )
+        client = SimpleNamespace(
+            language="typescript",
+            command=("true",),
+            cwd=None,
+            env={},
+            client_capabilities=("status.observed",),
         )
 
         report = run_matrix(
             [scenario],
             servers=[_spec("python")],
-            clients=[_spec("typescript")],
+            clients=[client],
             runner=runner,
         )
 
@@ -167,6 +175,36 @@ class TestCapabilities:
         assert cell.status == "unsupported"
         assert "typescript client" in str(cell.detail)
         assert "fanout.rest.strict" in str(cell.detail)
+        assert runner.ran == []
+
+    def test_client_result_capabilities_are_still_validated_after_preflight(self, tmp_path: Path) -> None:
+        scenario = self._fanout_scenario(tmp_path)
+        completed_without_fanout = _result("typescript")
+        completed_without_fanout["capabilities"] = ["status.observed"]
+        runner = _Runner(
+            {("python", "typescript"): completed_without_fanout},
+            server_capabilities={"python": ("status.observed", "fanout.rest.strict")},
+        )
+        client = SimpleNamespace(
+            language="typescript",
+            command=("true",),
+            cwd=None,
+            env={},
+            client_capabilities=("status.observed", "fanout.rest.strict"),
+        )
+
+        report = run_matrix(
+            [scenario],
+            servers=[_spec("python")],
+            clients=[client],
+            runner=runner,
+        )
+
+        (cell,) = report.cells
+        assert cell.status == "unsupported"
+        assert "typescript client" in str(cell.detail)
+        assert "fanout.rest.strict" in str(cell.detail)
+        assert runner.ran == [("python", "typescript")]
 
 
 class TestVerdicts:
