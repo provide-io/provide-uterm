@@ -4,6 +4,7 @@
 //
 
 import { describe, expect, it } from "vitest";
+import type { AuthorizablePrincipal } from "../server/authorization.ts";
 import { FanOutController, type FanOutControllerHub, type FanOutGroup, fanOutGroup } from "./index.ts";
 
 const NOW = 1000;
@@ -16,10 +17,19 @@ class FakeHub implements FanOutControllerHub {
   readonly refusing = new Set<string>();
   readonly exploding = new Set<string>();
   readonly outputs = new Map<string, string>();
+  readonly immediateOutputs = new Map<string, string>();
+  readonly captureBuffers = new Map<string, string[]>();
+  readonly captureFailures = new Set<string>();
+  readonly closes = new Map<string, number>();
   onApprovalExpired: ((requestId: string) => void) | undefined;
 
   async sendWorker(workerId: string, message: Record<string, unknown>): Promise<boolean> {
     this.sent.push({ workerId, message });
+    const immediate = this.immediateOutputs.get(workerId);
+    if (immediate !== undefined) {
+      this.immediateOutputs.delete(workerId);
+      this.captureBuffers.get(workerId)?.push(immediate);
+    }
     return !this.refusing.has(workerId);
   }
 
@@ -38,13 +48,40 @@ class FakeHub implements FanOutControllerHub {
     }
     return { output: this.outputs.get(workerId) ?? "", elapsedMs: 7 };
   }
+
+  async openOutputCapture(workerId: string) {
+    if (this.captureFailures.has(workerId)) {
+      throw new Error("capture unavailable");
+    }
+    const buffer: string[] = [];
+    this.captureBuffers.set(workerId, buffer);
+    return {
+      collect: async () =>
+        buffer.length > 0 ? { output: buffer.join(""), elapsedMs: 7 } : this.collectOutput(workerId),
+      close: async () => {
+        this.closes.set(workerId, (this.closes.get(workerId) ?? 0) + 1);
+      },
+    };
+  }
+}
+
+function actor(subjectId: string, roles: string[] = ["admin"]): AuthorizablePrincipal {
+  return { subject_id: subjectId, roles: new Set(roles), scopes: new Set<string>() };
+}
+
+function security() {
+  return {
+    isGlobalAdmin: async (principal: AuthorizablePrincipal) => principal.roles.has("admin"),
+    resolveSession: async (workerId: string) => ({ workerId }),
+    canReadSession: async () => true,
+  };
 }
 
 /** A controller over a recording hub, with ids and time pinned. */
 function build() {
   const hub = new FakeHub();
   let counter = 0;
-  const controller = new FanOutController({ hub, now: () => NOW, newId: () => `id-${++counter}` });
+  const controller = new FanOutController({ hub, ...security(), now: () => NOW, newId: () => `id-${++counter}` });
   return { hub, controller };
 }
 
@@ -63,6 +100,73 @@ async function seed(
 }
 
 describe("FanOutController parallel send", () => {
+  it("fails closed for missing dependencies, string identity, and non-admin callers", async () => {
+    const hub = new FakeHub();
+    const missing = new FanOutController({ hub, now: () => NOW, newId: () => "missing" });
+    await seed(missing, ["w1"]);
+    const secured = build();
+    await seed(secured.controller, ["w1"]);
+
+    const results = [
+      await missing.send("g1", "uptime", actor("alice")),
+      await secured.controller.send("g1", "uptime", "alice" as unknown as AuthorizablePrincipal),
+      await secured.controller.send("g1", "uptime", actor("viewer", ["viewer"])),
+    ];
+
+    expect(results.every((result) => typeof result.error === "string")).toBe(true);
+    expect(hub.sent).toStrictEqual([]);
+    expect(secured.hub.sent).toStrictEqual([]);
+    expect(secured.hub.broadcasts).toStrictEqual([]);
+  });
+
+  it("captures output emitted synchronously inside every send", async () => {
+    const { hub, controller } = build();
+    await seed(controller, ["w1", "w2"]);
+    hub.immediateOutputs.set("w1", "immediate-w1");
+    hub.immediateOutputs.set("w2", "immediate-w2");
+
+    const result = await controller.send("g1", "uptime", actor("alice"));
+
+    expect(result.results.map((entry) => entry.outputDelta)).toStrictEqual(["immediate-w1", "immediate-w2"]);
+  });
+
+  it("does not notify or send to a member whose capture cannot open", async () => {
+    const { hub, controller } = build();
+    await seed(controller, ["w1", "w2"]);
+    hub.captureFailures.add("w1");
+
+    const result = await controller.send("g1", "uptime", actor("alice"));
+
+    expect(hub.sent.map((entry) => entry.workerId)).toStrictEqual(["w2"]);
+    expect(hub.broadcasts.map((entry) => entry.workerId)).toStrictEqual(["w2"]);
+    expect(result.failedSessions).toStrictEqual(["w1"]);
+  });
+
+  it("closes every prepared capture exactly once when sends are rejected", async () => {
+    const { hub, controller } = build();
+    await seed(controller, ["w1", "w2"]);
+    hub.refusing.add("w1");
+    hub.refusing.add("w2");
+
+    await controller.send("g1", "uptime", actor("alice"));
+
+    expect([...hub.closes.entries()]).toStrictEqual([
+      ["w1", 1],
+      ["w2", 1],
+    ]);
+  });
+
+  it("closes every prepared capture exactly once when a group repeats a member", async () => {
+    const { hub, controller } = build();
+    await seed(controller, ["w1", "w1"]);
+    hub.refusing.add("w1");
+
+    await controller.send("g1", "uptime", actor("alice"));
+
+    expect(hub.sent.map((entry) => entry.workerId)).toStrictEqual(["w1", "w1"]);
+    expect(hub.closes.get("w1")).toBe(2);
+  });
+
   it("never sends to a member whose current session authorization was revoked", async () => {
     const hub = new FakeHub();
     const readable = new Set(["w1"]);
@@ -70,12 +174,13 @@ describe("FanOutController parallel send", () => {
       hub,
       now: () => NOW,
       newId: () => "id-1",
+      isGlobalAdmin: async () => true,
       resolveSession: async (workerId) => ({ workerId }),
       canReadSession: async (_principal, definition) => readable.has((definition as { workerId: string }).workerId),
     });
     await seed(controller, ["w1", "w2"]);
 
-    const result = await controller.send("g1", "uptime", "alice");
+    const result = await controller.send("g1", "uptime", actor("alice"));
 
     expect(hub.sent.map((entry) => entry.workerId)).toStrictEqual(["w1"]);
     expect(result.failedSessions).toStrictEqual(["w2"]);
@@ -87,12 +192,13 @@ describe("FanOutController parallel send", () => {
       hub,
       now: () => NOW,
       newId: () => "id-1",
+      isGlobalAdmin: async () => true,
       resolveSession: async (workerId) => ({ workerId }),
       canReadSession: async () => false,
     });
     await seed(controller, ["w1"], { grants: ["bob"] });
 
-    const result = await controller.send("g1", "uptime", "bob");
+    const result = await controller.send("g1", "uptime", actor("bob"));
 
     expect(hub.sent).toStrictEqual([]);
     expect(hub.broadcasts).toStrictEqual([]);
@@ -105,7 +211,7 @@ describe("FanOutController parallel send", () => {
     hub.outputs.set("w1", "same");
     hub.outputs.set("w2", "same");
 
-    const result = await controller.send("g1", "uptime", "alice");
+    const result = await controller.send("g1", "uptime", actor("alice"));
     expect(hub.sent.map((entry) => entry.workerId)).toStrictEqual(["w1", "w2"]);
     expect(result.results.map((entry) => [entry.workerId, entry.ok])).toStrictEqual([
       ["w1", true],
@@ -117,7 +223,7 @@ describe("FanOutController parallel send", () => {
   it("carries the command in an input frame", async () => {
     const { hub, controller } = build();
     await seed(controller, ["w1"]);
-    await controller.send("g1", "uptime", "alice");
+    await controller.send("g1", "uptime", actor("alice"));
     expect(hub.sent[0]?.message).toStrictEqual({ type: "input", data: "uptime", ts: NOW });
   });
 
@@ -126,7 +232,7 @@ describe("FanOutController parallel send", () => {
     // an operator sees keystrokes they did not type with no explanation.
     const { hub, controller } = build();
     await seed(controller, ["w1", "w2"]);
-    const result = await controller.send("g1", "uptime", "alice");
+    const result = await controller.send("g1", "uptime", actor("alice"));
     expect(hub.broadcasts.map((entry) => entry.workerId)).toStrictEqual(["w1", "w2"]);
     expect(hub.broadcasts[0]?.message).toStrictEqual({
       type: "fanout_input",
@@ -141,7 +247,7 @@ describe("FanOutController parallel send", () => {
     // The other order lets output arrive before anything has explained why.
     const { hub, controller } = build();
     await seed(controller, ["w1"]);
-    await controller.send("g1", "uptime", "alice");
+    await controller.send("g1", "uptime", actor("alice"));
     expect(hub.broadcasts).toHaveLength(1);
     expect(hub.sent).toHaveLength(1);
   });
@@ -150,7 +256,7 @@ describe("FanOutController parallel send", () => {
     const { hub, controller } = build();
     await seed(controller, ["w1", "w2"]);
     hub.refusing.add("w1");
-    const result = await controller.send("g1", "uptime", "alice");
+    const result = await controller.send("g1", "uptime", actor("alice"));
     expect(result.failedSessions).toStrictEqual(["w1"]);
     expect(result.results[0]).toStrictEqual({
       workerId: "w1",
@@ -167,7 +273,7 @@ describe("FanOutController parallel send", () => {
     const { hub, controller } = build();
     await seed(controller, ["w1", "w2"]);
     hub.refusing.add("w1");
-    await controller.send("g1", "uptime", "alice");
+    await controller.send("g1", "uptime", actor("alice"));
     expect(hub.collected).toStrictEqual(["w2"]);
   });
 
@@ -175,9 +281,10 @@ describe("FanOutController parallel send", () => {
     const { hub, controller } = build();
     await seed(controller, ["w1", "w2"]);
     hub.exploding.add("w1");
-    const result = await controller.send("g1", "uptime", "alice");
+    const result = await controller.send("g1", "uptime", actor("alice"));
     expect(result.failedSessions).toStrictEqual(["w1"]);
     expect(result.results[1]?.ok).toBe(true);
+    expect([...hub.closes.values()]).toStrictEqual([1, 1]);
   });
 
   it("marks a session whose send threw as failed", async () => {
@@ -192,7 +299,7 @@ describe("FanOutController parallel send", () => {
       }
       return original(workerId, message);
     };
-    const result = await controller.send("g1", "uptime", "alice");
+    const result = await controller.send("g1", "uptime", actor("alice"));
     expect(result.failedSessions).toStrictEqual(["w1"]);
     expect(result.results[1]?.ok).toBe(true);
   });
@@ -205,7 +312,7 @@ describe("FanOutController parallel send", () => {
     hub.broadcast = async () => {
       throw new Error("observer gone");
     };
-    const result = await controller.send("g1", "uptime", "alice");
+    const result = await controller.send("g1", "uptime", actor("alice"));
     expect(result.results[0]?.ok).toBe(true);
   });
 
@@ -215,7 +322,7 @@ describe("FanOutController parallel send", () => {
     const { hub, controller } = build();
     await seed(controller, ["w1", "w2", "w3"]);
     hub.refusing.add("w2");
-    const result = await controller.send("g1", "uptime", "alice");
+    const result = await controller.send("g1", "uptime", actor("alice"));
     expect(result.results.map((entry) => entry.workerId)).toStrictEqual(["w1", "w2", "w3"]);
   });
 
@@ -225,7 +332,7 @@ describe("FanOutController parallel send", () => {
     hub.outputs.set("w1", "all good here");
     hub.outputs.set("w2", "all good here");
     hub.outputs.set("w3", "catastrophic failure");
-    const result = await controller.send("g1", "check", "alice");
+    const result = await controller.send("g1", "check", actor("alice"));
     expect(result.divergentSessions).toStrictEqual(["w3"]);
     expect(result.results.map((entry) => entry.divergent)).toStrictEqual([false, false, true]);
   });
@@ -238,7 +345,7 @@ describe("FanOutController parallel send", () => {
     hub.refusing.add("w3");
     hub.outputs.set("w1", "identical");
     hub.outputs.set("w2", "identical");
-    const result = await controller.send("g1", "check", "alice");
+    const result = await controller.send("g1", "check", actor("alice"));
     expect(result.divergentSessions).toStrictEqual([]);
   });
 
@@ -246,7 +353,7 @@ describe("FanOutController parallel send", () => {
     const { hub, controller } = build();
     await seed(controller, ["w1"]);
     hub.refusing.add("w1");
-    const result = await controller.send("g1", "check", "alice");
+    const result = await controller.send("g1", "check", actor("alice"));
     expect(result.divergentSessions).toStrictEqual([]);
   });
 
@@ -256,7 +363,7 @@ describe("FanOutController parallel send", () => {
     hub.outputs.set("w1", "result 1");
     hub.outputs.set("w2", "result 2");
     hub.outputs.set("w3", "result 3");
-    const result = await controller.send("g1", "check", "alice");
+    const result = await controller.send("g1", "check", actor("alice"));
     expect(result.divergentSessions).toStrictEqual(["w1", "w2", "w3"]);
   });
 
@@ -270,11 +377,15 @@ describe("FanOutController parallel send", () => {
         broadcast: async () => {},
         appendEvent: async () => {},
         addApproval: () => {},
-        collectOutput: async (_workerId, options) => {
-          seen = options;
-          return { output: "", elapsedMs: 0 };
-        },
+        openOutputCapture: async () => ({
+          collect: async (options) => {
+            seen = options;
+            return { output: "", elapsedMs: 0 };
+          },
+          close: async () => {},
+        }),
       },
+      ...security(),
       now: () => NOW,
       newId: () => "id",
     });
@@ -282,8 +393,8 @@ describe("FanOutController parallel send", () => {
       { ...fanOutGroup({ groupId: "g1", name: "f", workerIds: ["w1"], createdBy: "alice", createdAt: NOW }) },
       "alice",
     );
-    await spy.send("g1", "x", "alice", { quiesceMs: 11, maxResponseMs: 22 });
-    expect(seen).toStrictEqual({ quiesceMs: 11, maxMs: 22 });
+    await spy.send("g1", "x", actor("alice"), { quiesceMs: 11, maxResponseMs: 22 });
+    expect(seen).toMatchObject({ quiesceMs: 11, maxMs: 22 });
   });
 
   it("falls back to the group's timings", async () => {
@@ -294,11 +405,15 @@ describe("FanOutController parallel send", () => {
         broadcast: async () => {},
         appendEvent: async () => {},
         addApproval: () => {},
-        collectOutput: async (_workerId, options) => {
-          seen = options;
-          return { output: "", elapsedMs: 0 };
-        },
+        openOutputCapture: async () => ({
+          collect: async (options) => {
+            seen = options;
+            return { output: "", elapsedMs: 0 };
+          },
+          close: async () => {},
+        }),
       },
+      ...security(),
       now: () => NOW,
       newId: () => "id",
     });
@@ -310,12 +425,23 @@ describe("FanOutController parallel send", () => {
       },
       "alice",
     );
-    await controller.send("g1", "x", "alice");
-    expect(seen).toStrictEqual({ quiesceMs: 33, maxMs: 44 });
+    await controller.send("g1", "x", actor("alice"));
+    expect(seen).toMatchObject({ quiesceMs: 33, maxMs: 44 });
   });
 });
 
 describe("FanOutController sequential send", () => {
+  it("captures synchronous output one member at a time", async () => {
+    const { hub, controller } = build();
+    await seed(controller, ["w1", "w2"], { mode: "sequential" });
+    hub.immediateOutputs.set("w1", "immediate-w1");
+    hub.immediateOutputs.set("w2", "immediate-w2");
+
+    const result = await controller.send("g1", "restart", actor("alice"));
+
+    expect(result.results.map((entry) => entry.outputDelta)).toStrictEqual(["immediate-w1", "immediate-w2"]);
+    expect([...hub.closes.values()]).toStrictEqual([1, 1]);
+  });
   it("waits for each session before starting the next", async () => {
     // The point of the mode: a rolling restart must not take every host down
     // at once.
@@ -332,7 +458,7 @@ describe("FanOutController sequential send", () => {
       order.push(`send ${workerId}`);
       return originalSend(workerId, message);
     };
-    await controller.send("g1", "restart", "alice");
+    await controller.send("g1", "restart", actor("alice"));
     expect(order).toStrictEqual(["send w1", "collect w1", "send w2", "collect w2"]);
   });
 
@@ -346,7 +472,7 @@ describe("FanOutController sequential send", () => {
       errorPattern: "FAILED",
     });
     hub.outputs.set("w1", "deploy FAILED");
-    const result = await controller.send("g1", "deploy", "alice");
+    const result = await controller.send("g1", "deploy", actor("alice"));
     expect(hub.sent.map((entry) => entry.workerId)).toStrictEqual(["w1"]);
     expect(result.failedSessions).toStrictEqual(["w2", "w3"]);
     expect(result.results[0]?.ok).toBe(true);
@@ -356,7 +482,7 @@ describe("FanOutController sequential send", () => {
     const { hub, controller } = build();
     await seed(controller, ["w1", "w2"], { mode: "sequential", stopOnFirstError: true, errorPattern: "FAILED" });
     hub.outputs.set("w1", "deploy ok");
-    await controller.send("g1", "deploy", "alice");
+    await controller.send("g1", "deploy", actor("alice"));
     expect(hub.sent.map((entry) => entry.workerId)).toStrictEqual(["w1", "w2"]);
   });
 
@@ -365,7 +491,7 @@ describe("FanOutController sequential send", () => {
     const { hub, controller } = build();
     await seed(controller, ["w1", "w2"], { mode: "sequential", errorPattern: "FAILED" });
     hub.outputs.set("w1", "deploy FAILED");
-    await controller.send("g1", "deploy", "alice");
+    await controller.send("g1", "deploy", actor("alice"));
     expect(hub.sent.map((entry) => entry.workerId)).toStrictEqual(["w1", "w2"]);
   });
 
@@ -373,7 +499,7 @@ describe("FanOutController sequential send", () => {
     const { hub, controller } = build();
     await seed(controller, ["w1", "w2"], { mode: "sequential", stopOnFirstError: true });
     hub.outputs.set("w1", "anything");
-    await controller.send("g1", "deploy", "alice");
+    await controller.send("g1", "deploy", actor("alice"));
     expect(hub.sent.map((entry) => entry.workerId)).toStrictEqual(["w1", "w2"]);
   });
 
@@ -381,7 +507,7 @@ describe("FanOutController sequential send", () => {
     const { hub, controller } = build();
     await seed(controller, ["w1", "w2"], { mode: "sequential" });
     hub.refusing.add("w1");
-    const result = await controller.send("g1", "x", "alice");
+    const result = await controller.send("g1", "x", actor("alice"));
     expect(result.failedSessions).toStrictEqual(["w1"]);
     expect(hub.collected).toStrictEqual(["w2"]);
   });
@@ -392,7 +518,7 @@ describe("FanOutController sequential send", () => {
     hub.outputs.set("w1", "steady state");
     hub.outputs.set("w2", "steady state");
     hub.outputs.set("w3", "wildly different output");
-    const result = await controller.send("g1", "check", "alice");
+    const result = await controller.send("g1", "check", actor("alice"));
     expect(result.divergentSessions).toStrictEqual(["w3"]);
   });
 
@@ -401,7 +527,7 @@ describe("FanOutController sequential send", () => {
     // fans out rather than failing closed.
     const { hub, controller } = build();
     await seed(controller, ["w1", "w2"], { mode: "something-else" });
-    await controller.send("g1", "x", "alice");
+    await controller.send("g1", "x", actor("alice"));
     expect(hub.sent.map((entry) => entry.workerId)).toStrictEqual(["w1", "w2"]);
   });
 });

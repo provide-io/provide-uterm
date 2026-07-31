@@ -126,9 +126,9 @@ describe("fanOutResult defaults", () => {
       divergentSessions: [],
       failedSessions: [],
     });
-    expect(built.error).toBe(golden.result_defaults.error ?? undefined);
+    expect(built.error).toBe(golden.result_defaults.error ?? null);
     expect(built.approvalRequired).toBe(golden.result_defaults.approval_required);
-    expect(built.approvalId).toBe(golden.result_defaults.approval_id ?? undefined);
+    expect(built.approvalId).toBe(golden.result_defaults.approval_id ?? null);
   });
 });
 

@@ -4,6 +4,7 @@
 //
 
 import { describe, expect, it } from "vitest";
+import type { AuthorizablePrincipal } from "../server/authorization.ts";
 import { loadGolden } from "../testing/golden.ts";
 import {
   createFanoutRoutes,
@@ -52,6 +53,7 @@ class FakeController implements FanoutRoutesController {
   readonly groups = new Map<string, FanOutGroup>();
   readonly calls: unknown[][] = [];
   createError: unknown;
+  sendResult: FanOutResult | undefined;
 
   async createGroup(group: FanOutGroup, principal: string): Promise<string> {
     this.calls.push(["create_group", group.groupId, principal]);
@@ -84,26 +86,24 @@ class FakeController implements FanoutRoutesController {
   async send(
     groupId: string,
     data: string,
-    principal: string,
+    principal: AuthorizablePrincipal,
     options: {
       quiesceMs?: number | undefined;
       maxResponseMs?: number | undefined;
-      memberWorkerIds?: string[] | undefined;
-      refusedWorkerIds?: string[] | undefined;
     },
   ): Promise<FanOutResult> {
     const call: unknown[] = [
       "send",
       groupId,
       data,
-      principal,
+      principal.subject_id,
       options.quiesceMs ?? null,
       options.maxResponseMs ?? null,
     ];
-    if (options.memberWorkerIds !== undefined || options.refusedWorkerIds !== undefined) {
-      call.push(options.memberWorkerIds ?? null, options.refusedWorkerIds ?? null);
-    }
     this.calls.push(call);
+    if (this.sendResult !== undefined) {
+      return this.sendResult;
+    }
     return {
       groupId,
       sendId: "send-1",
@@ -115,7 +115,9 @@ class FakeController implements FanoutRoutesController {
       ],
       divergentSessions: ["w2"],
       failedSessions: ["w2"],
+      error: null,
       approvalRequired: false,
+      approvalId: null,
     };
   }
 }
@@ -135,6 +137,8 @@ function harness(
       getDefinition: async (workerId: string) => (known.has(workerId) ? { workerId } : undefined),
     },
     authz: {
+      isAdmin: async (principal) =>
+        principal.roles.has("admin") && (principal.admin_session_scope ?? null) === null,
       canReadSession: async (_principal, definition) => allowed.has((definition as { workerId: string }).workerId),
     },
     ...(options.allowUnknownMembers === undefined
@@ -152,7 +156,10 @@ function harness(
 
 /** A request from `principal`, carrying `body`. */
 function request(principal: string, body?: unknown) {
-  return { principal: { subjectId: principal }, ...(body === undefined ? {} : { body }) };
+  return {
+    principal: { subject_id: principal, roles: new Set(["admin"]), scopes: new Set<string>() },
+    ...(body === undefined ? {} : { body }),
+  };
 }
 
 /** Replace the generated identifier so a response can be compared. */
@@ -167,6 +174,75 @@ describe("the route table", () => {
   });
 });
 
+describe("the global-admin boundary", () => {
+  it("rejects every route before parsing or group lookup", async () => {
+    const controller = new FakeController();
+    controller.groups.set(
+      "g1",
+      fanOutGroup({ groupId: "g1", name: "fleet", workerIds: [], createdBy: PRINCIPAL, createdAt: 1 }),
+    );
+    const routes = createFanoutRoutes({
+      controller,
+      registry: { getDefinition: async () => undefined },
+      authz: {
+        canReadSession: async () => true,
+        isAdmin: async () => false,
+      } as FanoutRoutesOptions["authz"],
+    });
+    const viewer = {
+      subjectId: PRINCIPAL,
+      subject_id: PRINCIPAL,
+      roles: new Set(["viewer"]),
+      scopes: new Set<string>(),
+      claims: {},
+      tenant_id: null,
+    };
+    const request = { principal: viewer, body: { data: "id", grantee: OTHER } };
+
+    const responses = [
+      await routes.createGroup(request),
+      await routes.listGroups(request),
+      await routes.deleteGroup(request, "g1"),
+      await routes.sendToGroup(request, "g1"),
+      await routes.grantAccess(request, "g1"),
+    ];
+
+    expect(responses.map((response) => response.status)).toStrictEqual([403, 403, 403, 403, 403]);
+    expect(controller.calls).toStrictEqual([]);
+  });
+
+  it.each([
+    [undefined, 401],
+    [{ subject_id: "viewer", roles: new Set(["viewer"]), scopes: new Set<string>() }, 403],
+    [{ subject_id: "operator", roles: new Set(["operator"]), scopes: new Set<string>() }, 403],
+    [
+      {
+        subject_id: "scoped-admin",
+        roles: new Set(["admin"]),
+        scopes: new Set<string>(),
+        admin_session_scope: "w1",
+      },
+      403,
+    ],
+  ])("rejects %j before an invalid body is parsed", async (principal, expected) => {
+    const controller = new FakeController();
+    const routes = createFanoutRoutes({
+      controller,
+      registry: { getDefinition: async () => undefined },
+      authz: {
+        isAdmin: async (candidate) =>
+          candidate.roles.has("admin") && (candidate.admin_session_scope ?? null) === null,
+        canReadSession: async () => true,
+      },
+    });
+
+    const response = await routes.createGroup({ principal, body: ["invalid"] });
+
+    expect(response.status).toBe(expected);
+    expect(controller.calls).toStrictEqual([]);
+  });
+});
+
 describe("when the feature is off", () => {
   it("answers 501 on every route", async () => {
     // A 501 rather than a 500 is the difference between "not built" and
@@ -174,7 +250,7 @@ describe("when the feature is off", () => {
     const { routes } = harness({ controller: undefined as unknown as FanoutRoutesController });
     const off = createFanoutRoutes({
       registry: { getDefinition: async () => undefined },
-      authz: { canReadSession: async () => true },
+      authz: { isAdmin: async () => true, canReadSession: async () => true },
     });
     void routes;
     const responses = [
@@ -459,14 +535,44 @@ describe("sending to a group", () => {
     expect({ ...(response.body as Record<string, unknown>), group_id: "<uuid>" }).toStrictEqual({
       ...golden.send.body,
       group_id: "<uuid>",
+      error: null,
+      approval_required: false,
+      approval_id: null,
       command: "uptime\r",
+    });
+  });
+
+  it.each([
+    ["deny", "blocked", false, null],
+    ["hold", null, true, "approval-1"],
+  ])("serializes explicit policy fields for %s", async (_kind, error, approvalRequired, approvalId) => {
+    const { routes, controller } = withGroup();
+    controller.sendResult = {
+      groupId: "g1",
+      sendId: approvalId ?? "send-1",
+      command: "id",
+      sentAt: 1000,
+      results: [],
+      divergentSessions: [],
+      failedSessions: [],
+      error,
+      approvalRequired,
+      approvalId,
+    };
+
+    const response = await routes.sendToGroup(request(PRINCIPAL, { data: "id" }), "g1");
+
+    expect(response.body).toMatchObject({
+      error,
+      approval_required: approvalRequired,
+      approval_id: approvalId,
     });
   });
 
   it("passes the caller's timing overrides through", async () => {
     const { routes, controller } = withGroup();
     await routes.sendToGroup(request(PRINCIPAL, { data: "x", quiesce_ms: 50, max_response_ms: 900 }), "g1");
-    expect(controller.calls.at(-1)).toStrictEqual(["send", "g1", "x", PRINCIPAL, 50, 900, ["w1", "w2"], []]);
+    expect(controller.calls.at(-1)).toStrictEqual(["send", "g1", "x", PRINCIPAL, 50, 900]);
   });
 
   it("leaves the timings unset when the caller gives none", async () => {
@@ -480,12 +586,10 @@ describe("sending to a group", () => {
       PRINCIPAL,
       golden.send_defaults_call[4],
       golden.send_defaults_call[5],
-      ["w1", "w2"],
-      [],
     ]);
   });
 
-  it("re-resolves and authorizes every member before dispatch", async () => {
+  it("leaves current member authorization to the controller", async () => {
     const harnessed = harness({ readable: ["w1"] });
     harnessed.controller.groups.set(
       "g1",
@@ -507,8 +611,6 @@ describe("sending to a group", () => {
       PRINCIPAL,
       null,
       null,
-      ["w1"],
-      ["secret"],
     ]);
   });
 });
@@ -611,7 +713,7 @@ describe("the audit trail", () => {
     const routes = createFanoutRoutes({
       controller: new FakeController(),
       registry: { getDefinition: async () => undefined },
-      authz: { canReadSession: async () => true },
+      authz: { isAdmin: async () => true, canReadSession: async () => true },
     });
     expect((await routes.createGroup(request(PRINCIPAL, {}))).status).toBe(200);
   });

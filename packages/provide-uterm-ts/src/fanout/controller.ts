@@ -15,6 +15,8 @@
  */
 
 import { compileExpectRegex } from "../hub/index.ts";
+import type { AuthorizablePrincipal } from "../server/authorization.ts";
+import type { CollectedOutput, OutputCapture } from "./collector.ts";
 import { computeDivergence } from "./divergence.ts";
 import {
   type FanOutGroup,
@@ -55,11 +57,8 @@ export interface FanOutControllerHub {
   appendEvent(workerId: string, eventType: string, data?: Record<string, unknown>): Promise<void>;
   /** Register a command held for approval. */
   addApproval(request: Record<string, unknown>): void;
-  /** Gather what a worker printed after a send. */
-  collectOutput(
-    workerId: string,
-    options: { quiesceMs: number; maxMs: number },
-  ): Promise<{ output: string; elapsedMs: number }>;
+  /** Open output capture before a worker can emit anything. */
+  openOutputCapture?(workerId: string): Promise<OutputCapture | undefined>;
   /** Set by the controller so it hears about approvals that lapse. */
   onApprovalExpired?: ((requestId: string) => void) | undefined;
 }
@@ -80,8 +79,10 @@ export interface FanOutControllerOptions {
   newId?: () => string;
   /** Resolve the current definition of a group member before delivery. */
   resolveSession?: (workerId: string) => Promise<unknown | undefined>;
+  /** Decide whether the full principal is a global administrator. */
+  isGlobalAdmin?: (principal: AuthorizablePrincipal) => Promise<boolean>;
   /** Check current session read access for a principal. */
-  canReadSession?: (principal: string, definition: unknown) => Promise<boolean>;
+  canReadSession?: (principal: AuthorizablePrincipal, definition: unknown) => Promise<boolean>;
 }
 
 /** Per-send overrides for the group's timings. */
@@ -90,17 +91,13 @@ export interface SendOptions {
   quiesceMs?: number;
   /** Hard cap on how long to wait for any one session. */
   maxResponseMs?: number;
-  /** Route-authorized members. Internal route/controller integration option. */
-  memberWorkerIds?: string[];
-  /** Members refused by current route authorization. */
-  refusedWorkerIds?: string[];
 }
 
 /** A command held awaiting approval. */
 interface PendingApproval {
   groupId: string;
   command: string;
-  principal: string;
+  principal: AuthorizablePrincipal;
   quiesceMs: number | undefined;
   maxResponseMs: number | undefined;
 }
@@ -120,7 +117,8 @@ export class FanOutController {
   readonly #now: () => number;
   readonly #newId: () => string;
   readonly #resolveSession: ((workerId: string) => Promise<unknown | undefined>) | undefined;
-  readonly #canReadSession: ((principal: string, definition: unknown) => Promise<boolean>) | undefined;
+  readonly #isGlobalAdmin: ((principal: AuthorizablePrincipal) => Promise<boolean>) | undefined;
+  readonly #canReadSession: ((principal: AuthorizablePrincipal, definition: unknown) => Promise<boolean>) | undefined;
   readonly #pending = new Map<string, PendingApproval>();
 
   constructor(options: FanOutControllerOptions) {
@@ -131,6 +129,7 @@ export class FanOutController {
     this.#now = options.now ?? (() => Date.now() / 1000);
     this.#newId = options.newId ?? (() => crypto.randomUUID().replaceAll("-", ""));
     this.#resolveSession = options.resolveSession;
+    this.#isGlobalAdmin = options.isGlobalAdmin;
     this.#canReadSession = options.canReadSession;
     // A held command that is never decided would otherwise sit in memory for
     // the life of the process, and stay releasable long after its window.
@@ -203,13 +202,19 @@ export class FanOutController {
    * A caller who may not see the group gets an empty result rather than an
    * error: the shape of the answer should not reveal whether it exists.
    */
-  async send(groupId: string, data: string, principal: string, options: SendOptions = {}): Promise<FanOutResult> {
-    const group = await this.#authorized(groupId, principal);
-    if (group === undefined) {
-      return this.#emptyResult(groupId, data);
+  async send(
+    groupId: string,
+    data: string,
+    principal: AuthorizablePrincipal | undefined,
+    options: SendOptions = {},
+  ): Promise<FanOutResult> {
+    const authorized = await this.#authorizedMembers(groupId, data, principal);
+    if ("error" in authorized) {
+      return authorized.error;
     }
+    const { group, dispatchGroup, refusedWorkerIds, principal: actor } = authorized;
 
-    const decision = await this.#decide(data, groupId, principal);
+    const decision = await this.#decide(data, groupId, actor);
     if (decision.action === "deny") {
       return {
         ...this.#emptyResult(groupId, data),
@@ -217,10 +222,9 @@ export class FanOutController {
       };
     }
     if (decision.action === "hold") {
-      return this.#hold(group, data, principal, options);
+      return this.#hold(group, data, actor, options);
     }
-    const authorized = await this.#authorizedMembers(group, principal, options);
-    return this.#dispatch(group, data, principal, { ...options, ...authorized });
+    return this.#dispatch(group, dispatchGroup, refusedWorkerIds, data, actor, options);
   }
 
   /**
@@ -237,16 +241,22 @@ export class FanOutController {
       return undefined;
     }
     this.#pending.delete(requestId);
-    const group = await this.#authorized(pending.groupId, pending.principal);
-    if (group === undefined) {
-      return undefined;
+    const authorized = await this.#authorizedMembers(pending.groupId, pending.command, pending.principal);
+    if ("error" in authorized) {
+      return authorized.error;
     }
     const options: SendOptions = {
       ...(pending.quiesceMs === undefined ? {} : { quiesceMs: pending.quiesceMs }),
       ...(pending.maxResponseMs === undefined ? {} : { maxResponseMs: pending.maxResponseMs }),
     };
-    const authorized = await this.#authorizedMembers(group, pending.principal, options);
-    return this.#dispatch(group, pending.command, pending.principal, { ...options, ...authorized });
+    return this.#dispatch(
+      authorized.group,
+      authorized.dispatchGroup,
+      authorized.refusedWorkerIds,
+      pending.command,
+      pending.principal,
+      options,
+    );
   }
 
   /** The group, if `principal` created it or was granted it. */
@@ -258,41 +268,51 @@ export class FanOutController {
     return group.createdBy === principal || group.grants.includes(principal) ? group : undefined;
   }
 
-  async #authorizedMembers(
-    group: FanOutGroup,
-    principal: string,
-    options: SendOptions,
-  ): Promise<Pick<SendOptions, "memberWorkerIds" | "refusedWorkerIds">> {
-    if (this.#resolveSession === undefined || this.#canReadSession === undefined) {
-      return {
-        memberWorkerIds: options.memberWorkerIds ?? [...group.workerIds],
-        refusedWorkerIds: options.refusedWorkerIds ?? [],
-      };
-    }
-    const routeAllowed = new Set(options.memberWorkerIds ?? group.workerIds);
-    const refused = new Set(options.refusedWorkerIds ?? []);
-    const allowed: string[] = [];
-    for (const workerId of group.workerIds) {
-      if (!routeAllowed.has(workerId)) {
-        refused.add(workerId);
-        continue;
+  async #authorizedMembers(groupId: string, data: string, principal: AuthorizablePrincipal | undefined): Promise<
+    | {
+        group: FanOutGroup;
+        dispatchGroup: FanOutGroup;
+        refusedWorkerIds: string[];
+        principal: AuthorizablePrincipal;
       }
+    | { error: FanOutResult }
+  > {
+    if (principal === undefined || typeof principal !== "object" || typeof principal.subject_id !== "string") {
+      return { error: this.#errorResult(groupId, data, "authenticated principal required") };
+    }
+    if (this.#isGlobalAdmin === undefined || this.#resolveSession === undefined || this.#canReadSession === undefined) {
+      return { error: this.#errorResult(groupId, data, "fan-out authorization is unavailable") };
+    }
+    try {
+      if (!(await this.#isGlobalAdmin(principal))) {
+        return { error: this.#errorResult(groupId, data, "global admin role required") };
+      }
+    } catch {
+      return { error: this.#errorResult(groupId, data, "fan-out authorization failed") };
+    }
+    const group = await this.#store.get(groupId);
+    if (group === undefined) {
+      return { error: this.#errorResult(groupId, data, "fan-out group not found") };
+    }
+    const allowed: string[] = [];
+    const refused: string[] = [];
+    for (const workerId of group.workerIds) {
       try {
         const definition = await this.#resolveSession(workerId);
         if (definition !== undefined && (await this.#canReadSession(principal, definition))) {
           allowed.push(workerId);
         } else {
-          refused.add(workerId);
+          refused.push(workerId);
         }
       } catch {
-        refused.add(workerId);
+        refused.push(workerId);
       }
     }
-    return { memberWorkerIds: allowed, refusedWorkerIds: [...refused] };
+    return { group, dispatchGroup: { ...group, workerIds: allowed }, refusedWorkerIds: refused, principal };
   }
 
   /** Ask the policy gate, defaulting to allow when none is configured. */
-  async #decide(data: string, groupId: string, principal: string): Promise<FanOutPolicyDecision> {
+  async #decide(data: string, groupId: string, principal: AuthorizablePrincipal): Promise<FanOutPolicyDecision> {
     if (this.#policyGate === undefined) {
       return { action: "allow" };
     }
@@ -300,8 +320,8 @@ export class FanOutController {
       data,
       {
         worker_id: `group:${groupId}`,
-        client_id: principal,
-        role: "admin",
+        client_id: principal.subject_id,
+        role: this.#strongestRole(principal),
         action: "fanout_send",
         metadata: { is_fanout: true, group_id: groupId },
       },
@@ -310,7 +330,12 @@ export class FanOutController {
   }
 
   /** Park a command for approval and audit that it was held. */
-  async #hold(group: FanOutGroup, data: string, principal: string, options: SendOptions): Promise<FanOutResult> {
+  async #hold(
+    group: FanOutGroup,
+    data: string,
+    principal: AuthorizablePrincipal,
+    options: SendOptions,
+  ): Promise<FanOutResult> {
     const requestId = this.#newId();
     this.#pending.set(requestId, {
       groupId: group.groupId,
@@ -324,7 +349,7 @@ export class FanOutController {
     this.#hub.addApproval({
       id: requestId,
       worker_id: `group:${group.groupId}`,
-      submitter_id: principal,
+      submitter_id: principal.subject_id,
       command: data,
       status: "pending",
       created_at: now,
@@ -340,7 +365,7 @@ export class FanOutController {
       group_id: group.groupId,
       command: data.slice(0, AUDIT_COMMAND_CHARS),
       request_id: requestId,
-      principal,
+      principal: principal.subject_id,
     });
 
     return {
@@ -351,19 +376,25 @@ export class FanOutController {
   }
 
   /** Run the send in whichever mode the group asks for. */
-  async #dispatch(group: FanOutGroup, data: string, principal: string, options: SendOptions): Promise<FanOutResult> {
+  async #dispatch(
+    group: FanOutGroup,
+    dispatchGroup: FanOutGroup,
+    refusedWorkerIds: string[],
+    data: string,
+    principal: AuthorizablePrincipal,
+    options: SendOptions,
+  ): Promise<FanOutResult> {
     const timings = {
       quiesceMs: options.quiesceMs ?? group.quiesceMs,
       maxMs: options.maxResponseMs ?? group.maxResponseMs,
     };
     // Compared against the literal, matching the reference: an unrecognised
     // mode fans out rather than failing closed.
-    const dispatchGroup = { ...group, workerIds: options.memberWorkerIds ?? [...group.workerIds] };
     const result =
       group.mode === "sequential"
-        ? await this.#sendSequential(dispatchGroup, data, principal, timings)
-        : await this.#sendParallel(dispatchGroup, data, principal, timings);
-    for (const workerId of options.refusedWorkerIds ?? []) {
+        ? await this.#sendSequential(dispatchGroup, data, principal.subject_id, timings)
+        : await this.#sendParallel(dispatchGroup, data, principal.subject_id, timings);
+    for (const workerId of refusedWorkerIds) {
       if (!result.failedSessions.includes(workerId)) {
         result.results.push(this.#failedRow(workerId));
         result.failedSessions.push(workerId);
@@ -383,6 +414,19 @@ export class FanOutController {
       divergentSessions: [],
       failedSessions: [],
     });
+  }
+
+  #errorResult(groupId: string, data: string, error: string): FanOutResult {
+    return { ...this.#emptyResult(groupId, data), error };
+  }
+
+  #strongestRole(principal: AuthorizablePrincipal): "admin" | "operator" | "viewer" {
+    for (const role of ["admin", "operator", "viewer"] as const) {
+      if (principal.roles.has(role)) {
+        return role;
+      }
+    }
+    return "viewer";
   }
 
   /**
@@ -421,44 +465,68 @@ export class FanOutController {
   ): Promise<FanOutResult> {
     const sendId = this.#newId();
     const sentAt = this.#now();
-    await this.#announce(group, data, sendId, principal);
-
     const frame = { type: "input", data, ts: sentAt };
-    const accepted = await Promise.all(
-      group.workerIds.map(async (workerId) => {
+    const captures: Array<OutputCapture | undefined> = [];
+    try {
+      for (const workerId of group.workerIds) {
         try {
-          return await this.#hub.sendWorker(workerId, frame);
+          const capture = await this.#hub.openOutputCapture?.(workerId);
+          captures.push(capture);
         } catch {
-          return false;
+          captures.push(undefined);
         }
-      }),
-    );
-
-    // Only sessions that took the command can answer; waiting on the rest is
-    // latency the whole fan-out pays for nothing.
-    const collected = await Promise.all(
-      group.workerIds.map(async (workerId, index) => {
-        if (accepted[index] !== true) {
-          return undefined;
-        }
-        try {
-          return await this.#hub.collectOutput(workerId, timings);
-        } catch {
-          return undefined;
-        }
-      }),
-    );
-
-    const answered: Answered[] = [];
-    const results = group.workerIds.map((workerId, index) => {
-      const output = collected[index];
-      if (output === undefined) {
-        return this.#failedRow(workerId);
       }
-      answered.push({ index, output: output.output });
-      return { workerId, ok: true, outputDelta: output.output, elapsedMs: output.elapsedMs, divergent: false };
-    });
-    return this.#finish(group, data, sendId, sentAt, results, answered);
+      const readyIndexes = group.workerIds.flatMap((_, index) => (captures[index] === undefined ? [] : [index]));
+      const readyIds = readyIndexes.map((index) => group.workerIds[index] as string);
+      await this.#announce({ ...group, workerIds: readyIds }, data, sendId, principal);
+
+      const accepted: Array<{ ok: boolean; startedAt: number } | undefined> = new Array(group.workerIds.length);
+      await Promise.all(
+        readyIndexes.map(async (index) => {
+          const workerId = group.workerIds[index] as string;
+          try {
+            const ok = await this.#hub.sendWorker(workerId, frame);
+            accepted[index] = { ok, startedAt: performance.now() / 1000 };
+          } catch {
+            accepted[index] = { ok: false, startedAt: performance.now() / 1000 };
+          }
+        }),
+      );
+
+      const collected: Array<CollectedOutput | undefined> = new Array(group.workerIds.length);
+      await Promise.all(
+        readyIndexes.map(async (index) => {
+          const dispatch = accepted[index];
+          if (dispatch?.ok !== true) {
+            return;
+          }
+          try {
+            collected[index] = await (captures[index] as OutputCapture).collect({
+              ...timings,
+              startedAt: dispatch.startedAt,
+            });
+          } catch {
+            collected[index] = undefined;
+          }
+        }),
+      );
+
+      const answered: Answered[] = [];
+      const results = group.workerIds.map((workerId, index) => {
+        if (captures[index] === undefined) {
+          return this.#failedRow(workerId);
+        }
+        const output = collected[index];
+        if (output === undefined) {
+          return this.#failedRow(workerId);
+        }
+        answered.push({ index, output: output.output });
+        return { workerId, ok: true, outputDelta: output.output, elapsedMs: output.elapsedMs, divergent: false };
+      });
+      return this.#finish(group, data, sendId, sentAt, results, answered);
+    } finally {
+      await Promise.allSettled(captures.flatMap((capture) => (capture === undefined ? [] : [capture.close()])));
+    }
   }
 
   /** Send to one session at a time, stopping early if asked to. */
@@ -470,8 +538,6 @@ export class FanOutController {
   ): Promise<FanOutResult> {
     const sendId = this.#newId();
     const sentAt = this.#now();
-    await this.#announce(group, data, sendId, principal);
-
     const frame = { type: "input", data, ts: sentAt };
     const results: SessionFanOutResult[] = [];
     const answered: Answered[] = [];
@@ -484,16 +550,34 @@ export class FanOutController {
         results.push(this.#failedRow(workerId));
         continue;
       }
-      if (!(await this.#hub.sendWorker(workerId, frame))) {
+      let capture: OutputCapture | undefined;
+      try {
+        capture = await this.#hub.openOutputCapture?.(workerId);
+      } catch {
+        capture = undefined;
+      }
+      if (capture === undefined) {
         results.push(this.#failedRow(workerId));
         continue;
       }
-      const { output, elapsedMs } = await this.#hub.collectOutput(workerId, timings);
-      answered.push({ index: results.length, output });
-      results.push({ workerId, ok: true, outputDelta: output, elapsedMs, divergent: false });
+      try {
+        await this.#announce({ ...group, workerIds: [workerId] }, data, sendId, principal);
+        if (!(await this.#hub.sendWorker(workerId, frame))) {
+          results.push(this.#failedRow(workerId));
+          continue;
+        }
+        const startedAt = performance.now() / 1000;
+        const { output, elapsedMs } = await capture.collect({ ...timings, startedAt });
+        answered.push({ index: results.length, output });
+        results.push({ workerId, ok: true, outputDelta: output, elapsedMs, divergent: false });
 
-      if (group.stopOnFirstError && group.errorPattern !== undefined) {
-        stopped = new RegExp(group.errorPattern).test(output);
+        if (group.stopOnFirstError && group.errorPattern !== undefined) {
+          stopped = new RegExp(group.errorPattern).test(output);
+        }
+      } catch {
+        results.push(this.#failedRow(workerId));
+      } finally {
+        await capture.close();
       }
     }
     return this.#finish(group, data, sendId, sentAt, results, answered);

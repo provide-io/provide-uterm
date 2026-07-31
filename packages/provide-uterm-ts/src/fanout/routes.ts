@@ -21,11 +21,12 @@
  */
 
 import { type FanOutGroup, type FanOutMode, type FanOutResult, fanOutGroup } from "./models.ts";
+import type { AuthorizablePrincipal } from "../server/authorization.ts";
 
 /** A request, as much of one as these handlers read. */
 export interface FanoutRequest {
   /** Who is asking. */
-  principal: { subjectId: string };
+  principal?: AuthorizablePrincipal | undefined;
   /** The parsed JSON body, when the route takes one. */
   body?: unknown;
 }
@@ -54,12 +55,10 @@ export interface FanoutRoutesController {
   send(
     groupId: string,
     data: string,
-    principal: string,
+    principal: AuthorizablePrincipal,
     options: {
       quiesceMs?: number | undefined;
       maxResponseMs?: number | undefined;
-      memberWorkerIds?: string[] | undefined;
-      refusedWorkerIds?: string[] | undefined;
     },
   ): Promise<FanOutResult>;
 }
@@ -71,7 +70,10 @@ export interface FanoutRoutesOptions {
   /** Where a session's definition is looked up, for the read check. */
   registry: { getDefinition(workerId: string): Promise<unknown> };
   /** Whether the caller may read a session. */
-  authz: { canReadSession(principal: { subjectId: string }, definition: unknown): Promise<boolean> };
+  authz: {
+    isAdmin(principal: AuthorizablePrincipal): Promise<boolean>;
+    canReadSession(principal: AuthorizablePrincipal, definition: unknown): Promise<boolean>;
+  };
   /** Where changes are recorded. Optional: a deployment may have no sink. */
   audit?: (event: string, record: { principal: string; detail: Record<string, unknown> }) => void;
   /** Wall clock in seconds. */
@@ -196,13 +198,35 @@ export function createFanoutRoutes(options: FanoutRoutesOptions): FanoutRoutes {
     audit?.(event, { principal, detail });
   };
 
+  const authorize = async (request: FanoutRequest): Promise<AuthorizablePrincipal | RouteResponse> => {
+    const principal = request.principal;
+    if (principal === undefined || principal.subject_id === "anonymous") {
+      return refusal(401, "authentication required");
+    }
+    try {
+      if (!(await options.authz.isAdmin(principal))) {
+        return refusal(403, "global admin role required");
+      }
+    } catch {
+      return refusal(403, "global admin role required");
+    }
+    return principal;
+  };
+
+  const isRefusal = (candidate: AuthorizablePrincipal | RouteResponse): candidate is RouteResponse =>
+    (candidate as RouteResponse).status !== undefined;
+
   return {
     async createGroup(request: FanoutRequest): Promise<RouteResponse> {
+      const authorized = await authorize(request);
+      if (isRefusal(authorized)) {
+        return authorized;
+      }
       const ctrl = controller();
       if (isDisabled(ctrl)) {
         return ctrl;
       }
-      const principal = request.principal.subjectId;
+      const principal = authorized.subject_id;
       const body = request.body;
       const workerIds = field(body, "worker_ids", isStringArray) ?? [];
       const name = field(body, "name", isString) ?? "";
@@ -215,7 +239,7 @@ export function createFanoutRoutes(options: FanoutRoutesOptions): FanoutRoutes {
           if (options.allowUnknownMembers !== true) {
             return refusal(400, `unknown fan-out session: ${workerId}`);
           }
-        } else if (!(await options.authz.canReadSession(request.principal, definition))) {
+        } else if (!(await options.authz.canReadSession(authorized, definition))) {
           return refusal(403, `forbidden: no read access to session ${workerId}`);
         }
       }
@@ -252,11 +276,15 @@ export function createFanoutRoutes(options: FanoutRoutesOptions): FanoutRoutes {
     },
 
     async listGroups(request: FanoutRequest): Promise<RouteResponse> {
+      const authorized = await authorize(request);
+      if (isRefusal(authorized)) {
+        return authorized;
+      }
       const ctrl = controller();
       if (isDisabled(ctrl)) {
         return ctrl;
       }
-      const groups = await ctrl.listGroups(request.principal.subjectId);
+      const groups = await ctrl.listGroups(authorized.subject_id);
       // Summary fields only: the full record carries grants and thresholds,
       // which a listing has no reason to hand out.
       return {
@@ -271,11 +299,15 @@ export function createFanoutRoutes(options: FanoutRoutesOptions): FanoutRoutes {
     },
 
     async deleteGroup(request: FanoutRequest, groupId: string): Promise<RouteResponse> {
+      const authorized = await authorize(request);
+      if (isRefusal(authorized)) {
+        return authorized;
+      }
       const ctrl = controller();
       if (isDisabled(ctrl)) {
         return ctrl;
       }
-      const principal = request.principal.subjectId;
+      const principal = authorized.subject_id;
       // Looked up *as the caller*: an access-aware controller hides a group
       // the caller has no part in, so it comes back absent and the 403 below
       // is never reached. Swapping the two checks here changes nothing on its
@@ -293,42 +325,26 @@ export function createFanoutRoutes(options: FanoutRoutesOptions): FanoutRoutes {
     },
 
     async sendToGroup(request: FanoutRequest, groupId: string): Promise<RouteResponse> {
+      const authorized = await authorize(request);
+      if (isRefusal(authorized)) {
+        return authorized;
+      }
       const ctrl = controller();
       if (isDisabled(ctrl)) {
         return ctrl;
       }
-      const principal = request.principal.subjectId;
+      const principal = authorized.subject_id;
       const existing = await ctrl.getGroup(groupId, principal);
       if (existing === undefined) {
         return refusal(404, "group not found");
       }
       const body = request.body;
       const data = field(body, "data", isString) ?? "";
-      const memberWorkerIds: string[] = [];
-      const refusedWorkerIds: string[] = [];
-      for (const workerId of existing.workerIds) {
-        try {
-          const definition = await options.registry.getDefinition(workerId);
-          if (
-            definition !== undefined &&
-            definition !== null &&
-            (await options.authz.canReadSession(request.principal, definition))
-          ) {
-            memberWorkerIds.push(workerId);
-          } else {
-            refusedWorkerIds.push(workerId);
-          }
-        } catch {
-          refusedWorkerIds.push(workerId);
-        }
-      }
       // Left unset rather than defaulted: unset means "use the group's own",
       // which is not the same as zero.
-      const result = await ctrl.send(groupId, data, principal, {
+      const result = await ctrl.send(groupId, data, authorized, {
         quiesceMs: field(body, "quiesce_ms", isNumber),
         maxResponseMs: field(body, "max_response_ms", isNumber),
-        memberWorkerIds,
-        refusedWorkerIds,
       });
       record("fanout.send", principal, {
         group_id: groupId,
@@ -353,16 +369,23 @@ export function createFanoutRoutes(options: FanoutRoutesOptions): FanoutRoutes {
           })),
           divergent_sessions: result.divergentSessions,
           failed_sessions: result.failedSessions,
+          error: result.error,
+          approval_required: result.approvalRequired,
+          approval_id: result.approvalId,
         },
       };
     },
 
     async grantAccess(request: FanoutRequest, groupId: string): Promise<RouteResponse> {
+      const authorized = await authorize(request);
+      if (isRefusal(authorized)) {
+        return authorized;
+      }
       const ctrl = controller();
       if (isDisabled(ctrl)) {
         return ctrl;
       }
-      const principal = request.principal.subjectId;
+      const principal = authorized.subject_id;
       const existing = await ctrl.getGroup(groupId, principal);
       if (existing === undefined) {
         return refusal(404, "group not found");

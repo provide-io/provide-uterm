@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 import { PromptRegexError } from "../hub/index.ts";
+import type { AuthorizablePrincipal } from "../server/authorization.ts";
 import {
   FanOutController,
   type FanOutControllerHub,
@@ -56,6 +57,25 @@ class FakeHub implements FanOutControllerHub {
     }
     return { output: this.outputs.get(workerId) ?? "", elapsedMs: 7 };
   }
+
+  async openOutputCapture(workerId: string) {
+    return {
+      collect: async (options: { quiesceMs: number; maxMs: number }) => this.collectOutput(workerId, options),
+      close: async () => {},
+    };
+  }
+}
+
+function actor(subjectId: string, roles: string[] = ["admin"]): AuthorizablePrincipal {
+  return { subject_id: subjectId, roles: new Set(roles), scopes: new Set<string>() };
+}
+
+function security() {
+  return {
+    isGlobalAdmin: async (principal: AuthorizablePrincipal) => principal.roles.has("admin"),
+    resolveSession: async (workerId: string) => ({ workerId }),
+    canReadSession: async () => true,
+  };
 }
 
 /** A controller over a recording hub, with ids and time pinned. */
@@ -68,6 +88,7 @@ function build(options: Partial<ConstructorParameters<typeof FanOutController>[0
     store,
     now: () => NOW,
     newId: () => `id-${++counter}`,
+    ...security(),
     ...options,
   });
   return { hub, store, controller };
@@ -188,7 +209,7 @@ describe("FanOutController send authorization", () => {
     // shape of the answer.
     const { controller, hub } = build();
     await controller.createGroup(group(["w1"]), "alice");
-    const result = await controller.send("g1", "uptime", "eve");
+    const result = await controller.send("g1", "uptime", actor("eve", ["viewer"]));
     expect(result.results).toStrictEqual([]);
     expect(result.failedSessions).toStrictEqual([]);
     expect(hub.sent).toStrictEqual([]);
@@ -196,19 +217,37 @@ describe("FanOutController send authorization", () => {
 
   it("returns an empty result for a group that does not exist", async () => {
     const { controller } = build();
-    const result = await controller.send("nope", "uptime", "alice");
+    const result = await controller.send("nope", "uptime", actor("alice"));
     expect(result.groupId).toBe("nope");
     expect(result.results).toStrictEqual([]);
   });
 });
 
 describe("FanOutController policy", () => {
+  it("uses the caller's actual strongest normalized role", async () => {
+    let policyRole: unknown;
+    const { controller } = build({
+      isGlobalAdmin: async () => true,
+      policyGate: {
+        interceptFanout: async (_command, context) => {
+          policyRole = context.role;
+          return { action: "deny" };
+        },
+      },
+    });
+    await controller.createGroup(group(["w1"]), "operator");
+
+    await controller.send("g1", "id", actor("operator", ["operator", "viewer"]));
+
+    expect(policyRole).toBe("operator");
+  });
+
   it("blocks a denied command without sending anything", async () => {
     const { controller, hub } = build({
       policyGate: { interceptFanout: async () => ({ action: "deny", reason: "no rm -rf" }) },
     });
     await controller.createGroup(group(["w1"]), "alice");
-    const result = await controller.send("g1", "rm -rf /", "alice");
+    const result = await controller.send("g1", "rm -rf /", actor("alice"));
     expect(result.error).toBe("no rm -rf");
     expect(hub.sent).toStrictEqual([]);
   });
@@ -216,13 +255,13 @@ describe("FanOutController policy", () => {
   it("supplies a reason when the gate gives none", async () => {
     const { controller } = build({ policyGate: { interceptFanout: async () => ({ action: "deny" }) } });
     await controller.createGroup(group(["w1"]), "alice");
-    expect((await controller.send("g1", "x", "alice")).error).toBe("Command blocked by fan-out policy");
+    expect((await controller.send("g1", "x", actor("alice"))).error).toBe("Command blocked by fan-out policy");
   });
 
   it("holds a command for approval instead of running it", async () => {
     const { controller, hub } = build({ policyGate: { interceptFanout: async () => ({ action: "hold" }) } });
     await controller.createGroup(group(["w1"]), "alice");
-    const result = await controller.send("g1", "reboot", "alice");
+    const result = await controller.send("g1", "reboot", actor("alice"));
     expect(result.approvalRequired).toBe(true);
     expect(result.approvalId).toBe(result.sendId);
     expect(hub.sent).toStrictEqual([]);
@@ -234,7 +273,7 @@ describe("FanOutController policy", () => {
     // not anyone ever approves it.
     const { controller, hub } = build({ policyGate: { interceptFanout: async () => ({ action: "hold" }) } });
     await controller.createGroup(group(["w1"]), "alice");
-    await controller.send("g1", "reboot", "alice");
+    await controller.send("g1", "reboot", actor("alice"));
     expect(hub.events).toHaveLength(1);
     expect(hub.events[0]?.eventType).toBe("terminal.fanout.hold");
     expect(hub.events[0]?.workerId).toBe("group:g1");
@@ -245,7 +284,7 @@ describe("FanOutController policy", () => {
     // let a caller write as much as they like into it.
     const { controller, hub } = build({ policyGate: { interceptFanout: async () => ({ action: "hold" }) } });
     await controller.createGroup(group(["w1"]), "alice");
-    await controller.send("g1", "x".repeat(900), "alice");
+    await controller.send("g1", "x".repeat(900), actor("alice"));
     expect(String(hub.events[0]?.data?.command).length).toBe(500);
   });
 
@@ -253,7 +292,7 @@ describe("FanOutController policy", () => {
     const { controller, hub } = build({ policyGate: { interceptFanout: async () => ({ action: "hold" }) } });
     await controller.createGroup(group(["w1"]), "alice");
     hub.outputs.set("w1", "ok");
-    const held = await controller.send("g1", "reboot", "alice");
+    const held = await controller.send("g1", "reboot", actor("alice"));
     const released = await controller.releaseApprovedCommand(held.approvalId ?? "");
     expect(released?.results.map((entry) => entry.workerId)).toStrictEqual(["w1"]);
     expect(hub.sent.map((entry) => entry.workerId)).toStrictEqual(["w1"]);
@@ -264,7 +303,7 @@ describe("FanOutController policy", () => {
     // cannot run the command again.
     const { controller } = build({ policyGate: { interceptFanout: async () => ({ action: "hold" }) } });
     await controller.createGroup(group(["w1"]), "alice");
-    const held = await controller.send("g1", "reboot", "alice");
+    const held = await controller.send("g1", "reboot", actor("alice"));
     await controller.releaseApprovedCommand(held.approvalId ?? "");
     expect(await controller.releaseApprovedCommand(held.approvalId ?? "")).toBeUndefined();
   });
@@ -287,26 +326,30 @@ describe("FanOutController policy", () => {
       hub,
       now: () => NOW,
       newId: () => "held",
+      ...security(),
       policyGate: { interceptFanout: async () => ({ action: "hold" }) },
     });
     await controller.createGroup(group(["w1"], { quiesceMs: 1, maxResponseMs: 2 }), "alice");
-    const held = await controller.send("g1", "reboot", "alice", { quiesceMs: 111, maxResponseMs: 222 });
+    const held = await controller.send("g1", "reboot", actor("alice"), { quiesceMs: 111, maxResponseMs: 222 });
     await controller.releaseApprovedCommand(held.approvalId ?? "");
-    expect(seen).toStrictEqual({ quiesceMs: 111, maxMs: 222 });
+    expect(seen).toMatchObject({ quiesceMs: 111, maxMs: 222 });
   });
 
   it("re-checks authorization when the approval is released", async () => {
-    // Access can be revoked between the hold and the approval, and running
-    // it then would honour a permission the sender no longer has.
-    const { controller, store } = build({ policyGate: { interceptFanout: async () => ({ action: "hold" }) } });
-    await controller.createGroup(group(["w1"], { grants: ["bob"] }), "alice");
-    const held = await controller.send("g1", "reboot", "bob");
-    const stored = await store.get("g1");
-    if (stored !== undefined) {
-      stored.grants = [];
-      await store.save(stored);
-    }
-    expect(await controller.releaseApprovedCommand(held.approvalId ?? "")).toBeUndefined();
+    let isAdmin = true;
+    const { controller, hub } = build({
+      isGlobalAdmin: async () => isAdmin,
+      policyGate: { interceptFanout: async () => ({ action: "hold" }) },
+    });
+    const principal = actor("alice");
+    await controller.createGroup(group(["w1"]), "alice");
+    const held = await controller.send("g1", "reboot", principal);
+
+    isAdmin = false;
+    const released = await controller.releaseApprovedCommand(held.approvalId ?? "");
+
+    expect(released?.error).toBe("global admin role required");
+    expect(hub.sent).toStrictEqual([]);
   });
 
   it("re-checks every member's session authorization when an approval is released", async () => {
@@ -317,7 +360,7 @@ describe("FanOutController policy", () => {
       canReadSession: async () => readable,
     });
     await controller.createGroup(group(["w1"]), "alice");
-    const held = await controller.send("g1", "reboot", "alice");
+    const held = await controller.send("g1", "reboot", actor("alice"));
 
     readable = false;
     const released = await controller.releaseApprovedCommand(held.approvalId ?? "");
@@ -331,7 +374,7 @@ describe("FanOutController policy", () => {
     // and could still be released long after the window closed.
     const { controller, hub } = build({ policyGate: { interceptFanout: async () => ({ action: "hold" }) } });
     await controller.createGroup(group(["w1"]), "alice");
-    const held = await controller.send("g1", "reboot", "alice");
+    const held = await controller.send("g1", "reboot", actor("alice"));
     hub.onApprovalExpired?.(held.approvalId ?? "");
     expect(await controller.releaseApprovedCommand(held.approvalId ?? "")).toBeUndefined();
   });
@@ -340,12 +383,12 @@ describe("FanOutController policy", () => {
     // Every other test pins the clock, the id source and the store; this one
     // checks the production defaults are wired and produce usable values.
     const hub = new FakeHub();
-    const controller = new FanOutController({ hub });
+    const controller = new FanOutController({ hub, ...security() });
     await controller.createGroup(
       fanOutGroup({ groupId: "g1", name: "f", workerIds: ["w1"], createdBy: "alice", createdAt: NOW }),
       "alice",
     );
-    const result = await controller.send("g1", "uptime", "alice");
+    const result = await controller.send("g1", "uptime", actor("alice"));
     expect(result.sendId).toMatch(/^[0-9a-f]{32}$/);
     expect(Math.abs(result.sentAt - Date.now() / 1000)).toBeLessThan(5);
   });
@@ -353,7 +396,7 @@ describe("FanOutController policy", () => {
   it("allows by default when no gate is configured", async () => {
     const { controller, hub } = build();
     await controller.createGroup(group(["w1"]), "alice");
-    await controller.send("g1", "uptime", "alice");
+    await controller.send("g1", "uptime", actor("alice"));
     expect(hub.sent.map((entry) => entry.workerId)).toStrictEqual(["w1"]);
   });
 });
