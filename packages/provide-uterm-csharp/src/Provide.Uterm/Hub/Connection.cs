@@ -1118,4 +1118,12 @@ public sealed class ConnectionManager
         string keys,
         CancellationToken ct = default) =>
         await _hub.Lease.SendRestInputAsync(workerId, hijackId, keys, ct).ConfigureAwait(false);
+
+    /// <summary>Send one control frame fenced to the exact REST hijack lease.</summary>
+    public async Task<(bool Ok, string Reason, double? LeaseExpiresAt)> SendRestControlAsync(
+        string workerId,
+        string hijackId,
+        IReadOnlyDictionary<string, object?> message,
+        CancellationToken ct = default) =>
+        await _hub.Lease.SendRestControlAsync(workerId, hijackId, message, ct).ConfigureAwait(false);
 }

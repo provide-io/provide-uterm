@@ -502,13 +502,8 @@ public sealed partial class UtermServer : IAsyncDisposable
             return limited!;
         }
 
-        var hs = _deps.Hub.GetRestSession(workerId, hijackId);
-        if (hs is null)
-        {
-            return BridgeError(404, "Invalid or expired hijack session.");
-        }
-
-        var (sent, _) = await _deps.Hub.SendWorkerAsync(workerId, new Dictionary<string, object?>
+        var (sent, reason, freshExpires) = await _deps.Hub.Conn.SendRestControlAsync(
+            workerId, hijackId, new Dictionary<string, object?>
         {
             ["type"] = "control",
             ["action"] = "step",
@@ -517,6 +512,10 @@ public sealed partial class UtermServer : IAsyncDisposable
         }, ctx.RequestAborted).ConfigureAwait(false);
         if (!sent)
         {
+            if (reason == "invalid_hijack")
+            {
+                return BridgeError(404, "Invalid or expired hijack session.");
+            }
             return BridgeError(409, "No worker connected for this session.");
         }
 
@@ -525,9 +524,7 @@ public sealed partial class UtermServer : IAsyncDisposable
             ["hijack_id"] = hijackId,
         });
         _deps.Hub.Metric("hijack_steps_total", 1);
-        var fresh = _deps.Hub.GetRestSession(workerId, hijackId);
-        var freshExpires = fresh?.LeaseExpiresAt ?? hs.LeaseExpiresAt;
-        var leaseExpiresAt = _clock.Wall() + (freshExpires - _clock.Monotonic());
+        var leaseExpiresAt = _clock.Wall() + (freshExpires!.Value - _clock.Monotonic());
         return Results.Json(new
         {
             ok = true,

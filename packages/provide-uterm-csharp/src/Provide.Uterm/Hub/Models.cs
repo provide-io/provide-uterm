@@ -145,6 +145,7 @@ internal sealed class PendingInputSend
     internal required string Reservation { get; init; }
     internal required IWorkerWs Worker { get; init; }
     internal string? RestHijackId { get; init; }
+    internal double? RestLeaseExpiresAt { get; set; }
     internal object? DashboardOwner { get; init; }
     internal long? DashboardOwnershipVersion { get; init; }
     internal required TaskCompletionSource Completion { get; init; }
