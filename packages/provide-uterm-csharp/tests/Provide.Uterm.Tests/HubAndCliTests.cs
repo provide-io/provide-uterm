@@ -51,7 +51,7 @@ public class HubAndCliTests
         Assert.NotNull(session);
         Assert.Equal("operator", session!.Owner);
 
-        var (released, shouldResume) = hub.ReleaseRestHijack("w1", "hij-1");
+        var (released, shouldResume) = await hub.ReleaseRestHijackAsync("w1", "hij-1");
         Assert.True(released);
         Assert.True(shouldResume);
         Assert.Null(hub.GetRestSession("w1", "hij-1"));

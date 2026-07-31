@@ -363,7 +363,8 @@ public sealed partial class UtermServer
         // configured as open. A tunnel that means `hijack` says so in its
         // `open` control frame, which HandleTunnelControl applies.
         var hadWorkerState = _deps.Hub.Registry.Contains(workerId);
-        if (!_deps.Hub.Conn.RegisterWorker(workerId, conn))
+        if (!await _deps.Hub.Conn.RegisterWorkerAsync(workerId, conn, ctx.RequestAborted)
+                .ConfigureAwait(false))
         {
             await WebSocketCloseHandler.CloseAndTerminateAsync(
                     ws, WebSocketCloseStatus.PolicyViolation, "worker registration rejected")
@@ -422,6 +423,7 @@ public sealed partial class UtermServer
                         .ConfigureAwait(false);
                     break;
                 }
+                if (!_deps.Hub.Conn.IsActiveWorker(workerId, conn)) break;
                 if (message.Payload.Length < 2) continue;
 
                 TunnelFrame frame;

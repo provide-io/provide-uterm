@@ -24,6 +24,7 @@ namespace Provide.Uterm.Tests;
 /// Every expectation here is the reference's observed behaviour, pinned by
 /// scenarios 002_session_authz / 003_error_shapes / 004_session_shape.
 /// </summary>
+[Collection("UTERM_TEST_MODE")]
 public sealed class SessionReferenceParityTests
 {
     /// <summary>Every key a session carries on the wire, in the reference's order.</summary>
@@ -62,7 +63,6 @@ public sealed class SessionReferenceParityTests
     private static async Task<(UtermServer Server, HttpClient Http, string Token)> StartAsync(
         UtermServerConfig? config = null)
     {
-        Environment.SetEnvironmentVariable("UTERM_TEST_MODE", "1");
         var port = FreePort();
         var cfg = config ?? UtermServerConfig.Default();
         cfg.Server.Host = "127.0.0.1";
@@ -89,6 +89,25 @@ public sealed class SessionReferenceParityTests
         var http = new HttpClient { BaseAddress = new Uri(server.BaseAddress!) };
         http.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", "Bearer " + token);
         return (server, http, token);
+    }
+
+    [Fact]
+    public async Task StartHelperRestoresPreviousTestMode()
+    {
+        var original = Environment.GetEnvironmentVariable("UTERM_TEST_MODE");
+        Environment.SetEnvironmentVariable("UTERM_TEST_MODE", "sentinel");
+        try
+        {
+            var (server, http, _) = await StartAsync();
+            await using (server)
+            using (http) { }
+
+            Assert.Equal("sentinel", Environment.GetEnvironmentVariable("UTERM_TEST_MODE"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("UTERM_TEST_MODE", original);
+        }
     }
 
     // -- Divergence 2: the default configuration ships a session ---------------

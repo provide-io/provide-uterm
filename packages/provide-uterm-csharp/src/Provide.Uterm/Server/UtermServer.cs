@@ -383,7 +383,7 @@ public sealed partial class UtermServer : IAsyncDisposable
         var owner = Str(body, "owner", "operator");
         if (string.IsNullOrWhiteSpace(owner)) owner = "operator";
         var leaseS = StateStore.ClampLease(Int(body, "lease_s", 90));
-        _deps.Hub.CleanupExpiredHijack(workerId);
+        await _deps.Hub.CleanupExpiredHijackAsync(workerId, ctx.RequestAborted).ConfigureAwait(false);
 
         var hijackId = NewHijackId();
         var wallNow = _clock.Wall();
@@ -516,16 +516,11 @@ public sealed partial class UtermServer : IAsyncDisposable
         var (p, authError) = await RequireHubAuthz(ctx, workerId, "session.control.hijack").ConfigureAwait(false);
         if (authError is not null) return authError;
 
-        var (released, shouldResume) = _deps.Hub.ReleaseRestHijack(workerId, hijackId);
+        var (released, _) = await _deps.Hub.ReleaseRestHijackAsync(
+            workerId, hijackId, ctx.RequestAborted).ConfigureAwait(false);
         if (!released)
         {
             return BridgeError(404, "Invalid or expired hijack session.");
-        }
-
-        if (shouldResume)
-        {
-            await _deps.Hub.SendWorkerAsync(workerId, HijackLeaseManager.ResumeFrame("operator", _clock.Wall()), ctx.RequestAborted)
-                .ConfigureAwait(false);
         }
 
         _deps.Hub.NotifyHijackChanged(workerId, false, null);
@@ -659,16 +654,18 @@ public sealed partial class UtermServer : IAsyncDisposable
         {
             p = await Authenticate(ctx).ConfigureAwait(false);
             role = "viewer";
-            if (_deps.Registry.TryGetDefinition(workerId, out var def))
+            if (!_deps.Registry.TryGetDefinition(workerId, out var def))
             {
-                if (!_deps.Authz.CanReadSession(p, def))
-                {
-                    ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
-                    return;
-                }
-
-                role = _deps.Authz.ResolveBrowserRole(p, def);
+                ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+                return;
             }
+            if (!_deps.Authz.CanReadSession(p, def))
+            {
+                ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
+                return;
+            }
+
+            role = _deps.Authz.ResolveBrowserRole(p, def);
         }
 
         using var ws = await ctx.WebSockets.AcceptWebSocketAsync().ConfigureAwait(false);
@@ -910,20 +907,8 @@ public sealed partial class UtermServer : IAsyncDisposable
                         await _deps.Hub.BroadcastHijackStateAsync(workerId, ct).ConfigureAwait(false);
                         break;
                     case "hijack_release":
-                        var (released, restActive) = _deps.Hub.Lease.TryReleaseWs(workerId, conn);
-                        if (released && !restActive)
-                        {
-                            _ = await _deps.Hub.Conn.SendWorkerAsync(
-                                workerId,
-                                new Dictionary<string, object?>
-                                {
-                                    ["type"] = "control",
-                                    ["action"] = "resume",
-                                    ["source"] = "dashboard",
-                                    ["ts"] = _clock.Wall(),
-                                },
-                                ct).ConfigureAwait(false);
-                        }
+                        _ = await _deps.Hub.Lease.TryReleaseWsAsync(workerId, conn, ct)
+                            .ConfigureAwait(false);
 
                         await _deps.Hub.BroadcastHijackStateAsync(workerId, ct).ConfigureAwait(false);
                         break;
@@ -1099,7 +1084,8 @@ public sealed partial class UtermServer : IAsyncDisposable
         // to turn a session the operator configured as `open` into one only a
         // lease holder may type at — an arbitration nobody asked for.
         var hadWorkerState = _deps.Hub.Registry.Contains(workerId);
-        if (!_deps.Hub.Conn.RegisterWorker(workerId, conn))
+        if (!await _deps.Hub.Conn.RegisterWorkerAsync(workerId, conn, ctx.RequestAborted)
+                .ConfigureAwait(false))
         {
             await WebSocketCloseHandler.CloseAndTerminateAsync(
                     ws, WebSocketCloseStatus.PolicyViolation, "worker registration rejected")
@@ -1163,12 +1149,13 @@ public sealed partial class UtermServer : IAsyncDisposable
                              message.Payload,
                              preserveRawData: message.MessageType == WebSocketMessageType.Binary))
                 {
+                    if (!_deps.Hub.Conn.IsActiveWorker(workerId, conn)) break;
                     if (chunk is ControlChunk ctrl)
                     {
                         var mtype = ctrl.Control.TryGetValue("type", out var t) ? t?.ToString() : null;
                         if (mtype == "snapshot")
                         {
-                            _deps.Hub.Conn.UpdateLastSnapshot(workerId, ctrl.Control);
+                            _deps.Hub.Conn.UpdateLastSnapshot(workerId, conn, ctrl.Control);
                         }
                         else if (mtype == "worker_hello")
                         {
@@ -1178,7 +1165,7 @@ public sealed partial class UtermServer : IAsyncDisposable
                             // is for. The reference applies it here
                             // (bridge/routes/websockets_worker.py), and it may
                             // raise the mode but never lower a decided one.
-                            await ApplyWorkerHelloAsync(workerId, ctrl.Control, ctx.RequestAborted)
+                            await ApplyWorkerHelloAsync(workerId, conn, ctrl.Control, ctx.RequestAborted)
                                 .ConfigureAwait(false);
                         }
 
@@ -1381,6 +1368,7 @@ public sealed partial class UtermServer : IAsyncDisposable
     /// </remarks>
     private async Task ApplyWorkerHelloAsync(
         string workerId,
+        IWorkerWs worker,
         Dictionary<string, object?> hello,
         CancellationToken cancellationToken)
     {
@@ -1404,7 +1392,7 @@ public sealed partial class UtermServer : IAsyncDisposable
             protocolVersion = parsed;
         }
 
-        var applied = _deps.Hub.Conn.SetWorkerHello(workerId, mode, protocolVersion);
+        var applied = _deps.Hub.Conn.SetWorkerHello(workerId, worker, mode, protocolVersion);
         if (applied)
         {
             await _deps.Hub.Conn.BroadcastHijackStateAsync(workerId, cancellationToken).ConfigureAwait(false);

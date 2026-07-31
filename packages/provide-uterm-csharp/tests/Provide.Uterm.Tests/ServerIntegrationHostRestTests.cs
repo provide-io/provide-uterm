@@ -16,6 +16,7 @@ using Xunit;
 namespace Provide.Uterm.Tests;
 
 /// <summary>Live HTTP proof for residual host REST (profiles, keys, approvals, metrics, posture, session extras, SPA shell).</summary>
+[Collection("UTERM_TEST_MODE")]
 public sealed class ServerIntegrationHostRestTests
 {
     private static int FreePort()
@@ -29,7 +30,6 @@ public sealed class ServerIntegrationHostRestTests
 
     private static async Task<(UtermServer Server, HttpClient Http, string Token, TermHub Hub)> StartAsync()
     {
-        Environment.SetEnvironmentVariable("UTERM_TEST_MODE", "1");
         var port = FreePort();
         var cfg = UtermServerConfig.Default();
         cfg.Server.Host = "127.0.0.1";
@@ -72,6 +72,25 @@ public sealed class ServerIntegrationHostRestTests
         var http = new HttpClient { BaseAddress = new Uri(server.BaseAddress!) };
         http.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", "Bearer " + token);
         return (server, http, token, hub);
+    }
+
+    [Fact]
+    public async Task StartHelperRestoresPreviousTestMode()
+    {
+        var original = Environment.GetEnvironmentVariable("UTERM_TEST_MODE");
+        Environment.SetEnvironmentVariable("UTERM_TEST_MODE", "sentinel");
+        try
+        {
+            var (server, http, _, _) = await StartAsync();
+            await using (server)
+            using (http) { }
+
+            Assert.Equal("sentinel", Environment.GetEnvironmentVariable("UTERM_TEST_MODE"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("UTERM_TEST_MODE", original);
+        }
     }
 
     [Fact]
@@ -182,6 +201,7 @@ public sealed class ServerIntegrationHostRestTests
     [Fact]
     public async Task Metrics_Posture_SessionPatch_Bulk_Connect_Events_Spa()
     {
+        using var testMode = new EnvironmentVariableScope("UTERM_TEST_MODE", "1");
         var (server, http, _, hub) = await StartAsync();
         await using (server)
         using (http)

@@ -27,7 +27,7 @@ public sealed class ResumeOwnershipTests
     }
 
     [Fact]
-    public void LaterOwnerPreventsOldTokenFromRestoringEvenAfterRelease()
+    public async Task LaterOwnerPreventsOldTokenFromRestoringEvenAfterRelease()
     {
         var hub = HubWithWorker();
         var original = new Socket();
@@ -40,7 +40,7 @@ public sealed class ResumeOwnershipTests
         var oldVersion = hub.Conn.CleanupBrowser("w", original)!.Value;
 
         Assert.True(hub.Lease.TryAcquireWs("w", later).Ok);
-        Assert.True(hub.Lease.TryReleaseWs("w", later).Released);
+        Assert.True((await hub.Lease.TryReleaseWsAsync("w", later)).Released);
 
         Assert.False(hub.Lease.TryRestoreWsOwnership("w", resumed, oldVersion));
         Assert.Null(hub.Registry.Get("w")!.HijackOwner);
@@ -64,7 +64,7 @@ public sealed class ResumeOwnershipTests
         Assert.Equal(oldVersion + 1, restVersion);
         Assert.NotNull(hub.ExtendHijackLease("w", "rest-hijack", "rest-owner", 30, 11));
         Assert.Equal(restVersion, hub.Registry.Get("w")!.HijackOwnershipVersion);
-        Assert.True(hub.ReleaseRestHijack("w", "rest-hijack").Released);
+        Assert.True((await hub.ReleaseRestHijackAsync("w", "rest-hijack")).Released);
         Assert.Equal(restVersion, hub.Registry.Get("w")!.HijackOwnershipVersion);
 
         Assert.False(hub.Lease.TryRestoreWsOwnership("w", resumed, oldVersion));

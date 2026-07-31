@@ -32,7 +32,9 @@ public sealed class WorkerAdmissionIntegrationTests
         request.Headers.TryAddWithoutValidation("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==");
         request.Headers.TryAddWithoutValidation("Authorization", "Bearer wrong");
 
-        using var response = await http.SendAsync(request);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        using var response = await http.SendAsync(
+            request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -58,6 +60,34 @@ public sealed class WorkerAdmissionIntegrationTests
         Assert.False(status.Connected);
     }
 
+    [Fact]
+    public async Task UnknownBrowserSessionReturnsHttp404BeforeUpgrade()
+    {
+        var fixture = await BootAtCapacityAsync();
+        await using var server = fixture.Server;
+        using var socket = new ClientWebSocket();
+        socket.Options.SetRequestHeader("Authorization", "Bearer " + fixture.BrowserToken);
+        Exception? refusal = null;
+        try
+        {
+            await socket.ConnectAsync(
+                new Uri(fixture.WsBase + "/ws/browser/not-configured/term"),
+                CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            refusal = ex;
+        }
+        finally
+        {
+            socket.Abort();
+        }
+
+        var error = Assert.IsType<WebSocketException>(refusal);
+        Assert.Contains("404", error.Message, StringComparison.Ordinal);
+        Assert.Null(fixture.Hub.Registry.Get("not-configured"));
+    }
+
     private static async Task<Fixture> BootAtCapacityAsync()
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);
@@ -76,6 +106,12 @@ public sealed class WorkerAdmissionIntegrationTests
             DisplayName = "Rejected",
             Visibility = "public",
             AutoStart = false,
+        });
+        var browserToken = DevIdp.Setup(cfg.Auth, new DevIdp.Options
+        {
+            TokenPath = Path.Combine(Path.GetTempPath(), "browser-admission-" + Guid.NewGuid().ToString("N")),
+            Subject = "admin",
+            Roles = ["admin"],
         });
         var clock = new RealClock();
         var hub = new TermHub(new TermHubConfig
@@ -97,14 +133,15 @@ public sealed class WorkerAdmissionIntegrationTests
         });
         server.Build([$"http://127.0.0.1:{port}"]);
         await server.StartAsync();
-        return new Fixture(server, hub, registry, $"ws://127.0.0.1:{port}");
+        return new Fixture(server, hub, registry, $"ws://127.0.0.1:{port}", browserToken);
     }
 
     private sealed record Fixture(
         UtermServer Server,
         TermHub Hub,
         InMemorySessionRegistry Registry,
-        string WsBase);
+        string WsBase,
+        string BrowserToken);
 
     private sealed class NoopSocket : IWorkerWs
     {

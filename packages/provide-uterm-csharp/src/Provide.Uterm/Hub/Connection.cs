@@ -34,8 +34,18 @@ public sealed class ConnectionManager
 
     public bool AllowRestSendFor(string clientId) => _hub.Limiter.AllowRestSend(clientId);
 
-    public bool RegisterWorker(string workerId, IWorkerWs ws)
+    public bool RegisterWorker(string workerId, IWorkerWs ws) =>
+        RegisterWorkerAsync(workerId, ws).GetAwaiter().GetResult();
+
+    public async Task<bool> RegisterWorkerAsync(
+        string workerId,
+        IWorkerWs ws,
+        CancellationToken ct = default)
     {
+        var reservation = "worker-replacement-" + Guid.NewGuid().ToString("N");
+        TaskCompletionSource? completion = null;
+        IWorkerWs? predecessor = null;
+        var mustResume = false;
         lock (_hub.SharedLock)
         {
             if (_hub.Registry.Count >= _hub.MaxWorkers && !_hub.Registry.Contains(workerId))
@@ -44,10 +54,67 @@ public sealed class ConnectionManager
             }
 
             var st = _hub.State.GetOrCreate(workerId);
+            if (ReferenceEquals(st.WorkerWs, ws)) return true;
+            predecessor = st.WorkerWs;
+            if (predecessor is not null)
+            {
+                mustResume = st.HijackSession is not null
+                    || st.HijackOwner is not null
+                    || st.PendingPauseObligation is not null;
+                st.HijackSession = null;
+                st.HijackOwner = null;
+                st.HijackOwnerExpiresAt = null;
+                st.PendingDashboardBrowser = null;
+                st.PendingDashboardOwnershipVersion = null;
+                st.PendingPauseReservation = null;
+                st.PendingPauseObligation = null;
+                st.HijackOwnershipVersion++;
+                completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                st.HijackPending = reservation;
+                st.DisconnectResumeCompletion = completion.Task;
+                st.DisconnectResumeOwnershipVersion = null;
+            }
             st.WorkerWs = ws;
             st.LastActivityAt = _hub.Clock.Monotonic();
-            return true;
         }
+
+        if (predecessor is null) return true;
+        try
+        {
+            if (mustResume)
+            {
+                using var bounded = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                bounded.CancelAfter(_hub.BrowserSendTimeout);
+                try
+                {
+                    var encoded = ControlChannelCodec.EncodeControlFrame(
+                        HijackLeaseManager.ResumeFrame("worker-replaced", _hub.Clock.Wall()));
+                    await predecessor.SendTextAsync(encoded, bounded.Token)
+                        .WaitAsync(_hub.BrowserSendTimeout, ct).ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Replacement remains authoritative even if the displaced transport cannot resume.
+                }
+            }
+        }
+        finally
+        {
+            if (predecessor is IAbortableBrowserWs abortable) abortable.Abort();
+            lock (_hub.SharedLock)
+            {
+                var st = _hub.Registry.Get(workerId);
+                if (st?.HijackPending == reservation) st.HijackPending = null;
+                if (st is not null && completion is not null
+                    && ReferenceEquals(st.DisconnectResumeCompletion, completion.Task))
+                {
+                    st.DisconnectResumeCompletion = null;
+                    st.DisconnectResumeOwnershipVersion = null;
+                }
+            }
+            completion?.TrySetResult();
+        }
+        return true;
     }
 
     public bool IsActiveWorker(string workerId, IWorkerWs ws)
@@ -83,13 +150,31 @@ public sealed class ConnectionManager
     /// <c>true</c> when the mode was applied, <c>false</c> for an unknown
     /// worker or a hello that would lower a decided mode.
     /// </returns>
-    public bool SetWorkerHello(string workerId, string mode, int? protocolVersion = null)
+    public bool SetWorkerHello(string workerId, string mode, int? protocolVersion = null) =>
+        SetWorkerHelloCore(workerId, null, mode, protocolVersion);
+
+    public bool SetWorkerHello(
+        string workerId,
+        IWorkerWs worker,
+        string mode,
+        int? protocolVersion = null) =>
+        SetWorkerHelloCore(workerId, worker, mode, protocolVersion);
+
+    private bool SetWorkerHelloCore(
+        string workerId,
+        IWorkerWs? expectedWorker,
+        string mode,
+        int? protocolVersion)
     {
         bool blocked;
         lock (_hub.SharedLock)
         {
             var st = _hub.Registry.Get(workerId);
-            if (st is null) return false;
+            if (st is null
+                || expectedWorker is not null && !ReferenceEquals(st.WorkerWs, expectedWorker))
+            {
+                return false;
+            }
 
             var wouldLower = mode == InputModes.Open && st.InputMode == InputModes.Hijack;
             blocked = wouldLower && (st.InputModeSetByOperator || _hub.State.IsHijacked(st));
@@ -136,6 +221,21 @@ public sealed class ConnectionManager
             if (st is null) return;
             st.LastSnapshot = new Dictionary<string, object?>(snapshot);
             st.LastActivityAt = _hub.Clock.Monotonic();
+        }
+    }
+
+    public bool UpdateLastSnapshot(
+        string workerId,
+        IWorkerWs worker,
+        Dictionary<string, object?> snapshot)
+    {
+        lock (_hub.SharedLock)
+        {
+            var st = _hub.Registry.Get(workerId);
+            if (st is null || !ReferenceEquals(st.WorkerWs, worker)) return false;
+            st.LastSnapshot = new Dictionary<string, object?>(snapshot);
+            st.LastActivityAt = _hub.Clock.Monotonic();
+            return true;
         }
     }
 
@@ -199,61 +299,8 @@ public sealed class ConnectionManager
     /// </summary>
     public async Task<bool> ForceReleaseHijackAsync(string workerId, CancellationToken ct = default)
     {
-        var owner = "server-forced";
-        var had = false;
-        lock (_hub.SharedLock)
-        {
-            var st = _hub.Registry.Get(workerId);
-            if (st is null) return false;
-            if (st.HijackSession is not null)
-            {
-                owner = st.HijackSession.Owner;
-                st.HijackSession = null;
-                had = true;
-            }
-
-            if (_hub.State.IsDashboardHijackActive(st))
-            {
-                had = true;
-                st.PendingPauseObligation = null;
-            }
-
-            // Only a live owner is a release worth announcing, but the fields
-            // are cleared either way — an owner whose lease already ran out is
-            // stale state, not a holder, and leaving it behind would keep
-            // answering "hijacked" to anything reading it before the expiry
-            // sweep runs.
-            st.HijackOwner = null;
-            st.HijackOwnerExpiresAt = null;
-            // Cancel acquisitions that have not committed. A disconnect-resume
-            // is different: it is already releasing the old owner, so keep its
-            // reservation until the send finishes and let a matching token
-            // reclaim wait for that completion.
-            if (st.PendingDashboardBrowser is not null)
-            {
-                var canceledReservation = st.HijackPending;
-                st.HijackPending = null;
-                if (st.PendingPauseReservation == canceledReservation)
-                {
-                    st.PendingPauseReservation = null;
-                }
-                st.PendingDashboardBrowser = null;
-                st.PendingDashboardOwnershipVersion = null;
-            }
-            else if (st.DisconnectResumeCompletion is not { IsCompleted: false })
-            {
-                var canceledReservation = st.HijackPending;
-                st.HijackPending = null;
-                if (st.PendingPauseReservation == canceledReservation)
-                {
-                    st.PendingPauseReservation = null;
-                }
-            }
-        }
-
+        var (had, _) = await _hub.Lease.ForceReleaseAsync(workerId, ct).ConfigureAwait(false);
         if (!had) return false;
-        await SendWorkerAsync(workerId, HijackLeaseManager.ResumeFrame(owner, _hub.Clock.Wall()), ct)
-            .ConfigureAwait(false);
         _hub.State.NotifyHijackChanged(workerId, false, null);
         await BroadcastHijackStateAsync(workerId, ct).ConfigureAwait(false);
         return true;
