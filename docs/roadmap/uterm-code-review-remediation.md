@@ -11,20 +11,20 @@ Design: `docs/superpowers/specs/2026-07-31-code-review-remediation-design.md`
 
 ## Cross-language fan-out security
 
-- [x] **FANOUT-001 (high): configurable unknown-member admission.** Python, Go,
+- [~] **FANOUT-001 (high): configurable unknown-member admission.** Python, Go,
   C#, and TypeScript reject unknown worker IDs by default; one consistently named
   option permits dormant IDs. Acceptance: strict/default and permissive tests exist
   in each served implementation.
-- [x] **FANOUT-002 (high): send-time session authorization.** Every group member is
+- [~] **FANOUT-002 (high): send-time session authorization.** Every group member is
   resolved and authorized on every send and approval release. Unknown or revoked
   members receive a failure and no input. Group grants do not bypass session authz.
-- [x] **FANOUT-003 (high): governance policy enforcement.** Python factory wiring
+- [~] **FANOUT-003 (high): governance policy enforcement.** Python factory wiring
   supplies a real fan-out policy adapter and fails closed when configured policy is
   unavailable. Go and C# cannot silently bypass configured governance.
-- [x] **FANOUT-004 (medium): C# semantic parity.** Parallel/sequential execution,
+- [~] **FANOUT-004 (medium): C# semantic parity.** Parallel/sequential execution,
   response collection, elapsed time, stop-on-first-error, and divergence behave as
   advertised or the surface explicitly reports unsupported behavior.
-- [x] **FANOUT-005 (high): shared parity coverage.** Cross-language behavioral
+- [~] **FANOUT-005 (high): shared parity coverage.** Cross-language behavioral
   scenarios cover unknown IDs, revoked authorization, group grants, policy deny,
   policy hold/release, and partial member failures.
 
@@ -123,3 +123,4 @@ Design: `docs/superpowers/specs/2026-07-31-code-review-remediation-design.md`
 | 2026-07-31 | TypeScript fan-out | Full TypeScript suite, typecheck, and Biome lint | 10,474 tests passed; typecheck and lint passed |
 | 2026-07-31 | Live fan-out strict admission | Python/Go/C# servers × Python/Go/C#/TypeScript clients | 12 of 12 cells passed; TypeScript server explicitly unadvertised |
 | 2026-07-31 | Fan-out coverage manifest | `uv run python scripts/validate_fanout_security_coverage.py`; focused validator tests | manifest valid; 7 tests passed; unsupported and unserved cells explicit |
+| 2026-07-31 | Fan-out independent review | Security, controller-invariant, fast-output, store-concurrency, timeout, and semantic-conformance review | rejected; FANOUT-001 through FANOUT-005 reopened pending corrected implementation and re-review |
