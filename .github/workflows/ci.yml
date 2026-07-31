@@ -333,11 +333,16 @@ jobs:
       # fresh resolution). Replaces a `uv venv && uv pip install -e` that
       # bypassed uv.lock entirely.
       - run: uv sync --frozen --package provide-uterm-platform --extra dev
-      - name: Run PTY unit tests (no PAM/root/native)
-        run: uv run pytest packages/provide-uterm-platform/tests/pty/ -q --no-cov --timeout=10 --ignore=packages/provide-uterm-platform/tests/pty/e2e -o "addopts=--import-mode=importlib"
       - name: Build and self-test native capture library
         if: matrix.python-version == '3.11'
-        run: make -C packages/provide-uterm-platform/native/capture clean test all
+        run: |
+          make -C packages/provide-uterm-platform/native/capture clean test all
+          cp packages/provide-uterm-platform/native/capture/libuterm_capture.so packages/provide-uterm-platform/src/provide/uterm/pty/_native/
+      - name: Run native capture LD_PRELOAD integration tests
+        if: matrix.python-version == '3.11'
+        run: uv run pytest packages/provide-uterm-platform/tests/pty/test_ld_preload_capture.py packages/provide-uterm-platform/tests/pty/test_capture_frame_atomicity.py -q --no-cov --timeout=30 -o "addopts=--import-mode=importlib"
+      - name: Run PTY unit tests (no PAM/root/native)
+        run: uv run pytest packages/provide-uterm-platform/tests/pty/ -q --no-cov --timeout=10 --ignore=packages/provide-uterm-platform/tests/pty/e2e --ignore=packages/provide-uterm-platform/tests/pty/test_ld_preload_capture.py --ignore=packages/provide-uterm-platform/tests/pty/test_capture_frame_atomicity.py -o "addopts=--import-mode=importlib"
 
   npm-quality:
     # Frontend unit tests + typecheck for both npm workspaces. Previously only
