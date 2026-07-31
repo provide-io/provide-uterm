@@ -10,13 +10,48 @@ import type { AuthorizablePrincipal } from "../server/authorization.ts";
 import type { OutputCapture } from "./collector.ts";
 import { FanOutController, type FanOutControllerHub } from "./controller.ts";
 import { fanOutGroup, type FanOutResult } from "./models.ts";
-import { createFanoutRoutes, type FanoutRoutesController } from "./routes.ts";
+import { createFanoutRoutes } from "./routes.ts";
+
+interface ActorInput {
+  subject: string;
+  authenticated: boolean;
+  roles: string[];
+}
+
+interface GroupInput {
+  id: string;
+  creator: string;
+  members: string[];
+  grants: string[];
+  allow_unknown_members: boolean;
+}
+
+interface ScenarioInput {
+  surface: "rest" | "rest_release" | "controller" | "store";
+  operation: string;
+  actor: ActorInput;
+  group: GroupInput;
+  visibility: { readable_members: string[]; revoke_before_send: string[] };
+  policy: { action: "allow" | "deny" | "hold_release" };
+  workers: {
+    accepted_members: string[];
+    immediate_output: Record<string, string>;
+    continuous_output?: boolean;
+  };
+  command: string;
+  omit_authorizers?: boolean;
+  mutation_member?: string;
+  concurrent_grants?: string[];
+  max_response_ms?: number;
+}
 
 interface Scenario {
   id: string;
+  input: ScenarioInput;
   expected: Record<string, unknown>;
-  backends: { typescript: { status: string; expected: Record<string, unknown> } } &
-    Record<string, { status: string; expected: Record<string, unknown> }>;
+  backends: {
+    typescript: { status: string; expected: Record<string, unknown> };
+  } & Record<string, { status: string; expected: Record<string, unknown> }>;
 }
 
 interface Contract {
@@ -30,6 +65,7 @@ interface Observation {
   error: string | null;
   approval_required: boolean;
   approval_id: string | null;
+  command: string;
   delivered_workers: string[];
   observer_notifications: string[];
   failed_members: string[];
@@ -38,35 +74,42 @@ interface Observation {
 
 const contractPath =
   process.env.FANOUT_SECURITY_SCENARIO_CONTRACT ??
-  resolve(import.meta.dirname, "../../../../spec/fanout_security_scenarios.json");
+  resolve(
+    import.meta.dirname,
+    "../../../../spec/fanout_security_scenarios.json",
+  );
 const outputPath = process.env.FANOUT_SECURITY_SCENARIO_OUTPUT;
 
 class ScenarioHub implements FanOutControllerHub {
   readonly delivered: string[] = [];
   readonly observers: string[] = [];
-  readonly refused = new Set<string>();
-  readonly immediate = new Map<string, string>();
   readonly buffers = new Map<string, string[]>();
+  readonly approvals: Record<string, unknown>[] = [];
+
+  constructor(
+    private readonly accepted: Set<string>,
+    private readonly immediate: Record<string, string>,
+  ) {}
 
   async sendWorker(workerId: string): Promise<boolean> {
-    if (this.refused.has(workerId)) {
-      return false;
-    }
+    if (!this.accepted.has(workerId)) return false;
     this.delivered.push(workerId);
-    const value = this.immediate.get(workerId) ?? "ok";
-    this.buffers.get(workerId)?.push(value);
+    this.buffers.get(workerId)?.push(this.immediate[workerId] ?? "ok");
     return true;
   }
 
-  async broadcast(workerId: string, message: Record<string, unknown>): Promise<void> {
-    if (message.type === "fanout_input") {
-      this.observers.push(workerId);
-    }
+  async broadcast(
+    workerId: string,
+    message: Record<string, unknown>,
+  ): Promise<void> {
+    if (message.type === "fanout_input") this.observers.push(workerId);
   }
 
   async appendEvent(): Promise<void> {}
 
-  addApproval(): void {}
+  addApproval(request: Record<string, unknown>): void {
+    this.approvals.push(request);
+  }
 
   async openOutputCapture(workerId: string): Promise<OutputCapture> {
     const buffer: string[] = [];
@@ -78,18 +121,42 @@ class ScenarioHub implements FanOutControllerHub {
   }
 }
 
-function principal(subjectId = "admin", roles: string[] = ["admin"]): AuthorizablePrincipal {
-  return { subject_id: subjectId, roles: new Set(roles), scopes: new Set<string>() };
+function actor(input: ActorInput): AuthorizablePrincipal | undefined {
+  if (!input.authenticated) return undefined;
+  return {
+    subject_id: input.subject,
+    roles: new Set(input.roles),
+    scopes: new Set<string>(),
+  };
 }
 
-function empty(id: string, status: string, statusCode: number, error: string | null): Observation {
+function canonicalRouteError(status: number, body: unknown): string | null {
+  if (status < 400) return null;
+  const record =
+    typeof body === "object" && body !== null
+      ? (body as Record<string, unknown>)
+      : {};
+  const message = String(record.error ?? record.detail ?? "");
+  if (status === 401) return "authentication_required";
+  if (message.includes("admin")) return "global_admin_required";
+  if (message.includes("unknown fan-out")) return "unknown_member";
+  return message || "request_failed";
+}
+
+function base(
+  scenario: Scenario,
+  statusCode: number,
+  command: string,
+  error: string | null,
+): Observation {
   return {
-    id,
-    status,
+    id: scenario.id,
+    status: scenario.backends.typescript.status,
     status_code: statusCode,
     error,
     approval_required: false,
     approval_id: null,
+    command,
     delivered_workers: [],
     observer_notifications: [],
     failed_members: [],
@@ -101,171 +168,228 @@ function fromResult(
   scenario: Scenario,
   result: FanOutResult,
   hub: ScenarioHub,
-  options: Partial<Observation> = {},
+  statusCode = 200,
 ): Observation {
   return {
-    ...empty(scenario.id, scenario.backends.typescript.status, 200, result.error),
+    ...base(scenario, statusCode, result.command, result.error),
     approval_required: result.approvalRequired,
     approval_id: result.approvalId === null ? null : "approval",
-    delivered_workers: hub.delivered,
-    observer_notifications: hub.observers,
-    failed_members: result.failedSessions,
+    delivered_workers: [...hub.delivered],
+    observer_notifications: [...hub.observers],
+    failed_members: [...result.failedSessions],
     output: Object.fromEntries(
-      result.results.flatMap((entry) => (entry.ok && entry.outputDelta !== undefined ? [[entry.workerId, entry.outputDelta]] : [])),
+      result.results.flatMap((entry) =>
+        entry.ok && entry.outputDelta !== undefined
+          ? [[entry.workerId, entry.outputDelta]]
+          : [],
+      ),
     ),
-    ...options,
   };
 }
 
-function controller(
-  hub: ScenarioHub,
-  readable = new Set(["w1", "w2"]),
-  policy?: "deny" | "hold",
-): FanOutController {
-  const policyOptions =
-    policy === undefined
+async function buildController(
+  input: ScenarioInput,
+): Promise<{ controller: FanOutController; hub: ScenarioHub }> {
+  const readable = new Set(input.visibility.readable_members);
+  for (const revoked of input.visibility.revoke_before_send)
+    readable.delete(revoked);
+  const hub = new ScenarioHub(
+    new Set(input.workers.accepted_members),
+    input.workers.immediate_output,
+  );
+  const policy = input.policy.action;
+  const controller = new FanOutController({
+    hub,
+    now: () => 1,
+    newId: () => "approval",
+    ...(input.omit_authorizers === true
+      ? {}
+      : {
+          isGlobalAdmin: async (principal) =>
+            principal.roles.has("admin") &&
+            (principal.admin_session_scope ?? null) === null,
+          resolveSession: async (workerId) => ({ workerId }),
+          canReadSession: async (_principal, definition) =>
+            readable.has((definition as { workerId: string }).workerId),
+        }),
+    ...(policy === "allow"
       ? {}
       : {
           policyGate: {
             interceptFanout: async () =>
-              policy === "deny" ? { action: "deny" as const, reason: "denied" } : { action: "hold" as const },
+              policy === "deny"
+                ? { action: "deny" as const, reason: "policy_denied" }
+                : { action: "hold" as const },
           },
-        };
-  return new FanOutController({
-    hub,
-    now: () => 1,
-    newId: () => "approval",
-    isGlobalAdmin: async (actor) => actor.roles.has("admin") && (actor.admin_session_scope ?? null) === null,
-    resolveSession: async (workerId) => ({ workerId }),
-    canReadSession: async (_actor, definition) => readable.has((definition as { workerId: string }).workerId),
-    ...policyOptions,
+        }),
   });
+  const group = fanOutGroup({
+    groupId: input.group.id,
+    name: "fixture-group",
+    workerIds: [...input.group.members],
+    createdBy: input.group.creator,
+    createdAt: 1,
+    grants: [...input.group.grants],
+    maxResponseMs: input.max_response_ms ?? 100,
+    quiesceMs: 1,
+  });
+  await controller.createGroup(group, input.group.creator);
+  return { controller, hub };
 }
 
-async function seeded(
-  members: string[],
-  options: { readable?: Set<string>; policy?: "deny" | "hold" } = {},
-): Promise<{ hub: ScenarioHub; controller: FanOutController }> {
-  const hub = new ScenarioHub();
-  const instance = controller(hub, options.readable, options.policy);
-  await instance.createGroup(
-    fanOutGroup({ groupId: "g1", name: "fleet", workerIds: members, createdBy: "admin", createdAt: 1 }),
-    "admin",
-  );
-  return { hub, controller: instance };
-}
-
-async function routeScenario(scenario: Scenario): Promise<Observation> {
-  const hub = new ScenarioHub();
-  const instance = controller(hub);
+async function executeRest(scenario: Scenario): Promise<Observation> {
+  const input = scenario.input;
+  const built = await buildController(input);
+  const definitions = new Set(input.visibility.readable_members);
   const routes = createFanoutRoutes({
-    controller: instance as unknown as FanoutRoutesController,
-    registry: { getDefinition: async () => undefined },
-    authz: {
-      isAdmin: async (actor) => actor.roles.has("admin") && (actor.admin_session_scope ?? null) === null,
-      canReadSession: async () => true,
+    controller: built.controller,
+    registry: {
+      getDefinition: async (workerId) =>
+        definitions.has(workerId) ? { workerId } : undefined,
     },
-    allowUnknownMembers: scenario.id === "dormant_member_permissive_admission",
+    authz: {
+      isAdmin: async (principal) =>
+        principal.roles.has("admin") &&
+        (principal.admin_session_scope ?? null) === null,
+      canReadSession: async (_principal, definition) =>
+        definitions.has((definition as { workerId: string }).workerId),
+    },
+    allowUnknownMembers: input.group.allow_unknown_members,
     now: () => 1,
+    newId: () => input.group.id,
   });
-  if (scenario.id === "unauthenticated_refusal") {
-    const response = await routes.sendToGroup({ principal: undefined, body: { data: "id" } }, "g1");
-    return empty(scenario.id, scenario.backends.typescript.status, response.status, "authentication_required");
+  const requestActor = actor(input.actor);
+  if (input.operation === "create") {
+    const response = await routes.createGroup({
+      principal: requestActor,
+      body: { name: "fixture-group", worker_ids: input.group.members },
+    });
+    return base(
+      scenario,
+      response.status,
+      input.command,
+      canonicalRouteError(response.status, response.body),
+    );
   }
-  if (scenario.id === "viewer_public_session_refusal") {
-    const response = await routes.sendToGroup({ principal: principal("viewer", ["viewer"]), body: { data: "id" } }, "g1");
-    return empty(scenario.id, scenario.backends.typescript.status, response.status, "global_admin_required");
-  }
-  const response = await routes.createGroup({
-    principal: principal(),
-    body: { name: "dormant", worker_ids: ["missing"] },
-  });
-  return empty(
-    scenario.id,
-    scenario.backends.typescript.status,
-    response.status,
-    response.status < 400 ? null : "unknown_member",
+  const response = await routes.sendToGroup(
+    {
+      principal: requestActor,
+      body: { data: input.command, max_response_ms: input.max_response_ms },
+    },
+    input.group.id,
   );
+  const body =
+    typeof response.body === "object" && response.body !== null
+      ? (response.body as Record<string, unknown>)
+      : {};
+  if (response.status !== 200 || body.results === undefined) {
+    return base(
+      scenario,
+      response.status,
+      input.command,
+      canonicalRouteError(response.status, response.body),
+    );
+  }
+  const held: FanOutResult = {
+    groupId: String(body.group_id),
+    sendId: String(body.send_id),
+    command: String(body.command),
+    sentAt: Number(body.sent_at),
+    results: [],
+    divergentSessions: [],
+    failedSessions: Array.isArray(body.failed_sessions)
+      ? (body.failed_sessions as string[])
+      : [],
+    error: body.error === null ? null : String(body.error),
+    approvalRequired: Boolean(body.approval_required),
+    approvalId: body.approval_id === null ? null : String(body.approval_id),
+  };
+  if (input.surface === "rest_release" && held.approvalId !== null) {
+    const released = await built.controller.releaseApprovedCommand(
+      held.approvalId,
+    );
+    expect(released).toBeDefined();
+    const observation = fromResult(
+      scenario,
+      released as FanOutResult,
+      built.hub,
+      response.status,
+    );
+    observation.approval_required = held.approvalRequired;
+    observation.approval_id = "approval";
+    return observation;
+  }
+  const observation = fromResult(scenario, held, built.hub, response.status);
+  observation.error = held.error;
+  return observation;
+}
+
+async function executeController(scenario: Scenario): Promise<Observation> {
+  const input = scenario.input;
+  const built = await buildController(input);
+  const result = await built.controller.send(
+    input.group.id,
+    input.command,
+    actor(input.actor),
+    {
+      maxResponseMs: input.max_response_ms,
+    },
+  );
+  const status = result.error?.includes("authorization") ? 403 : 200;
+  const observation = fromResult(scenario, result, built.hub, status);
+  if (result.error?.includes("authorization"))
+    observation.error = "authorization_unavailable";
+  return observation;
 }
 
 async function executeScenario(scenario: Scenario): Promise<Observation> {
   if (
-    scenario.id === "unauthenticated_refusal" ||
-    scenario.id === "viewer_public_session_refusal" ||
-    scenario.id.startsWith("dormant_member_")
+    scenario.input.surface === "rest" ||
+    scenario.input.surface === "rest_release"
   ) {
-    return routeScenario(scenario);
+    return executeRest(scenario);
   }
-  if (scenario.id === "missing_controller_dependencies") {
-    const hub = new ScenarioHub();
-    const instance = new FanOutController({ hub, now: () => 1, newId: () => "send" });
-    await instance.createGroup(
-      fanOutGroup({ groupId: "g1", name: "fleet", workerIds: ["w1"], createdBy: "admin", createdAt: 1 }),
-      "admin",
-    );
-    const result = await instance.send("g1", "id", principal());
-    return fromResult(scenario, result, hub, { status_code: 403, error: "authorization_unavailable" });
-  }
-  if (scenario.id === "current_authorization_revocation" || scenario.id === "group_grant_non_bypass") {
-    const readable = scenario.id === "current_authorization_revocation" ? new Set(["w1"]) : new Set<string>();
-    const members = scenario.id === "current_authorization_revocation" ? ["w1", "w2"] : ["w1"];
-    const seededController = await seeded(members, { readable });
-    const result = await seededController.controller.send("g1", "id", principal());
-    return fromResult(scenario, result, seededController.hub);
-  }
-  if (scenario.id === "partial_member_failure") {
-    const seededController = await seeded(["w1", "w2"]);
-    seededController.hub.refused.add("w2");
-    const result = await seededController.controller.send("g1", "id", principal());
-    return fromResult(scenario, result, seededController.hub);
-  }
-  if (scenario.id === "policy_deny") {
-    const seededController = await seeded(["w1"], { policy: "deny" });
-    const result = await seededController.controller.send("g1", "rm -rf /", principal());
-    return fromResult(scenario, result, seededController.hub, { status_code: 403, error: "policy_denied" });
-  }
-  if (scenario.id === "policy_hold_release") {
-    const seededController = await seeded(["w1"], { policy: "hold" });
-    const held = await seededController.controller.send("g1", "reboot", principal());
-    const released = await seededController.controller.releaseApprovedCommand(held.approvalId ?? "");
-    expect(released).toBeDefined();
-    return fromResult(scenario, held, seededController.hub, {
-      status_code: 202,
-      delivered_workers: seededController.hub.delivered,
-      observer_notifications: seededController.hub.observers,
-      output: Object.fromEntries(
-        (released?.results ?? []).flatMap((entry) =>
-          entry.ok && entry.outputDelta !== undefined ? [[entry.workerId, entry.outputDelta]] : [],
-        ),
-      ),
-    });
-  }
-  const seededController = await seeded(["w1"]);
-  seededController.hub.immediate.set("w1", "immediate");
-  const result = await seededController.controller.send("g1", "id", principal());
-  return fromResult(scenario, result, seededController.hub);
+  if (scenario.input.surface === "controller")
+    return executeController(scenario);
+  throw new Error(
+    `TypeScript component does not serve surface ${scenario.input.surface}`,
+  );
 }
 
 describe("shared fan-out security scenarios", () => {
-  it("executes every applicable TypeScript component scenario", async () => {
+  it("interprets every applicable scenario input through real component surfaces", async () => {
     const contract = JSON.parse(readFileSync(contractPath, "utf8")) as Contract;
-    const applicable = contract.scenarios.filter((scenario) => scenario.backends.typescript.status !== "unserved");
-    const observations: Observation[] = [];
-    for (const scenario of applicable) {
-      observations.push(await executeScenario(scenario));
-    }
-    expect(observations.map((observation) => observation.id).sort()).toStrictEqual(
-      applicable.map((scenario) => scenario.id).sort(),
+    const applicable = contract.scenarios.filter(
+      (scenario) => scenario.backends.typescript.status !== "unserved",
     );
-    for (const [index, scenario] of applicable.entries()) {
-      const expected = { ...scenario.expected, ...scenario.backends.typescript.expected };
-      const observation = observations[index] as unknown as Record<string, unknown>;
-      for (const [field, value] of Object.entries(expected)) {
-        expect(observation[field], `${scenario.id}.${field}`).toStrictEqual(value);
+    const observations: Observation[] = [];
+    for (const scenario of applicable)
+      observations.push(await executeScenario(scenario));
+    expect(observations.map((item) => item.id).sort()).toStrictEqual(
+      applicable.map((item) => item.id).sort(),
+    );
+    if (outputPath === undefined) {
+      for (const [index, scenario] of applicable.entries()) {
+        const expected = {
+          ...scenario.expected,
+          ...scenario.backends.typescript.expected,
+        };
+        const observation = observations[index] as unknown as Record<
+          string,
+          unknown
+        >;
+        for (const [field, value] of Object.entries(expected)) {
+          expect(observation[field], `${scenario.id}.${field}`).toStrictEqual(
+            value,
+          );
+        }
       }
     }
-    if (outputPath !== undefined) {
-      writeFileSync(outputPath, `${JSON.stringify(observations, null, 2)}\n`, "utf8");
-    }
+    if (outputPath !== undefined)
+      writeFileSync(
+        outputPath,
+        `${JSON.stringify(observations, null, 2)}\n`,
+        "utf8",
+      );
   });
 });

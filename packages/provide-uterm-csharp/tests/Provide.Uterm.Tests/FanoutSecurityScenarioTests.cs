@@ -5,11 +5,16 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Net;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Channels;
 using Provide.Uterm.Fanout;
+using Provide.Uterm.Hub;
+using Provide.Uterm.Server;
 using Provide.Uterm.ServerAuth;
+using Provide.Uterm.ServerConfig;
 
 namespace Provide.Uterm.Tests;
 
@@ -22,184 +27,215 @@ public sealed class FanoutSecurityScenarioTests
     };
 
     [Fact]
-    public async Task Executes_Every_Applicable_CSharp_Scenario()
+    public async Task Interprets_Every_Applicable_CSharp_Scenario()
     {
         var root = FindRepositoryRoot();
         var contractPath = Environment.GetEnvironmentVariable("FANOUT_SECURITY_SCENARIO_CONTRACT")
             ?? Path.Combine(root, "spec", "fanout_security_scenarios.json");
         var contract = JsonNode.Parse(await File.ReadAllTextAsync(contractPath))!.AsObject();
-        await RunRouteScenarios(root);
-
         var applicable = contract["scenarios"]!.AsArray().Select(node => node!.AsObject())
             .Where(scenario => Status(scenario) != "unserved").ToList();
         var observations = new List<Observation>();
-        foreach (var scenario in applicable)
-        {
-            var observation = await ExecuteScenario(scenario);
-            var actual = JsonSerializer.SerializeToNode(observation, JsonOptions)!.AsObject();
-            foreach (var expected in Expected(scenario))
-            {
-                Assert.True(JsonNode.DeepEquals(actual[expected.Key], expected.Value),
-                    $"{scenario["id"]}.{expected.Key}: {actual[expected.Key]} != {expected.Value}");
-            }
-            observations.Add(observation);
-        }
-        Assert.Equal(applicable.Select(s => s["id"]!.GetValue<string>()).Order(),
-            observations.Select(o => o.Id).Order());
+        foreach (var scenario in applicable) observations.Add(await ExecuteScenario(scenario));
+        Assert.Equal(applicable.Select(Id).Order(), observations.Select(item => item.Id).Order());
 
-        if (Environment.GetEnvironmentVariable("FANOUT_SECURITY_SCENARIO_OUTPUT") is { Length: > 0 } outputPath)
+        if (Environment.GetEnvironmentVariable("FANOUT_SECURITY_SCENARIO_OUTPUT") is not { Length: > 0 } outputPath)
+        {
+            for (var index = 0; index < applicable.Count; index++)
+            {
+                var actual = JsonSerializer.SerializeToNode(observations[index], JsonOptions)!.AsObject();
+                foreach (var expected in Expected(applicable[index]))
+                    Assert.True(JsonNode.DeepEquals(actual[expected.Key], expected.Value),
+                        $"{Id(applicable[index])}.{expected.Key}: {actual[expected.Key]} != {expected.Value}");
+            }
+        }
+        else
+        {
             await File.WriteAllTextAsync(outputPath, JsonSerializer.Serialize(observations, JsonOptions) + "\n");
+        }
     }
 
     private static async Task<Observation> ExecuteScenario(JsonObject scenario)
     {
-        switch (scenario["id"]!.GetValue<string>())
+        var input = scenario["input"]!.AsObject();
+        var surface = Text(input, "surface");
+        if (surface is "rest" or "rest_release") return await ExecuteRoute(scenario, input);
+        if (surface == "store") return await ExecuteStore(scenario, input);
+        if (surface != "controller") throw new InvalidOperationException($"unsupported surface {surface}");
+        return await ExecuteController(scenario, input);
+    }
+
+    private static async Task<Observation> ExecuteController(JsonObject scenario, JsonObject input)
+    {
+        var (controller, hub) = Build(input);
+        var command = Text(input, "command");
+        Result result;
+        try
         {
-            case "unauthenticated_refusal":
-            {
-                var (controller, hub) = Build(["w1"], ["w1"]);
-                await Assert.ThrowsAsync<FanoutAuthorizationException>(() => controller.SendAsync("g", "id", null));
-                Assert.Empty(hub.Delivered);
-                return Empty(scenario, 401, "authentication_required");
-            }
-            case "viewer_public_session_refusal":
-            {
-                var (controller, hub) = Build(["w1"], ["w1"]);
-                var viewer = new Principal
-                {
-                    SubjectId = "viewer", Roles = StringSet.Of("viewer"), Scopes = StringSet.Of("*"),
-                };
-                await Assert.ThrowsAsync<FanoutAuthorizationException>(() => controller.SendAsync("g", "id", viewer));
-                Assert.Empty(hub.Delivered);
-                return Empty(scenario, 403, "global_admin_required");
-            }
-            case "dormant_member_default_reject":
-                return Empty(scenario, 400, "unknown_member");
-            case "dormant_member_permissive_admission":
-            {
-                var (controller, _) = Build(["missing"], []);
-                Assert.NotNull(controller.GetGroup("g", "admin"));
-                return Empty(scenario, 200, null);
-            }
-            case "current_authorization_revocation":
-            {
-                var (controller, hub) = Build(["w1", "w2"], ["w1", "w2"], ["w2"]);
-                return FromResult(scenario, await controller.SendAsync("g", "id", Admin()), hub);
-            }
-            case "group_grant_non_bypass":
-            {
-                var (controller, hub) = Build(["w1"], ["w1"], ["w1"]);
-                controller.GrantAccess("g", "admin", "admin");
-                return FromResult(scenario, await controller.SendAsync("g", "id", Admin()), hub);
-            }
-            case "partial_member_failure":
-            {
-                var (controller, hub) = Build(["w1", "w2"], ["w1"]);
-                return FromResult(scenario, await controller.SendAsync("g", "id", Admin()), hub);
-            }
-            case "policy_deny":
-            case "policy_hold_release":
-            {
-                var hub = new ScenarioHub(["w1"]);
-                var controller = WithoutAuthorizer(hub);
-                await Assert.ThrowsAsync<FanoutAuthorizationException>(() => controller.SendAsync("g", "id", Admin()));
-                Assert.Empty(hub.Delivered);
-                Assert.Empty(hub.Observers);
-                return Empty(scenario, 501, "unsupported_fail_closed");
-            }
-            case "missing_controller_dependencies":
-            {
-                var hub = new ScenarioHub(["w1"]);
-                var controller = WithoutAuthorizer(hub);
-                await Assert.ThrowsAsync<FanoutAuthorizationException>(() => controller.SendAsync("g", "id", Admin()));
-                Assert.Empty(hub.Delivered);
-                return Empty(scenario, 403, "authorization_unavailable");
-            }
-            case "immediate_output_capture":
-            {
-                var (controller, hub) = Build(["w1"], ["w1"], output: "immediate");
-                return FromResult(scenario, await controller.SendAsync("g", "id", Admin()), hub);
-            }
-            case "store_read_isolation":
-            {
-                var store = new InMemoryGroupStore();
-                var stored = Group(["w1"]);
-                stored.CreatedBy = "admin";
-                store.Save(stored);
-                Assert.True(store.TryGet("g", out var read));
-                read.WorkerIds.Add("w2");
-                Assert.True(store.TryGet("g", out var again));
-                Assert.Equal(["w1"], again.WorkerIds);
-                return Empty(scenario, 200, null);
-            }
-            case "store_atomic_update":
-            {
-                var store = new InMemoryGroupStore();
-                var stored = Group(["w1"]);
-                stored.CreatedBy = "admin";
-                store.Save(stored);
-                await Task.WhenAll(new[] { "alice", "bob" }.Select(grantee =>
-                    Task.Run(() => Assert.True(store.GrantAccess("g", grantee, "admin")))));
-                Assert.True(store.TryGet("g", out var group));
-                Assert.Equal(["alice", "bob"], group.Grants.Order());
-                return Empty(scenario, 200, null);
-            }
-            case "total_response_deadline":
-            {
-                var (controller, hub) = Build(["w1"], ["w1"], hangReads: true);
-                var clock = Stopwatch.StartNew();
-                var result = await controller.SendAsync("g", "tail -f", Admin(), 1000, 20)
-                    .WaitAsync(TimeSpan.FromMilliseconds(500));
-                Assert.True(clock.ElapsedMilliseconds < 400);
-                return FromResult(scenario, result, hub);
-            }
-            default:
-                throw new InvalidOperationException("unimplemented applicable C# scenario");
+            result = await controller.SendAsync(
+                Text(input["group"]!.AsObject(), "id"), command, PrincipalFor(input),
+                maxResponseMs: Number(input, "max_response_ms"));
         }
-    }
-
-    private static Controller WithoutAuthorizer(ScenarioHub hub)
-    {
-        var controller = new Controller(hub, new ControllerConfig { IdGen = () => "send" });
-        controller.CreateGroup(Group(["w1"]), "admin");
-        return controller;
-    }
-
-    private static (Controller Controller, ScenarioHub Hub) Build(
-        IEnumerable<string> members,
-        IEnumerable<string> connected,
-        IEnumerable<string>? denied = null,
-        string output = "ok",
-        bool hangReads = false)
-    {
-        var hub = new ScenarioHub(connected, output, hangReads);
-        var controller = new Controller(hub, new ControllerConfig
+        catch (FanoutAuthorizationException exception)
         {
-            IdGen = () => "send", Authorizer = new ScenarioAuthorizer(denied ?? []),
+            var error = exception.Message.Contains("principal", StringComparison.OrdinalIgnoreCase)
+                ? "authentication_required"
+                : exception.Message.Contains("admin", StringComparison.OrdinalIgnoreCase)
+                    ? "global_admin_required"
+                    : "authorization_unavailable";
+            var code = error == "authentication_required" ? 401 : 403;
+            Assert.Empty(hub.Delivered);
+            return Empty(scenario, code, command, error);
+        }
+        return FromResult(scenario, result, hub);
+    }
+
+    private static async Task<Observation> ExecuteStore(JsonObject scenario, JsonObject input)
+    {
+        var groupInput = input["group"]!.AsObject();
+        var store = new InMemoryGroupStore();
+        var group = Group(input);
+        store.Save(group);
+        switch (Text(input, "operation"))
+        {
+            case "store_read_isolation":
+                Assert.True(store.TryGet(group.GroupId, out var read));
+                read.WorkerIds.Add(Text(input, "mutation_member"));
+                Assert.True(store.TryGet(group.GroupId, out var again));
+                Assert.DoesNotContain(Text(input, "mutation_member"), again.WorkerIds);
+                break;
+            case "store_atomic_update":
+                var grants = Strings(input["concurrent_grants"]);
+                await Task.WhenAll(grants.Select(grantee => Task.Run(() =>
+                    Assert.True(store.GrantAccess(group.GroupId, grantee, Text(groupInput, "creator"))))));
+                Assert.True(store.TryGet(group.GroupId, out var stored));
+                Assert.Equal(grants.Order(), stored.Grants.Order());
+                break;
+            default:
+                throw new InvalidOperationException($"unsupported store operation {Text(input, "operation")}");
+        }
+        return Empty(scenario, 200, Text(input, "command"), null);
+    }
+
+    private static async Task<Observation> ExecuteRoute(JsonObject scenario, JsonObject input)
+    {
+        var groupInput = input["group"]!.AsObject();
+        var config = UtermServerConfig.Default();
+        config.FanoutAllowUnknownMembers = Flag(groupInput, "allow_unknown_members");
+        if (Text(input["policy"]!.AsObject(), "action") != "allow")
+            config.Governance.PolicyWebhookUrl = "https://policy.example.test/fanout";
+        await using var server = new UtermServer(new ServerDeps
+        {
+            Hub = new TermHub(), Auth = new ScenarioAuthenticator(), Authz = new AuthorizationService(),
+            Config = config, Registry = new InMemorySessionRegistry(),
         });
-        controller.CreateGroup(Group(members), "admin");
+        server.Build(["http://127.0.0.1:0"]);
+        await server.StartAsync();
+        using var http = new HttpClient { BaseAddress = new Uri(server.BaseAddress!) };
+        var actor = input["actor"]!.AsObject();
+        if (Text(input, "operation") == "create")
+        {
+            using var response = await Send(http, HttpMethod.Post, "/api/fanout/groups",
+                JsonSerializer.Serialize(new { name = "fixture-group", worker_ids = Strings(groupInput["members"]) }), actor);
+            var body = await response.Content.ReadAsStringAsync();
+            return Empty(scenario, (int)response.StatusCode, Text(input, "command"), CanonicalRouteError(response.StatusCode, body));
+        }
+
+        var groupId = Text(groupInput, "id");
+        if (Flag(actor, "authenticated") && Strings(actor["roles"]).Contains("admin"))
+        {
+            var creator = new JsonObject
+            {
+                ["subject"] = Text(groupInput, "creator"), ["authenticated"] = true,
+                ["roles"] = new JsonArray("admin"),
+            };
+            using var created = await Send(http, HttpMethod.Post, "/api/fanout/groups",
+                JsonSerializer.Serialize(new { name = "fixture-group", worker_ids = Strings(groupInput["members"]) }), creator);
+            if (created.StatusCode == HttpStatusCode.OK)
+            {
+                var body = JsonNode.Parse(await created.Content.ReadAsStringAsync())!.AsObject();
+                groupId = body["group_id"]!.GetValue<string>();
+            }
+        }
+        using var sent = await Send(http, HttpMethod.Post, $"/api/fanout/groups/{groupId}/send",
+            JsonSerializer.Serialize(new { data = Text(input, "command") }), actor);
+        var sentBody = await sent.Content.ReadAsStringAsync();
+        return Empty(scenario, (int)sent.StatusCode, Text(input, "command"), CanonicalRouteError(sent.StatusCode, sentBody));
+    }
+
+    private static async Task<HttpResponseMessage> Send(
+        HttpClient http, HttpMethod method, string path, string body, JsonObject actor)
+    {
+        using var request = new HttpRequestMessage(method, path)
+        {
+            Content = new StringContent(body, Encoding.UTF8, "application/json"),
+        };
+        if (Flag(actor, "authenticated"))
+        {
+            request.Headers.Add("X-Test-Subject", Text(actor, "subject"));
+            request.Headers.Add("X-Test-Role", Strings(actor["roles"]).FirstOrDefault() ?? "viewer");
+        }
+        return await http.SendAsync(request);
+    }
+
+    private static string? CanonicalRouteError(HttpStatusCode status, string body)
+    {
+        if ((int)status < 400) return null;
+        if (status == HttpStatusCode.Unauthorized) return "authentication_required";
+        if (body.Contains("admin", StringComparison.OrdinalIgnoreCase)) return "global_admin_required";
+        if (body.Contains("unknown fan-out", StringComparison.OrdinalIgnoreCase)) return "unknown_member";
+        if (status == HttpStatusCode.NotImplemented) return "unsupported_fail_closed";
+        return "request_failed";
+    }
+
+    private static (Controller Controller, ScenarioHub Hub) Build(JsonObject input)
+    {
+        var visibility = input["visibility"]!.AsObject();
+        var readable = Strings(visibility["readable_members"]).ToHashSet();
+        readable.ExceptWith(Strings(visibility["revoke_before_send"]));
+        var workers = input["workers"]!.AsObject();
+        var hub = new ScenarioHub(
+            Strings(workers["accepted_members"]), StringMap(workers["immediate_output"]),
+            Flag(workers, "continuous_output"));
+        var config = new ControllerConfig { IdGen = () => "approval" };
+        if (!Flag(input, "omit_authorizers")) config.Authorizer = new ScenarioAuthorizer(readable);
+        var controller = new Controller(hub, config);
+        var group = Group(input);
+        controller.CreateGroup(group, group.CreatedBy);
         return (controller, hub);
     }
 
-    private static Group Group(IEnumerable<string> members) => new()
+    private static Group Group(JsonObject input)
     {
-        GroupId = "g", Name = "fleet", WorkerIds = members.ToList(), Mode = "parallel",
-        QuiesceMs = 5, MaxResponseMs = 100, DivergenceThreshold = 0.8,
-    };
+        var group = input["group"]!.AsObject();
+        return new Group
+        {
+            GroupId = Text(group, "id"), Name = "fixture-group", WorkerIds = Strings(group["members"]),
+            CreatedBy = Text(group, "creator"), Grants = Strings(group["grants"]), Mode = "parallel",
+            QuiesceMs = 1, MaxResponseMs = Number(input, "max_response_ms") is > 0 and var value ? value : 100,
+            DivergenceThreshold = 0.8,
+        };
+    }
 
-    private static Principal Admin() => new()
+    private static Principal? PrincipalFor(JsonObject input)
     {
-        SubjectId = "admin", Roles = StringSet.Of("admin"), Scopes = StringSet.Of("*"),
-    };
+        var actor = input["actor"]!.AsObject();
+        if (!Flag(actor, "authenticated")) return null;
+        return new Principal
+        {
+            SubjectId = Text(actor, "subject"), Roles = StringSet.Of(Strings(actor["roles"]).ToArray()),
+            Scopes = StringSet.Of("*"),
+        };
+    }
 
-    private static Observation Empty(JsonObject scenario, int code, string? error) => new()
+    private static Observation Empty(JsonObject scenario, int code, string command, string? error) => new()
     {
-        Id = scenario["id"]!.GetValue<string>(), Status = Status(scenario), StatusCode = code, Error = error,
+        Id = Id(scenario), Status = Status(scenario), StatusCode = code, Error = error, Command = command,
     };
 
     private static Observation FromResult(JsonObject scenario, Result result, ScenarioHub hub)
     {
-        var observation = Empty(scenario, 200, null);
+        var observation = Empty(scenario, 200, result.Command, null);
         observation.DeliveredWorkers.AddRange(hub.Delivered);
         observation.ObserverNotifications.AddRange(hub.Observers);
         observation.FailedMembers.AddRange(result.FailedSessions);
@@ -208,8 +244,16 @@ public sealed class FanoutSecurityScenarioTests
         return observation;
     }
 
+    private static string Id(JsonObject scenario) => Text(scenario, "id");
     private static string Status(JsonObject scenario) =>
         scenario["backends"]!["csharp"]!["status"]!.GetValue<string>();
+    private static string Text(JsonObject value, string key) => value[key]?.GetValue<string>() ?? "";
+    private static bool Flag(JsonObject value, string key) => value[key]?.GetValue<bool>() ?? false;
+    private static int Number(JsonObject value, string key) => value[key]?.GetValue<int>() ?? 0;
+    private static List<string> Strings(JsonNode? node) =>
+        node is JsonArray array ? array.Select(item => item!.GetValue<string>()).ToList() : [];
+    private static Dictionary<string, string> StringMap(JsonNode? node) =>
+        node is JsonObject value ? value.ToDictionary(pair => pair.Key, pair => pair.Value!.GetValue<string>()) : [];
 
     private static JsonObject Expected(JsonObject scenario)
     {
@@ -219,34 +263,12 @@ public sealed class FanoutSecurityScenarioTests
         return expected;
     }
 
-    private static async Task RunRouteScenarios(string root)
-    {
-        var start = new ProcessStartInfo("dotnet")
-        {
-            WorkingDirectory = Path.Combine(root, "packages", "provide-uterm-csharp"),
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        foreach (var arg in new[]
-        {
-            "test", "tests/Provide.Uterm.Tests/Provide.Uterm.Tests.csproj", "--no-build", "--no-restore", "--filter",
-            "FullyQualifiedName~ServerFanoutTests.All_Routes_Require_Authenticated_Global_Admin_Before_Parse_Or_Lookup|FullyQualifiedName~ServerIntegrationControlPlaneRestTests.Fanout_Unknown_Members_Are_Strict_By_Default_And_Configurable|FullyQualifiedName~ServerIntegrationControlPlaneRestTests.Fanout_Configured_Unsupported_Governance_Fails_Closed",
-        }) start.ArgumentList.Add(arg);
-        using var process = Process.Start(start)!;
-        var stdout = process.StandardOutput.ReadToEndAsync();
-        var stderr = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
-        Assert.True(process.ExitCode == 0, (await stdout) + (await stderr));
-    }
-
     private static string FindRepositoryRoot()
     {
         foreach (var start in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
-        {
             for (var directory = new DirectoryInfo(start); directory is not null; directory = directory.Parent)
                 if (File.Exists(Path.Combine(directory.FullName, "spec", "fanout_security_scenarios.json")))
                     return directory.FullName;
-        }
         throw new DirectoryNotFoundException("repository root not found");
     }
 
@@ -258,43 +280,46 @@ public sealed class FanoutSecurityScenarioTests
         public string? Error { get; init; }
         public bool ApprovalRequired { get; init; }
         public string? ApprovalId { get; init; }
+        public required string Command { get; init; }
         public List<string> DeliveredWorkers { get; } = [];
         public List<string> ObserverNotifications { get; } = [];
         public List<string> FailedMembers { get; } = [];
         public Dictionary<string, string> Output { get; } = [];
     }
 
-    private sealed class ScenarioAuthorizer(IEnumerable<string> denied) : IFanoutAuthorizer
+    private sealed class ScenarioAuthorizer(IEnumerable<string> readable) : IFanoutAuthorizer
     {
-        private readonly HashSet<string> _denied = denied.ToHashSet();
+        private readonly HashSet<string> _readable = readable.ToHashSet();
         public bool IsGlobalAdmin(Principal principal) =>
             principal.Roles.Has("admin") && principal.AdminSessionScope is null;
-        public bool CanReadMember(Principal principal, string workerId) => !_denied.Contains(workerId);
+        public bool CanReadMember(Principal principal, string workerId) => _readable.Contains(workerId);
     }
 
-    private sealed class ScenarioHub(IEnumerable<string> connected, string output = "ok", bool hangReads = false)
-        : IFanoutHub
+    private sealed class ScenarioHub(
+        IEnumerable<string> accepted, IReadOnlyDictionary<string, string> output, bool hangReads) : IFanoutHub
     {
-        private readonly HashSet<string> _connected = connected.ToHashSet();
-        private readonly string _output = output;
+        private readonly HashSet<string> _accepted = accepted.ToHashSet();
+        private readonly IReadOnlyDictionary<string, string> _output = output;
         private readonly bool _hangReads = hangReads;
         private readonly ConcurrentDictionary<string, ScenarioSubscription> _subscriptions = new();
         public List<string> Delivered { get; } = [];
         public List<string> Observers { get; } = [];
 
         public Task<bool> SendWorkerAsync(
-            string workerId, IReadOnlyDictionary<string, object?> msg, CancellationToken ct = default)
+            string workerId, IReadOnlyDictionary<string, object?> message, CancellationToken cancellationToken = default)
         {
-            if (!_connected.Contains(workerId)) return Task.FromResult(false);
+            if (!_accepted.Contains(workerId)) return Task.FromResult(false);
             lock (Delivered) Delivered.Add(workerId);
-            if (!_hangReads) _subscriptions[workerId].Enqueue(new FanoutOutputEvent("term", _output));
+            if (_hangReads)
+                return new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously).Task;
+            _subscriptions[workerId].Enqueue(new FanoutOutputEvent("term", _output.GetValueOrDefault(workerId, "ok")));
             return Task.FromResult(true);
         }
 
         public Task BroadcastAsync(
-            string workerId, IReadOnlyDictionary<string, object?> msg, CancellationToken ct = default)
+            string workerId, IReadOnlyDictionary<string, object?> message, CancellationToken cancellationToken = default)
         {
-            if (Equals(msg["type"], "fanout_input")) lock (Observers) Observers.Add(workerId);
+            if (Equals(message["type"], "fanout_input")) lock (Observers) Observers.Add(workerId);
             return Task.CompletedTask;
         }
 
@@ -306,12 +331,25 @@ public sealed class FanoutSecurityScenarioTests
     {
         private readonly Channel<FanoutOutputEvent?> _events = Channel.CreateUnbounded<FanoutOutputEvent?>();
         public void Enqueue(FanoutOutputEvent item) => _events.Writer.TryWrite(item);
-        public async ValueTask<FanoutOutputEvent?> ReadAsync(CancellationToken ct) =>
-            await _events.Reader.ReadAsync(ct);
+        public async ValueTask<FanoutOutputEvent?> ReadAsync(CancellationToken cancellationToken) =>
+            await _events.Reader.ReadAsync(cancellationToken);
         public ValueTask DisposeAsync()
         {
             _events.Writer.TryComplete();
             return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class ScenarioAuthenticator : IAuthenticator
+    {
+        public Task<Principal> AuthenticateAsync(AuthRequest request, CancellationToken cancellationToken = default)
+        {
+            var subject = request.Header("X-Test-Subject");
+            if (subject.Length == 0) return Task.FromResult(Principal.Anonymous());
+            return Task.FromResult(new Principal
+            {
+                SubjectId = subject, Roles = StringSet.Of(request.Header("X-Test-Role")), Scopes = StringSet.Of("*"),
+            });
         }
     }
 }

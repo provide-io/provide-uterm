@@ -22,6 +22,7 @@ RESULT_FIELDS = {
     "error",
     "approval_required",
     "approval_id",
+    "command",
     "delivered_workers",
     "observer_notifications",
     "failed_members",
@@ -33,22 +34,7 @@ EXPECTED_SURFACES = {
     "csharp": {"surface": "server", "advertised": True},
     "typescript": {"surface": "component", "advertised": False},
 }
-EXPECTED_STATUS_MATRIX = {
-    "unauthenticated_refusal": ("execute", "execute", "execute", "component_execute"),
-    "viewer_public_session_refusal": ("execute", "execute", "execute", "component_execute"),
-    "dormant_member_default_reject": ("execute", "execute", "execute", "component_execute"),
-    "dormant_member_permissive_admission": ("execute", "execute", "execute", "component_execute"),
-    "current_authorization_revocation": ("execute", "execute", "execute", "component_execute"),
-    "group_grant_non_bypass": ("execute", "execute", "execute", "component_execute"),
-    "partial_member_failure": ("execute", "execute", "execute", "component_execute"),
-    "policy_deny": ("execute", "unsupported_fail_closed", "unsupported_fail_closed", "component_execute"),
-    "policy_hold_release": ("execute", "unsupported_fail_closed", "unsupported_fail_closed", "component_execute"),
-    "missing_controller_dependencies": ("execute", "execute", "execute", "component_execute"),
-    "immediate_output_capture": ("execute", "execute", "execute", "component_execute"),
-    "store_read_isolation": ("unserved", "execute", "execute", "unserved"),
-    "store_atomic_update": ("unserved", "execute", "execute", "unserved"),
-    "total_response_deadline": ("unserved", "unserved", "execute", "unserved"),
-}
+INPUT_FIELDS = {"surface", "operation", "actor", "group", "visibility", "policy", "workers", "command"}
 
 
 def _dict(value: object) -> dict[str, Any]:
@@ -71,11 +57,28 @@ def applicable_ids(contract: dict[str, Any], backend: str) -> set[str]:
     }
 
 
+def semantic_status(scenario: dict[str, Any], backend: str) -> str:
+    """Derive backend support from scenario semantics rather than its opaque ID."""
+    input_data = _dict(scenario.get("input"))
+    surface = input_data.get("surface")
+    continuous_output = _dict(input_data.get("workers")).get("continuous_output") is True
+    governed = _dict(input_data.get("policy")).get("action") != "allow"
+    if backend == "typescript":
+        return "unserved" if surface == "store" or continuous_output else "component_execute"
+    if backend == "python":
+        return "unserved" if surface == "store" or continuous_output else "execute"
+    if backend == "go":
+        if continuous_output:
+            return "unserved"
+        return "unsupported_fail_closed" if governed else "execute"
+    return "unsupported_fail_closed" if governed else "execute"
+
+
 def validate_contract(contract: dict[str, Any]) -> list[str]:
-    """Validate the semantic contract and fixed support matrix."""
+    """Validate the semantic contract and backend support claims."""
     errors: list[str] = []
-    if contract.get("schema_version") != 1:
-        errors.append("schema_version must be 1")
+    if contract.get("schema_version") != 2:
+        errors.append("schema_version must be 2")
     if set(contract.get("status_vocabulary", [])) != STATUSES:
         errors.append("status vocabulary mismatch")
     backends = _dict(contract.get("backends"))
@@ -103,6 +106,8 @@ def validate_contract(contract: dict[str, Any]) -> list[str]:
         seen.add(scenario_id)
         if not isinstance(scenario.get("input"), dict):
             errors.append(f"{scenario_id}: input must be semantic data")
+        elif not set(scenario["input"]) >= INPUT_FIELDS:
+            errors.append(f"{scenario_id}: input is missing required semantic fields")
         common = _dict(scenario.get("expected"))
         if set(common) != RESULT_FIELDS:
             errors.append(f"{scenario_id}: common expectation must contain every normalized result field")
@@ -110,8 +115,7 @@ def validate_contract(contract: dict[str, Any]) -> list[str]:
         if set(claims) != set(BACKENDS):
             errors.append(f"{scenario_id}: backend claims must be exact")
             continue
-        expected_statuses = EXPECTED_STATUS_MATRIX.get(scenario_id)
-        for index, backend in enumerate(BACKENDS):
+        for backend in BACKENDS:
             claim = _dict(claims.get(backend))
             if set(claim) != {"status", "expected"}:
                 errors.append(f"{scenario_id}.{backend}: claim must contain status and expected")
@@ -119,15 +123,11 @@ def validate_contract(contract: dict[str, Any]) -> list[str]:
             status = claim.get("status")
             if status not in STATUSES:
                 errors.append(f"{scenario_id}.{backend}: invalid status {status!r}")
-            if expected_statuses is not None and status != expected_statuses[index]:
+            if status != semantic_status(scenario, backend):
                 errors.append(f"{scenario_id}.{backend}: false capability status {status!r}")
             overrides = _dict(claim.get("expected"))
             if set(overrides) - RESULT_FIELDS or set(expected_for(scenario, backend)) != RESULT_FIELDS:
                 errors.append(f"{scenario_id}.{backend}: invalid expected result fields")
-    if seen != set(EXPECTED_STATUS_MATRIX):
-        missing = sorted(set(EXPECTED_STATUS_MATRIX) - seen)
-        extra = sorted(seen - set(EXPECTED_STATUS_MATRIX))
-        errors.append(f"scenario IDs mismatch: missing={missing}, extra={extra}")
     return errors
 
 
@@ -199,7 +199,7 @@ def _command(root: Path, backend: str) -> tuple[list[str], Path]:
         return [
             "go",
             "test",
-            "./fanout",
+            "./server",
             "-run",
             "^TestFanoutSecurityScenarios$",
             "-count=1",
@@ -219,8 +219,10 @@ def _command(root: Path, backend: str) -> tuple[list[str], Path]:
     return ["npx", "vitest", "run", "src/fanout/security-scenarios.test.ts"], root / "packages/provide-uterm-ts"
 
 
-def run_backend(root: Path, contract_path: Path, contract: dict[str, Any], backend: str) -> list[str]:
-    """Run one native adapter and compare its JSON observations."""
+def collect_backend_observations(
+    root: Path, contract_path: Path, backend: str
+) -> tuple[list[str], list[dict[str, Any]]]:
+    """Run one native adapter and return only observations produced by it."""
     with tempfile.TemporaryDirectory(prefix=f"uterm-fanout-{backend}-") as directory:
         output_path = Path(directory) / "observations.json"
         environment = {
@@ -234,14 +236,22 @@ def run_backend(root: Path, contract_path: Path, contract: dict[str, Any], backe
         result = subprocess.run(command, cwd=cwd, env=environment, check=False, capture_output=True, text=True)
         errors = command_errors(backend, result)
         if errors:
-            return errors
+            return errors, []
         if not output_path.is_file():
-            return [f"{backend}: native command produced no observation file"]
+            return [f"{backend}: native command produced no observation file"], []
         try:
             observations = json.loads(output_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
-            return [f"{backend}: invalid observation JSON: {exc}"]
-        return compare_observations(contract, backend, observations)
+            return [f"{backend}: invalid observation JSON: {exc}"], []
+        if not isinstance(observations, list) or not all(isinstance(item, dict) for item in observations):
+            return [f"{backend}: adapter output must be a JSON list of objects"], []
+        return [], observations
+
+
+def run_backend(root: Path, contract_path: Path, contract: dict[str, Any], backend: str) -> list[str]:
+    """Run one native adapter and compare its runtime observations."""
+    errors, observations = collect_backend_observations(root, contract_path, backend)
+    return errors or compare_observations(contract, backend, observations)
 
 
 def _parser() -> argparse.ArgumentParser:
