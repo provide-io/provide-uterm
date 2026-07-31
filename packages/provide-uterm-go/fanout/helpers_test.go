@@ -12,7 +12,42 @@ import (
 	"time"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverauth"
 )
+
+type fakeAuthorizer struct {
+	mu      sync.Mutex
+	admin   bool
+	denied  map[string]bool
+	checked []string
+}
+
+func allowAllAuthorizer() *fakeAuthorizer { return &fakeAuthorizer{admin: true} }
+
+func (a *fakeAuthorizer) IsGlobalAdmin(p *serverauth.Principal) bool {
+	return a != nil && a.admin && p != nil && p.Roles.Has("admin") && p.AdminSessionScope == nil
+}
+
+func (a *fakeAuthorizer) CanReadMember(_ context.Context, _ *serverauth.Principal, workerID string) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.checked = append(a.checked, workerID)
+	return !a.denied[workerID]
+}
+
+func (a *fakeAuthorizer) checkedMembers() []string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return append([]string(nil), a.checked...)
+}
+
+func adminPrincipal(subject string) *serverauth.Principal {
+	return &serverauth.Principal{
+		SubjectID: subject,
+		Roles:     serverauth.NewSet("admin"),
+		Scopes:    serverauth.NewSet("*"),
+	}
+}
 
 // sendCall records one SendWorker invocation.
 type sendCall struct {
@@ -35,6 +70,7 @@ type fakeHub struct {
 	connected  map[string]bool
 	sends      []sendCall
 	broadcasts []bcastCall
+	onSend     func(string)
 }
 
 func newFakeHub(bus *hub.EventBus, connected ...string) *fakeHub {
@@ -47,9 +83,14 @@ func newFakeHub(bus *hub.EventBus, connected ...string) *fakeHub {
 
 func (f *fakeHub) SendWorker(_ context.Context, workerID string, msg map[string]any) (bool, error) {
 	f.mu.Lock()
-	defer f.mu.Unlock()
 	f.sends = append(f.sends, sendCall{WorkerID: workerID, Msg: msg})
-	return f.connected[workerID], nil
+	connected := f.connected[workerID]
+	onSend := f.onSend
+	f.mu.Unlock()
+	if onSend != nil {
+		onSend(workerID)
+	}
+	return connected, nil
 }
 
 func (f *fakeHub) Broadcast(_ context.Context, workerID string, msg map[string]any) error {

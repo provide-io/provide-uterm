@@ -21,16 +21,37 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"regexp"
 	"sync"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverauth"
 )
 
 // maxErrorPatternLen bounds a group's error_pattern. Port of
 // rest_helpers.MAX_EXPECT_REGEX_LEN.
 const maxErrorPatternLen = 200
+
+var (
+	// ErrPrincipalRequired means dispatch was attempted without a resolved,
+	// authenticated principal.
+	ErrPrincipalRequired = errors.New("fanout: authenticated principal is required")
+	// ErrAuthorizerUnavailable means the controller was constructed without its
+	// mandatory current-session authorization dependency.
+	ErrAuthorizerUnavailable = errors.New("fanout: member authorizer is unavailable")
+	// ErrAdminRequired means the resolved principal is not a global admin.
+	ErrAdminRequired = errors.New("fanout: global admin role is required")
+)
+
+// Authorizer owns the two authorization decisions required immediately before
+// dispatch. The controller iterates only the stored group's members, so callers
+// cannot inject an arbitrary authorized subset.
+type Authorizer interface {
+	IsGlobalAdmin(*serverauth.Principal) bool
+	CanReadMember(context.Context, *serverauth.Principal, string) bool
+}
 
 // Hub is the subset of the TermHub surface the controller needs. *hub.TermHub
 // satisfies it; tests supply a fake to assert the broadcast + send behavior.
@@ -49,6 +70,7 @@ type Hub interface {
 type Controller struct {
 	hub          Hub
 	store        Store
+	authorizer   Authorizer
 	clock        hub.Clock
 	maxGroupSize int
 	newID        func() string
@@ -58,6 +80,9 @@ type Controller struct {
 type Config struct {
 	// Store persists groups. nil → a fresh InMemoryStore.
 	Store Store
+	// Authorizer resolves current session membership and access. It is mandatory
+	// for Send; nil controllers fail closed.
+	Authorizer Authorizer
 	// Clock supplies wall time for send_id timestamps. nil → real clock.
 	Clock hub.Clock
 	// MaxGroupSize bounds a group's worker count. 0 → 50.
@@ -85,7 +110,10 @@ func NewController(h Hub, cfg Config) *Controller {
 	if idGen == nil {
 		idGen = newHexID
 	}
-	return &Controller{hub: h, store: store, clock: clock, maxGroupSize: maxSize, newID: idGen}
+	return &Controller{
+		hub: h, store: store, authorizer: cfg.Authorizer, clock: clock,
+		maxGroupSize: maxSize, newID: idGen,
+	}
 }
 
 // newHexID returns a 32-hex-char id, the shape of Python's uuid4().hex.
@@ -135,14 +163,7 @@ func (c *Controller) ListGroups(principal string) []*Group {
 // GrantAccess adds grantee to the group's grants. Only the creator can grant.
 // Port of grant_access.
 func (c *Controller) GrantAccess(groupID, grantee, principal string) {
-	g, ok := c.store.Get(groupID)
-	if !ok || g.CreatedBy != principal {
-		return
-	}
-	if !contains(g.Grants, grantee) {
-		g.Grants = append(g.Grants, grantee)
-		c.store.Save(g)
-	}
+	c.store.GrantAccess(groupID, grantee, principal)
 }
 
 // authorizedGroup returns the group when principal is the creator or a grantee,
@@ -160,47 +181,45 @@ func (c *Controller) authorizedGroup(groupID, principal string) *Group {
 
 // -- Send --------------------------------------------------------------------
 
-// Send broadcasts data to every worker in the group and collects the results.
-// When principal has no access the result is empty (mirroring Python). Port of
-// send (standard-execution path). quiesceMS / maxResponseMS <= 0 fall back to
-// the group defaults.
-func (c *Controller) Send(ctx context.Context, groupID, data, principal string, quiesceMS, maxResponseMS int) Result {
-	group := c.authorizedGroup(groupID, principal)
-	if group == nil {
+// Send reauthorizes the global-admin principal against every current stored
+// member, dispatches only to allowed members, and reports all others failed.
+// quiesceMS / maxResponseMS <= 0 fall back to the group defaults.
+func (c *Controller) Send(
+	ctx context.Context,
+	groupID, data string,
+	principal *serverauth.Principal,
+	quiesceMS, maxResponseMS int,
+) (Result, error) {
+	empty := func() Result {
 		return Result{
-			GroupID:           groupID,
-			SendID:            c.newID(),
-			Command:           data,
-			SentAt:            c.clock.Wall(),
-			Results:           []SessionResult{},
-			DivergentSessions: []string{},
-			FailedSessions:    []string{},
+			GroupID: groupID, SendID: c.newID(), Command: data, SentAt: c.clock.Wall(),
+			Results: []SessionResult{}, DivergentSessions: []string{}, FailedSessions: []string{},
 		}
 	}
-	qMS := quiesceMS
-	if qMS <= 0 {
-		qMS = group.QuiesceMS
+	if principal == nil || principal.SubjectID == "" || principal.SubjectID == "anonymous" {
+		return empty(), ErrPrincipalRequired
 	}
-	mMS := maxResponseMS
-	if mMS <= 0 {
-		mMS = group.MaxResponseMS
+	if c.authorizer == nil {
+		return empty(), ErrAuthorizerUnavailable
 	}
-	if group.Mode == "sequential" {
-		return c.sendSequential(ctx, group, data, qMS, mMS, principal)
+	if !c.authorizer.IsGlobalAdmin(principal) {
+		return empty(), ErrAdminRequired
 	}
-	return c.sendParallel(ctx, group, data, qMS, mMS, principal)
-}
-
-// SendAuthorized executes against the caller-authorized member subset and
-// records every refused member as a per-session failure. The server resolves
-// definitions and authorization immediately before calling this method.
-func (c *Controller) SendAuthorized(ctx context.Context, groupID, data, principal string, quiesceMS, maxResponseMS int, workerIDs, refused []string) Result {
-	group := c.authorizedGroup(groupID, principal)
+	group := c.authorizedGroup(groupID, principal.SubjectID)
 	if group == nil {
-		return c.Send(ctx, groupID, data, principal, quiesceMS, maxResponseMS)
+		return empty(), nil
+	}
+	allowed := make([]string, 0, len(group.WorkerIDs))
+	refused := make([]string, 0)
+	for _, workerID := range group.WorkerIDs {
+		if c.authorizer.CanReadMember(ctx, principal, workerID) {
+			allowed = append(allowed, workerID)
+		} else {
+			refused = append(refused, workerID)
+		}
 	}
 	dispatchGroup := *group
-	dispatchGroup.WorkerIDs = append([]string(nil), workerIDs...)
+	dispatchGroup.WorkerIDs = append([]string(nil), allowed...)
 	qMS := quiesceMS
 	if qMS <= 0 {
 		qMS = group.QuiesceMS
@@ -211,15 +230,15 @@ func (c *Controller) SendAuthorized(ctx context.Context, groupID, data, principa
 	}
 	var result Result
 	if group.Mode == "sequential" {
-		result = c.sendSequential(ctx, &dispatchGroup, data, qMS, mMS, principal)
+		result = c.sendSequential(ctx, &dispatchGroup, data, qMS, mMS, principal.SubjectID)
 	} else {
-		result = c.sendParallel(ctx, &dispatchGroup, data, qMS, mMS, principal)
+		result = c.sendParallel(ctx, &dispatchGroup, data, qMS, mMS, principal.SubjectID)
 	}
 	for _, wid := range refused {
 		result.Results = append(result.Results, SessionResult{WorkerID: wid, OK: false})
 		result.FailedSessions = append(result.FailedSessions, wid)
 	}
-	return result
+	return result, nil
 }
 
 // notifyObservers tells each target session's observers that this input is
@@ -249,12 +268,34 @@ func (c *Controller) sendParallel(ctx context.Context, group *Group, data string
 	sendID := c.newID()
 	sentAt := c.clock.Wall()
 	frame := inputFrame(data, sentAt)
-	c.notifyObservers(ctx, group, data, sendID, principal)
 
 	n := len(group.WorkerIDs)
+	captures := make([]*Capture, n)
+	captureOK := make([]bool, n)
+	readyGroup := *group
+	readyGroup.WorkerIDs = make([]string, 0, n)
+	for i, wid := range group.WorkerIDs {
+		capture, err := OpenCapture(c.hub.EventBus(), wid)
+		if err != nil {
+			continue
+		}
+		captures[i] = capture
+		captureOK[i] = true
+		readyGroup.WorkerIDs = append(readyGroup.WorkerIDs, wid)
+	}
+	defer func() {
+		for _, capture := range captures {
+			capture.Close()
+		}
+	}()
+	c.notifyObservers(ctx, &readyGroup, data, sendID, principal)
+
 	sendOK := make([]bool, n)
 	var sg sync.WaitGroup
 	for i, wid := range group.WorkerIDs {
+		if !captureOK[i] {
+			continue
+		}
 		sg.Add(1)
 		go func(i int, wid string) {
 			defer sg.Done()
@@ -274,7 +315,7 @@ func (c *Controller) sendParallel(ctx context.Context, group *Group, data string
 		cg.Add(1)
 		go func(i int, wid string) {
 			defer cg.Done()
-			d, e := OutputCollector{}.Collect(ctx, c.hub.EventBus(), wid, quiesceMS, maxMS)
+			d, e := captures[i].Collect(ctx, quiesceMS, maxMS)
 			deltas[i], elapsed[i] = d, e
 		}(i, wid)
 	}
@@ -314,8 +355,6 @@ func (c *Controller) sendSequential(ctx context.Context, group *Group, data stri
 	sendID := c.newID()
 	sentAt := c.clock.Wall()
 	frame := inputFrame(data, sentAt)
-	c.notifyObservers(ctx, group, data, sendID, principal)
-
 	// error_pattern is validated at create time; a compile failure here is
 	// impossible for a persisted group, so a nil re disables the stop check.
 	errRe, _ := validateErrorPattern(group.ErrorPattern)
@@ -332,13 +371,24 @@ func (c *Controller) sendSequential(ctx context.Context, group *Group, data stri
 			failed = append(failed, wid)
 			continue
 		}
-		ok, _ := c.hub.SendWorker(ctx, wid, frame)
-		if !ok {
+		capture, err := OpenCapture(c.hub.EventBus(), wid)
+		if err != nil {
 			results = append(results, SessionResult{WorkerID: wid, OK: false})
 			failed = append(failed, wid)
 			continue
 		}
-		delta, elapsed := OutputCollector{}.Collect(ctx, c.hub.EventBus(), wid, quiesceMS, maxMS)
+		memberGroup := *group
+		memberGroup.WorkerIDs = []string{wid}
+		c.notifyObservers(ctx, &memberGroup, data, sendID, principal)
+		ok, _ := c.hub.SendWorker(ctx, wid, frame)
+		if !ok {
+			capture.Close()
+			results = append(results, SessionResult{WorkerID: wid, OK: false})
+			failed = append(failed, wid)
+			continue
+		}
+		delta, elapsed := capture.Collect(ctx, quiesceMS, maxMS)
+		capture.Close()
 		d := delta
 		results = append(results, SessionResult{WorkerID: wid, OK: true, OutputDelta: &d, ElapsedMS: elapsed})
 		successOutputs = append(successOutputs, delta)

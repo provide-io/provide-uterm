@@ -73,8 +73,13 @@ type browserClient struct {
 
 func dialBrowser(t *testing.T, ctx context.Context, wsURL, subject, role string) *browserClient {
 	t.Helper()
+	return dialBrowserWithHeaders(t, ctx, wsURL, http.Header{"X-Subject": {subject}, "X-Role": {role}})
+}
+
+func dialBrowserWithHeaders(t *testing.T, ctx context.Context, wsURL string, headers http.Header) *browserClient {
+	t.Helper()
 	conn, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
-		HTTPHeader: http.Header{"X-Subject": {subject}, "X-Role": {role}},
+		HTTPHeader: headers,
 	})
 	if err != nil {
 		t.Fatalf("browser dial: %v", err)

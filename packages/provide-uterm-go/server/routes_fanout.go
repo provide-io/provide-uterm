@@ -6,26 +6,37 @@
 package server
 
 import (
-	"context"
+	"errors"
 	"net/http"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/fanout"
-	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverauth"
 )
 
 const unsupportedFanoutGovernance = "fanout governance is not supported by this server"
 
 // registerFanoutRoutes wires the fan-out group CRUD + send + grant routes. Port
 // of fanout/_routes.register_fanout_routes. Every route requires an
-// authenticated principal (the Python router mounts them behind
-// require_authenticated). Error bodies use the {"error": ...} envelope of the
+// global administrator. Error bodies use the {"error": ...} envelope of the
 // Python JSONResponse handlers (bridgeError), not the {"detail": ...} /api shape.
 func (s *Server) registerFanoutRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/fanout/groups", s.authenticated(s.handleFanoutCreate))
-	mux.HandleFunc("GET /api/fanout/groups", s.authenticated(s.handleFanoutList))
-	mux.HandleFunc("DELETE /api/fanout/groups/{group_id}", s.authenticated(s.handleFanoutDelete))
-	mux.HandleFunc("POST /api/fanout/groups/{group_id}/send", s.authenticated(s.handleFanoutSend))
-	mux.HandleFunc("POST /api/fanout/groups/{group_id}/grants", s.authenticated(s.handleFanoutGrant))
+	mux.HandleFunc("POST /api/fanout/groups", s.authenticated(s.fanoutAdmin(s.handleFanoutCreate)))
+	mux.HandleFunc("GET /api/fanout/groups", s.authenticated(s.fanoutAdmin(s.handleFanoutList)))
+	mux.HandleFunc("DELETE /api/fanout/groups/{group_id}", s.authenticated(s.fanoutAdmin(s.handleFanoutDelete)))
+	mux.HandleFunc("POST /api/fanout/groups/{group_id}/send", s.authenticated(s.fanoutAdmin(s.handleFanoutSend)))
+	mux.HandleFunc("POST /api/fanout/groups/{group_id}/grants", s.authenticated(s.fanoutAdmin(s.handleFanoutGrant)))
+}
+
+// fanoutAdmin enforces the global-admin boundary before a fan-out handler can
+// parse a body or resolve a group. Session-scoped admin grants are deliberately
+// insufficient for a multi-session operation.
+func (s *Server) fanoutAdmin(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !s.deps.Authz.IsAdmin(principalOf(r)) {
+			bridgeError(w, http.StatusForbidden, "admin role required")
+			return
+		}
+		next(w, r)
+	}
 }
 
 // handleFanoutCreate creates a fan-out group. Port of the POST /groups handler:
@@ -134,10 +145,18 @@ func (s *Server) handleFanoutSend(w http.ResponseWriter, r *http.Request) {
 	}
 	body, _ := decodeJSONBody(r)
 	data := stringField(body, "data")
-	// Absent quiesce/max (0) fall back to the group defaults inside Send.
-	allowed, refused := s.authorizedFanoutMembers(r.Context(), p, group.WorkerIDs)
-	result := s.fanout.SendAuthorized(r.Context(), groupID, data, p.SubjectID,
-		intField(body, "quiesce_ms", 0), intField(body, "max_response_ms", 0), allowed, refused)
+	// Absent quiesce/max (0) fall back to the group defaults inside Send. The
+	// controller resolves and authorizes the stored membership itself.
+	result, err := s.fanout.Send(r.Context(), groupID, data, p,
+		intField(body, "quiesce_ms", 0), intField(body, "max_response_ms", 0))
+	if err != nil {
+		if errors.Is(err, fanout.ErrAdminRequired) || errors.Is(err, fanout.ErrPrincipalRequired) {
+			bridgeError(w, http.StatusForbidden, "admin role required")
+		} else {
+			bridgeError(w, http.StatusServiceUnavailable, err.Error())
+		}
+		return
+	}
 	s.audit(r, "fanout.send", map[string]any{"group_id": groupID, "send_id": result.SendID})
 	writeJSON(w, http.StatusOK, map[string]any{
 		"group_id":           result.GroupID,
@@ -148,20 +167,6 @@ func (s *Server) handleFanoutSend(w http.ResponseWriter, r *http.Request) {
 		"divergent_sessions": result.DivergentSessions,
 		"failed_sessions":    result.FailedSessions,
 	})
-}
-
-func (s *Server) authorizedFanoutMembers(ctx context.Context, p *serverauth.Principal, workerIDs []string) ([]string, []string) {
-	allowed := make([]string, 0, len(workerIDs))
-	refused := make([]string, 0)
-	for _, wid := range workerIDs {
-		def, ok := s.deps.Registry.GetDefinition(ctx, wid)
-		if !ok || !s.deps.Authz.CanReadSession(p, def) {
-			refused = append(refused, wid)
-			continue
-		}
-		allowed = append(allowed, wid)
-	}
-	return allowed, refused
 }
 
 func (s *Server) fanoutGovernanceUnsupported() bool {
