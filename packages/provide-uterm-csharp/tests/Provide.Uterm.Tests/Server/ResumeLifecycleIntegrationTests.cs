@@ -1313,6 +1313,56 @@ public sealed class ResumeLifecycleIntegrationTests
     }
 
     [Fact]
+    public async Task DelayedDisconnectPublicationCannotOverwriteReplacementOwnership()
+    {
+        const string workerId = "disconnect-publication-race";
+        var changes = new List<bool>();
+        var changesGate = new object();
+        var hub = new TermHub(new TermHubConfig
+        {
+            BrowserSendTimeout = TimeSpan.FromSeconds(5),
+            OnHijackChanged = (_, enabled, _) =>
+            {
+                lock (changesGate) changes.Add(enabled);
+            },
+        });
+        var original = new RecordingWorker();
+        var replacement = new RecordingWorker();
+        var owner = new RecordingBrowser();
+        var delayedObserver = new DelayedDisconnectBrowser();
+        _ = NewUnstartedServer(hub, workerId, out var registry);
+        Assert.True(hub.Conn.RegisterWorker(workerId, original));
+        registry.MarkWorker(workerId, true, false);
+        hub.Conn.RegisterBrowser(workerId, owner, "admin");
+        hub.Conn.RegisterBrowser(workerId, delayedObserver, "viewer");
+
+        var teardown = hub.Conn.ReconcileWorkerDisconnectAsync(workerId, original);
+        await delayedObserver.DisconnectAttempted.WaitAsync(TimeSpan.FromSeconds(1));
+
+        Assert.True(await hub.Conn.RegisterWorkerAsync(workerId, replacement));
+        registry.MarkWorker(workerId, true, false);
+        Assert.True((await hub.Lease.TryAcquireWsAsync(workerId, owner)).Ok);
+        hub.NotifyHijackChanged(workerId, true, "replacement-owner");
+        await hub.BroadcastHijackStateAsync(workerId);
+
+        delayedObserver.ReleaseDisconnect();
+        Assert.True((await teardown.WaitAsync(TimeSpan.FromSeconds(1))).Reconciled);
+
+        lock (changesGate) Assert.Equal([true], changes);
+        var frames = DecodeBrowserFrames(delayedObserver);
+        Assert.Equal(1, frames.Count(frame => Type(frame) == "worker_disconnected"));
+        var disconnectedIndex = Array.FindIndex(
+            frames.ToArray(), frame => Type(frame) == "worker_disconnected");
+        var hijackStates = frames
+            .Select((frame, index) => (Frame: frame, Index: index))
+            .Where(item => Type(item.Frame) == "hijack_state")
+            .ToArray();
+        Assert.NotEmpty(hijackStates);
+        Assert.All(hijackStates, item => Assert.True(Bool(item.Frame, "hijacked")));
+        Assert.All(hijackStates, item => Assert.True(item.Index > disconnectedIndex));
+    }
+
+    [Fact]
     public async Task ConcurrentValidRestInputWaitsForPriorInputAndThenSends()
     {
         var hub = new TermHub();
@@ -1543,7 +1593,14 @@ public sealed class ResumeLifecycleIntegrationTests
         frame.TryGetValue("type", out var value) ? value?.ToString() : null;
 
     private static IReadOnlyList<Dictionary<string, object?>> DecodeBrowserFrames(RecordingBrowser browser) =>
-        browser.Payloads
+        DecodeBrowserFrames(browser.Payloads);
+
+    private static IReadOnlyList<Dictionary<string, object?>> DecodeBrowserFrames(
+        DelayedDisconnectBrowser browser) => DecodeBrowserFrames(browser.Payloads);
+
+    private static IReadOnlyList<Dictionary<string, object?>> DecodeBrowserFrames(
+        IReadOnlyList<string> payloads) =>
+        payloads
             .SelectMany(payload => new ControlFrameDecoder().Feed(payload))
             .OfType<ControlChunk>()
             .Select(chunk => chunk.Control)
@@ -2033,6 +2090,38 @@ public sealed class ResumeLifecycleIntegrationTests
         {
             lock (_gate) _payloads.Add(payload);
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class DelayedDisconnectBrowser : IWorkerWs
+    {
+        private readonly object _gate = new();
+        private readonly List<string> _payloads = [];
+        private readonly TaskCompletionSource _disconnectAttempted =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _disconnectRelease =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task DisconnectAttempted => _disconnectAttempted.Task;
+
+        public IReadOnlyList<string> Payloads
+        {
+            get { lock (_gate) return _payloads.ToArray(); }
+        }
+
+        public void ReleaseDisconnect() => _disconnectRelease.TrySetResult();
+
+        public async Task SendTextAsync(
+            string payload,
+            CancellationToken cancellationToken = default)
+        {
+            lock (_gate) _payloads.Add(payload);
+            var isDisconnect = new ControlFrameDecoder().Feed(payload)
+                .OfType<ControlChunk>()
+                .Any(chunk => Type(chunk.Control) == "worker_disconnected");
+            if (!isDisconnect) return;
+            _disconnectAttempted.TrySetResult();
+            await _disconnectRelease.Task.WaitAsync(cancellationToken);
         }
     }
 
