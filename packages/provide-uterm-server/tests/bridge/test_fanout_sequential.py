@@ -8,13 +8,16 @@ from __future__ import annotations
 
 import asyncio
 import time
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
+if TYPE_CHECKING:
+    import pytest
 
 from provide.uterm.server.bridge.fanout._controller import FanOutController
 from provide.uterm.server.bridge.fanout._models import FanOutGroup
 from provide.uterm.server.bridge.hub import EventBus, TermHub
+from provide.uterm.server.bridge.identity import Principal
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -119,6 +122,54 @@ async def test_sequential_rejected_send_closes_capture_once(monkeypatch: pytest.
     result = await FanOutController(hub)._send_sequential(_make_group(["w1"]), "id\n", 10, 100, principal="admin")
 
     assert result.failed_sessions == ["w1"]
+    handle.collect.assert_not_awaited()
+    handle.close.assert_awaited_once()
+
+
+async def test_public_send_dispatches_sequential_group() -> None:
+    hub = TermHub(event_bus=EventBus())
+    hub.send_worker = AsyncMock(return_value=False)  # type: ignore[method-assign]
+    controller = FanOutController(
+        hub,
+        is_global_admin=AsyncMock(return_value=True),
+        resolve_session=AsyncMock(return_value=object()),
+        can_read_session=AsyncMock(return_value=True),
+    )
+    group = _make_group(["w1"])
+    await controller.create_group(group, principal="admin")
+
+    result = await controller.send(
+        group.group_id,
+        "id\n",
+        principal=Principal(subject_id="admin", roles=frozenset({"admin"})),
+    )
+
+    assert result.failed_sessions == ["w1"]
+    hub.send_worker.assert_awaited_once()
+
+
+async def test_sequential_isolates_capture_open_and_send_exceptions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    hub = MagicMock()
+    hub.broadcast = AsyncMock()
+    hub.send_worker = AsyncMock(side_effect=RuntimeError("send failed"))
+    handle = MagicMock()
+    handle.collect = AsyncMock(return_value=("unused", 0))
+    handle.close = AsyncMock()
+
+    class Collector:
+        async def open(self, hub: object, worker_id: str) -> MagicMock:
+            if worker_id == "w1":
+                raise RuntimeError("capture failed")
+            return handle
+
+    monkeypatch.setattr("provide.uterm.server.bridge.fanout._controller.OutputCollector", Collector)
+
+    result = await FanOutController(hub)._send_sequential(_make_group(["w1", "w2"]), "id\n", 10, 100, principal="admin")
+
+    assert result.failed_sessions == ["w1", "w2"]
+    assert [call.args[0] for call in hub.send_worker.await_args_list] == ["w2"]
     handle.collect.assert_not_awaited()
     handle.close.assert_awaited_once()
 

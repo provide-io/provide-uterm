@@ -15,6 +15,7 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+from provide.uterm.server.bridge.fanout._models import FanOutResult, SessionFanOutResult
 from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.server.bridge.identity import Principal
 from provide.uterm.server.bridge.models import WorkerTermState
@@ -287,3 +288,80 @@ class TestFanOutAdminBoundary:
 
         ctrl.get_group.assert_not_awaited()
         ctrl.send.assert_not_awaited()
+
+    async def test_fanout_send_fails_closed_when_admin_check_raises(self) -> None:
+        hub = _make_hub()
+        ctrl = MagicMock(get_group=AsyncMock(), send=AsyncMock())
+        hub.fan_out_controller = ctrl  # type: ignore[attr-defined]
+        ws = _make_ws()
+        ws.state = SimpleNamespace(uterm_principal=Principal(subject_id="admin", roles=frozenset({"admin"})))
+        ws.app = SimpleNamespace(
+            state=SimpleNamespace(uterm_authz=MagicMock(is_admin=AsyncMock(side_effect=RuntimeError("down"))))
+        )
+        bucket = MagicMock(allow=MagicMock(return_value=True))
+        event = SimpleNamespace(control={"type": "fanout_send", "group_id": "g", "data": "id"})
+
+        await dispatch_browser_event(hub, ws, "w1", "admin", True, False, event, bucket, bucket)
+
+        ctrl.get_group.assert_not_awaited()
+        sent = decode_control_payload(ws.send_text.await_args.args[0])
+        assert sent["type"] == "error"
+
+    async def test_fanout_send_without_controller_is_ignored_for_admin(self) -> None:
+        hub = _make_hub()
+        if hasattr(hub, "fan_out_controller"):
+            del hub.fan_out_controller
+        ws = _make_ws()
+        ws.state = SimpleNamespace(uterm_principal=Principal(subject_id="admin", roles=frozenset({"admin"})))
+        ws.app = SimpleNamespace(state=SimpleNamespace(uterm_authz=MagicMock(is_admin=AsyncMock(return_value=True))))
+        bucket = MagicMock(allow=MagicMock(return_value=True))
+        event = SimpleNamespace(control={"type": "fanout_send", "group_id": "g", "data": "id"})
+
+        state = await dispatch_browser_event(hub, ws, "w1", "admin", True, False, event, bucket, bucket)
+
+        assert state == ("admin", True, False)
+        ws.send_text.assert_not_awaited()
+
+    async def test_fanout_send_unknown_group_is_ignored_for_admin(self) -> None:
+        hub = _make_hub()
+        ctrl = MagicMock(get_group=AsyncMock(return_value=None), send=AsyncMock())
+        hub.fan_out_controller = ctrl  # type: ignore[attr-defined]
+        ws = _make_ws()
+        ws.state = SimpleNamespace(uterm_principal=Principal(subject_id="admin", roles=frozenset({"admin"})))
+        ws.app = SimpleNamespace(state=SimpleNamespace(uterm_authz=MagicMock(is_admin=AsyncMock(return_value=True))))
+        bucket = MagicMock(allow=MagicMock(return_value=True))
+        event = SimpleNamespace(control={"type": "fanout_send", "group_id": "missing", "data": "id"})
+
+        await dispatch_browser_event(hub, ws, "w1", "admin", True, False, event, bucket, bucket)
+
+        ctrl.send.assert_not_awaited()
+        ws.send_text.assert_not_awaited()
+
+    async def test_fanout_send_serializes_controller_result_for_admin(self) -> None:
+        hub = _make_hub()
+        result = FanOutResult(
+            group_id="g",
+            send_id="send-1",
+            command="id",
+            sent_at=1.0,
+            results=[SessionFanOutResult("w1", True, "ok", 1, False)],
+            divergent_sessions=[],
+            failed_sessions=[],
+        )
+        ctrl = MagicMock(get_group=AsyncMock(return_value=object()), send=AsyncMock(return_value=result))
+        hub.fan_out_controller = ctrl  # type: ignore[attr-defined]
+        principal = Principal(subject_id="admin", roles=frozenset({"admin"}))
+        ws = _make_ws()
+        ws.state = SimpleNamespace(uterm_principal=principal)
+        ws.app = SimpleNamespace(state=SimpleNamespace(uterm_authz=MagicMock(is_admin=AsyncMock(return_value=True))))
+        bucket = MagicMock(allow=MagicMock(return_value=True))
+        event = SimpleNamespace(control={"type": "fanout_send", "group_id": "g", "data": "id"})
+
+        await dispatch_browser_event(hub, ws, "w1", "admin", True, False, event, bucket, bucket)
+
+        ctrl.send.assert_awaited_once_with("g", "id", principal=principal)
+        sent = decode_control_payload(ws.send_text.await_args.args[0])
+        assert sent["type"] == "fanout_result"
+        assert sent["results"] == [
+            {"worker_id": "w1", "ok": True, "output_delta": "ok", "elapsed_ms": 1, "divergent": False}
+        ]

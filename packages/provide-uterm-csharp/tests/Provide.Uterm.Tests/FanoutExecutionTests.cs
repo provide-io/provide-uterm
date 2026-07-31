@@ -167,6 +167,21 @@ public sealed class FanoutExecutionTests
     }
 
     [Fact]
+    public async Task Sequential_Subscription_Preparation_Failure_Is_Isolated_And_Continues()
+    {
+        var hub = new PreparationFailureHub("w2");
+        var controller = NewController(hub, "sequential", ["w1", "w2", "w3"]);
+
+        var result = await controller.SendAsync("g", "id", Admin("alice"), 5, 100);
+
+        Assert.Equal(["w2"], result.FailedSessions);
+        Assert.Equal(["w1", "w3"], hub.SentWorkers);
+        Assert.Equal(["w1", "w2", "w3"], hub.SubscriptionAttempts);
+        Assert.Equal(1, hub.DisposeCounts["w1"]);
+        Assert.Equal(1, hub.DisposeCounts["w3"]);
+    }
+
+    [Fact]
     public async Task Sequential_Collects_Each_Before_Sending_Next_And_Stops_On_Error()
     {
         var hub = new EventHub(new Dictionary<string, string> { ["w1"] = "ERROR", ["w2"] = "never" });

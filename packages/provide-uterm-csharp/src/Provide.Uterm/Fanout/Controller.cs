@@ -378,9 +378,10 @@ public sealed class Controller
                 break;
             }
 
-            var subscription = _hub!.SubscribeOutput(wid);
+            IFanoutOutputSubscription? subscription = null;
             try
             {
+                subscription = _hub!.SubscribeOutput(wid);
                 await AwaitBoundedAsync(
                     token => NotifyAsync(group, result, wid, data, principal, token), budget).ConfigureAwait(false);
                 var ok = await AwaitBoundedAsync(
@@ -410,7 +411,10 @@ public sealed class Controller
             }
             finally
             {
-                await DisposeBoundedAsync(subscription, budget).ConfigureAwait(false);
+                if (subscription is not null)
+                {
+                    await DisposeBoundedAsync(subscription, budget).ConfigureAwait(false);
+                }
             }
         }
     }

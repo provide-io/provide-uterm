@@ -8,9 +8,13 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { AuthorizablePrincipal } from "../server/authorization.ts";
 import type { OutputCapture } from "./collector.ts";
-import { FanOutController, type FanOutControllerHub } from "./controller.ts";
+import {
+  FanOutController,
+  type FanOutControllerHub,
+  type SendOptions,
+} from "./controller.ts";
 import { fanOutGroup, type FanOutResult } from "./models.ts";
-import { createFanoutRoutes } from "./routes.ts";
+import { createFanoutRoutes, type FanoutRoutesController } from "./routes.ts";
 
 interface ActorInput {
   subject: string;
@@ -85,11 +89,13 @@ class ScenarioHub implements FanOutControllerHub {
   readonly observers: string[] = [];
   readonly buffers = new Map<string, string[]>();
   readonly approvals: Record<string, unknown>[] = [];
+  private readonly accepted: Set<string>;
+  private readonly immediate: Record<string, string>;
 
-  constructor(
-    private readonly accepted: Set<string>,
-    private readonly immediate: Record<string, string>,
-  ) {}
+  constructor(accepted: Set<string>, immediate: Record<string, string>) {
+    this.accepted = accepted;
+    this.immediate = immediate;
+  }
 
   async sendWorker(workerId: string): Promise<boolean> {
     if (!this.accepted.has(workerId)) return false;
@@ -242,7 +248,7 @@ async function executeRest(scenario: Scenario): Promise<Observation> {
   const built = await buildController(input);
   const definitions = new Set(input.visibility.readable_members);
   const routes = createFanoutRoutes({
-    controller: built.controller,
+    controller: routeController(built.controller),
     registry: {
       getDefinition: async (workerId) =>
         definitions.has(workerId) ? { workerId } : undefined,
@@ -331,15 +337,38 @@ async function executeController(scenario: Scenario): Promise<Observation> {
     input.group.id,
     input.command,
     actor(input.actor),
-    {
-      maxResponseMs: input.max_response_ms,
-    },
+    sendOptions(input.max_response_ms),
   );
   const status = result.error?.includes("authorization") ? 403 : 200;
   const observation = fromResult(scenario, result, built.hub, status);
   if (result.error?.includes("authorization"))
     observation.error = "authorization_unavailable";
   return observation;
+}
+
+function sendOptions(maxResponseMs: number | undefined): SendOptions {
+  return maxResponseMs === undefined ? {} : { maxResponseMs };
+}
+
+function routeController(controller: FanOutController): FanoutRoutesController {
+  return {
+    createGroup: (group, principal) => controller.createGroup(group, principal),
+    listGroups: (principal) => controller.listGroups(principal),
+    getGroup: (groupId, principal) => controller.getGroup(groupId, principal),
+    deleteGroup: (groupId, principal) =>
+      controller.deleteGroup(groupId, principal),
+    grantAccess: (groupId, grantee, principal) =>
+      controller.grantAccess(groupId, grantee, principal),
+    send: (groupId, data, principal, options) =>
+      controller.send(groupId, data, principal, {
+        ...(options.quiesceMs === undefined
+          ? {}
+          : { quiesceMs: options.quiesceMs }),
+        ...(options.maxResponseMs === undefined
+          ? {}
+          : { maxResponseMs: options.maxResponseMs }),
+      }),
+  };
 }
 
 async function executeScenario(scenario: Scenario): Promise<Observation> {
