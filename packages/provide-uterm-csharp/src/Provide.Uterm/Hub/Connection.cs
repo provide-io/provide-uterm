@@ -8,6 +8,14 @@ using Provide.Uterm.ControlChannel;
 
 namespace Provide.Uterm.Hub;
 
+/// <summary>Browser admission refusal with its WebSocket close code.</summary>
+public sealed class BrowserRegistrationException : Exception
+{
+    public BrowserRegistrationException(int closeCode, string reason) : base(reason) => CloseCode = closeCode;
+
+    public int CloseCode { get; }
+}
+
 /// <summary>Worker/browser registration and REST rate-limit facade.</summary>
 public sealed class ConnectionManager
 {
@@ -218,22 +226,60 @@ public sealed class ConnectionManager
         return true;
     }
 
-    public Dictionary<string, object?> RegisterBrowser(string workerId, object ws, string role, bool deferBroadcast = false)
+    public Dictionary<string, object?> RegisterBrowser(
+        string workerId,
+        object ws,
+        string role,
+        bool deferBroadcast = false,
+        string? principalSubjectId = null)
     {
-        _ = deferBroadcast;
         lock (_hub.SharedLock)
         {
-            var st = _hub.State.GetOrCreate(workerId);
-            st.Browsers[ws] = string.IsNullOrWhiteSpace(role) ? "viewer" : role;
-            st.LastActivityAt = _hub.Clock.Monotonic();
-            return new Dictionary<string, object?>
+            var countedSubject = string.IsNullOrWhiteSpace(principalSubjectId)
+                || principalSubjectId == "anonymous"
+                ? null
+                : principalSubjectId;
+            if (countedSubject is not null)
             {
-                ["is_hijacked"] = _hub.State.IsHijacked(st),
-                ["hijacked_by_me"] = _hub.State.IsDashboardHijackActive(st) && ReferenceEquals(st.HijackOwner, ws),
-                ["worker_online"] = st.WorkerWs is not null,
-                ["input_mode"] = st.InputMode,
-                ["role"] = st.Browsers[ws],
-            };
+                var current = _hub.PrincipalBrowserCounts.GetValueOrDefault(countedSubject);
+                if (current >= _hub.MaxConnectionsPerPrincipal)
+                {
+                    throw new BrowserRegistrationException(1008, "too many connections");
+                }
+
+                _hub.PrincipalBrowserCounts[countedSubject] = current + 1;
+                _hub.BrowserPrincipals[ws] = countedSubject;
+            }
+
+            try
+            {
+                var st = _hub.State.GetOrCreate(workerId);
+                st.Browsers[ws] = string.IsNullOrWhiteSpace(role) ? "viewer" : role;
+                if (deferBroadcast) _hub.StartupPendingBrowsers.Add(ws);
+                st.LastActivityAt = _hub.Clock.Monotonic();
+                return new Dictionary<string, object?>
+                {
+                    ["is_hijacked"] = _hub.State.IsHijacked(st),
+                    ["hijacked_by_me"] = _hub.State.IsDashboardHijackActive(st) && ReferenceEquals(st.HijackOwner, ws),
+                    ["worker_online"] = st.WorkerWs is not null,
+                    ["input_mode"] = st.InputMode,
+                    ["role"] = st.Browsers[ws],
+                };
+            }
+            catch
+            {
+                RollbackBrowserQuota(ws);
+                throw;
+            }
+        }
+    }
+
+    public void ActivateBrowserBroadcasts(string workerId, object ws)
+    {
+        lock (_hub.SharedLock)
+        {
+            var st = _hub.Registry.Get(workerId);
+            if (st?.Browsers.ContainsKey(ws) is true) _hub.StartupPendingBrowsers.Remove(ws);
         }
     }
 
@@ -242,14 +288,27 @@ public sealed class ConnectionManager
         lock (_hub.SharedLock)
         {
             var st = _hub.Registry.Get(workerId);
-            if (st is null) return;
-            st.Browsers.Remove(ws);
-            if (ReferenceEquals(st.HijackOwner, ws))
+            if (st is not null)
             {
-                st.HijackOwner = null;
-                st.HijackOwnerExpiresAt = null;
+                st.Browsers.Remove(ws);
+                if (ReferenceEquals(st.HijackOwner, ws))
+                {
+                    st.HijackOwner = null;
+                    st.HijackOwnerExpiresAt = null;
+                }
             }
+
+            _hub.StartupPendingBrowsers.Remove(ws);
+            RollbackBrowserQuota(ws);
         }
+    }
+
+    private void RollbackBrowserQuota(object ws)
+    {
+        if (!_hub.BrowserPrincipals.Remove(ws, out var subjectId)) return;
+        var remaining = _hub.PrincipalBrowserCounts.GetValueOrDefault(subjectId) - 1;
+        if (remaining <= 0) _hub.PrincipalBrowserCounts.Remove(subjectId);
+        else _hub.PrincipalBrowserCounts[subjectId] = remaining;
     }
 
     public async Task<(bool Ok, Exception? Error)> SendWorkerAsync(
@@ -289,6 +348,7 @@ public sealed class ConnectionManager
             if (st is null) return;
             foreach (var kv in st.Browsers)
             {
+                if (_hub.StartupPendingBrowsers.Contains(kv.Key)) continue;
                 fanout.Add((kv.Key, _hub.Router.HijackStateMsgFor(workerId, kv.Key)));
             }
         }
@@ -317,7 +377,7 @@ public sealed class ConnectionManager
         {
             var st = _hub.Registry.Get(workerId);
             if (st is null) return;
-            browsers.AddRange(st.Browsers.Keys);
+            browsers.AddRange(st.Browsers.Keys.Where(ws => !_hub.StartupPendingBrowsers.Contains(ws)));
         }
 
         var encoded = ControlChannelCodec.EncodeControlFrame(msg);

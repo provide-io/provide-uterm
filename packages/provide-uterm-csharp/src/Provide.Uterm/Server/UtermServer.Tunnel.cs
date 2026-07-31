@@ -365,12 +365,20 @@ public sealed partial class UtermServer
         // default, so attaching a tunnel does not silently arbitrate a session
         // configured as open. A tunnel that means `hijack` says so in its
         // `open` control frame, which HandleTunnelControl applies.
-        if (_deps.Registry.TryGetDefinition(workerId, out var tdef))
+        var hadWorkerState = _deps.Hub.Registry.Contains(workerId);
+        if (!_deps.Hub.Conn.RegisterWorker(workerId, conn))
         {
-            _deps.Hub.Registry.SetDefault(workerId, new Hub.WorkerTermState { InputMode = tdef.InputMode });
+            await ws.CloseAsync(
+                WebSocketCloseStatus.PolicyViolation,
+                "worker registration rejected",
+                CancellationToken.None).ConfigureAwait(false);
+            return;
         }
 
-        _deps.Hub.Conn.RegisterWorker(workerId, conn);
+        if (!hadWorkerState && _deps.Registry.TryGetDefinition(workerId, out var tdef))
+        {
+            _deps.Hub.Registry.Get(workerId)!.InputMode = tdef.InputMode;
+        }
         var st = _deps.Hub.Registry.Get(workerId);
         if (st is not null)
         {

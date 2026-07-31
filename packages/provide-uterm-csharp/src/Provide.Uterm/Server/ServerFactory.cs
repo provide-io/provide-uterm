@@ -70,6 +70,7 @@ public static class ServerFactory
             Clock = clock,
             WorkerToken = cfg.Auth.WorkerBearerToken,
             MaxWorkers = cfg.MaxWorkers,
+            MaxConnectionsPerPrincipal = cfg.MaxConnectionsPerPrincipal,
             BrowserRateLimitPerSec = cfg.BrowserRateLimitPerSec,
             RestAcquireRateLimitPerSec = cfg.RestAcquireRateLimitPerSec,
             RestSendRateLimitPerSec = cfg.RestSendRateLimitPerSec,
