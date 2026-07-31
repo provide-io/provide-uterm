@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from fastapi.testclient import TestClient
 
 from provide.uterm.server import create_server_app, default_server_config
@@ -17,11 +18,16 @@ from provide.uterm.server.config_schema import SessionDefinition
 VIEWER = {"X-Uterm-Principal": "bob", "X-Uterm-Role": "viewer"}
 
 
-def _make_app(sessions: list[SessionDefinition] | None = None) -> Any:
+def _make_app(
+    sessions: list[SessionDefinition] | None = None,
+    *,
+    allow_unknown_members: bool = False,
+) -> Any:
     cfg = default_server_config()
     cfg.auth.mode = "header"
     cfg.auth.header_mode_acknowledged = True
     cfg.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
+    cfg.fanout_allow_unknown_members = allow_unknown_members
     cfg.sessions = sessions or []
     return create_server_app(cfg)
 
@@ -38,7 +44,7 @@ def _sess(session_id: str, *, owner: str, visibility: str) -> SessionDefinition:
 
 class TestCreateGroupAndSend:
     def test_create_group_and_send(self) -> None:
-        app = _make_app()
+        app = _make_app(allow_unknown_members=True)
         client = TestClient(app)
 
         # Create a group with two (non-existent) worker IDs
@@ -82,7 +88,7 @@ class TestCreateGroupAndSend:
 
 class TestCreateGroupExceedsMaxSize:
     def test_create_group_exceeds_max_size(self) -> None:
-        app = _make_app()
+        app = _make_app(allow_unknown_members=True)
         client = TestClient(app)
 
         # Default max_group_size is 50; send 60 workers
@@ -97,7 +103,7 @@ class TestCreateGroupExceedsMaxSize:
 
 class TestGrantAccess:
     def test_grant_access(self) -> None:
-        app = _make_app()
+        app = _make_app(allow_unknown_members=True)
         client = TestClient(app)
 
         # Create group
@@ -117,6 +123,29 @@ class TestGrantAccess:
 
 
 class TestCreateGroupReadAuthz:
+    def test_rejects_unknown_session_by_default(self) -> None:
+        app = _make_app()
+        client = TestClient(app)
+
+        resp = client.post(
+            "/api/fanout/groups",
+            json={"name": "g", "worker_ids": ["future-worker"]},
+        )
+
+        assert resp.status_code == 400
+        assert "future-worker" in resp.json()["error"]
+
+    def test_explicitly_allows_dormant_unknown_session(self) -> None:
+        app = _make_app(allow_unknown_members=True)
+        client = TestClient(app)
+
+        resp = client.post(
+            "/api/fanout/groups",
+            json={"name": "g", "worker_ids": ["future-worker"]},
+        )
+
+        assert resp.status_code == 200
+
     def test_rejects_session_principal_cannot_read(self) -> None:
         # A private session owned by alice; a viewer (bob) cannot read it → 403.
         app = _make_app([_sess("priv1", owner="alice", visibility="private")])
@@ -165,6 +194,47 @@ class TestFanOutObserverTransparency:
             assert frame["from_principal"] == "alice"
             assert frame["command"] == "uptime\n"
             assert frame["group_id"] == "g1"
+
+
+@pytest.mark.asyncio
+async def test_send_rechecks_current_session_authorization() -> None:
+    from provide.uterm.server.bridge.fanout._controller import FanOutController
+    from provide.uterm.server.bridge.fanout._models import FanOutGroup
+    from provide.uterm.server.bridge.identity import Principal
+
+    hub = MagicMock()
+    hub.broadcast = AsyncMock()
+    hub.send_worker = AsyncMock(return_value=True)
+    hub.approval_store = None
+    definition = _sess("w1", owner="alice", visibility="private")
+    readable = True
+
+    async def resolve_session(worker_id: str) -> SessionDefinition | None:
+        return definition if worker_id == "w1" else None
+
+    async def can_read_session(principal: Principal, session: SessionDefinition) -> bool:
+        assert session is definition
+        return readable
+
+    ctrl = FanOutController(
+        hub,
+        resolve_session=resolve_session,
+        can_read_session=can_read_session,
+    )
+    group = FanOutGroup(group_id="g1", name="g", worker_ids=["w1"], created_by="alice", created_at=0.0)
+    await ctrl.create_group(group, principal="alice")
+
+    readable = False
+    result = await ctrl.send(
+        "g1",
+        "whoami\n",
+        principal=Principal(subject_id="alice", roles=frozenset({"admin"})),
+    )
+
+    hub.send_worker.assert_not_awaited()
+    assert result.failed_sessions == ["w1"]
+    assert result.results[0].worker_id == "w1"
+    assert result.results[0].ok is False
 
 
 class TestSendToNonexistentGroup:

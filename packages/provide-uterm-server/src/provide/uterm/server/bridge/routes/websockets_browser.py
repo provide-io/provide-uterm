@@ -107,10 +107,14 @@ async def dispatch_browser_event(
             _fo_group = await _fo_ctrl.get_group(_fo_group_id, principal=_fo_subj)
             if _fo_group is None:
                 return role, can_hijack, owned_hijack  # caller doesn't own/have access
+            if _fo_principal is None:
+                from provide.uterm.server.bridge.identity import Principal
+
+                _fo_principal = Principal(subject_id="anonymous", roles=frozenset({"viewer"}))
             _fo_result = await _fo_ctrl.send(
                 _fo_group_id,
                 _fo_data,
-                principal=_fo_subj,
+                principal=_fo_principal,
             )
             await websocket.send_text(
                 encode_control_frame(

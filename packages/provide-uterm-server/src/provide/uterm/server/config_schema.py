@@ -519,6 +519,10 @@ class UtermServerConfig(ServerBaseModel):
     pam: PamConfig = Field(default_factory=PamConfig)
     governance: GovernanceConfig = Field(default_factory=GovernanceConfig)
     audit: AuditConfig = Field(default_factory=AuditConfig)
+    # Reject dormant/unknown fan-out members unless an operator explicitly
+    # opts into pre-provisioned groups. Send-time authorization is always
+    # enforced, regardless of this creation-time migration switch.
+    fanout_allow_unknown_members: bool = False
     sessions: list[SessionDefinition] = Field(
         default_factory=lambda: [
             SessionDefinition(

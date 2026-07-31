@@ -163,6 +163,49 @@ async def test_fanout_approval_lifecycle(controller, hub, gate):
 
 
 @pytest.mark.asyncio
+async def test_approval_release_rechecks_current_session_authorization(hub, gate):
+    from provide.uterm.server.bridge.identity import Principal
+    from provide.uterm.server.config_schema import SessionDefinition
+
+    definition = SessionDefinition(
+        session_id="w1",
+        display_name="W1",
+        connector_type="shell",
+        owner="admin",
+        visibility="private",
+    )
+    readable = True
+
+    async def resolve_session(worker_id: str):
+        return definition if worker_id == "w1" else None
+
+    async def can_read_session(principal, session):
+        return readable
+
+    ctrl = FanOutController(
+        hub=hub,
+        fanout_policy_gate=gate,
+        resolve_session=resolve_session,
+        can_read_session=can_read_session,
+    )
+    hub.fan_out_controller = ctrl
+    principal = Principal(subject_id="admin", roles=frozenset({"admin"}))
+    group_id = await ctrl.create_group(
+        FanOutGroup(group_id="g-revoke", name="G", worker_ids=["w1"], created_by="admin", created_at=time.time()),
+        principal=principal,
+    )
+    gate.next_decision = PolicyDecision(action="hold")
+    held = await ctrl.send(group_id, "id", principal=principal)
+
+    readable = False
+    result = await ctrl.release_approved_command(held.approval_id)
+
+    assert result is not None
+    assert result.failed_sessions == ["w1"]
+    assert not hub.sent_messages
+
+
+@pytest.mark.asyncio
 async def test_fanout_approval_expiration_cleanup(controller, hub, gate):
     """Checklist 5.1: Controller Memory Leak (Cleanup on Expiration)."""
     group_id = await controller.create_group(
