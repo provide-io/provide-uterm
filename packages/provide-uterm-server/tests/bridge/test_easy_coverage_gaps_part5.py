@@ -199,28 +199,38 @@ def test_command_splitter_skips_empty_segments() -> None:
 
 
 # ---------------------------------------------------------------------------
-# bridge/fanout/_controller.py:238 — release_approved_command returns None
-# when the group is no longer authorized (e.g. deleted between request and
-# approval).
+# bridge/fanout/_controller.py — approval release returns an explicit error
+# when the full principal no longer passes current authorization.
 # ---------------------------------------------------------------------------
 
 
-async def test_fanout_release_approved_command_returns_none_for_unauthorized_group() -> None:
+async def test_fanout_release_approved_command_returns_error_for_unauthorized_principal() -> None:
     from unittest.mock import AsyncMock, MagicMock
 
     from provide.uterm.server.bridge.fanout._controller import FanOutController
+    from provide.uterm.server.bridge.identity import Principal
 
-    ctrl = FanOutController(hub=MagicMock(), fanout_policy_gate=MagicMock())
+    hub = MagicMock()
+    ctrl = FanOutController(
+        hub=hub,
+        fanout_policy_gate=MagicMock(),
+        is_global_admin=AsyncMock(return_value=False),
+        resolve_session=AsyncMock(return_value=object()),
+        can_read_session=AsyncMock(return_value=True),
+    )
     ctrl._pending_approvals["req-y"] = {  # type: ignore[attr-defined]
         "group_id": "g-gone",
         "command": "ls",
-        "principal": "user",
+        "principal": Principal(subject_id="user", roles=frozenset({"admin"})),
         "quiesce_ms": None,
         "max_response_ms": None,
     }
-    # _authorized_group resolves to None when the group is missing/unauthorized.
-    ctrl._authorized_group = AsyncMock(return_value=None)  # type: ignore[method-assign]
-    assert await ctrl.release_approved_command("req-y") is None
+    result = await ctrl.release_approved_command("req-y")
+
+    assert result is not None
+    assert result.error == "global admin role required"
+    hub.send_worker.assert_not_called()
+    hub.broadcast.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
