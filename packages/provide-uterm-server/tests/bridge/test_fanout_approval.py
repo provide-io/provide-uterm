@@ -5,7 +5,7 @@
 import asyncio
 import time
 from typing import Any
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -250,6 +250,106 @@ async def test_approval_release_rechecks_global_admin_and_keeps_full_principal(h
 
     assert result is not None
     assert result.error == "global admin role required"
+    assert not hub.sent_messages
+
+
+@pytest.mark.asyncio
+async def test_approval_release_rechecks_current_group_acl(hub, gate):
+    ctrl = FanOutController(
+        hub=hub,
+        fanout_policy_gate=gate,
+        is_global_admin=AsyncMock(return_value=True),
+        resolve_session=AsyncMock(return_value=object()),
+        can_read_session=AsyncMock(return_value=True),
+    )
+    principal = Principal(subject_id="grantee", roles=frozenset({"admin"}))
+    await ctrl.create_group(
+        FanOutGroup(
+            group_id="g-grant-revoke",
+            name="G",
+            worker_ids=["w1"],
+            created_by="creator",
+            created_at=0.0,
+            grants=["grantee"],
+        ),
+        principal="creator",
+    )
+    gate.next_decision = PolicyDecision(action="hold")
+    held = await ctrl.send("g-grant-revoke", "id", principal=principal)
+    stored = await ctrl._store.get("g-grant-revoke")
+    assert stored is not None
+    stored.grants.clear()
+    await ctrl._store.save(stored)
+
+    result = await ctrl.release_approved_command(held.approval_id)
+
+    assert result is not None
+    assert result.error == "fan-out group not found"
+    assert not hub.sent_messages
+
+
+@pytest.mark.asyncio
+async def test_hold_audit_failure_leaves_nothing_releasable_or_duplicable(hub, gate, monkeypatch):
+    request_id = "audit-failed"
+    ctrl = FanOutController(
+        hub=hub,
+        fanout_policy_gate=gate,
+        is_global_admin=AsyncMock(return_value=True),
+        resolve_session=AsyncMock(return_value=object()),
+        can_read_session=AsyncMock(return_value=True),
+    )
+    await ctrl.create_group(
+        FanOutGroup(group_id="g-audit-fail", name="G", worker_ids=["w1"], created_by="admin", created_at=0.0),
+        principal=ADMIN,
+    )
+    gate.next_decision = PolicyDecision(action="hold")
+    monkeypatch.setattr(
+        "provide.uterm.server.bridge.fanout._controller.uuid.uuid4",
+        lambda: MagicMock(hex=request_id),
+    )
+    hub.append_event = AsyncMock(side_effect=RuntimeError("audit unavailable"))
+
+    for _ in range(2):
+        with pytest.raises(RuntimeError, match="audit unavailable"):
+            await ctrl.send("g-audit-fail", "id", principal=ADMIN)
+
+    assert ctrl._pending_approvals == {}
+    assert hub.approval_store.get(request_id) is None
+    assert await ctrl.release_approved_command(request_id) is None
+    assert not hub.sent_messages
+
+
+@pytest.mark.asyncio
+async def test_hold_approval_failure_leaves_nothing_releasable_or_duplicable(hub, gate, monkeypatch):
+    request_id = "approval-failed"
+    ctrl = FanOutController(
+        hub=hub,
+        fanout_policy_gate=gate,
+        is_global_admin=AsyncMock(return_value=True),
+        resolve_session=AsyncMock(return_value=object()),
+        can_read_session=AsyncMock(return_value=True),
+    )
+    await ctrl.create_group(
+        FanOutGroup(group_id="g-approval-fail", name="G", worker_ids=["w1"], created_by="admin", created_at=0.0),
+        principal=ADMIN,
+    )
+    gate.next_decision = PolicyDecision(action="hold")
+    monkeypatch.setattr(
+        "provide.uterm.server.bridge.fanout._controller.uuid.uuid4",
+        lambda: MagicMock(hex=request_id),
+    )
+    monkeypatch.setattr(
+        hub.approval_store,
+        "add",
+        MagicMock(side_effect=RuntimeError("approval unavailable")),
+    )
+
+    for _ in range(2):
+        with pytest.raises(RuntimeError, match="approval unavailable"):
+            await ctrl.send("g-approval-fail", "id", principal=ADMIN)
+
+    assert ctrl._pending_approvals == {}
+    assert await ctrl.release_approved_command(request_id) is None
     assert not hub.sent_messages
 
 

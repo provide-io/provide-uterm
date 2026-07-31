@@ -294,6 +294,9 @@ export class FanOutController {
     if (group === undefined) {
       return { error: this.#errorResult(groupId, data, "fan-out group not found") };
     }
+    if (group.createdBy !== principal.subject_id && !group.grants.includes(principal.subject_id)) {
+      return { error: this.#errorResult(groupId, data, "fan-out group not found") };
+    }
     const allowed: string[] = [];
     const refused: string[] = [];
     for (const workerId of group.workerIds) {
@@ -337,15 +340,16 @@ export class FanOutController {
     options: SendOptions,
   ): Promise<FanOutResult> {
     const requestId = this.#newId();
-    this.#pending.set(requestId, {
-      groupId: group.groupId,
-      command: data,
-      principal,
-      quiesceMs: options.quiesceMs,
-      maxResponseMs: options.maxResponseMs,
-    });
-
     const now = this.#now();
+    // A held command is a security event, logged whether or not anyone ever
+    // approves it. The command is truncated because the audit log is not a
+    // transcript store and a caller should not choose how much it writes.
+    await this.#hub.appendEvent(`group:${group.groupId}`, "terminal.fanout.hold", {
+      group_id: group.groupId,
+      command: data.slice(0, AUDIT_COMMAND_CHARS),
+      request_id: requestId,
+      principal: principal.subject_id,
+    });
     this.#hub.addApproval({
       id: requestId,
       worker_id: `group:${group.groupId}`,
@@ -357,15 +361,12 @@ export class FanOutController {
       group_id: group.groupId,
       is_fanout: true,
     });
-
-    // A held command is a security event, logged whether or not anyone ever
-    // approves it. The command is truncated because the audit log is not a
-    // transcript store and a caller should not choose how much it writes.
-    await this.#hub.appendEvent(`group:${group.groupId}`, "terminal.fanout.hold", {
-      group_id: group.groupId,
-      command: data.slice(0, AUDIT_COMMAND_CHARS),
-      request_id: requestId,
-      principal: principal.subject_id,
+    this.#pending.set(requestId, {
+      groupId: group.groupId,
+      command: data,
+      principal,
+      quiesceMs: options.quiesceMs,
+      maxResponseMs: options.maxResponseMs,
     });
 
     return {

@@ -221,6 +221,17 @@ describe("FanOutController send authorization", () => {
     expect(result.groupId).toBe("nope");
     expect(result.results).toStrictEqual([]);
   });
+
+  it("refuses a global admin who guesses a group they were not granted", async () => {
+    const { controller, hub } = build();
+    await controller.createGroup(group(["w1"]), "alice");
+
+    const result = await controller.send("g1", "uptime", actor("mallory"));
+
+    expect(result.error).toBe("fan-out group not found");
+    expect(hub.sent).toStrictEqual([]);
+    expect(hub.broadcasts).toStrictEqual([]);
+  });
 });
 
 describe("FanOutController policy", () => {
@@ -286,6 +297,43 @@ describe("FanOutController policy", () => {
     await controller.createGroup(group(["w1"]), "alice");
     await controller.send("g1", "x".repeat(900), actor("alice"));
     expect(String(hub.events[0]?.data?.command).length).toBe(500);
+  });
+
+  it("leaves no releasable approval when hold auditing fails, including on retry", async () => {
+    const { controller, hub } = build({
+      newId: () => "audit-failed",
+      policyGate: { interceptFanout: async () => ({ action: "hold" }) },
+    });
+    await controller.createGroup(group(["w1"]), "alice");
+    hub.appendEvent = async () => {
+      throw new Error("audit unavailable");
+    };
+
+    await expect(controller.send("g1", "reboot", actor("alice"))).rejects.toThrow("audit unavailable");
+    await expect(controller.send("g1", "reboot", actor("alice"))).rejects.toThrow("audit unavailable");
+
+    expect(hub.approvals).toStrictEqual([]);
+    expect(await controller.releaseApprovedCommand("audit-failed")).toBeUndefined();
+    expect(hub.sent).toStrictEqual([]);
+  });
+
+  it("leaves no releasable approval when registration fails, including on retry", async () => {
+    const { controller, hub } = build({
+      newId: () => "approval-failed",
+      policyGate: { interceptFanout: async () => ({ action: "hold" }) },
+    });
+    await controller.createGroup(group(["w1"]), "alice");
+    hub.addApproval = () => {
+      throw new Error("approval unavailable");
+    };
+
+    await expect(controller.send("g1", "reboot", actor("alice"))).rejects.toThrow("approval unavailable");
+    await expect(controller.send("g1", "reboot", actor("alice"))).rejects.toThrow("approval unavailable");
+
+    expect(hub.events).toHaveLength(2);
+    expect(hub.approvals).toStrictEqual([]);
+    expect(await controller.releaseApprovedCommand("approval-failed")).toBeUndefined();
+    expect(hub.sent).toStrictEqual([]);
   });
 
   it("runs a held command once it is approved", async () => {
@@ -367,6 +415,25 @@ describe("FanOutController policy", () => {
 
     expect(hub.sent).toStrictEqual([]);
     expect(released?.failedSessions).toStrictEqual(["w1"]);
+  });
+
+  it("re-checks the originating principal's current group grant when an approval is released", async () => {
+    const { controller, hub, store } = build({
+      policyGate: { interceptFanout: async () => ({ action: "hold" }) },
+    });
+    await controller.createGroup(group(["w1"], { grants: ["grantee"] }), "alice");
+    const held = await controller.send("g1", "reboot", actor("grantee"));
+    const stored = await store.get("g1");
+    expect(stored).toBeDefined();
+    if (stored === undefined) return;
+    stored.grants = [];
+    await store.save(stored);
+
+    const released = await controller.releaseApprovedCommand(held.approvalId ?? "");
+
+    expect(released?.error).toBe("fan-out group not found");
+    expect(hub.sent).toStrictEqual([]);
+    expect(hub.broadcasts).toStrictEqual([]);
   });
 
   it("forgets a pending command when its approval expires", async () => {

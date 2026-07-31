@@ -169,6 +169,32 @@ class TestCreateGroupAndSend:
         assert not any(g["group_id"] == group_id for g in resp.json())
 
 
+@pytest.mark.parametrize(
+    ("action", "error", "approval_required"),
+    [("deny", "blocked", False), ("hold", None, True)],
+)
+def test_send_route_keeps_http_200_for_policy_results(
+    action: str,
+    error: str | None,
+    approval_required: bool,
+) -> None:
+    app = _make_app(allow_unknown_members=True)
+    gate = MagicMock()
+    gate.intercept_fanout = AsyncMock(
+        return_value=MagicMock(action=action, reason="blocked" if action == "deny" else None)
+    )
+    app.state.uterm_hub.fan_out_controller._fanout_policy_gate = gate
+    client = TestClient(app)
+    created = client.post("/api/fanout/groups", json={"name": "policy", "worker_ids": ["w1"]})
+    group_id = created.json()["group_id"]
+
+    response = client.post(f"/api/fanout/groups/{group_id}/send", json={"data": "id"})
+
+    assert response.status_code == 200
+    assert response.json()["error"] == error
+    assert response.json()["approval_required"] is approval_required
+
+
 class TestCreateGroupExceedsMaxSize:
     def test_create_group_exceeds_max_size(self) -> None:
         app = _make_app(allow_unknown_members=True)
@@ -351,6 +377,28 @@ async def test_group_grant_does_not_bypass_session_authorization() -> None:
     hub.send_worker.assert_not_awaited()
     hub.broadcast.assert_not_awaited()
     assert result.failed_sessions == ["w1"]
+
+
+@pytest.mark.asyncio
+async def test_direct_admin_cannot_send_to_a_guessed_group_without_group_acl() -> None:
+    hub = MagicMock()
+    hub.broadcast = AsyncMock()
+    hub.send_worker = AsyncMock(return_value=True)
+    hub.approval_store = None
+    ctrl = _authorized_controller(hub)
+    await ctrl._store.save(
+        FanOutGroup(group_id="other-group", name="G", worker_ids=["w1"], created_by="alice", created_at=0.0)
+    )
+
+    result = await ctrl.send(
+        "other-group",
+        "id\n",
+        principal=Principal(subject_id="mallory", roles=frozenset({"admin"})),
+    )
+
+    assert result.error == "fan-out group not found"
+    hub.broadcast.assert_not_awaited()
+    hub.send_worker.assert_not_awaited()
 
 
 @pytest.mark.parametrize(
