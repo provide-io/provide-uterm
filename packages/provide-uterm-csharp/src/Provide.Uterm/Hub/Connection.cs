@@ -88,6 +88,13 @@ public sealed class ConnectionManager
                     }
                     else if (st.PendingPauseCompletion is { Task.IsCompleted: false } pauseCompletion)
                     {
+                        if (completion is null)
+                        {
+                            lifecycleTransition = LifecycleTransitionCoordinator.ReserveActive(
+                                st, reservation, preserveOnWorkerClear: true);
+                            completion = lifecycleTransition.Completion;
+                            RestorePendingPauseReservation(st);
+                        }
                         pendingCompletion = pauseCompletion.Task;
                     }
                     else if (st.InputSendPending is not null)
@@ -213,9 +220,19 @@ public sealed class ConnectionManager
             if (st is not null && transition is not null)
             {
                 LifecycleTransitionCoordinator.Complete(st, transition);
+                RestorePendingPauseReservation(st);
             }
         }
         completion.TrySetResult();
+    }
+
+    private static void RestorePendingPauseReservation(WorkerTermState st)
+    {
+        if (st.PendingPauseCompletion is { Task.IsCompleted: false }
+            && st.PendingPauseReservation is not null)
+        {
+            st.HijackPending = st.PendingPauseReservation;
+        }
     }
 
     private static PendingLifecycleTransition? FindLifecycleTransition(

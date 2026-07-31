@@ -1134,6 +1134,54 @@ public sealed class ResumeLifecycleIntegrationTests
     }
 
     [Fact]
+    public async Task ReplacementsWaitingForPauseRepairKeepFifoPriorityOverLaterInput()
+    {
+        const string workerId = "pause-repair-fifo";
+        var hub = new TermHub();
+        var original = new RecordingWorker();
+        var firstReplacement = new RecordingWorker();
+        var finalReplacement = new RecordingWorker();
+        var owner = new RecordingBrowser();
+        var viewer = new RecordingBrowser();
+        Assert.True(hub.Conn.RegisterWorker(workerId, original));
+        hub.Conn.RegisterBrowser(workerId, owner, "admin");
+        hub.Conn.RegisterBrowser(workerId, viewer, "admin");
+        Assert.True(hub.Router.SetInputMode(workerId, InputModes.Open).Ok);
+        var pause = original.DelayNextPause();
+        original.DelayNextResume();
+
+        var acquire = hub.Lease.TryAcquireWsAsync(workerId, owner);
+        await pause.Attempted.WaitAsync(TimeSpan.FromSeconds(1));
+        var firstTransition = hub.Conn.RegisterWorkerAsync(workerId, firstReplacement);
+        var finalTransition = hub.Conn.RegisterWorkerAsync(workerId, finalReplacement);
+        var state = hub.Registry.Get(workerId)!;
+
+        Assert.NotNull(state.ActiveLifecycleTransition);
+        Assert.Single(state.LifecycleTransitionQueue);
+
+        var server = NewUnstartedServer(hub);
+        var laterInput = server.SendBrowserInputAsync(workerId, viewer, "input-i");
+        Assert.False(laterInput.IsCompleted);
+
+        pause.Release();
+        Assert.True((await acquire.WaitAsync(TimeSpan.FromSeconds(1))).Ok);
+        await original.ResumeAttempted.WaitAsync(TimeSpan.FromSeconds(1));
+
+        Assert.Same(firstReplacement, state.WorkerWs);
+        Assert.False(finalTransition.IsCompleted);
+        Assert.False(laterInput.IsCompleted);
+
+        original.ReleaseResume();
+        Assert.True(await firstTransition.WaitAsync(TimeSpan.FromSeconds(1)));
+        Assert.True(await finalTransition.WaitAsync(TimeSpan.FromSeconds(1)));
+        Assert.True(await laterInput.WaitAsync(TimeSpan.FromSeconds(1)));
+
+        Assert.Same(finalReplacement, state.WorkerWs);
+        Assert.Empty(firstReplacement.Inputs);
+        Assert.Equal(["input-i"], finalReplacement.Inputs);
+    }
+
+    [Fact]
     public async Task QueuedReplacementsKeepFifoPriorityOverLaterOpenModeInput()
     {
         var hub = new TermHub();
@@ -1297,6 +1345,141 @@ public sealed class ResumeLifecycleIntegrationTests
         Assert.Equal(1, DecodeBrowserFrames(observer).Count(frame =>
             Type(frame) == "worker_disconnected"));
         Assert.Equal([true, false], ownershipChanges);
+    }
+
+    [Theory]
+    [InlineData("release", "local", false)]
+    [InlineData("release", "local", true)]
+    [InlineData("release", "ws", false)]
+    [InlineData("release", "ws", true)]
+    [InlineData("expiry", "local", false)]
+    [InlineData("expiry", "local", true)]
+    [InlineData("expiry", "ws", false)]
+    [InlineData("expiry", "ws", true)]
+    [InlineData("force", "local", false)]
+    [InlineData("force", "local", true)]
+    [InlineData("force", "ws", false)]
+    [InlineData("force", "ws", true)]
+    public async Task FailedOwnershipEndingResumeReconcilesWorkerExactlyOnce(
+        string operation,
+        string transport,
+        bool hangs)
+    {
+        const string workerId = "failed-ownership-ending-resume";
+        var clock = new ManualClock(100);
+        clock.SetMonotonic(0);
+        var ownershipChanges = new List<bool>();
+        var hub = new TermHub(new TermHubConfig
+        {
+            Clock = clock,
+            BrowserSendTimeout = TimeSpan.FromMilliseconds(200),
+            OnHijackChanged = (_, enabled, _) => ownershipChanges.Add(enabled),
+        });
+        var failure = new ResumeFailureGate();
+        var observer = new RecordingBrowser();
+        var replacement = new RecordingWorker();
+        _ = NewUnstartedServer(hub, workerId, out var registry);
+        UshellConnector? connector = null;
+        IWorkerWs worker;
+        GatedResumeFailureWorker? websocketWorker = null;
+        if (transport == "local")
+        {
+            connector = new UshellConnector(workerId, new UshellConnectorConfig
+            {
+                PollSleep = _ => { },
+            });
+            connector.Start();
+            var localWorker = new LocalWorkerLink(hub, workerId, connector);
+            Assert.True(await localWorker.AttachAsync(InputModes.Hijack));
+            worker = localWorker;
+        }
+        else
+        {
+            websocketWorker = new GatedResumeFailureWorker(failure);
+            worker = websocketWorker;
+            Assert.True(hub.Conn.RegisterWorker(workerId, worker));
+            websocketWorker.IsAuthoritative = () => ReferenceEquals(
+                hub.Registry.Get(workerId)?.WorkerWs, worker);
+        }
+
+        try
+        {
+            registry.MarkWorker(workerId, true, false);
+            hub.Conn.RegisterBrowser(workerId, observer, "viewer");
+            Assert.True((await hub.Lease.TryAcquireRestAsync(
+                workerId,
+                "rest-owner",
+                operation == "expiry" ? 1 : 30,
+                "ending-lease",
+                clock.Monotonic())).Ok);
+            if (worker is LocalWorkerLink localWorker)
+            {
+                localWorker.SendOverride = failure.SendAsync;
+            }
+            if (operation == "expiry") clock.SetMonotonic(2);
+
+            var ending = EndOwnershipAsync();
+            await failure.Attempted.WaitAsync(TimeSpan.FromSeconds(1));
+            var replacementTransition = hub.Conn.RegisterWorkerAsync(workerId, replacement);
+            if (!hangs) failure.ReleaseFault();
+
+            await ending.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.True(await replacementTransition.WaitAsync(TimeSpan.FromSeconds(1)));
+            if (hangs)
+            {
+                failure.ReleaseFault();
+                await failure.Completed.WaitAsync(TimeSpan.FromSeconds(1));
+            }
+
+            Assert.Same(replacement, hub.Registry.Get(workerId)!.WorkerWs);
+            Assert.False(Assert.IsAssignableFrom<IAbortableBrowserWs>(worker).IsActive);
+            if (websocketWorker is not null)
+            {
+                Assert.True(websocketWorker.AbortedWhileAuthoritative);
+            }
+            Assert.True(registry.TryGetStatus(workerId, out var offline));
+            Assert.False(offline.Connected);
+            Assert.Equal(SessionLifecycleState.Stopped, offline.LifecycleState);
+            Assert.Equal([true, false], ownershipChanges);
+            var frames = DecodeBrowserFrames(observer);
+            Assert.Equal(1, frames.Count(frame => Type(frame) == "worker_disconnected"));
+            Assert.Equal(1, frames.Count(frame => Type(frame) == "hijack_state"));
+
+            registry.MarkWorker(workerId, true, false);
+            Assert.False((await hub.Conn.ReconcileWorkerDisconnectAsync(
+                workerId, worker)).Reconciled);
+
+            Assert.Same(replacement, hub.Registry.Get(workerId)!.WorkerWs);
+            Assert.True(registry.TryGetStatus(workerId, out var afterReplay));
+            Assert.True(afterReplay.Connected);
+            Assert.Equal([true, false], ownershipChanges);
+            frames = DecodeBrowserFrames(observer);
+            Assert.Equal(1, frames.Count(frame => Type(frame) == "worker_disconnected"));
+            Assert.Equal(1, frames.Count(frame => Type(frame) == "hijack_state"));
+        }
+        finally
+        {
+            connector?.Stop();
+        }
+
+        async Task EndOwnershipAsync()
+        {
+            switch (operation)
+            {
+                case "release":
+                    Assert.True((await hub.Lease.ReleaseRestAsync(
+                        workerId, "ending-lease")).Released);
+                    break;
+                case "expiry":
+                    Assert.True((await hub.Lease.CleanupExpiredAsync(workerId)).RestExpired);
+                    break;
+                case "force":
+                    Assert.True((await hub.Lease.ForceReleaseAsync(workerId)).Released);
+                    break;
+                default:
+                    throw new Xunit.Sdk.XunitException("unknown ownership-ending operation");
+            }
+        }
     }
 
     [Fact]
@@ -2073,6 +2256,67 @@ public sealed class ResumeLifecycleIntegrationTests
     {
         Resume,
         Input,
+    }
+
+    private sealed class ResumeFailureGate
+    {
+        private readonly TaskCompletionSource _attempted = NewSignal();
+        private readonly TaskCompletionSource _release = NewSignal();
+        private readonly TaskCompletionSource _completed = NewSignal();
+
+        internal Task Attempted => _attempted.Task;
+        internal Task Completed => _completed.Task;
+
+        internal void ReleaseFault() => _release.TrySetResult();
+
+        internal async Task SendAsync(
+            string payload,
+            CancellationToken cancellationToken = default)
+        {
+            _attempted.TrySetResult();
+            try
+            {
+                await _release.Task.ConfigureAwait(false);
+                throw new IOException("deterministic resume send failure");
+            }
+            finally
+            {
+                _completed.TrySetResult();
+            }
+        }
+
+        private static TaskCompletionSource NewSignal() =>
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
+    private sealed class GatedResumeFailureWorker : IAbortableBrowserWs
+    {
+        private readonly ResumeFailureGate _failure;
+
+        internal GatedResumeFailureWorker(ResumeFailureGate failure) => _failure = failure;
+
+        public bool IsActive { get; private set; } = true;
+        internal bool AbortedWhileAuthoritative { get; private set; }
+        internal Func<bool>? IsAuthoritative { get; set; }
+
+        public void Abort()
+        {
+            AbortedWhileAuthoritative = IsAuthoritative?.Invoke() is true;
+            IsActive = false;
+        }
+
+        public Task SendTextAsync(
+            string payload,
+            CancellationToken cancellationToken = default)
+        {
+            var action = new ControlFrameDecoder().Feed(payload)
+                .OfType<ControlChunk>()
+                .Select(chunk => chunk.Control.GetValueOrDefault("action")?.ToString())
+                .FirstOrDefault(value => value is not null);
+            return action == "resume"
+                ? _failure.SendAsync(payload, cancellationToken)
+                : Task.CompletedTask;
+        }
     }
 
     private sealed class FaultingWorker : IAbortableBrowserWs
