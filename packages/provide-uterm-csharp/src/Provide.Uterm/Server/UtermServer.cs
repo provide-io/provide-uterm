@@ -87,6 +87,11 @@ public sealed partial class UtermServer : IAsyncDisposable
         _startTime = _clock.Wall();
         _resumeTokens = new ResumeTokenStore(_clock);
         _deckMux = new DeckMuxPresence(new HubDeckMuxBroadcaster(_deps.Hub));
+        if (deps.Registry is InMemorySessionRegistry memoryRegistry)
+        {
+            deps.Hub.Conn.ConfigureWorkerOfflineMarker(workerId =>
+                memoryRegistry.MarkWorker(workerId, false, false));
+        }
     }
 
     private sealed class HubDeckMuxBroadcaster : IDeckMuxBroadcaster
@@ -1160,49 +1165,8 @@ public sealed partial class UtermServer : IAsyncDisposable
         }
         finally
         {
-            // Everything about a disconnect is inside the identity check. A
-            // socket that a later one displaced is nobody's worker any more —
-            // DeregisterWorker answers false for it — and its eventual close
-            // says nothing about the session, which is still being served by
-            // the socket that replaced it. Marking the session offline out here
-            // took down a live session, with a lease held on it, because a
-            // stale socket finally noticed it was gone. The reference draws the
-            // line in the same place (bridge/routes/websockets_impl.py:241-247,
-            // and see :106-111 for why the check exists at all).
-            var (shouldBroadcast, wasHijacked) = _deps.Hub.Conn.DeregisterWorker(workerId, conn);
-            if (shouldBroadcast)
-            {
-                if (_deps.Registry is InMemorySessionRegistry mem2)
-                {
-                    // Offline, and nothing else: a worker leaving is not a mode
-                    // change either. Rewriting the mode here left every session
-                    // reporting `hijack` after its worker went away, whatever
-                    // it had been configured as.
-                    mem2.MarkWorker(workerId, false, false);
-                }
-
-                try
-                {
-                    await _deps.Hub.Conn.BroadcastToBrowsersAsync(
-                        workerId,
-                        new Dictionary<string, object?>
-                        {
-                            ["type"] = "worker_disconnected",
-                            ["worker_id"] = workerId,
-                            ["ts"] = _clock.Wall(),
-                        },
-                        CancellationToken.None).ConfigureAwait(false);
-                    if (wasHijacked)
-                    {
-                        await _deps.Hub.BroadcastHijackStateAsync(workerId, CancellationToken.None)
-                            .ConfigureAwait(false);
-                    }
-                }
-                catch
-                {
-                    // best-effort on worker teardown
-                }
-            }
+            await _deps.Hub.Conn.ReconcileWorkerDisconnectAsync(workerId, conn)
+                .ConfigureAwait(false);
 
             await WebSocketCloseHandler.CloseAndTerminateAsync(
                     ws, WebSocketCloseStatus.NormalClosure, "bye")

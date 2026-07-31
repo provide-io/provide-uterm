@@ -445,39 +445,8 @@ public sealed partial class UtermServer
         }
         finally
         {
-            // Inside the identity check, for the reason the worker WS route
-            // documents: a displaced tunnel socket closing says nothing about
-            // the session the socket that replaced it is still serving.
-            var (shouldBroadcast, wasHijacked) = _deps.Hub.Conn.DeregisterWorker(workerId, conn);
-            if (shouldBroadcast)
-            {
-                if (_deps.Registry is InMemorySessionRegistry mem2)
-                {
-                    mem2.MarkWorker(workerId, false, false);
-                }
-
-                try
-                {
-                    await _deps.Hub.Conn.BroadcastToBrowsersAsync(
-                        workerId,
-                        new Dictionary<string, object?>
-                        {
-                            ["type"] = "worker_disconnected",
-                            ["worker_id"] = workerId,
-                            ["ts"] = _clock.Wall(),
-                        },
-                        CancellationToken.None).ConfigureAwait(false);
-                    if (wasHijacked)
-                    {
-                        await _deps.Hub.BroadcastHijackStateAsync(workerId, CancellationToken.None)
-                            .ConfigureAwait(false);
-                    }
-                }
-                catch
-                {
-                    // best-effort
-                }
-            }
+            await _deps.Hub.Conn.ReconcileWorkerDisconnectAsync(workerId, conn)
+                .ConfigureAwait(false);
 
             await WebSocketCloseHandler.CloseAndTerminateAsync(
                     ws, WebSocketCloseStatus.NormalClosure, "bye")

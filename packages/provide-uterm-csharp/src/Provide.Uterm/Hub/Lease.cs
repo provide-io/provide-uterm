@@ -20,6 +20,9 @@ public interface ILeaseHub
     /// <summary>Authoritative bound for worker-bound control and input writes.</summary>
     TimeSpan ResumeSendTimeout { get; }
     Task<(bool Ok, Exception? Error)> SendWorkerAsync(string workerId, Dictionary<string, object?> msg, CancellationToken ct = default);
+    Task<(bool Reconciled, bool WasHijacked)> ReconcileWorkerDisconnectAsync(
+        string workerId,
+        IWorkerWs worker);
     Task BroadcastHijackStateAsync(string workerId, CancellationToken ct = default);
     Task AppendEventAsync(string workerId, string eventType, CancellationToken ct = default);
     Task PruneIfIdleAsync(string workerId, CancellationToken ct = default);
@@ -879,7 +882,7 @@ public sealed class HijackLeaseManager
         CancellationToken ct)
     {
         var sent = false;
-        var publishState = false;
+        var reconcileWorker = false;
         Task? sendTask = null;
         using var bounded = CancellationTokenSource.CreateLinkedTokenSource(ct);
         bounded.CancelAfter(_hub.ResumeSendTimeout);
@@ -920,28 +923,21 @@ public sealed class HijackLeaseManager
                         st.LastActivityAt = _clock.Monotonic();
                     }
                 }
-                if (!sent
-                    && st is not null
-                    && ReferenceEquals(st.WorkerWs, pending.Worker))
+                reconcileWorker = !sent;
+            }
+            try
+            {
+                if (reconcileWorker)
                 {
-                    st.WorkerWs = null;
-                    st.HijackSession = null;
-                    st.HijackOwner = null;
-                    st.HijackOwnerExpiresAt = null;
-                    st.PendingDashboardBrowser = null;
-                    st.PendingDashboardOwnershipVersion = null;
-                    st.PendingPauseReservation = null;
-                    st.PendingPauseObligation = null;
-                    LifecycleTransitionCoordinator.Clear(st);
-                    publishState = true;
+                    await _hub.ReconcileWorkerDisconnectAsync(workerId, pending.Worker)
+                        .ConfigureAwait(false);
                 }
             }
-            // Always release lifecycle transitions, including cancellation and send failure.
-            pending.Completion.TrySetResult();
-        }
-        if (publishState)
-        {
-            await PublishOwnershipLostAsync(workerId).ConfigureAwait(false);
+            finally
+            {
+                // Always release lifecycle transitions, including cancellation and send failure.
+                pending.Completion.TrySetResult();
+            }
         }
         return sent;
     }
