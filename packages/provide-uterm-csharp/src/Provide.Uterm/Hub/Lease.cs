@@ -17,6 +17,7 @@ public interface ILeaseHub
     bool CanSendInput(WorkerTermState st, object ws);
     void Metric(string name, int value);
     void NotifyHijackChanged(string workerId, bool enabled, string? owner);
+    /// <summary>Authoritative bound for worker-bound control and input writes.</summary>
     TimeSpan ResumeSendTimeout { get; }
     Task<(bool Ok, Exception? Error)> SendWorkerAsync(string workerId, Dictionary<string, object?> msg, CancellationToken ct = default);
     Task BroadcastHijackStateAsync(string workerId, CancellationToken ct = default);
@@ -878,19 +879,36 @@ public sealed class HijackLeaseManager
         CancellationToken ct)
     {
         var sent = false;
+        var publishState = false;
+        Task? sendTask = null;
+        using var bounded = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        bounded.CancelAfter(_hub.ResumeSendTimeout);
         try
         {
-            if (pending.Worker is IAbortableBrowserWs { IsActive: false }) return false;
-            await pending.Worker.SendTextAsync(text, ct).ConfigureAwait(false);
-            sent = pending.Worker is not IAbortableBrowserWs { IsActive: false };
-            return sent;
+            if (pending.Worker is not IAbortableBrowserWs { IsActive: false })
+            {
+                sendTask = pending.Worker.SendTextAsync(text, bounded.Token);
+                await sendTask.WaitAsync(_hub.ResumeSendTimeout, ct).ConfigureAwait(false);
+                sent = pending.Worker is not IAbortableBrowserWs { IsActive: false };
+            }
         }
         catch
         {
-            return false;
+            ObserveEventualSendFault(sendTask);
         }
         finally
         {
+            if (!sent && pending.Worker is IAbortableBrowserWs abortable)
+            {
+                try
+                {
+                    abortable.Abort();
+                }
+                catch
+                {
+                    // Registry fencing below is authoritative even if transport abort fails.
+                }
+            }
             lock (_lock)
             {
                 var st = _registry.Get(workerId);
@@ -902,10 +920,40 @@ public sealed class HijackLeaseManager
                         st.LastActivityAt = _clock.Monotonic();
                     }
                 }
+                if (!sent
+                    && st is not null
+                    && ReferenceEquals(st.WorkerWs, pending.Worker))
+                {
+                    st.WorkerWs = null;
+                    st.HijackSession = null;
+                    st.HijackOwner = null;
+                    st.HijackOwnerExpiresAt = null;
+                    st.PendingDashboardBrowser = null;
+                    st.PendingDashboardOwnershipVersion = null;
+                    st.PendingPauseReservation = null;
+                    st.PendingPauseObligation = null;
+                    LifecycleTransitionCoordinator.Clear(st);
+                    publishState = true;
+                }
             }
             // Always release lifecycle transitions, including cancellation and send failure.
             pending.Completion.TrySetResult();
         }
+        if (publishState)
+        {
+            await PublishOwnershipLostAsync(workerId).ConfigureAwait(false);
+        }
+        return sent;
+    }
+
+    private static void ObserveEventualSendFault(Task? task)
+    {
+        if (task is null) return;
+        _ = task.ContinueWith(
+            static completed => _ = completed.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
 
     public bool PrepareBrowserInput(string workerId, object ws)

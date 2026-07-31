@@ -745,20 +745,48 @@ public sealed class ConnectionManager
                 CompleteLifecycleTransition(workerId, transition);
             }
         }
+        var resumed = false;
+        var fenced = false;
+        Exception? error = null;
+        Task? sendTask = null;
+        using var bounded = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        bounded.CancelAfter(_hub.ResumeSendTimeout);
         try
         {
             var encoded = ControlChannelCodec.EncodeControlFrame(msg);
-            await worker!.SendTextAsync(encoded, ct).ConfigureAwait(false);
-            return (true, null);
+            sendTask = worker!.SendTextAsync(encoded, bounded.Token);
+            await sendTask.WaitAsync(_hub.ResumeSendTimeout, ct).ConfigureAwait(false);
+            resumed = worker is not IAbortableBrowserWs { IsActive: false };
         }
         catch (Exception ex)
         {
-            return (false, ex);
+            error = ex;
+            ObserveEventualFault(sendTask);
         }
         finally
         {
+            if (!resumed)
+            {
+                if (worker is IAbortableBrowserWs abortable)
+                {
+                    try
+                    {
+                        abortable.Abort();
+                    }
+                    catch
+                    {
+                        // Registry fencing below is authoritative even if transport abort fails.
+                    }
+                }
+                fenced = DeregisterWorker(workerId, worker!).ShouldBroadcast;
+            }
             CompleteLifecycleTransition(workerId, transition!);
         }
+        if (fenced)
+        {
+            await PublishOwnershipLostAsync(workerId).ConfigureAwait(false);
+        }
+        return resumed ? (true, null) : (false, error);
     }
 
     private void CompleteLifecycleTransition(
