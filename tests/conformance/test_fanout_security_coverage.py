@@ -6,10 +6,12 @@
 
 from __future__ import annotations
 
+import copy
 import importlib.util
 import json
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from types import ModuleType
 
@@ -23,6 +25,7 @@ EXPECTED_FIELDS = {
     "error",
     "approval_required",
     "approval_id",
+    "command",
     "delivered_workers",
     "observer_notifications",
     "failed_members",
@@ -45,7 +48,7 @@ def _runner() -> ModuleType:
 def test_contract_contains_semantic_inputs_expectations_and_exact_status_matrix() -> None:
     contract = _contract()
 
-    assert contract["schema_version"] == 1
+    assert contract["schema_version"] == 2
     assert set(contract["backends"]) == BACKENDS  # type: ignore[arg-type]
     scenarios = contract["scenarios"]
     assert isinstance(scenarios, list) and scenarios
@@ -60,6 +63,16 @@ def test_contract_contains_semantic_inputs_expectations_and_exact_status_matrix(
             assert set(claim["expected"]) <= EXPECTED_FIELDS
             assert set(scenario["expected"] | claim["expected"]) == EXPECTED_FIELDS
         assert "file" not in scenario and "test" not in scenario
+        assert set(scenario["input"]) >= {
+            "surface",
+            "operation",
+            "actor",
+            "group",
+            "visibility",
+            "policy",
+            "workers",
+            "command",
+        }
 
 
 def test_real_runner_executes_and_compares_native_observations() -> None:
@@ -118,9 +131,69 @@ def test_false_typescript_server_capability_claim_is_rejected() -> None:
     assert any("typescript" in error and "unserved component" in error for error in errors)
 
 
+def test_scenario_ids_are_opaque_and_statuses_derive_from_semantic_inputs() -> None:
+    runner = _runner()
+    contract = copy.deepcopy(_contract())
+    for index, scenario in enumerate(contract["scenarios"]):
+        scenario["id"] = f"opaque-{index}"
+
+    assert runner.validate_contract(contract) == []
+
+    governed = next(scenario for scenario in contract["scenarios"] if scenario["input"]["policy"]["action"] == "deny")
+    governed["backends"]["go"]["status"] = "execute"
+    assert any("false capability status" in error for error in runner.validate_contract(contract))
+
+
 def test_native_command_failure_is_not_reported_as_coverage() -> None:
     runner = _runner()
 
     errors = runner.command_errors("python", subprocess.CompletedProcess(["bad"], 2, "", "boom"))
 
     assert any("command failed" in error and "boom" in error for error in errors)
+
+
+def _mutated_contract(kind: str) -> tuple[dict[str, object], str]:
+    contract = copy.deepcopy(_contract())
+    scenarios = contract["scenarios"]
+    assert isinstance(scenarios, list)
+    if kind == "policy":
+        scenario = next(item for item in scenarios if item["input"]["policy"]["action"] == "deny")
+    else:
+        scenario = next(
+            item for item in scenarios if "immediate" in item["input"]["workers"]["immediate_output"].values()
+        )
+    scenario_input = scenario["input"]
+    if kind == "member":
+        scenario_input["group"]["members"] = ["mutant-worker"]
+        scenario_input["visibility"]["readable_members"] = ["mutant-worker"]
+        scenario_input["workers"]["accepted_members"] = ["mutant-worker"]
+        scenario_input["workers"]["immediate_output"] = {"mutant-worker": "immediate"}
+    elif kind == "command":
+        scenario_input["command"] = "whoami-mutant"
+    elif kind == "policy":
+        scenario_input["policy"]["action"] = "allow"
+    elif kind == "output":
+        scenario_input["workers"]["immediate_output"] = {"w1": "changed-output"}
+    return contract, scenario["id"]
+
+
+def test_fixture_inputs_drive_every_backend_runtime_observations_and_comparator() -> None:
+    runner = _runner()
+    for backend in sorted(BACKENDS):
+        for kind in ("member", "command", "policy", "output"):
+            contract, scenario_id = _mutated_contract(kind)
+            with tempfile.TemporaryDirectory(prefix=f"fanout-metamorphic-{backend}-{kind}-") as directory:
+                contract_path = Path(directory) / "contract.json"
+                contract_path.write_text(json.dumps(contract), encoding="utf-8")
+                command_errors, observations = runner.collect_backend_observations(REPO_ROOT, contract_path, backend)
+            assert command_errors == []
+            observation = next(item for item in observations if item["id"] == scenario_id)
+            if kind == "member":
+                assert observation["delivered_workers"] == ["mutant-worker"]
+            elif kind == "command":
+                assert observation["command"] == "whoami-mutant"
+            elif kind == "policy":
+                assert observation["status_code"] == 200 and observation["error"] is None
+            else:
+                assert observation["output"] == {"w1": "changed-output"}
+            assert runner.compare_observations(contract, backend, observations)
