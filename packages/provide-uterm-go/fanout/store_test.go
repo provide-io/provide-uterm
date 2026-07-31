@@ -5,7 +5,11 @@
 
 package fanout
 
-import "testing"
+import (
+	"fmt"
+	"sync"
+	"testing"
+)
 
 func TestInMemoryStoreCRUD(t *testing.T) {
 	s := NewInMemoryStore()
@@ -26,6 +30,98 @@ func TestInMemoryStoreCRUD(t *testing.T) {
 	}
 	// Delete of a missing group is a no-op.
 	s.Delete("nope")
+}
+
+func TestInMemoryStoreClonesSavedAndReturnedGroups(t *testing.T) {
+	s := NewInMemoryStore()
+	original := &Group{GroupID: "g1", Name: "original", WorkerIDs: []string{"w1"}, Grants: []string{"alice"}}
+	s.Save(original)
+	original.Name = "mutated-input"
+	original.WorkerIDs[0] = "mutated-input-worker"
+	original.Grants[0] = "mutated-input-grant"
+
+	got, ok := s.Get("g1")
+	if !ok {
+		t.Fatal("saved group missing")
+	}
+	if got.Name != "original" || got.WorkerIDs[0] != "w1" || got.Grants[0] != "alice" {
+		t.Fatalf("saved state aliased input: %+v", got)
+	}
+	got.Name = "mutated-get"
+	got.WorkerIDs[0] = "mutated-get-worker"
+	got.Grants[0] = "mutated-get-grant"
+	listed := s.ListForPrincipal("alice")
+	if len(listed) != 1 {
+		t.Fatalf("list = %+v", listed)
+	}
+	listed[0].Name = "mutated-list"
+	listed[0].WorkerIDs[0] = "mutated-list-worker"
+	listed[0].Grants[0] = "mutated-list-grant"
+
+	again, _ := s.Get("g1")
+	if again.Name != "original" || again.WorkerIDs[0] != "w1" || again.Grants[0] != "alice" {
+		t.Fatalf("stored state aliased returned group: %+v", again)
+	}
+}
+
+func TestGrantAccessPreservesConcurrentDistinctGrants(t *testing.T) {
+	store := NewInMemoryStore()
+	controller := NewController(newFakeHub(nil), Config{Store: store, Authorizer: allowAllAuthorizer()})
+	_, _ = controller.CreateGroup(&Group{GroupID: "g1"}, "owner")
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for _, grantee := range []string{"alice", "bob"} {
+		grantee := grantee
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			controller.GrantAccess("g1", grantee, "owner")
+		}()
+	}
+	close(start)
+	wg.Wait()
+
+	group, ok := store.Get("g1")
+	if !ok || !contains(group.Grants, "alice") || !contains(group.Grants, "bob") {
+		t.Fatalf("concurrent grants = %v, want alice and bob", group.Grants)
+	}
+}
+
+func TestInMemoryStoreCanListWhileGranting(t *testing.T) {
+	store := NewInMemoryStore()
+	store.Save(&Group{GroupID: "g1", CreatedBy: "owner"})
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		<-start
+		for i := 0; i < 100; i++ {
+			store.GrantAccess("g1", fmt.Sprintf("member-%d", i), "owner")
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		<-start
+		for i := 0; i < 100; i++ {
+			groups := store.ListForPrincipal("owner")
+			if len(groups) != 1 {
+				t.Errorf("owner list length = %d, want 1", len(groups))
+				return
+			}
+			// Returned values must remain detached while the stored grant slice
+			// grows concurrently.
+			groups[0].Grants = append(groups[0].Grants, "caller-only")
+		}
+	}()
+	close(start)
+	wg.Wait()
+
+	group, ok := store.Get("g1")
+	if !ok || len(group.Grants) != 100 {
+		t.Fatalf("stored grants = %d, want 100", len(group.Grants))
+	}
 }
 
 func TestInMemoryStoreListForPrincipal(t *testing.T) {

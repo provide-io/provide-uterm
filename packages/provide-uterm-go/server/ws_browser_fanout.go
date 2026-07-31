@@ -26,6 +26,10 @@ func (s *Server) browserFanoutSend(ctx context.Context, conn *websocket.Conn, bc
 	if p == nil {
 		p = serverauth.AnonymousPrincipal()
 	}
+	if !s.deps.Authz.IsAdmin(p) {
+		s.writeFrame(ctx, conn, frames.MakeErrorFrame("admin role required"))
+		return
+	}
 	subject := p.SubjectID
 	groupID, _ := msg["group_id"].(string)
 	data, _ := msg["data"].(string)
@@ -39,8 +43,11 @@ func (s *Server) browserFanoutSend(ctx context.Context, conn *websocket.Conn, bc
 		s.writeFrame(ctx, conn, frames.MakeErrorFrame(unsupportedFanoutGovernance))
 		return
 	}
-	allowed, refused := s.authorizedFanoutMembers(ctx, p, group.WorkerIDs)
-	result := s.fanout.SendAuthorized(ctx, groupID, data, subject, 0, 0, allowed, refused)
+	result, err := s.fanout.Send(ctx, groupID, data, p, 0, 0)
+	if err != nil {
+		s.writeFrame(ctx, conn, frames.MakeErrorFrame(err.Error()))
+		return
+	}
 	frame := map[string]any{
 		"type":               "fanout_result",
 		"group_id":           result.GroupID,

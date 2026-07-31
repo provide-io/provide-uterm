@@ -6,14 +6,12 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
 	"testing"
 
-	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverauth"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
 )
 
@@ -139,24 +137,18 @@ func TestFanoutGrant(t *testing.T) {
 	}
 }
 
-func TestFanoutReadAuthz(t *testing.T) {
+func TestFanoutGlobalAdminCanCreateForPrivateAndPublicSessions(t *testing.T) {
 	ts := newTestServer(t, nil)
 	ts.reg.add("priv1", "alice", "private")
 	ts.reg.add("pub1", "alice", "public")
 
-	// Viewer bob cannot read alice's private session → 403.
-	rec := ts.do("POST", "/api/fanout/groups", `{"name":"g","worker_ids":["priv1"]}`, viewerHeaders())
-	if rec.Code != 403 {
-		t.Fatalf("private status = %d, want 403 (body=%s)", rec.Code, rec.Body.String())
-	}
-	errMsg := decodeBody(t, rec.Body.String()).(map[string]any)["error"].(string)
-	if !strings.Contains(errMsg, "priv1") {
-		t.Fatalf("error = %q", errMsg)
+	rec := ts.do("POST", "/api/fanout/groups", `{"name":"g","worker_ids":["priv1"]}`, adminHeaders())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("private status = %d, want 200 (body=%s)", rec.Code, rec.Body.String())
 	}
 
-	// Public session is readable → 200.
-	rec = ts.do("POST", "/api/fanout/groups", `{"name":"g","worker_ids":["pub1"]}`, viewerHeaders())
-	if rec.Code != 200 {
+	rec = ts.do("POST", "/api/fanout/groups", `{"name":"g","worker_ids":["pub1"]}`, adminHeaders())
+	if rec.Code != http.StatusOK {
 		t.Fatalf("public status = %d, want 200 (body=%s)", rec.Code, rec.Body.String())
 	}
 }
@@ -177,45 +169,24 @@ func TestFanoutExplicitlyAllowsDormantMembers(t *testing.T) {
 	}
 }
 
-func TestAuthorizedFanoutMembersRechecksCurrentAuthorization(t *testing.T) {
-	ts := newTestServer(t, nil)
-	ts.reg.add("w1", "alice", "public")
-	p := &serverauth.Principal{SubjectID: "bob", Roles: serverauth.NewSet("viewer"), Scopes: serverauth.NewSet("*")}
-
-	allowed, refused := ts.srv.authorizedFanoutMembers(context.Background(), p, []string{"w1", "missing"})
-	if len(allowed) != 1 || allowed[0] != "w1" || len(refused) != 1 || refused[0] != "missing" {
-		t.Fatalf("initial allowed/refused = %v/%v", allowed, refused)
-	}
-	ts.reg.add("w1", "alice", "private")
-	allowed, refused = ts.srv.authorizedFanoutMembers(context.Background(), p, []string{"w1"})
-	if len(allowed) != 0 || len(refused) != 1 || refused[0] != "w1" {
-		t.Fatalf("revoked allowed/refused = %v/%v", allowed, refused)
-	}
-}
-
 func TestFanoutGroupGrantDoesNotBypassSessionAuthorization(t *testing.T) {
 	ts := newTestServer(t, nil)
 	ts.reg.add("w1", "admin1", "private")
 	creator := adminHeaders()
-	grantee := map[string]string{"X-Subject": "admin2", "X-Role": "admin"}
+	grantee := map[string]string{"X-Subject": "view1", "X-Role": "viewer"}
 
 	rec := ts.do("POST", "/api/fanout/groups", `{"name":"g","worker_ids":["w1"]}`, creator)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("create status/body = %d %s", rec.Code, rec.Body.String())
 	}
 	groupID := decodeBody(t, rec.Body.String()).(map[string]any)["group_id"].(string)
-	if rec = ts.do("POST", "/api/fanout/groups/"+groupID+"/grants", `{"grantee":"admin2"}`, creator); rec.Code != http.StatusNoContent {
+	if rec = ts.do("POST", "/api/fanout/groups/"+groupID+"/grants", `{"grantee":"view1"}`, creator); rec.Code != http.StatusNoContent {
 		t.Fatalf("grant status/body = %d %s", rec.Code, rec.Body.String())
 	}
 
 	rec = ts.do("POST", "/api/fanout/groups/"+groupID+"/send", `{"data":"id"}`, grantee)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("grantee send status/body = %d %s", rec.Code, rec.Body.String())
-	}
-	result := decodeBody(t, rec.Body.String()).(map[string]any)
-	failed := result["failed_sessions"].([]any)
-	if len(failed) != 1 || failed[0] != "w1" {
-		t.Fatalf("failed_sessions = %v, want [w1]", failed)
+	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "admin role required") {
+		t.Fatalf("grantee send status/body = %d %s, want global-admin refusal", rec.Code, rec.Body.String())
 	}
 }
 
@@ -239,11 +210,44 @@ func TestFanoutRequiresAuth(t *testing.T) {
 	for _, tc := range []struct{ method, path string }{
 		{"POST", "/api/fanout/groups"},
 		{"GET", "/api/fanout/groups"},
+		{"DELETE", "/api/fanout/groups/x"},
 		{"POST", "/api/fanout/groups/x/send"},
+		{"POST", "/api/fanout/groups/x/grants"},
 	} {
-		rec := ts.do(tc.method, tc.path, "{}", nil)
+		rec := ts.do(tc.method, tc.path, "{not-json", nil)
 		if rec.Code != 401 {
 			t.Fatalf("%s %s status = %d, want 401", tc.method, tc.path, rec.Code)
+		}
+	}
+}
+
+func TestFanoutRequiresGlobalAdminBeforeParsingOrLookup(t *testing.T) {
+	ts := permissiveFanoutTestServer(t)
+	callers := []struct {
+		name    string
+		headers map[string]string
+	}{
+		{name: "viewer", headers: viewerHeaders()},
+		{name: "operator", headers: map[string]string{"X-Subject": "op1", "X-Role": "operator"}},
+		{name: "session-scoped-admin", headers: map[string]string{
+			"X-Subject": "scoped1", "X-Role": "admin", "X-Admin-Session-Scope": "w1",
+		}},
+	}
+	requests := []struct{ method, path string }{
+		{"POST", "/api/fanout/groups"},
+		{"GET", "/api/fanout/groups"},
+		{"DELETE", "/api/fanout/groups/does-not-exist"},
+		{"POST", "/api/fanout/groups/does-not-exist/send"},
+		{"POST", "/api/fanout/groups/does-not-exist/grants"},
+	}
+	for _, caller := range callers {
+		for _, req := range requests {
+			t.Run(caller.name+"/"+req.method+req.path, func(t *testing.T) {
+				rec := ts.do(req.method, req.path, "{not-json", caller.headers)
+				if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "admin role required") {
+					t.Fatalf("status/body = %d %s, want global-admin refusal", rec.Code, rec.Body.String())
+				}
+			})
 		}
 	}
 }

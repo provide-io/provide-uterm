@@ -8,6 +8,7 @@ package fanout
 import (
 	"context"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
@@ -31,6 +32,48 @@ import (
 // hard-cap waits are inherently wall-time bound.
 type OutputCollector struct{}
 
+// Capture is an output subscription prepared before worker input is sent.
+// Close is idempotent so every dispatch exit path can release it safely.
+type Capture struct {
+	sub       *hub.Subscription
+	remove    func()
+	closeOnce sync.Once
+}
+
+// OpenCapture registers the worker's output subscription without starting its
+// response timers. A nil bus preserves the historical no-output behavior.
+func OpenCapture(bus *hub.EventBus, workerID string) (*Capture, error) {
+	if bus == nil {
+		return &Capture{}, nil
+	}
+	sub, remove, err := bus.Watch(workerID, []string{"term", "snapshot"}, nil)
+	if err != nil {
+		return nil, err
+	}
+	return &Capture{sub: sub, remove: remove}, nil
+}
+
+// Close removes this capture's subscription exactly once.
+func (c *Capture) Close() {
+	if c == nil {
+		return
+	}
+	c.closeOnce.Do(func() {
+		if c.remove != nil {
+			c.remove()
+		}
+	})
+}
+
+// Collect consumes already-buffered and future output until quiescence, the
+// hard collection cap, disconnect, or context cancellation.
+func (c *Capture) Collect(ctx context.Context, quiesceMS, maxMS int) (string, int) {
+	if c == nil || c.sub == nil {
+		return "", 0
+	}
+	return collectSubscription(ctx, c.sub, quiesceMS, maxMS)
+}
+
 // Collect subscribes to the bus and accumulates output for workerID.
 func (OutputCollector) Collect(
 	ctx context.Context, bus *hub.EventBus, workerID string, quiesceMS, maxMS int,
@@ -38,11 +81,15 @@ func (OutputCollector) Collect(
 	if bus == nil {
 		return "", 0
 	}
-	sub, remove, err := bus.Watch(workerID, []string{"term", "snapshot"}, nil)
+	capture, err := OpenCapture(bus, workerID)
 	if err != nil {
 		return "", 0
 	}
-	defer remove()
+	defer capture.Close()
+	return capture.Collect(ctx, quiesceMS, maxMS)
+}
+
+func collectSubscription(ctx context.Context, sub *hub.Subscription, quiesceMS, maxMS int) (string, int) {
 
 	quiesce := time.Duration(quiesceMS) * time.Millisecond
 	start := time.Now()

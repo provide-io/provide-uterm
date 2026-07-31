@@ -7,6 +7,7 @@ package server
 
 import (
 	"context"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -83,5 +84,45 @@ func TestWSBrowserFanoutSendRouted(t *testing.T) {
 		case <-deadline:
 			t.Fatal("timed out waiting for pong after unowned fanout_send")
 		}
+	}
+}
+
+func TestWSBrowserFanoutSendRequiresGlobalAdminWithoutWorkerInput(t *testing.T) {
+	ts := newTestServer(t, nil)
+	ts.srv.MarkReady()
+	ts.reg.add("fo-view", "scoped1", "public")
+	worker := ts.setupWorker(t, "fanout-target")
+	if _, err := ts.srv.fanout.CreateGroup(&fanout.Group{
+		GroupID: "viewer-group", Name: "g", WorkerIDs: []string{"fanout-target"},
+		Mode: "parallel", QuiesceMS: 20, MaxResponseMS: 50, DivergenceThreshold: 0.8,
+	}, "scoped1"); err != nil {
+		t.Fatalf("create scoped-admin group: %v", err)
+	}
+
+	httpSrv := httptest.NewServer(ts.srv.Handler())
+	defer httpSrv.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	bc := dialBrowserWithHeaders(t, ctx, "ws"+strings.TrimPrefix(httpSrv.URL, "http")+"/ws/browser/fo-view/term", http.Header{
+		"X-Subject":             {"scoped1"},
+		"X-Role":                {"admin"},
+		"X-Admin-Session-Scope": {"fo-view"},
+	})
+	defer func() { _ = bc.conn.Close(websocket.StatusNormalClosure, "") }()
+	bc.waitFrame(t, "hello", 5*time.Second)
+
+	worker.mu.Lock()
+	before := len(worker.sent)
+	worker.mu.Unlock()
+	bc.send(t, ctx, map[string]any{"type": "fanout_send", "group_id": "viewer-group", "data": "id\n"})
+	errFrame := bc.waitFrame(t, "error", 5*time.Second)
+	if !strings.Contains(errFrame["message"].(string), "admin role required") {
+		t.Fatalf("error frame = %#v", errFrame)
+	}
+	worker.mu.Lock()
+	after := len(worker.sent)
+	worker.mu.Unlock()
+	if after != before {
+		t.Fatalf("non-admin fanout wrote %d worker frames", after-before)
 	}
 }

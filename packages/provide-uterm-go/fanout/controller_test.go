@@ -7,14 +7,27 @@ package fanout
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverauth"
 )
 
 func newCtrl(h Hub) *Controller {
-	return NewController(h, Config{Clock: hub.NewManualClock(1234.5), IDGen: func() string { return "sid" }})
+	return NewController(h, Config{
+		Clock: hub.NewManualClock(1234.5), IDGen: func() string { return "sid" }, Authorizer: allowAllAuthorizer(),
+	})
+}
+
+func mustSend(t *testing.T, ctrl *Controller, groupID, data, subject string, quiesceMS, maxResponseMS int) Result {
+	t.Helper()
+	result, err := ctrl.Send(context.Background(), groupID, data, adminPrincipal(subject), quiesceMS, maxResponseMS)
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	return result
 }
 
 // -- Group CRUD --------------------------------------------------------------
@@ -121,7 +134,7 @@ func TestAuthorizedGroupOwnership(t *testing.T) {
 
 func TestSendGroupNotFound(t *testing.T) {
 	ctrl := newCtrl(newFakeHub(nil))
-	r := ctrl.Send(context.Background(), "nonexistent", "ls\n", "admin", 0, 0)
+	r := mustSend(t, ctrl, "nonexistent", "ls\n", "admin", 0, 0)
 	if r.GroupID != "nonexistent" || len(r.Results) != 0 || len(r.FailedSessions) != 0 || len(r.DivergentSessions) != 0 {
 		t.Fatalf("empty result expected, got %+v", r)
 	}
@@ -138,12 +151,103 @@ func TestSendUnauthorizedPrincipal(t *testing.T) {
 	fh := newFakeHub(nil, "w1")
 	ctrl := newCtrl(fh)
 	_, _ = ctrl.CreateGroup(newGroup(t, []string{"w1"}, func(g *Group) { g.CreatedBy = "alice" }), "alice")
-	r := ctrl.Send(context.Background(), "g1", "cmd\n", "bob", 0, 0)
+	r := mustSend(t, ctrl, "g1", "cmd\n", "bob", 0, 0)
 	if len(r.Results) != 0 {
 		t.Fatalf("unauthorized send must be empty, got %+v", r)
 	}
 	if len(fh.sendCalls()) != 0 {
 		t.Fatal("unauthorized send must not reach any worker")
+	}
+}
+
+func TestSendFailsClosedWithoutMemberAuthorizer(t *testing.T) {
+	fh := newFakeHub(nil, "w1")
+	ctrl := NewController(fh, Config{Clock: hub.NewManualClock(1234.5), IDGen: func() string { return "sid" }})
+	_, _ = ctrl.CreateGroup(newGroup(t, []string{"w1"}, nil), "admin")
+
+	result, err := ctrl.Send(context.Background(), "g1", "id\n", adminPrincipal("admin"), 0, 0)
+
+	if !errors.Is(err, ErrAuthorizerUnavailable) {
+		t.Fatalf("Send error = %v, want ErrAuthorizerUnavailable", err)
+	}
+	if len(fh.sendCalls()) != 0 {
+		t.Fatalf("controller without an authorizer sent %d worker frames", len(fh.sendCalls()))
+	}
+	if len(result.Results) != 0 {
+		t.Fatalf("fail-closed result = %+v, want no dispatch results", result)
+	}
+}
+
+func TestSendChecksOnlyStoredMembership(t *testing.T) {
+	fh := newFakeHub(nil, "w1", "outside")
+	authz := allowAllAuthorizer()
+	ctrl := NewController(fh, Config{
+		Clock: hub.NewManualClock(1234.5), IDGen: func() string { return "sid" }, Authorizer: authz,
+	})
+	_, _ = ctrl.CreateGroup(newGroup(t, []string{"w1"}, nil), "admin")
+
+	_, err := ctrl.Send(context.Background(), "g1", "id\n", adminPrincipal("admin"), 0, 0)
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+
+	if got := authz.checkedMembers(); strings.Join(got, ",") != "w1" {
+		t.Fatalf("authorization checks = %v, want stored member only", got)
+	}
+	for _, call := range fh.sendCalls() {
+		if call.WorkerID == "outside" {
+			t.Fatalf("non-member reached dispatch: %+v", fh.sendCalls())
+		}
+	}
+}
+
+func TestSendRejectsMissingAndNonGlobalAdminPrincipals(t *testing.T) {
+	fh := newFakeHub(nil, "w1")
+	ctrl := newCtrl(fh)
+	_, _ = ctrl.CreateGroup(newGroup(t, []string{"w1"}, nil), "admin")
+	scope := "w1"
+	tests := []struct {
+		name      string
+		principal *serverauth.Principal
+		want      error
+	}{
+		{name: "nil", principal: nil, want: ErrPrincipalRequired},
+		{name: "empty", principal: &serverauth.Principal{}, want: ErrPrincipalRequired},
+		{name: "anonymous", principal: serverauth.AnonymousPrincipal(), want: ErrPrincipalRequired},
+		{name: "viewer", principal: &serverauth.Principal{SubjectID: "admin", Roles: serverauth.NewSet("viewer")}, want: ErrAdminRequired},
+		{name: "session admin", principal: &serverauth.Principal{SubjectID: "admin", Roles: serverauth.NewSet("admin"), AdminSessionScope: &scope}, want: ErrAdminRequired},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := ctrl.Send(context.Background(), "g1", "id\n", tc.principal, 0, 0)
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("Send error = %v, want %v", err, tc.want)
+			}
+		})
+	}
+	if len(fh.sendCalls()) != 0 || len(fh.broadcastCalls()) != 0 {
+		t.Fatalf("refused principals caused side effects: sends=%v broadcasts=%v", fh.sendCalls(), fh.broadcastCalls())
+	}
+}
+
+func TestSendRechecksRevokedStoredMember(t *testing.T) {
+	fh := newFakeHub(nil, "w1")
+	authz := allowAllAuthorizer()
+	ctrl := NewController(fh, Config{
+		Clock: hub.NewManualClock(1234.5), IDGen: func() string { return "sid" }, Authorizer: authz,
+	})
+	_, _ = ctrl.CreateGroup(newGroup(t, []string{"w1"}, nil), "admin")
+	authz.denied = map[string]bool{"w1": true}
+
+	result, err := ctrl.Send(context.Background(), "g1", "id\n", adminPrincipal("admin"), 0, 0)
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if len(fh.sendCalls()) != 0 || len(fh.broadcastCalls()) != 0 {
+		t.Fatalf("revoked member caused side effects: sends=%v broadcasts=%v", fh.sendCalls(), fh.broadcastCalls())
+	}
+	if len(result.FailedSessions) != 1 || result.FailedSessions[0] != "w1" {
+		t.Fatalf("failed sessions = %v, want [w1]", result.FailedSessions)
 	}
 }
 
@@ -156,7 +260,7 @@ func TestSendParallelAllConnected(t *testing.T) {
 	for _, w := range []string{"w1", "w2", "w3"} {
 		go waitAndEmitTerm(bus, w, "ok\n")
 	}
-	r := ctrl.Send(context.Background(), "g1", "ls\n", "admin", 0, 0)
+	r := mustSend(t, ctrl, "g1", "ls\n", "admin", 0, 0)
 
 	if r.GroupID != "g1" || r.Command != "ls\n" || len(r.Results) != 3 {
 		t.Fatalf("result = %+v", r)
@@ -182,6 +286,63 @@ func TestSendParallelAllConnected(t *testing.T) {
 	}
 }
 
+func TestFanoutParallelCapturesImmediateOutput(t *testing.T) {
+	bus := hub.NewEventBus(hub.EventBusOptions{})
+	fh := newFakeHub(bus, "w1", "w2")
+	fh.onSend = func(workerID string) {
+		bus.Enqueue(workerID, map[string]any{"type": "term", "data": map[string]any{"data": "immediate-" + workerID}})
+	}
+	ctrl := newCtrl(fh)
+	_, _ = ctrl.CreateGroup(newGroup(t, []string{"w1", "w2"}, nil), "admin")
+
+	result := mustSend(t, ctrl, "g1", "id\n", "admin", 5, 100)
+
+	if got := []string{derefStr(result.Results[0].OutputDelta), derefStr(result.Results[1].OutputDelta)}; strings.Join(got, ",") != "immediate-w1,immediate-w2" {
+		t.Fatalf("immediate outputs = %v", got)
+	}
+}
+
+func TestFanoutSequentialCapturesImmediateOutput(t *testing.T) {
+	bus := hub.NewEventBus(hub.EventBusOptions{})
+	fh := newFakeHub(bus, "w1", "w2")
+	fh.onSend = func(workerID string) {
+		bus.Enqueue(workerID, map[string]any{"type": "term", "data": map[string]any{"data": "immediate-" + workerID}})
+	}
+	ctrl := newCtrl(fh)
+	_, _ = ctrl.CreateGroup(newGroup(t, []string{"w1", "w2"}, func(group *Group) {
+		group.Mode = "sequential"
+	}), "admin")
+
+	result := mustSend(t, ctrl, "g1", "id\n", "admin", 5, 100)
+
+	if got := []string{derefStr(result.Results[0].OutputDelta), derefStr(result.Results[1].OutputDelta)}; strings.Join(got, ",") != "immediate-w1,immediate-w2" {
+		t.Fatalf("immediate outputs = %v", got)
+	}
+}
+
+func TestFanoutCaptureOpenFailureBlocksMemberInput(t *testing.T) {
+	bus := hub.NewEventBus(hub.EventBusOptions{MaxSubscribersPerWorker: 1})
+	_, remove, err := bus.Watch("w1", nil, nil)
+	if err != nil {
+		t.Fatalf("occupy subscription: %v", err)
+	}
+	defer remove()
+	fh := newFakeHub(bus, "w1", "w2")
+	ctrl := newCtrl(fh)
+	_, _ = ctrl.CreateGroup(newGroup(t, []string{"w1", "w2"}, nil), "admin")
+
+	result := mustSend(t, ctrl, "g1", "id\n", "admin", 5, 20)
+
+	for _, call := range fh.sendCalls() {
+		if call.WorkerID == "w1" {
+			t.Fatal("member without a capture received input")
+		}
+	}
+	if !contains(result.FailedSessions, "w1") {
+		t.Fatalf("failed sessions = %v, want w1", result.FailedSessions)
+	}
+}
+
 func TestSendParallelPartialFailure(t *testing.T) {
 	bus := hub.NewEventBus(hub.EventBusOptions{})
 	fh := newFakeHub(bus, "w1") // only w1 connected
@@ -189,7 +350,7 @@ func TestSendParallelPartialFailure(t *testing.T) {
 	_, _ = ctrl.CreateGroup(newGroup(t, []string{"w1", "w2", "w3"}, nil), "admin")
 
 	go waitAndEmitTerm(bus, "w1", "output from w1")
-	r := ctrl.Send(context.Background(), "g1", "cmd\n", "admin", 0, 0)
+	r := mustSend(t, ctrl, "g1", "cmd\n", "admin", 0, 0)
 
 	if len(r.Results) != 3 {
 		t.Fatalf("want 3 results, got %d", len(r.Results))
@@ -218,7 +379,7 @@ func TestSendParallelDivergence(t *testing.T) {
 	go waitAndEmitTerm(bus, "w1", "hello world")
 	go waitAndEmitTerm(bus, "w2", "hello world")
 	go waitAndEmitTerm(bus, "w3", "completely different text xyz")
-	r := ctrl.Send(context.Background(), "g1", "cmd\n", "admin", 0, 0)
+	r := mustSend(t, ctrl, "g1", "cmd\n", "admin", 0, 0)
 
 	if len(r.DivergentSessions) != 1 || r.DivergentSessions[0] != "w3" {
 		t.Fatalf("divergent = %v, want [w3]", r.DivergentSessions)
@@ -245,7 +406,7 @@ func TestSendSequentialInOrder(t *testing.T) {
 		w := w
 		go waitAndEmitTerm(bus, w, "output-"+w)
 	}
-	r := ctrl.Send(context.Background(), "g1", "cmd\n", "admin", 0, 0)
+	r := mustSend(t, ctrl, "g1", "cmd\n", "admin", 0, 0)
 
 	order := []string{}
 	for _, c := range fh.sendCalls() {
@@ -277,7 +438,7 @@ func TestSendSequentialStopOnFirstError(t *testing.T) {
 	go waitAndEmitTerm(bus, "w1", "success")
 	go waitAndEmitTerm(bus, "w2", "ERROR: something failed")
 	// w3 must NOT be contacted because processing stops after w2's error.
-	r := ctrl.Send(context.Background(), "g1", "deploy\n", "admin", 0, 0)
+	r := mustSend(t, ctrl, "g1", "deploy\n", "admin", 0, 0)
 
 	if !r.Results[0].OK || r.Results[0].WorkerID != "w1" {
 		t.Fatalf("w1 = %+v", r.Results[0])
@@ -309,7 +470,7 @@ func TestSendSequentialPartialFailure(t *testing.T) {
 
 	go waitAndEmitTerm(bus, "w1", "out1")
 	go waitAndEmitTerm(bus, "w3", "out3")
-	r := ctrl.Send(context.Background(), "g1", "cmd\n", "admin", 0, 0)
+	r := mustSend(t, ctrl, "g1", "cmd\n", "admin", 0, 0)
 
 	if !r.Results[0].OK || r.Results[1].OK || !r.Results[2].OK {
 		t.Fatalf("results ok = %v,%v,%v want true,false,true",
@@ -330,7 +491,7 @@ func TestSendNotifiesObservers(t *testing.T) {
 	ctrl := newCtrl(fh)
 	_, _ = ctrl.CreateGroup(newGroup(t, []string{"wa", "wb"}, func(g *Group) { g.CreatedBy = "alice" }), "alice")
 
-	ctrl.Send(context.Background(), "g1", "uptime\n", "alice", 0, 0)
+	_ = mustSend(t, ctrl, "g1", "uptime\n", "alice", 0, 0)
 
 	got := map[string]map[string]any{}
 	for _, c := range fh.broadcastCalls() {
@@ -350,12 +511,12 @@ func TestSendNotifiesObservers(t *testing.T) {
 
 func TestNewControllerDefaults(t *testing.T) {
 	// nil Store/Clock/IDGen must select working defaults.
-	ctrl := NewController(newFakeHub(nil), Config{})
+	ctrl := NewController(newFakeHub(nil), Config{Authorizer: allowAllAuthorizer()})
 	gid, err := ctrl.CreateGroup(newGroup(t, []string{"w1"}, nil), "admin")
 	if err != nil || gid == "" {
 		t.Fatalf("default controller CreateGroup = %q, %v", gid, err)
 	}
-	r := ctrl.Send(context.Background(), "g1", "x", "admin", 0, 0)
+	r := mustSend(t, ctrl, "g1", "x", "admin", 0, 0)
 	if len(r.SendID) != 32 { // default newHexID → 32 hex chars
 		t.Fatalf("default SendID len = %d (%q), want 32", len(r.SendID), r.SendID)
 	}

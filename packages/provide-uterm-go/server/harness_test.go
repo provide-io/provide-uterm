@@ -37,11 +37,16 @@ func (fakeAuth) Authenticate(_ context.Context, req *serverauth.Request) (*serve
 	if tv := req.Header("x-tenant"); tv != "" {
 		tenant = &tv
 	}
+	var adminSessionScope *string
+	if scope := req.Header("x-admin-session-scope"); scope != "" {
+		adminSessionScope = &scope
+	}
 	return &serverauth.Principal{
-		SubjectID: subject,
-		TenantID:  tenant,
-		Roles:     serverauth.NewSet(role),
-		Scopes:    serverauth.NewSet("*"),
+		SubjectID:         subject,
+		TenantID:          tenant,
+		Roles:             serverauth.NewSet(role),
+		Scopes:            serverauth.NewSet("*"),
+		AdminSessionScope: adminSessionScope,
 	}, nil
 }
 

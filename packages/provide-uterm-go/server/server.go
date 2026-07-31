@@ -145,6 +145,25 @@ type Server struct {
 	egress *EgressGuard
 }
 
+// fanoutAuthorizer adapts the server's current registry and authorization
+// service to the controller-owned, per-dispatch security boundary.
+type fanoutAuthorizer struct {
+	registry SessionRegistry
+	authz    *serverauth.AuthorizationService
+}
+
+func (a fanoutAuthorizer) IsGlobalAdmin(p *serverauth.Principal) bool {
+	return p != nil && a.authz != nil && a.authz.IsAdmin(p)
+}
+
+func (a fanoutAuthorizer) CanReadMember(ctx context.Context, p *serverauth.Principal, workerID string) bool {
+	if p == nil || a.registry == nil || a.authz == nil {
+		return false
+	}
+	definition, ok := a.registry.GetDefinition(ctx, workerID)
+	return ok && a.authz.CanReadSession(p, definition)
+}
+
 // New assembles a Server from deps. It validates required dependencies, builds
 // the route mux and middleware chain, and precomputes the allowed-origin set.
 // It does not bind a socket or start sweeps — use [Server.Run] (or
@@ -193,7 +212,10 @@ func New(deps Deps) (*Server, error) {
 		startTime: deps.Clock.Wall(),
 	}
 	s.computeAllowedOrigins()
-	s.fanout = fanout.NewController(deps.Hub, fanout.Config{Clock: deps.Clock})
+	s.fanout = fanout.NewController(deps.Hub, fanout.Config{
+		Clock:      deps.Clock,
+		Authorizer: fanoutAuthorizer{registry: deps.Registry, authz: deps.Authz},
+	})
 	s.egress = NewEgressGuard(nil, func() float64 { return deps.Clock.Wall() })
 	s.handler = s.buildHandler()
 	return s, nil
