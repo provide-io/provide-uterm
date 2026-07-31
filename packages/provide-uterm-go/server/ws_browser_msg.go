@@ -27,7 +27,13 @@ func (s *Server) dispatchBrowserMessage(ctx context.Context, conn *websocket.Con
 	case "hijack_release":
 		return s.browserHijackRelease(ctx, workerID, bc)
 	case "hijack_step":
-		_, _ = s.deps.Hub.SendWorker(ctx, workerID, controlMsg("step", "dashboard", 0, s.clock.Wall(), ""))
+		// Match the canonical Python route: stepping is an owner operation,
+		// not a capability granted merely by holding a browser connection.
+		// TouchIfOwner performs the current/expiry check under the hub lock and
+		// renews the dashboard lease before the worker sees the step.
+		if s.deps.Hub.TouchIfOwner(workerID, bc) != nil {
+			_, _ = s.deps.Hub.SendWorker(ctx, workerID, controlMsg("step", "dashboard", 0, s.clock.Wall(), ""))
+		}
 	case "snapshot_req":
 		_ = s.deps.Hub.RequestSnapshot(ctx, workerID)
 	case "heartbeat":

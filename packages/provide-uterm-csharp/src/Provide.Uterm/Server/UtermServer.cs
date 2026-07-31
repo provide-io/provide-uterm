@@ -916,42 +916,39 @@ public sealed partial class UtermServer : IAsyncDisposable
                         await _deps.Hub.BroadcastHijackStateAsync(workerId, ct).ConfigureAwait(false);
                         break;
                     case "hijack_step":
-                        _ = await _deps.Hub.Conn.SendWorkerAsync(
-                            workerId,
-                            new Dictionary<string, object?>
-                            {
-                                ["type"] = "control",
-                                ["action"] = "step",
-                                ["source"] = "dashboard",
-                                ["ts"] = _clock.Wall(),
-                            },
-                            ct).ConfigureAwait(false);
+                        if (_deps.Hub.Lease.TouchIfOwner(workerId, conn) is not null)
+                        {
+                            _ = await _deps.Hub.Conn.SendWorkerAsync(
+                                workerId,
+                                new Dictionary<string, object?>
+                                {
+                                    ["type"] = "control",
+                                    ["action"] = "step",
+                                    ["source"] = "dashboard",
+                                    ["ts"] = _clock.Wall(),
+                                },
+                                ct).ConfigureAwait(false);
+                        }
                         break;
                     case "snapshot_req":
                         break;
                     case "heartbeat":
                     {
-                        // Touch dashboard lease only if this browser owns it (Python touch_if_owner).
-                        var st = _deps.Hub.Registry.Get(workerId);
-                        if (st is not null
-                            && _deps.Hub.State.IsDashboardHijackActive(st)
-                            && ReferenceEquals(st.HijackOwner, conn))
+                        // Verify and touch the exact dashboard owner atomically.
+                        var exp = _deps.Hub.Lease.TouchIfOwner(workerId, conn);
+                        if (exp is not null)
                         {
-                            var exp = _deps.Hub.Lease.TouchOwner(workerId);
-                            if (exp is not null)
-                            {
-                                await conn.SendTextAsync(
-                                    ControlChannelCodec.EncodeControlFrame(new Dictionary<string, object?>
-                                    {
-                                        ["type"] = "heartbeat_ack",
-                                        ["lease_expires_at"] = _clock.Wall()
-                                            + (exp.Value - _clock.Monotonic()),
-                                        ["ts"] = _clock.Wall(),
-                                    }),
-                                    ct).ConfigureAwait(false);
-                                await _deps.Hub.BroadcastHijackStateAsync(workerId, ct)
-                                    .ConfigureAwait(false);
-                            }
+                            await conn.SendTextAsync(
+                                ControlChannelCodec.EncodeControlFrame(new Dictionary<string, object?>
+                                {
+                                    ["type"] = "heartbeat_ack",
+                                    ["lease_expires_at"] = _clock.Wall()
+                                        + (exp.Value - _clock.Monotonic()),
+                                    ["ts"] = _clock.Wall(),
+                                }),
+                                ct).ConfigureAwait(false);
+                            await _deps.Hub.BroadcastHijackStateAsync(workerId, ct)
+                                .ConfigureAwait(false);
                         }
 
                         break;

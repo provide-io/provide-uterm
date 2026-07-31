@@ -196,6 +196,45 @@ func TestBrowserWSAlreadyHijacked(t *testing.T) {
 	})
 }
 
+// TestBrowserWSHijackStepRequiresCurrentOwner proves that the public browser
+// route cannot single-step a paused worker merely because the socket is
+// connected. Only the browser holding the current dashboard lease may step.
+func TestBrowserWSHijackStepRequiresCurrentOwner(t *testing.T) {
+	ts := newTestServer(t, nil)
+	ts.reg.add("step-owner", "admin1", "public")
+	worker := ts.setupWorker(t, "step-owner")
+	base, closeFn := wsServer(t, ts)
+	defer closeFn()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	owner := dialBrowser(t, ctx, base+"/ws/browser/step-owner/term", "admin1", "admin")
+	defer func() { _ = owner.conn.Close(websocket.StatusNormalClosure, "") }()
+	owner.waitFrame(t, "hello", 5*time.Second)
+	owner.send(t, ctx, map[string]any{"type": "hijack_request"})
+	owner.waitFrameWhere(t, "hijack_state", 5*time.Second, func(f map[string]any) bool {
+		return f["hijacked"] == true
+	})
+
+	nonOwner := dialBrowser(t, ctx, base+"/ws/browser/step-owner/term", "admin2", "admin")
+	defer func() { _ = nonOwner.conn.Close(websocket.StatusNormalClosure, "") }()
+	nonOwner.waitFrame(t, "hello", 5*time.Second)
+	before := len(workerSent(worker))
+	nonOwner.send(t, ctx, map[string]any{"type": "hijack_step"})
+	nonOwner.send(t, ctx, map[string]any{"type": "ping"})
+	nonOwner.waitFrame(t, "pong", 5*time.Second)
+	if got := len(workerSent(worker)); got != before {
+		t.Fatalf("non-owner hijack_step reached worker: before=%d after=%d payloads=%v", before, got, workerSent(worker))
+	}
+
+	owner.send(t, ctx, map[string]any{"type": "hijack_step"})
+	owner.send(t, ctx, map[string]any{"type": "ping"})
+	owner.waitFrame(t, "pong", 5*time.Second)
+	if got := workerSent(worker); len(got) != before+1 || !strings.Contains(got[len(got)-1], `"action":"step"`) {
+		t.Fatalf("owner hijack_step was not delivered exactly once: %v", got)
+	}
+}
+
 // TestBrowserWSHijackNoWorker covers the acquire-failure resume branch (reason
 // != already_hijacked): with no worker registered, a hijack_request fails
 // no_worker and the handler sends a resume + "No worker connected" error.

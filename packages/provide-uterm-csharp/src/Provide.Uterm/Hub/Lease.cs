@@ -800,6 +800,34 @@ public sealed class HijackLeaseManager
         return expiration;
     }
 
+    /// <summary>
+    /// Atomically verifies that <paramref name="ws"/> is the current active
+    /// dashboard owner and renews that exact lease. Browser control handlers
+    /// use this instead of separating an owner check from <see cref="TouchOwner"/>,
+    /// which would allow ownership to change between authorization and touch.
+    /// </summary>
+    public double? TouchIfOwner(string workerId, object ws, int? leaseS = null)
+    {
+        double? expiration;
+        lock (_lock)
+        {
+            var st = _registry.Get(workerId);
+            if (st is null
+                || !_hub.IsDashboardHijackActive(st)
+                || !ReferenceEquals(st.HijackOwner, ws))
+            {
+                return null;
+            }
+
+            var ttl = leaseS is null ? _dashboardLeaseS : ClampDashboardLease(leaseS.Value);
+            st.HijackOwnerExpiresAt = _clock.Monotonic() + ttl;
+            expiration = st.HijackOwnerExpiresAt;
+        }
+
+        ArmExpiry(workerId, expiration.Value);
+        return expiration;
+    }
+
     public async Task<(bool Released, bool RestActive)> TryReleaseWsAsync(
         string workerId,
         object ws,

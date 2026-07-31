@@ -119,6 +119,33 @@ public sealed class ResumeLifecycleIntegrationTests
     }
 
     [Fact]
+    public async Task BrowserHijackStepRequiresCurrentDashboardOwner()
+    {
+        var fixture = await BootAsync();
+        await using var server = fixture.Server;
+        using var owner = await ConnectAsync(fixture);
+        using var nonOwner = await ConnectAsync(fixture);
+        await DrainHandshakeAsync(owner);
+        await DrainHandshakeAsync(nonOwner);
+
+        await SendControlAsync(owner, "hijack_request");
+        await ReceiveUntilAsync(owner, frame => Type(frame) == "hijack_state" && Bool(frame, "hijacked"));
+        await WaitUntilAsync(() => fixture.Hub.Registry.Get("resume-worker")!.HijackOwner is not null);
+        var before = fixture.Worker.Actions.Count;
+
+        await SendControlAsync(nonOwner, "hijack_step");
+        await SendControlAsync(nonOwner, "ping");
+        await ReceiveUntilAsync(nonOwner, frame => Type(frame) == "pong");
+        Assert.Equal(before, fixture.Worker.Actions.Count);
+
+        await SendControlAsync(owner, "hijack_step");
+        await SendControlAsync(owner, "ping");
+        await ReceiveUntilAsync(owner, frame => Type(frame) == "pong");
+        await WaitUntilAsync(() => fixture.Worker.Actions.Count == before + 1);
+        Assert.Equal("step", fixture.Worker.Actions[^1]);
+    }
+
+    [Fact]
     public async Task LaterOwnerMakesOldTokenTruthfullyReportResumedFalse()
     {
         var fixture = await BootAsync();
