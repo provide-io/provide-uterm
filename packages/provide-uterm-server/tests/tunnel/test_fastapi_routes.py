@@ -184,11 +184,36 @@ class TestTunnelControlExtra:
         with client.websocket_connect("/tunnel/test-short") as ws:
             ws.send_bytes(b"\x01")
 
-    def test_snapshot_control(self, client: TestClient) -> None:
-        """Snapshot control message updates hub snapshot."""
-        with client.websocket_connect("/tunnel/test-snap") as ws:
-            ctrl = encode_control({"type": "snapshot", "screen": "hello screen"})
-            ws.send_bytes(ctrl)
+    def test_snapshot_control_commits_one_correlated_event(
+        self,
+        client: TestClient,
+        hub: TermHub,
+    ) -> None:
+        """Tunnel snapshots share one sequence across wire, state, and ring."""
+        worker_id = "test-snap"
+        with (
+            client.websocket_connect(f"/tunnel/{worker_id}") as tunnel_ws,
+            client.websocket_connect(f"/ws/browser/{worker_id}/term") as browser_ws,
+        ):
+            _drain_until_hello(browser_ws)
+            tunnel_ws.send_bytes(encode_control({"type": "snapshot", "screen": "hello screen"}))
+
+            for _ in range(10):
+                wire = _decode_browser_msg(browser_ws.receive_text())
+                if wire.get("type") == "snapshot":
+                    break
+            assert wire["type"] == "snapshot"
+            assert wire["screen"] == "hello screen"
+            assert wire["event_seq"] == 1
+
+            state = hub.registry.get(worker_id)
+            assert state is not None
+            assert state.last_snapshot == wire
+            snapshot_events = [event for event in state.events if event["type"] == "snapshot"]
+            assert len(snapshot_events) == 1
+            assert snapshot_events[0]["seq"] == wire["event_seq"]
+            assert snapshot_events[0]["data"]["event_seq"] == wire["event_seq"]
+            assert snapshot_events[0]["data"]["screen"] == wire["screen"]
 
 
 class TestTunnelBranchCoverage:
