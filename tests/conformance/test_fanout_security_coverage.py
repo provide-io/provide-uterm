@@ -257,6 +257,23 @@ def test_adapter_timeout_is_a_hard_failure_without_partial_observations(
     assert observations == []
 
 
+def test_adapter_timeout_defaults_to_120_seconds(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    runner = _runner()
+    contract_path = tmp_path / "contract.json"
+    contract_path.write_text(json.dumps(_contract()), encoding="utf-8")
+
+    def timeout(*_args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        assert kwargs["timeout"] == 120
+        raise subprocess.TimeoutExpired(["adapter"], timeout=120)
+
+    monkeypatch.setattr(runner.subprocess, "run", timeout)
+
+    errors, observations = runner.collect_backend_observations(REPO_ROOT, contract_path, "python")
+
+    assert errors == ["python: native command timed out after 120s"]
+    assert observations == []
+
+
 def _mutated_contract(kind: str) -> tuple[dict[str, object], str]:
     contract = copy.deepcopy(_contract())
     scenarios = contract["scenarios"]
