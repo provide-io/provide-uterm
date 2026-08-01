@@ -7,7 +7,7 @@ from __future__ import annotations
 import asyncio
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
@@ -40,6 +40,9 @@ class ApprovalRequest:
     # input owner.
     origin_browser: Any | None = None
     ownership_generation: int | None = None
+    # Store-assigned monotonic identity. Completion must present the revision it
+    # claimed so a pruned/reused request ID cannot receive a stale status write.
+    revision: int = 0
 
 
 class InMemoryApprovalStore:
@@ -50,24 +53,36 @@ class InMemoryApprovalStore:
     critical sections are microsecond-scale dictionary operations; taking a
     threading lock from asyncio code does not block any meaningful work.
 
-    Note: ``get`` is intentionally lock-free since a single dict read is atomic
-    in CPython. Callers MUST NOT iterate the live ``_requests`` dict without
-    holding ``_lock`` themselves.
+    Records are copied at the boundary. Callers never receive the live mutable
+    object held by the store, and duplicate IDs are rejected rather than
+    replacing an in-flight approval.
     """
 
     def __init__(self) -> None:
         self._requests: dict[str, ApprovalRequest] = {}
         self._lock = threading.Lock()
+        self._next_revision = 0
         self.on_expired: Callable[[str], Any] | None = None
 
-    def add(self, request: ApprovalRequest) -> None:
+    def add(self, request: ApprovalRequest) -> bool:
         with self._lock:
-            self._requests[request.id] = request
+            if request.id in self._requests:
+                return False
+            self._next_revision += 1
+            self._requests[request.id] = replace(request, revision=self._next_revision)
+            return True
 
     def get(self, request_id: str) -> ApprovalRequest | None:
-        return self._requests.get(request_id)
+        with self._lock:
+            req = self._requests.get(request_id)
+            return None if req is None else replace(req)
 
-    def resolve(self, request_id: str, status: ApprovalStatus) -> None:
+    def pending(self) -> list[ApprovalRequest]:
+        """Return immutable snapshots of every pending request."""
+        with self._lock:
+            return [replace(req) for req in self._requests.values() if req.status == ApprovalStatus.PENDING]
+
+    def resolve(self, request_id: str, status: ApprovalStatus, *, expected_revision: int) -> bool:
         """Transition a PENDING request to *status*.
 
         Superseded by ``claim()`` for request handling; retained for
@@ -75,10 +90,12 @@ class InMemoryApprovalStore:
         """
         with self._lock:
             req = self._requests.get(request_id)
-            if req and req.status == ApprovalStatus.PENDING:
-                req.status = status
+            if req is None or req.status != ApprovalStatus.PENDING or req.revision != expected_revision:
+                return False
+            req.status = status
+            return True
 
-    def claim(self, request_id: str, status: ApprovalStatus) -> bool:
+    def claim(self, request_id: str, status: ApprovalStatus, *, expected_revision: int) -> bool:
         """Atomically transition a PENDING request to *status*.
 
         Returns ``True`` only for the caller that performs the transition, so a
@@ -88,18 +105,29 @@ class InMemoryApprovalStore:
         """
         with self._lock:
             req = self._requests.get(request_id)
-            if req is None or req.status != ApprovalStatus.PENDING:
+            if req is None or req.status != ApprovalStatus.PENDING or req.revision != expected_revision:
                 return False
             req.status = status
             return True
 
-    def finalize(self, request_id: str, status: ApprovalStatus) -> bool:
+    def claim_request(
+        self, request_id: str, status: ApprovalStatus, *, expected_revision: int
+    ) -> ApprovalRequest | None:
+        """Claim one exact revision and return its immutable snapshot."""
+        with self._lock:
+            req = self._requests.get(request_id)
+            if req is None or req.status != ApprovalStatus.PENDING or req.revision != expected_revision:
+                return None
+            req.status = status
+            return replace(req)
+
+    def finalize(self, request_id: str, status: ApprovalStatus, *, expected_revision: int) -> bool:
         """Atomically finalize a request currently reserved for resolution."""
         if status not in {ApprovalStatus.APPROVED, ApprovalStatus.REFUSED}:
             raise ValueError("approval resolution must finalize as approved or refused")
         with self._lock:
             req = self._requests.get(request_id)
-            if req is None or req.status != ApprovalStatus.RESOLVING:
+            if req is None or req.status != ApprovalStatus.RESOLVING or req.revision != expected_revision:
                 return False
             req.status = status
             return True

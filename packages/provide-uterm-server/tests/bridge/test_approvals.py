@@ -30,9 +30,96 @@ def test_store_add_and_get():
     store = InMemoryApprovalStore()
     now = time.time()
     request = ApprovalRequest("req-1", "w1", "u1", "cmd", ApprovalStatus.PENDING, now, now + 60)
-    store.add(request)
-    assert store.get("req-1") == request
+    assert store.add(request) is True
+    stored = store.get("req-1")
+    assert stored is not None
+    assert stored == ApprovalRequest(**{**request.__dict__, "revision": stored.revision})
+    assert request.revision == 0
     assert store.get("nonexistent") is None
+
+
+def test_store_rejects_duplicate_request_id_without_replacing_original() -> None:
+    store = InMemoryApprovalStore()
+    now = time.time()
+    original = ApprovalRequest("same", "w1", "u1", "first", ApprovalStatus.PENDING, now, now + 60)
+    replacement = ApprovalRequest("same", "w2", "u2", "second", ApprovalStatus.PENDING, now, now + 60)
+
+    assert store.add(original) is True
+    assert store.add(replacement) is False
+
+    stored = store.get("same")
+    assert stored is not None
+    assert (stored.worker_id, stored.command) == ("w1", "first")
+
+
+def test_store_get_and_pending_return_immutable_snapshots() -> None:
+    store = InMemoryApprovalStore()
+    now = time.time()
+    request = ApprovalRequest("r1", "w1", "u1", "safe", ApprovalStatus.PENDING, now, now + 60)
+    assert store.add(request) is True
+
+    fetched = store.get("r1")
+    assert fetched is not None
+    fetched.command = "mutated"
+    fetched.status = ApprovalStatus.REJECTED
+    listed = store.pending()
+    assert len(listed) == 1
+    listed[0].command = "also-mutated"
+
+    stored = store.get("r1")
+    assert stored is not None
+    assert (stored.command, stored.status) == ("safe", ApprovalStatus.PENDING)
+
+
+def test_claimed_revision_cannot_finalize_a_replacement() -> None:
+    store = InMemoryApprovalStore()
+    now = time.time()
+    assert store.add(ApprovalRequest("r1", "w1", "u1", "first", ApprovalStatus.PENDING, now, now + 60))
+    snapshot = store.get("r1")
+    assert snapshot is not None
+    claimed = store.claim_request("r1", ApprovalStatus.RESOLVING, expected_revision=snapshot.revision)
+    assert claimed is not None
+
+    # A stale/mismatched revision cannot complete the active claim.
+    assert store.finalize("r1", ApprovalStatus.APPROVED, expected_revision=claimed.revision + 1) is False
+    assert store.finalize("r1", ApprovalStatus.APPROVED, expected_revision=claimed.revision) is True
+
+
+def test_stale_claim_cannot_mutate_reused_request_id() -> None:
+    store = InMemoryApprovalStore()
+    now = time.time()
+    assert store.add(ApprovalRequest("r1", "w1", "u1", "first", ApprovalStatus.PENDING, now, now + 60))
+    first = store.get("r1")
+    assert first is not None
+    claimed = store.claim_request("r1", ApprovalStatus.RESOLVING, expected_revision=first.revision)
+    assert claimed is not None
+
+    # Deterministically model terminal pruning followed by request-ID reuse.
+    with store._lock:
+        del store._requests["r1"]
+    assert store.add(ApprovalRequest("r1", "w2", "u2", "second", ApprovalStatus.PENDING, now, now + 60))
+    replacement = store.get("r1")
+    assert replacement is not None
+    assert replacement.revision > claimed.revision
+
+    assert store.finalize("r1", ApprovalStatus.APPROVED, expected_revision=claimed.revision) is False
+    assert store.resolve("r1", ApprovalStatus.REJECTED, expected_revision=claimed.revision) is False
+    assert store.claim_request("r1", ApprovalStatus.REJECTED, expected_revision=claimed.revision) is None
+    assert store.get("r1") == replacement
+
+
+def test_claim_request_returns_a_snapshot() -> None:
+    store = InMemoryApprovalStore()
+    now = time.time()
+    assert store.add(ApprovalRequest("r1", "w1", "u1", "safe", ApprovalStatus.PENDING, now, now + 60))
+    pending = store.get("r1")
+    assert pending is not None
+    claimed = store.claim_request("r1", ApprovalStatus.REJECTED, expected_revision=pending.revision)
+    assert claimed is not None
+    claimed.command = "mutated"
+    stored = store.get("r1")
+    assert stored is not None
+    assert (stored.command, stored.status) == ("safe", ApprovalStatus.REJECTED)
 
 
 def test_store_resolve_success():
@@ -40,7 +127,9 @@ def test_store_resolve_success():
     now = time.time()
     request = ApprovalRequest("req-1", "w1", "u1", "cmd", ApprovalStatus.PENDING, now, now + 60)
     store.add(request)
-    store.resolve("req-1", ApprovalStatus.APPROVED)
+    stored = store.get("req-1")
+    assert stored is not None
+    assert store.resolve("req-1", ApprovalStatus.APPROVED, expected_revision=stored.revision) is True
     assert store.get("req-1").status == ApprovalStatus.APPROVED
 
 
@@ -49,7 +138,9 @@ def test_store_resolve_only_pending():
     now = time.time()
     request = ApprovalRequest("req-1", "w1", "u1", "cmd", ApprovalStatus.APPROVED, now, now + 60)
     store.add(request)
-    store.resolve("req-1", ApprovalStatus.REJECTED)
+    stored = store.get("req-1")
+    assert stored is not None
+    assert store.resolve("req-1", ApprovalStatus.REJECTED, expected_revision=stored.revision) is False
     assert store.get("req-1").status == ApprovalStatus.APPROVED  # Unchanged
 
 
@@ -84,13 +175,16 @@ def test_concurrent_resolve_converges_to_one_winner() -> None:
     now = time.time()
     request = ApprovalRequest("req-race", "w1", "u1", "cmd", ApprovalStatus.PENDING, now, now + 60)
     store.add(request)
+    stored = store.get("req-race")
+    assert stored is not None
+    revision = stored.revision
 
     barrier = threading.Barrier(8)
     results: list[ApprovalStatus] = []
 
     def resolver(target: ApprovalStatus) -> None:
         barrier.wait()
-        store.resolve("req-race", target)
+        store.resolve("req-race", target, expected_revision=revision)
         results.append(store.get("req-race").status)
 
     threads = [

@@ -2355,6 +2355,7 @@ class TestApprovalsRoutes:
             status=ApprovalStatus(status),
             created_at=created_at,
             expires_at=expires_at,
+            revision=1,
         )
         if group_id != "UNSET":
             ns.group_id = group_id
@@ -2367,6 +2368,9 @@ class TestApprovalsRoutes:
         if hub is None:
             store = MagicMock(name="approval_store")
             store._requests = requests if requests is not None else {}
+            store.pending = MagicMock(
+                return_value=[row for row in store._requests.values() if row.status.value == "pending"]
+            )
             hub = MagicMock(name="hub")
             hub.approval_store = store
             hub.resolve_approval = AsyncMock()
@@ -2489,10 +2493,10 @@ class TestApprovalsRoutes:
         row = self._approval(req_id="r-5", worker_id="w-22", command="halt")
         store = MagicMock()
         store.get = MagicMock(return_value=row)
-        store.claim = MagicMock(return_value=True)
+        store.claim_request = MagicMock(return_value=row)
         hub = MagicMock()
         hub.approval_store = store
-        hub.resolve_approval = AsyncMock()
+        hub.resolve_approval = AsyncMock(return_value=(True, None))
         authz = self._admin_authz()
         req = _request(
             app_state={"uterm_hub": hub, "uterm_authz": authz},
@@ -2501,14 +2505,17 @@ class TestApprovalsRoutes:
         out = await approve("r-5", req)
         assert out == {"status": "approved"}
         store.get.assert_called_once_with("r-5")
-        store.claim.assert_called_once_with("r-5", ApprovalStatus.APPROVED)
-        hub.resolve_approval.assert_awaited_once_with("w-22", "r-5", PolicyDecision(action="allow"), "halt")
+        store.claim_request.assert_called_once_with("r-5", ApprovalStatus.RESOLVING, expected_revision=1)
+        store.finalize.assert_called_once_with("r-5", ApprovalStatus.APPROVED, expected_revision=1)
+        hub.resolve_approval.assert_awaited_once_with(
+            "w-22", "r-5", PolicyDecision(action="allow"), "halt", approval_request=row
+        )
 
     async def test_approve_not_found_404(self) -> None:
         approve = _endpoint(self._router(), self._APPROVE, "POST")
         store = MagicMock()
         store.get = MagicMock(return_value=None)
-        store.claim = MagicMock()
+        store.claim_request = MagicMock()
         hub = MagicMock()
         hub.approval_store = store
         hub.resolve_approval = AsyncMock()
@@ -2520,14 +2527,35 @@ class TestApprovalsRoutes:
             await approve("ghost", req)
         assert exc.value.status_code == 404
         assert exc.value.detail == "Approval request not found"
-        store.claim.assert_not_called()
+        store.claim_request.assert_not_called()
         hub.resolve_approval.assert_not_awaited()
+
+    async def test_approve_resolution_exception_finalizes_refused_and_reraises(self) -> None:
+        from provide.uterm.server.bridge.hub.approvals import ApprovalStatus
+
+        approve = _endpoint(self._router(), self._APPROVE, "POST")
+        row = self._approval(req_id="r-error")
+        store = MagicMock()
+        store.get.return_value = row
+        store.claim_request.return_value = row
+        hub = MagicMock()
+        hub.approval_store = store
+        hub.resolve_approval = AsyncMock(side_effect=RuntimeError("delivery exploded"))
+        req = _request(
+            app_state={"uterm_hub": hub, "uterm_authz": self._admin_authz()},
+            state={"uterm_principal": object()},
+        )
+
+        with pytest.raises(RuntimeError, match="delivery exploded"):
+            await approve("r-error", req)
+
+        store.finalize.assert_called_once_with("r-error", ApprovalStatus.REFUSED, expected_revision=1)
 
     async def test_approve_not_pending_400(self) -> None:
         approve = _endpoint(self._router(), self._APPROVE, "POST")
         store = MagicMock()
         store.get = MagicMock(return_value=self._approval(req_id="r-5"))
-        store.claim = MagicMock(return_value=False)
+        store.claim_request = MagicMock(return_value=None)
         hub = MagicMock()
         hub.approval_store = store
         hub.resolve_approval = AsyncMock()
@@ -2545,7 +2573,7 @@ class TestApprovalsRoutes:
         approve = _endpoint(self._router(), self._APPROVE, "POST")
         store = MagicMock()
         store.get = MagicMock()
-        store.claim = MagicMock()
+        store.claim_request = MagicMock()
         hub = MagicMock()
         hub.approval_store = store
         hub.resolve_approval = AsyncMock()
@@ -2558,7 +2586,7 @@ class TestApprovalsRoutes:
         assert exc.value.status_code == 403
         assert exc.value.detail == "Admin role required"
         store.get.assert_not_called()
-        store.claim.assert_not_called()
+        store.claim_request.assert_not_called()
         hub.resolve_approval.assert_not_awaited()
 
     async def test_approve_self_submitted_rejected(self) -> None:
@@ -2567,7 +2595,7 @@ class TestApprovalsRoutes:
         approve = _endpoint(self._router(), self._APPROVE, "POST")
         store = MagicMock()
         store.get = MagicMock(return_value=self._approval(req_id="r-5", submitter_id="alice"))
-        store.claim = MagicMock()
+        store.claim_request = MagicMock()
         hub = MagicMock()
         hub.approval_store = store
         hub.resolve_approval = AsyncMock()
@@ -2579,7 +2607,7 @@ class TestApprovalsRoutes:
             await approve("r-5", req)
         assert exc.value.status_code == 403
         assert exc.value.detail == "Cannot approve your own command"
-        store.claim.assert_not_called()
+        store.claim_request.assert_not_called()
         hub.resolve_approval.assert_not_awaited()
 
     # ---- reject_command -----------------------------------------------------
@@ -2592,7 +2620,7 @@ class TestApprovalsRoutes:
         row = self._approval(req_id="r-8", worker_id="w-9", command="shutdown")
         store = MagicMock()
         store.get = MagicMock(return_value=row)
-        store.claim = MagicMock(return_value=True)
+        store.claim_request = MagicMock(return_value=row)
         hub = MagicMock()
         hub.approval_store = store
         hub.resolve_approval = AsyncMock()
@@ -2603,9 +2631,9 @@ class TestApprovalsRoutes:
         out = await reject("r-8", req, "too risky")
         assert out == {"status": "rejected"}
         store.get.assert_called_once_with("r-8")
-        store.claim.assert_called_once_with("r-8", ApprovalStatus.REJECTED)
+        store.claim_request.assert_called_once_with("r-8", ApprovalStatus.REJECTED, expected_revision=1)
         hub.resolve_approval.assert_awaited_once_with(
-            "w-9", "r-8", PolicyDecision(action="deny", reason="too risky"), "shutdown"
+            "w-9", "r-8", PolicyDecision(action="deny", reason="too risky"), "shutdown", approval_request=row
         )
 
     async def test_reject_default_reason_is_none(self) -> None:
@@ -2615,7 +2643,7 @@ class TestApprovalsRoutes:
         row = self._approval(req_id="r-8", worker_id="w-9", command="shutdown")
         store = MagicMock()
         store.get = MagicMock(return_value=row)
-        store.claim = MagicMock(return_value=True)
+        store.claim_request = MagicMock(return_value=row)
         hub = MagicMock()
         hub.approval_store = store
         hub.resolve_approval = AsyncMock()
@@ -2626,14 +2654,14 @@ class TestApprovalsRoutes:
         out = await reject("r-8", req)
         assert out == {"status": "rejected"}
         hub.resolve_approval.assert_awaited_once_with(
-            "w-9", "r-8", PolicyDecision(action="deny", reason=None), "shutdown"
+            "w-9", "r-8", PolicyDecision(action="deny", reason=None), "shutdown", approval_request=row
         )
 
     async def test_reject_not_found_404(self) -> None:
         reject = _endpoint(self._router(), self._REJECT, "POST")
         store = MagicMock()
         store.get = MagicMock(return_value=None)
-        store.claim = MagicMock()
+        store.claim_request = MagicMock()
         hub = MagicMock()
         hub.approval_store = store
         hub.resolve_approval = AsyncMock()
@@ -2645,14 +2673,14 @@ class TestApprovalsRoutes:
             await reject("ghost", req)
         assert exc.value.status_code == 404
         assert exc.value.detail == "Approval request not found"
-        store.claim.assert_not_called()
+        store.claim_request.assert_not_called()
         hub.resolve_approval.assert_not_awaited()
 
     async def test_reject_not_pending_400(self) -> None:
         reject = _endpoint(self._router(), self._REJECT, "POST")
         store = MagicMock()
         store.get = MagicMock(return_value=self._approval(req_id="r-8"))
-        store.claim = MagicMock(return_value=False)
+        store.claim_request = MagicMock(return_value=None)
         hub = MagicMock()
         hub.approval_store = store
         hub.resolve_approval = AsyncMock()
@@ -2670,7 +2698,7 @@ class TestApprovalsRoutes:
         reject = _endpoint(self._router(), self._REJECT, "POST")
         store = MagicMock()
         store.get = MagicMock()
-        store.claim = MagicMock()
+        store.claim_request = MagicMock()
         hub = MagicMock()
         hub.approval_store = store
         hub.resolve_approval = AsyncMock()

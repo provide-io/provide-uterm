@@ -33,6 +33,8 @@ from provide.uterm.server.bridge.models import VALID_ROLES
 _ROLE_PRIORITY: dict[str, int] = {"viewer": 0, "operator": 1, "admin": 2}
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from fastapi import WebSocket
 
     from provide.uterm.server.bridge.hub import TermHub
@@ -246,47 +248,58 @@ async def _handle_input(
     ws: WebSocket,
     worker_id: str,
     msg_b: dict[str, Any],
-) -> None:
+    *,
+    bypass_pause: bool = False,
+    ownership_generation_override: int | None = None,
+    reserved_sender: Callable[[dict[str, Any]], Awaitable[bool]] | None = None,
+) -> str:
     """Process an input message from the browser."""
     data = str(cast("BrowserInputFrame", msg_b).get("data", ""))
     if not data:
-        return
+        return "ignored"
 
-    if ws in hub._paused_browsers:
+    if ws in hub._paused_browsers and not bypass_pause:
         new_hold = hub._hold_buffers.get(ws, "") + data
         if len(new_hold) > hub.max_buffer_chars:
             await ws.send_text(encode_control_frame(make_error_frame("Input too long.")))
-            return
+            return "blocked"
         hub._hold_buffers[ws] = new_hold
-        return
+        return "buffered"
 
-    ownership_generation = await hub.capture_browser_ownership(worker_id, ws)
+    ownership_generation = ownership_generation_override
     if ownership_generation is None:
-        return
+        ownership_generation = await hub.capture_browser_ownership(worker_id, ws)
+    if ownership_generation is None:
+        return "invalid_owner"
 
     if len(data) > hub.max_input_chars:
         await ws.send_text(encode_control_frame(make_error_frame("Input too long.")))
-        return
+        return "blocked"
 
     context = await hub.prepare_policy_context(ws, worker_id, action="input")
     gate = hub._policy_gate
     is_complete_chunk = "\r" in data or "\n" in data
 
     if _is_noop_policy_gate(gate):
-        ok, error = await hub.send_owned_worker(
-            worker_id,
-            {"type": "input", "data": data, "ts": time.time()},
-            browser_ws=ws,
-            ownership_generation=ownership_generation,
-            source=ws,
-        )
+        worker_msg = {"type": "input", "data": data, "ts": time.time()}
+        if reserved_sender is None:
+            ok, error = await hub.send_owned_worker(
+                worker_id,
+                worker_msg,
+                browser_ws=ws,
+                ownership_generation=ownership_generation,
+                source=ws,
+            )
+        else:
+            ok = await reserved_sender(worker_msg)
+            error = None if ok else "no_worker"
         if error == "invalid_owner":
-            return
+            return "invalid_owner"
         if not ok:
             await ws.send_text(encode_control_frame(make_error_frame("Worker connection lost.")))
-        else:
-            await hub.append_event(worker_id, "input_send", {"owner": "dashboard_ws", "keys": data[:120]})
-        return
+            return "send_failed"
+        await hub.append_event(worker_id, "input_send", {"owner": "dashboard_ws", "keys": data[:120]})
+        return "sent"
 
     if not is_complete_chunk and ws not in hub._input_buffers:
         decision = await gate.intercept_input(data, context)
@@ -303,7 +316,9 @@ async def _handle_input(
                 origin_browser=ws,
                 ownership_generation=ownership_generation,
             )
-            hub.approval_store.add(request)
+            if not hub.approval_store.add(request):
+                await ws.send_text(encode_control_frame(make_error_frame("Approval request ID collision.")))
+                return "collision"
             hub._paused_browsers.add(ws)
             from provide.uterm.server.bridge.hub.core import _encode_browser_frame
 
@@ -319,7 +334,7 @@ async def _handle_input(
                         }
                     )
                 )
-            return
+            return "held"
 
         if decision.action != "allow":
             logger.debug(
@@ -330,11 +345,11 @@ async def _handle_input(
                 data,
             )
             await ws.send_text(encode_control_frame(make_error_frame(f"Command part blocked by policy: {data}")))
-            return
+            return "blocked"
 
     command = hub._buffer_and_get_command(ws, data)
     if command is None:
-        return
+        return "buffered"
 
     splitter = CommandSplitter()
     parts = splitter.split(command)
@@ -355,7 +370,9 @@ async def _handle_input(
                 origin_browser=ws,
                 ownership_generation=ownership_generation,
             )
-            hub.approval_store.add(request)
+            if not hub.approval_store.add(request):
+                await ws.send_text(encode_control_frame(make_error_frame("Approval request ID collision.")))
+                return "collision"
             hub._paused_browsers.add(ws)
             from provide.uterm.server.bridge.hub.core import _encode_browser_frame
 
@@ -371,7 +388,7 @@ async def _handle_input(
                         }
                     )
                 )
-            return
+            return "held"
         if part_decision.action != "allow":
             logger.debug(
                 "input_blocked_by_policy worker_id=%s action=%s reason=%s part=%s",
@@ -381,22 +398,28 @@ async def _handle_input(
                 part,
             )
             await ws.send_text(encode_control_frame(make_error_frame(f"Command part blocked by policy: {part}")))
-            return
+            return "blocked"
 
-    ok, error = await hub.send_owned_worker(
-        worker_id,
-        {"type": "input", "data": command, "ts": time.time()},
-        browser_ws=ws,
-        ownership_generation=ownership_generation,
-        source=ws,
-    )
+    worker_msg = {"type": "input", "data": command, "ts": time.time()}
+    if reserved_sender is None:
+        ok, error = await hub.send_owned_worker(
+            worker_id,
+            worker_msg,
+            browser_ws=ws,
+            ownership_generation=ownership_generation,
+            source=ws,
+        )
+    else:
+        ok = await reserved_sender(worker_msg)
+        error = None if ok else "no_worker"
 
     if error == "invalid_owner":
-        return
+        return "invalid_owner"
     if not ok:
         await ws.send_text(encode_control_frame(make_error_frame("Worker connection lost.")))
-    else:
-        await hub.append_event(worker_id, "input_send", {"owner": "dashboard_ws", "keys": command[:120]})
+        return "send_failed"
+    await hub.append_event(worker_id, "input_send", {"owner": "dashboard_ws", "keys": command[:120]})
+    return "sent"
 
 
 async def _resolve_resumed_role(
