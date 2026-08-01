@@ -236,6 +236,20 @@ export function createFanoutRoutes(options: FanoutRoutesOptions): FanoutRoutes {
       // the registry then splits the refused into unknown and forbidden.
       // Strict by default — dormant members require the controller's explicit
       // opt-in, while every known member always requires current read access.
+      //
+      // The two lookups are the reference's own shape, and they are only sound
+      // while the registry read below is the same source the controller
+      // resolved from — which is how the reference wires it, one registry
+      // behind both `app.state.uterm_registry` and the controller's
+      // `resolve_session`. Where the two can disagree, a member the controller
+      // refused for read access can be read here as unknown, and the dormant
+      // opt-in then admits what a single lookup would have refused with a 403.
+      // Deciding this from the controller's own resolution instead is what
+      // would close that, and it is not the port's call to make: the shared
+      // scenario contract records a controller that resolves every member and
+      // a registry that knows only the readable ones, and expects the unknown
+      // member admitted. Changing it here would answer 403 where every other
+      // backend answers 200.
       const [, refused] = await ctrl.validateMembers([...workerIds], authorized);
       if (refused.length > 0) {
         const unknown: string[] = [];
