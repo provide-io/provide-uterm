@@ -231,6 +231,7 @@ class FanOutController:
             return auth_error
         if dispatch_group is None:  # pragma: no cover - narrowed by auth_error
             return self._error_result(group_id, data, "fan-out authorization failed")
+        assert principal is not None  # the dispatch snapshot rejects a missing principal
         group = dispatch_group
 
         # 1. Check Policy for Fan-Out
@@ -415,18 +416,19 @@ class FanOutController:
                 send_results[index] = dispatched_item
 
             async def _collect(capture: Any, started_at: float) -> tuple[str, int]:
-                return await capture.collect(
+                collected_pair: tuple[str, int] = await capture.collect(
                     quiesce_ms=quiesce_ms,
                     max_ms=max_response_ms,
                     started_at=started_at,
                 )
+                return collected_pair
 
             collect_indices: list[int] = []
             tasks: list[asyncio.Task[tuple[str, int]]] = []
             for index in ready_indices:
-                dispatched_item = send_results[index]
-                assert dispatched_item is not None
-                accepted, started_at = dispatched_item
+                sent_item = send_results[index]
+                assert sent_item is not None
+                accepted, started_at = sent_item
                 if accepted is True:
                     collect_indices.append(index)
                     tasks.append(asyncio.create_task(_collect(captures[index], started_at)))
@@ -445,11 +447,11 @@ class FanOutController:
             successful_indices: list[int] = []
 
             for index, worker_id in enumerate(group.worker_ids):
-                dispatched_item = send_results[index]
-                if dispatched_item is None:
+                sent_item = send_results[index]
+                if sent_item is None:
                     item: tuple[str, int] | BaseException | None = None
                 else:
-                    accepted, _started_at = dispatched_item
+                    accepted, _started_at = sent_item
                     item = collected[index] if accepted is True else None
                 if isinstance(item, tuple):
                     delta, elapsed = item

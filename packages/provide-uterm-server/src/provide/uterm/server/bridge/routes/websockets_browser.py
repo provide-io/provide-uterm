@@ -112,6 +112,7 @@ async def dispatch_browser_event(
         if not _fo_is_admin:
             await websocket.send_text(encode_control_frame(make_error_frame("global admin role required")))
             return role, can_hijack, owned_hijack
+        assert _fo_principal is not None  # the admin gate above rejects a missing principal
         _fo_ctrl: Any = getattr(hub, "fan_out_controller", None)
         if _fo_ctrl is not None:
             _fo_group_id = msg_b.get("group_id", "")
