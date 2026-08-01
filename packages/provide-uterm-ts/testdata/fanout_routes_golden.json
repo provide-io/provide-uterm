@@ -18,14 +18,6 @@
     },
     {
       "detail": {
-        "group_id": "<uuid>",
-        "name": ""
-      },
-      "event": "fanout.create_group",
-      "principal": "operator@example.org"
-    },
-    {
-      "detail": {
         "command": "uptime\\r",
         "group_id": "<uuid>",
         "send_id": "send-1"
@@ -139,11 +131,10 @@
   },
   "create_unknown_session": {
     "body": {
-      "group_id": "<uuid>",
-      "name": "",
-      "session_count": 1
+      "error": "unknown fan-out session: never-registered",
+      "group_id": "<uuid>"
     },
-    "status": 200
+    "status": 400
   },
   "delete": {
     "body": null,
@@ -199,12 +190,6 @@
         "mode": "sequential",
         "name": "prod fleet",
         "session_count": 2
-      },
-      {
-        "group_id": "<uuid>",
-        "mode": "parallel",
-        "name": "",
-        "session_count": 1
       }
     ],
     "status": 200
@@ -257,10 +242,13 @@
   ],
   "send": {
     "body": {
+      "approval_id": null,
+      "approval_required": false,
       "command": "uptime\\r",
       "divergent_sessions": [
         "w2"
       ],
+      "error": null,
       "failed_sessions": [
         "w2"
       ],

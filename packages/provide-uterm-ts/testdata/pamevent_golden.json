@@ -69,23 +69,17 @@
     {
       "name": "a JSON list rather than an object",
       "line": "[\"open\",\"ada\"]",
-      "event": {
-        "raises": "AttributeError"
-      }
+      "event": null
     },
     {
       "name": "a JSON string rather than an object",
       "line": "\"open\"",
-      "event": {
-        "raises": "AttributeError"
-      }
+      "event": null
     },
     {
       "name": "a JSON null",
       "line": "null",
-      "event": {
-        "raises": "AttributeError"
-      }
+      "event": null
     },
     {
       "name": "an event nobody defined",

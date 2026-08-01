@@ -2,8 +2,10 @@
  "generator": "packages/provide-uterm-ts/testdata/gen_approvals_golden.py",
  "statuses": [
   "pending",
+  "resolving",
   "approved",
   "rejected",
+  "refused",
   "timeout"
  ],
  "cleanup": {
@@ -87,15 +89,15 @@
   ]
  },
  "claim": {
-  "first_claim": true,
+  "first_claim": false,
   "second_claim": false,
   "unknown_claim": false,
-  "status_after_double_claim": "approved",
-  "status_after_resolve": "rejected",
+  "status_after_double_claim": "timeout",
+  "status_after_resolve": "timeout",
   "unknown_get_is_none": true
  },
  "replacement": {
-  "status": "approved",
-  "expires_at": 1000120.0
+  "status": "pending",
+  "expires_at": 1000060.0
  }
 }

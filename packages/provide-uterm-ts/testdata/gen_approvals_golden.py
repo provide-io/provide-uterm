@@ -97,18 +97,22 @@ def _claim_record() -> dict[str, Any]:
     """Claim transitions once and only once; resolve is the lenient sibling."""
     store = InMemoryApprovalStore()
     store.add(_request("r0", ApprovalStatus.PENDING, NOW + 60.0))
-    first = store.claim("r0", ApprovalStatus.APPROVED)
-    second = store.claim("r0", ApprovalStatus.REJECTED)
-    unknown = store.claim("nope", ApprovalStatus.APPROVED)
+    stored = store.get("r0")
+    assert stored is not None
+    first = store.claim("r0", ApprovalStatus.APPROVED, expected_revision=stored.revision)
+    second = store.claim("r0", ApprovalStatus.REJECTED, expected_revision=stored.revision)
+    unknown = store.claim("nope", ApprovalStatus.APPROVED, expected_revision=1)
 
     # resolve on an already-resolved request leaves it alone, and on an
     # unknown id does nothing at all rather than raising.
-    store.resolve("r0", ApprovalStatus.REJECTED)
-    store.resolve("nope", ApprovalStatus.APPROVED)
+    store.resolve("r0", ApprovalStatus.REJECTED, expected_revision=stored.revision)
+    store.resolve("nope", ApprovalStatus.APPROVED, expected_revision=1)
 
     pending = InMemoryApprovalStore()
     pending.add(_request("r1", ApprovalStatus.PENDING, NOW + 60.0))
-    pending.resolve("r1", ApprovalStatus.REJECTED)
+    stored_pending = pending.get("r1")
+    assert stored_pending is not None
+    pending.resolve("r1", ApprovalStatus.REJECTED, expected_revision=stored_pending.revision)
 
     return {
         "first_claim": first,
@@ -121,10 +125,11 @@ def _claim_record() -> dict[str, Any]:
 
 
 def _replacement_record() -> dict[str, Any]:
-    """Adding the same id twice replaces rather than merges."""
+    """Adding a live duplicate id is rejected; the original request survives."""
     store = InMemoryApprovalStore()
     store.add(_request("r0", ApprovalStatus.PENDING, NOW + 60.0))
-    store.add(_request("r0", ApprovalStatus.APPROVED, NOW + 120.0))
+    duplicate_accepted = store.add(_request("r0", ApprovalStatus.APPROVED, NOW + 120.0))
+    assert not duplicate_accepted
     req = store.get("r0")
     assert req is not None
     return {"status": req.status.value, "expires_at": req.expires_at}
