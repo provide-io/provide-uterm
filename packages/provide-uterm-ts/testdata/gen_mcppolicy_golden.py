@@ -114,6 +114,11 @@ CONNECTORS = ["shell", "telnet", "ssh", "ws", "websocket", "pty", "ushell", "vnc
 # What ``inet_aton`` accepts, recorded directly: the guard's whole point is
 # that a resolver takes forms a dotted-quad blocklist does not, and guessing
 # which ones would be exactly the mistake being guarded against.
+#
+# Only inputs the C libraries agree on. ``inet_aton`` is not CPython's — it is
+# whichever libc the interpreter was linked against — so an input the libcs
+# read differently has no reference behaviour to record, only a recording of
+# the machine that ran the generator. See :data:`INET_ATON_LIBC_DIVERGENT`.
 INET_ATON: list[str] = [
     "127.0.0.1",
     "1.2.3.4",
@@ -134,7 +139,6 @@ INET_ATON: list[str] = [
     "127.0.1",
     "2130706433",
     "4294967295",
-    "4294967296",
     "0177.0.0.1",
     "0x7f.0.0.1",
     "0x7f000001",
@@ -149,7 +153,6 @@ INET_ATON: list[str] = [
     "1e3",
     "1.2.3.0x4",
     "localhost",
-    "999999999999",
     "1.2.3.4/24",
     "1.16777215",
     "1.16777216",
@@ -161,6 +164,32 @@ INET_ATON: list[str] = [
     "1.2.3.4\t",
     "1.2.3.4x",
     "0xffffffff",
+]
+
+# The inputs BSD and glibc read differently, named rather than recorded.
+#
+# All three are a *whole* address written as one number larger than 32 bits.
+# BSD (macOS) keeps the low thirty-two bits — ``4294967296`` becomes 0.0.0.0 —
+# while glibc refuses anything past ``0xffffffff`` outright, so on Linux the
+# same string is not an address at all and falls through to the hostname path.
+# musl differs again, refusing the trailing-whitespace forms the other two
+# accept. There is no CPython answer underneath any of this: ``socket
+# .inet_aton`` is a thin wrapper over whichever libc the interpreter is linked
+# against.
+#
+# Recording one platform's reply made the corpus reproduce only on macOS and
+# turned the drift check red on every Linux CI runner — and worse, it would
+# have bound the ports to imitate BSD's libc as though it were the reference.
+# Every input the two libcs agree on stays in :data:`INET_ATON` above; these
+# are listed so the omission is deliberate and visible rather than something to
+# quietly re-add. Do not move them back.
+#
+# (``999999999999`` also appears in :data:`HOSTS`. That is safe: BSD wraps it
+# to the public address 212.165.15.255 and glibc treats it as a hostname, and
+# ``_is_internal_host`` answers "not internal" either way.)
+INET_ATON_LIBC_DIVERGENT: list[str] = [
+    "4294967296",
+    "999999999999",
     "0x100000000",
 ]
 
@@ -212,6 +241,7 @@ def main() -> None:
         "max_keystroke_bytes": constants.MAX_KEYSTROKE_BYTES,
         "allow_private_hosts": constants.ALLOW_PRIVATE_HOSTS,
         "inet_aton": [{"value": value, "address": _aton(value)} for value in INET_ATON],
+        "inet_aton_libc_divergent": list(INET_ATON_LIBC_DIVERGENT),
         "hosts": [{"name": name, "host": host, "internal": _host(host)} for name, host in HOSTS],
         "patterns": [{"name": name, "pattern": value, "rejection": _pattern(value)} for name, value in PATTERNS],
         "ids": [{"name": name, "id": value, "rejection": _id(value)} for name, value in IDS],

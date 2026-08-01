@@ -3,8 +3,10 @@
   "expected_mode": 384,
   "expected_mode_repr": "0o600",
   "foreign_owner": {
-    "message": "refusing to load SSH host key owned by uid 501 (current uid 502)",
-    "uid_offset": 1
+    "current_uid": 4243,
+    "message": "refusing to load SSH host key owned by uid 4242 (current uid 4243): /keys/ssh_host_key",
+    "owner_uid": 4242,
+    "path": "/keys/ssh_host_key"
   },
   "key_permissions": [
     {

@@ -19,7 +19,7 @@ import {
 interface SshPolicyGolden {
   loopback: Array<{ host: string; loopback: boolean }>;
   key_permissions: Array<{ name: string; mode: number; mode_repr: string; error: string | null }>;
-  foreign_owner: { message: string; uid_offset: number };
+  foreign_owner: { message: string; owner_uid: number; current_uid: number; path: string };
   start_guard: Array<{ name: string; refused: boolean; message: string | null }>;
   per_ip_limit: {
     limit: number;
@@ -109,8 +109,11 @@ describe("isLoopbackBind", () => {
 describe("verifyKeyPermissions", () => {
   it.each(golden.key_permissions)("$name", (record) => {
     // A private key that anyone can read is not a secret, and loading it
-    // anyway would be silent.
-    const check = () => verifyKeyPermissions("/keys/ssh_host_key", { mode: record.mode, uid: 501 }, 501);
+    // anyway would be silent. The uid is the recorded placeholder on both
+    // sides of the comparison, so this says "owned by the caller" without
+    // depending on who the caller is.
+    const owner = golden.foreign_owner.owner_uid;
+    const check = () => verifyKeyPermissions(golden.foreign_owner.path, { mode: record.mode, uid: owner }, owner);
     if (record.error === null) {
       expect(check).not.toThrow();
     } else {
@@ -138,23 +141,31 @@ describe("verifyKeyPermissions", () => {
   });
 
   it("names the file it refused", () => {
-    expect(() => verifyKeyPermissions("/keys/ssh_host_key", { mode: 0o644, uid: 501 }, 501)).toThrow(
-      "/keys/ssh_host_key",
+    const owner = golden.foreign_owner.owner_uid;
+    expect(() => verifyKeyPermissions(golden.foreign_owner.path, { mode: 0o644, uid: owner }, owner)).toThrow(
+      golden.foreign_owner.path,
     );
   });
 
   it("refuses a key owned by somebody else", () => {
     // Same bytes, different owner: it is their key, and it may be a key they
-    // can still read.
-    expect(() => verifyKeyPermissions("/keys/ssh_host_key", { mode: 0o600, uid: 501 }, 502)).toThrow(
-      golden.foreign_owner.message,
-    );
+    // can still read. Both uids come from the corpus — they are placeholders
+    // the reference was driven with, not the uid of whoever is running this.
+    expect(() =>
+      verifyKeyPermissions(
+        golden.foreign_owner.path,
+        { mode: 0o600, uid: golden.foreign_owner.owner_uid },
+        golden.foreign_owner.current_uid,
+      ),
+    ).toThrow(golden.foreign_owner.message);
   });
 
   it("skips the ownership check where there are no uids", () => {
     // The reference skips it when the platform has no getuid; refusing every
     // key there would make the server unstartable.
-    expect(() => verifyKeyPermissions("/keys/ssh_host_key", { mode: 0o600, uid: 501 })).not.toThrow();
+    expect(() =>
+      verifyKeyPermissions(golden.foreign_owner.path, { mode: 0o600, uid: golden.foreign_owner.owner_uid }),
+    ).not.toThrow();
   });
 
   it("raises the shared error type", () => {
