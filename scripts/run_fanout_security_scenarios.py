@@ -50,6 +50,12 @@ REQUIRED_CATEGORY_CARDINALITY = {
     "store read isolation": 1,
     "store atomic update": 1,
     "total response deadline": 1,
+    # Member admission is decided from ONE registry resolution, so these pin
+    # the answers that a second, divergent resolution used to get wrong.
+    "registered member read refusal": 1,
+    "positional member refusal ordering": 2,
+    "controller cannot widen member access": 1,
+    "create authorization wiring refusal": 1,
 }
 
 
@@ -131,6 +137,14 @@ def semantic_categories(scenario: dict[str, Any]) -> set[str]:
         categories.add("store read isolation")
     if operation == "store_atomic_update":
         categories.add("store atomic update")
+    if operation == "create" and visibility.get("registered_members") and not visibility.get("readable_members"):
+        categories.add("registered member read refusal")
+    if operation == "create" and len(group.get("members", [])) > 1:
+        categories.add("positional member refusal ordering")
+    if operation == "create" and visibility.get("controller_readable_members"):
+        categories.add("controller cannot widen member access")
+    if operation == "create" and input_data.get("omit_authorizers") is True:
+        categories.add("create authorization wiring refusal")
     if workers.get("continuous_output") is True and input_data.get("max_response_ms"):
         categories.add("total response deadline")
     return categories
@@ -139,8 +153,8 @@ def semantic_categories(scenario: dict[str, Any]) -> set[str]:
 def validate_contract(contract: dict[str, Any]) -> list[str]:
     """Validate the semantic contract and backend support claims."""
     errors: list[str] = []
-    if contract.get("schema_version") != 2:
-        errors.append("schema_version must be 2")
+    if contract.get("schema_version") != 3:
+        errors.append("schema_version must be 3")
     if set(contract.get("status_vocabulary", [])) != STATUSES:
         errors.append("status vocabulary mismatch")
     backends = _dict(contract.get("backends"))
