@@ -135,7 +135,13 @@ async def force_release_hijack(mgr: ConnectionManager, worker_id: str) -> bool:
                 st.hijack_owner = None
                 st.hijack_owner_expires_at = None
                 had_hijack = True
-            if had_hijack:
+            # Same Python-3.11 coverage.py async-with __aexit__ arc quirk as in
+            # HubConnectionService.set_worker_hello: the False arc leaves the
+            # `async with hub._lock` block for the `if not had_hijack` below, and
+            # 3.11 mis-attributes that crossing. 3.12+ records it correctly. The
+            # branch IS exercised — see
+            # test_known_worker_no_hijack_returns_false_no_side_effects.
+            if had_hijack:  # pragma: no branch
                 st.ownership_generation += 1
         if not had_hijack:
             return False

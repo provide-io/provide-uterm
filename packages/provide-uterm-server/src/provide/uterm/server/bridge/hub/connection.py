@@ -209,8 +209,10 @@ class ConnectionManager:
 
         Returns ``True`` if the mode was applied, ``False`` if the worker is no
         longer registered or if switching to ``"open"`` while a hijack lease is
-        active (mode change is blocked in that case). When ``protocol_version`` is
-        provided, it is recorded on the :class:`WorkerTermState` so downstream
+        active or while an operator's ``hijack`` decision still stands (mode
+        change is blocked in those cases). Applying a mode the operator did not
+        choose retires that decision — see the comments below. When ``protocol_version``
+        is provided, it is recorded on the :class:`WorkerTermState` so downstream
         feature gates can query it via ``worker.protocol_version``.
         """
         hub = self._hub
@@ -242,6 +244,17 @@ class ConnectionManager:
                     worker_id,
                 )
                 return False
+            # The flag guards the *value* an operator chose, not the worker
+            # forever. A hello that raises over a decided `open` has already
+            # overridden that decision — the mode on the state is now the
+            # worker's, not the operator's — so leaving the flag set would
+            # refuse the worker its own way back to `open` for the lifetime of
+            # the registry entry. That is how a session ends up stuck in
+            # `hijack` when the operator and the worker both asked for `open`.
+            # A hello that agrees with the current mode changes nothing and
+            # leaves the decision standing.
+            if mode != st.input_mode:
+                st.input_mode_set_by_operator = False
             st.input_mode = mode
             # Same Python-3.11 coverage.py async-with __aexit__ arc quirk as in
             # set_worker_tunnel_flag: the False arc (no protocol_version) falls

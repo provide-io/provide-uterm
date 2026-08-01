@@ -606,3 +606,54 @@ async def test_deciding_open_is_a_decision_too() -> None:
 
     assert await hub.set_worker_hello(worker_id, "open") is True
     assert hub.registry.get(worker_id).input_mode == "open"
+
+
+async def test_a_hello_may_lower_the_mode_its_own_hello_raised() -> None:
+    """The guard protects the operator's *value*, and stops the moment a hello
+    overrides it.
+
+    An operator returns a session to ``open``; the worker then announces
+    ``hijack``, which is allowed to raise over the decision. At that point the
+    mode on the state is the worker's, not the operator's — so the worker's
+    next hello, announcing ``open`` again, has to be honoured. Holding the flag
+    past the override stranded the session in ``hijack`` permanently, with both
+    the operator and the worker asking for ``open`` and neither able to get it.
+    """
+    hub = TermHub()
+    worker_id = "w-hello-relower"
+    async with hub._lock:
+        from provide.uterm.server.bridge.models import WorkerTermState
+
+        hub.registry._workers[worker_id] = WorkerTermState()
+
+    ok, _ = await hub.set_input_mode(worker_id, "open")
+    assert ok is True
+
+    assert await hub.set_worker_hello(worker_id, "hijack") is True
+    assert hub.registry.get(worker_id).input_mode_set_by_operator is False
+
+    assert await hub.set_worker_hello(worker_id, "open") is True
+    assert hub.registry.get(worker_id).input_mode == "open"
+
+
+async def test_a_hello_that_changes_nothing_leaves_the_decision_standing() -> None:
+    """Only an override clears the decision — agreeing with it does not.
+
+    A worker that reconnects and announces the mode the operator already chose
+    must not thereby buy itself permission to lower it on the next hello.
+    """
+    hub = TermHub()
+    worker_id = "w-hello-agrees"
+    async with hub._lock:
+        from provide.uterm.server.bridge.models import WorkerTermState
+
+        hub.registry._workers[worker_id] = WorkerTermState()
+
+    ok, _ = await hub.set_input_mode(worker_id, "hijack")
+    assert ok is True
+
+    assert await hub.set_worker_hello(worker_id, "hijack") is True
+    assert hub.registry.get(worker_id).input_mode_set_by_operator is True
+
+    assert await hub.set_worker_hello(worker_id, "open") is False
+    assert hub.registry.get(worker_id).input_mode == "hijack"

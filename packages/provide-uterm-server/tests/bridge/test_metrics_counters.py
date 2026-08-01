@@ -20,7 +20,6 @@ from fastapi.testclient import TestClient
 from provide.uterm.client import connect_test_ws
 from provide.uterm.server.bridge.hub import EventBus, TermHub
 from provide.uterm.server.bridge.hub.event_bus import _Subscription
-from provide.uterm.server.bridge.ratelimit import TokenBucket
 from provide.uterm.server.webhooks import WebhookManager
 
 # ---------------------------------------------------------------------------
@@ -156,25 +155,23 @@ class TestWsBrowserRateLimitedCounters:
         def on_metric(name: str, value: int = 1) -> None:
             metrics2[name] = metrics2.get(name, 0) + value
 
+        # Real buckets, no patching. A class-level patch of ``TokenBucket.allow``
+        # could only stay installed until the last ``send_json`` returned, which
+        # is when the frames are *queued* — not when the server loop has read
+        # them. The window closed first often enough that the frames were then
+        # measured against the unpatched bucket and nothing was ever refused.
+        # Configuring the control bucket to a burst of one and leaving input
+        # effectively unlimited denies the 2nd and 3rd frames on its own, and
+        # the assertion outside the client block runs after the server has
+        # drained.
         hub2 = TermHub(
             on_metric=on_metric,
-            # Allow input; deny control by setting control limit to 1 burst
             browser_rate_limit_per_sec=10000,
+            browser_control_rate_limit_per_sec=1,
             resolve_browser_role=lambda _ws, _wid: "operator",
         )
         app2 = FastAPI()
         app2.include_router(hub2.create_router())
-
-        # Patch TokenBucket.allow to deny the control bucket specifically.
-        # The browser loop creates _browser_bucket then _browser_control_bucket.
-        # We intercept by patching allow() on all TokenBucket instances via the class.
-        call_count = [0]
-
-        def patched_allow(self: TokenBucket) -> bool:
-            call_count[0] += 1
-            # First call per message is the input bucket check — let that pass.
-            # Subsequent calls (control bucket) are denied.
-            return call_count[0] % 2 == 1
 
         with TestClient(app2) as client:
             with connect_test_ws(client, "/ws/worker/w1/term") as worker_ws:
@@ -185,11 +182,10 @@ class TestWsBrowserRateLimitedCounters:
                     browser_ws.receive_json()  # hello
                     browser_ws.receive_json()  # hijack_state
 
-                    with patch.object(TokenBucket, "allow", patched_allow):
-                        # Send a non-input control frame (hijack_request)
-                        browser_ws.send_json({"type": "hijack_request"})
-                        browser_ws.send_json({"type": "hijack_request"})
-                        browser_ws.send_json({"type": "hijack_request"})
+                    # Non-input control frames — burst=1, so 2nd and 3rd are refused.
+                    browser_ws.send_json({"type": "hijack_request"})
+                    browser_ws.send_json({"type": "hijack_request"})
+                    browser_ws.send_json({"type": "hijack_request"})
 
         assert metrics2.get("ws_browser_control_rate_limited_total", 0) >= 1
 
