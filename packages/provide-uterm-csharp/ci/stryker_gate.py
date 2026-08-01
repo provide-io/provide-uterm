@@ -100,6 +100,17 @@ def run_stryker() -> Path:
         raise SystemExit(2)
 
     output_root = TEST_PROJECT_DIR / "StrykerOutput"
+    if not output_root.is_dir():
+        # Stryker exits 1 both for "below threshold" and for "the tool is not
+        # installed", so the return code above cannot tell them apart. No
+        # output directory at all means it never ran — most often the local
+        # tool was not restored.
+        print(
+            f"FAIL: {output_root} does not exist — dotnet stryker produced no output. "
+            "Run `dotnet tool restore` first (see .config/dotnet-tools.json).",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
     runs = sorted((p for p in output_root.iterdir() if p.is_dir()), key=lambda p: p.name)
     if not runs:
         print("FAIL: no StrykerOutput run directory found", file=sys.stderr)
