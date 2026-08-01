@@ -504,6 +504,10 @@ jobs:
           dotnet-version: "10.0.x"
       - run: uv sync --frozen --group dev
       - run: npm ci
+      # Every live cell boots a real server, which refuses to start without
+      # the built frontend assets. They are gitignored build output, so a job
+      # that only installs dependencies errors every cell in the matrix.
+      - run: npm run build:frontend
       # The harness's own unit tests: what an expectation means, how two cells
       # are compared, and which drivers exist. A broken harness would agree
       # with itself in every cell.
