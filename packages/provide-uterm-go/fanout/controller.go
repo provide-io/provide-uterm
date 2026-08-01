@@ -117,6 +117,15 @@ func NewController(h Hub, cfg Config) *Controller {
 	}
 }
 
+// AuthorizationReady reports whether the controller's mandatory authorization
+// dependency is wired. A controller without it cannot judge member access at
+// all, so callers that admit membership (the create route) must fail closed
+// rather than admit on whatever checks remain wired. Port of
+// FanOutController.authorization_ready — Go collapses Python's three separate
+// hooks (is_global_admin / resolve_session / can_read_session) into the single
+// [Authorizer] interface, so a nil authorizer is the whole unwired condition.
+func (c *Controller) AuthorizationReady() bool { return c.authorizer != nil }
+
 // newHexID returns a 32-hex-char id, the shape of Python's uuid4().hex.
 func newHexID() string {
 	var b [16]byte

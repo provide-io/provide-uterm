@@ -12,7 +12,12 @@ import (
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/fanout"
 )
 
-const unsupportedFanoutGovernance = "fanout governance is not supported by this server"
+const (
+	unsupportedFanoutGovernance = "fanout governance is not supported by this server"
+	// unavailableFanoutAuthorization matches the Python create_group wiring
+	// gate's body so the cross-language contract canonicalizes it identically.
+	unavailableFanoutAuthorization = "fan-out authorization is unavailable"
+)
 
 // registerFanoutRoutes wires the fan-out group CRUD + send + grant routes. Port
 // of fanout/_routes.register_fanout_routes. Every route requires an
@@ -43,6 +48,13 @@ func (s *Server) fanoutAdmin(next http.HandlerFunc) http.HandlerFunc {
 // it rejects (403) any known session the principal cannot read, then persists
 // the group (400 on size/pattern validation failure).
 func (s *Server) handleFanoutCreate(w http.ResponseWriter, r *http.Request) {
+	// Fail closed before any member work: a controller whose authorization
+	// dependency is unwired cannot judge access at all, so admitting on the
+	// checks that happen to remain wired would be a silent downgrade.
+	if !s.fanout.AuthorizationReady() {
+		bridgeError(w, http.StatusForbidden, unavailableFanoutAuthorization)
+		return
+	}
 	p := principalOf(r)
 	body, _ := decodeJSONBody(r)
 	workerIDs := stringList(body["worker_ids"])
