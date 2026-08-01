@@ -512,6 +512,11 @@ jobs:
       # are compared, and which drivers exist. A broken harness would agree
       # with itself in every cell.
       - run: uv run pytest -q tests/conformance/live/ -o addopts=--import-mode=importlib
+      # The fan-out contract drives the C# adapter with `dotnet test
+      # --no-restore`, which needs the project already restored. Nothing else
+      # in this job restores it, and an unmatched filter exits 0 — so the
+      # adapter silently produced no observations instead of failing loudly.
+      - run: dotnet build packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Provide.Uterm.Tests.csproj
       # Security-sensitive cross-language contracts execute their native
       # adapters here. Keeping these outside the default Python testpaths must
       # not let a missing scenario category or a backend observation drift
