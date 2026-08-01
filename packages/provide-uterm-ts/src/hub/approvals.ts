@@ -94,9 +94,11 @@ export class InMemoryApprovalStore {
    * Exact-revision snapshots of requests that timed out, awaiting delivery.
    *
    * A claim or resolve that finds its request already expired times it out on
-   * the spot, but the notification is queued and delivered from
-   * {@link cleanupExpired} — the reference never runs listener code inside a
-   * decision call.
+   * the spot, but the notification is queued rather than delivered — the
+   * reference never runs listener code inside a decision call. A decision
+   * route drains it with {@link notifyExpired} the moment its claim fails;
+   * {@link cleanupExpired} drains whatever nobody claimed. Keyed by id *and*
+   * revision, so however many drains follow, each expiry goes out once.
    */
   readonly #expiredNotifications = new Map<string, StoredApprovalRequest>();
   readonly #now: () => number;
@@ -188,6 +190,50 @@ export class InMemoryApprovalStore {
   }
 
   /**
+   * Reserve the exact pending revision for resolution, returning its snapshot.
+   *
+   * The claiming half of the two-phase decision: `pending` becomes
+   * `resolving`, and the caller is handed the request it now owns so it can
+   * act on the command before {@link finalize} writes the outcome. Anyone
+   * else claiming that revision meanwhile gets `undefined`, so the command
+   * behind it is acted on exactly once. The snapshot is a copy — the store
+   * keeps its own.
+   */
+  claimRequest(requestId: string, status: ApprovalStatus, expectedRevision: number): StoredApprovalRequest | undefined {
+    const request = this.#requests.get(requestId);
+    if (request === undefined || request.status !== "pending" || request.revision !== expectedRevision) {
+      return undefined;
+    }
+    if (request.expiresAt <= this.#now()) {
+      this.#expire(request);
+      return undefined;
+    }
+    request.status = status;
+    return { ...request };
+  }
+
+  /**
+   * Write the outcome of a request that {@link claimRequest} reserved.
+   *
+   * Only `approved` and `refused` are outcomes; anything else is a caller
+   * mistake rather than a decision, and is refused loudly rather than
+   * recorded. Only the exact revision left in `resolving` moves, so a
+   * finalize arriving twice — or for a request nobody claimed — writes
+   * nothing.
+   */
+  finalize(requestId: string, status: ApprovalStatus, expectedRevision: number): boolean {
+    if (status !== "approved" && status !== "refused") {
+      throw new RangeError("approval resolution must finalize as approved or refused");
+    }
+    const request = this.#requests.get(requestId);
+    if (request === undefined || request.status !== "resolving" || request.revision !== expectedRevision) {
+      return false;
+    }
+    request.status = status;
+    return true;
+  }
+
+  /**
    * Time out expired pending requests and prune long-dead terminal ones.
    *
    * Both comparisons are strict, so a request expiring exactly now survives
@@ -209,8 +255,20 @@ export class InMemoryApprovalStore {
       }
     }
 
-    // Drained whether or not anyone is listening, exactly once per expiry —
-    // this pass also delivers timeouts a claim or resolve queued earlier.
+    // This pass also delivers the timeouts a claim or resolve queued earlier.
+    await this.notifyExpired();
+  }
+
+  /**
+   * Deliver every queued expiry snapshot, exactly once.
+   *
+   * A decision route calls this straight after a claim that failed, so the
+   * browser that was told "too late" learns the request timed out then rather
+   * than whenever the next cleanup sweep happens to run. The queue is emptied
+   * before the first callback, so a second call — or the cleanup sweep — has
+   * nothing left to deliver and cannot notify the same expiry twice.
+   */
+  async notifyExpired(): Promise<void> {
     const expired = [...this.#expiredNotifications.values()];
     this.#expiredNotifications.clear();
     const onExpired = this.onExpired;

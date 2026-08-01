@@ -12,8 +12,12 @@ now is still pending. Those comparisons are one keystroke from wrong and a
 hand-written expectation would just as easily encode the wrong one, so the
 cleanup table is recorded from the reference rather than asserted from memory.
 
-``cleanup_expired`` reads ``time.time()``, which the corpus stubs: an approval
-store asserted against wall time is a flaky test.
+Every decision path reads ``time.time()`` — ``cleanup_expired`` to sweep,
+``claim``/``resolve``/``claim_request`` to refuse a late decision — so the
+clock is stubbed throughout. An approval store asserted against wall time is a
+flaky test, and worse here: the fixtures expire at a fixed constant that real
+wall time is far past, so an unstubbed block would quietly record the timeout
+path in place of the behaviour it is named for.
 
 Usage (from the repository root)::
 
@@ -94,25 +98,32 @@ def _cleanup_record() -> dict[str, Any]:
 
 
 def _claim_record() -> dict[str, Any]:
-    """Claim transitions once and only once; resolve is the lenient sibling."""
-    store = InMemoryApprovalStore()
-    store.add(_request("r0", ApprovalStatus.PENDING, NOW + 60.0))
-    stored = store.get("r0")
-    assert stored is not None
-    first = store.claim("r0", ApprovalStatus.APPROVED, expected_revision=stored.revision)
-    second = store.claim("r0", ApprovalStatus.REJECTED, expected_revision=stored.revision)
-    unknown = store.claim("nope", ApprovalStatus.APPROVED, expected_revision=1)
+    """Claim transitions once and only once; resolve is the lenient sibling.
 
-    # resolve on an already-resolved request leaves it alone, and on an
-    # unknown id does nothing at all rather than raising.
-    store.resolve("r0", ApprovalStatus.REJECTED, expected_revision=stored.revision)
-    store.resolve("nope", ApprovalStatus.APPROVED, expected_revision=1)
+    Every fixture here expires at the fixed ``NOW + 60``, which real wall time
+    passed long ago — so the clock is pinned for the whole block. Without that
+    the store would find each request already expired and the corpus would
+    record the timeout path under the name of the exactly-once one.
+    """
+    with mock.patch("time.time", return_value=NOW):
+        store = InMemoryApprovalStore()
+        store.add(_request("r0", ApprovalStatus.PENDING, NOW + 60.0))
+        stored = store.get("r0")
+        assert stored is not None
+        first = store.claim("r0", ApprovalStatus.APPROVED, expected_revision=stored.revision)
+        second = store.claim("r0", ApprovalStatus.REJECTED, expected_revision=stored.revision)
+        unknown = store.claim("nope", ApprovalStatus.APPROVED, expected_revision=1)
 
-    pending = InMemoryApprovalStore()
-    pending.add(_request("r1", ApprovalStatus.PENDING, NOW + 60.0))
-    stored_pending = pending.get("r1")
-    assert stored_pending is not None
-    pending.resolve("r1", ApprovalStatus.REJECTED, expected_revision=stored_pending.revision)
+        # resolve on an already-resolved request leaves it alone, and on an
+        # unknown id does nothing at all rather than raising.
+        store.resolve("r0", ApprovalStatus.REJECTED, expected_revision=stored.revision)
+        store.resolve("nope", ApprovalStatus.APPROVED, expected_revision=1)
+
+        pending = InMemoryApprovalStore()
+        pending.add(_request("r1", ApprovalStatus.PENDING, NOW + 60.0))
+        stored_pending = pending.get("r1")
+        assert stored_pending is not None
+        pending.resolve("r1", ApprovalStatus.REJECTED, expected_revision=stored_pending.revision)
 
     return {
         "first_claim": first,
@@ -121,6 +132,142 @@ def _claim_record() -> dict[str, Any]:
         "status_after_double_claim": store.get("r0").status.value,  # type: ignore[union-attr]
         "status_after_resolve": pending.get("r1").status.value,  # type: ignore[union-attr]
         "unknown_get_is_none": store.get("nope") is None,
+    }
+
+
+def _two_phase_record() -> dict[str, Any]:
+    """The two-phase decision: pending → resolving → approved or refused.
+
+    ``claim_request`` reserves one exact revision and hands back the request
+    the caller now owns; ``finalize`` writes the outcome, and only from
+    RESOLVING. Both are revision-gated, so a decision for a request id that
+    was pruned and reused cannot land on the new one.
+    """
+    with mock.patch("time.time", return_value=NOW):
+        store = InMemoryApprovalStore()
+        store.add(_request("r0", ApprovalStatus.PENDING, NOW + 60.0))
+        stored = store.get("r0")
+        assert stored is not None
+        claimed = store.claim_request("r0", ApprovalStatus.RESOLVING, expected_revision=stored.revision)
+        assert claimed is not None
+        # The losing racer of a simultaneous decision: the request is no
+        # longer PENDING, so there is nothing left to reserve.
+        second_claim = store.claim_request("r0", ApprovalStatus.RESOLVING, expected_revision=stored.revision)
+        unknown_claim = store.claim_request("nope", ApprovalStatus.RESOLVING, expected_revision=1)
+        status_after_claim = store.get("r0").status.value  # type: ignore[union-attr]
+
+        stale_finalize = store.finalize("r0", ApprovalStatus.APPROVED, expected_revision=stored.revision + 99)
+        finalized = store.finalize("r0", ApprovalStatus.APPROVED, expected_revision=stored.revision)
+        refinalized = store.finalize("r0", ApprovalStatus.REFUSED, expected_revision=stored.revision)
+        unknown_finalize = store.finalize("nope", ApprovalStatus.APPROVED, expected_revision=1)
+
+        # Finalizing a request nobody reserved writes nothing: the two phases
+        # are not optional.
+        skipped = InMemoryApprovalStore()
+        skipped.add(_request("r1", ApprovalStatus.PENDING, NOW + 60.0))
+        skipped_stored = skipped.get("r1")
+        assert skipped_stored is not None
+        finalize_from_pending = skipped.finalize(
+            "r1", ApprovalStatus.APPROVED, expected_revision=skipped_stored.revision
+        )
+
+        # The refusing half of the same machine.
+        refusing = InMemoryApprovalStore()
+        refusing.add(_request("r2", ApprovalStatus.PENDING, NOW + 60.0))
+        refusing_stored = refusing.get("r2")
+        assert refusing_stored is not None
+        refusing.claim_request("r2", ApprovalStatus.RESOLVING, expected_revision=refusing_stored.revision)
+        refusing.finalize("r2", ApprovalStatus.REFUSED, expected_revision=refusing_stored.revision)
+
+        # Only approved and refused are outcomes; the rest are caller mistakes.
+        rejected_statuses = []
+        for status in ApprovalStatus:
+            if status in {ApprovalStatus.APPROVED, ApprovalStatus.REFUSED}:
+                continue
+            try:
+                store.finalize("r0", status, expected_revision=stored.revision)
+            except ValueError as exc:
+                rejected_statuses.append({"status": status.value, "message": str(exc)})
+
+        # A reservation attempt that arrives after the window closed times the
+        # request out instead, exactly as a plain claim does.
+        expiring = InMemoryApprovalStore()
+        expiring.add(_request("r3", ApprovalStatus.PENDING, NOW + 60.0))
+        expiring_stored = expiring.get("r3")
+        assert expiring_stored is not None
+
+    with mock.patch("time.time", return_value=NOW + 61.0):
+        expired_claim = expiring.claim_request(
+            "r3", ApprovalStatus.RESOLVING, expected_revision=expiring_stored.revision
+        )
+
+    return {
+        "claimed": {
+            "id": claimed.id,
+            "status": claimed.status.value,
+            "revision": claimed.revision,
+            "command": claimed.command,
+        },
+        "claim_snapshot_is_a_copy": store.get("r0") is not claimed,
+        "second_claim_request_is_none": second_claim is None,
+        "unknown_claim_request_is_none": unknown_claim is None,
+        "status_after_claim_request": status_after_claim,
+        "stale_revision_finalize": stale_finalize,
+        "finalized": finalized,
+        "status_after_finalize": store.get("r0").status.value,  # type: ignore[union-attr]
+        "second_finalize": refinalized,
+        "unknown_finalize": unknown_finalize,
+        "finalize_from_pending": finalize_from_pending,
+        "status_after_finalize_from_pending": skipped.get("r1").status.value,  # type: ignore[union-attr]
+        "status_after_refuse": refusing.get("r2").status.value,  # type: ignore[union-attr]
+        "rejected_finalize_statuses": rejected_statuses,
+        "expired_claim_request_is_none": expired_claim is None,
+        "status_after_expired_claim_request": expiring.get("r3").status.value,  # type: ignore[union-attr]
+    }
+
+
+def _notify_record() -> dict[str, Any]:
+    """A failed claim on an expired request, and when its timeout is heard.
+
+    The decision call queues the snapshot rather than delivering it — the
+    reference runs no listener code inside a decision — and the route that
+    lost calls ``notify_expired()`` at once, so the browser learns the request
+    timed out then and not whenever the next cleanup sweep happens to run. The
+    queue is keyed by (id, revision), so however many drains follow, the
+    expiry goes out exactly once.
+    """
+    seen: list[dict[str, Any]] = []
+    store = InMemoryApprovalStore()
+    store.subscribe_expired(
+        lambda req: seen.append({"id": req.id, "revision": req.revision, "status": req.status.value})
+    )
+    with mock.patch("time.time", return_value=NOW):
+        store.add(_request("r0", ApprovalStatus.PENDING, NOW + 60.0))
+        stored = store.get("r0")
+        assert stored is not None
+
+    with mock.patch("time.time", return_value=NOW + 61.0):
+        claimed = store.claim("r0", ApprovalStatus.APPROVED, expected_revision=stored.revision)
+        during_decision = list(seen)
+        asyncio.run(store.notify_expired())
+        after_notify = list(seen)
+        # The losing racer's own claim finds a request that is already TIMEOUT,
+        # so it queues nothing new and a second delivery hands out nothing.
+        second_claim = store.claim("r0", ApprovalStatus.REJECTED, expected_revision=stored.revision)
+        asyncio.run(store.notify_expired())
+        after_second_notify = list(seen)
+        # Neither does the cleanup sweep that eventually comes along.
+        asyncio.run(store.cleanup_expired())
+        after_cleanup = list(seen)
+
+    return {
+        "claim_succeeded": claimed,
+        "second_claim_succeeded": second_claim,
+        "notified_during_decision": during_decision,
+        "notified_after_notify_expired": after_notify,
+        "notified_after_second_notify": after_second_notify,
+        "notified_after_cleanup": after_cleanup,
+        "status": store.get("r0").status.value,  # type: ignore[union-attr]
     }
 
 
@@ -142,6 +289,8 @@ def main() -> int:
         "statuses": [status.value for status in ApprovalStatus],
         "cleanup": _cleanup_record(),
         "claim": _claim_record(),
+        "two_phase": _two_phase_record(),
+        "notify": _notify_record(),
         "replacement": _replacement_record(),
     }
     OUT.write_text(json.dumps(payload, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
