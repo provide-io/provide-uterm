@@ -2413,6 +2413,8 @@ dev = [
     { name = "uvicorn" },
     { name = "vulture" },
     { name = "websockets" },
+    { name = "workers-py", version = "1.6.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "workers-py", version = "1.11.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "xenon" },
 ]
 
@@ -2462,6 +2464,7 @@ dev = [
     { name = "uvicorn", specifier = ">=0.47.0" },
     { name = "vulture", specifier = ">=2.16" },
     { name = "websockets", specifier = ">=16.0" },
+    { name = "workers-py", specifier = ">=0.4.0" },
     { name = "xenon", specifier = ">=0.9.3" },
 ]
 
