@@ -78,7 +78,7 @@ def test_contract_has_exact_categories_backend_cells_and_result_fields() -> None
     runner = _runner()
     contract = _contract()
 
-    assert contract["schema_version"] == 2
+    assert contract["schema_version"] == 1
     assert set(contract["status_vocabulary"]) == STATUSES  # type: ignore[arg-type]
     assert set(contract["backends"]) == BACKENDS  # type: ignore[arg-type]
     scenarios = contract["scenarios"]

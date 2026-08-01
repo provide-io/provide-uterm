@@ -1,5 +1,5 @@
 {
-  "schema_version": 3,
+  "schema_version": 1,
   "status_vocabulary": [
     "execute",
     "unsupported_fail_closed",
