@@ -132,6 +132,15 @@ public sealed class Controller
         _lateFaultObserver = cfg.LateFaultObserver;
     }
 
+    /// <summary>
+    /// Whether every authorizer the controller needs is wired. A controller
+    /// missing one cannot judge access at all, so callers refuse rather than
+    /// proceed on whatever the remaining checks happen to allow. The single
+    /// <see cref="IFanoutAuthorizer"/> covers both decisions the reference
+    /// wires separately (global admin, and resolving a member to judge reads).
+    /// </summary>
+    public bool AuthorizationReady => _authorizer is not null;
+
     private static string NewHexId()
     {
         var b = new byte[16];
