@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 from provide.uterm.cloudflare.api.ws_routes import handle_socket_message
@@ -55,6 +56,9 @@ class _Runtime:
 
     async def send_ws(self, ws: object, frame: dict) -> None:
         self._sent.append(frame)
+
+    def input_delivery_guard(self):
+        return nullcontext()
 
     async def push_worker_input(self, data: str) -> bool:
         self._pushed.append(data)
@@ -343,32 +347,29 @@ async def test_browser_input_hijack_mode_owner_sent() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Browser frames — REST-only hijack frames
+# Browser hijack controls report truthful refusal when no lease/worker exists
 # ---------------------------------------------------------------------------
 
 
-async def test_browser_hijack_request_rejected() -> None:
-    """hijack_request from browser: use_rest_hijack_api error sent."""
+async def test_browser_hijack_request_without_worker_is_rejected() -> None:
     runtime = _Runtime()
     ws = _Ws()
     await handle_socket_message(runtime, ws, _raw("hijack_request"), is_worker=False)
-    assert runtime._sent[0]["message"] == "use_rest_hijack_api"
+    assert runtime._sent[0]["message"] == "no_worker"
 
 
-async def test_browser_hijack_release_rejected() -> None:
-    """hijack_release from browser: use_rest_hijack_api error sent."""
+async def test_browser_hijack_release_without_ownership_is_rejected() -> None:
     runtime = _Runtime()
     ws = _Ws()
     await handle_socket_message(runtime, ws, _raw("hijack_release"), is_worker=False)
-    assert runtime._sent[0]["message"] == "use_rest_hijack_api"
+    assert runtime._sent[0]["message"] == "not_owner"
 
 
-async def test_browser_hijack_step_rejected() -> None:
-    """hijack_step from browser: use_rest_hijack_api error sent."""
+async def test_browser_hijack_step_without_ownership_is_rejected() -> None:
     runtime = _Runtime()
     ws = _Ws()
     await handle_socket_message(runtime, ws, _raw("hijack_step"), is_worker=False)
-    assert runtime._sent[0]["message"] == "use_rest_hijack_api"
+    assert runtime._sent[0]["message"] == "not_owner"
 
 
 # ---------------------------------------------------------------------------

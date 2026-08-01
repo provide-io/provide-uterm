@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 from provide.uterm.cloudflare.api.http_routes import route_http
@@ -50,6 +51,9 @@ class _Runtime:
         self.last_analysis: str | None = None
         self.lifecycle_state = "stopped"
         self.input_mode: str = "hijack"
+
+    def input_delivery_guard(self):
+        return nullcontext()
 
     async def request_json(self, request: object) -> dict:
         return json.loads(getattr(request, "_body", "{}"))

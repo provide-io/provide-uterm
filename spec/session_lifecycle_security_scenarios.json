@@ -102,7 +102,7 @@
         "go": {"status": "served", "expected": {}},
         "csharp": {"status": "served", "expected": {}},
         "typescript": {"status": "unserved", "expected": {"error": "no_server_surface"}},
-        "cloudflare": {"status": "unsupported", "expected": {"status_code": 0, "error": "per_principal_browser_quota_unsupported", "accepted_connections": 0, "rejected_connections": 0, "quota_recovered": false, "setup_rollback_verified": false}}
+        "cloudflare": {"status": "unsupported", "expected": {"route": "http", "status_code": 501, "error": "per_principal_browser_quota_unsupported", "accepted_connections": 0, "rejected_connections": 0, "quota_recovered": false, "setup_rollback_verified": false}}
       }
     },
     {
@@ -114,7 +114,7 @@
         "go": {"status": "unsupported", "expected": {"route": "http", "status_code": 501, "error": "unsupported_governance", "policy_decision": "unsupported", "signed_request": false, "delivered_payloads": []}},
         "csharp": {"status": "unsupported", "expected": {"route": "http", "status_code": 501, "error": "unsupported_governance", "policy_decision": "unsupported", "signed_request": false, "delivered_payloads": []}},
         "typescript": {"status": "unserved", "expected": {"error": "no_server_surface"}},
-        "cloudflare": {"status": "unsupported", "expected": {"status_code": 0, "error": "governance_not_configurable", "policy_decision": "unsupported", "signed_request": false, "delivered_payloads": []}}
+        "cloudflare": {"status": "unsupported", "expected": {"route": "http", "status_code": 501, "error": "unsupported_governance", "policy_decision": "unsupported", "signed_request": false, "delivered_payloads": []}}
       }
     },
     {
@@ -126,7 +126,7 @@
         "go": {"status": "unsupported", "expected": {"route": "http", "status_code": 501, "error": "unsupported_governance", "policy_decision": "unsupported", "signed_request": false}},
         "csharp": {"status": "unsupported", "expected": {"route": "http", "status_code": 501, "error": "unsupported_governance", "policy_decision": "unsupported", "signed_request": false}},
         "typescript": {"status": "unserved", "expected": {"error": "no_server_surface"}},
-        "cloudflare": {"status": "unsupported", "expected": {"status_code": 0, "error": "governance_not_configurable", "policy_decision": "unsupported", "signed_request": false}}
+        "cloudflare": {"status": "unsupported", "expected": {"route": "http", "status_code": 501, "error": "unsupported_governance", "policy_decision": "unsupported", "signed_request": false}}
       }
     },
     {
@@ -138,7 +138,7 @@
         "go": {"status": "unsupported", "expected": {"route": "http", "status_code": 501, "error": "unsupported_governance", "policy_decision": "unsupported", "signed_request": false}},
         "csharp": {"status": "unsupported", "expected": {"route": "http", "status_code": 501, "error": "unsupported_governance", "policy_decision": "unsupported", "signed_request": false}},
         "typescript": {"status": "unserved", "expected": {"error": "no_server_surface"}},
-        "cloudflare": {"status": "unsupported", "expected": {"status_code": 0, "error": "governance_not_configurable", "policy_decision": "unsupported", "signed_request": false}}
+        "cloudflare": {"status": "unsupported", "expected": {"route": "http", "status_code": 501, "error": "unsupported_governance", "policy_decision": "unsupported", "signed_request": false}}
       }
     },
     {
@@ -156,7 +156,7 @@
     {
       "id": "resume_stale_owner_cannot_steal_competing_owner",
       "input": {"operation": "resume_ownership", "case": "competing_owner", "route": "/ws/browser/{worker_id}/term", "worker_id": "lifecycle-resume-competing", "principal": "resume-user", "competing_principal": "new-owner"},
-      "expected": {"route": "browser_websocket", "status_code": 101, "resume_succeeded": true, "competing_owner_preserved": true},
+      "expected": {"route": "browser_websocket", "status_code": 101, "resume_succeeded": false, "competing_owner_preserved": true},
       "backends": {
         "python": {"status": "served", "expected": {}},
         "go": {"status": "served", "expected": {}},
@@ -174,7 +174,7 @@
         "go": {"status": "served", "expected": {}},
         "csharp": {"status": "served", "expected": {}},
         "typescript": {"status": "unserved", "expected": {"error": "no_server_surface"}},
-        "cloudflare": {"status": "served", "expected": {"error": "use_rest_hijack_api"}}
+        "cloudflare": {"status": "served", "expected": {"error": "not_owner"}}
       }
     }
   ]

@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 from provide.uterm.cloudflare.api.http_routes import route_http
@@ -58,6 +59,9 @@ class _Runtime:
 
     async def request_json(self, request: object) -> dict:
         return json.loads(getattr(request, "_body", "{}"))
+
+    def input_delivery_guard(self):
+        return nullcontext()
 
     async def browser_role_for_request(self, request: object) -> str:
         return self._role
@@ -168,7 +172,7 @@ async def test_send_bad_timeout_ms_uses_defaults() -> None:
 
 async def test_hijack_events_bad_limit_uses_default() -> None:
     """events with non-numeric limit falls back to default 100."""
-    runtime = _Runtime()
+    runtime = _Runtime(worker_ws=object())
     r1 = await route_http(
         runtime,
         _Req("https://x/worker/w/hijack/acquire", method="POST").with_body({"owner": "a", "lease_s": 60}),

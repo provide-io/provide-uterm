@@ -218,6 +218,27 @@ def test_restore_state_with_deleted_tombstone() -> None:
     assert rt._deleted_at is not None
 
 
+def test_restore_state_ignores_runtime_null_tombstone(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A Pyodide JsNull SQL value must not look like a deletion timestamp."""
+    rt = _make_runtime("w1")
+    runtime_null = object()
+    monkeypatch.setattr(
+        rt.store,
+        "load_session",
+        lambda _worker_id: {
+            "deleted_at": runtime_null,
+            "hijack_id": runtime_null,
+            "owner": runtime_null,
+            "lease_expires_at": runtime_null,
+            "last_snapshot": runtime_null,
+            "input_mode": runtime_null,
+        },
+    )
+    rt._restore_state()
+    assert rt._deleted_at is None
+    assert rt.lifecycle_state != "deleted"
+
+
 def test_restore_state_loads_meta_from_sqlite() -> None:
     """_restore_state loads session metadata from SQLite when present."""
     rt = _make_runtime("w1")

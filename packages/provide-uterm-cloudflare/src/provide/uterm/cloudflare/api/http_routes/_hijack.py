@@ -58,15 +58,18 @@ async def route_hijack(
         lease_s, lease_error = _parse_lease_s(payload)
         if lease_error is not None or lease_s is None:
             return json_response({"error": lease_error or "invalid lease_s"}, status=400)
-        result = runtime.hijack.acquire(owner, lease_s)
-        if not result.ok:
-            return json_response({"error": result.error}, status=409)
-        runtime.persist_lease(result.session)
-        # Only send pause on a fresh acquisition; a same-owner renewal leaves the
-        # worker already paused and a redundant pause frame could confuse workers
-        # that track pause/resume counts or that need to acknowledge a new hijack_id.
-        if not result.is_renewal:
-            await runtime.push_worker_control("pause", owner=owner, lease_s=lease_s)
+        async with runtime.input_delivery_guard():
+            result = runtime.hijack.acquire(owner, lease_s)
+            if not result.ok:
+                return json_response({"error": result.error}, status=409)
+            runtime.persist_lease(result.session)
+            # Only send pause on a fresh acquisition; a same-owner renewal leaves the
+            # worker already paused and a redundant pause frame could confuse workers
+            # that track pause/resume counts or that need to acknowledge a new hijack_id.
+            if not result.is_renewal and not await runtime.push_worker_control("pause", owner=owner, lease_s=lease_s):
+                runtime.hijack.release(result.session.hijack_id)
+                runtime.clear_lease()
+                return json_response({"error": "no_worker"}, status=409)
         await runtime.broadcast_hijack_state()
         return json_response(
             {
@@ -94,10 +97,11 @@ async def route_hijack(
         if callable(resolve_principal):
             principal, _ = await resolve_principal(request)
             owner = principal.subject_id if principal else owner
-        result = runtime.hijack.heartbeat(hijack_id, lease_s, owner=owner)
-        if not result.ok:
-            return json_response({"error": result.error}, status=409)
-        runtime.persist_lease(result.session)
+        async with runtime.input_delivery_guard():
+            result = runtime.hijack.heartbeat(hijack_id, lease_s, owner=owner)
+            if not result.ok:
+                return json_response({"error": result.error}, status=409)
+            runtime.persist_lease(result.session)
         await runtime.broadcast_hijack_state()
         return json_response(
             {
@@ -114,11 +118,12 @@ async def route_hijack(
         hijack_id = _extract_hijack_id(path)
         if not hijack_id:
             return json_response({"error": "not_found", "path": path}, status=404)
-        result = runtime.hijack.release(hijack_id)
-        if not result.ok:
-            return json_response({"error": result.error}, status=409)
-        runtime.clear_lease()
-        await runtime.push_worker_control("resume", owner="release", lease_s=0)
+        async with runtime.input_delivery_guard():
+            result = runtime.hijack.release(hijack_id)
+            if not result.ok:
+                return json_response({"error": result.error}, status=409)
+            runtime.clear_lease()
+            await runtime.push_worker_control("resume", owner="release", lease_s=0)
         await runtime.broadcast_hijack_state()
         return json_response({"ok": True, "worker_id": runtime.worker_id, "hijack_id": hijack_id})
 
@@ -128,13 +133,15 @@ async def route_hijack(
         hijack_id = _extract_hijack_id(path)
         if not hijack_id:
             return json_response({"error": "not_found", "path": path}, status=404)
-        if not runtime.hijack.can_send_input(hijack_id):
-            return json_response({"error": "not_hijack_owner"}, status=403)
-        owner = runtime.hijack.session.owner if runtime.hijack.session is not None else "unknown"
-        ok = await runtime.push_worker_control("step", owner=owner, lease_s=0)
-        if not ok:
-            return json_response({"error": "no_worker"}, status=409)
-        lease_expires_at = runtime.hijack.session.lease_expires_at if runtime.hijack.session is not None else None
+        async with runtime.input_delivery_guard():
+            if not runtime.hijack.can_send_input(hijack_id):
+                return json_response({"error": "not_hijack_owner"}, status=403)
+            session = runtime.hijack.session
+            owner = session.owner if session is not None else "unknown"
+            lease_expires_at = session.lease_expires_at if session is not None else None
+            ok = await runtime.push_worker_control("step", owner=owner, lease_s=0)
+            if not ok:
+                return json_response({"error": "no_worker"}, status=409)
         return json_response(
             {
                 "ok": True,
@@ -204,20 +211,24 @@ async def route_hijack(
         mode = str(payload.get("input_mode") or "")
         if mode not in {"hijack", "open"}:
             return json_response({"error": "input_mode must be 'hijack' or 'open'"}, status=400)
-        if mode == "open" and runtime.hijack.session is not None:
-            return json_response({"error": "Cannot switch to open while hijack is active."}, status=409)
-        runtime.input_mode = mode
-        runtime.store.save_input_mode(runtime.worker_id, mode)
+        async with runtime.input_delivery_guard():
+            if mode == "open" and runtime.hijack.session is not None:
+                return json_response({"error": "Cannot switch to open while hijack is active."}, status=409)
+            runtime.input_mode = mode
+            runtime.store.save_input_mode(runtime.worker_id, mode)
         await runtime.broadcast_hijack_state()
         return json_response({"ok": True, "input_mode": mode, "worker_id": runtime.worker_id})
 
     if path.endswith("/disconnect_worker") and method == "POST":
         if await runtime.browser_role_for_request(request) != "admin":
             return json_response({"error": "admin role required"}, status=403)
-        if runtime.worker_ws is None:
+        async with runtime.input_delivery_guard():
+            worker_ws = runtime.worker_ws
+            runtime.worker_ws = None
+        if worker_ws is None:
             return json_response({"error": "No worker connected."}, status=404)
         with contextlib.suppress(Exception):
-            runtime.worker_ws.close(1001, "disconnected by operator")
+            worker_ws.close(1001, "disconnected by operator")
         return json_response({"ok": True, "worker_id": runtime.worker_id})
 
     return None
@@ -240,11 +251,14 @@ async def _handle_hijack_send(
         return json_response({"error": "keys must be non-empty"}, status=400)
     if len(data) > _MAX_INPUT_CHARS:
         return json_response({"error": "keys too long", "max": _MAX_INPUT_CHARS}, status=400)
-    if not runtime.hijack.can_send_input(hijack_id):
-        return json_response({"error": "not_hijack_owner"}, status=403)
-    ok = await runtime.push_worker_input(data)
-    if not ok:
-        return json_response({"error": "no_worker"}, status=409)
+    async with runtime.input_delivery_guard():
+        if not runtime.hijack.can_send_input(hijack_id):
+            return json_response({"error": "not_hijack_owner"}, status=403)
+        session = runtime.hijack.session
+        lease_expires_at = session.lease_expires_at if session is not None else None
+        ok = await runtime.push_worker_input(data)
+        if not ok:
+            return json_response({"error": "no_worker"}, status=409)
     # Optional prompt guards — wait for screen to match before returning.
     expect_prompt_id = str(payload.get("expect_prompt_id") or "") or None
     expect_regex_raw = str(payload.get("expect_regex") or "") or None
@@ -271,7 +285,6 @@ async def _handle_hijack_send(
             timeout_ms=timeout_ms,
             poll_interval_ms=poll_interval_ms,
         )
-    session = runtime.hijack.session
     return json_response(
         {
             "ok": True,
@@ -279,6 +292,6 @@ async def _handle_hijack_send(
             "hijack_id": hijack_id,
             "sent": data,
             "matched_prompt_id": _extract_prompt_id(matched_snapshot),
-            "lease_expires_at": _mono_to_wall(session.lease_expires_at) if session is not None else None,
+            "lease_expires_at": _mono_to_wall(lease_expires_at),
         }
     )

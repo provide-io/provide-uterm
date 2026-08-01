@@ -307,7 +307,11 @@ def run_backend(root: Path, contract_path: Path, contract: dict[str, Any], backe
     """Run and compare one backend, without launching an unserved component."""
     if not applicable_ids(contract, backend):
         return []
-    errors, observations = collect_backend_observations(root, contract_path, backend)
+    # The Cloudflare adapter performs a real Python-Worker bundle and boots
+    # workerd through pywrangler before exercising the public routes.  Keep its
+    # budget explicit instead of weakening the timeout for every native port.
+    timeout_s = 300 if backend == "cloudflare" else 120
+    errors, observations = collect_backend_observations(root, contract_path, backend, timeout_s=timeout_s)
     return errors or compare_observations(contract, backend, observations)
 
 

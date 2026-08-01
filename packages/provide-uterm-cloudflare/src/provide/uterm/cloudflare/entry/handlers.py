@@ -150,6 +150,31 @@ async def _route_request(request: object, env: object, config: CloudflareConfig)
     # Public routes (no auth).
     if path == "/api/health":
         return json_response({"ok": True, "service": "provide-uterm-cloudflare", "environment": config.environment})  # ty:ignore[unresolved-attribute]
+    if path.startswith("/api/lifecycle/"):
+        auth_error = await _require_jwt(request, config)
+        if auth_error is not None:
+            return auth_error
+        if path == "/api/lifecycle/capabilities":
+            return json_response(
+                {
+                    "browser_quota": {
+                        "supported": False,
+                        "error": "per_principal_browser_quota_unsupported",
+                        "refusal_route": "/api/lifecycle/browser-quota",
+                    },
+                    "governance": {
+                        "supported": False,
+                        "error": "unsupported_governance",
+                        "refusal_route": "/api/lifecycle/governance",
+                    },
+                }
+            )
+        lifecycle_errors = {
+            "/api/lifecycle/browser-quota": "per_principal_browser_quota_unsupported",
+            "/api/lifecycle/governance": "unsupported_governance",
+        }
+        if path in lifecycle_errors:
+            return json_response({"error": lifecycle_errors[path], "supported": False}, status=501)
     if path.startswith("/assets/"):
         return _entry_attr("serve_asset")(path.removeprefix("/assets/"))
     if _STATIC_ASSET_PATH.match(path):

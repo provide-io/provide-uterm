@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import nullcontext
 from types import SimpleNamespace
 from typing import Any
 
@@ -53,6 +54,9 @@ class _CfRuntime:
         # Seed some events for recording
         self.store.append_event("w1", "snapshot", {"screen": "$ hello", "ts": 1000.0})
         self.store.append_event("w1", "term", {"data": "world", "ts": 1001.0})
+
+    def input_delivery_guard(self):
+        return nullcontext()
 
     async def browser_role_for_request(self, _req: object) -> str:
         return "admin"

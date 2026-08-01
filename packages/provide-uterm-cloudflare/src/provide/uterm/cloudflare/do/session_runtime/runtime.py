@@ -123,6 +123,10 @@ class SessionRuntime(
         # Durable Objects are single-addressed, but awaits in a fetch handler can
         # otherwise allow a second redemption to observe the same invite state.
         self._tunnel_invite_lock = asyncio.Lock()
+        # A Durable Object is single-threaded, but separate requests can interleave
+        # whenever a handler awaits worker I/O.  Keep ownership validation, worker
+        # delivery, and lease transitions in one serialized state-owner section.
+        self._input_delivery_lock = asyncio.Lock()
 
         # ushell — set for sessions whose worker_id starts with "ushell-".
         self._ushell: Any = None  # UshellConnector | None

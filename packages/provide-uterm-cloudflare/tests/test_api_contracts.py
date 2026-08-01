@@ -21,6 +21,7 @@ FastAPI reference:
 from __future__ import annotations
 
 import json
+from contextlib import nullcontext
 from types import SimpleNamespace
 from typing import get_type_hints
 
@@ -78,6 +79,9 @@ class _Runtime:
 
     async def request_json(self, request: object) -> dict:
         return json.loads(getattr(request, "_body", "{}"))
+
+    def input_delivery_guard(self):
+        return nullcontext()
 
     async def browser_role_for_request(self, request: object) -> str:
         return self._role

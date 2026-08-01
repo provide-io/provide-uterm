@@ -23,6 +23,8 @@ from provide.telemetry import get_tracer
 from provide.uterm.control_channel import encode_control_frame, encode_terminal_data
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
     from provide.uterm.cloudflare.bridge.hijack import HijackSession
     from provide.uterm.cloudflare.cf_types import CFWebSocket
     from provide.uterm.cloudflare.do._webhooks import fire_webhooks
@@ -63,6 +65,7 @@ logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
 
 _MAX_REQUEST_BODY = 65_536  # 64 KB — guard against memory exhaustion in DO sandbox
+_WORKER_SEND_TIMEOUT_S = 5.0
 
 # Cap on concurrent in-flight webhook-delivery tasks. Delivery is offloaded off
 # the broadcast critical path (so a slow webhook can't stall the DO frame loop);
@@ -112,16 +115,61 @@ class _SessionRuntimeIoMixin:
         input_mode: str
         browser_sockets: Any
         browser_hijack_owner: Any
+        browser_resume_tokens: dict[str, str]
         worker_ws: Any
         _ushell: Any
         raw_sockets: Any
         env: Any
         last_snapshot: Any
+        _input_delivery_lock: asyncio.Lock
 
         def ws_key(self, ws: Any) -> Any: ...
         def _socket_role(self, ws: Any) -> str: ...
+        def _remove_ws(self, ws: Any) -> None: ...
         async def _send_text(self, ws: Any, text: str) -> None: ...
         async def send_ws(self, ws: CFWebSocket, frame: dict[str, object]) -> None: ...
+
+    @contextlib.asynccontextmanager
+    async def input_delivery_guard(self) -> AsyncIterator[None]:
+        """Serialize ownership decisions, worker delivery, and lease changes."""
+        async with self._input_delivery_lock:
+            yield
+
+    async def register_worker_socket(self, ws: CFWebSocket) -> None:
+        """Install a worker only after earlier owned deliveries have settled."""
+        async with self.input_delivery_guard():
+            self.worker_ws = ws
+
+    async def unregister_worker_socket(self, ws: CFWebSocket) -> bool:
+        """Remove the active worker without crossing an owned delivery."""
+        async with self.input_delivery_guard():
+            if self.worker_ws is not ws:
+                return False
+            self.worker_ws = None
+            return True
+
+    async def remove_browser_socket(self, ws: CFWebSocket) -> bool:
+        """Persist resumability and release browser ownership atomically.
+
+        The potentially slow hijack-state broadcast is deliberately left to
+        the caller after this method releases the delivery guard.
+        """
+        ws_id = self.ws_key(ws)
+        released = False
+        async with self.input_delivery_guard():
+            active = self.hijack.session
+            owns_hijack = active is not None and self.browser_hijack_owner.get(ws_id) == active.hijack_id
+            if owns_hijack:
+                token = self.browser_resume_tokens.get(ws_id)
+                if token:
+                    self.store.mark_resume_hijack_owner(token, True)
+                result = self.hijack.release(active.hijack_id)
+                if result.ok:
+                    self.clear_lease()
+                    await self.push_worker_control("resume", owner="browser_disconnected", lease_s=0)
+                    released = True
+            self._remove_ws(ws)
+        return released
 
     # ------------------------------------------------------------------
     # State restore (called from SessionRuntime.__init__)
@@ -136,7 +184,9 @@ class _SessionRuntimeIoMixin:
         if row is None:
             return
         deleted_at = row.get("deleted_at")
-        if deleted_at is not None:
+        # Durable Object SQL exposes NULL as Pyodide's JsNull proxy rather than
+        # Python None.  Treat only real numeric timestamps as tombstones.
+        if isinstance(deleted_at, (float, int)):
             self._deleted_at = float(deleted_at)
             self.lifecycle_state = "deleted"
             return
@@ -218,41 +268,66 @@ class _SessionRuntimeIoMixin:
         )
 
     async def broadcast_hijack_state(self) -> None:
-        for ws_id, ws in list(self.browser_sockets.items()):
+        failed: list[CFWebSocket] = []
+        for ws in list(self.browser_sockets.values()):
             try:
                 await self.send_hijack_state(ws)
             except Exception:
-                self.browser_sockets.pop(ws_id, None)
-                self.browser_hijack_owner.pop(ws_id, None)
+                failed.append(ws)
+        for ws in failed:
+            await self.remove_browser_socket(ws)
 
     # ------------------------------------------------------------------
     # Worker I/O
     # ------------------------------------------------------------------
 
+    async def _send_worker_frame(self, payload: dict[str, object]) -> bool:
+        """Send to the current worker with a hard deadline.
+
+        A timed-out or failed socket is detached only if it is still current;
+        a concurrently installed replacement is never cleared by the old
+        socket's failure.
+        """
+        worker = self.worker_ws
+        if worker is None:
+            return False
+        try:
+            await asyncio.wait_for(self.send_ws(worker, payload), timeout=_WORKER_SEND_TIMEOUT_S)
+        except Exception as exc:
+            logger.warning("worker send failed worker_id=%s: %s", self.worker_id, exc)
+            if self.worker_ws is worker:
+                self.worker_ws = None
+            with contextlib.suppress(Exception):
+                worker.close(1011, "worker send failed")
+            return False
+        return True
+
     async def push_worker_control(self, action: str, *, owner: str, lease_s: int) -> bool:
         # ushell acknowledges control frames as no-ops (always returns True).
         if self._ushell is not None:
-            await self._ushell.handle_control(action)
-            return True
-        if self.worker_ws is None:
-            return False
-        await self.send_ws(
-            self.worker_ws,
+            try:
+                await asyncio.wait_for(self._ushell.handle_control(action), timeout=_WORKER_SEND_TIMEOUT_S)
+            except Exception as exc:
+                logger.warning("ushell control failed worker_id=%s: %s", self.worker_id, exc)
+                return False
+            else:
+                return True
+        return await self._send_worker_frame(
             {"type": "control", "action": action, "owner": owner, "lease_s": lease_s, "ts": time.time()},
         )
-        return True
 
     async def push_worker_input(self, data: str) -> bool:
         # Route input to ushell when active; fall back to external worker WS.
         if self._ushell is not None:
-            frames = await self._ushell.handle_input(data)
+            try:
+                frames = await asyncio.wait_for(self._ushell.handle_input(data), timeout=_WORKER_SEND_TIMEOUT_S)
+            except (TimeoutError, Exception) as exc:
+                logger.warning("ushell input failed worker_id=%s: %s", self.worker_id, exc)
+                return False
             for frame in frames:
                 await self.broadcast_to_browsers(frame)
             return True
-        if self.worker_ws is None:
-            return False
-        await self.send_ws(self.worker_ws, {"type": "input", "data": data, "ts": time.time()})
-        return True
+        return await self._send_worker_frame({"type": "input", "data": data, "ts": time.time()})
 
     def _all_live_sockets(self) -> list[Any]:
         """Enumerate all live WebSockets, resilient to CF hibernation.
@@ -273,6 +348,7 @@ class _SessionRuntimeIoMixin:
     async def broadcast_to_browsers(self, payload: dict[str, Any]) -> None:
         all_ws = self._all_live_sockets()
         frame_type = str(payload.get("type") or "")
+        failed: list[CFWebSocket] = []
         for ws in all_ws:
             if self._socket_role(ws) != "browser":
                 continue
@@ -314,9 +390,9 @@ class _SessionRuntimeIoMixin:
                     # guard and is dropped.
                     self._queue_bytes = max(0, self._queue_bytes - msg_len)
             except Exception:
-                self.browser_sockets.pop(ws_id, None)
-                self.browser_hijack_owner.pop(ws_id, None)
-                self._flow.forget(ws_id)
+                failed.append(ws)
+        for ws in failed:
+            await self.remove_browser_socket(ws)
         await self._apply_flow_control()
 
     async def _apply_flow_control(self) -> None:
@@ -422,13 +498,17 @@ class _SessionRuntimeIoMixin:
             return
         mono_now = time.monotonic()
         wall_now = time.time()
-        session = self.hijack.session
-        if session is not None and session.lease_expires_at <= mono_now:
-            logger.info("alarm: auto-releasing expired lease owner=%s", session.owner)
-            self.hijack.release(session.hijack_id)
-            self.clear_lease()
-            with contextlib.suppress(Exception):
-                await self.push_worker_control("resume", owner="lease_expired", lease_s=0)
+        expired = False
+        async with self.input_delivery_guard():
+            session = self.hijack._session
+            if session is not None and session.lease_expires_at <= mono_now:
+                logger.info("alarm: auto-releasing expired lease owner=%s", session.owner)
+                self.hijack.release(session.hijack_id)
+                self.clear_lease()
+                with contextlib.suppress(Exception):
+                    await self.push_worker_control("resume", owner="lease_expired", lease_s=0)
+                expired = True
+        if expired:
             await self.broadcast_hijack_state()
         if self.worker_ws is not None or (self._ushell is not None and self._ushell_started):
             await update_kv_session(

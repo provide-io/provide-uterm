@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -70,6 +71,9 @@ class _CfRuntime:
         self.last_analysis = None
         self.lifecycle_state = "stopped"
         self.input_mode = "hijack"
+
+    def input_delivery_guard(self):
+        return nullcontext()
 
     async def request_json(self, request: object) -> dict:
         return json.loads(getattr(request, "_body", "{}"))

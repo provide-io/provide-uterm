@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import time
 import uuid
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 from provide.uterm.cloudflare.api.http_routes import route_http
@@ -58,6 +59,9 @@ class _Runtime:
 
     async def request_json(self, request: object) -> dict:
         return json.loads(getattr(request, "_body", "{}"))
+
+    def input_delivery_guard(self):
+        return nullcontext()
 
     async def browser_role_for_request(self, request: object) -> str:
         return self._role

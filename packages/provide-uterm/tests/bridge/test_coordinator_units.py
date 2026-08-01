@@ -204,12 +204,23 @@ def test_session_property_returns_active() -> None:
 
 
 def test_session_property_clears_expired() -> None:
-    """The .session property purges an expired lease lazily."""
+    """The .session property hides an expired lease."""
     coord = HijackCoordinator()
     past = time.monotonic() - 100
     coord.acquire("owner", 1, now=past)
     # By now (real monotonic), the lease has long expired.
     assert coord.session is None
+
+
+def test_session_property_does_not_mutate_expired_state() -> None:
+    """An observational read must not perform an unfenced state transition."""
+    coord = HijackCoordinator()
+    past = time.monotonic() - 100
+    acquired = coord.acquire("owner", 1, now=past)
+    assert acquired.session is not None
+
+    assert coord.session is None
+    assert coord._session is acquired.session
 
 
 def test_active_session_expired_at_exact_boundary() -> None:

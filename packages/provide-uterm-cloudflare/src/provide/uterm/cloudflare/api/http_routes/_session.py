@@ -140,10 +140,11 @@ async def _set_mode(
     mode = str(payload.get("input_mode") or "")
     if mode not in {"hijack", "open"}:
         return json_response({"error": "input_mode must be 'hijack' or 'open'"}, status=400)
-    if mode == "open" and runtime.hijack.session is not None:
-        return json_response({"error": "Cannot switch to open while hijack is active."}, status=409)
-    runtime.input_mode = mode
-    runtime.store.save_input_mode(runtime.worker_id, mode)
+    async with runtime.input_delivery_guard():
+        if mode == "open" and runtime.hijack.session is not None:
+            return json_response({"error": "Cannot switch to open while hijack is active."}, status=409)
+        runtime.input_mode = mode
+        runtime.store.save_input_mode(runtime.worker_id, mode)
     await runtime.broadcast_hijack_state()
     return json_response({"ok": True, "input_mode": mode, "worker_id": runtime.worker_id})
 
@@ -175,23 +176,30 @@ async def _delete(
 ) -> object:
     if not await _can_mutate_session(runtime, request):
         return json_response({"error": "owner or admin role required"}, status=403)
-    runtime.lifecycle_state = "deleted"
-    runtime._deleted_at = time.time()  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
-    with contextlib.suppress(Exception):
-        runtime.store.mark_deleted(runtime.worker_id)
-    sockets = [
-        runtime.worker_ws,
-        *getattr(runtime, "browser_sockets", {}).values(),
-        *getattr(runtime, "raw_sockets", {}).values(),
-    ]
+    async with runtime.input_delivery_guard():
+        runtime.lifecycle_state = "deleted"
+        runtime._deleted_at = time.time()  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
+        with contextlib.suppress(Exception):
+            runtime.store.mark_deleted(runtime.worker_id)
+        sockets = [
+            runtime.worker_ws,
+            *getattr(runtime, "browser_sockets", {}).values(),
+            *getattr(runtime, "raw_sockets", {}).values(),
+        ]
+        runtime.worker_ws = None
+        for sockets_by_id in (getattr(runtime, "browser_sockets", None), getattr(runtime, "raw_sockets", None)):
+            if sockets_by_id is not None:
+                sockets_by_id.clear()
+        getattr(runtime, "browser_hijack_owner", {}).clear()
+        getattr(runtime, "browser_resume_tokens", {}).clear()
+        active = runtime.hijack.session
+        if active is not None:
+            runtime.hijack.release(active.hijack_id)
+            runtime.clear_lease()
     for sock in sockets:
         if sock is not None:
             with contextlib.suppress(Exception):
                 sock.close(1001, "session deleted")  # ty:ignore[unresolved-attribute]
-    runtime.worker_ws = None
-    for sockets_by_id in (getattr(runtime, "browser_sockets", None), getattr(runtime, "raw_sockets", None)):
-        if sockets_by_id is not None:
-            sockets_by_id.clear()
     ushell = getattr(runtime, "_ushell", None)
     if ushell is not None and bool(getattr(runtime, "_ushell_started", False)):
         with contextlib.suppress(Exception):
@@ -206,9 +214,12 @@ async def _restart(
     if not await _can_mutate_session(runtime, request):
         return json_response({"error": "owner or admin role required"}, status=403)
     runtime.last_snapshot = None
-    if runtime.worker_ws is not None:
+    async with runtime.input_delivery_guard():
+        worker_ws = runtime.worker_ws
+        runtime.worker_ws = None
+    if worker_ws is not None:
         with contextlib.suppress(Exception):
-            runtime.worker_ws.close(1001, "restart requested")
+            worker_ws.close(1001, "restart requested")
     return json_response({**_session_status_item(runtime), "restarted": True})
 
 
@@ -233,11 +244,12 @@ async def _disconnect(
 ) -> object:
     if not await _can_mutate_session(runtime, request):
         return json_response({"error": "owner or admin role required"}, status=403)
-    worker_ws = runtime.worker_ws
+    async with runtime.input_delivery_guard():
+        worker_ws = runtime.worker_ws
+        runtime.worker_ws = None
     if worker_ws is not None:
         with contextlib.suppress(Exception):
             worker_ws.close(1001, "disconnect requested")
-        runtime.worker_ws = None
     ushell = getattr(runtime, "_ushell", None)
     if ushell is not None and bool(getattr(runtime, "_ushell_started", False)):
         with contextlib.suppress(Exception):
