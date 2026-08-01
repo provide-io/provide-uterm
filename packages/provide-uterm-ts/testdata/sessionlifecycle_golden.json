@@ -631,6 +631,11 @@
       },
       "actions": [
         {
+          "kind": "mark_resume_hijack_owner",
+          "token": "recorded-resume-token",
+          "owner": true
+        },
+        {
           "kind": "remove_browser_socket",
           "released": true
         },
@@ -673,6 +678,32 @@
         {
           "kind": "remove_browser_socket",
           "released": false
+        }
+      ],
+      "closed": [],
+      "lifecycle_state": "starting",
+      "kv": []
+    },
+    {
+      "name": "a browser that held the hijack leaving a deleted session",
+      "case": {
+        "role": "browser",
+        "deleted": true,
+        "held_hijack": true,
+        "has_resume_token": true
+      },
+      "actions": [
+        {
+          "kind": "mark_resume_hijack_owner",
+          "token": "recorded-resume-token",
+          "owner": true
+        },
+        {
+          "kind": "remove_browser_socket",
+          "released": true
+        },
+        {
+          "kind": "broadcast_hijack_state"
         }
       ],
       "closed": [],
@@ -826,6 +857,11 @@
       },
       "actions": [
         {
+          "kind": "mark_resume_hijack_owner",
+          "token": "recorded-resume-token",
+          "owner": true
+        },
+        {
           "kind": "remove_browser_socket",
           "released": true
         },
@@ -868,6 +904,32 @@
         {
           "kind": "remove_browser_socket",
           "released": false
+        }
+      ],
+      "closed": [],
+      "lifecycle_state": "starting",
+      "kv": []
+    },
+    {
+      "name": "a browser that held the hijack leaving a deleted session",
+      "case": {
+        "role": "browser",
+        "deleted": true,
+        "held_hijack": true,
+        "has_resume_token": true
+      },
+      "actions": [
+        {
+          "kind": "mark_resume_hijack_owner",
+          "token": "recorded-resume-token",
+          "owner": true
+        },
+        {
+          "kind": "remove_browser_socket",
+          "released": true
+        },
+        {
+          "kind": "broadcast_hijack_state"
         }
       ],
       "closed": [],

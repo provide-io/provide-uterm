@@ -55,6 +55,14 @@ export interface SessionStateRecord {
   worker_generation: unknown;
 }
 
+/** The witness one cold runtime leaves behind when it starts. */
+export interface RuntimeActivationRecord {
+  /** The runtime's own identifier for this incarnation. */
+  incarnation: string;
+  /** How many times a runtime has activated for this session, from one. */
+  activation_seq: number;
+}
+
 /** One thing that happened to a session. */
 export interface SessionEvent {
   seq: number;
@@ -367,6 +375,70 @@ export class SqliteStateStore {
       now,
       now,
     );
+  }
+
+  /**
+   * Record the one worker generation allowed to publish or disconnect.
+   *
+   * A worker that reconnects is issued a new generation, and this is what
+   * says which one is current — so a socket left over from before, whose
+   * generation no longer matches, is fenced out rather than believed. `null`
+   * clears it, which is what a worker leaving for good does.
+   */
+  saveWorkerGeneration(workerId: string, generation: string | null): void {
+    this.#rows(
+      "INSERT INTO session_state(worker_id, worker_generation, updated_at) VALUES(?, ?, ?) " +
+        "ON CONFLICT(worker_id) DO UPDATE SET " +
+        "worker_generation=excluded.worker_generation, updated_at=excluded.updated_at",
+      workerId,
+      generation,
+      this.#now(),
+    );
+  }
+
+  /**
+   * Record that a cold runtime has started, and hand back the witness.
+   *
+   * The sequence counts activations rather than naming them, so a hibernation
+   * wake that brought a *new* runtime up is observable: the incarnation
+   * changes and the number goes up. Both are read back rather than assumed,
+   * because the row may have been written by the Python Worker sharing this
+   * storage.
+   */
+  recordRuntimeActivation(workerId: string, incarnation: string): RuntimeActivationRecord {
+    this.#rows(
+      `
+            INSERT INTO runtime_activations(worker_id, incarnation, activation_seq, activated_at)
+            VALUES(?, ?, 1, ?)
+            ON CONFLICT(worker_id) DO UPDATE SET
+                incarnation = excluded.incarnation,
+                activation_seq = runtime_activations.activation_seq + 1,
+                activated_at = excluded.activated_at
+            `,
+      workerId,
+      incarnation,
+      this.#now(),
+    );
+    const witness = this.loadRuntimeActivation(workerId);
+    if (witness === undefined) {
+      // An upsert that succeeded must be readable; a store that says
+      // otherwise is one nothing else here can be trusted against.
+      throw new Error("runtime activation witness was not persisted");
+    }
+    return witness;
+  }
+
+  /** The witness the last cold runtime left, if any has run. */
+  loadRuntimeActivation(workerId: string): RuntimeActivationRecord | undefined {
+    const row = this.#row("SELECT incarnation, activation_seq FROM runtime_activations WHERE worker_id = ?", workerId);
+    if (row === undefined) {
+      return undefined;
+    }
+    return {
+      // NOT NULL in the schema; the sequence is too, and counts from one.
+      incarnation: String(row.incarnation),
+      activation_seq: Number(supplied(row.activation_seq) ?? 0),
+    };
   }
 
   /** Record how input reaches the session. */

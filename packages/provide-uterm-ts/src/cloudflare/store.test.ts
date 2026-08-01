@@ -277,8 +277,8 @@ describe("a session's own state", () => {
   });
 
   it("reads a worker generation something else wrote", () => {
-    // Nothing here writes the generation yet; the Python Worker sharing the
-    // same storage does, and a delete must wipe it with the rest.
+    // The Python Worker shares this storage and writes the column too, and a
+    // delete must wipe it with the rest.
     const { subject, db } = store();
     db.prepare("INSERT INTO session_state(worker_id,worker_generation,updated_at) VALUES(?,?,?)").run("w1", "g7", 0);
     expect(subject.loadSession("w1")?.worker_generation).toBe("g7");
@@ -327,6 +327,98 @@ describe("a session's own state", () => {
     expect(session?.last_snapshot).toBeNull();
     expect(session?.event_seq).toBe(0);
     expect(session?.input_mode).toBe("hijack");
+  });
+});
+
+describe("which worker is allowed to speak", () => {
+  it("records the generation of record", () => {
+    // What fences a stale socket out: a worker that reconnected is issued a
+    // new generation, and one arriving under the old one is not the worker.
+    const { subject } = store();
+    subject.saveWorkerGeneration("w1", "g1");
+    expect(subject.loadSession("w1")?.worker_generation).toBe("g1");
+    subject.saveWorkerGeneration("w1", "g2");
+    expect(subject.loadSession("w1")?.worker_generation).toBe("g2");
+  });
+
+  it("clears it when the worker leaves for good", () => {
+    const { subject } = store();
+    subject.saveWorkerGeneration("w1", "g1");
+    subject.saveWorkerGeneration("w1", null);
+    expect(subject.loadSession("w1")?.worker_generation).toBeNull();
+  });
+
+  it("records one for a session with no row yet", () => {
+    const { subject } = store();
+    subject.saveWorkerGeneration("w9", "g1");
+    expect(subject.loadSession("w9")?.worker_generation).toBe("g1");
+  });
+
+  it("leaves the lease alone", () => {
+    // The generation says which socket speaks for the worker; it says nothing
+    // about who holds the keyboard.
+    const { subject } = store();
+    subject.saveLease({ workerId: "w1", hijackId: "h1", owner: "alice", leaseExpiresAt: NOW + 60 });
+    subject.saveWorkerGeneration("w1", "g1");
+    expect(subject.loadSession("w1")?.owner).toBe("alice");
+  });
+});
+
+describe("what a cold runtime leaves behind", () => {
+  it("says nothing about a session no runtime has started for", () => {
+    expect(store().subject.loadRuntimeActivation("missing")).toBeUndefined();
+  });
+
+  it("counts activations rather than naming them", () => {
+    // A hibernation wake that brought a new runtime up is observable: the
+    // incarnation changes and the number goes up.
+    const { subject } = store();
+    expect(subject.recordRuntimeActivation("w1", "incarnation-one")).toStrictEqual({
+      incarnation: "incarnation-one",
+      activation_seq: 1,
+    });
+    expect(subject.recordRuntimeActivation("w1", "incarnation-two")).toStrictEqual({
+      incarnation: "incarnation-two",
+      activation_seq: 2,
+    });
+  });
+
+  it("hands back what it just wrote", () => {
+    const { subject } = store();
+    const witness = subject.recordRuntimeActivation("w1", "incarnation-one");
+    expect(subject.loadRuntimeActivation("w1")).toStrictEqual(witness);
+  });
+
+  it("counts each session's activations separately", () => {
+    // Two sessions share one Durable Object's storage in tests; a witness
+    // that counted across them would report a wake that never happened.
+    const { subject } = store();
+    subject.recordRuntimeActivation("w1", "one");
+    subject.recordRuntimeActivation("w1", "two");
+    expect(subject.recordRuntimeActivation("w2", "three").activation_seq).toBe(1);
+    expect(subject.loadRuntimeActivation("w1")?.activation_seq).toBe(2);
+  });
+
+  it("reads a sequence that says nothing as none", () => {
+    // Written by something else against the same storage: a blank where a
+    // count should be reads as no activations rather than as a NaN.
+    const { subject, db } = store();
+    const insert = db.prepare(
+      "INSERT INTO runtime_activations(worker_id,incarnation,activation_seq,activated_at) VALUES(?,?,?,?)",
+    );
+    insert.run("w1", "one", "", 0);
+    insert.run("w2", "two", 0, 0);
+    expect(subject.loadRuntimeActivation("w1")?.activation_seq).toBe(0);
+    expect(subject.loadRuntimeActivation("w2")?.activation_seq).toBe(0);
+  });
+
+  it("refuses to report a witness it cannot read back", () => {
+    // An upsert that succeeded must be readable; a store that says otherwise
+    // is one nothing else here can be trusted against, so it is not believed.
+    const exec: SqlExecutor = () => undefined;
+    const subject = new SqliteStateStore(exec);
+    expect(() => subject.recordRuntimeActivation("w1", "one")).toThrow("runtime activation witness was not persisted");
+    expect(subject.loadRuntimeActivation("w1")).toBeUndefined();
   });
 });
 

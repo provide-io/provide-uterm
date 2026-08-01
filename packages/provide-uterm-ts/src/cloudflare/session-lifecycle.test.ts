@@ -84,6 +84,7 @@ function closeState(record: RecordedCase): SocketCloseState {
     wsId: golden.ws_id,
     presence: record.presence ?? false,
     heldHijack: record.held_hijack ?? false,
+    resumeToken: (record.has_resume_token ?? false) ? golden.resume_token : undefined,
     workerCurrent: record.worker_current ?? true,
     now: golden.fixed_ts,
   };
@@ -272,6 +273,29 @@ describe("a socket going", () => {
     expect(actions.some((action) => action.kind === "broadcast_hijack_state")).toBe(false);
   });
 
+  it("marks the token of the browser that was driving, before it goes", () => {
+    // Without the mark a reconnecting admin comes back a plain viewer with
+    // every keystroke fenced, so the record has to outlive the socket.
+    const actions = onSocketClose(closeState({ held_hijack: true, has_resume_token: true }));
+    expect(actions[0]).toEqual({ kind: "mark_resume_hijack_owner", token: golden.resume_token, owner: true });
+  });
+
+  it("marks nothing for a browser that was not driving", () => {
+    // The token records ownership, not attendance.
+    const actions = onSocketClose(closeState({ held_hijack: false, has_resume_token: true }));
+    expect(actions.some((action) => action.kind === "mark_resume_hijack_owner")).toBe(false);
+  });
+
+  it("marks nothing when there is no token to mark", () => {
+    // A browser that was never issued one — or that holds a blank, which a
+    // Durable Object with resume off leaves behind — has nothing to record.
+    for (const resumeToken of [undefined, ""]) {
+      const actions = onSocketClose({ ...closeState({ held_hijack: true }), resumeToken });
+      expect(actions.some((action) => action.kind === "mark_resume_hijack_owner")).toBe(false);
+      expect(actions).toContainEqual({ kind: "remove_browser_socket", released: true });
+    }
+  });
+
   it("tells the others somebody left, when the session tracks presence", () => {
     expect(onSocketClose(closeState({ presence: true }))).toContainEqual({
       kind: "broadcast_browsers",
@@ -283,10 +307,15 @@ describe("a socket going", () => {
   });
 
   it("skips the presence goodbye on a deleted session but still releases", () => {
-    // Nobody is left to say goodbye to, yet the hijack still goes with the
-    // socket and its release is still broadcast.
+    // Nobody is left to say goodbye to, yet the token is still marked, the
+    // hijack still goes with the socket and its release is still broadcast.
     const actions = onSocketClose(closeState({ presence: true, deleted: true, held_hijack: true }));
     expect(actions).toEqual([{ kind: "remove_browser_socket", released: true }, { kind: "broadcast_hijack_state" }]);
+    expect(onSocketClose(closeState({ deleted: true, held_hijack: true, has_resume_token: true }))[0]).toEqual({
+      kind: "mark_resume_hijack_owner",
+      token: golden.resume_token,
+      owner: true,
+    });
   });
 
   it("still records a worker as disconnected on a deleted session", () => {
