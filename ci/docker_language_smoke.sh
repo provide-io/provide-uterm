@@ -15,6 +15,15 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+# Host ports the smoke containers are published on. Each container always
+# listens on 27780 inside; only the host side varies. Overridable because a
+# developer machine may already be using these — see the preflight in
+# `run_and_curl`, which refuses to curl a port it did not start.
+SMOKE_PORT_PYTHON="${SMOKE_PORT_PYTHON:-27780}"
+SMOKE_PORT_GO="${SMOKE_PORT_GO:-27781}"
+SMOKE_PORT_CSHARP="${SMOKE_PORT_CSHARP:-27782}"
+CONTAINER_PORT=27780
+
 EVIDENCE_DIR="${EVIDENCE_DIR:-${SCRATCH:-}}"
 if [[ -z "${EVIDENCE_DIR}" ]]; then
   if [[ -n "${RUNNER_TEMP:-}" ]]; then
@@ -64,12 +73,21 @@ build_one() {
 run_and_curl() {
   local lang="$1" tag name port
   case "${lang}" in
-    python) tag=provide-uterm-server:local; name=uterm-smoke-py; port=27780 ;;
-    go)     tag=provide-uterm-server-go:local; name=uterm-smoke-go; port=27781 ;;
-    csharp) tag=provide-uterm-server-csharp:local; name=uterm-smoke-cs; port=27782 ;;
+    python) tag=provide-uterm-server:local; name=uterm-smoke-py; port="${SMOKE_PORT_PYTHON}" ;;
+    go)     tag=provide-uterm-server-go:local; name=uterm-smoke-go; port="${SMOKE_PORT_GO}" ;;
+    csharp) tag=provide-uterm-server-csharp:local; name=uterm-smoke-cs; port="${SMOKE_PORT_CSHARP}" ;;
   esac
   docker rm -f "${name}" 2>/dev/null || true
-  docker run -d --name "${name}" -p "${port}:27780" \
+  # Refuse to run against a port something else already holds. Without this the
+  # curl below happily reaches the foreign service and reports its answer as the
+  # image's — a false pass, or a false failure, either way not this image.
+  if lsof -nP -iTCP:"${port}" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "FAIL: host port ${port} is already in use, so the ${lang} smoke would test whatever holds it." >&2
+    lsof -nP -iTCP:"${port}" -sTCP:LISTEN >&2 || true
+    echo "Free it, or re-run with SMOKE_PORT_$(echo "${lang}" | tr '[:lower:]' '[:upper:]')=<free port>." >&2
+    exit 1
+  fi
+  docker run -d --name "${name}" -p "${port}:${CONTAINER_PORT}" \
     -v "${RUN_CFG}:/etc/uterm:ro" \
     "${tag}"
   local i body code=000
