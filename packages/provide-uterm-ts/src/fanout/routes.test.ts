@@ -3,177 +3,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
+/**
+ * The fan-out REST surface, minus group creation, which is held on its own in
+ * `routes-create.test.ts`.
+ */
+
 import { describe, expect, it } from "vitest";
-import type { AuthorizablePrincipal } from "../server/authorization.ts";
-import { loadGolden } from "../testing/golden.ts";
-import {
-  createFanoutRoutes,
-  FANOUT_ROUTE_PATHS,
-  type FanOutGroup,
-  type FanOutResult,
-  type FanoutRoutesController,
-  type FanoutRoutesOptions,
-  fanOutGroup,
-} from "./index.ts";
-
-interface RoutesGolden {
-  routes: string[];
-  disabled: Record<string, { status: number; body: { detail: string } }>;
-  create_defaults: {
-    response: { status: number; body: Record<string, unknown> };
-    group: Record<string, unknown>;
-    group_id_length: number;
-    group_id_is_hex: boolean;
-  };
-  create_full: { response: { status: number; body: Record<string, unknown> }; group: Record<string, unknown> };
-  create_forbidden: { status: number; body: { error: string } };
-  create_unknown_session: { status: number; body: Record<string, unknown> };
-  create_rejected: { status: number; body: { error: string } };
-  list: { status: number; body: Array<Record<string, unknown>> };
-  missing: Record<string, { status: number; body: { error: string } }>;
-  not_creator: Record<string, { status: number; body: { error: string } }>;
-  send: { status: number; body: Record<string, unknown> };
-  send_defaults_call: [string, string, string, string, number | null, number | null];
-  grant: { status: number; body: null };
-  grant_default_call: [string, string, string, string];
-  delete: { status: number; body: null };
-  delete_removed_it: boolean;
-  audit: Array<{ event: string; principal: string; detail: Record<string, unknown> }>;
-  audit_command_length: number;
-  malformed_body: Record<string, string | null>;
-}
-
-const golden = loadGolden<RoutesGolden>("fanout_routes_golden.json");
-
-const PRINCIPAL = "operator@example.org";
-const OTHER = "intruder@example.org";
-
-/** A controller that records what the routes asked of it. */
-class FakeController implements FanoutRoutesController {
-  readonly groups = new Map<string, FanOutGroup>();
-  readonly calls: unknown[][] = [];
-  createError: unknown;
-  sendResult: FanOutResult | undefined;
-  allowUnknownMembers = false;
-  /** Mirrors the harness fixtures: w1..w3 readable, anything else refused. */
-  readonly readable = new Set(["w1", "w2", "w3"]);
-
-  async validateMembers(workerIds: string[], principal: AuthorizablePrincipal): Promise<[string[], string[]]> {
-    this.calls.push(["validate_members", [...workerIds], principal.subject_id]);
-    return [
-      workerIds.filter((workerId) => this.readable.has(workerId)),
-      workerIds.filter((workerId) => !this.readable.has(workerId)),
-    ];
-  }
-
-  async createGroup(group: FanOutGroup, principal: string): Promise<string> {
-    this.calls.push(["create_group", group.groupId, principal]);
-    if (this.createError !== undefined) {
-      throw this.createError;
-    }
-    this.groups.set(group.groupId, group);
-    return group.groupId;
-  }
-
-  async listGroups(principal: string): Promise<FanOutGroup[]> {
-    this.calls.push(["list_groups", principal]);
-    return [...this.groups.values()];
-  }
-
-  async getGroup(groupId: string, principal: string): Promise<FanOutGroup | undefined> {
-    this.calls.push(["get_group", groupId, principal]);
-    return this.groups.get(groupId);
-  }
-
-  async deleteGroup(groupId: string, principal: string): Promise<void> {
-    this.calls.push(["delete_group", groupId, principal]);
-    this.groups.delete(groupId);
-  }
-
-  async grantAccess(groupId: string, grantee: string, principal: string): Promise<void> {
-    this.calls.push(["grant_access", groupId, grantee, principal]);
-  }
-
-  async send(
-    groupId: string,
-    data: string,
-    principal: AuthorizablePrincipal,
-    options: {
-      quiesceMs?: number | undefined;
-      maxResponseMs?: number | undefined;
-    },
-  ): Promise<FanOutResult> {
-    const call: unknown[] = [
-      "send",
-      groupId,
-      data,
-      principal.subject_id,
-      options.quiesceMs ?? null,
-      options.maxResponseMs ?? null,
-    ];
-    this.calls.push(call);
-    if (this.sendResult !== undefined) {
-      return this.sendResult;
-    }
-    return {
-      groupId,
-      sendId: "send-1",
-      command: data,
-      sentAt: 1000.0,
-      results: [
-        { workerId: "w1", ok: true, outputDelta: "ok", elapsedMs: 12, divergent: false },
-        { workerId: "w2", ok: false, outputDelta: undefined, elapsedMs: 34, divergent: true },
-      ],
-      divergentSessions: ["w2"],
-      failedSessions: ["w2"],
-      error: null,
-      approvalRequired: false,
-      approvalId: null,
-    };
-  }
-}
-
-/** The routes, plus everything behind them. */
-function harness(
-  options: { controller?: FanoutRoutesController; readable?: string[]; allowUnknownMembers?: boolean } = {},
-) {
-  const controller = options.controller ?? new FakeController();
-  if (options.allowUnknownMembers !== undefined && controller instanceof FakeController) {
-    controller.allowUnknownMembers = options.allowUnknownMembers;
-  }
-  const known = new Set([...(options.readable ?? ["w1", "w2", "w3"]), "secret"]);
-  const audited: Array<{ event: string; principal: string; detail: Record<string, unknown> }> = [];
-  let counter = 0;
-  const deps: FanoutRoutesOptions = {
-    controller,
-    registry: {
-      getDefinition: async (workerId: string) => (known.has(workerId) ? { workerId } : undefined),
-    },
-    authz: {
-      isAdmin: async (principal) => principal.roles.has("admin") && (principal.admin_session_scope ?? null) === null,
-    },
-    audit: (event, record) => audited.push({ event, ...record }),
-    now: () => 1000.0,
-    newId: () => {
-      counter += 1;
-      return `0000000000000000000000000000000${counter}`;
-    },
-  };
-  return { routes: createFanoutRoutes(deps), controller: controller as FakeController, audited };
-}
-
-/** A request from `principal`, carrying `body`. */
-function request(principal: string, body?: unknown) {
-  return {
-    principal: { subject_id: principal, roles: new Set(["admin"]), scopes: new Set<string>() },
-    ...(body === undefined ? {} : { body }),
-  };
-}
-
-/** Replace the generated identifier so a response can be compared. */
-function withoutId(body: unknown): unknown {
-  return { ...(body as Record<string, unknown>), group_id: "<uuid>" };
-}
+import { FakeController, golden, harness, OTHER, PRINCIPAL, request } from "../testing/fanout-routes-harness.ts";
+import { createFanoutRoutes, FANOUT_ROUTE_PATHS, type FanoutRoutesController, fanOutGroup } from "./index.ts";
 
 describe("the route table", () => {
   it("matches the reference", () => {
@@ -191,7 +28,8 @@ describe("the global-admin boundary", () => {
         isAdmin: async () => {
           throw new Error("authorizer unavailable");
         },
-      } as FanoutRoutesOptions["authz"],
+        canReadSession: async () => true,
+      },
     });
 
     const response = await routes.listGroups(request(PRINCIPAL));
@@ -210,7 +48,8 @@ describe("the global-admin boundary", () => {
       registry: { getDefinition: async () => undefined },
       authz: {
         isAdmin: async () => false,
-      } as FanoutRoutesOptions["authz"],
+        canReadSession: async () => true,
+      },
     });
     const viewer = {
       subjectId: PRINCIPAL,
@@ -254,6 +93,7 @@ describe("the global-admin boundary", () => {
       registry: { getDefinition: async () => undefined },
       authz: {
         isAdmin: async (candidate) => candidate.roles.has("admin") && (candidate.admin_session_scope ?? null) === null,
+        canReadSession: async () => true,
       },
     });
 
@@ -271,7 +111,7 @@ describe("when the feature is off", () => {
     const { routes } = harness({ controller: undefined as unknown as FanoutRoutesController });
     const off = createFanoutRoutes({
       registry: { getDefinition: async () => undefined },
-      authz: { isAdmin: async () => true },
+      authz: { isAdmin: async () => true, canReadSession: async () => true },
     });
     void routes;
     const responses = [
@@ -285,144 +125,6 @@ describe("when the feature is off", () => {
     for (const response of responses) {
       expect(response).toStrictEqual(expected);
     }
-  });
-});
-
-describe("creating a group", () => {
-  it("fills in every default", async () => {
-    const { routes, controller } = harness();
-    const response = await routes.createGroup(request(PRINCIPAL, {}));
-    expect({ ...response, body: withoutId(response.body) }).toStrictEqual(golden.create_defaults.response);
-    const group = [...controller.groups.values()][0] as FanOutGroup;
-    expect({
-      created_by: group.createdBy,
-      divergence_threshold: group.divergenceThreshold,
-      error_pattern: group.errorPattern ?? null,
-      grants: group.grants,
-      max_response_ms: group.maxResponseMs,
-      mode: group.mode,
-      name: group.name,
-      quiesce_ms: group.quiesceMs,
-      stop_on_first_error: group.stopOnFirstError,
-      worker_ids: group.workerIds,
-    }).toStrictEqual(golden.create_defaults.group);
-  });
-
-  it("carries every field through when they are given", async () => {
-    const { routes, controller } = harness();
-    const response = await routes.createGroup(
-      request(PRINCIPAL, {
-        worker_ids: ["w1", "w2"],
-        name: "prod fleet",
-        mode: "sequential",
-        stop_on_first_error: true,
-        error_pattern: "ERROR",
-        quiesce_ms: 100,
-        max_response_ms: 2000,
-        divergence_threshold: 0.5,
-      }),
-    );
-    expect({ ...response, body: withoutId(response.body) }).toStrictEqual(golden.create_full.response);
-    const group = [...controller.groups.values()][0] as FanOutGroup;
-    expect({
-      created_by: group.createdBy,
-      divergence_threshold: group.divergenceThreshold,
-      error_pattern: group.errorPattern ?? null,
-      grants: group.grants,
-      max_response_ms: group.maxResponseMs,
-      mode: group.mode,
-      name: group.name,
-      quiesce_ms: group.quiesceMs,
-      stop_on_first_error: group.stopOnFirstError,
-      worker_ids: group.workerIds,
-    }).toStrictEqual(golden.create_full.group);
-  });
-
-  it("refuses a session the caller cannot read", async () => {
-    // Otherwise a group is a way to reach sessions the caller was never
-    // allowed to see.
-    const { routes, controller } = harness();
-    const response = await routes.createGroup(request(PRINCIPAL, { worker_ids: ["w1", "secret"] }));
-    expect(response).toStrictEqual(golden.create_forbidden);
-    expect(controller.groups.size).toBe(0);
-  });
-
-  it("names the session it refused", async () => {
-    expect(golden.create_forbidden.body.error).toContain("secret");
-  });
-
-  it("rejects a session it has never heard of by default", async () => {
-    const { routes, controller } = harness();
-    const response = await routes.createGroup(request(PRINCIPAL, { worker_ids: ["never-registered"] }));
-    expect(response).toStrictEqual({ status: 400, body: { error: "unknown fan-out session: never-registered" } });
-    expect(controller.groups.size).toBe(0);
-  });
-
-  it("allows dormant members only when explicitly configured", async () => {
-    // The gate is the controller's own, not the routes': the corpus records a
-    // strict controller refusing an unknown member with a 400 and no group.
-    const { routes: strict } = harness();
-    const refused = await strict.createGroup(request(PRINCIPAL, { worker_ids: ["never-registered"] }));
-    expect(refused.status).toBe(golden.create_unknown_session.status);
-    expect((refused.body as Record<string, unknown>).session_count).toBe(
-      golden.create_unknown_session.body.session_count,
-    );
-
-    const { routes, controller } = harness({ allowUnknownMembers: true });
-    const response = await routes.createGroup(request(PRINCIPAL, { worker_ids: ["never-registered"] }));
-    expect(response.status).toBe(200);
-    expect((response.body as Record<string, unknown>).session_count).toBe(1);
-    expect(controller.groups.size).toBe(1);
-  });
-
-  it("still refuses a forbidden member in dormant mode", async () => {
-    // The opt-in admits unknown members only; a known-but-unreadable session
-    // is refused exactly as before.
-    const { routes, controller } = harness({ allowUnknownMembers: true });
-    const response = await routes.createGroup(request(PRINCIPAL, { worker_ids: ["never-registered", "secret"] }));
-    expect(response).toStrictEqual({ status: 403, body: { error: "forbidden: no read access to session secret" } });
-    expect(controller.groups.size).toBe(0);
-  });
-
-  it("names an unknown member ahead of a forbidden one", async () => {
-    // The reference classifies the whole refused set before answering, so the
-    // unknown-member 400 wins even when a forbidden member comes first.
-    const { routes } = harness();
-    const response = await routes.createGroup(request(PRINCIPAL, { worker_ids: ["secret", "never-registered"] }));
-    expect(response).toStrictEqual({ status: 400, body: { error: "unknown fan-out session: never-registered" } });
-  });
-
-  it("passes a controller refusal back as a 400", async () => {
-    const controller = new FakeController();
-    controller.createError = new Error("group too large: 99 > 50");
-    const { routes } = harness({ controller });
-    expect(await routes.createGroup(request(PRINCIPAL, { worker_ids: ["w1"] }))).toStrictEqual(golden.create_rejected);
-  });
-
-  it("lets a failure that is not a refusal through", async () => {
-    // A bug in the controller is not a client error, and dressing it as one
-    // would send the caller looking at their own request.
-    const controller = new FakeController();
-    controller.createError = new TypeError("controller is broken");
-    const { routes } = harness({ controller });
-    await expect(routes.createGroup(request(PRINCIPAL, { worker_ids: ["w1"] }))).rejects.toThrow(TypeError);
-  });
-
-  it("gives the group a fresh identifier", async () => {
-    const { routes, controller } = harness();
-    await routes.createGroup(request(PRINCIPAL, {}));
-    await routes.createGroup(request(PRINCIPAL, {}));
-    expect(controller.groups.size).toBe(2);
-    const [first, second] = [...controller.groups.keys()];
-    expect(first).not.toBe(second);
-  });
-
-  it("stamps the creator and the time", async () => {
-    const { routes, controller } = harness();
-    await routes.createGroup(request(PRINCIPAL, {}));
-    const group = [...controller.groups.values()][0] as FanOutGroup;
-    expect(group.createdBy).toBe(PRINCIPAL);
-    expect(group.createdAt).toBe(1000.0);
   });
 });
 
@@ -753,7 +455,7 @@ describe("the audit trail", () => {
     const routes = createFanoutRoutes({
       controller: new FakeController(),
       registry: { getDefinition: async () => undefined },
-      authz: { isAdmin: async () => true },
+      authz: { isAdmin: async () => true, canReadSession: async () => true },
     });
     expect((await routes.createGroup(request(PRINCIPAL, {}))).status).toBe(200);
   });

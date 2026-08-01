@@ -175,10 +175,47 @@ export class FanOutController {
   }
 
   /**
+   * Every authorizer the controller needs, or undefined when one is missing.
+   *
+   * Returned together so a caller that has them is holding all three, rather
+   * than checking one and reaching for another.
+   */
+  #authorizers():
+    | {
+        isGlobalAdmin: (principal: AuthorizablePrincipal) => Promise<boolean>;
+        resolveSession: (workerId: string) => Promise<unknown | undefined>;
+        canReadSession: (principal: AuthorizablePrincipal, definition: unknown) => Promise<boolean>;
+      }
+    | undefined {
+    const isGlobalAdmin = this.#isGlobalAdmin;
+    const resolveSession = this.#resolveSession;
+    const canReadSession = this.#canReadSession;
+    if (isGlobalAdmin === undefined || resolveSession === undefined || canReadSession === undefined) {
+      return undefined;
+    }
+    return { isGlobalAdmin, resolveSession, canReadSession };
+  }
+
+  /**
+   * Whether every authorizer the controller needs is wired.
+   *
+   * A controller missing one cannot judge access at all, so callers refuse
+   * rather than proceed on whatever the remaining ones happen to allow.
+   */
+  get authorizationReady(): boolean {
+    return this.#authorizers() !== undefined;
+  }
+
+  /**
    * Split members into currently authorized and refused, for `principal`.
    *
    * With no way to resolve sessions or check read access, everything is
    * refused: admission cannot be verified, so nothing is admitted.
+   *
+   * This is the controller's own view, used to narrow a dispatch to the
+   * members the caller may still reach — group admission is decided by the
+   * routes against the session registry, so that a controller wired to a
+   * wider view cannot widen access.
    */
   async validateMembers(workerIds: string[], principal: AuthorizablePrincipal): Promise<[string[], string[]]> {
     if (this.#resolveSession === undefined || this.#canReadSession === undefined) {
@@ -321,11 +358,12 @@ export class FanOutController {
     if (principal === undefined || typeof principal !== "object" || typeof principal.subject_id !== "string") {
       return { error: this.#errorResult(groupId, data, "authenticated principal required") };
     }
-    if (this.#isGlobalAdmin === undefined || this.#resolveSession === undefined || this.#canReadSession === undefined) {
+    const authorizers = this.#authorizers();
+    if (authorizers === undefined) {
       return { error: this.#errorResult(groupId, data, "fan-out authorization is unavailable") };
     }
     try {
-      if (!(await this.#isGlobalAdmin(principal))) {
+      if (!(await authorizers.isGlobalAdmin(principal))) {
         return { error: this.#errorResult(groupId, data, "global admin role required") };
       }
     } catch {
@@ -342,8 +380,8 @@ export class FanOutController {
     const refused: string[] = [];
     for (const workerId of group.workerIds) {
       try {
-        const definition = await this.#resolveSession(workerId);
-        if (definition !== undefined && (await this.#canReadSession(principal, definition))) {
+        const definition = await authorizers.resolveSession(workerId);
+        if (definition !== undefined && (await authorizers.canReadSession(principal, definition))) {
           allowed.push(workerId);
         } else {
           refused.push(workerId);

@@ -146,6 +146,20 @@ describe("FanOutController member admission", () => {
     expect(await halfway.validateMembers(["w1"], actor("alice"))).toStrictEqual([[], ["w1"]]);
   });
 
+  it("reports whether it can judge access at all", () => {
+    // The create route consults this before admitting anything: a controller
+    // missing one authorizer must not admit members on the strength of the
+    // checks that remain.
+    const options = { hub: new FakeHub(), now: () => NOW, newId: () => "id-1" };
+    expect(new FanOutController(options).authorizationReady).toBe(false);
+    expect(new FanOutController({ ...options, isGlobalAdmin: async () => true }).authorizationReady).toBe(false);
+    expect(
+      new FanOutController({ ...options, isGlobalAdmin: async () => true, resolveSession: async () => ({}) })
+        .authorizationReady,
+    ).toBe(false);
+    expect(build().controller.authorizationReady).toBe(true);
+  });
+
   it("refuses dormant members by default and admits them only on the explicit flag", () => {
     // The flag the create route consults; the controller itself only carries
     // it.

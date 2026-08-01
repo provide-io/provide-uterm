@@ -31,7 +31,14 @@ interface ScenarioInput {
   operation: string;
   actor: ActorInput;
   group: GroupInput;
-  visibility: { readable_members: string[]; revoke_before_send: string[] };
+  visibility: {
+    readable_members: string[];
+    /** The sessions the routes' registry knows. Absent means the readable ones. */
+    registered_members?: string[];
+    /** What the controller's own authorizer sees. Absent means the readable ones. */
+    controller_readable_members?: string[];
+    revoke_before_send: string[];
+  };
   policy: { action: "allow" | "deny" | "hold_release" };
   workers: {
     accepted_members: string[];
@@ -138,6 +145,8 @@ function canonicalRouteError(status: number, body: unknown): string | null {
   if (status === 401) return "authentication_required";
   if (message.includes("admin")) return "global_admin_required";
   if (message.includes("unknown fan-out")) return "unknown_member";
+  if (message.includes("no read access")) return "member_read_forbidden";
+  if (message.includes("authorization")) return "authorization_unavailable";
   return message || "request_failed";
 }
 
@@ -174,7 +183,9 @@ function fromResult(scenario: Scenario, result: FanOutResult, hub: ScenarioHub, 
 }
 
 async function buildController(input: ScenarioInput): Promise<{ controller: FanOutController; hub: ScenarioHub }> {
-  const readable = new Set(input.visibility.readable_members);
+  // A fixture may give the controller a wider view than the server has, to
+  // prove that admission still follows the server's answer.
+  const readable = new Set(input.visibility.controller_readable_members ?? input.visibility.readable_members);
   for (const revoked of input.visibility.revoke_before_send) readable.delete(revoked);
   const hub = new ScenarioHub(new Set(input.workers.accepted_members), input.workers.immediate_output);
   const policy = input.policy.action;
@@ -214,10 +225,29 @@ async function buildController(input: ScenarioInput): Promise<{ controller: FanO
   return { controller, hub };
 }
 
+/**
+ * The members the routes' session registry knows about.
+ *
+ * A readable session must exist to be readable, so the visible set is the
+ * floor; a fixture naming `registered_members` adds the sessions that exist
+ * without being readable, which is what separates an unknown member from a
+ * forbidden one.
+ */
+function registeredMembers(input: ScenarioInput): Set<string> {
+  const registered = new Set(input.visibility.registered_members ?? input.visibility.readable_members);
+  for (const workerId of input.visibility.readable_members) registered.add(workerId);
+  return registered;
+}
+
 async function executeRest(scenario: Scenario): Promise<Observation> {
   const input = scenario.input;
   const built = await buildController(input);
-  const definitions = new Set(input.visibility.readable_members);
+  const definitions = registeredMembers(input);
+  // The route reads access off the same authorizer the rest of the server
+  // does, so the fixture's visible set has to answer there too — otherwise a
+  // registered member is readable purely because the actor is an admin.
+  const readable = new Set(input.visibility.readable_members);
+  for (const revoked of input.visibility.revoke_before_send) readable.delete(revoked);
   const routes = createFanoutRoutes({
     controller: routeController(built.controller),
     registry: {
@@ -225,6 +255,7 @@ async function executeRest(scenario: Scenario): Promise<Observation> {
     },
     authz: {
       isAdmin: async (principal) => principal.roles.has("admin") && (principal.admin_session_scope ?? null) === null,
+      canReadSession: async (_principal, definition) => readable.has((definition as { workerId: string }).workerId),
     },
     now: () => 1,
     newId: () => input.group.id,
@@ -340,10 +371,14 @@ function sendOptions(maxResponseMs: number | undefined): SendOptions {
 
 function routeController(controller: FanOutController): FanoutRoutesController {
   return {
+    // Read through rather than copied: a fixture that omits the authorizers
+    // has to reach the routes as a controller that cannot judge access.
+    get authorizationReady() {
+      return controller.authorizationReady;
+    },
     get allowUnknownMembers() {
       return controller.allowUnknownMembers;
     },
-    validateMembers: (workerIds, principal) => controller.validateMembers(workerIds, principal),
     createGroup: (group, principal) => controller.createGroup(group, principal),
     listGroups: (principal) => controller.listGroups(principal),
     getGroup: (groupId, principal) => controller.getGroup(groupId, principal),
