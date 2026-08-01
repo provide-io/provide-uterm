@@ -163,6 +163,16 @@ async def handle_socket_message(runtime: RuntimeProtocol, ws: CFWebSocket, raw: 
             # Relay intercept/inspect commands from browser back to the worker
             if runtime.worker_ws is not None:
                 await runtime.send_ws(runtime.worker_ws, cast("dict[str, object]", frame))
+        elif frame_type == "ping":
+            await runtime.send_ws(
+                ws,
+                {
+                    "type": "heartbeat",
+                    "runtime_incarnation": runtime._runtime_incarnation,
+                    "runtime_activation_seq": runtime._runtime_activation_seq,
+                    "ts": time.time(),
+                },
+            )
         elif frame_type == "ack":
             # Browser reports cumulative bytes consumed → drives Tier-A backpressure.
             # _normalize_frame already coerced "bytes" to a non-negative int.

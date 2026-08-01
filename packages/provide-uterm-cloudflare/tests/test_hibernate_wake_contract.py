@@ -171,6 +171,9 @@ async def test_hibernate_wake_rebuilds_browser_owner_and_worker_generation() -> 
     active = rt.hijack.session
     assert active is not None and active.owner == f"browser:{token}"
     assert rt._attachment_data(browser)["hijack_id"] == active.hijack_id  # type: ignore[arg-type]
+    warm_incarnation = rt._runtime_incarnation
+    warm_activation_seq = rt._runtime_activation_seq
+    assert warm_activation_seq >= 1
 
     # Workerd may reconstruct the object with an unnamed/default DO id. The
     # first socket callback must recover the real worker id from its attachment
@@ -185,6 +188,12 @@ async def test_hibernate_wake_rebuilds_browser_owner_and_worker_generation() -> 
     await cold.webSocketMessage(browser, frame_json("input", data="post-wake-owned-input"))  # type: ignore[arg-type]
 
     assert cold.worker_id == "hib-owner"
+    assert cold._runtime_incarnation != warm_incarnation
+    assert cold._runtime_activation_seq == warm_activation_seq + 1
+    assert cold.store.load_runtime_activation("hib-owner") == {
+        "incarnation": cold._runtime_incarnation,
+        "activation_seq": cold._runtime_activation_seq,
+    }
     assert cold.hijack.session is not None
     assert cold.worker_ws is worker
     assert cold.browser_hijack_owner["stable-browser-id"] == cold.hijack.session.hijack_id

@@ -55,6 +55,9 @@ class SqliteStateStore:
                 worker_id TEXT NOT NULL, seq INTEGER NOT NULL, ts REAL NOT NULL,
                 event_type TEXT NOT NULL, payload_json TEXT NOT NULL,
                 PRIMARY KEY (worker_id, seq))""",
+            """CREATE TABLE IF NOT EXISTS runtime_activations (
+                worker_id TEXT PRIMARY KEY, incarnation TEXT NOT NULL,
+                activation_seq INTEGER NOT NULL, activated_at REAL NOT NULL)""",
             """CREATE TABLE IF NOT EXISTS resume_tokens (
                 token TEXT PRIMARY KEY, worker_id TEXT NOT NULL,
                 role TEXT NOT NULL DEFAULT 'viewer', was_hijack_owner INTEGER NOT NULL DEFAULT 0,
@@ -243,6 +246,40 @@ class SqliteStateStore:
             generation,
             now,
         )
+
+    def record_runtime_activation(self, worker_id: str, incarnation: str) -> dict[str, Any]:
+        """Persist an observable monotonic witness for each cold runtime."""
+        self._run(
+            """
+            INSERT INTO runtime_activations(worker_id, incarnation, activation_seq, activated_at)
+            VALUES(?, ?, 1, ?)
+            ON CONFLICT(worker_id) DO UPDATE SET
+                incarnation = excluded.incarnation,
+                activation_seq = runtime_activations.activation_seq + 1,
+                activated_at = excluded.activated_at
+            """,
+            worker_id,
+            incarnation,
+            time.time(),
+        )
+        witness = self.load_runtime_activation(worker_id)
+        if witness is None:  # pragma: no cover - a successful upsert must be readable
+            raise RuntimeError("runtime activation witness was not persisted")
+        return witness
+
+    def load_runtime_activation(self, worker_id: str) -> dict[str, Any] | None:
+        rows = self._rows(
+            self._run(
+                "SELECT incarnation, activation_seq FROM runtime_activations WHERE worker_id = ?",
+                worker_id,
+            )
+        )
+        if not rows:
+            return None
+        return {
+            "incarnation": str(self._row_value(rows[0], "incarnation", 0)),
+            "activation_seq": int(self._row_value(rows[0], "activation_seq", 1) or 0),
+        }
 
     def save_input_mode(self, worker_id: str, mode: str) -> None:
         now = time.time()

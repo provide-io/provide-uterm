@@ -295,6 +295,34 @@ async def test_current_worker_generation_accepts_a_rebound_edge_proxy() -> None:
     assert rebound_proxy.closed is None
 
 
+async def test_same_generation_rebound_proxy_close_clears_worker_and_kv(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Close callbacks use the server generation, not Python proxy identity."""
+    runtime = _runtime()
+    original_proxy = _BlockingWorkerWs()
+    original_proxy.release.set()
+    assert await runtime.register_worker_socket(original_proxy)
+    rebound_proxy = _BlockingWorkerWs()
+    rebound_proxy.release.set()
+    rebound_proxy.attachment = original_proxy.attachment
+    assert await runtime.activate_worker_socket(rebound_proxy)
+    kv_updates: list[dict[str, object]] = []
+
+    async def record_kv(_env: object, _worker_id: str, **values: object) -> None:
+        kv_updates.append(values)
+
+    monkeypatch.setattr("provide.uterm.cloudflare.do.session_runtime.lifecycle.update_kv_session", record_kv)
+    runtime.lifecycle_state = "running"
+
+    await runtime.webSocketClose(original_proxy, 1000, "same edge socket closed")
+
+    assert runtime.worker_ws is None
+    assert runtime._worker_generation is None
+    assert runtime.lifecycle_state == "stopped"
+    assert kv_updates[-1]["connected"] is False
+
+
 async def test_stale_worker_close_does_not_publish_offline(monkeypatch: pytest.MonkeyPatch) -> None:
     runtime = _runtime()
     old_worker = _BlockingWorkerWs()
@@ -327,10 +355,10 @@ async def test_stale_worker_close_does_not_publish_offline(monkeypatch: pytest.M
 
 async def test_worker_disconnect_waits_for_owned_delivery() -> None:
     runtime = _runtime()
+    worker = _BlockingWorkerWs()
+    assert await runtime.register_worker_socket(worker)
     acquired = runtime.hijack.acquire("owner", 60)
     assert acquired.session is not None
-    worker = _BlockingWorkerWs()
-    runtime.worker_ws = worker
 
     delivery_task = asyncio.create_task(
         route_hijack(
@@ -438,6 +466,35 @@ async def test_invalid_expect_regex_sends_zero_worker_frames() -> None:
     response = await route_hijack(
         runtime,
         _Request({"keys": "must-not-send", "expect_regex": "["}),
+        f"/worker/{runtime.worker_id}/hijack/{active.session.hijack_id}/send",
+        "https://example.invalid/send",
+        "POST",
+    )
+
+    assert getattr(response, "status", None) == 400
+    assert worker.sent == []
+
+
+@pytest.mark.parametrize(
+    "unsafe_pattern",
+    [
+        "a*a*a*a*a*a*a*a*b",
+        "a?a?a?a?a?a?a?a?b",
+        r"(a)\1",
+        r"(?P<letter>a)(?P=letter)",
+    ],
+)
+async def test_unsafe_expect_regex_sends_zero_worker_frames(unsafe_pattern: str) -> None:
+    runtime = _runtime()
+    active = runtime.hijack.acquire("owner", 60)
+    assert active.session is not None
+    worker = _BlockingWorkerWs()
+    worker.release.set()
+    runtime.worker_ws = worker
+
+    response = await route_hijack(
+        runtime,
+        _Request({"keys": "must-not-send", "expect_regex": unsafe_pattern}),
         f"/worker/{runtime.worker_id}/hijack/{active.session.hijack_id}/send",
         "https://example.invalid/send",
         "POST",

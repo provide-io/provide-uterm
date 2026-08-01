@@ -74,19 +74,23 @@ def _looks_like_counted_quantifier(pattern: str, start: int) -> bool:
 
 
 def _validate_pattern_safety(pattern: str) -> None:
-    """Reject the nested/alternated quantified groups that can cause ReDoS."""
-    group_stack: list[list[bool]] = []
-    previous_kind = ""
-    last_group_quantified = False
-    last_group_alternated = False
+    """Enforce a conservative grammar with at most one branching quantifier.
+
+    Python's backtracking engine has no match timeout. Prompt guards therefore
+    reject constructs whose cost cannot be bounded linearly: alternation,
+    backreferences, regex extensions/lookarounds, and multiple variable-width
+    quantifiers (including sequential ``a*a*`` or ``a?a?`` chains).
+    """
+    branching_quantifiers = 0
     escaped = False
     in_class = False
     index = 0
     while index < len(pattern):
         char = pattern[index]
         if escaped:
+            if char.isdigit() or char == "g":
+                raise ValueError("backreferences are not allowed")
             escaped = False
-            previous_kind = "literal"
             index += 1
             continue
         if char == "\\":
@@ -96,61 +100,25 @@ def _validate_pattern_safety(pattern: str) -> None:
         if in_class:
             if char == "]":
                 in_class = False
-                previous_kind = "literal"
             index += 1
             continue
         if char == "[":
             in_class = True
             index += 1
             continue
-        if char == "(":
-            group_stack.append([False, False])
-            previous_kind = ""
-            last_group_quantified = False
-            last_group_alternated = False
-            index += 1
-            if index < len(pattern) and pattern[index] == "?":
-                index += 1
-                if index < len(pattern) and pattern[index] == "<" and index + 1 < len(pattern):
-                    if pattern[index + 1] in "=!":
-                        index += 2
-                elif index < len(pattern) and pattern[index] == "P":
-                    end = pattern.find(">", index)
-                    if end != -1:
-                        index = end + 1
-                elif index < len(pattern) and pattern[index] in ":=!?":
-                    index += 1
-            continue
-        if char == ")" and group_stack:
-            quantified, alternated = group_stack.pop()
-            last_group_quantified = quantified
-            last_group_alternated = alternated
-            if group_stack:
-                group_stack[-1][0] = group_stack[-1][0] or quantified
-                group_stack[-1][1] = group_stack[-1][1] or alternated
-            previous_kind = "group"
-            index += 1
-            continue
         if char == "|":
-            if group_stack:
-                group_stack[-1][1] = True
-            previous_kind = "alternation"
-            index += 1
-            continue
-        if char in "+*" or (char == "{" and _looks_like_counted_quantifier(pattern, index)):
-            if previous_kind == "group":
-                if last_group_quantified:
-                    raise ValueError("nested quantified groups are not allowed")
-                if last_group_alternated:
-                    raise ValueError("quantified groups containing alternation are not allowed")
-            if group_stack:
-                group_stack[-1][0] = True
-            previous_kind = "quantifier"
-            index = pattern.find("}", index) + 1 if char == "{" else index + 1
-            continue
-        previous_kind = "literal"
-        last_group_quantified = False
-        last_group_alternated = False
+            raise ValueError("alternation is not allowed")
+        if char == "(" and index + 1 < len(pattern) and pattern[index + 1] == "?":
+            raise ValueError("regex extensions and lookarounds are not allowed")
+        variable_quantifier = char in "+*?"
+        if char == "{" and _looks_like_counted_quantifier(pattern, index):
+            end = pattern.find("}", index)
+            variable_quantifier = "," in pattern[index + 1 : end]
+            index = end
+        if variable_quantifier:
+            branching_quantifiers += 1
+            if branching_quantifiers > 1:
+                raise ValueError("multiple variable-width quantifiers are not allowed")
         index += 1
 
 

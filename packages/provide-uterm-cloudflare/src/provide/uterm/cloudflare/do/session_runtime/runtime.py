@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import secrets
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -76,6 +77,9 @@ class SessionRuntime(
         self.hijack = HijackCoordinator()
         self.worker_ws: CFWebSocket | None = None
         self._worker_generation: str | None = None
+        self._runtime_incarnation = secrets.token_urlsafe(18)
+        self._runtime_activation_seq = 0
+        self._runtime_activation_recorded = False
         self.browser_sockets: dict[str, CFWebSocket] = {}
         self.raw_sockets: dict[str, CFWebSocket] = {}
         self.browser_hijack_owner: dict[str, str] = {}

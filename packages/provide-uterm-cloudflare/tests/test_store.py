@@ -42,3 +42,16 @@ def test_store_run_propagates_sql_errors() -> None:
     with pytest.raises((sqlite3.OperationalError, sqlite3.ProgrammingError)):
         # Querying a nonexistent table must raise, not silently return None.
         store._run("SELECT * FROM nonexistent_table_xyz WHERE id = ?", "val")
+
+
+def test_runtime_activation_witness_is_persisted_and_monotonic() -> None:
+    conn = sqlite3.connect(":memory:")
+    store = SqliteStateStore(conn.execute)
+    store.migrate()
+
+    first = store.record_runtime_activation("w1", "incarnation-one")
+    second = store.record_runtime_activation("w1", "incarnation-two")
+
+    assert first == {"incarnation": "incarnation-one", "activation_seq": 1}
+    assert second == {"incarnation": "incarnation-two", "activation_seq": 2}
+    assert store.load_runtime_activation("w1") == second
