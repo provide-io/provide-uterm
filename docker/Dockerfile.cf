@@ -30,7 +30,7 @@
 # ---- shared build args ------------------------------------------------------
 # Node base image tag — keep in sync with .nvmrc (single source of truth for the
 # Node major used to build the frontend). Same value is used by Dockerfile.server.
-ARG NODE_IMAGE=node:20-slim
+ARG NODE_IMAGE=node:22-slim
 # Canonical location of the compiled frontend inside the SERVER package source
 # tree (where `npm run build:frontend` emits). Defined ONCE here and mirrored by
 # Dockerfile.server so the two images can't drift.
@@ -46,15 +46,22 @@ WORKDIR /src
 COPY package.json package-lock.json ./
 COPY packages/provide-uterm-frontend/package.json packages/provide-uterm-frontend/package.json
 COPY packages/provide-uterm-app/package.json packages/provide-uterm-app/package.json
+# provide-uterm-app depends on the provide-uterm-ts workspace, so its manifest
+# must exist for `npm ci` to reify the workspace link (mirrors Dockerfile.server).
+COPY packages/provide-uterm-ts/package.json packages/provide-uterm-ts/package.json
 
 # Reproducible install from the committed lockfile (no re-resolution).
-RUN npm ci
+# --ignore-scripts skips node-pty's node-gyp build (pulled in via
+# provide-uterm-ts); this slim image has no C toolchain and a browser bundle
+# never loads a native PTY. See Dockerfile.server for the full rationale.
+RUN npm ci --ignore-scripts
 
-# Bring in the rest of the workspace needed to build (frontend/app source +
+# Bring in the rest of the workspace needed to build (frontend/app/ts source +
 # build scripts; the build emits into the server package dir under /src).
 COPY scripts/ scripts/
 COPY packages/provide-uterm-frontend/ packages/provide-uterm-frontend/
 COPY packages/provide-uterm-app/ packages/provide-uterm-app/
+COPY packages/provide-uterm-ts/ packages/provide-uterm-ts/
 
 # Compile widgets (tsc + copy) and the app bundle (vite build). Output lands in
 # ${FRONTEND_DIR} under /src.

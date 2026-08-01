@@ -18,7 +18,7 @@
 #
 
 ARG GO_IMAGE=golang:1.26-bookworm
-ARG NODE_IMAGE=node:20-slim
+ARG NODE_IMAGE=node:22-slim
 
 # ---- frontend-build --------------------------------------------------------
 FROM ${NODE_IMAGE} AS frontend-build
@@ -27,10 +27,14 @@ WORKDIR /src
 COPY package.json package-lock.json ./
 COPY packages/provide-uterm-frontend/package.json packages/provide-uterm-frontend/package.json
 COPY packages/provide-uterm-app/package.json packages/provide-uterm-app/package.json
-RUN npm ci
+# provide-uterm-app depends on the provide-uterm-ts workspace; --ignore-scripts
+# skips node-pty's node-gyp build. See Dockerfile.server for the rationale.
+COPY packages/provide-uterm-ts/package.json packages/provide-uterm-ts/package.json
+RUN npm ci --ignore-scripts
 COPY scripts/ scripts/
 COPY packages/provide-uterm-frontend/ packages/provide-uterm-frontend/
 COPY packages/provide-uterm-app/ packages/provide-uterm-app/
+COPY packages/provide-uterm-ts/ packages/provide-uterm-ts/
 RUN npm run build:frontend
 
 # ---- build -----------------------------------------------------------------
