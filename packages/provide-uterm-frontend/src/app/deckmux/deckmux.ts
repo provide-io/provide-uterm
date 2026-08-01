@@ -216,18 +216,7 @@ export class DeckMux {
 
   private _handleOwnerChange(msg: Record<string, unknown>): void {
     const userId = msg.user_id;
-    if (typeof userId === "string") {
-      this._presenceBar?.setOwner(userId);
-      // Update isOwner flags
-      for (const [uid, user] of this._users) {
-        user.isOwner = uid === userId;
-      }
-    } else {
-      this._presenceBar?.clearOwner();
-      for (const user of this._users.values()) {
-        user.isOwner = false;
-      }
-    }
+    this._reconcileOwner(typeof userId === "string" ? userId : null);
   }
 
   private _handleControlRequest(msg: Record<string, unknown>): void {
@@ -256,6 +245,7 @@ export class DeckMux {
     const toId = msg.to_user_id;
     if (typeof toName !== "string" || typeof toColor !== "string" || typeof toId !== "string") return;
 
+    this._reconcileOwner(toId);
     this._presenceBar?.setUserRequesting(toId, false);
     this._controlPanel?.showTransferToast(toName, toColor);
   }
@@ -293,9 +283,21 @@ export class DeckMux {
     }
 
     const ownerId = msg.owner_id;
-    if (typeof ownerId === "string") {
+    this._reconcileOwner(typeof ownerId === "string" ? ownerId : null);
+  }
+
+  private _reconcileOwner(ownerId: string | null): void {
+    if (ownerId === null) {
+      this._presenceBar?.clearOwner();
+    } else {
       this._presenceBar?.setOwner(ownerId);
     }
+
+    for (const [userId, user] of this._users) {
+      user.isOwner = userId === ownerId;
+      this._updateEdge(user);
+    }
+    this._cursorOverlay?.setOwner(ownerId);
   }
 
   private _extractUser(msg: Record<string, unknown>): DeckMuxUser | null {

@@ -290,7 +290,7 @@ describe("attachVnc", () => {
     expect(() => handle.disconnect()).not.toThrow();
   });
 
-  it("configures an embedded RFB, routes status/dimensions, and disconnects", async () => {
+  it("configures an embedded RFB and routes status/dimensions including a clean disconnect", async () => {
     vi.useFakeTimers();
     const screen = document.createElement("div");
     const status = vi.fn();
@@ -313,7 +313,7 @@ describe("attachVnc", () => {
         for (const listener of this.listeners.get(type) ?? []) listener(new CustomEvent(type, { detail }));
       }
     }
-    const handle = attachVnc(
+    attachVnc(
       screen,
       { workerId: "w", hijackId: "h", targetId: "desk", viewOnly: true, token: null },
       { RfbClass: EmbeddedRfb as unknown as RfbConstructor, onStatus: status, onDims: dims },
@@ -333,8 +333,31 @@ describe("attachVnc", () => {
     expect(status).toHaveBeenCalledWith("error", "RFB security failure");
     rfb?.emit("disconnect", { clean: true });
     expect(status).toHaveBeenCalledWith("disconnected", "Disconnected");
-    handle.disconnect();
     vi.useRealTimers();
+  });
+
+  it("disconnects the attached embedded RFB client during teardown", async () => {
+    const screen = document.createElement("div");
+    let instance: EmbeddedRfb | null = null;
+    class EmbeddedRfb {
+      disconnect = vi.fn();
+      constructor() { instance = this; }
+      addEventListener() {}
+      removeEventListener() {}
+    }
+    const handle = attachVnc(
+      screen,
+      { workerId: "w", hijackId: "h", targetId: "desk", viewOnly: false, token: null },
+      { RfbClass: EmbeddedRfb as unknown as RfbConstructor, onStatus: vi.fn() },
+    );
+    await Promise.resolve();
+    const rfb = instance as EmbeddedRfb | null;
+
+    handle.disconnect();
+
+    expect(rfb?.disconnect).toHaveBeenCalledOnce();
+    handle.disconnect();
+    expect(rfb?.disconnect).toHaveBeenCalledOnce();
   });
 
   it("reports embedded constructor failures", async () => {
