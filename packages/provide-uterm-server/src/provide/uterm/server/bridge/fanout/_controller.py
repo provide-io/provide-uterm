@@ -133,18 +133,54 @@ class FanOutController:
             return group
         return None
 
+    def _authorizers(
+        self,
+    ) -> (
+        tuple[
+            Callable[[Principal], Awaitable[bool]],
+            Callable[[str], Awaitable[SessionDefinition | None]],
+            Callable[[Principal, SessionDefinition], Awaitable[bool]],
+        ]
+        | None
+    ):
+        """Every authorizer at once, or None if any of them is unwired.
+
+        Returned together so a caller that passes the check holds non-optional
+        references, rather than re-testing each one at every use.
+        """
+        if self._is_global_admin is None or self._resolve_session is None or self._can_read_session is None:
+            return None
+        return self._is_global_admin, self._resolve_session, self._can_read_session
+
+    @property
+    def authorization_ready(self) -> bool:
+        """Whether every authorizer the controller needs is wired.
+
+        A controller missing one cannot judge access at all, so callers refuse
+        rather than proceed on whatever the remaining ones happen to allow.
+        """
+        return self._authorizers() is not None
+
     async def validate_members(self, worker_ids: list[str], principal: Principal) -> tuple[list[str], list[str]]:
-        """Return currently authorized and refused members for a principal."""
+        """Return currently authorized and refused members for a principal.
+
+        A resolver or authorizer that raises refuses the member: failing to
+        decide access is not access. This is the controller's own view, used to
+        narrow a dispatch to the members the caller may still reach — group
+        admission is decided by the routes against the session registry, so
+        that a controller wired to a wider view cannot widen access.
+        """
         if self._resolve_session is None or self._can_read_session is None:
             return [], list(worker_ids)
         allowed: list[str] = []
         refused: list[str] = []
         for worker_id in worker_ids:
-            definition = await self._resolve_session(worker_id)
-            if definition is None or not await self._can_read_session(principal, definition):
-                refused.append(worker_id)
-            else:
-                allowed.append(worker_id)
+            try:
+                definition = await self._resolve_session(worker_id)
+                readable = definition is not None and await self._can_read_session(principal, definition)
+            except Exception:
+                readable = False
+            (allowed if readable else refused).append(worker_id)
         return allowed, refused
 
     @staticmethod
@@ -170,10 +206,12 @@ class FanOutController:
         """Authorize a caller and create the only snapshot accepted by dispatch."""
         if principal is None or isinstance(principal, str):
             return None, [], self._error_result(group_id, data, "authenticated principal required")
-        if self._is_global_admin is None or self._resolve_session is None or self._can_read_session is None:
+        authorizers = self._authorizers()
+        if authorizers is None:
             return None, [], self._error_result(group_id, data, "fan-out authorization is unavailable")
+        is_global_admin, _, _ = authorizers
         try:
-            is_admin = await self._is_global_admin(principal)
+            is_admin = await is_global_admin(principal)
         except Exception:
             return None, [], self._error_result(group_id, data, "fan-out authorization failed")
         if not is_admin:
@@ -186,15 +224,7 @@ class FanOutController:
         if group.created_by != principal_id and principal_id not in group.grants:
             return None, [], self._error_result(group_id, data, "fan-out group not found")
 
-        allowed: list[str] = []
-        refused: list[str] = []
-        for worker_id in tuple(group.worker_ids):
-            try:
-                definition = await self._resolve_session(worker_id)
-                readable = definition is not None and await self._can_read_session(principal, definition)
-            except Exception:
-                readable = False
-            (allowed if readable else refused).append(worker_id)
+        allowed, refused = await self.validate_members(list(group.worker_ids), principal)
         return replace(group, worker_ids=allowed), refused, None
 
     @staticmethod

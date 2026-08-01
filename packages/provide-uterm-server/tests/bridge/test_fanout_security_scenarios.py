@@ -23,6 +23,7 @@ from provide.uterm.server.bridge.fanout._store import InMemoryFanOutStore
 from provide.uterm.server.bridge.hub import EventBus, TermHub
 from provide.uterm.server.bridge.hub.ext import PolicyContext, PolicyDecision
 from provide.uterm.server.bridge.identity import Principal
+from provide.uterm.server.config_schema_session import SessionDefinition
 
 ROOT = Path(__file__).resolve().parents[4]
 CONTRACT_PATH = Path(os.environ.get("FANOUT_SECURITY_SCENARIO_CONTRACT", ROOT / "spec/fanout_security_scenarios.json"))
@@ -72,6 +73,10 @@ def _canonical_route_error(status: int, body: Any) -> str | None:
         return "global_admin_required"
     if "unknown fan-out" in message:
         return "unknown_member"
+    if "no read access" in message:
+        return "member_read_forbidden"
+    if "authorization" in message:
+        return "authorization_unavailable"
     return message or "request_failed"
 
 
@@ -116,8 +121,11 @@ async def _build(
     workers = input_data["workers"]
     accepted = set(workers["accepted_members"])
     immediate = workers["immediate_output"]
-    readable = set(input_data["visibility"]["readable_members"])
-    readable.difference_update(input_data["visibility"]["revoke_before_send"])
+    # A fixture may give the controller a wider view than the server has, to
+    # prove that admission still follows the server's answer.
+    visibility = input_data["visibility"]
+    readable = set(visibility.get("controller_readable_members", visibility["readable_members"]))
+    readable.difference_update(visibility["revoke_before_send"])
     for worker_id in input_data["group"]["members"]:
         worker = AsyncMock()
         worker.send_text = AsyncMock()
@@ -175,21 +183,65 @@ async def _build(
     return controller, hub, delivered, observers
 
 
-def _make_app(allow_unknown_members: bool) -> Any:
+class _FixtureAuthz:
+    """The server's authorizer, with the fixture answering read access.
+
+    The real service is slotted, so its decision is replaced by wrapping rather
+    than by assignment; everything the routes ask of it other than read access
+    still goes to the real one.
+    """
+
+    def __init__(self, inner: Any, readable: set[str]) -> None:
+        self._inner = inner
+        self._readable = readable
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+    async def can_read_session(self, principal: Principal, definition: Any) -> bool:
+        del principal
+        return definition.session_id in self._readable
+
+
+def _registered_members(input_data: dict[str, Any]) -> list[str]:
+    """The members the session registry knows about.
+
+    A readable session must exist to be readable, so the visible set is the
+    floor; a fixture naming ``registered_members`` adds the sessions that exist
+    without being readable, which is what separates an unknown member from a
+    forbidden one.
+    """
+    visibility = input_data["visibility"]
+    registered = list(visibility.get("registered_members", visibility["readable_members"]))
+    for worker_id in visibility["readable_members"]:
+        if worker_id not in registered:
+            registered.append(worker_id)
+    return registered
+
+
+def _make_app(allow_unknown_members: bool, registered: list[str]) -> Any:
     config = default_server_config()
     config.auth.mode = "header"
     config.auth.header_mode_acknowledged = True
     config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     config.fanout_allow_unknown_members = allow_unknown_members
-    config.sessions = []
+    config.sessions = [SessionDefinition(session_id=worker_id, auto_start=False) for worker_id in registered]
     return create_server_app(config)
 
 
 async def _execute_rest(scenario: dict[str, Any]) -> dict[str, Any]:
     input_data = scenario["input"]
-    app = _make_app(input_data["group"]["allow_unknown_members"])
+    app = _make_app(input_data["group"]["allow_unknown_members"], _registered_members(input_data))
     controller, _hub, delivered, observers = await _build(input_data, app.state.uterm_hub)
     app.state.uterm_hub.fan_out_controller = controller
+
+    # The route reads access off the same authorizer the rest of the server
+    # does, so the fixture's visible set has to answer there too — otherwise a
+    # registered member is readable purely because the actor is an admin.
+    readable = set(input_data["visibility"]["readable_members"])
+    readable.difference_update(input_data["visibility"]["revoke_before_send"])
+
+    app.state.uterm_authz = _FixtureAuthz(app.state.uterm_authz, readable)
     with TestClient(app, raise_server_exceptions=False) as client:
         if input_data["operation"] == "create":
             response = client.post(

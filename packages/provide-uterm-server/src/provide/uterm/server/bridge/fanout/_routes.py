@@ -78,19 +78,30 @@ def register_fanout_routes(hub: TermHub, router: APIRouter) -> None:
         max_response_ms = body.get("max_response_ms", 10_000)
         divergence_threshold = body.get("divergence_threshold", 0.8)
 
-        _, refused = await ctrl.validate_members(list(worker_ids), principal)
-        if refused:
-            unknown = [wid for wid in refused if await request.app.state.uterm_registry.get_definition(wid) is None]
-            if unknown and not ctrl.allow_unknown_members:
-                return JSONResponse({"error": f"unknown fan-out session: {unknown[0]}"}, status_code=400)
-            forbidden = [wid for wid in refused if wid not in unknown]
-            if forbidden:
+        # A controller that cannot judge access does not get to admit members
+        # on the strength of the checks that remain.
+        if not ctrl.authorization_ready:
+            return JSONResponse({"error": "fan-out authorization is unavailable"}, status_code=403)
+
+        # Each member is judged from ONE resolution, and read access is checked
+        # against that same definition. Resolving twice — once to decide access
+        # and again to decide whether the member exists — lets a session the
+        # caller may not read be filed as merely unknown and admitted by the
+        # dormant-member opt-in, and lets a member the controller's own
+        # authorizer approves skip the registry's answer entirely.
+        registry = request.app.state.uterm_registry
+        authz = request.app.state.uterm_authz
+        for worker_id in worker_ids:
+            definition = await registry.get_definition(worker_id)
+            if definition is None:
+                if not ctrl.allow_unknown_members:
+                    return JSONResponse({"error": f"unknown fan-out session: {worker_id}"}, status_code=400)
+                continue
+            if not await authz.can_read_session(principal, definition):
                 return JSONResponse(
-                    {"error": f"forbidden: no read access to session {forbidden[0]}"},
+                    {"error": f"forbidden: no read access to session {worker_id}"},
                     status_code=403,
                 )
-            # Explicit dormant-member mode permits unknown members only.
-            assert ctrl.allow_unknown_members
 
         group = FanOutGroup(
             group_id=uuid.uuid4().hex,
