@@ -405,7 +405,11 @@ public sealed partial class UtermServer
                 try
                 {
                     message = await WebSocketMessageReader.ReadAsync(
-                        ws, _deps.Hub.MaxWsMessageBytes, ctx.RequestAborted).ConfigureAwait(false);
+                        ws,
+                        _deps.Hub.MaxWsMessageBytes,
+                        ctx.RequestAborted,
+                        _tunnelFragmentObserved)
+                        .ConfigureAwait(false);
                 }
                 catch (WebSocketMessageException ex)
                 {

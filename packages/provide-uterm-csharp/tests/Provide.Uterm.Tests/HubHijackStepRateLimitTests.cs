@@ -231,8 +231,10 @@ public sealed class HubHijackStepRateLimitTests
         var step = h.Step();
         await h.WorkerSocket.SendAttempted.WaitAsync(TimeSpan.FromSeconds(5));
         var transition = RunTransitionAsync();
-        await Task.Delay(50);
+        for (var index = 0; index < 200 && h.Hub.Registry.Get(Worker)!.HijackPending is null; index++)
+            await Task.Delay(10);
 
+        Assert.NotNull(h.Hub.Registry.Get(Worker)!.HijackPending);
         Assert.False(transition.IsCompleted);
         h.WorkerSocket.ReleaseSend();
         Assert.Equal(HttpStatusCode.OK, (await step).StatusCode);

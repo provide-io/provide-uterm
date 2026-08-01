@@ -21,6 +21,92 @@ namespace Provide.Uterm.Tests.Server;
 
 public sealed class ResumeLifecycleIntegrationTests
 {
+    internal sealed record ResumeContractEvidence(
+        bool ResumeSucceeded,
+        bool OwnershipRestored,
+        bool ReplayRejected,
+        bool CompetingOwnerPreserved);
+
+    internal static async Task<ResumeContractEvidence> RunCurrentOwnerContractScenarioAsync()
+    {
+        var fixture = await BootAsync();
+        await using var server = fixture.Server;
+        using var original = await ConnectAsync(fixture);
+        var oldToken = (await DrainHandshakeAsync(original))["resume_token"]!.ToString()!;
+        await SendControlAsync(original, "hijack_request");
+        await ReceiveUntilAsync(original, frame => Type(frame) == "hijack_state" && Bool(frame, "hijacked"));
+        original.Abort();
+        await WaitUntilAsync(() => fixture.Hub.Registry.Get("resume-worker")!.Browsers.Count == 0);
+        await WaitUntilAsync(() => fixture.Worker.Actions.SequenceEqual(["pause", "resume"]));
+
+        using var resumed = await ConnectAsync(fixture);
+        await DrainHandshakeAsync(resumed);
+        await SendControlAsync(resumed, "resume", oldToken);
+        var restored = await ReceiveUntilAsync(
+            resumed, frame => Type(frame) == "hello" && frame.ContainsKey("resumed"));
+        Assert.True(Bool(restored, "resumed"));
+        Assert.True(Bool(restored, "hijacked_by_me"));
+        var restoredOwner = fixture.Hub.Registry.Get("resume-worker")!.HijackOwner;
+
+        await SendControlAsync(resumed, "resume", oldToken);
+        await SendControlAsync(resumed, "ping");
+        var replayFrames = await ReceiveThroughAsync(resumed, frame => Type(frame) == "pong");
+        Assert.DoesNotContain(
+            replayFrames,
+            frame => Type(frame) == "hello" && Bool(frame, "resumed"));
+        Assert.Same(restoredOwner, fixture.Hub.Registry.Get("resume-worker")!.HijackOwner);
+        return new(true, true, true, false);
+    }
+
+    internal static async Task<ResumeContractEvidence> RunCompetingOwnerContractScenarioAsync()
+    {
+        var fixture = await BootAsync();
+        await using var server = fixture.Server;
+        using var original = await ConnectAsync(fixture);
+        var oldToken = (await DrainHandshakeAsync(original))["resume_token"]!.ToString()!;
+        await SendControlAsync(original, "hijack_request");
+        await ReceiveUntilAsync(original, frame => Type(frame) == "hijack_state" && Bool(frame, "hijacked"));
+        original.Abort();
+        await WaitUntilAsync(() => fixture.Hub.Registry.Get("resume-worker")!.Browsers.Count == 0);
+
+        using var competitor = await ConnectAsync(fixture);
+        await DrainHandshakeAsync(competitor);
+        await SendControlAsync(competitor, "hijack_request");
+        await ReceiveUntilAsync(competitor, frame => Type(frame) == "hijack_state" && Bool(frame, "hijacked"));
+        var competingOwner = fixture.Hub.Registry.Get("resume-worker")!.HijackOwner;
+
+        using var attempted = await ConnectAsync(fixture);
+        await DrainHandshakeAsync(attempted);
+        await SendControlAsync(attempted, "resume", oldToken);
+        var rejected = await ReceiveUntilAsync(
+            attempted, frame => Type(frame) == "hello" && frame.ContainsKey("resumed"));
+        Assert.False(Bool(rejected, "resumed"));
+        Assert.Same(competingOwner, fixture.Hub.Registry.Get("resume-worker")!.HijackOwner);
+        await SendControlAsync(competitor, "heartbeat");
+        await ReceiveUntilAsync(competitor, frame => Type(frame) == "heartbeat_ack");
+        return new(false, false, false, true);
+    }
+
+    internal static async Task<bool> RunNonOwnerStepContractScenarioAsync()
+    {
+        var fixture = await BootAsync();
+        await using var server = fixture.Server;
+        using var owner = await ConnectAsync(fixture);
+        using var nonOwner = await ConnectAsync(fixture);
+        await DrainHandshakeAsync(owner);
+        await DrainHandshakeAsync(nonOwner);
+        await SendControlAsync(owner, "hijack_request");
+        await ReceiveUntilAsync(owner, frame => Type(frame) == "hijack_state" && Bool(frame, "hijacked"));
+        var before = fixture.Worker.Actions.Count;
+        await SendControlAsync(nonOwner, "hijack_step");
+        await SendControlAsync(nonOwner, "ping");
+        await ReceiveUntilAsync(nonOwner, frame => Type(frame) == "pong");
+        Assert.Equal(before, fixture.Worker.Actions.Count);
+        await SendControlAsync(owner, "heartbeat");
+        await ReceiveUntilAsync(owner, frame => Type(frame) == "heartbeat_ack");
+        return true;
+    }
+
     [Fact]
     public async Task ProductionDashboardAcquireReleasePublishesExactlyOnce()
     {
@@ -2160,6 +2246,21 @@ public sealed class ResumeLifecycleIntegrationTests
         }
 
         throw new Xunit.Sdk.XunitException("expected control frame was not received");
+    }
+
+    private static async Task<List<Dictionary<string, object?>>> ReceiveThroughAsync(
+        ClientWebSocket socket,
+        Func<Dictionary<string, object?>, bool> predicate)
+    {
+        var frames = new List<Dictionary<string, object?>>();
+        for (var i = 0; i < 12; i++)
+        {
+            var frame = await ReceiveFrameAsync(socket);
+            frames.Add(frame);
+            if (predicate(frame)) return frames;
+        }
+
+        throw new Xunit.Sdk.XunitException("expected barrier frame was not received");
     }
 
     private static async Task<Dictionary<string, object?>> ReceiveFrameAsync(ClientWebSocket socket)
