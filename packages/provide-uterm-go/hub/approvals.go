@@ -17,6 +17,7 @@ const (
 	ApprovalApproved ApprovalStatus = "approved"
 	ApprovalRejected ApprovalStatus = "rejected"
 	ApprovalTimeout  ApprovalStatus = "timeout"
+	ApprovalRefused  ApprovalStatus = "refused"
 )
 
 // ApprovalRequest is a held command awaiting an approve/reject decision. Port
@@ -31,6 +32,10 @@ type ApprovalRequest struct {
 	ExpiresAt   float64
 	GroupID     *string
 	IsFanout    bool
+	// OriginBrowser and OriginGeneration are internal capability-fence data.
+	// They are intentionally absent from approval route serialization.
+	OriginBrowser    BrowserConn
+	OriginGeneration uint64
 }
 
 // approvalPruneTTL is how long a terminal-state request lingers past its
@@ -100,6 +105,15 @@ func (s *InMemoryApprovalStore) Claim(requestID string, status ApprovalStatus) b
 	}
 	req.Status = status
 	return true
+}
+
+// SetStatus records the terminal outcome after the one-shot claim has won.
+func (s *InMemoryApprovalStore) SetStatus(requestID string, status ApprovalStatus) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if req := s.requests[requestID]; req != nil {
+		req.Status = status
+	}
 }
 
 // CleanupExpired times out PENDING requests past their expiry and prunes

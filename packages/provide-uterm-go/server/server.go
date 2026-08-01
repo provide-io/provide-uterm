@@ -98,6 +98,10 @@ type Deps struct {
 	// holding the server closed — one connector that will not dial must not
 	// keep every other route unanswered.
 	OnStarted func(context.Context)
+	// BrowserSetupHook runs after browser registration but before the handshake.
+	// It is primarily an integration seam for proving setup rollback; failure
+	// closes the socket and releases the just-consumed quota slot.
+	BrowserSetupHook func() error
 }
 
 // OnStartedTimeout bounds how long [Server.Serve] waits for Deps.OnStarted

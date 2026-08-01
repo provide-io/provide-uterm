@@ -46,10 +46,15 @@ func (s *Server) browserInputGated(ctx context.Context, workerID string, bc *bro
 		s.writeFrame(ctx, bcConn(bc), frames.MakeErrorFrame("Input too long."))
 		return
 	}
+	generation, allowed := s.deps.Hub.BrowserInputFence(workerID, bc)
+	if !allowed {
+		return
+	}
 
 	// No-op policy gate → forward directly (no interception overhead).
 	if s.deps.Hub.IsNoOpPolicyGate() {
-		s.sendBrowserInput(ctx, workerID, bc, data)
+		_, _ = s.deps.Hub.SendBrowserOwnedInputAtGeneration(ctx, workerID, bc, generation,
+			map[string]any{"type": "input", "data": data, "ts": s.clock.Wall()})
 		return
 	}
 
@@ -60,11 +65,12 @@ func (s *Server) browserInputGated(ctx context.Context, workerID string, bc *bro
 	}
 	switch decision.Action {
 	case "hold":
-		if _, perr := s.deps.Hub.ParkBrowserForApproval(ctx, workerID, bc, data, decision); perr != nil {
+		if _, perr := s.deps.Hub.ParkBrowserForApproval(ctx, workerID, bc, data, decision, generation); perr != nil {
 			s.logger.Debug("park_for_approval_failed", "worker_id", workerID, "error", perr)
 		}
 	case "allow":
-		s.sendBrowserInput(ctx, workerID, bc, data)
+		_, _ = s.deps.Hub.SendBrowserOwnedInputAtGeneration(ctx, workerID, bc, generation,
+			map[string]any{"type": "input", "data": data, "ts": s.clock.Wall()})
 	default: // "deny"
 		s.writeFrame(ctx, bcConn(bc), frames.MakeErrorFrame("Command blocked by policy: "+data))
 	}
@@ -85,9 +91,6 @@ func (s *Server) browserInputGated(ctx context.Context, workerID string, bc *bro
 // (a held command is a policy decision, not a direct worker forward) while still
 // dropping every ungated/approved keystroke a non-owner would push to the worker.
 func (s *Server) sendBrowserInput(ctx context.Context, workerID string, bc *browserConn, data string) {
-	if !s.deps.Hub.PrepareBrowserInput(workerID, bc) {
-		return
-	}
-	_, _ = s.deps.Hub.Router.SendWorker(ctx, workerID,
-		map[string]any{"type": "input", "data": data, "ts": s.clock.Wall()}, bc)
+	_, _ = s.deps.Hub.SendBrowserOwnedInput(ctx, workerID, bc,
+		map[string]any{"type": "input", "data": data, "ts": s.clock.Wall()})
 }

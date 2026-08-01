@@ -172,19 +172,26 @@ func (lm *HijackLeaseManager) TouchIfOwner(workerID string, ws BrowserConn) *flo
 // TryReleaseWs verifies ws owns the dashboard hijack and clears it in one lock
 // block, returning (released, restActive).
 func (lm *HijackLeaseManager) TryReleaseWs(workerID string, ws BrowserConn) (released, restActive bool) {
-	lm.lock.Lock()
-	st := lm.registry.Get(workerID)
-	if st == nil || !lm.hub.IsDashboardHijackActive(st) || st.HijackOwner != ws {
-		restActive := st != nil && lm.hub.HasValidRESTLease(st)
+	for {
+		lm.lock.Lock()
+		st := lm.registry.Get(workerID)
+		if st == nil || !lm.hub.IsDashboardHijackActive(st) || st.HijackOwner != ws {
+			restActive := st != nil && lm.hub.HasValidRESTLease(st)
+			lm.lock.Unlock()
+			return false, restActive
+		}
+		if pending := st.InputSendPending; pending != nil {
+			done := pending.Done
+			lm.lock.Unlock()
+			<-done
+			continue
+		}
+		st.clearDashboardOwner()
+		restActive = lm.hub.HasValidRESTLease(st)
 		lm.lock.Unlock()
-		return false, restActive
+		lm.logger.Info(eventHijackReleased, "worker_id", workerID, "hijack_type", "dashboard")
+		return true, restActive
 	}
-	st.HijackOwner = nil
-	st.HijackOwnerExpiresAt = nil
-	restActive = lm.hub.HasValidRESTLease(st)
-	lm.lock.Unlock()
-	lm.logger.Info(eventHijackReleased, "worker_id", workerID, "hijack_type", "dashboard")
-	return true, restActive
 }
 
 // StillHijacked reports whether any hijack (REST or dashboard) is active.

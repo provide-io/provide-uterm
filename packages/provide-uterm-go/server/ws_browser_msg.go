@@ -31,9 +31,8 @@ func (s *Server) dispatchBrowserMessage(ctx context.Context, conn *websocket.Con
 		// not a capability granted merely by holding a browser connection.
 		// TouchIfOwner performs the current/expiry check under the hub lock and
 		// renews the dashboard lease before the worker sees the step.
-		if s.deps.Hub.TouchIfOwner(workerID, bc) != nil {
-			_, _ = s.deps.Hub.SendWorker(ctx, workerID, controlMsg("step", "dashboard", 0, s.clock.Wall(), ""))
-		}
+		_, _ = s.deps.Hub.SendBrowserOwnedInput(ctx, workerID, bc,
+			controlMsg("step", "dashboard", 0, s.clock.Wall(), ""))
 	case "snapshot_req":
 		_ = s.deps.Hub.RequestSnapshot(ctx, workerID)
 	case "heartbeat":
@@ -53,8 +52,8 @@ func (s *Server) dispatchBrowserMessage(ctx context.Context, conn *websocket.Con
 }
 
 // browserResume consumes a single-use resume token and reissues hello with
-// resumed=true + a fresh token. Port of browser_handlers._handle_resume
-// (hijack reclaim omitted — covered by dedicated hijack suite).
+// resumed=true + a fresh token. A token marked as the disconnected hijack
+// owner succeeds only if ownership is still reclaimable; a competitor wins.
 func (s *Server) browserResume(ctx context.Context, conn *websocket.Conn, workerID string, bc *browserConn, role string, msg map[string]any) {
 	store := s.deps.Hub.ResumeStore()
 	if store == nil {
@@ -74,8 +73,16 @@ func (s *Server) browserResume(ctx context.Context, conn *websocket.Conn, worker
 	}
 	// Mint a replacement token by re-registering resume metadata for this socket.
 	// RegisterBrowser already holds this connection; Create alone is enough.
-	newTok, err := store.Create(ctx, workerID, role, 300)
+	newTok, err := store.Create(ctx, workerID, consumed.Role, 300)
 	if err != nil || newTok == "" {
+		return
+	}
+	if consumed.WasHijackOwner && !s.deps.Hub.TryReclaimHijack(ctx, workerID, bc) {
+		_ = store.Revoke(ctx, newTok)
+		return
+	}
+	if err := s.deps.Hub.ReplaceBrowserResumeToken(ctx, bc, newTok); err != nil {
+		_ = store.Revoke(ctx, newTok)
 		return
 	}
 	state := s.deps.Hub.RegisterBrowserStateSnapshot(workerID, bc)

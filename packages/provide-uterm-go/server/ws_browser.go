@@ -65,6 +65,11 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 			_ = conn.Close(websocket.StatusPolicyViolation, "browser registration rejected")
 			return
 		}
+		if s.deps.BrowserSetupHook != nil && s.deps.BrowserSetupHook() != nil {
+			s.browserCleanup(bg, workerID, bc, false)
+			_ = conn.Close(websocket.StatusInternalError, "browser setup failed")
+			return
+		}
 		s.deps.Hub.State.TouchActivity(workerID)
 		if !s.browserHandshake(bg, conn, workerID, bc, role, canHijack, state) {
 			s.deckOnDisconnect(workerID, bc)
@@ -94,6 +99,11 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 	state, err := s.deps.Hub.RegisterBrowser(bg, workerID, bc, role, true)
 	if err != nil {
 		_ = conn.Close(websocket.StatusPolicyViolation, "browser registration rejected")
+		return
+	}
+	if s.deps.BrowserSetupHook != nil && s.deps.BrowserSetupHook() != nil {
+		s.browserCleanup(bg, workerID, bc, false)
+		_ = conn.Close(websocket.StatusInternalError, "browser setup failed")
 		return
 	}
 	s.deps.Hub.State.TouchActivity(workerID)

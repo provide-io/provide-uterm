@@ -215,19 +215,29 @@ func (r *MessageRouter) SetBrowserRole(_ context.Context, workerID string, ws Br
 
 // TryReclaimHijack acquires hijack ownership for ws when the session is
 // unhijacked and in a reclaimable state. Port of try_reclaim_hijack.
-func (r *MessageRouter) TryReclaimHijack(_ context.Context, workerID string, ws BrowserConn) bool {
+func (r *MessageRouter) TryReclaimHijack(ctx context.Context, workerID string, ws BrowserConn) bool {
 	hub := r.hub
-	hub.lock.Lock()
-	defer hub.lock.Unlock()
-	st := hub.registry.Get(workerID)
-	if st != nil && st.WorkerWS != nil && st.InputMode != InputModeOpen &&
-		st.HijackOwner == nil && !hub.State.IsHijacked(st) {
-		st.HijackOwner = ws
-		exp := hub.clock.Monotonic() + float64(hub.Lease.DashboardHijackLeaseS())
-		st.HijackOwnerExpiresAt = &exp
-		return true
+	for {
+		hub.lock.Lock()
+		st := hub.registry.Get(workerID)
+		if st != nil && st.InputSendPending != nil {
+			done := st.InputSendPending.Done
+			hub.lock.Unlock()
+			if waitInputReservation(ctx, done) != nil {
+				return false
+			}
+			continue
+		}
+		if st != nil && st.WorkerWS != nil && st.InputMode != InputModeOpen &&
+			st.HijackOwner == nil && !hub.State.IsHijacked(st) {
+			exp := hub.clock.Monotonic() + float64(hub.Lease.DashboardHijackLeaseS())
+			st.setDashboardOwner(ws, &exp)
+			hub.lock.Unlock()
+			return true
+		}
+		hub.lock.Unlock()
+		return false
 	}
-	return false
 }
 
 // GetWorkerBrowserRole returns the role assigned to ws for workerID. Port of

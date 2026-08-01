@@ -113,12 +113,20 @@ type WorkerTermState struct {
 	Browsers             map[BrowserConn]string
 	HijackOwner          BrowserConn
 	HijackOwnerExpiresAt *float64
-	HijackSession        *HijackSession
+	// HijackOwnerGeneration changes whenever dashboard ownership changes. It
+	// fences delayed policy/approval work against release-and-reacquire ABA.
+	HijackOwnerGeneration uint64
+	HijackSession         *HijackSession
 	// HijackPending is a transient REST-acquire reservation held while the
 	// worker is paused OUTSIDE the hub lock. See
 	// [HijackLeaseManager.TryAcquireRest].
 	HijackPending *string
-	InputMode     string
+	// InputSendPending reserves the exact owner/lease generation and worker
+	// while one authorized input is being delivered outside the hub lock.
+	// Ownership, expiry, disconnect, and worker-replacement transitions wait for
+	// Done before mutating the state, making authorization + delivery linear.
+	InputSendPending *InputSendReservation
+	InputMode        string
 	// InputModeSetByOperator records whether an authenticated caller has
 	// explicitly decided this session's input mode, as opposed to it merely
 	// holding the "hijack" default.
@@ -144,6 +152,15 @@ type WorkerTermState struct {
 	GraphicalSession       gui.GraphicalSession
 }
 
+// InputSendReservation is the in-flight state-owner fence for one worker
+// delivery. It is stored only while a single browser or REST hijack input is
+// being sent; Done is closed after delivery state has been reconciled.
+type InputSendReservation struct {
+	Worker   WorkerWS
+	IsTunnel bool
+	Done     chan struct{}
+}
+
 // NewWorkerTermState creates a worker state with the Python dataclass
 // defaults (empty browser map, "hijack" input mode).
 func NewWorkerTermState() *WorkerTermState {
@@ -165,9 +182,24 @@ func (st *WorkerTermState) Lease() HijackLease {
 
 // ApplyLease writes a [HijackLease] view back onto this state's hijack fields.
 func (st *WorkerTermState) ApplyLease(l HijackLease) {
+	if st.HijackOwner != l.WS {
+		st.HijackOwnerGeneration++
+	}
 	st.HijackOwner = l.WS
 	st.HijackOwnerExpiresAt = l.WSExpiresAt
 	st.HijackSession = l.Session
+}
+
+func (st *WorkerTermState) setDashboardOwner(ws BrowserConn, expiresAt *float64) {
+	if st.HijackOwner != ws {
+		st.HijackOwnerGeneration++
+	}
+	st.HijackOwner = ws
+	st.HijackOwnerExpiresAt = expiresAt
+}
+
+func (st *WorkerTermState) clearDashboardOwner() {
+	st.setDashboardOwner(nil, nil)
 }
 
 // loggerOrDefault returns l, or slog.Default() when l is nil.

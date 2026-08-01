@@ -31,23 +31,36 @@ func (lm *HijackLeaseManager) TryAcquireRest(
 	now float64,
 ) (ok bool, reason string, err error) {
 	// Phase 1 — reserve under the lock (in-memory only).
-	lm.lock.Lock()
-	st := lm.registry.Get(workerID)
-	if st == nil || st.WorkerWS == nil {
+	var st *WorkerTermState
+	var workerWS WorkerWS
+	for {
+		lm.lock.Lock()
+		st = lm.registry.Get(workerID)
+		if st == nil || st.WorkerWS == nil {
+			lm.lock.Unlock()
+			return false, "no_worker", nil
+		}
+		if pending := st.InputSendPending; pending != nil {
+			done := pending.Done
+			lm.lock.Unlock()
+			if err := waitInputReservation(ctx, done); err != nil {
+				return false, "", err
+			}
+			continue
+		}
+		if st.InputMode == InputModeOpen {
+			lm.lock.Unlock()
+			return false, "open_mode", nil
+		}
+		if lm.hub.IsDashboardHijackActive(st) || lm.hub.HasValidRESTLease(st) || st.HijackPending != nil {
+			lm.lock.Unlock()
+			return false, "already_hijacked", nil
+		}
+		workerWS = st.WorkerWS
+		st.HijackPending = strp(hijackID)
 		lm.lock.Unlock()
-		return false, "no_worker", nil
+		break
 	}
-	if st.InputMode == InputModeOpen {
-		lm.lock.Unlock()
-		return false, "open_mode", nil
-	}
-	if lm.hub.IsDashboardHijackActive(st) || lm.hub.HasValidRESTLease(st) || st.HijackPending != nil {
-		lm.lock.Unlock()
-		return false, "already_hijacked", nil
-	}
-	workerWS := st.WorkerWS
-	st.HijackPending = strp(hijackID)
-	lm.lock.Unlock()
 
 	// finally — roll back a still-outstanding reservation (no-op on success).
 	defer func() {
@@ -107,25 +120,32 @@ func (lm *HijackLeaseManager) TryAcquireRest(
 // TryAcquireWs atomically checks availability and sets the dashboard-WS hijack
 // owner. Port of try_acquire_ws. Returns (ok, reason).
 func (lm *HijackLeaseManager) TryAcquireWs(workerID string, ws BrowserConn) (bool, string) {
-	lm.lock.Lock()
-	st := lm.registry.Get(workerID)
-	if st == nil || st.WorkerWS == nil {
+	for {
+		lm.lock.Lock()
+		st := lm.registry.Get(workerID)
+		if st == nil || st.WorkerWS == nil {
+			lm.lock.Unlock()
+			return false, "no_worker"
+		}
+		if pending := st.InputSendPending; pending != nil {
+			done := pending.Done
+			lm.lock.Unlock()
+			<-done
+			continue
+		}
+		// HijackPending: REST two-phase reserve — treat as already taken so the
+		// dashboard WS cannot dual-own during the pause I/O window.
+		if lm.hub.IsDashboardHijackActive(st) || lm.hub.HasValidRESTLease(st) || st.HijackPending != nil {
+			lm.lock.Unlock()
+			return false, "already_hijacked"
+		}
+		ttl := lm.dashboardLeaseS
+		exp := lm.clock.Monotonic() + float64(ttl)
+		st.setDashboardOwner(ws, &exp)
 		lm.lock.Unlock()
-		return false, "no_worker"
+		lm.logger.Info(eventHijackAcquired, "worker_id", workerID, "hijack_type", "dashboard", "lease_s", ttl)
+		return true, ""
 	}
-	// HijackPending: REST two-phase reserve — treat as already taken so the
-	// dashboard WS cannot dual-own during the pause I/O window.
-	if lm.hub.IsDashboardHijackActive(st) || lm.hub.HasValidRESTLease(st) || st.HijackPending != nil {
-		lm.lock.Unlock()
-		return false, "already_hijacked"
-	}
-	ttl := lm.dashboardLeaseS
-	st.HijackOwner = ws
-	exp := lm.clock.Monotonic() + float64(ttl)
-	st.HijackOwnerExpiresAt = &exp
-	lm.lock.Unlock()
-	lm.logger.Info(eventHijackAcquired, "worker_id", workerID, "hijack_type", "dashboard", "lease_s", ttl)
-	return true, ""
 }
 
 // ExtendLease extends the REST hijack lease on a heartbeat, returning the new
@@ -155,13 +175,22 @@ func (lm *HijackLeaseManager) ExtendLease(workerID, hijackID, owner string, leas
 // (released, shouldResume). shouldResume is true when no dashboard hijack
 // remains. Port of release_rest.
 func (lm *HijackLeaseManager) ReleaseRest(workerID, hijackID string) (released, shouldResume bool) {
-	lm.lock.Lock()
-	defer lm.lock.Unlock()
-	st := lm.registry.Get(workerID)
-	if st == nil || st.HijackSession == nil || st.HijackSession.HijackID != hijackID {
-		return false, false
+	for {
+		lm.lock.Lock()
+		st := lm.registry.Get(workerID)
+		if st == nil || st.HijackSession == nil || st.HijackSession.HijackID != hijackID {
+			lm.lock.Unlock()
+			return false, false
+		}
+		if pending := st.InputSendPending; pending != nil {
+			done := pending.Done
+			lm.lock.Unlock()
+			<-done
+			continue
+		}
+		st.HijackSession = nil
+		shouldResume = !lm.hub.IsDashboardHijackActive(st)
+		lm.lock.Unlock()
+		return true, shouldResume
 	}
-	st.HijackSession = nil
-	shouldResume = !lm.hub.IsDashboardHijackActive(st)
-	return true, shouldResume
 }

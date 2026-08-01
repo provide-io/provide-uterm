@@ -49,12 +49,11 @@ func (s *Server) handleTunnelWS(w http.ResponseWriter, r *http.Request) {
 	wc := &tunnelWorkerConn{wsBase: wsBase{conn: conn}}
 
 	bg := context.Background()
-	prevHijacked, err := s.deps.Hub.RegisterWorker(bg, workerID, wc)
+	prevHijacked, err := s.deps.Hub.RegisterWorkerWithTransport(bg, workerID, wc, true)
 	if err != nil {
 		_ = conn.Close(websocket.StatusPolicyViolation, "worker registration rejected")
 		return
 	}
-	s.deps.Hub.SetWorkerTunnelFlag(bg, workerID, true)
 	s.deps.Hub.State.TouchActivity(workerID)
 	if prevHijacked {
 		s.deps.Hub.NotifyHijackChanged(workerID, false, nil)

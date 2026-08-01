@@ -7,6 +7,7 @@ package server
 
 import (
 	"context"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
@@ -101,6 +102,17 @@ func newApprovalServer(t *testing.T) (*testServer, *hub.TermHub) {
 	return ts, appHub
 }
 
+func dialApprovalOwner(t *testing.T, ctx context.Context, url string) *browserClient {
+	t.Helper()
+	bc := dialBrowser(t, ctx, url, "approval-submitter", "admin")
+	bc.waitFrame(t, "hello", 5*time.Second)
+	bc.send(t, ctx, map[string]any{"type": "hijack_request"})
+	bc.waitFrameWhere(t, "hijack_state", 5*time.Second, func(frame map[string]any) bool {
+		return frame["owner"] == "me"
+	})
+	return bc
+}
+
 // TestApprovalRequiredInputApproveReachesWorker drives: a browser input frame is
 // held for approval → approval_pending broadcast → REST approve → the held
 // command reaches the worker → approval_resolved(approved).
@@ -122,9 +134,8 @@ func TestApprovalRequiredInputApproveReachesWorker(t *testing.T) {
 
 	// The submitting browser is a (non-admin) viewer, so the admin approver is a
 	// different principal (no self-approval conflict).
-	bc := dialBrowser(t, ctx, wsBase+"/ws/browser/appr/term", "view1", "viewer")
+	bc := dialApprovalOwner(t, ctx, wsBase+"/ws/browser/appr/term")
 	defer func() { _ = bc.conn.Close(websocket.StatusNormalClosure, "") }()
-	bc.waitFrame(t, "hello", 5*time.Second)
 
 	bc.send(t, ctx, map[string]any{"type": "input", "data": "whoami\n"})
 	pending := bc.waitFrame(t, "approval_pending", 5*time.Second)
@@ -169,9 +180,8 @@ func TestApprovalRequiredInputRejectSendsBanner(t *testing.T) {
 	defer br.Stop()
 	waitUntil(t, 5*time.Second, func() bool { return appHub.Registry.Contains("rej") })
 
-	bc := dialBrowser(t, ctx, wsBase+"/ws/browser/rej/term", "view1", "viewer")
+	bc := dialApprovalOwner(t, ctx, wsBase+"/ws/browser/rej/term")
 	defer func() { _ = bc.conn.Close(websocket.StatusNormalClosure, "") }()
-	bc.waitFrame(t, "hello", 5*time.Second)
 
 	bc.send(t, ctx, map[string]any{"type": "input", "data": "shutdown\n"})
 	pending := bc.waitFrame(t, "approval_pending", 5*time.Second)
@@ -220,9 +230,8 @@ func TestApprovalDoubleResolveIsBadRequest(t *testing.T) {
 	defer br.Stop()
 	waitUntil(t, 5*time.Second, func() bool { return appHub.Registry.Contains("dbl") })
 
-	bc := dialBrowser(t, ctx, wsBase+"/ws/browser/dbl/term", "view1", "viewer")
+	bc := dialApprovalOwner(t, ctx, wsBase+"/ws/browser/dbl/term")
 	defer func() { _ = bc.conn.Close(websocket.StatusNormalClosure, "") }()
-	bc.waitFrame(t, "hello", 5*time.Second)
 	bc.send(t, ctx, map[string]any{"type": "input", "data": "ls\n"})
 	reqID, _ := bc.waitFrame(t, "approval_pending", 5*time.Second)["request_id"].(string)
 
@@ -259,9 +268,8 @@ func TestApprovalListEndpoint(t *testing.T) {
 	defer br.Stop()
 	waitUntil(t, 5*time.Second, func() bool { return appHub.Registry.Contains("lst") })
 
-	bc := dialBrowser(t, ctx, wsBase+"/ws/browser/lst/term", "view1", "viewer")
+	bc := dialApprovalOwner(t, ctx, wsBase+"/ws/browser/lst/term")
 	defer func() { _ = bc.conn.Close(websocket.StatusNormalClosure, "") }()
-	bc.waitFrame(t, "hello", 5*time.Second)
 	bc.send(t, ctx, map[string]any{"type": "input", "data": "id\n"})
 	reqID, _ := bc.waitFrame(t, "approval_pending", 5*time.Second)["request_id"].(string)
 
@@ -302,9 +310,8 @@ func TestBrowserInputDenyGate(t *testing.T) {
 	defer br.Stop()
 	waitUntil(t, 5*time.Second, func() bool { return appHub.Registry.Contains("deny") })
 
-	bc := dialBrowser(t, ctx, wsBase+"/ws/browser/deny/term", "view1", "viewer")
+	bc := dialApprovalOwner(t, ctx, wsBase+"/ws/browser/deny/term")
 	defer func() { _ = bc.conn.Close(websocket.StatusNormalClosure, "") }()
-	bc.waitFrame(t, "hello", 5*time.Second)
 	bc.send(t, ctx, map[string]any{"type": "input", "data": "rm\n"})
 	bc.waitFrameWhere(t, "error", 5*time.Second, func(f map[string]any) bool {
 		msg, _ := f["message"].(string)
@@ -334,9 +341,8 @@ func TestBrowserInputParkedBufferingAndTooLong(t *testing.T) {
 	defer br.Stop()
 	waitUntil(t, 5*time.Second, func() bool { return appHub.Registry.Contains("park") })
 
-	bc := dialBrowser(t, ctx, wsBase+"/ws/browser/park/term", "view1", "viewer")
+	bc := dialApprovalOwner(t, ctx, wsBase+"/ws/browser/park/term")
 	defer func() { _ = bc.conn.Close(websocket.StatusNormalClosure, "") }()
-	bc.waitFrame(t, "hello", 5*time.Second)
 
 	// First input is held for approval → browser is parked.
 	bc.send(t, ctx, map[string]any{"type": "input", "data": "base\n"})
@@ -358,6 +364,43 @@ func TestBrowserInputParkedBufferingAndTooLong(t *testing.T) {
 	waitUntil(t, 5*time.Second, func() bool { return session.received("base") && session.received("more") })
 }
 
+func TestApprovalAfterOwnershipLossReturnsConflictWithoutReplay(t *testing.T) {
+	ts, appHub := newApprovalServer(t)
+	ts.srv.MarkReady()
+	ts.reg.add("approval-lost-owner", "admin1", "public")
+
+	httpSrv := httptest.NewServer(ts.srv.Handler())
+	defer httpSrv.Close()
+	wsBase := "ws" + strings.TrimPrefix(httpSrv.URL, "http")
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	session := &recSession{}
+	br := startWorkerBridge(ctx, httpSrv.URL, "approval-lost-owner", session)
+	defer br.Stop()
+	waitUntil(t, 5*time.Second, func() bool { return appHub.Registry.Contains("approval-lost-owner") })
+
+	bc := dialApprovalOwner(t, ctx, wsBase+"/ws/browser/approval-lost-owner/term")
+	defer func() { _ = bc.conn.Close(websocket.StatusNormalClosure, "") }()
+	bc.send(t, ctx, map[string]any{"type": "input", "data": "base\n"})
+	reqID, _ := bc.waitFrame(t, "approval_pending", 5*time.Second)["request_id"].(string)
+	bc.send(t, ctx, map[string]any{"type": "input", "data": "buffered\n"})
+	bc.send(t, ctx, map[string]any{"type": "hijack_release"})
+	bc.send(t, ctx, map[string]any{"type": "ping"})
+	bc.waitFrame(t, "pong", 5*time.Second)
+
+	rec := ts.do("POST", "/api/approvals/"+reqID+"/approve", "", adminHeaders())
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("approve after ownership loss = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if session.received("base") || session.received("buffered") || session.count() != 0 {
+		t.Fatal("lost-owner approval delivered command or replay")
+	}
+	if status := string(appHub.Approvals.Get(reqID).Status); status != "refused" {
+		t.Fatalf("approval terminal status = %q", status)
+	}
+}
+
 // TestBrowserInputOversizedBeforeGate covers the pre-gate length check.
 func TestBrowserInputOversizedBeforeGate(t *testing.T) {
 	ts, appHub := newApprovalServer(t)
@@ -375,9 +418,8 @@ func TestBrowserInputOversizedBeforeGate(t *testing.T) {
 	defer br.Stop()
 	waitUntil(t, 5*time.Second, func() bool { return appHub.Registry.Contains("big") })
 
-	bc := dialBrowser(t, ctx, wsBase+"/ws/browser/big/term", "view1", "viewer")
+	bc := dialApprovalOwner(t, ctx, wsBase+"/ws/browser/big/term")
 	defer func() { _ = bc.conn.Close(websocket.StatusNormalClosure, "") }()
-	bc.waitFrame(t, "hello", 5*time.Second)
 	bc.send(t, ctx, map[string]any{"type": "input", "data": strings.Repeat("x", 11000)})
 	bc.waitFrameWhere(t, "error", 5*time.Second, func(f map[string]any) bool {
 		msg, _ := f["message"].(string)
@@ -419,9 +461,8 @@ func TestApprovalRestEdgeCases(t *testing.T) {
 	}
 
 	// Reject with a reason query param exercises the reason branch.
-	bc := dialBrowser(t, ctx, wsBase+"/ws/browser/edge/term", "view1", "viewer")
+	bc := dialApprovalOwner(t, ctx, wsBase+"/ws/browser/edge/term")
 	defer func() { _ = bc.conn.Close(websocket.StatusNormalClosure, "") }()
-	bc.waitFrame(t, "hello", 5*time.Second)
 	bc.send(t, ctx, map[string]any{"type": "input", "data": "danger\n"})
 	reqID, _ := bc.waitFrame(t, "approval_pending", 5*time.Second)["request_id"].(string)
 	if rec := ts.do("POST", "/api/approvals/"+reqID+"/reject?reason=too-risky", "", adminHeaders()); rec.Code != 200 {
@@ -461,9 +502,8 @@ func TestBrowserInputGateError(t *testing.T) {
 	defer br.Stop()
 	waitUntil(t, 5*time.Second, func() bool { return appHub.Registry.Contains("ge") })
 
-	bc := dialBrowser(t, ctx, wsBase+"/ws/browser/ge/term", "view1", "viewer")
+	bc := dialApprovalOwner(t, ctx, wsBase+"/ws/browser/ge/term")
 	defer func() { _ = bc.conn.Close(websocket.StatusNormalClosure, "") }()
-	bc.waitFrame(t, "hello", 5*time.Second)
 	bc.send(t, ctx, map[string]any{"type": "input", "data": "x\n"}) // gate errors → dropped
 	// The socket is still usable: a ping is answered.
 	bc.send(t, ctx, map[string]any{"type": "ping"})

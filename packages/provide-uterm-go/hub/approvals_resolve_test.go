@@ -26,6 +26,9 @@ func registerActiveBrowser(t *testing.T, h *TermHub, workerID string, ws Browser
 		t.Fatalf("RegisterBrowser: %v", err)
 	}
 	h.ActivateBrowserBroadcasts(bg(), workerID, ws)
+	if ok, reason := h.TryAcquireWsHijack(bg(), workerID, ws); !ok {
+		t.Fatalf("TryAcquireWsHijack: %s", reason)
+	}
 }
 
 // findControl decodes the first control payload of typ in a browser's payloads.
@@ -174,6 +177,35 @@ func TestResolveApprovalReleasesHoldBuffer(t *testing.T) {
 	}
 	if decodeTerminalData(t, got[0]) != "cmd\n" || decodeTerminalData(t, got[1]) != "extra\n" {
 		t.Fatalf("replay order wrong: %q then %q", decodeTerminalData(t, got[0]), decodeTerminalData(t, got[1]))
+	}
+}
+
+func TestResolveApprovalAfterOwnershipLossRefusesCommandAndReplay(t *testing.T) {
+	h, _ := newTestHub(t, nil)
+	worker := &fakeWorkerWS{}
+	registerWorkerState(h, "w", worker)
+	b := newBrowserWS("b1")
+	registerActiveBrowser(t, h, "w", b, "admin")
+	reqID, err := h.ParkBrowserForApproval(bg(), "w", b, "cmd\n", PolicyDecision{Action: "hold", TimeoutS: 60})
+	if err != nil {
+		t.Fatalf("ParkBrowserForApproval: %v", err)
+	}
+	if tooLong := h.HoldBrowserInput(b, "buffered\n"); tooLong {
+		t.Fatal("hold buffer should accept small input")
+	}
+	if released, _ := h.TryReleaseWsHijack(bg(), "w", b); !released {
+		t.Fatal("owner release failed")
+	}
+
+	resolved, err := h.ResolveApproval(bg(), reqID, true, nil, &Principal{SubjectID: "approver"})
+	if !resolved || err == nil {
+		t.Fatalf("approval after ownership loss = resolved:%t err:%v, want terminal refusal", resolved, err)
+	}
+	if got := worker.payloads(); len(got) != 0 {
+		t.Fatalf("ownership-lost approval delivered command or replay: %v", got)
+	}
+	if status := string(h.Approvals.Get(reqID).Status); status != "refused" {
+		t.Fatalf("terminal approval status = %q, want refused", status)
 	}
 }
 
