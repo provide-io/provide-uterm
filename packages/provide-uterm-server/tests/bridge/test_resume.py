@@ -8,16 +8,27 @@ from __future__ import annotations
 
 import asyncio
 import sqlite3
-import time
+from typing import Any
 from unittest.mock import patch
 
 from provide.uterm.control.plane import ControlPlaneConfig, bootstrap_control_plane
+from provide.uterm.server.bridge.hub import resume as resume_module
 from provide.uterm.server.bridge.hub.resume import (
     ControlPlaneResumeStore,
     InMemoryResumeStore,
     ResumeSession,
     ResumeTokenStore,
 )
+
+
+def _now() -> float:
+    """The monotonic clock the store reads, sampled once."""
+    return resume_module.time.monotonic()
+
+
+def _clock_at(instant: float) -> Any:
+    """Freeze the store's monotonic clock, so expiry never depends on wall time."""
+    return patch.object(resume_module.time, "monotonic", return_value=instant)
 
 
 class TestResumeSession:
@@ -67,9 +78,10 @@ class TestInMemoryResumeStore:
     def test_get_expired_returns_none_and_removes(self) -> None:
         store = InMemoryResumeStore()
         token = asyncio.run(store.create("w1", "admin", 0.001))
-        # Wait for expiry
-        time.sleep(0.01)
-        assert asyncio.run(store.get(token)) is None
+        # Move the clock rather than sleeping: a real sleep races anything that
+        # stalls the process, and the point here is only that expiry is past.
+        with _clock_at(_now() + 1.0):
+            assert asyncio.run(store.get(token)) is None
         assert len(store) == 0
 
     def test_revoke_removes_token(self) -> None:
@@ -108,8 +120,10 @@ class TestInMemoryResumeStore:
         store = InMemoryResumeStore()
         asyncio.run(store.create("w1", "admin", 0.001))
         asyncio.run(store.create("w2", "viewer", 60))
-        time.sleep(0.01)
-        removed = store.cleanup_expired()
+        # Pinned between the two expiries. A real sleep only separated them by
+        # 10ms, so a stall past w2's 60s TTL removed both and failed the count.
+        with _clock_at(_now() + 1.0):
+            removed = store.cleanup_expired()
         assert removed == 1
         assert len(store) == 1
 
@@ -123,8 +137,8 @@ class TestInMemoryResumeStore:
         store = InMemoryResumeStore()
         t1 = asyncio.run(store.create("w1", "admin", 60))
         t2 = asyncio.run(store.create("w2", "viewer", 0.001))
-        time.sleep(0.01)
-        active = store.active_tokens()
+        with _clock_at(_now() + 1.0):
+            active = store.active_tokens()
         assert t1 in active
         assert t2 not in active
 
