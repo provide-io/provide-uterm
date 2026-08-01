@@ -8,7 +8,7 @@ Prioritized by novelty and competitive differentiation.
 Pre-execution input gate that holds dangerous commands (`rm -rf /`, `DROP TABLE`)
 pending human approval via Slack/webhook/REST.
 *   **Status:** **Buffered Hold & Resume Done** — dangerous commands can be held for approval, subsequent keystrokes are buffered while the browser is paused, and buffered input is replayed after approval resolution.
-*   **Next:** Harden full-package verification and expand approval workflow coverage across broader server/API paths.
+*   **Next:** Add an optional durable approval queue for deployments that require pending decisions to survive process restart or active-node failover.
 
 ### 2. Session Replay with AI Annotation (AGPL-3.0-or-later)
 Automatic summarization of terminal sessions using LLMs. Generates searchable "Chapters" and "Key Actions" for long audit logs.
