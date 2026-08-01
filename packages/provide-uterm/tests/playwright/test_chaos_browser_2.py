@@ -60,6 +60,40 @@ def _wait_hijacked_by_me(page: Page, timeout: int = 5000) -> None:
     )
 
 
+def _wait_settled_after_reconnect(page: Page, timeout: int = 15000) -> str:
+    """Wait until the reconnect handshake has settled; return the final status.
+
+    A browser that reconnects inside the resume-token TTL may legitimately
+    reclaim the hijack lease it held before the drop (the disconnect marks the
+    resume token as the hijack owner and the ``resume`` frame reclaims it), so
+    ``Connected (watching)`` is *not* the guaranteed outcome — ``Hijacked
+    (you)`` is equally correct.  Which one lands depends on backend-internal
+    ordering between the disconnect bookkeeping and the resume frame.
+
+    The status is only trusted once it has held for a full second: the widget
+    shows ``Connected (watching)`` from the fresh hello *before* a pending
+    reclaim lands, so sampling too early would race the handshake.
+    """
+    page.wait_for_function(
+        """() => {
+            const st = window.__deepQuery('#statustext')?.textContent || '';
+            if (st !== 'Connected (watching)' && st !== 'Hijacked (you)') {
+                window.__settleStatus = null;
+                return false;
+            }
+            const now = Date.now();
+            if (window.__settleStatus !== st) {
+                window.__settleStatus = st;
+                window.__settleSince = now;
+                return false;
+            }
+            return now - window.__settleSince >= 1000;
+        }""",
+        timeout=timeout,
+    )
+    return _status_text(page)
+
+
 def _wait_stable_state(page: Page, timeout: int = 10000) -> None:
     """Wait until status text is a known stable state (not transitioning)."""
     page.wait_for_function(
@@ -176,11 +210,19 @@ class TestRapidPageRefresh:
                 page.reload(wait_until="domcontentloaded")
                 page.wait_for_timeout(100)
 
-            # After final reload, wait for widget to stabilize
-            _wait_connected(page, timeout=10000)
-            expect(_hijack_btn(page)).to_be_enabled(timeout=5000)  # type: ignore[union-attr]
+            # After the final reload the widget settles into one of two live
+            # states: a plain watcher, or the resumed lease owner (the resume
+            # token carries hijack ownership across the drop).  Both are
+            # correct; an orphaned socket would settle into neither.
+            settled = _wait_settled_after_reconnect(page)
 
-            # Verify widget is functional — can acquire hijack after all the reloads
+            # Verify the widget is functional whichever way it landed: an owner
+            # must be able to release the lease it reclaimed, and the resulting
+            # watcher must be able to acquire a fresh one.
+            if settled == "Hijacked (you)":
+                _release_btn(page).click()  # type: ignore[union-attr]
+                _wait_connected(page, timeout=10000)
+            expect(_hijack_btn(page)).to_be_enabled(timeout=5000)  # type: ignore[union-attr]
             _hijack_btn(page).click()  # type: ignore[union-attr]
             _wait_hijacked_by_me(page)
 
