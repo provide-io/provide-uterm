@@ -80,7 +80,7 @@ public sealed class SqliteCrossCompatTests
         Assert.Equal(2, (await engine.GraphicalTargets().ListAsync()).Count);
 
         await engine.CloseAsync();
-        File.Delete(work);
+        SqliteTestDb.Delete(work);
     }
 
     /// <summary>
@@ -117,13 +117,7 @@ public sealed class SqliteCrossCompatTests
             Assert.Equal(sql, csharpSchema[name]);
         }
 
-        foreach (var suffix in new[] { "", "-wal", "-shm" })
-        {
-            if (File.Exists(mine + suffix))
-            {
-                File.Delete(mine + suffix);
-            }
-        }
+        SqliteTestDb.Delete(mine);
     }
 
     /// <summary>Every CREATE statement as SQLite recorded it.</summary>
@@ -134,21 +128,26 @@ public sealed class SqliteCrossCompatTests
         try
         {
             var stored = new Dictionary<string, string>(StringComparer.Ordinal);
-            await using var conn = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={work}");
-            await conn.OpenAsync();
-            await using var cmd = conn.CreateCommand();
-            cmd.CommandText = "SELECT name, sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY name";
-            await using var r = await cmd.ExecuteReaderAsync();
-            while (await r.ReadAsync())
+
+            // Scoped so the connection closes before the `finally` deletes the
+            // copy: a method-scoped `await using` disposes after the finally.
+            await using (var conn = SqliteTestDb.Connect(work))
             {
-                stored[r.GetString(0)] = r.GetString(1);
+                await conn.OpenAsync();
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT name, sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY name";
+                await using var r = await cmd.ExecuteReaderAsync();
+                while (await r.ReadAsync())
+                {
+                    stored[r.GetString(0)] = r.GetString(1);
+                }
             }
 
             return stored;
         }
         finally
         {
-            File.Delete(work);
+            SqliteTestDb.Delete(work);
         }
     }
 }

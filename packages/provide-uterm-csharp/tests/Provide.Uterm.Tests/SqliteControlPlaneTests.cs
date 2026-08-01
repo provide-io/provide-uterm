@@ -24,17 +24,7 @@ public sealed class SqliteControlPlaneTests
         return (engine, path);
     }
 
-    private static void Cleanup(string path)
-    {
-        foreach (var suffix in new[] { "", "-wal", "-shm" })
-        {
-            var f = path + suffix;
-            if (File.Exists(f))
-            {
-                File.Delete(f);
-            }
-        }
-    }
+    private static void Cleanup(string path) => SqliteTestDb.Delete(path);
 
     [Fact]
     public void Capabilities_ReportDurableSqlite()
@@ -60,17 +50,33 @@ public sealed class SqliteControlPlaneTests
         var (engine, path) = await OpenAsync();
         await engine.CloseAsync();
 
-        await using var raw = new SqliteConnection($"Data Source={path}");
-        await raw.OpenAsync();
-
         var tables = new List<string>();
-        await using (var cmd = raw.CreateCommand())
+        var versions = new List<long>();
+
+        // Scoped so the connection is closed before Cleanup: a method-scoped
+        // `await using` would still be holding the file when the delete runs.
+        await using (var raw = SqliteTestDb.Connect(path))
         {
-            cmd.CommandText = "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name";
-            await using var r = await cmd.ExecuteReaderAsync();
-            while (await r.ReadAsync())
+            await raw.OpenAsync();
+
+            await using (var cmd = raw.CreateCommand())
             {
-                tables.Add(r.GetString(0));
+                cmd.CommandText = "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name";
+                await using var r = await cmd.ExecuteReaderAsync();
+                while (await r.ReadAsync())
+                {
+                    tables.Add(r.GetString(0));
+                }
+            }
+
+            await using (var cmd = raw.CreateCommand())
+            {
+                cmd.CommandText = "SELECT version FROM cp_schema_version ORDER BY version";
+                await using var r = await cmd.ExecuteReaderAsync();
+                while (await r.ReadAsync())
+                {
+                    versions.Add(r.GetInt64(0));
+                }
             }
         }
 
@@ -81,17 +87,6 @@ public sealed class SqliteControlPlaneTests
                  })
         {
             Assert.Contains(want, tables);
-        }
-
-        var versions = new List<long>();
-        await using (var cmd = raw.CreateCommand())
-        {
-            cmd.CommandText = "SELECT version FROM cp_schema_version ORDER BY version";
-            await using var r = await cmd.ExecuteReaderAsync();
-            while (await r.ReadAsync())
-            {
-                versions.Add(r.GetInt64(0));
-            }
         }
 
         Assert.Equal([1L, 2L, 3L], versions);

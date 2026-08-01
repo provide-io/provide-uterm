@@ -66,7 +66,7 @@ public sealed class CliServerControlPlaneTests
         // The engine was closed properly, so the schema is in the file itself
         // rather than stranded in an uncheckpointed WAL.
         var tables = new List<string>();
-        using (var conn = new SqliteConnection($"Data Source={db};Mode=ReadOnly"))
+        using (var conn = SqliteTestDb.Connect(db, SqliteOpenMode.ReadOnly))
         {
             conn.Open();
             using var cmd = conn.CreateCommand();
@@ -128,7 +128,7 @@ public sealed class CliServerControlPlaneTests
         // Re-migrating an existing database is a no-op, so the version list is
         // unchanged rather than duplicated.
         var versions = new List<long>();
-        using (var conn = new SqliteConnection($"Data Source={db};Mode=ReadOnly"))
+        using (var conn = SqliteTestDb.Connect(db, SqliteOpenMode.ReadOnly))
         {
             conn.Open();
             using var cmd = conn.CreateCommand();
