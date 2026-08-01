@@ -204,6 +204,48 @@ describe("FanOutController group management", () => {
 });
 
 describe("FanOutController send authorization", () => {
+  it("fails closed when the global-admin authorizer throws", async () => {
+    const { controller, hub } = build({
+      isGlobalAdmin: async () => {
+        throw new Error("authorizer unavailable");
+      },
+    });
+    await controller.createGroup(group(["w1"]), "alice");
+
+    const result = await controller.send("g1", "uptime", actor("alice"));
+
+    expect(result.error).toBe("fan-out authorization failed");
+    expect(hub.sent).toStrictEqual([]);
+  });
+
+  it("fails individual members closed when session authorization throws", async () => {
+    const { controller, hub } = build({
+      resolveSession: async () => {
+        throw new Error("registry unavailable");
+      },
+    });
+    await controller.createGroup(group(["w1"]), "alice");
+
+    const result = await controller.send("g1", "uptime", actor("alice"));
+
+    expect(result.failedSessions).toStrictEqual(["w1"]);
+    expect(hub.sent).toStrictEqual([]);
+  });
+
+  it("does not duplicate a member already reported as a failed send", async () => {
+    let resolution = 0;
+    const { controller, hub } = build({
+      resolveSession: async (workerId) => (++resolution === 1 ? undefined : { workerId }),
+    });
+    hub.refusing.add("w1");
+    await controller.createGroup(group(["w1", "w1"]), "alice");
+
+    const result = await controller.send("g1", "uptime", actor("alice"));
+
+    expect(result.failedSessions).toStrictEqual(["w1"]);
+    expect(result.results).toHaveLength(1);
+  });
+
   it("returns an empty result rather than leaking whether a group exists", async () => {
     // A stranger asking about someone else's group learns nothing from the
     // shape of the answer.
@@ -235,6 +277,24 @@ describe("FanOutController send authorization", () => {
 });
 
 describe("FanOutController policy", () => {
+  it("uses viewer as the conservative policy role when no normalized role is present", async () => {
+    let policyRole: unknown;
+    const { controller } = build({
+      isGlobalAdmin: async () => true,
+      policyGate: {
+        interceptFanout: async (_command, context) => {
+          policyRole = context.role;
+          return { action: "deny" };
+        },
+      },
+    });
+    await controller.createGroup(group(["w1"]), "service-account");
+
+    await controller.send("g1", "id", actor("service-account", []));
+
+    expect(policyRole).toBe("viewer");
+  });
+
   it("uses the caller's actual strongest normalized role", async () => {
     let policyRole: unknown;
     const { controller } = build({
@@ -464,6 +524,32 @@ describe("FanOutController policy", () => {
     const { controller, hub } = build();
     await controller.createGroup(group(["w1"]), "alice");
     await controller.send("g1", "uptime", actor("alice"));
+    expect(hub.sent.map((entry) => entry.workerId)).toStrictEqual(["w1"]);
+  });
+});
+
+describe("FanOutController sequential delivery failures", () => {
+  it("reports a capture-open failure without sending to that worker", async () => {
+    const { controller, hub } = build();
+    hub.openOutputCapture = async () => {
+      throw new Error("capture unavailable");
+    };
+    await controller.createGroup(group(["w1"], { mode: "sequential" }), "alice");
+
+    const result = await controller.send("g1", "uptime", actor("alice"));
+
+    expect(result.failedSessions).toStrictEqual(["w1"]);
+    expect(hub.sent).toStrictEqual([]);
+  });
+
+  it("reports a sequential collection failure after closing its capture", async () => {
+    const { controller, hub } = build();
+    hub.exploding.add("w1");
+    await controller.createGroup(group(["w1"], { mode: "sequential" }), "alice");
+
+    const result = await controller.send("g1", "uptime", actor("alice"));
+
+    expect(result.failedSessions).toStrictEqual(["w1"]);
     expect(hub.sent.map((entry) => entry.workerId)).toStrictEqual(["w1"]);
   });
 });

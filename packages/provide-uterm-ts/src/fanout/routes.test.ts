@@ -175,6 +175,23 @@ describe("the route table", () => {
 });
 
 describe("the global-admin boundary", () => {
+  it("fails closed when the admin authorizer is unavailable", async () => {
+    const routes = createFanoutRoutes({
+      controller: new FakeController(),
+      registry: { getDefinition: async () => undefined },
+      authz: {
+        canReadSession: async () => true,
+        isAdmin: async () => {
+          throw new Error("authorizer unavailable");
+        },
+      } as FanoutRoutesOptions["authz"],
+    });
+
+    const response = await routes.listGroups(request(PRINCIPAL));
+
+    expect(response).toMatchObject({ status: 403, body: { error: "global admin role required" } });
+  });
+
   it("rejects every route before parsing or group lookup", async () => {
     const controller = new FakeController();
     controller.groups.set(
