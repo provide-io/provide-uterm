@@ -68,6 +68,12 @@
     }
   ],
   "audit_command_length": 120,
+  "create_authorization_unavailable": {
+    "body": {
+      "error": "fan-out authorization is unavailable"
+    },
+    "status": 403
+  },
   "create_defaults": {
     "group": {
       "created_by": "operator@example.org",

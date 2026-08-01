@@ -94,6 +94,10 @@ class FakeController:
         # registered but unreadable, anything else unknown.
         self.readable = {"w1", "w2", "w3"}
         self.allow_unknown_members = False
+        # The reference refuses outright when a controller cannot judge access
+        # at all; the corpus records the routes' own shaping, so this fake is
+        # wired.
+        self.authorization_ready = True
 
     async def validate_members(self, worker_ids: list[str], principal: Any) -> tuple[list[str], list[str]]:
         """Split members exactly as the real controller's admission check does."""
@@ -242,6 +246,13 @@ async def _record() -> dict[str, Any]:
         )
         unknown = await _call(create, FakeRequest(PRINCIPAL, {"worker_ids": ["never-registered"]}))
         corpus["create_unknown_session"] = {**unknown, "body": {**unknown["body"], "group_id": "<uuid>"}}
+
+        # A controller that cannot judge access at all. It does not get to
+        # admit members on the strength of the checks that remain, so this is
+        # refused before any member is looked at.
+        controller.authorization_ready = False
+        corpus["create_authorization_unavailable"] = await _call(create, FakeRequest(PRINCIPAL, {"worker_ids": ["w1"]}))
+        controller.authorization_ready = True
 
         # A controller that refuses the group.
         controller.create_error = ValueError("group too large: 99 > 50")

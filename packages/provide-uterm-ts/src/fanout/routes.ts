@@ -41,10 +41,10 @@ export interface RouteResponse {
 
 /** The controller surface the routes drive. */
 export interface FanoutRoutesController {
+  /** Whether every authorizer the controller needs is wired. */
+  readonly authorizationReady: boolean;
   /** Whether dormant unknown members may be admitted at group creation. */
   readonly allowUnknownMembers: boolean;
-  /** Split members into currently authorized and refused, for `principal`. */
-  validateMembers(workerIds: string[], principal: AuthorizablePrincipal): Promise<[string[], string[]]>;
   /** Register a group and return its identifier. */
   createGroup(group: FanOutGroup, principal: string): Promise<string>;
   /** The groups the caller may see. */
@@ -73,9 +73,12 @@ export interface FanoutRoutesOptions {
   controller?: FanoutRoutesController | undefined;
   /** Where a session's definition is looked up, to tell unknown from forbidden. */
   registry: { getDefinition(workerId: string): Promise<unknown> };
-  /** Whether the caller is a global administrator. */
+  /** The server's authorizer: who is an administrator, and what they may read. */
   authz: {
+    /** Whether the caller is a global administrator. */
     isAdmin(principal: AuthorizablePrincipal): Promise<boolean>;
+    /** Whether the caller may read the session `definition` describes. */
+    canReadSession(principal: AuthorizablePrincipal, definition: unknown): Promise<boolean>;
   };
   /** Where changes are recorded. Optional: a deployment may have no sink. */
   audit?: (event: string, record: { principal: string; detail: Record<string, unknown> }) => void;
@@ -232,42 +235,35 @@ export function createFanoutRoutes(options: FanoutRoutesOptions): FanoutRoutes {
       const workerIds = field(body, "worker_ids", isStringArray) ?? [];
       const name = field(body, "name", isString) ?? "";
 
-      // Admission is the controller's call: it classifies every member, and
-      // the registry then splits the refused into unknown and forbidden.
-      // Strict by default — dormant members require the controller's explicit
-      // opt-in, while every known member always requires current read access.
+      // A controller that cannot judge access does not get to admit members
+      // on the strength of the checks that remain.
+      if (!ctrl.authorizationReady) {
+        return refusal(403, "fan-out authorization is unavailable");
+      }
+
+      // Each member is judged from ONE resolution, in the order the caller
+      // gave them, and read access is checked against that same definition.
+      // Resolving twice — once to decide access and again to decide whether
+      // the member exists — lets a session the caller may not read be filed as
+      // merely unknown and admitted by the dormant-member opt-in. Access is
+      // the routes' own authorizer's answer about the routes' own registry's
+      // definition, so a controller wired to a wider view cannot widen what a
+      // group may reach.
       //
-      // The two lookups are the reference's own shape, and they are only sound
-      // while the registry read below is the same source the controller
-      // resolved from — which is how the reference wires it, one registry
-      // behind both `app.state.uterm_registry` and the controller's
-      // `resolve_session`. Where the two can disagree, a member the controller
-      // refused for read access can be read here as unknown, and the dormant
-      // opt-in then admits what a single lookup would have refused with a 403.
-      // Deciding this from the controller's own resolution instead is what
-      // would close that, and it is not the port's call to make: the shared
-      // scenario contract records a controller that resolves every member and
-      // a registry that knows only the readable ones, and expects the unknown
-      // member admitted. Changing it here would answer 403 where every other
-      // backend answers 200.
-      const [, refused] = await ctrl.validateMembers([...workerIds], authorized);
-      if (refused.length > 0) {
-        const unknown: string[] = [];
-        for (const workerId of refused) {
-          const definition = await options.registry.getDefinition(workerId);
-          if (definition === undefined || definition === null) {
-            unknown.push(workerId);
+      // Strict by default: a member that is not registered needs the explicit
+      // dormant-member opt-in, and a member that is registered always needs
+      // current read access, opt-in or not.
+      for (const workerId of workerIds) {
+        const definition = await options.registry.getDefinition(workerId);
+        if (definition === undefined || definition === null) {
+          if (!ctrl.allowUnknownMembers) {
+            return refusal(400, `unknown fan-out session: ${workerId}`);
           }
+          continue;
         }
-        if (unknown.length > 0 && !ctrl.allowUnknownMembers) {
-          return refusal(400, `unknown fan-out session: ${unknown[0]}`);
+        if (!(await options.authz.canReadSession(authorized, definition))) {
+          return refusal(403, `forbidden: no read access to session ${workerId}`);
         }
-        const forbidden = refused.filter((workerId) => !unknown.includes(workerId));
-        if (forbidden.length > 0) {
-          return refusal(403, `forbidden: no read access to session ${forbidden[0]}`);
-        }
-        // What remains is unknown members under an explicit dormant-member
-        // opt-in, which is the one refusal that may proceed.
       }
 
       const errorPattern = field(body, "error_pattern", isString);
