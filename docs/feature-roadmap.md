@@ -7,7 +7,7 @@ Prioritized by novelty and competitive differentiation.
 ### 1. Command Approval Workflows (AGPL-3.0-or-later)
 Pre-execution input gate that holds dangerous commands (`rm -rf /`, `DROP TABLE`)
 pending human approval via Slack/webhook/REST.
-*   **Status:** **Buffered Hold & Resume Done** — dangerous commands can be held for approval, subsequent keystrokes are buffered while the browser is paused, and buffered input is replayed after approval resolution.
+*   **Status:** **Buffered Hold & Resume Done; Verification Hardened (2026-07-31)** — dangerous commands can be held for approval, subsequent keystrokes are buffered while the browser is paused, and buffered input is replayed after approval resolution. Full-package verification and broader server/API approval coverage (approval expiry/delivery, rejected-resume authority, approval ABA) were hardened during the comprehensive-review remediation — see the approval/lifecycle (`99d07111`) and approval/resume (`4219b154`) closures in `docs/roadmap/uterm-code-review-remediation.md`.
 *   **Next:** Add an optional durable approval queue for deployments that require pending decisions to survive process restart or active-node failover.
 
 ### 2. Session Replay with AI Annotation (AGPL-3.0-or-later)
