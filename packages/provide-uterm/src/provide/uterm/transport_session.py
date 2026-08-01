@@ -66,10 +66,8 @@ class TerminalFrame:
         return dict(cursor) if isinstance(cursor, dict) else {"x": 0, "y": 0}
 
 
-def _retained_size(value: Any, seen: set[int] | None = None) -> int:
+def _retained_size(value: Any, seen: set[int]) -> int:
     """Estimate one owned JSON-like value's recursively retained bytes."""
-    if seen is None:
-        seen = set()
     object_id = id(value)
     if object_id in seen:
         return 0
@@ -314,6 +312,10 @@ class TransportSession:
 
         Non-positive timeouts perform one queue check without waiting. Values
         above :data:`TERMINAL_FRAME_WAIT_MAX_MS` raise :class:`ValueError`.
+        History is bounded, so an old *since* may return the oldest retained
+        frame with a sequence greater than ``since + 1`` after eviction. The
+        newest frame is always retained complete; if it alone exceeds the
+        nominal byte budget, the retained total may temporarily exceed it.
         """
         if timeout_ms > TERMINAL_FRAME_WAIT_MAX_MS:
             raise ValueError(f"timeout_ms must be <= {TERMINAL_FRAME_WAIT_MAX_MS}")
