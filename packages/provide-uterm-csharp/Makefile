@@ -109,6 +109,11 @@ conformance-test:
 PYTHON ?= python3
 mutation-gate:
 	$(PYTHON) ci/mutation_gate.py
+# dotnet-stryker is a LOCAL tool (.config/dotnet-tools.json), so it does not
+# exist until restored. Without this, `dotnet stryker` exits 1 — the same code
+# it uses for "below threshold" — and the gate reads a tool that never ran as
+# a mutation result.
+	$(DOTNET) tool restore
 	$(PYTHON) ci/stryker_gate.py
 
 define DOTNET_COVER_BATCH
