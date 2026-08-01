@@ -19,14 +19,23 @@ needs splitting instead.
 
 | File | Lines | Why it is still here |
 |---|---:|---|
-| `provide-uterm-csharp/.../Server/UtermServer.cs` | 1562 | The server type is already `partial` and split across `UtermServer.Gui.cs`, `.GraphicalTargets.cs`, `.HostRest.cs`, `.HumanVnc.cs` and others. This file is the remaining core: construction, route mapping, `ServerFactory`. Splitting it is mechanical but touches route registration, so it wants its own change. |
 | `provide-uterm-csharp/tests/.../CoverageTo95Tests.cs` | 1196 | Coverage-driven test batches accreted by wave. Best split along the same batch lines the Makefile already uses. |
 | `provide-uterm-csharp/.../Vt/CharsetTables.cs` | 1051 | Generated character tables. A size cap measures nothing actionable here; a reviewer would never read it. Candidate for a permanent generated-file exclusion rather than a split. |
-| `provide-uterm-csharp/tests/.../HighCoverageBoostTests.cs` | 1032 | Same accretion as `CoverageTo95Tests.cs`. |
 | `scripts/record_uterm_vnc_demo_video.py` | 900 | Pre-existing waiver, carried over from when the check was Python-only. |
-| `provide-uterm-csharp/tests/.../ServerIntegrationControlPlaneRestTests.cs` | 836 | REST integration cases; splits cleanly by route family. |
 | `provide-uterm-go/embed/embed.go` | 831 | Embedded asset wiring. |
 | `provide-uterm-csharp/tests/.../CoverageTo97Wave5Tests.cs` | 783 | Six lines over; the cheapest one to clear. |
+
+## Paid down (2026-08-01)
+
+Split into `partial`-class siblings (sources) or partial test classes / sibling
+modules (tests), every resulting file under 700 lines, and their baseline
+entries deleted: `UtermServer.cs` (1559 → 358 + `.BridgeRest.cs`/`.BridgeWs.cs`),
+`Hub/Lease.cs` (1556 → 635 + `.Release.cs`/`.Expiry.cs`), `Hub/Connection.cs`
+(1129 → 587 + `.Browser.cs`), `ResumeLifecycleIntegrationTests.cs` (3255 → six
+files), `HighCoverageBoostTests.cs` (1035 → two), 
+`ServerIntegrationControlPlaneRestTests.cs` (924 → two, by route family),
+`FanoutExecutionTests.cs` (812 → two), and the Cloudflare
+`test_owned_input_fencing.py` (1190 → three modules + `cf_fencing_helpers.py`).
 
 ## Excluded from the scan
 
