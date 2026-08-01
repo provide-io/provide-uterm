@@ -48,6 +48,11 @@ dev = [
     "uvicorn>=0.47.0",
     "vulture>=2.16",
     "websockets>=16.0",
+    # The Cloudflare package declares this in its own dev EXTRA, but CI syncs
+    # the workspace-root dev GROUP, which does not install member extras — so
+    # the CF lifecycle scenario suite (part of the default root testpaths)
+    # never had it and failed on missing package metadata.
+    "workers-py>=0.4.0",
     "pyyaml>=6.0",
     "xenon>=0.9.3",
     "fastmcp>=3.3.1",
