@@ -25,11 +25,13 @@
  * receives two hellos or none.
  *
  * **What a disconnect leaves behind.** A browser that held the hijack
- * releases it, and the release is broadcast so every other viewer's controls
- * update; a worker leaving moves the session to `stopped` on a clean close and
- * `error` on a failure — though only the worker socket of record does, and a
- * stale one moves nothing. A session already deleted keeps its state and
- * tells nobody, but the registry is still corrected.
+ * releases it; its resume token is marked first, so the same browser can
+ * reclaim the hijack when it comes back rather than returning a plain viewer,
+ * and the release is broadcast so every other viewer's controls update. A
+ * worker leaving moves the session to `stopped` on a clean close and `error`
+ * on a failure — though only the worker socket of record does, and a stale one
+ * moves nothing. A session already deleted keeps its state and tells nobody,
+ * but the token is still marked and the registry still corrected.
  *
  * A socket's role is read from its attachment rather than from object
  * identity, because after hibernation the runtime's own references are gone
@@ -63,6 +65,7 @@ export type LifecycleAction =
   | { kind: "presence_sync"; exclude_self: boolean }
   | { kind: "send_hijack_state" }
   | { kind: "create_resume_token"; token: string; worker_id: string; role: string; ttl: number }
+  | { kind: "mark_resume_hijack_owner"; token: string; owner: boolean }
   | { kind: "update_kv"; connected: boolean }
   | { kind: "on_browser_connected" };
 
@@ -105,6 +108,8 @@ export interface SocketCloseState {
   presence: boolean;
   /** Whether this browser was the one holding the hijack. */
   heldHijack: boolean;
+  /** The resume token this browser was given, if it still holds one. */
+  resumeToken?: string | undefined;
   /** Whether a departing worker socket was the socket of record. */
   workerCurrent: boolean;
   now: number;
@@ -219,6 +224,13 @@ function onSocketGone(state: SocketCloseState): LifecycleAction[] {
         kind: "broadcast_browsers",
         frame: { type: "presence_leave", user_id: state.wsId, ts: state.now },
       });
+    }
+    // Marked before the socket goes, and marked even on a deleted session:
+    // the record is what lets a reconnecting admin reclaim the hijack rather
+    // than coming back a plain viewer with every keystroke fenced. A browser
+    // holding no token has nothing to mark.
+    if (state.heldHijack && state.resumeToken !== undefined && state.resumeToken !== "") {
+      actions.push({ kind: "mark_resume_hijack_owner", token: state.resumeToken, owner: true });
     }
     actions.push({ kind: "remove_browser_socket", released: state.heldHijack });
     // A hijack the leaver held is released with the socket, and the release

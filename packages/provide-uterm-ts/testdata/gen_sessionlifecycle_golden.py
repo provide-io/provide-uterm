@@ -16,10 +16,12 @@ is Cloudflare's; the decisions are not, and three of them matter:
   already sent it before the 101; on a hibernation restore ``fetch()`` never
   ran. Getting that wrong means a browser gets two hellos or none.
 * **What a disconnect leaves behind.** A browser that held the hijack has its
-  resume token marked so it can reclaim ownership on reconnect; a worker
-  leaving moves the session to ``stopped`` on a clean close and ``error`` on a
-  failure. A session already deleted does none of it — there is nobody left to
-  tell.
+  resume token marked so it can reclaim ownership on reconnect — without the
+  mark a reconnecting admin comes back a plain viewer with every keystroke
+  fenced — and the release is broadcast so every other viewer's controls
+  update; a worker leaving moves the session to ``stopped`` on a clean close
+  and ``error`` on a failure. A deleted session is told nothing, though the
+  token is still marked and the registry still corrected.
 
 The real handlers are driven here, not transcribed: the mixin reads everything
 it needs off ``self``, so a recording stub standing in for the Durable Object
@@ -36,11 +38,14 @@ Usage (from the repository root)::
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
+from provide.uterm.cloudflare.do.session_runtime import io as session_io
 from provide.uterm.cloudflare.do.session_runtime import lifecycle
 
 OUT = Path(__file__).resolve().parent / "sessionlifecycle_golden.json"
@@ -49,6 +54,7 @@ FIXED_TS = 1_700_000_000.0
 RESUME_TOKEN = "recorded-resume-token"  # noqa: S105 — a fixed stand-in, not a credential
 WS_ID = "ws-1"
 WORKER_ID = "w1"
+HIJACK_ID = "h1"
 
 
 class FakeSocket:
@@ -71,6 +77,12 @@ class RecordingRuntime:
     def __init__(self, case: dict[str, Any]) -> None:
         self.actions: list[dict[str, Any]] = []
         self._case = case
+        # Set while the real ``remove_browser_socket`` runs. Its own socket
+        # bookkeeping is the same work the port models as the single
+        # ``remove_browser_socket`` action, so recording those calls again
+        # would double-count them; what is recorded from inside it is only
+        # what outlives the call — the resume token it marks.
+        self._inside_remove_browser = False
         self._role = case.get("role", "browser")
         self._deleted_at = 1.0 if case.get("deleted") else None
         self.worker_id = WORKER_ID
@@ -83,10 +95,10 @@ class RecordingRuntime:
         self.raw_sockets: dict[str, Any] = {}
         self.last_snapshot = {"type": "snapshot", "screen": "the screen"} if case.get("has_snapshot", True) else None
         self.browser_resume_tokens = {WS_ID: RESUME_TOKEN} if case.get("has_resume_token") else {}
-        self.browser_hijack_owner = {WS_ID: "principal"} if case.get("held_hijack") else {}
+        self.browser_hijack_owner = {WS_ID: HIJACK_ID} if case.get("held_hijack") else {}
         self.config = _Config(case.get("resume_on", True))
         self.store = _Store(self.actions)
-        self.hijack = _Hijack()
+        self.hijack = _Hijack(HIJACK_ID if case.get("held_hijack") else None)
         self._ushell = None
 
     # ── the accessors the mixin calls ────────────────────────────────────
@@ -112,9 +124,22 @@ class RecordingRuntime:
         self.actions.append({"kind": "register_socket", "role": role})
 
     def _restore_browser_identity(self, _ws: Any) -> None:
+        if self._inside_remove_browser:
+            return
         self.actions.append({"kind": "restore_browser_identity"})
 
     def _set_browser_ownership_attachment(self, _ws: Any, _hijack_id: Any) -> None:
+        pass
+
+    def input_delivery_guard(self) -> Any:
+        return contextlib.nullcontext()
+
+    def clear_lease(self) -> None:
+        # Persisting the released lease is the store's business; the port
+        # models the removal and the release together as one action.
+        pass
+
+    async def push_worker_control(self, _op: str, **_kwargs: Any) -> None:
         pass
 
     async def activate_worker_socket(self, _ws: Any) -> bool:
@@ -127,8 +152,16 @@ class RecordingRuntime:
         self.actions.append({"kind": "unregister_worker_socket", "current": current})
         return current
 
-    async def remove_browser_socket(self, _ws: Any) -> bool:
-        released = bool(self._case.get("held_hijack"))
+    async def remove_browser_socket(self, ws: Any) -> bool:
+        # The real one, so what a departing owner leaves behind is the
+        # reference's own doing rather than a stand-in for it — in particular
+        # the resume token it marks, without which a reconnecting admin comes
+        # back a viewer with every keystroke fenced.
+        self._inside_remove_browser = True
+        try:
+            released = await session_io._SessionRuntimeIoMixin.remove_browser_socket(self, ws)
+        finally:
+            self._inside_remove_browser = False
         self.actions.append({"kind": "remove_browser_socket", "released": released})
         return released
 
@@ -136,6 +169,8 @@ class RecordingRuntime:
         self.actions.append({"kind": "broadcast_hijack_state"})
 
     def _remove_ws(self, _ws: Any) -> None:
+        if self._inside_remove_browser:
+            return
         self.actions.append({"kind": "remove_socket"})
 
     async def broadcast_worker_frame(self, frame: dict[str, Any]) -> None:
@@ -163,8 +198,22 @@ class _Config:
         self.resume_ttl_s = 300.0
 
 
+class _Session:
+    def __init__(self, hijack_id: str) -> None:
+        self.hijack_id = hijack_id
+
+
 class _Hijack:
-    session = None
+    """The live hijack, when the case says this browser is the one driving."""
+
+    def __init__(self, hijack_id: str | None) -> None:
+        self.session = None if hijack_id is None else _Session(hijack_id)
+
+    def release(self, hijack_id: str) -> Any:
+        ok = self.session is not None and self.session.hijack_id == hijack_id
+        if ok:
+            self.session = None
+        return SimpleNamespace(ok=ok)
 
 
 class _Store:
@@ -262,6 +311,10 @@ DISCONNECT_CASES: list[tuple[str, dict[str, Any]]] = [
         {"role": "browser", "held_hijack": True, "has_resume_token": False},
     ),
     ("a browser leaving a deleted session", {"role": "browser", "presence": True, "deleted": True}),
+    (
+        "a browser that held the hijack leaving a deleted session",
+        {"role": "browser", "deleted": True, "held_hijack": True, "has_resume_token": True},
+    ),
     ("a worker leaving", {"role": "worker"}),
     ("a worker leaving a deleted session", {"role": "worker", "deleted": True}),
     ("a stale worker socket leaving a live session", {"role": "worker", "worker_current": False}),
