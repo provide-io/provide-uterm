@@ -36,7 +36,41 @@ interface ApprovalsGolden {
     status_after_resolve: string;
     unknown_get_is_none: boolean;
   };
+  two_phase: {
+    claimed: { id: string; status: string; revision: number; command: string };
+    claim_snapshot_is_a_copy: boolean;
+    second_claim_request_is_none: boolean;
+    unknown_claim_request_is_none: boolean;
+    status_after_claim_request: string;
+    stale_revision_finalize: boolean;
+    finalized: boolean;
+    status_after_finalize: string;
+    second_finalize: boolean;
+    unknown_finalize: boolean;
+    finalize_from_pending: boolean;
+    status_after_finalize_from_pending: string;
+    status_after_refuse: string;
+    rejected_finalize_statuses: Array<{ status: string; message: string }>;
+    expired_claim_request_is_none: boolean;
+    status_after_expired_claim_request: string;
+  };
+  notify: {
+    claim_succeeded: boolean;
+    second_claim_succeeded: boolean;
+    notified_during_decision: NotifiedExpiry[];
+    notified_after_notify_expired: NotifiedExpiry[];
+    notified_after_second_notify: NotifiedExpiry[];
+    notified_after_cleanup: NotifiedExpiry[];
+    status: string;
+  };
   replacement: { status: string; expires_at: number };
+}
+
+/** One expiry snapshot as the reference's subscriber saw it. */
+interface NotifiedExpiry {
+  id: string;
+  revision: number;
+  status: string;
 }
 
 const golden = loadGolden<ApprovalsGolden>("approvals_golden.json");
@@ -121,7 +155,7 @@ describe("InMemoryApprovalStore claim", () => {
   it("transitions a pending request exactly once", () => {
     // The whole point of claim over resolve: only the winner injects the
     // held command, so a concurrent approve and reject cannot both run it.
-    const store = new InMemoryApprovalStore();
+    const store = new InMemoryApprovalStore({ now: () => NOW });
     const stored = store.add(request("r0", "pending", NOW + 60));
     expect(store.claim("r0", "approved", stored?.revision ?? 0)).toBe(golden.claim.first_claim);
     expect(store.claim("r0", "rejected", stored?.revision ?? 0)).toBe(golden.claim.second_claim);
@@ -177,21 +211,189 @@ describe("InMemoryApprovalStore claim", () => {
   });
 });
 
+describe("InMemoryApprovalStore two-phase decision", () => {
+  const two = golden.two_phase;
+
+  /** A store holding one pending request, with the clock the corpus used. */
+  function pending(id = "r0"): { store: InMemoryApprovalStore; revision: number } {
+    const store = new InMemoryApprovalStore({ now: () => NOW });
+    const stored = store.add(request(id, "pending", NOW + 60));
+    return { store, revision: stored?.revision ?? 0 };
+  }
+
+  it("reserves one exact revision and hands back its snapshot", () => {
+    const { store, revision } = pending();
+    const claimed = store.claimRequest("r0", "resolving", revision);
+    expect(claimed).toStrictEqual({
+      id: two.claimed.id,
+      workerId: "w1",
+      submitterId: "s1",
+      command: two.claimed.command,
+      status: two.claimed.status,
+      createdAt: NOW - 120,
+      expiresAt: NOW + 60,
+      revision: two.claimed.revision,
+    });
+    expect(store.get("r0")?.status).toBe(two.status_after_claim_request);
+    // A copy, not the store's own: a caller holding the reservation must not
+    // be able to write the outcome by mutating what it was handed.
+    expect(store.get("r0")).not.toBe(claimed);
+    expect(two.claim_snapshot_is_a_copy).toBe(true);
+  });
+
+  it("reserves for one caller only", () => {
+    // The losing racer of a simultaneous decision gets nothing to act on.
+    const { store, revision } = pending();
+    store.claimRequest("r0", "resolving", revision);
+    expect(store.claimRequest("r0", "resolving", revision)).toBeUndefined();
+    expect(two.second_claim_request_is_none).toBe(true);
+  });
+
+  it("reserves nothing for a request it does not hold", () => {
+    expect(new InMemoryApprovalStore().claimRequest("nope", "resolving", 1)).toBeUndefined();
+    expect(two.unknown_claim_request_is_none).toBe(true);
+  });
+
+  it("times out a reservation that arrives after the window closed", () => {
+    // Exactly what a plain claim does: a late decision decides nothing.
+    let now = NOW;
+    const store = new InMemoryApprovalStore({ now: () => now });
+    const stored = store.add(request("r3", "pending", NOW + 60));
+    now = NOW + 61;
+    expect(store.claimRequest("r3", "resolving", stored?.revision ?? 0)).toBeUndefined();
+    expect(store.get("r3")?.status).toBe(two.status_after_expired_claim_request);
+  });
+
+  it("writes the outcome of a reservation", () => {
+    const { store, revision } = pending();
+    store.claimRequest("r0", "resolving", revision);
+    expect(store.finalize("r0", "approved", revision)).toBe(two.finalized);
+    expect(store.get("r0")?.status).toBe(two.status_after_finalize);
+  });
+
+  it("refuses a command as readily as it approves one", () => {
+    const { store, revision } = pending("r2");
+    store.claimRequest("r2", "resolving", revision);
+    store.finalize("r2", "refused", revision);
+    expect(store.get("r2")?.status).toBe(two.status_after_refuse);
+  });
+
+  it("writes an outcome once", () => {
+    // The second finalize finds a request that is no longer resolving.
+    const { store, revision } = pending();
+    store.claimRequest("r0", "resolving", revision);
+    store.finalize("r0", "approved", revision);
+    expect(store.finalize("r0", "refused", revision)).toBe(two.second_finalize);
+    expect(store.get("r0")?.status).toBe(two.status_after_finalize);
+  });
+
+  it("writes nothing for a request nobody reserved", () => {
+    // The two phases are not optional: a finalize that skipped the claim
+    // would let a request be decided without anybody owning the decision.
+    const { store, revision } = pending("r1");
+    expect(store.finalize("r1", "approved", revision)).toBe(two.finalize_from_pending);
+    expect(store.get("r1")?.status).toBe(two.status_after_finalize_from_pending);
+  });
+
+  it("writes nothing for a stale revision", () => {
+    const { store, revision } = pending();
+    store.claimRequest("r0", "resolving", revision);
+    expect(store.finalize("r0", "approved", revision + 99)).toBe(two.stale_revision_finalize);
+    expect(store.get("r0")?.status).toBe(two.status_after_claim_request);
+  });
+
+  it("writes nothing for a request it does not hold", () => {
+    expect(new InMemoryApprovalStore().finalize("nope", "approved", 1)).toBe(two.unknown_finalize);
+  });
+
+  it.each(golden.two_phase.rejected_finalize_statuses)("refuses to finalize as $status", (rejected) => {
+    // Only approved and refused are outcomes; the rest are caller mistakes,
+    // and a mistake is refused loudly rather than recorded as a decision.
+    const { store, revision } = pending();
+    store.claimRequest("r0", "resolving", revision);
+    expect(() => store.finalize("r0", rejected.status as ApprovalStatus, revision)).toThrow(rejected.message);
+    expect(store.get("r0")?.status).toBe(two.status_after_claim_request);
+  });
+});
+
+describe("InMemoryApprovalStore expiry notification", () => {
+  const record = golden.notify;
+
+  /** The store, its subscriber's log, and the revision the corpus recorded. */
+  function expiringStore(): { store: InMemoryApprovalStore; seen: NotifiedExpiry[]; revision: number } {
+    let now = NOW;
+    const store = new InMemoryApprovalStore({ now: () => now });
+    const stored = store.add(request("r0", "pending", NOW + 60));
+    const seen: NotifiedExpiry[] = [];
+    store.onExpired = (approval) => {
+      seen.push({ id: approval.id, revision: approval.revision, status: approval.status });
+    };
+    now = NOW + 61;
+    return { store, seen, revision: stored?.revision ?? 0 };
+  }
+
+  it("delivers a failed claim's timeout as soon as the route asks", async () => {
+    // The decision call itself runs no listener code — the reference never
+    // does — but the route that lost drains the queue immediately, so the
+    // browser hears "timed out" then and not at the next cleanup sweep.
+    const { store, seen, revision } = expiringStore();
+
+    expect(store.claim("r0", "approved", revision)).toBe(record.claim_succeeded);
+    expect(seen).toStrictEqual(record.notified_during_decision);
+
+    await store.notifyExpired();
+    expect(seen).toStrictEqual(record.notified_after_notify_expired);
+    expect(store.get("r0")?.status).toBe(record.status);
+  });
+
+  it("delivers each expiry exactly once", async () => {
+    // Keyed by id and revision: the losing racer's own claim finds a request
+    // that is already timed out, and no later drain repeats the delivery.
+    const { store, seen, revision } = expiringStore();
+    store.claim("r0", "approved", revision);
+    await store.notifyExpired();
+
+    expect(store.claim("r0", "rejected", revision)).toBe(record.second_claim_succeeded);
+    await store.notifyExpired();
+    expect(seen).toStrictEqual(record.notified_after_second_notify);
+
+    await store.cleanupExpired();
+    expect(seen).toStrictEqual(record.notified_after_cleanup);
+  });
+
+  it("drains the queue even when nobody is listening", async () => {
+    // Otherwise the snapshot would sit there and reach the first subscriber
+    // to arrive, long after the request it describes was decided.
+    const { store, revision } = expiringStore();
+    store.onExpired = undefined;
+    store.claim("r0", "approved", revision);
+    await store.notifyExpired();
+
+    const late: string[] = [];
+    store.onExpired = (approval) => {
+      late.push(approval.id);
+    };
+    await store.notifyExpired();
+    expect(late).toStrictEqual([]);
+  });
+});
+
 describe("InMemoryApprovalStore resolve", () => {
   it("transitions a pending request", () => {
-    // The corpus records this against the wall clock, under which the fixture
-    // expiry has long passed — so what it pins is the expiry path.
-    const store = new InMemoryApprovalStore();
+    const store = new InMemoryApprovalStore({ now: () => NOW });
     const stored = store.add(request("r1", "pending", NOW + 60));
     store.resolve("r1", "rejected", stored?.revision ?? 0);
     expect(store.get("r1")?.status).toBe(golden.claim.status_after_resolve);
   });
 
-  it("resolves a pending request inside its window", () => {
-    const store = new InMemoryApprovalStore({ now: () => NOW });
+  it("times out a request whose window closed rather than resolving it", () => {
+    // The lenient sibling is lenient about who decides, not about when.
+    let now = NOW;
+    const store = new InMemoryApprovalStore({ now: () => now });
     const stored = store.add(request("r1", "pending", NOW + 60));
+    now = NOW + 60;
     store.resolve("r1", "rejected", stored?.revision ?? 0);
-    expect(store.get("r1")?.status).toBe("rejected");
+    expect(store.get("r1")?.status).toBe("timeout");
   });
 
   it("leaves an already-resolved request alone", () => {
