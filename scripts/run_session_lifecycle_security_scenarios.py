@@ -109,8 +109,8 @@ def applicable_ids(contract: dict[str, Any], backend: str) -> set[str]:
 def validate_contract(contract: dict[str, Any]) -> list[str]:
     """Validate category coverage, exact backend cells, and truthful statuses."""
     errors: list[str] = []
-    if contract.get("schema_version") != 2:
-        errors.append("schema_version must be 2")
+    if contract.get("schema_version") != 1:
+        errors.append("schema_version must be 1")
     if set(contract.get("status_vocabulary", [])) != STATUSES:
         errors.append("status vocabulary mismatch")
     backends = _dict(contract.get("backends"))

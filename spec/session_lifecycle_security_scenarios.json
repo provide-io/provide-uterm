@@ -1,6 +1,10 @@
 {
-  "schema_version": 2,
-  "status_vocabulary": ["served", "unsupported", "unserved"],
+  "schema_version": 1,
+  "status_vocabulary": [
+    "served",
+    "unsupported",
+    "unserved"
+  ],
   "result_defaults": {
     "route": "",
     "status_code": 0,
@@ -23,11 +27,26 @@
     "non_owner_refused": false
   },
   "backends": {
-    "python": {"surface": "server", "advertised": true},
-    "go": {"surface": "server", "advertised": true},
-    "csharp": {"surface": "server", "advertised": true},
-    "typescript": {"surface": "component", "advertised": false},
-    "cloudflare": {"surface": "server", "advertised": true}
+    "python": {
+      "surface": "server",
+      "advertised": true
+    },
+    "go": {
+      "surface": "server",
+      "advertised": true
+    },
+    "csharp": {
+      "surface": "server",
+      "advertised": true
+    },
+    "typescript": {
+      "surface": "component",
+      "advertised": false
+    },
+    "cloudflare": {
+      "surface": "server",
+      "advertised": true
+    }
   },
   "scenarios": [
     {
@@ -42,13 +61,40 @@
         "fragment_count": 3,
         "oversized_bytes": 1048577
       },
-      "expected": {"route": "browser_websocket", "status_code": 101, "fragment_count": 3, "pre_final_actions": 0, "post_final_actions": 1, "oversized_refused": true, "delivered_payloads": ["fragmented-browser-input"]},
+      "expected": {
+        "route": "browser_websocket",
+        "status_code": 101,
+        "fragment_count": 3,
+        "pre_final_actions": 0,
+        "post_final_actions": 1,
+        "oversized_refused": true,
+        "delivered_payloads": [
+          "fragmented-browser-input"
+        ]
+      },
       "backends": {
-        "python": {"status": "served", "expected": {}},
-        "go": {"status": "served", "expected": {}},
-        "csharp": {"status": "served", "expected": {}},
-        "typescript": {"status": "unserved", "expected": {"error": "no_server_surface"}},
-        "cloudflare": {"status": "served", "expected": {}}
+        "python": {
+          "status": "served",
+          "expected": {}
+        },
+        "go": {
+          "status": "served",
+          "expected": {}
+        },
+        "csharp": {
+          "status": "served",
+          "expected": {}
+        },
+        "typescript": {
+          "status": "unserved",
+          "expected": {
+            "error": "no_server_surface"
+          }
+        },
+        "cloudflare": {
+          "status": "served",
+          "expected": {}
+        }
       }
     },
     {
@@ -63,13 +109,40 @@
         "fragment_count": 3,
         "oversized_bytes": 1048577
       },
-      "expected": {"route": "worker_websocket", "status_code": 101, "fragment_count": 3, "pre_final_actions": 0, "post_final_actions": 1, "oversized_refused": true, "delivered_payloads": ["fragmented-worker-output"]},
+      "expected": {
+        "route": "worker_websocket",
+        "status_code": 101,
+        "fragment_count": 3,
+        "pre_final_actions": 0,
+        "post_final_actions": 1,
+        "oversized_refused": true,
+        "delivered_payloads": [
+          "fragmented-worker-output"
+        ]
+      },
       "backends": {
-        "python": {"status": "served", "expected": {}},
-        "go": {"status": "served", "expected": {}},
-        "csharp": {"status": "served", "expected": {}},
-        "typescript": {"status": "unserved", "expected": {"error": "no_server_surface"}},
-        "cloudflare": {"status": "served", "expected": {}}
+        "python": {
+          "status": "served",
+          "expected": {}
+        },
+        "go": {
+          "status": "served",
+          "expected": {}
+        },
+        "csharp": {
+          "status": "served",
+          "expected": {}
+        },
+        "typescript": {
+          "status": "unserved",
+          "expected": {
+            "error": "no_server_surface"
+          }
+        },
+        "cloudflare": {
+          "status": "served",
+          "expected": {}
+        }
       }
     },
     {
@@ -84,97 +157,399 @@
         "fragment_count": 3,
         "oversized_bytes": 1048577
       },
-      "expected": {"route": "tunnel_websocket", "status_code": 101, "fragment_count": 3, "pre_final_actions": 0, "post_final_actions": 1, "oversized_refused": true, "delivered_payloads": ["fragmented-tunnel-output"]},
+      "expected": {
+        "route": "tunnel_websocket",
+        "status_code": 101,
+        "fragment_count": 3,
+        "pre_final_actions": 0,
+        "post_final_actions": 1,
+        "oversized_refused": true,
+        "delivered_payloads": [
+          "fragmented-tunnel-output"
+        ]
+      },
       "backends": {
-        "python": {"status": "served", "expected": {}},
-        "go": {"status": "served", "expected": {}},
-        "csharp": {"status": "served", "expected": {}},
-        "typescript": {"status": "unserved", "expected": {"error": "no_server_surface"}},
-        "cloudflare": {"status": "unserved", "expected": {"error": "no_tunnel_websocket_route"}}
+        "python": {
+          "status": "served",
+          "expected": {}
+        },
+        "go": {
+          "status": "served",
+          "expected": {}
+        },
+        "csharp": {
+          "status": "served",
+          "expected": {}
+        },
+        "typescript": {
+          "status": "unserved",
+          "expected": {
+            "error": "no_server_surface"
+          }
+        },
+        "cloudflare": {
+          "status": "unserved",
+          "expected": {
+            "error": "no_tunnel_websocket_route"
+          }
+        }
       }
     },
     {
       "id": "browser_quota_rejection_setup_rollback_and_recovery",
-      "input": {"operation": "browser_quota", "route": "/ws/browser/{worker_id}/term", "worker_id": "lifecycle-quota", "principal": "quota-user", "limit": 1, "setup_failure": "post_registration_before_receive_loop"},
-      "expected": {"route": "browser_websocket", "status_code": 1008, "error": "too_many_connections", "accepted_connections": 2, "rejected_connections": 1, "quota_recovered": true, "setup_rollback_verified": true},
+      "input": {
+        "operation": "browser_quota",
+        "route": "/ws/browser/{worker_id}/term",
+        "worker_id": "lifecycle-quota",
+        "principal": "quota-user",
+        "limit": 1,
+        "setup_failure": "post_registration_before_receive_loop"
+      },
+      "expected": {
+        "route": "browser_websocket",
+        "status_code": 1008,
+        "error": "too_many_connections",
+        "accepted_connections": 2,
+        "rejected_connections": 1,
+        "quota_recovered": true,
+        "setup_rollback_verified": true
+      },
       "backends": {
-        "python": {"status": "served", "expected": {}},
-        "go": {"status": "served", "expected": {}},
-        "csharp": {"status": "served", "expected": {}},
-        "typescript": {"status": "unserved", "expected": {"error": "no_server_surface"}},
-        "cloudflare": {"status": "unsupported", "expected": {"route": "http", "status_code": 501, "error": "per_principal_browser_quota_unsupported", "accepted_connections": 0, "rejected_connections": 0, "quota_recovered": false, "setup_rollback_verified": false}}
+        "python": {
+          "status": "served",
+          "expected": {}
+        },
+        "go": {
+          "status": "served",
+          "expected": {}
+        },
+        "csharp": {
+          "status": "served",
+          "expected": {}
+        },
+        "typescript": {
+          "status": "unserved",
+          "expected": {
+            "error": "no_server_surface"
+          }
+        },
+        "cloudflare": {
+          "status": "unsupported",
+          "expected": {
+            "route": "http",
+            "status_code": 501,
+            "error": "per_principal_browser_quota_unsupported",
+            "accepted_connections": 0,
+            "rejected_connections": 0,
+            "quota_recovered": false,
+            "setup_rollback_verified": false
+          }
+        }
       }
     },
     {
       "id": "configured_signed_governance_allow",
-      "input": {"operation": "governed_input", "decision": "allow", "route": "/ws/browser/{worker_id}/term", "worker_id": "lifecycle-governance-allow", "payload": "governed-allow"},
-      "expected": {"route": "browser_websocket", "status_code": 101, "policy_decision": "allow", "signed_request": true, "delivered_payloads": ["governed-allow"]},
+      "input": {
+        "operation": "governed_input",
+        "decision": "allow",
+        "route": "/ws/browser/{worker_id}/term",
+        "worker_id": "lifecycle-governance-allow",
+        "payload": "governed-allow"
+      },
+      "expected": {
+        "route": "browser_websocket",
+        "status_code": 101,
+        "policy_decision": "allow",
+        "signed_request": true,
+        "delivered_payloads": [
+          "governed-allow"
+        ]
+      },
       "backends": {
-        "python": {"status": "served", "expected": {}},
-        "go": {"status": "unsupported", "expected": {"route": "http", "status_code": 501, "error": "unsupported_governance", "policy_decision": "unsupported", "signed_request": false, "delivered_payloads": []}},
-        "csharp": {"status": "unsupported", "expected": {"route": "http", "status_code": 501, "error": "unsupported_governance", "policy_decision": "unsupported", "signed_request": false, "delivered_payloads": []}},
-        "typescript": {"status": "unserved", "expected": {"error": "no_server_surface"}},
-        "cloudflare": {"status": "unsupported", "expected": {"route": "http", "status_code": 501, "error": "unsupported_governance", "policy_decision": "unsupported", "signed_request": false, "delivered_payloads": []}}
+        "python": {
+          "status": "served",
+          "expected": {}
+        },
+        "go": {
+          "status": "unsupported",
+          "expected": {
+            "route": "http",
+            "status_code": 501,
+            "error": "unsupported_governance",
+            "policy_decision": "unsupported",
+            "signed_request": false,
+            "delivered_payloads": []
+          }
+        },
+        "csharp": {
+          "status": "unsupported",
+          "expected": {
+            "route": "http",
+            "status_code": 501,
+            "error": "unsupported_governance",
+            "policy_decision": "unsupported",
+            "signed_request": false,
+            "delivered_payloads": []
+          }
+        },
+        "typescript": {
+          "status": "unserved",
+          "expected": {
+            "error": "no_server_surface"
+          }
+        },
+        "cloudflare": {
+          "status": "unsupported",
+          "expected": {
+            "route": "http",
+            "status_code": 501,
+            "error": "unsupported_governance",
+            "policy_decision": "unsupported",
+            "signed_request": false,
+            "delivered_payloads": []
+          }
+        }
       }
     },
     {
       "id": "configured_signed_governance_deny",
-      "input": {"operation": "governed_input", "decision": "deny", "route": "/ws/browser/{worker_id}/term", "worker_id": "lifecycle-governance-deny", "payload": "governed-deny"},
-      "expected": {"route": "browser_websocket", "status_code": 101, "error": "policy_denied", "policy_decision": "deny", "signed_request": true},
+      "input": {
+        "operation": "governed_input",
+        "decision": "deny",
+        "route": "/ws/browser/{worker_id}/term",
+        "worker_id": "lifecycle-governance-deny",
+        "payload": "governed-deny"
+      },
+      "expected": {
+        "route": "browser_websocket",
+        "status_code": 101,
+        "error": "policy_denied",
+        "policy_decision": "deny",
+        "signed_request": true
+      },
       "backends": {
-        "python": {"status": "served", "expected": {}},
-        "go": {"status": "unsupported", "expected": {"route": "http", "status_code": 501, "error": "unsupported_governance", "policy_decision": "unsupported", "signed_request": false}},
-        "csharp": {"status": "unsupported", "expected": {"route": "http", "status_code": 501, "error": "unsupported_governance", "policy_decision": "unsupported", "signed_request": false}},
-        "typescript": {"status": "unserved", "expected": {"error": "no_server_surface"}},
-        "cloudflare": {"status": "unsupported", "expected": {"route": "http", "status_code": 501, "error": "unsupported_governance", "policy_decision": "unsupported", "signed_request": false}}
+        "python": {
+          "status": "served",
+          "expected": {}
+        },
+        "go": {
+          "status": "unsupported",
+          "expected": {
+            "route": "http",
+            "status_code": 501,
+            "error": "unsupported_governance",
+            "policy_decision": "unsupported",
+            "signed_request": false
+          }
+        },
+        "csharp": {
+          "status": "unsupported",
+          "expected": {
+            "route": "http",
+            "status_code": 501,
+            "error": "unsupported_governance",
+            "policy_decision": "unsupported",
+            "signed_request": false
+          }
+        },
+        "typescript": {
+          "status": "unserved",
+          "expected": {
+            "error": "no_server_surface"
+          }
+        },
+        "cloudflare": {
+          "status": "unsupported",
+          "expected": {
+            "route": "http",
+            "status_code": 501,
+            "error": "unsupported_governance",
+            "policy_decision": "unsupported",
+            "signed_request": false
+          }
+        }
       }
     },
     {
       "id": "configured_signed_governance_unavailable_fail_closed",
-      "input": {"operation": "governed_input", "decision": "unavailable", "route": "/ws/browser/{worker_id}/term", "worker_id": "lifecycle-governance-unavailable", "payload": "governed-unavailable"},
-      "expected": {"route": "browser_websocket", "status_code": 101, "error": "governance_unavailable", "policy_decision": "unavailable", "signed_request": true},
+      "input": {
+        "operation": "governed_input",
+        "decision": "unavailable",
+        "route": "/ws/browser/{worker_id}/term",
+        "worker_id": "lifecycle-governance-unavailable",
+        "payload": "governed-unavailable"
+      },
+      "expected": {
+        "route": "browser_websocket",
+        "status_code": 101,
+        "error": "governance_unavailable",
+        "policy_decision": "unavailable",
+        "signed_request": true
+      },
       "backends": {
-        "python": {"status": "served", "expected": {}},
-        "go": {"status": "unsupported", "expected": {"route": "http", "status_code": 501, "error": "unsupported_governance", "policy_decision": "unsupported", "signed_request": false}},
-        "csharp": {"status": "unsupported", "expected": {"route": "http", "status_code": 501, "error": "unsupported_governance", "policy_decision": "unsupported", "signed_request": false}},
-        "typescript": {"status": "unserved", "expected": {"error": "no_server_surface"}},
-        "cloudflare": {"status": "unsupported", "expected": {"route": "http", "status_code": 501, "error": "unsupported_governance", "policy_decision": "unsupported", "signed_request": false}}
+        "python": {
+          "status": "served",
+          "expected": {}
+        },
+        "go": {
+          "status": "unsupported",
+          "expected": {
+            "route": "http",
+            "status_code": 501,
+            "error": "unsupported_governance",
+            "policy_decision": "unsupported",
+            "signed_request": false
+          }
+        },
+        "csharp": {
+          "status": "unsupported",
+          "expected": {
+            "route": "http",
+            "status_code": 501,
+            "error": "unsupported_governance",
+            "policy_decision": "unsupported",
+            "signed_request": false
+          }
+        },
+        "typescript": {
+          "status": "unserved",
+          "expected": {
+            "error": "no_server_surface"
+          }
+        },
+        "cloudflare": {
+          "status": "unsupported",
+          "expected": {
+            "route": "http",
+            "status_code": 501,
+            "error": "unsupported_governance",
+            "policy_decision": "unsupported",
+            "signed_request": false
+          }
+        }
       }
     },
     {
       "id": "resume_current_owner_and_single_use_replay",
-      "input": {"operation": "resume_ownership", "case": "current_owner", "route": "/ws/browser/{worker_id}/term", "worker_id": "lifecycle-resume-current", "principal": "resume-user"},
-      "expected": {"route": "browser_websocket", "status_code": 101, "resume_succeeded": true, "ownership_restored": true, "replay_rejected": true},
+      "input": {
+        "operation": "resume_ownership",
+        "case": "current_owner",
+        "route": "/ws/browser/{worker_id}/term",
+        "worker_id": "lifecycle-resume-current",
+        "principal": "resume-user"
+      },
+      "expected": {
+        "route": "browser_websocket",
+        "status_code": 101,
+        "resume_succeeded": true,
+        "ownership_restored": true,
+        "replay_rejected": true
+      },
       "backends": {
-        "python": {"status": "served", "expected": {}},
-        "go": {"status": "served", "expected": {}},
-        "csharp": {"status": "served", "expected": {}},
-        "typescript": {"status": "unserved", "expected": {"error": "no_server_surface"}},
-        "cloudflare": {"status": "served", "expected": {}}
+        "python": {
+          "status": "served",
+          "expected": {}
+        },
+        "go": {
+          "status": "served",
+          "expected": {}
+        },
+        "csharp": {
+          "status": "served",
+          "expected": {}
+        },
+        "typescript": {
+          "status": "unserved",
+          "expected": {
+            "error": "no_server_surface"
+          }
+        },
+        "cloudflare": {
+          "status": "served",
+          "expected": {}
+        }
       }
     },
     {
       "id": "resume_stale_owner_cannot_steal_competing_owner",
-      "input": {"operation": "resume_ownership", "case": "competing_owner", "route": "/ws/browser/{worker_id}/term", "worker_id": "lifecycle-resume-competing", "principal": "resume-user", "competing_principal": "new-owner"},
-      "expected": {"route": "browser_websocket", "status_code": 101, "resume_succeeded": false, "competing_owner_preserved": true},
+      "input": {
+        "operation": "resume_ownership",
+        "case": "competing_owner",
+        "route": "/ws/browser/{worker_id}/term",
+        "worker_id": "lifecycle-resume-competing",
+        "principal": "resume-user",
+        "competing_principal": "new-owner"
+      },
+      "expected": {
+        "route": "browser_websocket",
+        "status_code": 101,
+        "resume_succeeded": false,
+        "competing_owner_preserved": true
+      },
       "backends": {
-        "python": {"status": "served", "expected": {}},
-        "go": {"status": "served", "expected": {}},
-        "csharp": {"status": "served", "expected": {}},
-        "typescript": {"status": "unserved", "expected": {"error": "no_server_surface"}},
-        "cloudflare": {"status": "served", "expected": {}}
+        "python": {
+          "status": "served",
+          "expected": {}
+        },
+        "go": {
+          "status": "served",
+          "expected": {}
+        },
+        "csharp": {
+          "status": "served",
+          "expected": {}
+        },
+        "typescript": {
+          "status": "unserved",
+          "expected": {
+            "error": "no_server_surface"
+          }
+        },
+        "cloudflare": {
+          "status": "served",
+          "expected": {}
+        }
       }
     },
     {
       "id": "non_owner_browser_hijack_step_refused",
-      "input": {"operation": "non_owner_hijack_step", "route": "/ws/browser/{worker_id}/term", "worker_id": "lifecycle-step", "owner": "owner-user", "non_owner": "other-user"},
-      "expected": {"route": "browser_websocket", "status_code": 101, "non_owner_refused": true},
+      "input": {
+        "operation": "non_owner_hijack_step",
+        "route": "/ws/browser/{worker_id}/term",
+        "worker_id": "lifecycle-step",
+        "owner": "owner-user",
+        "non_owner": "other-user"
+      },
+      "expected": {
+        "route": "browser_websocket",
+        "status_code": 101,
+        "non_owner_refused": true
+      },
       "backends": {
-        "python": {"status": "served", "expected": {}},
-        "go": {"status": "served", "expected": {}},
-        "csharp": {"status": "served", "expected": {}},
-        "typescript": {"status": "unserved", "expected": {"error": "no_server_surface"}},
-        "cloudflare": {"status": "served", "expected": {"error": "not_owner"}}
+        "python": {
+          "status": "served",
+          "expected": {}
+        },
+        "go": {
+          "status": "served",
+          "expected": {}
+        },
+        "csharp": {
+          "status": "served",
+          "expected": {}
+        },
+        "typescript": {
+          "status": "unserved",
+          "expected": {
+            "error": "no_server_surface"
+          }
+        },
+        "cloudflare": {
+          "status": "served",
+          "expected": {
+            "error": "not_owner"
+          }
+        }
       }
     }
   ]

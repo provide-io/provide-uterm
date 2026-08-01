@@ -153,8 +153,8 @@ def semantic_categories(scenario: dict[str, Any]) -> set[str]:
 def validate_contract(contract: dict[str, Any]) -> list[str]:
     """Validate the semantic contract and backend support claims."""
     errors: list[str] = []
-    if contract.get("schema_version") != 3:
-        errors.append("schema_version must be 3")
+    if contract.get("schema_version") != 1:
+        errors.append("schema_version must be 1")
     if set(contract.get("status_vocabulary", [])) != STATUSES:
         errors.append("status vocabulary mismatch")
     backends = _dict(contract.get("backends"))

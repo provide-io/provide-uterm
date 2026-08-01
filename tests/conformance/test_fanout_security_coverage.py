@@ -70,7 +70,7 @@ def _runner() -> ModuleType:
 def test_contract_contains_semantic_inputs_expectations_and_exact_status_matrix() -> None:
     contract = _contract()
 
-    assert contract["schema_version"] == 3
+    assert contract["schema_version"] == 1
     assert set(contract["backends"]) == BACKENDS  # type: ignore[arg-type]
     scenarios = contract["scenarios"]
     assert isinstance(scenarios, list) and scenarios
