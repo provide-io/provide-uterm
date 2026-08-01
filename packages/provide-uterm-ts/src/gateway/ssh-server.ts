@@ -17,8 +17,8 @@
  * to for real.
  */
 
-import ssh2 from "ssh2";
 import type { Server as SshServerType } from "ssh2";
+import ssh2 from "ssh2";
 import { BIND_ALL, SSH_PORT } from "../defaults/index.ts";
 import { type SshProcess, SshStreamReader, SshStreamWriter } from "../transports/index.ts";
 import { getOrCreateHostKey } from "./host-key.ts";

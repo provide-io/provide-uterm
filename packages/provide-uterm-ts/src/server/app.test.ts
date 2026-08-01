@@ -525,8 +525,12 @@ describe("bootstrapping", () => {
   it("recognises dev_token written with surrounding whitespace", () => {
     // Same trim, the other operand: an authMode override of " dev_token "
     // must still be read as the mode it names.
-    expect(() => bootstrapServer({ authMode: " dev_token ", document: { server: { host: "127.0.0.1" } } })).not.toThrow();
-    expect(bootstrapServer({ authMode: " dev_token ", document: { server: { host: "127.0.0.1" } } }).token).not.toBe("");
+    expect(() =>
+      bootstrapServer({ authMode: " dev_token ", document: { server: { host: "127.0.0.1" } } }),
+    ).not.toThrow();
+    expect(bootstrapServer({ authMode: " dev_token ", document: { server: { host: "127.0.0.1" } } }).token).not.toBe(
+      "",
+    );
   });
 
   it("refuses the modes that were removed", () => {

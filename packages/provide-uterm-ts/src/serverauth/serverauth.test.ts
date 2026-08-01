@@ -6,8 +6,8 @@
 import { describe, expect, it } from "vitest";
 import { loadGolden } from "../testing/golden.ts";
 import {
-  type AuthSettings,
   ApiKeyStore,
+  type AuthSettings,
   applyCfAccessTeamDomain,
   buildWebhookSignature,
   canonicalTenantId,
@@ -320,7 +320,10 @@ describe("applyCfAccessTeamDomain", () => {
   });
 
   it("strips scheme and path from the team domain", () => {
-    const auth: Record<string, unknown> = { cf_access_team_domain: "https://other.cloudflareaccess.com/", jwt_issuer: "" };
+    const auth: Record<string, unknown> = {
+      cf_access_team_domain: "https://other.cloudflareaccess.com/",
+      jwt_issuer: "",
+    };
     applyCfAccessTeamDomain(auth);
     expect(auth.jwt_issuer).toBe("https://other.cloudflareaccess.com");
   });
