@@ -15,7 +15,6 @@ using Provide.Uterm.ServerAuth;
 using Provide.Uterm.ServerConfig;
 using Provide.Uterm.Tunnel;
 using Provide.Uterm.TunnelClient;
-using Xunit;
 
 namespace Provide.Uterm.Tests;
 

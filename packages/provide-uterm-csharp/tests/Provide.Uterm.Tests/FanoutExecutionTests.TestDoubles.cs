@@ -4,10 +4,8 @@
 //
 
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using Provide.Uterm.Fanout;
 using Provide.Uterm.ServerAuth;
-using Xunit;
 
 namespace Provide.Uterm.Tests;
 
