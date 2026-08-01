@@ -37,6 +37,10 @@ REQUIRED_CATEGORIES = {
     "store read isolation",
     "store atomic update",
     "total response deadline",
+    "registered member read refusal",
+    "positional member refusal ordering",
+    "controller cannot widen member access",
+    "create authorization wiring refusal",
 }
 EXPECTED_FIELDS = {
     "status_code",
@@ -66,7 +70,7 @@ def _runner() -> ModuleType:
 def test_contract_contains_semantic_inputs_expectations_and_exact_status_matrix() -> None:
     contract = _contract()
 
-    assert contract["schema_version"] == 2
+    assert contract["schema_version"] == 3
     assert set(contract["backends"]) == BACKENDS  # type: ignore[arg-type]
     scenarios = contract["scenarios"]
     assert isinstance(scenarios, list) and scenarios
@@ -202,6 +206,14 @@ def _categories(scenario: dict[str, object]) -> set[str]:
         categories.add("store read isolation")
     if operation == "store_atomic_update":
         categories.add("store atomic update")
+    if operation == "create" and visibility.get("registered_members") and not visibility["readable_members"]:
+        categories.add("registered member read refusal")
+    if operation == "create" and len(group["members"]) > 1:
+        categories.add("positional member refusal ordering")
+    if operation == "create" and visibility.get("controller_readable_members"):
+        categories.add("controller cannot widen member access")
+    if operation == "create" and input_data.get("omit_authorizers") is True:
+        categories.add("create authorization wiring refusal")
     if workers.get("continuous_output") is True and input_data.get("max_response_ms"):
         categories.add("total response deadline")
     return categories
@@ -212,7 +224,7 @@ def test_contract_rejects_removal_of_each_required_semantic_category(category: s
     runner = _runner()
     contract = copy.deepcopy(_contract())
     matching = [scenario for scenario in contract["scenarios"] if category in _categories(scenario)]
-    assert len(matching) == 1
+    assert matching
     contract["scenarios"] = [scenario for scenario in contract["scenarios"] if category not in _categories(scenario)]
 
     errors = runner.validate_contract(contract)
