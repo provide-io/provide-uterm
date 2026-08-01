@@ -210,7 +210,9 @@ export class FanOutController {
    * Split members into currently authorized and refused, for `principal`.
    *
    * With no way to resolve sessions or check read access, everything is
-   * refused: admission cannot be verified, so nothing is admitted.
+   * refused: admission cannot be verified, so nothing is admitted. A resolver
+   * or authorizer that throws refuses the member too — failing to decide
+   * access is not access.
    *
    * This is the controller's own view, used to narrow a dispatch to the
    * members the caller may still reach — group admission is decided by the
@@ -218,17 +220,23 @@ export class FanOutController {
    * wider view cannot widen access.
    */
   async validateMembers(workerIds: string[], principal: AuthorizablePrincipal): Promise<[string[], string[]]> {
-    if (this.#resolveSession === undefined || this.#canReadSession === undefined) {
+    const resolveSession = this.#resolveSession;
+    const canReadSession = this.#canReadSession;
+    if (resolveSession === undefined || canReadSession === undefined) {
       return [[], [...workerIds]];
     }
     const allowed: string[] = [];
     const refused: string[] = [];
     for (const workerId of workerIds) {
-      const definition = await this.#resolveSession(workerId);
-      if (definition === undefined || definition === null || !(await this.#canReadSession(principal, definition))) {
+      try {
+        const definition = await resolveSession(workerId);
+        if (definition === undefined || definition === null || !(await canReadSession(principal, definition))) {
+          refused.push(workerId);
+        } else {
+          allowed.push(workerId);
+        }
+      } catch {
         refused.push(workerId);
-      } else {
-        allowed.push(workerId);
       }
     }
     return [allowed, refused];
@@ -376,20 +384,7 @@ export class FanOutController {
     if (group.createdBy !== principal.subject_id && !group.grants.includes(principal.subject_id)) {
       return { error: this.#errorResult(groupId, data, "fan-out group not found") };
     }
-    const allowed: string[] = [];
-    const refused: string[] = [];
-    for (const workerId of group.workerIds) {
-      try {
-        const definition = await authorizers.resolveSession(workerId);
-        if (definition !== undefined && (await authorizers.canReadSession(principal, definition))) {
-          allowed.push(workerId);
-        } else {
-          refused.push(workerId);
-        }
-      } catch {
-        refused.push(workerId);
-      }
-    }
+    const [allowed, refused] = await this.validateMembers(group.workerIds, principal);
     return { group, dispatchGroup: { ...group, workerIds: allowed }, refusedWorkerIds: refused, principal };
   }
 
