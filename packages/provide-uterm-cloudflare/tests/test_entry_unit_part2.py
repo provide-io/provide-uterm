@@ -77,6 +77,57 @@ async def test_default_fetch_health() -> None:
     assert data["ok"] is True and "provide-uterm" in data["service"]
 
 
+async def test_lifecycle_routes_propagate_auth_error_and_unknown_route() -> None:
+    from provide.uterm.cloudflare.entry.handlers import _route_request
+
+    config = SimpleNamespace(environment="test")
+    denied = Response.json({"error": "denied"}, status=401)
+    with patch("provide.uterm.cloudflare.entry.handlers._require_jwt", new=AsyncMock(return_value=denied)):
+        response = await _route_request(_req("/api/lifecycle/capabilities"), SimpleNamespace(), config)
+    assert response.status == 401
+
+    with patch("provide.uterm.cloudflare.entry.handlers._require_jwt", new=AsyncMock(return_value=None)):
+        response = await _route_request(_req("/api/lifecycle/unknown"), SimpleNamespace(), config)
+    assert response.status == 404
+
+
+async def test_route_def_tunnel_wrappers_and_missing_session_binding() -> None:
+    from provide.uterm.cloudflare.entry import route_defs
+
+    expected = Response.json({"ok": True})
+    request = _req("/api/tunnels")
+    config = SimpleNamespace()
+    env = SimpleNamespace()
+    with (
+        patch("provide.uterm.cloudflare.entry.handlers._api_tunnels", new=AsyncMock(return_value=expected)) as tunnels,
+        patch(
+            "provide.uterm.cloudflare.entry.handlers._api_tunnel_revoke", new=AsyncMock(return_value=expected)
+        ) as revoke,
+        patch(
+            "provide.uterm.cloudflare.entry.handlers._api_tunnel_rotate", new=AsyncMock(return_value=expected)
+        ) as rotate,
+    ):
+        assert await route_defs._tunnels(request, env, config, {}) is expected
+        assert await route_defs._tunnel_revoke(request, env, config, {"tunnel_id": "tid"}) is expected
+        assert await route_defs._tunnel_rotate(request, env, config, {"tunnel_id": "tid"}) is expected
+    tunnels.assert_awaited_once()
+    revoke.assert_awaited_once()
+    rotate.assert_awaited_once()
+
+    session_request = SimpleNamespace(url="https://x/api/sessions/session-1", method="GET", headers={})
+    with (
+        patch("provide.uterm.cloudflare.entry.route_defs._require_jwt", new=AsyncMock(return_value=None)),
+        patch("provide.uterm.cloudflare.entry.route_defs._authorize_roles", new=AsyncMock(return_value=None)),
+    ):
+        missing = await route_defs.dispatch_api_route(
+            session_request,
+            SimpleNamespace(),
+            config,
+            "/api/sessions/session-1",
+        )
+    assert missing is not None and missing.status == 500
+
+
 # ---------------------------------------------------------------------------
 # /api/sessions
 # ---------------------------------------------------------------------------

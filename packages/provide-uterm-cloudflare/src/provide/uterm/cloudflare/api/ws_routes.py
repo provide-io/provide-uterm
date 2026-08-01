@@ -349,16 +349,17 @@ async def _handle_resume(runtime: RuntimeProtocol, ws: CFWebSocket, frame: dict[
         runtime.store.create_resume_token(new_token, runtime.worker_id, effective_role, resume_ttl_s)
         runtime.browser_resume_tokens[runtime.ws_key(ws)] = new_token
         if reclaimed_hijack:
-            active = runtime.hijack.session
-            if active is not None:
-                active.owner = f"browser:{new_token}"
-                runtime.persist_lease(active)
-                runtime._set_browser_ownership_attachment(
-                    ws,
-                    active.hijack_id,
-                    resume_token=new_token,
-                    browser_role=effective_role,
-                )
+            # This flag is set only after acquire() returned a concrete session,
+            # and the delivery guard prevents a concurrent release before here.
+            active = cast("Any", runtime.hijack.session)
+            active.owner = f"browser:{new_token}"
+            runtime.persist_lease(active)
+            runtime._set_browser_ownership_attachment(
+                ws,
+                active.hijack_id,
+                resume_token=new_token,
+                browser_role=effective_role,
+            )
         else:
             runtime._set_browser_ownership_attachment(
                 ws,

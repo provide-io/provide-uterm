@@ -83,6 +83,75 @@ async def test_do_route_defs_dispatch_connect_disconnect_and_events_watch() -> N
     }
 
 
+async def test_session_route_validation_and_event_filters() -> None:
+    runtime = _Runtime()
+    runtime.store.save_session_meta = Mock()
+    runtime.broadcast_worker_frame = AsyncMock()
+    runtime.env = SimpleNamespace()
+
+    filtered = await route_http(
+        runtime,
+        _Request("/api/sessions/session-1/events/watch?event_types=other&pattern=never"),
+    )
+    invalid_pattern = await route_http(runtime, _Request("/api/sessions/session-1/events/watch?pattern=["))
+    assert json.loads(filtered.body)["events"] == []
+    assert invalid_pattern.status == 422
+
+    for body in (
+        {"display_name": ""},
+        {"tags": "not-a-list"},
+        {"visibility": "secret"},
+    ):
+        response = await route_http(runtime, _Request("/api/sessions/session-1", "PATCH", body))
+        assert response.status == 422
+
+    updated = await route_http(
+        runtime,
+        _Request(
+            "/api/sessions/session-1",
+            "PATCH",
+            {"display_name": " renamed ", "tags": ["one"], "visibility": "private"},
+        ),
+    )
+    assert updated.status == 200
+    assert runtime.meta["display_name"] == "renamed"
+    tags_only = await route_http(runtime, _Request("/api/sessions/session-1", "PATCH", {"tags": ["two"]}))
+    assert tags_only.status == 200
+
+    missing_label = await route_http(runtime, _Request("/api/sessions/session-1/annotate", "POST"))
+    bad_severity = await route_http(
+        runtime,
+        _Request("/api/sessions/session-1/annotate", "POST", {"label": "x", "severity": "unknown"}),
+    )
+    annotated = await route_http(
+        runtime,
+        _Request("/api/sessions/session-1/annotate", "POST", {"label": "x", "severity": "warning"}),
+    )
+    assert missing_label.status == 400
+    assert bad_severity.status == 400
+    assert annotated.status == 200
+    runtime.broadcast_worker_frame.assert_awaited_once()
+
+
+@pytest.mark.parametrize("suffix", ["connect", "disconnect", "annotate"])
+async def test_session_mutation_routes_reject_non_owner(suffix: str) -> None:
+    runtime = _Runtime()
+    runtime.browser_role_for_request = AsyncMock(return_value="viewer")
+    runtime.browser_subject_for_request = AsyncMock(return_value="different-owner")
+
+    response = await route_http(runtime, _Request(f"/api/sessions/session-1/{suffix}", "POST"))
+
+    assert response.status == 403
+
+
+async def test_session_update_rejects_non_owner() -> None:
+    runtime = _Runtime()
+    runtime.browser_role_for_request = AsyncMock(return_value="viewer")
+    runtime.browser_subject_for_request = AsyncMock(return_value="different-owner")
+    response = await route_http(runtime, _Request("/api/sessions/session-1", "PATCH", {"tags": []}))
+    assert response.status == 403
+
+
 async def test_do_dispatches_every_session_route_def_to_its_declared_capability() -> None:
     from provide.uterm.cloudflare.api.http_routes import _session
 
