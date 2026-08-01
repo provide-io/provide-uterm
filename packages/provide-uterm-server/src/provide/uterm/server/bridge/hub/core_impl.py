@@ -506,6 +506,7 @@ class TermHub:
         self._input_buffers: dict[WebSocket, str] = {}
         self._hold_buffers: dict[WebSocket, str] = {}
         self.approval_store = InMemoryApprovalStore()
+        self.approval_store.subscribe_expired(self._handle_expired_approval)
         self._paused_browsers: set[WebSocket] = set()
         self._on_browser_message: OnBrowserMessage | None = None
         self._identity_provider = identity_provider
@@ -575,3 +576,6 @@ class TermHub:
             command,
             approval_request=approval_request,
         )
+
+    async def _handle_expired_approval(self, request: Any) -> None:
+        await _orch.handle_expired_approval(self, request)  # ty:ignore[invalid-argument-type]

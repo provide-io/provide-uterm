@@ -214,6 +214,23 @@ class TestComputeLeaseExpirations:
 class TestExpireLeasesUnderLock:
     """Pin the None sentinels, the 3-tuple, and the should_resume logic."""
 
+    async def test_replaced_worker_state_returns_none(self) -> None:
+        mgr, registry, _hub, _ = _make_manager()
+        original = _make_state()
+        replacement = _make_state()
+
+        class _ReplacingFence:
+            async def __aenter__(self) -> None:
+                registry.put("w1", replacement)
+
+            async def __aexit__(self, *_args: Any) -> None:
+                return None
+
+        original.owned_input_fence = _ReplacingFence()  # type: ignore[assignment]
+        registry.put("w1", original)
+
+        assert await mgr._expire_leases_under_lock("w1", time.monotonic()) is None
+
     async def test_missing_worker_returns_none(self) -> None:
         mgr, _registry, _hub, _ = _make_manager()
         assert await mgr._expire_leases_under_lock("ghost", time.monotonic()) is None
