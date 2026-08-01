@@ -367,7 +367,10 @@ class ConnectionManager:
                     # Mint the resume token only once the quota gate has passed.
                     if hub._resume_store is not None:
                         resume_token = await hub._resume_store.create(worker_id, role, hub._resume_ttl_s)
-                        hub._ws_to_resume_token[ws] = resume_token
+                        # Binding arms the token's detach latch so a browser that
+                        # reconnects with it can order itself behind THIS socket's
+                        # disconnect bookkeeping (see wait_resume_token_ready).
+                        hub._bind_resume_token_locked(ws, resume_token)
                     st = hub.registry._workers.setdefault(worker_id, WorkerTermState())
                     st.browsers[ws] = role
                     if defer_broadcast:
@@ -425,7 +428,10 @@ class ConnectionManager:
         # Also drop any resume-token map entry minted before the raise so it
         # doesn't orphan in memory (the route's disconnect cleanup, which
         # normally pops it, never runs when register_browser itself raises).
-        hub._ws_to_resume_token.pop(ws, None)
+        # The token's detach latch goes with it: this is a terminal path for the
+        # socket, so any waiter must be released here or it would block for the
+        # full wait_resume_token_ready bound.
+        hub._detach_resume_token_locked(hub._ws_to_resume_token.pop(ws, None))
         subject_id = hub._ws_principal.pop(ws, None)
         if subject_id is not None:
             remaining = hub._principal_browser_counts.get(subject_id, 0) - 1
@@ -484,6 +490,28 @@ class ConnectionManager:
             resume_without_owner = self._scan_events_for_resume(st)
         return was_owner, rest_still_active, resume_without_owner
 
+    async def _release_resume_token(self, ws: Any, *, mark_owner: bool) -> None:
+        """Commit *ws*'s resume-token bookkeeping and release its detach latch.
+
+        Marks the token with hijack ownership (when *mark_owner*) so a
+        reconnecting browser can reclaim the lease. Does NOT revoke — the token
+        must survive until the browser reconnects or the TTL expires.
+
+        **Must be called while holding ``hub._lock``.** The mark and the latch
+        release are one atomic step in that order: a resume waiting on the latch
+        is released only once the flag it is about to read has been written.
+        Doing this outside the lock is exactly the race this fixes — a browser
+        that reconnected promptly read ``was_hijack_owner=False`` and came back
+        as a fenced viewer.
+        """
+        hub = self._hub
+        if hub._resume_store is None:
+            return
+        token = hub._ws_to_resume_token.pop(ws, None)
+        if token and mark_owner:
+            await hub._resume_store.mark_hijack_owner(token, True)
+        hub._detach_resume_token_locked(token)
+
     async def cleanup_browser_disconnect(self, worker_id: str, ws: WebSocket, owned_hijack: bool) -> dict[str, Any]:
         """Handle a browser WS disconnect atomically.
 
@@ -510,13 +538,16 @@ class ConnectionManager:
                                 st, ws, owned_hijack
                             )
                             browser_count = len(st.browsers)
-            # Mark resume token with hijack ownership (if any) so a reconnecting
-            # browser can reclaim the lease.  Do NOT revoke — the token must survive
-            # until the browser reconnects or TTL expires.
-            if hub._resume_store is not None:
-                token = hub._ws_to_resume_token.pop(ws, None)
-                if token and (was_owner or owned_hijack):
-                    await hub._resume_store.mark_hijack_owner(token, True)
+                        # Inside the fence AND the lock: the owner has just been
+                        # cleared above, so a resume released by this latch sees
+                        # a reclaimable lease, not a stale owner.
+                        await self._release_resume_token(ws, mark_owner=was_owner or owned_hijack)
+            else:
+                # No registry entry to fence against; the token bookkeeping still
+                # has to commit-and-release under the lock. ``was_owner`` is
+                # necessarily False here.
+                async with hub._lock:
+                    await self._release_resume_token(ws, mark_owner=owned_hijack)
             hub._startup_pending_browsers.discard(ws)
 
             # Fire empty-browser callback outside the lock when the last browser left.

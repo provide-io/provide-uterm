@@ -9,14 +9,21 @@ Targets three methods on
 
 * ``cleanup_browser_disconnect`` — the public WS-disconnect handler.
 * ``_update_lock_state`` — the under-lock state-mutation helper.
+* ``_release_resume_token`` — the under-lock resume-token commit.
 * ``_scan_events_for_resume`` — the event-history backwards scan.
 
 Every test constructs a FRESH ``TermHub()`` and pins every observable:
 exact return dict/tuple, every ``WorkerTermState`` field mutation, every
 hub-map mutation (``_principal_browser_counts`` / ``_ws_principal`` /
-``_ws_to_resume_token`` / ``_startup_pending_browsers``), the resume-store
-``mark_hijack_owner`` delegation, the ``on_worker_empty`` callback, and the
-exact tracer span + ``EVENT_SESSION_DISCONNECTED`` log call.
+``_ws_to_resume_token`` / ``_resume_token_detached`` /
+``_startup_pending_browsers``), the resume-store ``mark_hijack_owner``
+delegation, the ``on_worker_empty`` callback, and the exact tracer span +
+``EVENT_SESSION_DISCONNECTED`` log call.
+
+The resume-token commit is also pinned *positionally*: it must run while the
+hub lock is held, after the owner has been cleared, and it must write the
+ownership flag before releasing the token's detach latch. That ordering is what
+lets a reconnecting browser reclaim its lease instead of coming back fenced.
 """
 
 from __future__ import annotations
@@ -491,6 +498,189 @@ class TestCleanupBrowserDisconnect:
         await hub.cleanup_browser_disconnect("w1", ws, False)
         # The _resume_store is None branch never pops the token map.
         assert hub._ws_to_resume_token.get(ws) == "tok-keep"
+
+    async def test_marks_on_owned_hijack_flag_when_worker_is_unknown(self) -> None:
+        """The no-registry-entry path still commits the token bookkeeping.
+
+        ``was_owner`` cannot be True without a state, so this branch marks on
+        ``owned_hijack`` alone. Kills a mutation that drops the mark (or the
+        whole ``else``) for a socket whose worker vanished before it closed.
+        """
+        hub = TermHub()
+        store = MagicMock()
+        store.mark_hijack_owner = AsyncMock()
+        hub._resume_store = store
+        ws = _ws()
+        hub._ws_to_resume_token[ws] = "tok-ghost"
+
+        result = await hub.cleanup_browser_disconnect("ghost", ws, owned_hijack=True)
+        assert result == {"was_owner": False, "rest_still_active": False, "resume_without_owner": False}
+        store.mark_hijack_owner.assert_awaited_once_with("tok-ghost", True)
+        assert ws not in hub._ws_to_resume_token
+
+    async def test_no_mark_on_unknown_worker_without_owned_hijack(self) -> None:
+        """Same path, ``owned_hijack`` False -> no mark, token still popped."""
+        hub = TermHub()
+        store = MagicMock()
+        store.mark_hijack_owner = AsyncMock()
+        hub._resume_store = store
+        ws = _ws()
+        hub._ws_to_resume_token[ws] = "tok-ghost"
+
+        await hub.cleanup_browser_disconnect("ghost", ws, owned_hijack=False)
+        store.mark_hijack_owner.assert_not_awaited()
+        assert ws not in hub._ws_to_resume_token
+
+    # -- resume-token detach latch (reconnect ordering) --------------------
+
+    async def test_releases_the_tokens_detach_latch(self) -> None:
+        """The disconnected socket's latch is set and dropped from the map.
+
+        A disconnect that leaves the latch armed blocks the next resume for the
+        full ``RESUME_TOKEN_DETACH_TIMEOUT_S``.
+        """
+        hub = TermHub()
+        store = MagicMock()
+        store.mark_hijack_owner = AsyncMock()
+        hub._resume_store = store
+        ws = _ws()
+        st = WorkerTermState()
+        st.worker_ws = _ws()
+        st.browsers[ws] = "admin"
+        st.hijack_owner = ws
+        st.hijack_owner_expires_at = time.monotonic() + 60
+        await _put(hub, "w1", st)
+        latch = asyncio.Event()
+        hub._ws_to_resume_token[ws] = "tok-latch"
+        hub._resume_token_detached["tok-latch"] = latch
+
+        await hub.cleanup_browser_disconnect("w1", ws, False)
+        assert latch.is_set() is True
+        assert "tok-latch" not in hub._resume_token_detached
+
+    async def test_releases_the_latch_even_when_nothing_is_marked(self) -> None:
+        """A plain viewer marks nothing but must still release its latch."""
+        hub = TermHub()
+        store = MagicMock()
+        store.mark_hijack_owner = AsyncMock()
+        hub._resume_store = store
+        ws = _ws()
+        st = WorkerTermState()
+        st.worker_ws = _ws()
+        st.browsers[ws] = "viewer"
+        await _put(hub, "w1", st)
+        latch = asyncio.Event()
+        hub._ws_to_resume_token[ws] = "tok-latch"
+        hub._resume_token_detached["tok-latch"] = latch
+
+        await hub.cleanup_browser_disconnect("w1", ws, False)
+        store.mark_hijack_owner.assert_not_awaited()
+        assert latch.is_set() is True
+        assert "tok-latch" not in hub._resume_token_detached
+
+    async def test_marks_ownership_before_releasing_the_latch(self) -> None:
+        """Ordering pin: the flag is written BEFORE any waiter is released.
+
+        This is the whole point of the fix — a resume released by the latch must
+        find ``was_hijack_owner`` already committed. Kills a mutation that
+        reorders the detach ahead of ``mark_hijack_owner``.
+        """
+        hub = TermHub()
+        latch = asyncio.Event()
+        set_during_mark: list[bool] = []
+
+        async def _mark(_token: str, _owner: bool) -> None:
+            set_during_mark.append(latch.is_set())
+
+        store = MagicMock()
+        store.mark_hijack_owner = _mark
+        hub._resume_store = store
+        ws = _ws()
+        st = WorkerTermState()
+        st.worker_ws = _ws()
+        st.browsers[ws] = "admin"
+        st.hijack_owner = ws
+        st.hijack_owner_expires_at = time.monotonic() + 60
+        await _put(hub, "w1", st)
+        hub._ws_to_resume_token[ws] = "tok-order"
+        hub._resume_token_detached["tok-order"] = latch
+
+        await hub.cleanup_browser_disconnect("w1", ws, False)
+        assert set_during_mark == [False]
+        assert latch.is_set() is True
+
+    async def test_marks_ownership_while_holding_the_hub_lock(self) -> None:
+        """The commit runs under ``hub._lock``, not after it is dropped.
+
+        The pre-fix code marked ownership outside the lock with nothing ordering
+        it against a reconnect; this pins the lock hold that closes that window.
+        """
+        hub = TermHub()
+        locked_during_mark: list[bool] = []
+
+        async def _mark(_token: str, _owner: bool) -> None:
+            locked_during_mark.append(hub._lock.locked())
+
+        store = MagicMock()
+        store.mark_hijack_owner = _mark
+        hub._resume_store = store
+        ws = _ws()
+        st = WorkerTermState()
+        st.worker_ws = _ws()
+        st.browsers[ws] = "admin"
+        st.hijack_owner = ws
+        st.hijack_owner_expires_at = time.monotonic() + 60
+        await _put(hub, "w1", st)
+        hub._ws_to_resume_token[ws] = "tok-lock"
+
+        await hub.cleanup_browser_disconnect("w1", ws, False)
+        assert locked_during_mark == [True]
+
+    async def test_clears_the_owner_before_releasing_the_latch(self) -> None:
+        """A resume released by the latch must see a RECLAIMABLE lease.
+
+        The state mutation and the latch release share one lock hold, so the
+        owner is already cleared when a waiter wakes. Kills a mutation that
+        commits the token outside the fence/lock block.
+        """
+        hub = TermHub()
+        latch = asyncio.Event()
+        owner_during_mark: list[Any] = []
+        st = WorkerTermState()
+
+        async def _mark(_token: str, _owner: bool) -> None:
+            owner_during_mark.append(st.hijack_owner)
+
+        store = MagicMock()
+        store.mark_hijack_owner = _mark
+        hub._resume_store = store
+        ws = _ws()
+        st.worker_ws = _ws()
+        st.browsers[ws] = "admin"
+        st.hijack_owner = ws
+        st.hijack_owner_expires_at = time.monotonic() + 60
+        await _put(hub, "w1", st)
+        hub._ws_to_resume_token[ws] = "tok-owner"
+        hub._resume_token_detached["tok-owner"] = latch
+
+        await hub.cleanup_browser_disconnect("w1", ws, False)
+        assert owner_during_mark == [None]
+
+    async def test_no_resume_store_leaves_the_latch_armed(self) -> None:
+        """Without a store there is no token bookkeeping at all."""
+        hub = TermHub()
+        hub._resume_store = None
+        ws = _ws()
+        st = WorkerTermState()
+        st.worker_ws = _ws()
+        st.browsers[ws] = "viewer"
+        await _put(hub, "w1", st)
+        latch = asyncio.Event()
+        hub._resume_token_detached["tok-keep"] = latch
+
+        await hub.cleanup_browser_disconnect("w1", ws, False)
+        assert latch.is_set() is False
+        assert hub._resume_token_detached == {"tok-keep": latch}
 
     # -- startup-pending discard -------------------------------------------
 

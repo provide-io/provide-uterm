@@ -66,6 +66,17 @@ if TYPE_CHECKING:
     OnBrowserMessage = Callable[["TermHub", WebSocket, str, str, dict[str, Any], bool], Awaitable[bool]]
 
 
+# Upper bound on how long a resuming socket waits for the *previous* socket's
+# disconnect bookkeeping to commit (see ``TermHub.wait_resume_token_ready``).
+# Mirrors the Go port's ``lifecycleOperationTimeout``
+# (``hub/lifecycle_reservation.go``). The work being waited on is a single
+# resume-store write performed under the hub lock, so five seconds is orders of
+# magnitude of headroom; it also stays far below the resume-token TTL (300 s
+# default) and the WS idle timeout, so a latch that somehow never gets released
+# costs one slow resume rather than a hung socket.
+RESUME_TOKEN_DETACH_TIMEOUT_S = 5.0
+
+
 class TermHub:
     """In-memory registry for terminal WebSocket connections."""
 
@@ -426,6 +437,68 @@ class TermHub:
     def resume_store(self) -> ResumeTokenStore | None:
         return self._resume_store
 
+    # -- Resume-token detach latches ------------------------------------
+    #
+    # A resume token is bound to exactly one browser socket. Its ownership flag
+    # (``was_hijack_owner``) is written by that socket's *disconnect*
+    # bookkeeping, which runs on the socket's own task — a promptly reconnecting
+    # browser could therefore read the flag before it was written and silently
+    # skip its lease reclaim. Each bound token gets an ``asyncio.Event`` latch,
+    # armed under ``_lock`` when the token is bound and set under ``_lock``
+    # *after* the disconnect bookkeeping has committed, so a resume can order
+    # itself behind the socket it is replacing. Port of ``resumeTokenDetached``
+    # in the Go hub (``hub/lifecycle_reservation.go``).
+
+    def _bind_resume_token_locked(self, ws: WebSocket, token: str) -> None:
+        """Bind *token* to *ws* and arm its detach latch.
+
+        The caller must hold ``self._lock``. Any token previously bound to *ws*
+        is superseded, so its latch is released here — otherwise a socket that
+        resumes into a replacement token would strand the connect-time token's
+        latch (and any waiter on it) until the process exits.
+        """
+        self._detach_resume_token_locked(self._ws_to_resume_token.get(ws))
+        self._ws_to_resume_token[ws] = token
+        self._resume_token_detached.setdefault(token, asyncio.Event())
+
+    def _detach_resume_token_locked(self, token: str | None) -> None:
+        """Release *token*'s detach latch, if it has one.
+
+        The caller must hold ``self._lock``. Tolerates ``None`` (nothing was
+        bound) and an unknown token (already detached), mirroring the Go port's
+        ``detachResumeTokenLocked``.
+        """
+        if token is None:
+            return
+        latch = self._resume_token_detached.pop(token, None)
+        if latch is not None:
+            latch.set()
+
+    async def wait_resume_token_ready(self, token: str, ws: WebSocket) -> bool:
+        """Wait until *token* is safe for *ws* to resume with.
+
+        Returns immediately when *token* is still bound to *ws* itself (nothing
+        to order against). Otherwise waits for the socket that held it to finish
+        its disconnect bookkeeping, so a subsequent ``resume_store.get(token)``
+        observes the committed ``was_hijack_owner`` flag.
+
+        Returns ``True`` when the token is ready and ``False`` when the wait hit
+        :data:`RESUME_TOKEN_DETACH_TIMEOUT_S`. The bound is a liveness guard
+        only: callers proceed either way (with whatever the store says), so a
+        lost latch degrades to the pre-latch race instead of hanging the socket.
+        """
+        async with self._lock:
+            if self._ws_to_resume_token.get(ws) == token:
+                return True
+            latch = self._resume_token_detached.get(token)
+        if latch is None:
+            return True
+        try:
+            await asyncio.wait_for(latch.wait(), RESUME_TOKEN_DETACH_TIMEOUT_S)
+        except TimeoutError:
+            return False
+        return True
+
     def create_router(self, *, extra_route_registrars: list[Any] | None = None) -> APIRouter:
         return _orch.create_router(self, extra_route_registrars=extra_route_registrars)  # ty:ignore[invalid-argument-type]
 
@@ -498,6 +571,9 @@ class TermHub:
         self._on_resume = on_resume
         self.allow_stale_owner_role_resume = bool(allow_stale_owner_role_resume)
         self._ws_to_resume_token: dict[WebSocket, str] = {}
+        # token -> latch set once the socket holding it has committed its
+        # disconnect bookkeeping (see _bind_resume_token_locked).
+        self._resume_token_detached: dict[str, asyncio.Event] = {}
         self._startup_pending_browsers: set[WebSocket] = set()
         self._background_tasks: set[asyncio.Task[Any]] = set()
         self._event_bus = event_bus
