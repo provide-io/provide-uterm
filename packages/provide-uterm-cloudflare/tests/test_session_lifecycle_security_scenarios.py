@@ -578,7 +578,19 @@ async def _public_rest_identity_proof(base: str, tokens: dict[str, str]) -> None
             _http_json, base, tokens["rest-competitor"], heartbeat_path, {"lease_s": 45}
         )
         assert status == 409 and refused["error"] == "owner_mismatch"
-        for pattern in ("[", "a*a*a*a*a*a*a*a*b", "a?a?a?a?a?a?a?a?b", r"(a)\1"):
+        for pattern in (
+            "[",
+            "a{,}",
+            "a{,3}",
+            "a*a*a*a*a*a*a*a*b",
+            "a?a?a?a?a?a?a?a?b",
+            "a|b",
+            "(?=a)",
+            "(?!a)",
+            "(?<=a)",
+            "(?<!a)",
+            r"(a)\1",
+        ):
             status, invalid = await asyncio.to_thread(
                 _http_json,
                 base,

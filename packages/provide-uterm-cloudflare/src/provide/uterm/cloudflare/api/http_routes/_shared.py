@@ -70,7 +70,9 @@ def _looks_like_counted_quantifier(pattern: str, start: int) -> bool:
     if not body:
         return False
     left, separator, right = body.partition(",")
-    return left.isdigit() and (not separator or right == "" or right.isdigit())
+    if not separator:
+        return left.isdigit()
+    return (left == "" or left.isdigit()) and (right == "" or right.isdigit())
 
 
 def _validate_pattern_safety(pattern: str) -> None:
@@ -113,7 +115,10 @@ def _validate_pattern_safety(pattern: str) -> None:
         variable_quantifier = char in "+*?"
         if char == "{" and _looks_like_counted_quantifier(pattern, index):
             end = pattern.find("}", index)
-            variable_quantifier = "," in pattern[index + 1 : end]
+            body = pattern[index + 1 : end]
+            if body.startswith(","):
+                raise ValueError("counted quantifiers require a lower bound")
+            variable_quantifier = "," in body
             index = end
         if variable_quantifier:
             branching_quantifiers += 1
