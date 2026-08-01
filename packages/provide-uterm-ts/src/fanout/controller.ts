@@ -47,6 +47,12 @@ export interface FanOutPolicyGate {
   interceptFanout(command: string, context: Record<string, unknown>, groupId: string): Promise<FanOutPolicyDecision>;
 }
 
+/** Exact identity of one store generation of an approval id. */
+export interface ApprovalIdentity {
+  id: string;
+  revision: number;
+}
+
 /** The hub surface the controller drives. */
 export interface FanOutControllerHub {
   /** Deliver a frame to one worker. Returns whether it was accepted. */
@@ -56,11 +62,11 @@ export interface FanOutControllerHub {
   /** Append to a worker's audit log. */
   appendEvent(workerId: string, eventType: string, data?: Record<string, unknown>): Promise<void>;
   /** Register a command held for approval. */
-  addApproval(request: Record<string, unknown>): void;
+  addApproval(request: Record<string, unknown>): ApprovalIdentity | undefined;
   /** Open output capture before a worker can emit anything. */
   openOutputCapture?(workerId: string): Promise<OutputCapture | undefined>;
   /** Set by the controller so it hears about approvals that lapse. */
-  onApprovalExpired?: ((requestId: string) => void) | undefined;
+  onApprovalExpired?: ((approval: ApprovalIdentity) => void) | undefined;
 }
 
 /** Construction options for {@link FanOutController}. */
@@ -95,6 +101,7 @@ export interface SendOptions {
 
 /** A command held awaiting approval. */
 interface PendingApproval {
+  revision: number;
   groupId: string;
   command: string;
   principal: AuthorizablePrincipal;
@@ -133,8 +140,8 @@ export class FanOutController {
     this.#canReadSession = options.canReadSession;
     // A held command that is never decided would otherwise sit in memory for
     // the life of the process, and stay releasable long after its window.
-    this.#hub.onApprovalExpired = (requestId) => {
-      this.#pending.delete(requestId);
+    this.#hub.onApprovalExpired = (approval) => {
+      this.#takePending(approval.id, approval.revision);
     };
   }
 
@@ -228,12 +235,11 @@ export class FanOutController {
    * between the hold and the decision, and running it then would honour a
    * permission the sender no longer has.
    */
-  async releaseApprovedCommand(requestId: string): Promise<FanOutResult | undefined> {
-    const pending = this.#pending.get(requestId);
+  async releaseApprovedCommand(requestId: string, revision: number): Promise<FanOutResult | undefined> {
+    const pending = this.#takePending(requestId, revision);
     if (pending === undefined) {
       return undefined;
     }
-    this.#pending.delete(requestId);
     const authorized = await this.#authorizedMembers(pending.groupId, pending.command, pending.principal);
     if ("error" in authorized) {
       return authorized.error;
@@ -250,6 +256,16 @@ export class FanOutController {
       pending.principal,
       options,
     );
+  }
+
+  /** Consume only the exact generation that supplied this authority. */
+  #takePending(requestId: string, revision: number): PendingApproval | undefined {
+    const pending = this.#pending.get(requestId);
+    if (pending === undefined || pending.revision !== revision) {
+      return undefined;
+    }
+    this.#pending.delete(requestId);
+    return pending;
   }
 
   /** The group, if `principal` created it or was granted it. */
@@ -347,7 +363,7 @@ export class FanOutController {
       request_id: requestId,
       principal: principal.subject_id,
     });
-    this.#hub.addApproval({
+    const approval = this.#hub.addApproval({
       id: requestId,
       worker_id: `group:${group.groupId}`,
       submitter_id: principal.subject_id,
@@ -358,7 +374,11 @@ export class FanOutController {
       group_id: group.groupId,
       is_fanout: true,
     });
+    if (approval === undefined || approval.id !== requestId || !Number.isSafeInteger(approval.revision)) {
+      throw new Error("fan-out approval registration failed");
+    }
     this.#pending.set(requestId, {
+      revision: approval.revision,
       groupId: group.groupId,
       command: data,
       principal,

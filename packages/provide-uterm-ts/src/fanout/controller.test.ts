@@ -8,6 +8,7 @@ import { PromptRegexError } from "../hub/index.ts";
 import type { AuthorizablePrincipal } from "../server/authorization.ts";
 import {
   FanOutController,
+  type ApprovalIdentity,
   type FanOutControllerHub,
   type FanOutGroup,
   fanOutGroup,
@@ -28,8 +29,9 @@ class FakeHub implements FanOutControllerHub {
   /** What each worker prints. */
   readonly outputs = new Map<string, string>();
   /** Approval expiry subscriber, as the hub's approval store would set it. */
-  onApprovalExpired: ((requestId: string) => void) | undefined;
+  onApprovalExpired: ((approval: ApprovalIdentity) => void) | undefined;
   readonly approvals: Array<Record<string, unknown>> = [];
+  #nextApprovalRevision = 0;
 
   async sendWorker(workerId: string, message: Record<string, unknown>): Promise<boolean> {
     this.sent.push({ workerId, message });
@@ -44,8 +46,14 @@ class FakeHub implements FanOutControllerHub {
     this.events.push({ workerId, eventType, data });
   }
 
-  addApproval(request: Record<string, unknown>): void {
-    this.approvals.push(request);
+  addApproval(request: Record<string, unknown>): ApprovalIdentity | undefined {
+    const id = String(request.id);
+    if (this.approvals.some((approval) => approval.id === id)) {
+      return undefined;
+    }
+    const revision = ++this.#nextApprovalRevision;
+    this.approvals.push({ ...request, revision });
+    return { id, revision };
   }
 
   async collectOutput(
@@ -76,6 +84,10 @@ function security() {
     resolveSession: async (workerId: string) => ({ workerId }),
     canReadSession: async () => true,
   };
+}
+
+function approvalRevision(hub: FakeHub, requestId: string | null | undefined): number {
+  return Number(hub.approvals.find((approval) => approval.id === requestId)?.revision);
 }
 
 /** A controller over a recording hub, with ids and time pinned. */
@@ -373,7 +385,7 @@ describe("FanOutController policy", () => {
     await expect(controller.send("g1", "reboot", actor("alice"))).rejects.toThrow("audit unavailable");
 
     expect(hub.approvals).toStrictEqual([]);
-    expect(await controller.releaseApprovedCommand("audit-failed")).toBeUndefined();
+    expect(await controller.releaseApprovedCommand("audit-failed", 1)).toBeUndefined();
     expect(hub.sent).toStrictEqual([]);
   });
 
@@ -392,7 +404,7 @@ describe("FanOutController policy", () => {
 
     expect(hub.events).toHaveLength(2);
     expect(hub.approvals).toStrictEqual([]);
-    expect(await controller.releaseApprovedCommand("approval-failed")).toBeUndefined();
+    expect(await controller.releaseApprovedCommand("approval-failed", 1)).toBeUndefined();
     expect(hub.sent).toStrictEqual([]);
   });
 
@@ -401,24 +413,60 @@ describe("FanOutController policy", () => {
     await controller.createGroup(group(["w1"]), "alice");
     hub.outputs.set("w1", "ok");
     const held = await controller.send("g1", "reboot", actor("alice"));
-    const released = await controller.releaseApprovedCommand(held.approvalId ?? "");
+    const released = await controller.releaseApprovedCommand(
+      held.approvalId ?? "",
+      approvalRevision(hub, held.approvalId),
+    );
     expect(released?.results.map((entry) => entry.workerId)).toStrictEqual(["w1"]);
     expect(hub.sent.map((entry) => entry.workerId)).toStrictEqual(["w1"]);
+  });
+
+  it("fails closed when release authority omits the revision", async () => {
+    const { controller, hub } = build({ policyGate: { interceptFanout: async () => ({ action: "hold" }) } });
+    await controller.createGroup(group(["w1"]), "alice");
+    const held = await controller.send("g1", "reboot", actor("alice"));
+
+    expect(await controller.releaseApprovedCommand(held.approvalId ?? "", undefined as never)).toBeUndefined();
+
+    const released = await controller.releaseApprovedCommand(
+      held.approvalId ?? "",
+      approvalRevision(hub, held.approvalId),
+    );
+    expect(released?.command).toBe("reboot");
+  });
+
+  it("rejects a duplicate live id without replacing the original pending command", async () => {
+    const { controller, hub } = build({
+      newId: () => "collision",
+      policyGate: { interceptFanout: async () => ({ action: "hold" }) },
+    });
+    await controller.createGroup(group(["w1"]), "alice");
+    const first = await controller.send("g1", "first", actor("alice"));
+    const revision = approvalRevision(hub, first.approvalId);
+
+    await expect(controller.send("g1", "second", actor("alice"))).rejects.toThrow(
+      "fan-out approval registration failed",
+    );
+    expect(hub.approvals).toHaveLength(1);
+
+    const released = await controller.releaseApprovedCommand(first.approvalId ?? "", revision);
+    expect(released?.command).toBe("first");
   });
 
   it("refuses to run the same approval twice", async () => {
     // The pending record is consumed on release, so a replayed approval id
     // cannot run the command again.
-    const { controller } = build({ policyGate: { interceptFanout: async () => ({ action: "hold" }) } });
+    const { controller, hub } = build({ policyGate: { interceptFanout: async () => ({ action: "hold" }) } });
     await controller.createGroup(group(["w1"]), "alice");
     const held = await controller.send("g1", "reboot", actor("alice"));
-    await controller.releaseApprovedCommand(held.approvalId ?? "");
-    expect(await controller.releaseApprovedCommand(held.approvalId ?? "")).toBeUndefined();
+    const revision = approvalRevision(hub, held.approvalId);
+    await controller.releaseApprovedCommand(held.approvalId ?? "", revision);
+    expect(await controller.releaseApprovedCommand(held.approvalId ?? "", revision)).toBeUndefined();
   });
 
   it("refuses an approval it never issued", async () => {
     const { controller } = build();
-    expect(await controller.releaseApprovedCommand("never-seen")).toBeUndefined();
+    expect(await controller.releaseApprovedCommand("never-seen", 1)).toBeUndefined();
   });
 
   it("remembers the timings the held command was sent with", async () => {
@@ -439,7 +487,7 @@ describe("FanOutController policy", () => {
     });
     await controller.createGroup(group(["w1"], { quiesceMs: 1, maxResponseMs: 2 }), "alice");
     const held = await controller.send("g1", "reboot", actor("alice"), { quiesceMs: 111, maxResponseMs: 222 });
-    await controller.releaseApprovedCommand(held.approvalId ?? "");
+    await controller.releaseApprovedCommand(held.approvalId ?? "", approvalRevision(hub, held.approvalId));
     expect(seen).toMatchObject({ quiesceMs: 111, maxMs: 222 });
   });
 
@@ -454,7 +502,10 @@ describe("FanOutController policy", () => {
     const held = await controller.send("g1", "reboot", principal);
 
     isAdmin = false;
-    const released = await controller.releaseApprovedCommand(held.approvalId ?? "");
+    const released = await controller.releaseApprovedCommand(
+      held.approvalId ?? "",
+      approvalRevision(hub, held.approvalId),
+    );
 
     expect(released?.error).toBe("global admin role required");
     expect(hub.sent).toStrictEqual([]);
@@ -471,7 +522,10 @@ describe("FanOutController policy", () => {
     const held = await controller.send("g1", "reboot", actor("alice"));
 
     readable = false;
-    const released = await controller.releaseApprovedCommand(held.approvalId ?? "");
+    const released = await controller.releaseApprovedCommand(
+      held.approvalId ?? "",
+      approvalRevision(hub, held.approvalId),
+    );
 
     expect(hub.sent).toStrictEqual([]);
     expect(released?.failedSessions).toStrictEqual(["w1"]);
@@ -489,7 +543,10 @@ describe("FanOutController policy", () => {
     stored.grants = [];
     await store.save(stored);
 
-    const released = await controller.releaseApprovedCommand(held.approvalId ?? "");
+    const released = await controller.releaseApprovedCommand(
+      held.approvalId ?? "",
+      approvalRevision(hub, held.approvalId),
+    );
 
     expect(released?.error).toBe("fan-out group not found");
     expect(hub.sent).toStrictEqual([]);
@@ -502,8 +559,33 @@ describe("FanOutController policy", () => {
     const { controller, hub } = build({ policyGate: { interceptFanout: async () => ({ action: "hold" }) } });
     await controller.createGroup(group(["w1"]), "alice");
     const held = await controller.send("g1", "reboot", actor("alice"));
-    hub.onApprovalExpired?.(held.approvalId ?? "");
-    expect(await controller.releaseApprovedCommand(held.approvalId ?? "")).toBeUndefined();
+    const approval = { id: held.approvalId ?? "", revision: approvalRevision(hub, held.approvalId) };
+    hub.onApprovalExpired?.(approval);
+    expect(await controller.releaseApprovedCommand(approval.id, approval.revision)).toBeUndefined();
+  });
+
+  it("keeps a reused id fenced from delayed expiry and stale release", async () => {
+    const { controller, hub } = build({
+      newId: () => "reused",
+      policyGate: { interceptFanout: async () => ({ action: "hold" }) },
+    });
+    await controller.createGroup(group(["w1"]), "alice");
+
+    const first = await controller.send("g1", "first", actor("alice"));
+    const revisionOne = Number(hub.approvals.at(-1)?.revision);
+    expect(revisionOne).toBeGreaterThan(0);
+    hub.approvals.length = 0;
+
+    const second = await controller.send("g1", "second", actor("alice"));
+    const revisionTwo = Number(hub.approvals.at(-1)?.revision);
+    expect(revisionTwo).toBeGreaterThan(revisionOne);
+
+    hub.onApprovalExpired?.({ id: first.approvalId ?? "", revision: revisionOne } as never);
+    expect(await controller.releaseApprovedCommand(second.approvalId ?? "", revisionOne)).toBeUndefined();
+
+    const released = await controller.releaseApprovedCommand(second.approvalId ?? "", revisionTwo);
+    expect(released?.command).toBe("second");
+    expect(hub.sent).toHaveLength(1);
   });
 
   it("runs on real defaults when given none", async () => {
