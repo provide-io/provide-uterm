@@ -136,11 +136,14 @@ module = ["provide.telemetry", "provide.telemetry.*", "provide.uterm.deckmux", "
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-# The Cloudflare Python Workers SDK ships py.typed but uses PEP 695 `type`
-# statements, which mypy cannot parse under python_version = "3.11". Only the
-# real CF runtime imports it (cf_types.py / entry/fallback_stubs.py guard it
-# behind try/except), so skip following it rather than raising the floor.
-module = ["workers"]
+# CF-runtime-only imports. The Cloudflare Python Workers SDK ships py.typed
+# but uses PEP 695 `type` statements, which mypy cannot parse under
+# python_version = "3.11"; pyodide's presence in the venv varies with how the
+# environment was last resolved. Both are guarded behind try/except at the
+# import sites (cf_types.py, entry/fallback_stubs.py, auth/jwt.py,
+# do/_webhook_crypto.py), so skip following them rather than letting the
+# verdict depend on the installed environment.
+module = ["workers", "pyodide", "pyodide.*"]
 follow_imports = "skip"
 ignore_missing_imports = true
 
