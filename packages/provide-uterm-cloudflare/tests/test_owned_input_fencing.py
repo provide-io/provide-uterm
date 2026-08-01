@@ -16,6 +16,7 @@ from cf_fencing_helpers import (
     _release,
     _Request,
     _runtime,
+    _send,
 )
 from provide.uterm.cloudflare.api.http_routes import route_http
 from provide.uterm.cloudflare.api.http_routes._hijack import route_hijack
@@ -33,13 +34,7 @@ async def test_release_waits_for_owned_delivery(source: str) -> None:
     runtime.worker_ws = worker
 
     if source == "rest_send":
-        delivery = route_hijack(
-            runtime,
-            _Request({"keys": "owned-input"}),
-            f"/worker/{runtime.worker_id}/hijack/{hijack_id}/send",
-            "https://example.invalid/send",
-            "POST",
-        )
+        delivery = _send(runtime, hijack_id)
     elif source == "rest_step":
         delivery = route_hijack(
             runtime,
@@ -78,15 +73,7 @@ async def test_alarm_expiry_waits_for_owned_delivery() -> None:
     worker = _BlockingWorkerWs()
     runtime.worker_ws = worker
 
-    delivery_task = asyncio.create_task(
-        route_hijack(
-            runtime,
-            _Request({"keys": "owned-input"}),
-            f"/worker/{runtime.worker_id}/hijack/{hijack_id}/send",
-            "https://example.invalid/send",
-            "POST",
-        )
-    )
+    delivery_task = asyncio.create_task(_send(runtime, hijack_id))
     await asyncio.wait_for(worker.started.wait(), timeout=1)
     assert runtime.hijack._session is not None
     runtime.hijack._session.lease_expires_at = 0
@@ -113,15 +100,7 @@ async def test_worker_replacement_waits_for_owned_delivery() -> None:
     old_worker = _BlockingWorkerWs()
     runtime.worker_ws = old_worker
 
-    delivery_task = asyncio.create_task(
-        route_hijack(
-            runtime,
-            _Request({"keys": "owned-input"}),
-            f"/worker/{runtime.worker_id}/hijack/{acquired.session.hijack_id}/send",
-            "https://example.invalid/send",
-            "POST",
-        )
-    )
+    delivery_task = asyncio.create_task(_send(runtime, acquired.session.hijack_id))
     await asyncio.wait_for(old_worker.started.wait(), timeout=1)
     new_worker = _BlockingWorkerWs()
     new_worker.release.set()
@@ -144,15 +123,7 @@ async def test_worker_disconnect_waits_for_owned_delivery() -> None:
     acquired = runtime.hijack.acquire("owner", 60)
     assert acquired.session is not None
 
-    delivery_task = asyncio.create_task(
-        route_hijack(
-            runtime,
-            _Request({"keys": "owned-input"}),
-            f"/worker/{runtime.worker_id}/hijack/{acquired.session.hijack_id}/send",
-            "https://example.invalid/send",
-            "POST",
-        )
-    )
+    delivery_task = asyncio.create_task(_send(runtime, acquired.session.hijack_id))
     await asyncio.wait_for(worker.started.wait(), timeout=1)
     disconnect_task = asyncio.create_task(runtime.unregister_worker_socket(worker))
     await asyncio.sleep(0)
@@ -178,13 +149,7 @@ async def test_worker_send_timeout_is_bounded_and_fails_delivery(monkeypatch: py
     )
 
     response = await asyncio.wait_for(
-        route_hijack(
-            runtime,
-            _Request({"keys": "owned-input"}),
-            f"/worker/{runtime.worker_id}/hijack/{acquired.session.hijack_id}/send",
-            "https://example.invalid/send",
-            "POST",
-        ),
+        _send(runtime, acquired.session.hijack_id),
         timeout=0.5,
     )
 
@@ -205,15 +170,7 @@ async def test_failed_browser_broadcast_removal_waits_for_owned_delivery() -> No
     worker = _BlockingWorkerWs()
     runtime.worker_ws = worker
 
-    delivery_task = asyncio.create_task(
-        route_hijack(
-            runtime,
-            _Request({"keys": "owned-input"}),
-            f"/worker/{runtime.worker_id}/hijack/{acquired.session.hijack_id}/send",
-            "https://example.invalid/send",
-            "POST",
-        )
-    )
+    delivery_task = asyncio.create_task(_send(runtime, acquired.session.hijack_id))
     await asyncio.wait_for(worker.started.wait(), timeout=1)
     failed_broadcast = asyncio.create_task(runtime.broadcast_hijack_state())
     await asyncio.sleep(0)
@@ -237,15 +194,7 @@ async def test_session_delete_waits_for_owned_delivery() -> None:
     worker = _BlockingWorkerWs()
     runtime.worker_ws = worker
 
-    delivery_task = asyncio.create_task(
-        route_hijack(
-            runtime,
-            _Request({"keys": "owned-input"}),
-            f"/worker/{runtime.worker_id}/hijack/{acquired.session.hijack_id}/send",
-            "https://example.invalid/send",
-            "POST",
-        )
-    )
+    delivery_task = asyncio.create_task(_send(runtime, acquired.session.hijack_id))
     await asyncio.wait_for(worker.started.wait(), timeout=1)
     delete_task = asyncio.create_task(
         route_http(

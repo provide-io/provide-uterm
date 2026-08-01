@@ -19,6 +19,7 @@ from cf_fencing_helpers import (
     _control,
     _Request,
     _runtime,
+    _send,
 )
 from provide.uterm.cloudflare.api._tunnel_api import _clear_tunnel_invite, consume_tunnel_invite
 from provide.uterm.cloudflare.api.http_routes._hijack import route_hijack
@@ -84,13 +85,7 @@ async def test_invalid_expect_regex_sends_zero_worker_frames() -> None:
     worker.release.set()
     runtime.worker_ws = worker
 
-    response = await route_hijack(
-        runtime,
-        _Request({"keys": "must-not-send", "expect_regex": "["}),
-        f"/worker/{runtime.worker_id}/hijack/{active.session.hijack_id}/send",
-        "https://example.invalid/send",
-        "POST",
-    )
+    response = await _send(runtime, active.session.hijack_id, {"keys": "must-not-send", "expect_regex": "["})
 
     assert getattr(response, "status", None) == 400
     assert worker.sent == []
@@ -120,13 +115,7 @@ async def test_unsafe_expect_regex_sends_zero_worker_frames(unsafe_pattern: str)
     worker.release.set()
     runtime.worker_ws = worker
 
-    response = await route_hijack(
-        runtime,
-        _Request({"keys": "must-not-send", "expect_regex": unsafe_pattern}),
-        f"/worker/{runtime.worker_id}/hijack/{active.session.hijack_id}/send",
-        "https://example.invalid/send",
-        "POST",
-    )
+    response = await _send(runtime, active.session.hijack_id, {"keys": "must-not-send", "expect_regex": unsafe_pattern})
 
     assert getattr(response, "status", None) == 400
     assert worker.sent == []

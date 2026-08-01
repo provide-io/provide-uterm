@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sqlite3
+from collections.abc import Coroutine
 from types import SimpleNamespace
 
 from provide.uterm.cloudflare.api.http_routes._hijack import route_hijack
@@ -119,6 +120,24 @@ def _control(raw: str) -> dict[str, object]:
     chunks = ControlFrameDecoder().feed(raw)
     assert len(chunks) == 1 and isinstance(chunks[0], ControlChunk)
     return chunks[0].control
+
+
+def _send(
+    runtime: SessionRuntime, hijack_id: str, body: dict[str, object] | None = None
+) -> Coroutine[object, object, object]:
+    """Return the owned-input send call, unawaited.
+
+    Callers variously await it, wrap it in ``asyncio.wait_for``, or hand it to
+    ``asyncio.create_task`` to hold a delivery in flight, so this hands back the
+    coroutine rather than awaiting it.
+    """
+    return route_hijack(
+        runtime,
+        _Request(body if body is not None else {"keys": "owned-input"}),
+        f"/worker/{runtime.worker_id}/hijack/{hijack_id}/send",
+        "https://example.invalid/send",
+        "POST",
+    )
 
 
 async def _release(runtime: SessionRuntime, hijack_id: str) -> object:

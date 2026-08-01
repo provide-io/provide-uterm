@@ -582,7 +582,7 @@ class TestCleanupBrowserDisconnect:
         st = WorkerTermState()
         st.browsers[ws] = "viewer"
         await _put(hub, "w1", st)
-        result = await hub.cleanup_browser_disconnect("w1", ws, False)
+        result = await hub.connection_mgr.cleanup_browser_disconnect("w1", ws, False)
         assert result == {"was_owner": False, "rest_still_active": False, "resume_without_owner": False}
         assert st.browsers == {}
 
