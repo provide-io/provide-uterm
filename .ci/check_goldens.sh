@@ -23,6 +23,22 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
+# A golden corpus is a recording of ONE reference interpreter, and some of what
+# it records is legitimately version-specific: pystr pins CPython's Unicode
+# tables (15.1.0 on 3.13, 16.0.0 on 3.14), statistics.variance became exact in
+# 3.12, and pathlib's class repr moved in 3.13. Running this check across a
+# version matrix therefore demands a single file match four interpreters at
+# once — something that cannot exist, and which left CI red on three of four
+# cells. The corpora are recorded against, and checked against, this one
+# version; the matrix still covers every test suite, which is what it is for.
+GOLDENS_REFERENCE_PYTHON="${GOLDENS_REFERENCE_PYTHON:-3.13}"
+running_python="$(uv run python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+if [[ "${running_python}" != "${GOLDENS_REFERENCE_PYTHON}" ]]; then
+  echo "SKIP: goldens are recorded against Python ${GOLDENS_REFERENCE_PYTHON}, this is ${running_python}."
+  echo "      Re-run on ${GOLDENS_REFERENCE_PYTHON}, or set GOLDENS_REFERENCE_PYTHON to re-record against another."
+  exit 0
+fi
+
 stale=()
 checked=0
 
