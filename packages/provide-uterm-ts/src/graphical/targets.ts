@@ -288,6 +288,12 @@ function netlocOf(url: string): string {
  * looked for (it holds no colon either way).
  */
 function hostAndPortOf(netloc: string): { host: string | null; port: string | null } {
+  // A bracket without its partner is CPython's "Invalid IPv6 URL", raised
+  // when the URL is parsed. Every caller turns an unusable netloc into the
+  // same refusal it gives a hostless one, so it is reported the same way.
+  if (netloc.includes("[") !== netloc.includes("]")) {
+    return { host: null, port: null };
+  }
   const at = netloc.lastIndexOf("@");
   const hostinfo = at === -1 ? netloc : netloc.slice(at + 1);
 

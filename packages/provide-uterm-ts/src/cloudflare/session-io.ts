@@ -58,12 +58,10 @@ export interface HijackStateInput {
 /**
  * Read a request body as an object, or refuse it.
  *
- * **A recorded divergence.** The reference returns an empty object for every
- * other kind of bad input — wrong content type, oversized, empty, not an
- * object — but a body that is not valid JSON raises out of it. Whether that
- * surfaces as a 500 depends on a handler above it that this port has not
- * traced; what is certain is that the function is inconsistent with itself.
- * This returns an empty object for that case too.
+ * Every kind of bad input — wrong content type, oversized, empty, not valid
+ * JSON, not an object — reads as an empty object, as the reference now reads
+ * it. It used to let a parse failure raise out of it; the corpus records the
+ * lenient answer.
  *
  * @returns The object the body carried, or an empty one for anything else.
  */

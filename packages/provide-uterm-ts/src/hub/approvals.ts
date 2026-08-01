@@ -21,7 +21,7 @@
  */
 
 /** The lifecycle states an approval request moves through. */
-export const APPROVAL_STATUSES = ["pending", "approved", "rejected", "timeout"] as const;
+export const APPROVAL_STATUSES = ["pending", "resolving", "approved", "rejected", "refused", "timeout"] as const;
 
 /** One of {@link APPROVAL_STATUSES}. */
 export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
@@ -90,6 +90,15 @@ export class InMemoryApprovalStore {
   onExpired: ((request: StoredApprovalRequest) => void | Promise<void>) | undefined;
 
   readonly #requests = new Map<string, StoredApprovalRequest>();
+  /**
+   * Exact-revision snapshots of requests that timed out, awaiting delivery.
+   *
+   * A claim or resolve that finds its request already expired times it out on
+   * the spot, but the notification is queued and delivered from
+   * {@link cleanupExpired} — the reference never runs listener code inside a
+   * decision call.
+   */
+  readonly #expiredNotifications = new Map<string, StoredApprovalRequest>();
   readonly #now: () => number;
   #nextRevision: number;
 
@@ -123,6 +132,12 @@ export class InMemoryApprovalStore {
     return { ...stored };
   }
 
+  /** Time a request out and queue its exact-revision snapshot for delivery. */
+  #expire(request: StoredApprovalRequest): void {
+    request.status = "timeout";
+    this.#expiredNotifications.set(`${request.id}#${request.revision}`, { ...request });
+  }
+
   /** A snapshot of `requestId`, or `undefined` when it is unknown. */
   get(requestId: string): StoredApprovalRequest | undefined {
     const request = this.#requests.get(requestId);
@@ -138,13 +153,14 @@ export class InMemoryApprovalStore {
    */
   resolve(requestId: string, status: ApprovalStatus, expectedRevision: number): void {
     const request = this.#requests.get(requestId);
-    if (
-      request !== undefined &&
-      request.status === "pending" &&
-      request.revision === expectedRevision
-    ) {
-      request.status = status;
+    if (request === undefined || request.status !== "pending" || request.revision !== expectedRevision) {
+      return;
     }
+    if (request.expiresAt <= this.#now()) {
+      this.#expire(request);
+      return;
+    }
+    request.status = status;
   }
 
   /**
@@ -157,11 +173,14 @@ export class InMemoryApprovalStore {
    */
   claim(requestId: string, status: ApprovalStatus, expectedRevision: number): boolean {
     const request = this.#requests.get(requestId);
-    if (
-      request === undefined ||
-      request.status !== "pending" ||
-      request.revision !== expectedRevision
-    ) {
+    if (request === undefined || request.status !== "pending" || request.revision !== expectedRevision) {
+      return false;
+    }
+    // An expired request cannot be decided any more — it is timed out on the
+    // spot, so a late approve arriving after the window closes injects
+    // nothing.
+    if (request.expiresAt <= this.#now()) {
+      this.#expire(request);
       return false;
     }
     request.status = status;
@@ -176,7 +195,6 @@ export class InMemoryApprovalStore {
    */
   async cleanupExpired(): Promise<void> {
     const now = this.#now();
-    const expired: StoredApprovalRequest[] = [];
 
     // Every mutation happens here, before the first callback: `onExpired` is
     // user code that may be slow, and a subscriber reading the store back
@@ -184,14 +202,17 @@ export class InMemoryApprovalStore {
     for (const [requestId, request] of [...this.#requests]) {
       if (request.status === "pending") {
         if (request.expiresAt < now) {
-          request.status = "timeout";
-          expired.push({ ...request });
+          this.#expire(request);
         }
       } else if (request.expiresAt + APPROVAL_PRUNE_TTL < now) {
         this.#requests.delete(requestId);
       }
     }
 
+    // Drained whether or not anyone is listening, exactly once per expiry —
+    // this pass also delivers timeouts a claim or resolve queued earlier.
+    const expired = [...this.#expiredNotifications.values()];
+    this.#expiredNotifications.clear();
     const onExpired = this.onExpired;
     if (onExpired === undefined) {
       return;

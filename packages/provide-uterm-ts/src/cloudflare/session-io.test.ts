@@ -20,7 +20,7 @@ interface RequestCase {
   name: string;
   content_type: string | null;
   body_len: number;
-  parsed: Record<string, unknown> | { raises: string };
+  parsed: Record<string, unknown>;
 }
 
 interface StateCase {
@@ -91,11 +91,6 @@ describe("what a request body has to look like", () => {
     const body = BODIES[record.name] as string;
     expect(body.length).toBe(record.body_len);
     const parsed = requestJson(record.content_type ?? undefined, body);
-    if ("raises" in record.parsed) {
-      // A recorded divergence, covered by its own test below.
-      expect(parsed).toEqual({});
-      return;
-    }
     expect(parsed).toEqual(record.parsed);
   });
 
@@ -140,14 +135,11 @@ describe("what a request body has to look like", () => {
     expect(requestJson("application/json", '{"a":{"b":[1,2]}}')).toEqual({ a: { b: [1, 2] } });
   });
 
-  it("returns nothing for a body that is not JSON, where the reference raises", () => {
-    // Every other bad input gets an empty object; only this one leaves the
-    // function. Whether that surfaces as a 500 depends on a handler above it
-    // that this port has not traced — what is certain is the inconsistency.
+  it("returns nothing for a body that is not JSON, as the reference now does", () => {
+    // The reference used to let this one raise where every other bad input got
+    // an empty object; the corpus records the lenient answer.
     expect(requestJson("application/json", "not json")).toEqual({});
-    expect(golden.requests.find((entry) => entry.name === "a body that is not JSON")?.parsed).toEqual({
-      raises: "JSONDecodeError",
-    });
+    expect(golden.requests.find((entry) => entry.name === "a body that is not JSON")?.parsed).toEqual({});
   });
 
   it("bounds webhook deliveries where the reference bounds them", () => {

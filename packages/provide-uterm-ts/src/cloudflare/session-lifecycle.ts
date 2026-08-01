@@ -24,11 +24,12 @@
  * whether the socket is already known, and getting it wrong means a browser
  * receives two hellos or none.
  *
- * **What a disconnect leaves behind.** A browser that held the hijack has its
- * resume token marked so it can reclaim ownership on reconnect; a worker
- * leaving moves the session to `stopped` on a clean close and `error` on a
- * failure. A session already deleted does none of it — there is nobody left to
- * tell, and the socket is closed instead.
+ * **What a disconnect leaves behind.** A browser that held the hijack
+ * releases it, and the release is broadcast so every other viewer's controls
+ * update; a worker leaving moves the session to `stopped` on a clean close and
+ * `error` on a failure — though only the worker socket of record does, and a
+ * stale one moves nothing. A session already deleted keeps its state and
+ * tells nobody, but the registry is still corrected.
  *
  * A socket's role is read from its attachment rather than from object
  * identity, because after hibernation the runtime's own references are gone
@@ -49,15 +50,19 @@ export type SocketRole = "worker" | "browser" | "raw";
 export type LifecycleAction =
   | { kind: "close"; code: number; reason: string }
   | { kind: "register_socket"; role: SocketRole }
+  | { kind: "restore_browser_identity" }
+  | { kind: "activate_worker_socket"; accepted: boolean }
   | { kind: "remove_socket" }
+  | { kind: "remove_browser_socket"; released: boolean }
+  | { kind: "unregister_worker_socket"; current: boolean }
   | { kind: "broadcast_worker_frame"; frame: Record<string, unknown> }
   | { kind: "broadcast_browsers"; frame: Record<string, unknown> }
+  | { kind: "broadcast_hijack_state" }
   | { kind: "send"; frame: Record<string, unknown> }
   | { kind: "send_text"; text: string }
   | { kind: "presence_sync"; exclude_self: boolean }
   | { kind: "send_hijack_state" }
   | { kind: "create_resume_token"; token: string; worker_id: string; role: string; ttl: number }
-  | { kind: "mark_resume_hijack_owner"; token: string; owner: boolean }
   | { kind: "update_kv"; connected: boolean }
   | { kind: "on_browser_connected" };
 
@@ -74,6 +79,8 @@ export interface SocketOpenState {
   wsId: string;
   /** The role a JWT resolved, which is what `can_hijack` follows. */
   browserRole: string;
+  /** Whether an arriving worker socket becomes the socket of record. */
+  workerCurrent: boolean;
   inputMode: string;
   presence: boolean;
   /** Whether a worker or a ushell is behind this session. */
@@ -98,8 +105,8 @@ export interface SocketCloseState {
   presence: boolean;
   /** Whether this browser was the one holding the hijack. */
   heldHijack: boolean;
-  /** The resume token this browser was given, if any. */
-  resumeToken?: string | undefined;
+  /** Whether a departing worker socket was the socket of record. */
+  workerCurrent: boolean;
   now: number;
 }
 
@@ -118,7 +125,7 @@ export function buildHelloFrame(state: SocketOpenState): Record<string, unknown>
     can_hijack: state.browserRole === "admin",
     input_mode: state.inputMode,
     role: state.browserRole,
-    hijack_control: "rest",
+    hijack_control: "ws",
     hijack_step_supported: true,
     resume_supported: state.resumeEnabled,
     presence_enabled: state.presence,
@@ -145,9 +152,14 @@ export function onSocketOpen(state: SocketOpenState): LifecycleAction[] {
   if (state.deleted) {
     return [{ kind: "close", code: 1001, reason: "session deleted" }];
   }
-  const actions: LifecycleAction[] = [{ kind: "register_socket", role: state.role }];
 
   if (state.role === "worker") {
+    // Activation, not registration: only the socket of record is accepted,
+    // and a stale one is turned away without a word to anybody.
+    const actions: LifecycleAction[] = [{ kind: "activate_worker_socket", accepted: state.workerCurrent }];
+    if (!state.workerCurrent) {
+      return actions;
+    }
     actions.push(
       { kind: "broadcast_worker_frame", frame: { type: "worker_connected", worker_id: state.workerId, ts: state.now } },
       { kind: "update_kv", connected: true },
@@ -158,6 +170,7 @@ export function onSocketOpen(state: SocketOpenState): LifecycleAction[] {
   if (state.role === "raw") {
     // A raw socket gets the screen as text and nothing else — it is a plain
     // terminal, not a client that understands frames.
+    const actions: LifecycleAction[] = [{ kind: "register_socket", role: state.role }];
     const screen = state.lastSnapshot?.screen;
     if (typeof screen === "string") {
       actions.push({ kind: "send_text", text: screen });
@@ -165,6 +178,9 @@ export function onSocketOpen(state: SocketOpenState): LifecycleAction[] {
     return actions;
   }
 
+  // A browser's identity is restored rather than registered: after
+  // hibernation the attachment is all that remembers who this socket was.
+  const actions: LifecycleAction[] = [{ kind: "restore_browser_identity" }];
   if (!state.alreadyInitialized) {
     // The hibernation-restore path: `fetch` never ran for this connection, so
     // hello has to be sent here. On a normal upgrade it already went.
@@ -196,31 +212,41 @@ export function onSocketOpen(state: SocketOpenState): LifecycleAction[] {
  * body here and not two.
  */
 function onSocketGone(state: SocketCloseState): LifecycleAction[] {
-  const actions: LifecycleAction[] = [];
-  if (state.role === "browser" && !state.deleted) {
-    if (state.presence) {
+  if (state.role === "browser") {
+    const actions: LifecycleAction[] = [];
+    if (!state.deleted && state.presence) {
       actions.push({
         kind: "broadcast_browsers",
         frame: { type: "presence_leave", user_id: state.wsId, ts: state.now },
       });
     }
-    // Marked before the socket goes, so a browser that was driving can
-    // reclaim ownership when it comes back.
-    if (state.heldHijack && state.resumeToken !== undefined && state.resumeToken !== "") {
-      actions.push({ kind: "mark_resume_hijack_owner", token: state.resumeToken, owner: true });
+    actions.push({ kind: "remove_browser_socket", released: state.heldHijack });
+    // A hijack the leaver held is released with the socket, and the release
+    // is broadcast so every other viewer's controls update.
+    if (state.heldHijack) {
+      actions.push({ kind: "broadcast_hijack_state" });
     }
+    return actions;
   }
-  actions.push({ kind: "remove_socket" });
   if (state.role === "worker") {
-    if (!state.deleted) {
-      actions.push({
-        kind: "broadcast_worker_frame",
-        frame: { type: "worker_disconnected", worker_id: state.workerId, ts: state.now },
-      });
+    const actions: LifecycleAction[] = [
+      { kind: "unregister_worker_socket", current: state.workerCurrent },
+      { kind: "remove_socket" },
+    ];
+    // Only the socket of record speaks for the worker: a stale one going
+    // says nothing and corrects nothing.
+    if (state.workerCurrent) {
+      if (!state.deleted) {
+        actions.push({
+          kind: "broadcast_worker_frame",
+          frame: { type: "worker_disconnected", worker_id: state.workerId, ts: state.now },
+        });
+      }
+      actions.push({ kind: "update_kv", connected: false });
     }
-    actions.push({ kind: "update_kv", connected: false });
+    return actions;
   }
-  return actions;
+  return [{ kind: "remove_socket" }];
 }
 
 /** What a clean close causes. A departing worker leaves the session stopped. */
@@ -236,17 +262,19 @@ export function onSocketError(state: SocketCloseState): LifecycleAction[] {
 /** The lifecycle state a socket event leaves the session in, or nothing. */
 export function lifecycleStateAfter(
   event: "open" | "close" | "error",
-  state: { role: SocketRole; deleted: boolean },
+  state: { role: SocketRole; deleted: boolean; workerCurrent: boolean },
 ): "running" | "stopped" | "error" | undefined {
   if (state.role !== "worker") {
     return undefined;
   }
-  if (event === "open") {
-    return state.deleted ? undefined : "running";
-  }
-  // A deleted session's state is not moved: there is nothing left to run.
-  if (state.deleted) {
+  // A stale worker socket moves nothing: the session's state belongs to the
+  // socket of record. A deleted session's is not moved either — there is
+  // nothing left to run.
+  if (state.deleted || !state.workerCurrent) {
     return undefined;
+  }
+  if (event === "open") {
+    return "running";
   }
   return event === "close" ? "stopped" : "error";
 }

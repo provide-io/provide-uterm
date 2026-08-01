@@ -27,6 +27,8 @@ export interface LeaseRecord {
   hijackId: string;
   owner: string;
   leaseExpiresAt: number;
+  /** The connection that acquired the lease, when the caller says. */
+  acquiredBy?: string | null;
 }
 
 /** What a session says about itself. */
@@ -49,6 +51,8 @@ export interface SessionStateRecord {
   event_seq: number;
   input_mode: string;
   deleted_at: unknown;
+  acquired_by: unknown;
+  worker_generation: unknown;
 }
 
 /** One thing that happened to a session. */
@@ -107,11 +111,15 @@ const SCHEMA: readonly string[] = [
   `CREATE TABLE IF NOT EXISTS session_state (
                 worker_id TEXT PRIMARY KEY, hijack_id TEXT, owner TEXT,
                 lease_expires_at REAL, last_snapshot_json TEXT, deleted_at REAL,
-                event_seq INTEGER NOT NULL DEFAULT 0, updated_at REAL NOT NULL)`,
+                event_seq INTEGER NOT NULL DEFAULT 0, updated_at REAL NOT NULL,
+                acquired_by TEXT, worker_generation TEXT)`,
   `CREATE TABLE IF NOT EXISTS session_events (
                 worker_id TEXT NOT NULL, seq INTEGER NOT NULL, ts REAL NOT NULL,
                 event_type TEXT NOT NULL, payload_json TEXT NOT NULL,
                 PRIMARY KEY (worker_id, seq))`,
+  `CREATE TABLE IF NOT EXISTS runtime_activations (
+                worker_id TEXT PRIMARY KEY, incarnation TEXT NOT NULL,
+                activation_seq INTEGER NOT NULL, activated_at REAL NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS resume_tokens (
                 token TEXT PRIMARY KEY, worker_id TEXT NOT NULL,
                 role TEXT NOT NULL DEFAULT 'viewer', was_hijack_owner INTEGER NOT NULL DEFAULT 0,
@@ -138,6 +146,8 @@ const SCHEMA: readonly string[] = [
 const LATER_COLUMNS: readonly string[] = [
   "ALTER TABLE session_state ADD COLUMN input_mode TEXT NOT NULL DEFAULT 'hijack'",
   "ALTER TABLE session_state ADD COLUMN deleted_at REAL",
+  "ALTER TABLE session_state ADD COLUMN acquired_by TEXT",
+  "ALTER TABLE session_state ADD COLUMN worker_generation TEXT",
 ];
 
 /** A value the caller actually supplied. */
@@ -264,7 +274,7 @@ export class SqliteStateStore {
     const row = this.#row(
       `
                 SELECT worker_id, hijack_id, owner, lease_expires_at, last_snapshot_json, event_seq, input_mode
-                     , deleted_at
+                     , deleted_at, acquired_by, worker_generation
                 FROM session_state
                 WHERE worker_id = ?
                 `,
@@ -284,6 +294,8 @@ export class SqliteStateStore {
       event_seq: Number(row.event_seq),
       input_mode: String(supplied(row.input_mode) ?? "hijack"),
       deleted_at: row.deleted_at ?? null,
+      acquired_by: row.acquired_by ?? null,
+      worker_generation: row.worker_generation ?? null,
     };
   }
 
@@ -291,18 +303,20 @@ export class SqliteStateStore {
   saveLease(record: LeaseRecord): void {
     this.#rows(
       `
-            INSERT INTO session_state(worker_id, hijack_id, owner, lease_expires_at, updated_at)
-            VALUES(?, ?, ?, ?, ?)
+            INSERT INTO session_state(worker_id, hijack_id, owner, lease_expires_at, acquired_by, updated_at)
+            VALUES(?, ?, ?, ?, ?, ?)
             ON CONFLICT(worker_id) DO UPDATE SET
                 hijack_id = excluded.hijack_id,
                 owner = excluded.owner,
                 lease_expires_at = excluded.lease_expires_at,
+                acquired_by = excluded.acquired_by,
                 updated_at = excluded.updated_at
             `,
       record.workerId,
       record.hijackId,
       record.owner,
       Number(record.leaseExpiresAt),
+      record.acquiredBy ?? null,
       this.#now(),
     );
   }
@@ -318,7 +332,7 @@ export class SqliteStateStore {
     this.#rows(
       `
             UPDATE session_state
-            SET hijack_id = NULL, owner = NULL, lease_expires_at = NULL, updated_at = ?
+            SET hijack_id = NULL, owner = NULL, lease_expires_at = NULL, acquired_by = NULL, updated_at = ?
             WHERE worker_id = ?
             `,
       this.#now(),
@@ -343,7 +357,9 @@ export class SqliteStateStore {
                 hijack_id = NULL,
                 owner = NULL,
                 lease_expires_at = NULL,
+                acquired_by = NULL,
                 last_snapshot_json = NULL,
+                worker_generation = NULL,
                 deleted_at = excluded.deleted_at,
                 updated_at = excluded.updated_at
             `,

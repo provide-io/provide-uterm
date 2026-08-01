@@ -85,7 +85,9 @@ function textField(event: Record<string, unknown>, key: string): string {
  * With no subscription there is no bus, which is a valid configuration rather
  * than an error.
  */
-export async function openOutputCapture(options: Pick<CollectOutputOptions, "subscribe" | "now">): Promise<OutputCapture | undefined> {
+export async function openOutputCapture(
+  options: Pick<CollectOutputOptions, "subscribe" | "now">,
+): Promise<OutputCapture | undefined> {
   if (options.subscribe === undefined) {
     return undefined;
   }

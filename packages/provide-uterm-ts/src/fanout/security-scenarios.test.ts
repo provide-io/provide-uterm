@@ -8,12 +8,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { AuthorizablePrincipal } from "../server/authorization.ts";
 import type { OutputCapture } from "./collector.ts";
-import {
-  type ApprovalIdentity,
-  FanOutController,
-  type FanOutControllerHub,
-  type SendOptions,
-} from "./controller.ts";
+import { type ApprovalIdentity, FanOutController, type FanOutControllerHub, type SendOptions } from "./controller.ts";
 import { type FanOutResult, fanOutGroup, InMemoryFanOutStore } from "./models.ts";
 import { createFanoutRoutes, type FanoutRoutesController } from "./routes.ts";
 
@@ -187,6 +182,7 @@ async function buildController(input: ScenarioInput): Promise<{ controller: FanO
     hub,
     now: () => 1,
     newId: () => "approval",
+    allowUnknownMembers: input.group.allow_unknown_members,
     ...(input.omit_authorizers === true
       ? {}
       : {
@@ -229,9 +225,7 @@ async function executeRest(scenario: Scenario): Promise<Observation> {
     },
     authz: {
       isAdmin: async (principal) => principal.roles.has("admin") && (principal.admin_session_scope ?? null) === null,
-      canReadSession: async (_principal, definition) => definitions.has((definition as { workerId: string }).workerId),
     },
-    allowUnknownMembers: input.group.allow_unknown_members,
     now: () => 1,
     newId: () => input.group.id,
   });
@@ -346,6 +340,10 @@ function sendOptions(maxResponseMs: number | undefined): SendOptions {
 
 function routeController(controller: FanOutController): FanoutRoutesController {
   return {
+    get allowUnknownMembers() {
+      return controller.allowUnknownMembers;
+    },
+    validateMembers: (workerIds, principal) => controller.validateMembers(workerIds, principal),
     createGroup: (group, principal) => controller.createGroup(group, principal),
     listGroups: (principal) => controller.listGroups(principal),
     getGroup: (groupId, principal) => controller.getGroup(groupId, principal),

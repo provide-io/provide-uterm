@@ -54,6 +54,17 @@ class FakeController implements FanoutRoutesController {
   readonly calls: unknown[][] = [];
   createError: unknown;
   sendResult: FanOutResult | undefined;
+  allowUnknownMembers = false;
+  /** Mirrors the harness fixtures: w1..w3 readable, anything else refused. */
+  readonly readable = new Set(["w1", "w2", "w3"]);
+
+  async validateMembers(workerIds: string[], principal: AuthorizablePrincipal): Promise<[string[], string[]]> {
+    this.calls.push(["validate_members", [...workerIds], principal.subject_id]);
+    return [
+      workerIds.filter((workerId) => this.readable.has(workerId)),
+      workerIds.filter((workerId) => !this.readable.has(workerId)),
+    ];
+  }
 
   async createGroup(group: FanOutGroup, principal: string): Promise<string> {
     this.calls.push(["create_group", group.groupId, principal]);
@@ -127,8 +138,10 @@ function harness(
   options: { controller?: FanoutRoutesController; readable?: string[]; allowUnknownMembers?: boolean } = {},
 ) {
   const controller = options.controller ?? new FakeController();
+  if (options.allowUnknownMembers !== undefined && controller instanceof FakeController) {
+    controller.allowUnknownMembers = options.allowUnknownMembers;
+  }
   const known = new Set([...(options.readable ?? ["w1", "w2", "w3"]), "secret"]);
-  const allowed = new Set(options.readable ?? ["w1", "w2", "w3"]);
   const audited: Array<{ event: string; principal: string; detail: Record<string, unknown> }> = [];
   let counter = 0;
   const deps: FanoutRoutesOptions = {
@@ -137,13 +150,8 @@ function harness(
       getDefinition: async (workerId: string) => (known.has(workerId) ? { workerId } : undefined),
     },
     authz: {
-      isAdmin: async (principal) =>
-        principal.roles.has("admin") && (principal.admin_session_scope ?? null) === null,
-      canReadSession: async (_principal, definition) => allowed.has((definition as { workerId: string }).workerId),
+      isAdmin: async (principal) => principal.roles.has("admin") && (principal.admin_session_scope ?? null) === null,
     },
-    ...(options.allowUnknownMembers === undefined
-      ? {}
-      : { allowUnknownMembers: options.allowUnknownMembers }),
     audit: (event, record) => audited.push({ event, ...record }),
     now: () => 1000.0,
     newId: () => {
@@ -180,7 +188,6 @@ describe("the global-admin boundary", () => {
       controller: new FakeController(),
       registry: { getDefinition: async () => undefined },
       authz: {
-        canReadSession: async () => true,
         isAdmin: async () => {
           throw new Error("authorizer unavailable");
         },
@@ -202,7 +209,6 @@ describe("the global-admin boundary", () => {
       controller,
       registry: { getDefinition: async () => undefined },
       authz: {
-        canReadSession: async () => true,
         isAdmin: async () => false,
       } as FanoutRoutesOptions["authz"],
     });
@@ -247,9 +253,7 @@ describe("the global-admin boundary", () => {
       controller,
       registry: { getDefinition: async () => undefined },
       authz: {
-        isAdmin: async (candidate) =>
-          candidate.roles.has("admin") && (candidate.admin_session_scope ?? null) === null,
-        canReadSession: async () => true,
+        isAdmin: async (candidate) => candidate.roles.has("admin") && (candidate.admin_session_scope ?? null) === null,
       },
     });
 
@@ -267,7 +271,7 @@ describe("when the feature is off", () => {
     const { routes } = harness({ controller: undefined as unknown as FanoutRoutesController });
     const off = createFanoutRoutes({
       registry: { getDefinition: async () => undefined },
-      authz: { isAdmin: async () => true, canReadSession: async () => true },
+      authz: { isAdmin: async () => true },
     });
     void routes;
     const responses = [
@@ -355,12 +359,37 @@ describe("creating a group", () => {
   });
 
   it("allows dormant members only when explicitly configured", async () => {
-    const { routes } = harness({ allowUnknownMembers: true });
-    const response = await routes.createGroup(request(PRINCIPAL, { worker_ids: ["never-registered"] }));
-    expect(response.status).toBe(golden.create_unknown_session.status);
-    expect((response.body as Record<string, unknown>).session_count).toBe(
+    // The gate is the controller's own, not the routes': the corpus records a
+    // strict controller refusing an unknown member with a 400 and no group.
+    const { routes: strict } = harness();
+    const refused = await strict.createGroup(request(PRINCIPAL, { worker_ids: ["never-registered"] }));
+    expect(refused.status).toBe(golden.create_unknown_session.status);
+    expect((refused.body as Record<string, unknown>).session_count).toBe(
       golden.create_unknown_session.body.session_count,
     );
+
+    const { routes, controller } = harness({ allowUnknownMembers: true });
+    const response = await routes.createGroup(request(PRINCIPAL, { worker_ids: ["never-registered"] }));
+    expect(response.status).toBe(200);
+    expect((response.body as Record<string, unknown>).session_count).toBe(1);
+    expect(controller.groups.size).toBe(1);
+  });
+
+  it("still refuses a forbidden member in dormant mode", async () => {
+    // The opt-in admits unknown members only; a known-but-unreadable session
+    // is refused exactly as before.
+    const { routes, controller } = harness({ allowUnknownMembers: true });
+    const response = await routes.createGroup(request(PRINCIPAL, { worker_ids: ["never-registered", "secret"] }));
+    expect(response).toStrictEqual({ status: 403, body: { error: "forbidden: no read access to session secret" } });
+    expect(controller.groups.size).toBe(0);
+  });
+
+  it("names an unknown member ahead of a forbidden one", async () => {
+    // The reference classifies the whole refused set before answering, so the
+    // unknown-member 400 wins even when a forbidden member comes first.
+    const { routes } = harness();
+    const response = await routes.createGroup(request(PRINCIPAL, { worker_ids: ["secret", "never-registered"] }));
+    expect(response).toStrictEqual({ status: 400, body: { error: "unknown fan-out session: never-registered" } });
   });
 
   it("passes a controller refusal back as a 400", async () => {
@@ -622,14 +651,7 @@ describe("sending to a group", () => {
 
     await harnessed.routes.sendToGroup(request(PRINCIPAL, { data: "id" }), "g1");
 
-    expect(harnessed.controller.calls.at(-1)).toStrictEqual([
-      "send",
-      "g1",
-      "id",
-      PRINCIPAL,
-      null,
-      null,
-    ]);
+    expect(harnessed.controller.calls.at(-1)).toStrictEqual(["send", "g1", "id", PRINCIPAL, null, null]);
   });
 });
 
@@ -731,7 +753,7 @@ describe("the audit trail", () => {
     const routes = createFanoutRoutes({
       controller: new FakeController(),
       registry: { getDefinition: async () => undefined },
-      authz: { isAdmin: async () => true, canReadSession: async () => true },
+      authz: { isAdmin: async () => true },
     });
     expect((await routes.createGroup(request(PRINCIPAL, {}))).status).toBe(200);
   });

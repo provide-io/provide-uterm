@@ -219,5 +219,6 @@ export const TOP_LEVEL_FIELD_SPEC = {
   rest_send_rate_limit_per_sec: "float",
   worker_frame_on_invalid: ["drop", "reject"],
   max_connections_per_principal: "int",
+  allow_stale_owner_role_resume: "bool",
   max_workers: "int",
 } as const;

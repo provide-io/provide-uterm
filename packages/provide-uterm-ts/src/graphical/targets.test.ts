@@ -33,8 +33,6 @@ interface Outcome {
   value?: unknown;
   error?: string;
   message?: string;
-  /** Set where the reference crashed instead of refusing. See below. */
-  crash?: string;
 }
 
 interface Step extends Outcome {
@@ -121,13 +119,6 @@ function outcomeOf(call: () => unknown): Outcome {
 /** Assert a call matched what the reference did, value or refusal. */
 function expectOutcome(recorded: Outcome, call: () => unknown): void {
   const actual = outcomeOf(call);
-  if (recorded.crash !== undefined) {
-    // A recorded divergence. The reference guards only its port lookup, so an
-    // address whose bracket is never closed escapes as a bare ValueError — a
-    // 500 where the operator earned a 400. The port refuses with a code.
-    expect(actual.error).toBe("INVALID");
-    return;
-  }
   if (recorded.error !== undefined) {
     expect(actual.error).toBe(recorded.error);
     expect(actual.message).toBe(recorded.message);
@@ -284,13 +275,19 @@ describe("where an rfb endpoint points", () => {
   });
 
   it("refuses an address whose bracket is never closed", () => {
-    // A recorded divergence. The reference guards only its port lookup, so
-    // this escapes as a bare ValueError and an operator's typo becomes a 500.
-    // Everything a client can send has to come back coded.
+    // The reference now guards its whole parse, so CPython's "Invalid IPv6
+    // URL" comes back as the same structured refusal a hostless endpoint
+    // earns rather than escaping as a 500.
     for (const endpoint of ["[2001:db8::1:5900", "[::1", "["]) {
-      expect(() => parseRfbEndpoint(endpoint)).toThrow(GraphicalTargetError);
-      expect(() => parseLitevirtEndpoint(endpoint)).toThrow(GraphicalTargetError);
+      expect(() => parseRfbEndpoint(endpoint)).toThrow("invalid endpoint; expected host:port or rfb://host:port");
+      expect(() => parseLitevirtEndpoint(endpoint)).toThrow("invalid endpoint; expected host:port");
     }
+    // A closing bracket nobody opened is the same CPython refusal.
+    expect(() => parseRfbEndpoint("vm]x:5900")).toThrow("invalid endpoint; expected host:port or rfb://host:port");
+    expect(() => parseLitevirtEndpoint("vm]x:9000")).toThrow("invalid endpoint; expected host:port");
+    // Both brackets present but in the wrong order read as CPython reads
+    // them: an empty bracketed host, refused at the port it never names.
+    expect(() => parseRfbEndpoint("rfb://]a[:1")).toThrow("invalid endpoint port");
   });
 
   it("says which of the two things is wrong", () => {

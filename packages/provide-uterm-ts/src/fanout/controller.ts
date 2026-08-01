@@ -89,6 +89,8 @@ export interface FanOutControllerOptions {
   isGlobalAdmin?: (principal: AuthorizablePrincipal) => Promise<boolean>;
   /** Check current session read access for a principal. */
   canReadSession?: (principal: AuthorizablePrincipal, definition: unknown) => Promise<boolean>;
+  /** Permit dormant unknown members at group creation. Defaults to strict refusal. */
+  allowUnknownMembers?: boolean;
 }
 
 /** Per-send overrides for the group's timings. */
@@ -127,6 +129,8 @@ export class FanOutController {
   readonly #isGlobalAdmin: ((principal: AuthorizablePrincipal) => Promise<boolean>) | undefined;
   readonly #canReadSession: ((principal: AuthorizablePrincipal, definition: unknown) => Promise<boolean>) | undefined;
   readonly #pending = new Map<string, PendingApproval>();
+  /** Whether dormant unknown members may be admitted at group creation. */
+  readonly allowUnknownMembers: boolean;
 
   constructor(options: FanOutControllerOptions) {
     this.#hub = options.hub;
@@ -138,6 +142,7 @@ export class FanOutController {
     this.#resolveSession = options.resolveSession;
     this.#isGlobalAdmin = options.isGlobalAdmin;
     this.#canReadSession = options.canReadSession;
+    this.allowUnknownMembers = options.allowUnknownMembers ?? false;
     // A held command that is never decided would otherwise sit in memory for
     // the life of the process, and stay releasable long after its window.
     this.#hub.onApprovalExpired = (approval) => {
@@ -159,6 +164,29 @@ export class FanOutController {
    *   of service against the fan-out; it is validated here rather than on the
    *   hot path.
    */
+  /**
+   * Split members into currently authorized and refused, for `principal`.
+   *
+   * With no way to resolve sessions or check read access, everything is
+   * refused: admission cannot be verified, so nothing is admitted.
+   */
+  async validateMembers(workerIds: string[], principal: AuthorizablePrincipal): Promise<[string[], string[]]> {
+    if (this.#resolveSession === undefined || this.#canReadSession === undefined) {
+      return [[], [...workerIds]];
+    }
+    const allowed: string[] = [];
+    const refused: string[] = [];
+    for (const workerId of workerIds) {
+      const definition = await this.#resolveSession(workerId);
+      if (definition === undefined || definition === null || !(await this.#canReadSession(principal, definition))) {
+        refused.push(workerId);
+      } else {
+        allowed.push(workerId);
+      }
+    }
+    return [allowed, refused];
+  }
+
   async createGroup(group: FanOutGroup, principal: string): Promise<string> {
     if (group.workerIds.length > this.#maxGroupSize) {
       throw new RangeError(`Group size ${group.workerIds.length} exceeds max ${this.#maxGroupSize}`);
