@@ -123,6 +123,56 @@ public sealed class SqliteControlPlaneTests
     }
 
     [Fact]
+    public async Task Migrate_NonIdentifierTable_ThrowsBeforeTouchingSql()
+    {
+        await using var conn = new SqliteConnection("Data Source=:memory:");
+        await conn.OpenAsync();
+        var ex = await Assert.ThrowsAsync<SqliteMigrationException>(
+            () => Migration.ApplyAsync(conn, "cp-schema-version", 1000.0));
+        Assert.Contains("invalid migration table name", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Migrate_SqlFailure_RollsBackAndWraps()
+    {
+        // query_only turns the first DDL statement into a SqliteException, which
+        // ApplyAsync must translate into SqliteMigrationException after a
+        // best-effort ROLLBACK (itself a no-op here — no transaction is open).
+        await using var conn = new SqliteConnection("Data Source=:memory:");
+        await conn.OpenAsync();
+        await using (var pragma = conn.CreateCommand())
+        {
+            pragma.CommandText = "PRAGMA query_only = 1";
+            await pragma.ExecuteNonQueryAsync();
+        }
+
+        var ex = await Assert.ThrowsAsync<SqliteMigrationException>(
+            () => Migration.ApplyAsync(conn, "cp_schema_version", 1000.0));
+        Assert.Contains("failed to apply control-plane migration", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Migrate_SqlFailureInsideTransaction_RollsBackForReal()
+    {
+        // Same wrap, but with a transaction actually open, so the ROLLBACK in the
+        // handler succeeds instead of raising "no transaction is active". A
+        // pre-existing cp_schema_version without a `version` column makes the
+        // CREATE TABLE IF NOT EXISTS a no-op and the version probe fail.
+        await using var conn = new SqliteConnection("Data Source=:memory:");
+        await conn.OpenAsync();
+        foreach (var sql in new[] { "CREATE TABLE cp_schema_version (foo INTEGER)", "BEGIN" })
+        {
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = sql;
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        var ex = await Assert.ThrowsAsync<SqliteMigrationException>(
+            () => Migration.ApplyAsync(conn, "cp_schema_version", 1000.0));
+        Assert.Contains("failed to apply control-plane migration", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task SessionStore_RoundTripsAndSoftDeletes()
     {
         var (engine, path) = await OpenAsync();
