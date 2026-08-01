@@ -11,6 +11,22 @@ import { useTerminalStore } from "../../stores/terminalStore";
 // is the one registered, instead of the full Lit element (xterm/WS/DeckMux).
 vi.mock("@provide-uterm-frontend/session-element", () => ({}));
 
+const deckMuxInstances = vi.hoisted(() => [] as Array<{
+  enable: ReturnType<typeof vi.fn>;
+  setOwnDimensions: ReturnType<typeof vi.fn>;
+  handleMessage: ReturnType<typeof vi.fn>;
+}>);
+vi.mock("@provide-uterm-frontend/app/deckmux/deckmux", () => ({
+  DeckMux: class {
+    enable = vi.fn();
+    setOwnDimensions = vi.fn();
+    handleMessage = vi.fn();
+    constructor() {
+      deckMuxInstances.push(this);
+    }
+  },
+}));
+
 import { HijackHost } from "./HijackHost";
 
 // HijackHost renders a <uterm-session> custom element and drives it
@@ -48,6 +64,7 @@ function resetStore() {
 
 beforeEach(() => {
   instances.length = 0;
+  deckMuxInstances.length = 0;
   resetStore();
 });
 
@@ -110,5 +127,52 @@ describe("HijackHost", () => {
     const { unmount } = render(<HijackHost sessionId="s1" />);
     unmount();
     expect(clearSpy).toHaveBeenCalled();
+  });
+
+  it("creates DeckMux from presence sync and forwards lifecycle messages", () => {
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      callback(0);
+      return 1;
+    });
+    render(<HijackHost sessionId="s1" surface="operator" />);
+    instances[0]?.config?.onResize?.(100, 30);
+    instances[0]?.config?.onPresenceMessage?.({
+      type: "presence_sync",
+      owner_id: "u1",
+      config: { auto_transfer_idle_s: 12, keystroke_queue: "replay", ghost_box: false },
+      users: [{ user_id: "u1", name: "Alice", color: "#f00" }],
+    });
+
+    const deckMux = deckMuxInstances[0];
+    expect(deckMux?.enable).toHaveBeenCalledWith({ autoTransferIdleS: 12, keystrokeQueue: "replay", ghostBox: false });
+    expect(deckMux?.setOwnDimensions).toHaveBeenCalledWith(100, 30);
+    expect(deckMux?.handleMessage).toHaveBeenCalledWith({ type: "dm_owner_change", user_id: "u1" });
+
+    instances[0]?.config?.onPresenceMessage?.({ type: "presence_update", user_id: "u1", name: "Alicia", cols: 101 });
+    instances[0]?.config?.onPresenceMessage?.({ type: "control_transfer", to_user_id: "u1", from_user_id: "u2" });
+    instances[0]?.config?.onPresenceMessage?.({ type: "presence_leave", user_id: "u2" });
+    expect(deckMux?.handleMessage).toHaveBeenCalledWith(expect.objectContaining({ type: "dm_presence", user_id: "u1" }));
+    expect(deckMux?.handleMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "dm_control_transfer", to_name: "Alicia", from_user_id: "u2" }),
+    );
+    expect(deckMux?.handleMessage).toHaveBeenCalledWith(expect.objectContaining({ type: "dm_leave", user_id: "u2" }));
+  });
+
+  it("forwards terminal scroll, control requests, and keepalive dimensions", () => {
+    vi.useFakeTimers();
+    render(<HijackHost sessionId="s1" />);
+    const widget = instances[0];
+    widget?.config?.onResize?.(80, 24);
+    widget?.dispatchEvent(new CustomEvent("uterm:scroll", { detail: { viewportY: 20, rows: 20, totalLines: 100 } }));
+    widget?.dispatchEvent(new Event("deckmux:request_control"));
+    widget?.dispatchEvent(new Event("deckmux:hand_off"));
+    vi.advanceTimersByTime(15_000);
+
+    expect(widget?.sendControlMessage).toHaveBeenCalledWith({
+      type: "presence_update", scroll_line: 0.2, scroll_range: [0.2, 0.4],
+    });
+    expect(widget?.sendControlMessage).toHaveBeenCalledTimes(5);
+    expect(widget?.sendControlMessage).toHaveBeenCalledWith({ type: "control_request" });
+    vi.useRealTimers();
   });
 });

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
-import { LitElement, html, css, type PropertyValues, unsafeCSS } from "lit";
+import { LitElement, html, css, } from "lit";
 import { customElement, property, query, state } from "lit/decorators.js";
 import type { AnyFrame } from "./generated/frames.js";
 import "./approval-prompt-element.js";

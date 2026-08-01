@@ -5,7 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ControlChannelDecoder } from "./hijack-codec.js";
-import { UtermTerminalElement } from "./terminal-element.js";
+import type { UtermTerminalElement } from "./terminal-element.js";
 import "./terminal-element.js";
 
 // ── Mock classes ──────────────────────────────────────────────────────────────
@@ -64,7 +64,6 @@ class MockXterm {
   opened = false;
   disposed = false;
   focused = false;
-  // biome-ignore lint/suspicious/noExplicitAny: test mock
   addon: any = null;
   _onDataCb: ((data: string) => void) | null = null;
   options: { fontSize: number; theme?: Record<string, unknown> } = { fontSize: 14 };
@@ -97,7 +96,6 @@ class MockXterm {
   dispose(): void {
     this.disposed = true;
   }
-  // biome-ignore lint/suspicious/noExplicitAny: test mock
   loadAddon(a: any): void {
     this.addon = a;
   }
@@ -125,9 +123,7 @@ beforeEach(() => {
   MockXterm.instances = [];
   vi.useFakeTimers();
   vi.stubGlobal("WebSocket", MockWebSocket);
-  // biome-ignore lint/suspicious/noExplicitAny: test mock
   (window as any).Terminal = MockXterm;
-  // biome-ignore lint/suspicious/noExplicitAny: test mock
   (window as any).FitAddon = { FitAddon: MockFitAddon };
   vi.stubGlobal("localStorage", {
     getItem: vi.fn().mockReturnValue(null),
@@ -202,28 +198,24 @@ describe("ProvideTerminal construction", () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
     // Now remove Terminal before constructing
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).Terminal = undefined;
     const terminal = document.createElement("uterm-terminal") as UtermTerminalElement;
     terminal.config = {};
     container.appendChild(terminal);
     await expect(terminal.updateComplete).rejects.toThrow("xterm.js (Terminal) not loaded");
     // Restore for other tests
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).Terminal = MockXterm;
   });
 
   it("throws when FitAddon is not loaded", async () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).FitAddon = undefined;
     const terminal = document.createElement("uterm-terminal") as UtermTerminalElement;
     terminal.config = {};
     container.appendChild(terminal);
     await expect(terminal.updateComplete).rejects.toThrow("addon-fit (FitAddon) not loaded");
     // Restore for other tests
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).FitAddon = { FitAddon: MockFitAddon };
   });
 });
@@ -681,7 +673,6 @@ describe("ProvideTerminal fitWithMinCols", () => {
         return { cols: 60 }; // less than 80
       }
     }
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).FitAddon = { FitAddon: SmallFitAddon };
     await makeTerminal({ cols: 80 });
     const xterm = getXterm();
@@ -696,7 +687,6 @@ describe("ProvideTerminal fitWithMinCols", () => {
         return undefined;
       }
     }
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).FitAddon = { FitAddon: NullFitAddon };
     // Should not throw
     await makeTerminal();
@@ -709,7 +699,6 @@ describe("ProvideTerminal fitWithMinCols", () => {
         return { cols: 0 };
       }
     }
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).FitAddon = { FitAddon: ZeroFitAddon };
     // Should not throw
     await makeTerminal();
@@ -1153,7 +1142,6 @@ describe("ProvideTerminal fitWithMinCols", () => {
         return { cols: 60 }; // less than 80
       }
     }
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).FitAddon = { FitAddon: SmallFitAddon };
     await makeTerminal({ cols: 80 });
     const xterm = getXterm();
@@ -1168,7 +1156,6 @@ describe("ProvideTerminal fitWithMinCols", () => {
         return undefined;
       }
     }
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).FitAddon = { FitAddon: NullFitAddon };
     // Should not throw
     await makeTerminal();
@@ -1181,7 +1168,6 @@ describe("ProvideTerminal fitWithMinCols", () => {
         return { cols: 0 };
       }
     }
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).FitAddon = { FitAddon: ZeroFitAddon };
     // Should not throw
     await makeTerminal();

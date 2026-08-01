@@ -4,13 +4,13 @@
 //
 
 import "./edge-indicators-element.js";
-import type { EdgeIndicatorUser } from "./edge-indicators-element.js";
+import type { EdgeIndicatorsElement, EdgeIndicatorUser } from "./edge-indicators-element.js";
 
 const MAX_USERS = 7;
 
 export class DeckMuxEdgeIndicators {
   private readonly _terminalContainer: HTMLElement;
-  private _element: HTMLElement & { users: EdgeIndicatorUser[]; namesVisible: boolean } | null = null;
+  private _element: EdgeIndicatorsElement | null = null;
   private _namesVisible = false;
   private _slots: (string | null)[] = Array(MAX_USERS).fill(null) as (string | null)[];
   private _users = new Map<string, EdgeIndicatorUser>();
@@ -21,7 +21,7 @@ export class DeckMuxEdgeIndicators {
   }
 
   private _buildElement(): void {
-    const el = document.createElement("uterm-edge-indicators") as any;
+    const el = document.createElement("uterm-edge-indicators") as EdgeIndicatorsElement;
     el.namesVisible = this._namesVisible;
     el.users = [];
     this._element = el;

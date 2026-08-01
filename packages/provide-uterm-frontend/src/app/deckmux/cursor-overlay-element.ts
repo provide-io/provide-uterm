@@ -94,8 +94,8 @@ export class CursorOverlayElement extends LitElement {
         data-user-id=${u.userId}
         style=${styleMap({
           "--dm-user-color": u.color,
-          top: startLine + "lh",
-          height: lineCount + "lh",
+          top: `${startLine}lh`,
+          height: `${lineCount}lh`,
         })}
       ></div>
     `;
@@ -112,7 +112,7 @@ export class CursorOverlayElement extends LitElement {
         data-user-id=${u.userId}
         style=${styleMap({
           "--dm-user-color": u.color,
-          top: u.pin.line + "lh",
+          top: `${u.pin.line}lh`,
         })}
       >
         <div class="dm-pin-bar"></div>

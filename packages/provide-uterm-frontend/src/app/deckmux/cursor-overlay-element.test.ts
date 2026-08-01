@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import "./cursor-overlay-element.js";
-import type { CursorOverlayElement, OverlayUser } from "./cursor-overlay-element.js";
+import type { CursorOverlayElement, } from "./cursor-overlay-element.js";
 
 describe("CursorOverlayElement", () => {
   let el: CursorOverlayElement;

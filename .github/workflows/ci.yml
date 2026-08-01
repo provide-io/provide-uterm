@@ -367,9 +367,10 @@ jobs:
       - run: npm run typecheck:app
       - run: npm run lint:frontend
       - run: npm run lint:app
-      # Both browser workspaces have their own vitest suite.
-      - run: npm test --workspace=packages/provide-uterm-frontend
-      - run: npm test --workspace=packages/provide-uterm-app
+      # Both browser workspaces enforce their behavioral coverage floors here;
+      # plain `npm test` would not evaluate Vitest's configured thresholds.
+      - run: npm run test:coverage --workspace=packages/provide-uterm-frontend
+      - run: npm run test:coverage --workspace=packages/provide-uterm-app
       # The TypeScript runtime port typechecks under tsc 7 and holds itself
       # to 100% line/branch/function coverage, enforced by its vitest config.
       - run: npm run typecheck:ts

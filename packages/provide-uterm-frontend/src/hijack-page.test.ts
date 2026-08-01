@@ -114,7 +114,6 @@ describe("hijack-page module", () => {
       }),
     );
     await import("./hijack-page.js");
-    // biome-ignore lint/suspicious/noExplicitAny: test access to window
     const demoHijack = (window as any).demoHijack;
     expect(typeof demoHijack.loadSession).toBe("function");
     expect(typeof demoHijack.applyMode).toBe("function");
@@ -188,7 +187,6 @@ describe("hijack-page module", () => {
     vi.stubGlobal("fetch", mockFetch);
     await import("./hijack-page.js");
     await new Promise((r) => setTimeout(r, 20));
-    // biome-ignore lint/suspicious/noExplicitAny: test access
     const demoHijack = (window as any).demoHijack;
     await demoHijack.applyMode();
     // Called for: initial loadSession + applyMode POST + loadSession after apply
@@ -216,7 +214,6 @@ describe("hijack-page module", () => {
     vi.stubGlobal("fetch", mockFetch);
     await import("./hijack-page.js");
     await new Promise((r) => setTimeout(r, 20));
-    // biome-ignore lint/suspicious/noExplicitAny: test access
     const demoHijack = (window as any).demoHijack;
     await demoHijack.applyMode();
     const statusEl = document.getElementById("demo-session-status")!;
@@ -243,7 +240,6 @@ describe("hijack-page module", () => {
     vi.stubGlobal("fetch", mockFetch);
     await import("./hijack-page.js");
     await new Promise((r) => setTimeout(r, 20));
-    // biome-ignore lint/suspicious/noExplicitAny: test access
     const demoHijack = (window as any).demoHijack;
     await demoHijack.resetSession();
     const noteEl = document.getElementById("demo-session-note")!;
@@ -271,7 +267,6 @@ describe("hijack-page module", () => {
     vi.stubGlobal("fetch", mockFetch);
     await import("./hijack-page.js");
     await new Promise((r) => setTimeout(r, 20));
-    // biome-ignore lint/suspicious/noExplicitAny: test access
     const demoHijack = (window as any).demoHijack;
     await demoHijack.resetSession();
     const statusEl = document.getElementById("demo-session-status")!;

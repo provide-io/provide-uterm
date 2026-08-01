@@ -24,7 +24,7 @@ afterEach(() => {
 
 function getToggle(name: "Names" | "Cursors" | "Dims"): HTMLButtonElement {
   const pb = container.querySelector("uterm-presence-bar");
-  if (!pb || !pb.shadowRoot) throw new Error("pb not found");
+  if (!pb?.shadowRoot) throw new Error("pb not found");
   const buttons = pb.shadowRoot.querySelectorAll<HTMLButtonElement>(".dm-toggle-btn");
   for (const btn of buttons) {
     if (btn.textContent === name) return btn;

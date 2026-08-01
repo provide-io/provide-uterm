@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { UtermSessionElement } from "./session-element.js";
+import type { UtermSessionElement } from "./session-element.js";
 import "./session-element.js";
 import { encodeControlFrame, encodeDataFrame } from "./hijack-codec.js";
 
@@ -64,7 +64,6 @@ class MockTerminal {
   cols = 0;
   rows = 0;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  // biome-ignore lint/suspicious/noExplicitAny: test mock
   addon: any = null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   _onData: ((data: string) => void) | null = null;
@@ -84,7 +83,6 @@ class MockTerminal {
     this.disposed = true;
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  // biome-ignore lint/suspicious/noExplicitAny: test mock
   loadAddon(a: any): void {
     this.addon = a;
   }
@@ -131,7 +129,7 @@ function makeWidget(opts: Record<string, unknown> = {}) {
 /** Query within container by ID suffix, e.g. q(container, "statustext") → finds [id$="-statustext"] */
 function flushLit(container: HTMLElement) {
   const session = container.querySelector("uterm-session") as any;
-  if (session && session.isUpdatePending) {
+  if (session?.isUpdatePending) {
     session.performUpdate();
   }
 }
@@ -139,7 +137,7 @@ function flushLit(container: HTMLElement) {
 function q(container: HTMLElement, name: string): HTMLElement | null {
   flushLit(container);
   const session = container.querySelector("uterm-session");
-  if (session && session.shadowRoot) {
+  if (session?.shadowRoot) {
     return session.shadowRoot.querySelector(`[id="${name}"]`) as HTMLElement | null;
   }
   return container.querySelector(`[id$="-${name}"]`);
@@ -155,9 +153,7 @@ beforeEach(() => {
   instances = [];
   vi.useFakeTimers();
   vi.stubGlobal("WebSocket", MockWebSocket);
-  // biome-ignore lint/suspicious/noExplicitAny: test mock
   (window as any).Terminal = MockTerminal;
-  // biome-ignore lint/suspicious/noExplicitAny: test mock
   (window as any).FitAddon = { FitAddon: MockFitAddon };
 });
 
@@ -818,7 +814,6 @@ describe("mobileKeys=false option", () => {
 describe("local echo and activity indicator", () => {
   it("widget has local echo tracking state variables", () => {
     const { widget } = makeWidget();
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
     const w = widget as any;
 
     // Verify state variables exist for activity indicator feature
@@ -864,7 +859,6 @@ describe("local echo and activity indicator", () => {
     const { widget } = makeWidget();
     getWs().open();
 
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
     const w = widget as any;
 
     // Set up timer
@@ -957,7 +951,6 @@ describe("onResize callback", () => {
       cols = 80;
       rows = 24;
     }
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).Terminal = TermWithDims;
     vi.stubGlobal("requestAnimationFrame", (cb: () => void) => {
       cb();
@@ -987,7 +980,6 @@ describe("onResize callback", () => {
       cols = 80;
       rows = 24;
     }
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).Terminal = TermWithDims;
     let latestWidget: UtermSessionElement | null = null;
     vi.stubGlobal("requestAnimationFrame", (cb: () => void) => {
@@ -1304,7 +1296,6 @@ describe("mobileKeys=false option (continued)", () => {
 describe("local echo and activity indicator (continued)", () => {
   it("widget has local echo tracking state variables", () => {
     const { widget } = makeWidget();
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
     const w = widget as any;
 
     // Verify state variables exist for activity indicator feature
@@ -1351,7 +1342,6 @@ describe("local echo and activity indicator (continued)", () => {
     const { widget } = makeWidget();
     getWs().open();
 
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
     const w = widget as any;
 
     // Set up timer
@@ -1443,7 +1433,6 @@ describe("onResize callback (continued)", () => {
       cols = 80;
       rows = 24;
     }
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).Terminal = TermWithDims;
     vi.stubGlobal("requestAnimationFrame", (cb: () => void) => {
       cb();
@@ -1473,7 +1462,6 @@ describe("onResize callback (continued)", () => {
       cols = 80;
       rows = 24;
     }
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).Terminal = TermWithDims;
     let latestWidget: UtermSessionElement | null = null;
     vi.stubGlobal("requestAnimationFrame", (cb: () => void) => {
@@ -1516,7 +1504,6 @@ describe("ProvideHijack catch-block observability (Fix 2)", () => {
         throw new Error("write failed");
       }
     }
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).Terminal = ThrowingTerminal;
     // Disconnect and reconnect to get a throwing terminal
     const { widget: w2 } = makeWidget();
@@ -1534,7 +1521,6 @@ describe("ProvideHijack catch-block observability (Fix 2)", () => {
         throw new Error("write failed on snapshot");
       }
     }
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).Terminal = ThrowingTerminal2;
     const { widget: w3 } = makeWidget();
     getWs().open();
@@ -1551,7 +1537,6 @@ describe("ProvideHijack catch-block observability (Fix 2)", () => {
         throw new Error("focus failed");
       }
     }
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).Terminal = ThrowOnFocus;
     const { widget: w4, container } = makeWidget();
     getWs().open();
@@ -1581,7 +1566,6 @@ describe("ProvideHijack catch-block observability (Fix 2)", () => {
         throw new Error("fit rAF failed");
       }
     }
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).FitAddon = { FitAddon: ThrowingFitAddon };
     const { widget: w5 } = makeWidget();
     getWs().open();
@@ -1593,7 +1577,6 @@ describe("ProvideHijack catch-block observability (Fix 2)", () => {
 
   it("WebLinksAddon loadAddon failure logs console.warn", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).WebLinksAddon = {
       WebLinksAddon: class {
         constructor() {
@@ -1619,7 +1602,6 @@ describe("ProvideHijack catch-block observability (Fix 2)", () => {
     sendMessage({ type: "snapshot", screen: "" });
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("WebLinksAddon"), expect.any(Error));
     warnSpy.mockRestore();
-    // biome-ignore lint/suspicious/noExplicitAny: cleanup
     delete (window as any).WebLinksAddon;
     w6.dispose();
   });
@@ -1644,7 +1626,6 @@ describe("ProvideHijack catch-block observability (Fix 2)", () => {
         throw new Error("fit ResizeObserver failed");
       }
     }
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).FitAddon = { FitAddon: ThrowingFitAddonRO };
     const { widget: w7 } = makeWidget();
     getWs().open();

@@ -114,11 +114,7 @@ export interface VncAttachOptions {
  * their own chrome (e.g. the tiling panels page) — no required element IDs, one
  * RFB per call. Returns a handle whose ``disconnect()`` tears the session down.
  */
-export function attachVnc(
-  screenEl: HTMLElement,
-  params: VncPageParams,
-  opts: VncAttachOptions = {},
-): VncAttachHandle {
+export function attachVnc(screenEl: HTMLElement, params: VncPageParams, opts: VncAttachOptions = {}): VncAttachHandle {
   const status = opts.onStatus ?? (() => {});
   const dims = opts.onDims ?? (() => {});
   let rfb: RfbInstance | null = null;
@@ -156,7 +152,8 @@ export function attachVnc(
       inst.addEventListener("disconnect", (ev: Event) => {
         const detail = (ev as CustomEvent<{ clean?: boolean; code?: number }>).detail;
         const info = statusFromCloseCode(detail?.code);
-        status(info.state, detail?.clean && detail?.code === undefined ? "Disconnected" : info.message);
+        const cleanWithoutCode = detail?.clean === true && detail.code === undefined;
+        status(cleanWithoutCode ? "disconnected" : info.state, cleanWithoutCode ? "Disconnected" : info.message);
         rfb = null;
       });
       inst.addEventListener("securityfailure", () => status("error", "RFB security failure"));

@@ -7,13 +7,15 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  attachVnc,
   buildVncWsUrl,
   NOVNC_RFB_MODULE,
   readVncPageParams,
   resolveRfbConstructor,
+  type RfbConstructor,
   sanitizeId,
   statusFromCloseCode,
   VncConsolePage,
@@ -189,6 +191,162 @@ describe("VncConsolePage", () => {
     expect(resolveRfbConstructor({ default: Fake })).toBe(Fake);
     expect(resolveRfbConstructor({ default: { default: Fake } })).toBe(Fake);
     expect(() => resolveRfbConstructor({ default: { foo: 1 } })).toThrow(/not a constructor/);
+  });
+
+  it("describes missing params and rejects a manual connection", async () => {
+    setupDom();
+    const page = new VncConsolePage(document, {
+      workerId: "", hijackId: "", targetId: "", viewOnly: false, token: null,
+    });
+    expect(page.describeParams()).toContain("Missing worker_id");
+    await page.connect();
+    expect(page.statusState).toBe("error");
+    expect((document.getElementById("vnc-connect") as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("reports constructor failures and restores connection controls", async () => {
+    setupDom();
+    class FailingRfb {
+      constructor() { throw new Error("RFB unavailable"); }
+    }
+    const page = new VncConsolePage(
+      document,
+      { workerId: "w", hijackId: "h", targetId: "t", viewOnly: true, token: null },
+      FailingRfb as unknown as RfbConstructor,
+    );
+    await viWaitFor(() => page.statusState === "error");
+    expect(document.getElementById("vnc-status")?.textContent).toContain("RFB unavailable");
+    expect((document.getElementById("vnc-connect") as HTMLButtonElement).disabled).toBe(false);
+    expect((document.getElementById("vnc-disconnect") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("maps disconnect and security events and refreshes canvas dimensions", async () => {
+    vi.useFakeTimers();
+    setupDom();
+    const instances: EventRfb[] = [];
+    class EventRfb {
+      viewOnly = false;
+      scaleViewport = false;
+      clipViewport = true;
+      resizeSession = true;
+      background = "";
+      qualityLevel = 0;
+      compressionLevel = 0;
+      listeners = new Map<string, Array<(event: Event) => void>>();
+      constructor(target: HTMLElement) {
+        const canvas = document.createElement("canvas");
+        canvas.width = 1024;
+        canvas.height = 768;
+        target.appendChild(canvas);
+        instances.push(this);
+      }
+      addEventListener(type: string, listener: (event: Event) => void) {
+        this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+      }
+      removeEventListener() {}
+      disconnect() { this.emit("disconnect", { clean: true }); }
+      emit(type: string, detail?: Record<string, unknown>) {
+        for (const listener of this.listeners.get(type) ?? []) {
+          listener(new CustomEvent(type, { detail }));
+        }
+      }
+    }
+    const page = new VncConsolePage(
+      document,
+      { workerId: "w", hijackId: "h", targetId: "desktop", viewOnly: true, token: null },
+      EventRfb as unknown as RfbConstructor,
+    );
+    await Promise.resolve();
+    const rfb = instances[0];
+    expect(rfb).toMatchObject({ viewOnly: true, scaleViewport: true, clipViewport: false, resizeSession: false, qualityLevel: 9, compressionLevel: 2 });
+    rfb?.emit("connect");
+    vi.advanceTimersByTime(1_200);
+    expect(document.getElementById("vnc-dims")?.textContent).toBe("1024×768 · desktop");
+    rfb?.emit("securityfailure");
+    expect(page.statusState).toBe("error");
+    rfb?.emit("disconnect", { clean: false });
+    expect(document.getElementById("vnc-status")?.textContent).toBe("Connection lost");
+    await page.connect();
+    instances.at(-1)?.emit("disconnect", { code: 1008 });
+    expect(page.statusState).toBe("denied");
+    page.disconnect();
+    expect(page.statusState).toBe("disconnected");
+    vi.useRealTimers();
+  });
+});
+
+describe("attachVnc", () => {
+  it("reports invalid params without constructing an RFB client", () => {
+    const screen = document.createElement("div");
+    const status = vi.fn();
+    const RfbClass = vi.fn();
+    const handle = attachVnc(
+      screen,
+      { workerId: "", hijackId: "h", targetId: "t", viewOnly: false, token: null },
+      { RfbClass: RfbClass as unknown as RfbConstructor, onStatus: status },
+    );
+    expect(status).toHaveBeenCalledWith("error", expect.stringContaining("required"));
+    expect(RfbClass).not.toHaveBeenCalled();
+    expect(() => handle.disconnect()).not.toThrow();
+  });
+
+  it("configures an embedded RFB, routes status/dimensions, and disconnects", async () => {
+    vi.useFakeTimers();
+    const screen = document.createElement("div");
+    const status = vi.fn();
+    const dims = vi.fn();
+    let instance: EmbeddedRfb | null = null;
+    class EmbeddedRfb {
+      viewOnly = false;
+      scaleViewport = false;
+      clipViewport = true;
+      resizeSession = true;
+      background = "";
+      listeners = new Map<string, Array<(event: Event) => void>>();
+      disconnect = vi.fn();
+      constructor() { instance = this; }
+      addEventListener(type: string, listener: (event: Event) => void) {
+        this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+      }
+      removeEventListener() {}
+      emit(type: string, detail?: Record<string, unknown>) {
+        for (const listener of this.listeners.get(type) ?? []) listener(new CustomEvent(type, { detail }));
+      }
+    }
+    const handle = attachVnc(
+      screen,
+      { workerId: "w", hijackId: "h", targetId: "desk", viewOnly: true, token: null },
+      { RfbClass: EmbeddedRfb as unknown as RfbConstructor, onStatus: status, onDims: dims },
+    );
+    await Promise.resolve();
+    const rfb = instance as EmbeddedRfb | null;
+    expect(status).toHaveBeenCalledWith("connecting", "Connecting…");
+    expect(rfb?.viewOnly).toBe(true);
+    const canvas = document.createElement("canvas");
+    canvas.width = 640;
+    canvas.height = 480;
+    screen.appendChild(canvas);
+    rfb?.emit("connect");
+    vi.advanceTimersByTime(1_200);
+    expect(dims).toHaveBeenCalledWith("640×480");
+    rfb?.emit("securityfailure");
+    expect(status).toHaveBeenCalledWith("error", "RFB security failure");
+    rfb?.emit("disconnect", { clean: true });
+    expect(status).toHaveBeenCalledWith("disconnected", "Disconnected");
+    handle.disconnect();
+    vi.useRealTimers();
+  });
+
+  it("reports embedded constructor failures", async () => {
+    const status = vi.fn();
+    class Broken { constructor() { throw new Error("broken client"); } }
+    attachVnc(
+      document.createElement("div"),
+      { workerId: "w", hijackId: "h", targetId: "desk", viewOnly: false, token: null },
+      { RfbClass: Broken as unknown as RfbConstructor, onStatus: status },
+    );
+    await Promise.resolve();
+    expect(status).toHaveBeenCalledWith("error", expect.stringContaining("broken client"));
   });
 });
 

@@ -5,6 +5,7 @@
 
 import type { ContextAction, DeckMuxUser } from "./types.js";
 import "./context-menu.js";
+import type { ContextMenu } from "./context-menu.js";
 
 const TOAST_AUTO_DISMISS_MS = 6_000;
 const KEYSTROKE_AUTO_HIDE_MS = 2_000;
@@ -38,7 +39,7 @@ export class DeckMuxControlPanel {
   ): void {
     this.hideContextMenu();
 
-    const menu = document.createElement("uterm-context-menu") as any;
+    const menu = document.createElement("uterm-context-menu") as ContextMenu;
     menu.user = user;
     menu.actions = actions.map((a) => ({
       ...a,
