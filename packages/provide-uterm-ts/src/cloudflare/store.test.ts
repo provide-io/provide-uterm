@@ -266,6 +266,26 @@ describe("a session's own state", () => {
     expect(subject.loadSession("w3")).toStrictEqual(golden.session_state.mode_only);
   });
 
+  it("records which connection acquired the lease when the caller says", () => {
+    // The reference's LeaseRecord carries an optional acquired_by; a clear
+    // wipes it along with the rest of the lease.
+    const { subject } = store();
+    subject.saveLease({ workerId: "w1", hijackId: "h1", owner: "alice", leaseExpiresAt: NOW + 60, acquiredBy: "c1" });
+    expect(subject.loadSession("w1")?.acquired_by).toBe("c1");
+    subject.clearLease("w1");
+    expect(subject.loadSession("w1")?.acquired_by).toBeNull();
+  });
+
+  it("reads a worker generation something else wrote", () => {
+    // Nothing here writes the generation yet; the Python Worker sharing the
+    // same storage does, and a delete must wipe it with the rest.
+    const { subject, db } = store();
+    db.prepare("INSERT INTO session_state(worker_id,worker_generation,updated_at) VALUES(?,?,?)").run("w1", "g7", 0);
+    expect(subject.loadSession("w1")?.worker_generation).toBe("g7");
+    subject.markDeleted("w1");
+    expect(subject.loadSession("w1")?.worker_generation).toBeNull();
+  });
+
   it("records a snapshot for a session with no row yet", () => {
     const { subject } = store();
     subject.saveSnapshot("w4", { screen: "x" });

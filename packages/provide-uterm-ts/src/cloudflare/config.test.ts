@@ -223,6 +223,15 @@ describe("clamping what it was given", () => {
   it("leaves a setting above its floor alone", () => {
     expect(configFromEnv(envWith({ MAX_INPUT_CHARS: "20000" })).limits.max_input_chars).toBe(20000);
   });
+
+  it("clamps the hijack lease from both ends", () => {
+    // The one setting with a ceiling as well as a floor: a zero-second lease
+    // disables hijacking, and an hour-plus one holds a session hostage.
+    expect(configFromEnv(envWith({ HIJACK_LEASE_S: "0" })).hijack_lease_s).toBe(1);
+    expect(configFromEnv(envWith({ HIJACK_LEASE_S: "7200" })).hijack_lease_s).toBe(3600);
+    expect(configFromEnv(envWith({ HIJACK_LEASE_S: "120" })).hijack_lease_s).toBe(120);
+    expect(configFromEnv(envWith({})).hijack_lease_s).toBe(60);
+  });
 });
 
 describe("falling back", () => {

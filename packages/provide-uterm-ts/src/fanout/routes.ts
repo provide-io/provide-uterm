@@ -20,8 +20,8 @@
  *   probe for groups it has no part in.
  */
 
-import { type FanOutGroup, type FanOutMode, type FanOutResult, fanOutGroup } from "./models.ts";
 import type { AuthorizablePrincipal } from "../server/authorization.ts";
+import { type FanOutGroup, type FanOutMode, type FanOutResult, fanOutGroup } from "./models.ts";
 
 /** A request, as much of one as these handlers read. */
 export interface FanoutRequest {
@@ -41,6 +41,10 @@ export interface RouteResponse {
 
 /** The controller surface the routes drive. */
 export interface FanoutRoutesController {
+  /** Whether dormant unknown members may be admitted at group creation. */
+  readonly allowUnknownMembers: boolean;
+  /** Split members into currently authorized and refused, for `principal`. */
+  validateMembers(workerIds: string[], principal: AuthorizablePrincipal): Promise<[string[], string[]]>;
   /** Register a group and return its identifier. */
   createGroup(group: FanOutGroup, principal: string): Promise<string>;
   /** The groups the caller may see. */
@@ -67,12 +71,11 @@ export interface FanoutRoutesController {
 export interface FanoutRoutesOptions {
   /** Absent means the feature is switched off, and every route answers 501. */
   controller?: FanoutRoutesController | undefined;
-  /** Where a session's definition is looked up, for the read check. */
+  /** Where a session's definition is looked up, to tell unknown from forbidden. */
   registry: { getDefinition(workerId: string): Promise<unknown> };
-  /** Whether the caller may read a session. */
+  /** Whether the caller is a global administrator. */
   authz: {
     isAdmin(principal: AuthorizablePrincipal): Promise<boolean>;
-    canReadSession(principal: AuthorizablePrincipal, definition: unknown): Promise<boolean>;
   };
   /** Where changes are recorded. Optional: a deployment may have no sink. */
   audit?: (event: string, record: { principal: string; detail: Record<string, unknown> }) => void;
@@ -80,8 +83,6 @@ export interface FanoutRoutesOptions {
   now?: () => number;
   /** Identifier source for new groups. */
   newId?: () => string;
-  /** Permit dormant unknown members at creation. Defaults to strict refusal. */
-  allowUnknownMembers?: boolean;
 }
 
 /** The handlers, one per route. */
@@ -231,17 +232,28 @@ export function createFanoutRoutes(options: FanoutRoutesOptions): FanoutRoutes {
       const workerIds = field(body, "worker_ids", isStringArray) ?? [];
       const name = field(body, "name", isString) ?? "";
 
-      // Strict by default: dormant members require an explicit opt-in, while
-      // every known member always requires current session access.
-      for (const workerId of workerIds) {
-        const definition = await options.registry.getDefinition(workerId);
-        if (definition === undefined || definition === null) {
-          if (options.allowUnknownMembers !== true) {
-            return refusal(400, `unknown fan-out session: ${workerId}`);
+      // Admission is the controller's call: it classifies every member, and
+      // the registry then splits the refused into unknown and forbidden.
+      // Strict by default — dormant members require the controller's explicit
+      // opt-in, while every known member always requires current read access.
+      const [, refused] = await ctrl.validateMembers([...workerIds], authorized);
+      if (refused.length > 0) {
+        const unknown: string[] = [];
+        for (const workerId of refused) {
+          const definition = await options.registry.getDefinition(workerId);
+          if (definition === undefined || definition === null) {
+            unknown.push(workerId);
           }
-        } else if (!(await options.authz.canReadSession(authorized, definition))) {
-          return refusal(403, `forbidden: no read access to session ${workerId}`);
         }
+        if (unknown.length > 0 && !ctrl.allowUnknownMembers) {
+          return refusal(400, `unknown fan-out session: ${unknown[0]}`);
+        }
+        const forbidden = refused.filter((workerId) => !unknown.includes(workerId));
+        if (forbidden.length > 0) {
+          return refusal(403, `forbidden: no read access to session ${forbidden[0]}`);
+        }
+        // What remains is unknown members under an explicit dormant-member
+        // opt-in, which is the one refusal that may proceed.
       }
 
       const errorPattern = field(body, "error_pattern", isString);

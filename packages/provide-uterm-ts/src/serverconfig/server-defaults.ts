@@ -26,6 +26,7 @@ export type ServerConfigDocument = Readonly<Record<string, unknown>>;
  * would change what the *next* load defaults to.
  */
 export const SERVER_CONFIG_DEFAULTS: ServerConfigDocument = deepFreeze({
+  allow_stale_owner_role_resume: false,
   audit: {
     chain_enabled: false,
     chain_file: null,
@@ -226,6 +227,7 @@ export const SERVER_CONFIG_SECTIONS: readonly string[] = [
 
 /** The values that sit at the top level beside them. */
 export const SERVER_CONFIG_TOP_LEVEL: readonly string[] = [
+  "allow_stale_owner_role_resume",
   "browser_rate_limit_per_sec",
   "environment",
   "fanout_allow_unknown_members",

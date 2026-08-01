@@ -88,6 +88,8 @@ describe("InMemoryApprovalStore storage", () => {
     const req = store.get("r0");
     expect(duplicate).toBeUndefined();
     expect(req).toStrictEqual(first);
+    expect(req?.status).toBe(golden.replacement.status);
+    expect(req?.expiresAt).toBe(golden.replacement.expires_at);
   });
 
   it("assigns a fresh revision when a pruned id is reused", async () => {
@@ -130,6 +132,29 @@ describe("InMemoryApprovalStore claim", () => {
     expect(new InMemoryApprovalStore().claim("nope", "approved", 1)).toBe(golden.claim.unknown_claim);
   });
 
+  it("times out an expired request on the spot but notifies from cleanup", async () => {
+    // A late decision cannot inject, and the reference never runs listener
+    // code inside a decision call — the snapshot waits for the next cleanup
+    // pass, and is delivered exactly once.
+    let now = NOW;
+    const store = new InMemoryApprovalStore({ now: () => now });
+    const stored = store.add(request("r0", "pending", NOW + 60));
+    now = NOW + 60;
+    const notified: string[] = [];
+    store.onExpired = (approval) => {
+      notified.push(`${approval.id}#${approval.revision}`);
+    };
+
+    expect(store.claim("r0", "approved", stored?.revision ?? 0)).toBe(false);
+    expect(store.get("r0")?.status).toBe("timeout");
+    expect(notified).toStrictEqual([]);
+
+    await store.cleanupExpired();
+    expect(notified).toStrictEqual([`r0#${stored?.revision}`]);
+    await store.cleanupExpired();
+    expect(notified).toStrictEqual([`r0#${stored?.revision}`]);
+  });
+
   it("refuses to claim a request that is already terminal", () => {
     const store = new InMemoryApprovalStore();
     const stored = store.add(request("r0", "timeout", NOW + 60));
@@ -154,10 +179,19 @@ describe("InMemoryApprovalStore claim", () => {
 
 describe("InMemoryApprovalStore resolve", () => {
   it("transitions a pending request", () => {
+    // The corpus records this against the wall clock, under which the fixture
+    // expiry has long passed — so what it pins is the expiry path.
     const store = new InMemoryApprovalStore();
     const stored = store.add(request("r1", "pending", NOW + 60));
     store.resolve("r1", "rejected", stored?.revision ?? 0);
     expect(store.get("r1")?.status).toBe(golden.claim.status_after_resolve);
+  });
+
+  it("resolves a pending request inside its window", () => {
+    const store = new InMemoryApprovalStore({ now: () => NOW });
+    const stored = store.add(request("r1", "pending", NOW + 60));
+    store.resolve("r1", "rejected", stored?.revision ?? 0);
+    expect(store.get("r1")?.status).toBe("rejected");
   });
 
   it("leaves an already-resolved request alone", () => {

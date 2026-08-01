@@ -7,8 +7,8 @@ import { describe, expect, it } from "vitest";
 import { PromptRegexError } from "../hub/index.ts";
 import type { AuthorizablePrincipal } from "../server/authorization.ts";
 import {
-  FanOutController,
   type ApprovalIdentity,
+  FanOutController,
   type FanOutControllerHub,
   type FanOutGroup,
   fanOutGroup,
@@ -119,6 +119,40 @@ function group(workerIds: string[], overrides: Partial<FanOutGroup> = {}): FanOu
     ...overrides,
   };
 }
+
+describe("FanOutController member admission", () => {
+  it("splits members into the readable and the refused", async () => {
+    // The create route's admission check: a member the principal cannot read
+    // — or one that resolves to nothing — lands in the refused list.
+    const { controller } = build({
+      resolveSession: async (workerId) => (workerId === "gone" ? undefined : { workerId }),
+      canReadSession: async (_principal, definition) => (definition as { workerId: string }).workerId !== "secret",
+    });
+    const [allowed, refused] = await controller.validateMembers(["w1", "secret", "gone", "w2"], actor("alice"));
+    expect(allowed).toStrictEqual(["w1", "w2"]);
+    expect(refused).toStrictEqual(["secret", "gone"]);
+  });
+
+  it("refuses every member when admission cannot be verified", async () => {
+    // No resolver or no read check means nothing can be admitted.
+    const bare = new FanOutController({ hub: new FakeHub(), now: () => NOW, newId: () => "id-1" });
+    expect(await bare.validateMembers(["w1", "w2"], actor("alice"))).toStrictEqual([[], ["w1", "w2"]]);
+    const halfway = new FanOutController({
+      hub: new FakeHub(),
+      now: () => NOW,
+      newId: () => "id-1",
+      resolveSession: async (workerId: string) => ({ workerId }),
+    });
+    expect(await halfway.validateMembers(["w1"], actor("alice"))).toStrictEqual([[], ["w1"]]);
+  });
+
+  it("refuses dormant members by default and admits them only on the explicit flag", () => {
+    // The flag the create route consults; the controller itself only carries
+    // it.
+    expect(build().controller.allowUnknownMembers).toBe(false);
+    expect(build({ allowUnknownMembers: true }).controller.allowUnknownMembers).toBe(true);
+  });
+});
 
 describe("FanOutController group management", () => {
   it("stores a group and stamps its creator", async () => {

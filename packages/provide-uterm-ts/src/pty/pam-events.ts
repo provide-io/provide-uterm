@@ -70,13 +70,10 @@ export const PAM_BIND_UMASK = 0o177;
 /**
  * Read one notification line, or nothing when it cannot be believed.
  *
- * **A recorded divergence.** The reference documents itself as returning
- * nothing on any error, and for a line that is valid JSON but not an *object*
- * that is not what happens: it calls `.get` on a list, a string or a null and
- * raises, and the exception leaves the connection handler — so one such line
- * from any sender past the socket's permission gate ends that connection. This
- * returns nothing instead, which is what the reference says it does and what
- * every other malformed line here already gets.
+ * A line that is valid JSON but not an *object* — a list, a string, a null —
+ * is nothing too, as the reference now reads it. It used to call `.get` on
+ * whatever arrived and let the exception end the connection; the corpus
+ * records the lenient answer its docstring always claimed.
  *
  * @param line The bytes as they came off the socket.
  */

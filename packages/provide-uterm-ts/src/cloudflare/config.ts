@@ -79,6 +79,7 @@ export interface CloudflareConfig {
   deckmux_auto_transfer_idle_s: number;
   deckmux_keystroke_queue: string;
   resume_ttl_s: number;
+  hijack_lease_s: number;
   resume_enabled: boolean;
 }
 
@@ -242,6 +243,7 @@ export function defaultConfig(): CloudflareConfig {
     deckmux_auto_transfer_idle_s: DEFAULT_AUTO_TRANSFER_IDLE_S,
     deckmux_keystroke_queue: "display",
     resume_ttl_s: 300,
+    hijack_lease_s: 60,
     resume_enabled: true,
   };
 }
@@ -415,6 +417,9 @@ export function configFromEnv(env: unknown): CloudflareConfig {
     ),
     deckmux_keystroke_queue: orElse("DECKMUX_KEYSTROKE_QUEUE", defaults.deckmux_keystroke_queue),
     resume_ttl_s: readInt(get("RESUME_TTL_S"), "300", 30, "RESUME_TTL_S"),
+    // Clamped from both ends: a zero-second lease disables hijacking, and an
+    // hour-plus one holds a session hostage past any plausible use.
+    hijack_lease_s: Math.min(3600, readInt(get("HIJACK_LEASE_S"), "60", 1, "HIJACK_LEASE_S")),
     resume_enabled: readBoolean(get("RESUME_ENABLED"), true),
   };
 }

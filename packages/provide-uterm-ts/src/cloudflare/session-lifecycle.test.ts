@@ -29,6 +29,7 @@ interface RecordedCase {
   has_snapshot?: boolean;
   held_hijack?: boolean;
   has_resume_token?: boolean;
+  worker_current?: boolean;
 }
 
 interface Recorded {
@@ -62,6 +63,7 @@ function openState(record: RecordedCase): SocketOpenState {
     workerId: golden.worker_id,
     wsId: golden.ws_id,
     browserRole: record.browser_role ?? "viewer",
+    workerCurrent: record.worker_current ?? true,
     inputMode: record.input_mode ?? "open",
     presence: record.presence ?? false,
     // The recorded runtime had no worker socket and no ushell attached.
@@ -82,7 +84,7 @@ function closeState(record: RecordedCase): SocketCloseState {
     wsId: golden.ws_id,
     presence: record.presence ?? false,
     heldHijack: record.held_hijack ?? false,
-    resumeToken: (record.has_resume_token ?? false) ? golden.resume_token : undefined,
+    workerCurrent: record.worker_current ?? true,
     now: golden.fixed_ts,
   };
 }
@@ -109,6 +111,15 @@ function produced(actions: LifecycleAction[]): Array<Record<string, unknown>> {
   });
 }
 
+/** The KV rows the reference wrote, lined up with this port's `update_kv`. */
+function expectKvMatches(record: Recorded, actions: LifecycleAction[]): void {
+  const written = actions.filter((action) => action.kind === "update_kv").map((action) => action.connected);
+  expect(record.kv.map((row) => row.connected)).toEqual(written);
+  for (const row of record.kv) {
+    expect(row.worker_id).toBe(golden.worker_id);
+  }
+}
+
 describe("a socket arriving", () => {
   it.each(golden.open)("$name", (record) => {
     const actions = onSocketOpen(openState(record.case));
@@ -123,6 +134,7 @@ describe("a socket arriving", () => {
     // `exclude_self`, a resume token's ttl and a replayed screen are all
     // decisions, and a comparison of names alone would let any of them drift.
     expect(produced(actions)).toEqual(expected(record));
+    expectKvMatches(record, actions);
   });
 
   it("tells a browser it may hijack only when it is an admin", () => {
@@ -207,12 +219,19 @@ describe("a socket arriving", () => {
 
   it("announces a worker and marks it connected", () => {
     expect(onSocketOpen(openState({ role: "worker" }))).toEqual([
-      { kind: "register_socket", role: "worker" },
+      { kind: "activate_worker_socket", accepted: true },
       {
         kind: "broadcast_worker_frame",
         frame: { type: "worker_connected", worker_id: golden.worker_id, ts: golden.fixed_ts },
       },
       { kind: "update_kv", connected: true },
+    ]);
+  });
+
+  it("turns a stale worker socket away without a word", () => {
+    // Not the socket of record: nothing is broadcast, nothing is written.
+    expect(onSocketOpen(openState({ role: "worker", worker_current: false }))).toEqual([
+      { kind: "activate_worker_socket", accepted: false },
     ]);
   });
 
@@ -228,33 +247,29 @@ describe("a socket arriving", () => {
 
 describe("a socket going", () => {
   it.each(golden.close)("$name, closing", (record) => {
-    expect(produced(onSocketClose(closeState(record.case)))).toEqual(expected(record));
+    const actions = onSocketClose(closeState(record.case));
+    expect(produced(actions)).toEqual(expected(record));
+    expect(record.closed).toEqual([]);
+    expectKvMatches(record, actions);
   });
 
   it.each(golden.error)("$name, failing", (record) => {
-    expect(produced(onSocketError(closeState(record.case)))).toEqual(expected(record));
+    const actions = onSocketError(closeState(record.case));
+    expect(produced(actions)).toEqual(expected(record));
+    expect(record.closed).toEqual([]);
+    expectKvMatches(record, actions);
   });
 
-  it("lets a browser that was driving reclaim the hijack", () => {
-    // Marked before the socket goes, so a reconnect can take ownership back.
-    const actions = onSocketClose(closeState({ held_hijack: true, has_resume_token: true }));
-    expect(actions).toContainEqual({
-      kind: "mark_resume_hijack_owner",
-      token: golden.resume_token,
-      owner: true,
-    });
+  it("broadcasts the release when the browser that was driving leaves", () => {
+    // The hijack goes with the socket, and everybody else is told so their
+    // controls update.
+    const actions = onSocketClose(closeState({ held_hijack: true }));
+    expect(actions).toEqual([{ kind: "remove_browser_socket", released: true }, { kind: "broadcast_hijack_state" }]);
   });
 
-  it("cannot mark what it was never given", () => {
-    for (const token of [undefined, ""]) {
-      const actions = onSocketClose({ ...closeState({ held_hijack: true }), resumeToken: token });
-      expect(actions.some((action) => action.kind === "mark_resume_hijack_owner")).toBe(false);
-    }
-  });
-
-  it("does not mark a browser that was not driving", () => {
-    const actions = onSocketClose(closeState({ held_hijack: false, has_resume_token: true }));
-    expect(actions.some((action) => action.kind === "mark_resume_hijack_owner")).toBe(false);
+  it("broadcasts nothing for a browser that was not driving", () => {
+    const actions = onSocketClose(closeState({ held_hijack: false }));
+    expect(actions.some((action) => action.kind === "broadcast_hijack_state")).toBe(false);
   });
 
   it("tells the others somebody left, when the session tracks presence", () => {
@@ -267,57 +282,75 @@ describe("a socket going", () => {
     );
   });
 
-  it("says nothing about a deleted session but still lets the socket go", () => {
+  it("skips the presence goodbye on a deleted session but still releases", () => {
+    // Nobody is left to say goodbye to, yet the hijack still goes with the
+    // socket and its release is still broadcast.
     const actions = onSocketClose(closeState({ presence: true, deleted: true, held_hijack: true }));
-    expect(actions).toEqual([{ kind: "remove_socket" }]);
+    expect(actions).toEqual([{ kind: "remove_browser_socket", released: true }, { kind: "broadcast_hijack_state" }]);
   });
 
   it("still records a worker as disconnected on a deleted session", () => {
     // Nobody is told, but the registry is corrected — an entry left saying
     // `connected` would outlive the session.
     expect(onSocketClose(closeState({ role: "worker", deleted: true }))).toEqual([
+      { kind: "unregister_worker_socket", current: true },
       { kind: "remove_socket" },
       { kind: "update_kv", connected: false },
     ]);
   });
 
+  it("corrects nothing for a stale worker socket", () => {
+    // The registry entry belongs to the socket of record, and that one is
+    // still connected.
+    expect(onSocketClose(closeState({ role: "worker", worker_current: false }))).toEqual([
+      { kind: "unregister_worker_socket", current: false },
+      { kind: "remove_socket" },
+    ]);
+  });
+
   it("leaves a session stopped on a close and in error on a failure", () => {
     // The one place the two handlers differ.
-    expect(lifecycleStateAfter("close", { role: "worker", deleted: false })).toBe("stopped");
-    expect(lifecycleStateAfter("error", { role: "worker", deleted: false })).toBe("error");
-    expect(lifecycleStateAfter("open", { role: "worker", deleted: false })).toBe("running");
+    expect(lifecycleStateAfter("close", { role: "worker", deleted: false, workerCurrent: true })).toBe("stopped");
+    expect(lifecycleStateAfter("error", { role: "worker", deleted: false, workerCurrent: true })).toBe("error");
+    expect(lifecycleStateAfter("open", { role: "worker", deleted: false, workerCurrent: true })).toBe("running");
   });
 
   it("moves nothing for a browser or a raw socket", () => {
     for (const role of ["browser", "raw"] as const) {
       for (const event of ["open", "close", "error"] as const) {
-        expect(lifecycleStateAfter(event, { role, deleted: false })).toBeUndefined();
+        expect(lifecycleStateAfter(event, { role, deleted: false, workerCurrent: true })).toBeUndefined();
       }
     }
   });
 
   it("moves nothing on a deleted session", () => {
     for (const event of ["open", "close", "error"] as const) {
-      expect(lifecycleStateAfter(event, { role: "worker", deleted: true })).toBeUndefined();
+      expect(lifecycleStateAfter(event, { role: "worker", deleted: true, workerCurrent: true })).toBeUndefined();
+    }
+  });
+
+  it("moves nothing for a stale worker socket", () => {
+    for (const event of ["open", "close", "error"] as const) {
+      expect(lifecycleStateAfter(event, { role: "worker", deleted: false, workerCurrent: false })).toBeUndefined();
     }
   });
 
   it("matches the states the reference left behind", () => {
+    const stateFor = (record: Recorded) => ({
+      role: record.case.role ?? ("browser" as const),
+      deleted: record.case.deleted ?? false,
+      workerCurrent: record.case.worker_current ?? true,
+    });
+    // The recorded runtime started at `starting`, so an untouched state
+    // means this port should have moved nothing.
+    for (const record of golden.open) {
+      expect(lifecycleStateAfter("open", stateFor(record)) ?? "starting").toBe(record.lifecycle_state);
+    }
     for (const record of golden.close) {
-      const state = lifecycleStateAfter("close", {
-        role: record.case.role ?? "browser",
-        deleted: record.case.deleted ?? false,
-      });
-      // The recorded runtime started at `starting`, so an untouched state
-      // means this port should have moved nothing.
-      expect(state ?? "starting").toBe(record.lifecycle_state);
+      expect(lifecycleStateAfter("close", stateFor(record)) ?? "starting").toBe(record.lifecycle_state);
     }
     for (const record of golden.error) {
-      const state = lifecycleStateAfter("error", {
-        role: record.case.role ?? "browser",
-        deleted: record.case.deleted ?? false,
-      });
-      expect(state ?? "starting").toBe(record.lifecycle_state);
+      expect(lifecycleStateAfter("error", stateFor(record)) ?? "starting").toBe(record.lifecycle_state);
     }
   });
 });
