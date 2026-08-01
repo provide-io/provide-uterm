@@ -129,18 +129,18 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 func (s *Server) browserHandshake(ctx context.Context, conn *websocket.Conn, workerID string, bc *browserConn, role string, canHijack bool, state map[string]any) bool {
 	hello := s.buildHelloFrame(workerID, role, canHijack, state)
 	payload, err := encodeFrameControl(hello)
-	if err != nil || conn.Write(ctx, websocket.MessageText, []byte(payload)) != nil {
+	if err != nil || bc.SendText(ctx, payload) != nil {
 		return false
 	}
 	hijackState := s.deps.Hub.HijackStateMsgFor(ctx, workerID, bc)
 	if p, e := encodeFrameControl(hijackState); e == nil {
-		if conn.Write(ctx, websocket.MessageText, []byte(p)) != nil {
+		if bc.SendText(ctx, p) != nil {
 			return false
 		}
 	}
 	if snap, ok := state["initial_snapshot"].(map[string]any); ok && snap != nil {
 		if p, e := encodeControlMap(snap); e == nil {
-			_ = conn.Write(ctx, websocket.MessageText, []byte(p))
+			_ = bc.SendText(ctx, p)
 		}
 	} else {
 		_ = s.deps.Hub.RequestSnapshot(ctx, workerID)
@@ -244,27 +244,10 @@ func (s *Server) browserCleanup(ctx context.Context, workerID string, bc *browse
 		return
 	}
 	wasOwner := boolField(result, "was_owner", false)
-	restStillActive := boolField(result, "rest_still_active", false)
-	resumeWithoutOwner := boolField(result, "resume_without_owner", false)
-	switch {
-	case wasOwner:
-		doResume := !restStillActive
-		if doResume && s.deps.Hub.CheckStillHijacked(workerID) {
-			doResume = false
-		}
-		if doResume {
-			_, _ = s.deps.Hub.SendWorker(ctx, workerID, controlMsg("resume", "dashboard", 0, s.clock.Wall(), ""))
-		}
+	if wasOwner {
 		_ = s.deps.Hub.BroadcastHijackState(ctx, workerID)
-		if doResume {
-			s.deps.Hub.NotifyHijackChanged(workerID, false, nil)
-		}
 		_, _ = s.deps.Hub.AppendEventData(ctx, workerID, "hijack_released",
 			map[string]any{"owner": "dashboard_ws_disconnect"})
-	case resumeWithoutOwner:
-		if !s.deps.Hub.CheckStillHijacked(workerID) {
-			_, _ = s.deps.Hub.SendWorker(ctx, workerID, controlMsg("resume", "dashboard", 0, s.clock.Wall(), ""))
-		}
 	}
 	_ = s.deps.Hub.PruneIfIdle(ctx, workerID)
 }

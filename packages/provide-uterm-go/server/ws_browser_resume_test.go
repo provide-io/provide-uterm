@@ -84,8 +84,16 @@ func TestBrowserResumeRestoresDisconnectedCurrentOwner(t *testing.T) {
 	original.waitFrameWhere(t, "hijack_state", 5*time.Second, func(f map[string]any) bool {
 		return f["owner"] == "me"
 	})
+	ownedSession, err := ts.hub.ResumeStore().Get(context.Background(), token)
+	if err != nil || ownedSession == nil || !ownedSession.WasHijackOwner {
+		t.Fatalf("active token ownership = session:%+v err:%v", ownedSession, err)
+	}
 	_ = original.conn.Close(websocket.StatusNormalClosure, "")
 	waitUntil(t, 5*time.Second, func() bool { return !ts.hub.CheckStillHijacked("resume-owner") })
+	stored, err := ts.hub.ResumeStore().Get(context.Background(), token)
+	if err != nil || stored == nil || !stored.WasHijackOwner {
+		t.Fatalf("disconnect token ownership = session:%+v err:%v", stored, err)
+	}
 
 	reconnected := dialBrowser(t, ctx, base+"/ws/browser/resume-owner/term", "admin1", "admin")
 	defer func() { _ = reconnected.conn.Close(websocket.StatusNormalClosure, "") }()
@@ -96,6 +104,32 @@ func TestBrowserResumeRestoresDisconnectedCurrentOwner(t *testing.T) {
 	})
 	if resumed["hijacked_by_me"] != true {
 		t.Fatalf("resumed owner hello = %v", resumed)
+	}
+}
+
+func TestBrowserResumeImmediateReconnectWaitsForDisconnectBookkeeping(t *testing.T) {
+	ts := resumeTestServer(t)
+	ts.reg.add("resume-immediate", "admin1", "public")
+	ts.setupWorker(t, "resume-immediate")
+	base, closeFn := wsServer(t, ts)
+	defer closeFn()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	original := dialBrowser(t, ctx, base+"/ws/browser/resume-immediate/term", "admin1", "admin")
+	hello := original.waitFrame(t, "hello", 5*time.Second)
+	token, _ := hello["resume_token"].(string)
+	original.send(t, ctx, map[string]any{"type": "hijack_request"})
+	original.waitFrameWhere(t, "hijack_state", 5*time.Second, func(f map[string]any) bool { return f["owner"] == "me" })
+	_ = original.conn.Close(websocket.StatusNormalClosure, "")
+
+	reconnected := dialBrowser(t, ctx, base+"/ws/browser/resume-immediate/term", "admin1", "admin")
+	defer func() { _ = reconnected.conn.Close(websocket.StatusNormalClosure, "") }()
+	reconnected.waitFrame(t, "hello", 5*time.Second)
+	reconnected.send(t, ctx, map[string]any{"type": "resume", "token": token})
+	resumed := reconnected.waitFrameWhere(t, "hello", 5*time.Second, func(f map[string]any) bool { return f["resumed"] == true })
+	if resumed["hijacked_by_me"] != true {
+		t.Fatalf("immediate resume did not restore ownership: %v", resumed)
 	}
 }
 

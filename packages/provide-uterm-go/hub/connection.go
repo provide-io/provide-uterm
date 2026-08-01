@@ -70,13 +70,16 @@ func (c *ConnectionManager) RegisterWorkerWithTransport(
 			return false, &WebSocketRejection{Code: 1008, Reason: "worker capacity exceeded"}
 		}
 		st := hub.registry.SetDefault(workerID, NewWorkerTermState())
-		if pending := st.InputSendPending; pending != nil {
-			done := pending.Done
+		if done := statePendingDone(st, true); done != nil {
 			hub.lock.Unlock()
 			if err := waitInputReservation(ctx, done); err != nil {
 				return false, err
 			}
 			continue
+		}
+		if hub.State.HasValidRESTLease(st) {
+			hub.lock.Unlock()
+			return false, &WebSocketRejection{Code: 1008, Reason: "worker has active REST hijack"}
 		}
 		if len(st.Events) > hub.eventDequeMaxlen {
 			st.Events = st.Events[len(st.Events)-hub.eventDequeMaxlen:]
@@ -92,6 +95,7 @@ func (c *ConnectionManager) RegisterWorkerWithTransport(
 		}
 		st.WorkerWS = ws
 		st.IsTunnelWorker = isTunnel
+		st.WorkerGeneration++
 		hub.lock.Unlock()
 		hub.logger.Info(eventSessionRegistered, "worker_id", workerID, "session_type", "worker")
 		return prevWasHijacked, nil
@@ -183,8 +187,7 @@ func (c *ConnectionManager) DeregisterWorker(ctx context.Context, workerID strin
 			hub.lock.Unlock()
 			return false, false
 		}
-		if pending := st.InputSendPending; pending != nil {
-			done := pending.Done
+		if done := statePendingDone(st, true); done != nil {
 			hub.lock.Unlock()
 			if waitInputReservation(ctx, done) != nil {
 				return false, false
@@ -193,6 +196,7 @@ func (c *ConnectionManager) DeregisterWorker(ctx context.Context, workerID strin
 		}
 		wasHijacked := st.HijackSession != nil || st.HijackOwner != nil
 		st.WorkerWS = nil
+		st.WorkerGeneration++
 		st.HijackSession = nil
 		st.clearDashboardOwner()
 		hub.lock.Unlock()

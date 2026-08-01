@@ -120,6 +120,7 @@ type TermHub struct {
 
 	// Per-ws hub-level state, all guarded by lock.
 	wsToResumeToken        map[BrowserConn]string
+	resumeTokenDetached    map[string]chan struct{}
 	startupPendingBrowsers map[BrowserConn]bool
 	pausedBrowsers         map[BrowserConn]bool
 	holdBuffers            map[BrowserConn]string
@@ -225,6 +226,7 @@ func NewTermHub(cfg TermHubConfig) *TermHub {
 		newID:           idGen,
 
 		wsToResumeToken:        map[BrowserConn]string{},
+		resumeTokenDetached:    map[string]chan struct{}{},
 		startupPendingBrowsers: map[BrowserConn]bool{},
 		pausedBrowsers:         map[BrowserConn]bool{},
 		holdBuffers:            map[BrowserConn]string{},

@@ -30,15 +30,22 @@ func TestRegisterWorkerExpiredSessionCleared(t *testing.T) {
 	mustEqual(t, st.HijackSession, (*HijackSession)(nil), "expired session cleared")
 }
 
-func TestRegisterWorkerActiveSessionPreserved(t *testing.T) {
+func TestRegisterWorkerActiveRESTSessionRejectsReplacement(t *testing.T) {
 	h, clk := newTestHub(t, nil)
 	st := NewWorkerTermState()
 	st.HijackSession = &HijackSession{HijackID: "hj", LeaseExpiresAt: clk.Monotonic() + 100}
 	h.registry.Put("w1", st)
-	prev, _ := h.Conn.RegisterWorker(bg(), "w1", &fakeWorkerWS{})
-	mustFalse(t, prev, "active session preserved across reconnect")
+	prev, err := h.Conn.RegisterWorker(bg(), "w1", &fakeWorkerWS{})
+	mustFalse(t, prev, "replacement rejected before publishing")
+	var rejection *WebSocketRejection
+	if !errors.As(err, &rejection) || rejection.Code != 1008 {
+		t.Fatalf("active REST replacement error = %v, want policy rejection", err)
+	}
 	if st.HijackSession == nil {
-		t.Fatal("active session must survive reconnect")
+		t.Fatal("active session must survive rejected replacement")
+	}
+	if st.WorkerWS != nil {
+		t.Fatal("rejected replacement must not publish a worker")
 	}
 }
 

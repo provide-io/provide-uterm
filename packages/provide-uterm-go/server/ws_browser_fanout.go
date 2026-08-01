@@ -8,8 +8,6 @@ package server
 import (
 	"context"
 
-	"github.com/coder/websocket"
-
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/frames"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverauth"
 )
@@ -21,13 +19,13 @@ import (
 // the caller has no access, get_group returns nil and the handler silently does
 // nothing (matching the Python bare `continue` — no response frame, socket
 // stays live).
-func (s *Server) browserFanoutSend(ctx context.Context, conn *websocket.Conn, bc *browserConn, msg map[string]any) {
+func (s *Server) browserFanoutSend(ctx context.Context, bc *browserConn, msg map[string]any) {
 	p := bc.principal
 	if p == nil {
 		p = serverauth.AnonymousPrincipal()
 	}
 	if !s.deps.Authz.IsAdmin(p) {
-		s.writeFrame(ctx, conn, frames.MakeErrorFrame("admin role required"))
+		s.writeFrame(ctx, bc, frames.MakeErrorFrame("admin role required"))
 		return
 	}
 	subject := p.SubjectID
@@ -40,12 +38,12 @@ func (s *Server) browserFanoutSend(ctx context.Context, conn *websocket.Conn, bc
 		return
 	}
 	if s.fanoutGovernanceUnsupported() {
-		s.writeFrame(ctx, conn, frames.MakeErrorFrame(unsupportedFanoutGovernance))
+		s.writeFrame(ctx, bc, frames.MakeErrorFrame(unsupportedFanoutGovernance))
 		return
 	}
 	result, err := s.fanout.Send(ctx, groupID, data, p, 0, 0)
 	if err != nil {
-		s.writeFrame(ctx, conn, frames.MakeErrorFrame(err.Error()))
+		s.writeFrame(ctx, bc, frames.MakeErrorFrame(err.Error()))
 		return
 	}
 	frame := map[string]any{
@@ -60,5 +58,5 @@ func (s *Server) browserFanoutSend(ctx context.Context, conn *websocket.Conn, bc
 	if err != nil {
 		return
 	}
-	_ = conn.Write(ctx, websocket.MessageText, []byte(payload))
+	_ = bc.SendText(ctx, payload)
 }

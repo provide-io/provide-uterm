@@ -7,6 +7,7 @@ package hub
 
 import (
 	"context"
+	"strings"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/controlchannel"
 )
@@ -30,9 +31,13 @@ func (lm *HijackLeaseManager) TryAcquireRest(
 	hijackID string,
 	now float64,
 ) (ok bool, reason string, err error) {
+	opCtx, cancel := boundedOperationContext(ctx)
+	defer cancel()
 	// Phase 1 — reserve under the lock (in-memory only).
 	var st *WorkerTermState
 	var workerWS WorkerWS
+	var workerGeneration uint64
+	var lifecycle *LifecycleReservation
 	for {
 		lm.lock.Lock()
 		st = lm.registry.Get(workerID)
@@ -40,10 +45,13 @@ func (lm *HijackLeaseManager) TryAcquireRest(
 			lm.lock.Unlock()
 			return false, "no_worker", nil
 		}
-		if pending := st.InputSendPending; pending != nil {
-			done := pending.Done
+		if st.LifecyclePending != nil && strings.HasSuffix(st.LifecyclePending.Kind, "acquire_pause") {
 			lm.lock.Unlock()
-			if err := waitInputReservation(ctx, done); err != nil {
+			return false, "already_hijacked", nil
+		}
+		if done := statePendingDone(st, true); done != nil {
+			lm.lock.Unlock()
+			if err := waitInputReservation(opCtx, done); err != nil {
 				return false, "", err
 			}
 			continue
@@ -57,7 +65,13 @@ func (lm *HijackLeaseManager) TryAcquireRest(
 			return false, "already_hijacked", nil
 		}
 		workerWS = st.WorkerWS
+		workerGeneration = st.WorkerGeneration
 		st.HijackPending = strp(hijackID)
+		lifecycle = &LifecycleReservation{
+			Kind: "rest_acquire_pause", Worker: st.WorkerWS,
+			WorkerGeneration: st.WorkerGeneration, Done: make(chan struct{}),
+		}
+		st.LifecyclePending = lifecycle
 		lm.lock.Unlock()
 		break
 	}
@@ -69,6 +83,13 @@ func (lm *HijackLeaseManager) TryAcquireRest(
 		if st != nil && st.HijackPending != nil && *st.HijackPending == hijackID {
 			st.HijackPending = nil
 		}
+		if st != nil && st.LifecyclePending == lifecycle {
+			st.LifecyclePending = nil
+		}
+		if lifecycle != nil {
+			close(lifecycle.Done)
+			lifecycle = nil
+		}
 		lm.lock.Unlock()
 	}()
 
@@ -77,8 +98,8 @@ func (lm *HijackLeaseManager) TryAcquireRest(
 	if encErr != nil {
 		return false, "", encErr
 	}
-	if sendErr := workerWS.SendText(ctx, encoded); sendErr != nil {
-		if ctx.Err() != nil {
+	if sendErr := workerWS.SendText(opCtx, encoded); sendErr != nil {
+		if opCtx.Err() != nil {
 			// Cancellation: propagate like Python's CancelledError. The
 			// deferred rollback still clears the reservation; the socket is
 			// NOT nulled.
@@ -98,7 +119,8 @@ func (lm *HijackLeaseManager) TryAcquireRest(
 	// Phase 3 — finalise under the lock (unless cancelled / superseded).
 	lm.lock.Lock()
 	st = lm.registry.Get(workerID)
-	if st == nil || st.HijackPending == nil || *st.HijackPending != hijackID {
+	if st == nil || st.HijackPending == nil || *st.HijackPending != hijackID ||
+		st.LifecyclePending != lifecycle || st.WorkerWS != workerWS || st.WorkerGeneration != workerGeneration {
 		lm.lock.Unlock()
 		return false, "no_worker", nil
 	}
@@ -120,6 +142,10 @@ func (lm *HijackLeaseManager) TryAcquireRest(
 // TryAcquireWs atomically checks availability and sets the dashboard-WS hijack
 // owner. Port of try_acquire_ws. Returns (ok, reason).
 func (lm *HijackLeaseManager) TryAcquireWs(workerID string, ws BrowserConn) (bool, string) {
+	return lm.TryAcquireWsContext(context.Background(), workerID, ws)
+}
+
+func (lm *HijackLeaseManager) TryAcquireWsContext(ctx context.Context, workerID string, ws BrowserConn) (bool, string) {
 	for {
 		lm.lock.Lock()
 		st := lm.registry.Get(workerID)
@@ -127,10 +153,11 @@ func (lm *HijackLeaseManager) TryAcquireWs(workerID string, ws BrowserConn) (boo
 			lm.lock.Unlock()
 			return false, "no_worker"
 		}
-		if pending := st.InputSendPending; pending != nil {
-			done := pending.Done
+		if done := statePendingDone(st, true); done != nil {
 			lm.lock.Unlock()
-			<-done
+			if waitInputReservation(ctx, done) != nil {
+				return false, "cancelled"
+			}
 			continue
 		}
 		// HijackPending: REST two-phase reserve — treat as already taken so the

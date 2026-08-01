@@ -5,7 +5,10 @@
 
 package hub
 
-import "context"
+import (
+	"context"
+	"strings"
+)
 
 // This file holds the lease + polling facade delegators on TermHub. The
 // telemetry-emitting wrappers mirror core_delegates_lease.py; the rest are thin
@@ -66,12 +69,202 @@ func (h *TermHub) TryAcquireRestHijack(
 // TryAcquireWsHijack sets the dashboard-WS hijack owner and emits acquire
 // telemetry on success. Port of core_delegates_lease.try_acquire_ws_hijack.
 func (h *TermHub) TryAcquireWsHijack(ctx context.Context, workerID string, ws BrowserConn) (bool, string) {
-	ok, reason := h.Lease.TryAcquireWs(workerID, ws)
+	opCtx, cancel := boundedOperationContext(ctx)
+	defer cancel()
+	for {
+		h.lock.Lock()
+		st := h.registry.Get(workerID)
+		if st == nil || st.WorkerWS == nil {
+			h.lock.Unlock()
+			return false, "no_worker"
+		}
+		if st.LifecyclePending != nil && strings.HasSuffix(st.LifecyclePending.Kind, "acquire_pause") {
+			h.lock.Unlock()
+			return false, "already_hijacked"
+		}
+		if done := statePendingDone(st, true); done != nil {
+			h.lock.Unlock()
+			if waitInputReservation(opCtx, done) != nil {
+				return false, "cancelled"
+			}
+			continue
+		}
+		if h.State.IsDashboardHijackActive(st) || h.State.HasValidRESTLease(st) || st.HijackPending != nil {
+			h.lock.Unlock()
+			return false, "already_hijacked"
+		}
+		exp := h.clock.Monotonic() + float64(h.Lease.DashboardHijackLeaseS())
+		st.setDashboardOwner(ws, &exp)
+		if err := h.markBrowserResumeOwnerLocked(opCtx, ws, true); err != nil {
+			st.clearDashboardOwner()
+			h.lock.Unlock()
+			return false, "resume_store"
+		}
+		h.lock.Unlock()
+		break
+	}
+	ok, reason := true, ""
 	if ok {
 		h.emitTelemetry(ctx, "hijack.acquired", workerID, nil, nil,
 			map[string]any{"hijack_type": "dashboard", "lease_s": h.Lease.DashboardHijackLeaseS()})
 	}
 	return ok, reason
+}
+
+// AcquireWsHijackAndPause reserves the complete pause/acquire transition, so
+// no release, reconnect, or competing acquire can interleave between the
+// worker pause and publishing the dashboard owner.
+func (h *TermHub) AcquireWsHijackAndPause(ctx context.Context, workerID string, ws BrowserConn) (bool, string) {
+	opCtx, cancel := boundedOperationContext(ctx)
+	defer cancel()
+	var lifecycle *LifecycleReservation
+	var worker WorkerWS
+	var workerGeneration uint64
+	for {
+		h.lock.Lock()
+		st := h.registry.Get(workerID)
+		if st == nil || st.WorkerWS == nil {
+			h.lock.Unlock()
+			return false, "no_worker"
+		}
+		if done := statePendingDone(st, true); done != nil {
+			h.lock.Unlock()
+			if waitInputReservation(opCtx, done) != nil {
+				return false, "cancelled"
+			}
+			continue
+		}
+		if h.State.IsDashboardHijackActive(st) || h.State.HasValidRESTLease(st) || st.HijackPending != nil {
+			h.lock.Unlock()
+			return false, "already_hijacked"
+		}
+		if st.IsTunnelWorker {
+			h.lock.Unlock()
+			return false, OwnedInputUnsupported
+		}
+		worker = st.WorkerWS
+		workerGeneration = st.WorkerGeneration
+		lifecycle = h.beginLifecycleLocked(st, "ws_acquire_pause")
+		h.lock.Unlock()
+		break
+	}
+	defer h.finishLifecycle(workerID, lifecycle)
+	if err := h.Router.deliverWorker(opCtx, worker, false, pauseFrame("dashboard", "", h.clock.Wall())); err != nil {
+		if opCtx.Err() != nil {
+			return false, "cancelled"
+		}
+		h.lock.Lock()
+		if st := h.registry.Get(workerID); st != nil && st.WorkerWS == worker && st.WorkerGeneration == workerGeneration {
+			st.WorkerWS = nil
+			st.WorkerGeneration++
+		}
+		h.lock.Unlock()
+		return false, "no_worker"
+	}
+	h.lock.Lock()
+	st := h.registry.Get(workerID)
+	if st == nil || st.LifecyclePending != lifecycle || st.WorkerWS != worker || st.WorkerGeneration != workerGeneration {
+		h.lock.Unlock()
+		return false, "no_worker"
+	}
+	exp := h.clock.Monotonic() + float64(h.Lease.DashboardHijackLeaseS())
+	st.setDashboardOwner(ws, &exp)
+	if err := h.markBrowserResumeOwnerLocked(opCtx, ws, true); err != nil {
+		st.clearDashboardOwner()
+		h.lock.Unlock()
+		_, _ = h.Router.SendWorker(opCtx, workerID, resumeFrame("dashboard", h.clock.Wall()), nil)
+		return false, "resume_store"
+	}
+	h.lock.Unlock()
+	h.emitTelemetry(opCtx, "hijack.acquired", workerID, nil, nil,
+		map[string]any{"hijack_type": "dashboard", "lease_s": h.Lease.DashboardHijackLeaseS()})
+	return true, ""
+}
+
+func (h *TermHub) ReleaseWsHijack(
+	ctx context.Context, workerID string, ws BrowserConn,
+) (released, restActive bool, err error) {
+	opCtx, cancel := boundedOperationContext(ctx)
+	defer cancel()
+	var lifecycle *LifecycleReservation
+	for {
+		h.lock.Lock()
+		st := h.registry.Get(workerID)
+		if st == nil || !h.State.IsDashboardHijackActive(st) || st.HijackOwner != ws {
+			restActive = st != nil && h.State.HasValidRESTLease(st)
+			h.lock.Unlock()
+			return false, restActive, nil
+		}
+		if done := statePendingDone(st, true); done != nil {
+			h.lock.Unlock()
+			if err := waitInputReservation(opCtx, done); err != nil {
+				return false, false, err
+			}
+			continue
+		}
+		if err := h.markBrowserResumeOwnerLocked(opCtx, ws, false); err != nil {
+			h.lock.Unlock()
+			return false, false, err
+		}
+		st.clearDashboardOwner()
+		restActive = h.State.HasValidRESTLease(st)
+		if !restActive {
+			lifecycle = h.beginLifecycleLocked(st, "ws_release_resume")
+		}
+		h.lock.Unlock()
+		break
+	}
+	if lifecycle != nil {
+		defer h.finishLifecycle(workerID, lifecycle)
+		if sent, sendErr := h.SendWorker(opCtx, workerID, resumeFrame("dashboard", h.clock.Wall())); sendErr != nil {
+			return true, restActive, sendErr
+		} else if !sent {
+			return true, restActive, context.Canceled
+		}
+	}
+	h.emitTelemetry(opCtx, "hijack.released", workerID, nil, nil, map[string]any{"hijack_type": "dashboard"})
+	return true, restActive, nil
+}
+
+func (h *TermHub) ReleaseRestHijackAndResume(
+	ctx context.Context, workerID, hijackID string,
+) (released, shouldResume bool, err error) {
+	opCtx, cancel := boundedOperationContext(ctx)
+	defer cancel()
+	owner := "rest"
+	var lifecycle *LifecycleReservation
+	for {
+		h.lock.Lock()
+		st := h.registry.Get(workerID)
+		if st == nil || st.HijackSession == nil || st.HijackSession.HijackID != hijackID {
+			h.lock.Unlock()
+			return false, false, nil
+		}
+		if done := statePendingDone(st, true); done != nil {
+			h.lock.Unlock()
+			if err := waitInputReservation(opCtx, done); err != nil {
+				return false, false, err
+			}
+			continue
+		}
+		owner = st.HijackSession.Owner
+		st.HijackSession = nil
+		shouldResume = !h.State.IsDashboardHijackActive(st)
+		if shouldResume {
+			lifecycle = h.beginLifecycleLocked(st, "rest_release_resume")
+		}
+		h.lock.Unlock()
+		break
+	}
+	if lifecycle != nil {
+		defer h.finishLifecycle(workerID, lifecycle)
+		if sent, sendErr := h.SendWorker(opCtx, workerID, resumeFrame(owner, h.clock.Wall())); sendErr != nil {
+			return true, shouldResume, sendErr
+		} else if !sent {
+			return true, shouldResume, context.Canceled
+		}
+	}
+	return true, shouldResume, nil
 }
 
 // TryReleaseWsHijack verifies ownership and clears the dashboard hijack,

@@ -7,9 +7,11 @@ package hub
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // holdGate is a PolicyGate that holds every input for approval.
@@ -206,6 +208,148 @@ func TestResolveApprovalAfterOwnershipLossRefusesCommandAndReplay(t *testing.T) 
 	}
 	if status := string(h.Approvals.Get(reqID).Status); status != "refused" {
 		t.Fatalf("terminal approval status = %q, want refused", status)
+	}
+}
+
+func TestResolveApprovalAfterSameBrowserReacquiresRefusesStaleGeneration(t *testing.T) {
+	h, _ := newTestHub(t, nil)
+	worker := &fakeWorkerWS{}
+	registerWorkerState(h, "w", worker)
+	b := newBrowserWS("b1")
+	registerActiveBrowser(t, h, "w", b, "admin")
+	reqID, err := h.ParkBrowserForApproval(bg(), "w", b, "stale\n", PolicyDecision{Action: "hold", TimeoutS: 60})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if released, _ := h.TryReleaseWsHijack(bg(), "w", b); !released {
+		t.Fatal("release failed")
+	}
+	if ok, reason := h.TryAcquireWsHijack(bg(), "w", b); !ok {
+		t.Fatalf("same-browser reacquire failed: %s", reason)
+	}
+	resolved, err := h.ResolveApproval(bg(), reqID, true, nil, nil)
+	if !resolved || err == nil {
+		t.Fatalf("stale-generation approval = resolved:%t err:%v", resolved, err)
+	}
+	if got := worker.payloads(); len(got) != 0 {
+		t.Fatalf("stale-generation command reached worker: %v", got)
+	}
+}
+
+type orderedApprovalWorker struct {
+	mu       sync.Mutex
+	payloads []string
+	entered  chan struct{}
+	release  chan struct{}
+	once     sync.Once
+}
+
+func (w *orderedApprovalWorker) SendText(ctx context.Context, payload string) error {
+	w.mu.Lock()
+	w.payloads = append(w.payloads, payload)
+	index := len(w.payloads)
+	w.mu.Unlock()
+	if index == 1 {
+		w.once.Do(func() { close(w.entered) })
+		select {
+		case <-w.release:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return nil
+}
+
+func (w *orderedApprovalWorker) decoded(t *testing.T) []string {
+	t.Helper()
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	out := make([]string, 0, len(w.payloads))
+	for _, payload := range w.payloads {
+		out = append(out, decodeTerminalData(t, payload))
+	}
+	return out
+}
+
+func TestApprovalCommandAndReplayCannotBeOvertakenByFreshInput(t *testing.T) {
+	h, _ := newTestHub(t, nil)
+	worker := &orderedApprovalWorker{entered: make(chan struct{}), release: make(chan struct{})}
+	registerWorkerState(h, "w", worker)
+	b := newBrowserWS("b1")
+	registerActiveBrowser(t, h, "w", b, "admin")
+	reqID, err := h.ParkBrowserForApproval(bg(), "w", b, "command\n", PolicyDecision{Action: "hold", TimeoutS: 60})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.HoldBrowserInput(b, "replay\n")
+
+	resolveDone := make(chan error, 1)
+	go func() {
+		_, err := h.ResolveApproval(bg(), reqID, true, nil, nil)
+		resolveDone <- err
+	}()
+	<-worker.entered
+	generation, ok := h.BrowserInputFence("w", b)
+	if !ok {
+		t.Fatal("browser fence unavailable")
+	}
+	freshDone := make(chan bool, 1)
+	go func() {
+		sent, _ := h.SendBrowserOwnedInputAtGeneration(bg(), "w", b, generation,
+			map[string]any{"type": "input", "data": "fresh\n"})
+		freshDone <- sent
+	}()
+	select {
+	case <-freshDone:
+		t.Fatal("fresh input overtook the approval batch")
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(worker.release)
+	if err := <-resolveDone; err != nil {
+		t.Fatal(err)
+	}
+	if sent := <-freshDone; !sent {
+		t.Fatal("fresh input was not delivered after the approval batch")
+	}
+	want := []string{"command\n", "replay\n", "fresh\n"}
+	if got := worker.decoded(t); !reflect.DeepEqual(got, want) {
+		t.Fatalf("delivery order = %q, want %q", got, want)
+	}
+}
+
+type failSecondApprovalWorker struct {
+	mu       sync.Mutex
+	payloads []string
+}
+
+func (w *failSecondApprovalWorker) SendText(_ context.Context, payload string) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.payloads = append(w.payloads, payload)
+	if len(w.payloads) == 2 {
+		return context.DeadlineExceeded
+	}
+	return nil
+}
+
+func TestResolveApprovalCommandSuccessReplayFailureStaysApproved(t *testing.T) {
+	h, _ := newTestHub(t, nil)
+	worker := &failSecondApprovalWorker{}
+	registerWorkerState(h, "w", worker)
+	b := newBrowserWS("b1")
+	registerActiveBrowser(t, h, "w", b, "admin")
+	reqID, err := h.ParkBrowserForApproval(bg(), "w", b, "command\n", PolicyDecision{Action: "hold", TimeoutS: 60})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.HoldBrowserInput(b, "replay\n")
+
+	resolved, err := h.ResolveApproval(bg(), reqID, true, nil, &Principal{SubjectID: "approver"})
+	if !resolved || err != nil {
+		t.Fatalf("partial approval = resolved:%t err:%v", resolved, err)
+	}
+	if status := h.Approvals.Get(reqID).Status; status != ApprovalApproved {
+		t.Fatalf("partial approval status = %q, want approved", status)
 	}
 }
 

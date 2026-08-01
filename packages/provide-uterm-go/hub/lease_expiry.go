@@ -12,39 +12,56 @@ import "context"
 // unknown or already idle (the Python None sentinel).
 func (lm *HijackLeaseManager) expireLeasesAfterPending(
 	ctx context.Context, workerID string, now float64,
-) (rest, dash, resume, ok bool, err error) {
+) (rest, dash, resume, ok bool, lifecycle *LifecycleReservation, err error) {
 	for {
 		lm.lock.Lock()
 		st := lm.registry.Get(workerID)
 		if st == nil {
 			lm.lock.Unlock()
-			return false, false, false, false, nil
+			return false, false, false, false, nil, nil
 		}
 		lease := st.Lease()
 		if lease.IsIdle() {
 			lm.lock.Unlock()
-			return false, false, false, false, nil
+			return false, false, false, false, nil, nil
 		}
-		if pending := st.InputSendPending; pending != nil {
-			done := pending.Done
+		if done := statePendingDone(st, true); done != nil {
 			lm.lock.Unlock()
 			if err := waitInputReservation(ctx, done); err != nil {
-				return false, false, false, false, err
+				return false, false, false, false, nil, err
 			}
 			continue
 		}
+		oldOwner := st.HijackOwner
 		restExpired, dashExpired := lease.Expire(now)
+		if dashExpired {
+			if termHub, isTermHub := lm.hub.(*TermHub); isTermHub {
+				if err := termHub.markBrowserResumeOwnerLocked(ctx, oldOwner, false); err != nil {
+					lm.lock.Unlock()
+					return false, false, false, false, nil, err
+				}
+			}
+		}
 		if restExpired || dashExpired {
 			st.ApplyLease(lease)
 		}
 		shouldResume := (restExpired || dashExpired) && lease.IsIdle()
+		if shouldResume {
+			if termHub, isTermHub := lm.hub.(*TermHub); isTermHub {
+				lifecycle = termHub.beginLifecycleLocked(st, "lease_expiry_resume")
+			}
+		}
 		lm.lock.Unlock()
-		return restExpired, dashExpired, shouldResume, true, nil
+		return restExpired, dashExpired, shouldResume, true, lifecycle, nil
 	}
 }
 
 func (lm *HijackLeaseManager) expireLeasesUnderLock(workerID string, now float64) (rest, dash, resume, ok bool) {
-	rest, dash, resume, ok, _ = lm.expireLeasesAfterPending(context.Background(), workerID, now)
+	var lifecycle *LifecycleReservation
+	rest, dash, resume, ok, lifecycle, _ = lm.expireLeasesAfterPending(context.Background(), workerID, now)
+	if lifecycle != nil {
+		lm.hub.(*TermHub).finishLifecycle(workerID, lifecycle)
+	}
 	return rest, dash, resume, ok
 }
 
@@ -70,10 +87,15 @@ func (lm *HijackLeaseManager) RecheckAndResume(ctx context.Context, workerID str
 // on full release. Port of cleanup_expired: the ordered pipeline is
 // metric → recheck (which sends+notifies) → append_event(s) → broadcast → prune.
 func (lm *HijackLeaseManager) CleanupExpired(ctx context.Context, workerID string) (bool, error) {
+	opCtx, cancel := boundedOperationContext(ctx)
+	defer cancel()
 	now := lm.clock.Monotonic()
-	restExpired, dashExpired, shouldResume, ok, err := lm.expireLeasesAfterPending(ctx, workerID, now)
+	restExpired, dashExpired, shouldResume, ok, lifecycle, err := lm.expireLeasesAfterPending(opCtx, workerID, now)
 	if err != nil {
 		return false, err
+	}
+	if lifecycle != nil {
+		defer lm.hub.(*TermHub).finishLifecycle(workerID, lifecycle)
 	}
 	if !ok {
 		return false, nil
@@ -83,8 +105,15 @@ func (lm *HijackLeaseManager) CleanupExpired(ctx context.Context, workerID strin
 	}
 	lm.hub.Metric("hijack_lease_expiries_total", 1)
 	if shouldResume {
-		if err := lm.hub.RecheckAndResume(ctx, workerID, now); err != nil {
-			return false, err
+		if lifecycle != nil {
+			if _, err := lm.hub.SendWorker(opCtx, workerID, resumeFrame("lease-expired", now)); err != nil {
+				return false, err
+			}
+			lm.hub.NotifyHijackChanged(workerID, false, nil)
+		} else {
+			if err := lm.hub.RecheckAndResume(opCtx, workerID, now); err != nil {
+				return false, err
+			}
 		}
 	}
 	if restExpired {
@@ -193,14 +222,16 @@ func coerceSeq(evt map[string]any) int {
 // RemoveDeadBrowsers removes dead browser sockets under lock and resumes if the
 // dead socket was the dashboard owner. Port of remove_dead_browsers.
 func (lm *HijackLeaseManager) RemoveDeadBrowsers(ctx context.Context, workerID string, dead []BrowserConn) (bool, error) {
+	opCtx, cancel := boundedOperationContext(ctx)
+	defer cancel()
 	notifyHijackOff := false
+	var lifecycle *LifecycleReservation
 	for {
 		lm.lock.Lock()
 		st := lm.registry.Get(workerID)
-		if st != nil && st.InputSendPending != nil {
-			done := st.InputSendPending.Done
+		if done := statePendingDone(st, true); done != nil {
 			lm.lock.Unlock()
-			if err := waitInputReservation(ctx, done); err != nil {
+			if err := waitInputReservation(opCtx, done); err != nil {
 				return false, err
 			}
 			continue
@@ -209,8 +240,19 @@ func (lm *HijackLeaseManager) RemoveDeadBrowsers(ctx context.Context, workerID s
 			for _, ws := range dead {
 				delete(st.Browsers, ws)
 				if lm.hub.IsDashboardHijackActive(st) && st.HijackOwner == ws {
+					if termHub, isTermHub := lm.hub.(*TermHub); isTermHub {
+						if err := termHub.markBrowserResumeOwnerLocked(opCtx, ws, true); err != nil {
+							lm.lock.Unlock()
+							return false, err
+						}
+					}
 					st.clearDashboardOwner()
 					notifyHijackOff = !lm.hub.HasValidRESTLease(st)
+					if notifyHijackOff {
+						if termHub, isTermHub := lm.hub.(*TermHub); isTermHub {
+							lifecycle = termHub.beginLifecycleLocked(st, "dead_browser_resume")
+						}
+					}
 				}
 			}
 		}
@@ -218,7 +260,7 @@ func (lm *HijackLeaseManager) RemoveDeadBrowsers(ctx context.Context, workerID s
 		break
 	}
 
-	if notifyHijackOff {
+	if notifyHijackOff && lifecycle == nil {
 		// Re-check: a concurrent acquire may have written a new session.
 		lm.lock.Lock()
 		st2 := lm.registry.Get(workerID)
@@ -228,7 +270,10 @@ func (lm *HijackLeaseManager) RemoveDeadBrowsers(ctx context.Context, workerID s
 		lm.lock.Unlock()
 	}
 	if notifyHijackOff {
-		if _, err := lm.hub.SendWorker(ctx, workerID, resumeFrame("dead-socket", lm.clock.Wall())); err != nil {
+		if lifecycle != nil {
+			defer lm.hub.(*TermHub).finishLifecycle(workerID, lifecycle)
+		}
+		if _, err := lm.hub.SendWorker(opCtx, workerID, resumeFrame("dead-socket", lm.clock.Wall())); err != nil {
 			return false, err
 		}
 		lm.hub.NotifyHijackChanged(workerID, false, nil)

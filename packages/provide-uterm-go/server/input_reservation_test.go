@@ -7,6 +7,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -324,11 +325,10 @@ func TestCompetingAcquireWaitsForReservedInputDelivery(t *testing.T) {
 	competitor := &browserConn{}
 	state := hub.NewWorkerTermState()
 	state.WorkerWS = worker
-	state.Browsers[owner] = "admin"
-	state.Browsers[competitor] = "admin"
 	expires := 1e12
 	state.HijackOwner = owner
 	state.HijackOwnerExpiresAt = &expires
+	state.Browsers[owner] = "admin"
 	ts.hub.Registry.Put("reserved-competitor", state)
 	entered, releaseSend := worker.blockNextMatching(t, func(payload string) bool { return payload == "id" })
 	go ts.srv.sendBrowserInput(context.Background(), "reserved-competitor", owner, "id")
@@ -362,5 +362,159 @@ func TestRegisterWorkerWithTransportPublishesTunnelModeAtomically(t *testing.T) 
 	state := ts.hub.Registry.Get("atomic-tunnel")
 	if state == nil || state.WorkerWS != worker || !state.IsTunnelWorker {
 		t.Fatalf("published tunnel state = %+v", state)
+	}
+}
+
+func TestBrowserReleaseResumeCompletesBeforeCompetingAcquire(t *testing.T) {
+	ts := newTestServer(t, nil)
+	worker := &reservationWorker{}
+	owner := &browserConn{}
+	competitor := &browserConn{}
+	state := hub.NewWorkerTermState()
+	state.WorkerWS = worker
+	expires := 1e12
+	state.HijackOwner = owner
+	state.HijackOwnerExpiresAt = &expires
+	ts.hub.Registry.Put("release-order", state)
+	entered, releaseResume := worker.blockNextMatching(t, func(payload string) bool {
+		return strings.Contains(payload, `"action":"resume"`)
+	})
+	releaseDone := make(chan struct{})
+	go func() {
+		ts.srv.browserHijackRelease(context.Background(), "release-order", owner)
+		close(releaseDone)
+	}()
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("release did not reach resume send")
+	}
+
+	acquireDone := make(chan bool, 1)
+	go func() {
+		ok, _ := ts.hub.TryAcquireWsHijack(context.Background(), "release-order", competitor)
+		acquireDone <- ok
+	}()
+	select {
+	case ok := <-acquireDone:
+		releaseResume()
+		t.Fatalf("competing acquire completed before old resume: %t", ok)
+	case <-time.After(100 * time.Millisecond):
+	}
+	releaseResume()
+	if ok := <-acquireDone; !ok {
+		t.Fatal("competing acquire did not succeed after resume")
+	}
+	<-releaseDone
+}
+
+func TestRESTAcquirePauseBlocksWorkerReplacement(t *testing.T) {
+	ts := newTestServer(t, nil)
+	original := &reservationWorker{}
+	replacement := &reservationWorker{}
+	if _, err := ts.hub.RegisterWorker(context.Background(), "pause-replace", original); err != nil {
+		t.Fatal(err)
+	}
+	entered, releasePause := original.blockNextMatching(t, func(payload string) bool {
+		return strings.Contains(payload, `"action":"pause"`)
+	})
+	acquireDone := make(chan error, 1)
+	go func() {
+		ok, reason, err := ts.hub.TryAcquireRestHijack(context.Background(), "pause-replace", "owner", 60, "h1", 1)
+		if err == nil && (!ok || reason != "") {
+			err = fmt.Errorf("acquire = ok:%t reason:%q", ok, reason)
+		}
+		acquireDone <- err
+	}()
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("REST acquire did not reach pause send")
+	}
+
+	replaceDone := make(chan error, 1)
+	go func() {
+		_, err := ts.hub.RegisterWorker(context.Background(), "pause-replace", replacement)
+		replaceDone <- err
+	}()
+	select {
+	case err := <-replaceDone:
+		releasePause()
+		t.Fatalf("worker replacement completed during pause reservation: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	releasePause()
+	if err := <-acquireDone; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-replaceDone; err == nil {
+		t.Fatal("replacement under active REST lease must be rejected")
+	}
+}
+
+func TestRESTAcquirePauseBlocksWorkerDisconnect(t *testing.T) {
+	ts := newTestServer(t, nil)
+	original := &reservationWorker{}
+	if _, err := ts.hub.RegisterWorker(context.Background(), "pause-disconnect", original); err != nil {
+		t.Fatal(err)
+	}
+	entered, releasePause := original.blockNextMatching(t, func(payload string) bool {
+		return strings.Contains(payload, `"action":"pause"`)
+	})
+	acquireDone := make(chan error, 1)
+	go func() {
+		ok, reason, err := ts.hub.TryAcquireRestHijack(context.Background(), "pause-disconnect", "owner", 60, "h1", 1)
+		if err == nil && (!ok || reason != "") {
+			err = fmt.Errorf("acquire = ok:%t reason:%q", ok, reason)
+		}
+		acquireDone <- err
+	}()
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("REST acquire did not reach pause send")
+	}
+	disconnectDone := make(chan error, 1)
+	go func() {
+		ok, err := ts.hub.DisconnectWorker(context.Background(), "pause-disconnect")
+		if err == nil && !ok {
+			err = fmt.Errorf("disconnect returned false")
+		}
+		disconnectDone <- err
+	}()
+	select {
+	case err := <-disconnectDone:
+		releasePause()
+		t.Fatalf("disconnect completed during pause reservation: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	releasePause()
+	if err := <-acquireDone; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-disconnectDone; err != nil {
+		t.Fatal(err)
+	}
+	state := ts.hub.Registry.Get("pause-disconnect")
+	if state != nil && (state.WorkerWS != nil || state.HijackSession != nil) {
+		t.Fatalf("disconnect left active state: %+v", state)
+	}
+}
+
+func TestTunnelRESTStepFailsWithoutSuccessEffects(t *testing.T) {
+	ts, _, _, hijackID := reservationRESTFixture(t)
+	state := ts.hub.Registry.Get("reserved-rest")
+	state.IsTunnelWorker = true
+	beforeMetric := ts.metrics.Snapshot()["hijack_steps_total"]
+	beforeEvents := state.EventSeq
+	rec := ts.do("POST", "/worker/reserved-rest/hijack/"+hijackID+"/step", "", adminHeaders())
+	if rec.Code >= 200 && rec.Code < 300 {
+		t.Fatalf("tunnel step unexpectedly succeeded: %d %s", rec.Code, rec.Body.String())
+	}
+	if got := ts.metrics.Snapshot()["hijack_steps_total"]; got != beforeMetric {
+		t.Fatalf("tunnel step success metric changed: %d -> %d", beforeMetric, got)
+	}
+	if state.EventSeq != beforeEvents {
+		t.Fatalf("tunnel step appended success event: %d -> %d", beforeEvents, state.EventSeq)
 	}
 }
