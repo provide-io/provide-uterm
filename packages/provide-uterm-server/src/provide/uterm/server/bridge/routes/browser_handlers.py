@@ -422,19 +422,25 @@ async def _handle_input(
     return "sent"
 
 
-async def _resolve_resumed_role(
-    hub: TermHub, ws: WebSocket, worker_id: str, role: str, session_role: str
-) -> tuple[str, bool]:
-    """Resolve the role for a resumed browser session. Returns (new_role, can_hijack).
-
-    Never escalates above the role the current auth layer grants.
-    """
+def _select_resumed_role(role: str, session_role: str) -> tuple[str, bool]:
+    """Select a resumed role without mutating browser state."""
     new_role = role
     if session_role in VALID_ROLES and _ROLE_PRIORITY.get(session_role, 0) <= _ROLE_PRIORITY.get(role, 0):
         new_role = session_role
-    if new_role != role:
-        await hub.set_browser_role(worker_id, ws, new_role)
     return new_role, new_role == "admin"
+
+
+async def _rollback_reclaimed_hijack(hub: TermHub, ws: WebSocket, worker_id: str) -> None:
+    """Release only *ws*'s provisional reclaim and compensate its pause."""
+    released, rest_active = await hub.try_release_ws_hijack(worker_id, ws)
+    if not released:
+        return
+    if not rest_active:
+        await hub.send_worker_if_unowned(
+            worker_id,
+            {"type": "control", "action": "resume", "owner": "resume-rollback", "lease_s": 0, "ts": time.time()},
+        )
+    await hub.broadcast_hijack_state(worker_id)
 
 
 async def _try_reclaim_hijack(
@@ -457,7 +463,7 @@ async def _try_reclaim_hijack(
         ownership_generation=generation,
     )
     if not pause_sent:
-        await hub.try_release_ws_hijack(worker_id, ws)
+        await _rollback_reclaimed_hijack(hub, ws, worker_id)
         return False, False, False
     return True, True, False
 
@@ -495,19 +501,43 @@ async def _handle_resume(
         logger.warning(EVENT_RESUME_FAILED, worker_id=worker_id, reason="callback_rejected")
         return owned_hijack
 
-    # Atomically burn the token now that all gates have passed. A concurrent
-    # replay loses the race and gets None here, so single-use is preserved.
-    if await store.consume(old_token) is None:
-        logger.warning(EVENT_RESUME_FAILED, worker_id=worker_id, reason="token_invalid")
-        return owned_hijack
-
-    new_role, can_hijack = await _resolve_resumed_role(hub, ws, worker_id, role, session.role)
+    # Prepare all fallible ownership work before consuming the single-use
+    # authority. Rejected/failed reclaim must leave the legitimate token live.
+    new_role, can_hijack = _select_resumed_role(role, session.role)
     owned_hijack, reclaimed_hijack, competing_owner = await _try_reclaim_hijack(hub, ws, worker_id, session, can_hijack)
-    if session.was_hijack_owner and can_hijack and competing_owner and not hub.allow_stale_owner_role_resume:
-        logger.warning(EVENT_RESUME_FAILED, worker_id=worker_id, reason="competing_owner")
-        return owned_hijack
+    reclaim_required = session.was_hijack_owner and can_hijack
+    if reclaim_required and not reclaimed_hijack:
+        open_mode = await hub.is_input_open_mode(worker_id)
+        role_only_resume_allowed = open_mode or (competing_owner and hub.allow_stale_owner_role_resume)
+        if not role_only_resume_allowed:
+            reason = "competing_owner" if competing_owner else "reclaim_failed"
+            logger.warning(EVENT_RESUME_FAILED, worker_id=worker_id, reason=reason)
+            return False
 
-    new_token = await store.create(worker_id, new_role, hub._resume_ttl_s)
+    new_token: str | None = None
+    try:
+        # Pre-create replacement authority so create failure cannot burn the old
+        # token. Concurrent attempts may each prepare one, but only the consume
+        # winner keeps its replacement; losers revoke theirs below.
+        new_token = await store.create(worker_id, new_role, hub._resume_ttl_s)
+        consumed = await store.consume(old_token)
+    except BaseException:
+        if new_token is not None:
+            # Cleanup must not replace the original create/consume failure.
+            with suppress(Exception):
+                await store.revoke(new_token)
+        if reclaimed_hijack:
+            await _rollback_reclaimed_hijack(hub, ws, worker_id)
+        raise
+    if consumed is None:
+        await store.revoke(new_token)
+        if reclaimed_hijack:
+            await _rollback_reclaimed_hijack(hub, ws, worker_id)
+        logger.warning(EVENT_RESUME_FAILED, worker_id=worker_id, reason="token_invalid")
+        return False
+
+    if new_role != role:
+        await hub.set_browser_role(worker_id, ws, new_role)
     hub._ws_to_resume_token[ws] = new_token
 
     _resumed_state = await hub.register_browser_state_snapshot(worker_id, ws)

@@ -17,12 +17,16 @@ resume with the same token still succeeds) and is burned on success.
 
 from __future__ import annotations
 
+import asyncio
+import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from provide.uterm.server.bridge.hub import InMemoryResumeStore, TermHub
 from provide.uterm.server.bridge.models import WorkerTermState
-from provide.uterm.server.bridge.routes.browser_handlers import _handle_resume
+from provide.uterm.server.bridge.routes.browser_handlers import _handle_resume, _rollback_reclaimed_hijack
 
 
 def _make_ws() -> MagicMock:
@@ -155,3 +159,213 @@ async def test_callback_accepted_resume_consumes_token() -> None:
     new_token = hub._ws_to_resume_token[ws]
     assert new_token != token
     assert await store.get(new_token) is not None
+
+
+async def test_competing_owner_rejection_preserves_token_and_owner() -> None:
+    store = InMemoryResumeStore()
+    hub = TermHub(resume_store=store)
+    token = await store.create("w1", "admin", 300)
+    await store.mark_hijack_owner(token, True)
+    resumer = _make_ws()
+    competitor = _make_ws()
+    worker = _make_ws()
+    state = await _register(hub, "w1", resumer, "admin")
+    async with hub._lock:
+        state.worker_ws = worker
+        state.hijack_owner = competitor
+        state.hijack_owner_expires_at = time.monotonic() + 60
+
+    result = await _handle_resume(hub, resumer, "w1", "admin", {"token": token}, False)
+
+    assert result is False
+    assert await store.get(token) is not None
+    assert state.hijack_owner is competitor
+    assert resumer not in hub._ws_to_resume_token
+    resumer.send_text.assert_not_awaited()
+    worker.send_text.assert_not_awaited()
+
+
+async def test_concurrent_resume_replay_has_exactly_one_winner() -> None:
+    class _GatedStore(InMemoryResumeStore):
+        def __init__(self) -> None:
+            super().__init__()
+            self.waiting = 0
+            self.both_waiting = asyncio.Event()
+
+        async def consume(self, token: str) -> Any:
+            self.waiting += 1
+            if self.waiting == 2:
+                self.both_waiting.set()
+            await self.both_waiting.wait()
+            return await super().consume(token)
+
+    store = _GatedStore()
+    hub = TermHub(resume_store=store)
+    token = await store.create("w1", "admin", 300)
+    first = _make_ws()
+    second = _make_ws()
+    await _register(hub, "w1", first, "admin")
+    await _register(hub, "w1", second, "admin")
+
+    await asyncio.gather(
+        _handle_resume(hub, first, "w1", "admin", {"token": token}, False),
+        _handle_resume(hub, second, "w1", "admin", {"token": token}, False),
+    )
+
+    assert await store.get(token) is None
+    assert len(hub._ws_to_resume_token) == 1
+    assert len(store) == 1
+    frames = [call.args[0] for browser in (first, second) for call in browser.send_text.await_args_list]
+    assert sum('"type":"hello"' in frame for frame in frames) == 1
+
+
+async def test_consume_race_after_reclaim_compensates_pause_and_ownership() -> None:
+    store = InMemoryResumeStore()
+    hub = TermHub(resume_store=store)
+    token = await store.create("w1", "admin", 300)
+    await store.mark_hijack_owner(token, True)
+    resumer = _make_ws()
+    worker = _make_ws()
+    state = await _register(hub, "w1", resumer, "admin")
+    async with hub._lock:
+        state.worker_ws = worker
+
+    async def _lose_consume(_token: str) -> None:
+        return None
+
+    store.consume = _lose_consume  # type: ignore[method-assign]
+    result = await _handle_resume(hub, resumer, "w1", "admin", {"token": token}, False)
+
+    assert result is False
+    assert await store.get(token) is not None
+    assert state.hijack_owner is None
+    actions = [call.args[0] for call in worker.send_text.await_args_list]
+    assert "pause" in actions[0]
+    assert "resume" in actions[1]
+
+
+async def test_rollback_never_releases_or_resumes_a_competitor() -> None:
+    store = InMemoryResumeStore()
+    hub = TermHub(resume_store=store)
+    token = await store.create("w1", "admin", 300)
+    await store.mark_hijack_owner(token, True)
+    resumer = _make_ws()
+    competitor = _make_ws()
+    worker = _make_ws()
+    state = await _register(hub, "w1", resumer, "admin")
+    async with hub._lock:
+        state.worker_ws = worker
+
+    async def _competitor_wins(_token: str) -> None:
+        async with hub._lock:
+            state.hijack_owner = competitor
+            state.hijack_owner_expires_at = time.monotonic() + 60
+            state.ownership_generation += 1
+
+    store.consume = _competitor_wins  # type: ignore[method-assign]
+    result = await _handle_resume(hub, resumer, "w1", "admin", {"token": token}, False)
+
+    assert result is False
+    assert await store.get(token) is not None
+    assert state.hijack_owner is competitor
+    assert worker.send_text.await_count == 1
+    assert "pause" in worker.send_text.await_args_list[0].args[0]
+
+
+async def test_consume_exception_revokes_precreated_token_and_preserves_old() -> None:
+    store = InMemoryResumeStore()
+    hub = TermHub(resume_store=store)
+    token = await store.create("w1", "admin", 300)
+    ws = _make_ws()
+    await _register(hub, "w1", ws, "admin")
+
+    async def _explode(_token: str) -> None:
+        raise RuntimeError("consume unavailable")
+
+    store.consume = _explode  # type: ignore[method-assign]
+    with pytest.raises(RuntimeError, match="consume unavailable"):
+        await _handle_resume(hub, ws, "w1", "admin", {"token": token}, False)
+
+    assert await store.get(token) is not None
+    assert len(store) == 1
+
+
+async def test_revoke_cleanup_failure_does_not_mask_consume_error() -> None:
+    store = InMemoryResumeStore()
+    hub = TermHub(resume_store=store)
+    token = await store.create("w1", "admin", 300)
+    ws = _make_ws()
+    await _register(hub, "w1", ws, "admin")
+
+    async def _explode_consume(_token: str) -> None:
+        raise RuntimeError("consume unavailable")
+
+    async def _explode_revoke(_token: str) -> None:
+        raise RuntimeError("revoke unavailable")
+
+    store.consume = _explode_consume  # type: ignore[method-assign]
+    store.revoke = _explode_revoke  # type: ignore[method-assign]
+
+    with pytest.raises(RuntimeError, match="consume unavailable"):
+        await _handle_resume(hub, ws, "w1", "admin", {"token": token}, False)
+
+    assert await store.get(token) is not None
+
+
+async def test_create_exception_preserves_old_token() -> None:
+    store = InMemoryResumeStore()
+    hub = TermHub(resume_store=store)
+    token = await store.create("w1", "admin", 300)
+    ws = _make_ws()
+    await _register(hub, "w1", ws, "admin")
+
+    async def _explode_create(_worker_id: str, _role: str, _ttl_s: float) -> str:
+        raise RuntimeError("create unavailable")
+
+    store.create = _explode_create  # type: ignore[method-assign]
+
+    with pytest.raises(RuntimeError, match="create unavailable"):
+        await _handle_resume(hub, ws, "w1", "admin", {"token": token}, False)
+
+    assert await store.get(token) is not None
+    assert ws not in hub._ws_to_resume_token
+
+
+async def test_consume_exception_after_reclaim_rolls_back_pause_and_owner() -> None:
+    store = InMemoryResumeStore()
+    hub = TermHub(resume_store=store)
+    token = await store.create("w1", "admin", 300)
+    await store.mark_hijack_owner(token, True)
+    ws = _make_ws()
+    worker = _make_ws()
+    state = await _register(hub, "w1", ws, "admin")
+    async with hub._lock:
+        state.worker_ws = worker
+
+    async def _explode_consume(_token: str) -> None:
+        raise RuntimeError("consume unavailable")
+
+    store.consume = _explode_consume  # type: ignore[method-assign]
+
+    with pytest.raises(RuntimeError, match="consume unavailable"):
+        await _handle_resume(hub, ws, "w1", "admin", {"token": token}, False)
+
+    assert await store.get(token) is not None
+    assert len(store) == 1
+    assert state.hijack_owner is None
+    actions = [call.args[0] for call in worker.send_text.await_args_list]
+    assert "pause" in actions[0]
+    assert "resume" in actions[1]
+
+
+async def test_rollback_with_active_rest_lease_does_not_resume_worker() -> None:
+    hub = TermHub()
+    ws = _make_ws()
+    hub.try_release_ws_hijack = AsyncMock(return_value=(True, True))  # type: ignore[method-assign]
+    hub.send_worker_if_unowned = AsyncMock()  # type: ignore[method-assign]
+    hub.broadcast_hijack_state = AsyncMock()  # type: ignore[method-assign]
+
+    await _rollback_reclaimed_hijack(hub, ws, "w1")
+
+    hub.send_worker_if_unowned.assert_not_awaited()
+    hub.broadcast_hijack_state.assert_awaited_once_with("w1")

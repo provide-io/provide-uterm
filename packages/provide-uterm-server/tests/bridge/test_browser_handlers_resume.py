@@ -392,7 +392,7 @@ class TestHandleResumeBranchCoverage:
     """Cover arcs in _handle_resume that require was_hijack_owner=True."""
 
     async def test_resume_hijack_owner_no_worker_pause_not_sent(self) -> None:
-        """Arc 263->284: was_hijack_owner=True, can_hijack=True, but no worker → pause_sent=False."""
+        """A failed owner reclaim without a worker preserves the legitimate token."""
         store = InMemoryResumeStore()
         hub = _make_hub(resume_store=store)
         ws = _make_ws()
@@ -402,7 +402,9 @@ class TestHandleResumeBranchCoverage:
 
         result = await _handle_resume(hub, ws, "w1", "admin", {"token": token}, False)
         assert result is False
-        ws.send_text.assert_called()
+        assert await store.get(token) is not None
+        assert ws not in hub._ws_to_resume_token
+        ws.send_text.assert_not_awaited()
 
     async def test_resume_hijack_owner_pause_sent_but_already_hijacked(self) -> None:
         """Arc 266->277: was_hijack_owner=True, pause_sent=True, inner condition False (owner set)."""
@@ -464,4 +466,5 @@ class TestHandleResumeBranchCoverage:
 
         assert result is False
         ws.send_text.assert_not_called()
-        assert await store.get(token) is None
+        assert await store.get(token) is not None
+        assert ws not in hub._ws_to_resume_token
