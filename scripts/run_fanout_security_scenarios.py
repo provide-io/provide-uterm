@@ -336,7 +336,12 @@ def collect_backend_observations(
         if errors:
             return errors, []
         if not output_path.is_file():
-            return [f"{backend}: native command produced no observation file"], []
+            # Exiting 0 without writing means the adapter never ran — a filter
+            # that matched no tests exits 0, as does a runner that skipped
+            # everything. The command's own output names which, so include it
+            # rather than reporting only the missing file.
+            detail = "\n".join(part.strip() for part in (result.stdout, result.stderr) if part.strip())
+            return [f"{backend}: native command produced no observation file: {detail}"], []
         try:
             observations = json.loads(output_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
