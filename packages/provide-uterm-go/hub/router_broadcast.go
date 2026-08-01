@@ -297,6 +297,9 @@ func (r *MessageRouter) SendWorker(ctx context.Context, workerID string, msg map
 	if sendErr == nil {
 		return true, nil
 	}
+	if errors.Is(sendErr, errOwnedInputUnsupported) {
+		return false, nil
+	}
 	hub.logger.Debug("send_worker_failed", "worker_id", workerID, "error", sendErr)
 	hub.lock.Lock()
 	st2 := hub.registry.Get(workerID)
@@ -317,18 +320,18 @@ func (r *MessageRouter) deliverWorker(ctx context.Context, ws WorkerWS, isTunnel
 	if isTunnel {
 		ts, ok := ws.(TunnelSender)
 		if !ok {
-			return nil // no tunnel codec: drop, mirroring the "no JSON envelope" path
+			return errOwnedInputUnsupported
 		}
 		msgType := str(msg["type"])
 		switch {
 		case httpInspectControlTypes[msgType]:
 			return ts.SendHTTPControl(ctx, msg)
 		case msgType != "input":
-			return nil // dropped
+			return errOwnedInputUnsupported
 		default:
 			data, ok := msg["data"].(string)
 			if !ok {
-				return nil // dropped
+				return errOwnedInputUnsupported
 			}
 			return ts.SendInput(ctx, data)
 		}

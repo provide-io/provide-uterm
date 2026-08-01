@@ -153,30 +153,42 @@ func (r *MessageRouter) HijackStateMsgFor(_ context.Context, workerID string, ws
 // "open" while a hijack is active. Port of set_input_mode. Returns (ok, reason).
 func (r *MessageRouter) SetInputMode(ctx context.Context, workerID, mode string) (bool, string, error) {
 	hub := r.hub
-	hub.lock.Lock()
-	st := hub.registry.Get(workerID)
-	if st == nil {
+	opCtx, cancel := boundedOperationContext(ctx)
+	defer cancel()
+	for {
+		hub.lock.Lock()
+		st := hub.registry.Get(workerID)
+		if st == nil {
+			hub.lock.Unlock()
+			return false, "not_found", nil
+		}
+		if done := statePendingDone(st, true); done != nil {
+			hub.lock.Unlock()
+			if err := waitInputReservation(opCtx, done); err != nil {
+				return false, "", err
+			}
+			continue
+		}
+		if mode == InputModeOpen && (hub.State.IsHijacked(st) || st.HijackPending != nil) {
+			hub.lock.Unlock()
+			return false, "active_hijack", nil
+		}
+		st.InputMode = mode
+		// Every caller of this is an authenticated route — the session routes and
+		// the worker-control route, which requires session.control.mode. So reaching
+		// here means somebody decided the mode, and a later worker_hello may raise
+		// it but never lower it back. See WorkerTermState.InputModeSetByOperator.
+		st.InputModeSetByOperator = true
 		hub.lock.Unlock()
-		return false, "not_found", nil
+		break
 	}
-	if mode == InputModeOpen && hub.State.IsHijacked(st) {
-		hub.lock.Unlock()
-		return false, "active_hijack", nil
-	}
-	st.InputMode = mode
-	// Every caller of this is an authenticated route — the session routes and
-	// the worker-control route, which requires session.control.mode. So reaching
-	// here means somebody decided the mode, and a later worker_hello may raise
-	// it but never lower it back. See WorkerTermState.InputModeSetByOperator.
-	st.InputModeSetByOperator = true
-	hub.lock.Unlock()
 
-	if err := r.Broadcast(ctx, workerID, map[string]any{
+	if err := r.Broadcast(opCtx, workerID, map[string]any{
 		"type": "input_mode_changed", "input_mode": mode, "ts": hub.clock.Wall(),
 	}); err != nil {
 		return false, "", err
 	}
-	if err := r.BroadcastHijackState(ctx, workerID); err != nil {
+	if err := r.BroadcastHijackState(opCtx, workerID); err != nil {
 		return false, "", err
 	}
 	return true, "", nil

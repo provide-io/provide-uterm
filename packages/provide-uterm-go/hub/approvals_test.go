@@ -22,7 +22,9 @@ func TestApprovalStoreAddAndGet(t *testing.T) {
 	s := NewInMemoryApprovalStore(NewManualClock(1000))
 	req := pendingReq("req-1", 1060)
 	s.Add(req)
-	mustDeepEqual(t, s.Get("req-1"), req, "get returns copied value")
+	got := s.Get("req-1")
+	req.Revision = got.Revision
+	mustDeepEqual(t, got, req, "get returns copied value")
 	mustTrue(t, s.Get("nonexistent") == nil, "get missing -> nil")
 }
 
@@ -57,7 +59,8 @@ func TestApprovalStoreGetAndPendingReturnImmutableCopies(t *testing.T) {
 func TestApprovalResolveSuccess(t *testing.T) {
 	s := NewInMemoryApprovalStore(NewManualClock(1000))
 	s.Add(pendingReq("req-1", 1060))
-	s.Resolve("req-1", ApprovalApproved)
+	rev := s.Get("req-1").Revision
+	s.Resolve("req-1", rev, ApprovalApproved)
 	mustEqual(t, s.Get("req-1").Status, ApprovalApproved, "resolved to approved")
 }
 
@@ -66,26 +69,59 @@ func TestApprovalResolveOnlyPending(t *testing.T) {
 	req := pendingReq("req-1", 1060)
 	req.Status = ApprovalApproved
 	s.Add(req)
-	s.Resolve("req-1", ApprovalRejected)
+	s.Resolve("req-1", s.Get("req-1").Revision, ApprovalRejected)
 	mustEqual(t, s.Get("req-1").Status, ApprovalApproved, "non-pending unchanged")
 }
 
 func TestApprovalResolveMissingIsNoop(t *testing.T) {
 	s := NewInMemoryApprovalStore(NewManualClock(1000))
-	s.Resolve("ghost", ApprovalApproved) // must not panic
+	s.Resolve("ghost", 1, ApprovalApproved) // must not panic
 }
 
 func TestApprovalClaimSucceedsExactlyOnce(t *testing.T) {
 	s := NewInMemoryApprovalStore(NewManualClock(1000))
 	s.Add(pendingReq("r1", 1e12))
-	mustTrue(t, s.Claim("r1", ApprovalApproved), "first claim wins")
-	mustFalse(t, s.Claim("r1", ApprovalRejected), "second claim loses")
+	rev := s.Get("r1").Revision
+	mustTrue(t, s.ClaimRevision("r1", rev, ApprovalApproved), "first claim wins")
+	mustFalse(t, s.ClaimRevision("r1", rev, ApprovalRejected), "second claim loses")
 	mustEqual(t, s.Get("r1").Status, ApprovalApproved, "final status approved")
 }
 
 func TestApprovalClaimMissingReturnsFalse(t *testing.T) {
 	s := NewInMemoryApprovalStore(NewManualClock(1000))
-	mustFalse(t, s.Claim("nope", ApprovalApproved), "missing claim false")
+	mustFalse(t, s.ClaimRevision("nope", 1, ApprovalApproved), "missing claim false")
+}
+
+func TestApprovalRevisionPreventsPruneReuseABA(t *testing.T) {
+	clk := NewManualClock(1000)
+	s := NewInMemoryApprovalStore(clk)
+	first := pendingReq("same", 1100)
+	s.Add(first)
+	stale := s.Get("same")
+	if stale.Revision == 0 {
+		t.Fatal("approval revision was not assigned")
+	}
+	if !s.ClaimRevision("same", stale.Revision, ApprovalApproved) {
+		t.Fatal("initial revision claim failed")
+	}
+	clk.SetWall(1100 + approvalPruneTTL + 1)
+	s.CleanupExpired()
+	second := pendingReq("same", clk.Wall()+60)
+	second.Command = "replacement"
+	if !s.Add(second) {
+		t.Fatal("pruned id could not be reused")
+	}
+
+	if s.ClaimRevision("same", stale.Revision, ApprovalRejected) {
+		t.Fatal("stale resolver claimed replacement revision")
+	}
+	if s.SetStatusRevision("same", stale.Revision, ApprovalRefused) {
+		t.Fatal("stale finalizer overwrote replacement revision")
+	}
+	current := s.Get("same")
+	if current.Command != "replacement" || current.Status != ApprovalPending || current.Revision == stale.Revision {
+		t.Fatalf("replacement approval changed by stale resolver: %+v", current)
+	}
 }
 
 func TestApprovalCleanupExpiresPendingKeepsValid(t *testing.T) {
@@ -139,6 +175,7 @@ func TestApprovalCleanupNoCallbackIsSafe(t *testing.T) {
 func TestApprovalConcurrentClaimSingleWinner(t *testing.T) {
 	s := NewInMemoryApprovalStore(NewManualClock(1000))
 	s.Add(pendingReq("race", 1e12))
+	rev := s.Get("race").Revision
 	var wg sync.WaitGroup
 	wins := make([]bool, 8)
 	start := make(chan struct{})
@@ -151,7 +188,7 @@ func TestApprovalConcurrentClaimSingleWinner(t *testing.T) {
 			if idx%2 == 1 {
 				status = ApprovalRejected
 			}
-			wins[idx] = s.Claim("race", status)
+			wins[idx] = s.ClaimRevision("race", rev, status)
 		}(i)
 	}
 	close(start)

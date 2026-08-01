@@ -34,9 +34,10 @@ func (s *Server) browserInputGated(ctx context.Context, workerID string, bc *bro
 		return
 	}
 
-	// Parked browser: buffer further input until the approval resolves.
-	if s.deps.Hub.IsBrowserParked(bc) {
-		if s.deps.Hub.HoldBrowserInput(bc, data) {
+	// The parked check and buffer append are one hub transition. If approval
+	// concurrently unparked this browser, continue into normal fenced delivery.
+	if held, tooLong := s.deps.Hub.TryHoldBrowserInput(bc, data); held {
+		if tooLong {
 			s.writeFrame(ctx, bc, frames.MakeErrorFrame("Input too long."))
 		}
 		return

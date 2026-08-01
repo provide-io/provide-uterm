@@ -8,6 +8,8 @@ package server
 import (
 	"context"
 	"os"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -22,6 +24,11 @@ import (
 func resumeTestServer(t *testing.T) *testServer {
 	t.Helper()
 	store := hub.NewInMemoryResumeStore(nil, nil)
+	return resumeTestServerWithStore(t, store)
+}
+
+func resumeTestServerWithStore(t *testing.T, store hub.ResumeTokenStore) *testServer {
+	t.Helper()
 	return newTestServer(t, func(_ *serverconfig.UtermServerConfig, deps *Deps) {
 		deps.Hub = hub.NewTermHub(hub.TermHubConfig{
 			Clock:       deps.Clock,
@@ -30,6 +37,17 @@ func resumeTestServer(t *testing.T) *testServer {
 			ResumeStore: store,
 		})
 	})
+}
+
+type consumeObservedResumeStore struct {
+	hub.ResumeTokenStore
+	consumed chan struct{}
+	once     sync.Once
+}
+
+func (s *consumeObservedResumeStore) Consume(ctx context.Context, token string) (*hub.ResumeSession, error) {
+	s.once.Do(func() { close(s.consumed) })
+	return s.ResumeTokenStore.Consume(ctx, token)
 }
 
 // TestBrowserResumeHappyPath consumes a resume token minted at connect and
@@ -66,6 +84,31 @@ func TestBrowserResumeHappyPath(t *testing.T) {
 	bc.send(t, ctx, map[string]any{"type": "resume", "token": tok})
 	bc.send(t, ctx, map[string]any{"type": "ping"})
 	bc.waitFrame(t, "pong", 5*time.Second)
+}
+
+func TestBrowserResumeCurrentOwnerDoesNotConsumeToken(t *testing.T) {
+	ts := resumeTestServer(t)
+	ts.reg.add("resume-current", "admin1", "public")
+	ts.setupWorker(t, "resume-current")
+	base, closeFn := wsServer(t, ts)
+	defer closeFn()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	bc := dialBrowser(t, ctx, base+"/ws/browser/resume-current/term", "admin1", "admin")
+	defer func() { _ = bc.conn.Close(websocket.StatusNormalClosure, "") }()
+	hello := bc.waitFrame(t, "hello", 5*time.Second)
+	token, _ := hello["resume_token"].(string)
+	bc.send(t, ctx, map[string]any{"type": "hijack_request"})
+	bc.waitFrameWhere(t, "hijack_state", 5*time.Second, func(f map[string]any) bool { return f["owner"] == "me" })
+
+	bc.send(t, ctx, map[string]any{"type": "resume", "token": token})
+	bc.send(t, ctx, map[string]any{"type": "ping"})
+	bc.waitFrame(t, "pong", 5*time.Second)
+	stored, err := ts.hub.ResumeStore().Get(context.Background(), token)
+	if err != nil || stored == nil {
+		t.Fatalf("current-owner resume consumed token: session:%+v err:%v", stored, err)
+	}
 }
 
 func TestBrowserResumeRestoresDisconnectedCurrentOwner(t *testing.T) {
@@ -108,9 +151,16 @@ func TestBrowserResumeRestoresDisconnectedCurrentOwner(t *testing.T) {
 }
 
 func TestBrowserResumeImmediateReconnectWaitsForDisconnectBookkeeping(t *testing.T) {
-	ts := resumeTestServer(t)
+	store := &consumeObservedResumeStore{
+		ResumeTokenStore: hub.NewInMemoryResumeStore(nil, nil),
+		consumed:         make(chan struct{}),
+	}
+	ts := resumeTestServerWithStore(t, store)
 	ts.reg.add("resume-immediate", "admin1", "public")
-	ts.setupWorker(t, "resume-immediate")
+	worker := &reservationWorker{}
+	if _, err := ts.hub.RegisterWorker(context.Background(), "resume-immediate", worker); err != nil {
+		t.Fatal(err)
+	}
 	base, closeFn := wsServer(t, ts)
 	defer closeFn()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -121,12 +171,27 @@ func TestBrowserResumeImmediateReconnectWaitsForDisconnectBookkeeping(t *testing
 	token, _ := hello["resume_token"].(string)
 	original.send(t, ctx, map[string]any{"type": "hijack_request"})
 	original.waitFrameWhere(t, "hijack_state", 5*time.Second, func(f map[string]any) bool { return f["owner"] == "me" })
+	resumeEntered, releaseResume := worker.blockNextMatching(t, func(payload string) bool {
+		return strings.Contains(payload, `"action":"resume"`)
+	})
 	_ = original.conn.Close(websocket.StatusNormalClosure, "")
+	select {
+	case <-resumeEntered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("disconnect bookkeeping did not reach resume send")
+	}
 
 	reconnected := dialBrowser(t, ctx, base+"/ws/browser/resume-immediate/term", "admin1", "admin")
 	defer func() { _ = reconnected.conn.Close(websocket.StatusNormalClosure, "") }()
 	reconnected.waitFrame(t, "hello", 5*time.Second)
 	reconnected.send(t, ctx, map[string]any{"type": "resume", "token": token})
+	select {
+	case <-store.consumed:
+	case <-time.After(5 * time.Second):
+		releaseResume()
+		t.Fatal("immediate reconnect did not reach token consumption")
+	}
+	releaseResume()
 	resumed := reconnected.waitFrameWhere(t, "hello", 5*time.Second, func(f map[string]any) bool { return f["resumed"] == true })
 	if resumed["hijacked_by_me"] != true {
 		t.Fatalf("immediate resume did not restore ownership: %v", resumed)

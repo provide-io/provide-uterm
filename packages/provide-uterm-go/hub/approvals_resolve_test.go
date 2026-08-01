@@ -294,15 +294,18 @@ func TestApprovalCommandAndReplayCannotBeOvertakenByFreshInput(t *testing.T) {
 		t.Fatal("browser fence unavailable")
 	}
 	freshDone := make(chan bool, 1)
+	waitCtx, reachedWait := WithReservationWaitBarrier(bg())
 	go func() {
-		sent, _ := h.SendBrowserOwnedInputAtGeneration(bg(), "w", b, generation,
+		sent, _ := h.SendBrowserOwnedInputAtGeneration(waitCtx, "w", b, generation,
 			map[string]any{"type": "input", "data": "fresh\n"})
 		freshDone <- sent
 	}()
 	select {
-	case <-freshDone:
-		t.Fatal("fresh input overtook the approval batch")
-	case <-time.After(100 * time.Millisecond):
+	case <-reachedWait:
+	case sent := <-freshDone:
+		t.Fatalf("fresh input completed before reservation wait: %t", sent)
+	case <-time.After(5 * time.Second):
+		t.Fatal("fresh input did not reach approval batch reservation wait")
 	}
 	close(worker.release)
 	if err := <-resolveDone; err != nil {
@@ -314,6 +317,51 @@ func TestApprovalCommandAndReplayCannotBeOvertakenByFreshInput(t *testing.T) {
 	want := []string{"command\n", "replay\n", "fresh\n"}
 	if got := worker.decoded(t); !reflect.DeepEqual(got, want) {
 		t.Fatalf("delivery order = %q, want %q", got, want)
+	}
+}
+
+func TestResolveApprovalFinalCASDoesNotPublishForReusedID(t *testing.T) {
+	h, clock := newTestHub(t, nil)
+	worker := &orderedApprovalWorker{entered: make(chan struct{}), release: make(chan struct{})}
+	registerWorkerState(h, "w", worker)
+	b := newBrowserWS("b1")
+	registerActiveBrowser(t, h, "w", b, "admin")
+	requestID := "reused"
+	reqID, err := h.ParkBrowserForApproval(bg(), "w", b, "old-command\n", PolicyDecision{
+		Action: "hold", TimeoutS: 60, RequestID: &requestID,
+	})
+	if err != nil || reqID != requestID {
+		t.Fatalf("park = id:%q err:%v", reqID, err)
+	}
+	resolveDone := make(chan error, 1)
+	go func() {
+		_, err := h.ResolveApproval(bg(), requestID, true, nil, nil)
+		resolveDone <- err
+	}()
+	<-worker.entered
+	clock.SetWall(5000 + 60 + approvalPruneTTL + 1)
+	h.Approvals.CleanupExpired()
+	replacement := pendingReq(requestID, clock.Wall()+60)
+	replacement.WorkerID = "replacement-worker"
+	replacement.Command = "replacement"
+	if !h.Approvals.Add(replacement) {
+		t.Fatal("replacement approval was not added after prune")
+	}
+	close(worker.release)
+	if err := <-resolveDone; err != nil {
+		t.Fatal(err)
+	}
+	if current := h.Approvals.Get(requestID); current == nil || current.Status != ApprovalPending || current.Command != "replacement" {
+		t.Fatalf("replacement record changed: %+v", current)
+	}
+	for _, payload := range b.payloads() {
+		if !strings.HasPrefix(payload, controlPrefix) {
+			continue
+		}
+		frame := decodeOneControl(t, payload)
+		if frame["type"] == "approval_resolved" && frame["request_id"] == requestID {
+			t.Fatalf("stale resolver published terminal outcome for reused id: %v", frame)
+		}
 	}
 }
 
@@ -368,6 +416,23 @@ func TestHoldBrowserInputTooLong(t *testing.T) {
 	// further 10 bytes (total 100) still fits.
 	if h.HoldBrowserInput(b, strings.Repeat("c", 10)) {
 		t.Fatal("buffer should still hold 90 bytes; a further 10 (total 100) fits")
+	}
+}
+
+func TestTryHoldBrowserInputAtomicallyDistinguishesUnparked(t *testing.T) {
+	h, _ := newTestHub(t, nil)
+	b := newBrowserWS("b1")
+	if held, tooLong := h.TryHoldBrowserInput(b, "fresh"); held || tooLong {
+		t.Fatalf("unparked hold = held:%t tooLong:%t", held, tooLong)
+	}
+	h.lock.Lock()
+	h.pausedBrowsers[b] = true
+	h.lock.Unlock()
+	if held, tooLong := h.TryHoldBrowserInput(b, "buffered"); !held || tooLong {
+		t.Fatalf("parked hold = held:%t tooLong:%t", held, tooLong)
+	}
+	if got := h.releaseParkedBrowser(&ApprovalRequest{OriginBrowser: b}, true); got != "buffered" {
+		t.Fatalf("atomic hold buffer = %q", got)
 	}
 }
 

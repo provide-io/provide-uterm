@@ -126,43 +126,56 @@ func (c *ConnectionManager) SetWorkerTunnelFlag(_ context.Context, workerID stri
 // SetWorkerHello applies a worker_hello: sets input_mode and records the
 // protocol version. Port of set_worker_hello. Returns false when the worker is
 // unknown or when switching to "open" while a hijack is active.
-func (c *ConnectionManager) SetWorkerHello(_ context.Context, workerID, mode string, protocolVersion *int) (bool, error) {
+func (c *ConnectionManager) SetWorkerHello(ctx context.Context, workerID, mode string, protocolVersion *int) (bool, error) {
 	hub := c.hub
+	opCtx, cancel := boundedOperationContext(ctx)
+	defer cancel()
 	if protocolVersion != nil {
 		hub.logger.Info("worker_hello_protocol", "worker_id", workerID, "version", *protocolVersion)
 		if *protocolVersion < 1 {
 			hub.logger.Warn("worker_hello_legacy_protocol", "worker_id", workerID, "version", *protocolVersion)
 		}
 	}
-	hub.lock.Lock()
-	defer hub.lock.Unlock()
-	st := hub.registry.Get(workerID)
-	if st == nil {
-		return false, nil
+	for {
+		hub.lock.Lock()
+		st := hub.registry.Get(workerID)
+		if st == nil {
+			hub.lock.Unlock()
+			return false, nil
+		}
+		if done := statePendingDone(st, true); done != nil {
+			hub.lock.Unlock()
+			if err := waitInputReservation(opCtx, done); err != nil {
+				return false, err
+			}
+			continue
+		}
+		// A hello may raise the mode, never lower it. Two reasons to refuse, both
+		// needed: a lease is actually held, or somebody has explicitly decided the
+		// mode through an authenticated route. The second is the window the lease
+		// check alone left open — an operator sets hijack and then acquires, and a
+		// hello landing between those two steps reverted the mode, so the acquire was
+		// refused for being in open mode and the operator's only clue was a failure
+		// that looked like their own mistake.
+		//
+		// Keyed on whether the hello would actually lower the mode, not on its value:
+		// a hello agreeing with a decided "open" is not a downgrade. And the decision
+		// flag is what makes this expressible at all, since InputMode defaults to
+		// hijack and refusing every lowering would refuse every worker announcing
+		// open.
+		wouldLower := mode == InputModeOpen && st.InputMode == InputModeHijack
+		if wouldLower && (st.InputModeSetByOperator || hub.State.IsHijacked(st) || st.HijackPending != nil) {
+			hub.logger.Warn("worker_hello_mode_blocked", "worker_id", workerID)
+			hub.lock.Unlock()
+			return false, nil
+		}
+		st.InputMode = mode
+		if protocolVersion != nil {
+			st.ProtocolVersion = protocolVersion
+		}
+		hub.lock.Unlock()
+		return true, nil
 	}
-	// A hello may raise the mode, never lower it. Two reasons to refuse, both
-	// needed: a lease is actually held, or somebody has explicitly decided the
-	// mode through an authenticated route. The second is the window the lease
-	// check alone left open — an operator sets hijack and then acquires, and a
-	// hello landing between those two steps reverted the mode, so the acquire was
-	// refused for being in open mode and the operator's only clue was a failure
-	// that looked like their own mistake.
-	//
-	// Keyed on whether the hello would actually lower the mode, not on its value:
-	// a hello agreeing with a decided "open" is not a downgrade. And the decision
-	// flag is what makes this expressible at all, since InputMode defaults to
-	// hijack and refusing every lowering would refuse every worker announcing
-	// open.
-	wouldLower := mode == InputModeOpen && st.InputMode == InputModeHijack
-	if wouldLower && (st.InputModeSetByOperator || hub.State.IsHijacked(st)) {
-		hub.logger.Warn("worker_hello_mode_blocked", "worker_id", workerID)
-		return false, nil
-	}
-	st.InputMode = mode
-	if protocolVersion != nil {
-		st.ProtocolVersion = protocolVersion
-	}
-	return true, nil
 }
 
 // UpdateLastSnapshot stores snapshot as the most recent snapshot for workerID.

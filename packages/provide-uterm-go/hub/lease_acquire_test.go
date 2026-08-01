@@ -290,6 +290,36 @@ func TestTryAcquireRestCancellationRollback(t *testing.T) {
 	mustTrue(t, st.HijackSession == nil, "no session")
 }
 
+func TestTryAcquireRestPauseDeliveredFinalizeFailureRollsBackResume(t *testing.T) {
+	f := makeManager(t, 45)
+	st := makeState()
+	var sends int
+	var payloads []string
+	ctx, cancel := context.WithCancel(context.Background())
+	worker := &recordingWorkerWS{onSend: func(_ context.Context, payload string) error {
+		sends++
+		payloads = append(payloads, payload)
+		if sends == 1 {
+			cancel()
+		}
+		return nil
+	}}
+	st.WorkerWS = worker
+	f.registry.Put("w1", st)
+
+	ok, reason, err := f.mgr.TryAcquireRest(ctx, "w1", "owner", 60, "h1", f.now())
+	if !errors.Is(err, context.Canceled) || ok || reason != "" {
+		t.Fatalf("acquire = ok:%t reason:%q err:%v", ok, reason, err)
+	}
+	if got := len(payloads); got != 2 {
+		t.Fatalf("pause-delivered rollback sends = %d, want pause + resume", got)
+	}
+	resume := decodeOneControl(t, payloads[1])
+	if resume["action"] != "resume" || resume["hijack_id"] != "h1" {
+		t.Fatalf("rollback frame = %v", resume)
+	}
+}
+
 func TestExtendLease(t *testing.T) {
 	f := makeManager(t, 45)
 	st := makeState()
