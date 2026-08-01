@@ -62,7 +62,21 @@ class InMemoryApprovalStore:
         self._requests: dict[str, ApprovalRequest] = {}
         self._lock = threading.Lock()
         self._next_revision = 0
+        self._expiration_listeners: list[Callable[[ApprovalRequest], Any]] = []
+        self._expired_notifications: dict[tuple[str, int], ApprovalRequest] = {}
+        # Backwards-compatible single-listener surface. Production subscribers
+        # use subscribe_expired(), so assigning this hook cannot overwrite them.
         self.on_expired: Callable[[str], Any] | None = None
+
+    def subscribe_expired(self, listener: Callable[[ApprovalRequest], Any]) -> None:
+        """Add an expiration listener without replacing existing subscribers."""
+        with self._lock:
+            self._expiration_listeners.append(listener)
+
+    def _expire_locked(self, req: ApprovalRequest) -> None:
+        req.status = ApprovalStatus.TIMEOUT
+        snapshot = replace(req)
+        self._expired_notifications[(snapshot.id, snapshot.revision)] = snapshot
 
     def add(self, request: ApprovalRequest) -> bool:
         with self._lock:
@@ -92,6 +106,9 @@ class InMemoryApprovalStore:
             req = self._requests.get(request_id)
             if req is None or req.status != ApprovalStatus.PENDING or req.revision != expected_revision:
                 return False
+            if req.expires_at <= time.time():
+                self._expire_locked(req)
+                return False
             req.status = status
             return True
 
@@ -107,6 +124,9 @@ class InMemoryApprovalStore:
             req = self._requests.get(request_id)
             if req is None or req.status != ApprovalStatus.PENDING or req.revision != expected_revision:
                 return False
+            if req.expires_at <= time.time():
+                self._expire_locked(req)
+                return False
             req.status = status
             return True
 
@@ -117,6 +137,9 @@ class InMemoryApprovalStore:
         with self._lock:
             req = self._requests.get(request_id)
             if req is None or req.status != ApprovalStatus.PENDING or req.revision != expected_revision:
+                return None
+            if req.expires_at <= time.time():
+                self._expire_locked(req)
                 return None
             req.status = status
             return replace(req)
@@ -141,18 +164,29 @@ class InMemoryApprovalStore:
         # Hold the lock only while snapshotting + mutating dict state. The
         # ``on_expired`` callback may be async and is invoked outside the lock
         # to avoid blocking other threads on user code.
-        expired_ids: list[str] = []
         with self._lock:
             for req_id, req in list(self._requests.items()):
                 if req.status == ApprovalStatus.PENDING and req.expires_at < now:
-                    req.status = ApprovalStatus.TIMEOUT
-                    expired_ids.append(req.id)
+                    self._expire_locked(req)
                 elif req.status != ApprovalStatus.PENDING and (req.expires_at + PRUNE_TTL) < now:
                     del self._requests[req_id]
 
-        if self.on_expired:
-            for req_id in expired_ids:
-                # Notify subscribers (e.g. FanOutController) to prune state
-                res = self.on_expired(req_id)
+        await self.notify_expired()
+
+    async def notify_expired(self) -> None:
+        """Deliver queued expiration snapshots exactly once outside the store lock."""
+        with self._lock:
+            expired = list(self._expired_notifications.values())
+            self._expired_notifications.clear()
+            listeners = list(self._expiration_listeners)
+            legacy_listener = self.on_expired
+
+        for request in expired:
+            for listener in listeners:
+                res = listener(replace(request))
+                if asyncio.iscoroutine(res):
+                    await res
+            if legacy_listener is not None:
+                res = legacy_listener(request.id)
                 if asyncio.iscoroutine(res):
                     await res

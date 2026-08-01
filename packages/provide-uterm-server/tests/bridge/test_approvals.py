@@ -122,6 +122,62 @@ def test_claim_request_returns_a_snapshot() -> None:
     assert (stored.command, stored.status) == ("safe", ApprovalStatus.REJECTED)
 
 
+@pytest.mark.asyncio
+async def test_expired_request_is_timed_out_atomically_instead_of_claimed() -> None:
+    store = InMemoryApprovalStore()
+    now = time.time()
+    assert store.add(ApprovalRequest("expired", "w1", "u1", "unsafe", ApprovalStatus.PENDING, now - 2, now - 1))
+    pending = store.get("expired")
+    assert pending is not None
+    expired: list[ApprovalRequest] = []
+    store.subscribe_expired(expired.append)
+
+    claimed = store.claim_request("expired", ApprovalStatus.RESOLVING, expected_revision=pending.revision)
+    await store.notify_expired()
+
+    assert claimed is None
+    stored = store.get("expired")
+    assert stored is not None
+    assert stored.status == ApprovalStatus.TIMEOUT
+    assert expired == [stored]
+
+
+@pytest.mark.asyncio
+async def test_expiration_subscribers_are_composed_and_receive_snapshots() -> None:
+    store = InMemoryApprovalStore()
+    now = time.time()
+    assert store.add(ApprovalRequest("expired", "w1", "u1", "safe", ApprovalStatus.PENDING, now - 2, now - 1))
+    first: list[ApprovalRequest] = []
+    second: list[ApprovalRequest] = []
+    store.subscribe_expired(first.append)
+    store.subscribe_expired(second.append)
+
+    await store.cleanup_expired()
+
+    assert len(first) == len(second) == 1
+    assert first[0] == second[0]
+    first[0].command = "mutated snapshot"
+    stored = store.get("expired")
+    assert stored is not None
+    assert stored.command == "safe"
+
+
+@pytest.mark.parametrize("transition", ["resolve", "claim"])
+def test_all_direct_transitions_fail_closed_after_expiration(transition: str) -> None:
+    store = InMemoryApprovalStore()
+    now = time.time()
+    assert store.add(ApprovalRequest("expired", "w1", "u1", "unsafe", ApprovalStatus.PENDING, now - 2, now - 1))
+    pending = store.get("expired")
+    assert pending is not None
+
+    changed = getattr(store, transition)("expired", ApprovalStatus.APPROVED, expected_revision=pending.revision)
+
+    assert changed is False
+    stored = store.get("expired")
+    assert stored is not None
+    assert stored.status == ApprovalStatus.TIMEOUT
+
+
 def test_store_resolve_success():
     store = InMemoryApprovalStore()
     now = time.time()

@@ -5,6 +5,7 @@
 # Mutation-enforced at killed==100 ([tool.mutmut]); bound suite: tests/server/test_routes_mutation_killing.py (router-endpoint extraction, mocked Request).
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING, Any, cast
 
 from fastapi import APIRouter, HTTPException, Request
@@ -65,6 +66,8 @@ def create_approvals_router() -> APIRouter:
             request_id, ApprovalStatus.RESOLVING, expected_revision=approval_req.revision
         )
         if claimed is None:
+            if approval_req.expires_at <= time.time():
+                await hub.approval_store.notify_expired()
             raise HTTPException(status_code=400, detail="Approval request is not pending")
         try:
             delivered, reason = await hub.resolve_approval(
@@ -81,7 +84,10 @@ def create_approvals_router() -> APIRouter:
         hub.approval_store.finalize(request_id, final_status, expected_revision=claimed.revision)
         if not delivered:
             raise HTTPException(status_code=409, detail=f"Approval delivery refused: {reason or 'delivery_failed'}")
-        return {"status": "approved"}
+        response = {"status": "approved"}
+        if reason is not None:
+            response["detail"] = reason
+        return response
 
     @router.post("/{request_id}/reject")
     async def reject_command(request_id: str, request: Request, reason: str | None = None) -> dict[str, str]:
@@ -95,6 +101,8 @@ def create_approvals_router() -> APIRouter:
             request_id, ApprovalStatus.REJECTED, expected_revision=approval_req.revision
         )
         if claimed is None:
+            if approval_req.expires_at <= time.time():
+                await hub.approval_store.notify_expired()
             raise HTTPException(status_code=400, detail="Approval request is not pending")
         await hub.resolve_approval(
             claimed.worker_id,

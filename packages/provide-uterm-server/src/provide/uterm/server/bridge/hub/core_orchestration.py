@@ -114,8 +114,20 @@ async def resolve_approval(
     if getattr(req, "is_fanout", False):
         if decision.action == "allow":
             fo_ctrl = getattr(hub, "fan_out_controller", None)
-            if fo_ctrl:
-                await fo_ctrl.release_approved_command(request_id)
+            if fo_ctrl is None:
+                return False, "fanout_controller_unavailable"
+            result = await fo_ctrl.release_approved_command(request_id)
+            if result is None:
+                return False, "fanout_approval_not_pending"
+            if result.error:
+                return False, f"fanout_error:{result.error}"
+            if result.failed_sessions:
+                failed = ",".join(result.failed_sessions)
+                if any(item.ok for item in result.results):
+                    return True, f"fanout_partial_failure:{failed}"
+                return False, f"fanout_delivery_failed:{failed}"
+            if not any(item.ok for item in result.results):
+                return False, "fanout_no_targets"
         elif decision.action == "deny":
             logger.info(
                 "fanout_approval_rejected request_id=%s group_id=%s",
@@ -124,7 +136,7 @@ async def resolve_approval(
             )
             fo_ctrl = getattr(hub, "fan_out_controller", None)
             if fo_ctrl:
-                await asyncio.to_thread(fo_ctrl._on_approval_expired, request_id)
+                await asyncio.to_thread(fo_ctrl._on_approval_expired, req)
         return True, None
 
     st = await hub._get(worker_id)
@@ -243,9 +255,51 @@ async def resolve_approval(
     return delivered, refusal_reason
 
 
+async def handle_expired_approval(hub: TermHub, request: Any) -> None:
+    """Settle browser state and publish the terminal outcome for one timeout."""
+    current = hub.approval_store.get(request.id)
+    if current is None or current.revision != request.revision or current.status.value != "timeout":
+        return
+
+    origin_browser = getattr(request, "origin_browser", None)
+    if origin_browser is not None:
+        # Settle local input state before the first await, so a timeout callback
+        # cannot unpark a later approval while browser tasks are scheduled.
+        hub._paused_browsers.discard(origin_browser)
+        hub._hold_buffers.pop(origin_browser, None)
+
+    async with hub._lock:
+        state = hub.registry.get(request.worker_id)
+        browsers = [] if state is None else list(state.browsers)
+
+    dead: set[WebSocket] = set()
+    frame = _encode_browser_frame(
+        {
+            "type": "approval_resolved",
+            "outcome": "timeout",
+            "request_id": request.id,
+            "detail": "expired",
+        }
+    )
+    for ws in browsers:
+        try:
+            await ws.send_text(frame)
+        except Exception as exc:
+            logger.debug("approval_timeout_send_failed worker_id=%s: %s", request.worker_id, exc)
+            dead.add(ws)
+    if dead:
+        await hub.remove_dead_browsers(request.worker_id, dead)
+    await hub.append_event(
+        request.worker_id,
+        "approval_resolved",
+        {"request_id": request.id, "outcome": "timeout", "detail": "expired"},
+    )
+
+
 __all__ = [
     "create_router",
     "emit_telemetry",
+    "handle_expired_approval",
     "resolve_approval",
     "set_worker_hello_mode",
 ]

@@ -121,6 +121,7 @@ def test_approve_remains_approved_when_only_buffered_replay_fails(client):
     response = client.post(f"/api/approvals/{req_id}/approve", headers=ADMIN_H)
 
     assert response.status_code == 200
+    assert response.json() == {"status": "approved", "detail": "replay_failed"}
     assert hub.approval_store.get(req_id).status == ApprovalStatus.APPROVED
 
 

@@ -58,11 +58,11 @@ class FanOutController:
         # Subscribe to approval expiration to prune pending state
         hub_approvals = getattr(self._hub, "approval_store", None)
         if hub_approvals:
-            hub_approvals.on_expired = self._on_approval_expired
+            hub_approvals.subscribe_expired(self._on_approval_expired)
 
-    def _on_approval_expired(self, request_id: str) -> None:
+    def _on_approval_expired(self, request: Any) -> None:
         """Prune local state when a fan-out approval times out in the Hub."""
-        self._pending_approvals.pop(request_id, None)
+        self._pending_approvals.pop(request.id, None)
 
     def _get_fanout_policy_gate(self) -> FanOutPolicyGate:
         if self._fanout_policy_gate is not None:

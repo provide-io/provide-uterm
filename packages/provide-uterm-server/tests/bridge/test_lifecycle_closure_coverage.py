@@ -346,6 +346,127 @@ async def test_approval_replay_policy_block_is_reported_after_command_success() 
     assert owner not in hub._paused_browsers
 
 
+async def test_expired_browser_approval_unparks_drops_buffer_and_notifies() -> None:
+    hub, owner, _request = await _approval_hub()
+    dead = AsyncMock()
+    await hub.register_browser("approval", dead, "viewer", defer_broadcast=True)
+    dead.send_text.side_effect = RuntimeError("disconnected")
+    current = hub.approval_store.get("approved")
+    assert current is not None
+    with hub.approval_store._lock:
+        hub.approval_store._requests["approved"].expires_at = time.time() - 1
+    hub._hold_buffers[owner] = "must-not-run"
+
+    await hub.approval_store.cleanup_expired()
+
+    expired = hub.approval_store.get("approved")
+    assert expired is not None
+    assert expired.status == ApprovalStatus.TIMEOUT
+    assert owner not in hub._paused_browsers
+    assert owner not in hub._hold_buffers
+    frames = [str(call.args[0]) for call in owner.send_text.await_args_list]
+    assert any('"outcome":"timeout"' in frame and '"request_id":"approved"' in frame for frame in frames)
+    events = list(hub.registry._workers["approval"].events)
+    assert any(
+        event["type"] == "approval_resolved"
+        and event["data"] == {"request_id": "approved", "outcome": "timeout", "detail": "expired"}
+        for event in events
+    )
+    assert dead not in hub.registry._workers["approval"].browsers
+
+
+async def test_stale_expiration_snapshot_cannot_settle_current_state() -> None:
+    hub = TermHub()
+    request = ApprovalRequest(
+        "pending", "worker", "submitter", "command", ApprovalStatus.PENDING, time.time(), time.time() + 60
+    )
+    assert hub.approval_store.add(request)
+    stored = hub.approval_store.get("pending")
+    assert stored is not None
+
+    await hub._handle_expired_approval(stored)
+
+    assert "worker" not in hub.registry._workers
+
+
+@pytest.mark.parametrize(
+    ("controller", "expected"),
+    [
+        (None, (False, "fanout_controller_unavailable")),
+        (AsyncMock(return_value=None), (False, "fanout_approval_not_pending")),
+    ],
+)
+async def test_fanout_approval_refuses_missing_release(
+    controller: AsyncMock | None, expected: tuple[bool, str]
+) -> None:
+    hub = TermHub()
+    if controller is not None:
+        hub.fan_out_controller = type("Controller", (), {"release_approved_command": controller})()
+    request = ApprovalRequest(
+        "fanout",
+        "group:g",
+        "submitter",
+        "command",
+        ApprovalStatus.PENDING,
+        time.time(),
+        time.time() + 60,
+        group_id="g",
+        is_fanout=True,
+    )
+
+    assert (
+        await hub.resolve_approval(
+            request.worker_id,
+            request.id,
+            PolicyDecision(action="allow"),
+            request.command,
+            approval_request=request,
+        )
+        == expected
+    )
+
+
+async def test_fanout_approval_maps_error_all_failed_partial_and_success_truthfully() -> None:
+    from provide.uterm.server.bridge.fanout._models import FanOutResult, SessionFanOutResult
+
+    hub = TermHub()
+    request = ApprovalRequest(
+        "fanout",
+        "group:g",
+        "submitter",
+        "command",
+        ApprovalStatus.PENDING,
+        time.time(),
+        time.time() + 60,
+        group_id="g",
+        is_fanout=True,
+    )
+    success = SessionFanOutResult("ok", True, "", 1, False)
+    failure = SessionFanOutResult("failed", False, None, 1, False)
+    release = AsyncMock()
+    hub.fan_out_controller = type("Controller", (), {"release_approved_command": release})()
+
+    release.return_value = FanOutResult("g", "s", "command", time.time(), [], [], [], error="authorization revoked")
+    assert await hub.resolve_approval(
+        request.worker_id, request.id, PolicyDecision(action="allow"), request.command, approval_request=request
+    ) == (False, "fanout_error:authorization revoked")
+
+    release.return_value = FanOutResult("g", "s", "command", time.time(), [failure], [], ["failed"])
+    assert await hub.resolve_approval(
+        request.worker_id, request.id, PolicyDecision(action="allow"), request.command, approval_request=request
+    ) == (False, "fanout_delivery_failed:failed")
+
+    release.return_value = FanOutResult("g", "s", "command", time.time(), [success, failure], [], ["failed"])
+    assert await hub.resolve_approval(
+        request.worker_id, request.id, PolicyDecision(action="allow"), request.command, approval_request=request
+    ) == (True, "fanout_partial_failure:failed")
+
+    release.return_value = FanOutResult("g", "s", "command", time.time(), [success], [], [])
+    assert await hub.resolve_approval(
+        request.worker_id, request.id, PolicyDecision(action="allow"), request.command, approval_request=request
+    ) == (True, None)
+
+
 def test_approval_store_rejects_invalid_final_status() -> None:
     store = InMemoryApprovalStore()
     with pytest.raises(ValueError, match="finalize"):

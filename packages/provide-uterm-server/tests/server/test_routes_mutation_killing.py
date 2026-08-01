@@ -2371,6 +2371,7 @@ class TestApprovalsRoutes:
             store.pending = MagicMock(
                 return_value=[row for row in store._requests.values() if row.status.value == "pending"]
             )
+            store.notify_expired = AsyncMock()
             hub = MagicMock(name="hub")
             hub.approval_store = store
             hub.resolve_approval = AsyncMock()
@@ -2556,6 +2557,7 @@ class TestApprovalsRoutes:
         store = MagicMock()
         store.get = MagicMock(return_value=self._approval(req_id="r-5"))
         store.claim_request = MagicMock(return_value=None)
+        store.notify_expired = AsyncMock()
         hub = MagicMock()
         hub.approval_store = store
         hub.resolve_approval = AsyncMock()
@@ -2567,6 +2569,7 @@ class TestApprovalsRoutes:
             await approve("r-5", req)
         assert exc.value.status_code == 400
         assert exc.value.detail == "Approval request is not pending"
+        store.notify_expired.assert_awaited_once()
         hub.resolve_approval.assert_not_awaited()
 
     async def test_approve_requires_admin_403_short_circuits(self) -> None:
@@ -2681,6 +2684,7 @@ class TestApprovalsRoutes:
         store = MagicMock()
         store.get = MagicMock(return_value=self._approval(req_id="r-8"))
         store.claim_request = MagicMock(return_value=None)
+        store.notify_expired = AsyncMock()
         hub = MagicMock()
         hub.approval_store = store
         hub.resolve_approval = AsyncMock()
@@ -2692,6 +2696,7 @@ class TestApprovalsRoutes:
             await reject("r-8", req)
         assert exc.value.status_code == 400
         assert exc.value.detail == "Approval request is not pending"
+        store.notify_expired.assert_awaited_once()
         hub.resolve_approval.assert_not_awaited()
 
     async def test_reject_requires_principal_401_short_circuits(self) -> None:
