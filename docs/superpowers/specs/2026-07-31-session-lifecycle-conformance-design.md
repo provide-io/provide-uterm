@@ -31,14 +31,19 @@ Governance records the real configured behavior: Python exercises its signed
 webhook path, while Go and C# prove their documented fail-closed public-route
 response where the configured governed fan-out surface is unsupported.
 Cloudflare and TypeScript are declared per actual mounted surface rather than
-being inferred from package-level components.
+being inferred from package-level components. Every non-`unserved` Cloudflare
+cell is executed by the edge-native adapter; unsupported cells demonstrate an
+explicit refusal rather than a declaration-only result.
 
 ## Native adapters
 
 `scripts/run_session_lifecycle_security_scenarios.py` owns contract loading,
 schema/status validation, process isolation, timeouts, normalized observation
 comparison, and the final coverage/cardinality check. It launches native
-adapter entry points for Python, Go, and C#.
+adapter entry points for Python, Go, C#, and Cloudflare. The Cloudflare adapter
+starts the real local edge runtime with authenticated browser and worker tokens;
+a missing runtime, missing credentials, skipped test, or missing observation
+file is a gate failure.
 
 An adapter may reuse an existing integration fixture, but its scenario path
 must:
@@ -88,5 +93,7 @@ replay refusal.
 The central runner and focused conformance tests run in CI alongside the
 existing fan-out semantic runner. The protocol/security matrices identify
 served, unsupported, and unserved cells using the same vocabulary as the
-contract. `ARCH-001` closes only after the native adapters, shared runner, full
-relevant language suites, and an independent review pass.
+contract. CI provisions the local Cloudflare runtime and authentication inputs
+needed by its adapter, and treats an adapter skip as failure. `ARCH-001` closes
+only after the native adapters, shared runner, full relevant language suites,
+and an independent review pass.

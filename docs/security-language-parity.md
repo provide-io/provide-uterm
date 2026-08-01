@@ -64,6 +64,32 @@ Policy, authorization-mutation, capture, storage, and deadline behavior is
 defined by `spec/fanout_security_scenarios.json` and executed across the native
 adapters by `scripts/run_fanout_security_scenarios.py`.
 
+## Session lifecycle security
+
+The executable lifecycle contract distinguishes a served route from an
+authenticated explicit refusal and from a surface that is not mounted at all.
+`501` below means the adapter must observe the documented refusal through a
+public authenticated HTTP route; it is not a synthetic skipped result.
+
+| Scenario | Python | Go | C# | Cloudflare | TypeScript |
+|---|:---:|:---:|:---:|:---:|:---:|
+| Fragmented browser WebSocket message | served | served | served | served | unserved |
+| Fragmented worker WebSocket message | served | served | served | served | unserved |
+| Fragmented tunnel WebSocket message | served | served | served | unserved | unserved |
+| Browser quota rejection, rollback, recovery | served | served | served | 501 unsupported | unserved |
+| Signed governance allow | served | 501 unsupported | 501 unsupported | 501 unsupported | unserved |
+| Signed governance deny | served | 501 unsupported | 501 unsupported | 501 unsupported | unserved |
+| Signed governance unavailable, fail closed | served | 501 unsupported | 501 unsupported | 501 unsupported | unserved |
+| Resume current owner and reject replay | served | served | served | served | unserved |
+| Reject stale owner after competing acquisition | served | served | served | served | unserved |
+| Reject non-owner browser step | served | served | served | served | unserved |
+
+The source of truth is `spec/session_lifecycle_security_scenarios.json`, executed
+by `scripts/run_session_lifecycle_security_scenarios.py`. Served cells must emit
+normalized observations from native handlers. TypeScript remains a component
+library with no advertised server. Cloudflare has no tunnel WebSocket route and
+does not silently simulate per-principal quotas or signed governance.
+
 ## Intentional de-scopes (not bugs)
 
 1. **CF Access email header on Go/C#** — Do **not** trust `Cf-Access-Authenticated-User-Email`. That header is client-forgeable without Access in front. Correct pattern: accept only cryptographically verified JWT material (`Authorization: Bearer`, `CF-Access-JWT-Assertion`, or `CF_Authorization` cookie). Regression: spoofed Access email must not change `subject_id`.

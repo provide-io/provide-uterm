@@ -6,7 +6,7 @@ Resolve every actionable finding from the 2026-07-31 repository-wide uterm
 architecture and implementation review while preserving protocol compatibility,
 making security behavior explicit, and leaving a durable progress record.
 
-The work is split into five independently verifiable tracks. A single umbrella
+The work is split into eight independently verifiable tracks. A single umbrella
 tracker records status and evidence, while each track receives its own detailed
 implementation plan so changes remain reviewable and bisectable.
 
@@ -24,6 +24,9 @@ The implementation tracks are:
 3. TypeScript build, coverage, runtime maturity, and CI.
 4. Native capture backpressure and frame integrity.
 5. Python malformed-input robustness and test hygiene.
+6. Cross-language authorize-to-deliver lifecycle fencing and approval truthfulness.
+7. Edge-native Cloudflare capability evidence and fail-closed CI provisioning.
+8. Package-by-package architecture report, tracker reconciliation, and release review.
 
 ## Fan-out security contract
 
@@ -157,7 +160,9 @@ spec-compliance and code-quality review before its tracker entries are checked.
 Final verification includes Python package suites, Go test/vet/format checks, the
 repository-prescribed batched C# suite, TypeScript build/typecheck/lint/coverage,
 both browser workspaces, native builds/self-tests, static conformance, and the full
-live client/server matrix.
+live client/server matrix. The shared fan-out and session-lifecycle semantic
+runners are mandatory gates; a missing native adapter, skipped edge runtime, or
+missing observation is a failure.
 
 ## Compatibility and rollout
 

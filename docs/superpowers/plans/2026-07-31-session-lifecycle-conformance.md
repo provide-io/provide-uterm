@@ -42,7 +42,17 @@ servers and drive their public HTTP/WebSocket routes.
 - Emit normalized observations; run focused, full serial, and Release build
   gates.
 
-## Task 5: CI, docs, and closure
+## Task 5: Cloudflare edge-native adapter (TDD)
+
+- Start the real local Worker/Durable Object runtime and provision browser and
+  worker authentication. Missing runtime/JWT setup and pytest skips are failures.
+- Execute every non-unserved edge cell through public routes: fragmentation,
+  current/stale resume ownership, and non-owner step refusal.
+- Emit exact observations for explicitly unsupported quota/governance behavior;
+  keep the absent tunnel route `unserved` and unlaunched.
+- Run focused edge tests and the central Cloudflare backend runner.
+
+## Task 6: CI, docs, and closure
 
 - Run the shared lifecycle runner and its tests in CI.
 - Update protocol/security matrices with the exact status vocabulary.
