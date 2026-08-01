@@ -194,5 +194,5 @@ async def _handle_control(
     elif msg_type == "snapshot":
         screen = str(msg.get("screen", ""))
         snapshot: dict[str, Any] = {"type": "snapshot", "screen": screen, "ts": time.time()}
-        await hub.update_last_snapshot(worker_id, snapshot)
-        await hub.broadcast(worker_id, snapshot)
+        committed = await hub.commit_snapshot_event(worker_id, snapshot)
+        await hub.broadcast(worker_id, committed)
