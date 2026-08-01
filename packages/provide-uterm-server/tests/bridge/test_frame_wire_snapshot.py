@@ -116,8 +116,10 @@ class TestNullablePreservingFrames:
             has_trailing_space=True,
             prompt_detected={"name": "bash", "confidence": 0.9},
             ts=1.0,
+            event_seq=7,
         )
         assert out["prompt_detected"] == {"name": "bash", "confidence": 0.9}
+        assert out["event_seq"] == 7
 
     def test_analysis_frame_keeps_null_raw(self) -> None:
         out = make_analysis_frame(formatted="ok", raw=None, ts=1.0)

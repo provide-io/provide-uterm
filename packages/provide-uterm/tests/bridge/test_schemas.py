@@ -89,8 +89,13 @@ class TestRoundTrip:
                 "has_trailing_space": True,
                 "prompt_detected": None,
                 "ts": 1.0,
+                "event_seq": 7,
             },
         )
+
+    def test_snapshot_event_sequence_is_optional(self) -> None:
+        snapshot = SnapshotFrame.model_validate({"type": "snapshot", "screen": "$ "})
+        assert snapshot.event_seq is None
 
     def test_control(self) -> None:
         _roundtrip(

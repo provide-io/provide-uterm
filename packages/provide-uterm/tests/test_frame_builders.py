@@ -45,10 +45,12 @@ def test_make_snapshot_frame_validates_against_schema() -> None:
         has_trailing_space=False,
         prompt_detected=None,
         ts=123.0,
+        event_seq=7,
     )
 
     schemas.SnapshotFrame.model_validate(frame)
     assert frame["prompt_detected"] is None
+    assert frame["event_seq"] == 7
 
 
 def test_invalid_session_token_still_raises() -> None:

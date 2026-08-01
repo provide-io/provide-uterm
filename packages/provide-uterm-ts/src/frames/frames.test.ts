@@ -135,6 +135,10 @@ describe("makeSnapshotFrame", () => {
     const detected = { kind: "command", confidence: 0.75 };
     expect(makeSnapshotFrame({ ...base, promptDetected: detected })).toHaveProperty("prompt_detected", detected);
   });
+
+  it("carries an optional committed event sequence", () => {
+    expect(makeSnapshotFrame({ ...base, eventSeq: 7 })).toHaveProperty("event_seq", 7);
+  });
 });
 
 describe("makeAnalysisFrame", () => {

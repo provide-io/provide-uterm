@@ -89,6 +89,8 @@ export interface SnapshotFrameArgs {
   ts: number;
   /** Kept on the wire even when null, for the same reason. */
   rawTail?: string | null;
+  /** Manager-assigned causal sequence; absent on worker-originated snapshots. */
+  eventSeq?: number;
 }
 
 /** Build a `snapshot` frame. */
@@ -105,6 +107,7 @@ export function makeSnapshotFrame(args: SnapshotFrameArgs): SnapshotFrame {
     prompt_detected: args.promptDetected,
     raw_tail: args.rawTail ?? null,
     ts: args.ts,
+    ...(args.eventSeq === undefined ? {} : { event_seq: args.eventSeq }),
   } as SnapshotFrame;
 }
 

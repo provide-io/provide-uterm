@@ -51,6 +51,7 @@ export type Cursor = {
   [k: string]: number;
 } | null;
 export type CursorAtEnd = boolean | null;
+export type EventSeq = number | null;
 export type HasTrailingSpace = boolean | null;
 export type PromptDetected = {
   [k: string]: unknown;
@@ -220,6 +221,7 @@ export interface SnapshotFrame {
   cols?: Cols;
   cursor?: Cursor;
   cursor_at_end?: CursorAtEnd;
+  event_seq?: EventSeq;
   has_trailing_space?: HasTrailingSpace;
   prompt_detected?: PromptDetected;
   raw_tail?: RawTail;

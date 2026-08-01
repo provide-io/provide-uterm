@@ -33,9 +33,10 @@ def make_snapshot_frame(
     prompt_detected: dict[str, Any] | None,
     ts: float | None = None,
     raw_tail: str | None = None,
+    event_seq: int | None = None,
 ) -> dict[str, Any]:
     """Build a validated snapshot frame."""
-    return SnapshotFrame(
+    frame = SnapshotFrame(
         type="snapshot",
         screen=screen,
         cursor=cursor,
@@ -47,7 +48,11 @@ def make_snapshot_frame(
         prompt_detected=prompt_detected,
         raw_tail=raw_tail,
         ts=time.time() if ts is None else ts,
+        event_seq=event_seq,
     ).model_dump(exclude_none=False)
+    if event_seq is None:
+        frame.pop("event_seq")
+    return frame
 
 
 __all__ = [

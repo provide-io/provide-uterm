@@ -30,6 +30,7 @@ serialising against the same object that the rest of the hub uses.
 from __future__ import annotations
 
 import time
+from copy import deepcopy
 from typing import TYPE_CHECKING, Any
 
 from provide.telemetry import get_logger
@@ -70,6 +71,7 @@ from provide.uterm.server.bridge.hub.router_redaction import (
     _redact_frame_fields,
     _redact_value,
 )
+from provide.uterm.server.bridge.rest_helpers import extract_prompt_id
 
 if TYPE_CHECKING:
     from collections import deque
@@ -201,29 +203,37 @@ class MessageRouter:
         return evt
 
     async def commit_snapshot_event(self, worker_id: str, snapshot: dict[str, Any]) -> dict[str, Any]:
-        """Atomically store a snapshot and append its correlated ring event."""
+        """Atomically store a raw snapshot and append its correlated redacted event.
+
+        Snapshot capture, ring storage, EventBus delivery, and the returned
+        broadcast frame each own distinct bounded copies. Redaction applies
+        only to the event payload; the stored and returned snapshot stay raw.
+        """
         hub = self._hub
-        payload = dict(snapshot)
-        frame_type = payload.pop("type", "snapshot")
-        payload = {"type": frame_type, **self._redact_event_payload("snapshot", payload)}
+        raw_snapshot = deepcopy(snapshot)
+        event_payload = deepcopy(raw_snapshot)
+        frame_type = event_payload.pop("type", "snapshot")
+        event_payload["prompt_id"] = extract_prompt_id(raw_snapshot)
+        event_payload = {"type": frame_type, **self._redact_event_payload("snapshot", event_payload)}
         async with hub._lock:
             st = hub.registry.get(worker_id)
             if st is None:
-                return {**payload, "event_seq": 0}
+                return {**raw_snapshot, "event_seq": 0}
             st.event_seq += 1
-            committed = {**payload, "event_seq": st.event_seq}
+            committed = {**raw_snapshot, "event_seq": st.event_seq}
+            ring_data = {**event_payload, "event_seq": st.event_seq}
             evt: dict[str, Any] = {
                 "seq": st.event_seq,
                 "ts": time.time(),
                 "type": "snapshot",
-                "data": committed,
+                "data": ring_data,
             }
             st.last_snapshot = committed
             st.events.append(evt)
             st.min_event_seq = int(st.events[0]["seq"])
         if hub._event_bus is not None:
-            hub._event_bus._enqueue(worker_id, evt)
-        return committed
+            hub._event_bus._enqueue(worker_id, deepcopy(evt))
+        return deepcopy(committed)
 
     # -- Broadcast / send hot path --------------------------------------
     # Thin wrappers over :mod:`router_broadcast` (fan-out / redaction / worker
@@ -484,7 +494,7 @@ class MessageRouter:
         return _redact_frame_fields(to_redact, StreamRedactor(rules))
 
     async def get_last_snapshot(self, worker_id: str, recipient: Any = None) -> dict[str, Any] | None:
-        """Return the most recent snapshot for *worker_id*, or ``None`` if not registered.
+        """Return an owned copy of the latest snapshot, or ``None`` if not registered.
 
         When *recipient* is provided AND an output-redaction policy is active,
         the returned snapshot is a role-scoped REDACTED copy (M5: the REST
@@ -497,6 +507,7 @@ class MessageRouter:
         async with hub._lock:
             st = hub.registry.get(worker_id)
             snapshot = None if st is None else st.last_snapshot
+        snapshot = deepcopy(snapshot)
         if snapshot is None or recipient is None or hub._output_policy_gate is None:
             return snapshot
         return await self.redact_snapshot_for_recipient(worker_id, snapshot, recipient)
@@ -515,13 +526,14 @@ class MessageRouter:
             return sum(len(st.browsers) for st in hub.registry.all())
 
     async def get_recent_events(self, worker_id: str, limit: int) -> list[dict[str, Any]]:
-        """Return the most recent events for *worker_id* (up to *limit*, clamped to 1-500)."""
+        """Return owned copies of recent events (up to *limit*, clamped to 1-500)."""
         hub = self._hub
         async with hub._lock:
             st = hub.registry.get(worker_id)
             if st is None:
                 return []
-            return list(st.events)[-max(1, min(limit, 500)) :]
+            events = list(st.events)[-max(1, min(limit, 500)) :]
+        return deepcopy(events)
 
 
 __all__ = ["MessageRouter", "_redact_frame_fields", "_redact_value"]
