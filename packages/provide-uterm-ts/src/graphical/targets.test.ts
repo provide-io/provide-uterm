@@ -285,9 +285,16 @@ describe("where an rfb endpoint points", () => {
     // A closing bracket nobody opened is the same CPython refusal.
     expect(() => parseRfbEndpoint("vm]x:5900")).toThrow("invalid endpoint; expected host:port or rfb://host:port");
     expect(() => parseLitevirtEndpoint("vm]x:9000")).toThrow("invalid endpoint; expected host:port");
-    // Both brackets present but in the wrong order read as CPython reads
-    // them: an empty bracketed host, refused at the port it never names.
-    expect(() => parseRfbEndpoint("rfb://]a[:1")).toThrow("invalid endpoint port");
+    // Both brackets present but out of order is CPython's "Invalid IPv6 URL"
+    // as well — the netloc is never read, so no port is ever looked for. The
+    // corpus pins this and the rest of CPython's bracket reading; it is
+    // restated here because reading it as an empty bracketed host would
+    // answer about the port instead, and that is a different endpoint.
+    expect(() => parseRfbEndpoint("rfb://]a[:1")).toThrow("invalid endpoint; expected host:port or rfb://host:port");
+    // A name is not an address, however well bracketed.
+    expect(() => parseRfbEndpoint("[vmhost]:5900")).toThrow("invalid endpoint; expected host:port or rfb://host:port");
+    // A genuine address still parses, brackets and all.
+    expect(parseRfbEndpoint("[2001:db8::1]:5900")).toEqual(["2001:db8::1", 5900]);
   });
 
   it("says which of the two things is wrong", () => {
