@@ -30,7 +30,7 @@ try:
 
     _js_crypto = _js_mod.crypto  # pragma: no cover
     _js_object = _js_mod.Object  # pragma: no cover
-    from pyodide.ffi import to_js  # type: ignore[import-not-found]  # pragma: no cover  # ty:ignore[unresolved-import]
+    from pyodide.ffi import to_js  # pragma: no cover  # ty:ignore[unresolved-import]
 
     _to_js = to_js  # pragma: no cover
 

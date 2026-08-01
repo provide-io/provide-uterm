@@ -135,6 +135,15 @@ mypy_path = ["packages/provide-uterm/src", "packages/provide-uterm-annotation/sr
 module = ["provide.telemetry", "provide.telemetry.*", "provide.uterm.deckmux", "provide.uterm.deckmux.*", "structlog", "structlog.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+# The Cloudflare Python Workers SDK ships py.typed but uses PEP 695 `type`
+# statements, which mypy cannot parse under python_version = "3.11". Only the
+# real CF runtime imports it (cf_types.py / entry/fallback_stubs.py guard it
+# behind try/except), so skip following it rather than raising the floor.
+module = ["workers"]
+follow_imports = "skip"
+ignore_missing_imports = true
+
 
 [[tool.mypy.overrides]]
 # ty 0.0.19 has a cross-file resolution bug: it can't see methods added to HijackClient

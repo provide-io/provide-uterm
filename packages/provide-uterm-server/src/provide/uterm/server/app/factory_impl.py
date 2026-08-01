@@ -12,7 +12,7 @@ import re
 import secrets
 import time
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketException, status
 from starlette.requests import HTTPConnection  # noqa: TC002
@@ -365,7 +365,7 @@ def create_server_app(
     # Attach the fan-out controller so routes and WS dispatch can find it.
     from provide.uterm.server.bridge.fanout import FanOutController, InMemoryFanOutStore
 
-    async def _resolve_fanout_session(worker_id: str):
+    async def _resolve_fanout_session(worker_id: str) -> Any:
         return await registry.get_definition(worker_id) if registry is not None else None
 
     async def _authorize_fanout_session(principal: Principal, session: object) -> bool:
