@@ -4,7 +4,6 @@
 //
 
 using System.Text.RegularExpressions;
-using Microsoft.Data.Sqlite;
 using Provide.Uterm.ControlPlane;
 
 namespace Provide.Uterm.Tests;
@@ -126,7 +125,7 @@ public sealed class SqliteSchemaParityTests
         await engine.CloseAsync();
 
         var stored = new Dictionary<string, string>(StringComparer.Ordinal);
-        await using (var raw = new SqliteConnection($"Data Source={path}"))
+        await using (var raw = SqliteTestDb.Connect(path))
         {
             await raw.OpenAsync();
             await using var cmd = raw.CreateCommand();
@@ -160,12 +159,6 @@ public sealed class SqliteSchemaParityTests
             "CREATE TABLE cp_schema_version (version INTEGER PRIMARY KEY, applied_at REAL NOT NULL)",
             stored["cp_schema_version"]);
 
-        foreach (var suffix in new[] { "", "-wal", "-shm" })
-        {
-            if (File.Exists(path + suffix))
-            {
-                File.Delete(path + suffix);
-            }
-        }
+        SqliteTestDb.Delete(path);
     }
 }

@@ -45,16 +45,7 @@ public sealed class ServerFactoryControlPlaneTests
         Height = 480,
     };
 
-    private static void Cleanup(string path)
-    {
-        foreach (var suffix in new[] { "", "-wal", "-shm" })
-        {
-            if (File.Exists(path + suffix))
-            {
-                File.Delete(path + suffix);
-            }
-        }
-    }
+    private static void Cleanup(string path) => SqliteTestDb.Delete(path);
 
     /// <summary>
     /// The end-to-end point of the wiring: a runtime target created against a

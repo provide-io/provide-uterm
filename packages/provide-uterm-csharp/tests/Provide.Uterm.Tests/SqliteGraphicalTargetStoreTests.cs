@@ -53,13 +53,7 @@ public sealed class SqliteGraphicalTargetStoreTests
             return;
         }
 
-        foreach (var suffix in new[] { "", "-wal", "-shm" })
-        {
-            if (File.Exists(path + suffix))
-            {
-                File.Delete(path + suffix);
-            }
-        }
+        SqliteTestDb.Delete(path);
     }
 
     [Theory]
@@ -242,7 +236,7 @@ public sealed class SqliteGraphicalTargetStoreTests
         await engine.MigrateAsync();
         await engine.GraphicalTargets().PutAsync(Record());
 
-        await using (var raw = new SqliteConnection($"Data Source={path}"))
+        await using (var raw = SqliteTestDb.Connect(path))
         {
             await raw.OpenAsync();
             await using var drop = raw.CreateCommand();

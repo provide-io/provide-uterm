@@ -46,13 +46,7 @@ public sealed class ControlPlaneGraphicalTargetRegistryTests
             return;
         }
 
-        foreach (var suffix in new[] { "", "-wal", "-shm" })
-        {
-            if (File.Exists(path + suffix))
-            {
-                File.Delete(path + suffix);
-            }
-        }
+        SqliteTestDb.Delete(path);
     }
 
     private static Def Target(string targetId, string tenant) => new()
