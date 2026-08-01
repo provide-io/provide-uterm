@@ -219,19 +219,19 @@ func TestBrowserWSHijackStepRequiresCurrentOwner(t *testing.T) {
 	nonOwner := dialBrowser(t, ctx, base+"/ws/browser/step-owner/term", "admin2", "admin")
 	defer func() { _ = nonOwner.conn.Close(websocket.StatusNormalClosure, "") }()
 	nonOwner.waitFrame(t, "hello", 5*time.Second)
-	before := len(workerSent(worker))
+	before := len(workerSteps(worker))
 	nonOwner.send(t, ctx, map[string]any{"type": "hijack_step"})
 	nonOwner.send(t, ctx, map[string]any{"type": "ping"})
 	nonOwner.waitFrame(t, "pong", 5*time.Second)
-	if got := len(workerSent(worker)); got != before {
+	if got := len(workerSteps(worker)); got != before {
 		t.Fatalf("non-owner hijack_step reached worker: before=%d after=%d payloads=%v", before, got, workerSent(worker))
 	}
 
 	owner.send(t, ctx, map[string]any{"type": "hijack_step"})
 	owner.send(t, ctx, map[string]any{"type": "ping"})
 	owner.waitFrame(t, "pong", 5*time.Second)
-	if got := workerSent(worker); len(got) != before+1 || !strings.Contains(got[len(got)-1], `"action":"step"`) {
-		t.Fatalf("owner hijack_step was not delivered exactly once: %v", got)
+	if got := len(workerSteps(worker)); got != before+1 {
+		t.Fatalf("owner hijack_step was not delivered exactly once: %v", workerSent(worker))
 	}
 }
 
@@ -360,4 +360,20 @@ func workerSent(w *fakeWorkerWS) []string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return append([]string(nil), w.sent...)
+}
+
+// workerSteps narrows to the frames a hijack step actually produces. Counting
+// every payload instead is what a browser-ownership test appears to want and
+// is not: a second browser connecting also makes the server ask the worker for
+// a snapshot, and on a loaded runner that unrelated frame lands inside the
+// measurement window. CI failed exactly that way while the property under
+// test — that a non-owner's step never reaches the worker — still held.
+func workerSteps(w *fakeWorkerWS) []string {
+	var steps []string
+	for _, payload := range workerSent(w) {
+		if strings.Contains(payload, `"action":"step"`) {
+			steps = append(steps, payload)
+		}
+	}
+	return steps
 }
