@@ -289,7 +289,11 @@ def _command(root: Path, backend: str) -> tuple[list[str], Path]:
 
 
 def collect_backend_observations(
-    root: Path, contract_path: Path, backend: str
+    root: Path,
+    contract_path: Path,
+    backend: str,
+    *,
+    timeout_s: float = 120,
 ) -> tuple[list[str], list[dict[str, Any]]]:
     """Run one native adapter and return only observations produced by it."""
     with tempfile.TemporaryDirectory(prefix=f"uterm-fanout-{backend}-") as directory:
@@ -302,7 +306,18 @@ def collect_backend_observations(
         if backend == "go":
             environment["GOWORK"] = "off"
         command, cwd = _command(root, backend)
-        result = subprocess.run(command, cwd=cwd, env=environment, check=False, capture_output=True, text=True)
+        try:
+            result = subprocess.run(
+                command,
+                cwd=cwd,
+                env=environment,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=timeout_s,
+            )
+        except subprocess.TimeoutExpired:
+            return [f"{backend}: native command timed out after {timeout_s:g}s"], []
         errors = command_errors(backend, result)
         if errors:
             return errors, []
