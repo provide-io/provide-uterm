@@ -162,7 +162,7 @@ class TestHijackStepSendFailure:
                 assert hs["type"] == "hijack_state"
 
                 # Patch _send_worker to fail for step
-                async def _fail_step(wid, msg):
+                async def _fail_step(wid, msg, **_delivery_fence):
                     return msg.get("action") != "step"
 
                 with patch.object(hub, "send_worker", side_effect=_fail_step):
