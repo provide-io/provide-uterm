@@ -381,6 +381,15 @@ from the contract.
 11. **Python rejected resume could burn legitimate single-use authority.** The
     final prepare/commit flow defers token consumption until reclaim succeeds and
     generation-safely compensates a concurrent losing attempt.
+12. **TypeScript held fan-out approvals were vulnerable to reused-ID ABA.**
+    Resolved with store-assigned monotonic revisions and exact claim, resolve,
+    expiry, and controller release. Public approval-input compatibility is
+    preserved, live duplicate IDs reject, stale cleanup cannot consume a newer
+    revision, and counter exhaustion fails before insertion.
+13. **A wedged native adapter could hang the central fan-out release gate.**
+    Resolved with a 120-second per-backend subprocess bound, explicit
+    `TimeoutExpired` failure with zero accepted observations, and a 600-second
+    outer conformance-test bound.
 
 ### Medium severity
 
