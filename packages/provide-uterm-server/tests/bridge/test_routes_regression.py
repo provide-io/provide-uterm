@@ -182,6 +182,7 @@ def test_acquire_sends_compensating_resume_on_cancellation_after_pause() -> None
     sent = decode_control_payloads([c.args[0] for c in mock_ws.send_text.await_args_list])
     resume_msgs = [m for m in sent if m.get("type") == "control" and m.get("action") == "resume"]
     assert resume_msgs, "compensating resume must be sent on CancelledError after pause"
+    assert hub.registry._workers["bot1"].hijack_session is None
 
 
 def test_acquire_compensating_resume_swallows_send_worker_failure(caplog) -> None:

@@ -331,24 +331,13 @@ class TestRecheckAndResume:
         assert hub.send_worker_calls == []
         assert hub.notify_calls == []
 
-    async def test_missing_worker_still_sends_resume(self) -> None:
-        """st2 is None → guard is False → resume fires (clears stale UI)."""
+    async def test_missing_worker_does_not_send_stale_resume(self) -> None:
+        """A missing state must not target a worker that registers afterward."""
         mgr, _registry, hub, _ = _make_manager()
         now = 77.0
         await mgr._recheck_and_resume("ghost", now)
-        assert hub.send_worker_calls == [
-            (
-                "ghost",
-                {
-                    "type": "control",
-                    "action": "resume",
-                    "owner": "lease-expired",
-                    "lease_s": 0,
-                    "ts": now,
-                },
-            )
-        ]
-        assert hub.notify_calls == [("ghost", False, None)]
+        assert hub.send_worker_calls == []
+        assert hub.notify_calls == []
 
     async def test_send_precedes_notify(self) -> None:
         """Frame must go out before the local notify callback fires."""

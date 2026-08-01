@@ -32,6 +32,7 @@ those are injected as callables so this module avoids any hub import.
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -44,8 +45,6 @@ from provide.uterm.server.bridge.hub.ext import (
 from provide.uterm.server.bridge.models import HijackSession
 
 if TYPE_CHECKING:
-    import asyncio
-
     from fastapi import WebSocket
 
     from provide.uterm.server.bridge.hub.registry import WorkerRegistry
@@ -53,6 +52,8 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 tracer = get_tracer(__name__)
+
+_OWNED_INPUT_SEND_TIMEOUT_S = 5.0
 
 
 class _LeaseHubCallbacks(Protocol):
@@ -68,7 +69,14 @@ class _LeaseHubCallbacks(Protocol):
     def can_send_input(self, st: WorkerTermState, ws: WebSocket) -> bool: ...
     def metric(self, name: str, value: int = ...) -> None: ...
     def notify_hijack_changed(self, worker_id: str, *, enabled: bool, owner: str | None = None) -> None: ...
-    async def send_worker(self, worker_id: str, msg: dict[str, Any], *, source: Any = None) -> bool: ...
+    async def send_worker(
+        self,
+        worker_id: str,
+        msg: dict[str, Any],
+        *,
+        source: Any = None,
+        expected_worker: WebSocket | None = None,
+    ) -> bool: ...
     async def broadcast_hijack_state(self, worker_id: str) -> None: ...
     async def append_event(
         self, worker_id: str, event_type: str, data: dict[str, Any] | None = None
@@ -141,25 +149,29 @@ class HijackLeaseManager:
             st = self._registry._workers.get(worker_id)
             if st is None:
                 return None
-            lease = st.lease
-            if lease.is_idle:
-                return None
-            rest_expired, dashboard_expired = lease.expire(now)
-            if rest_expired or dashboard_expired:
-                st.apply_lease(lease)
-            should_resume = (rest_expired or dashboard_expired) and lease.is_idle
-        return rest_expired, dashboard_expired, should_resume
+            state = st
+            fence = st.owned_input_fence
+        async with fence:
+            async with self._lock:
+                st = self._registry._workers.get(worker_id)
+                if st is not state:
+                    return None
+                lease = st.lease
+                if lease.is_idle:
+                    return None
+                rest_expired, dashboard_expired = lease.expire(now)
+                if rest_expired or dashboard_expired:
+                    st.apply_lease(lease)
+                    st.ownership_generation += 1
+                should_resume = (rest_expired or dashboard_expired) and lease.is_idle
+            return rest_expired, dashboard_expired, should_resume
 
     async def _recheck_and_resume(self, worker_id: str, now: float) -> None:
         """Verify no concurrent hijack appeared; send resume if clear."""
-        async with self._lock:
-            st2 = self._registry._workers.get(worker_id)
-            if st2 is not None and self._hub.is_hijacked(st2):  # pragma: no branch
-                return
-        await self._hub.send_worker(
-            worker_id,
-            {"type": "control", "action": "resume", "owner": "lease-expired", "lease_s": 0, "ts": now},
-        )
+        msg = {"type": "control", "action": "resume", "owner": "lease-expired", "lease_s": 0, "ts": now}
+        sent = await self.send_worker_if_unowned(worker_id, msg)
+        if not sent:
+            return
         self._hub.notify_hijack_changed(worker_id, enabled=False, owner=None)
 
     async def cleanup_expired(self, worker_id: str) -> bool:
@@ -241,68 +253,79 @@ class HijackLeaseManager:
         ):
             from provide.uterm.server.bridge.hub.core import _encode_worker_frame
 
-            # Phase 1 — reserve under the lock (in-memory only).
+            # Capture stable state identity before waiting for its per-worker
+            # ownership fence. The global lock is never held during worker I/O.
             async with self._lock:
                 st = self._registry._workers.get(worker_id)
                 if st is None or st.worker_ws is None:
                     return False, "no_worker"
-                if st.input_mode == "open":
-                    return False, "open_mode"
-                if (
-                    self._hub.is_dashboard_hijack_active(st)
-                    or self._hub.has_valid_rest_lease(st)
-                    or st.hijack_pending is not None
-                ):
+                if st.hijack_pending is not None:
                     return False, "already_hijacked"
-                worker_ws = st.worker_ws
-                st.hijack_pending = hijack_id
+                state = st
+                fence = st.owned_input_fence
 
-            try:
-                # Phase 2 — pause the worker OUTSIDE the lock.
+            async with fence:
+                # Phase 1 — reserve under the lock (in-memory only).
+                async with self._lock:
+                    st = self._registry._workers.get(worker_id)
+                    if st is not state or st.worker_ws is None:
+                        return False, "no_worker"
+                    if st.input_mode == "open":
+                        return False, "open_mode"
+                    if (
+                        self._hub.is_dashboard_hijack_active(st)
+                        or self._hub.has_valid_rest_lease(st)
+                        or st.hijack_pending is not None
+                    ):
+                        return False, "already_hijacked"
+                    worker_ws = st.worker_ws
+                    st.hijack_pending = hijack_id
+
                 try:
-                    await worker_ws.send_text(
-                        _encode_worker_frame(
-                            {
-                                "type": "control",
-                                "action": "pause",
-                                "owner": owner,
-                                "hijack_id": hijack_id,
-                                "ts": time.time(),
-                            }
+                    # Phase 2 — bounded worker I/O while the ownership fence is held.
+                    try:
+                        await asyncio.wait_for(
+                            worker_ws.send_text(
+                                _encode_worker_frame(
+                                    {
+                                        "type": "control",
+                                        "action": "pause",
+                                        "owner": owner,
+                                        "hijack_id": hijack_id,
+                                        "ts": time.time(),
+                                    }
+                                )
+                            ),
+                            timeout=_OWNED_INPUT_SEND_TIMEOUT_S,
                         )
-                    )
-                except Exception as exc:
-                    logger.debug("pause_worker_failed worker_id=%s: %s", worker_id, exc)
+                    except Exception as exc:
+                        logger.debug("pause_worker_failed worker_id=%s: %s", worker_id, exc)
+                        async with self._lock:
+                            st = self._registry._workers.get(worker_id)
+                            if st is state and st.worker_ws is worker_ws:  # pragma: no branch
+                                st.worker_ws = None
+                                st.ownership_generation += 1
+                        return False, "no_worker"
+
+                    # Phase 3 — finalise under the lock.
                     async with self._lock:
                         st = self._registry._workers.get(worker_id)
-                        # Both arcs tested; coverage.py 3.11 mis-reads the async-with exit.
-                        if st is not None and st.worker_ws is worker_ws:  # pragma: no branch
-                            st.worker_ws = None
-                    return False, "no_worker"
-
-                # Phase 3 — finalise under the lock (unless cancelled / superseded).
-                async with self._lock:
-                    st = self._registry._workers.get(worker_id)
-                    if st is None or st.hijack_pending != hijack_id:
-                        return False, "no_worker"
-                    st.hijack_session = HijackSession(
-                        hijack_id=hijack_id,
-                        owner=owner,
-                        acquired_at=now,
-                        lease_expires_at=now + lease_s,
-                        last_heartbeat=now,
-                    )
-                    st.hijack_pending = None
-            finally:
-                # Roll back a still-outstanding reservation (send failure, cancellation,
-                # or a worker that vanished mid-send). On success phase 3 already cleared
-                # it, so this is a no-op; a concurrent acquire's reservation (different
-                # hijack_id) is left untouched.
-                async with self._lock:
-                    st = self._registry._workers.get(worker_id)
-                    # Both arcs tested; coverage.py 3.11 mis-reads the async-with exit.
-                    if st is not None and st.hijack_pending == hijack_id:  # pragma: no branch
+                        if st is not state or st.worker_ws is not worker_ws or st.hijack_pending != hijack_id:
+                            return False, "no_worker"
+                        st.hijack_session = HijackSession(
+                            hijack_id=hijack_id,
+                            owner=owner,
+                            acquired_at=now,
+                            lease_expires_at=now + lease_s,
+                            last_heartbeat=now,
+                        )
                         st.hijack_pending = None
+                        st.ownership_generation += 1
+                finally:
+                    async with self._lock:
+                        st = self._registry._workers.get(worker_id)
+                        if st is state and st.hijack_pending == hijack_id:  # pragma: no branch
+                            st.hijack_pending = None
 
             logger.info(EVENT_HIJACK_ACQUIRED, worker_id=worker_id, hijack_type="rest", owner=owner, lease_s=lease_s)
             return True, None
@@ -314,17 +337,25 @@ class HijackLeaseManager:
                 st = self._registry._workers.get(worker_id)
                 if st is None or st.worker_ws is None:
                     return False, "no_worker"
-                # hijack_pending: REST two-phase reserve — treat as already taken
-                # so dashboard WS cannot dual-own during the pause I/O window.
-                if (
-                    self._hub.is_dashboard_hijack_active(st)
-                    or self._hub.has_valid_rest_lease(st)
-                    or st.hijack_pending is not None
-                ):
+                if st.hijack_pending is not None:
                     return False, "already_hijacked"
-                ttl = self._dashboard_hijack_lease_s
-                st.hijack_owner = ws
-                st.hijack_owner_expires_at = time.monotonic() + ttl
+                state = st
+                fence = st.owned_input_fence
+            async with fence:
+                async with self._lock:
+                    st = self._registry._workers.get(worker_id)
+                    if st is not state or st.worker_ws is None:
+                        return False, "no_worker"
+                    if (
+                        self._hub.is_dashboard_hijack_active(st)
+                        or self._hub.has_valid_rest_lease(st)
+                        or st.hijack_pending is not None
+                    ):
+                        return False, "already_hijacked"
+                    ttl = self._dashboard_hijack_lease_s
+                    st.hijack_owner = ws
+                    st.hijack_owner_expires_at = time.monotonic() + ttl
+                    st.ownership_generation += 1
             logger.info(EVENT_HIJACK_ACQUIRED, worker_id=worker_id, hijack_type="dashboard", lease_s=ttl)
             return True, None
 
@@ -355,12 +386,20 @@ class HijackLeaseManager:
         """Atomically verify ownership and clear in a single lock block."""
         async with self._lock:
             st = self._registry._workers.get(worker_id)
-            if st is None or not self._hub.is_dashboard_hijack_active(st) or st.hijack_owner is not ws:
-                rest_active = st is not None and self._hub.has_valid_rest_lease(st)
-                return False, rest_active
-            st.hijack_owner = None
-            st.hijack_owner_expires_at = None
-            rest_active = self._hub.has_valid_rest_lease(st)
+            if st is None:
+                return False, False
+            state = st
+            fence = st.owned_input_fence
+        async with fence:
+            async with self._lock:
+                st = self._registry._workers.get(worker_id)
+                if st is not state or not self._hub.is_dashboard_hijack_active(st) or st.hijack_owner is not ws:
+                    rest_active = st is not None and self._hub.has_valid_rest_lease(st)
+                    return False, rest_active
+                st.hijack_owner = None
+                st.hijack_owner_expires_at = None
+                st.ownership_generation += 1
+                rest_active = self._hub.has_valid_rest_lease(st)
         logger.info(EVENT_HIJACK_RELEASED, worker_id=worker_id, hijack_type="dashboard")
         return True, rest_active
 
@@ -369,12 +408,21 @@ class HijackLeaseManager:
         notify_hijack_off = False
         async with self._lock:
             st = self._registry._workers.get(worker_id)
-            if st is not None:
+            if st is None:
+                return False
+            state = st
+            fence = st.owned_input_fence
+        async with fence:
+            async with self._lock:
+                st = self._registry._workers.get(worker_id)
+                if st is not state:
+                    return False
                 for ws in dead:
                     st.browsers.pop(ws, None)
                     if self._hub.is_dashboard_hijack_active(st) and st.hijack_owner is ws:
                         st.hijack_owner = None
                         st.hijack_owner_expires_at = None
+                        st.ownership_generation += 1
                         notify_hijack_off = not self._hub.has_valid_rest_lease(st)
         if notify_hijack_off:
             # Re-check: a concurrent acquire may have written a new session
@@ -384,11 +432,12 @@ class HijackLeaseManager:
                 if _st2 is not None and self._hub.is_hijacked(_st2):  # pragma: no branch
                     notify_hijack_off = False
         if notify_hijack_off:
-            await self._hub.send_worker(
+            sent = await self.send_worker_if_unowned(
                 worker_id,
                 {"type": "control", "action": "resume", "owner": "dead-socket", "lease_s": 0, "ts": time.time()},
             )
-            self._hub.notify_hijack_changed(worker_id, enabled=False, owner=None)
+            if sent:
+                self._hub.notify_hijack_changed(worker_id, enabled=False, owner=None)
         return notify_hijack_off
 
     async def extend_lease(self, worker_id: str, hijack_id: str, owner: str, lease_s: int, now: float) -> float | None:
@@ -471,11 +520,19 @@ class HijackLeaseManager:
         with tracer.start_as_current_span("uterm.hijack.release", attributes={"worker_id": worker_id}):
             async with self._lock:
                 st = self._registry._workers.get(worker_id)
-                if st is None or st.hijack_session is None or st.hijack_session.hijack_id != hijack_id:
+                if st is None:
                     return False, False
-                st.hijack_session = None
-                should_resume = not self._hub.is_dashboard_hijack_active(st)
-            return True, should_resume
+                state = st
+                fence = st.owned_input_fence
+            async with fence:
+                async with self._lock:
+                    st = self._registry._workers.get(worker_id)
+                    if st is not state or st.hijack_session is None or st.hijack_session.hijack_id != hijack_id:
+                        return False, False
+                    st.hijack_session = None
+                    st.ownership_generation += 1
+                    should_resume = not self._hub.is_dashboard_hijack_active(st)
+                return True, should_resume
 
     async def still_hijacked(self, worker_id: str) -> bool:
         """Return True if any hijack (REST or dashboard WS) is currently active."""
@@ -501,6 +558,98 @@ class HijackLeaseManager:
             if self._hub.is_dashboard_hijack_active(st) and st.hijack_owner is ws:
                 st.hijack_owner_expires_at = time.monotonic() + self._dashboard_hijack_lease_s
             return allowed
+
+    async def send_owned_worker(
+        self,
+        worker_id: str,
+        msg: dict[str, Any],
+        *,
+        browser_ws: WebSocket | None = None,
+        rest_hijack_id: str | None = None,
+        ownership_generation: int | None = None,
+        source: Any = None,
+    ) -> tuple[bool, str | None]:
+        """Revalidate an exact input owner, reserve it, and send lock-free."""
+        if (browser_ws is None) == (rest_hijack_id is None):
+            raise ValueError("exactly one input owner must be specified")
+        async with self._lock:
+            st = self._registry._workers.get(worker_id)
+            if st is None:
+                return False, "invalid_owner"
+            state = st
+            fence = st.owned_input_fence
+
+        async with fence:
+            async with self._lock:
+                st = self._registry._workers.get(worker_id)
+                if st is not state:
+                    return False, "invalid_owner"
+                if browser_ws is not None:
+                    if not self._hub.can_send_input(st, browser_ws):
+                        return False, "invalid_owner"
+                    if ownership_generation is not None and st.ownership_generation != ownership_generation:
+                        return False, "invalid_owner"
+                    if self._hub.is_dashboard_hijack_active(st) and st.hijack_owner is browser_ws:
+                        st.hijack_owner_expires_at = time.monotonic() + self._dashboard_hijack_lease_s
+                else:
+                    session = st.hijack_session
+                    if (
+                        session is None
+                        or session.hijack_id != rest_hijack_id
+                        or session.lease_expires_at <= time.monotonic()
+                    ):
+                        return False, "invalid_owner"
+                worker_ws = st.worker_ws
+                if worker_ws is None:
+                    return False, "no_worker"
+            try:
+                ok = await asyncio.wait_for(
+                    self._hub.send_worker(worker_id, msg, source=source, expected_worker=worker_ws),
+                    timeout=_OWNED_INPUT_SEND_TIMEOUT_S,
+                )
+            except TimeoutError:
+                ok = False
+            return ok, None if ok else "no_worker"
+
+    async def capture_browser_ownership(self, worker_id: str, ws: WebSocket) -> int | None:
+        """Return the exact active browser ownership generation, or ``None``."""
+        async with self._lock:
+            st = self._registry._workers.get(worker_id)
+            if st is None or not self._hub.can_send_input(st, ws):
+                return None
+            if self._hub.is_dashboard_hijack_active(st) and st.hijack_owner is ws:
+                st.hijack_owner_expires_at = time.monotonic() + self._dashboard_hijack_lease_s
+            return st.ownership_generation
+
+    async def capture_dashboard_ownership(self, worker_id: str, ws: WebSocket) -> int | None:
+        """Return the exact active dashboard-owner generation, or ``None``."""
+        async with self._lock:
+            st = self._registry._workers.get(worker_id)
+            if st is None or not self._hub.is_dashboard_hijack_active(st) or st.hijack_owner is not ws:
+                return None
+            st.hijack_owner_expires_at = time.monotonic() + self._dashboard_hijack_lease_s
+            return st.ownership_generation
+
+    async def send_worker_if_unowned(self, worker_id: str, msg: dict[str, Any]) -> bool:
+        """Send a bounded control frame only while the worker remains unowned."""
+        async with self._lock:
+            st = self._registry._workers.get(worker_id)
+            if st is None:
+                return False
+            state = st
+            fence = st.owned_input_fence
+        async with fence:
+            async with self._lock:
+                st = self._registry._workers.get(worker_id)
+                if st is not state or self._hub.is_hijacked(st) or st.worker_ws is None:
+                    return False
+            try:
+                return await asyncio.wait_for(
+                    self._hub.send_worker(worker_id, msg),
+                    timeout=_OWNED_INPUT_SEND_TIMEOUT_S,
+                )
+            except TimeoutError:
+                return False
 
 
 __all__ = ["HijackLeaseManager"]

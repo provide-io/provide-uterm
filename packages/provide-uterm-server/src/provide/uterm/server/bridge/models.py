@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -138,6 +139,13 @@ class WorkerTermState:
     hijack_owner: WebSocket | None = None  # dashboard WS that holds the lease
     hijack_owner_expires_at: float | None = None
     hijack_session: HijackSession | None = None  # REST lease
+    # Per-worker ownership fence. Worker-bound input holds this across the
+    # network send; lease transitions take the same fence before mutating
+    # ownership. The global hub lock is never held during worker I/O.
+    owned_input_fence: asyncio.Lock = field(default_factory=asyncio.Lock)
+    # Monotonic token for the exact ownership epoch. Held approvals capture it
+    # so release/reacquire by the same browser cannot revive stale input.
+    ownership_generation: int = 0
     # Transient REST-acquire reservation. Set under the hub lock while a REST
     # acquire pauses the worker OUTSIDE the lock, then cleared when the lease is
     # finalised (or rolled back). Makes the acquire mutually exclusive without

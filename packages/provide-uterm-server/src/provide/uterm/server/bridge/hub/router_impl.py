@@ -239,7 +239,14 @@ class MessageRouter:
         """Send a hijack_state message to every browser for *worker_id*, cleaning up dead sockets."""
         await _broadcast_hijack_state_impl(self, worker_id)  # ty:ignore[invalid-argument-type]
 
-    async def send_worker(self, worker_id: str, msg: dict[str, Any], *, source: Any = None) -> bool:
+    async def send_worker(
+        self,
+        worker_id: str,
+        msg: dict[str, Any],
+        *,
+        source: Any = None,
+        expected_worker: WebSocket | None = None,
+    ) -> bool:
         """Send *msg* to the worker WebSocket; returns False if no worker is connected.
 
         Tunnel workers (``is_tunnel_worker=True``) use the binary tunnel
@@ -248,7 +255,9 @@ class MessageRouter:
         types are dropped because the worker's bridge loop has no JSON
         envelope handling.
         """
-        return await _send_worker_impl(self, worker_id, msg, source=source)  # ty:ignore[invalid-argument-type]
+        return await _send_worker_impl(  # ty:ignore[invalid-argument-type]
+            self, worker_id, msg, source=source, expected_worker=expected_worker
+        )
 
     # -- Behavioral heuristics ------------------------------------------
     # Thin wrappers over :mod:`router_behavioral` (keystroke timing / audit);
@@ -376,20 +385,33 @@ class MessageRouter:
 
     async def try_reclaim_hijack(self, worker_id: str, ws: WebSocket) -> bool:
         """Attempt to acquire hijack ownership for *ws* if the session is unhijacked."""
+        reclaimed, _competing_owner = await self.try_reclaim_hijack_status(worker_id, ws)
+        return reclaimed
+
+    async def try_reclaim_hijack_status(self, worker_id: str, ws: WebSocket) -> tuple[bool, bool]:
+        """Return ``(reclaimed, competing_owner)`` from one fenced observation."""
         hub = self._hub
         async with hub._lock:
             st = hub.registry.get(worker_id)
-            if (
-                st is not None
-                and st.worker_ws is not None
-                and st.input_mode != "open"
-                and st.hijack_owner is None
-                and not hub.is_hijacked(st)
-            ):
-                st.hijack_owner = ws
-                st.hijack_owner_expires_at = time.monotonic() + hub.lease.dashboard_hijack_lease_s
-                return True
-        return False
+            if st is None:
+                return False, False
+            state = st
+            fence = st.owned_input_fence
+        async with fence:
+            async with hub._lock:
+                st = hub.registry.get(worker_id)
+                if (
+                    st is state
+                    and st.worker_ws is not None
+                    and st.input_mode != "open"
+                    and st.hijack_owner is None
+                    and not hub.is_hijacked(st)
+                ):
+                    st.hijack_owner = ws
+                    st.hijack_owner_expires_at = time.monotonic() + hub.lease.dashboard_hijack_lease_s
+                    st.ownership_generation += 1
+                    return True, False
+                return False, st is state and hub.is_hijacked(st)
 
     async def get_worker_browser_role(self, worker_id: str, ws: WebSocket) -> str | None:
         """Return the role assigned to *ws* for *worker_id*, or ``None`` if not found."""

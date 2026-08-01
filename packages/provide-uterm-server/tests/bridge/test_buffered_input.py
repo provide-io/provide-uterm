@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from provide.uterm.server.bridge.hub import TermHub
+from provide.uterm.server.bridge.hub.approvals import ApprovalRequest, ApprovalStatus
 from provide.uterm.server.bridge.hub.ext import PolicyDecision
 from provide.uterm.server.bridge.models import WorkerTermState
 from provide.uterm.server.bridge.routes.browser_handlers import handle_browser_message
@@ -84,6 +85,21 @@ async def test_input_playback_on_approval_resolve() -> None:
     # Simulate browser being paused and having buffered data
     hub._paused_browsers.add(ws)
     hub._hold_buffers[ws] = "ls\r"
+    generation = await hub.capture_browser_ownership("w1", ws)
+    assert generation is not None
+    hub.approval_store.add(
+        ApprovalRequest(
+            id="req1",
+            worker_id="w1",
+            submitter_id="operator",
+            command="sudo rm -rf /\r",
+            status=ApprovalStatus.PENDING,
+            created_at=time.time(),
+            expires_at=time.time() + 60,
+            origin_browser=ws,
+            ownership_generation=generation,
+        )
+    )
 
     # Resolve approval
     decision = PolicyDecision(action="allow")

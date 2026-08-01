@@ -199,7 +199,7 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
                 # sending resume here would unpause the legitimate owner's session.
                 session_committed = True
                 if err != "already_hijacked":
-                    await hub.send_worker(
+                    await hub.send_worker_if_unowned(
                         worker_id,
                         {
                             "type": "control",
@@ -230,12 +230,12 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
                 worker_id, "hijack_acquired", {"hijack_id": hijack_id, "owner": request.owner, "lease_s": lease_s}
             )
             await hub.broadcast_hijack_state(worker_id)
-            session_committed = True
             # Record the acquiring principal on the live lease so release can verify
             # ownership (the REST ``owner`` field is a self-declared display label).
             _acquired = await hub.get_rest_session(worker_id, hijack_id)
             if _acquired is not None:  # pragma: no branch - present right after commit
                 _acquired.acquired_by = _principal_subject(http_request)
+            session_committed = True
             return {
                 "ok": True,
                 "worker_id": worker_id,
@@ -245,11 +245,13 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
             }
         finally:
             if not session_committed:
-                # Pause was sent but the session was never committed (e.g. client
-                # disconnected and the request was cancelled).  Send a resume so
-                # the worker exits the paused state.
+                # The lease manager commits its in-memory reservation before
+                # route-level observability runs. If the request is cancelled
+                # after that point, roll the exact lease back before resuming;
+                # otherwise a live lease would describe an unpaused worker.
                 try:
-                    await hub.send_worker(
+                    released, _ = await hub.release_rest_hijack(worker_id, hijack_id)
+                    await hub.send_worker_if_unowned(
                         worker_id,
                         {
                             "type": "control",
@@ -260,6 +262,9 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
                             "ts": wall_now,
                         },
                     )
+                    if released:
+                        hub.notify_hijack_changed(worker_id, enabled=False, owner=None)
+                        await hub.broadcast_hijack_state(worker_id)
                 except (asyncio.CancelledError, OSError, RuntimeError) as exc:
                     logger.warning("hijack_acquire_compensating_resume_failed worker_id=%s: %s", worker_id, exc)
 
@@ -375,19 +380,16 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
                 {"error": reason or "prompt_guard_not_satisfied", "current_prompt_id": extract_prompt_id(snapshot)},
                 status_code=409,
             )
-        # Re-validate: session may have expired (or been replaced) during the
-        # wait_for_guard poll window.  A concurrent acquire could have written a
-        # new HijackSession; we must confirm *this* hijack_id is still active
-        # before sending keystrokes on its behalf.
-        _still_valid = await hub.check_hijack_valid(worker_id, hijack_id)
-        if not _still_valid:
+        # Revalidate the exact lease only after the guard wait, then reserve
+        # that ownership through delivery. Release/expiry transitions take the
+        # same per-worker fence, without holding the global hub lock over I/O.
+        ok, error = await hub.send_owned_worker(
+            worker_id,
+            {"type": "input", "data": request.keys, "ts": time.time()},
+            rest_hijack_id=hijack_id,
+        )
+        if error == "invalid_owner":
             return JSONResponse({"error": "Invalid or expired hijack session."}, status_code=404)
-        # Narrow race: a concurrent hijack_release could fire between the lock
-        # release above and _send_worker below, unpausing the worker before these
-        # keystrokes are sent.  Holding the lock across a network send is worse
-        # (deadlock risk), so this sub-millisecond window is accepted.  The worker
-        # processes stray keystrokes as normal input — no lock-state corruption.
-        ok = await hub.send_worker(worker_id, {"type": "input", "data": request.keys, "ts": time.time()})
         if not ok:
             return JSONResponse({"error": "No worker connected for this session."}, status_code=409)
         logger.info(
@@ -440,15 +442,13 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
         hs = await hub.get_rest_session(worker_id, hijack_id)
         if hs is None:
             return JSONResponse({"error": "Invalid or expired hijack session."}, status_code=404)
-        # Re-validate: session may have expired (or been replaced) during any
-        # concurrent heartbeat / release / expiry cleanup since get_rest_session
-        # returned (mirrors hijack_send re-validation).
-        _still_valid = await hub.check_hijack_valid(worker_id, hijack_id)
-        if not _still_valid:
-            return JSONResponse({"error": "Invalid or expired hijack session."}, status_code=404)
-        ok = await hub.send_worker(
-            worker_id, {"type": "control", "action": "step", "owner": hs.owner, "lease_s": 0, "ts": time.time()}
+        ok, error = await hub.send_owned_worker(
+            worker_id,
+            {"type": "control", "action": "step", "owner": hs.owner, "lease_s": 0, "ts": time.time()},
+            rest_hijack_id=hijack_id,
         )
+        if error == "invalid_owner":
+            return JSONResponse({"error": "Invalid or expired hijack session."}, status_code=404)
         if not ok:
             return JSONResponse({"error": "No worker connected for this session."}, status_code=409)
         logger.info("rest_step_ok worker_id=%s hijack_id=%s client=%s", worker_id, hijack_id, _client_id)
@@ -484,7 +484,7 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
             # new session between release_rest_hijack and _send_worker below.
             should_resume = False
         if should_resume:
-            await hub.send_worker(
+            await hub.send_worker_if_unowned(
                 worker_id, {"type": "control", "action": "resume", "owner": hs.owner, "lease_s": 0, "ts": time.time()}
             )
         # Always notify subscribers (e.g. bbsbot SwarmManager's bot.is_hijacked

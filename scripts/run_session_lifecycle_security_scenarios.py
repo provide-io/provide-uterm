@@ -340,6 +340,9 @@ def main(argv: list[str] | None = None) -> int:
         for error in errors:
             print(f"- {error}")
         return 1
+    if args.validate_only:
+        print("session-lifecycle contract validation passed")
+        return 0
     print(f"session-lifecycle security scenarios passed for {', '.join(selected)}")
     return 0
 

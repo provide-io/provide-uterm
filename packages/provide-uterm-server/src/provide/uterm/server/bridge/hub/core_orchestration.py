@@ -98,7 +98,7 @@ async def resolve_approval(
     request_id: str,
     decision: PolicyDecision,
     command: str,
-) -> None:
+) -> tuple[bool, str | None]:
     """Resolve a pending approval and resume the worker if approved."""
     req = hub.approval_store.get(request_id)
     if req and getattr(req, "is_fanout", False):
@@ -115,7 +115,7 @@ async def resolve_approval(
             fo_ctrl = getattr(hub, "fan_out_controller", None)
             if fo_ctrl:
                 await asyncio.to_thread(fo_ctrl._on_approval_expired, request_id)
-        return
+        return True, None
 
     st = await hub._get(worker_id)
 
@@ -125,8 +125,21 @@ async def resolve_approval(
     # dead sockets and prune them once at the end, mirroring broadcast().
     dead: set[WebSocket] = set()
 
+    delivered = True
+    refusal_reason: str | None = None
     if decision.action == "allow":
-        await hub.send_worker(worker_id, {"type": "input", "data": command, "ts": time.time()})
+        origin_browser = getattr(req, "origin_browser", None)
+        ownership_generation = getattr(req, "ownership_generation", None)
+        if origin_browser is None or ownership_generation is None:
+            delivered, refusal_reason = False, "invalid_owner"
+        else:
+            delivered, refusal_reason = await hub.send_owned_worker(
+                worker_id,
+                {"type": "input", "data": command, "ts": time.time()},
+                browser_ws=origin_browser,
+                ownership_generation=ownership_generation,
+                source=origin_browser,
+            )
     elif decision.action == "deny":
         msg = f"\\r\\x1b[31m[REJECTED] Command '{command.strip()}' blocked by Admin.\\x1b[0m"
         if decision.reason:
@@ -140,9 +153,10 @@ async def resolve_approval(
                 dead.add(ws)
 
     for ws in list(st.browsers.keys()):
-        if ws in hub._paused_browsers:
+        is_origin = req is None or getattr(req, "origin_browser", None) is None or ws is req.origin_browser
+        if ws in hub._paused_browsers and is_origin:
             hub._paused_browsers.discard(ws)
-            if decision.action == "allow" and ws in hub._hold_buffers:
+            if decision.action == "allow" and delivered and ws in hub._hold_buffers:
                 buffered_data = hub._hold_buffers.pop(ws)
                 if hub._on_browser_message:  # pragma: no branch — _on_browser_message is wired by app factory; no-handler case is a unit-test artifact
 
@@ -171,13 +185,21 @@ async def resolve_approval(
                     )
                     hub._background_tasks.add(task)
                     task.add_done_callback(hub._background_tasks.discard)
+            elif ws in hub._hold_buffers:
+                hub._hold_buffers.pop(ws, None)
 
         try:
             await ws.send_text(
                 _encode_browser_frame(
                     {
                         "type": "approval_resolved",
-                        "outcome": "approved" if decision.action == "allow" else "rejected",
+                        "outcome": (
+                            "approved"
+                            if decision.action == "allow" and delivered
+                            else "refused"
+                            if decision.action == "allow"
+                            else "rejected"
+                        ),
                         "request_id": request_id,
                     }
                 )
@@ -188,6 +210,7 @@ async def resolve_approval(
 
     if dead:
         await hub.remove_dead_browsers(worker_id, dead)
+    return delivered, refusal_reason
 
 
 __all__ = [

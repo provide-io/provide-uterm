@@ -564,6 +564,10 @@ class UtermServerConfig(ServerBaseModel):
     # single authenticated user from exhausting server memory with thousands
     # of open browser tabs.
     max_connections_per_principal: int = 25
+    # A resume token that formerly owned hijack cannot degrade into a
+    # role-only resume after another owner acquires the terminal unless this
+    # compatibility switch is explicitly enabled.
+    allow_stale_owner_role_resume: bool = False
     # Generous GLOBAL cap on the number of distinct worker_ids the hub will
     # register. Unlike max_connections_per_principal (BROWSER-only), workers
     # share a static principal, so a per-principal cap would wrongly limit the

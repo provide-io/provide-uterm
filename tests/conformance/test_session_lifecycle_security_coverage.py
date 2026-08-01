@@ -243,3 +243,4 @@ def test_default_paths_are_independent_of_callers_working_directory(tmp_path: Pa
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.strip() == "session-lifecycle contract validation passed"

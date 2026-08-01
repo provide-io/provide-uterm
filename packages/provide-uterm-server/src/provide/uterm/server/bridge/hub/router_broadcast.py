@@ -263,7 +263,14 @@ async def broadcast_hijack_state(router: MessageRouter, worker_id: str) -> None:
         )
 
 
-async def send_worker(router: MessageRouter, worker_id: str, msg: dict[str, Any], *, source: Any = None) -> bool:
+async def send_worker(
+    router: MessageRouter,
+    worker_id: str,
+    msg: dict[str, Any],
+    *,
+    source: Any = None,
+    expected_worker: WebSocket | None = None,
+) -> bool:
     """Send *msg* to the worker WebSocket; returns False if no worker is connected.
 
     Tunnel workers (``is_tunnel_worker=True``) use the binary tunnel
@@ -281,6 +288,8 @@ async def send_worker(router: MessageRouter, worker_id: str, msg: dict[str, Any]
     async with hub._lock:
         st = hub.registry.get(worker_id)
         if st is None or st.worker_ws is None:
+            return False
+        if expected_worker is not None and st.worker_ws is not expected_worker:
             return False
         ws = st.worker_ws
         is_tunnel = st.is_tunnel_worker

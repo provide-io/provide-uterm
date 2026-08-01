@@ -26,6 +26,7 @@ module's ``logger`` (via ``connection_hijack.logger``) to assert the
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import TYPE_CHECKING, Any, cast
 
@@ -60,12 +61,20 @@ async def disconnect_worker(mgr: ConnectionManager, worker_id: str) -> bool:
         st = hub.registry.get(worker_id)
         if st is None or st.worker_ws is None:
             return False
-        ws = st.worker_ws
-        st.worker_ws = None
-        was_hijacked = st.hijack_session is not None or st.hijack_owner is not None
-        st.hijack_session = None
-        st.hijack_owner = None
-        st.hijack_owner_expires_at = None
+        state = st
+        fence = st.owned_input_fence
+    async with fence:
+        async with hub._lock:
+            st = hub.registry.get(worker_id)
+            if st is not state or st.worker_ws is None:
+                return False
+            ws = st.worker_ws
+            st.worker_ws = None
+            was_hijacked = st.hijack_session is not None or st.hijack_owner is not None
+            st.hijack_session = None
+            st.hijack_owner = None
+            st.hijack_owner_expires_at = None
+            st.ownership_generation += 1
     try:
         await ws.close()
     except Exception as exc:
@@ -111,20 +120,35 @@ async def force_release_hijack(mgr: ConnectionManager, worker_id: str) -> bool:
         st = hub.registry.get(worker_id)
         if st is None:
             return False
-        if st.hijack_session is not None:
-            owner = st.hijack_session.owner
-            st.hijack_session = None
-            had_hijack = True
-        if hub.is_dashboard_hijack_active(st):  # pragma: no branch
-            st.hijack_owner = None
-            st.hijack_owner_expires_at = None
-            had_hijack = True
-    if not had_hijack:
-        return False
-    await hub.send_worker(
-        worker_id,
-        {"type": "control", "action": "resume", "owner": owner, "lease_s": 0, "ts": time.time()},
-    )
+        state = st
+        fence = st.owned_input_fence
+    async with fence:
+        async with hub._lock:
+            st = hub.registry.get(worker_id)
+            if st is not state:
+                return False
+            if st.hijack_session is not None:
+                owner = st.hijack_session.owner
+                st.hijack_session = None
+                had_hijack = True
+            if hub.is_dashboard_hijack_active(st):  # pragma: no branch
+                st.hijack_owner = None
+                st.hijack_owner_expires_at = None
+                had_hijack = True
+            if had_hijack:
+                st.ownership_generation += 1
+        if not had_hijack:
+            return False
+        try:
+            await asyncio.wait_for(
+                hub.send_worker(
+                    worker_id,
+                    {"type": "control", "action": "resume", "owner": owner, "lease_s": 0, "ts": time.time()},
+                ),
+                timeout=5.0,
+            )
+        except TimeoutError:
+            logger.warning("force_release_resume_timeout worker_id=%s", worker_id)
     hub.notify_hijack_changed(worker_id, enabled=False, owner=None)
     await hub.broadcast_hijack_state(worker_id)
     return True

@@ -23,9 +23,9 @@ if TYPE_CHECKING:
     from provide.uterm.server.bridge.hub.core_impl import TermHub
 
 
-async def register_worker(hub: TermHub, worker_id: str, ws: WebSocket) -> bool:
+async def register_worker(hub: TermHub, worker_id: str, ws: WebSocket, *, is_tunnel_worker: bool = False) -> bool:
     """Register *ws* as the active worker for *worker_id*."""
-    result = await hub.connection_mgr.register_worker(worker_id, ws)
+    result = await hub.connection_mgr.register_worker(worker_id, ws, is_tunnel_worker=is_tunnel_worker)
     await hub.emit_telemetry("session.registered", worker_id=worker_id, metadata={"session_type": "worker"})
     return result
 

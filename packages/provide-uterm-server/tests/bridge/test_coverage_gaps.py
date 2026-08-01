@@ -389,7 +389,8 @@ class TestBrowserHandlersResumeReclaimFail:
         msg_b = {"type": "resume", "token": token}
         await _handle_resume(hub, ws, "w1", "admin", msg_b, False)
 
-        # A pause was sent (for reclaim attempt), then a compensating resume (reclaim failed)
+        # Default fail-closed behavior consumes the stale owner token without
+        # touching the worker or emitting a resumed hello.
         actions = [m.get("action") for m in resume_sends]
-        assert "pause" in actions, f"Expected pause in {actions}"
-        assert "resume" in actions, f"Expected compensating resume in {actions}"
+        assert actions == []
+        assert await store.get(token) is None

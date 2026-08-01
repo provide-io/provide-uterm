@@ -347,6 +347,7 @@ def create_server_app(
         worker_frame_on_invalid=config.worker_frame_on_invalid,
         resume_store=resume_store,
         on_resume=_on_resume,
+        allow_stale_owner_role_resume=config.allow_stale_owner_role_resume,
         browser_rate_limit_per_sec=config.browser_rate_limit_per_sec,
         rest_acquire_rate_limit_per_sec=config.rest_acquire_rate_limit_per_sec,
         rest_send_rate_limit_per_sec=config.rest_send_rate_limit_per_sec,
