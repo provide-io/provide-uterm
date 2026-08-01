@@ -226,6 +226,39 @@ class TestResumeRoleRestoration:
 
 
 class TestResumeBranchCoverage:
+    def test_public_resume_rejected_by_competitor_preserves_token_for_retry(self) -> None:
+        """The browser route keeps rejected authority live until ownership is available."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        store = InMemoryResumeStore()
+        app, hub = make_app(role="admin", resume_store=store)
+        client = TestClient(app)
+        token = asyncio.run(store.create(WID, "admin", 300))
+        asyncio.run(store.mark_hijack_owner(token, True))
+
+        with connect_test_ws(client, f"/ws/browser/{WID}/term") as browser:
+            _read_initial(browser)
+            state = hub.registry._workers[WID]
+            competitor = MagicMock()
+            state.worker_ws = AsyncMock()
+            state.hijack_owner = competitor
+            state.hijack_owner_expires_at = float("inf")
+
+            browser.send_json({"type": "resume", "token": token})
+            browser.send_json({"type": "ping"})
+            assert browser.receive_json()["type"] == "pong"
+            assert asyncio.run(store.get(token)) is not None
+            assert state.hijack_owner is competitor
+
+            state.hijack_owner = None
+            state.hijack_owner_expires_at = None
+            browser.send_json({"type": "resume", "token": token})
+            resumed = browser.receive_json()
+            assert resumed["type"] == "hello"
+            assert resumed["resumed"] is True
+            assert resumed["hijacked_by_me"] is True
+            assert asyncio.run(store.get(token)) is None
+
     @pytest.mark.asyncio()
     async def test_register_browser_state_snapshot_no_worker(self) -> None:
         """register_browser_state_snapshot returns defaults when worker not registered."""
