@@ -8,7 +8,12 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { AuthorizablePrincipal } from "../server/authorization.ts";
 import type { OutputCapture } from "./collector.ts";
-import { FanOutController, type FanOutControllerHub, type SendOptions } from "./controller.ts";
+import {
+  type ApprovalIdentity,
+  FanOutController,
+  type FanOutControllerHub,
+  type SendOptions,
+} from "./controller.ts";
 import { type FanOutResult, fanOutGroup, InMemoryFanOutStore } from "./models.ts";
 import { createFanoutRoutes, type FanoutRoutesController } from "./routes.ts";
 
@@ -84,6 +89,7 @@ class ScenarioHub implements FanOutControllerHub {
   readonly approvals: Record<string, unknown>[] = [];
   private readonly accepted: Set<string>;
   private readonly immediate: Record<string, string>;
+  #nextApprovalRevision = 0;
 
   constructor(accepted: Set<string>, immediate: Record<string, string>) {
     this.accepted = accepted;
@@ -103,8 +109,12 @@ class ScenarioHub implements FanOutControllerHub {
 
   async appendEvent(): Promise<void> {}
 
-  addApproval(request: Record<string, unknown>): void {
-    this.approvals.push(request);
+  addApproval(request: Record<string, unknown>): ApprovalIdentity | undefined {
+    const id = String(request.id);
+    if (this.approvals.some((approval) => approval.id === id)) return undefined;
+    const revision = ++this.#nextApprovalRevision;
+    this.approvals.push({ ...request, revision });
+    return { id, revision };
   }
 
   async openOutputCapture(workerId: string): Promise<OutputCapture> {
@@ -258,7 +268,8 @@ async function executeRest(scenario: Scenario): Promise<Observation> {
     approvalId: body.approval_id === null ? null : String(body.approval_id),
   };
   if (input.surface === "rest_release" && held.approvalId !== null) {
-    const released = await built.controller.releaseApprovedCommand(held.approvalId);
+    const revision = Number(built.hub.approvals.find((approval) => approval.id === held.approvalId)?.revision);
+    const released = await built.controller.releaseApprovedCommand(held.approvalId, revision);
     expect(released).toBeDefined();
     const observation = fromResult(scenario, released as FanOutResult, built.hub, response.status);
     observation.approval_required = held.approvalRequired;

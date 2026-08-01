@@ -5,7 +5,13 @@
 
 import { describe, expect, it } from "vitest";
 import type { AuthorizablePrincipal } from "../server/authorization.ts";
-import { FanOutController, type FanOutControllerHub, type FanOutGroup, fanOutGroup } from "./index.ts";
+import {
+  type ApprovalIdentity,
+  FanOutController,
+  type FanOutControllerHub,
+  type FanOutGroup,
+  fanOutGroup,
+} from "./index.ts";
 
 const NOW = 1000;
 
@@ -21,7 +27,7 @@ class FakeHub implements FanOutControllerHub {
   readonly captureBuffers = new Map<string, string[]>();
   readonly captureFailures = new Set<string>();
   readonly closes = new Map<string, number>();
-  onApprovalExpired: ((requestId: string) => void) | undefined;
+  onApprovalExpired: ((approval: ApprovalIdentity) => void) | undefined;
 
   async sendWorker(workerId: string, message: Record<string, unknown>): Promise<boolean> {
     this.sent.push({ workerId, message });
@@ -39,7 +45,9 @@ class FakeHub implements FanOutControllerHub {
 
   async appendEvent(): Promise<void> {}
 
-  addApproval(): void {}
+  addApproval(request: Record<string, unknown>): ApprovalIdentity {
+    return { id: String(request.id), revision: 1 };
+  }
 
   async collectOutput(workerId: string): Promise<{ output: string; elapsedMs: number }> {
     this.collected.push(workerId);
@@ -376,7 +384,7 @@ describe("FanOutController parallel send", () => {
         sendWorker: async () => true,
         broadcast: async () => {},
         appendEvent: async () => {},
-        addApproval: () => {},
+        addApproval: (request) => ({ id: String(request.id), revision: 1 }),
         openOutputCapture: async () => ({
           collect: async (options) => {
             seen = options;
@@ -404,7 +412,7 @@ describe("FanOutController parallel send", () => {
         sendWorker: async () => true,
         broadcast: async () => {},
         appendEvent: async () => {},
-        addApproval: () => {},
+        addApproval: (request) => ({ id: String(request.id), revision: 1 }),
         openOutputCapture: async () => ({
           collect: async (options) => {
             seen = options;

@@ -44,7 +44,7 @@ export interface ApprovalRequest {
   submitterId: string;
   /** The command text held for review. */
   command: string;
-  /** Current lifecycle state; mutated in place by the store. */
+  /** Current lifecycle state; the store mutates only its internal copy. */
   status: ApprovalStatus;
   /** Wall-clock seconds at submission. */
   createdAt: number;
@@ -56,10 +56,21 @@ export interface ApprovalRequest {
   isFanout?: boolean | undefined;
 }
 
+/** A stored request carrying the opaque generation that fences stale work. */
+export interface StoredApprovalRequest extends ApprovalRequest {
+  /** Store-assigned generation used to fence stale decisions and callbacks. */
+  readonly revision: number;
+}
+
+/** Explicit name for the public construction shape. */
+export type ApprovalRequestInput = ApprovalRequest;
+
 /** Construction options for {@link InMemoryApprovalStore}. */
 export interface ApprovalStoreOptions {
   /** Wall clock in seconds. Injected so tests need not depend on real time. */
   now?: () => number;
+  /** Last issued revision when restoring a store's monotonic sequence. */
+  initialRevision?: number;
 }
 
 /** Wall-clock seconds, matching the reference's `time.time()`. */
@@ -70,56 +81,87 @@ function wallNow(): number {
 /** In-memory store for approval requests, keyed by request id. */
 export class InMemoryApprovalStore {
   /**
-   * Notified with the id of each request that times out during cleanup.
+   * Notified with an exact-revision snapshot of each request that times out.
    *
    * Subscribers (the fan-out controller, for one) use this to drop their own
    * state for the request. It runs after every mutation is complete, and is
    * awaited if it returns a promise.
    */
-  onExpired: ((requestId: string) => void | Promise<void>) | undefined;
+  onExpired: ((request: StoredApprovalRequest) => void | Promise<void>) | undefined;
 
-  readonly #requests = new Map<string, ApprovalRequest>();
+  readonly #requests = new Map<string, StoredApprovalRequest>();
   readonly #now: () => number;
+  #nextRevision: number;
 
   constructor(options: ApprovalStoreOptions = {}) {
     this.#now = options.now ?? wallNow;
-  }
-
-  /** Insert a request, replacing any existing one with the same id. */
-  add(request: ApprovalRequest): void {
-    this.#requests.set(request.id, request);
-  }
-
-  /** The request for `requestId`, or `undefined` when it is unknown. */
-  get(requestId: string): ApprovalRequest | undefined {
-    return this.#requests.get(requestId);
+    const initialRevision = options.initialRevision ?? 0;
+    if (!Number.isSafeInteger(initialRevision) || initialRevision < 0) {
+      throw new RangeError("initial approval revision must be a non-negative safe integer");
+    }
+    this.#nextRevision = initialRevision;
   }
 
   /**
-   * Transition a pending request to `status`, ignoring it otherwise.
+   * Insert a request and return its store-assigned revision.
+   *
+   * A live id collision is rejected instead of replacing the current
+   * request: replacement would let a delayed decision for the old request
+   * act on the new one. Once a terminal request is pruned, the id may be
+   * reused, but it receives a fresh revision.
+   */
+  add(request: ApprovalRequestInput): StoredApprovalRequest | undefined {
+    if (this.#requests.has(request.id)) {
+      return undefined;
+    }
+    if (this.#nextRevision === Number.MAX_SAFE_INTEGER) {
+      throw new RangeError("approval revision space exhausted");
+    }
+    this.#nextRevision += 1;
+    const stored = { ...request, revision: this.#nextRevision };
+    this.#requests.set(stored.id, stored);
+    return { ...stored };
+  }
+
+  /** A snapshot of `requestId`, or `undefined` when it is unknown. */
+  get(requestId: string): StoredApprovalRequest | undefined {
+    const request = this.#requests.get(requestId);
+    return request === undefined ? undefined : { ...request };
+  }
+
+  /**
+   * Transition the exact pending revision to `status`, ignoring it otherwise.
    *
    * Superseded by {@link claim} for handling a decision, since it cannot tell
    * the caller whether *it* was the one that resolved the request. Retained
    * because direct callers and tests still use it.
    */
-  resolve(requestId: string, status: ApprovalStatus): void {
+  resolve(requestId: string, status: ApprovalStatus, expectedRevision: number): void {
     const request = this.#requests.get(requestId);
-    if (request !== undefined && request.status === "pending") {
+    if (
+      request !== undefined &&
+      request.status === "pending" &&
+      request.revision === expectedRevision
+    ) {
       request.status = status;
     }
   }
 
   /**
-   * Transition a pending request to `status`, reporting whether this call did
-   * it.
+   * Transition the exact pending revision to `status`, reporting whether this
+   * call did it.
    *
    * Returns `true` only for the caller that performs the transition, so a
    * command held for approval is injected exactly once even when an approve
    * and a reject arrive together. Callers must inject only on `true`.
    */
-  claim(requestId: string, status: ApprovalStatus): boolean {
+  claim(requestId: string, status: ApprovalStatus, expectedRevision: number): boolean {
     const request = this.#requests.get(requestId);
-    if (request === undefined || request.status !== "pending") {
+    if (
+      request === undefined ||
+      request.status !== "pending" ||
+      request.revision !== expectedRevision
+    ) {
       return false;
     }
     request.status = status;
@@ -134,7 +176,7 @@ export class InMemoryApprovalStore {
    */
   async cleanupExpired(): Promise<void> {
     const now = this.#now();
-    const expiredIds: string[] = [];
+    const expired: StoredApprovalRequest[] = [];
 
     // Every mutation happens here, before the first callback: `onExpired` is
     // user code that may be slow, and a subscriber reading the store back
@@ -143,7 +185,7 @@ export class InMemoryApprovalStore {
       if (request.status === "pending") {
         if (request.expiresAt < now) {
           request.status = "timeout";
-          expiredIds.push(request.id);
+          expired.push({ ...request });
         }
       } else if (request.expiresAt + APPROVAL_PRUNE_TTL < now) {
         this.#requests.delete(requestId);
@@ -154,8 +196,8 @@ export class InMemoryApprovalStore {
     if (onExpired === undefined) {
       return;
     }
-    for (const requestId of expiredIds) {
-      await onExpired(requestId);
+    for (const request of expired) {
+      await onExpired({ ...request });
     }
   }
 }
