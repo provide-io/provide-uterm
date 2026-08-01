@@ -230,7 +230,12 @@ async def _execute_rest(scenario: dict[str, Any]) -> dict[str, Any]:
         approval_id=body["approval_id"],
     )
     if input_data["surface"] == "rest_release" and held.approval_id:
-        released = await controller.release_approved_command(held.approval_id)
+        approval = _hub.approval_store.get(held.approval_id)
+        assert approval is not None
+        released = await controller.release_approved_command(
+            held.approval_id,
+            expected_revision=approval.revision,
+        )
         assert released is not None
         observation = _from_result(scenario, released, delivered, observers, response.status_code)
         observation["approval_required"] = held.approval_required

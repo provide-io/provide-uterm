@@ -219,13 +219,14 @@ async def test_fanout_release_approved_command_returns_error_for_unauthorized_pr
         can_read_session=AsyncMock(return_value=True),
     )
     ctrl._pending_approvals["req-y"] = {  # type: ignore[attr-defined]
+        "revision": 7,
         "group_id": "g-gone",
         "command": "ls",
         "principal": Principal(subject_id="user", roles=frozenset({"admin"})),
         "quiesce_ms": None,
         "max_response_ms": None,
     }
-    result = await ctrl.release_approved_command("req-y")
+    result = await ctrl.release_approved_command("req-y", expected_revision=7)
 
     assert result is not None
     assert result.error == "global admin role required"

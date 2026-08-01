@@ -116,7 +116,7 @@ async def resolve_approval(
             fo_ctrl = getattr(hub, "fan_out_controller", None)
             if fo_ctrl is None:
                 return False, "fanout_controller_unavailable"
-            result = await fo_ctrl.release_approved_command(request_id)
+            result = await fo_ctrl.release_approved_command(request_id, expected_revision=req.revision)
             if result is None:
                 return False, "fanout_approval_not_pending"
             if result.error:

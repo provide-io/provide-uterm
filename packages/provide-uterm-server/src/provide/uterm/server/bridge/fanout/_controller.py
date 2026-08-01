@@ -62,7 +62,14 @@ class FanOutController:
 
     def _on_approval_expired(self, request: Any) -> None:
         """Prune local state when a fan-out approval times out in the Hub."""
-        self._pending_approvals.pop(request.id, None)
+        self._pop_pending_approval(request.id, request.revision)
+
+    def _pop_pending_approval(self, request_id: str, expected_revision: int) -> dict[str, Any] | None:
+        """Remove pending fan-out state only for the exact approval revision."""
+        pending = self._pending_approvals.get(request_id)
+        if pending is None or pending["revision"] != expected_revision:
+            return None
+        return self._pending_approvals.pop(request_id)
 
     def _get_fanout_policy_gate(self) -> FanOutPolicyGate:
         if self._fanout_policy_gate is not None:
@@ -285,7 +292,12 @@ class FanOutController:
             if not hub_approvals.add(approval):
                 msg = "fan-out approval request ID collision"
                 raise RuntimeError(msg)
+            stored_approval = hub_approvals.get(request_id)
+            if stored_approval is None:  # pragma: no cover - add/get are one synchronous store operation
+                msg = "fan-out approval request disappeared after creation"
+                raise RuntimeError(msg)
             self._pending_approvals[request_id] = {
+                "revision": stored_approval.revision,
                 "group_id": group_id,
                 "command": data,
                 "quiesce_ms": quiesce_ms,
@@ -315,9 +327,9 @@ class FanOutController:
             result = await self._send_parallel(dispatch_group, data, q_ms, m_ms, principal=principal.subject_id)
         return self._append_refused(result, refused)
 
-    async def release_approved_command(self, request_id: str) -> FanOutResult | None:
+    async def release_approved_command(self, request_id: str, *, expected_revision: int) -> FanOutResult | None:
         """Execute a previously held fan-out command after approval."""
-        pending = self._pending_approvals.pop(request_id, None)
+        pending = self._pop_pending_approval(request_id, expected_revision)
         if pending is None:
             return None
 

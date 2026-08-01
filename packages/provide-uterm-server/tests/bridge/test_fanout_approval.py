@@ -230,9 +230,11 @@ async def test_approval_release_rechecks_current_session_authorization(hub, gate
     )
     gate.next_decision = PolicyDecision(action="hold")
     held = await ctrl.send(group_id, "id", principal=principal)
+    approval = hub.approval_store.get(held.approval_id)
+    assert approval is not None
 
     readable = False
-    result = await ctrl.release_approved_command(held.approval_id)
+    result = await ctrl.release_approved_command(held.approval_id, expected_revision=approval.revision)
 
     assert result is not None
     assert result.failed_sessions == ["w1"]
@@ -266,10 +268,12 @@ async def test_approval_release_rechecks_global_admin_and_keeps_full_principal(h
     )
     gate.next_decision = PolicyDecision(action="hold")
     held = await ctrl.send(group_id, "id", principal=principal)
+    approval = hub.approval_store.get(held.approval_id)
+    assert approval is not None
     assert ctrl._pending_approvals[held.approval_id]["principal"] is principal
 
     admin_allowed = False
-    result = await ctrl.release_approved_command(held.approval_id)
+    result = await ctrl.release_approved_command(held.approval_id, expected_revision=approval.revision)
 
     assert result is not None
     assert result.error == "global admin role required"
@@ -299,12 +303,14 @@ async def test_approval_release_rechecks_current_group_acl(hub, gate):
     )
     gate.next_decision = PolicyDecision(action="hold")
     held = await ctrl.send("g-grant-revoke", "id", principal=principal)
+    approval = hub.approval_store.get(held.approval_id)
+    assert approval is not None
     stored = await ctrl._store.get("g-grant-revoke")
     assert stored is not None
     stored.grants.clear()
     await ctrl._store.save(stored)
 
-    result = await ctrl.release_approved_command(held.approval_id)
+    result = await ctrl.release_approved_command(held.approval_id, expected_revision=approval.revision)
 
     assert result is not None
     assert result.error == "fan-out group not found"
@@ -338,7 +344,7 @@ async def test_hold_audit_failure_leaves_nothing_releasable_or_duplicable(hub, g
 
     assert ctrl._pending_approvals == {}
     assert hub.approval_store.get(request_id) is None
-    assert await ctrl.release_approved_command(request_id) is None
+    assert await ctrl.release_approved_command(request_id, expected_revision=1) is None
     assert not hub.sent_messages
 
 
@@ -372,7 +378,7 @@ async def test_hold_approval_failure_leaves_nothing_releasable_or_duplicable(hub
             await ctrl.send("g-approval-fail", "id", principal=ADMIN)
 
     assert ctrl._pending_approvals == {}
-    assert await ctrl.release_approved_command(request_id) is None
+    assert await ctrl.release_approved_command(request_id, expected_revision=1) is None
     assert not hub.sent_messages
 
 
@@ -426,6 +432,77 @@ async def test_fanout_approval_expiration_cleanup(controller, hub, gate):
 
     # Verify controller state is pruned
     assert req_id not in controller._pending_approvals
+
+
+@pytest.mark.asyncio
+async def test_delayed_expiry_of_pruned_revision_cannot_delete_reused_pending_payload(hub, gate, monkeypatch):
+    """A queued rev1 timeout must not remove rev2 after its request ID is reused."""
+    from provide.uterm.server.bridge.hub.approvals import ApprovalStatus
+
+    notification_started = asyncio.Event()
+    release_notification = asyncio.Event()
+
+    async def delay_rev1_notification(_request):
+        notification_started.set()
+        await release_notification.wait()
+
+    hub.approval_store.subscribe_expired(delay_rev1_notification)
+    ctrl = FanOutController(
+        hub=hub,
+        fanout_policy_gate=gate,
+        is_global_admin=AsyncMock(return_value=True),
+        resolve_session=AsyncMock(return_value=object()),
+        can_read_session=AsyncMock(return_value=True),
+    )
+    await ctrl.create_group(
+        FanOutGroup(group_id="g-aba", name="G", worker_ids=["w1"], created_by="admin", created_at=0.0),
+        principal=ADMIN,
+    )
+    gate.next_decision = PolicyDecision(action="hold")
+    monkeypatch.setattr(
+        "provide.uterm.server.bridge.fanout._controller.uuid.uuid4",
+        lambda: MagicMock(hex="reused-request"),
+    )
+
+    first = await ctrl.send("g-aba", "first", principal=ADMIN)
+    revision_one = hub.approval_store.get(first.approval_id)
+    assert revision_one is not None
+    with hub.approval_store._lock:
+        hub.approval_store._requests[first.approval_id].expires_at = time.time() - 3601
+    assert (
+        hub.approval_store.claim_request(
+            first.approval_id,
+            ApprovalStatus.RESOLVING,
+            expected_revision=revision_one.revision,
+        )
+        is None
+    )
+
+    cleanup = asyncio.create_task(hub.approval_store.cleanup_expired())
+    await asyncio.wait_for(notification_started.wait(), timeout=1)
+    assert hub.approval_store.get(first.approval_id) is None
+
+    second = await ctrl.send("g-aba", "second", principal=ADMIN)
+    revision_two = hub.approval_store.get(second.approval_id)
+    assert revision_two is not None
+    assert revision_two.revision > revision_one.revision
+    assert ctrl._pending_approvals[second.approval_id]["command"] == "second"
+    assert (
+        await ctrl.release_approved_command(
+            second.approval_id,
+            expected_revision=revision_one.revision,
+        )
+        is None
+    )
+    assert ctrl._pending_approvals[second.approval_id]["command"] == "second"
+
+    release_notification.set()
+    await cleanup
+
+    current = hub.approval_store.get(second.approval_id)
+    assert current is not None
+    assert current.status == ApprovalStatus.PENDING
+    assert ctrl._pending_approvals[second.approval_id]["command"] == "second"
 
 
 @pytest.mark.asyncio

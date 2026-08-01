@@ -390,7 +390,7 @@ async def test_fanout_release_approved_command_returns_none_for_unknown_request(
 
     ctrl = FanOutController(hub=MagicMock(), fanout_policy_gate=MagicMock())
     # No pending approval registered -> None (line 226).
-    assert await ctrl.release_approved_command("missing-id") is None
+    assert await ctrl.release_approved_command("missing-id", expected_revision=1) is None
 
 
 # ---------------------------------------------------------------------------
