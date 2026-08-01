@@ -127,10 +127,18 @@ public sealed class FanoutSecurityScenarioTests
         config.FanoutAllowUnknownMembers = Flag(groupInput, "allow_unknown_members");
         if (Text(input["policy"]!.AsObject(), "action") != "allow")
             config.Governance.PolicyWebhookUrl = "https://policy.example.test/fanout";
+        // The routes resolve every member through their own registry and ask
+        // their own authorizer for read access, so the fixture has to answer at
+        // both — otherwise a member is only ever unknown, and a registered one
+        // is readable purely because the actor is an admin.
+        var visibility = input["visibility"]!.AsObject();
+        var registry = new InMemorySessionRegistry(
+            RegisteredMembers(visibility).Select(id => new SessionDefinition { SessionId = id, AutoStart = false }));
         await using var server = new UtermServer(new ServerDeps
         {
-            Hub = new TermHub(), Auth = new ScenarioAuthenticator(), Authz = new AuthorizationService(),
-            Config = config, Registry = new InMemorySessionRegistry(), Fanout = controller,
+            Hub = new TermHub(), Auth = new ScenarioAuthenticator(),
+            Authz = new AuthorizationService(new ScenarioAuthorizationProvider(ServerReadable(visibility))),
+            Config = config, Registry = registry, Fanout = controller,
         });
         server.Build(["http://127.0.0.1:0"]);
         await server.StartAsync();
@@ -199,15 +207,56 @@ public sealed class FanoutSecurityScenarioTests
         if (status == HttpStatusCode.Unauthorized) return "authentication_required";
         if (body.Contains("admin", StringComparison.OrdinalIgnoreCase)) return "global_admin_required";
         if (body.Contains("unknown fan-out", StringComparison.OrdinalIgnoreCase)) return "unknown_member";
+        if (body.Contains("no read access", StringComparison.OrdinalIgnoreCase)) return "member_read_forbidden";
+        if (body.Contains("authorization", StringComparison.OrdinalIgnoreCase)) return "authorization_unavailable";
         if (status == HttpStatusCode.NotImplemented) return "unsupported_fail_closed";
         return "request_failed";
     }
 
-    private static (Controller Controller, ScenarioHub Hub) Build(JsonObject input)
+    /// <summary>
+    /// The sessions the routes' registry knows about. A readable session has to
+    /// exist to be readable, so the visible set is the floor; naming
+    /// <c>registered_members</c> only adds sessions that exist without being
+    /// readable, which is what separates an unknown member from a forbidden one.
+    /// </summary>
+    private static List<string> RegisteredMembers(JsonObject visibility)
     {
-        var visibility = input["visibility"]!.AsObject();
+        var readable = Strings(visibility["readable_members"]);
+        var registered = visibility["registered_members"] is JsonArray declared
+            ? Strings(declared)
+            : new List<string>(readable);
+        foreach (var workerId in readable)
+            if (!registered.Contains(workerId))
+                registered.Add(workerId);
+        return registered;
+    }
+
+    /// <summary>What the server's own authorizer answers read access from.</summary>
+    private static HashSet<string> ServerReadable(JsonObject visibility)
+    {
         var readable = Strings(visibility["readable_members"]).ToHashSet();
         readable.ExceptWith(Strings(visibility["revoke_before_send"]));
+        return readable;
+    }
+
+    /// <summary>
+    /// What the fan-out controller's own authorizer answers read access from. A
+    /// fixture may hand the controller a wider view than the server has, to
+    /// prove that admission still follows the server's answer.
+    /// </summary>
+    private static HashSet<string> ControllerReadable(JsonObject visibility)
+    {
+        var declared = visibility["controller_readable_members"] is JsonArray widened
+            ? Strings(widened)
+            : Strings(visibility["readable_members"]);
+        var readable = declared.ToHashSet();
+        readable.ExceptWith(Strings(visibility["revoke_before_send"]));
+        return readable;
+    }
+
+    private static (Controller Controller, ScenarioHub Hub) Build(JsonObject input)
+    {
+        var readable = ControllerReadable(input["visibility"]!.AsObject());
         var workers = input["workers"]!.AsObject();
         var hub = new ScenarioHub(
             Strings(workers["accepted_members"]), StringMap(workers["immediate_output"]),
@@ -223,15 +272,15 @@ public sealed class FanoutSecurityScenarioTests
     private static (Controller Controller, ScenarioHub Hub) BuildRoute(JsonObject input, bool preseedGroup)
     {
         var workers = input["workers"]!.AsObject();
-        var members = Strings(input["group"]!["members"]);
         var hub = new ScenarioHub(
             Strings(workers["accepted_members"]), StringMap(workers["immediate_output"]),
             Flag(workers, "continuous_output"));
-        var controller = new Controller(hub, new ControllerConfig
-        {
-            IdGen = () => "route-group",
-            Authorizer = new ScenarioAuthorizer(members),
-        });
+        var config = new ControllerConfig { IdGen = () => "route-group" };
+        // A fixture may leave the controller unwired, so the route has to refuse
+        // rather than admit on whatever checks remain.
+        if (!Flag(input, "omit_authorizers"))
+            config.Authorizer = new ScenarioAuthorizer(ControllerReadable(input["visibility"]!.AsObject()));
+        var controller = new Controller(hub, config);
         if (preseedGroup)
         {
             var group = Group(input);
@@ -328,6 +377,33 @@ public sealed class FanoutSecurityScenarioTests
         public bool IsGlobalAdmin(Principal principal) =>
             principal.Roles.Has("admin") && principal.AdminSessionScope is null;
         public bool CanReadMember(Principal principal, string workerId) => _readable.Contains(workerId);
+    }
+
+    /// <summary>
+    /// The server's authorizer, with the fixture answering read access. Every
+    /// other decision still comes from local RBAC, so the admin and viewer
+    /// refusals stay the server's own.
+    /// </summary>
+    private sealed class ScenarioAuthorizationProvider(IReadOnlySet<string> readable) : IAuthorizationProvider
+    {
+        private readonly LocalAuthorizationProvider _local = new();
+
+        public StringSet CapabilitiesFor(Principal p) => _local.CapabilitiesFor(p);
+        public bool HasCapability(Principal p, string capability) => _local.HasCapability(p, capability);
+        public bool IsAdmin(Principal p) => _local.IsAdmin(p);
+        public bool IsOwner(Principal p, SessionDefinition session) => _local.IsOwner(p, session);
+        public bool CanReadSession(Principal p, SessionDefinition session) => readable.Contains(session.SessionId);
+
+        public bool CanReadRecording(Principal p, SessionDefinition session) =>
+            CanReadSession(p, session) && _local.HasCapability(p, "session.recording.read");
+
+        public bool CanCreateSession(Principal p) => _local.CanCreateSession(p);
+
+        public bool CanMutateSession(Principal p, SessionDefinition session, string action) =>
+            _local.CanMutateSession(p, session, action);
+
+        public string ResolveBrowserRole(Principal p, SessionDefinition session) =>
+            CanReadSession(p, session) ? _local.ResolveBrowserRole(p, session) : "viewer";
     }
 
     private sealed class ScenarioHub(

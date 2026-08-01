@@ -148,6 +148,14 @@ public sealed partial class UtermServer
         var body = await ReadJson(ctx).ConfigureAwait(false);
         var workerIds = body.TryGetValue("worker_ids", out var w) ? StringList(w) : new List<string>();
         var name = Str(body, "name");
+        var fanout = EnsureFanout();
+        // A controller that cannot judge access does not get to admit members
+        // on the strength of the checks that remain.
+        if (!fanout.AuthorizationReady)
+        {
+            return BridgeError(403, "fan-out authorization is unavailable");
+        }
+
         foreach (var wid in workerIds)
         {
             if (!_deps.Registry.TryGetDefinition(wid, out var def))
@@ -184,7 +192,6 @@ public sealed partial class UtermServer
         };
         try
         {
-            var fanout = EnsureFanout();
             var groupId = fanout.CreateGroup(group, p.SubjectId);
             return Results.Json(new
             {
