@@ -486,6 +486,17 @@ async def _handle_resume(
         logger.warning(EVENT_RESUME_FAILED, worker_id=worker_id, reason="token_malformed")
         return owned_hijack
 
+    # Order this resume behind the OLD socket's disconnect bookkeeping. That is
+    # what writes ``was_hijack_owner`` onto the stored session, it runs on the
+    # old socket's own task, and everything below — including the reclaim gate
+    # in ``_try_reclaim_hijack`` — is decided from the value read here. Without
+    # the wait a browser that reconnects promptly reads ``False`` and silently
+    # comes back as a fenced viewer.  The wait is bounded; on expiry we proceed
+    # with whatever the store already says (the pre-latch behaviour) rather than
+    # failing a resume that is otherwise valid.
+    if not await hub.wait_resume_token_ready(old_token, ws):
+        logger.warning("ws_browser_resume_detach_wait_timeout worker_id=%s", worker_id)
+
     # Non-destructive lookup for the validation gates: a wrong-worker or
     # callback-rejected resume must NOT burn the single-use token, otherwise
     # the legitimate browser could no longer resume. The token is consumed
@@ -538,7 +549,11 @@ async def _handle_resume(
 
     if new_role != role:
         await hub.set_browser_role(worker_id, ws, new_role)
-    hub._ws_to_resume_token[ws] = new_token
+    # Bind under the lock so the replacement token is armed with its own detach
+    # latch (and the superseded connect-time token's latch is released) before
+    # any peer can wait on it.
+    async with hub._lock:
+        hub._bind_resume_token_locked(ws, new_token)
 
     _resumed_state = await hub.register_browser_state_snapshot(worker_id, ws)
     await ws.send_text(

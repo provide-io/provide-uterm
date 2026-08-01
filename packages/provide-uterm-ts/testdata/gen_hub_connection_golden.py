@@ -138,11 +138,27 @@ class _FakeHub:
         self._resume_store = None
         self._resume_ttl_s = 60
         self._ws_to_resume_token: dict[Any, str] = {}
+        self._resume_token_detached: dict[str, asyncio.Event] = {}
         self._ws_principal: dict[Any, str] = {}
         self._principal_browser_counts: dict[str, int] = {}
         self._startup_pending_browsers: set[Any] = set()
         self._background_tasks: set[Any] = set()
         self._output_policy_gate = None
+
+    # The resume-token detach latch, mirrored from the real hub: binding arms
+    # it and every terminal path releases it, so a browser resuming with the
+    # token can order itself behind the previous socket's bookkeeping.
+    def _bind_resume_token_locked(self, ws: Any, token: str) -> None:
+        self._detach_resume_token_locked(self._ws_to_resume_token.get(ws))
+        self._ws_to_resume_token[ws] = token
+        self._resume_token_detached.setdefault(token, asyncio.Event())
+
+    def _detach_resume_token_locked(self, token: str | None) -> None:
+        if token is None:
+            return
+        latch = self._resume_token_detached.pop(token, None)
+        if latch is not None:
+            latch.set()
 
     def is_hijacked(self, st: WorkerTermState) -> bool:
         return StateStore.is_dashboard_hijack_active(st) or StateStore.has_valid_rest_lease(st)

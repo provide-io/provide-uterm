@@ -27,6 +27,7 @@ worker state seeded under ``hub._lock``, ``ws`` is a ``MagicMock`` with
 
 from __future__ import annotations
 
+import asyncio
 import types
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -389,6 +390,33 @@ class TestRegisterBrowserResumeToken:
         # create() invoked with exactly (worker_id, role, ttl).
         assert store.create_calls == [("w1", "operator", hub._resume_ttl_s)]
 
+    async def test_binding_arms_the_detach_latch_for_the_minted_token(self) -> None:
+        """The mint must go through ``_bind_resume_token_locked``, not a raw
+        ``_ws_to_resume_token`` write.
+
+        The latch is what lets a reconnecting browser order itself behind THIS
+        socket's disconnect bookkeeping; a bind that skips it silently restores
+        the lost-reclaim race. Pinned as armed-but-unset: an already-set latch
+        would release a waiter immediately and be just as broken.
+        """
+        store = _FakeResumeStore("TOK-LATCH")
+        hub = TermHub(resume_store=store)
+        await _seed_worker(hub, "w1", WorkerTermState())
+        ws = _ws_no_principal()
+
+        await hub.register_browser("w1", ws, "operator")
+        latch = hub._resume_token_detached["TOK-LATCH"]
+        assert isinstance(latch, asyncio.Event)
+        assert latch.is_set() is False
+
+    async def test_no_resume_store_arms_no_latch(self) -> None:
+        """Without a store nothing is minted, so no latch is armed."""
+        hub = TermHub()
+        await _seed_worker(hub, "w1", WorkerTermState())
+
+        await hub.register_browser("w1", _ws_no_principal(), "viewer")
+        assert hub._resume_token_detached == {}
+
 
 # ===========================================================================
 # register_browser — defer_broadcast
@@ -496,6 +524,31 @@ class TestRegisterBrowserRollback:
         # The browser was never recorded in state.
         assert ws not in hub.registry._workers["w1"].browsers
 
+    async def test_raise_after_mint_releases_the_tokens_detach_latch(self) -> None:
+        """A raise AFTER the token is minted is a terminal path for the socket.
+
+        The rollback must release the latch it armed, otherwise a browser that
+        reconnects with a stale token blocks for the full
+        ``RESUME_TOKEN_DETACH_TIMEOUT_S`` bound waiting on a socket that never
+        existed.
+        """
+        store = _FakeResumeStore("TOK-ORPHAN")
+        hub = TermHub(resume_store=store)
+        await _seed_worker(hub, "w1", WorkerTermState())
+        ws = _ws_with_principal("alice")
+
+        def _boom(*_a: Any, **_k: Any) -> Any:
+            raise RuntimeError("state read exploded")
+
+        # is_hijacked() is read while building initial_state — i.e. after the
+        # token has been minted and bound, which is the window under test.
+        hub.is_hijacked = _boom  # type: ignore[method-assign]
+        with pytest.raises(RuntimeError, match="state read exploded"):
+            await hub.register_browser("w1", ws, "viewer")
+
+        assert hub._resume_token_detached == {}
+        assert ws not in hub._ws_to_resume_token
+
     async def test_rollback_preserves_other_connections_of_same_principal(self) -> None:
         """Rollback decrements (not zeroes) when the principal has other live conns."""
         store = _FakeResumeStore()
@@ -539,6 +592,37 @@ class TestRollbackBrowserQuota:
         assert ws not in hub._ws_to_resume_token
         assert ws not in hub._ws_principal
         assert "alice" not in hub._principal_browser_counts
+
+    def test_pops_the_popped_tokens_latch_and_releases_waiters(self) -> None:
+        """The popped token is the one detached — pinned by releasing its latch.
+
+        A rollback that detaches nothing (or detaches some other token) leaves a
+        waiter blocked; a rollback that pops without detaching leaks the latch.
+        """
+        hub = TermHub()
+        ws = _make_ws()
+        latch = asyncio.Event()
+        other = asyncio.Event()
+        hub._ws_to_resume_token[ws] = "TOK"
+        hub._resume_token_detached["TOK"] = latch
+        hub._resume_token_detached["OTHER"] = other
+
+        hub.connection_mgr._rollback_browser_quota(ws)
+        assert latch.is_set() is True
+        assert "TOK" not in hub._resume_token_detached
+        # An unrelated socket's latch is untouched.
+        assert other.is_set() is False
+        assert hub._resume_token_detached["OTHER"] is other
+
+    def test_no_token_leaves_every_latch_untouched(self) -> None:
+        """Nothing bound for ws -> the detach is a no-op, not a blind pop."""
+        hub = TermHub()
+        latch = asyncio.Event()
+        hub._resume_token_detached["TOK"] = latch
+
+        hub.connection_mgr._rollback_browser_quota(_make_ws())
+        assert latch.is_set() is False
+        assert hub._resume_token_detached == {"TOK": latch}
 
     def test_decrements_when_remaining_positive(self) -> None:
         """Multi-connection principal: rollback decrements but keeps the entry."""
