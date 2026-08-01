@@ -27,15 +27,34 @@ needs splitting instead.
 
 ## Paid down (2026-08-01)
 
-Split into `partial`-class siblings (sources) or partial test classes / sibling
-modules (tests), every resulting file under 700 lines, and their baseline
-entries deleted: `UtermServer.cs` (1559 → 358 + `.BridgeRest.cs`/`.BridgeWs.cs`),
-`Hub/Lease.cs` (1556 → 635 + `.Release.cs`/`.Expiry.cs`), `Hub/Connection.cs`
-(1129 → 587 + `.Browser.cs`), `ResumeLifecycleIntegrationTests.cs` (3255 → six
-files), `HighCoverageBoostTests.cs` (1035 → two), 
-`ServerIntegrationControlPlaneRestTests.cs` (924 → two, by route family),
-`FanoutExecutionTests.cs` (812 → two), and the Cloudflare
-`test_owned_input_fencing.py` (1190 → three modules + `cf_fencing_helpers.py`).
+The gate was red here for two separate reasons, and eight files were split to
+clear it — but only three of them had baseline entries to delete, so "eight
+files split" and "eight entries removed" are not the same count (the commit
+message on `83eaabb6` conflates them).
+
+Three ratcheted files had **grown past** their recorded sizes, which is the
+never-raise rule firing as designed. Their entries are now deleted:
+
+| File | Entry | Actual | Now |
+|---|---:|---:|---|
+| `.../Server/UtermServer.cs` | 1423 | 1559 | 358 + `.BridgeRest.cs`/`.BridgeWs.cs` |
+| `tests/.../HighCoverageBoostTests.cs` | 1032 | 1035 | two files |
+| `tests/.../ServerIntegrationControlPlaneRestTests.cs` | 841 | 924 | two, by route family |
+
+Five more were over the 777 cap with **no entry at all** — they were never
+ratcheted, so the gate simply failed on them. Nothing was deleted for these:
+
+| File | Was | Now |
+|---|---:|---|
+| `tests/.../ResumeLifecycleIntegrationTests.cs` | 3255 | six files by scenario cluster |
+| `.../Hub/Lease.cs` | 1556 | 635 + `.Release.cs`/`.Expiry.cs` |
+| `provide-uterm-cloudflare/tests/test_owned_input_fencing.py` | 1190 | three modules + `cf_fencing_helpers.py` |
+| `.../Hub/Connection.cs` | 1129 | 587 + `.Browser.cs` |
+| `tests/.../FanoutExecutionTests.cs` | 812 | two files |
+
+Every resulting file is under 700 lines. Sources became `partial`-class
+siblings, tests became partial test classes or sibling modules; whole members
+moved verbatim.
 
 ## Excluded from the scan
 
