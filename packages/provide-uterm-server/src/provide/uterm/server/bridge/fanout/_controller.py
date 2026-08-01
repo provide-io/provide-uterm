@@ -282,7 +282,9 @@ class FanOutController:
             if hub_approvals is None:
                 msg = "fan-out approval store is unavailable"
                 raise RuntimeError(msg)
-            hub_approvals.add(approval)
+            if not hub_approvals.add(approval):
+                msg = "fan-out approval request ID collision"
+                raise RuntimeError(msg)
             self._pending_approvals[request_id] = {
                 "group_id": group_id,
                 "command": data,

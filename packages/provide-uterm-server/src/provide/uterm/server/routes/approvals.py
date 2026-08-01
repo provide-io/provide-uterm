@@ -35,8 +35,7 @@ def create_approvals_router() -> APIRouter:
                 "created_at": req.created_at,
                 "expires_at": req.expires_at,
             }
-            for req in hub.approval_store._requests.values()
-            if req.status == ApprovalStatus.PENDING
+            for req in hub.approval_store.pending()
         ]
 
     async def _require_admin(request: Request) -> Any:
@@ -62,17 +61,24 @@ def create_approvals_router() -> APIRouter:
         if approval_req.submitter_id == getattr(approver, "subject_id", None):
             raise HTTPException(status_code=403, detail="Cannot approve your own command")
 
-        if not hub.approval_store.claim(request_id, ApprovalStatus.RESOLVING):
+        claimed = hub.approval_store.claim_request(
+            request_id, ApprovalStatus.RESOLVING, expected_revision=approval_req.revision
+        )
+        if claimed is None:
             raise HTTPException(status_code=400, detail="Approval request is not pending")
         try:
             delivered, reason = await hub.resolve_approval(
-                approval_req.worker_id, request_id, PolicyDecision(action="allow"), approval_req.command
+                claimed.worker_id,
+                request_id,
+                PolicyDecision(action="allow"),
+                claimed.command,
+                approval_request=claimed,
             )
         except BaseException:
-            hub.approval_store.finalize(request_id, ApprovalStatus.REFUSED)
+            hub.approval_store.finalize(request_id, ApprovalStatus.REFUSED, expected_revision=claimed.revision)
             raise
         final_status = ApprovalStatus.APPROVED if delivered else ApprovalStatus.REFUSED
-        hub.approval_store.finalize(request_id, final_status)
+        hub.approval_store.finalize(request_id, final_status, expected_revision=claimed.revision)
         if not delivered:
             raise HTTPException(status_code=409, detail=f"Approval delivery refused: {reason or 'delivery_failed'}")
         return {"status": "approved"}
@@ -85,10 +91,17 @@ def create_approvals_router() -> APIRouter:
         if not approval_req:
             raise HTTPException(status_code=404, detail="Approval request not found")
 
-        if not hub.approval_store.claim(request_id, ApprovalStatus.REJECTED):
+        claimed = hub.approval_store.claim_request(
+            request_id, ApprovalStatus.REJECTED, expected_revision=approval_req.revision
+        )
+        if claimed is None:
             raise HTTPException(status_code=400, detail="Approval request is not pending")
         await hub.resolve_approval(
-            approval_req.worker_id, request_id, PolicyDecision(action="deny", reason=reason), approval_req.command
+            claimed.worker_id,
+            request_id,
+            PolicyDecision(action="deny", reason=reason),
+            claimed.command,
+            approval_request=claimed,
         )
         return {"status": "rejected"}
 

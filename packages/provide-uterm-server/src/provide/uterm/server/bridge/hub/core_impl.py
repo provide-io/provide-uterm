@@ -234,6 +234,23 @@ class TermHub:
             source=source,
         )
 
+    async def run_owned_browser_operation(
+        self,
+        worker_id: str,
+        operation: Any,
+        *,
+        browser_ws: WebSocket,
+        ownership_generation: int,
+        source: Any = None,
+    ) -> tuple[tuple[bool, str | None] | None, str | None]:
+        return await self.lease.run_owned_browser_operation(
+            worker_id,
+            operation,
+            browser_ws=browser_ws,
+            ownership_generation=ownership_generation,
+            source=source,
+        )
+
     async def capture_browser_ownership(self, worker_id: str, ws: WebSocket) -> int | None:
         return await self.lease.capture_browser_ownership(worker_id, ws)
 
@@ -547,7 +564,14 @@ class TermHub:
         request_id: str,
         decision: PolicyDecision,
         command: str,
+        *,
+        approval_request: Any | None = None,
     ) -> tuple[bool, str | None]:
         return await _orch.resolve_approval(  # ty:ignore[invalid-argument-type]
-            self, worker_id, request_id, decision, command
+            self,
+            worker_id,
+            request_id,
+            decision,
+            command,
+            approval_request=approval_request,
         )

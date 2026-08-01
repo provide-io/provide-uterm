@@ -4,6 +4,7 @@
 #
 from __future__ import annotations
 
+import time
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -65,6 +66,8 @@ async def test_approval_flow_buffering_and_hold() -> None:
 
 @pytest.mark.asyncio
 async def test_resolve_approval_approved() -> None:
+    from provide.uterm.server.bridge.hub.approvals import ApprovalRequest, ApprovalStatus
+
     hub = TermHub()
     worker_ws = AsyncMock()
     worker_id = "w1"
@@ -72,14 +75,29 @@ async def test_resolve_approval_approved() -> None:
 
     ws = AsyncMock()
     await hub.register_browser(worker_id, ws, "admin")
+    assert await hub.try_acquire_ws_hijack(worker_id, ws) == (True, None)
 
     # Mock approval request
     request_id = "req-123"
     command = "ls -la\n"
+    generation = await hub.capture_browser_ownership(worker_id, ws)
+    assert generation is not None
+    hub.approval_store.add(
+        ApprovalRequest(
+            id=request_id,
+            worker_id=worker_id,
+            submitter_id="admin",
+            command=command,
+            status=ApprovalStatus.PENDING,
+            created_at=time.time(),
+            expires_at=time.time() + 60,
+            origin_browser=ws,
+            ownership_generation=generation,
+        )
+    )
 
-    # Call resolve_approval
-    # We'll need to implement this in TermHub
-    await hub.resolve_approval(worker_id, request_id, PolicyDecision(action="allow"), command)
+    delivered, reason = await hub.resolve_approval(worker_id, request_id, PolicyDecision(action="allow"), command)
+    assert (delivered, reason) == (True, None)
 
     # Should be sent to worker
     worker_ws.send_text.assert_called()

@@ -45,6 +45,8 @@ from provide.uterm.server.bridge.hub.ext import (
 from provide.uterm.server.bridge.models import HijackSession
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from fastapi import WebSocket
 
     from provide.uterm.server.bridge.hub.registry import WorkerRegistry
@@ -610,6 +612,55 @@ class HijackLeaseManager:
             except TimeoutError:
                 ok = False
             return ok, None if ok else "no_worker"
+
+    async def run_owned_browser_operation(
+        self,
+        worker_id: str,
+        operation: Callable[[Callable[[dict[str, Any]], Awaitable[bool]]], Awaitable[tuple[bool, str | None]]],
+        *,
+        browser_ws: WebSocket,
+        ownership_generation: int,
+        source: Any = None,
+    ) -> tuple[tuple[bool, str | None] | None, str | None]:
+        """Run a multi-send browser operation under one ownership fence.
+
+        The callback receives a bounded sender pinned to the worker socket that
+        was present when ownership was revalidated.  This is used for approval
+        delivery so the approved command and policy-checked buffered replay
+        cannot be interleaved with a release, reacquire, or fresh input send.
+        """
+        async with self._lock:
+            st = self._registry._workers.get(worker_id)
+            if st is None:
+                return None, "invalid_owner"
+            state = st
+            fence = st.owned_input_fence
+
+        async with fence:
+            async with self._lock:
+                st = self._registry._workers.get(worker_id)
+                if (
+                    st is not state
+                    or not self._hub.can_send_input(st, browser_ws)
+                    or st.ownership_generation != ownership_generation
+                ):
+                    return None, "invalid_owner"
+                if self._hub.is_dashboard_hijack_active(st) and st.hijack_owner is browser_ws:
+                    st.hijack_owner_expires_at = time.monotonic() + self._dashboard_hijack_lease_s
+                worker_ws = st.worker_ws
+                if worker_ws is None:
+                    return None, "no_worker"
+
+            async def send_reserved(msg: dict[str, Any]) -> bool:
+                try:
+                    return await asyncio.wait_for(
+                        self._hub.send_worker(worker_id, msg, source=source, expected_worker=worker_ws),
+                        timeout=_OWNED_INPUT_SEND_TIMEOUT_S,
+                    )
+                except TimeoutError:
+                    return False
+
+            return await operation(send_reserved), None
 
     async def capture_browser_ownership(self, worker_id: str, ws: WebSocket) -> int | None:
         """Return the exact active browser ownership generation, or ``None``."""

@@ -158,18 +158,41 @@ async def test_fanout_approval_lifecycle(controller, hub, gate):
     assert called_with is None
     assert getattr(res, "approval_required", False) is True
     request_id = res.approval_id
+    request = hub.approval_store.get(request_id)
+    assert request is not None
 
     # 2. Resolve the approval via the Hub
     await hub.resolve_approval(
-        worker_id="doesnt-matter-for-fanout",
+        worker_id=request.worker_id,
         request_id=request_id,
         decision=PolicyDecision(action="allow"),
         command="apt-get upgrade",
+        approval_request=request,
     )
 
     # 3. Verify it was released
     assert called_with == "apt-get upgrade"
     assert request_id not in controller._pending_approvals
+
+
+@pytest.mark.asyncio
+async def test_fanout_approval_rejects_request_id_collision(controller, hub, gate, monkeypatch):
+    from provide.uterm.server.bridge.hub.approvals import ApprovalRequest, ApprovalStatus
+
+    await controller.create_group(
+        FanOutGroup(group_id="g-collision", name="GC", worker_ids=["w1"], created_by="admin", created_at=0),
+        principal="admin",
+    )
+    gate.next_decision = PolicyDecision(action="hold")
+    monkeypatch.setattr("provide.uterm.server.bridge.fanout._controller.uuid.uuid4", lambda: MagicMock(hex="duplicate"))
+    assert hub.approval_store.add(
+        ApprovalRequest("duplicate", "existing", "user", "first", ApprovalStatus.PENDING, time.time(), time.time() + 60)
+    )
+
+    with pytest.raises(RuntimeError, match="request ID collision"):
+        await controller.send("g-collision", "second", principal=ADMIN)
+
+    assert controller._pending_approvals == {}
 
 
 @pytest.mark.asyncio
@@ -395,8 +418,8 @@ async def test_fanout_approval_expiration_cleanup(controller, hub, gate):
     assert req_id in controller._pending_approvals
 
     # Force expiration in Hub
-    req = hub.approval_store.get(req_id)
-    req.expires_at = time.time() - 10
+    with hub.approval_store._lock:
+        hub.approval_store._requests[req_id].expires_at = time.time() - 10
 
     # Trigger cleanup
     await hub.approval_store.cleanup_expired()
@@ -418,13 +441,16 @@ async def test_fanout_approval_rejection_cleanup(controller, hub, gate):
     req_id = res.approval_id
 
     assert req_id in controller._pending_approvals
+    request = hub.approval_store.get(req_id)
+    assert request is not None
 
     # Resolve as DENY
     await hub.resolve_approval(
-        worker_id="any",
+        worker_id=request.worker_id,
         request_id=req_id,
         decision=PolicyDecision(action="deny", reason="No way"),
         command="dangerous-command",
+        approval_request=request,
     )
 
     # Verify controller state is pruned and no command executed
@@ -467,9 +493,17 @@ async def test_fanout_sequential_release(controller, hub, gate):
 
     res = await controller.send(group_id, "rollout", principal=ADMIN)
     req_id = res.approval_id
+    request = hub.approval_store.get(req_id)
+    assert request is not None
 
     # Approve
-    await hub.resolve_approval("any", req_id, PolicyDecision(action="allow"), "rollout")
+    await hub.resolve_approval(
+        request.worker_id,
+        req_id,
+        PolicyDecision(action="allow"),
+        "rollout",
+        approval_request=request,
+    )
 
     assert called_sequential is True
 

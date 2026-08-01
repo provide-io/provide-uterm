@@ -26,11 +26,13 @@ def _pending(req_id: str = "r1") -> ApprovalRequest:
 def test_claim_succeeds_exactly_once() -> None:
     store = InMemoryApprovalStore()
     store.add(_pending())
-    assert store.claim("r1", ApprovalStatus.APPROVED) is True
-    assert store.claim("r1", ApprovalStatus.REJECTED) is False
+    stored = store.get("r1")
+    assert stored is not None
+    assert store.claim("r1", ApprovalStatus.APPROVED, expected_revision=stored.revision) is True
+    assert store.claim("r1", ApprovalStatus.REJECTED, expected_revision=stored.revision) is False
     assert store.get("r1").status == ApprovalStatus.APPROVED
 
 
 def test_claim_missing_request_returns_false() -> None:
     store = InMemoryApprovalStore()
-    assert store.claim("nope", ApprovalStatus.APPROVED) is False
+    assert store.claim("nope", ApprovalStatus.APPROVED, expected_revision=1) is False

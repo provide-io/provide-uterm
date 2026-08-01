@@ -15,6 +15,7 @@ import pytest
 from fastapi import FastAPI
 
 from provide.uterm.server.bridge.hub import PolicyContext, PolicyDecision, TermHub
+from provide.uterm.server.bridge.hub.approvals import ApprovalRequest, ApprovalStatus
 from provide.uterm.server.bridge.models import HijackSession, WorkerTermState
 from provide.uterm.server.bridge.routes.browser_handlers import _handle_input
 
@@ -49,6 +50,16 @@ class _GatedWorker:
         self.entered.set()
         await self.release.wait()
         self.payloads.append(payload)
+
+
+class _FailSecondWorker:
+    def __init__(self) -> None:
+        self.payloads: list[str] = []
+
+    async def send_text(self, payload: str) -> None:
+        self.payloads.append(payload)
+        if len(self.payloads) == 2:
+            raise RuntimeError("replay failed")
 
 
 async def test_browser_input_is_refused_when_competitor_acquires_during_policy_wait() -> None:
@@ -360,3 +371,104 @@ async def test_approved_held_command_is_refused_after_owner_changes() -> None:
     )
     assert (delivered, reason) == (False, "invalid_owner")
     worker.send_text.assert_not_awaited()
+
+
+async def test_approved_held_command_is_refused_after_same_socket_reacquires() -> None:
+    hub = TermHub(policy_gate=_HoldPolicy())
+    worker = AsyncMock()
+    owner = AsyncMock()
+    worker_id = "approval-owner-aba"
+    await hub.register_worker(worker_id, worker)
+    await hub.register_browser(worker_id, owner, "admin")
+    assert await hub.try_acquire_ws_hijack(worker_id, owner) == (True, None)
+
+    await _handle_input(hub, owner, worker_id, {"type": "input", "data": "held-command"})
+    request = hub.approval_store.get("held-command")
+    assert request is not None
+    assert await hub.try_release_ws_hijack(worker_id, owner) == (True, False)
+    assert await hub.try_acquire_ws_hijack(worker_id, owner) == (True, None)
+
+    result = await hub.resolve_approval(
+        worker_id, request.id, PolicyDecision(action="allow"), request.command, approval_request=request
+    )
+    assert result == (False, "invalid_owner")
+    worker.send_text.assert_not_awaited()
+
+
+async def test_approval_and_fresh_buffered_input_are_one_ordered_operation() -> None:
+    worker = _GatedWorker("approved-command")
+    hub = TermHub()
+    owner = AsyncMock()
+    worker_id = "approval-ordered-replay"
+    await hub.register_worker(worker_id, worker)  # type: ignore[arg-type]
+    await hub.register_browser(worker_id, owner, "admin")
+    assert await hub.try_acquire_ws_hijack(worker_id, owner) == (True, None)
+    generation = await hub.capture_browser_ownership(worker_id, owner)
+    assert generation is not None
+    request = ApprovalRequest(
+        "ordered",
+        worker_id,
+        "submitter",
+        "approved-command",
+        ApprovalStatus.PENDING,
+        time.time(),
+        time.time() + 60,
+        origin_browser=owner,
+        ownership_generation=generation,
+    )
+    assert hub.approval_store.add(request)
+    stored = hub.approval_store.get("ordered")
+    assert stored is not None
+    hub._paused_browsers.add(owner)
+
+    approval_task = asyncio.create_task(
+        hub.resolve_approval(
+            worker_id, "ordered", PolicyDecision(action="allow"), "caller-data", approval_request=stored
+        )
+    )
+    await asyncio.wait_for(worker.entered.wait(), timeout=1.0)
+    await _handle_input(hub, owner, worker_id, {"type": "input", "data": "fresh-input"})
+    release_task = asyncio.create_task(hub.try_release_ws_hijack(worker_id, owner))
+    await asyncio.sleep(0)
+    assert release_task.done() is False
+
+    worker.release.set()
+    assert await asyncio.wait_for(approval_task, timeout=1.0) == (True, None)
+    assert await asyncio.wait_for(release_task, timeout=1.0) == (True, False)
+    assert "approved-command" in worker.payloads[0]
+    assert "fresh-input" in worker.payloads[1]
+
+
+async def test_replay_failure_does_not_retroactively_refuse_executed_command() -> None:
+    worker = _FailSecondWorker()
+    hub = TermHub()
+    owner = AsyncMock()
+    worker_id = "approval-partial-replay"
+    await hub.register_worker(worker_id, worker)  # type: ignore[arg-type]
+    await hub.register_browser(worker_id, owner, "admin")
+    assert await hub.try_acquire_ws_hijack(worker_id, owner) == (True, None)
+    generation = await hub.capture_browser_ownership(worker_id, owner)
+    assert generation is not None
+    request = ApprovalRequest(
+        "partial",
+        worker_id,
+        "submitter",
+        "approved-command",
+        ApprovalStatus.PENDING,
+        time.time(),
+        time.time() + 60,
+        origin_browser=owner,
+        ownership_generation=generation,
+    )
+    assert hub.approval_store.add(request)
+    stored = hub.approval_store.get("partial")
+    assert stored is not None
+    hub._paused_browsers.add(owner)
+    hub._hold_buffers[owner] = "buffered-input"
+
+    result = await hub.resolve_approval(
+        worker_id, "partial", PolicyDecision(action="allow"), "caller-data", approval_request=stored
+    )
+
+    assert result == (True, "replay_failed")
+    assert "approved-command" in worker.payloads[0]

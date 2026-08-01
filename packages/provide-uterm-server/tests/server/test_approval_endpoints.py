@@ -103,6 +103,27 @@ def test_approve_refuses_truthfully_when_delivery_owner_is_stale(client):
     assert hub.approval_store.get(req_id).status == ApprovalStatus.REFUSED
 
 
+def test_approve_remains_approved_when_only_buffered_replay_fails(client):
+    hub = client.app.state.uterm_hub
+    hub.resolve_approval = AsyncMock(return_value=(True, "replay_failed"))
+    req_id = str(uuid.uuid4())
+    req = ApprovalRequest(
+        id=req_id,
+        worker_id="worker1",
+        submitter_id="user1",
+        command="safe-command",
+        status=ApprovalStatus.PENDING,
+        created_at=time.time(),
+        expires_at=time.time() + 60,
+    )
+    assert hub.approval_store.add(req)
+
+    response = client.post(f"/api/approvals/{req_id}/approve", headers=ADMIN_H)
+
+    assert response.status_code == 200
+    assert hub.approval_store.get(req_id).status == ApprovalStatus.APPROVED
+
+
 def test_reject_request(client):
     hub = client.app.state.uterm_hub
     req_id = str(uuid.uuid4())
