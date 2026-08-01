@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, Literal, cast
 
 import pytest
 
@@ -38,7 +38,7 @@ class _PausedWaitEvent(asyncio.Event):
         self.wait_started = asyncio.Event()
         self.proceed = asyncio.Event()
 
-    async def wait(self) -> bool:
+    async def wait(self) -> Literal[True]:
         self.wait_started.set()
         await self.proceed.wait()
         return await super().wait()
@@ -150,13 +150,13 @@ class _SizedSnapshotEmulator(_MutableSnapshotEmulator):
     def __init__(self) -> None:
         super().__init__()
         self.current["raw_tail"] = "r" * 200
-        self.current["metadata"] = {"nested": {"payload": "n" * 300}}
+        self.current["metadata"] = {"nested": {"payload": "n" * 300, "items": ["i" * 10_000, "j" * 10_000]}}
 
 
 async def test_terminal_frame_owns_nested_snapshot_and_copies_cursor() -> None:
     session = _ConcreteSession(_FakeTransport([b"owned"]), receive_encoding="utf-8")
     emulator = _MutableSnapshotEmulator()
-    session._emulator = emulator  # type: ignore[assignment]
+    session._emulator = cast(Any, emulator)
 
     await session.connect()
     frame = await session.wait_for_terminal_frame(since=0, timeout_ms=1000)
@@ -176,7 +176,7 @@ async def test_terminal_frame_owns_nested_snapshot_and_copies_cursor() -> None:
 async def test_terminal_frame_waiters_receive_independently_owned_snapshots() -> None:
     session = _ConcreteSession(_FakeTransport([b"shared"]), receive_encoding="utf-8")
     emulator = _MutableSnapshotEmulator()
-    session._emulator = emulator  # type: ignore[assignment]
+    session._emulator = cast(Any, emulator)
 
     await session.connect()
     consumer_a = await session.wait_for_terminal_frame(since=0, timeout_ms=1000)
@@ -314,13 +314,14 @@ async def test_terminal_frame_history_evicts_by_retained_byte_budget() -> None:
     transport = _TwoGatedReadTransport(chunk, chunk)
     session = _ConcreteSession(transport, receive_encoding="utf-8")
     emulator = _SizedSnapshotEmulator()
-    session._emulator = emulator  # type: ignore[assignment]
+    session._emulator = cast(Any, emulator)
 
     await session.connect()
     first = await session.wait_for_terminal_frame(since=0, timeout_ms=1000)
     assert first is not None
+    nested = emulator.current["metadata"]["nested"]
     minimum_payload_bytes = (
-        len(chunk) * 2 + len(emulator.current["raw_tail"]) + len(emulator.current["metadata"]["nested"]["payload"])
+        len(chunk) * 2 + len(emulator.current["raw_tail"]) + len(nested["payload"]) + sum(map(len, nested["items"]))
     )
     assert session._terminal_frame_bytes >= minimum_payload_bytes
     session._terminal_frame_max_bytes = session._terminal_frame_bytes + 1
@@ -354,7 +355,7 @@ async def test_terminal_frame_history_retains_oversized_newest_frame_complete() 
     chunk = b"oversized newest"
     transport = _GatedReadTransport(chunk)
     session = _ConcreteSession(transport, receive_encoding="utf-8")
-    session._emulator = _SizedSnapshotEmulator()  # type: ignore[assignment]
+    session._emulator = cast(Any, _SizedSnapshotEmulator())
     session._terminal_frame_max_bytes = 1
 
     await session.connect()
