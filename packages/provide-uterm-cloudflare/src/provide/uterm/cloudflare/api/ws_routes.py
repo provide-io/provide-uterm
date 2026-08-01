@@ -304,6 +304,7 @@ async def _handle_resume(runtime: RuntimeProtocol, ws: CFWebSocket, frame: dict[
     effective_role = "viewer"
     was_hijack_owner = False
     new_token = ""
+    reclaimed_session: Any | None = None
     async with runtime.input_delivery_guard():
         record = runtime.store.get_resume_token(old_token)
         if record is None or record.get("worker_id") != runtime.worker_id:
@@ -328,16 +329,32 @@ async def _handle_resume(runtime: RuntimeProtocol, ws: CFWebSocket, frame: dict[
                 runtime.browser_hijack_owner[ws_key] = result.session.hijack_id
                 runtime.persist_lease(result.session)
                 if not result.is_renewal:
-                    if not await runtime.push_worker_control("pause", owner=result.session.owner, lease_s=lease_s):
+                    pause_succeeded = await runtime.push_worker_control(
+                        "pause",
+                        owner=result.session.owner,
+                        lease_s=lease_s,
+                    )
+                    live_after_pause = runtime.hijack.session
+                    if not pause_succeeded or live_after_pause is not result.session:
                         runtime.hijack.release(result.session.hijack_id)
                         runtime.browser_hijack_owner.pop(ws_key, None)
                         runtime._set_browser_ownership_attachment(ws, None)
                         runtime.clear_lease()
+                        # A successful pause may outlive a short lease. Restore
+                        # worker input before rejecting the stale resume.
+                        if pause_succeeded:
+                            await runtime.push_worker_control(
+                                "resume",
+                                owner="browser_resume_expired",
+                                lease_s=0,
+                            )
                         rejected_stale_owner = True
                     else:
                         reclaimed_hijack = True
+                        reclaimed_session = live_after_pause
                 else:
                     reclaimed_hijack = True
+                    reclaimed_session = result.session
             else:
                 rejected_stale_owner = True
 
@@ -349,9 +366,9 @@ async def _handle_resume(runtime: RuntimeProtocol, ws: CFWebSocket, frame: dict[
         runtime.store.create_resume_token(new_token, runtime.worker_id, effective_role, resume_ttl_s)
         runtime.browser_resume_tokens[runtime.ws_key(ws)] = new_token
         if reclaimed_hijack:
-            # This flag is set only after acquire() returned a concrete session,
-            # and the delivery guard prevents a concurrent release before here.
-            active = cast("Any", runtime.hijack.session)
+            # Reclaimed ownership is advertised only from the post-I/O live
+            # session witness, never from the pre-await acquire result.
+            active = cast("Any", reclaimed_session)
             active.owner = f"browser:{new_token}"
             runtime.persist_lease(active)
             runtime._set_browser_ownership_attachment(

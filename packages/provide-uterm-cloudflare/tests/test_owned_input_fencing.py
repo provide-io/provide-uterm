@@ -676,10 +676,30 @@ async def test_lifecycle_rejects_worker_activation_and_removes_unknown_sockets(
 
     unknown = _AttachmentWs("")
     unknown._ut_role = "unknown"
-    runtime._register_socket(unknown, "unknown")
+
+    def seed_unknown_socket() -> str:
+        socket_id = runtime.ws_key(unknown)
+        runtime.worker_ws = unknown
+        runtime.browser_sockets[socket_id] = unknown
+        runtime.raw_sockets[socket_id] = unknown
+        runtime.browser_hijack_owner[socket_id] = "stale-hijack"
+        runtime.browser_resume_tokens[socket_id] = "stale-token"
+        return socket_id
+
+    def assert_unknown_socket_removed(socket_id: str) -> None:
+        assert runtime.worker_ws is None
+        assert socket_id not in runtime.browser_sockets
+        assert socket_id not in runtime.raw_sockets
+        assert socket_id not in runtime.browser_hijack_owner
+        assert socket_id not in runtime.browser_resume_tokens
+
+    socket_id = seed_unknown_socket()
     await runtime.webSocketClose(unknown, 1000, "closed")
-    runtime._register_socket(unknown, "unknown")
+    assert_unknown_socket_removed(socket_id)
+
+    socket_id = seed_unknown_socket()
     await runtime.webSocketError(unknown, RuntimeError("failed"))
+    assert_unknown_socket_removed(socket_id)
 
 
 async def test_browser_removal_covers_missing_token_and_failed_release(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -871,6 +891,38 @@ async def test_resume_rejects_owner_when_pause_cannot_be_restored(monkeypatch: p
 
     assert runtime.hijack.session is None
     assert resumed.sent == []
+
+
+async def test_resume_rejects_lease_that_expires_while_worker_pause_succeeds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = _runtime()
+    monkeypatch.setattr(runtime.config, "hijack_lease_s", 1)
+    runtime.worker_ws = _BlockingWorkerWs()
+    runtime.store.create_resume_token("expiring-owner", runtime.worker_id, "admin", 60)
+    runtime.store.mark_resume_hijack_owner("expiring-owner", True)
+    actions: list[str] = []
+
+    async def delayed_control(action: str, *, owner: str, lease_s: int) -> bool:
+        _ = (owner, lease_s)
+        actions.append(action)
+        if action == "pause":
+            await asyncio.sleep(1.05)
+        return True
+
+    monkeypatch.setattr(runtime, "push_worker_control", delayed_control)
+    resumed = _BrowserWs()
+
+    await handle_socket_message(runtime, resumed, frame_json("resume", token="expiring-owner"), is_worker=False)
+
+    socket_id = runtime.ws_key(resumed)
+    assert actions == ["pause", "resume"]
+    assert runtime.hijack.session is None
+    assert socket_id not in runtime.browser_hijack_owner
+    assert socket_id not in runtime.browser_resume_tokens
+    assert resumed.sent == []
+    persisted = runtime.store.load_session(runtime.worker_id)
+    assert persisted is not None and persisted["hijack_id"] is None
 
 
 def test_clear_single_tunnel_invite_uses_role_prefix() -> None:
