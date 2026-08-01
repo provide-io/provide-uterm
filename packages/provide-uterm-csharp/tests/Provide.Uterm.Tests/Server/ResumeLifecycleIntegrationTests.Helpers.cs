@@ -13,9 +13,6 @@ using Provide.Uterm.Hub;
 using Provide.Uterm.Server;
 using Provide.Uterm.ServerAuth;
 using Provide.Uterm.ServerConfig;
-using Provide.Uterm.Shell;
-using Provide.Uterm.Tunnel;
-using Provide.Uterm.TunnelClient;
 
 namespace Provide.Uterm.Tests.Server;
 

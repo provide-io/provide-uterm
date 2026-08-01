@@ -3,11 +3,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
-using System.Collections.Concurrent;
 using System.Diagnostics;
 using Provide.Uterm.Fanout;
 using Provide.Uterm.ServerAuth;
-using Xunit;
 
 namespace Provide.Uterm.Tests;
 

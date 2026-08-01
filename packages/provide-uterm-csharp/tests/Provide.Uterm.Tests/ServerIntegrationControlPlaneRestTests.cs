@@ -5,17 +5,13 @@
 
 using System.Net;
 using System.Net.Http.Json;
-using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
-using Provide.Uterm.Fanout;
 using Provide.Uterm.Hub;
 using Provide.Uterm.Server;
 using Provide.Uterm.ServerAuth;
 using Provide.Uterm.ServerConfig;
 using Provide.Uterm.Tunnel;
-using Provide.Uterm.TunnelClient;
-using Xunit;
 
 namespace Provide.Uterm.Tests;
 

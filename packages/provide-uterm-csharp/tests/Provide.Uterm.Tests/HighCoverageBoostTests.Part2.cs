@@ -5,15 +5,11 @@
 
 using System.Globalization;
 using System.Net;
-using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using Provide.Uterm.Auth;
 using Provide.Uterm.Bridge;
 using Provide.Uterm.Cli;
-using Provide.Uterm.Client;
-using Provide.Uterm.ControlChannel;
 using Provide.Uterm.CtrlMsg;
 using Provide.Uterm.DeckMux;
 using Provide.Uterm.Emulator;
@@ -21,9 +17,6 @@ using Provide.Uterm.Hub;
 using Provide.Uterm.Server;
 using Provide.Uterm.ServerAuth;
 using Provide.Uterm.ServerConfig;
-using Provide.Uterm.TermSession;
-using Provide.Uterm.Transports;
-using Provide.Uterm.Vt;
 using FileIoHelper = Provide.Uterm.FileIo.FileIo;
 
 namespace Provide.Uterm.Tests;
