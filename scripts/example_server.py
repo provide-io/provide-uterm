@@ -65,6 +65,9 @@ from _example_session import (
     _make_snapshot as _make_snapshot,  # re-export for test access
 )
 from _example_session import (
+    _refresh_outbound as _refresh_outbound,  # re-export for test access
+)
+from _example_session import (
     _reset_all_sessions as _reset_all_sessions,  # re-export for test access
 )
 

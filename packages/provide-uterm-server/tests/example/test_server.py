@@ -124,3 +124,29 @@ def test_reset_command_replaces_transcript_with_fresh_state() -> None:
     assert messages[0]["type"] == "worker_hello"
     assert refreshed.transcript[0].text == "Session online."
     assert refreshed.pending_banner == "Session reset."
+
+
+def test_a_queued_hello_is_re_rendered_from_live_state_before_it_is_sent() -> None:
+    """A hello queued by one endpoint must not announce a mode a later one replaced.
+
+    ``/reset`` builds its ``worker_hello`` while the session is back on the
+    ``hijack`` default and hands it to the worker through a queue. If
+    ``/mode {"input_mode": "open"}`` lands before the worker drains that queue,
+    sending the frame as-built tells the hub ``hijack`` — undoing a decision
+    already made, and dropping browser input until a later hello corrects it.
+    """
+    session = _fresh()
+    stale = demo._state_update_messages(session)[0]
+    assert stale["type"] == "worker_hello"
+    assert stale["input_mode"] == "hijack"
+
+    session.input_mode = "open"
+
+    assert demo._refresh_outbound(session, stale)["input_mode"] == "open"
+
+
+def test_re_rendering_leaves_frames_that_are_not_announcements_alone() -> None:
+    session = _fresh()
+    snapshot = demo._make_snapshot(session)
+
+    assert demo._refresh_outbound(session, snapshot) is snapshot

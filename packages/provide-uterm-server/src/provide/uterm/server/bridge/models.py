@@ -166,6 +166,11 @@ class WorkerTermState:
     # It lives on the worker state rather than on the connection deliberately:
     # registry state outlives a worker socket, so a decision is not undone by a
     # reconnect. Internal only — nothing serialises it onto the wire.
+    #
+    # It tracks the decision, not the decider: it is cleared as soon as a
+    # `worker_hello` moves `input_mode` off the decided value, because from
+    # then on the mode is the worker's and refusing the worker's own way back
+    # would strand the session. See ``HubConnectionService.set_worker_hello``.
     input_mode_set_by_operator: bool = False
     last_snapshot: dict[str, Any] | None = None
     events: deque[dict[str, Any]] = field(default_factory=lambda: deque(maxlen=2000))

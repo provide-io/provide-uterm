@@ -9,7 +9,10 @@ import logging
 import time
 from dataclasses import dataclass, field
 from threading import RLock
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 from provide.uterm.control_channel import (
     ControlFrameDecoder,
@@ -360,6 +363,25 @@ def _apply_input(session: DemoSessionState, data: str) -> list[dict[str, Any]]:
     return _snapshot_only(session)
 
 
+def _refresh_outbound(session: DemoSessionState, msg: dict[str, Any]) -> dict[str, Any]:
+    """Re-render a queued announcement from live session state before sending it.
+
+    A ``worker_hello`` announces the mode the session is in *now*. The HTTP
+    endpoints build their messages inside the request handler but hand them to
+    the worker through a queue, so a hello can be built and sent an arbitrary
+    number of event-loop turns apart. ``/reset`` followed immediately by
+    ``/mode {"input_mode": "open"}`` is the case that bites: the reset builds a
+    hello announcing the restored default of ``hijack``, the mode endpoint then
+    moves the hub to ``open`` synchronously, and the stale hello lands
+    afterwards and drags the hub back to ``hijack`` — dropping, unacknowledged,
+    any browser input that arrives before the next hello corrects it.
+    Re-rendering here means a hello always agrees with the session it describes.
+    """
+    if msg.get("type") == "worker_hello":
+        return _worker_hello(session)
+    return msg
+
+
 def _enqueue_worker_messages(session: DemoSessionState, messages: list[dict[str, Any]]) -> None:
     queue = session.outbound_queue
     if queue is None:
@@ -378,6 +400,43 @@ async def _sync_hub_input_mode(worker_id: str, mode: str) -> None:
 async def _force_release_hijack_for_shared_mode(worker_id: str) -> bool:
     """Clear any active hijack so the demo can switch into shared-input mode immediately."""
     return await _hub.force_release_hijack(worker_id)
+
+
+async def _handle_worker_events(
+    ws: Any,
+    session: DemoSessionState,
+    worker_id: str,
+    events: list[Any],
+    encode_frame: Callable[[dict[str, Any]], str],
+) -> None:
+    """Answer one batch of decoded frames from the hub."""
+    for event in events:
+        if isinstance(event, DataChunk):
+            msg: dict[str, Any] = {"type": "input", "data": event.data}
+        else:
+            msg = event.control
+
+        mtype = msg.get("type")
+        if mtype == "snapshot_req":
+            await ws.send(encode_frame(_make_snapshot(session)))
+        elif mtype == "analyze_req":
+            await ws.send(encode_frame({"type": "analysis", "formatted": _make_analysis(session), "ts": time.time()}))
+        elif mtype == "control":
+            for outbound in _apply_control(session, str(msg.get("action", ""))):
+                await ws.send(encode_frame(outbound))
+        elif mtype == "input":
+            raw_input = str(msg.get("data", ""))
+            normalized = _normalize_input(raw_input)
+            if normalized == "/mode open":
+                released = await _force_release_hijack_for_shared_mode(worker_id)
+                if released:
+                    session.paused = False
+                    session.status_line = "Live"
+                    _append_entry(session, "system", "control: released for shared input")
+            for outbound in _apply_input(session, raw_input):
+                await ws.send(encode_frame(outbound))
+            if normalized in {"/mode open", "/mode hijack"}:
+                await _sync_hub_input_mode(worker_id, session.input_mode)
 
 
 async def _run_session_worker(base_url: str, worker_id: str) -> None:
@@ -406,68 +465,47 @@ async def _run_session_worker(base_url: str, worker_id: str) -> None:
                 await ws.send(_encode_frame(_worker_hello(session)))
                 await ws.send(_encode_frame(_make_snapshot(session)))
 
-                while True:
-                    recv_task = asyncio.create_task(ws.recv())
-                    queue_task = asyncio.create_task(session.outbound_queue.get())
-                    done, pending = await asyncio.wait(
-                        {recv_task, queue_task},
-                        timeout=30.0,
-                        return_when=asyncio.FIRST_COMPLETED,
-                    )
-                    for task in pending:
-                        task.cancel()
-                    if not done:
-                        await ws.send(_encode_frame(_make_snapshot(session)))
-                        continue
-                    if queue_task in done:
-                        await ws.send(_encode_frame(queue_task.result()))
-                        with contextlib.suppress(asyncio.CancelledError):
-                            await recv_task
-                        continue
-                    raw = recv_task.result()
-                    with contextlib.suppress(asyncio.CancelledError):
-                        await queue_task
-
-                    try:
-                        events = decoder.feed(raw)
-                    except ControlFrameProtocolError:
-                        continue
-
-                    for event in events:
-                        if isinstance(event, DataChunk):
-                            msg: dict[str, Any] = {"type": "input", "data": event.data}
-                        else:
-                            msg = event.control
-
-                        mtype = msg.get("type")
-                        if mtype == "snapshot_req":
+                # The receive stays alive across iterations. Sending a queued
+                # message or ticking the 30 s keepalive used to cancel the
+                # in-flight ``ws.recv()`` and drop whatever it had already
+                # read, so a browser keystroke that arrived alongside a queued
+                # snapshot was swallowed with no error anywhere — the operator
+                # saw a session that had simply stopped listening. Cancelling
+                # the queue read is safe by comparison: ``Queue.get`` leaves an
+                # already-delivered item in the queue when it is cancelled.
+                recv_task: asyncio.Task[Any] | None = None
+                try:
+                    while True:
+                        if recv_task is None:
+                            recv_task = asyncio.create_task(ws.recv())
+                        queue_task = asyncio.create_task(session.outbound_queue.get())
+                        done, _pending = await asyncio.wait(
+                            {recv_task, queue_task},
+                            timeout=30.0,
+                            return_when=asyncio.FIRST_COMPLETED,
+                        )
+                        if queue_task not in done:
+                            queue_task.cancel()
+                        if not done:
                             await ws.send(_encode_frame(_make_snapshot(session)))
-                        elif mtype == "analyze_req":
-                            await ws.send(
-                                _encode_frame(
-                                    {
-                                        "type": "analysis",
-                                        "formatted": _make_analysis(session),
-                                        "ts": time.time(),
-                                    }
-                                )
-                            )
-                        elif mtype == "control":
-                            for outbound in _apply_control(session, str(msg.get("action", ""))):
-                                await ws.send(_encode_frame(outbound))
-                        elif mtype == "input":
-                            raw_input = str(msg.get("data", ""))
-                            normalized = _normalize_input(raw_input)
-                            if normalized == "/mode open":
-                                released = await _force_release_hijack_for_shared_mode(worker_id)
-                                if released:
-                                    session.paused = False
-                                    session.status_line = "Live"
-                                    _append_entry(session, "system", "control: released for shared input")
-                            for outbound in _apply_input(session, raw_input):
-                                await ws.send(_encode_frame(outbound))
-                            if normalized in {"/mode open", "/mode hijack"}:
-                                await _sync_hub_input_mode(worker_id, session.input_mode)
+                            continue
+                        if queue_task in done:
+                            await ws.send(_encode_frame(_refresh_outbound(session, queue_task.result())))
+                            continue
+                        raw = recv_task.result()
+                        recv_task = None
+
+                        try:
+                            events = decoder.feed(raw)
+                        except ControlFrameProtocolError:
+                            continue
+
+                        await _handle_worker_events(ws, session, worker_id, events, _encode_frame)
+                finally:
+                    if recv_task is not None:
+                        recv_task.cancel()
+                        with contextlib.suppress(asyncio.CancelledError, Exception):
+                            await recv_task
         except asyncio.CancelledError:
             logger.info("demo_session_cancelled worker_id=%s", worker_id)
             session.connected = False
