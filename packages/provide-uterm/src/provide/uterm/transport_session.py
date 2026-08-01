@@ -31,6 +31,7 @@ import contextlib
 from collections import deque
 from copy import deepcopy
 from dataclasses import dataclass
+from sys import getsizeof
 from typing import TYPE_CHECKING, Any
 
 from provide.uterm.control_channel import ControlFrameDecoder, DataChunk
@@ -40,6 +41,14 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
     from provide.uterm.transports.base import ConnectionTransport
+
+# Frame history is bounded by both update count and an estimated retained-byte
+# total. The newest frame is always kept complete even when it alone exceeds
+# the byte budget; older frames are evicted first and sequence gaps are valid.
+TERMINAL_FRAME_HISTORY_MAX_COUNT = 128
+TERMINAL_FRAME_HISTORY_MAX_BYTES = 1_048_576
+# Frame waits accept at most 24 hours, keeping deadline conversion bounded.
+TERMINAL_FRAME_WAIT_MAX_MS = 86_400_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +64,33 @@ class TerminalFrame:
         """Return an owned copy of the frame's cursor position."""
         cursor = self.snapshot.get("cursor")
         return dict(cursor) if isinstance(cursor, dict) else {"x": 0, "y": 0}
+
+
+def _retained_size(value: Any, seen: set[int] | None = None) -> int:
+    """Estimate one owned JSON-like value's recursively retained bytes."""
+    if seen is None:
+        seen = set()
+    object_id = id(value)
+    if object_id in seen:
+        return 0
+    seen.add(object_id)
+
+    size = getsizeof(value)
+    if isinstance(value, dict):
+        return size + sum(_retained_size(key, seen) + _retained_size(item, seen) for key, item in value.items())
+    if isinstance(value, (list, tuple, set, frozenset, deque)):
+        return size + sum(_retained_size(item, seen) for item in value)
+    return size
+
+
+def _terminal_frame_size(frame: TerminalFrame) -> int:
+    seen: set[int] = set()
+    return (
+        getsizeof(frame)
+        + _retained_size(frame.sequence, seen)
+        + _retained_size(frame.snapshot, seen)
+        + _retained_size(frame.transcript_delta, seen)
+    )
 
 
 class TerminalCapture:
@@ -110,9 +146,14 @@ class TransportSession:
         self._emulator = TerminalEmulator(cols, rows, receive_encoding=receive_encoding)
         self._read_task: asyncio.Task[None] | None = None
         self._update_event = asyncio.Event()
+        self._terminal_frame_event = asyncio.Event()
+        self._terminal_frame_closed = False
         self._connected = False
         self._change_seq: int = 0
-        self._terminal_frames: deque[TerminalFrame] = deque(maxlen=128)
+        self._terminal_frames: deque[TerminalFrame] = deque(maxlen=TERMINAL_FRAME_HISTORY_MAX_COUNT)
+        self._terminal_frame_sizes: deque[int] = deque(maxlen=TERMINAL_FRAME_HISTORY_MAX_COUNT)
+        self._terminal_frame_bytes = 0
+        self._terminal_frame_max_bytes = TERMINAL_FRAME_HISTORY_MAX_BYTES
         # Raw-byte watchers — called from ``_reader_loop`` after every
         # successful read with the IAC-stripped CP437+ANSI byte chunk.
         # Used by worker_term_bridge to fan terminal output (with colors
@@ -145,11 +186,14 @@ class TransportSession:
         """Open the transport connection and start the background reader."""
         await self._connect_transport()
         self._connected = True
+        self._terminal_frame_closed = False
         self._read_task = asyncio.create_task(self._reader_loop())
 
     async def close(self) -> None:
         """Close the connection and stop the background reader."""
         self._connected = False
+        self._terminal_frame_closed = True
+        self._notify_terminal_frame_waiters()
         if self._read_task is not None:
             self._read_task.cancel()
             with contextlib.suppress(asyncio.CancelledError, Exception):
@@ -266,32 +310,54 @@ class TransportSession:
                 return self._change_seq > (since or 0)
 
     async def wait_for_terminal_frame(self, *, since: int, timeout_ms: int) -> TerminalFrame | None:
-        """Return the first correlated terminal frame newer than *since*."""
+        """Return the first correlated terminal frame newer than *since*.
+
+        Non-positive timeouts perform one queue check without waiting. Values
+        above :data:`TERMINAL_FRAME_WAIT_MAX_MS` raise :class:`ValueError`.
+        """
+        if timeout_ms > TERMINAL_FRAME_WAIT_MAX_MS:
+            raise ValueError(f"timeout_ms must be <= {TERMINAL_FRAME_WAIT_MAX_MS}")
+        if timeout_ms <= 0:
+            frame = next((candidate for candidate in self._terminal_frames if candidate.sequence > since), None)
+            return None if frame is None else deepcopy(frame)
+
         loop = asyncio.get_running_loop()
         deadline = loop.time() + timeout_ms / 1000.0
         while True:
+            notifier = self._terminal_frame_event
             frame = next((candidate for candidate in self._terminal_frames if candidate.sequence > since), None)
             if frame is not None:
-                return frame
-
-            remaining = deadline - loop.time()
-            if remaining <= 0:
+                return deepcopy(frame)
+            if self._terminal_frame_closed:
                 return None
-
-            self._update_event.clear()
-            frame = next((candidate for candidate in self._terminal_frames if candidate.sequence > since), None)
-            if frame is not None:
-                return frame
 
             remaining = deadline - loop.time()
             if remaining <= 0:
                 return None
             try:
-                await asyncio.wait_for(self._update_event.wait(), timeout=remaining)
+                await asyncio.wait_for(notifier.wait(), timeout=remaining)
             except TimeoutError:
                 pass
 
     # ── Internal ──────────────────────────────────────────────────────────
+
+    def _notify_terminal_frame_waiters(self) -> None:
+        notifier = self._terminal_frame_event
+        self._terminal_frame_event = asyncio.Event()
+        notifier.set()
+
+    def _append_terminal_frame(self, frame: TerminalFrame) -> None:
+        """Append *frame* and evict old history by count and retained bytes."""
+        frame_size = _terminal_frame_size(frame)
+        if len(self._terminal_frames) == TERMINAL_FRAME_HISTORY_MAX_COUNT:
+            self._terminal_frames.popleft()
+            self._terminal_frame_bytes -= self._terminal_frame_sizes.popleft()
+        self._terminal_frames.append(frame)
+        self._terminal_frame_sizes.append(frame_size)
+        self._terminal_frame_bytes += frame_size
+        while len(self._terminal_frames) > 1 and self._terminal_frame_bytes > self._terminal_frame_max_bytes:
+            self._terminal_frames.popleft()
+            self._terminal_frame_bytes -= self._terminal_frame_sizes.popleft()
 
     def add_watch(
         self,
@@ -382,16 +448,19 @@ class TransportSession:
                     self._emulator.process(data)
                     self._change_seq += 1
                     snapshot = deepcopy(self._emulator.get_snapshot())
-                    self._terminal_frames.append(
+                    self._append_terminal_frame(
                         TerminalFrame(
                             sequence=self._change_seq,
                             snapshot=snapshot,
                             transcript_delta=data.decode(self._receive_encoding, errors="replace"),
                         )
                     )
+                    self._notify_terminal_frame_waiters()
                     self._update_event.set()
         except (asyncio.CancelledError, ConnectionResetError, OSError, ConnectionError):
             self._connected = False
+            self._terminal_frame_closed = True
+            self._notify_terminal_frame_waiters()
 
     def _split_control_frames(self, data: bytes) -> bytes | None:
         """Run *data* through the control-frame decoder.
