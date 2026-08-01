@@ -28,6 +28,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+from collections import deque
+from copy import deepcopy
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from provide.uterm.control_channel import ControlFrameDecoder, DataChunk
@@ -37,6 +40,21 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
     from provide.uterm.transports.base import ConnectionTransport
+
+
+@dataclass(frozen=True, slots=True)
+class TerminalFrame:
+    """One terminal update with its correlated, owned screen snapshot."""
+
+    sequence: int
+    snapshot: dict[str, Any]
+    transcript_delta: str
+
+    @property
+    def cursor(self) -> dict[str, Any]:
+        """Return an owned copy of the frame's cursor position."""
+        cursor = self.snapshot.get("cursor")
+        return dict(cursor) if isinstance(cursor, dict) else {"x": 0, "y": 0}
 
 
 class TerminalCapture:
@@ -94,6 +112,7 @@ class TransportSession:
         self._update_event = asyncio.Event()
         self._connected = False
         self._change_seq: int = 0
+        self._terminal_frames: deque[TerminalFrame] = deque(maxlen=128)
         # Raw-byte watchers — called from ``_reader_loop`` after every
         # successful read with the IAC-stripped CP437+ANSI byte chunk.
         # Used by worker_term_bridge to fan terminal output (with colors
@@ -246,6 +265,32 @@ class TransportSession:
             except TimeoutError:
                 return self._change_seq > (since or 0)
 
+    async def wait_for_terminal_frame(self, *, since: int, timeout_ms: int) -> TerminalFrame | None:
+        """Return the first correlated terminal frame newer than *since*."""
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout_ms / 1000.0
+        while True:
+            frame = next((candidate for candidate in self._terminal_frames if candidate.sequence > since), None)
+            if frame is not None:
+                return frame
+
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                return None
+
+            self._update_event.clear()
+            frame = next((candidate for candidate in self._terminal_frames if candidate.sequence > since), None)
+            if frame is not None:
+                return frame
+
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                return None
+            try:
+                await asyncio.wait_for(self._update_event.wait(), timeout=remaining)
+            except TimeoutError:
+                pass
+
     # ── Internal ──────────────────────────────────────────────────────────
 
     def add_watch(
@@ -336,6 +381,14 @@ class TransportSession:
                                 cb({}, data)
                     self._emulator.process(data)
                     self._change_seq += 1
+                    snapshot = deepcopy(self._emulator.get_snapshot())
+                    self._terminal_frames.append(
+                        TerminalFrame(
+                            sequence=self._change_seq,
+                            snapshot=snapshot,
+                            transcript_delta=data.decode(self._receive_encoding, errors="replace"),
+                        )
+                    )
                     self._update_event.set()
         except (asyncio.CancelledError, ConnectionResetError, OSError, ConnectionError):
             self._connected = False
