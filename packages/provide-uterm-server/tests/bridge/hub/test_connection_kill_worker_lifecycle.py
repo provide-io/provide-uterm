@@ -17,6 +17,14 @@ mutated :class:`WorkerTermState` field (``worker_ws``, ``hijack_session``,
 ``maxlen``), the worker-cap rejection (``WebSocketException(1008)``), the
 expired-vs-live lease boundary, and the exact span name/attributes +
 structured ``logger.info`` event constant emitted on each path.
+
+The ``TestRegisterWorkerOwnershipFencing`` / generation-pinning tests cover
+the input-ownership fencing added by "fence lifecycle input ownership"
+(61647de9) and the hello-mode work (662d72eb): ``ownership_generation``
+transitions (fresh == 1, epoch-change +1, idempotent re-register unchanged),
+the tunnel-flag plumbing on both branches, the fenced re-read retry loop
+(bounded registry reads + the state-swap race), and the fenced
+``deregister_worker`` early return.
 """
 
 from __future__ import annotations
@@ -35,6 +43,14 @@ from provide.uterm.server.bridge.models import HijackSession, WorkerTermState
 
 _LOGGER = "provide.uterm.server.bridge.hub.connection.logger"
 _TRACER = "provide.uterm.server.bridge.hub.connection.tracer"
+
+# register_worker's fenced re-read loop never suspends (uncontended asyncio.Lock
+# acquires take the no-await fast path), so the register_worker__mutmut_40/_41/_42
+# infinite-retry mutants spin without yielding. Whichever reconnect-path test runs
+# first under those mutants must FAIL via a short SIGALRM bound (a recorded kill)
+# BEFORE mutmut's wall-clock limit fires (which would record a bad `timeout`
+# instead). The marker overrides the mutation run's --timeout=90.
+pytestmark = pytest.mark.timeout(10)
 
 
 def _ws() -> MagicMock:
@@ -298,6 +314,220 @@ class TestRegisterWorker:
         mlog.info.assert_not_called()
 
 
+class _BudgetedRegistry:
+    """Registry proxy that fails the test if ``get`` is called past a budget.
+
+    ``register_worker``'s fenced re-read loop must terminate after exactly two
+    ``registry.get(worker_id)`` reads on an uncontended reconnect. A mutant
+    that corrupts the re-read (``st = None``, ``get(None)``) or inverts the
+    retry condition (``if st is state: continue``) loops forever WITHOUT ever
+    suspending (the uncontended locks take their fast path), so a wall-clock
+    timeout can never cancel it — the budget raise is the only deterministic
+    way to surface the loop as a test failure.
+    """
+
+    def __init__(self, real: Any, budget: int = 8) -> None:
+        self._real = real
+        self._workers = real._workers
+        self.get_calls: list[Any] = []
+        self._budget = budget
+
+    def get(self, worker_id: Any) -> Any:
+        self.get_calls.append(worker_id)
+        if len(self.get_calls) > self._budget:
+            raise RuntimeError("register_worker is looping: registry.get exceeded its call budget")
+        return self._real.get(worker_id)
+
+
+class TestRegisterWorkerOwnershipFencing:
+    """``register_worker`` generation transitions, tunnel flag, fenced retry loop."""
+
+    async def test_new_worker_generation_starts_at_one(self) -> None:
+        """A fresh registration seeds ownership_generation to exactly 1.
+
+        Kills register_worker__mutmut_33 (``= None``) and __mutmut_34 (``= 2``).
+        """
+        hub = TermHub()
+        await hub.connection_mgr.register_worker("w-gen1", _ws())
+        async with hub._lock:
+            assert hub.registry._workers["w-gen1"].ownership_generation == 1
+
+    async def test_new_worker_default_tunnel_flag_is_false(self) -> None:
+        """Calling without the keyword registers a non-tunnel worker.
+
+        Kills register_worker__mutmut_1 (default flipped to ``True``).
+        """
+        hub = TermHub()
+        await hub.connection_mgr.register_worker("w-notunnel", _ws())
+        async with hub._lock:
+            assert hub.registry._workers["w-notunnel"].is_tunnel_worker is False
+
+    async def test_new_worker_tunnel_flag_true_reaches_state(self) -> None:
+        """``is_tunnel_worker=True`` lands on the freshly constructed state.
+
+        Kills register_worker__mutmut_25 (ctor kwarg -> ``None``) and
+        __mutmut_27 (ctor kwarg dropped -> default ``False``).
+        """
+        hub = TermHub()
+        await hub.connection_mgr.register_worker("w-tunnel", _ws(), is_tunnel_worker=True)
+        async with hub._lock:
+            assert hub.registry._workers["w-tunnel"].is_tunnel_worker is True
+
+    async def test_new_worker_events_rebuild_preserves_contents_and_maxlen(self) -> None:
+        """The new-state events rebuild keeps contents AND applies the hub maxlen.
+
+        The state is constructed by the method itself, so a factory shim seeds
+        one event at construction time to make the contents-copy observable.
+        Kills register_worker__mutmut_28 (``events = None``), __mutmut_30
+        (``maxlen=None``), __mutmut_31 (``state.events`` operand dropped — the
+        seeded event would be lost) and __mutmut_32 (``maxlen`` kwarg dropped).
+        """
+        hub = TermHub(event_deque_maxlen=7)
+
+        def _seeded_state(**kwargs: Any) -> WorkerTermState:
+            st = WorkerTermState(**kwargs)
+            st.events.append({"type": "seeded"})
+            return st
+
+        with patch("provide.uterm.server.bridge.hub.connection.WorkerTermState", side_effect=_seeded_state):
+            await hub.connection_mgr.register_worker("w-seed", _ws())
+
+        async with hub._lock:
+            rebuilt = hub.registry._workers["w-seed"].events
+        assert isinstance(rebuilt, deque)
+        assert rebuilt.maxlen == 7
+        assert list(rebuilt) == [{"type": "seeded"}]
+
+    async def test_reconnect_new_ws_bumps_generation_once(self) -> None:
+        """A reconnect with a NEW ws (no hijack) advances the epoch by exactly 1.
+
+        Kills register_worker__mutmut_59 (``changed_epoch = None`` — no bump),
+        __mutmut_60 (``or`` -> ``and`` — no bump without a hijack), __mutmut_67
+        (``= 1``), __mutmut_68 (``-= 1``) and __mutmut_69 (``+= 2``).
+        """
+        hub = TermHub()
+        st = WorkerTermState()
+        st.worker_ws = _ws()
+        st.ownership_generation = 5
+        await _put_state(hub, "w-epoch", st)
+
+        result = await hub.connection_mgr.register_worker("w-epoch", _ws())
+
+        assert result is False
+        async with hub._lock:
+            assert hub.registry._workers["w-epoch"].ownership_generation == 6
+
+    async def test_reregister_same_ws_no_hijack_keeps_generation(self) -> None:
+        """Re-registering the CURRENT ws without any hijack does not bump the epoch.
+
+        Kills register_worker__mutmut_61 (``is not ws`` -> ``is ws`` — would
+        bump on the idempotent re-register).
+        """
+        hub = TermHub()
+        ws = _ws()
+        st = WorkerTermState()
+        st.worker_ws = ws
+        st.ownership_generation = 5
+        await _put_state(hub, "w-idem", st)
+
+        result = await hub.connection_mgr.register_worker("w-idem", ws)
+
+        assert result is False
+        async with hub._lock:
+            assert hub.registry._workers["w-idem"].ownership_generation == 5
+
+    async def test_reregister_same_ws_after_expired_lease_bumps_generation(self) -> None:
+        """Same ws but an expired lease (prev_was_hijacked) still changes the epoch.
+
+        Pins the ``or prev_was_hijacked`` arm on its own: kills
+        register_worker__mutmut_60 (``or`` -> ``and``) even when the ws is
+        unchanged.
+        """
+        hub = TermHub()
+        ws = _ws()
+        st = WorkerTermState()
+        st.worker_ws = ws
+        st.hijack_session = _hijack(lease_expires_at=time.monotonic() - 1.0)
+        st.ownership_generation = 5
+        await _put_state(hub, "w-samews", st)
+
+        result = await hub.connection_mgr.register_worker("w-samews", ws)
+
+        assert result is True
+        async with hub._lock:
+            assert hub.registry._workers["w-samews"].ownership_generation == 6
+
+    async def test_reconnect_applies_tunnel_flag_to_existing_state(self) -> None:
+        """The reconnect branch writes the passed tunnel flag onto the state.
+
+        Kills register_worker__mutmut_66 (``st.is_tunnel_worker = None``).
+        """
+        hub = TermHub()
+        st = WorkerTermState()
+        st.worker_ws = _ws()
+        await _put_state(hub, "w-retunnel", st)
+
+        await hub.connection_mgr.register_worker("w-retunnel", _ws(), is_tunnel_worker=True)
+
+        async with hub._lock:
+            assert hub.registry._workers["w-retunnel"].is_tunnel_worker is True
+
+    async def test_reconnect_reads_registry_exactly_twice_and_terminates(self) -> None:
+        """An uncontended reconnect re-reads the registry exactly twice, by id.
+
+        Kills the three infinite-loop (timeout) mutants: register_worker
+        __mutmut_40 (``st = None`` — retry forever), __mutmut_41
+        (``get(None)`` — never finds the state) and __mutmut_42 (``is not`` ->
+        ``is`` — the successful re-read retries forever). Each spins without
+        suspending, so the budgeted registry proxy converts the loop into a
+        deterministic RuntimeError.
+        """
+        hub = TermHub()
+        ws_new = _ws()
+        st = WorkerTermState()
+        st.worker_ws = _ws()
+        await _put_state(hub, "w-loop", st)
+        proxy = _BudgetedRegistry(hub.registry)
+        hub.registry = proxy  # type: ignore[assignment]
+
+        result = await hub.connection_mgr.register_worker("w-loop", ws_new)
+
+        assert result is False
+        assert proxy.get_calls == ["w-loop", "w-loop"]
+        assert st.worker_ws is ws_new
+
+    async def test_registry_swap_mid_fence_retries_onto_new_state(self) -> None:
+        """A state swap during the fence wait retries and registers on the NEW state.
+
+        Kills register_worker__mutmut_43 (``continue`` -> ``break`` — the loop
+        would exit with ``prev_was_hijacked`` unbound and raise
+        UnboundLocalError instead of retrying).
+        """
+        hub = TermHub()
+        ws = _ws()
+        original = WorkerTermState()
+        original.worker_ws = _ws()
+        replacement = WorkerTermState()
+
+        class _SwappingFence:
+            async def __aenter__(self) -> None:
+                hub.registry._workers["w-swap"] = replacement
+
+            async def __aexit__(self, *_args: Any) -> None:
+                return None
+
+        original.owned_input_fence = _SwappingFence()  # type: ignore[assignment]
+        await _put_state(hub, "w-swap", original)
+
+        result = await hub.connection_mgr.register_worker("w-swap", ws)
+
+        assert result is False
+        # The retry landed on the replacement state; the stale one is untouched.
+        assert replacement.worker_ws is ws
+        assert replacement.ownership_generation == 1
+        assert original.worker_ws is not ws
+
+
 # ===========================================================================
 # deregister_worker
 # ===========================================================================
@@ -438,6 +668,63 @@ class TestDeregisterWorker:
         mtr.start_as_current_span.assert_called_once_with(
             "uterm.worker.deregister", attributes={"worker_id": "w-span-stale"}
         )
+
+    async def test_deregister_bumps_generation_once(self) -> None:
+        """Clearing the current worker advances ownership_generation by exactly 1.
+
+        Kills deregister_worker__mutmut_34 (``= 1``), __mutmut_35 (``-= 1``)
+        and __mutmut_36 (``+= 2``).
+        """
+        hub = TermHub()
+        ws = _ws()
+        st = WorkerTermState()
+        st.worker_ws = ws
+        st.ownership_generation = 5
+        await _put_state(hub, "w-degen", st)
+
+        result = await hub.connection_mgr.deregister_worker("w-degen", ws)
+
+        assert result == (True, False)
+        async with hub._lock:
+            assert hub.registry._workers["w-degen"].ownership_generation == 6
+
+    async def test_ws_swapped_during_fence_wait_returns_false_false_untouched(self) -> None:
+        """A ws replacement landing during the fence wait aborts the deregister.
+
+        The fenced re-read sees the SAME state object but a replaced
+        ``worker_ws``; the stale disconnect must return ``(False, False)`` and
+        leave the replacement's ownership intact. Kills
+        deregister_worker__mutmut_21 (``or`` -> ``and`` — would clear the
+        replacement worker), __mutmut_24 (fenced return -> ``(True, False)``)
+        and __mutmut_25 (fenced return -> ``(False, True)``).
+        """
+        hub = TermHub()
+        ws_old = _ws()
+        ws_new = _ws()
+        st = WorkerTermState()
+        st.worker_ws = ws_old
+        st.hijack_owner = MagicMock()
+        st.hijack_owner_expires_at = 123.0
+        st.ownership_generation = 5
+
+        class _WsSwappingFence:
+            async def __aenter__(self) -> None:
+                st.worker_ws = ws_new
+
+            async def __aexit__(self, *_args: Any) -> None:
+                return None
+
+        st.owned_input_fence = _WsSwappingFence()  # type: ignore[assignment]
+        await _put_state(hub, "w-fence", st)
+
+        result = await hub.connection_mgr.deregister_worker("w-fence", ws_old)
+
+        assert result == (False, False)
+        # Nothing cleared: the replacement worker's ownership epoch is intact.
+        assert st.worker_ws is ws_new
+        assert st.hijack_owner is not None
+        assert st.hijack_owner_expires_at == 123.0
+        assert st.ownership_generation == 5
 
 
 # ===========================================================================

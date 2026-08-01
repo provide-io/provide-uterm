@@ -205,6 +205,25 @@ class TestUpdateLockState:
         assert st.hijack_owner is None
         assert st.hijack_owner_expires_at is None
 
+    def test_was_owner_bumps_ownership_generation_once(self) -> None:
+        """The owner-disconnect path advances ownership_generation by exactly 1.
+
+        Kills _update_lock_state__mutmut_35 (``-= 1``) and __mutmut_36
+        (``+= 2``) — a stale epoch would let a released owner's held approvals
+        revive input after a reacquire.
+        """
+        hub = TermHub()
+        st = WorkerTermState()
+        ws = _ws()
+        st.worker_ws = _ws()
+        st.browsers[ws] = "admin"
+        st.hijack_owner = ws
+        st.hijack_owner_expires_at = time.monotonic() + 60
+        st.ownership_generation = 5
+        result = hub.connection_mgr._update_lock_state(st, ws, False)
+        assert result == (True, False, False)
+        assert st.ownership_generation == 6
+
     def test_was_owner_with_rest_lease_reports_rest_still_active(self) -> None:
         """Owner disconnect while a valid REST lease remains -> rest_still_active True."""
         hub = TermHub()
@@ -549,6 +568,23 @@ class TestCleanupBrowserDisconnect:
         before = len(hub._background_tasks)
         await hub.cleanup_browser_disconnect("w1", ws, False)
         assert len(hub._background_tasks) == before
+
+    async def test_tolerates_hub_without_on_worker_empty_attribute(self) -> None:
+        """A hub with NO on_worker_empty attribute at all still cleans up fine.
+
+        The ``getattr(hub, "on_worker_empty", None)`` default is the load-bearing
+        piece: kills cleanup_browser_disconnect__mutmut_55 (default dropped ->
+        AttributeError on any hub-shaped object without the attribute).
+        """
+        hub = TermHub()
+        del hub.on_worker_empty
+        ws = _ws()
+        st = WorkerTermState()
+        st.browsers[ws] = "viewer"
+        await _put(hub, "w1", st)
+        result = await hub.cleanup_browser_disconnect("w1", ws, False)
+        assert result == {"was_owner": False, "rest_still_active": False, "resume_without_owner": False}
+        assert st.browsers == {}
 
     async def test_callback_task_tracked_in_background_tasks(self) -> None:
         """The scheduled callback task is registered in _background_tasks."""
