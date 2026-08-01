@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import sqlite3
 import time
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 import pytest
@@ -125,6 +126,7 @@ class _MockRuntime:
         self.last_snapshot: dict | None = None
         self.last_analysis: str | None = None
         self.browser_hijack_owner: dict[str, str] = {}
+        self.browser_resume_tokens: dict[str, str] = {}
         self.worker_ws = None
         self._sent: list[dict] = []
         self.config = SimpleNamespace(
@@ -134,8 +136,14 @@ class _MockRuntime:
         self.store = store
         self.current_role = "admin"
 
+    def clear_lease(self) -> None:
+        return
+
     async def send_ws(self, ws: object, frame: dict) -> None:
         self._sent.append(frame)
+
+    def input_delivery_guard(self):
+        return nullcontext()
 
     async def send_hijack_state(self, ws: object) -> None:
         self._sent.append({"type": "hijack_state"})
@@ -338,10 +346,10 @@ class TestWsRoutesResume:
         assert persisted
         assert broadcast_calls
 
-    async def test_resume_hijack_reclaim_skipped_when_acquire_fails(
+    async def test_resume_hijack_reclaim_rejects_stale_owner_when_acquire_fails(
         self, runtime: _MockRuntime, store: SqliteStateStore
     ) -> None:
-        """Line 130->140: hijack acquire returns ok=False → reclaim skipped, resume still succeeds."""
+        """A former owner cannot report resume after a competitor acquired."""
         from provide.uterm.cloudflare.bridge.hijack import HijackSession
 
         store.create_resume_token("tok-fail-acq", "w1", "admin", 300)
@@ -349,7 +357,7 @@ class TestWsRoutesResume:
         runtime.current_role = "admin"
         runtime.input_mode = "hijack"
 
-        # Pre-acquire with a different owner so acquire("dashboard_resume", ...) returns ok=False
+        # Pre-acquire with a different owner so the stale token cannot reclaim.
         other_session = HijackSession(hijack_id="other-id", owner="other_owner", lease_expires_at=time.time() + 60)
         runtime.hijack._session = other_session
 
@@ -371,9 +379,9 @@ class TestWsRoutesResume:
         await handle_socket_message(runtime, ws, raw, is_worker=False)
 
         hellos = [m for m in runtime._sent if m.get("type") == "hello"]
-        assert len(hellos) == 1
-        # No hijack reclaim occurred
+        assert hellos == []
         assert not broadcast_calls
+        assert runtime.hijack.session is other_session
 
     async def test_resume_hijack_reclaim_renewal_skips_pause(
         self, runtime: _MockRuntime, store: SqliteStateStore
@@ -388,8 +396,12 @@ class TestWsRoutesResume:
         runtime.current_role = "admin"
         runtime.input_mode = "hijack"
 
-        # Pre-acquire with the same "dashboard_resume" owner so it's a renewal
-        existing = HijackSession(hijack_id="existing-id", owner="dashboard_resume", lease_expires_at=_time.time() + 60)
+        # Pre-acquire with the same token-bound owner so it's a renewal.
+        existing = HijackSession(
+            hijack_id="existing-id",
+            owner="browser:tok-renew",
+            lease_expires_at=_time.monotonic() + 60,
+        )
         runtime.hijack._session = existing
 
         persisted: list = []

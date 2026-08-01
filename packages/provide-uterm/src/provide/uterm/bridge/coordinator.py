@@ -61,7 +61,17 @@ class HijackCoordinator:
 
     @property
     def session(self) -> HijackSession | None:
-        return self._active_session(time.monotonic())
+        """Return the live lease without mutating coordinator state.
+
+        Expiry is a state transition and therefore belongs in an explicitly
+        serialized operation (``acquire``, ``heartbeat``, or a backend expiry
+        sweep).  Keeping this property observational prevents an innocent
+        status read from clearing ownership outside a backend's state guard.
+        """
+        session = self._session
+        if session is None or session.lease_expires_at <= time.monotonic():
+            return None
+        return session
 
     def acquire(self, owner: str, lease_s: int, *, now: float | None = None) -> AcquireResult:
         """Acquire a hijack lease, always generating a new hijack_id.

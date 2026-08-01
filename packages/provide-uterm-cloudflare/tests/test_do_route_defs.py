@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -42,6 +43,9 @@ class _Runtime:
             load_session=lambda *_args: None,
             save_input_mode=lambda *_args: None,
         )
+
+    def input_delivery_guard(self):
+        return nullcontext()
 
     async def request_json(self, request: object) -> dict[str, object]:
         return json.loads(request._body)

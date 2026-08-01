@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 from provide.uterm.cloudflare.api.ws_routes import handle_socket_message
@@ -55,6 +56,9 @@ class _Runtime:
     async def send_ws(self, ws: object, frame: dict) -> None:
         self._sent.append(frame)
 
+    def input_delivery_guard(self):
+        return nullcontext()
+
     async def push_worker_input(self, data: str) -> bool:
         self._pushed.append(data)
         return True
@@ -79,6 +83,13 @@ class _Runtime:
         if not all_ws:
             all_ws = list(self.browser_sockets.values())
         return all_ws
+
+    async def remove_browser_socket(self, ws: object) -> bool:
+        ws_id = self.ws_key(ws)
+        self.browser_sockets.pop(ws_id, None)
+        self.browser_hijack_owner.pop(ws_id, None)
+        self.browser_resume_tokens.pop(ws_id, None)
+        return False
 
 
 class _Ws:

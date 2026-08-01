@@ -88,7 +88,14 @@ jobs:
       # with the package as CWD.
       - run: uv run --directory packages/provide-uterm pytest -q tests
       # Cloudflare worker / Durable Object test suite.
-      - run: uv run pytest -q packages/provide-uterm-cloudflare/tests
+      # The native lifecycle adapter is run once below because it performs a
+      # real Node 22 pywrangler/workerd bundle; don't repeat it for every
+      # Python-version matrix cell.
+      - run: >-
+          uv run pytest -q packages/provide-uterm-cloudflare/tests
+          --ignore=packages/provide-uterm-cloudflare/tests/test_session_lifecycle_security_scenarios.py
+      - if: matrix.python-version == '3.13'
+        run: uv run python scripts/run_session_lifecycle_security_scenarios.py --backend cloudflare
       # Save the corpus, INCLUDING when the job failed — this is the step that
       # makes a red build reproducible. The all-in-one actions/cache declares
       # `post-if: success()`, which would discard exactly the run that found a

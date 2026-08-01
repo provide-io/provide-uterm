@@ -89,6 +89,7 @@ class _FetchMixin:
         def _register_socket(self, ws: Any, role: str) -> None: ...
         def ws_key(self, ws: Any) -> str: ...
         async def _maybe_send_presence_sync(self, ws: Any, *, exclude_self: bool = False) -> None: ...
+        async def register_worker_socket(self, ws: Any) -> None: ...
 
     async def _redeem_tunnel_invite(self, request: Any) -> Response:
         """Atomically consume an invite from this session's Durable Object."""
@@ -334,7 +335,10 @@ class _FetchMixin:
                 server._ut_browser_role = browser_role
             # Register here so the role is available if fetch() is re-entered
             # before webSocketOpen() fires (hibernation-restore path).
-            self._register_socket(server, socket_role)  # server is Any from WebSocketPair
+            if socket_role == "worker":
+                await self.register_worker_socket(server)  # server is Any from WebSocketPair
+            else:
+                self._register_socket(server, socket_role)  # server is Any from WebSocketPair
 
             # For worker connections, write KV registration eagerly in fetch() before
             # returning 101. In CF hibernation mode, async operations in webSocketOpen()
@@ -371,7 +375,7 @@ class _FetchMixin:
                                 "can_hijack": browser_role == "admin",
                                 "input_mode": self.input_mode,
                                 "role": browser_role,
-                                "hijack_control": "rest",
+                                "hijack_control": "ws",
                                 "hijack_step_supported": True,
                                 "resume_supported": True,
                                 "resume_token": resume_token,

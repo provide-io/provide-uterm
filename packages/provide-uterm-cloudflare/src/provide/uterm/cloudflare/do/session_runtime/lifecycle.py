@@ -79,6 +79,10 @@ class _LifecycleMixin:
         broadcast_to_browsers: Any
         browser_hijack_owner: dict[str, str]
         push_worker_input: Any
+        register_worker_socket: Any
+        unregister_worker_socket: Any
+        remove_browser_socket: Any
+        broadcast_hijack_state: Any
 
     async def webSocketOpen(self, ws: CFWebSocket) -> None:  # noqa: N802
         if self._deleted_at is not None:
@@ -91,9 +95,8 @@ class _LifecycleMixin:
         # fetch() sends hello before the 101 response; webSocketOpen() fires after the upgrade.
         # For the normal (non-hibernation) path the socket is already registered — skip hello.
         already_initialized = ws_id in self.browser_sockets
-        self._register_socket(ws, role)
         if role == "worker":
-            self.worker_ws = ws
+            await self.register_worker_socket(ws)
             self.lifecycle_state = "running"
             await self.broadcast_worker_frame(
                 {"type": "worker_connected", "worker_id": self.worker_id, "ts": time.time()}
@@ -107,10 +110,12 @@ class _LifecycleMixin:
                 meta=self.meta,
             )
         elif role == "raw":
+            self._register_socket(ws, role)
             self.raw_sockets[ws_id] = ws
             if self.last_snapshot is not None and isinstance(self.last_snapshot.get("screen"), str):
                 await self._send_text(ws, str(self.last_snapshot.get("screen")))
         else:
+            self._register_socket(ws, role)
             self.browser_sockets[ws_id] = ws
             browser_role = self._socket_browser_role(ws)
             if not already_initialized:
@@ -130,7 +135,7 @@ class _LifecycleMixin:
                     "can_hijack": browser_role == "admin",
                     "input_mode": self.input_mode,
                     "role": browser_role,
-                    "hijack_control": "rest",
+                    "hijack_control": "ws",
                     "hijack_step_supported": True,
                     "resume_supported": _resume_on,
                     "presence_enabled": bool(self.meta.get("presence")),
@@ -158,7 +163,10 @@ class _LifecycleMixin:
                 ws.close(1001, "session deleted")
             return
         role = self._socket_role(ws)
-        self._register_socket(ws, role)
+        if role == "worker":
+            await self.register_worker_socket(ws)
+        else:
+            self._register_socket(ws, role)
         if role == "raw":
             payload = (
                 message.decode("latin-1", errors="replace") if isinstance(message, (bytes, bytearray)) else str(message)
@@ -200,13 +208,16 @@ class _LifecycleMixin:
             ws_id = self.ws_key(ws)
             if self.meta.get("presence"):
                 await self.broadcast_to_browsers({"type": "presence_leave", "user_id": ws_id, "ts": time.time()})
-            # Mark the resume token as hijack owner before removing socket, so the
-            # browser can reclaim ownership on reconnect.
-            if ws_id in self.browser_hijack_owner:
-                token = self.browser_resume_tokens.get(ws_id)
-                if token:
-                    self.store.mark_resume_hijack_owner(token, True)
-        self._remove_ws(ws)
+        released_hijack = False
+        if role == "browser":
+            released_hijack = await self.remove_browser_socket(ws)
+        elif role == "worker":
+            await self.unregister_worker_socket(ws)
+            self._remove_ws(ws)
+        else:
+            self._remove_ws(ws)
+        if released_hijack:
+            await self.broadcast_hijack_state()
         if role == "worker":
             if not deleted:
                 self.lifecycle_state = "stopped"
@@ -222,11 +233,16 @@ class _LifecycleMixin:
             ws_id = self.ws_key(ws)
             if self.meta.get("presence"):
                 await self.broadcast_to_browsers({"type": "presence_leave", "user_id": ws_id, "ts": time.time()})
-            if ws_id in self.browser_hijack_owner:
-                token = self.browser_resume_tokens.get(ws_id)
-                if token:
-                    self.store.mark_resume_hijack_owner(token, True)
-        self._remove_ws(ws)
+        released_hijack = False
+        if role == "browser":
+            released_hijack = await self.remove_browser_socket(ws)
+        elif role == "worker":
+            await self.unregister_worker_socket(ws)
+            self._remove_ws(ws)
+        else:
+            self._remove_ws(ws)
+        if released_hijack:
+            await self.broadcast_hijack_state()
         if role == "worker":
             if not deleted:
                 self.lifecycle_state = "error"

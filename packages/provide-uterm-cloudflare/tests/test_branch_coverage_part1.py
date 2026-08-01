@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import time
+from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -109,6 +110,9 @@ async def test_acquire_renewal_skips_pause() -> None:
         input_mode = "hijack"
         browser_hijack_owner: dict = {}
         browser_resume_tokens: dict = {}
+
+        def input_delivery_guard(self):
+            return nullcontext()
 
         async def browser_role_for_request(self, req):
             return "admin"

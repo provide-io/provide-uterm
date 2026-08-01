@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 from provide.uterm.cloudflare.api.http_routes import route_http
@@ -61,6 +62,9 @@ class _Runtime:
 
     async def request_json(self, request: object) -> dict:
         return json.loads(getattr(request, "_body", "{}"))
+
+    def input_delivery_guard(self):
+        return nullcontext()
 
     async def browser_role_for_request(self, request: object) -> str:
         return self._role
@@ -185,7 +189,7 @@ async def test_heartbeat_404_no_hijack_id() -> None:
 
 async def test_heartbeat_400_invalid_lease() -> None:
     """Line 113: non-integer lease_s → 400."""
-    runtime = _Runtime()
+    runtime = _Runtime(worker_ws=object())
     r1 = await route_http(
         runtime,
         _Req("https://x/worker/w/hijack/acquire", method="POST").with_body({"owner": "a", "lease_s": 60}),
@@ -279,12 +283,13 @@ async def test_step_403_not_owner() -> None:
 
 async def test_step_409_no_worker() -> None:
     """Line 153: step succeeds auth but push_worker_control returns False → 409."""
-    runtime = _Runtime(worker_ws=None)  # no worker → push returns False
+    runtime = _Runtime(worker_ws=object())
     r1 = await route_http(
         runtime,
         _Req("https://x/worker/w/hijack/acquire", method="POST").with_body({"owner": "a", "lease_s": 60}),
     )
     hid = _body(r1)["hijack_id"]
+    runtime.worker_ws = None
     resp = await route_http(runtime, _Req(f"https://x/worker/w/hijack/{hid}/step", method="POST"))
     assert resp.status == 409
 
@@ -310,7 +315,7 @@ async def test_send_404_no_hijack_id() -> None:
 
 async def test_send_400_empty_keys() -> None:
     """Line 173: empty keys payload → 400."""
-    runtime = _Runtime()
+    runtime = _Runtime(worker_ws=object())
     r1 = await route_http(
         runtime,
         _Req("https://x/worker/w/hijack/acquire", method="POST").with_body({"owner": "a", "lease_s": 60}),
@@ -325,7 +330,7 @@ async def test_send_400_empty_keys() -> None:
 
 async def test_send_400_keys_too_long() -> None:
     """Line 180: keys payload exceeds _MAX_INPUT_CHARS → 400."""
-    runtime = _Runtime()
+    runtime = _Runtime(worker_ws=object())
     r1 = await route_http(
         runtime,
         _Req("https://x/worker/w/hijack/acquire", method="POST").with_body({"owner": "a", "lease_s": 60}),
@@ -357,12 +362,13 @@ async def test_send_403_not_owner() -> None:
 
 async def test_send_409_no_worker() -> None:
     """Line 178: send succeeds auth but push_worker_input returns False → 409."""
-    runtime = _Runtime(worker_ws=None)
+    runtime = _Runtime(worker_ws=object())
     r1 = await route_http(
         runtime,
         _Req("https://x/worker/w/hijack/acquire", method="POST").with_body({"owner": "a", "lease_s": 60}),
     )
     hid = _body(r1)["hijack_id"]
+    runtime.worker_ws = None
     resp = await route_http(
         runtime,
         _Req(f"https://x/worker/w/hijack/{hid}/send", method="POST").with_body({"keys": "ls\r"}),
@@ -403,7 +409,7 @@ async def test_events_404_no_hijack_id() -> None:
 
 async def test_events_bad_after_seq_defaults_to_zero() -> None:
     """Lines 221-222: invalid after_seq query param → defaults to 0, still returns 200."""
-    runtime = _Runtime()
+    runtime = _Runtime(worker_ws=object())
     r1 = await route_http(
         runtime,
         _Req("https://x/worker/w/hijack/acquire", method="POST").with_body({"owner": "a", "lease_s": 60}),
@@ -426,7 +432,7 @@ async def test_events_bad_after_seq_defaults_to_zero() -> None:
 async def test_events_403_non_admin() -> None:
     """Line 221: non-admin role → 403 for /events."""
     # Acquire with admin, then check events as viewer
-    runtime = _Runtime()
+    runtime = _Runtime(worker_ws=object())
     r1 = await route_http(
         runtime,
         _Req("https://x/worker/w/hijack/acquire", method="POST").with_body({"owner": "a", "lease_s": 60}),

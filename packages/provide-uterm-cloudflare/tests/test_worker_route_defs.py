@@ -137,6 +137,42 @@ async def test_unknown_route_def_returns_404() -> None:
     assert json.loads(response.body) == {"error": "not_found", "path": "/api/not-a-route"}
 
 
+async def test_lifecycle_capabilities_publish_explicit_edge_refusals() -> None:
+    from provide.uterm.cloudflare.entry.handlers import _route_request
+
+    response = await _route_request(_request("/api/lifecycle/capabilities"), SimpleNamespace(), _config())
+
+    assert response.status == 200
+    assert json.loads(response.body) == {
+        "browser_quota": {
+            "supported": False,
+            "error": "per_principal_browser_quota_unsupported",
+            "refusal_route": "/api/lifecycle/browser-quota",
+        },
+        "governance": {
+            "supported": False,
+            "error": "unsupported_governance",
+            "refusal_route": "/api/lifecycle/governance",
+        },
+    }
+
+
+@pytest.mark.parametrize(
+    ("path", "error"),
+    [
+        ("/api/lifecycle/browser-quota", "per_principal_browser_quota_unsupported"),
+        ("/api/lifecycle/governance", "unsupported_governance"),
+    ],
+)
+async def test_lifecycle_unsupported_capability_routes_return_501(path: str, error: str) -> None:
+    from provide.uterm.cloudflare.entry.handlers import _route_request
+
+    response = await _route_request(_request(path), SimpleNamespace(), _config())
+
+    assert response.status == 501
+    assert json.loads(response.body) == {"error": error, "supported": False}
+
+
 async def test_invalid_route_def_parameter_returns_422() -> None:
     from provide.uterm.cloudflare.entry.handlers import _route_request
 

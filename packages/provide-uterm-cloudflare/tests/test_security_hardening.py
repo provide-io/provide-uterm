@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 import jwt
@@ -105,6 +106,9 @@ class _Runtime:
         self.browser_hijack_owner: dict[str, str] = {}
         self.lifecycle_state = "stopped"
         self.input_mode: str = "hijack"
+
+    def input_delivery_guard(self):
+        return nullcontext()
 
     async def request_json(self, request: object) -> dict[str, object]:
         return json.loads(getattr(request, "_body", "{}"))
