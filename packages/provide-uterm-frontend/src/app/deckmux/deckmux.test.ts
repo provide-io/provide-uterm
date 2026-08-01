@@ -45,6 +45,29 @@ function clickAvatar(userId: string): void {
   wrap.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 }
 
+function addPinnedUser(userId: string, name: string, color: string): void {
+  dm.handleMessage({ type: "dm_join", user_id: userId, name, color });
+  dm.handleMessage({ type: "dm_presence", user_id: userId, pin: { line: userId === "alice" ? 4 : 8 } });
+}
+
+async function expectProjectedOwner(ownerId: string | null): Promise<void> {
+  const edges = terminalContainer.querySelector("uterm-edge-indicators") as EdgeIndicatorsElement;
+  const cursors = terminalContainer.querySelector("uterm-cursor-overlay") as CursorOverlayElement;
+  await Promise.all([edges.updateComplete, cursors.updateComplete]);
+
+  expect(edges.users.filter((user) => user.options.isOwner).map((user) => user.userId)).toEqual(
+    ownerId === null ? [] : [ownerId],
+  );
+  const ownerBars = Array.from(edges.shadowRoot?.querySelectorAll<HTMLElement>(".dm-edge-bar--owner") ?? []);
+  expect(ownerBars.map((bar) => bar.dataset.userId)).toEqual(ownerId === null ? [] : [ownerId]);
+  expect(cursors.ownerId).toBe(ownerId);
+  for (const pin of Array.from(cursors.shadowRoot?.querySelectorAll<HTMLElement>(".dm-pin") ?? [])) {
+    const expectedOwner = pin.dataset.userId === ownerId;
+    expect(pin.classList.contains("dm-pin--owner")).toBe(expectedOwner);
+    expect(pin.textContent).toContain(expectedOwner ? "⌨️" : "📌");
+  }
+}
+
 describe("DeckMux avatar lookup", () => {
   it("avatar lookup survives a userId with CSS-special chars", async () => {
     const userId = 'a"]b';
@@ -170,7 +193,9 @@ describe("DeckMux avatar lookup", () => {
     dm.handleMessage({ type: "dm_join", user_id: "viewer", name: "V", color: "#00f" });
     dm.handleMessage({ type: "dm_join", user_id: "owner", name: "Owner", color: "#f00", is_owner: true });
     dm.handleMessage({
-      type: "dm_snapshot", users: [{ user_id: "viewer", name: "Viewer Updated", color: "#0ff", role: "admin" }],
+      type: "dm_snapshot",
+      owner_id: "owner",
+      users: [{ user_id: "viewer", name: "Viewer Updated", color: "#0ff", role: "admin" }],
     });
     const presence = parent.querySelector("uterm-presence-bar") as PresenceBar;
     await presence.updateComplete;
@@ -230,5 +255,41 @@ describe("DeckMux avatar lookup", () => {
     internals._presenceBar.getAvatarElement = () => null;
     internals._handleAvatarClick("full");
     expect((terminalContainer.querySelector("uterm-context-menu") as ContextMenu).style.left).toBe("0px");
+  });
+
+  it("projects control transfers into presence, edge, and pinned-cursor ownership", async () => {
+    addPinnedUser("alice", "Alice", "#f00");
+    addPinnedUser("bob", "Bob", "#0f0");
+    dm.handleMessage({ type: "dm_owner_change", user_id: "alice" });
+    await expectProjectedOwner("alice");
+
+    dm.handleMessage({ type: "dm_control_transfer", to_user_id: "bob", to_name: "Bob", to_color: "#0f0" });
+    await expectProjectedOwner("bob");
+  });
+
+  it("clears owner projection from edge bars and pinned cursors", async () => {
+    addPinnedUser("alice", "Alice", "#f00");
+    dm.handleMessage({ type: "dm_owner_change", user_id: "alice" });
+    await expectProjectedOwner("alice");
+
+    dm.handleMessage({ type: "dm_owner_change", user_id: null });
+    await expectProjectedOwner(null);
+  });
+
+  it("reconciles snapshot ownership across every visual projection", async () => {
+    addPinnedUser("alice", "Alice", "#f00");
+    addPinnedUser("bob", "Bob", "#0f0");
+    dm.handleMessage({ type: "dm_owner_change", user_id: "alice" });
+    await expectProjectedOwner("alice");
+
+    dm.handleMessage({
+      type: "dm_snapshot",
+      owner_id: "bob",
+      users: [
+        { user_id: "alice", name: "Alice", color: "#f00", pin: { line: 4 } },
+        { user_id: "bob", name: "Bob", color: "#0f0", pin: { line: 8 } },
+      ],
+    });
+    await expectProjectedOwner("bob");
   });
 });

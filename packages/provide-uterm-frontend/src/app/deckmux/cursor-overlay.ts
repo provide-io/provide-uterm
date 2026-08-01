@@ -37,6 +37,11 @@ export class DeckMuxCursorOverlay {
     this._sync();
   }
 
+  setOwner(userId: string | null): void {
+    this._ownerId = userId;
+    this._sync();
+  }
+
   removePin(userId: string): void {
     const user = this._users.get(userId);
     if (user) {
