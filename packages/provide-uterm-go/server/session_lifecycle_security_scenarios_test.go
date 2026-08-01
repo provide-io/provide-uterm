@@ -383,7 +383,7 @@ func lifecycleHTTPRequest(t *testing.T, client *http.Client, method, url, body s
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var response bytes.Buffer
 	_, _ = response.ReadFrom(resp.Body)
 	return resp.StatusCode, response.Bytes()
