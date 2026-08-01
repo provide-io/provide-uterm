@@ -572,3 +572,42 @@ class TestSendToNonexistentGroup:
         )
         assert resp.status_code == 404
         assert "not found" in resp.json()["error"].lower()
+
+
+class TestControllerViewComesFromTheServer:
+    """The controller's own member view is built from the server's registry and authorizer.
+
+    Group admission is decided by the routes, so these hooks are what remains
+    of the controller's view — used to narrow a dispatch to the members the
+    caller may still reach.
+    """
+
+    async def test_controller_view_resolves_and_authorizes_through_the_server(self) -> None:
+        app = _make_app([_sess("pub1", owner="admin", visibility="public")])
+        controller = app.state.uterm_hub.fan_out_controller
+
+        allowed, refused = await controller.validate_members(["pub1", "never-registered"], ADMIN)
+
+        assert allowed == ["pub1"]
+        assert refused == ["never-registered"]
+
+    async def test_controller_view_refuses_a_session_the_server_will_not_show(self) -> None:
+        app = _make_app([_sess("priv1", owner="someone-else", visibility="private")])
+        controller = app.state.uterm_hub.fan_out_controller
+        viewer = Principal(subject_id="bob", roles=frozenset({"viewer"}))
+
+        allowed, refused = await controller.validate_members(["priv1"], viewer)
+
+        assert allowed == []
+        assert refused == ["priv1"]
+
+    async def test_controller_without_its_authorizers_refuses_every_member(self) -> None:
+        # validate_members is reached only through callers that check
+        # authorization_ready first, so it answers for itself as well.
+        controller = FanOutController(MagicMock())
+
+        allowed, refused = await controller.validate_members(["w1", "w2"], ADMIN)
+
+        assert allowed == []
+        assert refused == ["w1", "w2"]
+        assert controller.authorization_ready is False
