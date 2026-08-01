@@ -492,6 +492,7 @@ class ConnectionManager:
                     async with hub._lock:
                         st = hub.registry.get(worker_id)
                         if st is state:  # pragma: no branch
+                            assert st is not None  # fence non-None ⇒ the state it was read from was too
                             was_owner, rest_still_active, resume_without_owner = self._update_lock_state(
                                 st, ws, owned_hijack
                             )

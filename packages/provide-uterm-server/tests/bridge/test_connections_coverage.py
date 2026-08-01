@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.server.bridge.hub import connections as _conn_module
 
@@ -171,6 +173,11 @@ def test_allow_rest_send_for_checks_both_buckets() -> None:
 # ---------------------------------------------------------------------------
 
 
+# timeout(10): register_worker's fenced re-read loop never suspends, so the
+# register_worker__mutmut_40/_41/_42 infinite-retry mutants spin without yielding;
+# a short SIGALRM bound makes this test FAIL fast under those mutants (a kill)
+# instead of tripping mutmut's wall-clock limit (recorded as a bad `timeout`).
+@pytest.mark.timeout(10)
 async def test_register_worker_clears_all_hijack_fields() -> None:
     """When prev_was_hijacked, all three hijack fields are cleared."""
     hub = TermHub()
