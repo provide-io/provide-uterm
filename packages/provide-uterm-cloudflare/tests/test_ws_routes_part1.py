@@ -45,6 +45,8 @@ class _Runtime:
         self._broadcast: list[dict] = []
         self._snapshots_saved: list[dict] = []
         self._input_modes_saved: list[str] = []
+        self._runtime_incarnation = "test-incarnation"
+        self._runtime_activation_seq = 7
         self._socket_roles: dict[str, str] = {}  # ws_key → role
         self.config = SimpleNamespace(limits=SimpleNamespace(max_ws_message_bytes=1_048_576, max_input_chars=10_000))
         self.store = SimpleNamespace(
@@ -386,12 +388,19 @@ async def test_browser_heartbeat_no_response() -> None:
     assert not runtime._pushed
 
 
-async def test_browser_ping_no_response() -> None:
-    """ping: no error sent."""
+async def test_browser_ping_returns_runtime_witness() -> None:
+    """Ping exposes the persisted cold-runtime activation witness."""
     runtime = _Runtime()
     ws = _Ws()
     await handle_socket_message(runtime, ws, _raw("ping"), is_worker=False)
-    assert not runtime._sent
+    assert runtime._sent == [
+        {
+            "type": "heartbeat",
+            "runtime_incarnation": "test-incarnation",
+            "runtime_activation_seq": 7,
+            "ts": runtime._sent[0]["ts"],
+        }
+    ]
 
 
 # ---------------------------------------------------------------------------

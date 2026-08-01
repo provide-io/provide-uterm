@@ -358,7 +358,12 @@ def _headers(token: str) -> dict[str, str]:
 
 def _connect(url: str, *, additional_headers: dict[str, str]) -> Any:
     """Open a socket with bounded cleanup for workerd hibernation sockets."""
-    return websockets.connect(url, additional_headers=additional_headers, close_timeout=0.2)
+    return websockets.connect(
+        url,
+        additional_headers=additional_headers,
+        close_timeout=0.2,
+        ping_interval=None,
+    )
 
 
 async def _fragmentation(base: str, token: str, scenario: dict[str, Any], defaults: dict[str, Any]) -> dict[str, Any]:
@@ -469,46 +474,31 @@ async def _resume(
                 )
                 == 0
             )
+            await _send_control(resumed, {"type": "ping"})
+            warm_witness = await _receive_matching(
+                resumed,
+                lambda event: event.get("type") == "heartbeat" and "runtime_activation_seq" in event,
+            )
             # A locally booted Durable Object hibernates after an idle window;
-            # a fresh public upgrade wakes the isolate, then the same attached
-            # browser must still remain the owner.
+            # the original edge-held browser and worker attachments must wake
+            # the cold isolate and recover ownership/generation state.
             await asyncio.sleep(HIBERNATION_IDLE_S)
-            wake_probe = await _connect(browser_url, additional_headers=_headers(tokens[data["principal"]]))
-            try:
-                await _drain_browser_startup(wake_probe)
-                await _send_control(wake_probe, {"type": "resume", "token": resumed_hello["resume_token"]})
-                await _receive_matching(
-                    wake_probe,
-                    lambda event: event.get("type") == "hello" and event.get("resumed") is True,
-                )
-                # Local workerd discards the client-facing half of an idle edge
-                # socket on hibernation. Reconnect the worker generation and
-                # prove the active lease is paused before any owned delivery.
-                async with _connect(worker_url, additional_headers=_headers(WORKER_TOKEN)) as wake_worker:
-                    await _drain_worker_startup(wake_worker)
-                    await _receive_matching(
-                        wake_worker,
-                        lambda event: event.get("type") == "control" and event.get("action") == "pause",
-                    )
-                    await _send_control(wake_probe, {"type": "input", "data": "post-hibernation-proof"})
-                    delivered = asyncio.create_task(
-                        _receive_matching(
-                            wake_worker,
-                            lambda event: event.get("type") == "data" and event.get("data") == "post-hibernation-proof",
-                            timeout=8,
-                        )
-                    )
-                    refused = asyncio.create_task(
-                        _receive_matching(wake_probe, lambda event: event.get("type") == "error", timeout=8)
-                    )
-                    done, pending = await asyncio.wait({delivered, refused}, return_when=asyncio.FIRST_COMPLETED)
-                    for task in pending:
-                        task.cancel()
-                    if refused in done:
-                        raise AssertionError(f"post-hibernation owner was rejected: {refused.result()}")
-                    post_wake = delivered.result()
-            finally:
-                await wake_probe.close()
+            await _send_control(resumed, {"type": "ping"})
+            cold_witness = await _receive_matching(
+                resumed,
+                lambda event: event.get("type") == "heartbeat" and "runtime_activation_seq" in event,
+                timeout=8,
+            )
+            assert cold_witness["runtime_activation_seq"] > warm_witness["runtime_activation_seq"]
+            assert cold_witness["runtime_incarnation"] != warm_witness["runtime_incarnation"]
+            await _send_control(worker, {"type": "ping"})
+            await _receive_matching(resumed, lambda event: event.get("type") == "ping", timeout=8)
+            await _send_control(resumed, {"type": "input", "data": "post-hibernation-proof"})
+            post_wake = await _receive_matching(
+                worker,
+                lambda event: event.get("type") == "data" and event.get("data") == "post-hibernation-proof",
+                timeout=8,
+            )
             restored = restored and post_wake.get("data") == "post-hibernation-proof"
             await replay.close()
             await resumed.close()
@@ -588,22 +578,23 @@ async def _public_rest_identity_proof(base: str, tokens: dict[str, str]) -> None
             _http_json, base, tokens["rest-competitor"], heartbeat_path, {"lease_s": 45}
         )
         assert status == 409 and refused["error"] == "owner_mismatch"
-        status, invalid = await asyncio.to_thread(
-            _http_json,
-            base,
-            tokens["rest-subject"],
-            f"/worker/{worker_id}/hijack/{hijack_id}/send",
-            {"keys": "must-not-send", "expect_regex": "["},
-        )
-        assert status == 400 and "invalid expect_regex" in invalid["error"]
-        assert (
-            await _matching_count(
-                worker,
-                lambda event: event.get("type") == "data" and event.get("data") == "must-not-send",
-                timeout=0.5,
+        for pattern in ("[", "a*a*a*a*a*a*a*a*b", "a?a?a?a?a?a?a?a?b", r"(a)\1"):
+            status, invalid = await asyncio.to_thread(
+                _http_json,
+                base,
+                tokens["rest-subject"],
+                f"/worker/{worker_id}/hijack/{hijack_id}/send",
+                {"keys": "must-not-send", "expect_regex": pattern},
             )
-            == 0
-        )
+            assert status == 400 and "expect_regex" in invalid["error"]
+            assert (
+                await _matching_count(
+                    worker,
+                    lambda event: event.get("type") == "data" and event.get("data") == "must-not-send",
+                    timeout=0.3,
+                )
+                == 0
+            )
 
 
 async def _public_resume_disabled_proof(base: str, token: str) -> None:

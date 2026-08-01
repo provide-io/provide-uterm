@@ -251,6 +251,8 @@ class RuntimeProtocol(Protocol):
     last_analysis: Any
     browser_hijack_owner: dict[str, str]
     browser_resume_tokens: dict[str, str]
+    _runtime_incarnation: str
+    _runtime_activation_seq: int
     _ushell: Any  # UshellConnector | None
     _ushell_started: bool
     env: Any  # the Worker's bindings, supplied by the Durable Object runtime

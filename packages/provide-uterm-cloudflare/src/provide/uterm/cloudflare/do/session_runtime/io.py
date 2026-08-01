@@ -124,6 +124,9 @@ class _SessionRuntimeIoMixin:
         last_snapshot: Any
         _input_delivery_lock: asyncio.Lock
         _worker_generation: str | None
+        _runtime_incarnation: str
+        _runtime_activation_seq: int
+        _runtime_activation_recorded: bool
 
         def ws_key(self, ws: Any) -> Any: ...
         def _socket_role(self, ws: Any) -> str: ...
@@ -215,7 +218,8 @@ class _SessionRuntimeIoMixin:
     async def unregister_worker_socket(self, ws: CFWebSocket) -> bool:
         """Remove the active worker without crossing an owned delivery."""
         async with self.input_delivery_guard():
-            if self.worker_ws is not ws:
+            generation = self._socket_worker_generation(ws)
+            if not generation or generation != self._worker_generation:
                 return False
             self.worker_ws = None
             self._worker_generation = None
@@ -256,6 +260,7 @@ class _SessionRuntimeIoMixin:
         if saved_meta is not None:
             self.meta = saved_meta
             self._meta_loaded = True
+        self._record_runtime_activation()
         row = self.store.load_session(self.worker_id)
         if row is None:
             return
@@ -292,6 +297,13 @@ class _SessionRuntimeIoMixin:
         stored_mode = row.get("input_mode")
         if stored_mode in {"hijack", "open"}:
             self.input_mode = stored_mode
+
+    def _record_runtime_activation(self) -> None:
+        if self._runtime_activation_recorded or self.worker_id == "default":
+            return
+        witness = self.store.record_runtime_activation(self.worker_id, self._runtime_incarnation)
+        self._runtime_activation_seq = int(witness["activation_seq"])
+        self._runtime_activation_recorded = True
 
     # ------------------------------------------------------------------
     # Request helpers
