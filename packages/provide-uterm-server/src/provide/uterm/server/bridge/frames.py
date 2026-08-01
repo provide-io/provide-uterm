@@ -16,7 +16,7 @@ churn — they still see ``ErrorFrame``, ``TermFrame``, etc.
 from __future__ import annotations
 
 import time
-from typing import Any, Literal, TypedDict, cast
+from typing import Any, Literal, NotRequired, TypedDict, cast
 
 from provide.uterm.bridge.schemas import (
     AnalysisFrame as _AnalysisModel,
@@ -96,6 +96,7 @@ class SnapshotFrame(TypedDict):
     prompt_detected: dict[str, Any] | None
     raw_tail: str | None
     ts: float
+    event_seq: NotRequired[int]
 
 
 class AnalysisFrame(TypedDict):
@@ -205,6 +206,7 @@ def make_snapshot_frame(
     prompt_detected: dict[str, Any] | None,
     ts: float,
     raw_tail: str | None = None,
+    event_seq: int | None = None,
 ) -> SnapshotFrame:
     # Snapshot construction lives once in ``provide.uterm.frames``; this thin
     # wrapper only re-types the result as the local ``SnapshotFrame`` TypedDict
@@ -223,6 +225,7 @@ def make_snapshot_frame(
             prompt_detected=prompt_detected,
             ts=ts,
             raw_tail=raw_tail,
+            event_seq=event_seq,
         ),
     )
 

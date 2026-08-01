@@ -82,6 +82,9 @@ class SnapshotFrame(_FrameBase):
     # within a single turn. Optional/backward-compatible.
     raw_tail: str | None = None
     ts: float | None = None
+    # Manager-assigned causal sequence. Worker-originated snapshots omit it;
+    # the server stamps it before storing and broadcasting the committed frame.
+    event_seq: int | None = None
 
 
 # ---------------------------------------------------------------------------

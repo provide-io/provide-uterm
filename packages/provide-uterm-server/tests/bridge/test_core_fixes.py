@@ -87,7 +87,7 @@ class TestBrowserCount:
 
 
 class TestGetLastSnapshot:
-    """get_last_snapshot must return st.last_snapshot — not None — when one is stored.
+    """get_last_snapshot must return an owned copy — not None — when one is stored.
 
     Kills:
     - mutmut_1: _workers.get(worker_id) → _workers.get(None) → always None
@@ -95,7 +95,7 @@ class TestGetLastSnapshot:
     """
 
     async def test_returns_snapshot_when_present(self) -> None:
-        """get_last_snapshot returns the stored snapshot dict, not None."""
+        """get_last_snapshot returns an equal copy of the stored snapshot."""
         hub = _make_hub()
         snapshot = {"type": "snapshot", "screen": "hello", "ts": time.time()}
 
@@ -105,9 +105,10 @@ class TestGetLastSnapshot:
 
         result = await hub.get_last_snapshot("w1")
 
-        assert result is snapshot, (
+        assert result == snapshot, (
             "Expected the stored snapshot dict, got None — mutmut_1/2 corrupt the get() key so st is always None"
         )
+        assert result is not snapshot
 
     async def test_returns_none_when_no_snapshot(self) -> None:
         """get_last_snapshot returns None when no snapshot has been stored."""

@@ -1312,6 +1312,18 @@
           "default": null,
           "title": "Cursor At End"
         },
+        "event_seq": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Event Seq"
+        },
         "has_trailing_space": {
           "anyOf": [
             {
