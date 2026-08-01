@@ -185,6 +185,20 @@ func TestSendUnauthorizedPrincipal(t *testing.T) {
 	}
 }
 
+// TestAuthorizationReadyReportsAuthorizerWiring pins the wiring gate that the
+// create route consults before admitting any member: a controller built
+// without an Authorizer cannot judge access, and must say so.
+func TestAuthorizationReadyReportsAuthorizerWiring(t *testing.T) {
+	fh := newFakeHub(nil, "w1")
+
+	if NewController(fh, Config{}).AuthorizationReady() {
+		t.Fatal("controller without an Authorizer reported authorization ready")
+	}
+	if !NewController(fh, Config{Authorizer: allowAllAuthorizer()}).AuthorizationReady() {
+		t.Fatal("controller with an Authorizer reported authorization unavailable")
+	}
+}
+
 func TestSendFailsClosedWithoutMemberAuthorizer(t *testing.T) {
 	fh := newFakeHub(nil, "w1")
 	ctrl := NewController(fh, Config{Clock: hub.NewManualClock(1234.5), IDGen: func() string { return "sid" }})

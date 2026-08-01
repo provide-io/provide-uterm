@@ -43,8 +43,16 @@ type semanticInput struct {
 	Actor      semanticActor `json:"actor"`
 	Group      semanticGroup `json:"group"`
 	Visibility struct {
-		ReadableMembers  []string `json:"readable_members"`
-		RevokeBeforeSend []string `json:"revoke_before_send"`
+		ReadableMembers []string `json:"readable_members"`
+		// RegisteredMembers is the optional set the routes' session registry
+		// knows about. Absent (nil) means "default to readable_members".
+		RegisteredMembers []string `json:"registered_members"`
+		// ControllerReadableMembers is the optional set the fan-out
+		// controller's own authorizer treats as readable. Absent (nil) means
+		// "default to readable_members". It never feeds the server/routes
+		// authorizer — the contract requires the two to be able to disagree.
+		ControllerReadableMembers []string `json:"controller_readable_members"`
+		RevokeBeforeSend          []string `json:"revoke_before_send"`
 	} `json:"visibility"`
 	Policy struct {
 		Action string `json:"action"`
@@ -244,6 +252,77 @@ type semanticAuthorizer struct {
 	readable map[string]bool
 }
 
+// semanticReadableSet resolves what the *server* (routes) authorizer treats as
+// readable: visibility.readable_members minus the revoke_before_send
+// withdrawals. It deliberately ignores controller_readable_members.
+func semanticReadableSet(input semanticInput) map[string]bool {
+	readable := map[string]bool{}
+	for _, workerID := range input.Visibility.ReadableMembers {
+		readable[workerID] = true
+	}
+	for _, workerID := range input.Visibility.RevokeBeforeSend {
+		delete(readable, workerID)
+	}
+	return readable
+}
+
+// semanticControllerReadableSet resolves what the *controller's own*
+// authorizer treats as readable. The contract default when
+// controller_readable_members is absent (nil, not an empty list) is
+// readable_members; revoke_before_send still withdraws from the result.
+func semanticControllerReadableSet(input semanticInput) map[string]bool {
+	members := input.Visibility.ControllerReadableMembers
+	if members == nil {
+		members = input.Visibility.ReadableMembers
+	}
+	readable := map[string]bool{}
+	for _, workerID := range members {
+		readable[workerID] = true
+	}
+	for _, workerID := range input.Visibility.RevokeBeforeSend {
+		delete(readable, workerID)
+	}
+	return readable
+}
+
+// semanticRegisteredMembers resolves the sessions the routes' session registry
+// knows about. The contract default when registered_members is absent (nil,
+// not an empty list) is readable_members, and the effective set is the union
+// with readable_members because a readable session has to exist to be
+// readable. Order follows the group's declared membership so the positional
+// "first offending member decides" rule stays observable.
+func semanticRegisteredMembers(input semanticInput) []string {
+	registered := input.Visibility.RegisteredMembers
+	if registered == nil {
+		registered = input.Visibility.ReadableMembers
+	}
+	seen := map[string]bool{}
+	effective := []string{}
+	for _, workerID := range append(append([]string(nil), registered...), input.Visibility.ReadableMembers...) {
+		if !seen[workerID] {
+			seen[workerID] = true
+			effective = append(effective, workerID)
+		}
+	}
+	return effective
+}
+
+// semanticRouteAuthorizer is the server-side authorization provider used by the
+// contract's create scenarios. Everything but session reads delegates to the
+// normal RBAC provider (so the global-admin boundary is unchanged); reads
+// answer from the scenario's server-side readable set, which lets a scenario
+// register a session the caller must not be able to read.
+type semanticRouteAuthorizer struct {
+	serverauth.LocalAuthorizationProvider
+	readable map[string]bool
+}
+
+func (a *semanticRouteAuthorizer) CanReadSession(
+	_ *serverauth.Principal, session *serverconfig.SessionDefinition,
+) bool {
+	return session != nil && a.readable[session.SessionID]
+}
+
 func (a *semanticAuthorizer) IsGlobalAdmin(principal *serverauth.Principal) bool {
 	return principal != nil && principal.Roles.Has("admin") && principal.AdminSessionScope == nil
 }
@@ -263,13 +342,7 @@ func semanticPrincipal(actor semanticActor) *serverauth.Principal {
 
 func buildSemanticController(t *testing.T, input semanticInput) (*fanout.Controller, *semanticHub) {
 	t.Helper()
-	readable := map[string]bool{}
-	for _, workerID := range input.Visibility.ReadableMembers {
-		readable[workerID] = true
-	}
-	for _, workerID := range input.Visibility.RevokeBeforeSend {
-		delete(readable, workerID)
-	}
+	readable := semanticControllerReadableSet(input)
 	h := newSemanticHub(input)
 	config := fanout.Config{Clock: hub.NewManualClock(1), IDGen: func() string { return "approval" }}
 	if !input.OmitAuthorizers {
@@ -327,20 +400,62 @@ func canonicalGoRouteError(code int, body string) *string {
 	if strings.Contains(body, "unknown fan-out") {
 		return semanticError("unknown_member")
 	}
+	// "no read access" then "authorization" — checked after "admin"/"unknown
+	// fan-out" to match the Python canonicalizer's precedence exactly.
+	if strings.Contains(body, "no read access") {
+		return semanticError("member_read_forbidden")
+	}
+	if strings.Contains(body, "authorization") {
+		return semanticError("authorization_unavailable")
+	}
 	if code == 501 {
 		return semanticError("unsupported_fail_closed")
 	}
 	return semanticError("request_failed")
 }
 
+// executeSemanticRouteCreate drives POST /api/fanout/groups against a server
+// whose registry holds the scenario's effective registered set. The fan-out
+// controller is rebuilt with an authorizer over controller_readable_members so
+// it can be strictly more permissive than the route's: the contract requires
+// that a controller which would happily accept a member still cannot widen the
+// route's admission decision.
+func executeSemanticRouteCreate(t *testing.T, ts *testServer, s semanticScenario) semanticObservation {
+	t.Helper()
+	input := s.Input
+	for _, workerID := range semanticRegisteredMembers(input) {
+		ts.reg.add(workerID, input.Group.Creator, "public")
+	}
+	config := fanout.Config{Clock: ts.srv.clock}
+	// omit_authorizers models a controller whose authorization dependency was
+	// never wired: the interface field stays nil (assigning a typed nil would
+	// still read as a non-nil interface), so the route's wiring gate fires.
+	if !input.OmitAuthorizers {
+		config.Authorizer = &semanticAuthorizer{readable: semanticControllerReadableSet(input)}
+	}
+	ts.srv.fanout = fanout.NewController(ts.srv.deps.Hub, config)
+	body, _ := json.Marshal(map[string]any{"name": "fixture-group", "worker_ids": input.Group.Members})
+	recorder := ts.do("POST", "/api/fanout/groups", string(body), semanticHeaders(input.Actor))
+	return emptySemanticObservation(s, recorder.Code, canonicalGoRouteError(recorder.Code, recorder.Body.String()))
+}
+
 func executeSemanticRoute(t *testing.T, s semanticScenario) semanticObservation {
 	t.Helper()
 	input := s.Input
-	ts := newTestServer(t, func(cfg *serverconfig.UtermServerConfig, _ *Deps) {
+	ts := newTestServer(t, func(cfg *serverconfig.UtermServerConfig, deps *Deps) {
 		cfg.FanoutAllowUnknownMembers = input.Group.AllowUnknownMembers
 		if input.Policy.Action != "allow" {
 			url := "https://policy.example.test/fanout"
 			cfg.Governance.PolicyWebhookURL = &url
+		}
+		// Create scenarios pin the routes' member-admission rule, so the
+		// server needs an authorizer that can refuse a *registered* member.
+		// Send scenarios keep the default RBAC provider so their pre-created
+		// fixture group is unaffected.
+		if input.Operation == "create" {
+			deps.Authz = serverauth.NewAuthorizationServiceWith(
+				&semanticRouteAuthorizer{readable: semanticReadableSet(input)},
+			)
 		}
 	})
 	var tracking *semanticRouteTracking
@@ -348,9 +463,7 @@ func executeSemanticRoute(t *testing.T, s semanticScenario) semanticObservation 
 		tracking = trackSemanticRouteFanout(t, ts, input)
 	}
 	if input.Operation == "create" {
-		body, _ := json.Marshal(map[string]any{"name": "fixture-group", "worker_ids": input.Group.Members})
-		recorder := ts.do("POST", "/api/fanout/groups", string(body), semanticHeaders(input.Actor))
-		return emptySemanticObservation(s, recorder.Code, canonicalGoRouteError(recorder.Code, recorder.Body.String()))
+		return executeSemanticRouteCreate(t, ts, s)
 	}
 	if input.Actor.Authenticated && input.Actor.Roles[0] == "admin" {
 		body, _ := json.Marshal(map[string]any{"name": "fixture-group", "worker_ids": input.Group.Members})
