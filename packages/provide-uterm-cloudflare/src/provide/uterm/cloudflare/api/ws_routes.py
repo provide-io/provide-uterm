@@ -203,6 +203,7 @@ async def _handle_hijack_control(runtime: RuntimeProtocol, ws: CFWebSocket, fram
                     refusal = result.error or "already_hijacked"
                 else:
                     runtime.browser_hijack_owner[ws_id] = result.session.hijack_id
+                    runtime._set_browser_ownership_attachment(ws, result.session.hijack_id)
                     runtime.persist_lease(result.session)
                     if not result.is_renewal and not await runtime.push_worker_control(
                         "pause",
@@ -211,6 +212,7 @@ async def _handle_hijack_control(runtime: RuntimeProtocol, ws: CFWebSocket, fram
                     ):
                         runtime.hijack.release(result.session.hijack_id)
                         runtime.browser_hijack_owner.pop(ws_id, None)
+                        runtime._set_browser_ownership_attachment(ws, None)
                         runtime.clear_lease()
                         refusal = "no_worker"
                     else:
@@ -226,6 +228,7 @@ async def _handle_hijack_control(runtime: RuntimeProtocol, ws: CFWebSocket, fram
                 refusal = result.error or "not_owner"
             else:
                 runtime.browser_hijack_owner.pop(ws_id, None)
+                runtime._set_browser_ownership_attachment(ws, None)
                 runtime.clear_lease()
                 if not await runtime.push_worker_control("resume", owner=active.owner, lease_s=0):
                     refusal = "no_worker"
@@ -302,7 +305,10 @@ async def _handle_resume(runtime: RuntimeProtocol, ws: CFWebSocket, frame: dict[
         effective_role = stored_role
         if _ROLE_RANK.get(stored_role, 0) > _ROLE_RANK.get(current_role, 0):
             effective_role = current_role
-        was_hijack_owner = bool(record.get("was_hijack_owner"))
+        active = runtime.hijack.session
+        was_hijack_owner = bool(record.get("was_hijack_owner")) or (
+            active is not None and active.owner == f"browser:{old_token}"
+        )
 
         if was_hijack_owner and effective_role == "admin" and runtime.input_mode != "open":
             lease_s = int(getattr(runtime.config, "hijack_lease_s", 60))
@@ -315,6 +321,7 @@ async def _handle_resume(runtime: RuntimeProtocol, ws: CFWebSocket, frame: dict[
                     if not await runtime.push_worker_control("pause", owner=result.session.owner, lease_s=lease_s):
                         runtime.hijack.release(result.session.hijack_id)
                         runtime.browser_hijack_owner.pop(ws_key, None)
+                        runtime._set_browser_ownership_attachment(ws, None)
                         runtime.clear_lease()
                         rejected_stale_owner = True
                     else:
@@ -331,11 +338,24 @@ async def _handle_resume(runtime: RuntimeProtocol, ws: CFWebSocket, frame: dict[
         resume_ttl_s = float(getattr(runtime.config, "resume_ttl_s", 300))
         runtime.store.create_resume_token(new_token, runtime.worker_id, effective_role, resume_ttl_s)
         runtime.browser_resume_tokens[runtime.ws_key(ws)] = new_token
-
-    try:
-        ws.serializeAttachment(f"browser:{effective_role}:{runtime.worker_id}")
-    except Exception as exc:
-        logger.debug("resume: serializeAttachment failed: %s", exc)
+        if reclaimed_hijack:
+            active = runtime.hijack.session
+            if active is not None:
+                active.owner = f"browser:{new_token}"
+                runtime.persist_lease(active)
+                runtime._set_browser_ownership_attachment(
+                    ws,
+                    active.hijack_id,
+                    resume_token=new_token,
+                    browser_role=effective_role,
+                )
+        else:
+            runtime._set_browser_ownership_attachment(
+                ws,
+                None,
+                resume_token=new_token,
+                browser_role=effective_role,
+            )
 
     if reclaimed_hijack:
         await runtime.broadcast_hijack_state()

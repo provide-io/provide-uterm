@@ -15,6 +15,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import secrets
 import time
 from typing import TYPE_CHECKING, Any, cast
 
@@ -122,10 +123,23 @@ class _SessionRuntimeIoMixin:
         env: Any
         last_snapshot: Any
         _input_delivery_lock: asyncio.Lock
+        _worker_generation: str | None
 
         def ws_key(self, ws: Any) -> Any: ...
         def _socket_role(self, ws: Any) -> str: ...
         def _remove_ws(self, ws: Any) -> None: ...
+        def _socket_browser_role(self, ws: Any) -> str: ...
+        def _socket_worker_generation(self, ws: Any) -> str | None: ...
+        def _restore_browser_identity(self, ws: Any) -> None: ...
+        def _serialize_socket_attachment(self, ws: Any, **kwargs: Any) -> None: ...
+        def _set_browser_ownership_attachment(
+            self,
+            ws: Any,
+            hijack_id: str | None,
+            *,
+            resume_token: str | None = None,
+            browser_role: str | None = None,
+        ) -> None: ...
         async def _send_text(self, ws: Any, text: str) -> None: ...
         async def send_ws(self, ws: CFWebSocket, frame: dict[str, object]) -> None: ...
 
@@ -135,10 +149,68 @@ class _SessionRuntimeIoMixin:
         async with self._input_delivery_lock:
             yield
 
-    async def register_worker_socket(self, ws: CFWebSocket) -> None:
-        """Install a worker only after earlier owned deliveries have settled."""
+    async def register_worker_socket(self, ws: CFWebSocket) -> bool:
+        """Install a new worker generation and reapply an active pause first."""
         async with self.input_delivery_guard():
+            generation = self._socket_worker_generation(ws) or secrets.token_urlsafe(18)
+            if self.worker_ws is ws and self._worker_generation == generation:
+                return True
+            active = self.hijack.session
+            if active is not None:
+                remaining_s = max(1, int(active.lease_expires_at - time.monotonic()))
+                try:
+                    await asyncio.wait_for(
+                        self.send_ws(
+                            ws,
+                            {
+                                "type": "control",
+                                "action": "pause",
+                                "owner": active.owner,
+                                "lease_s": remaining_s,
+                                "ts": time.time(),
+                            },
+                        ),
+                        timeout=_WORKER_SEND_TIMEOUT_S,
+                    )
+                except Exception as exc:
+                    logger.warning("replacement worker pause failed worker_id=%s: %s", self.worker_id, exc)
+                    with contextlib.suppress(Exception):
+                        ws.close(1011, "failed to restore active lease")
+                    return False
+            old_worker = self.worker_ws
+            try:
+                self._serialize_socket_attachment(
+                    ws,
+                    role="worker",
+                    browser_role="admin",
+                    socket_id=f"worker-{generation}",
+                    worker_generation=generation,
+                )
+            except Exception:
+                with contextlib.suppress(Exception):
+                    ws._ut_role = "worker"  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
+                    ws._ut_worker_generation = generation  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
             self.worker_ws = ws
+            self._worker_generation = generation
+            self.store.save_worker_generation(self.worker_id, generation)
+            if old_worker is not None and old_worker is not ws:
+                with contextlib.suppress(Exception):
+                    old_worker.close(1012, "worker replaced")
+            return True
+
+    async def activate_worker_socket(self, ws: CFWebSocket) -> bool:
+        """Accept only the persisted current generation on open/message wakeups."""
+        async with self.input_delivery_guard():
+            generation = self._socket_worker_generation(ws)
+            if not generation or generation != self._worker_generation:
+                with contextlib.suppress(Exception):
+                    ws.close(1008, "stale worker generation")
+                return False
+            # A hibernation callback may wrap the same edge WebSocket in a new
+            # Python proxy. The server-issued generation, not proxy identity,
+            # determines whether it is the current worker.
+            self.worker_ws = ws
+            return True
 
     async def unregister_worker_socket(self, ws: CFWebSocket) -> bool:
         """Remove the active worker without crossing an owned delivery."""
@@ -146,6 +218,8 @@ class _SessionRuntimeIoMixin:
             if self.worker_ws is not ws:
                 return False
             self.worker_ws = None
+            self._worker_generation = None
+            self.store.save_worker_generation(self.worker_id, None)
             return True
 
     async def remove_browser_socket(self, ws: CFWebSocket) -> bool:
@@ -157,6 +231,7 @@ class _SessionRuntimeIoMixin:
         ws_id = self.ws_key(ws)
         released = False
         async with self.input_delivery_guard():
+            self._restore_browser_identity(ws)
             active = self.hijack.session
             owns_hijack = active is not None and self.browser_hijack_owner.get(ws_id) == active.hijack_id
             if owns_hijack:
@@ -168,6 +243,7 @@ class _SessionRuntimeIoMixin:
                     self.clear_lease()
                     await self.push_worker_control("resume", owner="browser_disconnected", lease_s=0)
                     released = True
+            self._set_browser_ownership_attachment(ws, None)
             self._remove_ws(ws)
         return released
 
@@ -205,7 +281,11 @@ class _SessionRuntimeIoMixin:
                 hijack_id=hijack_id,
                 owner=owner,
                 lease_expires_at=_wall_to_mono(float(lease_expires_at)),
+                acquired_by=(str(row.get("acquired_by")) if isinstance(row.get("acquired_by"), str) else None),
             )
+        worker_generation = row.get("worker_generation")
+        if isinstance(worker_generation, str) and worker_generation:
+            self._worker_generation = worker_generation
         snapshot = row.get("last_snapshot")
         if isinstance(snapshot, dict):
             self.last_snapshot = snapshot

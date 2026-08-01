@@ -251,6 +251,11 @@ def _command(root: Path, backend: str) -> tuple[list[str], Path]:
         return [
             "uv",
             "run",
+            "--frozen",
+            "--package",
+            "provide-uterm-cloudflare",
+            "--extra",
+            "dev",
             "pytest",
             "-q",
             "--no-cov",

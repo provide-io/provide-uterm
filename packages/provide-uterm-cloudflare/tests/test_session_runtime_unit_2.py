@@ -72,8 +72,14 @@ class _MockWs:
     def deserializeAttachment(self) -> object:  # noqa: N802
         return self._attachment
 
+    def serializeAttachment(self, attachment: object) -> None:  # noqa: N802
+        self._attachment = attachment
+
     def send(self, data: str) -> None:
         self.sent.append(data)
+
+    def close(self, code: int, reason: str) -> None:
+        return
 
 
 class _AsyncWs(_MockWs):
@@ -94,8 +100,10 @@ def test_lazy_init_from_ws_worker_url() -> None:
     ctx.id = SimpleNamespace(name=lambda: "default")
     rt = SessionRuntime(ctx, _make_env())
     assert rt.worker_id == "default"
+    rt.store.save_worker_generation("real-id", "persisted-generation")
     rt._lazy_init_worker_id(_MockRequest(url="https://x/ws/worker/real-id/term"))
     assert rt.worker_id == "real-id"
+    assert rt._worker_generation == "persisted-generation"
 
 
 def test_lazy_init_from_worker_http_url() -> None:
@@ -157,9 +165,10 @@ async def test_websocket_open_browser_sends_hello() -> None:
 
 
 async def test_websocket_open_worker_sets_worker_ws() -> None:
-    """Lines 375-386: worker socket → worker_ws set."""
+    """The fetch-registered current worker generation activates on open."""
     rt = _make_runtime()
     ws = _MockWs(attachment="worker:admin:test-worker")
+    assert await rt.register_worker_socket(ws)
     await rt.webSocketOpen(ws)
     assert rt.worker_ws is ws
 
@@ -201,9 +210,10 @@ async def test_websocket_message_raw_bytes() -> None:
 
 
 async def test_websocket_message_worker_calls_handle_socket_message() -> None:
-    """Lines 423-424: worker socket → handle_socket_message called."""
+    """A message from the current worker generation reaches the dispatcher."""
     rt = _make_runtime()
     ws = _MockWs(attachment="worker:admin:test-worker")
+    assert await rt.register_worker_socket(ws)
     with patch(
         "provide.uterm.cloudflare.do.session_runtime.lifecycle.handle_socket_message",
         new=AsyncMock(return_value=None),
@@ -240,7 +250,7 @@ async def test_websocket_close_worker_broadcasts_disconnected() -> None:
     """Lines 436-444: worker closes → worker_disconnected broadcast."""
     rt = _make_runtime()
     ws = _MockWs(attachment="worker:admin:test-worker")
-    rt.worker_ws = ws
+    assert await rt.register_worker_socket(ws)
     browser = _MockWs(attachment="browser:admin:test-worker")
     rt._register_socket(browser, "browser")
     # Make getWebSockets raise so broadcast_to_browsers falls back to browser_sockets
@@ -269,7 +279,7 @@ async def test_websocket_error_worker_broadcasts_disconnected() -> None:
     """Lines 447-453: worker error → worker_disconnected broadcast."""
     rt = _make_runtime()
     ws = _MockWs(attachment="worker:admin:test-worker")
-    rt.worker_ws = ws
+    assert await rt.register_worker_socket(ws)
     browser = _MockWs(attachment="browser:admin:test-worker")
     rt._register_socket(browser, "browser")
 
@@ -381,7 +391,7 @@ async def test_websocket_close_worker_when_deleted_skips_broadcast() -> None:
     """lifecycle.py:161->166: tombstoned worker close skips state mutation, still updates KV."""
     rt = _make_runtime()
     ws = _MockWs(attachment="worker:admin:test-worker")
-    rt.worker_ws = ws
+    assert await rt.register_worker_socket(ws)
     rt.lifecycle_state = "running"
     rt._deleted_at = 999.0
     await rt.webSocketClose(ws, 1000, "normal", True)
@@ -393,7 +403,7 @@ async def test_websocket_error_worker_when_deleted_skips_broadcast() -> None:
     """lifecycle.py:185->190: tombstoned worker error skips state mutation."""
     rt = _make_runtime()
     ws = _MockWs(attachment="worker:admin:test-worker")
-    rt.worker_ws = ws
+    assert await rt.register_worker_socket(ws)
     rt.lifecycle_state = "running"
     rt._deleted_at = 999.0
     await rt.webSocketError(ws, "boom")

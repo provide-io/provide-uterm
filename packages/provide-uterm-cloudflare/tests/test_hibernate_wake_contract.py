@@ -20,9 +20,10 @@ from types import SimpleNamespace
 
 import pytest
 from provide.uterm.cloudflare.bridge.hijack import HijackSession
+from provide.uterm.cloudflare.contracts import frame_json
 from provide.uterm.cloudflare.do.session_runtime import SessionRuntime
 
-from provide.uterm.control_channel import ControlChunk, ControlFrameDecoder
+from provide.uterm.control_channel import ControlChunk, ControlFrameDecoder, DataChunk
 
 _KEY = "test-secret-key-32-bytes-minimum!"
 
@@ -33,6 +34,7 @@ class _HibernatableWs:
     def __init__(self, attachment: str) -> None:
         self._attachment = attachment
         self.sent: list[str] = []
+        self.closed: tuple[int, str] | None = None
 
     def serializeAttachment(self, value: object) -> None:  # noqa: N802
         self._attachment = str(value)
@@ -42,6 +44,9 @@ class _HibernatableWs:
 
     def send(self, data: str) -> None:
         self.sent.append(data)
+
+    def close(self, code: int, reason: str) -> None:
+        self.closed = (code, reason)
 
 
 def _decode(raw: str) -> dict:
@@ -83,6 +88,7 @@ def _make_runtime(worker_id: str = "hib-w1") -> SessionRuntime:
 def _simulate_do_eviction(rt: SessionRuntime) -> None:
     """Wipe every in-memory field CF loses on hibernate (keep store + ctx)."""
     rt.worker_ws = None
+    rt._worker_generation = None
     rt.browser_sockets.clear()
     rt.raw_sockets.clear()
     rt.browser_hijack_owner.clear()
@@ -142,6 +148,51 @@ async def test_hibernate_wake_restores_lease_and_broadcasts_via_get_websockets()
     assert frame["type"] == "worker_status"
 
 
+@pytest.mark.asyncio
+async def test_hibernate_wake_rebuilds_browser_owner_and_worker_generation() -> None:
+    """A live owner and current worker remain authoritative after an isolate wipe."""
+    rt = _make_runtime("hib-owner")
+    worker = _HibernatableWs("worker:admin:hib-owner")
+    assert await rt.register_worker_socket(worker)  # type: ignore[arg-type]
+    browser = _HibernatableWs("browser:admin:hib-owner")
+    token = "hibernation-owner-token"
+    rt.store.create_resume_token(token, rt.worker_id, "admin", 600)
+    rt._serialize_socket_attachment(  # type: ignore[arg-type]
+        browser,
+        role="browser",
+        browser_role="admin",
+        socket_id="stable-browser-id",
+        resume_token=token,
+    )
+    rt._test_live.extend([worker, browser])  # type: ignore[attr-defined]
+    rt._restore_browser_identity(browser)  # type: ignore[arg-type]
+
+    await rt.webSocketMessage(browser, frame_json("hijack_request"))  # type: ignore[arg-type]
+    active = rt.hijack.session
+    assert active is not None and active.owner == f"browser:{token}"
+    assert rt._attachment_data(browser)["hijack_id"] == active.hijack_id  # type: ignore[arg-type]
+
+    # Workerd may reconstruct the object with an unnamed/default DO id. The
+    # first socket callback must recover the real worker id from its attachment
+    # before loading SQLite state.
+    rt.ctx.id = SimpleNamespace(name=lambda: "default")
+    cold = SessionRuntime(rt.ctx, rt.env)
+    assert cold.worker_id == "default"
+    assert cold.hijack.session is None
+
+    await cold.webSocketMessage(worker, frame_json("worker_hello", input_mode="hijack"))  # type: ignore[arg-type]
+    worker.sent.clear()
+    await cold.webSocketMessage(browser, frame_json("input", data="post-wake-owned-input"))  # type: ignore[arg-type]
+
+    assert cold.worker_id == "hib-owner"
+    assert cold.hijack.session is not None
+    assert cold.worker_ws is worker
+    assert cold.browser_hijack_owner["stable-browser-id"] == cold.hijack.session.hijack_id
+    decoded = ControlFrameDecoder().feed(worker.sent[-1])
+    assert len(decoded) == 1 and isinstance(decoded[0], DataChunk)
+    assert decoded[0].data == "post-wake-owned-input"
+
+
 def test_socket_role_not_identity_after_hibernate() -> None:
     """Post-wake, worker detection must use attachment, not object identity."""
     rt = _make_runtime("hib-role")
@@ -168,12 +219,14 @@ def test_resume_config_from_env() -> None:
         JWT_ALGORITHMS="HS256",
         JWT_PUBLIC_KEY_PEM=_KEY,
         WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz",
+        HIJACK_LEASE_S="180",
         RESUME_TTL_S="90",
         RESUME_ENABLED="0",
     )
     cfg = CloudflareConfig.from_env(env)
     assert cfg.resume_ttl_s == 90
     assert cfg.resume_enabled is False
+    assert cfg.hijack_lease_s == 180
 
 
 @pytest.mark.asyncio

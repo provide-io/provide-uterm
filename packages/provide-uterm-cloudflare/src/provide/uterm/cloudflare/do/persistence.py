@@ -57,6 +57,7 @@ def persist_lease(
             hijack_id=session.hijack_id,
             owner=session.owner,
             lease_expires_at=wall_expires,
+            acquired_by=getattr(session, "acquired_by", None),
         )
     )
     schedule_alarm(ctx, wall_expires)

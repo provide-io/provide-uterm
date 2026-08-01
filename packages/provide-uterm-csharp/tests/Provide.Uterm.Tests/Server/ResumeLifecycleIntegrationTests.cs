@@ -2215,6 +2215,214 @@ public sealed class ResumeLifecycleIntegrationTests
         Assert.Equal(["pause", "resume", "pause"], fixture.Worker.Actions);
     }
 
+    [Theory]
+    [InlineData("force")]
+    [InlineData("release")]
+    [InlineData("expiry")]
+    public async Task CancelledLifecycleWaitClearsItsReservationWithoutCancelingAuthorizedInput(
+        string operation)
+    {
+        var clock = new ManualClock(100);
+        clock.SetMonotonic(0);
+        var hub = new TermHub(new TermHubConfig { Clock = clock });
+        var worker = new RecordingWorker();
+        Assert.True(hub.Conn.RegisterWorker("cancelled-transition", worker));
+        Assert.True((await hub.Lease.TryAcquireRestAsync(
+            "cancelled-transition", "owner", 10, "lease", 0)).Ok);
+        worker.DelayNextInput();
+        var input = hub.Lease.SendRestInputAsync("cancelled-transition", "lease", "echo safe");
+        await worker.InputAttempted.WaitAsync(TimeSpan.FromSeconds(1));
+        if (operation == "expiry") clock.SetMonotonic(11);
+        using var cancellation = new CancellationTokenSource();
+        var transition = operation switch
+        {
+            "force" => WaitForForceAsync(),
+            "release" => WaitForReleaseAsync(),
+            _ => WaitForExpiryAsync(),
+        };
+        await WaitUntilAsync(() =>
+            hub.Registry.Get("cancelled-transition")!.HijackPending is not null);
+
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await transition);
+        worker.ReleaseInput();
+
+        Assert.True((await input).Ok);
+        var state = hub.Registry.Get("cancelled-transition")!;
+        Assert.Null(state.HijackPending);
+        Assert.Null(state.DisconnectResumeCompletion);
+
+        async Task WaitForForceAsync() =>
+            _ = await hub.Lease.ForceReleaseAsync("cancelled-transition", cancellation.Token);
+
+        async Task WaitForReleaseAsync() =>
+            _ = await hub.Lease.ReleaseRestAsync("cancelled-transition", "lease", cancellation.Token);
+
+        async Task WaitForExpiryAsync() =>
+            _ = await hub.Lease.CleanupExpiredAsync("cancelled-transition", cancellation.Token);
+    }
+
+    [Fact]
+    public async Task ReplacementSurvivesResumeAndOwnershipPublicationFailures()
+    {
+        var hub = new TermHub(new TermHubConfig
+        {
+            OnHijackChanged = (_, enabled, _) =>
+            {
+                if (!enabled) throw new InvalidOperationException("publication failed");
+            },
+        });
+        var predecessor = new ThrowingResumeWorker();
+        var replacement = new RecordingWorker();
+        Assert.True(hub.Conn.RegisterWorker("replacement-failures", predecessor));
+        Assert.True((await hub.Lease.TryAcquireRestAsync(
+            "replacement-failures", "owner", 30, "lease", 0)).Ok);
+
+        Assert.True(await hub.Conn.RegisterWorkerAsync("replacement-failures", replacement));
+
+        var state = hub.Registry.Get("replacement-failures")!;
+        Assert.Same(replacement, state.WorkerWs);
+        Assert.Null(state.HijackSession);
+        Assert.True(predecessor.Aborted);
+    }
+
+    [Fact]
+    public async Task WorkerTeardownSurvivesOfflineAndOwnershipCallbackFailures()
+    {
+        var hub = new TermHub(new TermHubConfig
+        {
+            OnHijackChanged = (_, enabled, _) =>
+            {
+                if (!enabled) throw new InvalidOperationException("publication failed");
+            },
+        });
+        hub.Conn.ConfigureWorkerOfflineMarker(_ =>
+            throw new InvalidOperationException("offline marker failed"));
+        var worker = new RecordingWorker();
+        Assert.True(hub.Conn.RegisterWorker("teardown-failures", worker));
+        Assert.True((await hub.Lease.TryAcquireRestAsync(
+            "teardown-failures", "owner", 30, "lease", 0)).Ok);
+
+        var result = await hub.Conn.ReconcileWorkerDisconnectAsync("teardown-failures", worker);
+
+        Assert.True(result.Reconciled);
+        Assert.True(result.WasHijacked);
+        Assert.Null(hub.Registry.Get("teardown-failures")!.WorkerWs);
+    }
+
+    [Fact]
+    public async Task DashboardCleanupSurvivesOwnershipPublicationFailure()
+    {
+        var hub = new TermHub(new TermHubConfig
+        {
+            OnHijackChanged = (_, enabled, _) =>
+            {
+                if (!enabled) throw new InvalidOperationException("publication failed");
+            },
+        });
+        var worker = new RecordingWorker();
+        var browser = new RecordingBrowser();
+        Assert.True(hub.Conn.RegisterWorker("cleanup-publication", worker));
+        hub.Conn.RegisterBrowser("cleanup-publication", browser, "admin");
+        Assert.True(hub.Lease.TryAcquireWs("cleanup-publication", browser).Ok);
+
+        var version = hub.Conn.CleanupBrowser("cleanup-publication", browser);
+
+        Assert.NotNull(version);
+        Assert.Null(hub.Registry.Get("cleanup-publication")!.HijackOwner);
+    }
+
+    [Fact]
+    public async Task FailedDisconnectResumeContainsAbortFailureAndReconcilesWorker()
+    {
+        var hub = new TermHub();
+        var worker = new ThrowingResumeAndAbortWorker();
+        var browser = new RecordingBrowser();
+        Assert.True(hub.Conn.RegisterWorker("abort-failure", worker));
+        hub.Conn.RegisterBrowser("abort-failure", browser, "admin");
+        Assert.True(hub.Lease.TryAcquireWs("abort-failure", browser).Ok);
+        var version = Assert.IsType<long>(hub.Conn.CleanupBrowser("abort-failure", browser));
+
+        var resumed = await hub.Conn.ResumeWorkerIfOwnershipUnchangedAsync(
+            "abort-failure",
+            version,
+            HijackLeaseManager.ResumeFrame("disconnect", 1));
+
+        Assert.False(resumed.Resumed);
+        Assert.IsType<IOException>(resumed.Error);
+        Assert.Null(hub.Registry.Get("abort-failure")!.WorkerWs);
+    }
+
+    [Fact]
+    public async Task WorkerThatClosesDuringSendCannotReportSuccessfulDelivery()
+    {
+        var hub = new TermHub();
+        var worker = new DeactivateDuringSendWorker();
+        Assert.True(hub.Conn.RegisterWorker("close-during-send", worker));
+        Assert.True(hub.Conn.SetWorkerHello("close-during-send", worker, InputModes.Hijack, 1));
+
+        var result = await hub.Conn.SendWorkerAsync(
+            "close-during-send", new Dictionary<string, object?> { ["type"] = "input" });
+
+        Assert.False(result.Ok);
+        Assert.Null(result.Error);
+    }
+
+    [Fact]
+    public async Task FailedPauseContainsAbortFailureAndFencesWorkerOffline()
+    {
+        var hub = new TermHub();
+        var worker = new ThrowingPauseAndAbortWorker();
+        Assert.True(hub.Conn.RegisterWorker("pause-abort-failure", worker));
+
+        var result = await hub.Lease.TryAcquireRestAsync(
+            "pause-abort-failure", "owner", 30, "lease", 0);
+
+        Assert.False(result.Ok);
+        Assert.Equal("no_worker", result.Reason);
+        Assert.Null(hub.Registry.Get("pause-abort-failure")!.WorkerWs);
+    }
+
+    [Fact]
+    public async Task FailedPauseRepairsCapturedWorkerWithoutDisconnectingReplacement()
+    {
+        var hub = new TermHub();
+        var predecessor = new RecordingWorker();
+        var replacement = new RecordingWorker();
+        Assert.True(hub.Conn.RegisterWorker("pause-repair", predecessor));
+        var pause = predecessor.DelayNextPause(fail: true);
+        var acquire = hub.Lease.TryAcquireRestAsync(
+            "pause-repair", "owner", 30, "lease", 0);
+        await pause.Attempted.WaitAsync(TimeSpan.FromSeconds(1));
+        var state = hub.Registry.Get("pause-repair")!;
+        state.PendingPauseObligation = state.HijackPending;
+        state.WorkerWs = replacement;
+
+        pause.Release();
+        var result = await acquire;
+
+        Assert.False(result.Ok);
+        Assert.Same(replacement, state.WorkerWs);
+        Assert.Null(state.PendingPauseObligation);
+        Assert.Equal(["resume"], predecessor.Actions);
+    }
+
+    [Fact]
+    public async Task ExpiryArmFailureDoesNotUndoSuccessfulAcquisition()
+    {
+        var clock = new ThrowingSleepClock();
+        var hub = new TermHub(new TermHubConfig { Clock = clock });
+        var worker = new RecordingWorker();
+        Assert.True(hub.Conn.RegisterWorker("arm-failure", worker));
+
+        var acquired = await hub.Lease.TryAcquireRestAsync(
+            "arm-failure", "owner", 30, "lease", 0);
+        await clock.SleepAttempted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+        Assert.True(acquired.Ok);
+        Assert.NotNull(hub.Registry.Get("arm-failure")!.HijackSession);
+    }
+
     private static async Task<Dictionary<string, object?>> DrainHandshakeAsync(ClientWebSocket socket)
     {
         Dictionary<string, object?>? hello = null;
@@ -2951,6 +3159,76 @@ public sealed class ResumeLifecycleIntegrationTests
         {
             SendCount++;
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class ThrowingResumeWorker : IAbortableBrowserWs
+    {
+        public bool IsActive => !Aborted;
+        public bool Aborted { get; private set; }
+        public void Abort() => Aborted = true;
+
+        public Task SendTextAsync(string payload, CancellationToken cancellationToken = default)
+        {
+            var action = new ControlFrameDecoder().Feed(payload)
+                .OfType<ControlChunk>()
+                .Select(chunk => chunk.Control.GetValueOrDefault("action")?.ToString())
+                .FirstOrDefault(value => value is not null);
+            return action == "resume"
+                ? Task.FromException(new IOException("resume failed"))
+                : Task.CompletedTask;
+        }
+    }
+
+    private sealed class ThrowingResumeAndAbortWorker : IAbortableBrowserWs
+    {
+        public bool IsActive => true;
+        public void Abort() => throw new IOException("abort failed");
+
+        public Task SendTextAsync(string payload, CancellationToken cancellationToken = default)
+        {
+            var action = new ControlFrameDecoder().Feed(payload)
+                .OfType<ControlChunk>()
+                .Select(chunk => chunk.Control.GetValueOrDefault("action")?.ToString())
+                .FirstOrDefault(value => value is not null);
+            return action == "resume"
+                ? Task.FromException(new IOException("resume failed"))
+                : Task.CompletedTask;
+        }
+    }
+
+    private sealed class DeactivateDuringSendWorker : IAbortableBrowserWs
+    {
+        public bool IsActive { get; private set; } = true;
+        public void Abort() => IsActive = false;
+
+        public Task SendTextAsync(string payload, CancellationToken cancellationToken = default)
+        {
+            IsActive = false;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class ThrowingPauseAndAbortWorker : IAbortableBrowserWs
+    {
+        public bool IsActive => true;
+        public void Abort() => throw new IOException("abort failed");
+
+        public Task SendTextAsync(string payload, CancellationToken cancellationToken = default) =>
+            Task.FromException(new IOException("worker send failed"));
+    }
+
+    private sealed class ThrowingSleepClock : IClock
+    {
+        public TaskCompletionSource SleepAttempted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public double Monotonic() => 0;
+        public double Wall() => 100;
+
+        public Task SleepAsync(double seconds, CancellationToken cancellationToken = default)
+        {
+            SleepAttempted.TrySetResult();
+            throw new IOException("timer scheduling failed");
         }
     }
 

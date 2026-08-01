@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import contextlib
 import inspect
+import json
 import logging
 import secrets
 import time
@@ -23,6 +24,7 @@ if TYPE_CHECKING:
     from provide.uterm.cloudflare.cf_types import CFWebSocket
 
 logger = logging.getLogger(__name__)
+_ATTACHMENT_PREFIX = "uterm-v2:"
 
 
 class _WsHelperMixin:
@@ -30,8 +32,101 @@ class _WsHelperMixin:
 
     if TYPE_CHECKING:
         worker_ws: CFWebSocket | None
+        worker_id: str
+        browser_sockets: dict[str, CFWebSocket]
+        browser_hijack_owner: dict[str, str]
+        browser_resume_tokens: dict[str, str]
+        raw_sockets: dict[str, CFWebSocket]
+        hijack: Any
+        store: Any
+        meta: dict[str, Any]
+
+        def _restore_state(self) -> None: ...
+
+    def _attachment_data(self, ws: CFWebSocket) -> dict[str, str]:
+        """Decode the durable v2 attachment, returning an empty dict for legacy sockets."""
+        try:
+            attachment = ws.deserializeAttachment()
+            if hasattr(attachment, "to_py"):
+                attachment = attachment.to_py()
+            if isinstance(attachment, str) and attachment.startswith(_ATTACHMENT_PREFIX):
+                value = json.loads(attachment.removeprefix(_ATTACHMENT_PREFIX))
+                if isinstance(value, dict):
+                    return {str(key): str(item) for key, item in value.items() if item is not None}
+        except Exception as exc:
+            logger.debug("failed to decode socket attachment: %s", exc)
+        return {}
+
+    def _serialize_socket_attachment(
+        self,
+        ws: CFWebSocket,
+        *,
+        role: str,
+        browser_role: str,
+        socket_id: str,
+        resume_token: str | None = None,
+        worker_generation: str | None = None,
+        hijack_id: str | None = None,
+    ) -> None:
+        value = {
+            "role": role,
+            "browser_role": browser_role,
+            "worker_id": self.worker_id,
+            "socket_id": socket_id,
+            "resume_token": resume_token,
+            "worker_generation": worker_generation,
+            "hijack_id": hijack_id,
+        }
+        ws.serializeAttachment(_ATTACHMENT_PREFIX + json.dumps(value, separators=(",", ":"), sort_keys=True))
+
+    def _set_browser_ownership_attachment(
+        self,
+        ws: CFWebSocket,
+        hijack_id: str | None,
+        *,
+        resume_token: str | None = None,
+        browser_role: str | None = None,
+    ) -> None:
+        data = self._attachment_data(ws)
+        with contextlib.suppress(Exception):
+            self._serialize_socket_attachment(
+                ws,
+                role="browser",
+                browser_role=browser_role or data.get("browser_role") or self._socket_browser_role(ws),
+                socket_id=data.get("socket_id") or self.ws_key(ws),
+                resume_token=resume_token
+                or data.get("resume_token")
+                or self.browser_resume_tokens.get(self.ws_key(ws)),
+                hijack_id=hijack_id,
+            )
+
+    def _socket_worker_generation(self, ws: CFWebSocket) -> str | None:
+        attached = self._attachment_data(ws).get("worker_generation")
+        if attached:
+            return attached
+        fallback = getattr(ws, "_ut_worker_generation", None)
+        return fallback if isinstance(fallback, str) and fallback else None
+
+    def _restore_browser_identity(self, ws: CFWebSocket) -> None:
+        """Rebuild browser token and ownership maps from durable attachment state."""
+        data = self._attachment_data(ws)
+        ws_id = self.ws_key(ws)
+        self.browser_sockets[ws_id] = ws
+        token = data.get("resume_token")
+        if not token:
+            return
+        record = self.store.get_resume_token(token)
+        if record is None or record.get("worker_id") != self.worker_id:
+            return
+        self.browser_resume_tokens[ws_id] = token
+        active = self.hijack.session
+        if active is not None and active.owner == f"browser:{token}" and data.get("hijack_id") == active.hijack_id:
+            self.browser_hijack_owner[ws_id] = active.hijack_id
 
     def ws_key(self, ws: CFWebSocket) -> str:
+        attached_id = self._attachment_data(ws).get("socket_id")
+        if attached_id:
+            return attached_id
         try:
             existing = getattr(ws, "_ut_ws_key", None)
             if isinstance(existing, str) and existing:
@@ -49,6 +144,9 @@ class _WsHelperMixin:
         try:
             attachment = ws.deserializeAttachment()
             if isinstance(attachment, str):
+                data = self._attachment_data(ws)
+                if data.get("role") in {"browser", "worker", "raw"}:
+                    return data["role"]
                 if attachment in {"browser", "worker", "raw"}:
                     return attachment  # legacy plain-string format
                 # Format: "type:browser_role" or "type:browser_role:worker_id"
@@ -88,6 +186,9 @@ class _WsHelperMixin:
         whose ``serializeAttachment`` call raised at connect time.
         """
         try:
+            data = self._attachment_data(ws)
+            if data.get("browser_role") in {"admin", "operator", "viewer"}:
+                return data["browser_role"]
             attachment = ws.deserializeAttachment()
             if isinstance(attachment, str):
                 # Attachment format: "type:browser_role:worker_id" (3 fields).
@@ -119,6 +220,9 @@ class _WsHelperMixin:
         (e.g. legacy connections, test sockets without serialized attachment).
         """
         try:
+            data = self._attachment_data(ws)
+            if data.get("worker_id"):
+                return data["worker_id"]
             attachment = ws.deserializeAttachment()
             if isinstance(attachment, str):
                 parts = attachment.split(":", 2)
@@ -126,8 +230,18 @@ class _WsHelperMixin:
                     return parts[2]
         except Exception as exc:
             logger.debug("failed to deserialize worker_id from attachment: %s", exc)
-        worker_id: str = self.worker_id  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
+        worker_id: str = self.worker_id
         return worker_id
+
+    def _restore_worker_id_from_socket(self, ws: CFWebSocket) -> None:
+        """Recover an unnamed DO's storage key before a hibernation callback."""
+        attached_worker_id = self._socket_worker_id(ws)
+        if self.worker_id != "default" or attached_worker_id == "default":
+            return
+        self.worker_id = attached_worker_id
+        if self.meta.get("display_name") == "default":
+            self.meta["display_name"] = attached_worker_id
+        self._restore_state()
 
     def _register_socket(self, ws: CFWebSocket, role: str) -> None:
         ws_id = self.ws_key(ws)
@@ -135,19 +249,19 @@ class _WsHelperMixin:
             self.worker_ws = ws
             return
         if role == "raw":
-            self.raw_sockets[ws_id] = ws  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
+            self.raw_sockets[ws_id] = ws
             return
-        self.browser_sockets[ws_id] = ws  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
+        self.browser_sockets[ws_id] = ws
 
     def _remove_ws(self, ws: CFWebSocket) -> None:
         """Remove *ws* from all socket registries (worker, browser, raw)."""
         ws_id = self.ws_key(ws)
         if ws is self.worker_ws:
             self.worker_ws = None
-        self.browser_sockets.pop(ws_id, None)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
-        self.raw_sockets.pop(ws_id, None)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
-        self.browser_hijack_owner.pop(ws_id, None)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
-        self.browser_resume_tokens.pop(ws_id, None)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
+        self.browser_sockets.pop(ws_id, None)
+        self.raw_sockets.pop(ws_id, None)
+        self.browser_hijack_owner.pop(ws_id, None)
+        self.browser_resume_tokens.pop(ws_id, None)
         self._flow.forget(ws_id)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
 
     async def send_ws(self, ws: CFWebSocket, payload: dict[str, Any]) -> None:
@@ -170,7 +284,7 @@ class _WsHelperMixin:
         registered, so we exclude it from the peer list) and ``False`` in
         ``fetch()`` (the socket is not yet in the registry).
         """
-        if not self.meta.get("presence"):  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
+        if not self.meta.get("presence"):
             return
         exclude_ws: CFWebSocket | None = ws if exclude_self else None
         connected_ids = self._get_presence_browser_ids(exclude_ws=exclude_ws)
@@ -201,7 +315,7 @@ class _WsHelperMixin:
         except Exception:
             all_ws = []
         if not all_ws:
-            all_ws = list(self.browser_sockets.values())  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
+            all_ws = list(self.browser_sockets.values())
         ids: list[str] = []
         for candidate in all_ws:
             if self._socket_role(candidate) != "browser":

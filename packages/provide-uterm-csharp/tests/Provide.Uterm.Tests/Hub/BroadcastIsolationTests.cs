@@ -91,6 +91,24 @@ public sealed class BroadcastIsolationTests
     }
 
     [Fact]
+    public async Task HijackBroadcastCallerCancellationAlsoPropagatesWithoutPruningHealthyPeers()
+    {
+        var hub = new TermHub();
+        var first = new CaptureSocket();
+        var second = new CaptureSocket();
+        hub.Conn.RegisterBrowser("w", first, "viewer");
+        hub.Conn.RegisterBrowser("w", second, "viewer");
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            hub.Conn.BroadcastHijackStateAsync("w", cancelled.Token));
+
+        Assert.Contains(first, hub.Registry.Get("w")!.Browsers.Keys);
+        Assert.Contains(second, hub.Registry.Get("w")!.Browsers.Keys);
+    }
+
+    [Fact]
     public async Task TimedOutPeerIsAbortedAndItsEventualFaultIsContained()
     {
         var hub = new TermHub(new TermHubConfig

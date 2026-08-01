@@ -13,11 +13,13 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import http.server
+import importlib.metadata
 import json
 import os
 import shutil
 import socket
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -43,6 +45,7 @@ CONTRACT_PATH = Path(
 )
 OUTPUT_PATH = os.environ.get("SESSION_LIFECYCLE_SCENARIO_OUTPUT")
 WORKER_TOKEN = "lifecycle-worker-token-padded-beyond-32-characters"
+HIBERNATION_IDLE_S = 40
 
 
 def _observation(scenario: dict[str, Any], defaults: dict[str, Any], **values: Any) -> dict[str, Any]:
@@ -79,6 +82,28 @@ def _node22_bin() -> Path:
     raise AssertionError("Node 22 is required for the native Cloudflare lifecycle adapter")
 
 
+def _locked_pywrangler() -> Path:
+    """Return the workers-py script from this lockfile-provisioned environment."""
+    installed = importlib.metadata.version("workers-py")
+    lock_text = (REPO_ROOT / "uv.lock").read_text(encoding="utf-8")
+    assert f'name = "workers-py"\nversion = "{installed}"' in lock_text, (
+        f"installed workers-py {installed} isn't selected by uv.lock"
+    )
+    executable = Path(sys.executable).parent / "pywrangler"
+    assert executable.is_file(), (
+        "pywrangler must be provisioned beside the active Python executable; "
+        "run uv sync --frozen --package provide-uterm-cloudflare --extra dev"
+    )
+    return executable
+
+
+def _selected_uv() -> Path:
+    """Resolve the explicitly provisioned uv binary used by pywrangler."""
+    executable = shutil.which("uv")
+    assert executable is not None, "uv is required to provision pywrangler's Python modules"
+    return Path(executable).resolve()
+
+
 def _prepare_worker_vendor_tree() -> None:
     """Generate the ignored module tree without consulting published wheels."""
     vendor_provide = PACKAGE_ROOT / "python_modules" / "provide"
@@ -110,8 +135,9 @@ def _prepare_worker_vendor_tree() -> None:
         encoding="utf-8",
     )
     (PACKAGE_ROOT / ".venv-workers").mkdir(exist_ok=True)
-    (PACKAGE_ROOT / ".venv-workers/.synced").touch()
-    (PACKAGE_ROOT / "python_modules/.synced").touch()
+    workers_py_version = importlib.metadata.version("workers-py")
+    (PACKAGE_ROOT / ".venv-workers/.synced").write_text(workers_py_version, encoding="utf-8")
+    (PACKAGE_ROOT / "python_modules/.synced").write_text(workers_py_version, encoding="utf-8")
 
 
 @contextmanager
@@ -155,16 +181,15 @@ def _health_ready(base_url: str, process: subprocess.Popen[str], timeout_s: floa
 
 
 @contextmanager
-def _worker_server(jwks_url: str) -> Iterator[str]:
+def _worker_server(jwks_url: str, *, resume_enabled: bool = True) -> Iterator[str]:
     _prepare_worker_vendor_tree()
-    pywrangler = shutil.which("pywrangler")
-    assert pywrangler is not None, "pywrangler is required for the native Cloudflare lifecycle adapter"
+    pywrangler = _locked_pywrangler()
+    uv = _selected_uv()
     node_bin = _node22_bin()
     port = _free_port()
     base_url = f"http://127.0.0.1:{port}"
-    environment = {**os.environ, "PATH": f"{node_bin}{os.pathsep}{os.environ.get('PATH', '')}"}
     command = [
-        pywrangler,
+        str(pywrangler),
         "dev",
         "--port",
         str(port),
@@ -183,9 +208,20 @@ def _worker_server(jwks_url: str) -> Iterator[str]:
         "--var",
         "JWT_ALGORITHMS:RS256",
         "--var",
+        "HIJACK_LEASE_S:300",
+        "--var",
+        f"RESUME_ENABLED:{str(resume_enabled).lower()}",
+        "--var",
         f"WORKER_BEARER_TOKEN:{WORKER_TOKEN}",
     ]
-    with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as log:
+    with (
+        tempfile.TemporaryDirectory(prefix="uterm-cf-tools-") as tool_dir,
+        tempfile.TemporaryFile(mode="w+", encoding="utf-8") as log,
+    ):
+        # Expose only the selected uv executable to pywrangler; do not inherit
+        # user/global bin directories where an arbitrary pywrangler could win.
+        Path(tool_dir, "uv").symlink_to(uv)
+        environment = {**os.environ, "PATH": os.pathsep.join((str(node_bin), tool_dir, "/usr/bin", "/bin"))}
         process = subprocess.Popen(
             command,
             cwd=PACKAGE_ROOT,
@@ -433,6 +469,47 @@ async def _resume(
                 )
                 == 0
             )
+            # A locally booted Durable Object hibernates after an idle window;
+            # a fresh public upgrade wakes the isolate, then the same attached
+            # browser must still remain the owner.
+            await asyncio.sleep(HIBERNATION_IDLE_S)
+            wake_probe = await _connect(browser_url, additional_headers=_headers(tokens[data["principal"]]))
+            try:
+                await _drain_browser_startup(wake_probe)
+                await _send_control(wake_probe, {"type": "resume", "token": resumed_hello["resume_token"]})
+                await _receive_matching(
+                    wake_probe,
+                    lambda event: event.get("type") == "hello" and event.get("resumed") is True,
+                )
+                # Local workerd discards the client-facing half of an idle edge
+                # socket on hibernation. Reconnect the worker generation and
+                # prove the active lease is paused before any owned delivery.
+                async with _connect(worker_url, additional_headers=_headers(WORKER_TOKEN)) as wake_worker:
+                    await _drain_worker_startup(wake_worker)
+                    await _receive_matching(
+                        wake_worker,
+                        lambda event: event.get("type") == "control" and event.get("action") == "pause",
+                    )
+                    await _send_control(wake_probe, {"type": "input", "data": "post-hibernation-proof"})
+                    delivered = asyncio.create_task(
+                        _receive_matching(
+                            wake_worker,
+                            lambda event: event.get("type") == "data" and event.get("data") == "post-hibernation-proof",
+                            timeout=8,
+                        )
+                    )
+                    refused = asyncio.create_task(
+                        _receive_matching(wake_probe, lambda event: event.get("type") == "error", timeout=8)
+                    )
+                    done, pending = await asyncio.wait({delivered, refused}, return_when=asyncio.FIRST_COMPLETED)
+                    for task in pending:
+                        task.cancel()
+                    if refused in done:
+                        raise AssertionError(f"post-hibernation owner was rejected: {refused.result()}")
+                    post_wake = delivered.result()
+            finally:
+                await wake_probe.close()
+            restored = restored and post_wake.get("data") == "post-hibernation-proof"
             await replay.close()
             await resumed.close()
             succeeded = restored
@@ -468,6 +545,73 @@ async def _resume(
         replay_rejected=replay_rejected,
         competing_owner_preserved=competing_preserved,
     )
+
+
+def _http_json(
+    base: str,
+    token: str,
+    path: str,
+    body: dict[str, object],
+) -> tuple[int, dict[str, Any]]:
+    payload = json.dumps(body).encode()
+    request = urllib.request.Request(  # noqa: S310 - base is the loopback workerd instance
+        f"{base}{path}",
+        data=payload,
+        headers={**_headers(token), "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=8) as response:  # noqa: S310
+            return response.status, json.loads(response.read())
+    except urllib.error.HTTPError as response:
+        return response.code, json.loads(response.read())
+
+
+async def _public_rest_identity_proof(base: str, tokens: dict[str, str]) -> None:
+    worker_id = "lifecycle-rest-identity"
+    worker_url = _ws_url(base, f"/ws/worker/{worker_id}/term")
+    async with _connect(worker_url, additional_headers=_headers(WORKER_TOKEN)) as worker:
+        status, acquired = await asyncio.to_thread(
+            _http_json,
+            base,
+            tokens["rest-subject"],
+            f"/worker/{worker_id}/hijack/acquire",
+            {"owner": "display-label-not-subject", "lease_s": 30},
+        )
+        assert status == 200
+        await _receive_matching(worker, lambda event: event.get("action") == "pause")
+        hijack_id = acquired["hijack_id"]
+        heartbeat_path = f"/worker/{worker_id}/hijack/{hijack_id}/heartbeat"
+        status, _ = await asyncio.to_thread(_http_json, base, tokens["rest-subject"], heartbeat_path, {"lease_s": 45})
+        assert status == 200
+        status, refused = await asyncio.to_thread(
+            _http_json, base, tokens["rest-competitor"], heartbeat_path, {"lease_s": 45}
+        )
+        assert status == 409 and refused["error"] == "owner_mismatch"
+        status, invalid = await asyncio.to_thread(
+            _http_json,
+            base,
+            tokens["rest-subject"],
+            f"/worker/{worker_id}/hijack/{hijack_id}/send",
+            {"keys": "must-not-send", "expect_regex": "["},
+        )
+        assert status == 400 and "invalid expect_regex" in invalid["error"]
+        assert (
+            await _matching_count(
+                worker,
+                lambda event: event.get("type") == "data" and event.get("data") == "must-not-send",
+                timeout=0.5,
+            )
+            == 0
+        )
+
+
+async def _public_resume_disabled_proof(base: str, token: str) -> None:
+    browser_url = _ws_url(base, "/ws/browser/lifecycle-resume-disabled/term")
+    async with _connect(browser_url, additional_headers=_headers(token)) as browser:
+        hello = await _drain_browser_startup(browser)
+        assert hello["resume_supported"] is False
+        assert "resume_token" not in hello
 
 
 async def _non_owner_step(
@@ -535,10 +679,21 @@ def _expected(contract: dict[str, Any], scenario: dict[str, Any]) -> dict[str, A
 def test_cloudflare_public_route_session_lifecycle_scenarios() -> None:
     contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
     private_key, jwks = build_keypair()
-    subjects = {"admin", "resume-user", "new-owner", "owner-user", "other-user"}
+    subjects = {
+        "admin",
+        "resume-user",
+        "new-owner",
+        "owner-user",
+        "other-user",
+        "rest-subject",
+        "rest-competitor",
+    }
     tokens = {subject: mint(private_key, subject=subject) for subject in subjects}
     with _jwks_server(jwks) as jwks_url, _worker_server(jwks_url) as base_url:
         observations = asyncio.run(_execute(base_url, tokens, contract))
+        asyncio.run(_public_rest_identity_proof(base_url, tokens))
+    with _jwks_server(jwks) as jwks_url, _worker_server(jwks_url, resume_enabled=False) as base_url:
+        asyncio.run(_public_resume_disabled_proof(base_url, tokens["admin"]))
 
     scenarios = [item for item in contract["scenarios"] if item["backends"]["cloudflare"]["status"] != "unserved"]
     assert {item["id"] for item in observations} == {item["id"] for item in scenarios}

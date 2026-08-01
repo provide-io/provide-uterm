@@ -63,6 +63,17 @@ class _BlockingWorkerWs:
         self.release = asyncio.Event()
         self.sent: list[str] = []
         self._blocked = False
+        self.attachment = "worker:admin:fence-worker"
+        self.closed: tuple[int, str] | None = None
+
+    def deserializeAttachment(self) -> str:  # noqa: N802 - Cloudflare WebSocket API
+        return self.attachment
+
+    def serializeAttachment(self, attachment: str) -> None:  # noqa: N802 - Cloudflare WebSocket API
+        self.attachment = attachment
+
+    def close(self, code: int, reason: str) -> None:
+        self.closed = (code, reason)
 
     async def send(self, data: str) -> None:
         self.sent.append(data)
@@ -216,6 +227,7 @@ async def test_worker_replacement_waits_for_owned_delivery() -> None:
     )
     await asyncio.wait_for(old_worker.started.wait(), timeout=1)
     new_worker = _BlockingWorkerWs()
+    new_worker.release.set()
     replacement_task = asyncio.create_task(runtime.register_worker_socket(new_worker))
     await asyncio.sleep(0)
 
@@ -226,6 +238,91 @@ async def test_worker_replacement_waits_for_owned_delivery() -> None:
     await asyncio.wait_for(delivery_task, timeout=1)
     await asyncio.wait_for(replacement_task, timeout=1)
     assert runtime.worker_ws is new_worker
+
+
+async def test_worker_replacement_reapplies_active_pause_and_displaces_old_generation() -> None:
+    runtime = _runtime()
+    old_worker = _BlockingWorkerWs()
+    old_worker.release.set()
+    assert await runtime.register_worker_socket(old_worker)
+    old_generation = runtime._worker_generation
+    acquired = runtime.hijack.acquire("lease-owner", 60)
+    assert acquired.session is not None
+    runtime.persist_lease(acquired.session)
+
+    new_worker = _BlockingWorkerWs()
+    new_worker.release.set()
+    assert await runtime.register_worker_socket(new_worker)
+
+    assert runtime.worker_ws is new_worker
+    assert runtime._worker_generation != old_generation
+    assert _control(new_worker.sent[0])["action"] == "pause"
+    assert old_worker.closed == (1012, "worker replaced")
+    row = runtime.store.load_session(runtime.worker_id)
+    assert row is not None and row["worker_generation"] == runtime._worker_generation
+
+
+async def test_displaced_worker_frames_are_rejected() -> None:
+    runtime = _runtime()
+    old_worker = _BlockingWorkerWs()
+    old_worker.release.set()
+    assert await runtime.register_worker_socket(old_worker)
+    new_worker = _BlockingWorkerWs()
+    new_worker.release.set()
+    assert await runtime.register_worker_socket(new_worker)
+    browser = _BrowserWs()
+    runtime.browser_sockets[runtime.ws_key(browser)] = browser
+
+    await runtime.webSocketMessage(old_worker, frame_json("term", data="stale-output"))
+
+    assert browser.sent == []
+    assert old_worker.closed == (1008, "stale worker generation")
+    assert runtime.worker_ws is new_worker
+
+
+async def test_current_worker_generation_accepts_a_rebound_edge_proxy() -> None:
+    """CF may provide a new Python proxy for the same attached edge socket."""
+    runtime = _runtime()
+    original_proxy = _BlockingWorkerWs()
+    original_proxy.release.set()
+    assert await runtime.register_worker_socket(original_proxy)
+    rebound_proxy = _BlockingWorkerWs()
+    rebound_proxy.release.set()
+    rebound_proxy.attachment = original_proxy.attachment
+
+    assert await runtime.activate_worker_socket(rebound_proxy)
+    assert runtime.worker_ws is rebound_proxy
+    assert rebound_proxy.closed is None
+
+
+async def test_stale_worker_close_does_not_publish_offline(monkeypatch: pytest.MonkeyPatch) -> None:
+    runtime = _runtime()
+    old_worker = _BlockingWorkerWs()
+    old_worker.release.set()
+    assert await runtime.register_worker_socket(old_worker)
+    new_worker = _BlockingWorkerWs()
+    new_worker.release.set()
+    assert await runtime.register_worker_socket(new_worker)
+    broadcasts: list[dict[str, object]] = []
+
+    async def record_broadcast(frame: dict[str, object]) -> None:
+        broadcasts.append(frame)
+
+    kv_updates: list[dict[str, object]] = []
+
+    async def record_kv(_env: object, _worker_id: str, **values: object) -> None:
+        kv_updates.append(values)
+
+    runtime.broadcast_worker_frame = record_broadcast  # type: ignore[method-assign]
+    monkeypatch.setattr("provide.uterm.cloudflare.do.session_runtime.lifecycle.update_kv_session", record_kv)
+    runtime.lifecycle_state = "running"
+
+    await runtime.webSocketClose(old_worker, 1000, "stale close")
+
+    assert runtime.worker_ws is new_worker
+    assert runtime.lifecycle_state == "running"
+    assert broadcasts == []
+    assert kv_updates == []
 
 
 async def test_worker_disconnect_waits_for_owned_delivery() -> None:
@@ -281,6 +378,73 @@ async def test_worker_send_timeout_is_bounded_and_fails_delivery(monkeypatch: py
 
     assert getattr(response, "status", None) == 409
     assert runtime.worker_ws is None
+
+
+async def test_rest_heartbeat_uses_authenticated_acquirer_not_display_owner() -> None:
+    runtime = _runtime()
+    worker = _BlockingWorkerWs()
+    worker.release.set()
+    runtime.worker_ws = worker
+    subject = "authenticated-subject"
+
+    async def resolve(_request: object) -> tuple[object, None]:
+        return SimpleNamespace(subject_id=subject), None
+
+    runtime.resolve_principal = resolve  # type: ignore[method-assign]
+    acquired_response = await route_hijack(
+        runtime,
+        _Request({"owner": "display-label", "lease_s": 30}),
+        f"/worker/{runtime.worker_id}/hijack/acquire",
+        "https://example.invalid/acquire",
+        "POST",
+    )
+    assert getattr(acquired_response, "status", None) == 200
+    active = runtime.hijack.session
+    assert active is not None
+    assert active.owner == "display-label"
+    assert active.acquired_by == subject
+
+    heartbeat = await route_hijack(
+        runtime,
+        _Request({"lease_s": 45}),
+        f"/worker/{runtime.worker_id}/hijack/{active.hijack_id}/heartbeat",
+        "https://example.invalid/heartbeat",
+        "POST",
+    )
+    assert getattr(heartbeat, "status", None) == 200
+
+    async def resolve_competitor(_request: object) -> tuple[object, None]:
+        return SimpleNamespace(subject_id="different-subject"), None
+
+    runtime.resolve_principal = resolve_competitor  # type: ignore[method-assign]
+    refused = await route_hijack(
+        runtime,
+        _Request({"lease_s": 45}),
+        f"/worker/{runtime.worker_id}/hijack/{active.hijack_id}/heartbeat",
+        "https://example.invalid/heartbeat",
+        "POST",
+    )
+    assert getattr(refused, "status", None) == 409
+
+
+async def test_invalid_expect_regex_sends_zero_worker_frames() -> None:
+    runtime = _runtime()
+    active = runtime.hijack.acquire("owner", 60)
+    assert active.session is not None
+    worker = _BlockingWorkerWs()
+    worker.release.set()
+    runtime.worker_ws = worker
+
+    response = await route_hijack(
+        runtime,
+        _Request({"keys": "must-not-send", "expect_regex": "["}),
+        f"/worker/{runtime.worker_id}/hijack/{active.session.hijack_id}/send",
+        "https://example.invalid/send",
+        "POST",
+    )
+
+    assert getattr(response, "status", None) == 400
+    assert worker.sent == []
 
 
 async def test_browser_hijack_control_is_public_and_owner_fenced() -> None:
