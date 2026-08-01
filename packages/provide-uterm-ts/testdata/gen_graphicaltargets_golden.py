@@ -89,6 +89,45 @@ RFB_ENDPOINTS: list[tuple[str, str | None]] = [
     # Digits, but not the ones a port is written in: the reference asks for
     # ASCII, and a runtime whose `isdigit` is looser would read a port here.
     ("a port in another script", "vm.example:\u0665\u0669\u0660\u0660"),
+    # Brackets, which CPython's `urlsplit` reads with rules of its own: they
+    # come in order, nothing may sit either side of them, and what is between
+    # them is an address rather than a name. A runtime that only matched the
+    # brackets up would take `[vmhost]` for a host and connect somewhere the
+    # reference refuses to.
+    ("a name in brackets", "[vmhost]:5900"),
+    ("brackets the wrong way round", "]a[:1"),
+    ("something before the bracket", "a[::1]:5900"),
+    ("something after the bracket", "[::1]x:5900"),
+    ("four octets in brackets", "[192.0.2.10]:5900"),
+    ("an IPvFuture address", "[v7.example]:5900"),
+    ("an IPvFuture address with no version", "[v.example]:5900"),
+    ("brackets in the credentials", "[::1]@vm.example:5900"),
+    ("brackets in the credentials and no port", "[::1]@vm.example"),
+    ("a closing bracket in the credentials", "]@[::1"),
+    ("a zone with nothing in it", "[fe80::1%]:5900"),
+    ("a second zone", "[fe80::1%a%b]:5900"),
+    ("an address ending in four octets", "[::ffff:192.0.2.10]:5900"),
+    ("an octet past the end", "[::ffff:192.0.2.256]:5900"),
+    ("an octet with a leading zero", "[::ffff:192.0.2.010]:5900"),
+    ("three octets where there are four", "[::ffff:1.2.3]:5900"),
+    ("a name where the octets go", "[::ffff:host.example]:5900"),
+    ("eight groups written out", "[1:2:3:4:5:6:7:8]:5900"),
+    ("nine groups", "[1:2:3:4:5:6:7:8:9]:5900"),
+    ("eleven groups", "[1:2:3:4:5:6:7:8:9:a:b]:5900"),
+    ("eight groups and a run of zeroes", "[1:2:3:4:5:6:7:8::]:5900"),
+    ("a run of zeroes standing in for nothing", "[1:2:3:4::5:6:7:8]:5900"),
+    ("two runs of zeroes", "[1::2::3]:5900"),
+    ("a leading colon before a run", "[:1::2]:5900"),
+    ("a trailing colon after a run", "[1::2:]:5900"),
+    ("a leading colon and no run at all", "[:1:2:3:4:5:6:7]:5900"),
+    ("a trailing colon and no run at all", "[1:2:3:4:5:6:7:]:5900"),
+    ("a run of zeroes at the end", "[1:2:3:4:5:6:7::]:5900"),
+    ("three groups where there are eight", "[1:2:3]:5900"),
+    ("two groups", "[a:b]:5900"),
+    ("a group of five digits", "[12345::1]:5900"),
+    ("a group that is not hex", "[::z]:5900"),
+    ("nothing but a run of zeroes", "[::]:5900"),
+    ("an address longer than an address goes", "[" + "2001:db8:" * 5 + "1]:5900"),
 ]
 
 LITEVIRT_ENDPOINTS: list[tuple[str, str | None]] = [
@@ -111,6 +150,10 @@ LITEVIRT_ENDPOINTS: list[tuple[str, str | None]] = [
     ("an address in brackets with no port", "[2001:db8::1]"),
     ("a negative port", "vm.example:-1"),
     ("a port that is not a number", "vm.example:abc"),
+    # The same bracket reading, reported under this protocol's own message.
+    ("a name in brackets", "[vmhost]:9000"),
+    ("brackets the wrong way round", "]a[:9000"),
+    ("an IPvFuture address", "[v7.example]:9000"),
 ]
 
 DEFINITIONS: list[tuple[str, dict[str, Any]]] = [

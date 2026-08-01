@@ -27,6 +27,8 @@
  * boundary, so a target's password is never in a listing.
  */
 
+import { bracketsAreValid, netlocOf } from "./cpython-netloc.ts";
+
 /** The in-process protocol, for tests and for a console with no network. */
 export const PROTOCOL_MEMORY = "memory";
 
@@ -256,24 +258,6 @@ export function validateTarget(target: GraphicalTarget): void {
   }
 }
 
-/** What CPython's `urlsplit` drops from a URL wherever it appears. */
-const URL_BYTES_TO_REMOVE = /[\t\r\n]/g;
-
-/**
- * The netloc of a `scheme://…`, as CPython's `urlsplit` finds it.
- *
- * Every caller has already put a scheme and its `//` in front, so what is
- * left is the authority up to whatever path, query or fragment ends it.
- */
-function netlocOf(url: string): string {
-  // Dropped before anything is measured, as CPython drops them: a tab ahead
-  // of the scheme would otherwise shift every index that follows.
-  const cleaned = url.replace(URL_BYTES_TO_REMOVE, "");
-  const after = cleaned.slice(cleaned.indexOf("://") + "://".length);
-  const stop = after.search(/[/?#]/);
-  return stop === -1 ? after : after.slice(0, stop);
-}
-
 /**
  * Host and port from a netloc, exactly as CPython's `SplitResult` reads them.
  *
@@ -288,10 +272,11 @@ function netlocOf(url: string): string {
  * looked for (it holds no colon either way).
  */
 function hostAndPortOf(netloc: string): { host: string | null; port: string | null } {
-  // A bracket without its partner is CPython's "Invalid IPv6 URL", raised
-  // when the URL is parsed. Every caller turns an unusable netloc into the
-  // same refusal it gives a hostless one, so it is reported the same way.
-  if (netloc.includes("[") !== netloc.includes("]")) {
+  // A netloc CPython refuses to read at all — a bracket without its partner,
+  // brackets out of order, or a bracketed host that is not an address. Every
+  // caller turns an unusable netloc into the same refusal it gives a hostless
+  // one, so it is reported the same way.
+  if (!bracketsAreValid(netloc)) {
     return { host: null, port: null };
   }
   const at = netloc.lastIndexOf("@");

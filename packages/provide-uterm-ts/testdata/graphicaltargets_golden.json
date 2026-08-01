@@ -278,6 +278,220 @@
       "endpoint": "vm.example:٥٩٠٠",
       "error": "INVALID",
       "message": "invalid endpoint port"
+    },
+    {
+      "name": "a name in brackets",
+      "endpoint": "[vmhost]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "brackets the wrong way round",
+      "endpoint": "]a[:1",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "something before the bracket",
+      "endpoint": "a[::1]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "something after the bracket",
+      "endpoint": "[::1]x:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "four octets in brackets",
+      "endpoint": "[192.0.2.10]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "an IPvFuture address",
+      "endpoint": "[v7.example]:5900",
+      "value": [
+        "v7.example",
+        5900
+      ]
+    },
+    {
+      "name": "an IPvFuture address with no version",
+      "endpoint": "[v.example]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "brackets in the credentials",
+      "endpoint": "[::1]@vm.example:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "brackets in the credentials and no port",
+      "endpoint": "[::1]@vm.example",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "a closing bracket in the credentials",
+      "endpoint": "]@[::1",
+      "error": "INVALID",
+      "message": "invalid endpoint port"
+    },
+    {
+      "name": "a zone with nothing in it",
+      "endpoint": "[fe80::1%]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "a second zone",
+      "endpoint": "[fe80::1%a%b]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "an address ending in four octets",
+      "endpoint": "[::ffff:192.0.2.10]:5900",
+      "value": [
+        "::ffff:192.0.2.10",
+        5900
+      ]
+    },
+    {
+      "name": "an octet past the end",
+      "endpoint": "[::ffff:192.0.2.256]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "an octet with a leading zero",
+      "endpoint": "[::ffff:192.0.2.010]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "three octets where there are four",
+      "endpoint": "[::ffff:1.2.3]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "a name where the octets go",
+      "endpoint": "[::ffff:host.example]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "eight groups written out",
+      "endpoint": "[1:2:3:4:5:6:7:8]:5900",
+      "value": [
+        "1:2:3:4:5:6:7:8",
+        5900
+      ]
+    },
+    {
+      "name": "nine groups",
+      "endpoint": "[1:2:3:4:5:6:7:8:9]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "eleven groups",
+      "endpoint": "[1:2:3:4:5:6:7:8:9:a:b]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "eight groups and a run of zeroes",
+      "endpoint": "[1:2:3:4:5:6:7:8::]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "a run of zeroes standing in for nothing",
+      "endpoint": "[1:2:3:4::5:6:7:8]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "two runs of zeroes",
+      "endpoint": "[1::2::3]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "a leading colon before a run",
+      "endpoint": "[:1::2]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "a trailing colon after a run",
+      "endpoint": "[1::2:]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "a leading colon and no run at all",
+      "endpoint": "[:1:2:3:4:5:6:7]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "a trailing colon and no run at all",
+      "endpoint": "[1:2:3:4:5:6:7:]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "a run of zeroes at the end",
+      "endpoint": "[1:2:3:4:5:6:7::]:5900",
+      "value": [
+        "1:2:3:4:5:6:7::",
+        5900
+      ]
+    },
+    {
+      "name": "three groups where there are eight",
+      "endpoint": "[1:2:3]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "two groups",
+      "endpoint": "[a:b]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "a group of five digits",
+      "endpoint": "[12345::1]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "a group that is not hex",
+      "endpoint": "[::z]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "nothing but a run of zeroes",
+      "endpoint": "[::]:5900",
+      "value": [
+        "::",
+        5900
+      ]
+    },
+    {
+      "name": "an address longer than an address goes",
+      "endpoint": "[2001:db8:2001:db8:2001:db8:2001:db8:2001:db8:1]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
     }
   ],
   "litevirt": [
@@ -410,6 +624,26 @@
       "endpoint": "vm.example:abc",
       "error": "INVALID",
       "message": "invalid endpoint port"
+    },
+    {
+      "name": "a name in brackets",
+      "endpoint": "[vmhost]:9000",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port"
+    },
+    {
+      "name": "brackets the wrong way round",
+      "endpoint": "]a[:9000",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port"
+    },
+    {
+      "name": "an IPvFuture address",
+      "endpoint": "[v7.example]:9000",
+      "value": [
+        "v7.example",
+        9000
+      ]
     }
   ],
   "definitions": [
