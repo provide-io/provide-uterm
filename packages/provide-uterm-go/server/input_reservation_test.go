@@ -20,14 +20,41 @@ import (
 )
 
 type reservationWorker struct {
-	mu      sync.Mutex
-	entered chan struct{}
-	release chan struct{}
-	match   func(string) bool
+	mu       sync.Mutex
+	entered  chan struct{}
+	release  chan struct{}
+	match    func(string) bool
+	payloads []string
+}
+
+type lifecycleRecordingWorker struct {
+	mu       sync.Mutex
+	payloads []string
+}
+
+func (w *lifecycleRecordingWorker) SendText(_ context.Context, payload string) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.payloads = append(w.payloads, payload)
+	return nil
+}
+
+func (w *lifecycleRecordingWorker) snapshot() []string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return append([]string(nil), w.payloads...)
+}
+
+type recordingTunnelWorker struct{ lifecycleRecordingWorker }
+
+func (*recordingTunnelWorker) SendInput(context.Context, string) error { return nil }
+func (*recordingTunnelWorker) SendHTTPControl(context.Context, map[string]any) error {
+	return nil
 }
 
 func (w *reservationWorker) SendText(ctx context.Context, payload string) error {
 	w.mu.Lock()
+	w.payloads = append(w.payloads, payload)
 	if w.entered == nil || (w.match != nil && !w.match(payload)) {
 		w.mu.Unlock()
 		return nil
@@ -45,6 +72,12 @@ func (w *reservationWorker) SendText(ctx context.Context, payload string) error 
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+func (w *reservationWorker) payloadSnapshot() []string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return append([]string(nil), w.payloads...)
 }
 
 func (w *reservationWorker) blockNextMatching(t *testing.T, match func(string) bool) (<-chan struct{}, func()) {
@@ -92,20 +125,21 @@ func reservationRESTFixture(t *testing.T) (*testServer, *reservationWorker, *hub
 	return ts, worker, clock, hijackID
 }
 
-func assertTransitionWaits(t *testing.T, transition func() any, releaseSend func()) any {
+func assertTransitionWaits(t *testing.T, transition func(context.Context) any, releaseSend func()) any {
 	t.Helper()
-	started := make(chan struct{})
+	waitCtx, reachedWait := hub.WithReservationWaitBarrier(context.Background())
 	done := make(chan any, 1)
 	go func() {
-		close(started)
-		done <- transition()
+		done <- transition(waitCtx)
 	}()
-	<-started
 	select {
+	case <-reachedWait:
 	case result := <-done:
 		releaseSend()
-		t.Fatalf("lifecycle transition completed during reserved input delivery: %#v", result)
-	case <-time.After(100 * time.Millisecond):
+		t.Fatalf("transition completed before reaching reservation wait: %#v", result)
+	case <-time.After(5 * time.Second):
+		releaseSend()
+		t.Fatal("transition did not reach reservation wait")
 	}
 	releaseSend()
 	select {
@@ -132,11 +166,20 @@ func TestRESTStepReleaseWaitsForReservedDelivery(t *testing.T) {
 		t.Fatal("step did not reach worker")
 	}
 
-	result := assertTransitionWaits(t, func() any {
-		return ts.do("POST", "/worker/reserved-rest/hijack/"+hijackID+"/release", "", adminHeaders())
-	}, releaseSend).(*httptest.ResponseRecorder)
-	if result.Code != http.StatusOK {
-		t.Fatalf("release status = %d, body=%s", result.Code, result.Body.String())
+	result := assertTransitionWaits(t, func(ctx context.Context) any {
+		released, resume, err := ts.hub.ReleaseRestHijackAndResume(ctx, "reserved-rest", hijackID)
+		return struct {
+			released bool
+			resume   bool
+			err      error
+		}{released, resume, err}
+	}, releaseSend).(struct {
+		released bool
+		resume   bool
+		err      error
+	})
+	if !result.released || !result.resume || result.err != nil {
+		t.Fatalf("release result = %+v", result)
 	}
 	if step := <-stepDone; step.Code != http.StatusOK {
 		t.Fatalf("step status = %d, body=%s", step.Code, step.Body.String())
@@ -157,8 +200,8 @@ func TestRESTSendExpiryWaitsForReservedDelivery(t *testing.T) {
 	}
 	clock.SetMonotonic(121)
 
-	result := assertTransitionWaits(t, func() any {
-		cleaned, err := ts.hub.CleanupExpiredHijack(context.Background(), "reserved-rest")
+	result := assertTransitionWaits(t, func(ctx context.Context) any {
+		cleaned, err := ts.hub.CleanupExpiredHijack(ctx, "reserved-rest")
 		return struct {
 			cleaned bool
 			err     error
@@ -198,12 +241,20 @@ func TestBrowserReleaseWaitsForReservedInputDelivery(t *testing.T) {
 		t.Fatal("browser input did not reach worker")
 	}
 
-	result := assertTransitionWaits(t, func() any {
-		released, restActive := ts.hub.TryReleaseWsHijack(context.Background(), "reserved-browser", browser)
-		return [2]bool{released, restActive}
-	}, releaseSend).([2]bool)
-	if !result[0] || result[1] {
-		t.Fatalf("browser release = %v", result)
+	result := assertTransitionWaits(t, func(ctx context.Context) any {
+		released, restActive, err := ts.hub.ReleaseWsHijack(ctx, "reserved-browser", browser)
+		return struct {
+			released   bool
+			restActive bool
+			err        error
+		}{released, restActive, err}
+	}, releaseSend).(struct {
+		released   bool
+		restActive bool
+		err        error
+	})
+	if !result.released || result.restActive || result.err != nil {
+		t.Fatalf("browser release = %+v", result)
 	}
 	select {
 	case <-sendDone:
@@ -231,8 +282,8 @@ func TestDeadBrowserRemovalWaitsForReservedInputDelivery(t *testing.T) {
 		t.Fatal("browser input did not reach worker")
 	}
 
-	result := assertTransitionWaits(t, func() any {
-		changed, err := ts.hub.RemoveDeadBrowsers(context.Background(), "reserved-dead-browser", []hub.BrowserConn{browser})
+	result := assertTransitionWaits(t, func(ctx context.Context) any {
+		changed, err := ts.hub.RemoveDeadBrowsers(ctx, "reserved-dead-browser", []hub.BrowserConn{browser})
 		return struct {
 			changed bool
 			err     error
@@ -265,8 +316,8 @@ func TestBrowserDisconnectWaitsForReservedInputDelivery(t *testing.T) {
 		t.Fatal("browser input did not reach worker")
 	}
 
-	result := assertTransitionWaits(t, func() any {
-		cleanup, err := ts.hub.CleanupBrowserDisconnect(context.Background(), "reserved-disconnect", browser, true)
+	result := assertTransitionWaits(t, func(ctx context.Context) any {
+		cleanup, err := ts.hub.CleanupBrowserDisconnect(ctx, "reserved-disconnect", browser, true)
 		return struct {
 			cleanup map[string]any
 			err     error
@@ -300,8 +351,8 @@ func TestWorkerReplacementWaitsForReservedInputDelivery(t *testing.T) {
 		t.Fatal("browser input did not reach original worker")
 	}
 
-	result := assertTransitionWaits(t, func() any {
-		previousHijacked, err := ts.hub.RegisterWorker(context.Background(), "reserved-replacement", replacement)
+	result := assertTransitionWaits(t, func(ctx context.Context) any {
+		previousHijacked, err := ts.hub.RegisterWorker(ctx, "reserved-replacement", replacement)
 		return struct {
 			previousHijacked bool
 			err              error
@@ -338,8 +389,8 @@ func TestCompetingAcquireWaitsForReservedInputDelivery(t *testing.T) {
 		t.Fatal("browser input did not reach worker")
 	}
 
-	result := assertTransitionWaits(t, func() any {
-		ok, reason := ts.hub.TryAcquireWsHijack(context.Background(), "reserved-competitor", competitor)
+	result := assertTransitionWaits(t, func(ctx context.Context) any {
+		ok, reason := ts.hub.TryAcquireWsHijack(ctx, "reserved-competitor", competitor)
 		return struct {
 			ok     bool
 			reason string
@@ -391,15 +442,19 @@ func TestBrowserReleaseResumeCompletesBeforeCompetingAcquire(t *testing.T) {
 	}
 
 	acquireDone := make(chan bool, 1)
+	waitCtx, reachedWait := hub.WithReservationWaitBarrier(context.Background())
 	go func() {
-		ok, _ := ts.hub.TryAcquireWsHijack(context.Background(), "release-order", competitor)
+		ok, _ := ts.hub.TryAcquireWsHijack(waitCtx, "release-order", competitor)
 		acquireDone <- ok
 	}()
 	select {
+	case <-reachedWait:
 	case ok := <-acquireDone:
 		releaseResume()
-		t.Fatalf("competing acquire completed before old resume: %t", ok)
-	case <-time.After(100 * time.Millisecond):
+		t.Fatalf("competing acquire completed before lifecycle wait: %t", ok)
+	case <-time.After(5 * time.Second):
+		releaseResume()
+		t.Fatal("competing acquire did not reach lifecycle wait")
 	}
 	releaseResume()
 	if ok := <-acquireDone; !ok {
@@ -433,15 +488,19 @@ func TestRESTAcquirePauseBlocksWorkerReplacement(t *testing.T) {
 	}
 
 	replaceDone := make(chan error, 1)
+	waitCtx, reachedWait := hub.WithReservationWaitBarrier(context.Background())
 	go func() {
-		_, err := ts.hub.RegisterWorker(context.Background(), "pause-replace", replacement)
+		_, err := ts.hub.RegisterWorker(waitCtx, "pause-replace", replacement)
 		replaceDone <- err
 	}()
 	select {
+	case <-reachedWait:
 	case err := <-replaceDone:
 		releasePause()
-		t.Fatalf("worker replacement completed during pause reservation: %v", err)
-	case <-time.After(100 * time.Millisecond):
+		t.Fatalf("worker replacement completed before lifecycle wait: %v", err)
+	case <-time.After(5 * time.Second):
+		releasePause()
+		t.Fatal("worker replacement did not reach lifecycle wait")
 	}
 	releasePause()
 	if err := <-acquireDone; err != nil {
@@ -475,18 +534,22 @@ func TestRESTAcquirePauseBlocksWorkerDisconnect(t *testing.T) {
 		t.Fatal("REST acquire did not reach pause send")
 	}
 	disconnectDone := make(chan error, 1)
+	waitCtx, reachedWait := hub.WithReservationWaitBarrier(context.Background())
 	go func() {
-		ok, err := ts.hub.DisconnectWorker(context.Background(), "pause-disconnect")
+		ok, err := ts.hub.DisconnectWorker(waitCtx, "pause-disconnect")
 		if err == nil && !ok {
 			err = fmt.Errorf("disconnect returned false")
 		}
 		disconnectDone <- err
 	}()
 	select {
+	case <-reachedWait:
 	case err := <-disconnectDone:
 		releasePause()
-		t.Fatalf("disconnect completed during pause reservation: %v", err)
-	case <-time.After(100 * time.Millisecond):
+		t.Fatalf("disconnect completed before lifecycle wait: %v", err)
+	case <-time.After(5 * time.Second):
+		releasePause()
+		t.Fatal("disconnect did not reach lifecycle wait")
 	}
 	releasePause()
 	if err := <-acquireDone; err != nil {
@@ -498,6 +561,84 @@ func TestRESTAcquirePauseBlocksWorkerDisconnect(t *testing.T) {
 	state := ts.hub.Registry.Get("pause-disconnect")
 	if state != nil && (state.WorkerWS != nil || state.HijackSession != nil) {
 		t.Fatalf("disconnect left active state: %+v", state)
+	}
+}
+
+func TestRESTAcquirePauseFencesSetInputMode(t *testing.T) {
+	ts := newTestServer(t, nil)
+	worker := &reservationWorker{}
+	if _, err := ts.hub.RegisterWorker(context.Background(), "pause-mode", worker); err != nil {
+		t.Fatal(err)
+	}
+	entered, releasePause := worker.blockNextMatching(t, func(payload string) bool {
+		return strings.Contains(payload, `"action":"pause"`)
+	})
+	acquireDone := make(chan error, 1)
+	go func() {
+		_, _, err := ts.hub.TryAcquireRestHijack(context.Background(), "pause-mode", "owner", 60, "h1", 1)
+		acquireDone <- err
+	}()
+	<-entered
+	waitCtx, reachedWait := hub.WithReservationWaitBarrier(context.Background())
+	type modeResult struct {
+		ok     bool
+		reason string
+		err    error
+	}
+	modeDone := make(chan modeResult, 1)
+	go func() {
+		ok, reason, err := ts.hub.SetInputMode(waitCtx, "pause-mode", hub.InputModeOpen)
+		modeDone <- modeResult{ok, reason, err}
+	}()
+	select {
+	case <-reachedWait:
+	case <-time.After(5 * time.Second):
+		releasePause()
+		t.Fatal("set_input_mode did not reach lifecycle wait")
+	}
+	releasePause()
+	if err := <-acquireDone; err != nil {
+		t.Fatal(err)
+	}
+	result := <-modeDone
+	if result.err != nil || result.ok || result.reason != "active_hijack" {
+		t.Fatalf("set mode after acquire = %+v", result)
+	}
+}
+
+func TestRESTAcquirePauseFencesWorkerHelloMode(t *testing.T) {
+	ts := newTestServer(t, nil)
+	worker := &reservationWorker{}
+	if _, err := ts.hub.RegisterWorker(context.Background(), "pause-hello", worker); err != nil {
+		t.Fatal(err)
+	}
+	entered, releasePause := worker.blockNextMatching(t, func(payload string) bool {
+		return strings.Contains(payload, `"action":"pause"`)
+	})
+	acquireDone := make(chan error, 1)
+	go func() {
+		_, _, err := ts.hub.TryAcquireRestHijack(context.Background(), "pause-hello", "owner", 60, "h1", 1)
+		acquireDone <- err
+	}()
+	<-entered
+	waitCtx, reachedWait := hub.WithReservationWaitBarrier(context.Background())
+	helloDone := make(chan bool, 1)
+	go func() {
+		ok, _ := ts.hub.SetWorkerHello(waitCtx, "pause-hello", hub.InputModeOpen, nil)
+		helloDone <- ok
+	}()
+	select {
+	case <-reachedWait:
+	case <-time.After(5 * time.Second):
+		releasePause()
+		t.Fatal("worker hello did not reach lifecycle wait")
+	}
+	releasePause()
+	if err := <-acquireDone; err != nil {
+		t.Fatal(err)
+	}
+	if ok := <-helloDone; ok {
+		t.Fatal("worker hello lowered mode after acquire")
 	}
 }
 
@@ -516,5 +657,114 @@ func TestTunnelRESTStepFailsWithoutSuccessEffects(t *testing.T) {
 	}
 	if state.EventSeq != beforeEvents {
 		t.Fatalf("tunnel step appended success event: %d -> %d", beforeEvents, state.EventSeq)
+	}
+}
+
+func TestFailedRESTAcquireDoesNotResumeCompetingDashboardLease(t *testing.T) {
+	ts := newTestServer(t, nil)
+	ts.reg.add("acquire-competitor", "admin1", "public")
+	worker := &lifecycleRecordingWorker{}
+	if _, err := ts.hub.RegisterWorker(context.Background(), "acquire-competitor", worker); err != nil {
+		t.Fatal(err)
+	}
+	state := ts.hub.Registry.Get("acquire-competitor")
+	competitor := &browserConn{}
+	state.Browsers[competitor] = "admin"
+	state.HijackOwner = competitor
+	expires := ts.srv.clock.Monotonic() + 60
+	state.HijackOwnerExpiresAt = &expires
+	state.InputMode = hub.InputModeOpen
+
+	rec := ts.do("POST", "/worker/acquire-competitor/hijack/acquire", `{"owner":"challenger"}`, adminHeaders())
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("failed acquire status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	for _, payload := range worker.snapshot() {
+		if strings.Contains(payload, `"action":"resume"`) {
+			t.Fatalf("failed acquire resumed competing lease: %q", payload)
+		}
+	}
+}
+
+func TestTunnelRESTAcquireRejectedWithoutSuccessEffects(t *testing.T) {
+	ts := newTestServer(t, nil)
+	ts.reg.add("tunnel-acquire", "admin1", "public")
+	worker := &recordingTunnelWorker{}
+	if _, err := ts.hub.RegisterWorkerWithTransport(context.Background(), "tunnel-acquire", worker, true); err != nil {
+		t.Fatal(err)
+	}
+	state := ts.hub.Registry.Get("tunnel-acquire")
+	beforeMetric := ts.metrics.Snapshot()["hijack_acquires_total"]
+	beforeEvents := state.EventSeq
+	rec := ts.do("POST", "/worker/tunnel-acquire/hijack/acquire", `{"owner":"tester"}`, adminHeaders())
+	if rec.Code >= 200 && rec.Code < 300 {
+		t.Fatalf("tunnel acquire unexpectedly succeeded: %d %s", rec.Code, rec.Body.String())
+	}
+	if state.HijackSession != nil {
+		t.Fatalf("tunnel acquire published lease: %+v", state.HijackSession)
+	}
+	if got := ts.metrics.Snapshot()["hijack_acquires_total"]; got != beforeMetric {
+		t.Fatalf("acquire metric changed: %d -> %d", beforeMetric, got)
+	}
+	if state.EventSeq != beforeEvents {
+		t.Fatalf("acquire event changed: %d -> %d", beforeEvents, state.EventSeq)
+	}
+}
+
+func TestBrowserInputUnparkedByApprovalContinuesThroughRealHandler(t *testing.T) {
+	ts := newTestServer(t, nil)
+	worker := &reservationWorker{}
+	browser := &browserConn{}
+	if _, err := ts.hub.RegisterWorker(context.Background(), "approval-unpark", worker); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ts.hub.RegisterBrowser(context.Background(), "approval-unpark", browser, "admin", true); err != nil {
+		t.Fatal(err)
+	}
+	if ok, reason := ts.hub.TryAcquireWsHijack(context.Background(), "approval-unpark", browser); !ok {
+		t.Fatalf("acquire browser owner: %s", reason)
+	}
+	generation, ok := ts.hub.BrowserInputFence("approval-unpark", browser)
+	if !ok {
+		t.Fatal("browser fence unavailable")
+	}
+	reqID, err := ts.hub.ParkBrowserForApproval(context.Background(), "approval-unpark", browser,
+		"command\n", hub.PolicyDecision{Action: "hold", TimeoutS: 60}, generation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commandEntered, releaseCommand := worker.blockNextMatching(t, func(payload string) bool {
+		return payload == "command\n"
+	})
+	resolveDone := make(chan error, 1)
+	go func() {
+		_, err := ts.hub.ResolveApproval(context.Background(), reqID, true, nil, nil)
+		resolveDone <- err
+	}()
+	<-commandEntered
+	waitCtx, reachedWait := hub.WithReservationWaitBarrier(context.Background())
+	handlerDone := make(chan struct{})
+	go func() {
+		ts.srv.browserInputGated(waitCtx, "approval-unpark", browser,
+			map[string]any{"type": "input", "data": "fresh\n"})
+		close(handlerDone)
+	}()
+	select {
+	case <-reachedWait:
+	case <-handlerDone:
+		releaseCommand()
+		t.Fatal("real input handler dropped input after approval unpark")
+	case <-time.After(5 * time.Second):
+		releaseCommand()
+		t.Fatal("real input handler did not reach approval reservation wait")
+	}
+	releaseCommand()
+	if err := <-resolveDone; err != nil {
+		t.Fatal(err)
+	}
+	<-handlerDone
+	payloads := worker.payloadSnapshot()
+	if len(payloads) < 2 || payloads[len(payloads)-2] != "command\n" || payloads[len(payloads)-1] != "fresh\n" {
+		t.Fatalf("real handler delivery order = %q", payloads)
 	}
 }

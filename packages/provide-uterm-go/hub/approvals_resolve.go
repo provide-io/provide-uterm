@@ -64,6 +64,24 @@ func (h *TermHub) HoldBrowserInput(ws BrowserConn, data string) (tooLong bool) {
 	return false
 }
 
+// TryHoldBrowserInput atomically checks whether ws is still parked and, when
+// it is, appends data to the hold buffer. held=false tells the caller that an
+// approval concurrently unparked the browser and normal fenced delivery must
+// continue instead of dropping the input.
+func (h *TermHub) TryHoldBrowserInput(ws BrowserConn, data string) (held, tooLong bool) {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+	if !h.pausedBrowsers[ws] {
+		return false, false
+	}
+	newHold := h.holdBuffers[ws] + data
+	if len(newHold) > h.maxBufferChars {
+		return true, true
+	}
+	h.holdBuffers[ws] = newHold
+	return true, false
+}
+
 // InterceptBrowserInput runs the input policy gate for a browser input frame,
 // building the policy context first. Port of the gate.intercept_input call in
 // _handle_input.
@@ -168,7 +186,7 @@ func (h *TermHub) ResolveApproval(
 	if approve {
 		status = ApprovalApproved
 	}
-	if !h.Approvals.Claim(requestID, status) {
+	if !h.Approvals.ClaimRevision(requestID, req.Revision, status) {
 		// Already resolved by a concurrent/prior call: idempotent no-op.
 		return false, nil
 	}
@@ -178,7 +196,9 @@ func (h *TermHub) ResolveApproval(
 			map[string]any{"type": "input", "data": command, "ts": h.clock.Wall()},
 		)
 		if batch.Delivered == 0 {
-			h.Approvals.SetStatus(requestID, ApprovalRefused)
+			if !h.Approvals.SetStatusRevision(requestID, req.Revision, ApprovalRefused) {
+				return true, nil
+			}
 			_ = h.Router.Broadcast(ctx, workerID, map[string]any{
 				"type": "approval_resolved", "outcome": "refused", "request_id": requestID,
 			})
@@ -203,6 +223,11 @@ func (h *TermHub) ResolveApproval(
 
 	if !approve {
 		h.releaseParkedBrowser(req, false)
+	}
+	// Re-check the opaque record identity before publishing/auditing a terminal
+	// outcome. A long-running resolver may outlive pruning and ID reuse.
+	if !h.Approvals.SetStatusRevision(requestID, req.Revision, status) {
+		return true, nil
 	}
 
 	outcome := "rejected"

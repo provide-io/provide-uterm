@@ -38,6 +38,7 @@ func (lm *HijackLeaseManager) TryAcquireRest(
 	var workerWS WorkerWS
 	var workerGeneration uint64
 	var lifecycle *LifecycleReservation
+	pauseDelivered := false
 	for {
 		lm.lock.Lock()
 		st = lm.registry.Get(workerID)
@@ -60,6 +61,10 @@ func (lm *HijackLeaseManager) TryAcquireRest(
 			lm.lock.Unlock()
 			return false, "open_mode", nil
 		}
+		if st.IsTunnelWorker {
+			lm.lock.Unlock()
+			return false, OwnedInputUnsupported, nil
+		}
 		if lm.hub.IsDashboardHijackActive(st) || lm.hub.HasValidRESTLease(st) || st.HijackPending != nil {
 			lm.lock.Unlock()
 			return false, "already_hijacked", nil
@@ -78,6 +83,23 @@ func (lm *HijackLeaseManager) TryAcquireRest(
 
 	// finally — roll back a still-outstanding reservation (no-op on success).
 	defer func() {
+		if !ok && pauseDelivered {
+			lm.lock.Lock()
+			current := lm.registry.Get(workerID)
+			canRollback := current != nil && current.LifecyclePending == lifecycle &&
+				current.WorkerWS == workerWS && current.WorkerGeneration == workerGeneration &&
+				current.HijackPending != nil && *current.HijackPending == hijackID
+			lm.lock.Unlock()
+			if canRollback {
+				rollbackCtx, rollbackCancel := context.WithTimeout(context.Background(), lifecycleOperationTimeout)
+				rollback := resumeFrame(owner, lm.clock.Wall())
+				rollback["hijack_id"] = hijackID
+				if encoded, encodeErr := controlchannel.EncodeControlFrame(rollback); encodeErr == nil {
+					_ = workerWS.SendText(rollbackCtx, encoded)
+				}
+				rollbackCancel()
+			}
+		}
 		lm.lock.Lock()
 		st := lm.registry.Get(workerID)
 		if st != nil && st.HijackPending != nil && *st.HijackPending == hijackID {
@@ -115,6 +137,10 @@ func (lm *HijackLeaseManager) TryAcquireRest(
 		lm.lock.Unlock()
 		return false, "no_worker", nil
 	}
+	pauseDelivered = true
+	if opCtx.Err() != nil {
+		return false, "", opCtx.Err()
+	}
 
 	// Phase 3 — finalise under the lock (unless cancelled / superseded).
 	lm.lock.Lock()
@@ -123,6 +149,10 @@ func (lm *HijackLeaseManager) TryAcquireRest(
 		st.LifecyclePending != lifecycle || st.WorkerWS != workerWS || st.WorkerGeneration != workerGeneration {
 		lm.lock.Unlock()
 		return false, "no_worker", nil
+	}
+	if st.InputMode == InputModeOpen {
+		lm.lock.Unlock()
+		return false, "open_mode", nil
 	}
 	st.HijackSession = &HijackSession{
 		HijackID:       hijackID,

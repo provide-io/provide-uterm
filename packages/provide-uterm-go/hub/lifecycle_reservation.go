@@ -7,10 +7,33 @@ package hub
 
 import (
 	"context"
+	"sync"
 	"time"
 )
 
 const lifecycleOperationTimeout = 5 * time.Second
+
+type reservationWaitBarrierKey struct{}
+
+type reservationWaitBarrier struct {
+	reached chan struct{}
+	once    sync.Once
+}
+
+// WithReservationWaitBarrier returns a derived context and a channel closed
+// when an operation actually reaches a lifecycle/input reservation wait. It is
+// useful for deterministic orchestration and diagnostics without scheduler
+// sleeps.
+func WithReservationWaitBarrier(ctx context.Context) (context.Context, <-chan struct{}) {
+	barrier := &reservationWaitBarrier{reached: make(chan struct{})}
+	return context.WithValue(ctx, reservationWaitBarrierKey{}, barrier), barrier.reached
+}
+
+func acknowledgeReservationWait(ctx context.Context) {
+	if barrier, ok := ctx.Value(reservationWaitBarrierKey{}).(*reservationWaitBarrier); ok {
+		barrier.once.Do(func() { close(barrier.reached) })
+	}
+}
 
 func boundedOperationContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(ctx, lifecycleOperationTimeout)
@@ -76,6 +99,16 @@ func (h *TermHub) WaitResumeTokenReady(ctx context.Context, token string, ws Bro
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+// IsCurrentDashboardOwner reports whether ws already owns the active
+// dashboard lease. Resume requests from that same live socket are rejected
+// before consuming its reconnect token.
+func (h *TermHub) IsCurrentDashboardOwner(workerID string, ws BrowserConn) bool {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+	st := h.registry.Get(workerID)
+	return st != nil && h.State.IsDashboardHijackActive(st) && st.HijackOwner == ws
 }
 
 func (h *TermHub) detachResumeTokenLocked(token string) {

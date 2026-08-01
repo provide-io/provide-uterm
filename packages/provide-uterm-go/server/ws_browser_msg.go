@@ -73,6 +73,9 @@ func (s *Server) browserResume(ctx context.Context, conn *websocket.Conn, worker
 	if err != nil || session == nil || session.WorkerID != workerID {
 		return
 	}
+	if session.WasHijackOwner && s.deps.Hub.IsCurrentDashboardOwner(workerID, bc) {
+		return
+	}
 	consumed, err := store.Consume(opCtx, oldTok)
 	if err != nil || consumed == nil {
 		return

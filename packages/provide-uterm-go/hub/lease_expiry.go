@@ -254,6 +254,11 @@ func (lm *HijackLeaseManager) RemoveDeadBrowsers(ctx context.Context, workerID s
 						}
 					}
 				}
+				if termHub, isTermHub := lm.hub.(*TermHub); isTermHub && termHub.resumeStore != nil {
+					token := termHub.wsToResumeToken[ws]
+					delete(termHub.wsToResumeToken, ws)
+					termHub.detachResumeTokenLocked(token)
+				}
 			}
 		}
 		lm.lock.Unlock()

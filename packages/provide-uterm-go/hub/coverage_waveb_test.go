@@ -328,15 +328,16 @@ func TestConfigDelegateRolesFalse(t *testing.T) {
 	mustFalse(t, h.delegateRoles, "delegate roles false honored")
 }
 
-func TestDeliverWorkerTunnelNoCodecDrops(t *testing.T) {
-	// A worker flagged tunnel but whose socket lacks TunnelSender: input dropped
-	// (returns true, no error).
+func TestDeliverWorkerTunnelNoCodecRejects(t *testing.T) {
+	// A worker flagged tunnel but whose socket lacks TunnelSender rejects input
+	// without treating the worker as dead.
 	h, _ := newTestHub(t, nil)
 	worker := &fakeWorkerWS{} // not a TunnelSender
 	st := registerWorkerState(h, "w1", worker)
 	st.IsTunnelWorker = true
 	ok, err := h.SendWorker(bg(), "w1", map[string]any{"type": "input", "data": "x"})
 	mustEqual(t, err, nil, "no err")
-	mustTrue(t, ok, "dropped tunnel send still returns true")
+	mustFalse(t, ok, "unsupported tunnel send returns false")
 	mustEqual(t, len(worker.payloads()), 0, "nothing sent without codec")
+	mustTrue(t, st.WorkerWS == worker, "unsupported operation preserves worker")
 }

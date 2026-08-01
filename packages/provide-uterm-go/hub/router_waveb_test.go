@@ -157,16 +157,26 @@ func TestSendWorkerTunnelRouting(t *testing.T) {
 	mustTrue(t, ok, "http control ok")
 	mustEqual(t, len(tun.httpControl), 1, "one http control")
 
-	// other type -> dropped (still returns true)
+	// other type -> explicitly unsupported
 	ok, _ = h.SendWorker(bg(), "w1", map[string]any{"type": "snapshot_req"})
-	mustTrue(t, ok, "dropped type returns true")
+	mustFalse(t, ok, "unsupported type returns false")
 	mustEqual(t, len(tun.inputs), 1, "no new input")
 	mustEqual(t, len(tun.httpControl), 1, "no new http control")
 
-	// input with non-string data -> dropped
+	// input with non-string data -> explicitly unsupported
 	ok, _ = h.SendWorker(bg(), "w1", map[string]any{"type": "input", "data": 42})
-	mustTrue(t, ok, "non-string input dropped")
+	mustFalse(t, ok, "non-string input returns false")
 	mustEqual(t, len(tun.inputs), 1, "still one input")
+}
+
+func TestTunnelUnsupportedControlReturnsExplicitFailure(t *testing.T) {
+	h, _ := newTestHub(t, nil)
+	worker := &fakeTunnelWS{}
+	err := h.Router.deliverWorker(bg(), worker, true,
+		map[string]any{"type": "control", "action": "step"})
+	if !errors.Is(err, errOwnedInputUnsupported) {
+		t.Fatalf("unsupported tunnel control error = %v", err)
+	}
 }
 
 func TestSendWorkerRecordsKeystroke(t *testing.T) {

@@ -153,9 +153,6 @@ func (s *Server) handleHijackAcquire(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !okAcq {
-		if errKind != "already_hijacked" {
-			_, _ = s.deps.Hub.SendWorker(ctx, workerID, controlMsg("resume", owner, 0, wallNow, hijackID))
-		}
 		bridgeError(w, http.StatusConflict, acquireErrorMessage(errKind))
 		return
 	}

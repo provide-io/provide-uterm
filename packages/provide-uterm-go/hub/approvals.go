@@ -32,6 +32,9 @@ type ApprovalRequest struct {
 	ExpiresAt   float64
 	GroupID     *string
 	IsFanout    bool
+	// Revision is an opaque store-assigned identity. It distinguishes records
+	// when a pruned caller-controlled ID is later reused.
+	Revision uint64
 	// OriginBrowser and OriginGeneration are internal capability-fence data.
 	// They are intentionally absent from approval route serialization.
 	OriginBrowser    BrowserConn
@@ -52,6 +55,7 @@ type InMemoryApprovalStore struct {
 	mu       sync.Mutex
 	requests map[string]*ApprovalRequest
 	clock    Clock
+	nextRev  uint64
 
 	// OnExpired is notified with the id of each request that transitions to
 	// TIMEOUT during CleanupExpired. It runs outside the lock.
@@ -75,7 +79,10 @@ func (s *InMemoryApprovalStore) Add(req *ApprovalRequest) bool {
 	if _, exists := s.requests[req.ID]; exists {
 		return false
 	}
-	s.requests[req.ID] = cloneApprovalRequest(req)
+	s.nextRev++
+	stored := cloneApprovalRequest(req)
+	stored.Revision = s.nextRev
+	s.requests[req.ID] = stored
 	return true
 }
 
@@ -101,11 +108,11 @@ func cloneApprovalRequest(req *ApprovalRequest) *ApprovalRequest {
 // Resolve transitions a PENDING request to status. A non-pending request is
 // left unchanged. Superseded by Claim for one-shot handling; retained for
 // direct/test use.
-func (s *InMemoryApprovalStore) Resolve(requestID string, status ApprovalStatus) {
+func (s *InMemoryApprovalStore) Resolve(requestID string, revision uint64, status ApprovalStatus) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	req, ok := s.requests[requestID]
-	if ok && req.Status == ApprovalPending {
+	if ok && req.Revision == revision && req.Status == ApprovalPending {
 		req.Status = status
 	}
 }
@@ -113,11 +120,11 @@ func (s *InMemoryApprovalStore) Resolve(requestID string, status ApprovalStatus)
 // Claim atomically transitions a PENDING request to status, returning true
 // only for the caller that performs the transition (so a held command is
 // injected exactly once under concurrent approve/reject).
-func (s *InMemoryApprovalStore) Claim(requestID string, status ApprovalStatus) bool {
+func (s *InMemoryApprovalStore) ClaimRevision(requestID string, revision uint64, status ApprovalStatus) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	req, ok := s.requests[requestID]
-	if !ok || req.Status != ApprovalPending {
+	if !ok || req.Revision != revision || req.Status != ApprovalPending {
 		return false
 	}
 	req.Status = status
@@ -125,12 +132,14 @@ func (s *InMemoryApprovalStore) Claim(requestID string, status ApprovalStatus) b
 }
 
 // SetStatus records the terminal outcome after the one-shot claim has won.
-func (s *InMemoryApprovalStore) SetStatus(requestID string, status ApprovalStatus) {
+func (s *InMemoryApprovalStore) SetStatusRevision(requestID string, revision uint64, status ApprovalStatus) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if req := s.requests[requestID]; req != nil {
+	if req := s.requests[requestID]; req != nil && req.Revision == revision {
 		req.Status = status
+		return true
 	}
+	return false
 }
 
 // CleanupExpired times out PENDING requests past their expiry and prunes

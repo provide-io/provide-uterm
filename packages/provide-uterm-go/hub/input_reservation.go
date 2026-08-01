@@ -302,6 +302,7 @@ func (claim ownedInputClaim) invalidReason() string {
 }
 
 func waitInputReservation(ctx context.Context, done <-chan struct{}) error {
+	acknowledgeReservationWait(ctx)
 	select {
 	case <-done:
 		return nil
