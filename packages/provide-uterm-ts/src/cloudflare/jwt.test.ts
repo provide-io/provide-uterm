@@ -36,6 +36,7 @@ interface JwtGolden {
   default_scopes_claim: string;
   default_role: string;
   b64url: Array<{ name: string; encoded: string } & Raised>;
+  b64url_unstable: Array<{ name: string; encoded: string }>;
   parts: Array<{ name: string; token: string } & Raised>;
   signing_input: string;
   signature_bytes: number[];
@@ -157,6 +158,21 @@ describe("decoding a token segment", () => {
     expect(() => b64urlDecode("YWJ!jZA")).toThrow();
     expect(() => b64urlDecode("a")).toThrow();
     expect(() => b64urlDecode("YW Jj ZA")).toThrow();
+  });
+
+  it("is not held to a segment the standard library disagrees with itself about", () => {
+    // A pad in the middle of a group decoded to `a` through CPython 3.13.12
+    // and raises `Incorrect padding` from 3.13.13 — a change between *patch*
+    // releases of the same minor version. The reference has no settled answer
+    // to record, so the corpus names the input instead of pinning one
+    // interpreter's reply, and nothing here asserts what this port does with
+    // it.
+    expect(golden.b64url_unstable.length).toBeGreaterThan(0);
+    for (const record of golden.b64url_unstable) {
+      expect(golden.b64url.some((pinned) => pinned.encoded === record.encoded)).toBe(false);
+      // Exercised, not asserted: it must not crash the decoder outright.
+      expect(() => raised(() => [...b64urlDecode(record.encoded)])).not.toThrow();
+    }
   });
 });
 

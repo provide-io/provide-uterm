@@ -72,14 +72,14 @@
     {
       "encoded": "YWJ!jZA",
       "error": "Error",
-      "message": "Incorrect padding",
+      "message": null,
       "name": "punctuation among the digits",
       "result": null
     },
     {
       "encoded": "a",
       "error": "Error",
-      "message": "Invalid base64-encoded string: number of data characters (1) cannot be 1 more than a multiple of 4",
+      "message": null,
       "name": "a single character",
       "result": null
     },
@@ -112,46 +112,37 @@
     {
       "encoded": "a+b/c",
       "error": "Error",
-      "message": "Invalid base64-encoded string: number of data characters (5) cannot be 1 more than a multiple of 4",
+      "message": null,
       "name": "standard-alphabet characters",
       "result": null
     },
     {
       "encoded": "a-b_c+d/e",
       "error": "Error",
-      "message": "Invalid base64-encoded string: number of data characters (9) cannot be 1 more than a multiple of 4",
+      "message": null,
       "name": "both alphabets at once",
       "result": null
     },
     {
       "encoded": "YW Jj ZA",
       "error": "Error",
-      "message": "Incorrect padding",
+      "message": null,
       "name": "whitespace inside",
       "result": null
     },
     {
       "encoded": "YWJj\nZA",
       "error": "Error",
-      "message": "Incorrect padding",
+      "message": null,
       "name": "a newline inside",
       "result": null
     },
     {
       "encoded": "YWJj=WJj",
       "error": "Error",
-      "message": "Incorrect padding",
+      "message": null,
       "name": "data after the padding",
       "result": null
-    },
-    {
-      "encoded": "YW==JjZA",
-      "error": null,
-      "message": null,
-      "name": "padding in the middle",
-      "result": [
-        97
-      ]
     },
     {
       "encoded": "YWJjZA=",
@@ -201,6 +192,12 @@
         98,
         99
       ]
+    }
+  ],
+  "b64url_unstable": [
+    {
+      "encoded": "YW==JjZA",
+      "name": "padding in the middle"
     }
   ],
   "bearer": [
@@ -838,28 +835,28 @@
     },
     {
       "error": "JSONDecodeError",
-      "message": "Expecting value: line 1 column 1 (char 0)",
+      "message": null,
       "name": "empty parts",
       "result": null,
       "token": ".."
     },
     {
       "error": "JSONDecodeError",
-      "message": "Expecting value: line 1 column 1 (char 0)",
+      "message": null,
       "name": "a header that is not json",
       "result": null,
       "token": "bm9wZQ.eyJzdWIiOiJ1MSJ9.c2ln"
     },
     {
       "error": "JSONDecodeError",
-      "message": "Expecting value: line 1 column 1 (char 0)",
+      "message": null,
       "name": "a payload that is not json",
       "result": null,
       "token": "eyJhbGciOiJSUzI1NiJ9.bm9wZQ.c2ln"
     },
     {
       "error": "JSONDecodeError",
-      "message": "Expecting value: line 1 column 1 (char 0)",
+      "message": null,
       "name": "a header that is not base64",
       "result": null,
       "token": "!!!.eyJzdWIiOiJ1MSJ9.c2ln"

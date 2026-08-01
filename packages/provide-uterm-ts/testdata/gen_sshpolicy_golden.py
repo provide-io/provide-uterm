@@ -34,6 +34,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import stat
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -41,6 +42,21 @@ from typing import Any
 from provide.uterm.transports import ssh as ssh_module
 
 OUT = Path(__file__).with_name("sshpolicy_golden.json")
+
+# The uids the ownership refusal is recorded with. They are stated here rather
+# than read off the machine because the refusal quotes both of them, and the
+# real uids are a fact about whoever ran the generator — 501 on a Mac, 1001 on
+# a CI runner, 0 in a container. Recording those made the corpus reproduce on
+# exactly one laptop and the drift check went red everywhere else. What the
+# port has to match is the *shape* of the message, so the numbers in it are
+# fixed. Deliberately not any uid a real account is likely to hold, so nobody
+# reads them as something that was observed. Do not go back to `os.getuid()`.
+OWNER_UID = 4242
+CURRENT_UID = 4243
+
+# The path the ownership refusal names, for the same reason: a temporary
+# directory is a different string on every run.
+FOREIGN_KEY_PATH = "/keys/ssh_host_key"
 
 # Bind addresses, including the ones that look loopback and are not.
 HOSTS: list[str] = [
@@ -109,14 +125,26 @@ def _record_loopback() -> list[dict[str, Any]]:
 
 
 def _record_key_permissions() -> list[dict[str, Any]]:
-    """Record what each host-key file mode does."""
+    """Record what each host-key file mode does.
+
+    Real files with real modes, so what is recorded is what ``chmod`` and
+    ``stat`` actually produce rather than a second reading of the mode bits.
+    Only the *ownership* half of the check is pinned: ``os.getuid`` is held at
+    whatever uid the temporary file came out owned by, so the reference gets
+    past the owner check on every machine and each row says something about
+    its mode and nothing about who ran the generator. Without that pin the 0600
+    row would carry a uid the moment the two ever disagreed.
+    """
     records = []
+    real_getuid = os.getuid
     with tempfile.TemporaryDirectory() as raw:
         directory = Path(raw)
         for name, mode in KEY_MODES:
             key_path = directory / f"key_{mode:04o}"
             key_path.write_bytes(b"not-a-real-key")
             key_path.chmod(mode)
+            owner = key_path.stat().st_uid
+            os.getuid = lambda owner=owner: owner  # type: ignore[assignment,misc]
             row: dict[str, Any] = {"name": name, "mode": mode, "mode_repr": oct(mode)}
             try:
                 ssh_module._verify_key_permissions(key_path)
@@ -126,27 +154,54 @@ def _record_key_permissions() -> list[dict[str, Any]]:
                 row["error"] = str(exc).split(":")[0]
             else:
                 row["error"] = None
+            finally:
+                os.getuid = real_getuid  # type: ignore[assignment]
             records.append(row)
     return records
 
 
+class StatedKey:
+    """A host key whose mode and owner are stated rather than found on disk.
+
+    ``_verify_key_permissions`` reads exactly two facts off the path it is
+    given — ``st_mode`` and ``st_uid`` — and quotes the path itself in the
+    refusal. Supplying all three drives the real reference function while
+    leaving nothing in the recording that came from this machine.
+    """
+
+    def __init__(self, path: str, mode: int, uid: int) -> None:
+        self.path = path
+        self.mode = mode
+        self.uid = uid
+
+    def stat(self) -> os.stat_result:
+        """Return the stated mode and owner, as :meth:`Path.stat` would."""
+        return os.stat_result((stat.S_IFREG | self.mode, 0, 0, 1, self.uid, 0, 0, 0, 0, 0))
+
+    def __str__(self) -> str:
+        """Name the file, which the refusal quotes."""
+        return self.path
+
+
 def _record_foreign_owner() -> dict[str, Any]:
-    """Record the refusal when the key belongs to someone else."""
+    """Record the refusal when the key belongs to someone else.
+
+    Both uids are the fixed placeholders above, so the recorded message is the
+    same bytes on every machine. The owner and the current uid are recorded
+    alongside it so the port can reproduce the message from them rather than
+    hard-coding the two numbers a second time.
+    """
     real_getuid = os.getuid
-    with tempfile.TemporaryDirectory() as raw:
-        key_path = Path(raw) / "ssh_host_key"
-        key_path.write_bytes(b"not-a-real-key")
-        key_path.chmod(0o600)
-        os.getuid = lambda: real_getuid() + 1  # type: ignore[assignment]
-        try:
-            ssh_module._verify_key_permissions(key_path)
-        except PermissionError as exc:
-            message = str(exc).split(":")[0]
-        else:
-            message = ""
-        finally:
-            os.getuid = real_getuid  # type: ignore[assignment]
-    return {"message": message, "uid_offset": 1}
+    os.getuid = lambda: CURRENT_UID  # type: ignore[assignment]
+    try:
+        ssh_module._verify_key_permissions(StatedKey(FOREIGN_KEY_PATH, 0o600, OWNER_UID))  # type: ignore[arg-type]
+    except PermissionError as exc:
+        message = str(exc)
+    else:
+        message = ""
+    finally:
+        os.getuid = real_getuid  # type: ignore[assignment]
+    return {"message": message, "owner_uid": OWNER_UID, "current_uid": CURRENT_UID, "path": FOREIGN_KEY_PATH}
 
 
 async def _record_start_guard() -> list[dict[str, Any]]:

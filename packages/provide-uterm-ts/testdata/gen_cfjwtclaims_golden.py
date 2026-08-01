@@ -89,13 +89,24 @@ def _token(header: Any, payload: Any, signature: bytes = b"\x01\x02\x03") -> str
 
 
 def _raised(call: Any) -> dict[str, Any]:
-    """What a check refuses, and how it says so."""
+    """What a check refuses, and how it says so.
+
+    Only the reference's *own* refusals carry their wording. Everything else
+    reaching here came out of the standard library — ``binascii.Error`` from
+    the decoder, ``json.JSONDecodeError`` from the parser — and that wording is
+    CPython's, not this project's. It has been reworded between releases
+    ("number of data characters (1) cannot be 1 more than a multiple of 4" is a
+    3.x phrasing, not a specification), and a port has no business reproducing
+    it. What the reference decides is *which kind* of failure it is, and the
+    exception class already carries that, so the message is dropped rather than
+    pinned. Do not record ``str(exc)`` for these.
+    """
     try:
         result = call()
     except JwtValidationError as exc:
         return {"error": "JwtValidationError", "message": str(exc), "result": None}
     except Exception as exc:
-        return {"error": type(exc).__name__, "message": str(exc), "result": None}
+        return {"error": type(exc).__name__, "message": None, "result": None}
     return {"error": None, "message": None, "result": result}
 
 
@@ -145,13 +156,34 @@ B64_CASES: list[tuple[str, str]] = [
     # Everything after the first pad is ignored, including data characters —
     # a decoder that kept reading past it would decode a different segment.
     ("data after the padding", "YWJj=WJj"),
-    ("padding in the middle", "YW==JjZA"),
     # The padding has to complete the group exactly: one pad short is a
     # refusal, not a shorter decode.
     ("one pad short", "YWJjZA="),
     ("padded exactly", "YWJjZA=="),
     ("a stray pad between groups", "YWJj=YWJj"),
     ("a leading pad", "=YWJj"),
+]
+
+# Segments the standard library has not made up its mind about, named rather
+# than recorded.
+#
+# ``YW==JjZA`` — a pad in the middle of a group — decoded to ``b"a"`` through
+# CPython 3.13.12 and 3.14.3, and raises ``binascii.Error("Incorrect padding")``
+# from 3.13.13 and 3.14.4 onwards. 3.12.13, the current 3.12, still accepts it.
+# That is a *patch*-level change in ``binascii.a2b_base64``: two interpreters
+# with the same minor version disagree, so there is no "the reference does X"
+# to record and no version a port could be told to match. Recording the older
+# answer is what put this corpus a patch release behind CI, where every runner
+# installs the newest patch of its minor — and why the drift check was red on
+# the 3.13 and 3.14 cells while 3.11 and 3.12 stayed green.
+#
+# The behaviour this case was here to pin — that the decoder discards what is
+# not in the alphabet, and that the padding arithmetic is computed from the
+# original length — is still pinned by ``!!!``, ``YWJ!jZA``, ``====`` and
+# ``YWJj=YWJj`` above, all of which every release agrees on. Do not put this
+# input back.
+B64_UNSTABLE: list[tuple[str, str]] = [
+    ("padding in the middle", "YW==JjZA"),
 ]
 
 # (name, token) — how a token splits.
@@ -330,6 +362,7 @@ def _build() -> dict[str, Any]:
             {"name": name, "encoded": encoded, **_raised(lambda e=encoded: list(_b64url_decode(e)))}
             for name, encoded in B64_CASES
         ],
+        "b64url_unstable": [{"name": name, "encoded": encoded} for name, encoded in B64_UNSTABLE],
         "parts": [
             {
                 "name": name,

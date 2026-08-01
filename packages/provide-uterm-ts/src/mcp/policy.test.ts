@@ -33,6 +33,7 @@ interface McpGolden {
   max_keystroke_bytes: number;
   allow_private_hosts: boolean;
   inet_aton: Array<{ value: string; address: string | null }>;
+  inet_aton_libc_divergent: string[];
   hosts: Array<{ name: string; host: string; internal: boolean }>;
   patterns: Array<{ name: string; pattern: string | null; rejection: Record<string, unknown> | null }>;
   ids: Array<{ name: string; id: string; rejection: Record<string, unknown> | null }>;
@@ -164,11 +165,21 @@ describe("reading an address the way a resolver reads it", () => {
     expect(inetAton("0400.0.0.1")).toBeUndefined();
   });
 
-  it("wraps a whole address that overflows rather than refusing it", () => {
-    // Which is what the C function does, and why `999999999999` is an
-    // address at all.
+  it("is not held to either libc where the two disagree", () => {
+    // `inet_aton` is not CPython's — it is whichever C library the interpreter
+    // was linked against, and the two do not agree on a whole address written
+    // as one number past 2^32: BSD keeps the low thirty-two bits, glibc
+    // refuses it outright. The reference delegates, so it has no answer of its
+    // own for these; the corpus names them instead of recording the libc of
+    // whoever ran the generator.
+    expect(golden.inet_aton_libc_divergent.length).toBeGreaterThan(0);
+    for (const value of golden.inet_aton_libc_divergent) {
+      expect(golden.inet_aton.some((record) => record.value === value)).toBe(false);
+      // This port wraps, as BSD does. Nothing differential holds it to that,
+      // which is the point of listing the input rather than its answer.
+      expect(inetAton(value)).toBeDefined();
+    }
     expect(ipToString(inetAton("4294967296") as ReturnType<typeof inetAton> & object)).toBe("0.0.0.0");
-    expect(ipToString(inetAton("999999999999") as ReturnType<typeof inetAton> & object)).toBe("212.165.15.255");
   });
 
   it("refuses an empty field anywhere", () => {
