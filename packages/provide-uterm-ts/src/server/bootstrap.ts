@@ -19,12 +19,7 @@
  */
 
 import { effectiveAllowLoopbackDestinations, type WebhookEgressConfig } from "../egress/index.ts";
-import {
-  applyCfAccessTeamDomain,
-  type AuthSettings,
-  type DevIdpAuthConfig,
-  setupDevIdp,
-} from "../serverauth/index.ts";
+import { type AuthSettings, applyCfAccessTeamDomain, type DevIdpAuthConfig, setupDevIdp } from "../serverauth/index.ts";
 import { deepMerge, normalizeDocument, SERVER_CONFIG_DEFAULTS } from "../serverconfig/index.ts";
 import type { Logger } from "../telemetry/index.ts";
 import { createServerApp, type ServerApp } from "./app.ts";
