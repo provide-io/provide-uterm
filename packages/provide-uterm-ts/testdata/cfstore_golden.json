@@ -8,6 +8,12 @@
       "created_at",
       "expires_at"
     ],
+    "runtime_activations": [
+      "worker_id",
+      "incarnation",
+      "activation_seq",
+      "activated_at"
+    ],
     "session_events": [
       "worker_id",
       "seq",
@@ -33,6 +39,8 @@
       "deleted_at",
       "event_seq",
       "updated_at",
+      "acquired_by",
+      "worker_generation",
       "input_mode"
     ],
     "tunnel_invite_state": [
@@ -329,6 +337,7 @@
   },
   "session_state": {
     "after_clear": {
+      "acquired_by": null,
       "event_seq": 0,
       "hijack_id": null,
       "input_mode": "observe",
@@ -338,11 +347,13 @@
       },
       "lease_expires_at": null,
       "owner": null,
+      "worker_generation": null,
       "worker_id": "w1"
     },
     "after_delete_has_timestamp": true,
     "after_delete_keeps_row": true,
     "after_lease": {
+      "acquired_by": null,
       "deleted_at": null,
       "event_seq": 0,
       "hijack_id": "h1",
@@ -350,9 +361,11 @@
       "last_snapshot": null,
       "lease_expires_at": 1760000060.0,
       "owner": "alice",
+      "worker_generation": null,
       "worker_id": "w1"
     },
     "after_mode": {
+      "acquired_by": null,
       "deleted_at": null,
       "event_seq": 0,
       "hijack_id": "h1",
@@ -363,9 +376,11 @@
       },
       "lease_expires_at": 1760000060.0,
       "owner": "alice",
+      "worker_generation": null,
       "worker_id": "w1"
     },
     "after_snapshot": {
+      "acquired_by": null,
       "deleted_at": null,
       "event_seq": 0,
       "hijack_id": "h1",
@@ -376,9 +391,11 @@
       },
       "lease_expires_at": 1760000060.0,
       "owner": "alice",
+      "worker_generation": null,
       "worker_id": "w1"
     },
     "fresh_worker": {
+      "acquired_by": null,
       "deleted_at": null,
       "event_seq": 0,
       "hijack_id": "h2",
@@ -386,10 +403,12 @@
       "last_snapshot": null,
       "lease_expires_at": 1760000030.0,
       "owner": "bob",
+      "worker_generation": null,
       "worker_id": "w2"
     },
     "missing": null,
     "mode_only": {
+      "acquired_by": null,
       "deleted_at": null,
       "event_seq": 0,
       "hijack_id": null,
@@ -397,9 +416,11 @@
       "last_snapshot": null,
       "lease_expires_at": null,
       "owner": null,
+      "worker_generation": null,
       "worker_id": "w3"
     },
     "snapshot_only": {
+      "acquired_by": null,
       "deleted_at": null,
       "event_seq": 0,
       "hijack_id": null,
@@ -409,11 +430,13 @@
       },
       "lease_expires_at": null,
       "owner": null,
+      "worker_generation": null,
       "worker_id": "w4"
     }
   },
   "tables": [
     "resume_tokens",
+    "runtime_activations",
     "session_events",
     "session_meta",
     "session_state",

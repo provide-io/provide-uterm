@@ -114,8 +114,8 @@
     {
       "name": "brackets with nothing in them",
       "endpoint": "[]:5900",
-      "crash": "ValueError",
-      "message": "'' does not appear to be an IPv4 or IPv6 address"
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
     },
     {
       "name": "credentials and no user",
@@ -128,8 +128,8 @@
     {
       "name": "a bracket nobody closed",
       "endpoint": "[2001:db8::1:5900",
-      "crash": "ValueError",
-      "message": "Invalid IPv6 URL"
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
     },
     {
       "name": "a tab in the middle of the host",
@@ -324,8 +324,8 @@
     {
       "name": "a bracket nobody closed",
       "endpoint": "[2001:db8::1:9000",
-      "crash": "ValueError",
-      "message": "Invalid IPv6 URL"
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port"
     },
     {
       "name": "a scheme it does not take",

@@ -970,6 +970,11 @@
       "optional": false,
       "required": false
     },
+    "allow_stale_owner_role_resume": {
+      "kind": "bool",
+      "optional": false,
+      "required": false
+    },
     "max_workers": {
       "kind": "int",
       "optional": false,
@@ -3594,6 +3599,7 @@
         "rest_send_rate_limit_per_sec": 20.0,
         "worker_frame_on_invalid": "drop",
         "max_connections_per_principal": 25,
+        "allow_stale_owner_role_resume": false,
         "max_workers": 1
       }
     },
@@ -3791,6 +3797,7 @@
         "rest_send_rate_limit_per_sec": 20.0,
         "worker_frame_on_invalid": "drop",
         "max_connections_per_principal": 25,
+        "allow_stale_owner_role_resume": false,
         "max_workers": 10000
       }
     },
@@ -3988,6 +3995,7 @@
         "rest_send_rate_limit_per_sec": 20.0,
         "worker_frame_on_invalid": "reject",
         "max_connections_per_principal": 25,
+        "allow_stale_owner_role_resume": false,
         "max_workers": 10000
       }
     },
@@ -4170,6 +4178,7 @@
         "rest_send_rate_limit_per_sec": 20.0,
         "worker_frame_on_invalid": "drop",
         "max_connections_per_principal": 25,
+        "allow_stale_owner_role_resume": false,
         "max_workers": 10000
       }
     },
@@ -4352,6 +4361,7 @@
         "rest_send_rate_limit_per_sec": 20.0,
         "worker_frame_on_invalid": "drop",
         "max_connections_per_principal": 25,
+        "allow_stale_owner_role_resume": false,
         "max_workers": 10000
       }
     },
@@ -4534,6 +4544,7 @@
         "rest_send_rate_limit_per_sec": 100.0,
         "worker_frame_on_invalid": "drop",
         "max_connections_per_principal": 25,
+        "allow_stale_owner_role_resume": false,
         "max_workers": 10000
       }
     },
@@ -4716,6 +4727,7 @@
         "rest_send_rate_limit_per_sec": 20.0,
         "worker_frame_on_invalid": "drop",
         "max_connections_per_principal": 25,
+        "allow_stale_owner_role_resume": false,
         "max_workers": 10000
       }
     },
@@ -4898,6 +4910,7 @@
         "rest_send_rate_limit_per_sec": 20.0,
         "worker_frame_on_invalid": "drop",
         "max_connections_per_principal": 25,
+        "allow_stale_owner_role_resume": false,
         "max_workers": 10000
       }
     },
@@ -5287,6 +5300,7 @@
         "rest_send_rate_limit_per_sec": 20.0,
         "worker_frame_on_invalid": "drop",
         "max_connections_per_principal": 25,
+        "allow_stale_owner_role_resume": false,
         "max_workers": 10000
       }
     },
@@ -5508,6 +5522,7 @@
         "rest_send_rate_limit_per_sec": 20.0,
         "worker_frame_on_invalid": "drop",
         "max_connections_per_principal": 25,
+        "allow_stale_owner_role_resume": false,
         "max_workers": 10000
       }
     }

@@ -84,9 +84,7 @@
       "name": "a body that is not JSON",
       "content_type": "application/json",
       "body_len": 8,
-      "parsed": {
-        "raises": "JSONDecodeError"
-      }
+      "parsed": {}
     },
     {
       "name": "a JSON list",

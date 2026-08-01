@@ -65,9 +65,15 @@ class FakeRequest:
         async def can_read_session(_principal: Any, session_def: Any) -> bool:
             return session_def.worker_id in allowed
 
+        # Every route rejects non-admins before doing anything else; the
+        # boundary itself is pinned by hand-written tests on both sides, so
+        # the corpus records the admin's view of each route's shaping.
+        async def is_admin(_principal: Any) -> bool:
+            return True
+
         self.app = SimpleNamespace(
             state=SimpleNamespace(
-                uterm_authz=SimpleNamespace(can_read_session=can_read_session),
+                uterm_authz=SimpleNamespace(can_read_session=can_read_session, is_admin=is_admin),
                 uterm_registry=SimpleNamespace(get_definition=get_definition),
             )
         )
@@ -84,6 +90,17 @@ class FakeController:
         self.groups: dict[str, FanOutGroup] = {}
         self.calls: list[list[Any]] = []
         self.create_error: Exception | None = None
+        # Mirrors FakeRequest's default fixtures: w1..w3 readable, "secret"
+        # registered but unreadable, anything else unknown.
+        self.readable = {"w1", "w2", "w3"}
+        self.allow_unknown_members = False
+
+    async def validate_members(self, worker_ids: list[str], principal: Any) -> tuple[list[str], list[str]]:
+        """Split members exactly as the real controller's admission check does."""
+        self.calls.append(["validate_members", list(worker_ids), getattr(principal, "subject_id", principal)])
+        allowed = [worker_id for worker_id in worker_ids if worker_id in self.readable]
+        refused = [worker_id for worker_id in worker_ids if worker_id not in self.readable]
+        return allowed, refused
 
     async def create_group(self, group: FanOutGroup, *, principal: str) -> str:
         """Store the group, or raise what the case asked for."""
@@ -116,7 +133,9 @@ class FakeController:
         self, group_id: str, data: str, *, principal: str, quiesce_ms: Any = None, max_response_ms: Any = None
     ) -> Any:
         """Return a fixed result, so the route's shaping is what shows."""
-        self.calls.append(["send", group_id, data, principal, quiesce_ms, max_response_ms])
+        self.calls.append(
+            ["send", group_id, data, getattr(principal, "subject_id", principal), quiesce_ms, max_response_ms]
+        )
         from provide.uterm.server.bridge.fanout._models import SessionFanOutResult
 
         return SimpleNamespace(
@@ -130,6 +149,9 @@ class FakeController:
             ],
             divergent_sessions=["w2"],
             failed_sessions=["w2"],
+            error=None,
+            approval_required=False,
+            approval_id=None,
         )
 
 

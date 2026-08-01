@@ -33,8 +33,10 @@ Usage (from the repository root)::
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
@@ -76,9 +78,34 @@ class RecordingRuntime:
         self.browser_hijack_owner = dict(case.get("owners", {}))
         self.browser_sockets = {ws_id: _Socket(ws_id) for ws_id in case.get("sockets", [])}
         self._failing = set(case.get("failing_sockets", []))
+        # The full remove_browser_socket path a failed broadcast now takes.
+        self.browser_resume_tokens: dict[str, str] = {}
+        self.store = SimpleNamespace(mark_resume_hijack_owner=lambda _token, _flag: None)
 
     def ws_key(self, ws: Any) -> str:
         return ws.ws_id
+
+    def input_delivery_guard(self) -> Any:
+        return contextlib.nullcontext()
+
+    def _restore_browser_identity(self, ws: Any) -> None:
+        pass
+
+    def _set_browser_ownership_attachment(self, ws: Any, hijack_id: str | None) -> None:
+        if hijack_id is None:
+            self.browser_hijack_owner.pop(ws.ws_id, None)
+        else:
+            self.browser_hijack_owner[ws.ws_id] = hijack_id
+
+    def _remove_ws(self, ws: Any) -> None:
+        self.browser_sockets.pop(ws.ws_id, None)
+        self.dropped.append(ws.ws_id)
+
+    def clear_lease(self) -> None:
+        self.hijack.session = None
+
+    async def push_worker_control(self, op: str, **_kwargs: Any) -> None:
+        pass
 
     async def send_ws(self, ws: Any, frame: dict[str, Any]) -> None:
         if ws.ws_id in self._failing:
@@ -89,6 +116,11 @@ class RecordingRuntime:
         # The real one, so a broadcast exercises the frame builder rather than
         # a stand-in for it.
         await session_io._SessionRuntimeIoMixin.send_hijack_state(self, ws)
+
+    async def remove_browser_socket(self, ws: Any) -> bool:
+        # The real one, so a dead socket's ownership release is what the
+        # reference actually does rather than a stand-in for it.
+        return await session_io._SessionRuntimeIoMixin.remove_browser_socket(self, ws)
 
 
 class _Socket:
@@ -105,6 +137,12 @@ class _Session:
 class _Hijack:
     def __init__(self, hijack_id: str | None, lease_expires_at: float | None) -> None:
         self.session = None if hijack_id is None else _Session(hijack_id, lease_expires_at)
+
+    def release(self, hijack_id: str) -> Any:
+        ok = self.session is not None and self.session.hijack_id == hijack_id
+        if ok:
+            self.session = None
+        return SimpleNamespace(ok=ok)
 
 
 def _fix(frame: dict[str, Any]) -> dict[str, Any]:

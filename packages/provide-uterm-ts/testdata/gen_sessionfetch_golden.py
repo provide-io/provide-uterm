@@ -56,6 +56,9 @@ class Runtime:
     def __init__(self, worker_id: str) -> None:
         self.worker_id = worker_id
 
+    def _restore_state(self) -> None:
+        """Cold-runtime state restore; a no-op here — the corpus pins only id resolution."""
+
 
 PATHS: list[tuple[str, str, str]] = [
     ("a browser socket", "default", "https://x.example/ws/browser/sess-1"),

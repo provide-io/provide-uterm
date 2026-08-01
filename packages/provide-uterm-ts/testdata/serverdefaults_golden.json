@@ -1,5 +1,6 @@
 {
   "config": {
+    "allow_stale_owner_role_resume": false,
     "audit": {
       "chain_enabled": false,
       "chain_file": null
@@ -190,6 +191,7 @@
     "webhooks"
   ],
   "top_level_scalars": [
+    "allow_stale_owner_role_resume",
     "browser_rate_limit_per_sec",
     "environment",
     "fanout_allow_unknown_members",

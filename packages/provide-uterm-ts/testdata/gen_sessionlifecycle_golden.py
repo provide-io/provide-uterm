@@ -103,8 +103,37 @@ class RecordingRuntime:
         return WORKER_ID
 
     # ── the effects ──────────────────────────────────────────────────────
+    def _restore_worker_id_from_socket(self, _ws: Any) -> None:
+        # Identity restore is invisible bookkeeping; recording it would put a
+        # noise row in front of every event.
+        pass
+
     def _register_socket(self, _ws: Any, role: str) -> None:
         self.actions.append({"kind": "register_socket", "role": role})
+
+    def _restore_browser_identity(self, _ws: Any) -> None:
+        self.actions.append({"kind": "restore_browser_identity"})
+
+    def _set_browser_ownership_attachment(self, _ws: Any, _hijack_id: Any) -> None:
+        pass
+
+    async def activate_worker_socket(self, _ws: Any) -> bool:
+        accepted = self._case.get("worker_current", True)
+        self.actions.append({"kind": "activate_worker_socket", "accepted": accepted})
+        return accepted
+
+    async def unregister_worker_socket(self, _ws: Any) -> bool:
+        current = self._case.get("worker_current", True)
+        self.actions.append({"kind": "unregister_worker_socket", "current": current})
+        return current
+
+    async def remove_browser_socket(self, _ws: Any) -> bool:
+        released = bool(self._case.get("held_hijack"))
+        self.actions.append({"kind": "remove_browser_socket", "released": released})
+        return released
+
+    async def broadcast_hijack_state(self) -> None:
+        self.actions.append({"kind": "broadcast_hijack_state"})
 
     def _remove_ws(self, _ws: Any) -> None:
         self.actions.append({"kind": "remove_socket"})
@@ -198,6 +227,7 @@ async def _run(case: dict[str, Any], event: str) -> dict[str, Any]:
 OPEN_CASES: list[tuple[str, dict[str, Any]]] = [
     ("a worker arriving", {"role": "worker"}),
     ("a worker arriving at a deleted session", {"role": "worker", "deleted": True}),
+    ("a stale worker socket arriving", {"role": "worker", "worker_current": False}),
     ("a raw socket arriving with a screen to show", {"role": "raw", "has_snapshot": True}),
     ("a raw socket arriving with nothing to show", {"role": "raw", "has_snapshot": False}),
     (
@@ -234,6 +264,7 @@ DISCONNECT_CASES: list[tuple[str, dict[str, Any]]] = [
     ("a browser leaving a deleted session", {"role": "browser", "presence": True, "deleted": True}),
     ("a worker leaving", {"role": "worker"}),
     ("a worker leaving a deleted session", {"role": "worker", "deleted": True}),
+    ("a stale worker socket leaving a live session", {"role": "worker", "worker_current": False}),
     ("a raw socket leaving", {"role": "raw"}),
 ]
 
