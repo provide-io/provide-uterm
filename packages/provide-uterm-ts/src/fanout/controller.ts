@@ -164,6 +164,16 @@ export class FanOutController {
    *   of service against the fan-out; it is validated here rather than on the
    *   hot path.
    */
+  async createGroup(group: FanOutGroup, principal: string): Promise<string> {
+    if (group.workerIds.length > this.#maxGroupSize) {
+      throw new RangeError(`Group size ${group.workerIds.length} exceeds max ${this.#maxGroupSize}`);
+    }
+    compileExpectRegex(group.errorPattern);
+    group.createdBy = principal;
+    await this.#store.save(group);
+    return group.groupId;
+  }
+
   /**
    * Split members into currently authorized and refused, for `principal`.
    *
@@ -185,16 +195,6 @@ export class FanOutController {
       }
     }
     return [allowed, refused];
-  }
-
-  async createGroup(group: FanOutGroup, principal: string): Promise<string> {
-    if (group.workerIds.length > this.#maxGroupSize) {
-      throw new RangeError(`Group size ${group.workerIds.length} exceeds max ${this.#maxGroupSize}`);
-    }
-    compileExpectRegex(group.errorPattern);
-    group.createdBy = principal;
-    await this.#store.save(group);
-    return group.groupId;
   }
 
   /** Delete a group, if `principal` may see it. */
