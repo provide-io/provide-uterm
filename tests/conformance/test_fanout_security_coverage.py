@@ -100,6 +100,7 @@ def test_real_runner_executes_and_compares_native_observations() -> None:
         check=False,
         capture_output=True,
         text=True,
+        timeout=600,
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
@@ -225,6 +226,35 @@ def test_native_command_failure_is_not_reported_as_coverage() -> None:
     errors = runner.command_errors("python", subprocess.CompletedProcess(["bad"], 2, "", "boom"))
 
     assert any("command failed" in error and "boom" in error for error in errors)
+
+
+def test_adapter_timeout_is_a_hard_failure_without_partial_observations(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    runner = _runner()
+    contract_path = tmp_path / "contract.json"
+    contract_path.write_text(json.dumps(_contract()), encoding="utf-8")
+
+    def timeout(*_args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        assert kwargs["timeout"] == 1
+        raise subprocess.TimeoutExpired(
+            ["adapter"],
+            timeout=1,
+            output='[{"id":"partial"}]',
+            stderr="still running",
+        )
+
+    monkeypatch.setattr(runner.subprocess, "run", timeout)
+
+    errors, observations = runner.collect_backend_observations(
+        REPO_ROOT,
+        contract_path,
+        "python",
+        timeout_s=1,
+    )
+
+    assert errors == ["python: native command timed out after 1s"]
+    assert observations == []
 
 
 def _mutated_contract(kind: str) -> tuple[dict[str, object], str]:
