@@ -4,6 +4,7 @@
 #
 import time
 import uuid
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -60,6 +61,7 @@ def test_list_approvals_requires_admin(client):
 
 def test_approve_request(client):
     hub = client.app.state.uterm_hub
+    hub.resolve_approval = AsyncMock(return_value=(True, None))
     req_id = str(uuid.uuid4())
     req = ApprovalRequest(
         id=req_id,
@@ -78,6 +80,27 @@ def test_approve_request(client):
 
     updated_req = hub.approval_store.get(req_id)
     assert updated_req.status == ApprovalStatus.APPROVED
+
+
+def test_approve_refuses_truthfully_when_delivery_owner_is_stale(client):
+    hub = client.app.state.uterm_hub
+    hub.resolve_approval = AsyncMock(return_value=(False, "invalid_owner"))
+    req_id = str(uuid.uuid4())
+    req = ApprovalRequest(
+        id=req_id,
+        worker_id="worker1",
+        submitter_id="user1",
+        command="rm -rf /",
+        status=ApprovalStatus.PENDING,
+        created_at=time.time(),
+        expires_at=time.time() + 60,
+    )
+    hub.approval_store.add(req)
+
+    response = client.post(f"/api/approvals/{req_id}/approve", headers=ADMIN_H)
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Approval delivery refused: invalid_owner"
+    assert hub.approval_store.get(req_id).status == ApprovalStatus.REFUSED
 
 
 def test_reject_request(client):

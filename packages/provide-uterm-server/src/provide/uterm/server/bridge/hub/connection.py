@@ -128,7 +128,7 @@ class ConnectionManager:
 
     # -- Worker connection lifecycle ------------------------------------
 
-    async def register_worker(self, worker_id: str, ws: WebSocket) -> bool:
+    async def register_worker(self, worker_id: str, ws: WebSocket, *, is_tunnel_worker: bool = False) -> bool:
         """Register *ws* as the active worker for *worker_id*.
 
         Clears any stale hijack state from a previous crashed worker session.
@@ -137,42 +137,41 @@ class ConnectionManager:
         """
         hub = self._hub
         with tracer.start_as_current_span("uterm.worker.register", attributes={"worker_id": worker_id}):
-            async with hub._lock:
-                # --- Global worker-registration cap (OOM bound) ---
-                # Only reject a brand-NEW worker_id once the map is full. A
-                # reconnecting, already-registered worker_id (CF DO rotation,
-                # manager restart, network blip) MUST always be allowed — the
-                # ``worker_id not in _workers`` guard preserves reconnects (see
-                # the lease-preservation note below).
-                if worker_id not in hub.registry._workers and len(hub.registry._workers) >= hub.max_workers:
-                    from fastapi import WebSocketException
+            while True:
+                async with hub._lock:
+                    state = hub.registry.get(worker_id)
+                    if state is None:
+                        if len(hub.registry._workers) >= hub.max_workers:
+                            from fastapi import WebSocketException
 
-                    raise WebSocketException(
-                        code=1008,
-                        reason="worker capacity exceeded",
-                    )
-                st = hub.registry._workers.setdefault(worker_id, WorkerTermState())
-                st.events = deque(st.events, maxlen=hub._event_deque_maxlen)
-                # Only clear hijack state when the EXISTING lease is
-                # actually expired. Worker WS reconnects are routine for
-                # passive supervised bots (Cloudflare DO rotation, manager
-                # restart, network blip) and the framework's hijack lease
-                # should survive a transient reconnect — clearing it
-                # unconditionally meant a single CFDO "reconnecting..."
-                # blip mid-run silently invalidated the holder's
-                # hijack_id, every subsequent /send 404'd, and the
-                # whole compare run cratered. Time-bounded expiry
-                # (lease_expires_at) is already the security guarantee;
-                # WS register is not a security event.
-                _now_mono = time.monotonic()
-                _expired = st.hijack_session is not None and st.hijack_session.lease_expires_at <= _now_mono
-                prev_was_hijacked = _expired or (st.hijack_session is None and st.hijack_owner is not None)
-                if _expired:
-                    st.hijack_session = None
-                if prev_was_hijacked:
-                    st.hijack_owner = None
-                    st.hijack_owner_expires_at = None
-                st.worker_ws = ws
+                            raise WebSocketException(code=1008, reason="worker capacity exceeded")
+                        state = WorkerTermState(worker_ws=ws, is_tunnel_worker=is_tunnel_worker)
+                        state.events = deque(state.events, maxlen=hub._event_deque_maxlen)
+                        state.ownership_generation = 1
+                        hub.registry._workers[worker_id] = state
+                        prev_was_hijacked = False
+                        break
+                    fence = state.owned_input_fence
+                async with fence:
+                    async with hub._lock:
+                        st = hub.registry.get(worker_id)
+                        if st is not state:
+                            continue
+                        st.events = deque(st.events, maxlen=hub._event_deque_maxlen)
+                        _now_mono = time.monotonic()
+                        _expired = st.hijack_session is not None and st.hijack_session.lease_expires_at <= _now_mono
+                        prev_was_hijacked = _expired or (st.hijack_session is None and st.hijack_owner is not None)
+                        changed_epoch = st.worker_ws is not ws or prev_was_hijacked
+                        if _expired:
+                            st.hijack_session = None
+                        if prev_was_hijacked:
+                            st.hijack_owner = None
+                            st.hijack_owner_expires_at = None
+                        st.worker_ws = ws
+                        st.is_tunnel_worker = is_tunnel_worker
+                        if changed_epoch:
+                            st.ownership_generation += 1
+                        break
             logger.info(EVENT_SESSION_REGISTERED, worker_id=worker_id, session_type="worker")
             return prev_was_hijacked
 
@@ -195,12 +194,15 @@ class ConnectionManager:
         hub = self._hub
         async with hub._lock:
             st = hub.registry.get(worker_id)
-            # The False arc here exits the async-with directly; coverage.py 7.14
-            # mis-attributes that __aexit__ arc on Python 3.11 (3.12+ tracks it
-            # fine), so it falsely reports the branch as partial. The branch IS
-            # exercised — see test_set_worker_tunnel_flag_noop_for_unknown_worker.
-            if st is not None:  # pragma: no branch
-                st.is_tunnel_worker = value
+            if st is None:
+                return
+            state = st
+            fence = st.owned_input_fence
+        async with fence:
+            async with hub._lock:
+                st = hub.registry.get(worker_id)
+                if st is state:  # pragma: no branch
+                    st.is_tunnel_worker = value
 
     async def set_worker_hello(self, worker_id: str, mode: InputMode, protocol_version: int | None = None) -> bool:
         """Process a ``worker_hello`` message: set input_mode and persist protocol version.
@@ -270,11 +272,19 @@ class ConnectionManager:
                 st = hub.registry.get(worker_id)
                 if st is None or st.worker_ws is not ws:
                     return False, False
-                was_hijacked = st.hijack_session is not None or st.hijack_owner is not None
-                st.worker_ws = None
-                st.hijack_session = None
-                st.hijack_owner = None
-                st.hijack_owner_expires_at = None
+                state = st
+                fence = st.owned_input_fence
+            async with fence:
+                async with hub._lock:
+                    st = hub.registry.get(worker_id)
+                    if st is not state or st.worker_ws is not ws:
+                        return False, False
+                    was_hijacked = st.hijack_session is not None or st.hijack_owner is not None
+                    st.worker_ws = None
+                    st.hijack_session = None
+                    st.hijack_owner = None
+                    st.hijack_owner_expires_at = None
+                    st.ownership_generation += 1
             return True, was_hijacked
 
     # -- Browser connection lifecycle ------------------------------------
@@ -451,6 +461,7 @@ class ConnectionManager:
         if was_owner:
             st.hijack_owner = None
             st.hijack_owner_expires_at = None
+            st.ownership_generation += 1
             rest_still_active = hub.has_valid_rest_lease(st)
         elif owned_hijack and st.worker_ws is not None and not hub.is_hijacked(st):  # pragma: no branch
             # Scan backwards for the most recent hijack-related event to determine
@@ -471,12 +482,20 @@ class ConnectionManager:
             browser_count = -1
             async with hub._lock:
                 st = hub.registry.get(worker_id)
-                was_owner = False
-                rest_still_active = False
-                resume_without_owner = False
-                if st is not None:  # pragma: no branch
-                    was_owner, rest_still_active, resume_without_owner = self._update_lock_state(st, ws, owned_hijack)
-                    browser_count = len(st.browsers)
+                state = st
+                fence = st.owned_input_fence if st is not None else None
+            was_owner = False
+            rest_still_active = False
+            resume_without_owner = False
+            if fence is not None:
+                async with fence:
+                    async with hub._lock:
+                        st = hub.registry.get(worker_id)
+                        if st is state:  # pragma: no branch
+                            was_owner, rest_still_active, resume_without_owner = self._update_lock_state(
+                                st, ws, owned_hijack
+                            )
+                            browser_count = len(st.browsers)
             # Mark resume token with hijack ownership (if any) so a reconnecting
             # browser can reclaim the lease.  Do NOT revoke — the token must survive
             # until the browser reconnects or TTL expires.

@@ -62,11 +62,19 @@ def create_approvals_router() -> APIRouter:
         if approval_req.submitter_id == getattr(approver, "subject_id", None):
             raise HTTPException(status_code=403, detail="Cannot approve your own command")
 
-        if not hub.approval_store.claim(request_id, ApprovalStatus.APPROVED):
+        if not hub.approval_store.claim(request_id, ApprovalStatus.RESOLVING):
             raise HTTPException(status_code=400, detail="Approval request is not pending")
-        await hub.resolve_approval(
-            approval_req.worker_id, request_id, PolicyDecision(action="allow"), approval_req.command
-        )
+        try:
+            delivered, reason = await hub.resolve_approval(
+                approval_req.worker_id, request_id, PolicyDecision(action="allow"), approval_req.command
+            )
+        except BaseException:
+            hub.approval_store.finalize(request_id, ApprovalStatus.REFUSED)
+            raise
+        final_status = ApprovalStatus.APPROVED if delivered else ApprovalStatus.REFUSED
+        hub.approval_store.finalize(request_id, final_status)
+        if not delivered:
+            raise HTTPException(status_code=409, detail=f"Approval delivery refused: {reason or 'delivery_failed'}")
         return {"status": "approved"}
 
     @router.post("/{request_id}/reject")

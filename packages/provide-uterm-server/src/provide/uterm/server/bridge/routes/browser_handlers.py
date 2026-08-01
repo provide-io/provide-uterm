@@ -88,10 +88,13 @@ async def _handle_heartbeat(hub: TermHub, ws: WebSocket, worker_id: str) -> None
 
 async def _handle_hijack_step(hub: TermHub, ws: WebSocket, worker_id: str) -> None:
     """Handle hijack_step message type."""
-    if await hub.touch_if_owner(worker_id, ws) is not None:
-        ok = await hub.send_worker(
+    generation = await hub.capture_dashboard_ownership(worker_id, ws)
+    if generation is not None:
+        ok, _reason = await hub.send_owned_worker(
             worker_id,
             {"type": "control", "action": "step", "owner": "dashboard", "lease_s": 0, "ts": time.time()},
+            browser_ws=ws,
+            ownership_generation=generation,
         )
         if not ok:
             await ws.send_text(encode_control_frame(make_error_frame("No worker connected for this session.")))
@@ -107,9 +110,14 @@ async def _handle_http_inspect_control(
     msg_b: dict[str, Any],
 ) -> None:
     """Forward inspect/intercept control only when browser input is permitted."""
-    if not await hub.prepare_browser_input(worker_id, ws):
-        return
-    await hub.send_worker(worker_id, msg_b)
+    generation = await hub.capture_browser_ownership(worker_id, ws)
+    if generation is not None:
+        await hub.send_owned_worker(
+            worker_id,
+            msg_b,
+            browser_ws=ws,
+            ownership_generation=generation,
+        )
 
 
 async def handle_browser_message(
@@ -184,7 +192,7 @@ async def _handle_hijack_request(
         # Compensating resume. Skip for "already_hijacked": sending resume
         # would unpause the legitimate owner's session.
         if err != "already_hijacked":
-            await hub.send_worker(
+            await hub.send_worker_if_unowned(
                 worker_id,
                 {"type": "control", "action": "resume", "owner": "dashboard", "lease_s": 0, "ts": time.time()},
             )
@@ -220,7 +228,7 @@ async def _handle_hijack_release(
             # session between try_release_ws_hijack and _send_worker.
             _do_resume = False
         if _do_resume:
-            await hub.send_worker(
+            await hub.send_worker_if_unowned(
                 worker_id,
                 {"type": "control", "action": "resume", "owner": "dashboard", "lease_s": 0, "ts": time.time()},
             )
@@ -252,8 +260,8 @@ async def _handle_input(
         hub._hold_buffers[ws] = new_hold
         return
 
-    can_send = await hub.prepare_browser_input(worker_id, ws)
-    if not can_send:
+    ownership_generation = await hub.capture_browser_ownership(worker_id, ws)
+    if ownership_generation is None:
         return
 
     if len(data) > hub.max_input_chars:
@@ -265,7 +273,15 @@ async def _handle_input(
     is_complete_chunk = "\r" in data or "\n" in data
 
     if _is_noop_policy_gate(gate):
-        ok = await hub.send_worker(worker_id, {"type": "input", "data": data, "ts": time.time()}, source=ws)
+        ok, error = await hub.send_owned_worker(
+            worker_id,
+            {"type": "input", "data": data, "ts": time.time()},
+            browser_ws=ws,
+            ownership_generation=ownership_generation,
+            source=ws,
+        )
+        if error == "invalid_owner":
+            return
         if not ok:
             await ws.send_text(encode_control_frame(make_error_frame("Worker connection lost.")))
         else:
@@ -284,6 +300,8 @@ async def _handle_input(
                 status=ApprovalStatus.PENDING,
                 created_at=time.time(),
                 expires_at=time.time() + decision.timeout_s,
+                origin_browser=ws,
+                ownership_generation=ownership_generation,
             )
             hub.approval_store.add(request)
             hub._paused_browsers.add(ws)
@@ -334,6 +352,8 @@ async def _handle_input(
                 status=ApprovalStatus.PENDING,
                 created_at=time.time(),
                 expires_at=time.time() + part_decision.timeout_s,
+                origin_browser=ws,
+                ownership_generation=ownership_generation,
             )
             hub.approval_store.add(request)
             hub._paused_browsers.add(ws)
@@ -363,8 +383,16 @@ async def _handle_input(
             await ws.send_text(encode_control_frame(make_error_frame(f"Command part blocked by policy: {part}")))
             return
 
-    ok = await hub.send_worker(worker_id, {"type": "input", "data": command, "ts": time.time()}, source=ws)
+    ok, error = await hub.send_owned_worker(
+        worker_id,
+        {"type": "input", "data": command, "ts": time.time()},
+        browser_ws=ws,
+        ownership_generation=ownership_generation,
+        source=ws,
+    )
 
+    if error == "invalid_owner":
+        return
     if not ok:
         await ws.send_text(encode_control_frame(make_error_frame("Worker connection lost.")))
     else:
@@ -388,27 +416,27 @@ async def _resolve_resumed_role(
 
 async def _try_reclaim_hijack(
     hub: TermHub, ws: WebSocket, worker_id: str, session: Any, can_hijack: bool
-) -> tuple[bool, bool]:
+) -> tuple[bool, bool, bool]:
     """Attempt to reclaim the hijack lease for a resuming session.
 
     Returns (owned_hijack, reclaimed_hijack).
     """
     if not (session.was_hijack_owner and can_hijack):
-        return False, False
-    pause_sent = await hub.send_worker(
+        return False, False, False
+    reclaimed_hijack, competing_owner = await hub.try_reclaim_hijack_status(worker_id, ws)
+    if not reclaimed_hijack:
+        return False, False, competing_owner
+    generation = await hub.capture_browser_ownership(worker_id, ws)
+    pause_sent, _reason = await hub.send_owned_worker(
         worker_id,
         {"type": "control", "action": "pause", "owner": "dashboard", "lease_s": 0, "ts": time.time()},
+        browser_ws=ws,
+        ownership_generation=generation,
     )
-    if pause_sent:
-        reclaimed_hijack = await hub.try_reclaim_hijack(worker_id, ws)
-        owned_hijack = reclaimed_hijack
-        if not reclaimed_hijack and not await hub.check_still_hijacked(worker_id):
-            await hub.send_worker(
-                worker_id,
-                {"type": "control", "action": "resume", "owner": "dashboard", "lease_s": 0, "ts": time.time()},
-            )
-        return owned_hijack, reclaimed_hijack
-    return False, False
+    if not pause_sent:
+        await hub.try_release_ws_hijack(worker_id, ws)
+        return False, False, False
+    return True, True, False
 
 
 async def _handle_resume(
@@ -451,7 +479,10 @@ async def _handle_resume(
         return owned_hijack
 
     new_role, can_hijack = await _resolve_resumed_role(hub, ws, worker_id, role, session.role)
-    owned_hijack, reclaimed_hijack = await _try_reclaim_hijack(hub, ws, worker_id, session, can_hijack)
+    owned_hijack, reclaimed_hijack, competing_owner = await _try_reclaim_hijack(hub, ws, worker_id, session, can_hijack)
+    if session.was_hijack_owner and can_hijack and competing_owner and not hub.allow_stale_owner_role_resume:
+        logger.warning(EVENT_RESUME_FAILED, worker_id=worker_id, reason="competing_owner")
+        return owned_hijack
 
     new_token = await store.create(worker_id, new_role, hub._resume_ttl_s)
     hub._ws_to_resume_token[ws] = new_token

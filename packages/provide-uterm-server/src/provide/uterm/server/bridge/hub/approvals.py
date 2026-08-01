@@ -17,8 +17,10 @@ if TYPE_CHECKING:
 
 class ApprovalStatus(Enum):
     PENDING = "pending"
+    RESOLVING = "resolving"
     APPROVED = "approved"
     REJECTED = "rejected"
+    REFUSED = "refused"
     TIMEOUT = "timeout"
 
 
@@ -33,6 +35,11 @@ class ApprovalRequest:
     expires_at: float
     group_id: str | None = None
     is_fanout: bool = False
+    # Exact browser ownership epoch that submitted this held command. Fan-out
+    # approvals intentionally leave these unset because they have no terminal
+    # input owner.
+    origin_browser: Any | None = None
+    ownership_generation: int | None = None
 
 
 class InMemoryApprovalStore:
@@ -82,6 +89,17 @@ class InMemoryApprovalStore:
         with self._lock:
             req = self._requests.get(request_id)
             if req is None or req.status != ApprovalStatus.PENDING:
+                return False
+            req.status = status
+            return True
+
+    def finalize(self, request_id: str, status: ApprovalStatus) -> bool:
+        """Atomically finalize a request currently reserved for resolution."""
+        if status not in {ApprovalStatus.APPROVED, ApprovalStatus.REFUSED}:
+            raise ValueError("approval resolution must finalize as approved or refused")
+        with self._lock:
+            req = self._requests.get(request_id)
+            if req is None or req.status != ApprovalStatus.RESOLVING:
                 return False
             req.status = status
             return True

@@ -215,6 +215,34 @@ class TermHub:
     async def prepare_browser_input(self, worker_id: str, ws: WebSocket) -> bool:
         return await self.lease.prepare_browser_input(worker_id, ws)
 
+    async def send_owned_worker(
+        self,
+        worker_id: str,
+        msg: dict[str, Any],
+        *,
+        browser_ws: WebSocket | None = None,
+        rest_hijack_id: str | None = None,
+        ownership_generation: int | None = None,
+        source: Any = None,
+    ) -> tuple[bool, str | None]:
+        return await self.lease.send_owned_worker(
+            worker_id,
+            msg,
+            browser_ws=browser_ws,
+            rest_hijack_id=rest_hijack_id,
+            ownership_generation=ownership_generation,
+            source=source,
+        )
+
+    async def capture_browser_ownership(self, worker_id: str, ws: WebSocket) -> int | None:
+        return await self.lease.capture_browser_ownership(worker_id, ws)
+
+    async def capture_dashboard_ownership(self, worker_id: str, ws: WebSocket) -> int | None:
+        return await self.lease.capture_dashboard_ownership(worker_id, ws)
+
+    async def send_worker_if_unowned(self, worker_id: str, msg: dict[str, Any]) -> bool:
+        return await self.lease.send_worker_if_unowned(worker_id, msg)
+
     def allow_rest_acquire_for(self, client_id: str) -> bool:
         return self.connection_mgr.allow_rest_acquire_for(client_id)
 
@@ -224,8 +252,10 @@ class TermHub:
     def worker_token(self) -> str | None:
         return self.connection_mgr.worker_token()
 
-    async def register_worker(self, worker_id: str, ws: WebSocket) -> bool:
-        return await _conn.register_worker(self, worker_id, ws)  # ty:ignore[invalid-argument-type]
+    async def register_worker(self, worker_id: str, ws: WebSocket, *, is_tunnel_worker: bool = False) -> bool:
+        return await _conn.register_worker(  # ty:ignore[invalid-argument-type]
+            self, worker_id, ws, is_tunnel_worker=is_tunnel_worker
+        )
 
     async def is_active_worker(self, worker_id: str, ws: WebSocket) -> bool:
         return await self.connection_mgr.is_active_worker(worker_id, ws)
@@ -274,8 +304,15 @@ class TermHub:
     async def broadcast_hijack_state(self, worker_id: str) -> None:
         await self.router.broadcast_hijack_state(worker_id)
 
-    async def send_worker(self, worker_id: str, msg: dict[str, Any], *, source: Any = None) -> bool:
-        return await self.router.send_worker(worker_id, msg, source=source)
+    async def send_worker(
+        self,
+        worker_id: str,
+        msg: dict[str, Any],
+        *,
+        source: Any = None,
+        expected_worker: WebSocket | None = None,
+    ) -> bool:
+        return await self.router.send_worker(worker_id, msg, source=source, expected_worker=expected_worker)
 
     async def hijack_state_msg_for(self, worker_id: str, ws: WebSocket) -> HijackStateFrame:
         return await self.router.hijack_state_msg_for(worker_id, ws)
@@ -297,6 +334,9 @@ class TermHub:
 
     async def try_reclaim_hijack(self, worker_id: str, ws: WebSocket) -> bool:
         return await self.router.try_reclaim_hijack(worker_id, ws)
+
+    async def try_reclaim_hijack_status(self, worker_id: str, ws: WebSocket) -> tuple[bool, bool]:
+        return await self.router.try_reclaim_hijack_status(worker_id, ws)
 
     async def get_worker_browser_role(self, worker_id: str, ws: WebSocket) -> str | None:
         return await self.router.get_worker_browser_role(worker_id, ws)
@@ -393,6 +433,7 @@ class TermHub:
         resume_store: ResumeTokenStore | None = None,
         resume_ttl_s: float = 300,
         on_resume: ResumeCallback | None = None,
+        allow_stale_owner_role_resume: bool = False,
         event_bus: EventBus | None = None,
         ws_idle_timeout_s: float = 14400.0,
         policy_gate: PolicyGate | None = None,
@@ -438,6 +479,7 @@ class TermHub:
         self._resume_store = resume_store
         self._resume_ttl_s = max(1.0, float(resume_ttl_s))
         self._on_resume = on_resume
+        self.allow_stale_owner_role_resume = bool(allow_stale_owner_role_resume)
         self._ws_to_resume_token: dict[WebSocket, str] = {}
         self._startup_pending_browsers: set[WebSocket] = set()
         self._background_tasks: set[asyncio.Task[Any]] = set()
@@ -505,5 +547,7 @@ class TermHub:
         request_id: str,
         decision: PolicyDecision,
         command: str,
-    ) -> None:
-        await _orch.resolve_approval(self, worker_id, request_id, decision, command)  # ty:ignore[invalid-argument-type]
+    ) -> tuple[bool, str | None]:
+        return await _orch.resolve_approval(  # ty:ignore[invalid-argument-type]
+            self, worker_id, request_id, decision, command
+        )

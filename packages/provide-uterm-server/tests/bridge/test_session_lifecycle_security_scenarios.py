@@ -486,6 +486,7 @@ async def _execute_resume(scenario: dict[str, Any], defaults: dict[str, Any]) ->
     principal_headers = _principal_headers(input_data["principal"])
     app = _configured_app(worker_id)
     ownership_restored = False
+    resume_succeeded = False
     replay_rejected = False
     competing_owner_preserved = False
     async with _serve(app, f"python resume {input_data['case']}") as base_url:
@@ -521,6 +522,7 @@ async def _execute_resume(scenario: dict[str, Any], defaults: dict[str, Any]) ->
                     lambda event: event.get("type") == "control" and event.get("action") == "pause",
                 )
                 ownership_restored = resumed_hello["resumed"] is True and state["owner"] == "me"
+                resume_succeeded = ownership_restored
 
                 replay = await websockets.connect(browser_url, additional_headers=principal_headers)
                 await _drain_browser_startup(replay)
@@ -544,21 +546,14 @@ async def _execute_resume(scenario: dict[str, Any], defaults: dict[str, Any]) ->
                 resumed = await websockets.connect(browser_url, additional_headers=principal_headers)
                 await _drain_browser_startup(resumed)
                 await _send_control(resumed, {"type": "resume", "token": token})
-                resumed_hello = await _receive_matching(
-                    resumed,
-                    lambda event: event.get("type") == "hello" and event.get("resumed") is True,
-                )
-                stale_state = await _receive_matching(
-                    resumed,
-                    lambda event: event.get("type") == "hijack_state",
+                await _send_control(resumed, {"type": "ping"})
+                stale_events = await _receive_through(resumed, lambda event: event.get("type") == "pong")
+                resume_succeeded = any(
+                    event.get("type") == "hello" and event.get("resumed") is True for event in stale_events
                 )
                 await _send_control(competitor, {"type": "heartbeat"})
                 heartbeat = await _receive_matching(competitor, lambda event: event.get("type") == "heartbeat_ack")
-                competing_owner_preserved = (
-                    resumed_hello["resumed"] is True
-                    and stale_state.get("owner") == "other"
-                    and heartbeat["type"] == "heartbeat_ack"
-                )
+                competing_owner_preserved = not resume_succeeded and heartbeat["type"] == "heartbeat_ack"
                 await resumed.close()
                 await competitor.close()
 
@@ -567,7 +562,7 @@ async def _execute_resume(scenario: dict[str, Any], defaults: dict[str, Any]) ->
         defaults,
         route="browser_websocket",
         status_code=101,
-        resume_succeeded=True,
+        resume_succeeded=resume_succeeded,
         ownership_restored=ownership_restored,
         replay_rejected=replay_rejected,
         competing_owner_preserved=competing_owner_preserved,

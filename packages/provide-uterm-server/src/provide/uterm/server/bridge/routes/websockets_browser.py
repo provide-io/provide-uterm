@@ -159,7 +159,7 @@ def resume_worker_on_disconnect(hub: TermHub, worker_id: str) -> None:
     resume-without-owner cleanup paths in ``ws_browser_term``.
     """
     _resume_task = asyncio.create_task(
-        hub.send_worker(
+        hub.send_worker_if_unowned(
             worker_id,
             {
                 "type": "control",

@@ -35,8 +35,15 @@ from provide.uterm.server.bridge.routes.browser_handlers import (
 )
 
 
-def _make_hub(resume_store: InMemoryResumeStore | None = None) -> TermHub:
-    return TermHub(resume_store=resume_store)
+def _make_hub(
+    resume_store: InMemoryResumeStore | None = None,
+    *,
+    allow_stale_owner_role_resume: bool = False,
+) -> TermHub:
+    return TermHub(
+        resume_store=resume_store,
+        allow_stale_owner_role_resume=allow_stale_owner_role_resume,
+    )
 
 
 def _make_ws() -> MagicMock:
@@ -413,4 +420,48 @@ class TestHandleResumeBranchCoverage:
 
         result = await _handle_resume(hub, ws, "w1", "admin", {"token": token}, False)
         assert result is False
+        ws.send_text.assert_not_called()
+
+    async def test_competing_owner_role_only_resume_requires_explicit_opt_in(self) -> None:
+        store = InMemoryResumeStore()
+        hub = _make_hub(resume_store=store, allow_stale_owner_role_resume=True)
+        ws = _make_ws()
+        other_ws = _make_ws()
+        worker = _make_ws()
+        state = await _register(hub, "w1", ws, "admin", worker)
+        async with hub._lock:
+            state.hijack_owner = other_ws
+            state.hijack_owner_expires_at = time.monotonic() + 60
+        token = await store.create("w1", "admin", 300)
+        await store.mark_hijack_owner(token, True)
+
+        result = await _handle_resume(hub, ws, "w1", "admin", {"token": token}, False)
+
+        assert result is False
         ws.send_text.assert_called()
+
+    async def test_competing_owner_observation_remains_rejected_after_owner_releases(self) -> None:
+        store = InMemoryResumeStore()
+        hub = _make_hub(resume_store=store)
+        ws = _make_ws()
+        competitor = _make_ws()
+        worker = _make_ws()
+        state = await _register(hub, "w1", ws, "admin", worker)
+        async with hub._lock:
+            state.hijack_owner = competitor
+            state.hijack_owner_expires_at = time.monotonic() + 60
+        token = await store.create("w1", "admin", 300)
+        await store.mark_hijack_owner(token, True)
+        original = hub.try_reclaim_hijack_status
+
+        async def _observe_then_release(worker_id: str, browser: Any) -> tuple[bool, bool]:
+            result = await original(worker_id, browser)
+            await hub.try_release_ws_hijack(worker_id, competitor)
+            return result
+
+        hub.try_reclaim_hijack_status = _observe_then_release  # type: ignore[method-assign]
+        result = await _handle_resume(hub, ws, "w1", "admin", {"token": token}, False)
+
+        assert result is False
+        ws.send_text.assert_not_called()
+        assert await store.get(token) is None
