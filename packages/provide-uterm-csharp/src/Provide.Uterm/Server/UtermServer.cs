@@ -51,6 +51,10 @@ public sealed class ServerDeps
     public ApiKeyStore? ApiKeys { get; init; }
     /// <summary>Optional path to built frontend assets (SPA hosting).</summary>
     public string? FrontendDir { get; init; }
+    /// <summary>Internal deterministic seam for post-registration setup-failure tests.</summary>
+    internal Func<Task>? BrowserSetupHook { get; init; }
+    /// <summary>Internal deterministic seam observing consumed WebSocket fragments.</summary>
+    internal Action<string, int, bool>? WebSocketFragmentObserved { get; init; }
 }
 
 /// <summary>
@@ -78,6 +82,9 @@ public sealed partial class UtermServer : IAsyncDisposable
     private readonly object _resumeGate = new();
     private readonly Dictionary<object, string> _browserResumeTokens = new();
     private readonly DeckMuxPresence _deckMux;
+    private readonly Action<int, bool>? _browserFragmentObserved;
+    private readonly Action<int, bool>? _workerFragmentObserved;
+    private readonly Action<int, bool>? _tunnelFragmentObserved;
 
     public UtermServer(ServerDeps deps)
     {
@@ -87,6 +94,12 @@ public sealed partial class UtermServer : IAsyncDisposable
         _startTime = _clock.Wall();
         _resumeTokens = new ResumeTokenStore(_clock);
         _deckMux = new DeckMuxPresence(new HubDeckMuxBroadcaster(_deps.Hub));
+        if (deps.WebSocketFragmentObserved is { } fragmentObserved)
+        {
+            _browserFragmentObserved = (count, final) => fragmentObserved("browser", count, final);
+            _workerFragmentObserved = (count, final) => fragmentObserved("worker", count, final);
+            _tunnelFragmentObserved = (count, final) => fragmentObserved("tunnel", count, final);
+        }
         _lazyFanout = new Lazy<Fanout.Controller>(
             CreateDefaultFanout,
             System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
@@ -710,6 +723,10 @@ public sealed partial class UtermServer : IAsyncDisposable
 
         try
         {
+            if (_deps.BrowserSetupHook is not null)
+            {
+                await _deps.BrowserSetupHook().ConfigureAwait(false);
+            }
             var canHijack = role is "admin";
             static bool StateBool(IReadOnlyDictionary<string, object?> d, string key) =>
                 d.TryGetValue(key, out var v) && v is true;
@@ -771,7 +788,11 @@ public sealed partial class UtermServer : IAsyncDisposable
                 try
                 {
                     message = await WebSocketMessageReader.ReadAsync(
-                        ws, _deps.Hub.MaxWsMessageBytes, ctx.RequestAborted).ConfigureAwait(false);
+                        ws,
+                        _deps.Hub.MaxWsMessageBytes,
+                        ctx.RequestAborted,
+                        _browserFragmentObserved)
+                        .ConfigureAwait(false);
                 }
                 catch (WebSocketMessageException ex)
                 {
@@ -1148,7 +1169,11 @@ public sealed partial class UtermServer : IAsyncDisposable
                 try
                 {
                     message = await WebSocketMessageReader.ReadAsync(
-                        ws, _deps.Hub.MaxWsMessageBytes, ctx.RequestAborted).ConfigureAwait(false);
+                        ws,
+                        _deps.Hub.MaxWsMessageBytes,
+                        ctx.RequestAborted,
+                        _workerFragmentObserved)
+                        .ConfigureAwait(false);
                 }
                 catch (WebSocketMessageException ex)
                 {

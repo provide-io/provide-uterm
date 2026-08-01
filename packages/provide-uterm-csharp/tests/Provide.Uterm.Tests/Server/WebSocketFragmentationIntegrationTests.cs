@@ -18,6 +18,127 @@ namespace Provide.Uterm.Tests.Server;
 
 public sealed class WebSocketFragmentationIntegrationTests
 {
+    internal sealed record ContractEvidence(
+        int FragmentCount,
+        int PreFinalActions,
+        int PostFinalActions,
+        bool OversizedRefused,
+        List<string> DeliveredPayloads);
+
+    internal static async Task<ContractEvidence> RunContractScenarioAsync(
+        string endpoint,
+        string payload,
+        int fragmentCount,
+        int oversizedBytes)
+    {
+        var fragments = System.Threading.Channels.Channel.CreateUnbounded<(string Endpoint, int Count, bool Final)>();
+        var capture = endpoint == "browser" ? new CapturingWorker() : null;
+        var fixture = await BootAsync(
+            "contract-fragments-" + endpoint,
+            capture,
+            (kind, count, final) => fragments.Writer.TryWrite((kind, count, final)));
+        await using var server = fixture.Server;
+        using var browser = await ConnectBrowserAsync(fixture);
+        using var producer = endpoint switch
+        {
+            "browser" => browser,
+            "worker" => await ConnectWorkerEndpointAsync(fixture, "worker"),
+            "tunnel" => await ConnectWorkerEndpointAsync(fixture, "tunnel"),
+            _ => throw new ArgumentOutOfRangeException(nameof(endpoint)),
+        };
+
+        var wirePayload = endpoint == "tunnel"
+            ? TunnelCodec.EncodeFrame(
+                TunnelProtocol.ChannelData,
+                Encoding.UTF8.GetBytes(payload),
+                TunnelProtocol.FlagData)
+            : Encoding.UTF8.GetBytes(payload);
+        var beforeSeq = fixture.Hub.Registry.Get(fixture.WorkerId)?.EventSeq ?? 0;
+        var preFinalActions = 0;
+        for (var index = 0; index < fragmentCount; index++)
+        {
+            var start = wirePayload.Length * index / fragmentCount;
+            var end = wirePayload.Length * (index + 1) / fragmentCount;
+            var final = index == fragmentCount - 1;
+            await producer.SendAsync(
+                wirePayload.AsMemory(start, end - start),
+                endpoint == "tunnel" ? WebSocketMessageType.Binary : WebSocketMessageType.Text,
+                final,
+                CancellationToken.None);
+            using var fragmentTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var observed = await fragments.Reader.ReadAsync(fragmentTimeout.Token);
+            Assert.Equal((endpoint, index + 1, final), observed);
+            if (!final)
+            {
+                var acted = endpoint == "browser"
+                    ? capture!.TryRead(out _)
+                    : (fixture.Hub.Registry.Get(fixture.WorkerId)?.EventSeq ?? 0) != beforeSeq;
+                if (acted) preFinalActions++;
+            }
+        }
+
+        string delivered;
+        if (endpoint == "browser")
+        {
+            delivered = await capture!.NextAsync();
+        }
+        else
+        {
+            delivered = await ReceiveUntilAsync(browser, payload);
+            await WaitUntilAsync(() =>
+                (fixture.Hub.Registry.Get(fixture.WorkerId)?.EventSeq ?? 0) == beforeSeq + 1);
+        }
+        Assert.Contains(payload, delivered, StringComparison.Ordinal);
+
+        if (endpoint == "browser")
+        {
+            var ping = ControlChannelCodec.EncodeControlFrame(
+                new Dictionary<string, object?> { ["type"] = "ping" });
+            await browser.SendAsync(
+                Encoding.UTF8.GetBytes(ping), WebSocketMessageType.Text, true, CancellationToken.None);
+            Assert.Contains("\"type\":\"pong\"", await ReceiveTextAsync(browser));
+            Assert.False(capture!.TryRead(out _));
+        }
+        else
+        {
+            var sentinel = "fragment-sentinel-" + endpoint;
+            var sentinelPayload = endpoint == "tunnel"
+                ? TunnelCodec.EncodeFrame(
+                    TunnelProtocol.ChannelData,
+                    Encoding.UTF8.GetBytes(sentinel),
+                    TunnelProtocol.FlagData)
+                : Encoding.UTF8.GetBytes(sentinel);
+            await producer.SendAsync(
+                sentinelPayload,
+                endpoint == "tunnel" ? WebSocketMessageType.Binary : WebSocketMessageType.Text,
+                true,
+                CancellationToken.None);
+            Assert.Contains(sentinel, await ReceiveUntilAsync(browser, sentinel));
+            await WaitUntilAsync(() =>
+                (fixture.Hub.Registry.Get(fixture.WorkerId)?.EventSeq ?? 0) == beforeSeq + 2);
+        }
+
+        var deliveredSeq = fixture.Hub.Registry.Get(fixture.WorkerId)?.EventSeq ?? 0;
+        await producer.SendAsync(
+            new byte[oversizedBytes],
+            endpoint == "browser" ? WebSocketMessageType.Text : WebSocketMessageType.Binary,
+            true,
+            CancellationToken.None);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var close = await WebSocketMessageReader.ReadAsync(producer, oversizedBytes + 1024, timeout.Token);
+        Assert.True(close.IsClose);
+        Assert.Equal(WebSocketCloseStatus.MessageTooBig, close.CloseStatus);
+        var oversizedActed = endpoint == "browser"
+            ? capture!.TryRead(out _)
+            : (fixture.Hub.Registry.Get(fixture.WorkerId)?.EventSeq ?? 0) != deliveredSeq;
+        Assert.False(oversizedActed);
+
+        var postFinalActions = endpoint == "browser"
+            ? 1
+            : (fixture.Hub.Registry.Get(fixture.WorkerId)?.EventSeq ?? 0) - beforeSeq - 1;
+        return new ContractEvidence(fragmentCount, preFinalActions, postFinalActions, true, [payload]);
+    }
+
     [Fact]
     public async Task BrowserLoop_ReassemblesFragmentedControlAndInput()
     {
@@ -165,7 +286,10 @@ public sealed class WebSocketFragmentationIntegrationTests
         Assert.True(predicate());
     }
 
-    private static async Task<Fixture> BootAsync(string workerId, IWorkerWs? existingWorker = null)
+    private static async Task<Fixture> BootAsync(
+        string workerId,
+        IWorkerWs? existingWorker = null,
+        Action<string, int, bool>? fragmentObserved = null)
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
@@ -213,6 +337,7 @@ public sealed class WebSocketFragmentationIntegrationTests
             Config = cfg,
             Registry = new InMemorySessionRegistry(cfg.Sessions),
             Clock = clock,
+            WebSocketFragmentObserved = fragmentObserved,
         });
         server.Build([$"http://127.0.0.1:{port}"]);
         await server.StartAsync();
@@ -251,5 +376,7 @@ public sealed class WebSocketFragmentationIntegrationTests
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             return await _messages.Reader.ReadAsync(timeout.Token);
         }
+
+        public bool TryRead(out string payload) => _messages.Reader.TryRead(out payload!);
     }
 }

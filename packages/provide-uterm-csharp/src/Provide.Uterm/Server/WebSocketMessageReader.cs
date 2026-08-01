@@ -33,7 +33,8 @@ internal static class WebSocketMessageReader
     public static async Task<WebSocketMessage> ReadAsync(
         WebSocket socket,
         int maxMessageBytes,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<int, bool>? fragmentObserved = null)
     {
         ArgumentNullException.ThrowIfNull(socket);
         if (maxMessageBytes < 1) throw new ArgumentOutOfRangeException(nameof(maxMessageBytes));
@@ -43,6 +44,7 @@ internal static class WebSocketMessageReader
         {
             using var payload = new MemoryStream(Math.Min(8192, maxMessageBytes));
             WebSocketMessageType? messageType = null;
+            var fragmentCount = 0;
             while (true)
             {
                 var result = await socket.ReceiveAsync(
@@ -75,6 +77,8 @@ internal static class WebSocketMessageReader
                 }
 
                 payload.Write(rented, 0, result.Count);
+                fragmentCount++;
+                fragmentObserved?.Invoke(fragmentCount, result.EndOfMessage);
                 if (result.EndOfMessage)
                 {
                     return new WebSocketMessage(messageType.Value, payload.ToArray());
