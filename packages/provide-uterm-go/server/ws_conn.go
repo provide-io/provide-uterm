@@ -21,16 +21,31 @@ import (
 // goroutines while the handler's send paths also write, so every write goes
 // through writeMu.
 type wsBase struct {
-	conn    *websocket.Conn
-	writeMu sync.Mutex
+	conn      *websocket.Conn
+	writeOnce sync.Once
+	writeGate chan struct{}
+}
+
+func (b *wsBase) withWrite(ctx context.Context, fn func() error) error {
+	b.writeOnce.Do(func() {
+		b.writeGate = make(chan struct{}, 1)
+		b.writeGate <- struct{}{}
+	})
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-b.writeGate:
+	}
+	defer func() { b.writeGate <- struct{}{} }()
+	return fn()
 }
 
 // SendText writes an already-control-framed payload as a WS text message. This
 // satisfies hub.BrowserSender and hub.WorkerWS.
 func (b *wsBase) SendText(ctx context.Context, payload string) error {
-	b.writeMu.Lock()
-	defer b.writeMu.Unlock()
-	return b.conn.Write(ctx, websocket.MessageText, []byte(payload))
+	return b.withWrite(ctx, func() error {
+		return b.conn.Write(ctx, websocket.MessageText, []byte(payload))
+	})
 }
 
 // workerConn adapts a worker WebSocket to hub.WorkerWS + hub.WorkerCloser.

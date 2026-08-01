@@ -14,6 +14,7 @@ import (
 // ErrApprovalOwnershipInvalid means the submitting browser's capability fence
 // no longer authorizes worker input.
 var ErrApprovalOwnershipInvalid = errors.New("approval input ownership is no longer valid")
+var ErrApprovalDuplicateID = errors.New("approval request id already exists")
 
 // PendingApprovals returns a snapshot slice of every request still PENDING.
 // The store lock is held only for the snapshot; callers iterate the returned
@@ -26,7 +27,7 @@ func (s *InMemoryApprovalStore) PendingApprovals() []*ApprovalRequest {
 	var out []*ApprovalRequest
 	for _, req := range s.requests {
 		if req.Status == ApprovalPending {
-			out = append(out, req)
+			out = append(out, cloneApprovalRequest(req))
 		}
 	}
 	return out
@@ -112,7 +113,7 @@ func (h *TermHub) ParkBrowserForApproval(
 		h.lock.Unlock()
 		return "", ErrApprovalOwnershipInvalid
 	}
-	h.Approvals.Add(&ApprovalRequest{
+	if !h.Approvals.Add(&ApprovalRequest{
 		ID:               requestID,
 		WorkerID:         workerID,
 		SubmitterID:      submitter,
@@ -122,7 +123,10 @@ func (h *TermHub) ParkBrowserForApproval(
 		ExpiresAt:        expiresAt,
 		OriginBrowser:    ws,
 		OriginGeneration: generation,
-	})
+	}) {
+		h.lock.Unlock()
+		return "", ErrApprovalDuplicateID
+	}
 	h.pausedBrowsers[ws] = true
 	h.lock.Unlock()
 
@@ -168,27 +172,28 @@ func (h *TermHub) ResolveApproval(
 		// Already resolved by a concurrent/prior call: idempotent no-op.
 		return false, nil
 	}
-	h.logger.Info("approval_resolved",
-		"request_id", requestID, "worker_id", workerID,
-		"approved", approve, "resolver", resolverSubject(resolver))
-
 	if approve {
-		msgs := []map[string]any{{"type": "input", "data": command, "ts": h.clock.Wall()}}
-		if replay := h.releaseParkedBrowser(req, true); replay != "" {
-			msgs = append(msgs, map[string]any{"type": "input", "data": replay, "ts": h.clock.Wall()})
-		}
-		sent, err := h.SendBrowserOwnedInputBatchAtGeneration(
-			ctx, workerID, req.OriginBrowser, req.OriginGeneration, msgs,
+		batch, err := h.SendApprovedBrowserInputAtGeneration(
+			ctx, workerID, req.OriginBrowser, req.OriginGeneration,
+			map[string]any{"type": "input", "data": command, "ts": h.clock.Wall()},
 		)
-		if err != nil || !sent {
+		if batch.Delivered == 0 {
 			h.Approvals.SetStatus(requestID, ApprovalRefused)
 			_ = h.Router.Broadcast(ctx, workerID, map[string]any{
 				"type": "approval_resolved", "outcome": "refused", "request_id": requestID,
 			})
+			h.logger.Info("approval_resolved",
+				"request_id", requestID, "worker_id", workerID,
+				"approved", false, "outcome", "refused", "resolver", resolverSubject(resolver))
 			if err != nil {
 				return true, err
 			}
 			return true, ErrApprovalOwnershipInvalid
+		}
+		if batch.Delivered < batch.Total {
+			h.logger.Info("approval_replay_failed",
+				"request_id", requestID, "worker_id", workerID,
+				"delivered", batch.Delivered, "total", batch.Total, "reason", batch.Reason)
 		}
 	} else if err := h.Router.Broadcast(ctx, workerID, map[string]any{
 		"type": "term", "data": rejectMessage(command, reason),
@@ -209,6 +214,9 @@ func (h *TermHub) ResolveApproval(
 	}); err != nil {
 		return true, err
 	}
+	h.logger.Info("approval_resolved",
+		"request_id", requestID, "worker_id", workerID,
+		"approved", approve, "outcome", outcome, "resolver", resolverSubject(resolver))
 	return true, nil
 }
 

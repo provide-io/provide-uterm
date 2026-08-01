@@ -151,16 +151,14 @@ func (s *Server) handleHijackRelease(w http.ResponseWriter, r *http.Request) {
 		bridgeError(w, http.StatusForbidden, "Not the lease owner.")
 		return
 	}
-	released, shouldResume := s.deps.Hub.ReleaseRestHijack(workerID, hijackID)
+	released, _, releaseErr := s.deps.Hub.ReleaseRestHijackAndResume(ctx, workerID, hijackID)
+	if releaseErr != nil {
+		bridgeError(w, http.StatusConflict, "Unable to finalize hijack release.")
+		return
+	}
 	if !released {
 		bridgeError(w, http.StatusNotFound, "Invalid or expired hijack session.")
 		return
-	}
-	if shouldResume && s.deps.Hub.CheckStillHijacked(workerID) {
-		shouldResume = false
-	}
-	if shouldResume {
-		_, _ = s.deps.Hub.SendWorker(ctx, workerID, controlMsg("resume", hs.Owner, 0, s.clock.Wall(), ""))
 	}
 	s.deps.Hub.NotifyHijackChanged(workerID, false, nil)
 	s.deps.Hub.Metric("hijack_releases_total", 1)

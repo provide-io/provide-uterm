@@ -37,13 +37,13 @@ func (s *Server) browserInputGated(ctx context.Context, workerID string, bc *bro
 	// Parked browser: buffer further input until the approval resolves.
 	if s.deps.Hub.IsBrowserParked(bc) {
 		if s.deps.Hub.HoldBrowserInput(bc, data) {
-			s.writeFrame(ctx, bcConn(bc), frames.MakeErrorFrame("Input too long."))
+			s.writeFrame(ctx, bc, frames.MakeErrorFrame("Input too long."))
 		}
 		return
 	}
 
 	if len(data) > s.deps.Hub.MaxInputChars() {
-		s.writeFrame(ctx, bcConn(bc), frames.MakeErrorFrame("Input too long."))
+		s.writeFrame(ctx, bc, frames.MakeErrorFrame("Input too long."))
 		return
 	}
 	generation, allowed := s.deps.Hub.BrowserInputFence(workerID, bc)
@@ -72,7 +72,7 @@ func (s *Server) browserInputGated(ctx context.Context, workerID string, bc *bro
 		_, _ = s.deps.Hub.SendBrowserOwnedInputAtGeneration(ctx, workerID, bc, generation,
 			map[string]any{"type": "input", "data": data, "ts": s.clock.Wall()})
 	default: // "deny"
-		s.writeFrame(ctx, bcConn(bc), frames.MakeErrorFrame("Command blocked by policy: "+data))
+		s.writeFrame(ctx, bc, frames.MakeErrorFrame("Command blocked by policy: "+data))
 	}
 }
 

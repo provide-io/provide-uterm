@@ -67,18 +67,35 @@ func NewInMemoryApprovalStore(clock Clock) *InMemoryApprovalStore {
 	}
 }
 
-// Add inserts (or replaces) a request keyed by its id.
-func (s *InMemoryApprovalStore) Add(req *ApprovalRequest) {
+// Add inserts a copied request, rejecting duplicate IDs so a stale resolver
+// can never claim a different request through identifier reuse.
+func (s *InMemoryApprovalStore) Add(req *ApprovalRequest) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.requests[req.ID] = req
+	if _, exists := s.requests[req.ID]; exists {
+		return false
+	}
+	s.requests[req.ID] = cloneApprovalRequest(req)
+	return true
 }
 
 // Get returns the request for requestID, or nil if unknown.
 func (s *InMemoryApprovalStore) Get(requestID string) *ApprovalRequest {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.requests[requestID]
+	return cloneApprovalRequest(s.requests[requestID])
+}
+
+func cloneApprovalRequest(req *ApprovalRequest) *ApprovalRequest {
+	if req == nil {
+		return nil
+	}
+	copy := *req
+	if req.GroupID != nil {
+		groupID := *req.GroupID
+		copy.GroupID = &groupID
+	}
+	return &copy
 }
 
 // Resolve transitions a PENDING request to status. A non-pending request is

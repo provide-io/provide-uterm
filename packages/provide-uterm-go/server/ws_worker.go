@@ -128,7 +128,7 @@ func (s *Server) workerRecvLoop(ctx context.Context, conn *websocket.Conn, worke
 					_, _ = s.deps.Hub.AppendEventData(bg, workerID, "term", map[string]any{"data": e.Data})
 				}
 			case controlchannel.ControlChunk:
-				if s.dispatchWorkerControl(bg, conn, workerID, e.Control) {
+				if s.dispatchWorkerControl(bg, wc, workerID, e.Control) {
 					return
 				}
 			}
@@ -138,11 +138,11 @@ func (s *Server) workerRecvLoop(ctx context.Context, conn *websocket.Conn, worke
 
 // dispatchWorkerControl handles one inbound worker control frame. It returns
 // true when the caller should stop the recv loop (protocol mismatch).
-func (s *Server) dispatchWorkerControl(ctx context.Context, conn *websocket.Conn, workerID string, msg map[string]any) bool {
+func (s *Server) dispatchWorkerControl(ctx context.Context, wc *workerConn, workerID string, msg map[string]any) bool {
 	mtype, _ := msg["type"].(string)
 	switch mtype {
 	case "worker_hello":
-		return s.handleWorkerHello(ctx, conn, workerID, msg)
+		return s.handleWorkerHello(ctx, wc, workerID, msg)
 	case "snapshot":
 		s.deps.Hub.UpdateLastSnapshot(ctx, workerID, msg)
 		_, _ = s.deps.Hub.AppendEventData(ctx, workerID, "snapshot", map[string]any{
@@ -165,7 +165,7 @@ func (s *Server) dispatchWorkerControl(ctx context.Context, conn *websocket.Conn
 // handleWorkerHello negotiates protocol + applies input mode. Returns true when
 // the recv loop should stop (protocol mismatch → 1002 close). Port of
 // _handle_worker_hello.
-func (s *Server) handleWorkerHello(ctx context.Context, conn *websocket.Conn, workerID string, msg map[string]any) bool {
+func (s *Server) handleWorkerHello(ctx context.Context, wc *workerConn, workerID string, msg map[string]any) bool {
 	selected, err := bridge.NegotiateFromHello(msg)
 	if err != nil {
 		clientMin, clientMax := bridge.ParseClientRange(msg)
@@ -179,9 +179,9 @@ func (s *Server) handleWorkerHello(ctx context.Context, conn *websocket.Conn, wo
 			ServerMax: frames.Ptr(bridge.MaxProtocolVersion),
 		}
 		if payload, encErr := encodeFrameControl(ef); encErr == nil {
-			_ = conn.Write(ctx, websocket.MessageText, []byte(payload))
+			_ = wc.SendText(ctx, payload)
 		}
-		_ = conn.Close(websocket.StatusProtocolError, "protocol_mismatch")
+		_ = wc.conn.Close(websocket.StatusProtocolError, "protocol_mismatch")
 		return true
 	}
 	mode, _ := msg["input_mode"].(string)

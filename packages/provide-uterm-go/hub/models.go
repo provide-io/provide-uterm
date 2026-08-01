@@ -126,6 +126,9 @@ type WorkerTermState struct {
 	// Ownership, expiry, disconnect, and worker-replacement transitions wait for
 	// Done before mutating the state, making authorization + delivery linear.
 	InputSendPending *InputSendReservation
+	// LifecyclePending fences pause/resume and connection churn. Acquires,
+	// input, and worker replacement wait for Done before observing new state.
+	LifecyclePending *LifecycleReservation
 	InputMode        string
 	// InputModeSetByOperator records whether an authenticated caller has
 	// explicitly decided this session's input mode, as opposed to it merely
@@ -149,6 +152,7 @@ type WorkerTermState struct {
 	LastActivityAt         float64
 	ProtocolVersion        *int
 	IsTunnelWorker         bool
+	WorkerGeneration       uint64
 	GraphicalSession       gui.GraphicalSession
 }
 
@@ -156,9 +160,17 @@ type WorkerTermState struct {
 // delivery. It is stored only while a single browser or REST hijack input is
 // being sent; Done is closed after delivery state has been reconciled.
 type InputSendReservation struct {
-	Worker   WorkerWS
-	IsTunnel bool
-	Done     chan struct{}
+	Worker           WorkerWS
+	WorkerGeneration uint64
+	IsTunnel         bool
+	Done             chan struct{}
+}
+
+type LifecycleReservation struct {
+	Kind             string
+	Worker           WorkerWS
+	WorkerGeneration uint64
+	Done             chan struct{}
 }
 
 // NewWorkerTermState creates a worker state with the Python dataclass

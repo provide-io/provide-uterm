@@ -26,8 +26,7 @@ func (c *ConnectionManager) DisconnectWorker(ctx context.Context, workerID strin
 			hub.lock.Unlock()
 			return false, nil
 		}
-		if pending := st.InputSendPending; pending != nil {
-			done := pending.Done
+		if done := statePendingDone(st, true); done != nil {
 			hub.lock.Unlock()
 			if err := waitInputReservation(ctx, done); err != nil {
 				return false, err
@@ -36,6 +35,7 @@ func (c *ConnectionManager) DisconnectWorker(ctx context.Context, workerID strin
 		}
 		ws = st.WorkerWS
 		st.WorkerWS = nil
+		st.WorkerGeneration++
 		wasHijacked = st.HijackSession != nil || st.HijackOwner != nil
 		st.HijackSession = nil
 		st.clearDashboardOwner()
@@ -84,8 +84,11 @@ func (c *ConnectionManager) eventBusClose(workerID string) {
 // was active and cleared.
 func (c *ConnectionManager) ForceReleaseHijack(ctx context.Context, workerID string) (bool, error) {
 	hub := c.hub
+	opCtx, cancel := boundedOperationContext(ctx)
+	defer cancel()
 	owner := "server-forced"
 	hadHijack := false
+	var lifecycle *LifecycleReservation
 	for {
 		hub.lock.Lock()
 		st := hub.registry.Get(workerID)
@@ -93,10 +96,9 @@ func (c *ConnectionManager) ForceReleaseHijack(ctx context.Context, workerID str
 			hub.lock.Unlock()
 			return false, nil
 		}
-		if pending := st.InputSendPending; pending != nil {
-			done := pending.Done
+		if done := statePendingDone(st, true); done != nil {
 			hub.lock.Unlock()
-			if err := waitInputReservation(ctx, done); err != nil {
+			if err := waitInputReservation(opCtx, done); err != nil {
 				return false, err
 			}
 			continue
@@ -107,8 +109,15 @@ func (c *ConnectionManager) ForceReleaseHijack(ctx context.Context, workerID str
 			hadHijack = true
 		}
 		if hub.State.IsDashboardHijackActive(st) {
+			if err := hub.markBrowserResumeOwnerLocked(opCtx, st.HijackOwner, false); err != nil {
+				hub.lock.Unlock()
+				return false, err
+			}
 			st.clearDashboardOwner()
 			hadHijack = true
+		}
+		if hadHijack {
+			lifecycle = hub.beginLifecycleLocked(st, "force_release_resume")
 		}
 		hub.lock.Unlock()
 		break
@@ -117,7 +126,8 @@ func (c *ConnectionManager) ForceReleaseHijack(ctx context.Context, workerID str
 	if !hadHijack {
 		return false, nil
 	}
-	if _, err := hub.SendWorker(ctx, workerID, map[string]any{
+	defer hub.finishLifecycle(workerID, lifecycle)
+	if _, err := hub.SendWorker(opCtx, workerID, map[string]any{
 		"type": "control", "action": "resume", "owner": owner, "lease_s": 0, "ts": hub.clock.Wall(),
 	}); err != nil {
 		return false, err

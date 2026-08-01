@@ -220,8 +220,7 @@ func (r *MessageRouter) TryReclaimHijack(ctx context.Context, workerID string, w
 	for {
 		hub.lock.Lock()
 		st := hub.registry.Get(workerID)
-		if st != nil && st.InputSendPending != nil {
-			done := st.InputSendPending.Done
+		if done := statePendingDone(st, true); done != nil {
 			hub.lock.Unlock()
 			if waitInputReservation(ctx, done) != nil {
 				return false

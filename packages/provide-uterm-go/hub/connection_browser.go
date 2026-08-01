@@ -44,6 +44,7 @@ func (c *ConnectionManager) RegisterBrowser(
 		}
 		resumeToken = token
 		hub.wsToResumeToken[ws] = token
+		hub.resumeTokenDetached[token] = make(chan struct{})
 	}
 	st := hub.registry.SetDefault(workerID, NewWorkerTermState())
 	st.Browsers[ws] = role
@@ -83,7 +84,13 @@ func (c *ConnectionManager) ReplaceBrowserResumeToken(ctx context.Context, ws Br
 	hub := c.hub
 	hub.lock.Lock()
 	previous := hub.wsToResumeToken[ws]
+	if previous != "" && previous != token {
+		hub.detachResumeTokenLocked(previous)
+	}
 	hub.wsToResumeToken[ws] = token
+	if _, exists := hub.resumeTokenDetached[token]; !exists {
+		hub.resumeTokenDetached[token] = make(chan struct{})
+	}
 	hub.lock.Unlock()
 	if previous != "" && previous != token && hub.resumeStore != nil {
 		return hub.resumeStore.Revoke(ctx, previous)
@@ -98,41 +105,60 @@ func (c *ConnectionManager) CleanupBrowserDisconnect(
 	ctx context.Context, workerID string, ws BrowserConn, ownedHijack bool,
 ) (map[string]any, error) {
 	hub := c.hub
+	opCtx, cancel := boundedOperationContext(ctx)
+	defer cancel()
 	browserCount := -1
 	wasOwner, restStillActive, resumeWithoutOwner := false, false, false
+	resumeSent := false
+	var lifecycle *LifecycleReservation
 
 	token := ""
 	for {
 		hub.lock.Lock()
 		st := hub.registry.Get(workerID)
-		if st != nil && st.InputSendPending != nil {
-			done := st.InputSendPending.Done
+		if done := statePendingDone(st, true); done != nil {
 			hub.lock.Unlock()
-			if err := waitInputReservation(ctx, done); err != nil {
+			if err := waitInputReservation(opCtx, done); err != nil {
 				return nil, err
 			}
 			continue
 		}
 		if st != nil {
-			wasOwner, restStillActive, resumeWithoutOwner = c.updateLockState(st, ws, ownedHijack)
+			_, stillRegistered := st.Browsers[ws]
+			currentOwner := hub.State.IsDashboardHijackActive(st) && st.HijackOwner == ws
+			if currentOwner {
+				if err := hub.markBrowserResumeOwnerLocked(opCtx, ws, true); err != nil {
+					hub.lock.Unlock()
+					return nil, err
+				}
+			}
+			wasOwner, restStillActive, resumeWithoutOwner = c.updateLockState(st, ws, ownedHijack && stillRegistered)
 			browserCount = len(st.Browsers)
+			if (wasOwner && !restStillActive) || resumeWithoutOwner {
+				lifecycle = hub.beginLifecycleLocked(st, "browser_disconnect_resume")
+			}
 		}
 		// Pop the resume token + startup-pending flag under the lock (these
 		// hub-level maps are lock-guarded in this port).
 		if hub.resumeStore != nil {
 			token = hub.wsToResumeToken[ws]
 			delete(hub.wsToResumeToken, ws)
+			hub.detachResumeTokenLocked(token)
 		}
 		delete(hub.startupPendingBrowsers, ws)
 		hub.lock.Unlock()
 		break
 	}
 
-	// Mark the resume token with hijack ownership OUTSIDE the lock; do NOT
-	// revoke — the token must survive until reconnect or TTL.
-	if hub.resumeStore != nil && token != "" && (wasOwner || ownedHijack) {
-		if err := hub.resumeStore.MarkHijackOwner(ctx, token, true); err != nil {
+	if lifecycle != nil {
+		defer hub.finishLifecycle(workerID, lifecycle)
+		if sent, err := hub.SendWorker(opCtx, workerID, resumeFrame("dashboard", hub.clock.Wall())); err != nil {
 			return nil, err
+		} else {
+			resumeSent = sent
+		}
+		if resumeSent {
+			hub.NotifyHijackChanged(workerID, false, nil)
 		}
 	}
 
@@ -145,5 +171,6 @@ func (c *ConnectionManager) CleanupBrowserDisconnect(
 		"was_owner":            wasOwner,
 		"rest_still_active":    restStillActive,
 		"resume_without_owner": resumeWithoutOwner,
+		"resume_sent":          resumeSent,
 	}, nil
 }

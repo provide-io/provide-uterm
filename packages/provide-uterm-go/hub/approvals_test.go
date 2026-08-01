@@ -22,8 +22,36 @@ func TestApprovalStoreAddAndGet(t *testing.T) {
 	s := NewInMemoryApprovalStore(NewManualClock(1000))
 	req := pendingReq("req-1", 1060)
 	s.Add(req)
-	mustTrue(t, s.Get("req-1") == req, "get returns added")
+	mustDeepEqual(t, s.Get("req-1"), req, "get returns copied value")
 	mustTrue(t, s.Get("nonexistent") == nil, "get missing -> nil")
+}
+
+func TestApprovalStoreDuplicateIDCannotReplacePendingRequest(t *testing.T) {
+	s := NewInMemoryApprovalStore(NewManualClock(1000))
+	original := pendingReq("same", 2000)
+	original.Command = "original"
+	s.Add(original)
+	replacement := pendingReq("same", 3000)
+	replacement.Command = "replacement"
+	s.Add(replacement)
+	if got := s.Get("same"); got == nil || got.Command != "original" {
+		t.Fatalf("duplicate request replaced original: %+v", got)
+	}
+}
+
+func TestApprovalStoreGetAndPendingReturnImmutableCopies(t *testing.T) {
+	s := NewInMemoryApprovalStore(NewManualClock(1000))
+	s.Add(pendingReq("copy", 2000))
+	got := s.Get("copy")
+	got.Status = ApprovalApproved
+	pending := s.PendingApprovals()
+	if len(pending) != 1 {
+		t.Fatalf("external Get mutation changed store: %v", pending)
+	}
+	pending[0].Status = ApprovalRejected
+	if stored := s.Get("copy"); stored.Status != ApprovalPending {
+		t.Fatalf("pending snapshot mutation changed store: %+v", stored)
+	}
 }
 
 func TestApprovalResolveSuccess(t *testing.T) {

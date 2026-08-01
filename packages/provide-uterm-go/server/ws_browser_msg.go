@@ -7,6 +7,7 @@ package server
 
 import (
 	"context"
+	"time"
 
 	"github.com/coder/websocket"
 
@@ -40,11 +41,11 @@ func (s *Server) dispatchBrowserMessage(ctx context.Context, conn *websocket.Con
 	case "resume":
 		s.browserResume(ctx, conn, workerID, bc, role, msg)
 	case "ping":
-		s.writeFrame(ctx, conn, frames.PongFrame{Type: frames.TypePong, TS: frames.Ptr(s.clock.Wall())})
+		s.writeFrame(ctx, bc, frames.PongFrame{Type: frames.TypePong, TS: frames.Ptr(s.clock.Wall())})
 	case "presence_update", "queued_input", "control_request":
 		s.deckHandle(workerID, bc, msg)
 	case "fanout_send":
-		s.browserFanoutSend(ctx, conn, bc, msg)
+		s.browserFanoutSend(ctx, bc, msg)
 	default:
 		// Unhandled types (http_*) are dropped in this interop-subset port.
 	}
@@ -63,26 +64,31 @@ func (s *Server) browserResume(ctx context.Context, conn *websocket.Conn, worker
 	if oldTok == "" {
 		return
 	}
-	session, err := store.Get(ctx, oldTok)
+	opCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := s.deps.Hub.WaitResumeTokenReady(opCtx, oldTok, bc); err != nil {
+		return
+	}
+	session, err := store.Get(opCtx, oldTok)
 	if err != nil || session == nil || session.WorkerID != workerID {
 		return
 	}
-	consumed, err := store.Consume(ctx, oldTok)
+	consumed, err := store.Consume(opCtx, oldTok)
 	if err != nil || consumed == nil {
 		return
 	}
 	// Mint a replacement token by re-registering resume metadata for this socket.
 	// RegisterBrowser already holds this connection; Create alone is enough.
-	newTok, err := store.Create(ctx, workerID, consumed.Role, 300)
+	newTok, err := store.Create(opCtx, workerID, consumed.Role, 300)
 	if err != nil || newTok == "" {
 		return
 	}
-	if consumed.WasHijackOwner && !s.deps.Hub.TryReclaimHijack(ctx, workerID, bc) {
-		_ = store.Revoke(ctx, newTok)
+	if consumed.WasHijackOwner && !s.deps.Hub.TryReclaimHijack(opCtx, workerID, bc) {
+		_ = store.Revoke(opCtx, newTok)
 		return
 	}
-	if err := s.deps.Hub.ReplaceBrowserResumeToken(ctx, bc, newTok); err != nil {
-		_ = store.Revoke(ctx, newTok)
+	if err := s.deps.Hub.ReplaceBrowserResumeToken(opCtx, bc, newTok); err != nil {
+		_ = store.Revoke(opCtx, newTok)
 		return
 	}
 	state := s.deps.Hub.RegisterBrowserStateSnapshot(workerID, bc)
@@ -94,7 +100,7 @@ func (s *Server) browserResume(ctx context.Context, conn *websocket.Conn, worker
 	hello.Resumed = frames.Ptr(true)
 	hello.ResumeSupported = frames.Ptr(true)
 	hello.ResumeToken = frames.Ptr(newTok)
-	s.writeFrame(ctx, conn, hello)
+	s.writeFrame(ctx, bc, hello)
 	_ = s.deps.Hub.BroadcastHijackState(ctx, workerID)
 }
 
@@ -107,16 +113,12 @@ func (s *Server) browserInput(ctx context.Context, workerID string, bc *browserC
 // browserHijackRequest acquires the WS hijack lease (admin only).
 func (s *Server) browserHijackRequest(ctx context.Context, conn *websocket.Conn, workerID string, bc *browserConn, role string, owned bool) bool {
 	if role != "admin" {
-		s.writeFrame(ctx, conn, frames.MakeErrorFrame("Hijack requires admin role."))
+		s.writeFrame(ctx, bc, frames.MakeErrorFrame("Hijack requires admin role."))
 		return owned
 	}
-	_, _ = s.deps.Hub.SendWorker(ctx, workerID, controlMsg("pause", "dashboard", 0, s.clock.Wall(), ""))
-	ok, reason := s.deps.Hub.TryAcquireWsHijack(ctx, workerID, bc)
+	ok, reason := s.deps.Hub.AcquireWsHijackAndPause(ctx, workerID, bc)
 	if !ok {
-		if reason != "already_hijacked" {
-			_, _ = s.deps.Hub.SendWorker(ctx, workerID, controlMsg("resume", "dashboard", 0, s.clock.Wall(), ""))
-		}
-		s.writeFrame(ctx, conn, frames.MakeErrorFrame(wsHijackErrorMessage(reason)))
+		s.writeFrame(ctx, bc, frames.MakeErrorFrame(wsHijackErrorMessage(reason)))
 		return owned
 	}
 	_ = s.deps.Hub.BroadcastHijackState(ctx, workerID)
@@ -128,9 +130,11 @@ func (s *Server) browserHijackRequest(ctx context.Context, conn *websocket.Conn,
 // browserHijackRelease releases the WS hijack lease, resuming the worker when no
 // other lease keeps it paused.
 func (s *Server) browserHijackRelease(ctx context.Context, workerID string, bc *browserConn) bool {
-	released, restActive := s.deps.Hub.TryReleaseWsHijack(ctx, workerID, bc)
-	if released && !restActive && !s.deps.Hub.CheckStillHijacked(workerID) {
-		_, _ = s.deps.Hub.SendWorker(ctx, workerID, controlMsg("resume", "dashboard", 0, s.clock.Wall(), ""))
+	released, restActive, err := s.deps.Hub.ReleaseWsHijack(ctx, workerID, bc)
+	if err != nil {
+		return false
+	}
+	if released && !restActive {
 		s.deps.Hub.NotifyHijackChanged(workerID, false, nil)
 	}
 	_ = s.deps.Hub.BroadcastHijackState(ctx, workerID)
@@ -143,7 +147,7 @@ func (s *Server) browserHeartbeat(ctx context.Context, conn *websocket.Conn, wor
 	if newExp == nil {
 		return
 	}
-	s.writeFrame(ctx, conn, frames.HeartbeatAckFrame{
+	s.writeFrame(ctx, bc, frames.HeartbeatAckFrame{
 		Type:           frames.TypeHeartbeatAck,
 		LeaseExpiresAt: s.monoToWall(*newExp),
 		TS:             frames.Ptr(s.clock.Wall()),
@@ -153,16 +157,13 @@ func (s *Server) browserHeartbeat(ctx context.Context, conn *websocket.Conn, wor
 
 // writeFrame encodes v as a control frame and writes it, ignoring errors (a
 // failed write means the socket is gone; the recv loop will observe it).
-func (s *Server) writeFrame(ctx context.Context, conn *websocket.Conn, v any) {
+func (s *Server) writeFrame(ctx context.Context, bc *browserConn, v any) {
 	payload, err := encodeFrameControl(v)
 	if err != nil {
 		return
 	}
-	_ = conn.Write(ctx, websocket.MessageText, []byte(payload))
+	_ = bc.SendText(ctx, payload)
 }
-
-// bcConn returns the underlying websocket connection of a browserConn.
-func bcConn(bc *browserConn) *websocket.Conn { return bc.conn }
 
 // wsHijackErrorMessage maps a WS-hijack acquire failure reason to its message.
 func wsHijackErrorMessage(reason string) string {

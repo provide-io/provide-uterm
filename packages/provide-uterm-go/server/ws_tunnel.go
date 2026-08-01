@@ -164,9 +164,7 @@ type tunnelWorkerConn struct {
 // SendInput sends raw terminal bytes as a tunnel data frame (binary).
 func (c *tunnelWorkerConn) SendInput(ctx context.Context, data string) error {
 	frame := tunnelclient.EncodeFrame(tunnelclient.ChannelData, []byte(data), tunnelclient.FlagData)
-	c.writeMu.Lock()
-	defer c.writeMu.Unlock()
-	return c.conn.Write(ctx, websocket.MessageBinary, frame)
+	return c.withWrite(ctx, func() error { return c.conn.Write(ctx, websocket.MessageBinary, frame) })
 }
 
 // SendHTTPControl sends an inspect control message as a tunnel HTTP frame.
@@ -176,9 +174,7 @@ func (c *tunnelWorkerConn) SendHTTPControl(ctx context.Context, msg map[string]a
 		return err
 	}
 	frame := tunnelclient.EncodeFrame(tunnelclient.ChannelHTTP, payload, tunnelclient.FlagData)
-	c.writeMu.Lock()
-	defer c.writeMu.Unlock()
-	return c.conn.Write(ctx, websocket.MessageBinary, frame)
+	return c.withWrite(ctx, func() error { return c.conn.Write(ctx, websocket.MessageBinary, frame) })
 }
 
 // Close implements hub.WorkerCloser.

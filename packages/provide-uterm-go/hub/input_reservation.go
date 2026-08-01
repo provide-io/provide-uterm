@@ -7,16 +7,17 @@ package hub
 
 import (
 	"context"
-	"time"
+	"errors"
 )
-
-const ownedInputSendTimeout = 5 * time.Second
 
 const (
 	OwnedInputInvalidHijack = "invalid_hijack"
 	OwnedInputNoWorker      = "no_worker"
 	OwnedInputSendFailed    = "send_failed"
+	OwnedInputUnsupported   = "unsupported"
 )
+
+var errOwnedInputUnsupported = errors.New("worker transport does not support this input operation")
 
 // OwnedInputResult describes an exact-owner delivery attempt. LeaseExpiresAt
 // is populated for a successful REST-hijack send from the same stored lease.
@@ -24,6 +25,15 @@ type OwnedInputResult struct {
 	Sent           bool
 	Reason         string
 	LeaseExpiresAt *float64
+}
+
+// OwnedInputBatchResult preserves partial delivery. In particular, an
+// approval command that reached the worker remains delivered even if replaying
+// subsequently buffered input fails.
+type OwnedInputBatchResult struct {
+	Delivered int
+	Total     int
+	Reason    string
 }
 
 type ownedInputClaim struct {
@@ -38,7 +48,9 @@ type ownedInputClaim struct {
 func (h *TermHub) SendBrowserOwnedInput(
 	ctx context.Context, workerID string, browser BrowserConn, msg map[string]any,
 ) (bool, error) {
-	result, err := h.sendOwnedInput(ctx, workerID, msg, ownedInputClaim{browser: browser, source: browser})
+	opCtx, cancel := boundedOperationContext(ctx)
+	defer cancel()
+	result, err := h.sendOwnedInput(opCtx, workerID, msg, ownedInputClaim{browser: browser, source: browser})
 	return result.Sent, err
 }
 
@@ -47,7 +59,9 @@ func (h *TermHub) SendBrowserOwnedInput(
 func (h *TermHub) SendBrowserOwnedInputAtGeneration(
 	ctx context.Context, workerID string, browser BrowserConn, generation uint64, msg map[string]any,
 ) (bool, error) {
-	result, err := h.sendOwnedInput(ctx, workerID, msg, ownedInputClaim{
+	opCtx, cancel := boundedOperationContext(ctx)
+	defer cancel()
+	result, err := h.sendOwnedInput(opCtx, workerID, msg, ownedInputClaim{
 		browser: browser, browserGeneration: &generation, source: browser,
 	})
 	return result.Sent, err
@@ -58,25 +72,71 @@ func (h *TermHub) SendBrowserOwnedInputAtGeneration(
 // interleave between those sends.
 func (h *TermHub) SendBrowserOwnedInputBatchAtGeneration(
 	ctx context.Context, workerID string, browser BrowserConn, generation uint64, msgs []map[string]any,
-) (bool, error) {
-	claim := ownedInputClaim{browser: browser, browserGeneration: &generation, source: browser}
-	reservation, result, err := h.reserveOwnedInput(ctx, workerID, claim)
-	if err != nil || reservation == nil {
-		return result.Sent, err
-	}
-	sendCtx, cancel := context.WithTimeout(ctx, ownedInputSendTimeout)
+) (OwnedInputBatchResult, error) {
+	opCtx, cancel := boundedOperationContext(ctx)
 	defer cancel()
+	batch := OwnedInputBatchResult{Total: len(msgs)}
+	claim := ownedInputClaim{browser: browser, browserGeneration: &generation, source: browser}
+	reservation, result, err := h.reserveOwnedInput(opCtx, workerID, claim)
+	if err != nil || reservation == nil {
+		batch.Reason = result.Reason
+		return batch, err
+	}
+	return h.deliverBrowserOwnedInputBatch(opCtx, workerID, claim, reservation, msgs, batch)
+}
+
+// SendApprovedBrowserInputAtGeneration reserves the worker before unparking
+// the browser and taking its replay buffer. Fresh input therefore either joins
+// the replay buffer or waits behind the same reservation; it cannot overtake
+// the approved command/replay batch.
+func (h *TermHub) SendApprovedBrowserInputAtGeneration(
+	ctx context.Context, workerID string, browser BrowserConn, generation uint64, command map[string]any,
+) (OwnedInputBatchResult, error) {
+	opCtx, cancel := boundedOperationContext(ctx)
+	defer cancel()
+	claim := ownedInputClaim{browser: browser, browserGeneration: &generation, source: browser}
+	reservation, result, err := h.reserveOwnedInput(opCtx, workerID, claim)
+	if err != nil || reservation == nil {
+		h.releaseParkedBrowser(&ApprovalRequest{OriginBrowser: browser}, false)
+		return OwnedInputBatchResult{Total: 1, Reason: result.Reason}, err
+	}
+	h.lock.Lock()
+	delete(h.pausedBrowsers, browser)
+	replay := h.holdBuffers[browser]
+	delete(h.holdBuffers, browser)
+	h.lock.Unlock()
+	msgs := []map[string]any{command}
+	if replay != "" {
+		msgs = append(msgs, map[string]any{"type": "input", "data": replay, "ts": h.clock.Wall()})
+	}
+	return h.deliverBrowserOwnedInputBatch(opCtx, workerID, claim, reservation, msgs,
+		OwnedInputBatchResult{Total: len(msgs)})
+}
+
+func (h *TermHub) deliverBrowserOwnedInputBatch(
+	ctx context.Context,
+	workerID string,
+	claim ownedInputClaim,
+	reservation *InputSendReservation,
+	msgs []map[string]any,
+	batch OwnedInputBatchResult,
+) (OwnedInputBatchResult, error) {
 	var sendErr error
 	for _, msg := range msgs {
-		if str(msg["type"]) == "input" {
-			h.Router.RecordKeystroke(browser)
+		if claim.source != nil && str(msg["type"]) == "input" {
+			h.Router.RecordKeystroke(claim.source)
 		}
-		if sendErr = h.Router.deliverWorker(sendCtx, reservation.Worker, reservation.IsTunnel, msg); sendErr != nil {
+		if sendErr = h.Router.deliverWorker(ctx, reservation.Worker, reservation.IsTunnel, msg); sendErr != nil {
 			break
 		}
+		batch.Delivered++
 	}
-	finished, err := h.finishOwnedInput(sendCtx, workerID, claim, reservation, sendErr)
-	return finished.Sent, err
+	finished, err := h.finishOwnedInput(ctx, workerID, claim, reservation, sendErr)
+	if batch.Delivered == batch.Total && finished.Sent {
+		return batch, nil
+	}
+	batch.Reason = finished.Reason
+	return batch, err
 }
 
 // BrowserInputFence captures a browser's current authorization generation.
@@ -98,7 +158,9 @@ func (h *TermHub) BrowserInputFence(workerID string, browser BrowserConn) (uint6
 func (h *TermHub) SendRESTOwnedInput(
 	ctx context.Context, workerID, hijackID string, msg map[string]any,
 ) (OwnedInputResult, error) {
-	return h.sendOwnedInput(ctx, workerID, msg, ownedInputClaim{restID: hijackID})
+	opCtx, cancel := boundedOperationContext(ctx)
+	defer cancel()
+	return h.sendOwnedInput(opCtx, workerID, msg, ownedInputClaim{restID: hijackID})
 }
 
 func (h *TermHub) sendOwnedInput(
@@ -112,10 +174,18 @@ func (h *TermHub) sendOwnedInput(
 		h.Router.RecordKeystroke(claim.source)
 	}
 
-	sendCtx, cancel := context.WithTimeout(ctx, ownedInputSendTimeout)
-	defer cancel()
-	sendErr := h.Router.deliverWorker(sendCtx, reservation.Worker, reservation.IsTunnel, msg)
-	return h.finishOwnedInput(sendCtx, workerID, claim, reservation, sendErr)
+	sendErr := error(nil)
+	if reservation.IsTunnel && !tunnelSupportsOwnedMessage(msg) {
+		sendErr = errOwnedInputUnsupported
+	} else {
+		sendErr = h.Router.deliverWorker(ctx, reservation.Worker, reservation.IsTunnel, msg)
+	}
+	return h.finishOwnedInput(ctx, workerID, claim, reservation, sendErr)
+}
+
+func tunnelSupportsOwnedMessage(msg map[string]any) bool {
+	msgType := str(msg["type"])
+	return msgType == "input" || httpInspectControlTypes[msgType]
 }
 
 func (h *TermHub) reserveOwnedInput(
@@ -127,6 +197,14 @@ func (h *TermHub) reserveOwnedInput(
 		if st == nil {
 			h.lock.Unlock()
 			return nil, OwnedInputResult{Reason: claim.invalidReason()}, nil
+		}
+		if pending := st.LifecyclePending; pending != nil {
+			done := pending.Done
+			h.lock.Unlock()
+			if err := waitInputReservation(ctx, done); err != nil {
+				return nil, OwnedInputResult{}, err
+			}
+			continue
 		}
 		if pending := st.InputSendPending; pending != nil {
 			done := pending.Done
@@ -149,7 +227,8 @@ func (h *TermHub) reserveOwnedInput(
 			st.HijackOwnerExpiresAt = &expires
 		}
 		reservation := &InputSendReservation{
-			Worker: st.WorkerWS, IsTunnel: st.IsTunnelWorker, Done: make(chan struct{}),
+			Worker: st.WorkerWS, WorkerGeneration: st.WorkerGeneration,
+			IsTunnel: st.IsTunnelWorker, Done: make(chan struct{}),
 		}
 		st.InputSendPending = reservation
 		h.lock.Unlock()
@@ -187,20 +266,25 @@ func (h *TermHub) finishOwnedInput(
 	st := h.registry.Get(workerID)
 	if st != nil && st.InputSendPending == reservation {
 		st.InputSendPending = nil
-		if sendErr == nil && st.WorkerWS == reservation.Worker {
+		unsupported := errors.Is(sendErr, errOwnedInputUnsupported)
+		if sendErr == nil && st.WorkerWS == reservation.Worker && st.WorkerGeneration == reservation.WorkerGeneration {
 			result.Sent = true
 			st.LastActivityAt = h.clock.Monotonic()
 			if claim.restID != "" && st.HijackSession != nil && st.HijackSession.HijackID == claim.restID {
 				expires := st.HijackSession.LeaseExpiresAt
 				result.LeaseExpiresAt = &expires
 			}
-		} else if sendErr != nil && ctx.Err() == nil && st.WorkerWS == reservation.Worker {
+		} else if sendErr != nil && !unsupported && ctx.Err() == nil && st.WorkerWS == reservation.Worker && st.WorkerGeneration == reservation.WorkerGeneration {
 			st.WorkerWS = nil
 		}
 	}
 	close(reservation.Done)
 	h.lock.Unlock()
 	if result.Sent {
+		return result, nil
+	}
+	if errors.Is(sendErr, errOwnedInputUnsupported) {
+		result.Reason = OwnedInputUnsupported
 		return result, nil
 	}
 	result.Reason = OwnedInputSendFailed
