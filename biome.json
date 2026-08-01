@@ -32,7 +32,20 @@
       }
     },
     {
-      "includes": ["packages/provide-uterm-frontend/src/**/*.test.ts"],
+      "includes": ["packages/provide-uterm-frontend/src/**/*.test*.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noExplicitAny": "off"
+          },
+          "style": {
+            "noNonNullAssertion": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/provide-uterm-app/src/**/*.test.{ts,tsx}"],
       "linter": {
         "rules": {
           "style": {

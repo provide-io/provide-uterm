@@ -47,7 +47,7 @@ export function readVncPageParams(
     hijackId: sanitizeId(params.get("hijack_id") || params.get("hijack"), ""),
     targetId: sanitizeId(params.get("target_id") || params.get("target"), ""),
     viewOnly: viewRaw === "1" || viewRaw === "true" || viewRaw === "yes",
-    token: token && token.trim() ? token.trim() : null,
+    token: token?.trim() ? token.trim() : null,
   };
 }
 

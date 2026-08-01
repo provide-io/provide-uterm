@@ -34,7 +34,6 @@ class MockXterm {
   focus(): void {}
   write(_data: string): void {}
   dispose(): void {}
-  // biome-ignore lint/suspicious/noExplicitAny: test mock
   loadAddon(_a: any): void {}
   onData(_cb: (data: string) => void): { dispose(): void } {
     return { dispose: () => {} };
@@ -80,9 +79,7 @@ beforeEach(() => {
   mockSockets = [];
   vi.useFakeTimers();
   
-  // biome-ignore lint/suspicious/noExplicitAny: test mock
   (window as any).Terminal = MockXterm;
-  // biome-ignore lint/suspicious/noExplicitAny: test mock
   (window as any).FitAddon = { FitAddon: MockFitAddon };
   vi.stubGlobal("localStorage", {
     getItem: vi.fn().mockReturnValue(null),

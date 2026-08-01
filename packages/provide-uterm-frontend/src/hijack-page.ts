@@ -4,6 +4,7 @@
 //
 
 import { apiJson, requireElement, type SessionStatus } from "./server-common.js";
+import type { UtermSessionElement } from "./session-element.js";
 
 declare global {
   interface Window {
@@ -31,7 +32,7 @@ class HijackDemoPage {
     this.modeElement = requireElement<HTMLSelectElement>("#demo-mode");
     this.statusElement = requireElement<HTMLElement>("#demo-session-status");
     this.noteElement = requireElement<HTMLElement>("#demo-session-note");
-    const widget = document.createElement("uterm-session") as any;
+    const widget = document.createElement("uterm-session") as UtermSessionElement;
     widget.config = { workerId: this.workerId };
     appElement.appendChild(widget);
     // The element does not auto-connect (connectedCallback only initialises

@@ -13,7 +13,10 @@ export default defineConfig({
       reporter: ["text", "json"],
       reportsDirectory: "./coverage",
       include: ["src/**/*.ts"],
-      exclude: ["src/**/*.test.ts", "src/**/*.test_part*.ts"],
+      // `hijack.ts` is a side-effect-only vanilla browser entry. Its session
+      // behavior is covered through UtermSessionElement; importing the entry in
+      // jsdom would test module boot order rather than application behavior.
+      exclude: ["src/**/*.test.ts", "src/**/*.test_part*.ts", "src/hijack.ts"],
       thresholds: {
         statements: 90,
         branches: 85,

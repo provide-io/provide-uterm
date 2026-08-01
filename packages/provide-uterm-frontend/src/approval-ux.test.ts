@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { UtermSessionElement } from "./session-element.js";
+import type { UtermSessionElement } from "./session-element.js";
 import "./session-element.js";
 import { encodeControlFrame } from "./hijack-codec.js";
 
@@ -139,7 +139,7 @@ describe("Command Approval UX", () => {
       }),
     );
     await new Promise((r) => setTimeout(r, 0));
-    let prompt = container.querySelector("uterm-session")?.shadowRoot?.querySelector("uterm-approval-prompt");
+    const prompt = container.querySelector("uterm-session")?.shadowRoot?.querySelector("uterm-approval-prompt");
     expect(prompt?.shadowRoot?.querySelector(".hijack-approval-modal")).toBeTruthy();
 
     ws.receive(encodeControlFrame({ type: "approval_resolved", outcome: "approved", request_id: "req-1" }));

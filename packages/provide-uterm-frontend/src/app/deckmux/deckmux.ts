@@ -224,6 +224,9 @@ export class DeckMux {
       }
     } else {
       this._presenceBar?.clearOwner();
+      for (const user of this._users.values()) {
+        user.isOwner = false;
+      }
     }
   }
 

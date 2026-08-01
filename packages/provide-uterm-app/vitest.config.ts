@@ -24,6 +24,15 @@ export default defineConfig({
       reportsDirectory: "./coverage",
       include: ["src/**/*.{ts,tsx}"],
       exclude: ["src/**/*.test.{ts,tsx}", "src/test-setup.ts", "src/main.tsx"],
+      // Operational views include canvas/DOM rendering branches whose meaningful
+      // workflows are exercised above this floor; keep the gate honest at 80%
+      // rather than padding it with implementation-only permutations.
+      thresholds: {
+        statements: 90,
+        branches: 80,
+        functions: 90,
+        lines: 90,
+      },
     },
   },
 });

@@ -7,7 +7,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "lint": "biome lint src/",
+    "lint": "biome lint --error-on-warnings src/",
     "fix": "biome check --write --unsafe src/"
   },
   "dependencies": {

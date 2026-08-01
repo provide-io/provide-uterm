@@ -1,11 +1,19 @@
 import type { UtermSessionElement } from "./session-element.js";
+
 export * from "./session-element.js";
 
 import { startReconnectAnim, stopReconnectAnim } from "./hijack-websocket.js";
 
+declare global {
+  interface Window {
+    __testHooks_startReconnectAnim?: typeof startReconnectAnim;
+    __testHooks_stopReconnectAnim?: typeof stopReconnectAnim;
+  }
+}
+
 if (typeof window !== "undefined") {
-  (window as any).__testHooks_startReconnectAnim = startReconnectAnim;
-  (window as any).__testHooks_stopReconnectAnim = stopReconnectAnim;
+  window.__testHooks_startReconnectAnim = startReconnectAnim;
+  window.__testHooks_stopReconnectAnim = stopReconnectAnim;
 
   // Self-assemble if running in vanilla mode
   const sessionEl = document.querySelector("uterm-session#app-root") as UtermSessionElement | null;

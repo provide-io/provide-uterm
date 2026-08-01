@@ -4,7 +4,7 @@
 //
 // Additional branch coverage tests for hijack.ts to supplement hijack.test.ts
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { UtermSessionElement } from "./session-element.js";
+import type { UtermSessionElement } from "./session-element.js";
 import "./session-element.js";
 import { encodeControlFrame } from "./hijack-codec.js";
 
@@ -46,7 +46,6 @@ class MockWebSocket {
 class MockTerminal {
   written: string[] = [];
   opened = false;
-  // biome-ignore lint/suspicious/noExplicitAny: test mock
   addon: any = null;
   _onData: ((data: string) => void) | null = null;
   open(_el: HTMLElement): void {
@@ -60,7 +59,6 @@ class MockTerminal {
     this.written = [];
   }
   dispose(): void {}
-  // biome-ignore lint/suspicious/noExplicitAny: test mock
   loadAddon(a: any): void {
     this.addon = a;
   }
@@ -95,7 +93,7 @@ function makeWidget(opts: Record<string, unknown> = {}) {
 
 function flushLit(container: HTMLElement) {
   const session = container.querySelector("uterm-session") as any;
-  if (session && session.isUpdatePending) {
+  if (session?.isUpdatePending) {
     session.performUpdate();
   }
 }
@@ -103,13 +101,13 @@ function flushLit(container: HTMLElement) {
 function q(container: HTMLElement, name: string): HTMLElement | null {
   flushLit(container);
   const session = container.querySelector("uterm-session");
-  if (session && session.shadowRoot) {
+  if (session?.shadowRoot) {
     let el = session.shadowRoot.querySelector(`[id="${name}"]`) as HTMLElement | null;
     if (el) return el;
     
     // Also check inside approval prompt if it exists
     const prompt = session.shadowRoot.querySelector("uterm-approval-prompt");
-    if (prompt && prompt.shadowRoot) {
+    if (prompt?.shadowRoot) {
       el = prompt.shadowRoot.querySelector(`[id="${name}"]`) as HTMLElement | null;
       if (el) return el;
       el = prompt.shadowRoot.querySelector(`[id$="-${name}"]`) as HTMLElement | null;
@@ -127,9 +125,7 @@ beforeEach(() => {
   instances = [];
   vi.useFakeTimers();
   vi.stubGlobal("WebSocket", MockWebSocket);
-  // biome-ignore lint/suspicious/noExplicitAny: test mock
   (window as any).Terminal = MockTerminal;
-  // biome-ignore lint/suspicious/noExplicitAny: test mock
   (window as any).FitAddon = { FitAddon: MockFitAddon };
 });
 
@@ -578,7 +574,6 @@ describe("hijack.ts branch coverage - xterm and reconnect anim", () => {
 
   it("_stopReconnectAnim when no term is set", () => {
     // Create widget without Terminal so _term stays null
-    // biome-ignore lint/suspicious/noExplicitAny: test
     (window as any).Terminal = undefined;
     const { container } = makeWidget();
     const ws = getWs();
@@ -1105,7 +1100,6 @@ describe("hijack.ts branch coverage - xterm and reconnect anim (continued)", () 
 
   it("_stopReconnectAnim when no term is set", () => {
     // Create widget without Terminal so _term stays null
-    // biome-ignore lint/suspicious/noExplicitAny: test
     (window as any).Terminal = undefined;
     const { container } = makeWidget();
     const ws = getWs();
