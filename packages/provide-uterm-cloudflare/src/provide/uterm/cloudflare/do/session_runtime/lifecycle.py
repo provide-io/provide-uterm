@@ -75,16 +75,21 @@ class _LifecycleMixin:
         _socket_browser_role: Any
         lifecycle_state: str
         _socket_worker_id: Any
+        _restore_worker_id_from_socket: Any
         _remove_ws: Any
         broadcast_to_browsers: Any
         browser_hijack_owner: dict[str, str]
         push_worker_input: Any
         register_worker_socket: Any
+        activate_worker_socket: Any
+        _restore_browser_identity: Any
+        _set_browser_ownership_attachment: Any
         unregister_worker_socket: Any
         remove_browser_socket: Any
         broadcast_hijack_state: Any
 
     async def webSocketOpen(self, ws: CFWebSocket) -> None:  # noqa: N802
+        self._restore_worker_id_from_socket(ws)
         if self._deleted_at is not None:
             with contextlib.suppress(Exception):
                 ws.close(1001, "session deleted")
@@ -96,7 +101,8 @@ class _LifecycleMixin:
         # For the normal (non-hibernation) path the socket is already registered — skip hello.
         already_initialized = ws_id in self.browser_sockets
         if role == "worker":
-            await self.register_worker_socket(ws)
+            if not await self.activate_worker_socket(ws):
+                return
             self.lifecycle_state = "running"
             await self.broadcast_worker_frame(
                 {"type": "worker_connected", "worker_id": self.worker_id, "ts": time.time()}
@@ -115,18 +121,19 @@ class _LifecycleMixin:
             if self.last_snapshot is not None and isinstance(self.last_snapshot.get("screen"), str):
                 await self._send_text(ws, str(self.last_snapshot.get("screen")))
         else:
-            self._register_socket(ws, role)
-            self.browser_sockets[ws_id] = ws
+            self._restore_browser_identity(ws)
             browser_role = self._socket_browser_role(ws)
             if not already_initialized:
                 # Hibernation-restore path: fetch() did not run for this connection, so
                 # send hello here.  For normal upgrades fetch() already sent it.
                 _resume_on = bool(getattr(self.config, "resume_enabled", True))
-                _open_resume_token = secrets.token_urlsafe(32) if _resume_on else ""
-                if _resume_on:
+                _open_resume_token = self.browser_resume_tokens.get(ws_id, "") if _resume_on else ""
+                if _resume_on and not _open_resume_token:
+                    _open_resume_token = secrets.token_urlsafe(32)
                     _open_resume_ttl = float(getattr(self.config, "resume_ttl_s", 300))
                     self.store.create_resume_token(_open_resume_token, self.worker_id, browser_role, _open_resume_ttl)
                     self.browser_resume_tokens[ws_id] = _open_resume_token
+                    self._set_browser_ownership_attachment(ws, self.browser_hijack_owner.get(ws_id))
                 hello: dict[str, object] = {
                     "type": "hello",
                     "worker_id": self.worker_id,
@@ -158,15 +165,20 @@ class _LifecycleMixin:
             await on_browser_connected(self)
 
     async def webSocketMessage(self, ws: CFWebSocket, message: Any) -> None:  # noqa: N802
+        self._restore_worker_id_from_socket(ws)
         if self._deleted_at is not None:
             with contextlib.suppress(Exception):
                 ws.close(1001, "session deleted")
             return
         role = self._socket_role(ws)
         if role == "worker":
-            await self.register_worker_socket(ws)
+            if not await self.activate_worker_socket(ws):
+                return
         else:
-            self._register_socket(ws, role)
+            if role == "browser":
+                self._restore_browser_identity(ws)
+            else:
+                self._register_socket(ws, role)
         if role == "raw":
             payload = (
                 message.decode("latin-1", errors="replace") if isinstance(message, (bytes, bytearray)) else str(message)
@@ -199,6 +211,7 @@ class _LifecycleMixin:
 
     async def webSocketClose(self, ws: CFWebSocket, code: int, reason: str, was_clean: bool = True) -> None:  # noqa: N802
         _ = (code, reason, was_clean)
+        self._restore_worker_id_from_socket(ws)
         deleted = self._deleted_at is not None
         # Use _socket_role() instead of `ws is self.worker_ws` — after hibernation,
         # self.worker_ws is None so the identity check would always be False.
@@ -209,22 +222,24 @@ class _LifecycleMixin:
             if self.meta.get("presence"):
                 await self.broadcast_to_browsers({"type": "presence_leave", "user_id": ws_id, "ts": time.time()})
         released_hijack = False
+        current_worker_closed = False
         if role == "browser":
             released_hijack = await self.remove_browser_socket(ws)
         elif role == "worker":
-            await self.unregister_worker_socket(ws)
+            current_worker_closed = await self.unregister_worker_socket(ws)
             self._remove_ws(ws)
         else:
             self._remove_ws(ws)
         if released_hijack:
             await self.broadcast_hijack_state()
-        if role == "worker":
+        if role == "worker" and current_worker_closed:
             if not deleted:
                 self.lifecycle_state = "stopped"
                 await self.broadcast_worker_frame({"type": "worker_disconnected", "worker_id": wid, "ts": time.time()})
             await update_kv_session(self.env, wid, connected=False)
 
     async def webSocketError(self, ws: CFWebSocket, error: Any) -> None:  # noqa: N802
+        self._restore_worker_id_from_socket(ws)
         role = self._socket_role(ws)
         wid = self._socket_worker_id(ws)
         logger.warning("ws_error worker_id=%s role=%s error=%s", wid, role, error)
@@ -234,16 +249,17 @@ class _LifecycleMixin:
             if self.meta.get("presence"):
                 await self.broadcast_to_browsers({"type": "presence_leave", "user_id": ws_id, "ts": time.time()})
         released_hijack = False
+        current_worker_closed = False
         if role == "browser":
             released_hijack = await self.remove_browser_socket(ws)
         elif role == "worker":
-            await self.unregister_worker_socket(ws)
+            current_worker_closed = await self.unregister_worker_socket(ws)
             self._remove_ws(ws)
         else:
             self._remove_ws(ws)
         if released_hijack:
             await self.broadcast_hijack_state()
-        if role == "worker":
+        if role == "worker" and current_worker_closed:
             if not deleted:
                 self.lifecycle_state = "error"
                 await self.broadcast_worker_frame({"type": "worker_disconnected", "worker_id": wid, "ts": time.time()})

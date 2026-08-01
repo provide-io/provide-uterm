@@ -177,6 +177,20 @@ def test_row_value_dict() -> None:
     assert SqliteStateStore._row_value({"seq": 5}, "seq", 0) == 5
 
 
+def test_row_value_converts_pyodide_scalar_proxy() -> None:
+    """Workerd SQL can wrap individual string/number values, not only rows."""
+
+    class _Scalar:
+        def __init__(self, value: object) -> None:
+            self.value = value
+
+        def to_py(self) -> object:
+            return self.value
+
+    assert SqliteStateStore._row_value({"owner": _Scalar("browser:token")}, "owner", 0) == "browser:token"
+    assert SqliteStateStore._row_value({"expires": _Scalar(123.5)}, "expires", 0) == 123.5
+
+
 def test_row_value_get_method_non_dict() -> None:
     """Lines 270-273: row has .get() but is not a dict → value from .get()."""
 

@@ -58,10 +58,22 @@ async def route_hijack(
         lease_s, lease_error = _parse_lease_s(payload)
         if lease_error is not None or lease_s is None:
             return json_response({"error": lease_error or "invalid lease_s"}, status=400)
+        resolve_principal = getattr(runtime, "resolve_principal", None)
+        principal, _ = await resolve_principal(request) if callable(resolve_principal) else (None, None)
+        acquired_by = principal.subject_id if principal is not None else None
         async with runtime.input_delivery_guard():
+            active = runtime.hijack.session
+            if (
+                active is not None
+                and active.owner == owner
+                and active.acquired_by is not None
+                and active.acquired_by != acquired_by
+            ):
+                return json_response({"error": "owner_mismatch"}, status=409)
             result = runtime.hijack.acquire(owner, lease_s)
             if not result.ok:
                 return json_response({"error": result.error}, status=409)
+            result.session.acquired_by = acquired_by
             runtime.persist_lease(result.session)
             # Only send pause on a fresh acquisition; a same-owner renewal leaves the
             # worker already paused and a redundant pause frame could confuse workers
@@ -91,14 +103,14 @@ async def route_hijack(
         lease_s, lease_error = _parse_lease_s(payload)
         if lease_error is not None or lease_s is None:
             return json_response({"error": lease_error or "invalid lease_s"}, status=400)
-        session = runtime.hijack.session
-        owner = session.owner if session is not None else "anonymous"
         resolve_principal = getattr(runtime, "resolve_principal", None)
-        if callable(resolve_principal):
-            principal, _ = await resolve_principal(request)
-            owner = principal.subject_id if principal else owner
+        principal, _ = await resolve_principal(request) if callable(resolve_principal) else (None, None)
+        acquired_by = principal.subject_id if principal is not None else None
         async with runtime.input_delivery_guard():
-            result = runtime.hijack.heartbeat(hijack_id, lease_s, owner=owner)
+            session = runtime.hijack.session
+            if session is not None and session.acquired_by is not None and session.acquired_by != acquired_by:
+                return json_response({"error": "owner_mismatch"}, status=409)
+            result = runtime.hijack.heartbeat(hijack_id, lease_s)
             if not result.ok:
                 return json_response({"error": result.error}, status=409)
             runtime.persist_lease(result.session)
@@ -251,6 +263,19 @@ async def _handle_hijack_send(
         return json_response({"error": "keys must be non-empty"}, status=400)
     if len(data) > _MAX_INPUT_CHARS:
         return json_response({"error": "keys too long", "max": _MAX_INPUT_CHARS}, status=400)
+    # Validate every guard before worker delivery: a malformed regex must have
+    # exactly zero downstream effects.
+    expect_prompt_id = str(payload.get("expect_prompt_id") or "") or None
+    expect_regex_raw = str(payload.get("expect_regex") or "") or None
+    expect_regex_obj: re.Pattern[str] | None = None
+    if expect_regex_raw:
+        try:
+            expect_regex_obj = compile_expect_regex(expect_regex_raw, max_length=_MAX_REGEX_LEN)
+        except PromptRegexError as exc:
+            error_payload: dict[str, object] = {"error": str(exc)}
+            if exc.kind == "too_long":
+                error_payload["max"] = int(exc.max_length or _MAX_REGEX_LEN)
+            return json_response(error_payload, status=400)
     async with runtime.input_delivery_guard():
         if not runtime.hijack.can_send_input(hijack_id):
             return json_response({"error": "not_hijack_owner"}, status=403)
@@ -260,22 +285,8 @@ async def _handle_hijack_send(
         if not ok:
             return json_response({"error": "no_worker"}, status=409)
     # Optional prompt guards — wait for screen to match before returning.
-    expect_prompt_id = str(payload.get("expect_prompt_id") or "") or None
-    expect_regex_raw = str(payload.get("expect_regex") or "") or None
     matched_snapshot = runtime.last_snapshot
     if expect_prompt_id or expect_regex_raw:
-        # Pre-compile the regex before entering the poll loop so that a
-        # malformed or pathological pattern raises re.error immediately,
-        # enabling a clean 400 response (avoids ReDoS in the polling loop).
-        expect_regex_obj: re.Pattern[str] | None = None
-        if expect_regex_raw:
-            try:
-                expect_regex_obj = compile_expect_regex(expect_regex_raw, max_length=_MAX_REGEX_LEN)
-            except PromptRegexError as exc:
-                payload = {"error": str(exc)}
-                if exc.kind == "too_long":
-                    payload["max"] = int(exc.max_length or _MAX_REGEX_LEN)  # ty:ignore[invalid-assignment]
-                return json_response(payload, status=400)
         timeout_ms = _safe_int(payload.get("timeout_ms"), 5_000, min_val=100, max_val=_MAX_TIMEOUT_MS)
         poll_interval_ms = _safe_int(payload.get("poll_interval_ms"), 200, min_val=50, max_val=5_000)
         matched_snapshot = await _wait_for_prompt(

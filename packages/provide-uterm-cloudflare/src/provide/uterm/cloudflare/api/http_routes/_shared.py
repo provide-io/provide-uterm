@@ -25,7 +25,6 @@ if TYPE_CHECKING:
         PromptRegexError,
         build_hijack_events_response,
         build_hijack_snapshot_response,
-        compile_expect_regex,
         extract_prompt_id,
         snapshot_matches,
     )
@@ -36,7 +35,6 @@ else:
             PromptRegexError,
             build_hijack_events_response,
             build_hijack_snapshot_response,
-            compile_expect_regex,
             extract_prompt_id,
             snapshot_matches,
         )
@@ -53,9 +51,6 @@ else:
         def build_hijack_snapshot_response(*_args, **_kwargs):
             raise RuntimeError("Should not be called during validation")
 
-        def compile_expect_regex(*_args, **_kwargs):
-            raise RuntimeError("Should not be called during validation")
-
         def extract_prompt_id(*_args, **_kwargs):
             raise RuntimeError("Should not be called during validation")
 
@@ -65,6 +60,119 @@ else:
 
 if TYPE_CHECKING:
     from provide.uterm.cloudflare.contracts import RuntimeProtocol
+
+
+def _looks_like_counted_quantifier(pattern: str, start: int) -> bool:
+    end = pattern.find("}", start + 1)
+    if end == -1:
+        return False
+    body = pattern[start + 1 : end]
+    if not body:
+        return False
+    left, separator, right = body.partition(",")
+    return left.isdigit() and (not separator or right == "" or right.isdigit())
+
+
+def _validate_pattern_safety(pattern: str) -> None:
+    """Reject the nested/alternated quantified groups that can cause ReDoS."""
+    group_stack: list[list[bool]] = []
+    previous_kind = ""
+    last_group_quantified = False
+    last_group_alternated = False
+    escaped = False
+    in_class = False
+    index = 0
+    while index < len(pattern):
+        char = pattern[index]
+        if escaped:
+            escaped = False
+            previous_kind = "literal"
+            index += 1
+            continue
+        if char == "\\":
+            escaped = True
+            index += 1
+            continue
+        if in_class:
+            if char == "]":
+                in_class = False
+                previous_kind = "literal"
+            index += 1
+            continue
+        if char == "[":
+            in_class = True
+            index += 1
+            continue
+        if char == "(":
+            group_stack.append([False, False])
+            previous_kind = ""
+            last_group_quantified = False
+            last_group_alternated = False
+            index += 1
+            if index < len(pattern) and pattern[index] == "?":
+                index += 1
+                if index < len(pattern) and pattern[index] == "<" and index + 1 < len(pattern):
+                    if pattern[index + 1] in "=!":
+                        index += 2
+                elif index < len(pattern) and pattern[index] == "P":
+                    end = pattern.find(">", index)
+                    if end != -1:
+                        index = end + 1
+                elif index < len(pattern) and pattern[index] in ":=!?":
+                    index += 1
+            continue
+        if char == ")" and group_stack:
+            quantified, alternated = group_stack.pop()
+            last_group_quantified = quantified
+            last_group_alternated = alternated
+            if group_stack:
+                group_stack[-1][0] = group_stack[-1][0] or quantified
+                group_stack[-1][1] = group_stack[-1][1] or alternated
+            previous_kind = "group"
+            index += 1
+            continue
+        if char == "|":
+            if group_stack:
+                group_stack[-1][1] = True
+            previous_kind = "alternation"
+            index += 1
+            continue
+        if char in "+*" or (char == "{" and _looks_like_counted_quantifier(pattern, index)):
+            if previous_kind == "group":
+                if last_group_quantified:
+                    raise ValueError("nested quantified groups are not allowed")
+                if last_group_alternated:
+                    raise ValueError("quantified groups containing alternation are not allowed")
+            if group_stack:
+                group_stack[-1][0] = True
+            previous_kind = "quantifier"
+            index = pattern.find("}", index) + 1 if char == "{" else index + 1
+            continue
+        previous_kind = "literal"
+        last_group_quantified = False
+        last_group_alternated = False
+        index += 1
+
+
+def compile_expect_regex(
+    expect_regex: str | None,
+    *,
+    flags: int = 0,
+    max_length: int = MAX_EXPECT_REGEX_LEN,
+) -> re.Pattern[str] | None:
+    """Compile prompt guards without importing the FastAPI server hub."""
+    if not expect_regex:
+        return None
+    if len(expect_regex) > max_length:
+        raise PromptRegexError("expect_regex too long", kind="too_long", max_length=max_length)
+    try:
+        _validate_pattern_safety(expect_regex)
+    except ValueError as exc:
+        raise PromptRegexError(f"unsafe expect_regex: {exc}", kind="unsafe", max_length=max_length) from exc
+    try:
+        return re.compile(expect_regex, flags)
+    except re.error as exc:
+        raise PromptRegexError(f"invalid expect_regex: {exc}", kind="invalid", max_length=max_length) from exc
 
 
 def _mono_to_wall(mono: float | None) -> float | None:

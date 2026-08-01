@@ -75,6 +75,7 @@ class SessionRuntime(
         self.worker_id = self._derive_worker_id()
         self.hijack = HijackCoordinator()
         self.worker_ws: CFWebSocket | None = None
+        self._worker_generation: str | None = None
         self.browser_sockets: dict[str, CFWebSocket] = {}
         self.raw_sockets: dict[str, CFWebSocket] = {}
         self.browser_hijack_owner: dict[str, str] = {}

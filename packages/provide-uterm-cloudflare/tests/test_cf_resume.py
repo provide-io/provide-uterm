@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import time
 from contextlib import nullcontext
@@ -16,6 +17,7 @@ import pytest
 from provide.uterm.cloudflare.api.ws_routes import handle_socket_message
 from provide.uterm.cloudflare.bridge.hijack import HijackCoordinator
 from provide.uterm.cloudflare.contracts import frame_json
+from provide.uterm.cloudflare.do.session_runtime.ws_helpers import _WsHelperMixin
 from provide.uterm.cloudflare.state.store import SqliteStateStore
 
 
@@ -114,8 +116,11 @@ class _MockWs:
     def serializeAttachment(self, val: str) -> None:  # noqa: N802
         self._attachment = val
 
+    def deserializeAttachment(self) -> str | None:  # noqa: N802
+        return self._attachment
 
-class _MockRuntime:
+
+class _MockRuntime(_WsHelperMixin):
     """Minimal runtime mock for ws_routes resume testing."""
 
     def __init__(self, store: SqliteStateStore) -> None:
@@ -159,6 +164,13 @@ class _MockRuntime:
 
     def _socket_browser_role(self, ws: object) -> str:
         return self.current_role
+
+
+def _attachment(ws: _MockWs) -> dict[str, str]:
+    assert ws._attachment is not None and ws._attachment.startswith("uterm-v2:")
+    value = json.loads(ws._attachment.removeprefix("uterm-v2:"))
+    assert isinstance(value, dict)
+    return value
 
 
 class TestWsRoutesResume:
@@ -232,8 +244,11 @@ class TestWsRoutesResume:
         ws = _MockWs()
         raw = frame_json("resume", token="tok-attach")
         await handle_socket_message(runtime, ws, raw, is_worker=False)
-        assert ws._attachment == "browser:operator:w1"
         hellos = [m for m in runtime._sent if m.get("type") == "hello"]
+        attachment = _attachment(ws)
+        assert attachment["role"] == "browser"
+        assert attachment["browser_role"] == "operator"
+        assert attachment["resume_token"] == hellos[0]["resume_token"]
         assert hellos[0]["role"] == "operator"
 
     async def test_resume_sends_snapshot_if_available(self, runtime: _MockRuntime, store: SqliteStateStore) -> None:
@@ -291,7 +306,9 @@ class TestWsRoutesResume:
         assert len(hellos) == 1
         assert hellos[0]["role"] == "viewer"
         assert hellos[0]["can_hijack"] is False
-        assert ws._attachment == "browser:viewer:w1"
+        attachment = _attachment(ws)
+        assert attachment["browser_role"] == "viewer"
+        assert attachment["resume_token"] == hellos[0]["resume_token"]
         record = store.get_resume_token(hellos[0]["resume_token"])
         assert record is not None
         assert record["role"] == "viewer"
@@ -307,7 +324,9 @@ class TestWsRoutesResume:
         assert len(hellos) == 1
         assert hellos[0]["role"] == "operator"
         assert hellos[0]["can_hijack"] is False
-        assert ws._attachment == "browser:operator:w1"
+        attachment = _attachment(ws)
+        assert attachment["browser_role"] == "operator"
+        assert attachment["resume_token"] == hellos[0]["resume_token"]
 
     async def test_resume_reclaims_hijack_when_was_owner(self, runtime: _MockRuntime, store: SqliteStateStore) -> None:
         """Lines 128-137: hijack ownership is reclaimed when stored token marks was_hijack_owner=True."""
@@ -342,6 +361,9 @@ class TestWsRoutesResume:
         hellos = [m for m in runtime._sent if m.get("type") == "hello"]
         assert len(hellos) == 1
         assert hellos[0]["role"] == "admin"
+        attachment = _attachment(ws)
+        assert attachment["resume_token"] == hellos[0]["resume_token"]
+        assert attachment["hijack_id"] == runtime.hijack.session.hijack_id
         # Hijack should have been acquired → persist_lease and broadcast_hijack_state called
         assert persisted
         assert broadcast_calls
@@ -392,11 +414,11 @@ class TestWsRoutesResume:
         from provide.uterm.cloudflare.bridge.hijack import HijackSession
 
         store.create_resume_token("tok-renew", "w1", "admin", 300)
-        store.mark_resume_hijack_owner("tok-renew", True)
         runtime.current_role = "admin"
         runtime.input_mode = "hijack"
 
-        # Pre-acquire with the same token-bound owner so it's a renewal.
+        # The active durable owner identity is authoritative even when a
+        # hibernated socket never emitted a close event to mark the token.
         existing = HijackSession(
             hijack_id="existing-id",
             owner="browser:tok-renew",

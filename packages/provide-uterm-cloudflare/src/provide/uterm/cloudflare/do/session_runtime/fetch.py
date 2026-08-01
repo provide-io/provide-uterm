@@ -87,9 +87,11 @@ class _FetchMixin:
         async def browser_role_for_request(self, request: Any) -> str: ...
         async def browser_subject_for_request(self, request: Any) -> str | None: ...
         def _register_socket(self, ws: Any, role: str) -> None: ...
+        def _restore_state(self) -> None: ...
         def ws_key(self, ws: Any) -> str: ...
         async def _maybe_send_presence_sync(self, ws: Any, *, exclude_self: bool = False) -> None: ...
-        async def register_worker_socket(self, ws: Any) -> None: ...
+        async def register_worker_socket(self, ws: Any) -> bool: ...
+        def _serialize_socket_attachment(self, ws: Any, **kwargs: Any) -> None: ...
 
     async def _redeem_tunnel_invite(self, request: Any) -> Response:
         """Atomically consume an invite from this session's Durable Object."""
@@ -193,12 +195,14 @@ class _FetchMixin:
                 session_id = unquote(parts[3])
                 if session_id and "/" not in session_id:
                     self.worker_id = session_id
+                    self._restore_state()
                     return
         for prefix in ("/ws/worker/", "/ws/browser/", "/ws/raw/", "/tunnel/", "/worker/", "/api/sessions/"):
             if path.startswith(prefix):
                 segment = path[len(prefix) :].split("/")[0]
                 if segment:
                     self.worker_id = segment
+                    self._restore_state()
                     return
 
     async def fetch(self, request: Any) -> Response:
@@ -320,11 +324,20 @@ class _FetchMixin:
 
             client, server = WebSocketPair.new().object_values()
             self.ctx.acceptWebSocket(server)
+            socket_id = secrets.token_urlsafe(18)
+            resume_on = socket_role == "browser" and bool(getattr(self.config, "resume_enabled", True))
+            resume_token = secrets.token_urlsafe(32) if resume_on else None
+            if resume_token is not None:
+                resume_ttl_s = float(getattr(self.config, "resume_ttl_s", 300))
+                self.store.create_resume_token(resume_token, self.worker_id, browser_role, resume_ttl_s)
             try:
-                # Encode socket type, browser role, and worker_id for hibernation safety.
-                # Format: "browser:admin:e2e-abc123", "worker:admin:e2e-abc123", "raw:admin:e2e-abc123"
-                # worker_id in the attachment lets webSocketClose recover the ID after hibernation.
-                server.serializeAttachment(f"{socket_role}:{browser_role}:{self.worker_id}")
+                self._serialize_socket_attachment(
+                    server,
+                    role=socket_role,
+                    browser_role=browser_role,
+                    socket_id=socket_id,
+                    resume_token=resume_token,
+                )
             except Exception as exc:
                 logger.warning(
                     "serializeAttachment failed — role lost on hibernation worker_id=%s: %s",
@@ -336,9 +349,16 @@ class _FetchMixin:
             # Register here so the role is available if fetch() is re-entered
             # before webSocketOpen() fires (hibernation-restore path).
             if socket_role == "worker":
-                await self.register_worker_socket(server)  # server is Any from WebSocketPair
+                if not await self.register_worker_socket(server):  # server is Any from WebSocketPair
+                    return Response(
+                        json.dumps({"error": "worker replacement rejected"}),
+                        status=409,
+                        headers={"content-type": "application/json"},
+                    )
             else:
                 self._register_socket(server, socket_role)  # server is Any from WebSocketPair
+                if socket_role == "browser" and resume_token is not None:
+                    self.browser_resume_tokens[self.ws_key(server)] = resume_token
 
             # For worker connections, write KV registration eagerly in fetch() before
             # returning 101. In CF hibernation mode, async operations in webSocketOpen()
@@ -360,36 +380,29 @@ class _FetchMixin:
             if socket_role == "browser":
                 # Initialize ushell connector if this is an ushell-* session.
                 init_ushell(self)
-                # Issue a resume token for this browser session
-                resume_token = secrets.token_urlsafe(32)
-                resume_ttl_s = float(getattr(self.config, "resume_ttl_s", 300))
-                self.store.create_resume_token(resume_token, self.worker_id, browser_role, resume_ttl_s)
-                self.browser_resume_tokens[self.ws_key(server)] = resume_token  # server is Any
+                hello: dict[str, object] = {
+                    "type": "hello",
+                    "worker_id": self.worker_id,
+                    "worker_online": self.worker_ws is not None or self._ushell is not None,
+                    "can_hijack": browser_role == "admin",
+                    "input_mode": self.input_mode,
+                    "role": browser_role,
+                    "hijack_control": "ws",
+                    "hijack_step_supported": True,
+                    "resume_supported": resume_on,
+                    "presence_enabled": bool(self.meta.get("presence")),
+                    "protocol_version": CURRENT_PROTOCOL_VERSION,
+                    "protocol": {
+                        "selected": PREFERRED_PROTOCOL_VERSION,
+                        "server_min": MIN_PROTOCOL_VERSION,
+                        "server_max": MAX_PROTOCOL_VERSION,
+                    },
+                    "ts": time.time(),
+                }
+                if resume_token is not None:
+                    hello["resume_token"] = resume_token
                 try:
-                    server.send(
-                        encode_control_frame(
-                            {
-                                "type": "hello",
-                                "worker_id": self.worker_id,
-                                "worker_online": self.worker_ws is not None or self._ushell is not None,
-                                "can_hijack": browser_role == "admin",
-                                "input_mode": self.input_mode,
-                                "role": browser_role,
-                                "hijack_control": "ws",
-                                "hijack_step_supported": True,
-                                "resume_supported": True,
-                                "resume_token": resume_token,
-                                "presence_enabled": bool(self.meta.get("presence")),
-                                "protocol_version": CURRENT_PROTOCOL_VERSION,
-                                "protocol": {
-                                    "selected": PREFERRED_PROTOCOL_VERSION,
-                                    "server_min": MIN_PROTOCOL_VERSION,
-                                    "server_max": MAX_PROTOCOL_VERSION,
-                                },
-                                "ts": time.time(),
-                            }
-                        )
-                    )
+                    server.send(encode_control_frame(hello))
                 except Exception as exc:
                     logger.warning("failed to send hello from fetch(): %s", exc)
                 try:

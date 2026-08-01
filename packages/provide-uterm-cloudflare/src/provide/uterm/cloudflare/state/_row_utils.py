@@ -17,6 +17,15 @@ import contextlib
 from typing import Any
 
 
+def _scalar_to_py(value: Any) -> Any:
+    """Normalize Pyodide proxies used for individual SQLite cell values."""
+    to_py = getattr(value, "to_py", None)
+    if callable(to_py):
+        with contextlib.suppress(Exception):
+            return to_py()
+    return value
+
+
 def rows(result: Any) -> list[Any]:
     if result is None:
         return []
@@ -33,12 +42,12 @@ def rows(result: Any) -> list[Any]:
 def get_by_index(row: Any, idx: int) -> Any:
     if isinstance(row, dict):
         values = list(row.values())
-        return values[idx] if idx < len(values) else None
+        return _scalar_to_py(values[idx]) if idx < len(values) else None
     if hasattr(row, "keys") and hasattr(row, "__getitem__"):
         keys = list(row.keys())
         if idx >= len(keys):
             return None
-        return row[keys[idx]]
+        return _scalar_to_py(row[keys[idx]])
     if hasattr(row, "to_py"):
         try:
             py_row = row.to_py()
@@ -46,20 +55,20 @@ def get_by_index(row: Any, idx: int) -> Any:
             py_row = None
         if py_row is not None:
             return get_by_index(py_row, idx)
-    return row[idx]
+    return _scalar_to_py(row[idx])
 
 
 def row_value(row: Any, key: str, idx: int) -> Any:
     if isinstance(row, dict):
-        return row.get(key)
+        return _scalar_to_py(row.get(key))
     if hasattr(row, "get"):
         with contextlib.suppress(Exception):
             value = row.get(key)
             if value is not None:
-                return value
+                return _scalar_to_py(value)
     if hasattr(row, key):
         with contextlib.suppress(Exception):
-            return getattr(row, key)
+            return _scalar_to_py(getattr(row, key))
     if hasattr(row, "to_py"):
         try:
             py_row = row.to_py()

@@ -19,6 +19,7 @@ class LeaseRecord:
     hijack_id: str
     owner: str
     lease_expires_at: float
+    acquired_by: str | None = None
 
 
 class SqliteStateStore:
@@ -48,7 +49,8 @@ class SqliteStateStore:
             """CREATE TABLE IF NOT EXISTS session_state (
                 worker_id TEXT PRIMARY KEY, hijack_id TEXT, owner TEXT,
                 lease_expires_at REAL, last_snapshot_json TEXT, deleted_at REAL,
-                event_seq INTEGER NOT NULL DEFAULT 0, updated_at REAL NOT NULL)""",
+                event_seq INTEGER NOT NULL DEFAULT 0, updated_at REAL NOT NULL,
+                acquired_by TEXT, worker_generation TEXT)""",
             """CREATE TABLE IF NOT EXISTS session_events (
                 worker_id TEXT NOT NULL, seq INTEGER NOT NULL, ts REAL NOT NULL,
                 event_type TEXT NOT NULL, payload_json TEXT NOT NULL,
@@ -73,6 +75,10 @@ class SqliteStateStore:
             self._run("ALTER TABLE session_state ADD COLUMN input_mode TEXT NOT NULL DEFAULT 'hijack'")
         with contextlib.suppress(Exception):
             self._run("ALTER TABLE session_state ADD COLUMN deleted_at REAL")
+        with contextlib.suppress(Exception):
+            self._run("ALTER TABLE session_state ADD COLUMN acquired_by TEXT")
+        with contextlib.suppress(Exception):
+            self._run("ALTER TABLE session_state ADD COLUMN worker_generation TEXT")
 
     # ------------------------------------------------------------------
     # Session metadata (display_name, connector_type, created_at, etc.)
@@ -147,8 +153,8 @@ class SqliteStateStore:
         rows = self._rows(
             self._run(
                 """
-                SELECT worker_id, hijack_id, owner, lease_expires_at, last_snapshot_json, event_seq, input_mode
-                     , deleted_at
+                SELECT worker_id, hijack_id, owner, lease_expires_at, last_snapshot_json, event_seq, input_mode,
+                       deleted_at, acquired_by, worker_generation
                 FROM session_state
                 WHERE worker_id = ?
                 """,
@@ -168,24 +174,28 @@ class SqliteStateStore:
             "event_seq": int(self._row_value(row, "event_seq", 5) or 0),
             "input_mode": str(self._row_value(row, "input_mode", 6) or "hijack"),
             "deleted_at": self._row_value(row, "deleted_at", 7),
+            "acquired_by": self._row_value(row, "acquired_by", 8),
+            "worker_generation": self._row_value(row, "worker_generation", 9),
         }
 
     def save_lease(self, record: LeaseRecord) -> None:
         now = time.time()
         self._run(
             """
-            INSERT INTO session_state(worker_id, hijack_id, owner, lease_expires_at, updated_at)
-            VALUES(?, ?, ?, ?, ?)
+            INSERT INTO session_state(worker_id, hijack_id, owner, lease_expires_at, acquired_by, updated_at)
+            VALUES(?, ?, ?, ?, ?, ?)
             ON CONFLICT(worker_id) DO UPDATE SET
                 hijack_id = excluded.hijack_id,
                 owner = excluded.owner,
                 lease_expires_at = excluded.lease_expires_at,
+                acquired_by = excluded.acquired_by,
                 updated_at = excluded.updated_at
             """,
             record.worker_id,
             record.hijack_id,
             record.owner,
             float(record.lease_expires_at),
+            record.acquired_by,
             now,
         )
 
@@ -193,7 +203,7 @@ class SqliteStateStore:
         self._run(
             """
             UPDATE session_state
-            SET hijack_id = NULL, owner = NULL, lease_expires_at = NULL, updated_at = ?
+            SET hijack_id = NULL, owner = NULL, lease_expires_at = NULL, acquired_by = NULL, updated_at = ?
             WHERE worker_id = ?
             """,
             time.time(),
@@ -211,12 +221,26 @@ class SqliteStateStore:
                 hijack_id = NULL,
                 owner = NULL,
                 lease_expires_at = NULL,
+                acquired_by = NULL,
                 last_snapshot_json = NULL,
+                worker_generation = NULL,
                 deleted_at = excluded.deleted_at,
                 updated_at = excluded.updated_at
             """,
             worker_id,
             now,
+            now,
+        )
+
+    def save_worker_generation(self, worker_id: str, generation: str | None) -> None:
+        """Persist the only worker generation allowed to publish or disconnect."""
+        now = time.time()
+        self._run(
+            "INSERT INTO session_state(worker_id, worker_generation, updated_at) VALUES(?, ?, ?) "
+            "ON CONFLICT(worker_id) DO UPDATE SET "
+            "worker_generation=excluded.worker_generation, updated_at=excluded.updated_at",
+            worker_id,
+            generation,
             now,
         )
 

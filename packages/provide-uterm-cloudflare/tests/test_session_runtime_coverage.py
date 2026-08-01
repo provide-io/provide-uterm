@@ -184,6 +184,27 @@ async def test_fetch_websocket_browser_upgrade() -> None:
     assert hello["role"] == "admin"  # dev mode
 
 
+async def test_public_browser_upgrade_resume_disabled_advertises_no_token() -> None:
+    """RESUME_ENABLED=false applies to the public fetch hello, not only wake."""
+    rt = _make_runtime()
+    rt.config.resume_enabled = False
+    js_mock, _client, server = _ws_pair_mock()
+
+    with patch.dict(sys.modules, {"js": js_mock}):
+        resp = await rt.fetch(
+            _MockRequest(
+                url="https://x/ws/browser/test-worker/term",
+                headers={"Upgrade": "websocket"},
+            )
+        )
+
+    assert resp.status == 101
+    hello = _decode_control(server.send.call_args[0][0])
+    assert hello["resume_supported"] is False
+    assert "resume_token" not in hello
+    assert rt.browser_resume_tokens == {}
+
+
 async def test_fetch_websocket_worker_upgrade() -> None:
     """Worker WS upgrade returns 101 and writes KV registration."""
     rt = _make_runtime()

@@ -289,8 +289,14 @@ class _MockWs:
     def deserializeAttachment(self) -> str:  # noqa: N802
         return self._attachment
 
+    def serializeAttachment(self, attachment: object) -> None:  # noqa: N802
+        self._attachment = str(attachment)
+
     def send(self, data: str) -> None:
         self.sent.append(data)
+
+    def close(self, code: int, reason: str) -> None:
+        return
 
 
 class TestSessionRuntimeBinaryDispatch:
@@ -303,6 +309,7 @@ class TestSessionRuntimeBinaryDispatch:
         rt.worker_id = "tunnel-test"
 
         ws = _MockWs("worker:admin:tunnel-test")
+        assert await rt.register_worker_socket(ws)  # type: ignore[arg-type]
 
         mock_handler = AsyncMock()
         # The lazy import inside webSocketMessage does:

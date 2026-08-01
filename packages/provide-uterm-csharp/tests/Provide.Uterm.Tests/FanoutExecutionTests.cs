@@ -278,6 +278,111 @@ public sealed class FanoutExecutionTests
         await AssertThrowingAuthorizerFailsBeforeDelivery("member");
     }
 
+    [Theory]
+    [InlineData("global")]
+    [InlineData("member")]
+    public async Task Already_Typed_Authorizer_Failures_Propagate_Without_Delivery(string stage)
+    {
+        var hub = new SideEffectTrackingHub();
+        var expected = new FanoutAuthorizationException(stage + " refused");
+        var controller = NewController(
+            hub, "parallel", ["w1"], authorizer: new TypedThrowingAuthorizer(stage, expected));
+
+        var actual = await Assert.ThrowsAsync<FanoutAuthorizationException>(() =>
+            controller.SendAsync("g", "id", Admin("alice"), 5, 100));
+
+        Assert.Same(expected, actual);
+        Assert.Equal(0, hub.SubscriptionCount);
+        Assert.Equal(0, hub.ObserverCount);
+        Assert.Equal(0, hub.SendCount);
+    }
+
+    [Fact]
+    public async Task Sequential_Refused_Send_Is_Failed_And_Later_Members_Continue()
+    {
+        var hub = new RefusingSendHub("w1");
+        var controller = NewController(hub, "sequential", ["w1", "w2"]);
+
+        var result = await controller.SendAsync("g", "id", Admin("alice"), 5, 100);
+
+        Assert.Equal(["w1"], result.FailedSessions);
+        Assert.Equal(["w1", "w2"], hub.SendAttempts);
+        Assert.True(Assert.Single(result.Results, row => row.WorkerId == "w2").Ok);
+    }
+
+    [Theory]
+    [InlineData("parallel")]
+    [InlineData("sequential")]
+    public async Task Caller_Cancellation_During_Output_Collection_Propagates(string mode)
+    {
+        var hub = new CancelDuringCollectionHub();
+        var controller = NewController(hub, mode, ["w1"]);
+        using var cancellation = new CancellationTokenSource();
+        var pending = controller.SendAsync("g", "id", Admin("alice"), 5, 5000, cancellation.Token);
+        await hub.ReadStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await pending.WaitAsync(TimeSpan.FromSeconds(1)));
+    }
+
+    [Theory]
+    [InlineData("sync_throw")]
+    [InlineData("completed_fault")]
+    [InlineData("delayed_fault")]
+    [InlineData("delayed_success")]
+    [InlineData("deadline")]
+    [InlineData("expired_before_dispose")]
+    public async Task Subscription_Disposal_Failures_Are_Bounded_And_Do_Not_Change_Delivery(string mode)
+    {
+        var observed = new TaskCompletionSource<Exception>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var hub = new DisposalFailureHub(mode);
+        var controller = NewController(
+            hub, "parallel", ["w1"], lateFaultObserver: error => observed.TrySetResult(error));
+
+        var result = await controller.SendAsync(
+            "g", "id", Admin("alice"), 1,
+            mode is "deadline" or "expired_before_dispose" ? 20 : 500);
+
+        Assert.True(Assert.Single(result.Results).Ok);
+        Assert.Equal(1, hub.DisposeAttempts);
+        if (mode is "deadline" or "expired_before_dispose")
+        {
+            hub.FaultDisposal();
+            Assert.Equal("dispose failed", (await observed.Task.WaitAsync(TimeSpan.FromSeconds(1))).Message);
+        }
+    }
+
+    [Fact]
+    public async Task Parallel_Output_Read_Failure_Is_Isolated_As_A_Failed_Member()
+    {
+        var controller = NewController(new ReadFailureHub(), "parallel", ["w1"]);
+
+        var result = await controller.SendAsync("g", "id", Admin("alice"), 5, 100);
+
+        Assert.Equal(["w1"], result.FailedSessions);
+        Assert.False(Assert.Single(result.Results).Ok);
+    }
+
+    [Fact]
+    public async Task A_Throwing_Late_Fault_Observer_Cannot_Escape_The_Continuation()
+    {
+        var hub = new HangingStageHub("send");
+        var observerCalled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var controller = NewController(hub, "parallel", ["w1"], lateFaultObserver: _ =>
+        {
+            observerCalled.TrySetResult();
+            throw new InvalidOperationException("observer failed");
+        });
+
+        var result = await controller.SendAsync("g", "id", Admin("alice"), 5, 30);
+        hub.Fault(new IOException("late worker fault"));
+
+        await observerCalled.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        Assert.Equal(["w1"], result.FailedSessions);
+    }
+
     private static async Task AssertThrowingAuthorizerFailsBeforeDelivery(string stage)
     {
         var hub = new SideEffectTrackingHub();
@@ -364,6 +469,17 @@ public sealed class FanoutExecutionTests
 
         public bool CanReadMember(Principal principal, string workerId) =>
             stage == "member" ? throw new InvalidOperationException("member auth unavailable") : true;
+    }
+
+    private sealed class TypedThrowingAuthorizer(
+        string stage,
+        FanoutAuthorizationException error) : IFanoutAuthorizer
+    {
+        public bool IsGlobalAdmin(Principal principal) =>
+            stage == "global" ? throw error : true;
+
+        public bool CanReadMember(Principal principal, string workerId) =>
+            stage == "member" ? throw error : true;
     }
 
     private sealed class SideEffectTrackingHub : IFanoutHub
@@ -540,6 +656,128 @@ public sealed class FanoutExecutionTests
             await Task.Delay(_delayMs, ct);
             return null;
         }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class RefusingSendHub(string refusedWorker) : IFanoutHub
+    {
+        public List<string> SendAttempts { get; } = [];
+
+        public Task<bool> SendWorkerAsync(
+            string workerId, IReadOnlyDictionary<string, object?> msg, CancellationToken ct = default)
+        {
+            SendAttempts.Add(workerId);
+            return Task.FromResult(workerId != refusedWorker);
+        }
+
+        public Task BroadcastAsync(
+            string workerId, IReadOnlyDictionary<string, object?> msg, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public IFanoutOutputSubscription SubscribeOutput(string workerId) =>
+            new TrackingSubscription(workerId, new ConcurrentDictionary<string, int>());
+    }
+
+    private sealed class CancelDuringCollectionHub : IFanoutHub
+    {
+        public TaskCompletionSource ReadStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task<bool> SendWorkerAsync(
+            string workerId, IReadOnlyDictionary<string, object?> msg, CancellationToken ct = default) =>
+            Task.FromResult(true);
+
+        public Task BroadcastAsync(
+            string workerId, IReadOnlyDictionary<string, object?> msg, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public IFanoutOutputSubscription SubscribeOutput(string workerId) =>
+            new CancelDuringCollectionSubscription(ReadStarted);
+    }
+
+    private sealed class CancelDuringCollectionSubscription(TaskCompletionSource started) : IFanoutOutputSubscription
+    {
+        public async ValueTask<FanoutOutputEvent?> ReadAsync(CancellationToken ct)
+        {
+            started.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            return null;
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class DisposalFailureHub(string mode) : IFanoutHub
+    {
+        private readonly TaskCompletionSource _dispose =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public int DisposeAttempts { get; private set; }
+
+        public void FaultDisposal() => _dispose.TrySetException(new IOException("dispose failed"));
+
+        public Task<bool> SendWorkerAsync(
+            string workerId, IReadOnlyDictionary<string, object?> msg, CancellationToken ct = default) =>
+            Task.FromResult(true);
+
+        public Task BroadcastAsync(
+            string workerId, IReadOnlyDictionary<string, object?> msg, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public IFanoutOutputSubscription SubscribeOutput(string workerId) =>
+            new DisposalFailureSubscription(mode, _dispose, () => DisposeAttempts++);
+    }
+
+    private sealed class DisposalFailureSubscription(
+        string mode,
+        TaskCompletionSource dispose,
+        Action onDispose) : IFanoutOutputSubscription
+    {
+        public ValueTask<FanoutOutputEvent?> ReadAsync(CancellationToken ct)
+        {
+            if (mode == "expired_before_dispose") Thread.Sleep(30);
+            return ValueTask.FromResult<FanoutOutputEvent?>(null);
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            onDispose();
+            return mode switch
+            {
+                "sync_throw" => throw new IOException("dispose failed"),
+                "completed_fault" => ValueTask.FromException(new IOException("dispose failed")),
+                "delayed_fault" => DelayedFailureAsync(),
+                "delayed_success" => DelayedSuccessAsync(),
+                _ => new ValueTask(dispose.Task),
+            };
+        }
+
+        private static async ValueTask DelayedFailureAsync()
+        {
+            await Task.Yield();
+            throw new IOException("dispose failed");
+        }
+
+        private static async ValueTask DelayedSuccessAsync() => await Task.Yield();
+    }
+
+    private sealed class ReadFailureHub : IFanoutHub
+    {
+        public Task<bool> SendWorkerAsync(
+            string workerId, IReadOnlyDictionary<string, object?> msg, CancellationToken ct = default) =>
+            Task.FromResult(true);
+
+        public Task BroadcastAsync(
+            string workerId, IReadOnlyDictionary<string, object?> msg, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public IFanoutOutputSubscription SubscribeOutput(string workerId) => new ReadFailureSubscription();
+    }
+
+    private sealed class ReadFailureSubscription : IFanoutOutputSubscription
+    {
+        public ValueTask<FanoutOutputEvent?> ReadAsync(CancellationToken ct) =>
+            ValueTask.FromException<FanoutOutputEvent?>(new IOException("output failed"));
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
