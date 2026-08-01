@@ -93,11 +93,11 @@ async def test_group_crud_lifecycle() -> None:
 
 async def test_max_group_size_enforcement() -> None:
     """Creating a group with 60 workers exceeds the 50-session max → 400."""
-    sessions = _sessions(3, prefix="mx")
+    sessions = _sessions(60, prefix="mx")
 
     async with live_server_with_bus(sessions, label="fanout_max_size") as (_hub, base_url):
         async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
-            worker_ids = [f"fake-{i}" for i in range(60)]
+            worker_ids = [session["session_id"] for session in sessions]
             resp = await http.post(
                 "/api/fanout/groups",
                 json={
