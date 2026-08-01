@@ -53,31 +53,49 @@ func (c *ConnectionManager) WorkerToken() *string { return c.hub.workerToken }
 // (expired) hijack state from a prior session. Port of register_worker. Returns
 // (prevWasHijacked, error); a full worker map for a brand-new worker id yields a
 // [WebSocketRejection] with code 1008.
-func (c *ConnectionManager) RegisterWorker(_ context.Context, workerID string, ws WorkerWS) (bool, error) {
+func (c *ConnectionManager) RegisterWorker(ctx context.Context, workerID string, ws WorkerWS) (bool, error) {
+	return c.RegisterWorkerWithTransport(ctx, workerID, ws, false)
+}
+
+// RegisterWorkerWithTransport publishes the worker identity and wire codec in
+// one lock transition, so no input reservation can capture a mismatched codec.
+func (c *ConnectionManager) RegisterWorkerWithTransport(
+	ctx context.Context, workerID string, ws WorkerWS, isTunnel bool,
+) (bool, error) {
 	hub := c.hub
-	hub.lock.Lock()
-	if !hub.registry.Contains(workerID) && hub.registry.Len() >= hub.maxWorkers {
+	for {
+		hub.lock.Lock()
+		if !hub.registry.Contains(workerID) && hub.registry.Len() >= hub.maxWorkers {
+			hub.lock.Unlock()
+			return false, &WebSocketRejection{Code: 1008, Reason: "worker capacity exceeded"}
+		}
+		st := hub.registry.SetDefault(workerID, NewWorkerTermState())
+		if pending := st.InputSendPending; pending != nil {
+			done := pending.Done
+			hub.lock.Unlock()
+			if err := waitInputReservation(ctx, done); err != nil {
+				return false, err
+			}
+			continue
+		}
+		if len(st.Events) > hub.eventDequeMaxlen {
+			st.Events = st.Events[len(st.Events)-hub.eventDequeMaxlen:]
+		}
+		now := hub.clock.Monotonic()
+		expired := st.HijackSession != nil && st.HijackSession.LeaseExpiresAt <= now
+		prevWasHijacked := expired || (st.HijackSession == nil && st.HijackOwner != nil)
+		if expired {
+			st.HijackSession = nil
+		}
+		if prevWasHijacked {
+			st.clearDashboardOwner()
+		}
+		st.WorkerWS = ws
+		st.IsTunnelWorker = isTunnel
 		hub.lock.Unlock()
-		return false, &WebSocketRejection{Code: 1008, Reason: "worker capacity exceeded"}
+		hub.logger.Info(eventSessionRegistered, "worker_id", workerID, "session_type", "worker")
+		return prevWasHijacked, nil
 	}
-	st := hub.registry.SetDefault(workerID, NewWorkerTermState())
-	if len(st.Events) > hub.eventDequeMaxlen {
-		st.Events = st.Events[len(st.Events)-hub.eventDequeMaxlen:]
-	}
-	now := hub.clock.Monotonic()
-	expired := st.HijackSession != nil && st.HijackSession.LeaseExpiresAt <= now
-	prevWasHijacked := expired || (st.HijackSession == nil && st.HijackOwner != nil)
-	if expired {
-		st.HijackSession = nil
-	}
-	if prevWasHijacked {
-		st.HijackOwner = nil
-		st.HijackOwnerExpiresAt = nil
-	}
-	st.WorkerWS = ws
-	hub.lock.Unlock()
-	hub.logger.Info(eventSessionRegistered, "worker_id", workerID, "session_type", "worker")
-	return prevWasHijacked, nil
 }
 
 // IsActiveWorker reports whether ws is still the registered worker. Port of
@@ -156,20 +174,30 @@ func (c *ConnectionManager) UpdateLastSnapshot(_ context.Context, workerID strin
 
 // DeregisterWorker clears ws as the active worker if it is still current. Port
 // of deregister_worker. Returns (shouldBroadcastDisconnect, wasHijacked).
-func (c *ConnectionManager) DeregisterWorker(_ context.Context, workerID string, ws WorkerWS) (bool, bool) {
+func (c *ConnectionManager) DeregisterWorker(ctx context.Context, workerID string, ws WorkerWS) (bool, bool) {
 	hub := c.hub
-	hub.lock.Lock()
-	defer hub.lock.Unlock()
-	st := hub.registry.Get(workerID)
-	if st == nil || st.WorkerWS != ws {
-		return false, false
+	for {
+		hub.lock.Lock()
+		st := hub.registry.Get(workerID)
+		if st == nil || st.WorkerWS != ws {
+			hub.lock.Unlock()
+			return false, false
+		}
+		if pending := st.InputSendPending; pending != nil {
+			done := pending.Done
+			hub.lock.Unlock()
+			if waitInputReservation(ctx, done) != nil {
+				return false, false
+			}
+			continue
+		}
+		wasHijacked := st.HijackSession != nil || st.HijackOwner != nil
+		st.WorkerWS = nil
+		st.HijackSession = nil
+		st.clearDashboardOwner()
+		hub.lock.Unlock()
+		return true, wasHijacked
 	}
-	wasHijacked := st.HijackSession != nil || st.HijackOwner != nil
-	st.WorkerWS = nil
-	st.HijackSession = nil
-	st.HijackOwner = nil
-	st.HijackOwnerExpiresAt = nil
-	return true, wasHijacked
 }
 
 // -- Browser connection lifecycle --------------------------------------------
@@ -263,8 +291,7 @@ func (c *ConnectionManager) updateLockState(st *WorkerTermState, ws BrowserConn,
 	}
 	switch {
 	case wasOwner:
-		st.HijackOwner = nil
-		st.HijackOwnerExpiresAt = nil
+		st.clearDashboardOwner()
 		restStillActive = hub.State.HasValidRESTLease(st)
 	case ownedHijack && st.WorkerWS != nil && !hub.State.IsHijacked(st):
 		resumeWithoutOwner = scanEventsForResume(st)

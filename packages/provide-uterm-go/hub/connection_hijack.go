@@ -17,19 +17,31 @@ import (
 // hijack-state, prune) dispatch through the hub facade.
 func (c *ConnectionManager) DisconnectWorker(ctx context.Context, workerID string) (bool, error) {
 	hub := c.hub
-	hub.lock.Lock()
-	st := hub.registry.Get(workerID)
-	if st == nil || st.WorkerWS == nil {
+	var ws WorkerWS
+	wasHijacked := false
+	for {
+		hub.lock.Lock()
+		st := hub.registry.Get(workerID)
+		if st == nil || st.WorkerWS == nil {
+			hub.lock.Unlock()
+			return false, nil
+		}
+		if pending := st.InputSendPending; pending != nil {
+			done := pending.Done
+			hub.lock.Unlock()
+			if err := waitInputReservation(ctx, done); err != nil {
+				return false, err
+			}
+			continue
+		}
+		ws = st.WorkerWS
+		st.WorkerWS = nil
+		wasHijacked = st.HijackSession != nil || st.HijackOwner != nil
+		st.HijackSession = nil
+		st.clearDashboardOwner()
 		hub.lock.Unlock()
-		return false, nil
+		break
 	}
-	ws := st.WorkerWS
-	st.WorkerWS = nil
-	wasHijacked := st.HijackSession != nil || st.HijackOwner != nil
-	st.HijackSession = nil
-	st.HijackOwner = nil
-	st.HijackOwnerExpiresAt = nil
-	hub.lock.Unlock()
 
 	if closer, ok := ws.(WorkerCloser); ok {
 		if err := closer.Close(ctx); err != nil {
@@ -74,23 +86,33 @@ func (c *ConnectionManager) ForceReleaseHijack(ctx context.Context, workerID str
 	hub := c.hub
 	owner := "server-forced"
 	hadHijack := false
-	hub.lock.Lock()
-	st := hub.registry.Get(workerID)
-	if st == nil {
+	for {
+		hub.lock.Lock()
+		st := hub.registry.Get(workerID)
+		if st == nil {
+			hub.lock.Unlock()
+			return false, nil
+		}
+		if pending := st.InputSendPending; pending != nil {
+			done := pending.Done
+			hub.lock.Unlock()
+			if err := waitInputReservation(ctx, done); err != nil {
+				return false, err
+			}
+			continue
+		}
+		if st.HijackSession != nil {
+			owner = st.HijackSession.Owner
+			st.HijackSession = nil
+			hadHijack = true
+		}
+		if hub.State.IsDashboardHijackActive(st) {
+			st.clearDashboardOwner()
+			hadHijack = true
+		}
 		hub.lock.Unlock()
-		return false, nil
+		break
 	}
-	if st.HijackSession != nil {
-		owner = st.HijackSession.Owner
-		st.HijackSession = nil
-		hadHijack = true
-	}
-	if hub.State.IsDashboardHijackActive(st) {
-		st.HijackOwner = nil
-		st.HijackOwnerExpiresAt = nil
-		hadHijack = true
-	}
-	hub.lock.Unlock()
 
 	if !hadHijack {
 		return false, nil

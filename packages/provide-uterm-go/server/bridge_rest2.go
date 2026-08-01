@@ -60,12 +60,13 @@ func (s *Server) handleHijackSend(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	if !s.deps.Hub.CheckHijackValid(workerID, hijackID) {
-		bridgeError(w, http.StatusNotFound, "Invalid or expired hijack session.")
-		return
-	}
-	sent, _ := s.deps.Hub.SendWorker(ctx, workerID, map[string]any{"type": "input", "data": keys, "ts": s.clock.Wall()})
-	if !sent {
+	result, _ := s.deps.Hub.SendRESTOwnedInput(ctx, workerID, hijackID,
+		map[string]any{"type": "input", "data": keys, "ts": s.clock.Wall()})
+	if !result.Sent {
+		if result.Reason == hub.OwnedInputInvalidHijack {
+			bridgeError(w, http.StatusNotFound, "Invalid or expired hijack session.")
+			return
+		}
 		bridgeError(w, http.StatusConflict, "No worker connected for this session.")
 		return
 	}
@@ -75,7 +76,10 @@ func (s *Server) handleHijackSend(w http.ResponseWriter, r *http.Request) {
 		"expect_prompt_id": expectPromptID,
 		"expect_regex":     expectRegex,
 	})
-	freshExpires := s.deps.Hub.GetFreshHijackExpiry(workerID, hijackID, hs.LeaseExpiresAt)
+	freshExpires := hs.LeaseExpiresAt
+	if result.LeaseExpiresAt != nil {
+		freshExpires = *result.LeaseExpiresAt
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":                true,
 		"worker_id":         workerID,
@@ -105,18 +109,22 @@ func (s *Server) handleHijackStep(w http.ResponseWriter, r *http.Request) {
 		bridgeError(w, http.StatusNotFound, "Invalid or expired hijack session.")
 		return
 	}
-	if !s.deps.Hub.CheckHijackValid(workerID, hijackID) {
-		bridgeError(w, http.StatusNotFound, "Invalid or expired hijack session.")
-		return
-	}
-	sent, _ := s.deps.Hub.SendWorker(ctx, workerID, controlMsg("step", hs.Owner, 0, s.clock.Wall(), ""))
-	if !sent {
+	result, _ := s.deps.Hub.SendRESTOwnedInput(ctx, workerID, hijackID,
+		controlMsg("step", hs.Owner, 0, s.clock.Wall(), ""))
+	if !result.Sent {
+		if result.Reason == hub.OwnedInputInvalidHijack {
+			bridgeError(w, http.StatusNotFound, "Invalid or expired hijack session.")
+			return
+		}
 		bridgeError(w, http.StatusConflict, "No worker connected for this session.")
 		return
 	}
 	_, _ = s.deps.Hub.AppendEventData(ctx, workerID, "hijack_step", map[string]any{"hijack_id": hijackID})
 	s.deps.Hub.Metric("hijack_steps_total", 1)
-	freshExpires := s.deps.Hub.GetFreshHijackExpiry(workerID, hijackID, hs.LeaseExpiresAt)
+	freshExpires := hs.LeaseExpiresAt
+	if result.LeaseExpiresAt != nil {
+		freshExpires = *result.LeaseExpiresAt
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":               true,
 		"worker_id":        workerID,

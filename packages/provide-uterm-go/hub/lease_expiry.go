@@ -10,23 +10,42 @@ import "context"
 // expireLeasesUnderLock expires stale leases under the hub lock, returning
 // (restExpired, dashExpired, shouldResume, ok). ok is false when the worker is
 // unknown or already idle (the Python None sentinel).
+func (lm *HijackLeaseManager) expireLeasesAfterPending(
+	ctx context.Context, workerID string, now float64,
+) (rest, dash, resume, ok bool, err error) {
+	for {
+		lm.lock.Lock()
+		st := lm.registry.Get(workerID)
+		if st == nil {
+			lm.lock.Unlock()
+			return false, false, false, false, nil
+		}
+		lease := st.Lease()
+		if lease.IsIdle() {
+			lm.lock.Unlock()
+			return false, false, false, false, nil
+		}
+		if pending := st.InputSendPending; pending != nil {
+			done := pending.Done
+			lm.lock.Unlock()
+			if err := waitInputReservation(ctx, done); err != nil {
+				return false, false, false, false, err
+			}
+			continue
+		}
+		restExpired, dashExpired := lease.Expire(now)
+		if restExpired || dashExpired {
+			st.ApplyLease(lease)
+		}
+		shouldResume := (restExpired || dashExpired) && lease.IsIdle()
+		lm.lock.Unlock()
+		return restExpired, dashExpired, shouldResume, true, nil
+	}
+}
+
 func (lm *HijackLeaseManager) expireLeasesUnderLock(workerID string, now float64) (rest, dash, resume, ok bool) {
-	lm.lock.Lock()
-	defer lm.lock.Unlock()
-	st := lm.registry.Get(workerID)
-	if st == nil {
-		return false, false, false, false
-	}
-	lease := st.Lease()
-	if lease.IsIdle() {
-		return false, false, false, false
-	}
-	restExpired, dashExpired := lease.Expire(now)
-	if restExpired || dashExpired {
-		st.ApplyLease(lease)
-	}
-	shouldResume := (restExpired || dashExpired) && lease.IsIdle()
-	return restExpired, dashExpired, shouldResume, true
+	rest, dash, resume, ok, _ = lm.expireLeasesAfterPending(context.Background(), workerID, now)
+	return rest, dash, resume, ok
 }
 
 // RecheckAndResume re-verifies no concurrent hijack appeared and, if clear,
@@ -52,7 +71,10 @@ func (lm *HijackLeaseManager) RecheckAndResume(ctx context.Context, workerID str
 // metric → recheck (which sends+notifies) → append_event(s) → broadcast → prune.
 func (lm *HijackLeaseManager) CleanupExpired(ctx context.Context, workerID string) (bool, error) {
 	now := lm.clock.Monotonic()
-	restExpired, dashExpired, shouldResume, ok := lm.expireLeasesUnderLock(workerID, now)
+	restExpired, dashExpired, shouldResume, ok, err := lm.expireLeasesAfterPending(ctx, workerID, now)
+	if err != nil {
+		return false, err
+	}
 	if !ok {
 		return false, nil
 	}
@@ -172,19 +194,29 @@ func coerceSeq(evt map[string]any) int {
 // dead socket was the dashboard owner. Port of remove_dead_browsers.
 func (lm *HijackLeaseManager) RemoveDeadBrowsers(ctx context.Context, workerID string, dead []BrowserConn) (bool, error) {
 	notifyHijackOff := false
-	lm.lock.Lock()
-	st := lm.registry.Get(workerID)
-	if st != nil {
-		for _, ws := range dead {
-			delete(st.Browsers, ws)
-			if lm.hub.IsDashboardHijackActive(st) && st.HijackOwner == ws {
-				st.HijackOwner = nil
-				st.HijackOwnerExpiresAt = nil
-				notifyHijackOff = !lm.hub.HasValidRESTLease(st)
+	for {
+		lm.lock.Lock()
+		st := lm.registry.Get(workerID)
+		if st != nil && st.InputSendPending != nil {
+			done := st.InputSendPending.Done
+			lm.lock.Unlock()
+			if err := waitInputReservation(ctx, done); err != nil {
+				return false, err
+			}
+			continue
+		}
+		if st != nil {
+			for _, ws := range dead {
+				delete(st.Browsers, ws)
+				if lm.hub.IsDashboardHijackActive(st) && st.HijackOwner == ws {
+					st.clearDashboardOwner()
+					notifyHijackOff = !lm.hub.HasValidRESTLease(st)
+				}
 			}
 		}
+		lm.lock.Unlock()
+		break
 	}
-	lm.lock.Unlock()
 
 	if notifyHijackOff {
 		// Re-check: a concurrent acquire may have written a new session.

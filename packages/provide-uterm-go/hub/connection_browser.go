@@ -77,6 +77,20 @@ func (c *ConnectionManager) RegisterBrowser(
 	return initialState, nil
 }
 
+// ReplaceBrowserResumeToken makes the post-resume token the sole token tied to
+// ws, revoking the connect-time token that it supersedes.
+func (c *ConnectionManager) ReplaceBrowserResumeToken(ctx context.Context, ws BrowserConn, token string) error {
+	hub := c.hub
+	hub.lock.Lock()
+	previous := hub.wsToResumeToken[ws]
+	hub.wsToResumeToken[ws] = token
+	hub.lock.Unlock()
+	if previous != "" && previous != token && hub.resumeStore != nil {
+		return hub.resumeStore.Revoke(ctx, previous)
+	}
+	return nil
+}
+
 // CleanupBrowserDisconnect handles a browser WS disconnect atomically. Port of
 // cleanup_browser_disconnect. Returns a map with was_owner, rest_still_active,
 // resume_without_owner.
@@ -87,21 +101,32 @@ func (c *ConnectionManager) CleanupBrowserDisconnect(
 	browserCount := -1
 	wasOwner, restStillActive, resumeWithoutOwner := false, false, false
 
-	hub.lock.Lock()
-	st := hub.registry.Get(workerID)
-	if st != nil {
-		wasOwner, restStillActive, resumeWithoutOwner = c.updateLockState(st, ws, ownedHijack)
-		browserCount = len(st.Browsers)
-	}
-	// Pop the resume token + startup-pending flag under the lock (these
-	// hub-level maps are lock-guarded in this port).
 	token := ""
-	if hub.resumeStore != nil {
-		token = hub.wsToResumeToken[ws]
-		delete(hub.wsToResumeToken, ws)
+	for {
+		hub.lock.Lock()
+		st := hub.registry.Get(workerID)
+		if st != nil && st.InputSendPending != nil {
+			done := st.InputSendPending.Done
+			hub.lock.Unlock()
+			if err := waitInputReservation(ctx, done); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		if st != nil {
+			wasOwner, restStillActive, resumeWithoutOwner = c.updateLockState(st, ws, ownedHijack)
+			browserCount = len(st.Browsers)
+		}
+		// Pop the resume token + startup-pending flag under the lock (these
+		// hub-level maps are lock-guarded in this port).
+		if hub.resumeStore != nil {
+			token = hub.wsToResumeToken[ws]
+			delete(hub.wsToResumeToken, ws)
+		}
+		delete(hub.startupPendingBrowsers, ws)
+		hub.lock.Unlock()
+		break
 	}
-	delete(hub.startupPendingBrowsers, ws)
-	hub.lock.Unlock()
 
 	// Mark the resume token with hijack ownership OUTSIDE the lock; do NOT
 	// revoke — the token must survive until reconnect or TTL.

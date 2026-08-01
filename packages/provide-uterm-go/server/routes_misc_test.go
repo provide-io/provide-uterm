@@ -6,6 +6,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"testing"
 
@@ -13,10 +14,27 @@ import (
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
 )
 
+type silentApprovalBrowser struct{}
+
+func (*silentApprovalBrowser) SendText(context.Context, string) error { return nil }
+
 func TestApprovals(t *testing.T) {
 	ts := newTestServer(t, nil)
+	ts.reg.add("w1", "admin1", "public")
+	worker := ts.setupWorker(t, "w1")
+	submitter := &silentApprovalBrowser{}
+	if _, err := ts.hub.RegisterBrowser(context.Background(), "w1", submitter, "admin", false); err != nil {
+		t.Fatalf("register approval submitter: %v", err)
+	}
+	if ok, reason := ts.hub.TryAcquireWsHijack(context.Background(), "w1", submitter); !ok {
+		t.Fatalf("acquire approval submitter: %s", reason)
+	}
+	generation, allowed := ts.hub.BrowserInputFence("w1", submitter)
+	if !allowed {
+		t.Fatal("approval submitter has no input fence")
+	}
 	future := ts.srv.clock.Wall() + 3600
-	ts.hub.Approvals.Add(&hub.ApprovalRequest{ID: "r1", WorkerID: "w1", SubmitterID: "someoneelse", Command: "ls", Status: hub.ApprovalPending, ExpiresAt: future})
+	ts.hub.Approvals.Add(&hub.ApprovalRequest{ID: "r1", WorkerID: "w1", SubmitterID: "someoneelse", Command: "ls", Status: hub.ApprovalPending, ExpiresAt: future, OriginBrowser: submitter, OriginGeneration: generation})
 	ts.hub.Approvals.Add(&hub.ApprovalRequest{ID: "own", WorkerID: "w1", SubmitterID: "admin1", Command: "rm", Status: hub.ApprovalPending, ExpiresAt: future})
 	ts.hub.Approvals.Add(&hub.ApprovalRequest{ID: "r2", WorkerID: "w1", SubmitterID: "x", Command: "y", Status: hub.ApprovalPending, ExpiresAt: future})
 
@@ -39,6 +57,22 @@ func TestApprovals(t *testing.T) {
 	// Approve unknown → 404.
 	if rec := ts.do("POST", "/api/approvals/ghost/approve", "", adminHeaders()); rec.Code != http.StatusNotFound {
 		t.Fatalf("approve ghost: %d", rec.Code)
+	}
+	// A disconnected worker makes an approval terminally refused; the route
+	// must not claim success or inject the command.
+	ts.hub.Approvals.Add(&hub.ApprovalRequest{ID: "offline", WorkerID: "w1", SubmitterID: "someoneelse", Command: "offline-input", Status: hub.ApprovalPending, ExpiresAt: future, OriginBrowser: submitter, OriginGeneration: generation})
+	if disconnected, err := ts.hub.DisconnectWorker(context.Background(), "w1"); err != nil || !disconnected {
+		t.Fatalf("disconnect worker: disconnected=%t err=%v", disconnected, err)
+	}
+	beforeOfflineApproval := len(workerSent(worker))
+	if rec := ts.do("POST", "/api/approvals/offline/approve", "", adminHeaders()); rec.Code != http.StatusConflict {
+		t.Fatalf("offline approve: %d %s", rec.Code, rec.Body.String())
+	}
+	if got := len(workerSent(worker)); got != beforeOfflineApproval {
+		t.Fatalf("offline approval touched worker: before=%d after=%d", beforeOfflineApproval, got)
+	}
+	if status := ts.hub.Approvals.Get("offline").Status; status != hub.ApprovalRefused {
+		t.Fatalf("offline approval status = %q", status)
 	}
 	// Reject flow.
 	if rec := ts.do("POST", "/api/approvals/r2/reject", "", adminHeaders()); rec.Code != http.StatusOK {

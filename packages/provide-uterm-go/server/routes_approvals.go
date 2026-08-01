@@ -71,6 +71,8 @@ func (s *Server) handleApprove(w http.ResponseWriter, r *http.Request) {
 	resolved, err := s.deps.Hub.ResolveApproval(r.Context(), requestID, true, nil, resolverPrincipal(r))
 	if err != nil {
 		s.logger.Debug("resolve_approval_failed", "request_id", requestID, "error", err)
+		detailError(w, http.StatusConflict, "Approval input ownership is no longer valid")
+		return
 	}
 	if !resolved {
 		detailError(w, http.StatusBadRequest, "Approval request is not pending")

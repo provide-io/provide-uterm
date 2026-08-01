@@ -7,8 +7,13 @@ package hub
 
 import (
 	"context"
+	"errors"
 	"strings"
 )
+
+// ErrApprovalOwnershipInvalid means the submitting browser's capability fence
+// no longer authorizes worker input.
+var ErrApprovalOwnershipInvalid = errors.New("approval input ownership is no longer valid")
 
 // PendingApprovals returns a snapshot slice of every request still PENDING.
 // The store lock is held only for the snapshot; callers iterate the returned
@@ -79,6 +84,7 @@ func (h *TermHub) InterceptBrowserInput(
 // _handle_input.
 func (h *TermHub) ParkBrowserForApproval(
 	ctx context.Context, workerID string, ws BrowserConn, command string, decision PolicyDecision,
+	ownershipGeneration ...uint64,
 ) (string, error) {
 	requestID := ""
 	if decision.RequestID != nil && *decision.RequestID != "" {
@@ -93,17 +99,30 @@ func (h *TermHub) ParkBrowserForApproval(
 	if s := browserPrincipalSubjectID(ws); s != nil {
 		submitter = *s
 	}
-	h.Approvals.Add(&ApprovalRequest{
-		ID:          requestID,
-		WorkerID:    workerID,
-		SubmitterID: submitter,
-		Command:     command,
-		Status:      ApprovalPending,
-		CreatedAt:   now,
-		ExpiresAt:   expiresAt,
-	})
-
 	h.lock.Lock()
+	st := h.registry.Get(workerID)
+	generation := uint64(0)
+	if st != nil {
+		generation = st.HijackOwnerGeneration
+	}
+	if len(ownershipGeneration) != 0 {
+		generation = ownershipGeneration[0]
+	}
+	if st == nil || st.HijackOwnerGeneration != generation || !h.CanSendInput(st, ws) {
+		h.lock.Unlock()
+		return "", ErrApprovalOwnershipInvalid
+	}
+	h.Approvals.Add(&ApprovalRequest{
+		ID:               requestID,
+		WorkerID:         workerID,
+		SubmitterID:      submitter,
+		Command:          command,
+		Status:           ApprovalPending,
+		CreatedAt:        now,
+		ExpiresAt:        expiresAt,
+		OriginBrowser:    ws,
+		OriginGeneration: generation,
+	})
 	h.pausedBrowsers[ws] = true
 	h.lock.Unlock()
 
@@ -154,10 +173,22 @@ func (h *TermHub) ResolveApproval(
 		"approved", approve, "resolver", resolverSubject(resolver))
 
 	if approve {
-		if _, err := h.SendWorker(ctx, workerID, map[string]any{
-			"type": "input", "data": command, "ts": h.clock.Wall(),
-		}); err != nil {
-			return true, err
+		msgs := []map[string]any{{"type": "input", "data": command, "ts": h.clock.Wall()}}
+		if replay := h.releaseParkedBrowser(req, true); replay != "" {
+			msgs = append(msgs, map[string]any{"type": "input", "data": replay, "ts": h.clock.Wall()})
+		}
+		sent, err := h.SendBrowserOwnedInputBatchAtGeneration(
+			ctx, workerID, req.OriginBrowser, req.OriginGeneration, msgs,
+		)
+		if err != nil || !sent {
+			h.Approvals.SetStatus(requestID, ApprovalRefused)
+			_ = h.Router.Broadcast(ctx, workerID, map[string]any{
+				"type": "approval_resolved", "outcome": "refused", "request_id": requestID,
+			})
+			if err != nil {
+				return true, err
+			}
+			return true, ErrApprovalOwnershipInvalid
 		}
 	} else if err := h.Router.Broadcast(ctx, workerID, map[string]any{
 		"type": "term", "data": rejectMessage(command, reason),
@@ -165,8 +196,8 @@ func (h *TermHub) ResolveApproval(
 		return true, err
 	}
 
-	if err := h.releaseParkedBrowsers(ctx, workerID, approve); err != nil {
-		return true, err
+	if !approve {
+		h.releaseParkedBrowser(req, false)
 	}
 
 	outcome := "rejected"
@@ -189,36 +220,17 @@ func (h *TermHub) ResolveApproval(
 // browser input handler (re-applying the policy gate / command splitter); this
 // port re-injects the buffered bytes directly as a worker input frame, which is
 // sufficient for the interop hold/resume behaviour.
-func (h *TermHub) releaseParkedBrowsers(ctx context.Context, workerID string, approve bool) error {
+func (h *TermHub) releaseParkedBrowser(req *ApprovalRequest, approve bool) string {
 	h.lock.Lock()
-	st := h.registry.Get(workerID)
-	var replays []string
-	if st != nil {
-		for ws := range st.Browsers {
-			if !h.pausedBrowsers[ws] {
-				continue
-			}
-			delete(h.pausedBrowsers, ws)
-			if approve {
-				if buf, ok := h.holdBuffers[ws]; ok {
-					delete(h.holdBuffers, ws)
-					if buf != "" {
-						replays = append(replays, buf)
-					}
-				}
-			}
-		}
+	defer h.lock.Unlock()
+	ws := req.OriginBrowser
+	delete(h.pausedBrowsers, ws)
+	buf := h.holdBuffers[ws]
+	delete(h.holdBuffers, ws)
+	if approve {
+		return buf
 	}
-	h.lock.Unlock()
-
-	for _, buf := range replays {
-		if _, err := h.SendWorker(ctx, workerID, map[string]any{
-			"type": "input", "data": buf, "ts": h.clock.Wall(),
-		}); err != nil {
-			return err
-		}
-	}
-	return nil
+	return ""
 }
 
 // rejectMessage builds the red terminal rejection banner. Byte-identical to the

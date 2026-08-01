@@ -73,6 +73,11 @@ func (h *TermHub) TryReclaimHijack(ctx context.Context, workerID string, ws Brow
 	return h.Router.TryReclaimHijack(ctx, workerID, ws)
 }
 
+// ReplaceBrowserResumeToken binds a successful resume's fresh token to ws.
+func (h *TermHub) ReplaceBrowserResumeToken(ctx context.Context, ws BrowserConn, token string) error {
+	return h.Conn.ReplaceBrowserResumeToken(ctx, ws, token)
+}
+
 // GetWorkerBrowserRole returns the role for ws (ok=false when unknown).
 func (h *TermHub) GetWorkerBrowserRole(ctx context.Context, workerID string, ws BrowserConn) (string, bool) {
 	return h.Router.GetWorkerBrowserRole(ctx, workerID, ws)
@@ -138,6 +143,13 @@ func (h *TermHub) IsActiveWorker(ctx context.Context, workerID string, ws Worker
 // SetWorkerTunnelFlag marks whether workerID uses the tunnel wire format.
 func (h *TermHub) SetWorkerTunnelFlag(ctx context.Context, workerID string, value bool) {
 	h.Conn.SetWorkerTunnelFlag(ctx, workerID, value)
+}
+
+// RegisterWorkerWithTransport atomically registers a worker and its wire mode.
+func (h *TermHub) RegisterWorkerWithTransport(
+	ctx context.Context, workerID string, ws WorkerWS, isTunnel bool,
+) (bool, error) {
+	return h.Conn.RegisterWorkerWithTransport(ctx, workerID, ws, isTunnel)
 }
 
 // SetWorkerHello applies a worker_hello.
@@ -210,21 +222,21 @@ func (h *TermHub) ActivateBrowserBroadcasts(ctx context.Context, workerID string
 	h.Conn.ActivateBrowserBroadcasts(ctx, workerID, ws)
 }
 
-// CleanupBrowserDisconnect clears per-ws hub state then runs the connection
-// cleanup and emits telemetry. Port of core_delegates_connection.cleanup_browser_disconnect.
+// CleanupBrowserDisconnect fences the connection transition before clearing
+// per-ws auxiliary state and emitting telemetry.
 func (h *TermHub) CleanupBrowserDisconnect(
 	ctx context.Context, workerID string, ws BrowserConn, ownedHijack bool,
 ) (map[string]any, error) {
+	result, err := h.Conn.CleanupBrowserDisconnect(ctx, workerID, ws, ownedHijack)
+	if err != nil {
+		return nil, err
+	}
 	h.Router.ForgetBrowser(ws)
 	h.State.ForgetInputBuffer(ws)
 	h.lock.Lock()
 	delete(h.holdBuffers, ws)
 	delete(h.pausedBrowsers, ws)
 	h.lock.Unlock()
-	result, err := h.Conn.CleanupBrowserDisconnect(ctx, workerID, ws, ownedHijack)
-	if err != nil {
-		return nil, err
-	}
 	h.emitTelemetry(ctx, "session.disconnected", workerID, nil, nil, map[string]any{"session_type": "browser"})
 	return result, nil
 }
@@ -232,6 +244,10 @@ func (h *TermHub) CleanupBrowserDisconnect(
 // RemoveDeadBrowsers clears per-ws state for dead browsers then calls the lease
 // manager. Port of core_delegates_connection.remove_dead_browsers.
 func (h *TermHub) RemoveDeadBrowsers(ctx context.Context, workerID string, dead []BrowserConn) (bool, error) {
+	changed, err := h.Lease.RemoveDeadBrowsers(ctx, workerID, dead)
+	if err != nil {
+		return false, err
+	}
 	h.lock.Lock()
 	for _, ws := range dead {
 		delete(h.holdBuffers, ws)
@@ -243,7 +259,7 @@ func (h *TermHub) RemoveDeadBrowsers(ctx context.Context, workerID string, dead 
 		h.Router.ForgetBrowser(ws)
 		h.State.ForgetInputBuffer(ws)
 	}
-	return h.Lease.RemoveDeadBrowsers(ctx, workerID, dead)
+	return changed, nil
 }
 
 // spawnWorkerEmpty fires the on-worker-empty callback as a tracked background
