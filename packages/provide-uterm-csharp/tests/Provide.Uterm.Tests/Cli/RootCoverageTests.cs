@@ -49,6 +49,24 @@ public class RootCoverageTests
         Assert.Contains("listen ready", o.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
+    // `--port 0` takes the ephemeral-probe arm in Root.ListenCommand (FxSsh needs a
+    // concrete bind port). Lives here, in a ~Cli batch class, rather than in
+    // LiveParityPhase2Tests: batch 3d is skipped whenever $CI is set, so a copy of
+    // this test there contributes coverage on developer machines only and the gate
+    // then swings ~0.02pt between local and CI runs. Nothing here touches native
+    // PTY/interop, so it is safe in the batch that CI actually runs.
+    [Fact]
+    public void Listen_Ssh_PortZero_Ephemeral_Once()
+    {
+        using var o = new StringWriter();
+        using var e = new StringWriter();
+        Assert.Equal(0, Root.Execute(
+            ["listen", "ws://127.0.0.1:9/ws", "--protocol", "ssh", "--host", "127.0.0.1", "--port", "0", "--once"],
+            o, e));
+        Assert.Contains("ssh gateway", o.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("listen ready", o.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public void Tunnel_MissingUrl_Fails()
     {
