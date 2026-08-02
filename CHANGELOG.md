@@ -2,10 +2,12 @@
 
 All notable changes to provide-uterm are documented in this file.
 
-## [Unreleased] — enterprise-hardening body (2026-05-06 … 2026-06-06)
+## [Unreleased]
 
-A multi-wave security/compliance hardening pass landed after the
-`0.5.0` release below. Highlights:
+## [0.5.0] — 2026-08-01
+
+A multi-wave security/compliance hardening pass landed during the
+`0.5.0` development cycle. Highlights:
 
 ### Post-audit hardening (2026-06-02 … 2026-06-06)
 
@@ -140,8 +142,6 @@ remediation pass; every actionable finding is closed.
 - **DRY transport sessions.** `telnet_session.py` and `ws_session.py` share a
   `TransportSession` base (`provide/uterm/transport_session.py`);
   `TelnetTransport` now explicitly implements the `ConnectionTransport` ABC.
-
-## [0.5.0] — 2026-08-01
 
 ### Breaking Changes
 

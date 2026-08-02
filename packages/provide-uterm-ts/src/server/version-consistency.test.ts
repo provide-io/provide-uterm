@@ -48,4 +48,15 @@ describe("release version consistency", () => {
     expect(SERVER_VERSION).toBe(expected);
     expect(readFileSync(join(repoRoot, "CHANGELOG.md"), "utf8")).toContain(`## [${expected}] — 2026-08-01`);
   });
+
+  it("keeps pre-release hardening inside the dated release section", () => {
+    const changelog = readFileSync(join(repoRoot, "CHANGELOG.md"), "utf8");
+    const unreleasedStart = changelog.indexOf("## [Unreleased]");
+    const releaseStart = changelog.indexOf("## [0.5.0] — 2026-08-01");
+
+    expect(unreleasedStart).toBeGreaterThanOrEqual(0);
+    expect(releaseStart).toBeGreaterThan(unreleasedStart);
+    expect(changelog.slice(unreleasedStart + "## [Unreleased]".length, releaseStart).trim()).toBe("");
+    expect(changelog.indexOf("### Post-audit hardening", releaseStart)).toBeGreaterThan(releaseStart);
+  });
 });
