@@ -131,8 +131,21 @@ CREATE INDEX IF NOT EXISTS ix_cp_graphical_targets_tenant
     /// </summary>
     internal static readonly (int Version, string Sql)[] Migrations =
     [
-        (1, V0001),
-        (2, V0002),
-        (3, V0003),
+        (1, Lf(V0001)),
+        (2, Lf(V0002)),
+        (3, Lf(V0003)),
     ];
+
+    /// <summary>
+    /// Force LF endings, whatever the checkout did to this file.
+    ///
+    /// The constants above are verbatim string literals, so they carry this
+    /// source file's own line endings. A CRLF checkout — the Windows default —
+    /// therefore puts CRLF into sqlite_master.sql and quietly makes a database
+    /// created here differ from one created by Python or Go, which is exactly
+    /// the byte-identical contract this class exists to keep. Normalising at
+    /// the single point the SQL is consumed makes that independent of how the
+    /// repository was cloned.
+    /// </summary>
+    private static string Lf(string sql) => sql.Replace("\r\n", "\n", StringComparison.Ordinal);
 }
