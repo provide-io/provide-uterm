@@ -13,7 +13,7 @@ docstring at :mod:`provide.uterm.server.bridge.hub` for the full service map.
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, overload
 
 try:
     from fastapi import WebSocket  # noqa: TC002 — runtime import drives the friendly ImportError below
@@ -355,6 +355,22 @@ class TermHub:
     async def append_event(self, worker_id: str, event_type: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
         return await self.router.append_event(worker_id, event_type, data)
 
+    @overload
+    async def commit_snapshot_event(
+        self,
+        worker_id: str,
+        snapshot: dict[str, Any],
+    ) -> dict[str, Any]: ...
+
+    @overload
+    async def commit_snapshot_event(
+        self,
+        worker_id: str,
+        snapshot: dict[str, Any],
+        *,
+        expected_worker: WebSocket,
+    ) -> dict[str, Any] | None: ...
+
     async def commit_snapshot_event(
         self,
         worker_id: str,
@@ -362,6 +378,8 @@ class TermHub:
         *,
         expected_worker: WebSocket | None = None,
     ) -> dict[str, Any] | None:
+        if expected_worker is None:
+            return await self.router.commit_snapshot_event(worker_id, snapshot)
         return await self.router.commit_snapshot_event(worker_id, snapshot, expected_worker=expected_worker)
 
     async def broadcast(

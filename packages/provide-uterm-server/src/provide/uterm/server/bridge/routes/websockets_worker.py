@@ -168,16 +168,17 @@ async def _dispatch_worker_frame(
     frame" (which would mis-count it and silently swallow a real bug).
     """
     if mtype == "snapshot":
-        committed = await hub.commit_snapshot_event(worker_id, frame, expected_worker=expected_worker)
-        if committed is not None:
-            if expected_worker is None:
-                await hub.broadcast(worker_id, committed)
-            else:
+        if expected_worker is None:
+            committed = await hub.commit_snapshot_event(worker_id, frame)
+            await hub.broadcast(worker_id, committed)
+        else:
+            owned_commit = await hub.commit_snapshot_event(worker_id, frame, expected_worker=expected_worker)
+            if owned_commit is not None:
                 await hub.broadcast(
                     worker_id,
-                    committed,
+                    owned_commit,
                     expected_worker=expected_worker,
-                    expected_event_seq=int(committed["event_seq"]),
+                    expected_event_seq=int(owned_commit["event_seq"]),
                 )
     elif mtype == "analysis":
         await hub.broadcast(worker_id, frame)
