@@ -183,7 +183,7 @@ class TestGifToAnsi:
         # Download the GIF
         with tempfile.NamedTemporaryFile(suffix=".gif", delete=False) as f:
             gif_path = f.name
-        urllib.request.urlretrieve(_NYAN_CAT_URL, gif_path)  # noqa: S310
+        urllib.request.urlretrieve(_NYAN_CAT_URL, gif_path)
 
         # Convert to ANSI frames at truecolor (24-bit)
         frames, fps = gif_to_ansi_frames(gif_path, cols=80, rows=25, mode="truecolor")
@@ -210,7 +210,7 @@ class TestGifToAnsi:
         """Same GIF quantized to 256-color palette (ESC[38;5;N)."""
         with tempfile.NamedTemporaryFile(suffix=".gif", delete=False) as f:
             gif_path = f.name
-        urllib.request.urlretrieve(_NYAN_CAT_URL, gif_path)  # noqa: S310
+        urllib.request.urlretrieve(_NYAN_CAT_URL, gif_path)
 
         frames, fps = gif_to_ansi_frames(gif_path, cols=80, rows=25, mode="256")
         worker_id = f"nyan256-{_uid()}"
@@ -229,7 +229,7 @@ class TestGifToAnsi:
         """Same GIF quantized to 16-color palette (classic ANSI)."""
         with tempfile.NamedTemporaryFile(suffix=".gif", delete=False) as f:
             gif_path = f.name
-        urllib.request.urlretrieve(_NYAN_CAT_URL, gif_path)  # noqa: S310
+        urllib.request.urlretrieve(_NYAN_CAT_URL, gif_path)
 
         frames, fps = gif_to_ansi_frames(gif_path, cols=80, rows=25, mode="16")
         worker_id = f"nyan16-{_uid()}"
