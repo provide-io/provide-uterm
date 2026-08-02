@@ -172,6 +172,11 @@ func TestInspectInterceptDrop(t *testing.T) {
 	deadline := time.Now().Add(8 * time.Second)
 	var last httpResult
 	for time.Now().Before(deadline) {
+		// Per-attempt, not cumulative: until the action receiver is up the gate
+		// times out to its "forward" default, so an early attempt legitimately
+		// reaches the origin. Asserting on a flag accumulated across attempts
+		// then fails on that earlier hit rather than on the dropped request.
+		hit.Store(false)
 		last = tryGet(proxyPort, "/secret")
 		if last.status == http.StatusBadGateway && strings.Contains(last.body, "dropped by interceptor") {
 			if hit.Load() {
