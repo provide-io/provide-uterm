@@ -86,8 +86,12 @@ RUN apt-get update \
 
 # uv from the pinned official image — NOT an unpinned `curl ... install.sh | sh`
 # (supply-chain). Mirrors Dockerfile.server so both images use the same auditable,
-# reproducible uv binary.
-COPY --from=ghcr.io/astral-sh/uv:0.11.16 /uv /uvx /bin/
+# reproducible uv binary. Floor is uv 0.11.30: earlier builds statically link
+# quinn-proto 0.11.14, which Trivy's HIGH/CRITICAL gate flags as
+# GHSA-4w2j-m93h-cj5j (remote memory exhaustion). Unlike Dockerfile.server,
+# which only needs uv in its discarded builder stage, this image ships uv in the
+# runtime layer because its CMD is `uv run pywrangler`, so the scanner sees it.
+COPY --from=ghcr.io/astral-sh/uv:0.11.33 /uv /uvx /bin/
 
 ENV PYTHONUNBUFFERED=1
 # Pin every `uv sync` / `uv run` in this image to the committed uv.lock (no

@@ -91,7 +91,7 @@ RUN apt-get update \
 
 # Pin the uv toolchain via the official image instead of bootstrapping it with
 # system pip. Pin to a digest for full reproducibility when you cut a release.
-COPY --from=ghcr.io/astral-sh/uv:0.11.16 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.11.33 /uv /uvx /bin/
 
 # uv installs into the venv at /app/.venv using the base image's interpreter (so
 # the venv is portable to the runtime stage, which shares the base), pinned to
