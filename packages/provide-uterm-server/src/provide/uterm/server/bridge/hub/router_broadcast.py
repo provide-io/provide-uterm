@@ -16,6 +16,13 @@ hub._lock`` block is identical to the original.
 The per-send timeout constant ``_BROADCAST_SEND_TIMEOUT_S`` still lives in
 ``router_impl`` (tests monkeypatch it there); :func:`broadcast` reads it
 through the module object so that patch keeps taking effect.
+
+Browser sockets reach this router only after the browser route authenticates
+and authorizes them, so the membership table is the authorized live terminal
+stream. With no output policy gate, broadcasts preserve exact gameplay screen
+semantics. A configured gate may apply role-scoped redaction. This differs from
+the public event ring/EventBus/SSE/API/MCP egress, which is always redacted at
+event commit time in :mod:`router_impl`.
 """
 
 from __future__ import annotations
@@ -87,6 +94,10 @@ async def payloads_by_role(
 
 async def broadcast(router: MessageRouter, worker_id: str, msg: dict[str, Any]) -> None:
     """Send *msg* to all browser WebSockets registered for *worker_id*.
+
+    Registered browsers are authenticated, authorized live viewers. The
+    default payload is therefore the exact terminal frame; deployments that
+    configure an output policy gate receive role-scoped redaction instead.
 
     Sends are fanned out CONCURRENTLY (``asyncio.gather``) so a slow browser
     only consumes its own ``_BROADCAST_SEND_TIMEOUT_S`` budget instead of

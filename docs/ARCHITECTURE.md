@@ -77,6 +77,7 @@ Treats collaboration as a first-class citizen rather than an afterthought.
     - **LocalProvider**: Standard RBAC with roles: `viewer`, `operator`, `admin`.
     - **WebhookProvider**: Delegates every decision to an external API, allowing integration into large enterprise systems.
 - **Tunnel Security**: Uses in-memory tokens for binary tunnels, supporting IP binding and automatic token rotation/sweeping to prevent unauthorized access to session streams.
+- **Terminal output egress**: A browser enters the hub membership table only after its live terminal WebSocket is authenticated and authorized. That live viewer stream preserves the exact gameplay screen by default; deployments can configure an output policy gate to apply role-scoped redaction. Diagnostic egress is a separate, stricter boundary: the public event ring, EventBus, SSE, events API, and MCP event tools always receive write-time-redacted terminal content. Server-owned supervised operations use a private, byte-bounded raw stream that is not exposed by a route.
 
 ---
 
