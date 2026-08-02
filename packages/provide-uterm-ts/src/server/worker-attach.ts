@@ -37,7 +37,7 @@ import { WorkerLink, type WorkerLinkTarget } from "../bridge/index.ts";
 import type { SessionConnector, WorkerMessage } from "../connectors/index.ts";
 import { ControlFrameDecoder } from "../control-channel/index.ts";
 import { makeSnapshotFrame } from "../frames/index.ts";
-import { extractPromptId, type InputMode, safeFloat, type WorkerSocket } from "../hub/index.ts";
+import { type InputMode, safeFloat, type WorkerSocket } from "../hub/index.ts";
 import { safeInt } from "../pycompat/index.ts";
 import type { SessionHub } from "./session-hub.ts";
 
@@ -116,13 +116,8 @@ export async function attachConnector(
       }
       lastSnapshot = message;
       const frame = workerSnapshotFrame(message, now());
-      await hub.updateLastSnapshot(sessionId, frame);
-      await hub.appendEvent(sessionId, "snapshot", {
-        prompt_id: extractPromptId(frame) ?? null,
-        screen_hash: frame.screen_hash,
-        screen: frame.screen,
-      });
-      await hub.router.broadcast(sessionId, frame);
+      const committed = await hub.commitSnapshotEvent(sessionId, frame);
+      await hub.router.broadcast(sessionId, committed);
     }
   }
 
