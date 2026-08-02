@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import socket
 import socketserver
 import threading
 import time
@@ -18,7 +20,7 @@ from playwright.sync_api import Page, expect
 from provide.uterm.fastapi_utils import WsTerminalProxy, mount_terminal_ui
 from provide.uterm.transports.telnet_server import _build_telnet_handshake
 
-from .backend_server import backend_name
+from .backend_server import backend_name, stop_uvicorn_thread
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -26,24 +28,65 @@ if TYPE_CHECKING:
 
 class _ThreadedEchoServer(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
+    daemon_threads = True
+    # ``ThreadingMixIn.server_close()`` joins every handler thread with NO
+    # timeout whenever ``block_on_close`` is true (the class default; note that
+    # ``daemon_threads`` alone does not disable it).  Each handler parks in a
+    # blocking ``recv()`` until its peer closes, so a single proxy connection
+    # that outlives the uvicorn thread wedges teardown *forever* — that is the
+    # >60 s pytest-timeout at session teardown seen on CI's
+    # ``multi-backend-playwright (python)`` job.  Teardown closes the peers
+    # explicitly in ``shutdown_connections()`` instead of blocking on a join.
+    block_on_close = False
 
     def __init__(self, server_address: tuple[str, int], received_chunks: list[bytes]) -> None:
         self.received_chunks = received_chunks
+        self._conns: set[socket.socket] = set()
+        self._conns_lock = threading.Lock()
         super().__init__(server_address, _EchoTelnetHandler)
+
+    def track(self, conn: socket.socket) -> None:
+        with self._conns_lock:
+            self._conns.add(conn)
+
+    def untrack(self, conn: socket.socket) -> None:
+        with self._conns_lock:
+            self._conns.discard(conn)
+
+    def shutdown_connections(self) -> None:
+        """Half-close every live peer so parked ``recv()`` calls return.
+
+        ``shutdown(SHUT_RDWR)`` (rather than ``close()``) is deliberate: the
+        handler thread still owns the fd, so closing it here would race a
+        concurrent ``recv()`` against fd reuse.  A half-close makes ``recv()``
+        return ``b""``; the handler then returns and ``shutdown_request()``
+        closes the socket from its owning thread.
+        """
+        with self._conns_lock:
+            conns = list(self._conns)
+        for conn in conns:
+            with contextlib.suppress(OSError):
+                conn.shutdown(socket.SHUT_RDWR)
 
 
 class _EchoTelnetHandler(socketserver.BaseRequestHandler):
     def handle(self) -> None:
         server = self.server
         assert isinstance(server, _ThreadedEchoServer)
-        self.request.sendall(_build_telnet_handshake())
-        self.request.sendall(b"WELCOME FROM TELNET\r\n")
-        while True:
-            data = self.request.recv(4096)
-            if not data:
-                return
-            server.received_chunks.append(data)
-            self.request.sendall(data)
+        server.track(self.request)
+        try:
+            self.request.sendall(_build_telnet_handshake())
+            self.request.sendall(b"WELCOME FROM TELNET\r\n")
+            while True:
+                data = self.request.recv(4096)
+                if not data:
+                    return
+                server.received_chunks.append(data)
+                self.request.sendall(data)
+        except OSError:
+            return  # peer half-closed by shutdown_connections(), or reset
+        finally:
+            server.untrack(self.request)
 
 
 def _skip_terminal_proxy_product_gap() -> None:
@@ -96,9 +139,11 @@ def terminal_proxy_server() -> Generator[tuple[str, list[bytes]], None, None]:
     port = server.servers[0].sockets[0].getsockname()[1]
     yield f"http://127.0.0.1:{port}", received_chunks
 
-    server.should_exit = True
-    thread.join(timeout=5)
+    # Order matters: drop the proxy first (it owns the telnet client sockets),
+    # then stop accepting, then force any still-parked handler out of recv().
+    stop_uvicorn_thread(server, thread)
     telnet_server.shutdown()
+    telnet_server.shutdown_connections()
     telnet_server.server_close()
     telnet_thread.join(timeout=5)
 
