@@ -262,6 +262,21 @@ async def _execute_rest(scenario: dict[str, Any]) -> dict[str, Any]:
             headers=_headers(input_data["actor"]),
         )
         body = response.json()
+        # Release while the app lifespan is still active. Hub shutdown now
+        # synchronously closes both event generations, so releasing after the
+        # TestClient context exits correctly has no operation-output stream.
+        if input_data["surface"] == "rest_release" and response.status_code == 200 and body.get("approval_id"):
+            approval = _hub.approval_store.get(body["approval_id"])
+            assert approval is not None
+            released = await controller.release_approved_command(
+                body["approval_id"],
+                expected_revision=approval.revision,
+            )
+            assert released is not None
+            observation = _from_result(scenario, released, delivered, observers, response.status_code)
+            observation["approval_required"] = body["approval_required"]
+            observation["approval_id"] = "approval"
+            return observation
     if response.status_code != 200 or "results" not in body:
         return _base(
             scenario,
