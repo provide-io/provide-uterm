@@ -6,7 +6,6 @@
 import { describe, expect, it } from "vitest";
 import { InMemoryGraphicalTargetRegistry, makeGraphicalTarget } from "../graphical/index.ts";
 import { loadGolden } from "../testing/golden.ts";
-import { decodePng } from "../testing/png.ts";
 import {
   CAP_GRAPHICAL_ATTACH,
   type GraphicalSession,
@@ -280,15 +279,6 @@ describe("the gui routes", () => {
       // there was one; the conversion itself is pinned above.
       expect(typeof actual.lease_expires_at).toBe("number");
       actual.lease_expires_at = "<a time>";
-    }
-    if (typeof actual.screenshot === "string" && typeof expected.screenshot === "string") {
-      // Compared as the picture it decodes to, not as bytes: zlib's deflate
-      // output is not identical across platforms even at the same level and
-      // version, so the corpus's base64 cannot be matched character for
-      // character by an encoder running elsewhere (see ../testing/png.ts).
-      const shot = decodePng(Buffer.from(actual.screenshot, "base64"));
-      expect(shot).toEqual(decodePng(Buffer.from(expected.screenshot, "base64")));
-      actual.screenshot = expected.screenshot;
     }
     expect(actual).toEqual(expected);
     expect(Object.keys(actual)).toEqual(Object.keys(expected));

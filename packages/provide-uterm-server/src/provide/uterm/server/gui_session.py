@@ -117,9 +117,20 @@ def encode_rgba_png(width: int, height: int, pixels: bytes | bytearray) -> bytes
         src = y * row_len
         raw += pixels[src : src + row_len]
 
-    # zlib.compress emits a full zlib stream (0x78 header + deflate + adler32),
-    # which is exactly the PNG IDAT payload.
-    idat = zlib.compress(bytes(raw), 9)
+    # A full zlib stream (0x78 header + deflate + adler32) is exactly the PNG
+    # IDAT payload.
+    #
+    # Z_RLE, not the default strategy, because this stream is a cross-language
+    # contract: the corpus is recorded here and the TypeScript and C# ports must
+    # reproduce it byte for byte. zlib's default match-finding is not the same
+    # in every zlib build -- node ships one on Linux that encodes a 1x1 white
+    # pixel in 13 bytes where CPython's takes 11 -- and Z_FIXED does not fix it.
+    # Z_RLE constrains matching to distance-1 runs, which every implementation
+    # does identically, so the output is stable across languages and platforms.
+    # It costs almost nothing here: screenshots are runs, so a blank 640x480
+    # frame is byte-identical in size and a white one is 1.06x.
+    compressor = zlib.compressobj(9, zlib.DEFLATED, 15, 8, zlib.Z_RLE)
+    idat = compressor.compress(bytes(raw)) + compressor.flush()
 
     ihdr = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
     out = bytearray(b"\x89PNG\r\n\x1a\n")

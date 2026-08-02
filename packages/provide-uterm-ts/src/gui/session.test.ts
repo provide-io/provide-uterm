@@ -6,7 +6,7 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { loadGolden } from "../testing/golden.ts";
-import { PNG_HEADER_LENGTH, decodePng, decodePngPixels } from "../testing/png.ts";
+import { decodePngPixels } from "../testing/png.ts";
 import { encodeRgbaPng, MAX_DIMENSION, MemoryGraphicalSession, RgbaImage } from "./index.ts";
 
 interface GuiGolden {
@@ -204,36 +204,24 @@ describe("the PNG a screenshot becomes", () => {
     expect(actual.error).toBe(record.error);
   });
 
-  it.each(golden.pngs.filter((record) => record.error === undefined))("$name, as a decoder reads it", (record) => {
+  it.each(golden.pngs.filter((record) => record.error === undefined))("$name, byte for byte", (record) => {
     // The client that opens this is not this one, so a stream differing by a
-    // single chunk is a screenshot that does not open. What it may differ in
-    // is the compressed stream: zlib's deflate is not identical across
-    // platforms even at the same level and version (see ../testing/png.ts), so
-    // the container is compared byte-for-byte where an encoder cannot vary it,
-    // and the payload is compared as the pixels it decodes to.
+    // single chunk is a screenshot that does not open. This is byte-for-byte
+    // across languages and platforms because every port compresses with level 9
+    // and the run-length strategy -- see the note in ../gui/session.ts.
     const source = bytesOf(record.value?.png as string);
     const pixels = decodePngPixels(source, record.width, record.height);
     const encoded = encodeRgbaPng(record.width, record.height, pixels);
-
-    expect(encoded.slice(0, PNG_HEADER_LENGTH)).toEqual(source.slice(0, PNG_HEADER_LENGTH));
-    expect(encoded.slice(-12)).toEqual(source.slice(-12));
-    expect(decodePng(encoded)).toEqual({ width: record.width, height: record.height, pixels });
+    expect(encoded.length).toBe(record.value?.length);
+    expect(digestOf(encoded)).toBe(record.value?.sha256);
   });
 
-  it("writes the screen nobody would paste into a test, as a decoder reads it", () => {
-    // Same platform caveat as above: the corpus records the reference's
-    // compressed length and digest, which this encoder need not reproduce
-    // byte-for-byte to be correct. What it must reproduce is the picture.
+  it("writes the same stream for a screen nobody would paste into a test", () => {
     const session = new MemoryGraphicalSession();
     const shot = session.screenshot();
     const encoded = encodeRgbaPng(shot.width, shot.height, shot.pixels);
-    const decoded = decodePng(encoded);
-
-    expect([decoded.width, decoded.height]).toEqual([shot.width, shot.height]);
-    // Compared by digest rather than by value: this screen is 640x480 RGBA,
-    // and a deep-equality walk over 1.2 MB is slow enough to blow the 5s test
-    // timeout on a CI runner even though it passes on a developer machine.
-    expect(digestOf(decoded.pixels)).toBe(digestOf(shot.pixels));
+    expect(encoded.length).toBe(golden.default_png.length);
+    expect(digestOf(encoded)).toBe(golden.default_png.sha256);
   });
 
   it("starts with the signature every decoder looks for", () => {
