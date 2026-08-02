@@ -206,15 +206,22 @@ class WsTerminalProxy:
         t_b2r = asyncio.create_task(self._browser_to_remote(reader, transport))
         t_r2b = asyncio.create_task(self._remote_to_browser(transport, writer))
         try:
-            _done, pending = await asyncio.wait(
+            await asyncio.wait(
                 [t_b2r, t_r2b],
                 return_when=asyncio.FIRST_COMPLETED,
             )
-            for task in pending:
-                task.cancel()
-            await asyncio.gather(*pending, return_exceptions=True)
         finally:
+            for task in (t_b2r, t_r2b):
+                task.cancel()
+            # Disconnect BEFORE awaiting the pumps, not after. Both pump loops
+            # are guarded by ``transport.is_connected()``, so closing the
+            # transport is what actually guarantees they terminate; waiting on
+            # a bare ``cancel()`` does not, because a cancellation can be
+            # swallowed inside a poll (see ``TelnetTransport._read_bounded``).
+            # Draining first would then hang forever holding the upstream
+            # socket open, which keeps the whole ASGI task alive.
             await transport.disconnect()
+            await asyncio.gather(t_b2r, t_r2b, return_exceptions=True)
 
     @staticmethod
     async def _browser_to_remote(
