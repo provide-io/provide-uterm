@@ -102,13 +102,22 @@ ENV UV_FROZEN=1
 # force a patched undici via an npm override. wrangler bundles miniflare, which
 # resolves undici 6.26.0 — CVE-2026-12151 (HIGH: denial of service via unbounded
 # memory), fixed in 6.27.0. The override pins undici to >=6.27.0,<7 across the
-# dependency tree (Trivy's HIGH/CRITICAL gate flags the bundled 6.26.0). The
-# wrangler binary is symlinked onto PATH so pywrangler resolves it exactly as a
-# global install would.
+# dependency tree (Trivy's HIGH/CRITICAL gate flags the bundled 6.26.0).
+#
+# The wrangler version is pinned to the exact one the repo's package.json
+# depends on. It was `wrangler@latest`, which made each image build resolve a
+# fresh dependency tree, so the CVEs the scan reported changed on their own
+# between builds with no commit in between — the run that prompted this pin
+# failed on brace-expansion (CVE-2026-13149, CVE-2026-14257) and tar
+# (CVE-2026-59873 CRITICAL, CVE-2026-59874), neither of which 4.118.0 pulls in
+# at all. Keep this in sync with package.json when bumping wrangler.
+#
+# The wrangler binary is symlinked onto PATH so pywrangler resolves it exactly
+# as a global install would.
 RUN mkdir -p /opt/wrangler \
     && cd /opt/wrangler \
     && printf '{"name":"wrangler-host","private":true,"overrides":{"undici":"^6.27.0"}}\n' > package.json \
-    && npm install --no-audit --no-fund wrangler@latest \
+    && npm install --no-audit --no-fund wrangler@4.118.0 \
     && ln -sf /opt/wrangler/node_modules/.bin/wrangler /usr/local/bin/wrangler \
     && wrangler --version
 
