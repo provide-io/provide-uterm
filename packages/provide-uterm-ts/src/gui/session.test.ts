@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { loadGolden } from "../testing/golden.ts";
 import { PNG_HEADER_LENGTH, decodePng, decodePngPixels } from "../testing/png.ts";
@@ -41,6 +42,11 @@ interface GuiGolden {
 const golden = loadGolden<GuiGolden>("guisession_golden.json");
 
 /** The corpus's base64 as the bytes it stands for. */
+/** A digest, for comparing large pixel buffers without a deep-equality walk. */
+function digestOf(bytes: Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
 function bytesOf(encoded: string): Uint8Array {
   return new Uint8Array(Buffer.from(encoded, "base64"));
 }
@@ -221,7 +227,13 @@ describe("the PNG a screenshot becomes", () => {
     const session = new MemoryGraphicalSession();
     const shot = session.screenshot();
     const encoded = encodeRgbaPng(shot.width, shot.height, shot.pixels);
-    expect(decodePng(encoded)).toEqual({ width: shot.width, height: shot.height, pixels: shot.pixels });
+    const decoded = decodePng(encoded);
+
+    expect([decoded.width, decoded.height]).toEqual([shot.width, shot.height]);
+    // Compared by digest rather than by value: this screen is 640x480 RGBA,
+    // and a deep-equality walk over 1.2 MB is slow enough to blow the 5s test
+    // timeout on a CI runner even though it passes on a developer machine.
+    expect(digestOf(decoded.pixels)).toBe(digestOf(shot.pixels));
   });
 
   it("starts with the signature every decoder looks for", () => {
