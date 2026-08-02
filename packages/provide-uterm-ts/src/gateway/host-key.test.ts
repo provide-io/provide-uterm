@@ -188,8 +188,19 @@ describe("the host key store", () => {
 
   it("starts with a temporary key when it cannot save one", () => {
     // Noisy for clients, but running beats refusing to start.
+    //
+    // The unwritable location is a regular file used as a parent directory, so
+    // mkdir fails with ENOTDIR promptly on every platform. It used to be
+    // "/proc/nonexistent/uterm", which hangs forever on Linux: node's recursive
+    // mkdir creates the parent and retries the child, and procfs answers ENOENT
+    // for a mkdir inside an existing directory, so the retry never terminates.
+    // mkdirSync is synchronous, so vitest cannot time it out -- the file never
+    // reported and the whole job sat until its timeout. macOS has no /proc, so
+    // it passed locally and only ever hung in CI.
+    const blocker = join(scratch, "not-a-directory");
+    writeFileSync(blocker, "a regular file, so mkdir below it is ENOTDIR");
     const reasons: string[] = [];
-    const key = getOrCreateHostKey("/proc/nonexistent/uterm", { onRegenerate: (reason) => reasons.push(reason) });
+    const key = getOrCreateHostKey(join(blocker, "uterm"), { onRegenerate: (reason) => reasons.push(reason) });
     expect(sshUtils.parseKey(key)).not.toBeInstanceOf(Error);
     expect(reasons.some((reason) => reason.includes("could not save"))).toBe(true);
   });
