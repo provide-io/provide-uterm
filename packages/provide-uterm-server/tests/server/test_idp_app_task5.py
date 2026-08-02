@@ -10,6 +10,7 @@ from provide.uterm.server.app import create_server_app
 from provide.uterm.server.auth import LocalIdentityProvider, WebhookIdentityProvider
 from provide.uterm.server.bridge.identity import Principal
 from provide.uterm.server.models import AuthConfig, ServerConfig
+from tests.helpers.fastapi_routes import find_effective_api_route
 
 
 def test_create_server_app_instantiates_correct_idp():
@@ -61,7 +62,6 @@ def test_create_server_app_wires_require_response_nonce_flag():
 
 
 async def test_webhook_idp_is_used_by_auth_dependency(monkeypatch) -> None:
-    from fastapi.routing import APIRoute
     from starlette.requests import HTTPConnection
 
     config = ServerConfig(
@@ -74,11 +74,11 @@ async def test_webhook_idp_is_used_by_auth_dependency(monkeypatch) -> None:
     )
     app = create_server_app(config, api_only=True)
 
-    dep = None
-    for route in app.routes:
-        if isinstance(route, APIRoute) and route.path == "/api/sessions":
-            dep = route.dependencies[0].dependency
-            break
+    # The auth dependency is attached by include_router(dependencies=[...]), so
+    # it lives on the *effective* route, not on the raw app.routes entry.
+    sessions_route = find_effective_api_route(app, "/api/sessions")
+    assert sessions_route is not None, "GET /api/sessions route not found"
+    dep = sessions_route.dependencies[0].dependency
     assert dep is not None, "auth dependency not found"
 
     conn = HTTPConnection(

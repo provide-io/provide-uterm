@@ -15,6 +15,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from provide.uterm.cli import _build_parser, main
+from tests.helpers.fastapi_routes import effective_route_paths
 
 pytestmark = pytest.mark.timeout(5)
 
@@ -115,8 +116,9 @@ class TestCmdProxy:
             main(["proxy", "bbs.example.com", "23", "--path", "/ws/bbs"])
 
         app = captured_app["app"]
-        routes = {r.path for r in app.routes}
-        assert "/ws/bbs" in routes
+        # The WS router is mounted with include_router(), so on FastAPI >= 0.141
+        # its path is only visible on the effective (expanded) routing table.
+        assert "/ws/bbs" in effective_route_paths(app)
 
     def test_proxy_app_has_terminal_page(self) -> None:
         """The proxy app serves a terminal HTML page at /."""
