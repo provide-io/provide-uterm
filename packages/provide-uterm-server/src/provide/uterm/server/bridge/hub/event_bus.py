@@ -34,6 +34,7 @@ import contextlib
 import json
 import re
 import uuid
+from collections import deque
 from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -62,14 +63,28 @@ class _ByteBoundedQueue(asyncio.Queue[dict[str, Any] | None]):
     def __init__(self, maxsize: int) -> None:
         super().__init__(maxsize=maxsize)
         self.queued_bytes = 0
+        self._item_bytes: deque[int] = deque()
+        self._next_item_bytes: int | None = None
+
+    def put_nowait_weighted(self, item: dict[str, Any], item_bytes: int) -> None:
+        """Enqueue an item whose serialized size was already calculated."""
+        self._next_item_bytes = item_bytes
+        try:
+            super().put_nowait(item)
+        finally:
+            self._next_item_bytes = None
 
     def _put(self, item: dict[str, Any] | None) -> None:
         super()._put(item)
-        self.queued_bytes += _serialized_bytes(item)
+        item_bytes = self._next_item_bytes
+        if item_bytes is None:
+            item_bytes = _serialized_bytes(item)
+        self._item_bytes.append(item_bytes)
+        self.queued_bytes += item_bytes
 
     def _get(self) -> dict[str, Any] | None:
         item = super()._get()
-        self.queued_bytes -= _serialized_bytes(item)
+        self.queued_bytes -= self._item_bytes.popleft()
         return item
 
 
@@ -148,12 +163,20 @@ class EventBus:
             return
         try:
             targets = list(self._subs.get(worker_id, []))
+            fitted_by_cap: dict[int, tuple[dict[str, Any], int] | None] = {}
             for sub in targets:
-                self._deliver(sub, worker_id, event)
+                self._deliver(sub, worker_id, event, fitted_by_cap=fitted_by_cap)
         except Exception as exc:
             logger.warning("event_bus_enqueue_error worker_id=%s error=%s", worker_id, exc)
 
-    def _deliver(self, sub: _Subscription, worker_id: str, event: dict[str, Any]) -> None:
+    def _deliver(
+        self,
+        sub: _Subscription,
+        worker_id: str,
+        event: dict[str, Any],
+        *,
+        fitted_by_cap: dict[int, tuple[dict[str, Any], int] | None] | None = None,
+    ) -> None:
         """Filter and enqueue *event* to a single subscription."""
         if sub.event_types is not None and event.get("type") not in sub.event_types:
             return
@@ -164,11 +187,20 @@ class EventBus:
             screen = screen[: self._max_match_input_chars]
             if not sub.pattern.search(screen):
                 return
-        fitted = _fit_item_to_bytes({"worker_id": worker_id, **event}, sub.max_queue_bytes)
+        if fitted_by_cap is None:
+            fitted = _fit_item_to_bytes({"worker_id": worker_id, **event}, sub.max_queue_bytes)
+        else:
+            if sub.max_queue_bytes not in fitted_by_cap:
+                fitted_by_cap[sub.max_queue_bytes] = _fit_item_to_bytes(
+                    {"worker_id": worker_id, **event},
+                    sub.max_queue_bytes,
+                )
+            fitted = fitted_by_cap[sub.max_queue_bytes]
         if fitted is None:
             self._record_drop(sub)
             return
-        item, item_bytes = fitted
+        fitted_item, item_bytes = fitted
+        item = deepcopy(fitted_item) if fitted_by_cap is not None else fitted_item
         while sub.queue.full() or sub.queued_bytes + item_bytes > sub.max_queue_bytes:
             try:
                 sub.queue.get_nowait()
@@ -176,7 +208,10 @@ class EventBus:
                 break
             self._record_drop(sub)
         with contextlib.suppress(asyncio.QueueFull):
-            sub.queue.put_nowait(item)
+            if isinstance(sub.queue, _ByteBoundedQueue):
+                sub.queue.put_nowait_weighted(item, item_bytes)
+            else:
+                sub.queue.put_nowait(item)
 
     def _record_drop(self, sub: _Subscription) -> None:
         sub.dropped += 1
