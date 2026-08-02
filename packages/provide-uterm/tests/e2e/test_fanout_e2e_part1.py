@@ -55,7 +55,7 @@ async def _await_collectors(hub: Any, worker_ids: list[str]) -> None:
     Delegates to the shared ``wait_for_subscribers`` helper for each worker.
     """
     for wid in worker_ids:
-        await wait_for_subscribers(hub, wid, 1)
+        await wait_for_subscribers(hub, wid, 1, stream="operation")
 
 
 # ---------------------------------------------------------------------------
