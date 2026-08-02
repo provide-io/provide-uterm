@@ -24,6 +24,7 @@ STRICT_PACKAGES=(
   "packages/provide-uterm-server/src/"
   "packages/provide-uterm-client/src/"
   "packages/provide-uterm-platform/src/"
+  "ci/typecheck_contracts/snapshot_commit.py"
 )
 
 SOFT_PACKAGES=(

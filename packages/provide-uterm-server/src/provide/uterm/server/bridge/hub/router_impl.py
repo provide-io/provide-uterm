@@ -210,6 +210,8 @@ class MessageRouter:
         self,
         worker_id: str,
         snapshot: dict[str, Any],
+        *,
+        expected_worker: None = None,
     ) -> dict[str, Any]: ...
 
     @overload
@@ -219,6 +221,15 @@ class MessageRouter:
         snapshot: dict[str, Any],
         *,
         expected_worker: WebSocket,
+    ) -> dict[str, Any] | None: ...
+
+    @overload
+    async def commit_snapshot_event(
+        self,
+        worker_id: str,
+        snapshot: dict[str, Any],
+        *,
+        expected_worker: WebSocket | None,
     ) -> dict[str, Any] | None: ...
 
     async def commit_snapshot_event(
