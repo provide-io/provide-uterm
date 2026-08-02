@@ -338,8 +338,14 @@ class TermHub:
     async def append_event(self, worker_id: str, event_type: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
         return await self.router.append_event(worker_id, event_type, data)
 
-    async def commit_snapshot_event(self, worker_id: str, snapshot: dict[str, Any]) -> dict[str, Any]:
-        return await self.router.commit_snapshot_event(worker_id, snapshot)
+    async def commit_snapshot_event(
+        self,
+        worker_id: str,
+        snapshot: dict[str, Any],
+        *,
+        expected_worker: WebSocket | None = None,
+    ) -> dict[str, Any] | None:
+        return await self.router.commit_snapshot_event(worker_id, snapshot, expected_worker=expected_worker)
 
     async def broadcast(self, worker_id: str, msg: dict[str, Any]) -> None:
         await self.router.broadcast(worker_id, msg)

@@ -165,7 +165,7 @@ def register_tunnel_routes(hub: TermHub, router: APIRouter) -> None:
 
 async def _handle_control(
     hub: TermHub,
-    _websocket: WebSocket,
+    websocket: WebSocket,
     worker_id: str,
     payload: bytes,
 ) -> None:
@@ -198,5 +198,6 @@ async def _handle_control(
         except (KeyError, TypeError, ValueError) as exc:
             logger.warning("tunnel_bad_snapshot worker_id=%s error=%s", worker_id, exc)
             return
-        committed = await hub.commit_snapshot_event(worker_id, snapshot)
-        await hub.broadcast(worker_id, committed)
+        committed = await hub.commit_snapshot_event(worker_id, snapshot, expected_worker=websocket)
+        if committed is not None:
+            await hub.broadcast(worker_id, committed)

@@ -229,7 +229,7 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
 
                     # Builder succeeded → dispatch the I/O OUTSIDE the guard so a
                     # downstream failure propagates instead of being miscounted.
-                    await _dispatch_worker_frame(hub, worker_id, mtype, built_frame)
+                    await _dispatch_worker_frame(hub, worker_id, mtype, built_frame, websocket)
         except WebSocketDisconnect:
             pass
         except Exception as exc:  # pragma: no cover

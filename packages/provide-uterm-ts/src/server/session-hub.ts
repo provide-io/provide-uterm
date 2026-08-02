@@ -352,9 +352,22 @@ export class SessionHub {
    * owns its value so a caller cannot mutate current state through its input or
    * the returned broadcast frame.
    */
-  async commitSnapshotEvent(workerId: string, snapshot: Record<string, unknown>): Promise<Record<string, unknown>> {
+  commitSnapshotEvent(workerId: string, snapshot: Record<string, unknown>): Promise<Record<string, unknown>>;
+  commitSnapshotEvent(
+    workerId: string,
+    snapshot: Record<string, unknown>,
+    expectedWorker: WorkerSocket,
+  ): Promise<Record<string, unknown> | undefined>;
+  async commitSnapshotEvent(
+    workerId: string,
+    snapshot: Record<string, unknown>,
+    expectedWorker?: WorkerSocket,
+  ): Promise<Record<string, unknown> | undefined> {
     const rawSnapshot = structuredClone(snapshot);
     const state = this.registry.get(workerId);
+    if (expectedWorker !== undefined && state?.workerWs !== expectedWorker) {
+      return undefined;
+    }
     if (state === undefined) {
       return { ...rawSnapshot, event_seq: 0 };
     }

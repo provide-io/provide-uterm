@@ -116,8 +116,10 @@ export async function attachConnector(
       }
       lastSnapshot = message;
       const frame = workerSnapshotFrame(message, now());
-      const committed = await hub.commitSnapshotEvent(sessionId, frame);
-      await hub.router.broadcast(sessionId, committed);
+      const committed = await hub.commitSnapshotEvent(sessionId, frame, socket);
+      if (committed !== undefined) {
+        await hub.router.broadcast(sessionId, committed);
+      }
     }
   }
 
