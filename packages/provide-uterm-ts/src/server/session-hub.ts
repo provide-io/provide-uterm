@@ -13,9 +13,10 @@
  * callbacks, and until something supplied those callbacks there was no hub,
  * only nine pieces of one. This is what supplies them.
  *
- * Three of the reference's methods have no service of their own and are
+ * The reference's remaining composition methods have no service of their own and are
  * written out here, exactly as the reference keeps them on the composed hub
  * (`router_impl`/`connection`): {@link SessionHub.appendEvent},
+ * {@link SessionHub.commitSnapshotEvent},
  * {@link SessionHub.sendWorker}, {@link SessionHub.setInputMode},
  * {@link SessionHub.updateLastSnapshot} and {@link SessionHub.pruneIfIdle}.
  *
@@ -37,6 +38,7 @@ import {
   ConnectionManager,
   clampLease,
   encodeWorkerFrame,
+  extractPromptId,
   HijackLeaseManager,
   type InputMode,
   MessageRouter,
@@ -338,6 +340,43 @@ export class SessionHub {
     // its front when it overflows, and a counter would not know that happened.
     state.minEventSeq = Number((state.events.at(0) as Record<string, unknown>).seq);
     return event;
+  }
+
+  /**
+   * Store one snapshot and its public ring event under the same sequence.
+   *
+   * All state mutation is synchronous: there is no await between allocating
+   * the sequence and publishing the paired copies. The event keeps the same
+   * reduced content shape used before snapshot correlation, while the stored
+   * and returned frames retain the complete worker snapshot. Each boundary
+   * owns its value so a caller cannot mutate current state through its input or
+   * the returned broadcast frame.
+   */
+  async commitSnapshotEvent(workerId: string, snapshot: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const rawSnapshot = structuredClone(snapshot);
+    const state = this.registry.get(workerId);
+    if (state === undefined) {
+      return { ...rawSnapshot, event_seq: 0 };
+    }
+
+    state.eventSeq += 1;
+    const eventSeq = state.eventSeq;
+    const committed = { ...rawSnapshot, event_seq: eventSeq };
+    const event = {
+      seq: eventSeq,
+      ts: this.#wallNow(),
+      type: "snapshot",
+      data: {
+        prompt_id: extractPromptId(rawSnapshot) ?? null,
+        screen_hash: rawSnapshot.screen_hash,
+        screen: rawSnapshot.screen,
+        event_seq: eventSeq,
+      },
+    };
+    state.lastSnapshot = structuredClone(committed);
+    state.events.push(event);
+    state.minEventSeq = Number((state.events.at(0) as Record<string, unknown>).seq);
+    return structuredClone(committed);
   }
 
   /** Store the most recent screen a worker sent. */

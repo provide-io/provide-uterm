@@ -16,7 +16,7 @@
 import { describe, expect, it } from "vitest";
 import type { SessionConnector, WorkerMessage } from "../connectors/index.ts";
 import { ShellSessionConnector } from "../connectors/index.ts";
-import { encodeControlFrame, encodeTerminalData } from "../control-channel/index.ts";
+import { ControlFrameDecoder, encodeControlFrame, encodeTerminalData } from "../control-channel/index.ts";
 import { SessionHub } from "./session-hub.ts";
 import { attachConnector, workerSnapshotFrame } from "./worker-attach.ts";
 
@@ -27,6 +27,20 @@ function socketOf(hub: SessionHub, workerId: string) {
     throw new Error("nothing attached");
   }
   return socket;
+}
+
+/** A browser that records decoded control frames from the real broadcast path. */
+class RecordingBrowser {
+  readonly sent: Record<string, unknown>[] = [];
+  readonly #decoder = new ControlFrameDecoder();
+
+  async sendText(payload: string): Promise<void> {
+    for (const chunk of this.#decoder.feed(payload)) {
+      if (chunk.kind === "control") {
+        this.sent.push(chunk.control);
+      }
+    }
+  }
 }
 
 /** A connector that records what it was asked and answers with what it is told. */
@@ -154,6 +168,28 @@ describe("attaching", () => {
     await attachConnector(hub, "w1", new RecordingConnector(), "hijack", { now: () => 5 });
     const events = hub.registry.get("w1")?.events.toArray() ?? [];
     expect(events[0]).toMatchObject({ type: "snapshot", data: { prompt_id: null, screen: "seed" } });
+  });
+
+  it("broadcasts the committed snapshot carrying the current and ring sequence", async () => {
+    const hub = new SessionHub();
+    await attachConnector(hub, "w1", new RecordingConnector(), "hijack", { now: () => 5 });
+    const browser = new RecordingBrowser();
+    await hub.connections.registerBrowser("w1", browser, "viewer", { deferBroadcast: true });
+    hub.connections.activateBrowserBroadcasts("w1", browser);
+
+    await socketOf(hub, "w1").sendText(encodeControlFrame({ type: "snapshot_req" }));
+
+    const state = hub.registry.get("w1");
+    const current = state?.lastSnapshot;
+    const event = state?.events.at(-1);
+    const broadcast = browser.sent.at(-1);
+    expect(current).toMatchObject({ type: "snapshot", screen: "seed", event_seq: 2 });
+    expect(event).toMatchObject({
+      seq: 2,
+      data: { screen: "seed", event_seq: 2 },
+    });
+    expect(broadcast).toEqual(current);
+    expect(broadcast).not.toBe(current);
   });
 });
 

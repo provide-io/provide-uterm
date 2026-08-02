@@ -100,6 +100,69 @@ describe("the event log", () => {
   });
 });
 
+describe("committing a snapshot event", () => {
+  it("owns the current snapshot and reduced ring event under one sequence", async () => {
+    const { hub, workerId } = attached();
+    const source = {
+      type: "snapshot",
+      screen: "one",
+      cursor: { x: 2, y: 3 },
+      screen_hash: "h1",
+      prompt_detected: { prompt_id: "command" },
+    };
+
+    const committed = await hub.commitSnapshotEvent(workerId, source);
+    const state = hub.registry.get(workerId);
+    const event = state?.events.at(0);
+
+    expect(committed).toEqual({ ...source, event_seq: 1 });
+    expect(state?.lastSnapshot).toEqual(committed);
+    expect(event).toEqual({
+      seq: 1,
+      ts: 1_700_000_000,
+      type: "snapshot",
+      data: { prompt_id: "command", screen_hash: "h1", screen: "one", event_seq: 1 },
+    });
+    expect(state?.lastSnapshot).not.toBe(committed);
+    expect(event?.data).not.toBe(committed);
+
+    source.cursor.x = 99;
+    (committed.cursor as Record<string, number>).x = 88;
+    expect((state?.lastSnapshot?.cursor as Record<string, number>).x).toBe(2);
+  });
+
+  it("pairs concurrent snapshot commits with unique monotonic sequences", async () => {
+    const { hub, workerId } = attached();
+    const committed = await Promise.all(
+      Array.from({ length: 24 }, (_unused, index) =>
+        hub.commitSnapshotEvent(workerId, {
+          type: "snapshot",
+          screen: `screen-${index}`,
+          screen_hash: `hash-${index}`,
+          prompt_detected: null,
+        }),
+      ),
+    );
+    const state = hub.registry.get(workerId);
+    const events = state?.events.toArray() ?? [];
+
+    expect(committed.map((frame) => frame.event_seq)).toEqual(Array.from({ length: 24 }, (_, index) => index + 1));
+    expect(events.map((event) => event.seq)).toEqual(Array.from({ length: 24 }, (_, index) => index + 1));
+    for (const [index, frame] of committed.entries()) {
+      expect(events[index]).toMatchObject({
+        seq: frame.event_seq,
+        data: {
+          screen: frame.screen,
+          screen_hash: frame.screen_hash,
+          event_seq: frame.event_seq,
+        },
+      });
+    }
+    expect(state?.lastSnapshot).toEqual(committed.at(-1));
+    expect(state?.lastSnapshot).not.toBe(committed.at(-1));
+  });
+});
+
 describe("the last screen", () => {
   it("keeps nothing for a worker it does not know", async () => {
     const { hub } = hubWithClock();
