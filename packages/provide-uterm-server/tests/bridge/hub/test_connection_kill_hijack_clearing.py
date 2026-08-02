@@ -26,13 +26,35 @@ bodies now live in ``connection_hijack``, so the patch targets
 
 from __future__ import annotations
 
+import asyncio
 import time
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from provide.uterm.server.bridge.frames import make_worker_disconnected_frame
-from provide.uterm.server.bridge.hub import TermHub
+from provide.uterm.server.bridge.hub import TermHub, connection_hijack
 from provide.uterm.server.bridge.models import HijackSession, WorkerTermState
+
+
+def _rest_session(owner: str) -> HijackSession:
+    now = time.monotonic()
+    return HijackSession(
+        hijack_id=f"hid-{owner}",
+        owner=owner,
+        acquired_at=now,
+        lease_expires_at=now + 60,
+        last_heartbeat=now,
+    )
+
+
+async def _await_fence_contention(fence: asyncio.Lock) -> None:
+    """Yield until the call under test is parked on *fence*."""
+    for _ in range(200):
+        if getattr(fence, "_waiters", None):
+            return
+        await asyncio.sleep(0)
+    raise AssertionError("the call never reached the owned-input fence")
 
 
 def _install_recorders(hub: TermHub) -> dict[str, Any]:
@@ -377,3 +399,250 @@ class TestEventBusClose:
 
         # Must not raise even though there is no bus to call.
         hub.connection_mgr._event_bus_close("w-direct")
+
+    def test_closes_the_private_operation_stream_for_the_same_worker(self) -> None:
+        """Supervised operations read a SECOND, private bus — close that too.
+
+        The operation bus carries unredacted terminal output and is never
+        exposed by a route, so nothing else ever ends its streams. Closing only
+        the public bus would leave an in-flight operation capture parked on its
+        queue until its own hard cap, long after the session it was watching
+        went away.
+        """
+        hub = TermHub()
+        public = MagicMock()
+        private = MagicMock()
+        hub._event_bus = public
+        hub._operation_event_bus = private
+
+        hub.connection_mgr._event_bus_close("w-both")
+
+        public.close_worker.assert_called_once_with("w-both")
+        private.close_worker.assert_called_once_with("w-both")
+
+    def test_public_bus_closes_even_with_no_private_operation_bus(self) -> None:
+        """Private bus absent → still a no-op for it, and the public close stands."""
+        hub = TermHub()
+        public = MagicMock()
+        hub._event_bus = public
+        assert hub._operation_event_bus is None
+
+        hub.connection_mgr._event_bus_close("w-public-only")
+
+        public.close_worker.assert_called_once_with("w-public-only")
+
+
+# ---------------------------------------------------------------------------
+# disconnect_worker / force_release_hijack — owned-input fence re-check
+# ---------------------------------------------------------------------------
+
+
+class TestOwnedInputFenceRecheck:
+    """Both bodies capture the state under the hub lock, then take its fence.
+
+    The hub lock is released for that wait, so a reconnect can replace the whole
+    ``WorkerTermState`` in the window. The second in-lock check exists to notice
+    that and abandon the operation; without it the call would clear a session it
+    never inspected.
+    """
+
+    async def test_disconnect_worker_refuses_a_state_replaced_behind_the_fence(self) -> None:
+        hub = TermHub()
+        rec = _install_recorders(hub)
+        worker_id = "w-fence-replaced"
+        old_ws = MagicMock()
+        old_ws.close = AsyncMock()
+        new_ws = MagicMock()
+        new_ws.close = AsyncMock()
+        async with hub._lock:
+            original = WorkerTermState()
+            original.worker_ws = old_ws
+            hub.registry._workers[worker_id] = original
+
+        await original.owned_input_fence.acquire()
+        pending = asyncio.create_task(hub.disconnect_worker(worker_id))
+        await _await_fence_contention(original.owned_input_fence)
+
+        replacement = WorkerTermState()
+        replacement.worker_ws = new_ws
+        hub.registry._workers[worker_id] = replacement
+        original.owned_input_fence.release()
+
+        assert await asyncio.wait_for(pending, timeout=1.0) is False
+        # The replacement's live socket must survive untouched.
+        assert replacement.worker_ws is new_ws
+        new_ws.close.assert_not_awaited()
+        old_ws.close.assert_not_awaited()
+        rec["broadcast"].assert_not_called()
+        rec["prune"].assert_not_called()
+        assert rec["order"] == []
+
+    async def test_force_release_refuses_a_state_replaced_behind_the_fence(self) -> None:
+        hub = TermHub()
+        rec = _install_recorders(hub)
+        send_worker = AsyncMock(return_value=True)
+        hub.send_worker = send_worker  # type: ignore[method-assign]
+        worker_id = "w-force-replaced"
+        async with hub._lock:
+            original = WorkerTermState()
+            original.hijack_session = _rest_session("alice")
+            hub.registry._workers[worker_id] = original
+
+        await original.owned_input_fence.acquire()
+        pending = asyncio.create_task(hub.connection_mgr.force_release_hijack(worker_id))
+        await _await_fence_contention(original.owned_input_fence)
+
+        replacement = WorkerTermState()
+        replacement.hijack_session = _rest_session("bob")
+        hub.registry._workers[worker_id] = replacement
+        original.owned_input_fence.release()
+
+        assert await asyncio.wait_for(pending, timeout=1.0) is False
+        # The replacement's freshly acquired lease must not be torn down.
+        assert replacement.hijack_session is not None
+        assert replacement.hijack_session.owner == "bob"
+        send_worker.assert_not_awaited()
+        rec["notify"].assert_not_called()
+        rec["broadcast_hijack_state"].assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Ownership-epoch arithmetic
+# ---------------------------------------------------------------------------
+
+
+class TestOwnershipGenerationBump:
+    """``ownership_generation`` is the token a held approval is matched against.
+
+    Approvals capture the epoch they were granted in, so the step size is
+    load-bearing: a value that resets, decrements, or skips lets a captured
+    approval from an earlier epoch compare equal again and revive stale input.
+    """
+
+    async def test_disconnect_worker_advances_the_epoch_by_exactly_one(self) -> None:
+        hub = TermHub()
+        _install_recorders(hub)
+        worker_id = "w-gen-disconnect"
+        ws = MagicMock()
+        ws.close = AsyncMock()
+        async with hub._lock:
+            st = WorkerTermState()
+            st.worker_ws = ws
+            st.ownership_generation = 7
+            hub.registry._workers[worker_id] = st
+
+        assert await hub.disconnect_worker(worker_id) is True
+
+        assert hub.registry._workers[worker_id].ownership_generation == 8
+
+    async def test_force_release_advances_the_epoch_by_exactly_one(self) -> None:
+        hub = TermHub()
+        _install_recorders(hub)
+        hub.send_worker = AsyncMock(return_value=True)  # type: ignore[method-assign]
+        worker_id = "w-gen-force"
+        async with hub._lock:
+            st = WorkerTermState()
+            st.hijack_session = _rest_session("carol")
+            st.ownership_generation = 3
+            hub.registry._workers[worker_id] = st
+
+        assert await hub.connection_mgr.force_release_hijack(worker_id) is True
+
+        assert hub.registry._workers[worker_id].ownership_generation == 4
+
+    async def test_force_release_leaves_the_epoch_alone_when_no_hijack_was_held(self) -> None:
+        """Nothing was revoked, so no approval needs invalidating."""
+        hub = TermHub()
+        _install_recorders(hub)
+        worker_id = "w-gen-noop"
+        async with hub._lock:
+            st = WorkerTermState()
+            st.ownership_generation = 5
+            hub.registry._workers[worker_id] = st
+
+        assert await hub.connection_mgr.force_release_hijack(worker_id) is False
+
+        assert hub.registry._workers[worker_id].ownership_generation == 5
+
+
+# ---------------------------------------------------------------------------
+# force_release_hijack — bounded resume send
+# ---------------------------------------------------------------------------
+
+
+class TestForceReleaseResumeSendBudget:
+    """The resume frame is sent while the worker's ownership fence is held.
+
+    An unbounded send would therefore wedge every later lease transition for
+    that worker behind one unresponsive socket, so the wait is capped — and the
+    cap is asserted by value, not merely by presence.
+    """
+
+    async def test_resume_send_is_bounded_by_a_five_second_budget(self) -> None:
+        hub = TermHub()
+        _install_recorders(hub)
+        hub.send_worker = AsyncMock(return_value=True)  # type: ignore[method-assign]
+        worker_id = "w-resume-budget"
+        async with hub._lock:
+            st = WorkerTermState()
+            st.hijack_session = _rest_session("dana")
+            hub.registry._workers[worker_id] = st
+
+        budgets: list[Any] = []
+
+        async def _wait_for(awaitable: Any, timeout: Any = None) -> Any:
+            budgets.append(timeout)
+            return await awaitable
+
+        with patch.object(connection_hijack, "asyncio", SimpleNamespace(wait_for=_wait_for)):
+            assert await hub.connection_mgr.force_release_hijack(worker_id) is True
+
+        assert budgets == [5.0]
+
+    async def test_resume_timeout_is_logged_with_the_worker_and_release_completes(self) -> None:
+        """A worker that never acks must not hold the release hostage.
+
+        The lease is already cleared under the lock by this point, so the only
+        correct outcome is: log which worker went silent, then finish notifying
+        and re-broadcasting exactly as a successful send would.
+        """
+        hub = TermHub()
+        rec = _install_recorders(hub)
+        hub.send_worker = AsyncMock(return_value=True)  # type: ignore[method-assign]
+        worker_id = "w-resume-timeout"
+        async with hub._lock:
+            st = WorkerTermState()
+            st.hijack_session = _rest_session("erin")
+            hub.registry._workers[worker_id] = st
+
+        async def _wait_for(awaitable: Any, timeout: Any = None) -> Any:
+            del timeout
+            awaitable.close()
+            raise TimeoutError
+
+        with (
+            patch.object(connection_hijack, "asyncio", SimpleNamespace(wait_for=_wait_for)),
+            patch.object(connection_hijack, "logger") as mock_logger,
+        ):
+            assert await hub.connection_mgr.force_release_hijack(worker_id) is True
+
+        mock_logger.warning.assert_called_once_with("force_release_resume_timeout worker_id=%s", worker_id)
+        assert hub.registry._workers[worker_id].hijack_session is None
+        rec["notify"].assert_called_once_with(worker_id, enabled=False, owner=None)
+        rec["broadcast_hijack_state"].assert_called_once_with(worker_id)
+
+    async def test_successful_resume_send_logs_no_timeout_warning(self) -> None:
+        """Distinct outcome from the timeout branch: nothing is logged."""
+        hub = TermHub()
+        _install_recorders(hub)
+        hub.send_worker = AsyncMock(return_value=True)  # type: ignore[method-assign]
+        worker_id = "w-resume-ok"
+        async with hub._lock:
+            st = WorkerTermState()
+            st.hijack_session = _rest_session("frank")
+            hub.registry._workers[worker_id] = st
+
+        with patch.object(connection_hijack, "logger") as mock_logger:
+            assert await hub.connection_mgr.force_release_hijack(worker_id) is True
+
+        mock_logger.warning.assert_not_called()

@@ -98,23 +98,30 @@ and never reads `skip`. When offset is not None the ternary uses the else arm \
 # force_release_hijack) were split into connection_hijack.py as module-level
 # functions, so their mutant ids changed from the method-mangled
 # ``connection.xǁConnectionManagerǁ<method>__mutmut_N`` to the function-mangled
-# ``connection_hijack.x_<method>__mutmut_N`` (the trailing _mutmut_N numbers are
-# unchanged). The equivalence reasons are identical to before the split.
+# ``connection_hijack.x_<method>__mutmut_N``. The equivalence reasons are
+# identical to before the split.
+#
+# disconnect_worker's ids then shifted by +11 (30/34/35/36/42 -> 41/45/46/47/53)
+# when ``fix(python): fence lifecycle input ownership`` wrapped the body in the
+# owned-input fence: capturing ``state``/``fence`` and re-checking them under a
+# second ``async with hub._lock`` inserts eleven mutants ahead of the cast()
+# group. Verified against the mutants/ tree — the mutants at the new ids are
+# exactly the same four cast() variants plus the owner=None default drop.
 #
 # typing.cast(type_str, value) is a RUNTIME NO-OP: it returns `value` unchanged
 # and ignores the type argument entirely (cast exists only for static checkers).
 # Mutating the cast type-string therefore has zero runtime effect — unkillable.
 [[equivalent]]
-mutant = "provide.uterm.server.bridge.hub.connection_hijack.x_disconnect_worker__mutmut_30"
+mutant = "provide.uterm.server.bridge.hub.connection_hijack.x_disconnect_worker__mutmut_41"
 reason = "cast(None, make_worker_disconnected_frame(...)) — typing.cast is a runtime no-op; the type arg is ignored, value returned unchanged."
 [[equivalent]]
-mutant = "provide.uterm.server.bridge.hub.connection_hijack.x_disconnect_worker__mutmut_34"
+mutant = "provide.uterm.server.bridge.hub.connection_hijack.x_disconnect_worker__mutmut_45"
 reason = 'cast("XXdict[str, Any]XX", ...) — typing.cast runtime no-op; the (mangled) type string is ignored at runtime.'
 [[equivalent]]
-mutant = "provide.uterm.server.bridge.hub.connection_hijack.x_disconnect_worker__mutmut_35"
+mutant = "provide.uterm.server.bridge.hub.connection_hijack.x_disconnect_worker__mutmut_46"
 reason = 'cast("dict[str, any]", ...) — typing.cast runtime no-op; type-string case has no runtime effect.'
 [[equivalent]]
-mutant = "provide.uterm.server.bridge.hub.connection_hijack.x_disconnect_worker__mutmut_36"
+mutant = "provide.uterm.server.bridge.hub.connection_hijack.x_disconnect_worker__mutmut_47"
 reason = 'cast("DICT[STR, ANY]", ...) — typing.cast runtime no-op; type-string case has no runtime effect.'
 # register_browser's four cast() mutants shifted 85/89/90/91 -> 88/92/93/94 when
 # the resume-token bind grew from a bare dict write to
@@ -156,7 +163,7 @@ reason = "had_hijack initial False -> None: only consumed by `if not had_hijack`
 
 # Argument value equals its default / unreachable default.
 [[equivalent]]
-mutant = "provide.uterm.server.bridge.hub.connection_hijack.x_disconnect_worker__mutmut_42"
+mutant = "provide.uterm.server.bridge.hub.connection_hijack.x_disconnect_worker__mutmut_53"
 reason = "notify_hijack_changed(worker_id, enabled=False, owner=None) -> drop owner=None. owner's signature default IS None, so omitting it passes the identical value. Equivalent."
 # The `getattr(hub, "on_worker_empty", None) -> getattr(hub, "on_worker_empty")`
 # entry (formerly cleanup_browser_disconnect__mutmut_48) is GONE: that mutant is
