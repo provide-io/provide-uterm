@@ -33,6 +33,7 @@ from ._ansi_palettes import (
     build_truecolor_palette,
 )
 from ._gif_to_ansi import gif_to_ansi_frames
+from .backend_server import stop_uvicorn_thread
 from .conftest import (
     SCREENSHOTS_DIR,
     AnimatedWorker,
@@ -327,7 +328,6 @@ class TestTelnetColorPath:
             SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
             _screenshot(page, "telnet-color-palette.png")
         finally:
-            server.should_exit = True
-            thread.join(timeout=5)
+            stop_uvicorn_thread(server, thread)
             telnet_server.shutdown()
             telnet_server.server_close()

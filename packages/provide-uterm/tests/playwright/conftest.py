@@ -23,6 +23,8 @@ from playwright.sync_api import Page
 from provide.uterm.control_channel import encode_control_frame
 from provide.uterm.server.bridge.hub import TermHub
 
+from .backend_server import stop_uvicorn_thread
+
 
 @pytest.fixture(scope="session")
 def browser_type_launch_args(browser_type_launch_args: dict) -> dict:
@@ -444,8 +446,7 @@ def color_server() -> Generator[str, None, None]:
 
     yield f"http://127.0.0.1:{port}"
 
-    server.should_exit = True
-    thread.join(timeout=5)
+    stop_uvicorn_thread(server, thread)
 
 
 # ---------------------------------------------------------------------------

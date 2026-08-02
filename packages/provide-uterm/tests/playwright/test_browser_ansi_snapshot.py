@@ -39,6 +39,8 @@ from starlette.staticfiles import StaticFiles
 from provide.uterm.control_channel import encode_control_frame
 from provide.uterm.server.bridge.hub import TermHub
 
+from .backend_server import stop_uvicorn_thread
+
 
 def _uid() -> str:
     return uuid.uuid4().hex[:8]
@@ -113,8 +115,7 @@ customElements.whenDefined('uterm-session').then(() => {{
 
     yield f"http://127.0.0.1:{port}", hub
 
-    server.should_exit = True
-    thread.join(timeout=5)
+    stop_uvicorn_thread(server, thread)
 
 
 class _SnapshotWorker:

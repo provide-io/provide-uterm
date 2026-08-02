@@ -57,6 +57,8 @@ from playwright.sync_api import Page
 
 from provide.uterm.server.bridge.hub import InMemoryResumeStore, TermHub
 
+from .backend_server import stop_uvicorn_thread
+
 if TYPE_CHECKING:
     from collections.abc import Generator
 
@@ -134,8 +136,7 @@ def resume_server() -> Generator[tuple[str, object | None, object | None], None,
     base_url = f"http://127.0.0.1:{port}"
     yield base_url, hub, store
 
-    server.should_exit = True
-    thread.join(timeout=5)
+    stop_uvicorn_thread(server, thread)
 
 
 # ---------------------------------------------------------------------------

@@ -30,6 +30,7 @@ from provide.uterm.deckmux._hub_mixin import DeckMuxMixin
 from provide.uterm.server.bridge.hub import TermHub
 
 from ..conftest import WorkerController  # noqa: TID252
+from .backend_server import stop_uvicorn_thread
 
 SCREENSHOTS_DIR = Path("packages/provide-uterm/tests/playwright/screenshots")
 
@@ -180,8 +181,7 @@ def deckmux_server() -> Generator[tuple[str, object | None], None, None]:
 
     yield f"http://127.0.0.1:{port}", hub
 
-    server.should_exit = True
-    thread.join(timeout=5)
+    stop_uvicorn_thread(server, thread)
 
 
 # ---------------------------------------------------------------------------
