@@ -221,3 +221,48 @@ func TestShareDisplayName(t *testing.T) {
 		t.Fatalf("auto display name should contain @, got %q", got)
 	}
 }
+
+func TestRunShareDefaultsNilContext(t *testing.T) {
+	// A nil context must be substituted rather than panicking in the HTTP call.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "nope", http.StatusForbidden)
+	}))
+	defer srv.Close()
+	//nolint:staticcheck // deliberately passing nil to cover the ctx guard
+	err := runShare(nil, shareOptions{Server: srv.URL, Cmd: []string{"echo"}}, &bytes.Buffer{})
+	if err == nil || !strings.Contains(err.Error(), "HTTP 403") {
+		t.Fatalf("expected HTTP 403 error, got %v", err)
+	}
+}
+
+func TestRunShareFailsWhenSourceCannotOpen(t *testing.T) {
+	// Registration succeeds, then --attach fails because `go test` stdin is not
+	// a terminal: the share must abort with that error, not proceed to bridge a
+	// source it never opened.
+	f := newFakeTunnelServer(t, func(ctx context.Context, c *websocket.Conn) {
+		<-ctx.Done()
+		_ = c.CloseNow()
+	})
+	if _, err := openShareSource(shareOptions{Attach: true}); err == nil {
+		t.Skip("stdin happens to be a TTY in this environment")
+	}
+	err := runShare(context.Background(), shareOptions{Server: f.srv.URL, Attach: true}, &bytes.Buffer{})
+	if err == nil || !strings.Contains(err.Error(), "raw mode") {
+		t.Fatalf("expected a raw-mode error, got %v", err)
+	}
+}
+
+func TestRunShareFailsWhenTunnelUnreachable(t *testing.T) {
+	// Registration hands back a ws_endpoint nothing is listening on, so the
+	// tunnel dial fails and the share reports it instead of hanging.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"tunnel_id": "tid-1", "ws_endpoint": "ws://127.0.0.1:1/tunnel", "worker_token": "wt",
+		})
+	}))
+	defer srv.Close()
+	err := runShare(context.Background(), shareOptions{Server: srv.URL, Cmd: []string{"true"}}, &bytes.Buffer{})
+	if err == nil || !strings.Contains(err.Error(), "cannot connect to tunnel") {
+		t.Fatalf("expected a tunnel connect error, got %v", err)
+	}
+}
