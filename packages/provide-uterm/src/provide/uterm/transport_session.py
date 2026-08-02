@@ -30,11 +30,10 @@ import asyncio
 import contextlib
 from collections import deque
 from copy import deepcopy
-from dataclasses import dataclass
 from sys import getsizeof
 from typing import TYPE_CHECKING, Any
 
-from provide.uterm.terminal_frames import TerminalFrameDisconnectedError
+from provide.uterm.terminal_frames import TerminalFrame, TerminalFrameDisconnectedError
 
 from provide.uterm.control_channel import ControlFrameDecoder, DataChunk
 from provide.uterm.emulator import TerminalEmulator
@@ -51,21 +50,6 @@ TERMINAL_FRAME_HISTORY_MAX_COUNT = 128
 TERMINAL_FRAME_HISTORY_MAX_BYTES = 1_048_576
 # Frame waits accept at most 24 hours, keeping deadline conversion bounded.
 TERMINAL_FRAME_WAIT_MAX_MS = 86_400_000
-
-
-@dataclass(frozen=True, slots=True)
-class TerminalFrame:
-    """One terminal update with its correlated, owned screen snapshot."""
-
-    sequence: int
-    snapshot: dict[str, Any]
-    transcript_delta: str
-
-    @property
-    def cursor(self) -> dict[str, Any]:
-        """Return an owned copy of the frame's cursor position."""
-        cursor = self.snapshot.get("cursor")
-        return dict(cursor) if isinstance(cursor, dict) else {"x": 0, "y": 0}
 
 
 def _retained_size(value: Any, seen: set[int]) -> int:

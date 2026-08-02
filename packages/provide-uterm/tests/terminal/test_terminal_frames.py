@@ -427,3 +427,11 @@ def test_terminal_frame_disconnect_signal_is_public_and_typed() -> None:
 
     assert uterm.TerminalFrameDisconnectedError is disconnect_type
     assert issubclass(disconnect_type, ConnectionError)
+
+
+def test_terminal_frame_is_stable_public_and_compatibility_identical() -> None:
+    from provide.uterm.terminal_frames import TerminalFrame as StableTerminalFrame
+    from provide.uterm.transport_session import TerminalFrame as CompatibilityTerminalFrame
+
+    assert uterm.TerminalFrame is StableTerminalFrame
+    assert CompatibilityTerminalFrame is StableTerminalFrame

@@ -25,7 +25,7 @@ try:
 except PackageNotFoundError:  # pragma: no cover
     __version__ = "0.0.0"
 
-from provide.uterm.terminal_frames import TerminalFrameDisconnectedError
+from provide.uterm.terminal_frames import TerminalFrame, TerminalFrameDisconnectedError
 
 from provide.uterm.ansi import (
     BOLD,
@@ -150,6 +150,7 @@ __all__ = [
     "ResolvedIdentity",
     "SSHKeyResolver",
     # terminal frame lifecycle
+    "TerminalFrame",
     "TerminalFrameDisconnectedError",
     "fingerprint_from_openssh_blob",
     # control-plane namespaces
