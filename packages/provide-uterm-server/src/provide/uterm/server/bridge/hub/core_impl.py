@@ -80,6 +80,9 @@ RESUME_TOKEN_DETACH_TIMEOUT_S = 5.0
 class TermHub:
     """In-memory registry for terminal WebSocket connections."""
 
+    _event_bus: EventBus | None
+    _operation_event_bus: EventBus | None
+
     # Thin no-mixin delegators to the owning service (heavier bodies in the
     # ``core_delegates_*`` / ``core_orchestration`` / ``core_helpers`` siblings).
     # Lease/router hooks dispatch via ``self._hub.<method>`` so monkey-patched hub names still intercept.
@@ -111,6 +114,12 @@ class TermHub:
 
     @event_bus.setter
     def event_bus(self, value: EventBus | None) -> None:
+        if value is self._event_bus:
+            return
+        if self._event_bus is not None:
+            self._event_bus.close()
+        if self._operation_event_bus is not None:
+            self._operation_event_bus.close()
         self._event_bus = value
         self._operation_event_bus = EventBus() if value is not None else None
 
@@ -133,6 +142,10 @@ class TermHub:
         return self.state.buffer_and_get_command(ws, data)
 
     async def shutdown(self) -> None:
+        if self._event_bus is not None:
+            self._event_bus.close()
+        if self._operation_event_bus is not None:
+            self._operation_event_bus.close()
         await self.state.shutdown()
 
     async def touch_activity(self, worker_id: str) -> None:

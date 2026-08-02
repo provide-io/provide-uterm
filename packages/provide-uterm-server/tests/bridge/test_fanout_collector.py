@@ -61,6 +61,57 @@ async def test_capture_close_unsubscribes_exactly_once() -> None:
     assert watch.exits == 1
 
 
+async def test_event_bus_replacement_wakes_public_and_private_subscribers() -> None:
+    hub = await _make_hub_with_worker("w1")
+    old_public = hub.event_bus
+    old_private = hub._operation_event_bus
+    assert old_public is not None
+    assert old_private is not None
+    capture = await OutputCollector().open(hub, "w1")
+
+    async with old_public.watch("w1") as public_sub:
+        public_wait = asyncio.create_task(public_sub.queue.get())
+        private_wait = asyncio.create_task(capture._subscription.queue.get())
+        replacement = EventBus()
+
+        hub.event_bus = replacement
+
+        assert await asyncio.wait_for(public_wait, timeout=0.1) is None
+        assert await asyncio.wait_for(private_wait, timeout=0.1) is None
+        assert old_public.subscriber_count("w1") == 0
+        assert old_private.subscriber_count("w1") == 0
+        async with replacement.watch("w1") as replacement_sub:
+            await hub.append_event("w1", "term", {"data": "new-generation"})
+            delivered = await asyncio.wait_for(replacement_sub.queue.get(), timeout=0.1)
+            assert delivered is not None
+            assert delivered["data"]["data"] == "new-generation"
+
+    await capture.close()
+
+
+async def test_hub_shutdown_wakes_public_and_private_subscribers_idempotently() -> None:
+    hub = await _make_hub_with_worker("w1")
+    public_bus = hub.event_bus
+    private_bus = hub._operation_event_bus
+    assert public_bus is not None
+    assert private_bus is not None
+    capture = await OutputCollector().open(hub, "w1")
+
+    async with public_bus.watch("w1") as public_sub:
+        public_wait = asyncio.create_task(public_sub.queue.get())
+        private_wait = asyncio.create_task(capture._subscription.queue.get())
+
+        await hub.shutdown()
+        await hub.shutdown()
+
+        assert await asyncio.wait_for(public_wait, timeout=0.1) is None
+        assert await asyncio.wait_for(private_wait, timeout=0.1) is None
+        assert public_bus.subscriber_count("w1") == 0
+        assert private_bus.subscriber_count("w1") == 0
+
+    await capture.close()
+
+
 # ---------------------------------------------------------------------------
 # Captures output events and returns delta string
 # ---------------------------------------------------------------------------
