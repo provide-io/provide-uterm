@@ -38,6 +38,11 @@ dev = [
   "workers-py>=0.4.0",
   "websockets>=16.0",
   "cryptography>=44.0",
+  # The cross-compat tests boot a real FastAPI server and compare it against
+  # the Worker, and that server refuses to build without annotation support.
+  # The Worker runtime itself does not need it, so it belongs here rather than
+  # in this package's runtime dependencies.
+  "provide-uterm-server[annotation]>=0.5.0",
 ]
 
 [project.urls]

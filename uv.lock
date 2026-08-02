@@ -2147,6 +2147,7 @@ dependencies = [
 dev = [
     { name = "cryptography" },
     { name = "mypy" },
+    { name = "provide-uterm-server", extra = ["annotation"] },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -2163,6 +2164,7 @@ requires-dist = [
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.19" },
     { name = "provide-uterm", editable = "packages/provide-uterm" },
     { name = "provide-uterm-server", editable = "packages/provide-uterm-server" },
+    { name = "provide-uterm-server", extras = ["annotation"], marker = "extra == 'dev'", editable = "packages/provide-uterm-server" },
     { name = "pyjwt", specifier = ">=2.9" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=1.3" },
