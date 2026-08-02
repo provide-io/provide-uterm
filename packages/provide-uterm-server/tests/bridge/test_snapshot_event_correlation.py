@@ -403,3 +403,12 @@ async def test_snapshot_commit_for_unknown_worker_returns_owned_raw_sequence_zer
     assert returned["event_seq"] == 0
     assert snapshot == original
     assert hub.registry.get("missing") is None
+
+
+@pytest.mark.asyncio
+async def test_snapshot_commit_explicit_none_uses_compatibility_runtime_path() -> None:
+    _app, hub = make_app()
+
+    returned = await hub.commit_snapshot_event("missing", _snapshot(), expected_worker=None)
+
+    assert returned["event_seq"] == 0
