@@ -52,13 +52,13 @@ provide-uterm already broadcasts terminal output to all connected browsers and t
 ```python
 @dataclass(slots=True)
 class BrowserPresence:
-    browser_id: str        # stable per-connection identifier (uuid4 assigned at hello)
-    principal: str         # subject_id (anonymous fallback: "anon:<browser_id[:8]>")
-    display_name: str      # resolved from principal or "Anonymous"
-    role: str              # "viewer" | "operator" | "admin"
-    color: str             # deterministic HSL color derived from browser_id
-    cursor_row: int        # 0-indexed row in current snapshot grid (-1 if not set)
-    cursor_col: int        # 0-indexed column
+    browser_id: str  # stable per-connection identifier (uuid4 assigned at hello)
+    principal: str  # subject_id (anonymous fallback: "anon:<browser_id[:8]>")
+    display_name: str  # resolved from principal or "Anonymous"
+    role: str  # "viewer" | "operator" | "admin"
+    color: str  # deterministic HSL color derived from browser_id
+    cursor_row: int  # 0-indexed row in current snapshot grid (-1 if not set)
+    cursor_col: int  # 0-indexed column
     last_active_at: float  # time.time() of last WS message
     joined_at: float
 ```
@@ -70,18 +70,18 @@ class BrowserPresence:
 ```python
 @dataclass(slots=True)
 class TerminalAnnotation:
-    annotation_id: str     # uuid4
-    browser_id: str        # author
+    annotation_id: str  # uuid4
+    browser_id: str  # author
     principal: str
     color: str
-    row: int               # anchor row in snapshot grid
-    col: int               # anchor column
-    end_row: int           # end of highlighted region (-1 if point annotation)
+    row: int  # anchor row in snapshot grid
+    col: int  # anchor column
+    end_row: int  # end of highlighted region (-1 if point annotation)
     end_col: int
-    text: str              # annotation label (max 280 chars)
+    text: str  # annotation label (max 280 chars)
     created_at: float
     updated_at: float
-    kind: str              # "highlight" | "pointer" | "note"
+    kind: str  # "highlight" | "pointer" | "note"
 ```
 
 Annotations are anchored to `(row, col)` in the snapshot grid. When the snapshot changes, annotations remain at their original coordinates — the browser reconciles whether they still make visual sense. A `snapshot_seq` field allows the browser to detect stale anchors.
@@ -97,7 +97,7 @@ class ChatMessage:
     browser_id: str
     principal: str
     display_name: str
-    text: str              # max 1000 chars
+    text: str  # max 1000 chars
     ts: float
 ```
 
@@ -147,8 +147,8 @@ All new frame types are opt-in. Browsers that do not send presence frames are st
 
 ```python
 # Added to WorkerTermState dataclass
-presences: dict[str, BrowserPresence]        # browser_id → presence
-annotations: dict[str, TerminalAnnotation]   # annotation_id → annotation
+presences: dict[str, BrowserPresence]  # browser_id → presence
+annotations: dict[str, TerminalAnnotation]  # annotation_id → annotation
 ```
 
 `browser_id` is added to the `hello` message:

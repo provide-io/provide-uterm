@@ -89,9 +89,11 @@ class SqliteControlPlane:
                     (cutoff, cutoff),
                 ),
                 (
-                    "DELETE FROM cp_session_tokens "
-                    "WHERE (revoked_at IS NOT NULL AND revoked_at < ?) "
-                    "OR (expires_at IS NOT NULL AND expires_at < ?)",
+                    (
+                        "DELETE FROM cp_session_tokens "
+                        "WHERE (revoked_at IS NOT NULL AND revoked_at < ?) "
+                        "OR (expires_at IS NOT NULL AND expires_at < ?)"
+                    ),
                     (cutoff, cutoff),
                 ),
                 ("DELETE FROM cp_sessions WHERE deleted_at IS NOT NULL AND deleted_at < ?", (cutoff,)),

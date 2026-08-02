@@ -25,7 +25,7 @@ from provide.uterm.control_channel import encode_control_frame, encode_terminal_
 from provide.uterm.server.bridge.hub.resume import ResumeSession
 
 HijackStateCallback = Callable[[str, bool, str | None], Awaitable[None] | None]
-BrowserRoleResolver = Callable[[WebSocket, str], str | None | Awaitable[str | None]]
+BrowserRoleResolver = Callable[[WebSocket, str], str | Awaitable[str | None] | None]
 MetricCallback = Callable[[str, int], None]
 WorkerEmptyCallback = Callable[[str], Coroutine[Any, Any, None]]
 ResumeCallback = Callable[[str, ResumeSession], Awaitable[bool]]

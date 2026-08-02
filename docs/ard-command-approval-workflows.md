@@ -37,34 +37,36 @@ provide-uterm holds the hijack input stream: it is the only place in the stack t
 class ApprovalPolicy:
     policy_id: str
     name: str
-    pattern: str               # regex matched against raw input data
-    min_role: str              # minimum role required to trigger ("operator" | "admin")
-    approver_url: str          # webhook URL for approval requests
-    timeout_s: float           # how long to hold before applying default_action
-    default_action: str        # "approve" | "reject" — applied on timeout or service failure
-    require_different_user: bool = True   # approver cannot be the same principal as submitter
-    notify_browsers: bool = True          # send hold/release messages to all connected browsers
+    pattern: str  # regex matched against raw input data
+    min_role: str  # minimum role required to trigger ("operator" | "admin")
+    approver_url: str  # webhook URL for approval requests
+    timeout_s: float  # how long to hold before applying default_action
+    default_action: str  # "approve" | "reject" — applied on timeout or service failure
+    require_different_user: bool = True  # approver cannot be the same principal as submitter
+    notify_browsers: bool = True  # send hold/release messages to all connected browsers
+
 
 @dataclass(slots=True)
 class ApprovalRequest:
-    request_id: str            # uuid4
+    request_id: str  # uuid4
     policy_id: str
     session_id: str
     worker_id: str
-    principal: str             # subject_id of the browser that submitted the command
+    principal: str  # subject_id of the browser that submitted the command
     role: str
-    command: str               # the full input string
+    command: str  # the full input string
     submitted_at: float
     expires_at: float
-    status: str                # "pending" | "approved" | "rejected" | "timeout" | "cancelled"
-    approver: str | None       # subject_id of the approver (if resolved)
+    status: str  # "pending" | "approved" | "rejected" | "timeout" | "cancelled"
+    approver: str | None  # subject_id of the approver (if resolved)
     decided_at: float | None
+
 
 @dataclass(slots=True)
 class ApprovalEvent:
     request_id: str
     policy_id: str
-    outcome: str               # "approved" | "rejected" | "timeout" | "cancelled"
+    outcome: str  # "approved" | "rejected" | "timeout" | "cancelled"
     principal: str
     approver: str | None
     command: str
@@ -192,7 +194,7 @@ async def _handle_input(hub, ws, worker_id, msg_b):
         ctx = ApprovalContext(principal=_get_principal(hub, ws, worker_id), role=_get_role(hub, ws, worker_id))
         forward = await hub._approval_gate.intercept(worker_id, data, principal=ctx.principal, role=ctx.role, hub=hub)
         if not forward:
-            return   # held or rejected — gate handles worker control and browser notification
+            return  # held or rejected — gate handles worker control and browser notification
     ok = await hub.send_worker(worker_id, {"type": "input", "data": data, "ts": time.time()})
     ...
 ```

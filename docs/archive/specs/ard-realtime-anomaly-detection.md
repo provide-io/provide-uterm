@@ -57,13 +57,14 @@ provide-uterm receives every byte of terminal output *before* it reaches the bro
 class DetectionRule:
     rule_id: str
     name: str
-    severity: str            # "info" | "warn" | "critical"
-    kind: str                # "output" | "input" | "both"
-    pattern: str             # regex (for "regex" engine) or prompt template (for "llm" engine)
-    engine: str              # "regex" | "rolling" | "llm"
-    window_lines: int = 5    # for "rolling" engine: how many output lines to buffer
-    context_lines: int = 2   # lines of context to include in DetectionEvent
+    severity: str  # "info" | "warn" | "critical"
+    kind: str  # "output" | "input" | "both"
+    pattern: str  # regex (for "regex" engine) or prompt template (for "llm" engine)
+    engine: str  # "regex" | "rolling" | "llm"
+    window_lines: int = 5  # for "rolling" engine: how many output lines to buffer
+    context_lines: int = 2  # lines of context to include in DetectionEvent
     tags: list[str] = field(default_factory=list)
+
 
 @dataclass(slots=True)
 class DetectionEvent:
@@ -73,10 +74,10 @@ class DetectionEvent:
     session_id: str
     worker_id: str
     ts: float
-    kind: str               # "output" | "input"
-    matched_text: str       # the specific text that triggered the rule
-    context: str            # surrounding lines for human review
-    principal: str | None   # subject_id of connected browser(s), or None
+    kind: str  # "output" | "input"
+    matched_text: str  # the specific text that triggered the rule
+    context: str  # surrounding lines for human review
+    principal: str | None  # subject_id of connected browser(s), or None
     role: str | None
     hijack_active: bool
 ```

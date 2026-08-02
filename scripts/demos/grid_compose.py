@@ -118,8 +118,10 @@ def tile_grid_with_footer(
                 "-i",
                 str(footer_png),
                 "-filter_complex",
-                f"[0:v]pad={width}:{tile_h + footer_h}:0:0:color=#0d1117[bg];"
-                f"[1:v]setsar=1[ftr];[bg][ftr]overlay=0:{tile_h}[out]",
+                (
+                    f"[0:v]pad={width}:{tile_h + footer_h}:0:0:color=#0d1117[bg];"
+                    f"[1:v]setsar=1[ftr];[bg][ftr]overlay=0:{tile_h}[out]"
+                ),
                 "-map",
                 "[out]",
                 *enc,

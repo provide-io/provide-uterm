@@ -75,6 +75,7 @@ graph TB
 
 ```python
 from provide.uterm.fastapi_utils import mount_terminal_ui
+
 app = FastAPI()
 mount_terminal_ui(app)  # serves at /terminal
 ```

@@ -236,6 +236,7 @@ def test_deckmux_mixin_is_public():
 
 def test_deckmux_init_has_public_name():
     from provide.uterm.deckmux import DeckMuxMixin
+
     # public, non-underscore init hook
     assert hasattr(DeckMuxMixin, "deckmux_init")
 ```
@@ -264,12 +265,14 @@ def test_deckmux_init_has_public_name():
 ```python
 def test_is_control_framed_detects_dle_stx_header():
     from provide.uterm.control_channel import encode_control, is_control_framed
+
     framed = encode_control({"type": "resume_ok"})
     assert is_control_framed(framed) is True
 
 
 def test_is_control_framed_rejects_plain_text():
     from provide.uterm.control_channel import is_control_framed
+
     assert is_control_framed("just terminal output\r\n") is False
     assert is_control_framed("") is False
 ```
@@ -301,13 +304,16 @@ Two independent sub-tasks. U1a is a one-liner; U1b is a small new module.
 ```python
 async def test_connect_forwards_ping_interval(monkeypatch):
     from provide.uterm.transports import ws_transport
+
     captured = {}
 
     async def fake_connect(url, **kwargs):
         captured["url"] = url
         captured.update(kwargs)
+
         class _WS:  # minimal stub
             async def close(self): ...
+
         return _WS()
 
     monkeypatch.setattr(ws_transport.websockets, "connect", fake_connect)
@@ -336,16 +342,19 @@ async def test_connect_forwards_ping_interval(monkeypatch):
 # reconnect.py
 @dataclass(frozen=True)
 class ReconnectPolicy:
-    max_retries: int = 5          # 0 = no reconnect
+    max_retries: int = 5  # 0 = no reconnect
     base_backoff_s: float = 0.5
     max_backoff_s: float = 30.0
     # exponential backoff: min(max_backoff_s, base_backoff_s * 2**attempt)
 
+
 OnReconnect = Callable[["TransportSession"], Awaitable[None]]  # app re-auth hook
 
+
 async def connect_with_reconnect(
-    connect: Callable[[], Awaitable[TransportSession]],   # e.g. partial(connect_ws, url)
-    *, policy: ReconnectPolicy = ReconnectPolicy(),
+    connect: Callable[[], Awaitable[TransportSession]],  # e.g. partial(connect_ws, url)
+    *,
+    policy: ReconnectPolicy = ReconnectPolicy(),
     on_reconnect: OnReconnect | None = None,
 ) -> ReconnectingSession: ...
 ```
@@ -355,16 +364,22 @@ async def connect_with_reconnect(
 ```python
 async def test_reconnects_and_calls_hook(monkeypatch):
     from provide.uterm.transports import reconnect
+
     calls = {"n": 0, "hook": 0}
+
     class _S:  # fake session
         async def send(self, d): ...
         async def close(self): ...
+
     async def factory():
         calls["n"] += 1
         if calls["n"] == 1:
             return _S()
         return _S()
-    async def hook(s): calls["hook"] += 1
+
+    async def hook(s):
+        calls["hook"] += 1
+
     monkeypatch.setattr(reconnect.asyncio, "sleep", lambda *_: _noop())
     rs = await reconnect.connect_with_reconnect(factory, on_reconnect=hook)
     await rs.reconnect()  # simulate a drop-triggered reconnect
@@ -391,10 +406,13 @@ async def test_reconnects_and_calls_hook(monkeypatch):
 **Interface contract:**
 ```python
 # file_io.py — atomic, owner-only, symlink-refusing creation (lift the logic from session_logger.py:54-81)
-def secure_create(path: Path, *, mode: int = 0o600, dir_mode: int = 0o700) -> int: ...      # returns fd
+def secure_create(path: Path, *, mode: int = 0o600, dir_mode: int = 0o700) -> int: ...  # returns fd
 def secure_open_append(path: Path, *, mode: int = 0o600, dir_mode: int = 0o700) -> TextIO: ...
+
+
 #   - parent dirs created with dir_mode
 #   - O_CREAT|O_WRONLY|O_APPEND|O_NOFOLLOW, mode at open time (NO chmod-after-open)
+
 
 # redaction.py
 def make_redactor(patterns: Sequence[str] | None = None) -> Callable[[str], str]: ...
@@ -427,13 +445,22 @@ def redact_text(text: str, redactor: Callable[[str], str] | None) -> str: ...
 def test_all_builders_validate_against_schema():
     from provide.uterm import frames
     from provide.uterm.bridge import schemas
+
     f = frames.make_resume(token="abc", player_id=1)
-    schemas.ResumeFrame.model_validate(f)   # must not raise
+    schemas.ResumeFrame.model_validate(f)  # must not raise
+
 
 def test_builder_facade_exposes_full_set():
     from provide.uterm import frames
-    for name in ("make_resume", "make_resume_ok", "make_resume_failed",
-                 "make_session_token", "make_link_patterns", "make_snapshot_frame"):
+
+    for name in (
+        "make_resume",
+        "make_resume_ok",
+        "make_resume_failed",
+        "make_session_token",
+        "make_link_patterns",
+        "make_snapshot_frame",
+    ):
         assert hasattr(frames, name)
 ```
 
@@ -462,19 +489,22 @@ def test_builder_facade_exposes_full_set():
 @dataclass(frozen=True)
 class ExpectResult:
     matched: bool
-    matched_text: str | None       # the substring/regex hit, if any
-    screen: str                    # final snapshot screen
+    matched_text: str | None  # the substring/regex hit, if any
+    screen: str  # final snapshot screen
     timed_out: bool
 
+
 async def send_and_expect(
-    session: SessionProtocol,      # anything with send + wait_for_screen_change + snapshot
+    session: SessionProtocol,  # anything with send + wait_for_screen_change + snapshot
     keys: str,
     *,
     expect_text: str | None = None,
     expect_regex: str | None = None,
     timeout_ms: int = 5000,
-    sanitize: bool = True,         # route keys through prepare_keystrokes
+    sanitize: bool = True,  # route keys through prepare_keystrokes
 ) -> ExpectResult: ...
+
+
 #   - if sanitize: keys = prepare_keystrokes(keys)   (client/sanitizer.py:76)
 #   - send, then loop: capture screen_change_seq, wait_for_screen_change(since=seq, timeout_ms=remaining),
 #     re-check expect_text/expect_regex against the snapshot until match or deadline.

@@ -316,25 +316,31 @@ def _family_emulator(rng: random.Random) -> list[dict[str, Any]]:
 _REGRESSIONS: Final[tuple[tuple[str, str, list[str]], ...]] = (
     (
         "AEF-REG-0001",
-        "An SGR split across a feed boundary: the parameters arrive in one chunk "
-        "and the terminating 'm' in the next. A port that flushes on a chunk "
-        "boundary rather than holding the partial sequence prints the parameters "
-        "as text.",
+        (
+            "An SGR split across a feed boundary: the parameters arrive in one chunk "
+            "and the terminating 'm' in the next. A port that flushes on a chunk "
+            "boundary rather than holding the partial sequence prints the parameters "
+            "as text."
+        ),
         [f"{ESC}[3", "1mred"],
     ),
     (
         "AEF-REG-0002",
-        "A wide code point that straddles the last column: the screen is twenty "
-        "columns and the character needs two, so it either wraps whole or is "
-        "split. Column arithmetic that counts UTF-8 bytes, or UTF-16 units, "
-        "rather than display width disagrees here.",
+        (
+            "A wide code point that straddles the last column: the screen is twenty "
+            "columns and the character needs two, so it either wraps whole or is "
+            "split. Column arithmetic that counts UTF-8 bytes, or UTF-16 units, "
+            "rather than display width disagrees here."
+        ),
         ["x" * 19 + "你好"],
     ),
     (
         "AEF-REG-0003",
-        "An extended colour cut off mid-sequence, then more text. The parser has "
-        "to decide how much to discard: too little and the leftover parameters "
-        "print, too much and the following text vanishes.",
+        (
+            "An extended colour cut off mid-sequence, then more text. The parser has "
+            "to decide how much to discard: too little and the leftover parameters "
+            "print, too much and the following text vanishes."
+        ),
         [f"{ESC}[38;5;", "1mtail"],
     ),
 )
