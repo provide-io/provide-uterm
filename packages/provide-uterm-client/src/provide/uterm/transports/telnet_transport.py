@@ -251,6 +251,29 @@ class TelnetTransport(ConnectionTransport):
             await self.disconnect()
             raise ConnectionError("Send failed") from exc
 
+    @staticmethod
+    async def _read_bounded(reader: StreamReader, max_bytes: int, timeout: float) -> bytes:
+        """Read up to *max_bytes*, raising :class:`TimeoutError` after *timeout*.
+
+        Deliberately not ``asyncio.wait_for``. On CPython < 3.12 ``wait_for``
+        can *swallow* a ``CancelledError`` when the inner future completes in
+        the same event-loop tick as the cancellation (gh-86296): it returns the
+        read result instead of propagating, so a caller polling in a loop keeps
+        running after it was cancelled and never releases the connection.
+        ``asyncio.wait`` propagates cancellation unconditionally; the ``finally``
+        makes sure the in-flight read is dropped on both the timeout and the
+        cancellation path.
+        """
+        read_task = asyncio.ensure_future(reader.read(max_bytes))
+        try:
+            done, _pending = await asyncio.wait({read_task}, timeout=timeout)
+            if not done:
+                raise TimeoutError
+            return read_task.result()
+        finally:
+            if not read_task.done():
+                read_task.cancel()
+
     async def receive(self, max_bytes: int, timeout_ms: int) -> bytes:
         """Receive bytes, stripping IAC sequences.
 
@@ -267,7 +290,7 @@ class TelnetTransport(ConnectionTransport):
         if not self._reader:
             raise ConnectionError("Not connected")
         try:
-            chunk = await asyncio.wait_for(self._reader.read(max_bytes), timeout=timeout_ms / 1000)
+            chunk = await self._read_bounded(self._reader, max_bytes, timeout_ms / 1000)
         except TimeoutError:
             return b""
         except (ConnectionResetError, BrokenPipeError) as exc:

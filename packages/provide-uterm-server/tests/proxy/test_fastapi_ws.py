@@ -314,6 +314,66 @@ class TestWsTerminalProxyConnectionError:
 
 
 # ---------------------------------------------------------------------------
+# Regression: a pump that ignores cancellation must not wedge the connection
+# ---------------------------------------------------------------------------
+
+
+class TestWsTerminalProxyCancellationSafety:
+    """``_handle`` must not depend on ``task.cancel()`` being honoured.
+
+    On CPython < 3.12 ``asyncio.wait_for`` drops a ``CancelledError`` whenever
+    the inner future resolves in the same event-loop tick (gh-86296), so the
+    remote->browser poll loop can survive its own cancellation.  If ``_handle``
+    drained the pumps before disconnecting, that survivor would hold the
+    upstream socket — and the whole ASGI task — open forever.  Closing the
+    transport first is what actually ends the ``is_connected()``-guarded loops.
+    """
+
+    def test_handle_returns_when_remote_pump_swallows_cancellation(self) -> None:
+        class _SwallowingTransport:
+            """``receive()`` eats cancellation exactly like 3.11's wait_for."""
+
+            def __init__(self) -> None:
+                self._connected = True
+                self.disconnect_calls = 0
+
+            async def connect(self, *_a: object, **_kw: object) -> None:
+                pass
+
+            async def disconnect(self) -> None:
+                self.disconnect_calls += 1
+                self._connected = False
+
+            async def send(self, data: bytes) -> None:
+                pass
+
+            async def receive(self, max_bytes: int, timeout_ms: int) -> bytes:
+                try:
+                    await asyncio.sleep(0.01)
+                except asyncio.CancelledError:
+                    return b""  # swallowed — the loop keeps polling
+                return b""
+
+            def is_connected(self) -> bool:
+                return self._connected
+
+        transport = _SwallowingTransport()
+        proxy = WsTerminalProxy("localhost", 23, transport_factory=lambda: transport)
+        reader = MagicMock()
+        reader.read = AsyncMock(return_value=b"")  # browser disconnects at once
+
+        async def _drive() -> bool:
+            task = asyncio.create_task(proxy._handle(reader, MagicMock(), MagicMock(spec=WebSocket)))
+            done, pending = await asyncio.wait({task}, timeout=5.0)
+            for leftover in pending:
+                leftover.cancel()
+            return bool(done)
+
+        assert asyncio.run(_drive()), "_handle never returned — the remote pump was left running"
+        assert transport.disconnect_calls >= 1, "upstream transport was never disconnected"
+
+
+# ---------------------------------------------------------------------------
 # Regression: explicit fastapi/gateway leaf imports remain stable after root cleanup
 # ---------------------------------------------------------------------------
 
