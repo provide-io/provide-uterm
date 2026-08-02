@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from typing import Any
+from typing import Any, Literal
 
 import uvicorn
 
@@ -89,6 +89,7 @@ async def wait_for_subscribers(
     worker_id: str,
     expected: int,
     *,
+    stream: Literal["public", "operation"] = "public",
     timeout: float = 5.0,
     interval: float = 0.01,
 ) -> None:
@@ -98,20 +99,24 @@ async def wait_for_subscribers(
     fan-out tests. HTTP long-poll subscribers register themselves with
     :class:`EventBus` from inside their request handler; on a loaded CI runner
     the registration can take >100ms, after which any events fired in the
-    interim are missed and the subscriber returns 0 events.
+    interim are missed and the subscriber returns 0 events. ``public`` tracks
+    the diagnostic API bus; ``operation`` tracks raw OutputCollector capture.
     """
-    # Fan-out OutputCapture subscribes to the server-owned raw stream, not the
-    # public write-time-redacted diagnostic EventBus.
-    bus = hub._operation_event_bus
+    if stream == "public":
+        bus = hub.event_bus
+    else:
+        # Fan-out OutputCapture subscribes to the server-owned raw stream, not
+        # the public write-time-redacted diagnostic EventBus.
+        bus = hub._operation_event_bus
     if bus is None:
-        raise RuntimeError("operation EventBus is not configured")
+        raise RuntimeError(f"{stream} EventBus is not configured")
     loop = asyncio.get_running_loop()
     deadline = loop.time() + timeout
     while loop.time() < deadline:
-        if len(bus._subs.get(worker_id, [])) >= expected:
+        if bus.subscriber_count(worker_id) >= expected:
             return
         await asyncio.sleep(interval)
-    current = len(bus._subs.get(worker_id, []))
+    current = bus.subscriber_count(worker_id)
     raise TimeoutError(
         f"wait_for_subscribers({worker_id!r}, expected={expected}) timed out after {timeout}s; saw {current}"
     )
