@@ -114,7 +114,7 @@ class TermHub:
         self._event_bus = value
         self._operation_event_bus = EventBus() if value is not None else None
 
-    def _watch_authorized_operation_output(self, worker_id: str) -> Any:
+    def _watch_authorized_operation_output(self, worker_id: str, *, max_queue_bytes: int | None = None) -> Any:
         """Open the private raw stream reserved for supervised operations.
 
         This stream is intentionally separate from :attr:`event_bus`, which
@@ -123,7 +123,11 @@ class TermHub:
         """
         if self._operation_event_bus is None:
             return None
-        return self._operation_event_bus.watch(worker_id, event_types=["term", "snapshot"])
+        return self._operation_event_bus.watch(
+            worker_id,
+            event_types=["term", "snapshot"],
+            max_queue_bytes=max_queue_bytes,
+        )
 
     def _buffer_and_get_command(self, ws: WebSocket, data: str) -> str | None:
         return self.state.buffer_and_get_command(ws, data)
