@@ -29,9 +29,20 @@ from dataclasses import dataclass
 from pathlib import Path
 
 MODULE_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = MODULE_ROOT.parent.parent
 SRC = MODULE_ROOT / "src" / "Provide.Uterm"
 ALLOWLIST_FILE = MODULE_ROOT / "mutation_equivalents.toml"
 TEST_PROJECT = MODULE_ROOT / "tests" / "Provide.Uterm.Tests" / "Provide.Uterm.Tests.csproj"
+
+# Changing any of these can turn a killed mutant into a survivor (or excuse one)
+# without touching a perimeter source file, so a --changed-only run that touches
+# them must NOT narrow. Mirrors ci/stryker_gate.py and the mutation-support-file
+# rule in scripts/run_mutation_gate.py.
+SUPPORT_PATHS = (
+    "packages/provide-uterm-csharp/mutation_equivalents.toml",
+    "packages/provide-uterm-csharp/ci/mutation_gate.py",
+    "packages/provide-uterm-csharp/ci/prepare_stryker_args.sh",
+)
 
 PERIMETER = (
     SRC / "Policy" / "StrictPolicyEngine.cs",
@@ -156,14 +167,60 @@ def run_tests() -> bool:
     return proc.returncode != 0
 
 
+def changed_perimeter(base_ref: str) -> tuple[Path, ...] | None:
+    """Perimeter files changed since ``base_ref``.
+
+    Returns ``None`` when the run must NOT be narrowed (a support file changed,
+    so the whole perimeter has to be re-proven). An empty tuple means nothing on
+    the perimeter changed and the caller can skip entirely -- which matters here
+    because this gate rebuilds the test project once per mutant.
+    """
+    proc = subprocess.run(  # nosec
+        ["git", "diff", "--name-only", base_ref],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        print(f"FAIL: git diff against {base_ref!r} failed: {proc.stderr.strip()}", file=sys.stderr)
+        raise SystemExit(2)
+    changed = {line for line in proc.stdout.splitlines() if line}
+    if changed & set(SUPPORT_PATHS):
+        return None
+    return tuple(p for p in PERIMETER if p.resolve().relative_to(REPO_ROOT).as_posix() in changed)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--max-mutants", type=int, default=0, help="Cap mutants (0=all)")
+    parser.add_argument(
+        "--changed-only",
+        action="store_true",
+        help="Mutate only the perimeter files changed since --base-ref; skip entirely if none did.",
+    )
+    parser.add_argument(
+        "--base-ref",
+        default="HEAD",
+        help="Git base ref used for --changed-only (default: HEAD, i.e. the working tree).",
+    )
     args = parser.parse_args()
+
+    perimeter = PERIMETER
+    if args.changed_only:
+        selected = changed_perimeter(args.base_ref)
+        if selected is None:
+            print("Mutation support file changed - running the full perimeter rather than narrowing.")
+        elif not selected:
+            print(f"SKIP: no perimeter file changed since {args.base_ref} - nothing to mutate.")
+            return 0
+        else:
+            perimeter = selected
+            print(f"Narrowed to {len(perimeter)} changed perimeter file(s): {', '.join(p.name for p in perimeter)}")
 
     allow = load_allowlist()
     all_mutants: list[Mutant] = []
-    for path in PERIMETER:
+    for path in perimeter:
         if not path.is_file():
             print(f"FAIL: perimeter missing {path}", file=sys.stderr)
             return 2
@@ -266,8 +323,11 @@ def main() -> int:
             status = "LIVED"
         print(f"  [{i}/{len(all_mutants)}] {status} {rel}:{m.line} {m.mutator} {m.original!r}->{m.replacement!r}")
 
+    # On a narrowed run, allowlist entries for files outside the narrowed set were
+    # never mutated, so their absence says nothing about staleness.
+    mutated_names = {p.name for p in perimeter}
     for key, reason in allow.items():
-        if key not in matched_allow:
+        if key not in matched_allow and Path(key[0]).name in mutated_names:
             print(f"WARN: stale allowlist entry {key}: {reason}")
 
     print(f"Summary: killed={killed} allowed={allowed} lived={len(lived)} total={len(all_mutants)}")

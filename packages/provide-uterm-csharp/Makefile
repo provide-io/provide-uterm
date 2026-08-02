@@ -107,14 +107,20 @@ conformance-test:
 # whole-project instrumentation cost regardless of perimeter size (Go's
 # gremlins gate is likewise kept separate for the same reason).
 PYTHON ?= python3
+# GATE_ARGS lets CI pass --changed-only/--base-ref (see ci/prepare_stryker_args.sh)
+# to BOTH stages. Empty by default, so a bare `make mutation-gate` still runs the
+# full perimeter. Both stages are per-mutant expensive -- the flipper rebuilds the
+# test project once per mutant, and Stryker pays a fixed whole-project
+# instrumentation cost -- so both need the narrowing, not just Stryker.
+GATE_ARGS ?=
 mutation-gate:
-	$(PYTHON) ci/mutation_gate.py
+	$(PYTHON) ci/mutation_gate.py $(GATE_ARGS)
 # dotnet-stryker is a LOCAL tool (.config/dotnet-tools.json), so it does not
 # exist until restored. Without this, `dotnet stryker` exits 1 — the same code
 # it uses for "below threshold" — and the gate reads a tool that never ran as
 # a mutation result.
 	$(DOTNET) tool restore
-	$(PYTHON) ci/stryker_gate.py
+	$(PYTHON) ci/stryker_gate.py $(GATE_ARGS)
 
 define DOTNET_COVER_BATCH
 	@echo "=== cover batch: $(1) ==="

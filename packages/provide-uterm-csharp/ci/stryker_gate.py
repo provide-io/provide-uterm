@@ -52,6 +52,7 @@ local tool restored (``dotnet tool restore``).
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import subprocess  # nosec
 import sys
@@ -59,9 +60,23 @@ import tomllib
 from pathlib import Path
 
 MODULE_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = MODULE_ROOT.parent.parent
 SRC = MODULE_ROOT / "src" / "Provide.Uterm"
 TEST_PROJECT_DIR = MODULE_ROOT / "tests" / "Provide.Uterm.Tests"
 ALLOWLIST_FILE = MODULE_ROOT / "mutation_equivalents.toml"
+STRYKER_CONFIG = TEST_PROJECT_DIR / "stryker-config.json"
+
+# Changing any of these can turn a killed mutant into a survivor (or excuse one)
+# without touching a perimeter source file, so a --changed-only run that touches
+# them must NOT narrow: it falls back to the full perimeter rather than
+# silently reporting "nothing to do". Mirrors the mutation-support-file rule in
+# scripts/run_mutation_gate.py.
+SUPPORT_PATHS = (
+    "packages/provide-uterm-csharp/mutation_equivalents.toml",
+    "packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/stryker-config.json",
+    "packages/provide-uterm-csharp/ci/stryker_gate.py",
+    "packages/provide-uterm-csharp/ci/prepare_stryker_args.sh",
+)
 
 # Statuses that are never a gate failure. CompileError is Stryker's own
 # Safe-Mode exclusion (the mutation never compiles, so it is never a live
@@ -88,9 +103,59 @@ def load_allowlist() -> dict[AllowKey, str]:
     return out
 
 
-def run_stryker() -> Path:
+def perimeter_globs() -> list[str]:
+    """The ``mutate`` globs from stryker-config.json — the mutation perimeter."""
+    config = json.loads(STRYKER_CONFIG.read_text(encoding="utf-8"))
+    return list(config["stryker-config"]["mutate"])
+
+
+def _git_changed_paths(base_ref: str) -> list[str]:
+    """Repo-relative paths changed between ``base_ref`` and the working tree."""
+    proc = subprocess.run(  # nosec
+        ["git", "diff", "--name-only", base_ref],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        print(f"FAIL: git diff against {base_ref!r} failed: {proc.stderr.strip()}", file=sys.stderr)
+        raise SystemExit(2)
+    return [line for line in proc.stdout.splitlines() if line]
+
+
+def changed_perimeter_globs(base_ref: str) -> list[str] | None:
+    """Narrowed ``--mutate`` globs for the changed perimeter files.
+
+    Returns ``None`` when the run must NOT be narrowed (a support file changed,
+    so the whole perimeter has to be re-proven), and ``[]`` when nothing on the
+    perimeter changed at all (the caller skips the run entirely).
+    """
+    changed = _git_changed_paths(base_ref)
+    if any(path in SUPPORT_PATHS for path in changed):
+        return None
+
+    src_prefix = f"{SRC.relative_to(REPO_ROOT).as_posix()}/"
+    globs = perimeter_globs()
+    selected: list[str] = []
+    for path in changed:
+        if not path.startswith(src_prefix):
+            continue
+        rel = path[len(src_prefix) :]
+        for glob in globs:
+            # Perimeter globs are written `**/Server/Foo.cs`; match them against
+            # the path relative to the mutated project root.
+            if fnmatch.fnmatch(rel, glob.removeprefix("**/")) or fnmatch.fnmatch(rel, glob):
+                selected.append(glob)
+                break
+    return sorted(set(selected))
+
+
+def run_stryker(mutate: list[str] | None = None) -> Path:
     """Run ``dotnet stryker`` and return the path to its JSON report."""
     cmd = ["dotnet", "stryker"]
+    for glob in mutate or []:
+        cmd += ["--mutate", glob]
     proc = subprocess.run(cmd, cwd=TEST_PROJECT_DIR, check=False)  # nosec
     if proc.returncode not in (0, 1):
         # 0 = above threshold-break, 1 = below it (Stryker's own thresholds are
@@ -130,17 +195,43 @@ def main() -> int:
         default=None,
         help="Use an existing mutation-report.json instead of running Stryker again.",
     )
+    parser.add_argument(
+        "--changed-only",
+        action="store_true",
+        help="Mutate only the perimeter files changed since --base-ref; skip entirely if none did.",
+    )
+    parser.add_argument(
+        "--base-ref",
+        default="HEAD",
+        help="Git base ref used for --changed-only (default: HEAD, i.e. the working tree).",
+    )
     args = parser.parse_args()
 
     allowlist = load_allowlist()
     used: set[AllowKey] = set()
 
-    report_path = args.report or run_stryker()
+    narrowed: list[str] | None = None
+    if args.changed_only and args.report is None:
+        selected = changed_perimeter_globs(args.base_ref)
+        if selected is None:
+            print("Mutation support file changed — running the full perimeter rather than narrowing.")
+        elif not selected:
+            # The whole point of --changed-only: a full Stryker run pays a fixed
+            # ~10-20 minute whole-project instrumentation cost even when the
+            # perimeter glob is narrow, and most pushes touch none of it.
+            print(f"SKIP: no perimeter file changed since {args.base_ref} — nothing to mutate.")
+            return 0
+        else:
+            narrowed = selected
+            print(f"Narrowed to {len(narrowed)} changed perimeter file(s): {', '.join(narrowed)}")
+
+    report_path = args.report or run_stryker(narrowed)
     report = json.loads(report_path.read_text(encoding="utf-8"))
 
     killed = 0
     excused = 0
     failures: list[str] = []
+    seen_files: set[str] = set()
 
     for abs_path, file_entry in report.get("files", {}).items():
         try:
@@ -153,6 +244,8 @@ def main() -> int:
 
         for mutant in file_entry.get("mutants", []):
             status = mutant["status"]
+            if status != "Ignored":
+                seen_files.add(rel)
             if status in OK_STATUSES:
                 if status == "Killed":
                     killed += 1
@@ -167,7 +260,10 @@ def main() -> int:
                 continue
             failures.append(where)
 
-    stale = sorted(set(allowlist) - used)
+    # On a narrowed run, allowlist entries for files outside the narrowed set were
+    # never mutated, so their absence says nothing about staleness.
+    checked_files = seen_files if narrowed else None
+    stale = sorted(key for key in set(allowlist) - used if checked_files is None or key[0] in checked_files)
     for key in stale:
         print(f"[WARN] stale allowlist entry (no longer a survivor): {key[0]}:{key[1]}:{key[2]} {key[3]}")
 
@@ -179,6 +275,16 @@ def main() -> int:
         for loc in failures:
             print(f"  - {loc}")
         return 1
+
+    if narrowed and not seen_files:
+        # An explicitly-narrowed run that produced no live mutants at all means
+        # the narrowing did not reach the code it named — a broken --mutate
+        # glob reads exactly like a clean pass otherwise.
+        print(
+            f"FAIL: narrowed to {', '.join(narrowed)} but Stryker mutated nothing there.",
+            file=sys.stderr,
+        )
+        return 2
 
     print("Stryker mutation gate passed (every mutant killed or documented-equivalent).")
     return 0
