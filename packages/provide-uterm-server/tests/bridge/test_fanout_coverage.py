@@ -140,9 +140,12 @@ class TestCollectorNoneSentinel:
             await asyncio.sleep(0.03)
             await hub.append_event("w1", "term", {"data": "chunk1"})
             await asyncio.sleep(0.02)
-            # Simulate worker disconnect by closing the event bus channel.
-            assert hub.event_bus is not None
-            hub.event_bus.close_worker("w1")
+            # Drive the real worker-disconnect path, which closes both the
+            # public diagnostic bus and the private operational stream.
+            state = hub.registry.get("w1")
+            assert state is not None
+            assert state.worker_ws is not None
+            await hub.deregister_worker("w1", state.worker_ws)
 
         task = asyncio.create_task(_emit_then_disconnect())
         delta, elapsed_ms = await collector.collect(hub, "w1", quiesce_ms=5_000, max_ms=10_000)

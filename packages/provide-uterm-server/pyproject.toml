@@ -12,8 +12,8 @@ description = "Server, bridge, tunnel, and gateway for provide-uterm"
 requires-python = ">=3.11"
 license = "AGPL-3.0-or-later"
 dependencies = [
-    "provide-uterm>=0.4.0",
-    "provide-uterm-client>=0.4.0",
+    "provide-uterm>=0.5.0",
+    "provide-uterm-client>=0.5.0",
 ]
 
 [project.optional-dependencies]
@@ -25,11 +25,11 @@ gateway = ["asyncssh>=2.22.0", "websockets>=16.0"]
 # separate provide-uterm-annotation package so deployments that don't need
 # pattern detection can ship a leaner wheel. The factory imports it lazily and
 # raises a friendly RuntimeError if it isn't installed.
-annotation = ["provide-uterm-annotation>=0.4.0"]
+annotation = ["provide-uterm-annotation>=0.5.0"]
 all = [
     "fastapi>=0.110", "uvicorn>=0.24", "pyjwt>=2.9", "websockets>=16.0",
     "textual>=0.50", "httpx>=0.27", "asyncssh>=2.22.0",
-    "provide-uterm-annotation>=0.4.0",
+    "provide-uterm-annotation>=0.5.0",
     # core's emulator dep — declared here so `uv sync --extra all` installs it
     # from the lock instead of a side-channel `uv pip install pyte` that
     # escapes UV_FROZEN (unpinned, hash-unverified).
@@ -60,7 +60,7 @@ dev = [
     "Pillow>=10.0",
     "pydantic>=2.0",
     "pyyaml>=6.0",
-    "provide-uterm-annotation>=0.4.0",
+    "provide-uterm-annotation>=0.5.0",
 ]
 
 [project.scripts]

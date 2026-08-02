@@ -25,6 +25,7 @@ import provide.uterm.server.bridge.hub.core_delegates_lease as _lease_d
 import provide.uterm.server.bridge.hub.core_orchestration as _orch
 from provide.uterm.server.bridge.hub.approvals import InMemoryApprovalStore
 from provide.uterm.server.bridge.hub.connection import ConnectionManager
+from provide.uterm.server.bridge.hub.event_bus import EventBus
 from provide.uterm.server.bridge.hub.ext import (
     BehavioralAuditGate,
     BehavioralThresholds,
@@ -57,7 +58,6 @@ if TYPE_CHECKING:
         ResumeCallback,
         WorkerEmptyCallback,
     )
-    from provide.uterm.server.bridge.hub.event_bus import EventBus
     from provide.uterm.server.bridge.hub.ext import PolicyContext
     from provide.uterm.server.bridge.hub.resume import ResumeTokenStore
     from provide.uterm.server.bridge.identity import IdentityProvider
@@ -112,6 +112,18 @@ class TermHub:
     @event_bus.setter
     def event_bus(self, value: EventBus | None) -> None:
         self._event_bus = value
+        self._operation_event_bus = EventBus() if value is not None else None
+
+    def _watch_authorized_operation_output(self, worker_id: str) -> Any:
+        """Open the private raw stream reserved for supervised operations.
+
+        This stream is intentionally separate from :attr:`event_bus`, which
+        backs diagnostic APIs, SSE, webhooks, and MCP tools and therefore only
+        receives redacted content events. No route exposes this private stream.
+        """
+        if self._operation_event_bus is None:
+            return None
+        return self._operation_event_bus.watch(worker_id, event_types=["term", "snapshot"])
 
     def _buffer_and_get_command(self, ws: WebSocket, data: str) -> str | None:
         return self.state.buffer_and_get_command(ws, data)
@@ -580,6 +592,10 @@ class TermHub:
         self._startup_pending_browsers: set[WebSocket] = set()
         self._background_tasks: set[asyncio.Task[Any]] = set()
         self._event_bus = event_bus
+        # Raw terminal content is available only to server-owned supervised
+        # operations. Diagnostic/untrusted EventBus consumers continue to see
+        # the write-time-redacted ring payloads.
+        self._operation_event_bus = EventBus() if event_bus is not None else None
         self.ws_idle_timeout_s = max(10.0, float(ws_idle_timeout_s))
         self._policy_gate = policy_gate or NoOpPolicyGate()
         self._input_buffers: dict[WebSocket, str] = {}

@@ -11,6 +11,8 @@ from typing import Any, Literal, cast
 
 import pytest
 
+import provide.uterm as uterm
+from provide.uterm import transport_session as transport_session_module
 from provide.uterm.control_channel import encode_control_frame
 
 from .test_transport_session import _ConcreteSession, _FakeTransport
@@ -257,10 +259,23 @@ async def test_close_wakes_terminal_frame_waiter_promptly() -> None:
 
     started = asyncio.get_running_loop().time()
     await session.close()
-    frame = await asyncio.wait_for(waiter, timeout=0.2)
+    with pytest.raises(transport_session_module.TerminalFrameDisconnectedError):
+        await asyncio.wait_for(waiter, timeout=0.2)
 
-    assert frame is None
     assert asyncio.get_running_loop().time() - started < 0.2
+
+
+async def test_close_wakes_all_terminal_frame_waiters_with_disconnect() -> None:
+    session = _ConcreteSession(_GatedReadTransport(b"never"), receive_encoding="utf-8")
+    await session.connect()
+    waiters = [asyncio.create_task(session.wait_for_terminal_frame(since=0, timeout_ms=10_000)) for _ in range(3)]
+    await asyncio.sleep(0)
+
+    await session.close()
+
+    for waiter in waiters:
+        with pytest.raises(transport_session_module.TerminalFrameDisconnectedError):
+            await asyncio.wait_for(waiter, timeout=0.2)
 
 
 async def test_close_returns_retained_frame_before_closed_outcome() -> None:
@@ -271,14 +286,14 @@ async def test_close_returns_retained_frame_before_closed_outcome() -> None:
     await session.close()
 
     retained = await session.wait_for_terminal_frame(since=0, timeout_ms=10_000)
-    exhausted = await asyncio.wait_for(
-        session.wait_for_terminal_frame(since=frame.sequence, timeout_ms=10_000),
-        timeout=0.2,
-    )
+    with pytest.raises(transport_session_module.TerminalFrameDisconnectedError):
+        await asyncio.wait_for(
+            session.wait_for_terminal_frame(since=frame.sequence, timeout_ms=10_000),
+            timeout=0.2,
+        )
 
     assert retained is not None
     assert retained.sequence == frame.sequence
-    assert exhausted is None
 
 
 async def test_remote_disconnect_wakes_terminal_frame_waiter_promptly() -> None:
@@ -286,13 +301,13 @@ async def test_remote_disconnect_wakes_terminal_frame_waiter_promptly() -> None:
     await session.connect()
 
     started = asyncio.get_running_loop().time()
-    frame = await asyncio.wait_for(
-        session.wait_for_terminal_frame(since=0, timeout_ms=10_000),
-        timeout=0.2,
-    )
+    with pytest.raises(transport_session_module.TerminalFrameDisconnectedError):
+        await asyncio.wait_for(
+            session.wait_for_terminal_frame(since=0, timeout_ms=10_000),
+            timeout=0.2,
+        )
     await session.close()
 
-    assert frame is None
     assert asyncio.get_running_loop().time() - started < 0.2
 
 
@@ -388,7 +403,8 @@ async def test_terminal_frame_wait_accepts_24_hour_timeout_boundary() -> None:
     session = _ConcreteSession(_FakeTransport())
     await session.close()
 
-    assert await session.wait_for_terminal_frame(since=0, timeout_ms=86_400_000) is None
+    with pytest.raises(transport_session_module.TerminalFrameDisconnectedError):
+        await session.wait_for_terminal_frame(since=0, timeout_ms=86_400_000)
 
 
 async def test_terminal_frame_wait_rejects_timeout_above_24_hours() -> None:
@@ -404,3 +420,10 @@ async def test_terminal_frame_wait_rejects_extreme_integer_without_overflow() ->
 
     with pytest.raises(ValueError, match="timeout_ms"):
         await session.wait_for_terminal_frame(since=0, timeout_ms=10**1000)
+
+
+def test_terminal_frame_disconnect_signal_is_public_and_typed() -> None:
+    disconnect_type = transport_session_module.TerminalFrameDisconnectedError
+
+    assert uterm.TerminalFrameDisconnectedError is disconnect_type
+    assert issubclass(disconnect_type, ConnectionError)

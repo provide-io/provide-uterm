@@ -103,6 +103,9 @@ def _event_bus_close(mgr: ConnectionManager, worker_id: str) -> None:
     bus = mgr._hub._event_bus
     if bus is not None:  # pragma: no branch
         bus.close_worker(worker_id)
+    operation_bus = mgr._hub._operation_event_bus
+    if operation_bus is not None:
+        operation_bus.close_worker(worker_id)
 
 
 async def force_release_hijack(mgr: ConnectionManager, worker_id: str) -> bool:
