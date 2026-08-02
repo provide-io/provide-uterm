@@ -72,7 +72,9 @@ async def live_server_with_bus(
     base_url = f"http://127.0.0.1:{port}"
 
     hub = app.state.uterm_registry._hub
-    hub._event_bus = EventBus()
+    # Replace through the lifecycle boundary so both the public diagnostic bus
+    # and the private raw-operation bus advance to the same generation.
+    hub.event_bus = EventBus()
 
     try:
         yield hub, base_url
@@ -98,7 +100,11 @@ async def wait_for_subscribers(
     the registration can take >100ms, after which any events fired in the
     interim are missed and the subscriber returns 0 events.
     """
-    bus = hub._event_bus
+    # Fan-out OutputCapture subscribes to the server-owned raw stream, not the
+    # public write-time-redacted diagnostic EventBus.
+    bus = hub._operation_event_bus
+    if bus is None:
+        raise RuntimeError("operation EventBus is not configured")
     loop = asyncio.get_running_loop()
     deadline = loop.time() + timeout
     while loop.time() < deadline:

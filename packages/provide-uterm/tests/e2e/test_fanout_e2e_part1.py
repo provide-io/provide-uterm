@@ -218,7 +218,7 @@ async def test_sequential_broadcast_order() -> None:
                 # time: send_worker → subscribe → collect.  We watch the EventBus
                 # subscriber count to know when each worker's collector has
                 # subscribed, then inject output for that worker.
-                bus = hub.event_bus
+                bus = hub._operation_event_bus
 
                 async def _emit_sequential() -> None:
                     for wid in wids:
@@ -286,7 +286,7 @@ async def test_sequential_stop_on_error() -> None:
                 assert resp.status_code == 200
                 group_id = resp.json()["group_id"]
 
-                bus = hub.event_bus
+                bus = hub._operation_event_bus
 
                 async def _emit() -> None:
                     # Wait for worker 1's collector to subscribe, then emit success
