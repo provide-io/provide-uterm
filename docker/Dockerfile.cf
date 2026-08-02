@@ -121,18 +121,36 @@ RUN mkdir -p /opt/wrangler \
     && ln -sf /opt/wrangler/node_modules/.bin/wrangler /usr/local/bin/wrangler \
     && wrangler --version
 
-# node:26-slim's bundled npm (11.17.0, already latest) ALSO vendors undici 6.26.0
-# — the same CVE-2026-12151. npm is a build-time tool here (the worker runtime
-# never invokes it), but Trivy scans it regardless, and an npm override can't
-# reach npm's own bundled copy. Replace it in place with the patched 6.27.0
-# (semver-compatible patch — npm's registry HTTP still works).
-RUN U=/usr/local/lib/node_modules/npm/node_modules/undici \
+# node:26-slim's bundled npm (11.17.0, already the latest) vendors its own copies
+# of several packages that Trivy's HIGH/CRITICAL gate flags. npm is a build-time
+# tool here — the worker runtime never invokes it — but Trivy scans it anyway,
+# and an npm `overrides` entry cannot reach npm's *bundled* tree, so each one has
+# to be replaced in place. All three replacements are semver-compatible patches:
+#   undici           6.26.0 -> 6.27.0   CVE-2026-12151 HIGH     unbounded memory
+#   brace-expansion  5.0.6  -> 5.0.8    CVE-2026-13149 HIGH     exponential-time
+#                                       CVE-2026-14257 HIGH     (needs >= 5.0.8)
+#   tar              7.5.16 -> 7.5.19   CVE-2026-59873 CRITICAL gzip-bomb DoS
+#                                       CVE-2026-59874 HIGH     malformed header
+# Every tarball is fetched BEFORE anything is replaced: `npm pack` itself runs on
+# npm's bundled tar, so swapping tar mid-loop would pull the implementation out
+# from under the remaining downloads. The trailing `npm --version` is a smoke
+# check — replacing npm's own dependencies could break npm, and nothing later in
+# this build invokes it, so without this the damage would ship undetected.
+RUN set -e \
+    && NM=/usr/local/lib/node_modules/npm/node_modules \
     && t="$(mktemp -d)" && cd "$t" \
-    && npm pack undici@6.27.0 >/dev/null \
-    && tar xzf undici-*.tgz \
-    && rm -rf "$U" && mv package "$U" \
+    && npm pack undici@6.27.0 brace-expansion@5.0.8 tar@7.5.19 >/dev/null \
+    && for pkg in undici brace-expansion tar; do \
+         mkdir -p "unpack-$pkg" \
+         && tar xzf "$pkg"-*.tgz -C "unpack-$pkg" \
+         && rm -rf "${NM:?}/$pkg" \
+         && mv "unpack-$pkg/package" "$NM/$pkg"; \
+       done \
     && cd / && rm -rf "$t" \
-    && node -e "console.log('npm-bundled undici ->', require('/usr/local/lib/node_modules/npm/node_modules/undici/package.json').version)"
+    && for pkg in undici brace-expansion tar; do \
+         node -e "console.log('npm-bundled $pkg ->', require('$NM/$pkg/package.json').version)"; \
+       done \
+    && npm --version
 
 WORKDIR /app
 
