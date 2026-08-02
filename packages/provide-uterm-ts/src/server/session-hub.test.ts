@@ -131,6 +131,21 @@ describe("committing a snapshot event", () => {
     expect((state?.lastSnapshot?.cursor as Record<string, number>).x).toBe(2);
   });
 
+  it("commits a snapshot for an unregistered worker without inventing a sequence", async () => {
+    // No registry state means there is no event log to append to and no
+    // sequence to advance. The snapshot is still echoed back so the caller has
+    // something well-formed to send, but at event_seq 0 -- claiming a real
+    // sequence here would collide with the first one a later registration
+    // hands out.
+    const { hub } = hubWithClock();
+    const source = { type: "snapshot", screen: "orphan", screen_hash: "h0", prompt_detected: null };
+
+    const committed = await hub.commitSnapshotEvent("never-registered", source);
+
+    expect(committed).toEqual({ ...source, event_seq: 0 });
+    expect(hub.registry.get("never-registered")).toBeUndefined();
+  });
+
   it("pairs concurrent snapshot commits with unique monotonic sequences", async () => {
     const { hub, workerId } = attached();
     const committed = await Promise.all(

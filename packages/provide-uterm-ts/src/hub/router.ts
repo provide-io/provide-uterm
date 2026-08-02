@@ -147,7 +147,11 @@ export class MessageRouter {
         return;
       }
       const predecessor = state.snapshotEgressTail;
-      let release = () => {};
+      // Declared, not initialised: the Promise executor runs synchronously, so
+      // `release` is always assigned before the next line. A `() => {}`
+      // placeholder here would be unreachable by construction and show up as a
+      // permanently uncovered function.
+      let release!: () => void;
       const current = new Promise<void>((resolve) => {
         release = resolve;
       });
