@@ -13,7 +13,7 @@ import yaml
 _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
-from scripts.package_metadata import DEPENDENT_PACKAGES, PUBLISHED_PACKAGES  # noqa: E402
+from scripts.package_metadata import DEPENDENT_PACKAGES, PUBLISHED_PACKAGES
 
 _SCRIPT_PATH = _ROOT / "scripts" / "verify_package_artifacts.py"
 _spec = importlib.util.spec_from_file_location("verify_package_artifacts", _SCRIPT_PATH)

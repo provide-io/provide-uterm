@@ -193,7 +193,7 @@ def _fetch_keyboard_cat_gif(out_path: Path) -> bool:
     import urllib.request
 
     try:
-        req = urllib.request.Request(_KEYBOARD_CAT_URL, headers={"User-Agent": "Mozilla/5.0"})  # noqa: S310
+        req = urllib.request.Request(_KEYBOARD_CAT_URL, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310 - fixed https giphy URL
             data = resp.read()
     except Exception as exc:  # offline / giphy hiccup → drawn-cat fallback
