@@ -143,6 +143,11 @@ class WorkerTermState:
     # network send; lease transitions take the same fence before mutating
     # ownership. The global hub lock is never held during worker I/O.
     owned_input_fence: asyncio.Lock = field(default_factory=asyncio.Lock)
+    # Snapshot browser egress is serialized independently from worker-bound
+    # input. A newer snapshot may commit while an older broadcast is waiting,
+    # but the older broadcast must revalidate its worker generation and
+    # sequence before it can reach a browser.
+    snapshot_egress_fence: asyncio.Lock = field(default_factory=asyncio.Lock)
     # Monotonic token for the exact ownership epoch. Held approvals capture it
     # so release/reacquire by the same browser cannot revive stale input.
     ownership_generation: int = 0

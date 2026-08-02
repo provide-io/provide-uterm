@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -70,6 +71,17 @@ def _drain_until_hello(ws: Any) -> dict[str, Any]:
             return msg
     msg_err = "never received hello"
     raise AssertionError(msg_err)
+
+
+def _snapshot_frames(websocket: AsyncMock) -> list[dict[str, Any]]:
+    decoder = ControlFrameDecoder()
+    frames: list[dict[str, Any]] = []
+    for call in websocket.send_text.call_args_list:
+        events = decoder.feed(call.args[0])
+        for event in events:
+            if hasattr(event, "control") and event.control.get("type") == "snapshot":
+                frames.append(dict(event.control))
+    return frames
 
 
 class TestTunnelConnect:
@@ -273,6 +285,59 @@ class TestTunnelControlExtra:
         assert state.last_snapshot is None
         assert state.event_seq == 0
         assert not state.events
+
+    @pytest.mark.asyncio
+    async def test_snapshot_control_fences_replaced_socket_after_commit_before_broadcast(self) -> None:
+        hub = TermHub()
+        worker_id = "test-replaced-after-commit"
+        worker_a = AsyncMock()
+        worker_b = AsyncMock()
+        browser = AsyncMock()
+        await hub.register_worker(worker_id, worker_a, is_tunnel_worker=True)
+        hub.registry._workers[worker_id].browsers[browser] = "viewer"
+
+        entered = asyncio.Event()
+        resume = asyncio.Event()
+        original_broadcast = hub.broadcast
+
+        async def paused_broadcast(
+            requested_worker_id: str,
+            frame: dict[str, Any],
+            **kwargs: Any,
+        ) -> None:
+            if frame.get("screen") == "worker-a":
+                entered.set()
+                await resume.wait()
+            await original_broadcast(requested_worker_id, frame, **kwargs)
+
+        hub.broadcast = paused_broadcast  # type: ignore[method-assign]
+        stale_task = asyncio.create_task(
+            _handle_control(
+                hub,
+                worker_a,
+                worker_id,
+                b'{"type":"snapshot","screen":"worker-a","cols":80,"rows":25}',
+            )
+        )
+        await entered.wait()
+        await hub.register_worker(worker_id, worker_b, is_tunnel_worker=True)
+        await _handle_control(
+            hub,
+            worker_b,
+            worker_id,
+            b'{"type":"snapshot","screen":"worker-b","cols":80,"rows":25}',
+        )
+        resume.set()
+        await stale_task
+
+        state = hub.registry._workers[worker_id]
+        assert state.worker_ws is worker_b
+        assert state.last_snapshot is not None
+        assert state.last_snapshot["screen"] == "worker-b"
+        assert state.last_snapshot["event_seq"] == 2
+        assert [event["seq"] for event in state.events] == [1, 2]
+        assert [event["data"]["screen"] for event in state.events] == ["worker-a", "worker-b"]
+        assert [(frame["screen"], frame["event_seq"]) for frame in _snapshot_frames(browser)] == [("worker-b", 2)]
 
 
 class TestTunnelBranchCoverage:

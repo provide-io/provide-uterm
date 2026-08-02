@@ -112,6 +112,19 @@ class PausedSnapshotConnector extends RecordingConnector {
   }
 }
 
+class FixedSnapshotConnector extends RecordingConnector {
+  readonly #screen: string;
+
+  constructor(screen: string) {
+    super();
+    this.#screen = screen;
+  }
+
+  override async getSnapshot(): Promise<WorkerMessage> {
+    return { type: "snapshot", screen: this.#screen, ts: 1 };
+  }
+}
+
 describe("building the frame a worker's snapshot becomes", () => {
   it("fills in every field a connector left out, as the reference's builder does", () => {
     // `raw_tail` is the tell: no connector sets it, and it is on the wire for
@@ -244,6 +257,48 @@ describe("attaching", () => {
     ]);
     expect(browser.sent).toHaveLength(1);
     expect(browser.sent[0]).toMatchObject({ screen: "seed", event_seq: 1 });
+  });
+
+  it("fences a replaced worker paused after snapshot commit but before broadcast", async () => {
+    const hub = new SessionHub();
+    let markEntered = () => {};
+    let release = () => {};
+    const entered = new Promise<void>((resolve) => {
+      markEntered = resolve;
+    });
+    const resume = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const originalBroadcast = hub.router.broadcast.bind(hub.router);
+    hub.router.broadcast = async (workerId, message, expectedWorker, expectedEventSeq) => {
+      if (message.screen === "worker-a") {
+        markEntered();
+        await resume;
+      }
+      await originalBroadcast(workerId, message, expectedWorker, expectedEventSeq);
+    };
+
+    const attachA = attachConnector(hub, "w1", new FixedSnapshotConnector("worker-a"), "hijack", {
+      now: () => 1,
+    });
+    await entered;
+
+    const browser = new RecordingBrowser();
+    await hub.connections.registerBrowser("w1", browser, "viewer", { deferBroadcast: true });
+    hub.connections.activateBrowserBroadcasts("w1", browser);
+
+    await attachConnector(hub, "w1", new FixedSnapshotConnector("worker-b"), "hijack", { now: () => 2 });
+    release();
+    await attachA;
+
+    const state = hub.registry.get("w1");
+    expect(state?.workerWs).toBeDefined();
+    expect(state?.lastSnapshot).toMatchObject({ screen: "worker-b", event_seq: 2 });
+    expect(state?.events.toArray()).toEqual([
+      expect.objectContaining({ seq: 1, data: expect.objectContaining({ screen: "worker-a", event_seq: 1 }) }),
+      expect.objectContaining({ seq: 2, data: expect.objectContaining({ screen: "worker-b", event_seq: 2 }) }),
+    ]);
+    expect(browser.sent).toEqual([expect.objectContaining({ screen: "worker-b", event_seq: 2 })]);
   });
 });
 

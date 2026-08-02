@@ -170,7 +170,15 @@ async def _dispatch_worker_frame(
     if mtype == "snapshot":
         committed = await hub.commit_snapshot_event(worker_id, frame, expected_worker=expected_worker)
         if committed is not None:
-            await hub.broadcast(worker_id, committed)
+            if expected_worker is None:
+                await hub.broadcast(worker_id, committed)
+            else:
+                await hub.broadcast(
+                    worker_id,
+                    committed,
+                    expected_worker=expected_worker,
+                    expected_event_seq=int(committed["event_seq"]),
+                )
     elif mtype == "analysis":
         await hub.broadcast(worker_id, frame)
     else:  # mtype == "status"

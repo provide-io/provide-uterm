@@ -92,7 +92,29 @@ async def payloads_by_role(
     return by_role
 
 
-async def broadcast(router: MessageRouter, worker_id: str, msg: dict[str, Any]) -> None:
+def _is_current_snapshot(
+    state: Any,
+    *,
+    expected_worker: WebSocket,
+    expected_event_seq: int,
+) -> bool:
+    """Return whether *state* still owns the snapshot being broadcast."""
+    return (
+        state.worker_ws is expected_worker
+        and state.event_seq == expected_event_seq
+        and state.last_snapshot is not None
+        and state.last_snapshot.get("event_seq") == expected_event_seq
+    )
+
+
+async def broadcast(
+    router: MessageRouter,
+    worker_id: str,
+    msg: dict[str, Any],
+    *,
+    expected_worker: WebSocket | None = None,
+    expected_event_seq: int | None = None,
+) -> None:
     """Send *msg* to all browser WebSockets registered for *worker_id*.
 
     Registered browsers are authenticated, authorized live viewers. The
@@ -106,6 +128,47 @@ async def broadcast(router: MessageRouter, worker_id: str, msg: dict[str, Any]) 
     :func:`payloads_by_role`) so the concurrent tasks read an immutable
     mapping rather than racing on a lazy cache.
     """
+    hub = router._hub
+
+    snapshot_fence = None
+    async with hub._lock:
+        st = hub.registry.get(worker_id)
+        if st is None:
+            return
+        if expected_worker is not None or expected_event_seq is not None:
+            if expected_worker is None or expected_event_seq is None:
+                return
+            if not _is_current_snapshot(
+                st,
+                expected_worker=expected_worker,
+                expected_event_seq=expected_event_seq,
+            ):
+                return
+            snapshot_fence = st.snapshot_egress_fence
+
+    if snapshot_fence is not None:
+        async with snapshot_fence:
+            await _broadcast_to_current_browsers(
+                router,
+                worker_id,
+                msg,
+                expected_worker=expected_worker,
+                expected_event_seq=expected_event_seq,
+            )
+        return
+
+    await _broadcast_to_current_browsers(router, worker_id, msg)
+
+
+async def _broadcast_to_current_browsers(
+    router: MessageRouter,
+    worker_id: str,
+    msg: dict[str, Any],
+    *,
+    expected_worker: WebSocket | None = None,
+    expected_event_seq: int | None = None,
+) -> None:
+    """Broadcast after validating an optional snapshot ownership contract."""
     from provide.uterm.server.bridge.hub import router_impl
     from provide.uterm.server.bridge.hub.core import _encode_browser_frame
 
@@ -114,6 +177,16 @@ async def broadcast(router: MessageRouter, worker_id: str, msg: dict[str, Any]) 
     async with hub._lock:
         st = hub.registry.get(worker_id)
         if st is None:
+            return
+        if (
+            expected_worker is not None
+            and expected_event_seq is not None
+            and not _is_current_snapshot(
+                st,
+                expected_worker=expected_worker,
+                expected_event_seq=expected_event_seq,
+            )
+        ):
             return
         browsers_with_roles = [
             (ws, role) for ws, role in st.browsers.items() if ws not in hub._startup_pending_browsers
@@ -130,6 +203,19 @@ async def broadcast(router: MessageRouter, worker_id: str, msg: dict[str, Any]) 
     payload_by_role = (
         await payloads_by_role(router, worker_id, msg, browsers_with_roles, encoded_default) if gate_active else {}
     )
+
+    # Policy evaluation above may await. Revalidate after it, immediately
+    # before the socket sends, so a replacement or newer committed sequence
+    # cannot pass an earlier ownership check and then emit stale output.
+    if expected_worker is not None and expected_event_seq is not None:
+        async with hub._lock:
+            current = hub.registry.get(worker_id)
+            if current is None or not _is_current_snapshot(
+                current,
+                expected_worker=expected_worker,
+                expected_event_seq=expected_event_seq,
+            ):
+                return
 
     async def _send(ws: WebSocket, role: str) -> None:
         payload = payload_by_role[role] if gate_active else encoded_default
