@@ -55,6 +55,7 @@ DEV_ONLY_SKIP: frozenset[str] = frozenset(
         "reuse",  # GPLv3+ (SPDX compliance tool)
         "docutils",
         "dnspython",  # ISC (dev-only transitive dep)
+        "shellingham",  # ISC (dev-only transitive dep, via workers-py's CLI)
         "email-validator",  # CC0 (dev-only)
         "pillow",  # HPND (dev-only)
         "pytest-timeout",  # DFSG approved; MIT (dev-only test tool)

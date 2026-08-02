@@ -484,7 +484,12 @@ func executeLifecycleNonOwnerStep(t *testing.T, scenario lifecycleScenario) life
 	nonOwner.send(t, ctx, map[string]any{"type": "ping"})
 	nonOwner.waitFrame(t, "pong", 5*time.Second)
 	after := workerSent(worker)
-	refused := len(after) == before
+	// Refusal means no STEP reached the worker, not that the worker received
+	// nothing at all: the second browser connecting also makes the server ask
+	// for a snapshot, and on a loaded runner that unrelated frame lands in this
+	// window. Seeding from a raw count let it report a refusal that held as a
+	// breach.
+	refused := true
 	for _, payload := range after[before:] {
 		if strings.Contains(payload, `"action":"step"`) {
 			refused = false
