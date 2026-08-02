@@ -105,9 +105,10 @@ class TestGetLastSnapshot:
 
         result = await hub.get_last_snapshot("w1")
 
-        assert result is snapshot, (
+        assert result == snapshot, (
             "Expected the stored snapshot dict, got None — mutmut_1/2 corrupt the get() key so st is always None"
         )
+        assert result is not snapshot, "snapshot reads must own their result"
 
     async def test_returns_none_when_no_snapshot(self) -> None:
         """get_last_snapshot returns None when no snapshot has been stored."""
