@@ -148,6 +148,58 @@ public class ServerRecordingHttpTests
         }
     }
 
+    /// <summary>
+    /// Disposing the server closes the recording sink it was writing to.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="LocalFileStore"/> keeps one append handle per session open for
+    /// the store's lifetime, and the only thing that ever closes one is
+    /// <c>EndSessionAsync</c> — which never runs for a session that was merely
+    /// annotated. Nothing released the store on the way down, so every server
+    /// that had ever written a recording held a write handle on that file until
+    /// the finalizer happened to run.
+    /// </para>
+    /// <para>
+    /// Asserted by reopening for append with <see cref="FileShare.None"/>, which
+    /// is the portable way to ask "is anyone still holding this file open for
+    /// write?": Windows enforces the share mode in the OS, and .NET on Unix takes
+    /// an exclusive advisory lock for it. The leak was invisible on POSIX for the
+    /// same reason it was fatal on Windows — the sink's own <c>FileShare.Read</c>
+    /// maps to a *shared* advisory lock there, so a second writer opened the path
+    /// regardless, whereas Windows refused the next append open and the annotate
+    /// route answered 500.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task DisposingTheServerClosesTheRecordingSink()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "uterm-rec-close-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var (server, client, sid, _) = await StartAsync(new LocalFileStore(dir));
+            using (client)
+            {
+                var ann = await client.PostAsync(
+                    $"/api/sessions/{sid}/annotate",
+                    new StringContent("""{"label":"deploy"}""", Encoding.UTF8, "application/json"));
+                Assert.Equal(HttpStatusCode.OK, ann.StatusCode);
+                await server.DisposeAsync();
+            }
+
+            var path = Path.Combine(dir, sid + ".jsonl");
+            // Not vacuous: the annotate really did open and write this file, so
+            // the reopen below is asking about a handle that existed.
+            Assert.True(File.Exists(path));
+            using var reopened = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.None);
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch { /* best effort */ }
+        }
+    }
+
     [Fact]
     public async Task RecordingDownload_LocalFile_And_PathGate()
     {

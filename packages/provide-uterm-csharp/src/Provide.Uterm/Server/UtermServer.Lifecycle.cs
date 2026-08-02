@@ -163,6 +163,28 @@ public sealed partial class UtermServer
             await _app.DisposeAsync().ConfigureAwait(false);
             _app = null;
         }
+
+        // After the app, not before: annotate and the session logger write to the
+        // recording sink from inside the request pipeline, so closing it while
+        // requests can still arrive would trade a leaked handle for a write to a
+        // disposed stream.
+        //
+        // <see cref="Recording.LocalFileStore"/> keeps one append handle per
+        // session open for the store's lifetime, and the only thing that ever
+        // closes one is EndSessionAsync — which never runs for a session that was
+        // written to without being started and stopped, such as one that was only
+        // annotated. So a server that is not asked to release the store holds a
+        // write handle on every recording file it touched, for as long as the
+        // process lives.
+        //
+        // On POSIX that is "merely" a descriptor leak, because the handle's
+        // FileShare.Read maps to a shared advisory lock and a second writer opens
+        // the same path regardless. On Windows the share mode is enforced: the
+        // next FileMode.Append open of that path is refused outright, so a second
+        // server over the same recording directory — an in-process restart, or a
+        // test suite that boots one server per case — gets an IOException out of
+        // the annotate route instead of a recording.
+        (_recording as IDisposable)?.Dispose();
     }
 
     /// <summary>Expose the request pipeline for in-process HttpClient tests.</summary>

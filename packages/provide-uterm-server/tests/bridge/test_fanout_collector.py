@@ -40,6 +40,24 @@ async def test_collector_returns_empty_when_no_event_bus() -> None:
     assert result == ("", 0)
 
 
+async def test_capture_without_any_event_infrastructure_collects_nothing() -> None:
+    """A hub double exposing neither private stream nor EventBus opens no watch.
+
+    ``OutputCapture.open`` degrades to a no-op subscription rather than raising,
+    so a supervised operation driven against a narrow test double still runs;
+    it just reports no captured output.
+    """
+    hub = SimpleNamespace(event_bus=None)
+
+    capture = await OutputCollector().open(hub, "w1")  # type: ignore[arg-type]
+    try:
+        assert capture._watch is None
+        assert capture._subscription is None
+        assert await capture.collect(quiesce_ms=1, max_ms=50) == ("", 0)
+    finally:
+        await capture.close()
+
+
 async def test_capture_close_unsubscribes_exactly_once() -> None:
     class Watch:
         exits = 0
@@ -85,6 +103,38 @@ async def test_event_bus_replacement_wakes_public_and_private_subscribers() -> N
             delivered = await asyncio.wait_for(replacement_sub.queue.get(), timeout=0.1)
             assert delivered is not None
             assert delivered["data"]["data"] == "new-generation"
+
+    await capture.close()
+
+
+async def test_reassigning_the_same_event_bus_keeps_live_subscribers() -> None:
+    """Assigning the bus a hub already owns must be a true no-op.
+
+    The setter tears down both the public and the private bus before adopting a
+    new one. Without the identity guard, an idempotent re-assignment (a config
+    reload that resolves to the same bus, say) would sentinel every live
+    subscriber and silently swap in a fresh private bus, orphaning any
+    in-flight supervised operation.
+    """
+    hub = await _make_hub_with_worker("w1")
+    public_bus = hub.event_bus
+    private_bus = hub._operation_event_bus
+    assert public_bus is not None
+    capture = await OutputCollector().open(hub, "w1")
+
+    async with public_bus.watch("w1") as public_sub:
+        hub.event_bus = public_bus
+
+        assert hub.event_bus is public_bus
+        assert hub._operation_event_bus is private_bus
+        await hub.append_event("w1", "term", {"data": "still-live"})
+        public_event = await asyncio.wait_for(public_sub.queue.get(), timeout=0.1)
+        private_event = await asyncio.wait_for(capture._subscription.queue.get(), timeout=0.1)
+
+    assert public_event is not None
+    assert private_event is not None
+    assert public_event["data"]["data"] == "still-live"
+    assert private_event["data"]["data"] == "still-live"
 
     await capture.close()
 
@@ -152,6 +202,47 @@ async def test_capture_bounds_multimegabyte_raw_output_by_utf8_bytes() -> None:
     assert len(delta.encode("utf-8")) <= cap
     assert delta.endswith(marker)
     assert "�" not in delta
+
+
+async def test_capture_truncates_accumulated_output_to_the_newest_whole_characters() -> None:
+    """Accumulation across events is bounded by bytes, tail-first.
+
+    Each individual event already fits the per-subscription budget, so the
+    overflow only appears once the collector concatenates them. The retained
+    text must be the *newest* suffix — an operation's final prompt is what the
+    caller acts on — and the cut must land on a character boundary rather than
+    slicing a multi-byte codepoint into a replacement character.
+    """
+    hub = await _make_hub_with_worker("w1")
+    cap = 4095
+    capture = await OutputCollector().open(hub, "w1", max_output_bytes=cap)
+    first = "é" * 1900  # 3800 UTF-8 bytes
+    second = "x" * 400
+    assert len(first.encode("utf-8")) + len(second.encode("utf-8")) > cap
+
+    async def _emit() -> None:
+        await hub.append_event("w1", "term", {"data": first})
+        for _ in range(1000):
+            if not capture.queued_bytes:
+                break
+            await asyncio.sleep(0)
+        await hub.append_event("w1", "term", {"data": second})
+
+    emitter = asyncio.create_task(_emit())
+    try:
+        delta, _elapsed_ms = await capture.collect(quiesce_ms=100, max_ms=5_000)
+    finally:
+        await emitter
+        await capture.close()
+
+    encoded = delta.encode("utf-8")
+    assert delta.endswith(second)
+    assert delta.startswith("é")
+    assert "�" not in delta
+    # 4200 total bytes trimmed to the newest 4095; the byte at that offset is a
+    # continuation byte, so one further byte is given up to keep the character
+    # whole rather than emitting U+FFFD.
+    assert len(encoded) == cap - 1
 
 
 async def test_capture_preserves_exact_unicode_output_below_cap() -> None:
