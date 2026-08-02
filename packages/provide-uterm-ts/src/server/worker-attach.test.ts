@@ -300,6 +300,40 @@ describe("attaching", () => {
     ]);
     expect(browser.sent).toEqual([expect.objectContaining({ screen: "worker-b", event_seq: 2 })]);
   });
+
+  it("broadcasts a paused snapshot after an unrelated event advances the ring", async () => {
+    const hub = new SessionHub();
+    let markEntered = () => {};
+    let release = () => {};
+    const entered = new Promise<void>((resolve) => {
+      markEntered = resolve;
+    });
+    const resume = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const originalBroadcast = hub.router.broadcast.bind(hub.router);
+    hub.router.broadcast = async (workerId, message, expectedWorker, expectedEventSeq) => {
+      markEntered();
+      await resume;
+      await originalBroadcast(workerId, message, expectedWorker, expectedEventSeq);
+    };
+
+    const attach = attachConnector(hub, "w1", new FixedSnapshotConnector("current"), "hijack", { now: () => 1 });
+    await entered;
+    const browser = new RecordingBrowser();
+    await hub.connections.registerBrowser("w1", browser, "viewer", { deferBroadcast: true });
+    hub.connections.activateBrowserBroadcasts("w1", browser);
+
+    const unrelated = await hub.appendEvent("w1", "hijack_heartbeat", { owner: "operator" });
+    release();
+    await attach;
+
+    const state = hub.registry.get("w1");
+    expect(unrelated.seq).toBe(2);
+    expect(state?.eventSeq).toBe(2);
+    expect(state?.lastSnapshot).toMatchObject({ screen: "current", event_seq: 1 });
+    expect(browser.sent).toEqual([expect.objectContaining({ screen: "current", event_seq: 1 })]);
+  });
 });
 
 describe("what the hub sends, and what the worker does with it", () => {

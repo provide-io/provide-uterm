@@ -101,7 +101,6 @@ def _is_current_snapshot(
     """Return whether *state* still owns the snapshot being broadcast."""
     return (
         state.worker_ws is expected_worker
-        and state.event_seq == expected_event_seq
         and state.last_snapshot is not None
         and state.last_snapshot.get("event_seq") == expected_event_seq
     )

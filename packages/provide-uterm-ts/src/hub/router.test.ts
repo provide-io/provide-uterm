@@ -137,6 +137,33 @@ describe("MessageRouter.broadcast", () => {
     await expect(router.broadcast("nope", { type: "term", data: "hi" })).resolves.toBeUndefined();
   });
 
+  it("suppresses an older snapshot after the same worker commits a newer one", async () => {
+    const browser = new FakeBrowser("browser");
+    const worker = new FakeBrowser("worker");
+    const { state, router } = build([[browser, "viewer"]]);
+    state.workerWs = worker;
+    state.eventSeq = 2;
+    state.lastSnapshot = { type: "snapshot", screen: "current", event_seq: 2 };
+
+    await router.broadcast("w1", { type: "snapshot", screen: "old", event_seq: 1 }, worker, 1);
+
+    expect(browser.sent).toStrictEqual([]);
+  });
+
+  it("suppresses a snapshot after its worker is replaced without a newer commit", async () => {
+    const browser = new FakeBrowser("browser");
+    const workerA = new FakeBrowser("worker-a");
+    const workerB = new FakeBrowser("worker-b");
+    const { state, router } = build([[browser, "viewer"]]);
+    state.workerWs = workerB;
+    state.eventSeq = 1;
+    state.lastSnapshot = { type: "snapshot", screen: "old", event_seq: 1 };
+
+    await router.broadcast("w1", { type: "snapshot", screen: "old", event_seq: 1 }, workerA, 1);
+
+    expect(browser.sent).toStrictEqual([]);
+  });
+
   it("skips browsers still completing their handshake", async () => {
     // A browser mid-startup has not been told what session it is joining, so
     // terminal output arriving first would render before the screen state.
