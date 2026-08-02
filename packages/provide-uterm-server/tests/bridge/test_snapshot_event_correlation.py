@@ -201,6 +201,31 @@ async def test_supervised_operation_gets_raw_snapshot_while_public_event_stays_r
 
 
 @pytest.mark.asyncio
+async def test_authorized_live_viewer_is_raw_while_public_diagnostics_are_always_redacted() -> None:
+    event_bus = EventBus()
+    hub = TermHub(event_bus=event_bus)
+    worker_id = "bot1"
+    worker = AsyncMock()
+    browser = AsyncMock()
+    await hub.register_worker(worker_id, worker)
+    await hub.register_browser(worker_id, browser, "viewer")
+    screen = f"ordinary gameplay token {_AWS_KEY}"
+
+    async with event_bus.watch(worker_id, event_types=["snapshot"]) as public_subscription:
+        committed = await hub.commit_snapshot_event(worker_id, _snapshot(screen=screen), expected_worker=worker)
+        assert committed is not None
+        await hub.broadcast(worker_id, committed)
+        public_event = public_subscription.queue.get_nowait()
+
+    live_frame = _snapshot_frames(browser)[-1]
+    ring_event = (await hub.get_recent_events(worker_id, limit=1))[0]
+    assert live_frame["screen"] == screen
+    assert public_event is not None
+    assert public_event["data"]["screen"] == "ordinary gameplay token [AWS_ACCESS_KEY_REDACTED]"
+    assert ring_event["data"]["screen"] == "ordinary gameplay token [AWS_ACCESS_KEY_REDACTED]"
+
+
+@pytest.mark.asyncio
 async def test_concurrent_snapshot_commits_and_appends_share_one_sequence() -> None:
     _app, hub = make_app()
     worker_id = "bot1"
