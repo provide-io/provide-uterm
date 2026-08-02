@@ -255,6 +255,128 @@ async def test_subscription_byte_cap_drops_old_events_before_newest() -> None:
     assert sub.dropped > 0
 
 
+async def test_unfittable_event_is_dropped_whole_and_counted() -> None:
+    """An oversize event with no truncatable text must be dropped, not shipped.
+
+    ``_fit_item_to_bytes`` returns ``None`` when it cannot shrink an oversize
+    item (the payload has no string field it may trim). Enqueueing it anyway
+    would blow the subscription's byte budget in one go, so the contract is:
+    leave the queue untouched, count the drop, and report the metric.
+    """
+    metrics: list[tuple[str, int]] = []
+    bus = EventBus(max_queue_depth=50, on_metric=lambda name, value: metrics.append((name, value)))
+
+    async with bus.watch("w1", max_queue_bytes=32) as sub:
+        # ``data.data`` is an int, so there is no text to trim down to 32 bytes.
+        bus._enqueue("w1", {"seq": 1, "ts": 1.0, "type": "term", "data": {"data": 10**200}})
+
+        assert sub.queue.empty()
+        assert sub.queued_bytes == 0
+        assert sub.dropped == 1
+
+    assert metrics == [("event_bus_subscriber_drop_total", 1)]
+
+
+async def test_byte_cap_is_enforced_on_a_queue_without_byte_tracking() -> None:
+    """Byte accounting falls back to measuring the retained items themselves.
+
+    ``watch`` always builds a ``_ByteBoundedQueue``, but ``_deliver``'s
+    drop-oldest loop is bounded by ``sub.queued_bytes``. If a subscription on a
+    plain ``asyncio.Queue`` reported nothing, that half of the loop condition
+    would be dead and the byte cap silently unenforced — the queue would grow to
+    ``max_queue_depth`` items regardless of size.
+    """
+    bus = EventBus(max_queue_depth=50)
+    sub = event_bus_module._Subscription(
+        sub_id="s1",
+        worker_id="w1",
+        queue=asyncio.Queue(maxsize=50),
+        event_types=None,
+        pattern=None,
+        max_queue_bytes=300,
+    )
+    assert sub.queued_bytes == 0
+
+    for seq in range(20):
+        bus._deliver(sub, "w1", {"seq": seq, "ts": 1.0, "type": "term", "data": {"data": "x" * 40}})
+
+    retained = list(sub.queue._queue)
+    assert sub.queued_bytes == sum(event_bus_module._serialized_bytes(item) for item in retained)
+    assert 0 < sub.queued_bytes <= 300
+    assert len(retained) < 20
+    assert retained[-1]["seq"] == 19
+    assert sub.dropped == 20 - len(retained)
+
+
+def test_fit_item_to_bytes_returns_an_owned_copy_when_already_within_budget() -> None:
+    item: dict[str, Any] = {"worker_id": "w1", "type": "term", "data": {"data": "short"}}
+
+    fitted = event_bus_module._fit_item_to_bytes(item, 10_000)
+
+    assert fitted is not None
+    copied, size = fitted
+    assert copied == item
+    assert copied["data"] is not item["data"]
+    assert size == event_bus_module._serialized_bytes(item)
+
+
+def test_fit_item_to_bytes_refuses_an_oversize_event_without_a_data_mapping() -> None:
+    """No ``data`` mapping means nothing is safe to trim — refuse the item.
+
+    Trimming the envelope itself would corrupt the event shape, so the fitter
+    reports failure and the caller drops the event.
+    """
+    item: dict[str, Any] = {"worker_id": "w1", "type": "term", "data": "not-a-mapping" * 100}
+
+    assert event_bus_module._fit_item_to_bytes(item, 64) is None
+
+
+def test_fit_item_to_bytes_refuses_an_oversize_event_whose_text_field_is_not_text() -> None:
+    item: dict[str, Any] = {"worker_id": "w1", "type": "snapshot", "data": {"screen": ["a"] * 500}}
+
+    assert event_bus_module._fit_item_to_bytes(item, 64) is None
+
+
+def test_fit_item_to_bytes_sacrifices_snapshot_raw_tail_to_keep_the_screen() -> None:
+    """``raw_tail`` is redundant with ``screen``, so it is dropped first.
+
+    Here the screen fits comfortably but ``raw_tail`` alone busts the budget.
+    Without clearing it no truncation of ``screen`` could ever fit, and the
+    whole snapshot would be dropped; clearing it keeps the screen intact.
+    """
+    item: dict[str, Any] = {
+        "worker_id": "w1",
+        "type": "snapshot",
+        "data": {"screen": "PROMPT>", "raw_tail": "t" * 4_000},
+    }
+
+    fitted = event_bus_module._fit_item_to_bytes(item, 128)
+
+    assert fitted is not None
+    trimmed, size = fitted
+    assert trimmed["data"]["screen"] == "PROMPT>"
+    assert trimmed["data"]["raw_tail"] == ""
+    assert size == event_bus_module._serialized_bytes(trimmed) <= 128
+    assert item["data"]["raw_tail"] == "t" * 4_000
+
+
+def test_fit_item_to_bytes_trims_snapshot_screen_on_a_character_boundary() -> None:
+    item: dict[str, Any] = {
+        "worker_id": "w1",
+        "type": "snapshot",
+        "data": {"screen": "é" * 2_000 + "NEWEST", "raw_tail": "é" * 2_000},
+    }
+
+    fitted = event_bus_module._fit_item_to_bytes(item, 256)
+
+    assert fitted is not None
+    trimmed, size = fitted
+    assert trimmed["data"]["raw_tail"] == ""
+    assert trimmed["data"]["screen"].endswith("NEWEST")
+    assert "�" not in trimmed["data"]["screen"]
+    assert size <= 256
+
+
 # ---------------------------------------------------------------------------
 # close_worker — sentinel delivery and cleanup
 # ---------------------------------------------------------------------------

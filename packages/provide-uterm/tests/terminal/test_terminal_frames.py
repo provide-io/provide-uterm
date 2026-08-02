@@ -399,6 +399,53 @@ async def test_terminal_frame_wait_nonpositive_timeout_returns_immediately() -> 
     assert asyncio.get_running_loop().time() - started < 0.2
 
 
+async def test_terminal_frame_nonpositive_timeout_returns_an_owned_retained_copy() -> None:
+    """The no-wait poll returns a frame *copy*, exactly like the waiting path.
+
+    A poller that gets the retained object itself could mutate the history that
+    every other consumer of the same sequence still reads.
+    """
+    session = _ConcreteSession(_FakeTransport([b"retained"]), receive_encoding="utf-8")
+    await session.connect()
+    while session.screen_change_seq() < 1:
+        await asyncio.sleep(0)
+
+    frame = await session.wait_for_terminal_frame(since=0, timeout_ms=0)
+    retained = session._terminal_frames[0]
+    await session.close()
+
+    assert frame is not None
+    assert frame.sequence == 1
+    assert frame.transcript_delta == "retained"
+    assert frame is not retained
+    frame.snapshot["screen"] = "mutated-by-poller"
+    assert retained.snapshot["screen"] != "mutated-by-poller"
+
+
+async def test_terminal_frame_nonpositive_timeout_separates_idle_from_disconnected() -> None:
+    """``None`` means "nothing new yet"; a disconnect must raise instead.
+
+    A poller loops on ``None``, so collapsing the closed-transport case into
+    ``None`` would spin forever against a dead session. Conversely a retained
+    newer frame still outranks the closed flag — the caller gets every frame the
+    transport produced before it dropped, and only then the disconnect signal.
+    """
+    session = _ConcreteSession(_FakeTransport([b"retained"]), receive_encoding="utf-8")
+    await session.connect()
+    while session.screen_change_seq() < 1:
+        await asyncio.sleep(0)
+
+    assert await session.wait_for_terminal_frame(since=1, timeout_ms=0) is None
+
+    await session.close()
+
+    drained = await session.wait_for_terminal_frame(since=0, timeout_ms=0)
+    assert drained is not None
+    assert drained.sequence == 1
+    with pytest.raises(transport_session_module.TerminalFrameDisconnectedError):
+        await session.wait_for_terminal_frame(since=1, timeout_ms=0)
+
+
 async def test_terminal_frame_wait_accepts_24_hour_timeout_boundary() -> None:
     session = _ConcreteSession(_FakeTransport())
     await session.close()
