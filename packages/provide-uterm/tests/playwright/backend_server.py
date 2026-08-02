@@ -15,11 +15,13 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 FRONTEND_DIR = REPO_ROOT / "packages" / "provide-uterm-server" / "src" / "provide" / "uterm" / "server" / "frontend"
@@ -68,6 +70,32 @@ owner = "dev-user"
     path = Path(name)
     path.write_text(content, encoding="utf-8")
     return path
+
+
+def stop_uvicorn_thread(
+    server: Any,
+    thread: threading.Thread,
+    *,
+    graceful: float = 5.0,
+    forced: float = 5.0,
+) -> None:
+    """Stop a threaded ``uvicorn.Server`` under a hard upper bound.
+
+    ``should_exit`` only requests a *graceful* shutdown, and uvicorn's
+    ``timeout_graceful_shutdown`` defaults to ``None`` — it then waits forever
+    for open connections to drain.  A browser WebSocket whose client socket
+    outlives the page (Chromium's network process can hold the socket after the
+    context is closed) never drains, so ``thread.join(timeout=...)`` silently
+    returns with the loop still running and every upstream connection the
+    server was proxying still open.  Escalating to ``force_exit`` makes the
+    shutdown deterministic instead of leaving the caller to discover the
+    leftovers in a later, unbounded teardown step.
+    """
+    server.should_exit = True
+    thread.join(timeout=graceful)
+    if thread.is_alive():
+        server.force_exit = True
+        thread.join(timeout=forced)
 
 
 def backend_name() -> str:

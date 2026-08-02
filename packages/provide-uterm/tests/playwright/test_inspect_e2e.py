@@ -35,7 +35,7 @@ from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.tunnel.fastapi_routes import register_tunnel_routes
 from provide.uterm.tunnel.protocol import CHANNEL_HTTP, encode_frame
 
-from .backend_server import FRONTEND_DIR, WORKER_BEARER
+from .backend_server import FRONTEND_DIR, WORKER_BEARER, stop_uvicorn_thread
 from .ui_routes import multi_backend_env
 
 # ---------------------------------------------------------------------------
@@ -106,8 +106,7 @@ def inspect_server():
     base_url = f"http://127.0.0.1:{port}"
     yield base_url, ""
 
-    server.should_exit = True
-    thread.join(timeout=5)
+    stop_uvicorn_thread(server, thread)
 
 
 def _install_inspect_routes(page: Page) -> None:
