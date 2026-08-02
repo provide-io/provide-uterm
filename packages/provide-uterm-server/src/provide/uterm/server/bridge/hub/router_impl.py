@@ -256,9 +256,22 @@ class MessageRouter:
     # Thin wrappers over :mod:`router_broadcast` (fan-out / redaction / worker
     # send); method surface and ``hub._lock`` semantics are unchanged.
 
-    async def broadcast(self, worker_id: str, msg: dict[str, Any]) -> None:
+    async def broadcast(
+        self,
+        worker_id: str,
+        msg: dict[str, Any],
+        *,
+        expected_worker: WebSocket | None = None,
+        expected_event_seq: int | None = None,
+    ) -> None:
         """Send *msg* to all browser WebSockets registered for *worker_id*."""
-        await _broadcast_impl(self, worker_id, msg)  # ty:ignore[invalid-argument-type]
+        await _broadcast_impl(  # ty:ignore[invalid-argument-type]
+            self,
+            worker_id,
+            msg,
+            expected_worker=expected_worker,
+            expected_event_seq=expected_event_seq,
+        )
 
     async def send_hijack_state_to(
         self,

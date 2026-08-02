@@ -19,7 +19,7 @@
 import { encodeControlFrame, encodeTerminalData } from "../control-channel/index.ts";
 import { makeHijackStateFrame } from "../frames/index.ts";
 import { monoToWall } from "./frames.ts";
-import type { Connection, WorkerTermState } from "./models.ts";
+import type { Connection, WorkerSocket, WorkerTermState } from "./models.ts";
 import type { WorkerRegistry } from "./registry.ts";
 
 /**
@@ -127,11 +127,65 @@ export class MessageRouter {
    * pass — and if losing them changed who holds the session, the survivors
    * are told.
    */
-  async broadcast(workerId: string, message: Record<string, unknown>): Promise<void> {
+  async broadcast(
+    workerId: string,
+    message: Record<string, unknown>,
+    expectedWorker?: WorkerSocket,
+    expectedEventSeq?: number,
+  ): Promise<void> {
     const state = this.#hub.registry.get(workerId);
     if (state === undefined) {
       return;
     }
+
+    if (expectedWorker !== undefined || expectedEventSeq !== undefined) {
+      if (
+        expectedWorker === undefined ||
+        expectedEventSeq === undefined ||
+        !this.#isCurrentSnapshot(state, expectedWorker, expectedEventSeq)
+      ) {
+        return;
+      }
+      const predecessor = state.snapshotEgressTail;
+      let release = () => {};
+      const current = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      state.snapshotEgressTail = predecessor.then(() => current);
+      await predecessor;
+      try {
+        const currentState = this.#hub.registry.get(workerId);
+        if (
+          currentState !== state ||
+          !this.#isCurrentSnapshot(currentState, expectedWorker, expectedEventSeq)
+        ) {
+          return;
+        }
+        await this.#broadcastToState(workerId, message, state);
+      } finally {
+        release();
+      }
+      return;
+    }
+
+    await this.#broadcastToState(workerId, message, state);
+  }
+
+  /** Whether a snapshot still belongs to the current worker generation and sequence. */
+  #isCurrentSnapshot(state: WorkerTermState, worker: WorkerSocket, eventSeq: number): boolean {
+    return (
+      state.workerWs === worker &&
+      state.eventSeq === eventSeq &&
+      state.lastSnapshot?.event_seq === eventSeq
+    );
+  }
+
+  /** Send to one already-resolved worker state. */
+  async #broadcastToState(
+    workerId: string,
+    message: Record<string, unknown>,
+    state: WorkerTermState,
+  ): Promise<void> {
     const recipients = this.#recipients(state);
     const payload = encodeBrowserFrame(message);
 

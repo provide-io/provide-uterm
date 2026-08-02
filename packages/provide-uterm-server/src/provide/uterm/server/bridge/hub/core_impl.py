@@ -364,8 +364,20 @@ class TermHub:
     ) -> dict[str, Any] | None:
         return await self.router.commit_snapshot_event(worker_id, snapshot, expected_worker=expected_worker)
 
-    async def broadcast(self, worker_id: str, msg: dict[str, Any]) -> None:
-        await self.router.broadcast(worker_id, msg)
+    async def broadcast(
+        self,
+        worker_id: str,
+        msg: dict[str, Any],
+        *,
+        expected_worker: WebSocket | None = None,
+        expected_event_seq: int | None = None,
+    ) -> None:
+        await self.router.broadcast(
+            worker_id,
+            msg,
+            expected_worker=expected_worker,
+            expected_event_seq=expected_event_seq,
+        )
 
     async def broadcast_hijack_state(self, worker_id: str) -> None:
         await self.router.broadcast_hijack_state(worker_id)

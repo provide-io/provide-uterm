@@ -310,6 +310,8 @@ export class WorkerTermState {
   inputModeSetByOperator = false;
   /** Most recent screen snapshot received from the worker. */
   lastSnapshot: Record<string, unknown> | undefined;
+  /** Tail of the per-worker browser snapshot egress queue. */
+  snapshotEgressTail: Promise<void> = Promise.resolve();
   /** Retained event log, bounded so a long-lived worker cannot grow forever. */
   events = new BoundedDeque<Record<string, unknown>>(EVENT_DEQUE_MAXLEN);
   /** Sequence number of the most recent event. */

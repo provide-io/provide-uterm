@@ -137,6 +137,58 @@ async def test_replaced_worker_cannot_commit_a_paused_snapshot() -> None:
 
 
 @pytest.mark.asyncio
+async def test_replaced_worker_cannot_broadcast_a_snapshot_paused_after_commit() -> None:
+    event_bus = EventBus()
+    hub = TermHub(event_bus=event_bus)
+    worker_id = "bot1"
+    worker_a = AsyncMock()
+    worker_b = AsyncMock()
+    browser = AsyncMock()
+    await hub.register_worker(worker_id, worker_a)
+    hub.registry._workers[worker_id].browsers[browser] = "viewer"
+
+    entered = asyncio.Event()
+    resume = asyncio.Event()
+    original_broadcast = hub.broadcast
+
+    async def paused_broadcast(
+        requested_worker_id: str,
+        frame: dict[str, Any],
+        **kwargs: Any,
+    ) -> None:
+        if frame.get("screen") == "worker-a":
+            entered.set()
+            await resume.wait()
+        await original_broadcast(requested_worker_id, frame, **kwargs)
+
+    hub.broadcast = paused_broadcast  # type: ignore[method-assign]
+    async with (
+        event_bus.watch(worker_id, event_types=["snapshot"]) as public_subscription,
+        hub._operation_event_bus.watch(worker_id, event_types=["snapshot"]) as private_subscription,
+    ):
+        stale_task = asyncio.create_task(
+            _dispatch_worker_frame(hub, worker_id, "snapshot", _snapshot(screen="worker-a"), worker_a)
+        )
+        await entered.wait()
+        await hub.register_worker(worker_id, worker_b)
+        await _dispatch_worker_frame(hub, worker_id, "snapshot", _snapshot(screen="worker-b"), worker_b)
+        resume.set()
+        await stale_task
+
+        assert public_subscription.queue.qsize() == 2
+        assert private_subscription.queue.qsize() == 2
+
+    state = hub.registry._workers[worker_id]
+    assert state.worker_ws is worker_b
+    assert state.last_snapshot is not None
+    assert state.last_snapshot["screen"] == "worker-b"
+    assert state.last_snapshot["event_seq"] == 2
+    assert [event["seq"] for event in state.events] == [1, 2]
+    assert [event["data"]["screen"] for event in state.events] == ["worker-a", "worker-b"]
+    assert [(frame["screen"], frame["event_seq"]) for frame in _snapshot_frames(browser)] == [("worker-b", 2)]
+
+
+@pytest.mark.asyncio
 async def test_snapshot_commit_owns_input_return_bus_and_reader_copies() -> None:
     event_bus = EventBus()
     hub = TermHub(event_bus=event_bus)

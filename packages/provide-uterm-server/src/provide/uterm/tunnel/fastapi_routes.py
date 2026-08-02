@@ -200,4 +200,9 @@ async def _handle_control(
             return
         committed = await hub.commit_snapshot_event(worker_id, snapshot, expected_worker=websocket)
         if committed is not None:
-            await hub.broadcast(worker_id, committed)
+            await hub.broadcast(
+                worker_id,
+                committed,
+                expected_worker=websocket,
+                expected_event_seq=int(committed["event_seq"]),
+            )
