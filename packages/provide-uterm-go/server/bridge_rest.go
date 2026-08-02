@@ -6,12 +6,10 @@
 package server
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
 	"image"
-	"image/png"
 	"io"
 	"net/http"
 	"strings"
@@ -428,8 +426,11 @@ func (s *Server) handleHijackGUIScreenshot(w http.ResponseWriter, r *http.Reques
 		bridgeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	var buf bytes.Buffer
-	if err := png.Encode(&buf, img); err != nil {
+	// gui.EncodeImage, not image/png: a screenshot is a wire format, and the
+	// stdlib encoder picks its own colour type, row filters and compression
+	// level, none of which match what the Python, TypeScript and C# ports emit.
+	shot, err := gui.EncodeImage(img)
+	if err != nil {
 		bridgeError(w, http.StatusInternalServerError, "screenshot encode failed")
 		return
 	}
@@ -438,7 +439,7 @@ func (s *Server) handleHijackGUIScreenshot(w http.ResponseWriter, r *http.Reques
 		"ok":               true,
 		"worker_id":        workerID,
 		"hijack_id":        hijackID,
-		"screenshot":       base64.StdEncoding.EncodeToString(buf.Bytes()),
+		"screenshot":       base64.StdEncoding.EncodeToString(shot),
 		"lease_expires_at": s.monoToWall(freshExpires),
 	})
 }
