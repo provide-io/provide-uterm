@@ -16,6 +16,9 @@ ALLOWED_LICENSES: frozenset[str] = frozenset(
     {
         "MIT",
         "MIT License",
+        # MIT No Attribution: MIT without the attribution clause, so strictly
+        # more permissive than the MIT already allowed above.
+        "MIT-0",
         "MIT OR Apache-2.0",
         "Apache-2.0",
         "Apache Software License",
