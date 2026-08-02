@@ -18,7 +18,7 @@
  * not this one.
  */
 
-import { deflateSync } from "node:zlib";
+import { constants, deflateSync } from "node:zlib";
 
 /**
  * The largest a single side may be.
@@ -135,7 +135,10 @@ export function encodeRgbaPng(width: number, height: number, pixels: Uint8Array)
   }
 
   // A zlib stream — header, deflate, adler32 — is exactly the IDAT payload.
-  const idat = new Uint8Array(deflateSync(raw, { level: 9 }));
+  // Z_RLE matches the Python reference and the C# port byte for byte; the
+  // default strategy does not, because node's zlib on Linux makes different
+  // match choices from CPython's (see gui_session.py for the full note).
+  const idat = new Uint8Array(deflateSync(raw, { level: 9, strategy: constants.Z_RLE }));
 
   const header = new Uint8Array(13);
   const view = new DataView(header.buffer);

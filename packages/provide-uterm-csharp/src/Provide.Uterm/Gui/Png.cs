@@ -60,35 +60,38 @@ public static class Png
         return buf;
     }
 
+    /// <summary>
+    /// The IDAT payload: a complete zlib stream (header, deflate, adler32).
+    /// </summary>
+    /// <remarks>
+    /// Level 9 with the run-length strategy, because this stream is a
+    /// cross-language contract -- the Python reference records the corpus and
+    /// this port and the TypeScript one must reproduce it byte for byte.
+    /// zlib's default match-finding is not the same in every build (node ships
+    /// one on Linux that encodes a 1x1 white pixel in 13 bytes where CPython's
+    /// takes 11), and Z_FIXED does not settle it either. The run-length
+    /// strategy constrains matching to distance-1 runs, which every
+    /// implementation does identically. It was also CompressionLevel.Fastest
+    /// here, which is a different level again from the other two ports.
+    ///
+    /// ZLibStream writes the header and the adler32 trailer itself, and with
+    /// these options emits the same 0x78 0x01 header the other ports do, so
+    /// neither has to be hand-rolled.
+    /// </remarks>
     private static byte[] DeflateZlib(byte[] raw)
     {
         using var ms = new MemoryStream();
-        // zlib header
-        ms.WriteByte(0x78);
-        ms.WriteByte(0x01);
-        using (var ds = new DeflateStream(ms, CompressionLevel.Fastest, leaveOpen: true))
+        var options = new ZLibCompressionOptions
         {
-            ds.Write(raw, 0, raw.Length);
+            CompressionLevel = 9,
+            CompressionStrategy = ZLibCompressionStrategy.RunLengthEncoding,
+        };
+        using (var zs = new ZLibStream(ms, options, leaveOpen: true))
+        {
+            zs.Write(raw, 0, raw.Length);
         }
 
-        // Adler-32 of uncompressed data
-        var adler = Adler32(raw);
-        Span<byte> adlerBytes = stackalloc byte[4];
-        BinaryPrimitives.WriteUInt32BigEndian(adlerBytes, adler);
-        ms.Write(adlerBytes);
         return ms.ToArray();
-    }
-
-    private static uint Adler32(ReadOnlySpan<byte> data)
-    {
-        uint a = 1, b = 0;
-        foreach (var x in data)
-        {
-            a = (a + x) % 65521;
-            b = (b + a) % 65521;
-        }
-
-        return (b << 16) | a;
     }
 
     private static void WriteChunk(Stream s, string type, ReadOnlySpan<byte> data)
