@@ -16,6 +16,7 @@ import pytest
 
 from provide.uterm.bridge.schemas import SnapshotFrame
 from provide.uterm.control_channel import ControlChunk, ControlFrameDecoder
+from provide.uterm.server.bridge.fanout._collector import OutputCollector
 from provide.uterm.server.bridge.hub import EventBus, TermHub
 from provide.uterm.server.bridge.models import WorkerTermState
 from provide.uterm.server.bridge.routes.websockets_worker import _dispatch_worker_frame
@@ -121,6 +122,29 @@ async def test_snapshot_commit_owns_input_return_bus_and_reader_copies() -> None
     assert fresh_snapshot is not None
     assert fresh_snapshot["cursor"] == original["cursor"]
     assert (await hub.get_recent_events(worker_id, limit=10))[-1]["data"]["cursor"] == original["cursor"]
+
+
+@pytest.mark.asyncio
+async def test_supervised_operation_gets_raw_snapshot_while_public_event_stays_redacted() -> None:
+    event_bus = EventBus()
+    hub = TermHub(event_bus=event_bus)
+    worker_id = "bot1"
+    hub.registry._workers[worker_id] = WorkerTermState()
+    screen = f"ordinary gameplay token {_AWS_KEY}"
+    capture = await OutputCollector().open(hub, worker_id)
+
+    try:
+        async with event_bus.watch(worker_id, event_types=["snapshot"]) as public_subscription:
+            await hub.commit_snapshot_event(worker_id, _snapshot(screen=screen))
+            public_event = public_subscription.queue.get_nowait()
+        operation_screen, _elapsed_ms = await capture.collect(quiesce_ms=1, max_ms=50)
+    finally:
+        await capture.close()
+
+    assert operation_screen == screen
+    assert public_event is not None
+    assert public_event["data"]["screen"] == "ordinary gameplay token [AWS_ACCESS_KEY_REDACTED]"
+    assert _AWS_KEY not in public_event["data"]["screen"]
 
 
 @pytest.mark.asyncio

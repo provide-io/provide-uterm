@@ -2,11 +2,12 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""OutputCollector — adaptive EventBus output accumulator for a single session.
+"""OutputCollector — adaptive operational output accumulator for one session.
 
-Subscribes to EventBus ``term`` and ``snapshot`` events for a given worker,
-accumulates the output text, and returns when the stream quiesces or the hard
-cap is hit.
+Subscribes to the hub's private raw ``term`` and ``snapshot`` stream for a
+given worker, accumulates the output text, and returns when the stream quiesces
+or the hard cap is hit. The public EventBus remains a redacted diagnostic
+egress and is never used for supervised-operation output.
 
 Primary source: ``term`` event deltas (PTY / raw-output connectors).
 Fallback source: last ``snapshot.screen`` value, used when no ``term`` events
@@ -39,9 +40,15 @@ class OutputCapture:
         self._closed = False
 
     async def open(self) -> OutputCapture:
-        """Subscribe now, before any observer notification or worker input."""
-        if self._hub.event_bus is not None:
+        """Subscribe to authorized raw output before notification or input."""
+        open_raw = getattr(self._hub, "_watch_authorized_operation_output", None)
+        if open_raw is not None:
+            self._watch = open_raw(self._worker_id)
+        elif self._hub.event_bus is not None:
+            # Compatibility for narrow test doubles; real TermHub instances
+            # always provide the private authorized stream above.
             self._watch = self._hub.event_bus.watch(self._worker_id, event_types=["term", "snapshot"])
+        if self._watch is not None:
             self._subscription = await self._watch.__aenter__()
         return self
 
@@ -99,7 +106,7 @@ class OutputCapture:
 
 
 class OutputCollector:
-    """Open and collect terminal output from a single session via EventBus.
+    """Open and collect raw terminal output for a supervised operation.
 
     Subscribes to both ``term`` and ``snapshot`` events, returning when:
 
@@ -114,7 +121,8 @@ class OutputCollector:
     returned instead so callers always get meaningful output regardless of
     connector type.
 
-    If *hub* has no EventBus attached, returns ``("", 0)`` immediately.
+    If *hub* has no configured event infrastructure, returns ``("", 0)``
+    immediately.
     """
 
     async def open(self, hub: TermHub, worker_id: str) -> OutputCapture:

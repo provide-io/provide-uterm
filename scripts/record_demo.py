@@ -163,7 +163,7 @@ async def demo_session_api(http: httpx.AsyncClient) -> None:
 async def run_demo() -> None:
     """Run the full demo."""
     print("\033[1;35m╔══════════════════════════════════════════╗\033[0m")
-    print("\033[1;35m║   provide-uterm v0.4.0 Feature Demo   ║\033[0m")
+    print("\033[1;35m║   provide-uterm v0.5.0 Feature Demo   ║\033[0m")
     print("\033[1;35m╚══════════════════════════════════════════╝\033[0m")
 
     base_url, server = _start_server()

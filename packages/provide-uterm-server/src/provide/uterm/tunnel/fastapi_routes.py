@@ -29,6 +29,7 @@ from provide.uterm.server.bridge.frames import (
     make_worker_connected_frame,
     make_worker_disconnected_frame,
 )
+from provide.uterm.server.bridge.routes.websockets_worker import _build_worker_frame
 from provide.uterm.tunnel.protocol import (
     CHANNEL_DATA,
     CHANNEL_HTTP,
@@ -192,7 +193,10 @@ async def _handle_control(
     elif msg_type == "close":
         logger.info("tunnel_close worker_id=%s channel=%d", worker_id, msg.get("channel", 1))
     elif msg_type == "snapshot":
-        screen = str(msg.get("screen", ""))
-        snapshot: dict[str, Any] = {"type": "snapshot", "screen": screen, "ts": time.time()}
+        try:
+            snapshot = _build_worker_frame("snapshot", msg)
+        except (KeyError, TypeError, ValueError) as exc:
+            logger.warning("tunnel_bad_snapshot worker_id=%s error=%s", worker_id, exc)
+            return
         committed = await hub.commit_snapshot_event(worker_id, snapshot)
         await hub.broadcast(worker_id, committed)

@@ -180,7 +180,8 @@ class MessageRouter:
         unaffected.
         """
         hub = self._hub
-        payload = data or {}
+        raw_payload = deepcopy(data or {})
+        payload = deepcopy(raw_payload)
         # Redact content at write time (before truncation) so a secret near the
         # truncation boundary is removed regardless of where the cap would cut.
         if event_type in self._REDACTED_EVENT_TYPES:
@@ -200,6 +201,8 @@ class MessageRouter:
             st.min_event_seq = int(st.events[0]["seq"])
         if hub._event_bus is not None:
             hub._event_bus._enqueue(worker_id, evt)
+        if hub._operation_event_bus is not None:
+            hub._operation_event_bus._enqueue(worker_id, {**evt, "data": raw_payload})
         return evt
 
     async def commit_snapshot_event(self, worker_id: str, snapshot: dict[str, Any]) -> dict[str, Any]:
@@ -211,10 +214,10 @@ class MessageRouter:
         """
         hub = self._hub
         raw_snapshot = deepcopy(snapshot)
-        event_payload = deepcopy(raw_snapshot)
-        frame_type = event_payload.pop("type", "snapshot")
-        event_payload["prompt_id"] = extract_prompt_id(raw_snapshot)
-        event_payload = {"type": frame_type, **self._redact_event_payload("snapshot", event_payload)}
+        raw_event_payload = deepcopy(raw_snapshot)
+        frame_type = raw_event_payload.pop("type", "snapshot")
+        raw_event_payload["prompt_id"] = extract_prompt_id(raw_snapshot)
+        event_payload = {"type": frame_type, **self._redact_event_payload("snapshot", raw_event_payload)}
         async with hub._lock:
             st = hub.registry.get(worker_id)
             if st is None:
@@ -233,6 +236,12 @@ class MessageRouter:
             st.min_event_seq = int(st.events[0]["seq"])
         if hub._event_bus is not None:
             hub._event_bus._enqueue(worker_id, deepcopy(evt))
+        if hub._operation_event_bus is not None:
+            raw_evt = {
+                **evt,
+                "data": {"type": frame_type, **raw_event_payload, "event_seq": evt["seq"]},
+            }
+            hub._operation_event_bus._enqueue(worker_id, raw_evt)
         return deepcopy(committed)
 
     # -- Broadcast / send hot path --------------------------------------

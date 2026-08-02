@@ -16,6 +16,9 @@ from fastapi.testclient import TestClient
 from provide.uterm.control_channel import ControlFrameDecoder
 from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.tunnel.fastapi_routes import (
+    _handle_control,
+)
+from provide.uterm.tunnel.fastapi_routes import (
     register_tunnel_routes as _tunnel_registrar,
 )
 from provide.uterm.tunnel.protocol import (
@@ -191,12 +194,25 @@ class TestTunnelControlExtra:
     ) -> None:
         """Tunnel snapshots share one sequence across wire, state, and ring."""
         worker_id = "test-snap"
+        snapshot = {
+            "type": "snapshot",
+            "screen": "hello screen",
+            "cursor": {"x": 7, "y": 3},
+            "cols": 132,
+            "rows": 43,
+            "screen_hash": "sha256:tunnel-screen",
+            "cursor_at_end": False,
+            "has_trailing_space": True,
+            "prompt_detected": {"prompt_id": "command", "matched": ">"},
+            "raw_tail": "raw hello screen",
+            "ts": 1234.5,
+        }
         with (
             client.websocket_connect(f"/tunnel/{worker_id}") as tunnel_ws,
             client.websocket_connect(f"/ws/browser/{worker_id}/term") as browser_ws,
         ):
             _drain_until_hello(browser_ws)
-            tunnel_ws.send_bytes(encode_control({"type": "snapshot", "screen": "hello screen"}))
+            tunnel_ws.send_bytes(encode_control(snapshot))
 
             for _ in range(10):
                 wire = _decode_browser_msg(browser_ws.receive_text())
@@ -204,6 +220,14 @@ class TestTunnelControlExtra:
                     break
             assert wire["type"] == "snapshot"
             assert wire["screen"] == "hello screen"
+            assert wire["cursor"] == snapshot["cursor"]
+            assert (wire["cols"], wire["rows"]) == (132, 43)
+            assert wire["screen_hash"] == snapshot["screen_hash"]
+            assert wire["cursor_at_end"] is False
+            assert wire["has_trailing_space"] is True
+            assert wire["prompt_detected"] == snapshot["prompt_detected"]
+            assert wire["raw_tail"] == snapshot["raw_tail"]
+            assert wire["ts"] == snapshot["ts"]
             assert wire["event_seq"] == 1
 
             state = hub.registry.get(worker_id)
@@ -214,6 +238,22 @@ class TestTunnelControlExtra:
             assert snapshot_events[0]["seq"] == wire["event_seq"]
             assert snapshot_events[0]["data"]["event_seq"] == wire["event_seq"]
             assert snapshot_events[0]["data"]["screen"] == wire["screen"]
+
+    @pytest.mark.asyncio
+    async def test_snapshot_control_rejects_malformed_cursor_without_committing(self) -> None:
+        hub = MagicMock(spec=TermHub)
+        hub.commit_snapshot_event = AsyncMock()
+        hub.broadcast = AsyncMock()
+
+        await _handle_control(
+            hub,
+            AsyncMock(),
+            "test-bad-snapshot",
+            b'{"type":"snapshot","screen":"bad","cursor":[7,3],"cols":80,"rows":25}',
+        )
+
+        hub.commit_snapshot_event.assert_not_awaited()
+        hub.broadcast.assert_not_awaited()
 
 
 class TestTunnelBranchCoverage:

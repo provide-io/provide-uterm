@@ -34,6 +34,8 @@ from dataclasses import dataclass
 from sys import getsizeof
 from typing import TYPE_CHECKING, Any
 
+from provide.uterm.terminal_frames import TerminalFrameDisconnectedError
+
 from provide.uterm.control_channel import ControlFrameDecoder, DataChunk
 from provide.uterm.emulator import TerminalEmulator
 
@@ -316,12 +318,21 @@ class TransportSession:
         frame with a sequence greater than ``since + 1`` after eviction. The
         newest frame is always retained complete; if it alone exceeds the
         nominal byte budget, the retained total may temporarily exceed it.
+
+        Raises:
+            TerminalFrameDisconnectedError: If the transport closes before a newer
+                retained frame is available. A deadline timeout still returns
+                ``None``.
         """
         if timeout_ms > TERMINAL_FRAME_WAIT_MAX_MS:
             raise ValueError(f"timeout_ms must be <= {TERMINAL_FRAME_WAIT_MAX_MS}")
         if timeout_ms <= 0:
             frame = next((candidate for candidate in self._terminal_frames if candidate.sequence > since), None)
-            return None if frame is None else deepcopy(frame)
+            if frame is not None:
+                return deepcopy(frame)
+            if self._terminal_frame_closed:
+                raise TerminalFrameDisconnectedError("terminal transport disconnected")
+            return None
 
         loop = asyncio.get_running_loop()
         deadline = loop.time() + timeout_ms / 1000.0
@@ -331,7 +342,7 @@ class TransportSession:
             if frame is not None:
                 return deepcopy(frame)
             if self._terminal_frame_closed:
-                return None
+                raise TerminalFrameDisconnectedError("terminal transport disconnected")
 
             remaining = deadline - loop.time()
             if remaining <= 0:
@@ -460,6 +471,8 @@ class TransportSession:
                     self._notify_terminal_frame_waiters()
                     self._update_event.set()
         except (asyncio.CancelledError, ConnectionResetError, OSError, ConnectionError):
+            pass
+        finally:
             self._connected = False
             self._terminal_frame_closed = True
             self._notify_terminal_frame_waiters()

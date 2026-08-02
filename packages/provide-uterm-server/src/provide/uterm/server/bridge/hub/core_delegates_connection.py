@@ -72,8 +72,11 @@ async def remove_dead_browsers(hub: TermHub, worker_id: str, dead: set[WebSocket
 async def deregister_worker(hub: TermHub, worker_id: str, ws: WebSocket) -> tuple[bool, bool]:
     """Deregister the worker WS and notify the EventBus on disconnect."""
     should_broadcast, was_hijacked = await hub.connection_mgr.deregister_worker(worker_id, ws)
-    if should_broadcast and hub._event_bus is not None:
-        hub._event_bus.close_worker(worker_id)
+    if should_broadcast:
+        if hub._event_bus is not None:
+            hub._event_bus.close_worker(worker_id)
+        if hub._operation_event_bus is not None:
+            hub._operation_event_bus.close_worker(worker_id)
     return should_broadcast, was_hijacked
 
 
