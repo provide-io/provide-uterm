@@ -134,7 +134,11 @@ async def broadcast(
         st = hub.registry.get(worker_id)
         if st is None:
             return
-        if expected_worker is not None or expected_event_seq is not None:
+        # pragma: no branch — the false arm leaves the `async with` block, and
+        # coverage.py records that __aexit__ arc as partial only on 3.11; the
+        # identical test selection reports it covered on 3.12/3.13/3.14. Same
+        # quirk already pragma'd in connection_hijack.py.
+        if expected_worker is not None or expected_event_seq is not None:  # pragma: no branch
             if expected_worker is None or expected_event_seq is None:
                 return
             if not _is_current_snapshot(
