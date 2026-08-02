@@ -128,6 +128,7 @@ class EventBus:
         self._max_pattern_length = max(1, int(max_pattern_length))
         self._max_match_input_chars = max(1, int(max_match_input_chars))
         self._on_metric = on_metric
+        self._closed = False
         # worker_id -> list of active subscriptions
         self._subs: dict[str, list[_Subscription]] = {}
 
@@ -143,6 +144,8 @@ class EventBus:
         Any internal error is caught and logged so it never propagates into
         the append_event call site.
         """
+        if self._closed:
+            return
         try:
             targets = list(self._subs.get(worker_id, []))
             for sub in targets:
@@ -192,6 +195,20 @@ class EventBus:
         worker connection).
         """
         subs = self._subs.pop(worker_id, [])
+        for sub in subs:
+            self._put_sentinel(sub)
+
+    def close(self) -> None:
+        """Synchronously wake and remove every active subscription.
+
+        Closure is idempotent. A closed bus never accepts later delivery, so
+        replacing a hub bus cannot leak events across configuration generations.
+        """
+        if self._closed:
+            return
+        self._closed = True
+        subs = [sub for worker_subs in self._subs.values() for sub in worker_subs]
+        self._subs.clear()
         for sub in subs:
             self._put_sentinel(sub)
 
@@ -268,7 +285,10 @@ class EventBus:
                 int(self._default_max_queue_bytes if max_queue_bytes is None else max_queue_bytes),
             ),
         )
-        self._subs.setdefault(worker_id, []).append(sub)
+        if self._closed:
+            self._put_sentinel(sub)
+        else:
+            self._subs.setdefault(worker_id, []).append(sub)
         try:
             yield sub
         finally:

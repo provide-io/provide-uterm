@@ -207,6 +207,33 @@ async def test_close_worker_unknown_noop() -> None:
     bus.close_worker("no-such-worker")  # Should not raise
 
 
+async def test_close_wakes_all_workers_and_is_idempotent() -> None:
+    bus = EventBus()
+    async with bus.watch("w1") as first, bus.watch("w2") as second:
+        first_wait = asyncio.create_task(first.queue.get())
+        second_wait = asyncio.create_task(second.queue.get())
+
+        bus.close()
+        bus.close()
+
+        assert await asyncio.wait_for(first_wait, timeout=0.1) is None
+        assert await asyncio.wait_for(second_wait, timeout=0.1) is None
+        assert bus.subscriber_count("w1") == 0
+        assert bus.subscriber_count("w2") == 0
+
+
+async def test_closed_bus_rejects_cross_generation_delivery() -> None:
+    bus = EventBus()
+    bus.close()
+
+    async with bus.watch("w1") as sub:
+        bus._enqueue("w1", {"seq": 1, "ts": 1.0, "type": "term", "data": {"data": "late"}})
+        assert await asyncio.wait_for(sub.queue.get(), timeout=0.1) is None
+        assert sub.queue.empty()
+
+    assert bus.subscriber_count("w1") == 0
+
+
 async def test_close_worker_full_queue_puts_sentinel_anyway() -> None:
     """Sentinel must fit even when queue is full (drops oldest to make room)."""
     bus = EventBus(max_queue_depth=1)
