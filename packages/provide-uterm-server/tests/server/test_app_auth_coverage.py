@@ -17,6 +17,7 @@ from starlette.requests import HTTPConnection
 from provide.uterm.server import create_server_app, default_server_config
 from provide.uterm.server.auth import Principal
 from provide.uterm.server.models import RecordingConfig, TunnelConfig
+from tests.helpers.fastapi_routes import find_effective_api_route
 
 
 def _make_app(**config_overrides: Any) -> tuple[Any, Any]:
@@ -31,13 +32,19 @@ def _make_app(**config_overrides: Any) -> tuple[Any, Any]:
 
 
 def _auth_dep(app: Any) -> Any:
-    from fastapi.routing import APIRoute
+    """Return the auth dependency that actually guards ``GET /api/sessions``.
 
-    for route in app.routes:
-        if isinstance(route, APIRoute) and route.path == "/api/sessions":
-            dependency = route.dependencies[0]
-            return dependency.dependency
-    raise AssertionError("auth dependency not found")
+    The dependency is attached at include time
+    (``include_router(..., dependencies=[Depends(_require_authenticated)])``),
+    so it only shows up on the *effective* route — see
+    ``tests/helpers/fastapi_routes.py`` for why ``app.routes`` no longer
+    exposes that directly on FastAPI >= 0.141.
+    """
+    route = find_effective_api_route(app, "/api/sessions")
+    if route is None:
+        raise AssertionError("auth dependency not found")
+    dependency = route.dependencies[0]
+    return dependency.dependency
 
 
 async def _run_lifespan_one_tick(app: Any) -> None:

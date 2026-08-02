@@ -188,7 +188,7 @@ extra-paths = []
 # python_modules trees) are gitignored, so they never reach CI, but skipping
 # them keeps a whole-tree local run clean.
 skip = ".git,*.pyc,__pycache__,.venv,node_modules,uv.lock,package-lock.json,*.mmd,./packages/provide-uterm/src/provide/uterm/frontend/assets/*.js,packages/provide-uterm/src/provide/uterm/frontend/assets/*.js,./packages/provide-uterm-server/src/provide/uterm/server/frontend/assets/*.js,packages/provide-uterm-server/src/provide/uterm/server/frontend/assets/*.js,./packages/provide-uterm-cloudflare/python_modules/provide/uterm/frontend/assets/*.js,packages/provide-uterm-cloudflare/python_modules/provide/uterm/frontend/assets/*.js,packages/provide-uterm-cloudflare/python_modules/structlog/*,./packages/provide-uterm-cloudflare/src/provide/uterm/cloudflare/ui/static/*,packages/provide-uterm-cloudflare/src/provide/uterm/cloudflare/ui/static/*,./packages/provide-uterm-ts/testdata/*,packages/provide-uterm-ts/testdata/*,./conformance/fuzz/*,conformance/fuzz/*,mutants,dist,build,reports,coverage,StrykerOutput,python_modules"
-ignore-words-list = "ore,opps,wont,strat,nd,rade,ans,unparseable,cna,intoto,te,shiftin,shttp,defint,onws,alo,ahi,blo,bhi,fo,afterall,wit"
+ignore-words-list = "ore,opps,wont,strat,nd,rade,ans,unparseable,cna,intoto,te,shiftin,shttp,defint,onws,alo,ahi,blo,bhi,fo,afterall,wit,dependant"
 
 [tool.bandit]
 exclude_dirs = [

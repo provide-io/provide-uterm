@@ -23,6 +23,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import APIRouter, HTTPException
+from fastapi.routing import iter_route_contexts
 
 
 def _request(
@@ -42,15 +43,32 @@ def _request(
     return req
 
 
+def _effective_routes(router: APIRouter) -> list[Any]:
+    """Expand ``router.routes`` into the effective (post-include) routing table.
+
+    FastAPI >= 0.141 no longer flattens ``include_router()`` into the parent's
+    ``.routes`` list — an include shows up as a single ``_IncludedRouter`` entry
+    with no ``.path``.  ``iter_route_contexts`` is the public accessor that
+    expands those (recursively) into one context per effective route, carrying
+    the joined path and merged dependencies.
+
+    This suite deliberately keeps that call inline instead of importing
+    ``tests.helpers.fastapi_routes``: it also runs inside mutmut's ``mutants/``
+    tree, which only receives ``tests/{bridge,server,tunnel}`` (see ``also_copy``
+    in the root ``pyproject.toml``), so ``tests.helpers`` is not importable there.
+    """
+    return list(iter_route_contexts(router.routes))
+
+
 def _endpoint(router: APIRouter, path: str, method: str = "GET") -> Any:
-    for route in router.routes:
+    for route in _effective_routes(router):
         if getattr(route, "path", None) == path and method in getattr(route, "methods", set()):
             return route.endpoint
     raise KeyError(f"{method} {path} not found in router")
 
 
 def _paths(router: APIRouter) -> set[str]:
-    return {getattr(r, "path", None) for r in router.routes}
+    return {getattr(r, "path", None) for r in _effective_routes(router)}
 
 
 _UNSET = object()  # sentinel so callers can pass principal=None explicitly
@@ -1239,7 +1257,11 @@ class TestProfilesRoutes:
 
         api_router = create_api_router()
         profiles_router = APIRouter()
-        profiles_router.routes.extend(route for route in api_router.routes if route.path.startswith("/api/profiles"))
+        profiles_router.routes.extend(
+            route.original_route
+            for route in _effective_routes(api_router)
+            if (route.path or "").startswith("/api/profiles")
+        )
         return profiles_router
 
     def _profile(

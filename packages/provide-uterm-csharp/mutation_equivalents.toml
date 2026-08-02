@@ -319,54 +319,41 @@ discipline, this entry should be revisited."""
 
 [[stryker_equivalent]]
 file = "ServerConfig/Load.cs"
-line = 471
+line = 458
 column = 100
 mutator = "Null coalescing mutation (remove left)"
 reason = """\
 ApplyServer: `s.MaxSessions = ToInt(maxSessions, s.MaxSessions ?? 0)` — the \
 fallback ToInt uses if the TOML value fails to parse as an int. `MaxSessions` \
-is `int?` with no default set anywhere (`Config.cs` declares it bare, and \
-`UtermServerConfig.Default()` never assigns it), and `ApplyServer` is the only \
-writer, called once per `Load()` on a fresh config — so `s.MaxSessions` is \
-provably `null` every time this line runs, making `s.MaxSessions ?? 0` always \
-evaluate to `0`, identically to the mutant's hardcoded `0`. Confirmed by \
-Load_FromToml_BindsMaxSessions using a *parseable* value, which is the only \
-way to observe this line at all — the fallback path itself is unreachable \
-with a different outcome."""
+is `int?` with no default set anywhere (`Config.cs:65` declares it bare, and \
+`UtermServerConfig.Default()` never assigns it), and `ApplyServer` — `private \
+static`, so unreachable from any test — is the only writer, called at most \
+once per `Load()` (TOML forbids a second `[server]` table) on a config that \
+`Load` has just built from `Default()`. So `s.MaxSessions` is provably `null` \
+every time this line runs, making `s.MaxSessions ?? 0` always evaluate to \
+`0`, identically to the mutant's hardcoded `0`. Confirmed empirically as well \
+as analytically: hand-applying the mutant and running the whole Stryker \
+test-case-filter perimeter (336 tests) leaves every test green. If \
+`MaxSessions` ever gains a non-null default, or `ApplyServer` a second \
+caller, this entry must be revisited — a test could then distinguish the two \
+by writing an unparseable `max_sessions` and asserting the prior value \
+survives."""
 
 [[stryker_equivalent]]
 file = "ServerConfig/Load.cs"
-line = 591
+line = 578
 column = 31
 mutator = "Statement mutation"
 reason = """\
-ApplyCfAccessTeamDomain: `if (team.Length == 0) return;`, the *first* of two \
-identical empty-string guards (the second is line 584, after the \
-scheme/slash/suffix strip). Every statement between them (`StartsWith`, \
-`IndexOf`, `EndsWith`, `Trim`) is a pure string query with no side effect on \
-`a`, and none of them can turn an empty `team` into a non-empty one — so if \
-`team` is already "" when line 571 is reached, it is still "" when line 584 \
-re-checks, and line 584 (not mutated by this mutant) returns in its place \
-with an identical outcome. If `team` is non-empty at line 571, the original \
-does not return there either. Either way, removing line 571's return changes \
-nothing any test can observe."""
-
-[[stryker_equivalent]]
-file = "ServerConfig/Load.cs"
-line = 265
-column = 71
-mutator = "Statement mutation"
-reason = """\
-RefuseUnknownNestedKeys: `if (!KnownNestedKeys.TryGetValue(section, out var \
-known)) continue;`. Every top-level key in `KnownTopLevelKeys` that is absent \
-from `KnownNestedKeys` (`environment`, and the seven scalar settings — \
-`session_idle_timeout_s`, `session_retention_s`, `browser_rate_limit_per_sec`, \
-`rest_acquire_rate_limit_per_sec`, `rest_send_rate_limit_per_sec`, \
-`worker_frame_on_invalid`, `max_connections_per_principal`, `max_workers`) is \
-a TOML scalar, never a table. `TablesIn(root, section)` — the only consumer \
-of the loop variable this `continue` skips ahead of — pattern-matches on \
-`TomlTable`/`TomlTableArray` and yields nothing for any other value, so the \
-foreach beneath it already iterates zero times for a scalar section whether \
-or not this `continue` fires. Every currently-known top-level key that maps \
-to a table (`server`, `auth`, …) *is* present in `KnownNestedKeys`, so this \
-branch is never reached for a table-valued section either."""
+ApplyCfAccessTeamDomain: `if (team.Length == 0) return;` on line 578, the \
+*first* of two identical empty-string guards (the second is line 591, after \
+the scheme/slash/suffix strip, and is itself a real mutant that the suite \
+kills). Every statement between them is a pure string query with no side \
+effect on `a`, and none can turn an empty `team` into a non-empty one: on \
+`""`, both `StartsWith` tests are false, `IndexOf('/')` is -1 so the slice \
+never runs, `EndsWith` is false, and `Trim()` is `""`. So if `team` is \
+already `""` at line 578 it is still `""` at line 591, which returns in its \
+place with an identical outcome; and if `team` is non-empty at 578 the \
+original does not return there either. Either way, removing line 578's \
+`return` changes nothing any test can observe — confirmed by hand-applying \
+the mutant and running the full 336-test perimeter green."""

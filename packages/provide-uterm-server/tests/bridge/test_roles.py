@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 
 def _make_app(
-    resolver: Callable[..., str | None | Awaitable[str | None]] | None = None,
+    resolver: Callable[..., str | Awaitable[str | None] | None] | None = None,
 ) -> tuple[FastAPI, TermHub]:
     hub = TermHub(resolve_browser_role=resolver)
     app = FastAPI()

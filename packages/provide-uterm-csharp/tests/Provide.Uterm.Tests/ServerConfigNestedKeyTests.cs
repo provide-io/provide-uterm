@@ -166,6 +166,33 @@ public sealed class ServerConfigNestedKeyTests
         Assert.Contains("kidn", error.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("environment")]
+    [InlineData("max_workers")]
+    [InlineData("worker_frame_on_invalid")]
+    public void AScalarTopLevelSettingWrittenAsATableIsSkipped(string key)
+    {
+        // These are top-level *scalars*: recognised by KnownTopLevelKeys, and
+        // deliberately absent from KnownNestedKeys because they hold a value,
+        // not a table of keys. TOML lets an operator write one as a table
+        // anyway (`[environment]`), and the reference refuses that as a type
+        // error rather than crashing — so the least this port must do is not
+        // fall over.
+        //
+        // RefuseUnknownNestedKeys is where that is decided: its
+        // `if (!KnownNestedKeys.TryGetValue(section, out var known)) continue;`
+        // is the only thing standing between a section with no key set and the
+        // `known.Contains(key)` beneath it. `TryGetValue` leaves `known` null
+        // on a miss, so dropping that `continue` does not merely validate the
+        // section too eagerly — it dereferences null on the first key inside,
+        // turning a harmless mis-typed file into a NullReferenceException out
+        // of ConfigLoader.Load. The table needs a key in it for that to bite,
+        // which is why each case carries one.
+        var cfg = LoadToml($"[{key}]\nsomething = \"value\"");
+
+        Assert.Equal("production", cfg.Environment);
+    }
+
     // -- The drift guard ---------------------------------------------------
 
     /// <summary>

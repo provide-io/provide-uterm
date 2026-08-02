@@ -135,4 +135,29 @@ public class ServerConfigTests
             File.Delete(tmp);
         }
     }
+
+    [Fact]
+    public void Load_FromToml_BindsFanoutAllowUnknownMembers()
+    {
+        // Its own row here, next to the other top-level scalars, even though
+        // ServerFanoutTests already loads this key: that class sits outside the
+        // mutation perimeter's test-case-filter, so the loader's only proof
+        // that `fanout_allow_unknown_members` is spelled correctly in
+        // KnownTopLevelKeys lived somewhere the mutation gate never runs. A
+        // mangled entry there does not silently drop the key — it makes
+        // RefuseUnknownTopLevelKeys reject the whole file, so a server that
+        // configures fanout would refuse to start.
+        var tmp = Path.Combine(Path.GetTempPath(), "uterm-cfg-" + Guid.NewGuid().ToString("N") + ".toml");
+        File.WriteAllText(tmp, "fanout_allow_unknown_members = true\n");
+        try
+        {
+            // False by default, so `true` here cannot pass by accident.
+            Assert.False(UtermServerConfig.Default().FanoutAllowUnknownMembers);
+            Assert.True(ConfigLoader.Load(tmp).FanoutAllowUnknownMembers);
+        }
+        finally
+        {
+            File.Delete(tmp);
+        }
+    }
 }
