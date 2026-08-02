@@ -31,8 +31,10 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import re
 import uuid
+from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -45,6 +47,30 @@ logger = get_logger(__name__)
 
 _DEFAULT_MAX_PATTERN_LENGTH = 512
 _DEFAULT_MAX_MATCH_INPUT_CHARS = 8192
+DEFAULT_MAX_QUEUE_BYTES = 1024 * 1024
+
+
+def _serialized_bytes(item: dict[str, Any] | None) -> int:
+    if item is None:
+        return 0
+    return len(json.dumps(item, ensure_ascii=False, separators=(",", ":"), default=str).encode("utf-8"))
+
+
+class _ByteBoundedQueue(asyncio.Queue[dict[str, Any] | None]):
+    """Async queue that reports the UTF-8 JSON bytes currently retained."""
+
+    def __init__(self, maxsize: int) -> None:
+        super().__init__(maxsize=maxsize)
+        self.queued_bytes = 0
+
+    def _put(self, item: dict[str, Any] | None) -> None:
+        super()._put(item)
+        self.queued_bytes += _serialized_bytes(item)
+
+    def _get(self) -> dict[str, Any] | None:
+        item = super()._get()
+        self.queued_bytes -= _serialized_bytes(item)
+        return item
 
 
 @dataclass
@@ -54,7 +80,19 @@ class _Subscription:
     queue: asyncio.Queue[dict[str, Any] | None]  # None = worker-disconnected sentinel
     event_types: frozenset[str] | None  # None = accept all types
     pattern: re.Pattern[str] | None  # None = no text filter
+    max_queue_bytes: int = DEFAULT_MAX_QUEUE_BYTES
     dropped: int = field(default=0)
+
+    @property
+    def queued_bytes(self) -> int:
+        """UTF-8 JSON bytes currently retained by this subscription."""
+        tracked = getattr(self.queue, "queued_bytes", None)
+        if tracked is not None:
+            return int(tracked)
+        total = 0
+        for item in self.queue._queue:  # type: ignore[attr-defined]
+            total += _serialized_bytes(item)
+        return total
 
 
 class EventBus:
@@ -70,6 +108,8 @@ class EventBus:
         max_queue_depth: Maximum events buffered per subscriber before the oldest
             is dropped to make room for new ones.  Higher values reduce drops for
             slow consumers at the cost of more memory.
+        default_max_queue_bytes: Default UTF-8 JSON byte budget for each
+            subscription. Individual watchers may request a stricter cap.
     """
 
     def __init__(
@@ -77,12 +117,14 @@ class EventBus:
         max_queue_depth: int = 500,
         max_subscribers_per_worker: int = 100,
         *,
+        default_max_queue_bytes: int = DEFAULT_MAX_QUEUE_BYTES,
         max_pattern_length: int = _DEFAULT_MAX_PATTERN_LENGTH,
         max_match_input_chars: int = _DEFAULT_MAX_MATCH_INPUT_CHARS,
         on_metric: Callable[[str, int], None] | None = None,
     ) -> None:
         self._max_queue_depth = max(1, int(max_queue_depth))
         self._max_subscribers_per_worker = max(1, int(max_subscribers_per_worker))
+        self._default_max_queue_bytes = max(1, int(default_max_queue_bytes))
         self._max_pattern_length = max(1, int(max_pattern_length))
         self._max_match_input_chars = max(1, int(max_match_input_chars))
         self._on_metric = on_metric
@@ -119,17 +161,23 @@ class EventBus:
             screen = screen[: self._max_match_input_chars]
             if not sub.pattern.search(screen):
                 return
-        item: dict[str, Any] = {"worker_id": worker_id, **event}
-        try:
-            sub.queue.put_nowait(item)
-        except asyncio.QueueFull:
-            # Ring-buffer semantics: drop oldest, enqueue new.
-            with contextlib.suppress(asyncio.QueueEmpty):  # pragma: no cover — race guard
+        fitted = _fit_item_to_bytes({"worker_id": worker_id, **event}, sub.max_queue_bytes)
+        if fitted is None:
+            self._record_drop(sub)
+            return
+        item, item_bytes = fitted
+        while sub.queue.full() or sub.queued_bytes + item_bytes > sub.max_queue_bytes:
+            try:
                 sub.queue.get_nowait()
-            sub.dropped += 1
-            self._on_metric and self._on_metric("event_bus_subscriber_drop_total", 1)
-            with contextlib.suppress(asyncio.QueueFull):
-                sub.queue.put_nowait(item)
+            except asyncio.QueueEmpty:  # pragma: no cover - defensive race guard
+                break
+            self._record_drop(sub)
+        with contextlib.suppress(asyncio.QueueFull):
+            sub.queue.put_nowait(item)
+
+    def _record_drop(self, sub: _Subscription) -> None:
+        sub.dropped += 1
+        self._on_metric and self._on_metric("event_bus_subscriber_drop_total", 1)
 
     # ------------------------------------------------------------------
     # Worker disconnect — called when a worker WS is torn down
@@ -158,8 +206,7 @@ class EventBus:
         except asyncio.QueueFull:
             with contextlib.suppress(asyncio.QueueEmpty):  # pragma: no cover — race guard
                 sub.queue.get_nowait()
-            sub.dropped += 1
-            self._on_metric and self._on_metric("event_bus_subscriber_drop_total", 1)
+            self._record_drop(sub)
             try:
                 sub.queue.put_nowait(None)
             except asyncio.QueueFull:
@@ -181,6 +228,7 @@ class EventBus:
         *,
         event_types: list[str] | None = None,
         pattern: str | None = None,
+        max_queue_bytes: int | None = None,
     ) -> AsyncIterator[_Subscription]:
         """Context manager that yields a :class:`_Subscription` for *worker_id*.
 
@@ -194,6 +242,9 @@ class EventBus:
             pattern: If given, only ``snapshot`` events whose ``data.screen``
                 matches this regex are delivered.  Pass ``None`` to skip text
                 filtering.
+            max_queue_bytes: Maximum UTF-8 JSON bytes retained by this
+                subscription. Defaults to 1 MiB. When full, oldest events are
+                dropped and oversized terminal text keeps its newest suffix.
 
         Yields:
             A :class:`_Subscription` whose ``queue`` the caller drains with
@@ -209,9 +260,13 @@ class EventBus:
         sub = _Subscription(
             sub_id=uuid.uuid4().hex,
             worker_id=worker_id,
-            queue=asyncio.Queue(maxsize=self._max_queue_depth),
+            queue=_ByteBoundedQueue(maxsize=self._max_queue_depth),
             event_types=frozenset(event_types) if event_types is not None else None,
             pattern=compiled,
+            max_queue_bytes=max(
+                1,
+                int(self._default_max_queue_bytes if max_queue_bytes is None else max_queue_bytes),
+            ),
         )
         self._subs.setdefault(worker_id, []).append(sub)
         try:
@@ -237,6 +292,40 @@ class EventBus:
     def subscriber_count(self, worker_id: str) -> int:
         """Return the number of active subscriptions for *worker_id*."""
         return len(self._subs.get(worker_id, []))
+
+
+def _fit_item_to_bytes(item: dict[str, Any], max_bytes: int) -> tuple[dict[str, Any], int] | None:
+    """Return a bounded copy, preserving the newest useful terminal text."""
+    item_bytes = _serialized_bytes(item)
+    if item_bytes <= max_bytes:
+        return deepcopy(item), item_bytes
+
+    fitted = deepcopy(item)
+    data = fitted.get("data")
+    if not isinstance(data, dict):
+        return None
+    event_type = fitted.get("type")
+    field = "data" if event_type == "term" else "screen" if event_type == "snapshot" else "formatted"
+    text = data.get(field)
+    if not isinstance(text, str):
+        return None
+    if event_type == "snapshot" and "raw_tail" in data:
+        data["raw_tail"] = ""
+
+    encoded = text.encode("utf-8")
+    low = 0
+    high = min(len(encoded), max_bytes)
+    best: tuple[dict[str, Any], int] | None = None
+    while low <= high:
+        keep = (low + high) // 2
+        data[field] = encoded[-keep:].decode("utf-8", errors="ignore") if keep else ""
+        candidate_bytes = _serialized_bytes(fitted)
+        if candidate_bytes <= max_bytes:
+            best = (deepcopy(fitted), candidate_bytes)
+            low = keep + 1
+        else:
+            high = keep - 1
+    return best
 
 
 def _compile_pattern(

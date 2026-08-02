@@ -28,26 +28,45 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from provide.uterm.server.bridge.hub import TermHub
 
+DEFAULT_MAX_OUTPUT_BYTES = 1024 * 1024
+
+
+def _newest_utf8_suffix(text: str, max_bytes: int) -> str:
+    encoded = text.encode("utf-8")
+    if len(encoded) <= max_bytes:
+        return text
+    return encoded[-max_bytes:].decode("utf-8", errors="ignore")
+
 
 class OutputCapture:
     """One explicitly opened EventBus subscription with idempotent cleanup."""
 
-    def __init__(self, hub: TermHub, worker_id: str) -> None:
+    def __init__(self, hub: TermHub, worker_id: str, *, max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES) -> None:
         self._hub = hub
         self._worker_id = worker_id
         self._watch: Any = None
         self._subscription: Any = None
         self._closed = False
+        self._max_output_bytes = max(1, int(max_output_bytes))
+
+    @property
+    def queued_bytes(self) -> int:
+        """UTF-8 JSON bytes waiting in this capture's private subscription."""
+        return int(getattr(self._subscription, "queued_bytes", 0))
 
     async def open(self) -> OutputCapture:
         """Subscribe to authorized raw output before notification or input."""
         open_raw = getattr(self._hub, "_watch_authorized_operation_output", None)
         if open_raw is not None:
-            self._watch = open_raw(self._worker_id)
+            self._watch = open_raw(self._worker_id, max_queue_bytes=self._max_output_bytes)
         elif self._hub.event_bus is not None:
             # Compatibility for narrow test doubles; real TermHub instances
             # always provide the private authorized stream above.
-            self._watch = self._hub.event_bus.watch(self._worker_id, event_types=["term", "snapshot"])
+            self._watch = self._hub.event_bus.watch(
+                self._worker_id,
+                event_types=["term", "snapshot"],
+                max_queue_bytes=self._max_output_bytes,
+            )
         if self._watch is not None:
             self._subscription = await self._watch.__aenter__()
         return self
@@ -65,7 +84,7 @@ class OutputCapture:
 
         quiesce_s = quiesce_ms / 1000.0
         max_s = max_ms / 1000.0
-        term_chunks: list[str] = []
+        term_output = ""
         last_snapshot_screen = ""
         start = started_at if started_at is not None else time.monotonic()
 
@@ -86,15 +105,15 @@ class OutputCapture:
             data = event.get("data") or {}
             if event_type == "term":
                 text = data.get("data", "") if isinstance(data, dict) else ""
-                if text:
-                    term_chunks.append(text)
+                if isinstance(text, str) and text:
+                    term_output = _newest_utf8_suffix(term_output + text, self._max_output_bytes)
             else:
                 screen = data.get("screen", "") if isinstance(data, dict) else ""
-                if screen:
-                    last_snapshot_screen = screen
+                if isinstance(screen, str) and screen:
+                    last_snapshot_screen = _newest_utf8_suffix(screen, self._max_output_bytes)
 
         elapsed_ms = int((time.monotonic() - start) * 1000)
-        return ("".join(term_chunks) if term_chunks else last_snapshot_screen, elapsed_ms)
+        return (term_output if term_output else last_snapshot_screen, elapsed_ms)
 
     async def close(self) -> None:
         """Unsubscribe exactly once; repeated cleanup calls are harmless."""
@@ -125,9 +144,15 @@ class OutputCollector:
     immediately.
     """
 
-    async def open(self, hub: TermHub, worker_id: str) -> OutputCapture:
+    async def open(
+        self,
+        hub: TermHub,
+        worker_id: str,
+        *,
+        max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES,
+    ) -> OutputCapture:
         """Create and open a capture handle for *worker_id*."""
-        return await OutputCapture(hub, worker_id).open()
+        return await OutputCapture(hub, worker_id, max_output_bytes=max_output_bytes).open()
 
     async def collect(
         self,
@@ -136,6 +161,7 @@ class OutputCollector:
         *,
         quiesce_ms: int = 500,
         max_ms: int = 10_000,
+        max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES,
     ) -> tuple[str, int]:
         """Subscribe to EventBus, accumulate term event output.
 
@@ -144,12 +170,14 @@ class OutputCollector:
             worker_id: The worker session to watch.
             quiesce_ms: Milliseconds of silence before returning early.
             max_ms: Hard-cap total collection time in milliseconds.
+            max_output_bytes: Maximum UTF-8 bytes retained in the private
+                subscription and returned output. Newest text is preserved.
 
         Returns:
             A ``(delta_string, elapsed_ms)`` tuple.  *delta_string* contains
             all text received; *elapsed_ms* is the total wall-clock time spent.
         """
-        capture = await self.open(hub, worker_id)
+        capture = await self.open(hub, worker_id, max_output_bytes=max_output_bytes)
         try:
             return await capture.collect(quiesce_ms=quiesce_ms, max_ms=max_ms)
         finally:

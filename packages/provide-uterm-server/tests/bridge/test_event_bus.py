@@ -142,6 +142,42 @@ async def test_queue_overflow_increments_dropped() -> None:
     assert sub.dropped >= 1
 
 
+async def test_subscription_byte_cap_keeps_newest_utf8_suffix() -> None:
+    cap = 256
+    bus = EventBus(max_queue_depth=50)
+    async with bus.watch("w1", max_queue_bytes=cap) as sub:
+        bus._enqueue(
+            "w1",
+            {"seq": 1, "ts": 1.0, "type": "term", "data": {"data": "é" * 2_000 + "NEWEST"}},
+        )
+
+        assert sub.queued_bytes <= cap
+        item = sub.queue.get_nowait()
+
+    assert item is not None
+    assert item["data"]["data"].endswith("NEWEST")
+    assert len(item["data"]["data"].encode("utf-8")) <= cap
+
+
+async def test_subscription_byte_cap_drops_old_events_before_newest() -> None:
+    cap = 300
+    bus = EventBus(max_queue_depth=50)
+    async with bus.watch("w1", max_queue_bytes=cap) as sub:
+        for seq in range(20):
+            bus._enqueue(
+                "w1",
+                {"seq": seq, "ts": 1.0, "type": "term", "data": {"data": f"chunk-{seq}-" + "x" * 40}},
+            )
+
+        assert sub.queued_bytes <= cap
+        items = []
+        while not sub.queue.empty():
+            items.append(sub.queue.get_nowait())
+
+    assert items[-1]["seq"] == 19
+    assert sub.dropped > 0
+
+
 # ---------------------------------------------------------------------------
 # close_worker — sentinel delivery and cleanup
 # ---------------------------------------------------------------------------

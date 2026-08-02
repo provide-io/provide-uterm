@@ -85,6 +85,37 @@ async def test_collector_captures_term_events() -> None:
     assert elapsed_ms >= 0
 
 
+async def test_capture_bounds_multimegabyte_raw_output_by_utf8_bytes() -> None:
+    hub = await _make_hub_with_worker("w1")
+    cap = 64 * 1024
+    capture = await OutputCollector().open(hub, "w1", max_output_bytes=cap)
+    marker = "NEWEST-✅"
+
+    try:
+        await hub.append_event("w1", "term", {"data": "é" * (2 * 1024 * 1024) + marker})
+        assert capture.queued_bytes <= cap
+        delta, _elapsed_ms = await capture.collect(quiesce_ms=1, max_ms=50)
+    finally:
+        await capture.close()
+
+    assert len(delta.encode("utf-8")) <= cap
+    assert delta.endswith(marker)
+    assert "�" not in delta
+
+
+async def test_capture_preserves_exact_unicode_output_below_cap() -> None:
+    hub = await _make_hub_with_worker("w1")
+    capture = await OutputCollector().open(hub, "w1", max_output_bytes=1024)
+
+    try:
+        await hub.append_event("w1", "term", {"data": "Trade → Sector 42 ✅"})
+        delta, _elapsed_ms = await capture.collect(quiesce_ms=1, max_ms=50)
+    finally:
+        await capture.close()
+
+    assert delta == "Trade → Sector 42 ✅"
+
+
 # ---------------------------------------------------------------------------
 # Quiesce — returns early after silence
 # ---------------------------------------------------------------------------
