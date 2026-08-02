@@ -164,6 +164,36 @@ describe("MessageRouter.broadcast", () => {
     expect(browser.sent).toStrictEqual([]);
   });
 
+  it("re-checks currency after the egress fence, not just before it", async () => {
+    // A snapshot that was current when it arrived can be superseded while it
+    // waits its turn behind an earlier one on the egress tail. Checking only
+    // on entry would let it reach browsers after the newer screen already did,
+    // leaving them showing the older one.
+    const browser = new FakeBrowser("browser");
+    const worker = new FakeBrowser("worker");
+    const { state, router } = build([[browser, "viewer"]]);
+    state.workerWs = worker;
+    state.eventSeq = 1;
+    state.lastSnapshot = { type: "snapshot", screen: "current", event_seq: 1 };
+
+    // Hold the fence open so the broadcast parks on its predecessor.
+    let releasePredecessor = () => {};
+    state.snapshotEgressTail = new Promise<void>((resolve) => {
+      releasePredecessor = resolve;
+    });
+
+    const inflight = router.broadcast("w1", { type: "snapshot", screen: "old", event_seq: 1 }, worker, 1);
+
+    // Superseded while parked: a newer snapshot commits behind its back.
+    state.eventSeq = 2;
+    state.lastSnapshot = { type: "snapshot", screen: "newer", event_seq: 2 };
+
+    releasePredecessor();
+    await inflight;
+
+    expect(browser.sent).toStrictEqual([]);
+  });
+
   it("skips browsers still completing their handshake", async () => {
     // A browser mid-startup has not been told what session it is joining, so
     // terminal output arriving first would render before the screen state.
