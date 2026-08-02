@@ -255,6 +255,25 @@ class TestTunnelControlExtra:
         hub.commit_snapshot_event.assert_not_awaited()
         hub.broadcast.assert_not_awaited()
 
+    @pytest.mark.asyncio
+    async def test_snapshot_control_fences_replaced_tunnel_socket(self) -> None:
+        hub = TermHub()
+        worker_id = "test-replaced-snapshot"
+        worker_a = AsyncMock()
+        worker_b = AsyncMock()
+        await hub.register_worker(worker_id, worker_a, is_tunnel_worker=True)
+        await hub.register_worker(worker_id, worker_b, is_tunnel_worker=True)
+        payload = b'{"type":"snapshot","screen":"stale","cols":80,"rows":25}'
+
+        await _handle_control(hub, worker_a, worker_id, payload)
+
+        state = hub.registry.get(worker_id)
+        assert state is not None
+        assert state.worker_ws is worker_b
+        assert state.last_snapshot is None
+        assert state.event_seq == 0
+        assert not state.events
+
 
 class TestTunnelBranchCoverage:
     """Cover remaining branch misses in fastapi_routes.py."""

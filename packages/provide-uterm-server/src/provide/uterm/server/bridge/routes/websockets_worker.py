@@ -153,7 +153,13 @@ def _build_worker_frame(mtype: str, msg: dict[str, Any]) -> dict[str, Any]:
     return cast("dict[str, Any]", coerce_worker_status_frame(msg))
 
 
-async def _dispatch_worker_frame(hub: TermHub, worker_id: str, mtype: str, frame: dict[str, Any]) -> None:
+async def _dispatch_worker_frame(
+    hub: TermHub,
+    worker_id: str,
+    mtype: str,
+    frame: dict[str, Any],
+    expected_worker: WebSocket | None = None,
+) -> None:
     """Run the downstream I/O for a successfully-built worker frame.
 
     Runs OUTSIDE the per-frame builder guard: a failure here (snapshot commit /
@@ -162,8 +168,9 @@ async def _dispatch_worker_frame(hub: TermHub, worker_id: str, mtype: str, frame
     frame" (which would mis-count it and silently swallow a real bug).
     """
     if mtype == "snapshot":
-        committed = await hub.commit_snapshot_event(worker_id, frame)
-        await hub.broadcast(worker_id, committed)
+        committed = await hub.commit_snapshot_event(worker_id, frame, expected_worker=expected_worker)
+        if committed is not None:
+            await hub.broadcast(worker_id, committed)
     elif mtype == "analysis":
         await hub.broadcast(worker_id, frame)
     else:  # mtype == "status"

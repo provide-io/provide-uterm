@@ -81,6 +81,37 @@ class RecordingConnector implements SessionConnector {
   }
 }
 
+class PausedSnapshotConnector extends RecordingConnector {
+  readonly entered: Promise<void>;
+  readonly #markEntered: () => void;
+  readonly #resume: Promise<void>;
+  #release: () => void;
+
+  constructor() {
+    super();
+    let markEntered = () => {};
+    let release = () => {};
+    this.entered = new Promise<void>((resolve) => {
+      markEntered = resolve;
+    });
+    this.#resume = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.#markEntered = markEntered;
+    this.#release = release;
+  }
+
+  resume(): void {
+    this.#release();
+  }
+
+  override async getSnapshot(): Promise<WorkerMessage> {
+    this.#markEntered();
+    await this.#resume;
+    return { type: "snapshot", screen: "worker-a", ts: 1 };
+  }
+}
+
 describe("building the frame a worker's snapshot becomes", () => {
   it("fills in every field a connector left out, as the reference's builder does", () => {
     // `raw_tail` is the tell: no connector sets it, and it is on the wire for
@@ -190,6 +221,29 @@ describe("attaching", () => {
     });
     expect(broadcast).toEqual(current);
     expect(broadcast).not.toBe(current);
+  });
+
+  it("fences a paused snapshot when a replacement worker commits first", async () => {
+    const hub = new SessionHub();
+    const workerA = new PausedSnapshotConnector();
+    const attachA = attachConnector(hub, "w1", workerA, "hijack", { now: () => 1 });
+    await workerA.entered;
+
+    const browser = new RecordingBrowser();
+    await hub.connections.registerBrowser("w1", browser, "viewer", { deferBroadcast: true });
+    hub.connections.activateBrowserBroadcasts("w1", browser);
+
+    await attachConnector(hub, "w1", new RecordingConnector(), "hijack", { now: () => 2 });
+    workerA.resume();
+    await attachA;
+
+    const state = hub.registry.get("w1");
+    expect(state?.lastSnapshot).toMatchObject({ screen: "seed", event_seq: 1 });
+    expect(state?.events.toArray()).toEqual([
+      expect.objectContaining({ seq: 1, data: expect.objectContaining({ screen: "seed", event_seq: 1 }) }),
+    ]);
+    expect(browser.sent).toHaveLength(1);
+    expect(browser.sent[0]).toMatchObject({ screen: "seed", event_seq: 1 });
   });
 });
 

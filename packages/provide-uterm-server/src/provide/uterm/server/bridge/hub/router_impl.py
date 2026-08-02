@@ -205,7 +205,13 @@ class MessageRouter:
             hub._operation_event_bus._enqueue(worker_id, {**evt, "data": raw_payload})
         return evt
 
-    async def commit_snapshot_event(self, worker_id: str, snapshot: dict[str, Any]) -> dict[str, Any]:
+    async def commit_snapshot_event(
+        self,
+        worker_id: str,
+        snapshot: dict[str, Any],
+        *,
+        expected_worker: WebSocket | None = None,
+    ) -> dict[str, Any] | None:
         """Atomically store a raw snapshot and append its correlated redacted event.
 
         Snapshot capture, ring storage, EventBus delivery, and the returned
@@ -220,6 +226,8 @@ class MessageRouter:
         event_payload = {"type": frame_type, **self._redact_event_payload("snapshot", raw_event_payload)}
         async with hub._lock:
             st = hub.registry.get(worker_id)
+            if expected_worker is not None and (st is None or st.worker_ws is not expected_worker):
+                return None
             if st is None:
                 return {**raw_snapshot, "event_seq": 0}
             st.event_seq += 1
