@@ -38,13 +38,13 @@ provide-uterm controls the input path for every managed session. A fan-out primi
 class FanOutGroup:
     group_id: str
     name: str
-    worker_ids: list[str]          # target sessions
-    created_by: str                # principal subject_id
+    worker_ids: list[str]  # target sessions
+    created_by: str  # principal subject_id
     created_at: float
-    mode: str                      # "parallel" | "sequential"
-    stop_on_first_error: bool      # sequential only: halt if a session returns non-zero exit code
-    response_window_ms: int        # how long to collect output after each send (default 2000)
-    divergence_threshold: float    # Levenshtein ratio below which outputs are flagged as divergent (0.0–1.0)
+    mode: str  # "parallel" | "sequential"
+    stop_on_first_error: bool  # sequential only: halt if a session returns non-zero exit code
+    response_window_ms: int  # how long to collect output after each send (default 2000)
+    divergence_threshold: float  # Levenshtein ratio below which outputs are flagged as divergent (0.0–1.0)
 ```
 
 Groups are ephemeral by default (in-memory, discarded on hub restart). A `SqliteFanOutStore` provides persistence.
@@ -64,7 +64,7 @@ Groups are ephemeral by default (in-memory, discarded on hub restart). A `Sqlite
 class FanOutController:
     def __init__(self, hub: TermHub, store: FanOutStore | None = None) -> None: ...
 
-    async def create_group(self, group: FanOutGroup) -> str: ...          # returns group_id
+    async def create_group(self, group: FanOutGroup) -> str: ...  # returns group_id
     async def delete_group(self, group_id: str) -> None: ...
     async def get_group(self, group_id: str) -> FanOutGroup | None: ...
     async def list_groups(self, principal: str) -> list[FanOutGroup]: ...
@@ -87,19 +87,20 @@ class FanOutController:
 @dataclass(slots=True)
 class SessionFanOutResult:
     worker_id: str
-    ok: bool                    # False if worker not connected
-    output_delta: str | None    # output captured after the send
-    divergent: bool             # True if output differs significantly from majority
+    ok: bool  # False if worker not connected
+    output_delta: str | None  # output captured after the send
+    divergent: bool  # True if output differs significantly from majority
+
 
 @dataclass(slots=True)
 class FanOutResult:
     group_id: str
-    send_id: str                # uuid4 per send operation
+    send_id: str  # uuid4 per send operation
     command: str
     sent_at: float
     results: list[SessionFanOutResult]
-    divergent_sessions: list[str]    # worker_ids flagged as divergent
-    failed_sessions: list[str]       # worker_ids where ok=False
+    divergent_sessions: list[str]  # worker_ids flagged as divergent
+    failed_sessions: list[str]  # worker_ids where ok=False
 ```
 
 ### Output Delta Collection

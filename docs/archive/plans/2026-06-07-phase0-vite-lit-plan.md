@@ -97,13 +97,16 @@ Modify `ui.py` to add `_vanilla_manifest` caching, and a new `_read_vanilla_mani
 _vanilla_manifest: dict[str, object] | None = None
 _vanilla_manifest_loaded = False
 
+
 def _read_vanilla_manifest() -> dict[str, object] | None:
     global _vanilla_manifest, _vanilla_manifest_loaded
     if _vanilla_manifest_loaded:
         return _vanilla_manifest
     _vanilla_manifest_loaded = True
     try:
-        manifest_path = importlib.resources.files("provide.uterm.server") / "frontend" / ".vite" / "vanilla-manifest.json"
+        manifest_path = (
+            importlib.resources.files("provide.uterm.server") / "frontend" / ".vite" / "vanilla-manifest.json"
+        )
         if not manifest_path.is_file():
             # Fallback to root dir if vite doesn't use .vite
             manifest_path = importlib.resources.files("provide.uterm.server") / "frontend" / "vanilla-manifest.json"
@@ -114,6 +117,7 @@ def _read_vanilla_manifest() -> dict[str, object] | None:
     except Exception:
         pass
     return _vanilla_manifest
+
 
 def _resolve_vanilla_asset(entry_name: str) -> str:
     manifest = _read_vanilla_manifest()
@@ -130,7 +134,7 @@ def _resolve_vanilla_asset(entry_name: str) -> str:
 Remove `_hijack_js_version()`. Update `session_page_html()`:
 
 ```python
-        pre_vite_modules=(f"{_resolve_vanilla_asset('src/hijack.ts')}",),
+pre_vite_modules = ((f"{_resolve_vanilla_asset('src/hijack.ts')}",),)
 ```
 
 - [ ] **Step 3: Test Python Syntax**

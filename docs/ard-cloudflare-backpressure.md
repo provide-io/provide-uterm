@@ -13,8 +13,10 @@ awaitable). So the existing guard:
 
 ```python
 self._queue_bytes += msg_len
-try:    await self.send_ws(ws, payload)   # resolves on enqueue, not drain
-finally: self._queue_bytes = max(0, self._queue_bytes - msg_len)  # ...immediately
+try:
+    await self.send_ws(ws, payload)  # resolves on enqueue, not drain
+finally:
+    self._queue_bytes = max(0, self._queue_bytes - msg_len)  # ...immediately
 ```
 
 never accumulates across frames — it only ever reflects one in-flight frame, so it

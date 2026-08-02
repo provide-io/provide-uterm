@@ -474,48 +474,58 @@ def _family_decode(rng: random.Random) -> list[dict[str, Any]]:
 _REGRESSIONS: tuple[tuple[str, str, list[str], bool], ...] = (
     (
         "CCF-REG-0001",
-        "A lone trailing DLE flushes the data before it and buffers the DLE; the "
-        "next feed decides whether it was an escape or a frame. Chunked and "
-        "single feeds emit different numbers of data events for this stream.",
+        (
+            "A lone trailing DLE flushes the data before it and buffers the DLE; the "
+            "next feed decides whether it was an escape or a frame. Chunked and "
+            "single feeds emit different numbers of data events for this stream."
+        ),
         ["a" + DLE, DLE + "b"],
         True,
     ),
     (
         "CCF-REG-0002",
-        "Raw DLE/STX bytes inside a control payload are covered by the length "
-        "header and must not be rescanned as framing.",
+        (
+            "Raw DLE/STX bytes inside a control payload are covered by the length "
+            "header and must not be rescanned as framing."
+        ),
         [_raw_frame(f'{{"k":"{DLE}{STX}{DLE}{DLE}"}}') + "tail"],
         True,
     ),
     (
         "CCF-REG-0003",
-        "A frame split at every single code point, with a 3-byte code point in "
-        "the payload: byte-length header vs code-point-indexed buffer walk.",
+        (
+            "A frame split at every single code point, with a 3-byte code point in "
+            "the payload: byte-length header vs code-point-indexed buffer walk."
+        ),
         list(encode_control_frame({"k0": "你好"})),
         True,
     ),
     (
         "CCF-REG-0004",
-        "Found by explore_control_channel_fuzz.py. Data that precedes a frame "
-        "the decoder later rejects is DELIVERED when the feed is split (an "
-        "earlier feed() already returned it) and DISCARDED when the whole "
-        "stream arrives at once (the raise throws away the events built so "
-        "far). Same bytes, same error, different delivery.",
+        (
+            "Found by explore_control_channel_fuzz.py. Data that precedes a frame "
+            "the decoder later rejects is DELIVERED when the feed is split (an "
+            "earlier feed() already returned it) and DISCARDED when the whole "
+            "stream arrives at once (the raise throws away the events built so "
+            "far). Same bytes, same error, different delivery."
+        ),
         ["ab" + DLE + STX + "0000000c:" + '{"k"', ":1}xxxxx"],
         True,
     ),
     (
         "CCF-REG-0005",
-        "Found by the C# port replaying this corpus. A length header with the "
-        "high bit set is an unsigned wire value; a port that accumulates it "
-        "into a signed 32-bit integer wraps negative, its payload-size guard "
-        "then never fires, and the negative length reaches an index or a slice "
-        "— C# threw IndexOutOfRangeException where the reference reports "
-        "'control payload too large'. Thirteen bytes from a peer, and the "
-        "exception type is one no caller catches. The corpus missed it because "
-        "every high-bit header it generated was followed by a separator other "
-        "than ':', so the header was rejected as malformed before its length "
-        "was ever parsed: a length is only load-bearing when ':' follows it.",
+        (
+            "Found by the C# port replaying this corpus. A length header with the "
+            "high bit set is an unsigned wire value; a port that accumulates it "
+            "into a signed 32-bit integer wraps negative, its payload-size guard "
+            "then never fires, and the negative length reaches an index or a slice "
+            "— C# threw IndexOutOfRangeException where the reference reports "
+            "'control payload too large'. Thirteen bytes from a peer, and the "
+            "exception type is one no caller catches. The corpus missed it because "
+            "every high-bit header it generated was followed by a separator other "
+            "than ':', so the header was rejected as malformed before its length "
+            "was ever parsed: a length is only load-bearing when ':' follows it."
+        ),
         [DLE + STX + "80000000:" + '{"k":1}'],
         True,
     ),

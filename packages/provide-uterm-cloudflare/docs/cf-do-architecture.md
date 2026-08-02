@@ -151,11 +151,12 @@ reads the socket's serialized attachment to determine the role.
 
 ```python
 # WRONG (breaks after hibernation):
-if ws is self.worker_ws: ...
+if ws is self.worker_ws:
+    ...
 
 # CORRECT:
-role = self._socket_role(ws)   # reads deserializeAttachment()
-wid  = self._socket_worker_id(ws)
+role = self._socket_role(ws)  # reads deserializeAttachment()
+wid = self._socket_worker_id(ws)
 ```
 
 ### `webSocketError(ws, error)` — transport error

@@ -64,13 +64,13 @@ Implementations: `InMemoryRecordingStore` (tests), `FileRecordingStore` (JSONL o
 ```python
 @dataclass(slots=True)
 class RecordingEvent:
-    seq: int               # monotonic per-session sequence number
-    ts: float              # wall-clock time.time()
-    kind: str              # "input" | "output" | "connect" | "disconnect" | "hijack" | "meta"
+    seq: int  # monotonic per-session sequence number
+    ts: float  # wall-clock time.time()
+    kind: str  # "input" | "output" | "connect" | "disconnect" | "hijack" | "meta"
     principal: str | None  # subject_id from Principal, None for worker output
-    role: str | None       # "viewer" | "operator" | "admin" | "worker"
-    data: str              # raw bytes (base64) or structured JSON for meta events
-    hmac: str              # HMAC-SHA256(seq|ts|kind|data, signing_key) for tamper evidence
+    role: str | None  # "viewer" | "operator" | "admin" | "worker"
+    data: str  # raw bytes (base64) or structured JSON for meta events
+    hmac: str  # HMAC-SHA256(seq|ts|kind|data, signing_key) for tamper evidence
 ```
 
 > **As-built (2026-06):** recording events are plain dicts shaped

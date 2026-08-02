@@ -61,18 +61,24 @@ async def main() -> None:
             "",
             "=== provide-uterm: session recording active ===\n",
             "=== provide-uterm: session recording active ===\n[deploy] step 1: pulling config\n",
-            "=== provide-uterm: session recording active ===\n"
-            "[deploy] step 1: pulling config\n"
-            "[deploy] step 2: running migrations\n",
-            "=== provide-uterm: session recording active ===\n"
-            "[deploy] step 1: pulling config\n"
-            "[deploy] step 2: running migrations\n"
-            "[deploy] step 3: restarting services\n",
-            "=== provide-uterm: session recording active ===\n"
-            "[deploy] step 1: pulling config\n"
-            "[deploy] step 2: running migrations\n"
-            "[deploy] step 3: restarting services\n"
-            "[deploy] healthcheck: ok — recording complete\n",
+            (
+                "=== provide-uterm: session recording active ===\n"
+                "[deploy] step 1: pulling config\n"
+                "[deploy] step 2: running migrations\n"
+            ),
+            (
+                "=== provide-uterm: session recording active ===\n"
+                "[deploy] step 1: pulling config\n"
+                "[deploy] step 2: running migrations\n"
+                "[deploy] step 3: restarting services\n"
+            ),
+            (
+                "=== provide-uterm: session recording active ===\n"
+                "[deploy] step 1: pulling config\n"
+                "[deploy] step 2: running migrations\n"
+                "[deploy] step 3: restarting services\n"
+                "[deploy] healthcheck: ok — recording complete\n"
+            ),
         ]
 
         for i, screen in enumerate(screens):
