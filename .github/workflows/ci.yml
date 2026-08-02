@@ -134,6 +134,9 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        with:
+          # The mutation gate is changed-only and diffs against the push base.
+          fetch-depth: 0
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9  # v4.3.1
         with:
           dotnet-version: "10.0.x"
@@ -154,13 +157,19 @@ jobs:
           CI: "true"
         run: make quality-gate
       # Mutation perimeter (Policy/DeckMux/Sgr/Filters) — proves the gate scripts
-      # on Windows paths + python launcher, not only Ubuntu.
-      - name: C# mutation gate (Windows)
+      # on Windows paths + python launcher, not only Ubuntu. Changed-only, same
+      # as the Ubuntu csharp-mutation-gate job: a full run tests ~630 mutants and
+      # does not finish inside this job's budget on a Windows runner, so it was
+      # killed at the limit every time (Stryker exiting 0xC000013A,
+      # STATUS_CONTROL_C_EXIT, which the gate correctly reports as a tool
+      # failure rather than a mutation result).
+      - name: C# mutation gate (Windows, changed-only)
         working-directory: packages/provide-uterm-csharp
         env:
           PYTHON: python
           CI: "true"
-        run: make mutation-gate
+          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+        run: ci/prepare_stryker_args.sh
 
   go-quality:
     runs-on: ubuntu-latest
