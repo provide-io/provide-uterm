@@ -51,7 +51,7 @@ re-export shim for ``_REST_CLIENT_CACHE_MAX``,
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, overload, runtime_checkable
 
 from provide.uterm.server.bridge.hub.core import (
     BrowserRoleResolutionError,
@@ -151,6 +151,22 @@ class TermHubProtocol(Protocol):
     async def append_event(
         self, worker_id: str, event_type: str, data: dict[str, Any] | None = ...
     ) -> dict[str, Any]: ...
+    @overload
+    async def commit_snapshot_event(
+        self,
+        worker_id: str,
+        snapshot: dict[str, Any],
+    ) -> dict[str, Any]: ...
+
+    @overload
+    async def commit_snapshot_event(
+        self,
+        worker_id: str,
+        snapshot: dict[str, Any],
+        *,
+        expected_worker: WebSocket,
+    ) -> dict[str, Any] | None: ...
+
     async def commit_snapshot_event(
         self,
         worker_id: str,

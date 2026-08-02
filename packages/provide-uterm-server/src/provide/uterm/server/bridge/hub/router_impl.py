@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import time
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, overload
 
 from provide.telemetry import get_logger
 from provide.uterm.server.bridge.frames import make_hijack_state_frame
@@ -204,6 +204,22 @@ class MessageRouter:
         if hub._operation_event_bus is not None:
             hub._operation_event_bus._enqueue(worker_id, {**evt, "data": raw_payload})
         return evt
+
+    @overload
+    async def commit_snapshot_event(
+        self,
+        worker_id: str,
+        snapshot: dict[str, Any],
+    ) -> dict[str, Any]: ...
+
+    @overload
+    async def commit_snapshot_event(
+        self,
+        worker_id: str,
+        snapshot: dict[str, Any],
+        *,
+        expected_worker: WebSocket,
+    ) -> dict[str, Any] | None: ...
 
     async def commit_snapshot_event(
         self,
