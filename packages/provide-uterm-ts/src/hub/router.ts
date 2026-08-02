@@ -173,11 +173,7 @@ export class MessageRouter {
 
   /** Whether a snapshot still belongs to the current worker generation and sequence. */
   #isCurrentSnapshot(state: WorkerTermState, worker: WorkerSocket, eventSeq: number): boolean {
-    return (
-      state.workerWs === worker &&
-      state.eventSeq === eventSeq &&
-      state.lastSnapshot?.event_seq === eventSeq
-    );
+    return state.workerWs === worker && state.lastSnapshot?.event_seq === eventSeq;
   }
 
   /** Send to one already-resolved worker state. */

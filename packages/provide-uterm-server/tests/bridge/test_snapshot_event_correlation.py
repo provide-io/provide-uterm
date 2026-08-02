@@ -189,6 +189,84 @@ async def test_replaced_worker_cannot_broadcast_a_snapshot_paused_after_commit()
 
 
 @pytest.mark.asyncio
+async def test_unrelated_event_does_not_suppress_snapshot_paused_after_commit() -> None:
+    hub = TermHub()
+    worker_id = "bot1"
+    worker = AsyncMock()
+    browser = AsyncMock()
+    await hub.register_worker(worker_id, worker)
+    hub.registry._workers[worker_id].browsers[browser] = "viewer"
+
+    entered = asyncio.Event()
+    resume = asyncio.Event()
+    original_broadcast = hub.broadcast
+
+    async def paused_broadcast(
+        requested_worker_id: str,
+        frame: dict[str, Any],
+        **kwargs: Any,
+    ) -> None:
+        entered.set()
+        await resume.wait()
+        await original_broadcast(requested_worker_id, frame, **kwargs)
+
+    hub.broadcast = paused_broadcast  # type: ignore[method-assign]
+    snapshot_task = asyncio.create_task(
+        _dispatch_worker_frame(hub, worker_id, "snapshot", _snapshot(screen="current"), worker)
+    )
+    await entered.wait()
+
+    unrelated = await hub.append_event(worker_id, "hijack_heartbeat", {"owner": "operator"})
+    resume.set()
+    await snapshot_task
+
+    state = hub.registry._workers[worker_id]
+    assert unrelated["seq"] == 2
+    assert state.event_seq == 2
+    assert state.last_snapshot is not None
+    assert state.last_snapshot["event_seq"] == 1
+    assert [(frame["screen"], frame["event_seq"]) for frame in _snapshot_frames(browser)] == [("current", 1)]
+
+
+@pytest.mark.asyncio
+async def test_newer_snapshot_suppresses_old_snapshot_for_same_worker() -> None:
+    hub = TermHub()
+    worker_id = "bot1"
+    worker = AsyncMock()
+    browser = AsyncMock()
+    await hub.register_worker(worker_id, worker)
+    hub.registry._workers[worker_id].browsers[browser] = "viewer"
+
+    old = await hub.commit_snapshot_event(worker_id, _snapshot(screen="old"), expected_worker=worker)
+    current = await hub.commit_snapshot_event(worker_id, _snapshot(screen="current"), expected_worker=worker)
+    assert old is not None
+    assert current is not None
+
+    await hub.broadcast(worker_id, old, expected_worker=worker, expected_event_seq=old["event_seq"])
+    await hub.broadcast(worker_id, current, expected_worker=worker, expected_event_seq=current["event_seq"])
+
+    assert [(frame["screen"], frame["event_seq"]) for frame in _snapshot_frames(browser)] == [("current", 2)]
+
+
+@pytest.mark.asyncio
+async def test_worker_replacement_suppresses_old_snapshot_without_newer_commit() -> None:
+    hub = TermHub()
+    worker_id = "bot1"
+    worker_a = AsyncMock()
+    worker_b = AsyncMock()
+    browser = AsyncMock()
+    await hub.register_worker(worker_id, worker_a)
+    hub.registry._workers[worker_id].browsers[browser] = "viewer"
+
+    old = await hub.commit_snapshot_event(worker_id, _snapshot(screen="old"), expected_worker=worker_a)
+    assert old is not None
+    await hub.register_worker(worker_id, worker_b)
+    await hub.broadcast(worker_id, old, expected_worker=worker_a, expected_event_seq=old["event_seq"])
+
+    assert _snapshot_frames(browser) == []
+
+
+@pytest.mark.asyncio
 async def test_snapshot_commit_owns_input_return_bus_and_reader_copies() -> None:
     event_bus = EventBus()
     hub = TermHub(event_bus=event_bus)
