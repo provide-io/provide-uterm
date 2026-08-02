@@ -7,9 +7,12 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import AsyncExitStack
+from typing import Any
 
 import pytest
 
+from provide.uterm.server.bridge.hub import event_bus as event_bus_module
 from provide.uterm.server.bridge.hub.event_bus import EventBus, _compile_pattern
 
 # ---------------------------------------------------------------------------
@@ -56,6 +59,80 @@ async def test_multiple_subscribers_all_receive() -> None:
         item2 = await asyncio.wait_for(sub2.queue.get(), timeout=1.0)
     assert item1["seq"] == 1
     assert item2["seq"] == 1
+
+
+async def test_fitting_cost_scales_with_distinct_byte_caps_not_subscribers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bus = EventBus(max_queue_depth=10, max_subscribers_per_worker=100)
+    event: dict[str, Any] = {
+        "seq": 1,
+        "ts": 1.0,
+        "type": "term",
+        "data": {"data": "é" * 2_000 + "NEWEST"},
+    }
+    fit_calls = 0
+    serializer_calls = 0
+    original_fit = event_bus_module._fit_item_to_bytes
+    original_serialize = event_bus_module._serialized_bytes
+
+    def counted_fit(item: dict[str, Any], max_bytes: int) -> tuple[dict[str, Any], int] | None:
+        nonlocal fit_calls
+        fit_calls += 1
+        return original_fit(item, max_bytes)
+
+    def counted_serialize(item: dict[str, Any] | None) -> int:
+        nonlocal serializer_calls
+        serializer_calls += 1
+        return original_serialize(item)
+
+    monkeypatch.setattr(event_bus_module, "_fit_item_to_bytes", counted_fit)
+    monkeypatch.setattr(event_bus_module, "_serialized_bytes", counted_serialize)
+
+    async with AsyncExitStack() as stack:
+        caps = [256 if index % 2 == 0 else 512 for index in range(100)]
+        subscriptions = [await stack.enter_async_context(bus.watch("w1", max_queue_bytes=cap)) for cap in caps]
+        bus._enqueue("w1", event)
+
+        assert fit_calls == len(set(caps))
+        assert serializer_calls <= 30
+        assert all(sub.queue.qsize() == 1 for sub in subscriptions)
+
+
+async def test_cached_fits_preserve_caps_suffix_and_subscriber_isolation() -> None:
+    bus = EventBus(max_queue_depth=10)
+    event: dict[str, Any] = {
+        "seq": 1,
+        "ts": 1.0,
+        "type": "term",
+        "data": {"data": "é" * 2_000 + "NEWEST"},
+    }
+
+    async with (
+        bus.watch("w1", max_queue_bytes=256) as small_a,
+        bus.watch("w1", max_queue_bytes=256) as small_b,
+        bus.watch("w1", max_queue_bytes=512) as large,
+    ):
+        bus._enqueue("w1", event)
+        small_a_item = small_a.queue.get_nowait()
+        small_b_item = small_b.queue.get_nowait()
+        large_item = large.queue.get_nowait()
+
+    assert small_a_item is not None
+    assert small_b_item is not None
+    assert large_item is not None
+    assert event_bus_module._serialized_bytes(small_a_item) <= 256
+    assert event_bus_module._serialized_bytes(small_b_item) <= 256
+    assert event_bus_module._serialized_bytes(large_item) <= 512
+    assert small_a_item["data"]["data"].endswith("NEWEST")
+    assert small_b_item["data"]["data"].endswith("NEWEST")
+    assert large_item["data"]["data"].endswith("NEWEST")
+    assert len(large_item["data"]["data"].encode("utf-8")) > len(small_a_item["data"]["data"].encode("utf-8"))
+
+    small_a_item["data"]["data"] = "mutated"
+    assert small_b_item["data"]["data"].endswith("NEWEST")
+    assert large_item["data"]["data"].endswith("NEWEST")
+    assert event["data"]["data"].endswith("NEWEST")
 
 
 # ---------------------------------------------------------------------------
