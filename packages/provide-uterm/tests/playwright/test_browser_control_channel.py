@@ -33,6 +33,8 @@ from starlette.staticfiles import StaticFiles
 
 from provide.uterm.control_channel import encode_control_frame
 
+from .backend_server import stop_uvicorn_thread
+
 # Frontend-only harness: always runs (independent of UTERM_TEST_BACKEND).
 # Exercises ProvideTerminal control-frame stripping used by every language server.
 
@@ -131,8 +133,7 @@ def terminal_decoder_server() -> Generator[str, None, None]:
 
     yield f"http://127.0.0.1:{port}"
 
-    server.should_exit = True
-    thread.join(timeout=5)
+    stop_uvicorn_thread(server, thread)
 
 
 def _xterm_text(page: Page) -> str:

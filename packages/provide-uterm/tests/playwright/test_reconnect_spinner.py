@@ -39,6 +39,7 @@ from playwright.sync_api import Page
 
 from provide.uterm.server.bridge.hub import TermHub
 
+from .backend_server import stop_uvicorn_thread
 from .ui_routes import install_multi_backend_routes, multi_backend_env, spinner_mock_page_html
 
 if TYPE_CHECKING:
@@ -101,8 +102,7 @@ def spinner_server() -> Generator[tuple[str, TermHub | None], None, None]:
     port: int = server.servers[0].sockets[0].getsockname()[1]
     yield f"http://127.0.0.1:{port}", hub
 
-    server.should_exit = True
-    thread.join(timeout=5)
+    stop_uvicorn_thread(server, thread)
 
 
 # ---------------------------------------------------------------------------
