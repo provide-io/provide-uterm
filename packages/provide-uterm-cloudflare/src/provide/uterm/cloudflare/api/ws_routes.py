@@ -230,7 +230,12 @@ async def _handle_hijack_control(runtime: RuntimeProtocol, ws: CFWebSocket, fram
         elif active is None or runtime.browser_hijack_owner.get(ws_id) != active.hijack_id:
             refusal = "not_owner"
         elif frame_type == "hijack_step":
-            if not await runtime.push_worker_control("step", owner=active.owner, lease_s=0):
+            # pragma: no branch — the false arm leaves the `async with
+            # input_delivery_guard()` opened above, and coverage.py records that
+            # __aexit__ arc as partial only on 3.11; the identical test selection
+            # reports it covered on 3.12/3.13/3.14. Same quirk already pragma'd
+            # in do/session_runtime/io.py and the server's router_broadcast.py.
+            if not await runtime.push_worker_control("step", owner=active.owner, lease_s=0):  # pragma: no branch
                 refusal = "no_worker"
         else:
             result = runtime.hijack.release(active.hijack_id)

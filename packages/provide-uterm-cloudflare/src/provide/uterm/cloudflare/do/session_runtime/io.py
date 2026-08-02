@@ -593,7 +593,13 @@ class _SessionRuntimeIoMixin:
         expired = False
         async with self.input_delivery_guard():
             session = self.hijack._session
-            if session is not None and session.lease_expires_at <= mono_now:
+            # pragma: no branch — the false arm leaves the `async with` block, and
+            # coverage.py records that __aexit__ arc as partial only on 3.11; the
+            # identical test selection reports it covered on 3.12/3.13/3.14. Both
+            # arms are exercised (test_alarm_noop_when_no_session and
+            # test_alarm_reschedules_when_lease_still_valid drive it false). Same
+            # quirk already pragma'd in the server's router_broadcast.py.
+            if session is not None and session.lease_expires_at <= mono_now:  # pragma: no branch
                 logger.info("alarm: auto-releasing expired lease owner=%s", session.owner)
                 self.hijack.release(session.hijack_id)
                 self.clear_lease()
