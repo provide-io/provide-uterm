@@ -127,8 +127,13 @@ RUN mkdir -p /opt/wrangler \
 # and an npm `overrides` entry cannot reach npm's *bundled* tree, so each one has
 # to be replaced in place. All three replacements are semver-compatible patches:
 #   undici           6.26.0 -> 6.27.0   CVE-2026-12151 HIGH     unbounded memory
-#   brace-expansion  5.0.6  -> 5.0.8    CVE-2026-13149 HIGH     exponential-time
+#   brace-expansion  5.0.6  -> 5.0.9    CVE-2026-13149 HIGH     exponential-time
 #                                       CVE-2026-14257 HIGH     (needs >= 5.0.8)
+#                                       CVE-2026-69152 HIGH     unbounded arrays
+#                                       (needs >= 5.0.9; this one landed after
+#                                       the 5.0.8 pin, with no commit of ours in
+#                                       between — Trivy's database updates daily,
+#                                       so a pinned image goes red on its own)
 #   tar              7.5.16 -> 7.5.19   CVE-2026-59873 CRITICAL gzip-bomb DoS
 #                                       CVE-2026-59874 HIGH     malformed header
 # Every tarball is fetched BEFORE anything is replaced: `npm pack` itself runs on
@@ -139,7 +144,7 @@ RUN mkdir -p /opt/wrangler \
 RUN set -e \
     && NM=/usr/local/lib/node_modules/npm/node_modules \
     && t="$(mktemp -d)" && cd "$t" \
-    && npm pack undici@6.27.0 brace-expansion@5.0.8 tar@7.5.19 >/dev/null \
+    && npm pack undici@6.27.0 brace-expansion@5.0.9 tar@7.5.19 >/dev/null \
     && for pkg in undici brace-expansion tar; do \
          mkdir -p "unpack-$pkg" \
          && tar xzf "$pkg"-*.tgz -C "unpack-$pkg" \
