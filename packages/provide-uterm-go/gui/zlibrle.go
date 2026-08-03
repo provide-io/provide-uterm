@@ -8,7 +8,7 @@
 // run-length strategy: CPython's `zlib.compressobj(9, DEFLATED, 15, 8, Z_RLE)`,
 // node's `deflateSync(raw, {level: 9, strategy: Z_RLE})`, and .NET's
 // `ZLibStream` with `ZLibCompressionStrategy.RunLengthEncoding`. Go's
-// compress/flate exposes no strategy and picks its own trees, so it cannot be
+// compress/flate exposes no strategy and picks its own trees, so it cannot be // codespell:ignore flate
 // asked for the same stream — which is why this file exists.
 //
 // It is a port of the parts of zlib 1.3 that stream touches: `deflate_rle`

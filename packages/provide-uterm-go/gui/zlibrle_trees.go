@@ -4,7 +4,7 @@
 package gui
 
 // Tree construction and block emission, ported from zlib's trees.c. See
-// zlibrle.go for why this is a port rather than a call into compress/flate.
+// zlibrle.go for why this is a port rather than a call into compress/flate. // codespell:ignore flate
 
 type symbol struct {
 	dist   uint16 // 0 for a literal

@@ -428,6 +428,14 @@ jobs:
 
   mutation-gate:
     runs-on: ubuntu-latest
+    # Without this the job inherits GitHub's 6-hour platform cap, and a run that
+    # widens to the full perimeter burns all of it before reporting anything —
+    # which is exactly what happened when a commit touched root pyproject.toml
+    # (a mutation support file) with no perimeter source change, forcing the
+    # un-chunked full run the changed-only path exists to avoid. A changed-only
+    # run is minutes; anything approaching this budget is the runaway, and
+    # failing at 90 minutes says so while the evidence is still readable.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
         with:
