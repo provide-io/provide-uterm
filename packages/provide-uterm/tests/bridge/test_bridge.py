@@ -14,8 +14,6 @@ from unittest.mock import MagicMock
 
 from provide.uterm.server.bridge.worker_link import TermBridge, _to_ws_url
 
-from .control_channel_helpers import decode_control_payload
-
 
 class TestToWsUrl:
     def test_http_to_ws(self) -> None:
@@ -258,11 +256,9 @@ class TestSendSnapshot:
         bot = MockBot(session)
         bridge = TermBridge(bot, "bot1", "http://localhost:8000")
 
-        ws = MockWS()
-        await bridge._send_snapshot(ws)
+        await bridge._send_snapshot()
 
-        assert len(ws.sent) == 1
-        payload = decode_control_payload(ws.sent[0])
+        payload = bridge._send_q.get_nowait()
         assert payload["type"] == "snapshot"
         assert payload["screen"] == "test"
 
@@ -270,10 +266,9 @@ class TestSendSnapshot:
         bot = MockBot(session=None)
         bridge = TermBridge(bot, "bot1", "http://localhost:8000")
 
-        ws = MockWS()
-        await bridge._send_snapshot(ws)
+        await bridge._send_snapshot()
 
-        assert len(ws.sent) == 0
+        assert bridge._send_q.empty()
 
     async def test_send_snapshot_emulator_wins_over_cached(self) -> None:
         """Live emulator snapshot takes priority over _latest_snapshot."""
@@ -282,10 +277,9 @@ class TestSendSnapshot:
         bridge = TermBridge(bot, "bot1", "http://localhost:8000")
         bridge._latest_snapshot = {"screen": "cached screen", "cols": 80, "rows": 25}
 
-        ws = MockWS()
-        await bridge._send_snapshot(ws)
+        await bridge._send_snapshot()
 
-        payload = decode_control_payload(ws.sent[0])
+        payload = bridge._send_q.get_nowait()
         assert payload["screen"] == "test"
 
     async def test_send_snapshot_uses_latest_snapshot_when_no_emulator(self) -> None:
@@ -296,10 +290,9 @@ class TestSendSnapshot:
         bridge = TermBridge(bot, "bot1", "http://localhost:8000")
         bridge._latest_snapshot = {"screen": "cached screen", "cols": 80, "rows": 25}
 
-        ws = MockWS()
-        await bridge._send_snapshot(ws)
+        await bridge._send_snapshot()
 
-        payload = decode_control_payload(ws.sent[0])
+        payload = bridge._send_q.get_nowait()
         assert payload["screen"] == "cached screen"
 
 
