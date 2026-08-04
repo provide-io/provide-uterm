@@ -56,7 +56,7 @@ __all__ = [
 
 async def spawn_agent(self: AgentProcessManager, config_path: str, agent_id: str) -> str:
     self.note_agent_id(agent_id)
-    if len(self.manager.agents) >= self.manager.max_agents:
+    if agent_id not in self.manager.agents and len(self.manager.agents) >= self.manager.max_agents:
         raise RuntimeError(f"Max agents ({self.manager.max_agents}) reached")
     if not Path(config_path).exists():
         raise RuntimeError(f"Config not found: {config_path}")

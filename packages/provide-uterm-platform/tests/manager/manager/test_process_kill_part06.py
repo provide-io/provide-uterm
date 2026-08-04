@@ -95,6 +95,23 @@ class TestSpawnAgentKills:
             await pm.spawn_agent(cfg, "agent_001")
 
     @pytest.mark.asyncio
+    async def test_same_agent_id_can_respawn_at_capacity(self, pm, manager, tmp_path):
+        """Replacing a stopped agent must not consume a second capacity slot."""
+        from provide.uterm.manager.models import AgentStatusBase
+
+        manager.max_agents = 1
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="completed")
+        manager.broadcast_status = AsyncMock()
+        cfg = self._cfg(tmp_path)
+
+        with patch.object(pm, "_spawn_process", return_value=make_mock_proc()):
+            result = await pm.spawn_agent(cfg, "agent_000")
+
+        assert result == "agent_000"
+        assert len(manager.agents) == 1
+        assert manager.agents["agent_000"].state == "running"
+
+    @pytest.mark.asyncio
     async def test_max_agents_error_message_preserved(self, pm, manager, tmp_path):
         """m3: RuntimeError(None) -> message becomes 'None'."""
         from provide.uterm.manager.models import AgentStatusBase
