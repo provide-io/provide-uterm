@@ -483,6 +483,12 @@ jobs:
           python-version: "3.11"
       # Run gremlins over the perimeter; fails on any unexcused survivor,
       # NOT_COVERED, or TIMED_OUT mutant. gremlins is fetched via `go run`.
+      # The gate carries its own 900s budget, deliberately below the 20 minutes
+      # above: a slow runner scales every mutant's derived timeout at once, and
+      # on 2026-08-03 that took a normally-5-minute run past this limit, where
+      # it was killed without reporting which package it was in. The gate now
+      # fails first and names it; this timeout is the backstop, not the
+      # mechanism. test_go_mutation_gate_budget.py asserts the two stay ordered.
       - run: make -C packages/provide-uterm-go mutation-gate
 
   # C# mutation gate: Policy + DeckMux + Colors/Sgr perimeter (local make target).

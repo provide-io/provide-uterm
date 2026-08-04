@@ -50,6 +50,7 @@ import re
 import subprocess  # nosec
 import sys
 import tempfile
+import time
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -113,6 +114,20 @@ GREMLINS = "github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0"
 # slow runner surfaces loudly rather than silently.
 DEFAULT_COEFFICIENT = 100
 
+# Wall-clock budgets. gremlins derives each mutant's timeout from the baseline
+# test time, so a slow runner scales every mutant's leash at once — the gate
+# does not get slower in one visible place, it gets slower everywhere. On
+# 2026-08-03 that took a job whose four previous runs took five minutes to
+# past twenty, where GitHub killed it; because each package's line is printed
+# only after that package finishes, the run died having said nothing at all
+# about where it was.
+#
+# These exist so the gate loses that race deliberately: it fails first, naming
+# the package it was in. The job's own timeout-minutes stays the backstop, not
+# the mechanism.
+DEFAULT_PACKAGE_TIMEOUT_S = 300
+DEFAULT_BUDGET_S = 900
+
 MODULE_ROOT = Path(__file__).resolve().parent.parent
 ALLOWLIST_FILE = MODULE_ROOT / "mutation_equivalents.toml"
 
@@ -153,11 +168,48 @@ def exclude_file_args(package: str, only_files: tuple[str, ...]) -> list[str]:
     return args
 
 
-def run_gremlins(package: str, coefficient: int, only_files: tuple[str, ...] = ()) -> dict:
+def _decoded(stream: bytes | str | None) -> str:
+    """Captured output as text, whatever form the kill left it in."""
+    if stream is None:
+        return ""
+    if isinstance(stream, bytes):
+        return stream.decode("utf-8", errors="replace")
+    return stream
+
+
+def remaining_budget(budget_s: float, started_at: float, now: float) -> float:
+    """Seconds left of the overall budget, never negative."""
+    return max(0.0, budget_s - (now - started_at))
+
+
+def package_timeout(package_timeout_s: float, budget_left: float) -> float:
+    """How long one package may take: its own cap, or what is left of the budget.
+
+    Whichever is smaller. A package allowed to run past the overall budget would
+    hand the kill back to the job's timeout, which is the silent failure this
+    replaces.
+    """
+    return min(package_timeout_s, budget_left)
+
+
+class GateTimeoutError(RuntimeError):
+    """A package, or the whole gate, ran past its wall-clock budget."""
+
+
+def run_gremlins(
+    package: str,
+    coefficient: int,
+    only_files: tuple[str, ...] = (),
+    timeout_s: float = DEFAULT_PACKAGE_TIMEOUT_S,
+) -> dict:
     """Run `gremlins unleash` on one package and return its parsed JSON report.
 
     only_files, when non-empty, narrows mutation to just those files via
     --exclude-files (everything else in the package directory is excluded).
+
+    timeout_s bounds the run. Without it a package that stops making progress
+    takes the whole job down with it and reports nothing, because gremlins'
+    output is captured and only surfaces once the run returns.
     """
     with tempfile.NamedTemporaryFile("r", suffix=".json", delete=False) as tmp:
         out_path = Path(tmp.name)
@@ -174,9 +226,23 @@ def run_gremlins(package: str, coefficient: int, only_files: tuple[str, ...] = (
             str(out_path),
             f"./{package}/",
         ]
-        proc = subprocess.run(  # nosec
-            cmd, cwd=MODULE_ROOT, capture_output=True, text=True, check=False
-        )
+        try:
+            proc = subprocess.run(  # nosec
+                cmd, cwd=MODULE_ROOT, capture_output=True, text=True, check=False, timeout=timeout_s
+            )
+        except subprocess.TimeoutExpired as expired:
+            # Surface whatever gremlins managed to say. Captured output is lost
+            # on a kill otherwise, and "it hung" without a package name is the
+            # report that started this.
+            sys.stdout.write(_decoded(expired.stdout))
+            sys.stderr.write(_decoded(expired.stderr))
+            msg = (
+                f"gremlins exceeded {timeout_s:.0f}s on {package!r}. "
+                f"Either the runner is slow enough that --timeout-coefficient "
+                f"{coefficient} scales every mutant past the budget, or this "
+                f"package stopped making progress."
+            )
+            raise GateTimeoutError(msg) from expired
         text = out_path.read_text(encoding="utf-8").strip()
         if not text:
             sys.stdout.write(proc.stdout)
@@ -225,6 +291,21 @@ def main() -> int:
         default=DEFAULT_COEFFICIENT,
         help=f"gremlins per-mutant timeout coefficient (default {DEFAULT_COEFFICIENT})",
     )
+    parser.add_argument(
+        "--package-timeout",
+        type=float,
+        default=DEFAULT_PACKAGE_TIMEOUT_S,
+        help=f"seconds one package may take (default {DEFAULT_PACKAGE_TIMEOUT_S})",
+    )
+    parser.add_argument(
+        "--budget",
+        type=float,
+        default=DEFAULT_BUDGET_S,
+        help=(
+            f"seconds the whole gate may take (default {DEFAULT_BUDGET_S}). Set below the CI job's "
+            f"timeout-minutes so the gate fails with a diagnostic rather than being killed without one"
+        ),
+    )
     args = parser.parse_args()
 
     allowlist = load_allowlist()
@@ -237,25 +318,61 @@ def main() -> int:
     print(f"Go mutation gate — perimeter: {', '.join(labels)}")
     print(f"gremlins {GREMLINS.rsplit('@', 1)[1]}, timeout-coefficient {args.timeout_coefficient}\n")
 
+    started_at = time.monotonic()
+
     for entry in PERIMETER:
         if isinstance(entry, ScopedPackage):
             package, only_files, label = entry.package, entry.only_files, entry.label
         else:
             package, only_files, label = entry, (), entry
-        report = run_gremlins(package, args.timeout_coefficient, only_files)
+
+        left = remaining_budget(args.budget, started_at, time.monotonic())
+        if left <= 0:
+            print(f"  [FAIL] {label}: not started — the {args.budget:.0f}s gate budget was already spent")
+            all_failures.append(f"{label}: gate budget exhausted before this package ran")
+            break
+
+        # Printed before the run, and flushed: if this package is the one that
+        # hangs, this line is the only record of where the gate was. The
+        # previous version printed only on completion, so a killed run said
+        # nothing.
+        print(f"  [ .. ] {label}: running (up to {package_timeout(args.package_timeout, left):.0f}s)", flush=True)
+
+        package_started = time.monotonic()
+        try:
+            report = run_gremlins(
+                package,
+                args.timeout_coefficient,
+                only_files,
+                timeout_s=package_timeout(args.package_timeout, left),
+            )
+        except GateTimeoutError as timed_out:
+            print(f"  [FAIL] {label}: {timed_out}")
+            all_failures.append(f"{label}: {timed_out}")
+            break
+
+        elapsed = time.monotonic() - package_started
         killed, excused, failures = check_package(package, report, allowlist, used)
         total_killed += killed
         total_excused += excused
         all_failures.extend(failures)
         status = "FAIL" if failures else "ok"
         note = f", {excused} allowlisted-equivalent" if excused else ""
-        print(f"  [{status:>4}] {label}: {killed} killed{note}, {len(failures)} unexcused survivor(s)")
+        print(
+            f"  [{status:>4}] {label}: {killed} killed{note}, {len(failures)} unexcused survivor(s) in {elapsed:.0f}s"
+        )
 
     stale = sorted(set(allowlist) - used)
     for key in stale:
         print(f"  [WARN] stale allowlist entry (no longer a survivor): {key[0]}/{key[1]}:{key[2]}:{key[3]} {key[4]}")
 
-    print(f"\nTotals: {total_killed} killed, {total_excused} allowlisted-equivalent, {len(all_failures)} unexcused")
+    # Elapsed against the budget, so a run drifting toward the ceiling is
+    # visible in a passing log rather than only in the failing one.
+    elapsed_total = time.monotonic() - started_at
+    print(
+        f"\nTotals: {total_killed} killed, {total_excused} allowlisted-equivalent, "
+        f"{len(all_failures)} unexcused, {elapsed_total:.0f}s of {args.budget:.0f}s budget"
+    )
     if all_failures:
         print("\nUnexcused mutants (kill with a test, or document as equivalent in mutation_equivalents.toml):")
         for loc in all_failures:
