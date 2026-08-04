@@ -112,9 +112,10 @@ class TestRegisterMessageHandler:
         # And the built-ins produced their normal side-effects.
         assert bot.step_calls == 1
         assert session.sizes == [(100, 30)]
-        # snapshot_req produced a snapshot frame.
-        snapshot_frames = [s for s in ws.sent if "snapshot" in s]
-        assert len(snapshot_frames) == 1
+        # snapshot_req queued a snapshot behind any preceding terminal output.
+        assert ws.sent == []
+        snapshot = bridge._send_q.get_nowait()
+        assert snapshot["type"] == "snapshot"
 
     async def test_unknown_type_with_no_handler_is_silently_ignored(self) -> None:
         """Backward-compat: unknown types without a registered handler don't raise."""

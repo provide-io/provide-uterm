@@ -84,13 +84,13 @@ class TestBridgeSendKeysSessionNone:
         bridge._worker = bot
         bridge._worker_id = "w1"
         bridge._latest_snapshot = None
+        bridge._send_q = asyncio.Queue()
 
-        mock_ws = AsyncMock()
-        await bridge._send_snapshot(mock_ws)  # should not raise, no send
-        mock_ws.send.assert_not_awaited()
+        await bridge._send_snapshot()  # should not raise or queue a frame
+        assert bridge._send_q.empty()
 
-    async def test_send_snapshot_ws_send_raises(self) -> None:
-        """Lines 321-323: ws.send() raises → exception caught and logged."""
+    async def test_send_snapshot_queues_current_frame(self) -> None:
+        """Snapshot requests enqueue the current terminal frame."""
         bot = MagicMock()
         bot.session = MagicMock()
         bot.session.emulator = None
@@ -99,11 +99,30 @@ class TestBridgeSendKeysSessionNone:
         bridge._worker = bot
         bridge._worker_id = "w1"
         bridge._latest_snapshot = {"screen": "test", "ts": 1.0}
+        bridge._send_q = asyncio.Queue()
 
-        mock_ws = AsyncMock()
-        mock_ws.send = AsyncMock(side_effect=RuntimeError("ws send failed"))
+        await bridge._send_snapshot()
 
-        await bridge._send_snapshot(mock_ws)  # should not raise
+        assert bridge._send_q.get_nowait()["screen"] == "test"
+
+    async def test_send_snapshot_preserves_order_after_terminal_output(self) -> None:
+        """A requested snapshot cannot overtake already-observed terminal data."""
+        bot = MagicMock()
+        bot.session = MagicMock()
+        bot.session.emulator = None
+
+        bridge = TermBridge.__new__(TermBridge)
+        bridge._worker = bot
+        bridge._worker_id = "w1"
+        bridge._latest_snapshot = {"screen": "after command", "ts": 1.0}
+        bridge._send_q = asyncio.Queue()
+        bridge._send_q.put_nowait({"type": "term", "data": "command output"})
+
+        await bridge._send_snapshot()
+
+        assert bridge._send_q.qsize() == 2
+        assert bridge._send_q.get_nowait()["type"] == "term"
+        assert bridge._send_q.get_nowait()["type"] == "snapshot"
 
     async def test_send_keys_session_send_raises(self) -> None:
         """Lines 331-332: session.send() raises → exception logged."""
