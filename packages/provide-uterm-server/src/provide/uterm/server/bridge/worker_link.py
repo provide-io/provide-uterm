@@ -333,7 +333,7 @@ class TermBridge:
         """Handle the mtype dispatch for one control message from the hub."""
         mtype = msg.get("type")
         if mtype == "snapshot_req":
-            await self._send_snapshot(ws)
+            await self._send_snapshot()
         elif mtype == "control":
             action = msg.get("action")
             if action == "pause":
@@ -389,34 +389,32 @@ class TermBridge:
             # resume over a closed socket — so the bridge must self-clear here.
             await self._set_hijacked(False)
 
-    async def _send_snapshot(self, ws: Any) -> None:
+    async def _send_snapshot(self) -> None:
         session = getattr(self._worker, "session", None)
         if session is None:
             return
         with contextlib.suppress(AttributeError, RuntimeError):
             self.attach_session()
-        try:
-            emulator = getattr(session, "emulator", None)
-            snapshot = (emulator.get_snapshot() if emulator else None) or self._latest_snapshot or {}
-            await ws.send(
-                encode_control_frame(
-                    {
-                        "type": "snapshot",
-                        "screen": snapshot.get("screen", ""),
-                        "cursor": snapshot.get("cursor", {"x": 0, "y": 0}),
-                        "cols": int(snapshot.get("cols", 80) or 80),
-                        "rows": int(snapshot.get("rows", 25) or 25),
-                        "screen_hash": snapshot.get("screen_hash", ""),
-                        "cursor_at_end": bool(snapshot.get("cursor_at_end", True)),
-                        "has_trailing_space": bool(snapshot.get("has_trailing_space", False)),
-                        "prompt_detected": snapshot.get("prompt_detected"),
-                        "ts": time.time(),
-                    }
-                )
-            )
-        except Exception as exc:
-            logger.debug("_send_snapshot failed worker_id=%s: %s", self._worker_id, exc)
-            return
+        emulator = getattr(session, "emulator", None)
+        snapshot = (emulator.get_snapshot() if emulator else None) or self._latest_snapshot or {}
+        # Terminal data observed before this request is already in ``_send_q``.
+        # Queue the correlated snapshot behind it instead of writing directly
+        # from the receive task, which could let the snapshot overtake the
+        # command output on the shared WebSocket.
+        await self._send_q.put(
+            {
+                "type": "snapshot",
+                "screen": snapshot.get("screen", ""),
+                "cursor": snapshot.get("cursor", {"x": 0, "y": 0}),
+                "cols": int(snapshot.get("cols", 80) or 80),
+                "rows": int(snapshot.get("rows", 25) or 25),
+                "screen_hash": snapshot.get("screen_hash", ""),
+                "cursor_at_end": bool(snapshot.get("cursor_at_end", True)),
+                "has_trailing_space": bool(snapshot.get("has_trailing_space", False)),
+                "prompt_detected": snapshot.get("prompt_detected"),
+                "ts": time.time(),
+            }
+        )
 
     async def _send_keys(self, data: str) -> None:
         session = getattr(self._worker, "session", None)

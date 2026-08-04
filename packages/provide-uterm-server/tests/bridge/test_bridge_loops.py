@@ -143,9 +143,10 @@ class TestRecvLoop:
         ws = MockWS([_ec({"type": "snapshot_req"})])
         await bridge._recv_loop(ws)
 
-        # _send_snapshot should have sent a snapshot via ws.send
-        assert len(ws.sent) == 1
-        payload = _decode_msg(ws.sent[0])
+        # _send_snapshot queues the snapshot so the send loop preserves its
+        # order relative to terminal output already waiting to be sent.
+        assert ws.sent == []
+        payload = bridge._send_q.get_nowait()
         assert payload["type"] == "snapshot"
 
     async def test_recv_loop_control_pause(self) -> None:
@@ -296,8 +297,8 @@ class TestRunLoop:
 
         assert len(received_frames) >= 1
 
-    async def test_send_snapshot_exception_suppressed(self) -> None:
-        """_send_snapshot catches exceptions from ws.send() silently."""
+    async def test_send_snapshot_queues_for_transport_send_loop(self) -> None:
+        """_send_snapshot leaves transport writes to the ordered send loop."""
 
         class _FakeSession:
             emulator = None
@@ -308,12 +309,9 @@ class TestRunLoop:
         bot = _FakeBot()
         bridge = TermBridge(bot, "bot1", "http://localhost")
 
-        class _BrokenWs:
-            async def send(self, data: object) -> None:
-                raise RuntimeError("broken")
-
-        # Should not raise
-        await bridge._send_snapshot(_BrokenWs())
+        await bridge._send_snapshot()
+        payload = bridge._send_q.get_nowait()
+        assert payload["type"] == "snapshot"
 
     async def test_stop_cancels_child_tasks(self) -> None:
         """stop() must not return until the per-connection pump tasks are cancelled."""

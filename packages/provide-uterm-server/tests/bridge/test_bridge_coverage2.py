@@ -241,13 +241,14 @@ class TestRecvLoopSnapshotReqAndPause:
             bridge._running = False
             raise RuntimeError("done")
 
-        sent_msgs: list[str] = []
         mock_ws = AsyncMock()
         mock_ws.recv = recv_side_effect
-        mock_ws.send = AsyncMock(side_effect=lambda m: sent_msgs.append(m))
 
         await bridge._recv_loop(mock_ws)
-        assert len(sent_msgs) >= 1  # snapshot was sent
+        queued = []
+        while not bridge._send_q.empty():
+            queued.append(bridge._send_q.get_nowait())
+        assert any(message.get("type") == "snapshot" for message in queued)
 
     async def test_recv_loop_control_pause(self) -> None:
         """Line 275: control/pause → _set_hijacked(True)."""
