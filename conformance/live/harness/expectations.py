@@ -20,7 +20,7 @@ Two readings matter more than they look:
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
 
@@ -121,6 +121,78 @@ def check(expectation: Expectation, steps: Mapping[str, Mapping[str, Any]]) -> F
     if held:
         return None
     return Failure(expectation, actual, f"{expectation.step}.{expectation.path}: {detail}")
+
+
+#: The suffix that turns a repeated step's name into "some repetition of it".
+ANY_REPETITION: Final = ".*"
+
+
+def check_all(expectations: Sequence[Expectation], steps: Mapping[str, Mapping[str, Any]]) -> tuple[Failure, ...]:
+    """Evaluate every expectation, resolving ``<step>.*`` against the repetitions.
+
+    A named step is checked on its own, as it always was. A wildcard step is a
+    claim about *some* repetition, and every wildcard expectation naming the
+    same step has to hold of one and the same repetition — otherwise "a refusal
+    carries its own reason" would be satisfied by a 429 in one repetition and
+    the word ``rate_limited`` in another, which is a different and much weaker
+    claim.
+
+    A repeated step exists where the answers stop being the same, and some of
+    those sequences are timed rather than counted: which repetition of a flood
+    first finds the budget gone depends on how long the flood took. Pinning an
+    index into one asserts how fast the runner was.
+    """
+    failures: list[Failure] = []
+    grouped: dict[str, list[Expectation]] = {}
+
+    for expectation in expectations:
+        if expectation.step.endswith(ANY_REPETITION):
+            grouped.setdefault(expectation.step, []).append(expectation)
+        else:
+            found = check(expectation, steps)
+            if found is not None:
+                failures.append(found)
+
+    for step, group in grouped.items():
+        found = _check_any_repetition(step, group, steps)
+        if found is not None:
+            failures.append(found)
+
+    return tuple(failures)
+
+
+def _check_any_repetition(
+    step: str, group: Sequence[Expectation], steps: Mapping[str, Mapping[str, Any]]
+) -> Failure | None:
+    """Hold *group* against each repetition of *step*, needing one to satisfy all."""
+    base = step[: -len(ANY_REPETITION)]
+    prefix = f"{base}."
+    # `flood.` rather than `flood`, so `flood.*` never picks up `floodgate.0`.
+    candidates = sorted(name for name in steps if name.startswith(prefix))
+
+    for name in candidates:
+        if all(check(_renamed(one, name), steps) is None for one in group):
+            return None
+
+    described = ", ".join(f"{one.path} {one.predicate} {one.expected!r}" for one in group)
+    seen = len(candidates)
+    return Failure(
+        group[0],
+        MISSING,
+        f"no repetition of {base!r} satisfied all of [{described}] "
+        f"({seen} repetition{'' if seen == 1 else 's'} recorded)",
+    )
+
+
+def _renamed(expectation: Expectation, step: str) -> Expectation:
+    """*expectation* as though it had named *step* all along."""
+    return Expectation(
+        step=step,
+        path=expectation.path,
+        predicate=expectation.predicate,
+        expected=expectation.expected,
+        why=expectation.why,
+    )
 
 
 def _json_equal(left: Any, right: Any) -> bool:

@@ -26,7 +26,7 @@ from typing import Any, Final, Protocol
 
 from harness import drivers
 from harness.drivers import DriverError, DriverSpec
-from harness.expectations import Failure, check
+from harness.expectations import Failure, check_all
 from harness.normalize import Difference, differences, observations
 
 if TYPE_CHECKING:
@@ -229,7 +229,7 @@ def _judge(
     # exists only so two cells can be compared, so it applies only there.
     watched = observations(result, {})
     seen[(server, client)] = observations(result, scenario.volatile_by_step)
-    failures = tuple(found for found in (check(one, watched) for one in scenario.expectations) if found is not None)
+    failures = check_all(scenario.expectations, watched)
     return Cell(scenario.id, server, client, FAIL if failures else PASS, failures=failures)
 
 

@@ -18,6 +18,7 @@ from harness.expectations import (
     MISSING,
     Expectation,
     check,
+    check_all,
     parse_expectation,
     resolve,
 )
@@ -185,5 +186,157 @@ class TestParse:
         assert parse_expectation({"step": "s", "path": "v", "present": False}).predicate == "present"
 
 
+class TestAnyRepetition:
+    """``<step>.*`` — an expectation about *some* repetition rather than a named one.
+
+    A repeated step exists precisely where the answers stop being the same, and
+    some of those sequences are timed rather than counted. Pinning an index into
+    one asserts an artifact of how fast the runner was, which is how
+    ``008_rate_limits`` came to fail on a loaded machine and pass on a quiet one.
+    """
+
+    def test_holds_when_one_repetition_satisfies_it(self) -> None:
+        steps = {
+            "flood.0": {"status": 409},
+            "flood.1": {"status": 429},
+            "flood.2": {"status": 409},
+        }
+
+        assert check_all((_exp("flood.*", "status", "equals", 429),), steps) == ()
+
+    def test_fails_when_no_repetition_satisfies_it(self) -> None:
+        steps = {"flood.0": {"status": 409}, "flood.1": {"status": 409}}
+
+        failures = check_all((_exp("flood.*", "status", "equals", 429),), steps)
+
+        assert len(failures) == 1
+        assert "no repetition of 'flood'" in failures[0].message
+
+    def test_one_repetition_must_satisfy_every_expectation_about_it(self) -> None:
+        # Split across two repetitions is not the same claim: the contract is
+        # that a refusal carries its own reason, not that a 429 happened
+        # somewhere and the word "rate_limited" happened somewhere else.
+        steps = {
+            "flood.0": {"status": 429, "body": {"error": "other"}},
+            "flood.1": {"status": 409, "body": {"error": "rate_limited"}},
+        }
+
+        failures = check_all(
+            (
+                _exp("flood.*", "status", "equals", 429),
+                _exp("flood.*", "body", "equals", {"error": "rate_limited"}),
+            ),
+            steps,
+        )
+
+        assert len(failures) == 1
+
+    def test_holds_when_a_single_repetition_satisfies_all_of_them(self) -> None:
+        steps = {
+            "flood.0": {"status": 409, "body": {"error": "other"}},
+            "flood.1": {"status": 429, "body": {"error": "rate_limited"}},
+        }
+
+        assert (
+            check_all(
+                (
+                    _exp("flood.*", "status", "equals", 429),
+                    _exp("flood.*", "body", "equals", {"error": "rate_limited"}),
+                ),
+                steps,
+            )
+            == ()
+        )
+
+    def test_fails_when_the_step_recorded_nothing(self) -> None:
+        # A wildcard over zero observations must not read as satisfied — that is
+        # the one failure shape that passes in every cell at once.
+        failures = check_all((_exp("flood.*", "status", "equals", 429),), {"other": {"status": 200}})
+
+        assert len(failures) == 1
+        assert "no repetition of 'flood'" in failures[0].message
+
+    def test_named_repetitions_are_unaffected(self) -> None:
+        steps = {"flood.0": {"status": 409}, "flood.1": {"status": 429}}
+
+        assert check_all((_exp("flood.0", "status", "equals", 409),), steps) == ()
+        assert len(check_all((_exp("flood.0", "status", "equals", 429),), steps)) == 1
+
+    def test_a_wildcard_does_not_match_a_differently_named_step(self) -> None:
+        # `flood.*` must not pick up `floodgate.0`: the separator is part of the
+        # prefix, not decoration.
+        failures = check_all((_exp("flood.*", "status", "equals", 429),), {"floodgate.0": {"status": 429}})
+
+        assert len(failures) == 1
+
+
 def _exp(step: str, path: str, predicate: str, expected: object) -> Expectation:
     return Expectation(step=step, path=path, predicate=predicate, expected=expected, why=None)
+
+
+class TestRateLimitScenarioSurvivesASlowRunner:
+    """The 008_rate_limits regression, replayed from the CI failure it caused.
+
+    Run 30860934627 (2026-08-03) failed this scenario on two cells with
+    ``spend_acquire.7.body: expected {'error': 'rate_limited'}, saw
+    {'error': 'Hijack not available in open input mode.'}`` — the eighth
+    acquire answered on its merits because the flood had taken long enough for
+    the bucket to hand a token back. A re-run of the identical commit passed.
+    """
+
+    @staticmethod
+    def _flood(first_refusal: int) -> dict[str, dict[str, object]]:
+        """A recorded flood whose limiter engages at *first_refusal*.
+
+        Before it, acquires are answered on their merits: the session is in open
+        mode, so there is no lease to take. From it, the budget is gone.
+        """
+        recorded: dict[str, dict[str, object]] = {}
+        for index in range(30):
+            if index < first_refusal:
+                recorded[f"spend_acquire.{index}"] = {
+                    "status": 409,
+                    "ok": False,
+                    "body": {"error": "Hijack not available in open input mode."},
+                }
+            else:
+                recorded[f"spend_acquire.{index}"] = {
+                    "status": 429,
+                    "ok": False,
+                    "body": {"error": "rate_limited"},
+                }
+        recorded["unknown_worker_while_spent"] = {
+            "status": 404,
+            "body": {"detail": "unknown session: no-such-worker"},
+        }
+        recorded["anonymous_while_spent"] = {
+            "status": 401,
+            "body": {"detail": "authentication required"},
+        }
+        recorded["read_while_spent"] = {"status": 200, "body": []}
+        return recorded
+
+    @staticmethod
+    def _expectations() -> tuple[Expectation, ...]:
+        from harness.scenario import SCENARIO_DIR, load_scenario
+
+        return tuple(load_scenario(SCENARIO_DIR / "008_rate_limits.json").expectations)
+
+    def test_holds_on_a_quick_runner(self) -> None:
+        # Five tokens spent, so the sixth acquire (index 5) is the first refused.
+        assert check_all(self._expectations(), self._flood(first_refusal=5)) == ()
+
+    def test_holds_when_a_refilled_token_pushes_the_refusal_later(self) -> None:
+        # The CI failure: the flood was slow enough for the bucket to hand a
+        # token back, so index 7 was answered on its merits. Pinning that index
+        # asserted how fast the machine was.
+        assert check_all(self._expectations(), self._flood(first_refusal=9)) == ()
+
+    def test_still_fails_when_the_limiter_never_engages(self) -> None:
+        # The property has to stay falsifiable: a server that never rate limits
+        # must fail this scenario rather than pass it by never being observed.
+        never = {name: dict(fields) for name, fields in self._flood(first_refusal=30).items()}
+
+        failures = check_all(self._expectations(), never)
+
+        assert failures, "a server that never refuses must not pass the rate-limit scenario"

@@ -55,21 +55,21 @@
       "why": "The first of the flood is answered on its merits \u2014 the session is in open mode, so there is no lease to take. That is the baseline the refusal further down is measured against, and it is why this scenario never moves the session out of open mode: no lease is ever granted, so it leaves nothing behind for the next client."
     },
     {
-      "step": "spend_acquire.7",
+      "step": "spend_acquire.*",
       "path": "status",
       "equals": 429,
-      "why": "Eight acquires against a budget of five a second, asserted at the eighth rather than at the thirtieth. The bucket refills a token every two hundred milliseconds, so a long flood does not stay refused \u2014 it alternates, and the last repetition is the *worst* one to assert on. Measured: a thirty-deep flood reads 409 409 409 409 409 429 429 ... 429 409, the final 409 being a token handed back mid-flood. Early is where the budget is reliably gone: eight requests take tens of milliseconds, so at most one token can have returned by then. The flood still runs thirty deep because the later repetitions cost nothing and prove the refusal is sustained rather than a single blip."
+      "why": "Thirty acquires against a budget of five a second: the budget goes, and the limiter answers. Asserted of *some* repetition rather than a named one, because which repetition first finds the budget gone is a fact about the clock, not the contract. The bucket refills a token every two hundred milliseconds, so a flood alternates \u2014 a thirty-deep run reads 409 409 409 409 409 429 429 ... 429 409, the final 409 being a token handed back mid-flood. This used to be pinned at the eighth repetition on the reasoning that eight requests take tens of milliseconds, so at most one token could have returned by then. On a loaded runner they take longer, another token returns, and the eighth is answered on its merits \u2014 the scenario then failed for being fast enough to matter, having asserted how quick the machine was rather than what the server owes."
     },
     {
-      "step": "spend_acquire.7",
+      "step": "spend_acquire.*",
       "path": "body",
       "equals": {
         "error": "rate_limited"
       },
-      "why": "The refusal names the reason and nothing else \u2014 no budget, no window, no Retry-After. A caller told when to come back would also be told the shape of the limit."
+      "why": "The refusal names the reason and nothing else \u2014 no budget, no window, no Retry-After. A caller told when to come back would also be told the shape of the limit. This holds of the same repetition as the status and the flag above, not of some other one: a 429 in one repetition and the word `rate_limited` in another would be a weaker claim wearing this one's clothes."
     },
     {
-      "step": "spend_acquire.7",
+      "step": "spend_acquire.*",
       "path": "ok",
       "equals": false,
       "why": "The client library's own reading of a 429. A library that treated an unfamiliar refusal as success would leave its caller believing the request landed \u2014 and, for a flood, believing it holds a lease it was never granted."

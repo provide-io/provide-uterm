@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import jsonschema
-from harness.expectations import Expectation, parse_expectation
+from harness.expectations import ANY_REPETITION, Expectation, parse_expectation
 
 _HERE: Final = Path(__file__).resolve().parent
 #: Where the committed scenarios live.
@@ -236,6 +236,16 @@ def _refuse_unknown_steps(steps: Sequence[Step], expectations: Sequence[Expectat
     known = {observed for step in steps for observed in step.observation_ids}
     repeated = {step.id for step in steps if step.repeat > 1}
     for expectation in expectations:
+        if expectation.step.endswith(ANY_REPETITION):
+            # `<id>.*` means "some repetition", which only says anything about a
+            # step that has repetitions.
+            base = expectation.step[: -len(ANY_REPETITION)]
+            if base not in repeated:
+                raise ValueError(
+                    f"{path.name}: expectation names {expectation.step!r}, but {base!r} is not a repeated step — "
+                    f"a wildcard over one observation is just that observation"
+                )
+            continue
         if expectation.step in repeated:
             # The bare id of a repeated step records nothing. Left unrefused
             # this reads as an expectation nobody runs, which is the one
