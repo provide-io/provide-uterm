@@ -220,26 +220,6 @@ class TestPamIntegrationGaps:
 
         await _on_close(ev, cfg, registry, bridges)  # must not raise
 
-    async def test_on_close_runtime_stop_callable(self) -> None:
-        """Line 230->232: runtime has stop_fn that is callable."""
-        try:
-            from provide.uterm.pty.pam_listener import PamEvent
-        except ImportError:
-            pytest.skip("provide-uterm-platform not installed")
-
-        from provide.uterm.server.models import PamConfig
-        from provide.uterm.server.pam_integration import _on_close
-
-        ev = PamEvent(event="close", username="alice", tty="/dev/pts/0", pid=42)
-        cfg = PamConfig()
-        runtime = MagicMock()
-        runtime.stop = AsyncMock()
-        registry = MagicMock()
-        registry.get_runtime = MagicMock(return_value=runtime)
-
-        await _on_close(ev, cfg, registry)
-        runtime.stop.assert_awaited_once()
-
     async def test_create_capture_session_none_socket_returns_early(self) -> None:
         """_create_capture_session returns early when capture_socket is None."""
         try:

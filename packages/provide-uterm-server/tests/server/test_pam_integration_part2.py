@@ -244,7 +244,7 @@ def test_capture_session_id_uses_pid_when_openssh_reports_placeholder_tty() -> N
 
     first = PamEvent(
         event="open",
-        username="suokki",
+        username="alice",
         tty="ssh",
         pid=100,
         mode="capture",
@@ -252,15 +252,15 @@ def test_capture_session_id_uses_pid_when_openssh_reports_placeholder_tty() -> N
     )
     second = PamEvent(
         event="open",
-        username="suokki",
+        username="alice",
         tty="ssh",
         pid=200,
         mode="capture",
         capture_socket="/run/uterm-cap-200.sock",
     )
 
-    assert _session_id(first) == "pam-suokki-capture-100"
-    assert _session_id(second) == "pam-suokki-capture-200"
+    assert _session_id(first) == "pam-alice-capture-100"
+    assert _session_id(second) == "pam-alice-capture-200"
 
 
 # ── run_pam_integration event loop ───────────────────────────────────────────
