@@ -101,6 +101,14 @@ PERIMETER: tuple[str | ScopedPackage, ...] = (
     # (incl. IsLoopbackHost, the §3 webhook-loopback permission source) is pure
     # validation logic and already ~100% unit-tested.
     ScopedPackage("serverconfig", ("validate.go",)),
+    # `cli` is the CLI + the in-memory session registry behind it. Only
+    # registry.go is perimeter material: it owns the session lifecycle
+    # (create/update/delete, connector stop, worker-bridge detach) that the
+    # Python SessionRegistry is mutation-enforced for, so the two ports are
+    # held to the same bar. Widened on purpose on 2026-08-06, after a
+    # DeleteSession that stopped the connector but leaked the hub worker
+    # bridge shipped with only one test pinning the fix.
+    ScopedPackage("cli", ("registry.go",)),
 )
 
 # Pinned like golangci-lint/govulncheck in the Makefile: invoked via `go run`

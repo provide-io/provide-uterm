@@ -345,9 +345,15 @@ func sessionIDValid(id string) bool {
 		return false
 	}
 	for _, c := range id {
-		switch {
-		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '_', c == '-':
-		default:
+		// The accepted classes are one boolean statement rather than a switch
+		// with an empty arm: Go's cover tool instruments case BODIES, not case
+		// expressions, so in switch form every comparison here lands outside any
+		// covered block and the mutation gate reports it NOT COVERED —
+		// unkillable by any test. As an assignment the comparisons sit inside a
+		// covered block, so the boundary mutants are reachable and killed by
+		// TestSessionIDValidCharsetBoundaries.
+		allowed := c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' || c == '-'
+		if !allowed {
 			return false
 		}
 	}
