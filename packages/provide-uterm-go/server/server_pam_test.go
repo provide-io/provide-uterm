@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -39,6 +40,32 @@ func strptr(s string) *string { return &s }
 
 func newPamIntegration(cfg serverconfig.PamConfig, reg *fakeRegistry) *PamIntegration {
 	return NewPamIntegration(cfg, reg, nil, quietLogger())
+}
+
+// recordingLogger captures the message of every log line, for the tests that
+// care that a PAM teardown left a trace an operator can grep for.
+type recordingLogger struct {
+	mu   sync.Mutex
+	msgs []string
+}
+
+func (l *recordingLogger) record(msg string) {
+	l.mu.Lock()
+	l.msgs = append(l.msgs, msg)
+	l.mu.Unlock()
+}
+func (l *recordingLogger) Info(msg string, _ ...any) { l.record(msg) }
+func (l *recordingLogger) Warn(msg string, _ ...any) { l.record(msg) }
+
+func (l *recordingLogger) has(msg string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, m := range l.msgs {
+		if m == msg {
+			return true
+		}
+	}
+	return false
 }
 
 func TestPamRunNoOpWhenUnset(t *testing.T) {
@@ -160,26 +187,64 @@ func TestPamOnCloseDeletes(t *testing.T) {
 	}
 }
 
-// TestPamCaptureOpenCloseSameID pins that a capture session opened and closed
-// with a tty present resolves to one id, so the close deletes what open created.
+// TestPamCaptureOpenCloseSameID pins that a capture session opened with a tty
+// present and closed without one still resolves to a single pid-keyed id, so
+// the close deletes what the open created. Both halves assert the literal id:
+// a round-trip that only compares the two ids to each other still agrees under
+// tty-slug keying, and would pass with the capture branch deleted.
 func TestPamCaptureOpenCloseSameID(t *testing.T) {
 	reg := newFakeRegistry()
 	pi := newPamIntegration(serverconfig.PamConfig{Mode: "capture"}, reg)
-	open := pty.PamEvent{
+	pi.onOpen(context.Background(), pty.PamEvent{
 		Event: "open", Username: "carol", TTY: "/dev/pts/4", PID: 7,
 		Mode: "capture", CaptureSocket: "/run/uterm-cap-7.sock",
-	}
-	pi.onOpen(context.Background(), open)
+	})
 	if len(reg.created) != 1 {
 		t.Fatalf("want 1 create, got %d", len(reg.created))
 	}
-	created, _ := reg.created[0]["session_id"].(string)
+	if created, _ := reg.created[0]["session_id"].(string); created != "pam-carol-capture-7" {
+		t.Fatalf("created id = %q, want pam-carol-capture-7", created)
+	}
 
+	// The close carries no tty: under tty-slug keying this would key on the pid
+	// with a "tty" slug ("pam-carol-tty-7") and miss the created session.
 	pi.onClose(context.Background(), pty.PamEvent{
-		Event: "close", Username: "carol", TTY: "/dev/pts/4", PID: 7, Mode: "capture",
+		Event: "close", Username: "carol", PID: 7, Mode: "capture",
 	})
-	if len(reg.deleted) != 1 || reg.deleted[0] != created {
-		t.Fatalf("close deleted %v, want the created id %q", reg.deleted, created)
+	if len(reg.deleted) != 1 || reg.deleted[0] != "pam-carol-capture-7" {
+		t.Fatalf("close deleted %v, want [pam-carol-capture-7]", reg.deleted)
+	}
+}
+
+// TestPamOnCloseRelaysBeforeDeleting pins the teardown order of _on_close: the
+// relay learns about the logout before the registry tears the connector down,
+// so a connector that hangs on stop cannot swallow the close notification.
+func TestPamOnCloseRelaysBeforeDeleting(t *testing.T) {
+	reg := newFakeRegistry()
+	relayed := make(chan int, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		reg.mu.Lock()
+		relayed <- len(reg.deleted)
+		reg.mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	reg.add("pam-erin-3", "erin", "operator")
+	pi := newPamIntegration(serverconfig.PamConfig{
+		Mode: "notify", RelayURL: strptr(srv.URL), RelayToken: strptr("t"),
+	}, reg)
+
+	pi.onClose(context.Background(), pty.PamEvent{Event: "close", Username: "erin", TTY: "/dev/pts/3"})
+	select {
+	case deletedWhenRelayed := <-relayed:
+		if deletedWhenRelayed != 0 {
+			t.Fatalf("relay saw %d deletes already done; the close must be relayed first", deletedWhenRelayed)
+		}
+	default:
+		t.Fatal("close event was never relayed")
+	}
+	if len(reg.deleted) != 1 {
+		t.Fatalf("want the session deleted after the relay, got %v", reg.deleted)
 	}
 }
 
@@ -303,15 +368,36 @@ func TestPamRunListenerStartError(t *testing.T) {
 
 // TestPamOnCloseUnknownSession covers the DeleteSession-error branch: the error
 // is logged, never raised, so a close for a session the registry never had is a
-// no-op rather than a crash.
+// no-op rather than a crash. The real SessionRegistryImpl.DeleteSession is
+// idempotent and cannot fail, so the error has to be injected; the branch
+// exists for the SessionRegistry implementations that can.
 func TestPamOnCloseUnknownSession(t *testing.T) {
 	reg := newFakeRegistry()
 	reg.deleteErr = errFixed("no such session")
-	pi := newPamIntegration(serverconfig.PamConfig{Mode: "notify"}, reg)
+	log := &recordingLogger{}
+	pi := NewPamIntegration(serverconfig.PamConfig{Mode: "notify"}, reg, nil, log)
 	pi.onClose(context.Background(), pty.PamEvent{Event: "close", Username: "ghost", TTY: "/dev/pts/9"})
 	// DeleteSession still recorded the attempt; the error was logged, not raised.
 	if len(reg.deleted) != 1 {
 		t.Fatalf("want 1 delete attempt, got %d", len(reg.deleted))
+	}
+	if !log.has("pam_session_delete_failed") || log.has("pam_session_deleted") {
+		t.Fatalf("a failed delete must log only the failure, got %v", log.msgs)
+	}
+}
+
+// TestPamOnCloseLogsTheDelete pins the success log. Against the real registry
+// DeleteSession is idempotent, so a close whose id matches nothing returns nil
+// and the failure branch never fires — this line is the only evidence in the
+// log that a teardown happened, and the only way to spot PAM id drift.
+func TestPamOnCloseLogsTheDelete(t *testing.T) {
+	reg := newFakeRegistry()
+	reg.add("pam-frank-1", "frank", "operator")
+	log := &recordingLogger{}
+	pi := NewPamIntegration(serverconfig.PamConfig{Mode: "notify"}, reg, nil, log)
+	pi.onClose(context.Background(), pty.PamEvent{Event: "close", Username: "frank", TTY: "/dev/pts/1"})
+	if !log.has("pam_session_deleted") {
+		t.Fatalf("a successful delete must be logged, got %v", log.msgs)
 	}
 }
 
