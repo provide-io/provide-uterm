@@ -111,7 +111,9 @@ def _tty_slug(tty: str) -> str:
 
 
 def _session_id(ev: PamEvent) -> str:
-    """Stable session ID for a PAM event.  Includes PID when TTY is absent."""
+    """Stable session ID for matching PAM open and close events."""
+    if ev.mode == "capture" or ev.capture_socket is not None:
+        return f"pam-{ev.username}-capture-{ev.pid}"
     slug = _tty_slug(ev.tty)
     if not ev.tty:
         return f"pam-{ev.username}-{slug}-{ev.pid}"

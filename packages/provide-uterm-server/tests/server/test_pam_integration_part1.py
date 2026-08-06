@@ -90,7 +90,7 @@ async def test_on_open_capture_mode_with_socket_creates_capture_session() -> Non
     payload = registry.create_session.call_args[0][0]
     assert payload["connector_type"] == "pty_capture"
     assert payload["connector_config"]["socket_path"] == "/run/uterm-cap-1234.sock"
-    assert payload["session_id"] == "pam-alice-3"
+    assert payload["session_id"] == "pam-alice-capture-1234"
     assert payload["ephemeral"] is True
 
 
