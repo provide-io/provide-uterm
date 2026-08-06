@@ -3,11 +3,13 @@ UNAME := $(shell uname)
 COMMON_CFLAGS = -std=c11 -fPIC -O2 -Wall -Wextra -Werror -fvisibility=hidden
 TEST_CFLAGS = $(COMMON_CFLAGS) -pthread
 TEST_TARGET = test_capture_writer
+EARLY_TEST = test_preload_early
 SYMBOL_TEST = test_symbols.sh
 
 ifeq ($(UNAME), Darwin)
     TARGET  = libuterm_capture.dylib
     LDFLAGS = -dynamiclib
+    EARLY_TEST =
 else
     TARGET  = libuterm_capture.so
     LDFLAGS = -shared -ldl
@@ -23,10 +25,17 @@ $(TARGET): capture.c capture_writer.c capture_writer.h
 $(TEST_TARGET): test_capture_writer.c capture_writer.c capture_writer.h
 	cc $(TEST_CFLAGS) -o $(TEST_TARGET) test_capture_writer.c capture_writer.c
 
-test: $(TEST_TARGET) $(TARGET)
+test_preload_early: test_preload_early.c
+	cc -std=c11 -O2 -Wall -Wextra -Werror -o $@ $<
+
+test: $(TEST_TARGET) $(TARGET) $(EARLY_TEST)
 	./$(TEST_TARGET)
 	./$(SYMBOL_TEST) $(TARGET) $(UNAME)
+	@if [ -n "$(EARLY_TEST)" ]; then \
+		UTERM_CAPTURE_SOCKET=/run/uterm-preinit-missing.sock \
+		LD_PRELOAD=./$(TARGET) ./$(EARLY_TEST); \
+	fi
 
 clean:
-	rm -f $(TARGET) $(TEST_TARGET)
-	rm -rf $(TARGET).dSYM $(TEST_TARGET).dSYM
+	rm -f $(TARGET) $(TEST_TARGET) test_preload_early
+	rm -rf $(TARGET).dSYM $(TEST_TARGET).dSYM test_preload_early.dSYM

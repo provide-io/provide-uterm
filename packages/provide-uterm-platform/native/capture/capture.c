@@ -35,6 +35,7 @@
 #include <sys/socket.h>
 #include <signal.h>
 #include <sys/un.h>
+#include <sys/syscall.h>
 #include <unistd.h>
 
 #define CHANNEL_STDOUT  0x01
@@ -228,6 +229,27 @@ static fn_write   orig_write;
 static fn_read    orig_read;
 static fn_connect orig_connect;
 
+static ssize_t call_write(int fd, const void *buf, size_t count) {
+    if (orig_write != NULL) {
+        return orig_write(fd, buf, count);
+    }
+    return syscall(SYS_write, fd, buf, count);
+}
+
+static ssize_t call_read(int fd, void *buf, size_t count) {
+    if (orig_read != NULL) {
+        return orig_read(fd, buf, count);
+    }
+    return syscall(SYS_read, fd, buf, count);
+}
+
+static int call_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
+    if (orig_connect != NULL) {
+        return orig_connect(sockfd, addr, addrlen);
+    }
+    return (int)syscall(SYS_connect, sockfd, addr, addrlen);
+}
+
 __attribute__((constructor))
 static void uterm_capture_init(void) {
     orig_write   = (fn_write)  dlsym(RTLD_NEXT, "write");
@@ -245,7 +267,7 @@ static void uterm_capture_init(void) {
     addr.sun_family = AF_UNIX;
     strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
 
-    if (orig_connect(capture_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+    if (call_connect(capture_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         (void)close(capture_fd);
         return;
     }
@@ -253,7 +275,7 @@ static void uterm_capture_init(void) {
 }
 
 UTERM_EXPORT ssize_t write(int fd, const void *buf, size_t count) {
-    ssize_t ret = orig_write(fd, buf, count);
+    ssize_t ret = call_write(fd, buf, count);
     if (ret > 0 && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
         send_frame(CHANNEL_STDOUT, buf, (size_t)ret);
     }
@@ -261,7 +283,7 @@ UTERM_EXPORT ssize_t write(int fd, const void *buf, size_t count) {
 }
 
 UTERM_EXPORT ssize_t read(int fd, void *buf, size_t count) {
-    ssize_t ret = orig_read(fd, buf, count);
+    ssize_t ret = call_read(fd, buf, count);
     if (ret > 0 && fd == STDIN_FILENO) {
         send_frame(CHANNEL_STDIN, buf, (size_t)ret);
     }
@@ -270,9 +292,9 @@ UTERM_EXPORT ssize_t read(int fd, void *buf, size_t count) {
 
 UTERM_EXPORT int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
     if (sockfd == atomic_load_explicit(&g_capture_fd, memory_order_acquire)) {
-        return orig_connect(sockfd, addr, addrlen);
+        return call_connect(sockfd, addr, addrlen);
     }
-    int ret = orig_connect(sockfd, addr, addrlen);
+    int ret = call_connect(sockfd, addr, addrlen);
     int application_errno = errno;
     if (ret == 0 && addr) {
         char addrstr[256] = {0};

@@ -236,6 +236,33 @@ def test_session_id_open_and_close_match_with_same_pid() -> None:
     assert _session_id(ev_open) == _session_id(ev_close)
 
 
+def test_capture_session_id_uses_pid_when_openssh_reports_placeholder_tty() -> None:
+    try:
+        from provide.uterm.pty.pam_listener import PamEvent
+    except ImportError:
+        pytest.skip("provide-uterm-platform not installed")
+
+    first = PamEvent(
+        event="open",
+        username="suokki",
+        tty="ssh",
+        pid=100,
+        mode="capture",
+        capture_socket="/run/uterm-cap-100.sock",
+    )
+    second = PamEvent(
+        event="open",
+        username="suokki",
+        tty="ssh",
+        pid=200,
+        mode="capture",
+        capture_socket="/run/uterm-cap-200.sock",
+    )
+
+    assert _session_id(first) == "pam-suokki-capture-100"
+    assert _session_id(second) == "pam-suokki-capture-200"
+
+
 # ── run_pam_integration event loop ───────────────────────────────────────────
 
 
