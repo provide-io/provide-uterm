@@ -34,9 +34,11 @@ from provide.uterm.server.models import (
 from provide.uterm.server.runtime import HostedSessionRuntime
 
 # Fields that callers may mutate on an existing session via update_session().
-# Immutable fields (session_id, connector_type, created_at, owner, ephemeral)
-# are intentionally excluded so they cannot drift after creation.  The HTTP
-# control plane may opt an authenticated administrator into an owner change.
+# Immutable fields (session_id, connector_type, created_at, ephemeral) are
+# intentionally excluded so they cannot drift after creation.  ``owner`` is
+# immutable by default too, and mutable only through the explicit
+# ``allow_owner_change`` opt-in that the HTTP control plane passes for an
+# authenticated administrator.
 _MUTABLE_SESSION_FIELDS = frozenset(
     {"display_name", "input_mode", "visibility", "auto_start", "tags", "recording_enabled", "connector_config"}
 )

@@ -1,4 +1,8 @@
-/* Regression: an executable preinit hook can call an interposed function
+/* packages/provide-uterm-platform/native/capture/test_preload_early.c
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * Regression: an executable preinit hook can call an interposed function
  * before libuterm_capture's constructor has resolved RTLD_NEXT. */
 
 #include <stdlib.h>
