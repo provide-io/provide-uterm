@@ -4,16 +4,20 @@
 #
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from provide.uterm.recording import LocalFileRecordingStore
+from provide.uterm.server.models import RecordingConfig, SessionDefinition
 from provide.uterm.server.pam_integration import (
     _on_close,
     _on_open,
     _tty_slug,
     run_pam_integration,
 )
+from provide.uterm.server.registry import SessionRegistry
 
 # ── _tty_slug ─────────────────────────────────────────────────────────────────
 
@@ -192,7 +196,18 @@ async def test_on_open_custom_auto_session_command() -> None:
 # ── _on_close ─────────────────────────────────────────────────────────────────
 
 
-async def test_on_close_stops_existing_session() -> None:
+def _pam_registry(tmp_path: Path, sessions: list[SessionDefinition]) -> SessionRegistry:
+    recording = RecordingConfig(directory=tmp_path)
+    return SessionRegistry(
+        sessions,
+        hub=MagicMock(),
+        public_base_url="http://localhost:9999",
+        recording=recording,
+        recording_store=LocalFileRecordingStore(recording.directory),
+    )
+
+
+async def test_on_close_stops_existing_session(tmp_path: Path) -> None:
     """Close event calls stop() on the runtime if found."""
     try:
         from provide.uterm.pty.pam_listener import PamEvent
@@ -202,9 +217,12 @@ async def test_on_close_stops_existing_session() -> None:
     ev = PamEvent(event="close", username="alice", tty="/dev/pts/3", pid=1234)
     runtime = MagicMock()
     runtime.stop = AsyncMock()
-
-    registry = MagicMock()
-    registry.get_runtime = MagicMock(return_value=runtime)
+    session_id = "pam-alice-3"
+    registry = _pam_registry(
+        tmp_path,
+        [SessionDefinition(session_id=session_id, display_name="alice", connector_type="shell")],
+    )
+    registry._runtimes[session_id] = runtime
 
     from provide.uterm.server.models import PamConfig
 
@@ -213,7 +231,34 @@ async def test_on_close_stops_existing_session() -> None:
     runtime.stop.assert_awaited_once()
 
 
-async def test_on_close_no_session_does_not_raise() -> None:
+async def test_on_close_removes_ephemeral_session_from_registry(tmp_path: Path) -> None:
+    """A completed PAM login no longer contributes to the active-session count."""
+    try:
+        from provide.uterm.pty.pam_listener import PamEvent
+    except ImportError:
+        pytest.skip("provide-uterm-platform not installed")
+    from provide.uterm.server.models import PamConfig
+
+    session_id = "pam-alice-3"
+    registry = _pam_registry(
+        tmp_path,
+        [
+            SessionDefinition(
+                session_id=session_id,
+                display_name="alice (/dev/pts/3)",
+                connector_type="shell",
+                ephemeral=True,
+            )
+        ],
+    )
+    ev = PamEvent(event="close", username="alice", tty="/dev/pts/3", pid=1234)
+
+    await _on_close(ev, PamConfig(), registry)
+
+    assert await registry.get_definition(session_id) is None
+
+
+async def test_on_close_no_session_does_not_raise(tmp_path: Path) -> None:
     """Close event for unknown session is silently ignored."""
     try:
         from provide.uterm.pty.pam_listener import PamEvent
@@ -221,15 +266,14 @@ async def test_on_close_no_session_does_not_raise() -> None:
         pytest.skip("provide-uterm-platform not installed")
 
     ev = PamEvent(event="close", username="ghost", tty="/dev/pts/99", pid=0)
-    registry = MagicMock()
-    registry.get_runtime = MagicMock(return_value=None)
+    registry = _pam_registry(tmp_path, [])
 
     from provide.uterm.server.models import PamConfig
 
     await _on_close(ev, PamConfig(), registry)  # must not raise
 
 
-async def test_on_close_runtime_stop_exception_is_swallowed() -> None:
+async def test_on_close_runtime_stop_exception_is_swallowed(tmp_path: Path) -> None:
     """Errors from runtime.stop() should be caught and logged, not propagated."""
     try:
         from provide.uterm.pty.pam_listener import PamEvent
@@ -239,9 +283,12 @@ async def test_on_close_runtime_stop_exception_is_swallowed() -> None:
     ev = PamEvent(event="close", username="alice", tty="/dev/pts/3", pid=1234)
     runtime = MagicMock()
     runtime.stop = AsyncMock(side_effect=RuntimeError("already stopped"))
-
-    registry = MagicMock()
-    registry.get_runtime = MagicMock(return_value=runtime)
+    session_id = "pam-alice-3"
+    registry = _pam_registry(
+        tmp_path,
+        [SessionDefinition(session_id=session_id, display_name="alice", connector_type="shell")],
+    )
+    registry._runtimes[session_id] = runtime
 
     from provide.uterm.server.models import PamConfig
 

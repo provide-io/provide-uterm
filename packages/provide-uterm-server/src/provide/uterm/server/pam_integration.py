@@ -244,15 +244,10 @@ async def _on_close(
         )
 
     try:
-        # get_session raises if not found; runtime exposes stop()
-        runtime = _get_runtime(registry, session_id)
-        if runtime is not None:
-            stop_fn = getattr(runtime, "stop", None)
-            if callable(stop_fn):
-                await stop_fn()
-            logger.info("pam_session_stopped session_id=%s", session_id)
+        await registry.delete_session(session_id)
+        logger.info("pam_session_deleted session_id=%s", session_id)
     except Exception as exc:
-        logger.debug("pam_session_stop_failed session_id=%s error=%s", session_id, exc)
+        logger.debug("pam_session_delete_failed session_id=%s error=%s", session_id, exc)
 
 
 # ── notify mode ───────────────────────────────────────────────────────────────
