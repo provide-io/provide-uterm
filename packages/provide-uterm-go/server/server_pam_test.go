@@ -59,6 +59,12 @@ func TestPamSessionIDAndSlug(t *testing.T) {
 		{pty.PamEvent{Username: "alice", TTY: "/dev/pts/3"}, "pam-alice-3"},
 		{pty.PamEvent{Username: "bob", TTY: "", PID: 42}, "pam-bob-tty-42"},
 		{pty.PamEvent{Username: "eve", TTY: "tty1"}, "pam-eve-tty1"},
+		// Capture sessions key on the pid, never the tty: pam_uterm.so publishes
+		// UTERM_CAPTURE_SOCKET per-pid, and a capture close event carries the tty
+		// too, so a tty-keyed id would not match the id minted at open.
+		{pty.PamEvent{Username: "carol", TTY: "/dev/pts/4", PID: 7, Mode: "capture"}, "pam-carol-capture-7"},
+		// The socket alone is enough — mode may be absent on a close event.
+		{pty.PamEvent{Username: "dan", TTY: "/dev/pts/5", PID: 9, CaptureSocket: "/run/uterm-cap-9.sock"}, "pam-dan-capture-9"},
 	}
 	for _, c := range cases {
 		if got := pamSessionID(c.ev); got != c.want {
@@ -138,13 +144,42 @@ func TestPamCaptureNoConfinementWhenNoBase(t *testing.T) {
 	}
 }
 
-func TestPamOnCloseStops(t *testing.T) {
+// TestPamOnCloseDeletes pins the delete-on-close contract: a PAM session is
+// ephemeral, so closing it must remove the definition from the registry rather
+// than leave a stopped shell behind. Port of _on_close's registry.delete_session.
+func TestPamOnCloseDeletes(t *testing.T) {
 	reg := newFakeRegistry()
 	reg.add("pam-dave-2", "dave", "operator")
 	pi := newPamIntegration(serverconfig.PamConfig{Mode: "notify"}, reg)
 	pi.onClose(context.Background(), pty.PamEvent{Event: "close", Username: "dave", TTY: "/dev/pts/2"})
-	if len(reg.stopped) != 1 || reg.stopped[0] != "pam-dave-2" {
-		t.Fatalf("want stop of pam-dave-2, got %v", reg.stopped)
+	if len(reg.deleted) != 1 || reg.deleted[0] != "pam-dave-2" {
+		t.Fatalf("want delete of pam-dave-2, got %v", reg.deleted)
+	}
+	if _, ok := reg.GetDefinition(context.Background(), "pam-dave-2"); ok {
+		t.Fatal("pam-dave-2 must not survive in the registry after close")
+	}
+}
+
+// TestPamCaptureOpenCloseSameID pins that a capture session opened and closed
+// with a tty present resolves to one id, so the close deletes what open created.
+func TestPamCaptureOpenCloseSameID(t *testing.T) {
+	reg := newFakeRegistry()
+	pi := newPamIntegration(serverconfig.PamConfig{Mode: "capture"}, reg)
+	open := pty.PamEvent{
+		Event: "open", Username: "carol", TTY: "/dev/pts/4", PID: 7,
+		Mode: "capture", CaptureSocket: "/run/uterm-cap-7.sock",
+	}
+	pi.onOpen(context.Background(), open)
+	if len(reg.created) != 1 {
+		t.Fatalf("want 1 create, got %d", len(reg.created))
+	}
+	created, _ := reg.created[0]["session_id"].(string)
+
+	pi.onClose(context.Background(), pty.PamEvent{
+		Event: "close", Username: "carol", TTY: "/dev/pts/4", PID: 7, Mode: "capture",
+	})
+	if len(reg.deleted) != 1 || reg.deleted[0] != created {
+		t.Fatalf("close deleted %v, want the created id %q", reg.deleted, created)
 	}
 }
 
@@ -192,8 +227,8 @@ func TestPamHandleDispatch(t *testing.T) {
 	pi.handle(context.Background(), pty.PamEvent{Event: "open", Username: "x", TTY: "/dev/pts/1"})
 	pi.handle(context.Background(), pty.PamEvent{Event: "close", Username: "x", TTY: "/dev/pts/1"})
 	pi.handle(context.Background(), pty.PamEvent{Event: "weird", Username: "x"}) // ignored
-	if len(reg.created) != 1 || len(reg.stopped) != 1 {
-		t.Fatalf("dispatch: created=%d stopped=%d", len(reg.created), len(reg.stopped))
+	if len(reg.created) != 1 || len(reg.deleted) != 1 {
+		t.Fatalf("dispatch: created=%d deleted=%d", len(reg.created), len(reg.deleted))
 	}
 }
 
@@ -266,14 +301,17 @@ func TestPamRunListenerStartError(t *testing.T) {
 	}
 }
 
-// TestPamOnCloseUnknownSession covers the StopSession-error branch.
+// TestPamOnCloseUnknownSession covers the DeleteSession-error branch: the error
+// is logged, never raised, so a close for a session the registry never had is a
+// no-op rather than a crash.
 func TestPamOnCloseUnknownSession(t *testing.T) {
-	reg := newFakeRegistry() // no session registered → StopSession errors
+	reg := newFakeRegistry()
+	reg.deleteErr = errFixed("no such session")
 	pi := newPamIntegration(serverconfig.PamConfig{Mode: "notify"}, reg)
 	pi.onClose(context.Background(), pty.PamEvent{Event: "close", Username: "ghost", TTY: "/dev/pts/9"})
-	// StopSession still recorded the attempt; the error was logged, not raised.
-	if len(reg.stopped) != 1 {
-		t.Fatalf("want 1 stop attempt, got %d", len(reg.stopped))
+	// DeleteSession still recorded the attempt; the error was logged, not raised.
+	if len(reg.deleted) != 1 {
+		t.Fatalf("want 1 delete attempt, got %d", len(reg.deleted))
 	}
 }
 

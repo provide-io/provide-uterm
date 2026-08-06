@@ -134,13 +134,14 @@ func (p *PamIntegration) onOpen(ctx context.Context, ev pty.PamEvent) {
 	}
 }
 
-// onClose stops the tunnel bridge, then the session, then best-effort relays the
-// close event.
+// onClose stops the tunnel bridge, deletes the session, then best-effort relays
+// the close event. PAM sessions are ephemeral, so the definition is removed
+// rather than left behind stopped (DeleteSession stops the connector first).
 func (p *PamIntegration) onClose(ctx context.Context, ev pty.PamEvent) {
 	sessionID := pamSessionID(ev)
 	p.stopBridge(sessionID)
-	if _, err := p.registry.StopSession(ctx, sessionID); err != nil {
-		p.logger.Warn("pam_session_stop_failed", "session_id", sessionID, "error", err)
+	if err := p.registry.DeleteSession(ctx, sessionID); err != nil {
+		p.logger.Warn("pam_session_delete_failed", "session_id", sessionID, "error", err)
 	}
 	if p.relayConfigured() {
 		p.forwardToRelay(ctx, map[string]any{
@@ -272,8 +273,13 @@ func (p *PamIntegration) forwardToRelay(ctx context.Context, event map[string]an
 }
 
 // pamSessionID builds a stable session id for a PAM event. Port of _session_id:
-// includes the PID when the TTY is absent.
+// capture sessions key on the PID (pam_uterm.so publishes one capture socket per
+// pid, and the close event carries a TTY that the open-side id must not depend
+// on); otherwise the TTY slug, plus the PID when the TTY is absent.
 func pamSessionID(ev pty.PamEvent) string {
+	if ev.Mode == "capture" || ev.CaptureSocket != "" {
+		return "pam-" + ev.Username + "-capture-" + strconv.Itoa(ev.PID)
+	}
 	slug := ttySlug(ev.TTY)
 	if ev.TTY == "" {
 		return "pam-" + ev.Username + "-" + slug + "-" + strconv.Itoa(ev.PID)
