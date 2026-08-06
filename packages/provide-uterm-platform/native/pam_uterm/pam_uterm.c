@@ -13,13 +13,14 @@
  *   Notify mode (default): server receives login events, creates a companion shell.
  *     session  optional  pam_uterm.so
  *
- *   Capture mode: server observes the real SSH shell via LD_PRELOAD interception.
- *     session  optional  pam_uterm.so mode=capture lib=/usr/lib/libuterm_capture.so
+ *   Capture mode: server observes the real SSH shell through a per-session socket.
+ *     session  optional  pam_uterm.so mode=capture
+ *   Add lib=/usr/lib/libuterm_capture.so when PAM should also inject LD_PRELOAD.
  *
  * Args:
  *   socket=PATH   notify socket (default /run/uterm-notify.sock)
  *   mode=MODE     "notify" (default) or "capture"
- *   lib=PATH      path to libuterm_capture.so (required for mode=capture)
+ *   lib=PATH      optional libuterm_capture.so path to inject in capture mode
  *   cap_dir=DIR   dir for per-pid capture sockets (default /run)
  *
  * JSON payloads sent to the notify socket (newline-terminated):
@@ -28,7 +29,7 @@
  *     open:  {"event":"open",  "username":"alice","tty":"/dev/pts/3","pid":12345,"mode":"notify"}
  *     close: {"event":"close", "username":"alice","tty":"/dev/pts/3","pid":12345,"mode":"notify"}
  *
- *   capture mode (open adds capture_socket; also sets LD_PRELOAD env via pam_putenv):
+ *   capture mode (open adds capture_socket and publishes it via pam_putenv):
  *     open:  {"event":"open",  "username":"alice","tty":"/dev/pts/3","pid":12345,"mode":"capture",
  *             "capture_socket":"/run/uterm-cap-12345.sock"}
  *     close: {"event":"close", "username":"alice","tty":"/dev/pts/3","pid":12345,"mode":"capture"}
@@ -154,6 +155,24 @@ static void _notify(const char *socket_path, const char *json) {
     close(fd);
 }
 
+/* Publish the per-session socket independently from optional library
+ * injection.  A constrained launcher may validate its final process before it
+ * applies LD_PRELOAD, while existing deployments may still request injection
+ * directly from PAM with lib=PATH. */
+static void _set_capture_environment(pam_handle_t *pamh,
+                                     const char *lib_path,
+                                     const char *cap_sock) {
+    char cap_env[MAX_ENV];
+    snprintf(cap_env, sizeof(cap_env), "UTERM_CAPTURE_SOCKET=%s", cap_sock);
+    pam_putenv(pamh, cap_env);
+
+    if (lib_path && *lib_path) {
+        char preload[MAX_ENV];
+        snprintf(preload, sizeof(preload), "LD_PRELOAD=%s", lib_path);
+        pam_putenv(pamh, preload);
+    }
+}
+
 /* ── open session ────────────────────────────────────────────────────────── */
 
 PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh, int flags __attribute__((unused)),
@@ -191,17 +210,7 @@ PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh, int flags __attribute__((
                  "\"pid\":%d,\"mode\":\"capture\",\"capture_socket\":\"%s\"}",
                  user_esc, tty_esc, pid, cap_sock);
 
-        /* Inject LD_PRELOAD and capture socket path into the PAM environment.
-         * These are inherited by the child shell that sshd/login spawns.      */
-        if (lib_path && *lib_path) {
-            char preload[MAX_ENV];
-            snprintf(preload, sizeof(preload), "LD_PRELOAD=%s", lib_path);
-            pam_putenv(pamh, preload);
-
-            char cap_env[MAX_ENV];
-            snprintf(cap_env, sizeof(cap_env), "UTERM_CAPTURE_SOCKET=%s", cap_sock);
-            pam_putenv(pamh, cap_env);
-        }
+        _set_capture_environment(pamh, lib_path, cap_sock);
     } else {
         json = _build_json(
                  "{\"event\":\"open\",\"username\":\"%s\",\"tty\":\"%s\","
