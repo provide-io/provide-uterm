@@ -208,7 +208,7 @@ def test_jwt_session_owner_reassignment_is_admin_only() -> None:
             "/api/sessions",
             headers=_jwt_headers(sub="capture-agent", roles=["operator"]),
             json={
-                "session_id": "pam-suokki-pts-4",
+                "session_id": "pam-alice-pts-4",
                 "connector_type": "shell",
                 "visibility": "operator",
             },
@@ -217,33 +217,33 @@ def test_jwt_session_owner_reassignment_is_admin_only() -> None:
         assert created.json()["owner"] == "capture-agent"
 
         denied = client.patch(
-            "/api/sessions/pam-suokki-pts-4",
+            "/api/sessions/pam-alice-pts-4",
             headers=_jwt_headers(sub="capture-agent", roles=["operator"]),
-            json={"owner": "blackbetty:7", "visibility": "private"},
+            json={"owner": "consumer:7", "visibility": "private"},
         )
         assert denied.status_code == 403
 
         reassigned = client.patch(
-            "/api/sessions/pam-suokki-pts-4",
-            headers=_jwt_headers(sub="blackbetty-gateway", roles=["admin"]),
-            json={"owner": "blackbetty:7", "visibility": "private"},
+            "/api/sessions/pam-alice-pts-4",
+            headers=_jwt_headers(sub="consumer-gateway", roles=["admin"]),
+            json={"owner": "consumer:7", "visibility": "private"},
         )
         assert reassigned.status_code == 200
-        assert reassigned.json()["owner"] == "blackbetty:7"
+        assert reassigned.json()["owner"] == "consumer:7"
         assert reassigned.json()["visibility"] == "private"
 
         owner_sessions = client.get(
             "/api/sessions",
-            headers=_jwt_headers(sub="blackbetty:7", roles=["viewer"]),
+            headers=_jwt_headers(sub="consumer:7", roles=["viewer"]),
         )
         stranger_sessions = client.get(
             "/api/sessions",
-            headers=_jwt_headers(sub="blackbetty:8", roles=["viewer"]),
+            headers=_jwt_headers(sub="consumer:8", roles=["viewer"]),
         )
         owner_ids = {item["session_id"] for item in owner_sessions.json()}
         stranger_ids = {item["session_id"] for item in stranger_sessions.json()}
-        assert "pam-suokki-pts-4" in owner_ids
-        assert "pam-suokki-pts-4" not in stranger_ids
+        assert "pam-alice-pts-4" in owner_ids
+        assert "pam-alice-pts-4" not in stranger_ids
 
 
 def test_replay_page_honors_custom_app_path() -> None:

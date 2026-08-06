@@ -180,12 +180,12 @@ git status --short
 
 Expected: no diff errors, a good signature, and only the pre-existing `.beads/interactions.jsonl` modification.
 
-- [ ] **Step 3: Close the Beads issue after Black Betty's live proof**
+- [ ] **Step 3: Close the Beads issue after an external consumer's live proof**
 
-After Black Betty proves socket-only PAM configuration and bounded capture on the server, run:
+After an external consumer proves socket-only PAM configuration and bounded capture on the server, run:
 
 ```bash
-bd close provide-uterm-u4y --reason="Pre-constructor capture, unique PAM IDs, socket-only PAM export, and the Black Betty consumer boundary passed native, Python, and live SSH verification."
+bd close provide-uterm-u4y --reason="Pre-constructor capture, unique PAM IDs, socket-only PAM export, and the external consumer boundary passed native, Python, and live SSH verification."
 ```
 
 Expected: `provide-uterm-u4y` is closed. Do not push the Dolt or Git remotes unless the user requests publication.
