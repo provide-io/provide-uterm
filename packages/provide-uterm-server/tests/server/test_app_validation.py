@@ -11,6 +11,7 @@ import importlib.resources
 import pytest
 
 from provide.uterm.server.app import _validate_auth_config, _validate_frontend_assets
+from provide.uterm.server.app.assets import _has_vite_manifest
 from provide.uterm.server.models import AuthConfig, ServerConfig
 
 # True only when frontend assets have been built (npm run build:frontend).
@@ -185,6 +186,11 @@ class TestValidateAuthConfigModeEdgeCases:
 
 class TestValidateFrontendAssets:
     """Test frontend asset validation."""
+
+    def test_package_data_safe_vite_manifest_is_accepted(self, tmp_path) -> None:
+        (tmp_path / "vite-manifest.json").write_text("{}")
+
+        assert _has_vite_manifest(tmp_path) is True
 
     @pytest.mark.skipif(not _FRONTEND_BUILT, reason="frontend not built; run npm run build:frontend first")
     def test_validate_frontend_assets_succeeds(self) -> None:

@@ -13,7 +13,7 @@ import { PageShell } from "../layout/PageShell";
 import { HijackHost } from "../widgets/HijackHost";
 import styles from "./SessionPage.module.css";
 
-interface SessionPageProps {
+export interface SessionPageProps {
   bootstrap: AppBootstrap;
 }
 

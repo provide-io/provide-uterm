@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { UtermSessionElement } from "./session-element.js";
-import "./session-element.js";
+import {
+  type UtermSessionElement,
+  registerUtermSessionElement,
+} from "./session-element.js";
 import { encodeControlFrame } from "./hijack-codec.js";
+
+registerUtermSessionElement();
 
 // Reuse mocks logic
 class MockWebSocket {

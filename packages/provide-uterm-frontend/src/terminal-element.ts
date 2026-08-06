@@ -583,6 +583,8 @@ declare global {
   }
 }
 
-if (!customElements.get("uterm-terminal")) {
-  customElements.define("uterm-terminal", TerminalElement);
+export function registerTerminalElement(registry: CustomElementRegistry = customElements): void {
+  if (!registry.get("uterm-terminal")) {
+    registry.define("uterm-terminal", TerminalElement);
+  }
 }

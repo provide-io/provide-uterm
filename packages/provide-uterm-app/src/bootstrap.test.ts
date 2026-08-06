@@ -21,9 +21,14 @@ describe("readBootstrap", () => {
     expect(readBootstrap()).toMatchObject({ page_kind: "operator", title: "Ops", session_id: "s1" });
   });
 
+  it("accepts a consumer page kind", () => {
+    installPayload({ page_kind: "consumer-reports", title: "Reports", app_path: "/app", assets_path: "/assets" });
+    expect(readBootstrap().page_kind).toBe("consumer-reports");
+  });
+
   it("rejects missing, unknown, and incomplete payloads", () => {
     expect(() => readBootstrap()).toThrow("Missing #app-bootstrap payload");
-    installPayload({ page_kind: "future", title: "Ops", app_path: "/app", assets_path: "/assets" });
+    installPayload({ page_kind: "../future", title: "Ops", app_path: "/app", assets_path: "/assets" });
     expect(() => readBootstrap()).toThrow("Invalid page bootstrap");
     document.body.replaceChildren();
     installPayload({ page_kind: "connect", title: "Ops" });

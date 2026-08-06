@@ -6,8 +6,12 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { encodeControlFrame } from "./hijack-codec.js";
-import type { UtermSessionElement } from "./session-element.js";
-import "./session-element.js";
+import {
+  type UtermSessionElement,
+  registerUtermSessionElement,
+} from "./session-element.js";
+
+registerUtermSessionElement();
 
 class MockWebSocket {
   static CONNECTING = 0;

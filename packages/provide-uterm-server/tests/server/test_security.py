@@ -198,6 +198,54 @@ def test_jwt_api_enforces_role_and_ownership() -> None:
         assert mode_admin.status_code == 200
 
 
+def test_jwt_session_owner_reassignment_is_admin_only() -> None:
+    config = default_server_config()
+    config.auth = _jwt_config()
+    app = create_server_app(config)
+
+    with TestClient(app) as client:
+        created = client.post(
+            "/api/sessions",
+            headers=_jwt_headers(sub="capture-agent", roles=["operator"]),
+            json={
+                "session_id": "pam-suokki-pts-4",
+                "connector_type": "shell",
+                "visibility": "operator",
+            },
+        )
+        assert created.status_code == 200
+        assert created.json()["owner"] == "capture-agent"
+
+        denied = client.patch(
+            "/api/sessions/pam-suokki-pts-4",
+            headers=_jwt_headers(sub="capture-agent", roles=["operator"]),
+            json={"owner": "blackbetty:7", "visibility": "private"},
+        )
+        assert denied.status_code == 403
+
+        reassigned = client.patch(
+            "/api/sessions/pam-suokki-pts-4",
+            headers=_jwt_headers(sub="blackbetty-gateway", roles=["admin"]),
+            json={"owner": "blackbetty:7", "visibility": "private"},
+        )
+        assert reassigned.status_code == 200
+        assert reassigned.json()["owner"] == "blackbetty:7"
+        assert reassigned.json()["visibility"] == "private"
+
+        owner_sessions = client.get(
+            "/api/sessions",
+            headers=_jwt_headers(sub="blackbetty:7", roles=["viewer"]),
+        )
+        stranger_sessions = client.get(
+            "/api/sessions",
+            headers=_jwt_headers(sub="blackbetty:8", roles=["viewer"]),
+        )
+        owner_ids = {item["session_id"] for item in owner_sessions.json()}
+        stranger_ids = {item["session_id"] for item in stranger_sessions.json()}
+        assert "pam-suokki-pts-4" in owner_ids
+        assert "pam-suokki-pts-4" not in stranger_ids
+
+
 def test_replay_page_honors_custom_app_path() -> None:
     config = default_server_config()
     config.ui.app_path = "/ops"

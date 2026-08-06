@@ -11,9 +11,11 @@ import { OperatorPage } from "./components/operator/OperatorPage";
 import { ReplayPage } from "./components/replay/ReplayPage";
 import { SessionPage } from "./components/session/SessionPage";
 import { ErrorBoundary } from "./components/common/ErrorBoundary";
+import type { UtermExtensionRegistry } from "./extensions";
 
-interface AppProps {
+export interface AppProps {
   bootstrap: AppBootstrap;
+  extensions?: UtermExtensionRegistry;
 }
 
 /** Rendered when `page_kind` has no matching case; throws so the nearest
@@ -22,10 +24,13 @@ function UnknownPageKind({ kind }: { kind: string }): never {
   throw new Error(`Unknown page_kind: ${kind}`);
 }
 
-export function App({ bootstrap }: AppProps) {
+export function App({ bootstrap, extensions }: AppProps) {
+  const consumerPage = extensions?.resolvePage(bootstrap.page_kind);
+  const ConsumerPage = consumerPage?.component;
   return (
     <ErrorBoundary>
       {(() => {
+        if (ConsumerPage) return <ConsumerPage bootstrap={bootstrap} />;
         switch (bootstrap.page_kind) {
           case "dashboard":
             return <DashboardPage bootstrap={bootstrap} />;

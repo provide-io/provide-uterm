@@ -5,7 +5,7 @@
 
 import type { AppBootstrap } from "./api/types";
 
-const VALID_PAGE_KINDS = new Set(["dashboard", "session", "operator", "replay", "connect", "inspect"]);
+const VALID_PAGE_KIND = /^[a-z][a-z0-9-]{0,63}$/;
 
 export function readBootstrap(): AppBootstrap {
   const script = document.getElementById("app-bootstrap");
@@ -13,7 +13,7 @@ export function readBootstrap(): AppBootstrap {
     throw new Error("Missing #app-bootstrap payload");
   }
   const parsed = JSON.parse(script.textContent || "{}") as Partial<AppBootstrap>;
-  if (!parsed.page_kind || !VALID_PAGE_KINDS.has(parsed.page_kind)) {
+  if (typeof parsed.page_kind !== "string" || !VALID_PAGE_KIND.test(parsed.page_kind)) {
     throw new Error("Invalid page bootstrap");
   }
   if (

@@ -196,8 +196,15 @@ def session_capability_handlers() -> dict[str, Callable[..., object]]:
         definition = await session_definition(request, session_id)
         if not await az.can_mutate_session(p, definition, "session.control.update"):
             raise HTTPException(status_code=403, detail="insufficient privileges")
+        owner_change = "owner" in payload
+        if owner_change and not await az.is_admin(p):
+            raise HTTPException(status_code=403, detail="admin privileges required to reassign owner")
         try:
-            session = await registry(request).update_session(session_id, payload)
+            session = await registry(request).update_session(
+                session_id,
+                payload,
+                allow_owner_change=owner_change,
+            )
         except SessionValidationError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except KeyError:

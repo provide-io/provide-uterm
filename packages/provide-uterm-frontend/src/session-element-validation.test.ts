@@ -3,7 +3,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 import { afterEach, describe, expect, it } from "vitest";
-import { UtermSessionElement } from "./session-element.js";
+import { UtermSessionElement, registerUtermSessionElement } from "./session-element.js";
+
+registerUtermSessionElement();
 
 type SessionInternals = {
   _handleMessage: (message: unknown) => void;

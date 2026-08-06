@@ -22,6 +22,7 @@
     "test:ts": "npm run test --workspace=packages/provide-uterm-ts",
     "test:ts:coverage": "npm run test:coverage --workspace=packages/provide-uterm-ts",
     "test:ts:mutation": "npm run test:mutation --workspace=packages/provide-uterm-ts",
+    "test:browser-consumer": "npm --prefix tests/fixtures/browser-consumer ci --ignore-scripts --install-links && npm --prefix tests/fixtures/browser-consumer run typecheck && npm --prefix tests/fixtures/browser-consumer run build",
     "lint:frontend": "npm run lint --workspace=packages/provide-uterm-frontend",
     "lint:app": "npm run lint --workspace=packages/provide-uterm-app",
     "lint:ts": "npm run lint --workspace=packages/provide-uterm-ts",

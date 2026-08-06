@@ -101,6 +101,7 @@ def main() -> int:
         ("provide-uterm-app typecheck", "npm run typecheck:app"),
         ("provide-uterm-frontend tests", "npm test --workspace=packages/provide-uterm-frontend"),
         ("provide-uterm-app tests", "npm test --workspace=packages/provide-uterm-app"),
+        ("browser consumer contract", "npm run test:browser-consumer"),
     ):
         rc = _run_npm(label, command)
         if rc != 0:

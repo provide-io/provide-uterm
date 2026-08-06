@@ -5,9 +5,10 @@
 
 import type { DetailedHTMLProps, HTMLAttributes, Ref } from "react";
 import { useEffect, useRef } from "react";
-// Side-effect import: registers the <uterm-terminal> custom element.
-import "@provide-uterm-frontend/terminal-element";
-import type { TerminalElement } from "@provide-uterm-frontend/terminal-element";
+import {
+  type TerminalElement,
+  registerTerminalElement,
+} from "provide-uterm-frontend/terminal-element";
 import { useTerminalStore } from "../../stores/terminalStore";
 
 declare module "react" {
@@ -21,7 +22,7 @@ declare module "react" {
   }
 }
 
-interface TerminalHostProps {
+export interface TerminalHostProps {
   config?: Record<string, unknown>;
 }
 
@@ -31,6 +32,7 @@ export function TerminalHost({ config }: TerminalHostProps) {
   const setMounted = useTerminalStore((s) => s.setMounted);
 
   useEffect(() => {
+    registerTerminalElement();
     if (mountedRef.current || !containerRef.current) return;
     mountedRef.current = true;
     setMounted(true);

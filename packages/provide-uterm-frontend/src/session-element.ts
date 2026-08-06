@@ -4,10 +4,12 @@
 //
 
 import { LitElement, html, css, } from "lit";
-import { customElement, property, query, state } from "lit/decorators.js";
+import { property, query, state } from "lit/decorators.js";
 import type { AnyFrame } from "./generated/frames.js";
-import "./approval-prompt-element.js";
-import type { ApprovalPromptElement } from "./approval-prompt-element.js";
+import {
+  type ApprovalPromptElement,
+  registerApprovalPromptElement,
+} from "./approval-prompt-element.js";
 import {
   ControlChannelDecoder,
   type FitAddonInstance,
@@ -349,7 +351,6 @@ function validateApprovalPendingFrame(value: unknown): ValidatedApprovalPendingF
   return value as ValidatedApprovalPendingFrame;
 }
 
-@customElement("uterm-session")
 export class UtermSessionElement extends LitElement {
   @property({ type: Object }) config: Partial<HijackConfig> = {};
   @property({ type: Number }) uid = 0;
@@ -1016,6 +1017,13 @@ export class UtermSessionElement extends LitElement {
           : ""
       }
     `;
+  }
+}
+
+export function registerUtermSessionElement(registry: CustomElementRegistry = customElements): void {
+  registerApprovalPromptElement(registry);
+  if (!registry.get("uterm-session")) {
+    registry.define("uterm-session", UtermSessionElement);
   }
 }
 

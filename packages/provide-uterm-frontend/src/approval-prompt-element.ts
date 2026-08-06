@@ -1,5 +1,5 @@
 import { LitElement, html, css, type PropertyValues } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
+import { property, state } from "lit/decorators.js";
 import { computeRemainingSeconds } from "./hijack-approval.js";
 
 export interface PendingApproval {
@@ -8,7 +8,6 @@ export interface PendingApproval {
   expiresAt: number;
 }
 
-@customElement("uterm-approval-prompt")
 export class ApprovalPromptElement extends LitElement {
   @property({ type: Object }) pendingApproval: PendingApproval | null = null;
   @property({ type: String }) mode: "modal" | "statusbar" = "statusbar";
@@ -262,6 +261,12 @@ export class ApprovalPromptElement extends LitElement {
         </div>
       </div>
     `;
+  }
+}
+
+export function registerApprovalPromptElement(registry: CustomElementRegistry = customElements): void {
+  if (!registry.get("uterm-approval-prompt")) {
+    registry.define("uterm-approval-prompt", ApprovalPromptElement);
   }
 }
 

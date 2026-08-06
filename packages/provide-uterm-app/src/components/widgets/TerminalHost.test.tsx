@@ -6,7 +6,7 @@ import { render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useTerminalStore } from "../../stores/terminalStore";
 
-vi.mock("@provide-uterm-frontend/terminal-element", () => ({}));
+vi.mock("provide-uterm-frontend/terminal-element", () => ({ registerTerminalElement: vi.fn() }));
 import { TerminalHost } from "./TerminalHost";
 
 const instances: StubTerminal[] = [];

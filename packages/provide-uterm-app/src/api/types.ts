@@ -3,7 +3,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
-export type AppPageKind = "dashboard" | "session" | "operator" | "replay" | "connect" | "inspect";
+export const BUILTIN_APP_PAGE_KINDS = [
+  "dashboard",
+  "session",
+  "operator",
+  "replay",
+  "connect",
+  "inspect",
+] as const;
+export type BuiltinAppPageKind = (typeof BUILTIN_APP_PAGE_KINDS)[number];
+export type AppPageKind = BuiltinAppPageKind | (string & {});
 export type SessionMode = "open" | "hijack";
 export type SessionSurface = "user" | "operator";
 
