@@ -1,0 +1,23 @@
+{
+  "name": "provide-uterm-browser-consumer-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "provide-uterm-app": "file:../../../packages/provide-uterm-app",
+    "provide-uterm-frontend": "file:../../../packages/provide-uterm-frontend",
+    "provide-uterm-ts": "file:../../../packages/provide-uterm-ts",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.16",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.0.16"
+  }
+}

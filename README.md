@@ -92,6 +92,46 @@ uterm server --config server.toml
 # Dashboard: http://localhost:27780/app/
 ```
 
+### Extend the browser application
+
+Browser consumers can register CSS theme tokens, navigation entries, custom page kinds,
+and one authentication adapter without importing internal source paths:
+
+```tsx
+import {
+  App,
+  applyThemeTokens,
+  createUtermExtensionRegistry,
+} from "provide-uterm-app";
+
+const extensions = createUtermExtensionRegistry();
+extensions.register({
+  id: "my-console",
+  themeTokens: { "--bg-primary": "#050302" },
+  navigation: [{ id: "reports", label: "Reports", href: "/reports", pageKind: "reports" }],
+  pages: [{ kind: "reports", component: ({ bootstrap }) => <h1>{bootstrap.title}</h1> }],
+  auth: {
+    resolve: async () => ({ subject: "external-user", roles: ["reader"] }),
+    authorize: (identity, capability) =>
+      identity.roles.includes("reader") && capability === "reports.read",
+  },
+});
+
+applyThemeTokens(document.documentElement, extensions.snapshot().themeTokens);
+root.render(<App bootstrap={bootstrap} extensions={extensions} />);
+```
+
+The public React package also exports `SessionPage`, `TerminalHost`, `ReplayPage`, and
+`HijackHost`. The framework-neutral `provide-uterm-frontend` package exports
+`TerminalElement`, `UtermSessionElement`, `registerUtermElements`, and the DeckMux types.
+Import `DeckMux` from the explicit `provide-uterm-frontend/deckmux` subpath. Other package
+subpaths expose the terminal and session elements and DeckMux CSS directly.
+
+These browser packages are private source packages, not registry artifacts. Supported
+consumers install them from a reviewed local checkout and let a TypeScript-aware bundler
+such as Vite compile the exported source. The consumer verification fixture exercises
+that exact installation, typecheck, JavaScript, and CSS build path.
+
 ### Inspect HTTP traffic with interception
 
 ```bash

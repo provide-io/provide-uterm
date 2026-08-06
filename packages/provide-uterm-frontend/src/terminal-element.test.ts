@@ -4,8 +4,9 @@
 //
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import "./terminal-element.js";
-import type { TerminalElement } from "./terminal-element.js";
+import { type TerminalElement, registerTerminalElement } from "./terminal-element.js";
+
+registerTerminalElement();
 
 class MockFitAddon {
   fit(): void {}

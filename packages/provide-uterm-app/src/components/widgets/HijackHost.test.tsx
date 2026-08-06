@@ -9,14 +9,14 @@ import { useTerminalStore } from "../../stores/terminalStore";
 // HijackHost side-effect-imports the real session-element (to register
 // <uterm-session>); stub that module out so our lightweight stub element below
 // is the one registered, instead of the full Lit element (xterm/WS/DeckMux).
-vi.mock("@provide-uterm-frontend/session-element", () => ({}));
+vi.mock("provide-uterm-frontend/session-element", () => ({ registerUtermSessionElement: vi.fn() }));
 
 const deckMuxInstances = vi.hoisted(() => [] as Array<{
   enable: ReturnType<typeof vi.fn>;
   setOwnDimensions: ReturnType<typeof vi.fn>;
   handleMessage: ReturnType<typeof vi.fn>;
 }>);
-vi.mock("@provide-uterm-frontend/app/deckmux/deckmux", () => ({
+vi.mock("provide-uterm-frontend/deckmux", () => ({
   DeckMux: class {
     enable = vi.fn();
     setOwnDimensions = vi.fn();

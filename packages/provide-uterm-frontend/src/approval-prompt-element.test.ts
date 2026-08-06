@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import "./approval-prompt-element.js";
-import type { ApprovalPromptElement } from "./approval-prompt-element.js";
+import {
+  type ApprovalPromptElement,
+  registerApprovalPromptElement,
+} from "./approval-prompt-element.js";
+
+registerApprovalPromptElement();
 
 describe("ApprovalPromptElement", () => {
   let element: ApprovalPromptElement;

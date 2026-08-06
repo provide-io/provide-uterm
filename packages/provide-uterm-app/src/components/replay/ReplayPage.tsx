@@ -14,7 +14,7 @@ import { ScreenPreview } from "./ScreenPreview";
 import { TimelineCanvas } from "./TimelineCanvas";
 import styles from "./ReplayPage.module.css";
 
-interface ReplayPageProps {
+export interface ReplayPageProps {
   bootstrap: AppBootstrap;
 }
 

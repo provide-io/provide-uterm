@@ -1,4 +1,3 @@
-import path from "node:path";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
@@ -12,11 +11,6 @@ const DEV_WS_TARGET = `ws://${DEV_API_HOST}`;
 export default defineConfig({
   plugins: [react()],
   base: "",
-  resolve: {
-    alias: {
-      "@provide-uterm-frontend": path.resolve(__dirname, "../provide-uterm-frontend/src"),
-    },
-  },
   build: {
     outDir: "../../packages/provide-uterm-server/src/provide/uterm/server/frontend",
     emptyOutDir: false,

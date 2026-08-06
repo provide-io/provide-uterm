@@ -3,9 +3,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { UtermSessionElement } from "./session-element.js";
-import "./session-element.js";
+import {
+  type UtermSessionElement,
+  registerUtermSessionElement,
+} from "./session-element.js";
 import { encodeControlFrame, encodeDataFrame } from "./hijack-codec.js";
+
+registerUtermSessionElement();
 
 // ── WebSocket mock ────────────────────────────────────────────────────────────
 

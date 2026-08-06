@@ -3,12 +3,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
-import { DeckMux } from "@provide-uterm-frontend/app/deckmux/deckmux";
-// Side-effect import: registers the <uterm-session> custom element. The React
-// app renders the tag directly, so it must ensure the element is defined rather
-// than relying on the vanilla hijack.ts entry being loaded on the page.
-import "@provide-uterm-frontend/session-element";
-import type { UtermSessionElement } from "@provide-uterm-frontend/session-element";
+import { DeckMux } from "provide-uterm-frontend/deckmux";
+import {
+  type UtermSessionElement,
+  registerUtermSessionElement,
+} from "provide-uterm-frontend/session-element";
 import type { DetailedHTMLProps, HTMLAttributes, Ref } from "react";
 import { useEffect, useRef } from "react";
 import type { SessionSurface } from "../../api/types";
@@ -25,7 +24,7 @@ declare module "react" {
   }
 }
 
-interface HijackHostProps {
+export interface HijackHostProps {
   sessionId: string;
   surface?: SessionSurface;
 }
@@ -37,6 +36,7 @@ export function HijackHost({ sessionId, surface }: HijackHostProps) {
   const setDimensions = useTerminalStore((s) => s.setDimensions);
 
   useEffect(() => {
+    registerUtermSessionElement();
     if (mountedRef.current || !containerRef.current) return;
     const isOperator = surface === "operator";
     mountedRef.current = true;
@@ -181,4 +181,3 @@ export function HijackHost({ sessionId, surface }: HijackHostProps) {
 
   return <uterm-session ref={containerRef} style={{ width: "100%", height: "100%" }} />;
 }
-

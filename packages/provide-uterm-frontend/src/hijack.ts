@@ -1,6 +1,11 @@
-import type { UtermSessionElement } from "./session-element.js";
+import {
+  type UtermSessionElement,
+  registerUtermSessionElement,
+} from "./session-element.js";
 
 export * from "./session-element.js";
+
+registerUtermSessionElement();
 
 import { startReconnectAnim, stopReconnectAnim } from "./hijack-websocket.js";
 

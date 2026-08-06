@@ -1,7 +1,15 @@
 {
   "name": "provide-uterm-frontend",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/public.ts",
+    "./deckmux": "./src/app/deckmux/deckmux.ts",
+    "./deckmux.css": "./src/app/deckmux/deckmux.css",
+    "./session-element": "./src/session-element.ts",
+    "./terminal-element": "./src/terminal-element.ts"
+  },
   "scripts": {
     "build": "vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",

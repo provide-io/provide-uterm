@@ -15,7 +15,7 @@
  *   Panes round-robin through each pool, so one entry = shared, many = fan-out.
  */
 
-import "./terminal-element.js"; // registers the <uterm-terminal> custom element
+import { registerTerminalElement } from "./terminal-element.js";
 import {
   closeLeaf,
   collectLeaves,
@@ -28,6 +28,8 @@ import {
   splitLeaf,
 } from "./panels-model.js";
 import { attachVnc, type VncAttachHandle } from "./vnc-page.js";
+
+registerTerminalElement();
 
 interface VncSource {
   workerId: string;

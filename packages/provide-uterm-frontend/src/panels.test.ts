@@ -12,7 +12,7 @@ const attachVnc = vi.hoisted(() => vi.fn((_screen, _params, options) => {
   return handle;
 }));
 vi.mock("./vnc-page.js", () => ({ attachVnc }));
-vi.mock("./terminal-element.js", () => ({}));
+vi.mock("./terminal-element.js", () => ({ registerTerminalElement: vi.fn() }));
 
 import { PanelsPage } from "./panels.js";
 

@@ -386,6 +386,7 @@ jobs:
       # plain `npm test` would not evaluate Vitest's configured thresholds.
       - run: npm run test:coverage --workspace=packages/provide-uterm-frontend
       - run: npm run test:coverage --workspace=packages/provide-uterm-app
+      - run: npm run test:browser-consumer
       # The TypeScript runtime port typechecks under tsc 7 and holds itself
       # to 100% line/branch/function coverage, enforced by its vitest config.
       - run: npm run typecheck:ts

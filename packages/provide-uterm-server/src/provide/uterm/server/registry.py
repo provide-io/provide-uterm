@@ -35,7 +35,8 @@ from provide.uterm.server.runtime import HostedSessionRuntime
 
 # Fields that callers may mutate on an existing session via update_session().
 # Immutable fields (session_id, connector_type, created_at, owner, ephemeral)
-# are intentionally excluded so they cannot drift after creation.
+# are intentionally excluded so they cannot drift after creation.  The HTTP
+# control plane may opt an authenticated administrator into an owner change.
 _MUTABLE_SESSION_FIELDS = frozenset(
     {"display_name", "input_mode", "visibility", "auto_start", "tags", "recording_enabled", "connector_config"}
 )
@@ -266,8 +267,16 @@ class SessionRegistry:
             await runtime.start()
         return runtime.status()
 
-    async def update_session(self, session_id: str, payload: dict[str, Any]) -> SessionRuntimeStatus:
+    async def update_session(
+        self,
+        session_id: str,
+        payload: dict[str, Any],
+        *,
+        allow_owner_change: bool = False,
+    ) -> SessionRuntimeStatus:
         updates = {k: v for k, v in payload.items() if k in _MUTABLE_SESSION_FIELDS}
+        if allow_owner_change and "owner" in payload:
+            updates["owner"] = payload["owner"]
         async with self._lock:
             session = self._require_session(session_id)
             if updates:

@@ -5,8 +5,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ControlChannelDecoder } from "./hijack-codec.js";
-import type { UtermTerminalElement } from "./terminal-element.js";
-import "./terminal-element.js";
+import {
+  type UtermTerminalElement,
+  registerTerminalElement,
+} from "./terminal-element.js";
+
+registerTerminalElement();
 
 // ── Mock classes ──────────────────────────────────────────────────────────────
 
