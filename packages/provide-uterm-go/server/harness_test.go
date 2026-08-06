@@ -57,6 +57,7 @@ type fakeRegistry struct {
 	statuses map[string]*SessionStatus
 	// hooks override behavior for error-branch coverage.
 	createErr   error
+	deleteErr   error
 	updateErr   error
 	annotateErr error
 	controlErr  error
@@ -68,9 +69,11 @@ type fakeRegistry struct {
 	snapshot    map[string]any
 	events      []map[string]any
 	watch       map[string]any
-	// created / stopped capture create/stop calls for the PAM integration tests.
+	// created / stopped / deleted capture create/stop/delete calls for the PAM
+	// integration tests.
 	created []map[string]any
 	stopped []string
+	deleted []string
 }
 
 func newFakeRegistry() *fakeRegistry {
@@ -145,10 +148,12 @@ func (f *fakeRegistry) UpdateSession(_ context.Context, id string, _ map[string]
 
 func (f *fakeRegistry) DeleteSession(_ context.Context, id string) error {
 	f.mu.Lock()
+	f.deleted = append(f.deleted, id)
 	delete(f.defs, id)
 	delete(f.statuses, id)
+	err := f.deleteErr
 	f.mu.Unlock()
-	return nil
+	return err
 }
 
 func (f *fakeRegistry) StartSession(_ context.Context, id string) (*SessionStatus, error) {
