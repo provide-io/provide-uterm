@@ -255,13 +255,13 @@ reason = "mode='python'->'XXpythonXX' — model_dump(mode=...) is a serializatio
 mutant = "provide.uterm.server.registry.xǁSessionRegistryǁset_mode__mutmut_6"
 reason = "mode='python'->'PYTHON' — model_dump(mode=...) is a serialization-format switch only; the result is fed straight back to model_validate (which accepts both python and json shapes), and pydantic treats any non-'json' mode as python — VERIFIED that 'PYTHON'/'XXpythonXX'/None all dump+validate identically. The mode value is never observable in set_mode/update_session."
 [[equivalent]]
-mutant = "provide.uterm.server.registry.xǁSessionRegistryǁupdate_session__mutmut_7"
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁupdate_session__mutmut_17"
 reason = "mode='python'->None — model_dump(mode=...) is a serialization-format switch only; the result is fed straight back to model_validate (which accepts both python and json shapes), and pydantic treats any non-'json' mode as python — VERIFIED that 'PYTHON'/'XXpythonXX'/None all dump+validate identically. The mode value is never observable in set_mode/update_session."
 [[equivalent]]
-mutant = "provide.uterm.server.registry.xǁSessionRegistryǁupdate_session__mutmut_8"
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁupdate_session__mutmut_18"
 reason = "mode='python'->'XXpythonXX' — model_dump(mode=...) is a serialization-format switch only; the result is fed straight back to model_validate (which accepts both python and json shapes), and pydantic treats any non-'json' mode as python — VERIFIED that 'PYTHON'/'XXpythonXX'/None all dump+validate identically. The mode value is never observable in set_mode/update_session."
 [[equivalent]]
-mutant = "provide.uterm.server.registry.xǁSessionRegistryǁupdate_session__mutmut_9"
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁupdate_session__mutmut_19"
 reason = "mode='python'->'PYTHON' — model_dump(mode=...) is a serialization-format switch only; the result is fed straight back to model_validate (which accepts both python and json shapes), and pydantic treats any non-'json' mode as python — VERIFIED that 'PYTHON'/'XXpythonXX'/None all dump+validate identically. The mode value is never observable in set_mode/update_session."
 [[equivalent]]
 mutant = "provide.uterm.server.registry.xǁSessionRegistryǁ_on_worker_empty__mutmut_15"

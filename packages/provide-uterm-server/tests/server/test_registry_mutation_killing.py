@@ -426,6 +426,53 @@ class TestUpdateSession:
         with pytest.raises(SessionValidationError):
             await reg.update_session("a", {"input_mode": "not-a-mode"})
 
+    # ---- owner reassignment (allow_owner_change) --------------------------
+    # ``owner`` is absent from _MUTABLE_SESSION_FIELDS, so the only way it can
+    # change is the explicit opt-in the admin-gated HTTP path passes. Each test
+    # below pins one half of that predicate.
+
+    async def test_owner_changes_only_through_the_opt_in(self) -> None:
+        reg = _make_registry([_session("a", owner="alice")])
+        await reg.update_session("a", {"owner": "bob"}, allow_owner_change=True)
+        assert reg._sessions["a"].owner == "bob"
+
+    async def test_owner_ignored_without_the_opt_in(self) -> None:
+        """Kills `and` → `or`: a payload owner must not leak through unopted."""
+        reg = _make_registry([_session("a", owner="alice")])
+        await reg.update_session("a", {"owner": "bob"}, allow_owner_change=False)
+        assert reg._sessions["a"].owner == "alice"
+
+    async def test_owner_opt_in_defaults_off(self) -> None:
+        """Kills the signature default flipping to True."""
+        reg = _make_registry([_session("a", owner="alice")])
+        await reg.update_session("a", {"owner": "bob"})
+        assert reg._sessions["a"].owner == "alice"
+
+    async def test_opt_in_without_an_owner_key_is_a_noop(self) -> None:
+        """Kills `"owner" in payload` → `not in`, which would KeyError here."""
+        reg = _make_registry([_session("a", owner="alice")])
+        await reg.update_session("a", {"display_name": "Renamed"}, allow_owner_change=True)
+        assert reg._sessions["a"].owner == "alice"
+        assert reg._sessions["a"].display_name == "Renamed"
+
+    async def test_owner_reassignment_can_clear_the_owner(self) -> None:
+        """An explicit null owner is a value, not a missing key."""
+        reg = _make_registry([_session("a", owner="alice")])
+        await reg.update_session("a", {"owner": None}, allow_owner_change=True)
+        assert reg._sessions["a"].owner is None
+
+    async def test_owner_key_name_is_exactly_owner(self) -> None:
+        """Kills the `"owner"` string mutants: a near-miss key must not apply."""
+        reg = _make_registry([_session("a", owner="alice")])
+        await reg.update_session("a", {"XXownerXX": "bob"}, allow_owner_change=True)
+        assert reg._sessions["a"].owner == "alice"
+
+    async def test_owner_reassignment_alone_still_validates(self) -> None:
+        """The owner update goes through model_validate like any other field."""
+        reg = _make_registry([_session("a", owner="alice")])
+        with pytest.raises(SessionValidationError):
+            await reg.update_session("a", {"owner": 42}, allow_owner_change=True)
+
     async def test_update_egress_block_becomes_validation_error(self) -> None:
         from provide.uterm.server.egress import EgressBlockedError
 
