@@ -266,11 +266,16 @@ func (r *SessionRegistryImpl) UpdateSession(_ context.Context, id string, payloa
 	return r.snapshotStatus(e), nil
 }
 
-// DeleteSession removes a session (idempotent), stopping any live connector.
+// DeleteSession removes a session (idempotent), detaching its worker bridge and
+// stopping any live connector.
 func (r *SessionRegistryImpl) DeleteSession(ctx context.Context, id string) error {
 	r.mu.Lock()
 	e, ok := r.entries[id]
+	var br *bridge.TermBridge
+	var conn connectors.Connector
 	if ok {
+		br = takeBridge(e)
+		conn = e.conn
 		delete(r.entries, id)
 		for i, oid := range r.order {
 			if oid == id {
@@ -280,8 +285,12 @@ func (r *SessionRegistryImpl) DeleteSession(ctx context.Context, id string) erro
 		}
 	}
 	r.mu.Unlock()
-	if ok && e.conn != nil {
-		_ = e.conn.Stop(ctx)
+	// Same order as StopSession: detach from the hub before the connector goes,
+	// or a worker whose socket outlived its terminal keeps reconnecting against
+	// a session id the registry can no longer list.
+	stopBridge(br)
+	if conn != nil {
+		_ = conn.Stop(ctx)
 	}
 	return nil
 }

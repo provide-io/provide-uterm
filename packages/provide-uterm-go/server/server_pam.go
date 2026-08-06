@@ -134,20 +134,30 @@ func (p *PamIntegration) onOpen(ctx context.Context, ev pty.PamEvent) {
 	}
 }
 
-// onClose stops the tunnel bridge, deletes the session, then best-effort relays
-// the close event. PAM sessions are ephemeral, so the definition is removed
-// rather than left behind stopped (DeleteSession stops the connector first).
+// onClose stops the tunnel bridge, best-effort relays the close event, then
+// deletes the session. PAM sessions are ephemeral, so the definition is removed
+// rather than left behind stopped (DeleteSession detaches the worker bridge and
+// stops the connector).
+//
+// Relay before delete, matching _on_close: DeleteSession stops the connector
+// synchronously, so relaying afterwards would hold the logout notification
+// behind a shell that is slow — or refusing — to die.
 func (p *PamIntegration) onClose(ctx context.Context, ev pty.PamEvent) {
 	sessionID := pamSessionID(ev)
 	p.stopBridge(sessionID)
-	if err := p.registry.DeleteSession(ctx, sessionID); err != nil {
-		p.logger.Warn("pam_session_delete_failed", "session_id", sessionID, "error", err)
-	}
 	if p.relayConfigured() {
 		p.forwardToRelay(ctx, map[string]any{
 			"event": "close", "username": ev.Username, "tty": ev.TTY, "pid": ev.PID,
 		})
 	}
+	// The success line is the teardown's only trace: the registry's delete is
+	// idempotent, so a close whose id matches nothing returns nil and would
+	// otherwise be indistinguishable from one that tore a session down.
+	if err := p.registry.DeleteSession(ctx, sessionID); err != nil {
+		p.logger.Warn("pam_session_delete_failed", "session_id", sessionID, "error", err)
+		return
+	}
+	p.logger.Info("pam_session_deleted", "session_id", sessionID)
 }
 
 func (p *PamIntegration) relayConfigured() bool {

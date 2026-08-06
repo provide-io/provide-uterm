@@ -83,6 +83,35 @@ func TestStoppingASessionDetachesTheWorkerBridge(t *testing.T) {
 	}
 }
 
+// Deleting a session takes its worker away too. Deletion is the more final of
+// the two teardowns, so a bridge left attached here reconnects forever against
+// a session id the registry can no longer even list.
+func TestDeletingASessionDetachesTheWorkerBridge(t *testing.T) {
+	r, _ := hubLinkedRegistry(t)
+	ctx := context.Background()
+
+	if _, err := r.StartSession(ctx, "provide-shell"); err != nil {
+		t.Fatalf("StartSession: %v", err)
+	}
+	// The entry leaves the map on delete, so hold it to inspect afterwards.
+	r.mu.Lock()
+	e := r.entries["provide-shell"]
+	r.mu.Unlock()
+	if e.bridge == nil {
+		t.Fatal("precondition: a started session must have a worker bridge")
+	}
+
+	if err := r.DeleteSession(ctx, "provide-shell"); err != nil {
+		t.Fatalf("DeleteSession: %v", err)
+	}
+	r.mu.Lock()
+	br := e.bridge
+	r.mu.Unlock()
+	if br != nil {
+		t.Fatal("the worker bridge outlived the session it belonged to")
+	}
+}
+
 // Without a hub link the registry is the connector-only thing it was: a caller
 // that never wired one (the CLI's non-server paths, and every registry unit
 // test) gets a live connector and no worker.
