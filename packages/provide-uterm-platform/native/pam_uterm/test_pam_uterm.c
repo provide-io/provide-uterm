@@ -11,12 +11,29 @@
  * library is not built in CI, so this is a local correctness gate.
  */
 
+#include <security/pam_appl.h>
+
+static int fake_pam_putenv(pam_handle_t *pamh, const char *value);
+
+#define pam_putenv fake_pam_putenv
 #include "pam_uterm.c"
+#undef pam_putenv
 
 #include <stdio.h>
 #include <string.h>
 
 static int failures = 0;
+static char recorded_env[2][MAX_ENV];
+static size_t recorded_env_count = 0;
+
+static int fake_pam_putenv(pam_handle_t *pamh, const char *value) {
+    (void)pamh;
+    if (recorded_env_count < 2) {
+        snprintf(recorded_env[recorded_env_count], MAX_ENV, "%s", value);
+    }
+    recorded_env_count++;
+    return PAM_SUCCESS;
+}
 
 static void expect_eq(const char *what, const char *got, const char *want) {
     if (strcmp(got, want) != 0) {
@@ -70,6 +87,24 @@ int main(void) {
     _json_escape(one, sizeof(one), "x");
     expect_true("size-1 yields empty", one[0] == '\0');
     _json_escape(out, 0, "x"); /* must early-return without touching out */
+
+    /* Capture mode always publishes its per-session socket.  Library
+     * injection remains optional so a launcher may apply it only after it has
+     * validated the final terminal process. */
+    recorded_env_count = 0;
+    _set_capture_environment((pam_handle_t *)1, NULL, "/run/uterm-cap-42.sock");
+    expect_true("socket-only count", recorded_env_count == 1);
+    expect_eq("socket-only value", recorded_env[0],
+              "UTERM_CAPTURE_SOCKET=/run/uterm-cap-42.sock");
+
+    recorded_env_count = 0;
+    _set_capture_environment((pam_handle_t *)1, "/opt/uterm/libuterm_capture.so",
+                             "/run/uterm-cap-43.sock");
+    expect_true("socket-and-lib count", recorded_env_count == 2);
+    expect_eq("socket first", recorded_env[0],
+              "UTERM_CAPTURE_SOCKET=/run/uterm-cap-43.sock");
+    expect_eq("preload second", recorded_env[1],
+              "LD_PRELOAD=/opt/uterm/libuterm_capture.so");
 
     if (failures == 0) {
         printf("pam_uterm self-test: all checks passed\n");
