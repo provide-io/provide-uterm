@@ -545,6 +545,11 @@ pytest_add_cli_args_test_selection = [
     # this binds the undecorated helpers + create_*_router bodies via router-endpoint
     # extraction with mocked Request — no TestClient/full-app lifespan).
     "packages/provide-uterm-server/tests/server/test_routes_mutation_killing.py",
+    # RouteDefs-era *_capability_handlers factories. 9bc4dd0c moved the handlers
+    # out of @router.* decorators, which made them mutable for the first time
+    # (mutmut skips decorated functions); the suite above covers the decorated-era
+    # surface and is at the 777-line cap, so the handler kills live here.
+    "packages/provide-uterm-server/tests/server/test_routes_capability_mutation_killing.py",
     # test_process.py (manager process supervisor) — REMOVED from pytest selection
     # (2026-06-02). It exercises process_impl.py, but process_impl.py is NOT in the
     # perimeter (and the listed manager/process.py + config.py are 0-mutant, see the
