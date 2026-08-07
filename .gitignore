@@ -130,15 +130,15 @@ packages/provide-uterm-csharp/**/bin/
 packages/provide-uterm-csharp/**/obj/
 packages/provide-uterm-csharp/coverage-out/
 
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
+
 # TypeScript port: vitest coverage output
 packages/provide-uterm-ts/coverage/
 
 # TypeScript port: StrykerJS mutation-testing output and sandbox scratch dir
 packages/provide-uterm-ts/reports/
 packages/provide-uterm-ts/.stryker-tmp/
-
-# Beads / Dolt files (added by bd init)
-.dolt/
-*.db
-.beads-credential-key
-.beads/proxieddb/

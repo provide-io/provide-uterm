@@ -127,7 +127,6 @@ describe("the framebuffer a console is read into", () => {
     expect(() => new RgbaImage(2, 1, new Uint8Array(9))).toThrow("pixel buffer length 9 does not match 2x1 RGBA (8)");
   });
 });
-
 describe("the in-memory console", () => {
   it("is the size the reference makes one", () => {
     const session = new MemoryGraphicalSession();
@@ -268,4 +267,3 @@ describe("the PNG a screenshot becomes", () => {
     }
   });
 });
-
