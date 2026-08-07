@@ -78,6 +78,27 @@ def _cookie_value(cookies: dict[str, str], key: str) -> str | None:
     return text or None
 
 
+_ADMIN_SESSION_SCOPE_CLAIM = "admin_session_scope"
+_ADMIN_SESSION_SCOPE = re.compile(r"[A-Za-z0-9_-]{1,128}\Z")
+
+
+def _admin_session_scope_from_claims(claims: dict[str, Any]) -> str | None:
+    """Confine a JWT's ``admin`` role to a single session, when it asks to be.
+
+    Mirrors the tunnel share-operator principal: an issuer that wants to grant
+    admin over one session emits this claim, and ``LocalAuthorizationProvider``
+    then treats the principal as admin for that session only, never globally.
+    Absent or malformed claims leave the scope unset, so existing tokens keep
+    their current meaning.
+    """
+
+    raw = claims.get(_ADMIN_SESSION_SCOPE_CLAIM)
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    return text if _ADMIN_SESSION_SCOPE.fullmatch(text) else None
+
+
 def _roles_from_claims(claims: dict[str, Any], auth: AuthConfig) -> frozenset[str]:
     return _provider(auth)._roles_from_claims(claims)
 
@@ -289,6 +310,7 @@ class LocalIdentityProvider(IdentityProvider):
             roles=self._roles_from_claims(claims),
             scopes=self._scopes_from_claims(claims),
             claims=claims,
+            admin_session_scope=_admin_session_scope_from_claims(claims),
         )
 
     def _anonymous_principal(self) -> Principal:
