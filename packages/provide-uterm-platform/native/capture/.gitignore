@@ -1,3 +1,9 @@
-libuterm_capture.so
-libuterm_capture.dylib
-test_capture_writer
+# Compiled artifacts of this directory's Makefile. Patterned rather than
+# enumerated: every new test_*.c used to leak its binary until someone
+# noticed and added the name by hand.
+*.so
+*.dylib
+*.o
+test_*
+!test_*.c
+!test_*.sh
