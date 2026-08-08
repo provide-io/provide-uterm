@@ -65,6 +65,19 @@ dev = [
     "respx>=0.23.1",
 ]
 
+[tool.uv]
+# Constrain a TRANSITIVE dependency without declaring it as one of ours.
+# caio 0.12.x installs its own `tests/` as a TOP-LEVEL package into
+# site-packages (verified: caio-0.12.2.dist-info/RECORD lists tests/…), which
+# shadows this repo's own `tests` package. Under pytest that turns
+# `from ..helpers import ...` in packages/provide-uterm/tests/bridge into
+# `ModuleNotFoundError: No module named 'tests.helpers'` — the suite collects
+# against caio's tests package instead of its own. 0.12.2 is the latest
+# release, so there is nothing newer to move to; 0.9.25 was in the lock before
+# and is unaffected. Reached via py-key-value-aio -> aiofile -> caio.
+# Drop this once caio stops shipping tests/ at the top level.
+constraint-dependencies = ["caio<0.12"]
+
 [tool.uv.workspace]
 members = ["packages/provide-uterm", "packages/provide-uterm-annotation", "packages/provide-uterm-cloudflare", "packages/provide-uterm-platform", "packages/provide-uterm-server", "packages/provide-uterm-client"]
 [tool.uv.sources]
