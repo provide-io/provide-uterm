@@ -136,8 +136,10 @@ packages/provide-uterm-csharp/coverage-out/
 .beads-credential-key
 .beads/proxieddb/
 
-# TypeScript port: vitest coverage output
-packages/provide-uterm-ts/coverage/
+# vitest coverage output. Globbed rather than listed per package: the frontend
+# and app configs also set reportsDirectory "./coverage", and only the ts port
+# was ignored, so running their coverage targets left an untracked dir behind.
+packages/*/coverage/
 
 # TypeScript port: StrykerJS mutation-testing output and sandbox scratch dir
 packages/provide-uterm-ts/reports/
