@@ -118,7 +118,11 @@ describe("DeckMux avatar lookup", () => {
     dm.handleMessage({ type: "dm_control_request", from_user_id: "guest", from_name: "Guest", from_color: "#0f0" });
     (terminalContainer.querySelector(".dm-toast-btn--accept") as HTMLButtonElement).click();
     expect(response).toHaveBeenCalledOnce();
-    expect((response.mock.calls[0]?.[0] as CustomEvent).detail).toEqual({ toUserId: "guest", response: "accept" });
+    // Destructure rather than `calls[0]?.[0]`: the assertion above already
+    // guarantees the call exists, and optional chaining before a property read
+    // would throw a TypeError instead of failing the test if it ever did not.
+    const [controlResponse] = response.mock.calls[0] as [CustomEvent];
+    expect(controlResponse.detail).toEqual({ toUserId: "guest", response: "accept" });
 
     dm.handleMessage({ type: "dm_control_transfer", to_user_id: "guest", to_name: "Guest", to_color: "#0f0" });
     expect(terminalContainer.textContent).toContain("Control transferred to Guest");
