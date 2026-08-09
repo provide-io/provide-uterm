@@ -4,7 +4,7 @@
 //
 
 import { describe, expect, it } from "vitest";
-import { loadGolden } from "../testing/golden.ts";
+import { loadGolden, must } from "../testing/golden.ts";
 import {
   DEFAULT_ENTITY_PREFIX,
   DEFAULT_EVENT_LIMIT,
@@ -135,7 +135,7 @@ describe("what the client asks for", () => {
   it("sends an expectation somebody did set", async () => {
     const { calls, transport } = recorder();
     await new HijackClient({ transport }).send("w1", "h1", { keys: "ls", expectRegex: "^\\$ " });
-    expect((calls[0]?.json as Record<string, unknown>).expect_regex).toBe("^\\$ ");
+    expect((must(calls[0], "the recorded request").json as Record<string, unknown>).expect_regex).toBe("^\\$ ");
   });
 
   it("uses the defaults the reference uses", () => {

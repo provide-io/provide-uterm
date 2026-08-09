@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { InMemoryRecordingStore, type RecordingEvent, type RecordingStore } from "../recording/index.ts";
 import { makeRedactor } from "../redaction/index.ts";
 import { noopLogger } from "../telemetry/index.ts";
-import { loadGolden } from "../testing/golden.ts";
+import { loadGolden, must } from "../testing/golden.ts";
 import { SessionLogger, type SessionLoggerOptions } from "./index.ts";
 
 interface SessionLoggerGolden {
@@ -85,8 +85,8 @@ describe("SessionLogger entries", () => {
     await logger.logSend("café");
     await logger.stop();
     const sends = (await store.getEntries("s1", { limit: 500 })).filter((e) => e.event === "send");
-    expect((sends[0]?.data as Record<string, unknown>).bytes_b64).toBe("sLE=");
-    expect((sends[1]?.data as Record<string, unknown>).bytes_b64).toBe("Y2Fmgg==");
+    expect((must(sends[0], "the first send entry").data as Record<string, unknown>).bytes_b64).toBe("sLE=");
+    expect((must(sends[1], "the second send entry").data as Record<string, unknown>).bytes_b64).toBe("Y2Fmgg==");
   });
 
   it("records a masked send without the value", async () => {
@@ -138,7 +138,14 @@ describe("SessionLogger redaction", () => {
     await logger.logScreen({ screen: "a secretword b", nested: { deep: ["secretx"] } }, new Uint8Array());
     await logger.stop();
     const entries = await store.getEntries("s1", { limit: 500 });
-    expect((entries.find((e) => e.event === "send")?.data as Record<string, unknown>).keys).toBe("[REDACTED]");
+    expect(
+      (
+        must(
+          entries.find((e) => e.event === "send"),
+          "a redacted send entry",
+        ).data as Record<string, unknown>
+      ).keys,
+    ).toBe("[REDACTED]");
     const read = entries.find((e) => e.event === "read")?.data as Record<string, unknown>;
     expect(read.screen).toBe("a [REDACTED] b");
     expect(read.nested).toStrictEqual({ deep: ["[REDACTED]"] });

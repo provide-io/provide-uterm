@@ -4,7 +4,7 @@
 //
 
 import { describe, expect, it } from "vitest";
-import { loadGolden } from "../testing/golden.ts";
+import { loadGolden, must } from "../testing/golden.ts";
 import {
   callSessionTool,
   GUI_TOOL_NAMES,
@@ -347,7 +347,7 @@ describe("the tools whose id lands in a URL", () => {
     for (const session_ids of [undefined, null, "s-1", 7, { a: 1 }]) {
       const { client, calls } = recordingClient(true, {});
       await callSessionTool(client, "fanout_group_create", { session_ids });
-      expect((calls[0]?.body as Record<string, unknown>).worker_ids).toEqual([]);
+      expect((must(calls[0], "the recorded fanout call").body as Record<string, unknown>).worker_ids).toEqual([]);
     }
   });
 

@@ -53,3 +53,24 @@ export function loadSpec<T>(name: string): T {
 export function loadConformance<T>(relativePath: string): T {
   return JSON.parse(readFileSync(join(CONFORMANCE_DIR, relativePath), "utf-8")) as T;
 }
+
+/**
+ * Narrow a corpus lookup or index access, failing by name if it is absent.
+ *
+ * Tests reach into golden corpora with `find()` and `[0]`, both of which are
+ * typed as possibly-undefined. Writing `record?.field` past that point looks
+ * defensive but is not: the optional chain short-circuits to `undefined` and
+ * the very next member access or index throws a bare TypeError — biome's
+ * `noUnsafeOptionalChaining` flags exactly this. Non-null assertion (`!`)
+ * silences the lint while keeping the useless error.
+ *
+ * These lookups genuinely must succeed: a miss means the corpus was
+ * regenerated with an entry renamed or removed, and the useful failure names
+ * what went missing rather than reporting a property read on undefined.
+ */
+export function must<T>(value: T | null | undefined, what: string): T {
+  if (value === null || value === undefined) {
+    throw new Error(`expected ${what} in the golden corpus, found none`);
+  }
+  return value;
+}

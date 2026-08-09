@@ -4,7 +4,7 @@
 //
 
 import { describe, expect, it } from "vitest";
-import { loadGolden } from "../testing/golden.ts";
+import { loadGolden, must } from "../testing/golden.ts";
 import { DeckMuxPresence, type DeckMuxPresenceOptions } from "./index.ts";
 
 interface Broadcast {
@@ -138,7 +138,9 @@ describe("browsers joining and leaving", () => {
     // The joiner has to appear in the others' participant lists, so the whole
     // sync goes out rather than just the new user.
     expect(golden.joining.broadcast_after_second).toHaveLength(1);
-    expect((golden.joining.broadcast_after_second[0]?.msg.users as unknown[]).length).toBe(2);
+    expect((must(golden.joining.broadcast_after_second[0], "the join broadcast").msg.users as unknown[]).length).toBe(
+      2,
+    );
     expect(golden.joining.broadcast_after_second[0]?.msg.type).toBe("presence_sync");
   });
 
