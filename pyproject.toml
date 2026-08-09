@@ -558,6 +558,13 @@ pytest_add_cli_args_test_selection = [
     # (mutmut skips decorated functions); the suite above covers the decorated-era
     # surface and is at the 777-line cap, so the handler kills live here.
     "packages/provide-uterm-server/tests/server/test_routes_capability_mutation_killing.py",
+    # routes/tunnels.py, split three ways for the 777-line cap. Its handlers mint
+    # and revoke the bearer tokens for a shared terminal, so most of what these
+    # pin is security-relevant: credential scrubbing before persistence/audit,
+    # digest-only token storage, the TTL clamp, and the ownership rules.
+    "packages/provide-uterm-server/tests/server/test_routes_tunnels_connect_mutation_killing.py",
+    "packages/provide-uterm-server/tests/server/test_routes_tunnels_create_mutation_killing.py",
+    "packages/provide-uterm-server/tests/server/test_routes_tunnels_tokens_mutation_killing.py",
     # test_process.py (manager process supervisor) — REMOVED from pytest selection
     # (2026-06-02). It exercises process_impl.py, but process_impl.py is NOT in the
     # perimeter (and the listed manager/process.py + config.py are 0-mutant, see the
