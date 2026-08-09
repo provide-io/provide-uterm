@@ -492,6 +492,40 @@ jobs:
       # mechanism. test_go_mutation_gate_budget.py asserts the two stay ordered.
       - run: make -C packages/provide-uterm-go mutation-gate
 
+  # TypeScript mutation gate: StrykerJS over the curated perimeter declared in
+  # packages/provide-uterm-ts/stryker.config.mjs (egress/CIDR + webhook-destination
+  # guards, hub store, server bootstrap, serverconfig schema/validators/posture,
+  # rate-limiter arithmetic). Same killed==100%-minus-documented-equivalents bar as
+  # the Python, Go and C# gates.
+  #
+  # This ran nowhere until 2026-08-09: the package had stryker.config.mjs and a
+  # hand-curated mutation_equivalents.toml, but no workflow invoked either, so the
+  # port's mutable surface had never been measured in CI. Baseline at wiring:
+  # 1477 killed / 14 survived, all 14 carrying a written equivalence reason.
+  #
+  # Full perimeter every run, like Go and C# — not changed-only. A changed-only
+  # split is what let routes/ and hub/lease.py drift unmeasured on the Python side
+  # for weeks, because a file nobody touches is never re-checked.
+  ts-mutation-gate:
+    runs-on: ubuntu-latest
+    # Stryker mutates ~1900 mutants through the real vitest suite (the
+    # typescript-checker pre-filter is unavailable under tsgo, see the config).
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      # Node pinned by .nvmrc, matching every other npm job.
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
+        with:
+          node-version-file: ".nvmrc"
+      # Python 3.11+ drives the gate (tomllib + json, stdlib only), mirroring Go's.
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.11"
+      - run: npm ci
+      # Runs Stryker, then scores its JSON report against the equivalent-mutant
+      # allowlist: any survivor without a written reason fails the job.
+      - run: python3 packages/provide-uterm-ts/ci/mutation_gate.py
+
   # C# mutation gate: Policy + DeckMux + Colors/Sgr perimeter (local make target).
   csharp-mutation-gate:
     runs-on: ubuntu-latest
