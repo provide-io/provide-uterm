@@ -88,34 +88,28 @@ jobs:
       - name: "Mutation gate: ${{ matrix.path }}"
         run: uv run python scripts/run_mutation_gate.py --python-version 3.11 --retries 0 --min-mutation-score 100 --paths "${{ matrix.path }}"
 
-  # Turn the run's result into something a human sees. A scheduled workflow that
-  # is simply red reports nothing: this one caught the routes/ regression on
+  # Name the failing legs in the run summary. A scheduled workflow that is
+  # simply red reports nothing useful: this one caught the routes/ regression on
   # 2026-08-02 and named the exact path, but it had already been red for nine
   # straight weeks (06-14 onward), so a newly-red file was indistinguishable from
-  # the standing failure and went unread for five days. This job files/updates one
-  # tracking issue while the perimeter is drifting and closes it when it is not.
+  # the standing failure and went unread for five days. The per-leg names are
+  # also buried behind expanding the matrix in the UI. This surfaces them on the
+  # run page itself. Tracking is deliberately NOT a GitHub issue — it lives in a
+  # local .provide/HANDOFF.md.
   report:
     needs: mutation-gate-full
     # always(): the point is to run when the matrix FAILED, which a default
     # (success-only) job would skip.
-    if: always()
+    if: always() && needs.mutation-gate-full.result != 'success'
     runs-on: ubuntu-latest
     permissions:
-      # Narrower than the workflow default: only this job writes issues.
+      # Read-only: this job writes a summary, not an issue.
       contents: read
-      issues: write
       actions: read
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
-      # Open or refresh the tracking issue with the failing perimeter files.
+      # Enumerate the failing perimeter files into the run summary.
       - name: Report perimeter drift
-        if: needs.mutation-gate-full.result != 'success'
         env:
           GH_TOKEN: ${{ github.token }}
         run: ci/report_mutation_full_failure.sh
-      # Green run: close the tracking issue so its presence always means "drifting now".
-      - name: Clear the tracking issue
-        if: needs.mutation-gate-full.result == 'success'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: ci/close_mutation_full_issue.sh
