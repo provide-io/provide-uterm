@@ -777,3 +777,84 @@ reason = "StreamingResponse header-NAME case mutation -- Starlette lowercases he
 [[equivalent]]
 mutant = "provide.uterm.server.routes.sse.x_sse_capability_handlers__mutmut_76"
 reason = "StreamingResponse header-NAME case mutation -- Starlette lowercases header names when building raw_headers, so 'Cache-Control'/'cache-control'/'CACHE-CONTROL' (and the X-Accel-Buffering trio) emit byte-identical raw_headers (VERIFIED by comparing raw_headers for both spellings). The header VALUES are case-sensitive and ARE killed by test_stream_sets_the_proxy_buffering_headers. Equivalent."
+
+# ---------------------------------------------------------------------------
+# routes/tunnels.py — mutmut names every mutant after the enclosing factory
+# (``x_tunnel_capability_handlers__mutmut_N``) because the four handlers are
+# nested defs inside it, so the ids below span all four.
+#
+# Two families, both unkillable rather than untested.
+#
+# 1. typing.cast(type, value) is a RUNTIME NO-OP: it returns `value` unchanged
+#    and never inspects the type argument, which exists only for static
+#    checkers. Nulling or mangling that string cannot change behaviour. Same
+#    reasoning as the connection.py / connection_hijack.py cast() entries above.
+[[equivalent]]
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_280"
+reason = "cast(None, uterm_tunnel_tokens) in create_tunnel — typing.cast is a runtime no-op; the type arg is ignored."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_284"
+reason = 'cast("XXdict[str, dict[str, object]]XX", uterm_tunnel_tokens) — runtime no-op; mangled type string ignored.'
+[[equivalent]]
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_285"
+reason = 'cast("DICT[STR, DICT[STR, OBJECT]]", uterm_tunnel_tokens) — runtime no-op; type-string case has no effect.'
+[[equivalent]]
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_287"
+reason = "cast(None, uterm_tunnel_invites) in create_tunnel — typing.cast runtime no-op."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_291"
+reason = 'cast("XXdict[str, dict[str, object]]XX", uterm_tunnel_invites) — runtime no-op.'
+[[equivalent]]
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_292"
+reason = 'cast("DICT[STR, DICT[STR, OBJECT]]", uterm_tunnel_invites) — runtime no-op.'
+[[equivalent]]
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_473"
+reason = "cast(None, uterm_tunnel_tokens) in revoke_tunnel_tokens — typing.cast runtime no-op."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_477"
+reason = 'cast("XXdict[str, dict[str, object]]XX", uterm_tunnel_tokens) in revoke — runtime no-op.'
+[[equivalent]]
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_478"
+reason = 'cast("DICT[STR, DICT[STR, OBJECT]]", uterm_tunnel_tokens) in revoke — runtime no-op.'
+[[equivalent]]
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_484"
+reason = "cast(None, uterm_tunnel_invites) in revoke_tunnel_tokens — typing.cast runtime no-op."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_488"
+reason = 'cast("XXdict[str, dict[str, object]]XX", uterm_tunnel_invites) in revoke — runtime no-op.'
+[[equivalent]]
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_489"
+reason = 'cast("DICT[STR, DICT[STR, OBJECT]]", uterm_tunnel_invites) in revoke — runtime no-op.'
+[[equivalent]]
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_548"
+reason = "cast(None, uterm_tunnel_tokens) in rotate_tunnel_tokens — typing.cast runtime no-op."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_552"
+reason = 'cast("XXdict[str, dict[str, object]]XX", uterm_tunnel_tokens) in rotate — runtime no-op.'
+[[equivalent]]
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_553"
+reason = 'cast("DICT[STR, DICT[STR, OBJECT]]", uterm_tunnel_tokens) in rotate — runtime no-op.'
+[[equivalent]]
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_555"
+reason = "cast(None, uterm_tunnel_invites) in rotate_tunnel_tokens — typing.cast runtime no-op. Sits between two mutants that are NOT equivalent (554 replaces the variable with None, 556 replaces the cast's value argument); both are killed by the invite-store assertions."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_559"
+reason = 'cast("XXdict[str, dict[str, object]]XX", uterm_tunnel_invites) in rotate — runtime no-op.'
+[[equivalent]]
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_560"
+reason = 'cast("DICT[STR, DICT[STR, OBJECT]]", uterm_tunnel_invites) in rotate — runtime no-op.'
+# NOTE: the sibling mutants that replace the cast's *value* argument
+# (``= None``, ``cast(type, None)``) are NOT listed — those change behaviour and
+# are killed by the invite-store assertions in
+# test_routes_tunnels_tokens_mutation_killing.py.
+#
+# 2. quick_connect's ``payload.get("tags", [])`` default is unreachable: the very
+#    next line guards with ``isinstance(tags_raw, list)``, so a missing "tags"
+#    key yields [] whether the default is [], None, or absent entirely. The
+#    default is defensive style, not behaviour.
+[[equivalent]]
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_43"
+reason = 'payload.get("tags", None) — the isinstance(tags_raw, list) guard maps both None and [] to the same empty tag list.'
+[[equivalent]]
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_45"
+reason = 'payload.get("tags") with the default dropped — identical: get returns None, the isinstance guard yields [].'

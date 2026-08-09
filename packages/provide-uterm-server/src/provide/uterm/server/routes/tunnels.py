@@ -2,7 +2,20 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Mutation-enforced at killed==100 ([tool.mutmut]); bound suite: tests/server/test_routes_mutation_killing.py (router-endpoint extraction, mocked Request).
+# Mutation-enforced at killed==100 ([tool.mutmut]), minus 20 documented-equivalent
+# mutants in mutation_equivalents.toml (17 typing.cast type-arg mutations, which are
+# runtime no-ops, plus 3 unreachable defaults). Bound suites:
+#   tests/server/test_routes_mutation_killing.py               decorated-era surface
+#   tests/server/test_routes_tunnels_connect_mutation_killing.py  scrub + quick_connect
+#   tests/server/test_routes_tunnels_create_mutation_killing.py   create_tunnel
+#   tests/server/test_routes_tunnels_tokens_mutation_killing.py   revoke + rotate
+# The three tunnels suites were written after this module measured 4.98% (659
+# survivors): 9bc4dd0c moved these handlers out of @router.* decorators into the
+# undecorated factory below, and mutmut skips decorated functions, so every literal
+# here became mutable at once behind tests that already had 100% line coverage.
+# Most of what they pin is security-relevant — credential scrubbing before the
+# session record and the audit trail, digest-only token storage, the TTL clamp, and
+# the ownership rules — so keep the bar when editing.
 """Quick-connect and tunnel routes for the hosted server app.
 
 Exposes:
