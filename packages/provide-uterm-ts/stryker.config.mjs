@@ -83,6 +83,17 @@ export default {
   // in mutation_equivalents.toml, not silently dropped here.
   ignoreStatic: true,
 
+  // inPlace (mutate the working tree, restore afterwards) rather than Stryker's
+  // default sandbox copy. The sandbox contains only this package, but
+  // src/fanout/security-scenarios.test.ts loads the SHARED cross-language corpus
+  // at <repo-root>/spec/fanout_security_scenarios.json, resolved four levels up
+  // from import.meta.dirname. Inside the sandbox that path does not exist, the
+  // dry run fails with ENOENT, and Stryker aborts before mutating anything
+  // ("There were failed tests in the initial test run") — which is why this gate
+  // had never completed a run. Stryker restores the files when it finishes; CI
+  // runners are ephemeral, and a local interrupt is recoverable with `git
+  // checkout`. Revisit if Stryker ever supports including paths above cwd.
+  inPlace: true,
   concurrency: 4,
   timeoutMS: 15000,
   timeoutFactor: 3,
