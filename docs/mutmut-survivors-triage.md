@@ -512,3 +512,51 @@ documented in `mutation_equivalents.toml` with exact mutant IDs. Mutant set + ID
 were enumerated via mutmut's own AST machinery and kills/equivalences confirmed by
 edit-test-revert (the connector gate is Linux-only — it stalls under the macOS
 fork-loop — so CI is authoritative).
+
+## Wave 9 — `routes/` de-decoration regression (2026-07-23 … open)
+
+`routes/` reached `killed==100` on 2026-06-02 over 459 mutants and the perimeter
+entry in `[tool.mutmut]` justified re-enabling it with "routes/ has NO async-hang
+surface at all". That claim was load-bearing and is no longer true.
+
+**What broke.** `9bc4dd0c` (2026-07-23, "bind FastAPI session routes from RouteDefs")
+moved the session handlers out of `@router.*` decorators into undecorated
+`*_capability_handlers` factories. mutmut skips *decorated* functions only, so
+de-decorating took the handler bodies from skipped to mutable and put ~2600 mutants
+live in one commit. Line coverage was, and stayed, 100% — the tests execute the
+handlers without asserting enough to kill their mutants, so nothing else flagged it.
+`mutation-full` caught it on 2026-08-02, but that job had already been red for nine
+straight weeks, so a newly-red file was indistinguishable from the standing failure
+and went unread for five days. `9ce12f09` added the tracking-issue reporter for
+exactly this reason.
+
+**The revived caveat.** The 2026-06-01 audit deferred `routes/` for "async
+timeout/segfault by pattern". The 2026-06-02 re-enablement overrode that on the
+grounds that every async handler — including `sse.py`'s `StreamingResponse`
+`stream_events` — was decorated and therefore skipped. Those handlers are mutated
+now, so the deferral is live again in principle. In practice it has not reproduced:
+`sse.py` was driven back to 100% with its async handler mutable and did not hang.
+The unproven surface is `sessions.py`'s async handler bodies.
+
+**Coverage split.** Both suites build routers with mocked app-state and call
+endpoints with a mocked `Request` (no TestClient / full-app lifespan), and both are
+wired into `pytest_add_cli_args_test_selection` — without that, mutmut runs none of
+them in the `mutants/` tree.
+
+- `test_routes_mutation_killing.py` — the decorated-era surface: `_helpers.py`
+  accessors, per-module `_registry`/`_authz`/`_principal` accessors, `create_*_router`
+  bodies, and nested undecorated helpers such as health's
+  `_posture_caller_is_privileged`. 390 killed + 69 documented equivalents (64
+  `typing.cast` no-ops + 5 `pages` default-value no-ops).
+- `test_routes_capability_mutation_killing.py` — the de-decorated factories.
+  `sse.py` 65.38% → 100%; `sessions.py` ~5% → 46.12% (493/1069), table-driven with a
+  completeness check so a new handler cannot join the factory unmeasured. Its 8
+  equivalents are `typing.cast` no-ops and Starlette header-*name* case folds
+  (Starlette lowercases header names into `raw_headers`, so name-case mutants emit
+  identical bytes; header *values* stay case-sensitive and are killed).
+
+**Still short.** `profiles`, `tunnels`, `webhooks`, `pam_events`, `route_defs`, and
+`sessions`' handler bodies — query-param clamps, split parsing, `set_mode`'s 422,
+delete's span + audit + token revocation, and the three handlers taking no
+`session_id`. Those need per-handler assertions; the shared-skeleton table is the
+wrong shape for them. `mutation-full` stays red until they are done.
