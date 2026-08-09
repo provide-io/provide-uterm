@@ -15,10 +15,26 @@ FastAPI hub needs:
   cleanup.
 * Lease-expiry sweep that emits resume frames when *both* slots go idle.
 
-This module is mutation-enforced at killed==100 (489/489): its dedicated
+This module is mutation-enforced at killed==100 (767/767): its dedicated
 ``tests/bridge/hub/test_lease_kill_*.py`` suites pin every return value, state
 mutation, control frame, and observability call, so a surviving mutant means a
 behaviour went unasserted. Keep that bar when editing.
+
+Two of those suites exist because adding the ownership fence quietly broke the
+bar, and the weekly full-perimeter run was the only thing that noticed:
+
+* ``test_lease_kill_fence_recheck.py`` — the post-fence ``st is not state``
+  identity recheck, the ``ownership_generation`` increments, and the bounded
+  send timeout. A new branch is not enough; the *count* has to move too. Note
+  that on the acquire paths the recheck's ``or`` is NOT observable through the
+  return value (the phase-3 check produces the same tuple) — only through the
+  fact that no pause frame reached the replacement worker.
+* ``test_lease_kill_owned_send.py`` — ``send_owned_worker``,
+  ``run_owned_browser_operation`` and the two ``capture_*_ownership`` helpers.
+  These arrived with full line coverage and zero *bound* tests, so their
+  mutants sat in mutmut's ``"no tests"`` state: not survivors, but still in the
+  denominator, which is why the file measured 77.71% while reporting 33
+  survivors out of what looked like 489 mutants.
 
 Lock semantics are unchanged from the pre-refactor mixin: every public
 method that needs cross-field atomicity acquires the shared
