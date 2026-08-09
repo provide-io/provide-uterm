@@ -315,17 +315,33 @@ source_paths = [
     # its specific obstacle. A --changed-only run on a deferred file is then correctly
     # skipped (not a false pass). Re-add each once its obstacle is resolved.
     #
-    # routes/ — RE-ENABLED at killed==100 (2026-06-02). The "async timeout/segfault by
-    #   pattern" deferral was overcautious: mutmut SKIPS every @router.get/@router.post
-    #   handler (incl. sse.py's StreamingResponse handler), so routes/ has NO async-hang
-    #   surface at all — its 459 mutants are pure/sync UNDECORATED code (the _helpers.py
-    #   accessors, per-module _registry/_authz/_principal accessors, create_*_router
-    #   bodies, and NESTED undecorated helpers like health's _posture_caller_is_privileged).
-    #   The dedicated suite test_routes_mutation_killing.py (wired into pytest selection) builds
-    #   each router with mocked app-state, pulls the handler endpoints off router.routes,
-    #   and calls them directly with a mocked Request (no TestClient/full-app lifespan).
-    #   390 killed + 69 documented equivalents (64 typing.cast no-ops across the accessors
-    #   + 5 pages default-value no-ops) excused via mutation_equivalents.toml.
+    # routes/ — ENFORCED but NOT currently at killed==100. Re-enabled 2026-06-02 at
+    #   100% over 459 mutants, then REGRESSED 2026-07-23: 9bc4dd0c moved the session
+    #   handlers out of @router.* into undecorated *_capability_handlers factories.
+    #   mutmut skips DECORATED functions only, so de-decorating took the handler bodies
+    #   from skipped to mutable and put ~2600 mutants live at once — behind tests whose
+    #   line coverage was, and stayed, 100%. Caught 2026-08-02 by mutation-full.
+    #
+    #   This invalidates the 2026-06-02 note's safety argument, which read "routes/ has
+    #   NO async-hang surface at all" — that was true only BECAUSE the async handlers
+    #   (incl. sse.py's StreamingResponse stream_events) were decorated and skipped.
+    #   They are mutated now, so the 2026-06-01 "async timeout/segfault by pattern"
+    #   deferral is live again in principle. In practice it has not reproduced: sse.py
+    #   was driven back to 100% with its async handler mutable and did not hang. The
+    #   unproven surface is sessions.py's async handler BODIES, which are still short.
+    #
+    #   Two suites, both wired into pytest selection, both building routers with mocked
+    #   app-state and calling endpoints with a mocked Request (no TestClient/full-app
+    #   lifespan). test_routes_mutation_killing.py covers the decorated-era surface —
+    #   the _helpers.py accessors, per-module _registry/_authz/_principal accessors,
+    #   create_*_router bodies, and nested undecorated helpers like health's
+    #   _posture_caller_is_privileged (390 killed + 69 documented equivalents: 64
+    #   typing.cast no-ops + 5 pages default-value no-ops).
+    #   test_routes_capability_mutation_killing.py covers the de-decorated factories:
+    #   sse.py back to 100%, sessions.py's shared handler skeleton table-driven with a
+    #   completeness check so a new handler cannot join the factory unmeasured.
+    #   Still short: profiles, tunnels, webhooks, pam_events, route_defs, and sessions'
+    #   handler bodies. mutation-full stays red until those are done.
     "src/provide/uterm/server/routes/",
     #
     # webhooks.py — RE-ENABLED at killed==100 (2026-06-02). The deferral was a REAL
