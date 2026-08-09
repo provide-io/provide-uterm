@@ -20,6 +20,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ControlFrameDecoder } from "../control-channel/index.ts";
 import type { WorkerSocket } from "../hub/index.ts";
+import { must } from "../testing/golden.ts";
 import { SESSION_HUB_REST_ACQUIRE_RATE, SESSION_HUB_REST_SEND_RATE, SessionHub } from "./session-hub.ts";
 
 /** A worker socket that records every frame the hub sent it. */
@@ -128,7 +129,7 @@ describe("committing a snapshot event", () => {
 
     source.cursor.x = 99;
     (committed.cursor as Record<string, number>).x = 88;
-    expect((state?.lastSnapshot?.cursor as Record<string, number>).x).toBe(2);
+    expect((must(state?.lastSnapshot, "the retained snapshot").cursor as Record<string, number>).x).toBe(2);
   });
 
   it("commits a snapshot for an unregistered worker without inventing a sequence", async () => {

@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 import { compilePySearch } from "../pycompat/index.ts";
-import { loadGolden } from "../testing/golden.ts";
+import { loadGolden, must } from "../testing/golden.ts";
 import { type MatchMode, parseRuleSet, RuleValidationError, regexRuleToRegex, toPromptPatterns } from "./index.ts";
 
 interface RulesGolden {
@@ -79,7 +79,7 @@ describe("reading a rule set", () => {
     // so it is part of the wire format rather than a local detail.
     expect(golden.default_flags).toBe(10);
     const prompt = (golden.full_dump.prompts as Array<Record<string, unknown>>)[0];
-    const extract = (prompt?.kv_extract as Array<Record<string, unknown>>)[0];
+    const extract = (must(prompt, "the first dumped prompt").kv_extract as Array<Record<string, unknown>>)[0];
     expect(extract?.flags).toBe(golden.default_flags);
   });
 
@@ -88,12 +88,17 @@ describe("reading a rule set", () => {
     // in the reference's own model; a port reading the internal name instead
     // would silently drop every validation an operator wrote.
     const prompt = (golden.full_dump.prompts as Array<Record<string, unknown>>)[0];
-    const extract = (prompt?.kv_extract as Array<Record<string, unknown>>)[1];
+    const extract = (must(prompt, "the first dumped prompt").kv_extract as Array<Record<string, unknown>>)[1];
     expect(extract?.validate_rule).toStrictEqual({ min: 0 });
-    expect((prompt?.kv_extract as Array<Record<string, unknown>>)[0]?.validate_rule).toBeNull();
+    expect(
+      (must(prompt, "the first dumped prompt").kv_extract as Array<Record<string, unknown>>)[0]?.validate_rule,
+    ).toBeNull();
     // ...and back out again under the written name, because the extractor
     // reads `validate`.
-    expect((golden.full_patterns[0]?.kv_extract as Array<Record<string, unknown>>)[1]?.validate).toStrictEqual({
+    expect(
+      (must(golden.full_patterns[0], "the first full pattern").kv_extract as Array<Record<string, unknown>>)[1]
+        ?.validate,
+    ).toStrictEqual({
       min: 0,
     });
   });
@@ -192,8 +197,8 @@ describe("a rule set the reference accepts by coercing", () => {
 
   it("reads a quoted number as a number", () => {
     const record = golden.coerced.find((entry) => entry.name === "a quoted cursor row");
-    const prompt = (record?.dump.prompts as Array<Record<string, unknown>>)[0];
-    expect((prompt?.screen as Record<string, unknown>).cursor_row_min).toBe(5);
+    const prompt = (must(record, "the quoted-cursor-row case").dump.prompts as Array<Record<string, unknown>>)[0];
+    expect((must(prompt, "the first dumped prompt").screen as Record<string, unknown>).cursor_row_min).toBe(5);
   });
 
   it("still refuses a string that is not a number", () => {

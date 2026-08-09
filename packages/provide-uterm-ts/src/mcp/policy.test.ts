@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 import { inetAton, ipToString } from "../pycompat/index.ts";
-import { loadGolden } from "../testing/golden.ts";
+import { loadGolden, must } from "../testing/golden.ts";
 import {
   ALLOW_PRIVATE_HOSTS,
   ALLOWED_CONNECTOR_TYPES,
@@ -259,7 +259,7 @@ describe("the limits an LLM is held to", () => {
     const overCap = golden.patterns.find((entry) => entry.name === "a pattern over the length cap");
     expect(atCap?.rejection).toBeNull();
     expect(overCap?.rejection).toMatchObject({ success: false, error: "invalid_pattern" });
-    expect((atCap?.pattern as string).length).toBe(MAX_USER_PATTERN_LEN);
+    expect((must(atCap, "the at-cap pattern case").pattern as string).length).toBe(MAX_USER_PATTERN_LEN);
   });
 
   it("caps a keystroke send at the reference's size", () => {

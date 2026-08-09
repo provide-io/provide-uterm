@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 import { InMemoryGraphicalTargetRegistry, makeGraphicalTarget } from "../graphical/index.ts";
-import { loadGolden } from "../testing/golden.ts";
+import { loadGolden, must } from "../testing/golden.ts";
 import {
   CAP_GRAPHICAL_ATTACH,
   type GraphicalSession,
@@ -333,7 +333,9 @@ describe("the gui routes", () => {
     deps.targets = { get: () => flat };
     const request = { principal: { tenantId: "acme", subjectId: "u1" }, body: { target_id: "gt-flat" } };
     expect((await guiAttach(deps, request, WORKER)).status).toBe(200);
-    const shot = (deps.hub.registry.get(WORKER)?.graphicalSession as GraphicalSession).screenshot();
+    const shot = (
+      must(deps.hub.registry.get(WORKER), "the worker state").graphicalSession as GraphicalSession
+    ).screenshot();
     expect([shot.width, shot.height]).toEqual([1, 1]);
   });
 

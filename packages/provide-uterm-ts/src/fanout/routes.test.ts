@@ -10,6 +10,7 @@
 
 import { describe, expect, it } from "vitest";
 import { FakeController, golden, harness, OTHER, PRINCIPAL, request } from "../testing/fanout-routes-harness.ts";
+import { must } from "../testing/golden.ts";
 import { createFanoutRoutes, FANOUT_ROUTE_PATHS, type FanoutRoutesController, fanOutGroup } from "./index.ts";
 
 describe("the route table", () => {
@@ -435,7 +436,9 @@ describe("the audit trail", () => {
       fanOutGroup({ groupId: "g1", name: "", workerIds: ["w1"], createdBy: PRINCIPAL, createdAt: 1 }),
     );
     await routes.sendToGroup(request(PRINCIPAL, { data: "x".repeat(300) }), "g1");
-    expect((audited.at(-1)?.detail.command as string).length).toBe(golden.audit_command_length);
+    expect((must(audited.at(-1), "the last audit entry").detail.command as string).length).toBe(
+      golden.audit_command_length,
+    );
   });
 
   it("matches the recorded details", async () => {

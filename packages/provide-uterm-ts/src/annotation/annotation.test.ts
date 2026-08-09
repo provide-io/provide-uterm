@@ -4,7 +4,7 @@
 //
 
 import { describe, expect, it } from "vitest";
-import { loadGolden } from "../testing/golden.ts";
+import { loadGolden, must } from "../testing/golden.ts";
 import {
   type Annotation,
   annotationToWire,
@@ -189,7 +189,7 @@ describe("scanning one chunk", () => {
     const detector = new PatternDetector();
     const result = detector.scan(record?.event_type as string, record?.text as string, 7);
     expect(result.matchEnd).toBe(record?.match_end);
-    expect(result.matchEnd).toBe((record?.text as string).length);
+    expect(result.matchEnd).toBe((must(record, "the later-rule scan").text as string).length);
   });
 });
 

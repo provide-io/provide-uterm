@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 import { EgressBlockedError } from "../egress/index.ts";
-import { loadGolden } from "../testing/golden.ts";
+import { loadGolden, must } from "../testing/golden.ts";
 import {
   TELNET_COLS,
   TELNET_CONNECTOR_KEYS,
@@ -224,7 +224,7 @@ describe("a telnet session in use", () => {
     // bytes; reading them as UTF-8 would turn every one into a replacement
     // character.
     const record = golden.drive_cases.find((entry) => entry.name === "output with high-byte drawing characters");
-    expect((record?.messages[0] as { data: string }).data).toBe("╔═╗\n");
+    expect((must(record, "the high-byte drive case").messages[0] as { data: string }).data).toBe("╔═╗\n");
   });
 
   it("scrolls the overlay off with everything else when the screen fills", async () => {

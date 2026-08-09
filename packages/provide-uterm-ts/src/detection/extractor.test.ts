@@ -4,7 +4,7 @@
 //
 
 import { describe, expect, it } from "vitest";
-import { loadGolden } from "../testing/golden.ts";
+import { loadGolden, must } from "../testing/golden.ts";
 import { convertType, type ExtractConfig, extractKV } from "./index.ts";
 
 interface ConvertCase {
@@ -272,7 +272,7 @@ describe("extracting a whole configuration", () => {
     // unable to tell "absent" from "implausible".
     const result = extractCase("a value below its minimum")?.result;
     expect(result?.sector).toBe(3);
-    expect((result?._validation as { valid: boolean }).valid).toBe(false);
+    expect((must(result, "the below-minimum extraction")._validation as { valid: boolean }).valid).toBe(false);
   });
 
   it("leaves the report out when it was not asked for", () => {
@@ -403,6 +403,6 @@ describe("what validation reports", () => {
     // reaches a caller unvalidated.
     const result = extractCase("a config whose field is not a string")?.result;
     expect(result?.["7"]).toBe("42");
-    expect((result?._validation as { valid: boolean }).valid).toBe(true);
+    expect((must(result, "the non-string-field extraction")._validation as { valid: boolean }).valid).toBe(true);
   });
 });

@@ -4,7 +4,7 @@
 //
 
 import { describe, expect, it } from "vitest";
-import { loadGolden } from "../testing/golden.ts";
+import { loadGolden, must } from "../testing/golden.ts";
 import { callHijackTool, HIJACK_TOOL_NAMES, type HijackToolClient, MAX_KEYSTROKE_BYTES, toolAnswer } from "./index.ts";
 
 interface Case {
@@ -134,7 +134,7 @@ describe("what happens before the client is touched", () => {
       hijack_id: "h-1",
       keys: "x".repeat(MAX_KEYSTROKE_BYTES * 2),
     });
-    expect((calls[0]?.keys as string).length).toBe(MAX_KEYSTROKE_BYTES);
+    expect((must(calls[0], "the recorded keystroke call").keys as string).length).toBe(MAX_KEYSTROKE_BYTES);
   });
 });
 

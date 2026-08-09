@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 import { EgressBlockedError } from "../egress/index.ts";
-import { loadGolden } from "../testing/golden.ts";
+import { loadGolden, must } from "../testing/golden.ts";
 import {
   parseWsUrl,
   WebSocketSessionConnector,
@@ -288,7 +288,7 @@ describe("a WebSocket session in use", () => {
     const { connector } = await drive(record);
     // Eleven bytes for eight characters: `é` is two and `☃` is three.
     expect(await connector.getAnalysis()).toContain("bytes_received: 11");
-    expect((record.frames[0]?.data as string).length).toBe(8);
+    expect((must(record.frames[0], "the first frame").data as string).length).toBe(8);
   });
 
   it("reads a binary frame as CP437", async () => {

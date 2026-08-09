@@ -4,7 +4,7 @@
 //
 
 import { describe, expect, it } from "vitest";
-import { loadGolden } from "../testing/golden.ts";
+import { loadGolden, must } from "../testing/golden.ts";
 import { ANSI16_PALETTE, nearest16, nearest256, type Rgb, XTERM256_PALETTE } from "./index.ts";
 
 interface PaletteGolden {
@@ -91,7 +91,7 @@ describe("mapping a colour onto a palette", () => {
     // A renderer upstream may have computed one; refusing here would lose a
     // whole frame over one pixel.
     const outside = golden.cases.find((entry) => entry.name === "a colour outside the range");
-    const [r, g, b] = outside?.rgb as [number, number, number];
+    const [r, g, b] = must(outside, "the out-of-range colour case").rgb as [number, number, number];
     expect(nearest256(r, g, b)).toBe(outside?.xterm256);
   });
 });
