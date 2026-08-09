@@ -589,6 +589,13 @@ pytest_add_cli_args_test_selection = [
     "packages/provide-uterm-server/tests/bridge/hub/test_lease_kill_dashboard_ws.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_lease_kill_expiry_sweep.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_lease_kill_events_dead.py",
+    # The ownership fence added by the lifecycle-fencing rework: the post-fence
+    # identity recheck, the ownership_generation increments, and the bounded
+    # worker-send timeout. Plus the owned-send surface (send_owned_worker,
+    # run_owned_browser_operation, capture_*_ownership), which had no bound test
+    # at all — its mutants sat in mutmut's "no tests" state, capping the score.
+    "packages/provide-uterm-server/tests/bridge/hub/test_lease_kill_fence_recheck.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_lease_kill_owned_send.py",
     # ConnectionManager (hub/connection.py) — dedicated covering suites + the
     # behaviour-pinning kill-suites.
     "packages/provide-uterm-server/tests/bridge/test_connections_coverage.py",
