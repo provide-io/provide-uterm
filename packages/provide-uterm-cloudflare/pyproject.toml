@@ -42,7 +42,13 @@ dev = [
   # the Worker, and that server refuses to build without annotation support.
   # The Worker runtime itself does not need it, so it belongs here rather than
   # in this package's runtime dependencies.
-  "provide-uterm-server[annotation]>=0.5.0",
+  #
+  # [server] as well as [annotation]: fastapi/uvicorn live under provide-uterm-
+  # server's server/cli/tunnel extras, not [annotation], so app/factory_impl.py
+  # raised ModuleNotFoundError: No module named 'fastapi' the moment the
+  # isolated env stopped receiving it transitively — the same failure mode the
+  # starlette note below describes.
+  "provide-uterm-server[annotation,server]>=0.5.0",
   # tests/conftest.py imports starlette.testclient directly, and TestClient
   # needs httpx at import time. Neither is reachable through the line above:
   # provide-uterm-server declares fastapi under its server/cli/tunnel extras,

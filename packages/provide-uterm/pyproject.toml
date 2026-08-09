@@ -28,7 +28,12 @@ classifiers = [
     "Topic :: Terminals",
     "Framework :: FastAPI",
 ]
-dependencies = ["provide-telemetry>=0.4.7", "aiosqlite>=0.22"]
+# pydantic is a RUNTIME dependency, not a dev one: bridge/schemas.py defines the
+# wire-format frame models, and the eager provide/uterm/__init__.py pulls it in
+# on import. It was only ever declared in the dev extra and arrived transitively
+# everywhere else, so the omission stayed invisible until a lock refresh stopped
+# supplying it and CI's isolated `--package` env failed to import pydantic.
+dependencies = ["provide-telemetry>=0.4.7", "aiosqlite>=0.22", "pydantic>=2.0"]
 
 [project.urls]
 Homepage = "https://github.com/provide-io/provide-uterm"
