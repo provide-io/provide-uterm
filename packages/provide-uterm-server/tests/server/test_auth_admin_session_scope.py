@@ -60,9 +60,7 @@ async def test_a_scoped_admin_is_not_a_global_admin() -> None:
 @pytest.mark.asyncio
 async def test_an_unscoped_admin_keeps_global_reach() -> None:
     provider = LocalAuthorizationProvider()
-    globally = Principal(
-        subject_id="ops", roles=frozenset({"admin"}), scopes=frozenset({"*"})
-    )
+    globally = Principal(subject_id="ops", roles=frozenset({"admin"}), scopes=frozenset({"*"}))
 
     assert await provider.is_admin(globally) is True
     assert provider._is_admin_for_session(globally, _session("anything")) is True
