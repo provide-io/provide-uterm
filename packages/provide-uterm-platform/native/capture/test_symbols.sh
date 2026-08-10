@@ -22,13 +22,15 @@ if [ "$platform" = Darwin ]; then
 else
     # The exported set is an allowlist, not a floor: anything extra is a symbol
     # this library would interpose in every preloaded process, so it has to be
-    # deliberate. splice is hooked because kernel-space copies issue no
-    # read/write; tee is NOT exported — it is only called inward, to peek.
+    # deliberate. splice/sendfile/copy_file_range are hooked because kernel-space
+    # copies issue no read/write and would otherwise be invisible; sendfile64 is
+    # the same call under the name a _FILE_OFFSET_BITS=64 caller binds. tee and
+    # pread are NOT exported — they are only called inward, to recover the bytes.
     actual=$(nm -D --defined-only "$target" | awk 'NF >= 3 {print $3}' | sort)
-    expected=$(printf '%s\n' connect read splice write)
+    expected=$(printf '%s\n' connect copy_file_range read sendfile sendfile64 splice write)
     if [ "$actual" != "$expected" ]; then
-        echo "FAIL $target dynamic exports differ from connect/read/splice/write" >&2
-        printf 'actual:\n%s\n' "$actual" >&2
+        echo "FAIL $target dynamic exports differ from the hooked-syscall allowlist" >&2
+        printf 'actual:\n%s\nexpected:\n%s\n' "$actual" "$expected" >&2
         exit 1
     fi
 fi
