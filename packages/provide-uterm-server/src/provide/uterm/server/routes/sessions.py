@@ -2,7 +2,32 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Mutation-enforced at killed==100 ([tool.mutmut]); bound suite: tests/server/test_routes_mutation_killing.py (router-endpoint extraction, mocked Request).
+# Mutation-enforced at killed==100 ([tool.mutmut]), minus 14 documented-equivalent
+# mutants in mutation_equivalents.toml. Bound suites:
+#   tests/server/test_routes_mutation_killing.py             decorated-era surface
+#   tests/server/test_routes_capability_mutation_killing.py  shared handler skeleton
+#   tests/server/test_routes_sessions_list_mutation_killing.py    list + bulk_delete
+#   tests/server/test_routes_sessions_crud_mutation_killing.py    create/get/patch/delete/lifecycle
+#   tests/server/test_routes_sessions_reads_mutation_killing.py   annotate/analyze/snapshot/events/recording
+#   tests/server/test_routes_sessions_argforward_mutation_killing.py  argument forwarding
+#
+# This module measured 46.12% until 2026-08-10. 9bc4dd0c moved the handlers out
+# of @router.* decorators into the undecorated factory below, and mutmut skips
+# decorated functions, so ~1000 literals became mutable at once behind tests
+# that already had 100% line coverage. The table-driven suite killed the shared
+# skeleton (authorize -> 403 -> 404 -> forward the id); the four suites above
+# cover the bodies.
+#
+# The last file exists because of a class of mutant no behavioural test can
+# reach: an AsyncMock answers identically whatever it is handed, so
+# `session_definition(request, None)` — present in twelve handlers — changes no
+# outcome. Those die only to assertions on the CALL. The same file pins the
+# absent-key `.get` defaults (only wrong when the key is missing) and the sort
+# whitelist (only distinguishable when the field disagrees with created_at).
+#
+# Note `authorize_session_route_roles` below is CONJUNCTIVE — every required
+# role must hold — unlike the identically-shaped disjunctive helper in
+# pam_events.py. Inverting it widens every multi-role route.
 """Session CRUD, lifecycle, and data routes for the hosted server app.
 
 Exposes:

@@ -570,6 +570,19 @@ pytest_add_cli_args_test_selection = [
     # observer session), and the role check resolves admin through the service
     # while matching any other role against the principal's own claims.
     "packages/provide-uterm-server/tests/server/test_routes_pam_events_mutation_killing.py",
+    # routes/sessions.py handler BODIES. The table-driven suite above kills the
+    # shared skeleton (authorize -> 403 -> 404 -> forward the id) but has no
+    # purchase on the bodies, which is where the query filters, the owner
+    # enforcement, the tunnel-token revocation on delete and the
+    # recording-download containment check live. Split three ways for the
+    # 777-line cap.
+    "packages/provide-uterm-server/tests/server/test_routes_sessions_list_mutation_killing.py",
+    "packages/provide-uterm-server/tests/server/test_routes_sessions_crud_mutation_killing.py",
+    "packages/provide-uterm-server/tests/server/test_routes_sessions_reads_mutation_killing.py",
+    # Argument forwarding and absent-key defaults: the families that survive a
+    # behavioural test because the OUTCOME is unchanged (a nulled session id
+    # still resolves through an AsyncMock).
+    "packages/provide-uterm-server/tests/server/test_routes_sessions_argforward_mutation_killing.py",
     # test_process.py (manager process supervisor) — REMOVED from pytest selection
     # (2026-06-02). It exercises process_impl.py, but process_impl.py is NOT in the
     # perimeter (and the listed manager/process.py + config.py are 0-mutant, see the
