@@ -20,10 +20,14 @@ if [ "$platform" = Darwin ]; then
         exit 1
     fi
 else
+    # The exported set is an allowlist, not a floor: anything extra is a symbol
+    # this library would interpose in every preloaded process, so it has to be
+    # deliberate. splice is hooked because kernel-space copies issue no
+    # read/write; tee is NOT exported — it is only called inward, to peek.
     actual=$(nm -D --defined-only "$target" | awk 'NF >= 3 {print $3}' | sort)
-    expected=$(printf '%s\n' connect read write)
+    expected=$(printf '%s\n' connect read splice write)
     if [ "$actual" != "$expected" ]; then
-        echo "FAIL $target dynamic exports differ from connect/read/write" >&2
+        echo "FAIL $target dynamic exports differ from connect/read/splice/write" >&2
         printf 'actual:\n%s\n' "$actual" >&2
         exit 1
     fi
