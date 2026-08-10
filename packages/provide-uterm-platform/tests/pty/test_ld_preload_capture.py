@@ -12,9 +12,15 @@ frames arrive on a Unix domain socket.
 Only runs on Linux (macOS SIP blocks DYLD_INSERT_LIBRARIES for system binaries,
 and the .dylib build is skipped on macOS in CI).
 
-Note: commands must call write() through libc's PLT (e.g. shell printf builtin,
-Python sys.stdout, /bin/cat). Static-linked or vDSO-optimised executables like
-/bin/echo on aarch64 glibc bypass the PLT and are NOT intercepted by design.
+Note: commands must call read()/write() through libc's PLT (e.g. the shell's read
+builtin and printf, Python sys.stdout). Two categories bypass interception by
+design, so neither is usable as a fixture here:
+
+- Static-linked or vDSO-optimised executables, like /bin/echo on aarch64 glibc.
+- Anything that moves bytes in kernel space instead of via read/write. uutils
+  coreutils' cat splice()s pipe-to-pipe and produces NO frames at all; GNU cat
+  uses read/write and does. Do not reach for /bin/cat — which one is installed
+  decides whether the test passes.
 """
 
 from __future__ import annotations
@@ -208,16 +214,21 @@ def test_stdin_read_produces_channel_stdin_frame() -> None:
 
     with tempfile.TemporaryDirectory() as td:
         sock_path = str(Path(td) / "cap.sock")
-        # /bin/cat reads stdin (CHANNEL_STDIN) and writes to stdout (CHANNEL_STDOUT)
+        # The shell's `read` builtin reads fd 0 (CHANNEL_STDIN) and printf writes fd 1
+        # (CHANNEL_STDOUT), both through libc. /bin/cat is NOT usable here: uutils
+        # coreutils' cat copies pipe-to-pipe with splice(), which moves the bytes in
+        # kernel space and issues no read()/write() at all, so nothing is intercepted
+        # and the capture socket sees zero frames. GNU cat happens to use read/write,
+        # which is why this only fails on a uutils system.
         frames = _run_with_capture(
-            ["/bin/cat"],
+            ["/bin/sh", "-c", 'read x; printf "%s\\n" "$x"'],
             lib,
             sock_path,
             stdin=b"keystroke-data\n",
         )
 
     channels = [ch for ch, _ in frames]
-    assert CHANNEL_STDIN in channels, f"expected CHANNEL_STDIN frame from /bin/cat; got channels: {channels}"
+    assert CHANNEL_STDIN in channels, f"expected CHANNEL_STDIN frame from the shell; got channels: {channels}"
     stdin_data = b"".join(data for ch, data in frames if ch == CHANNEL_STDIN)
     assert b"keystroke-data" in stdin_data
 
