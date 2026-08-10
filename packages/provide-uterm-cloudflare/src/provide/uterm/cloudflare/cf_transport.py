@@ -16,8 +16,11 @@ adapters: CF Workers WebSockets are *event-based* — messages arrive via the
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections import deque
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 class CFWebSocketStreamReader:
@@ -127,6 +130,18 @@ class CFWebSocketStreamWriter:
     async def drain(self) -> None:
         """Flush pending buffer as a WebSocket text message."""
         if self._batching or not self._pending or self._closed:
+            # Returning here discards nothing but sends nothing either, and the
+            # caller cannot tell: ``drain()`` has no return value and raises
+            # nothing, so a session writing to a CLOSED writer looks exactly
+            # like a successful send from the session's side. Pending bytes at
+            # this point are output the consumer believes it delivered — say so,
+            # or the only remaining evidence is a client that never rendered.
+            if self._pending and (self._closed or self._batching):
+                logger.info(
+                    "cf_writer_drain_skipped reason=%s pending_bytes=%d",
+                    "closed" if self._closed else "batching",
+                    len(self._pending),
+                )
             return
         # Decode with latin-1 (maps bytes 0x00-0xFF → U+0000-U+00FF losslessly)
         # so raw terminal bytes — including non-UTF-8 CP437 line-drawing chars
