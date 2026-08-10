@@ -2,7 +2,29 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""FastAPI registration adapter for framework-neutral API route definitions."""
+"""FastAPI registration adapter for framework-neutral API route definitions.
+
+Mutation-enforced at killed==100 (100/104 killed, 4 documented equivalents in
+mutation_equivalents.toml); bound suite:
+tests/server/test_route_defs_mutation_killing.py.
+
+This module measured **36.54%** until 2026-08-10 — the lowest in the perimeter,
+because nothing tested it directly. Every RouteDef family exercises it, but only
+implicitly, and implicit coverage executes code without discriminating anything.
+It is worth the direct tests: ``_route_guard`` is the 422 path-grammar check and
+the 403 role gate for the whole shared API surface at once.
+
+Two mutants are easy to under-test and were caught only by measuring:
+
+* Binding the guard with a null authorizer leaves the dependency attached and
+  looks entirely normal from outside — the route still *has* a guard, it just
+  never enforces roles. The suite pulls the dependency off the bound route and
+  executes it.
+* The catch-all loop walks ``{route.template for route in selected}`` — a SET,
+  so ``continue`` vs ``break`` is observable only when a skipped single-method
+  template happens to precede one that still needs its catch-all. The fixture
+  picks a pair whose real iteration order exposes it rather than assuming one.
+"""
 
 from __future__ import annotations
 
