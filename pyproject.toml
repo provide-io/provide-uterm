@@ -317,10 +317,10 @@ source_paths = [
     #
     # routes/ — ENFORCED, currently RED. Reached killed==100 on 2026-06-02, then
     #   regressed 2026-07-23 when 9bc4dd0c de-decorated the session handlers (mutmut
-    #   skips decorated functions, so ~2600 mutants went live at once). Two suites
-    #   cover it: test_routes_mutation_killing.py + test_routes_capability_mutation_killing.py.
-    #   Status, the revived async-hang caveat, and what is still short:
-    #   docs/mutmut-survivors-triage.md Wave 9.
+    #   skips decorated functions, so ~2600 mutants went live at once). Six
+    #   test_routes_*_mutation_killing.py suites cover it, all wired into the pytest
+    #   selection below. Status, the revived async-hang caveat, and what is still
+    #   short: docs/mutmut-survivors-triage.md Wave 9.
     "src/provide/uterm/server/routes/",
     #
     # webhooks.py — RE-ENABLED at killed==100 (2026-06-02). The deferral was a REAL
