@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import subprocess
 import tempfile
 from pathlib import Path
@@ -268,6 +269,19 @@ def command_errors(backend: str, result: subprocess.CompletedProcess[str]) -> li
     return [f"{backend}: native command failed ({result.returncode}): {detail}"]
 
 
+# How to prepare each backend so its adapter can actually run.  Every native
+# command here assumes its toolchain is already set up — the C# one passes
+# --no-restore, the TypeScript one needs node_modules — so a machine that has
+# never built the backend produces no observations, and without this hint the
+# failure reads like a parity bug rather than a missing build.
+_SETUP_HINTS = {
+    "python": "uv sync --group dev",
+    "go": "go build ./... (in packages/provide-uterm-go)",
+    "csharp": ("dotnet build tests/Provide.Uterm.Tests/Provide.Uterm.Tests.csproj (in packages/provide-uterm-csharp)"),
+    "typescript": "npm ci (in packages/provide-uterm-ts)",
+}
+
+
 def _command(root: Path, backend: str) -> tuple[list[str], Path]:
     if backend == "python":
         return [
@@ -341,7 +355,21 @@ def collect_backend_observations(
             # everything. The command's own output names which, so include it
             # rather than reporting only the missing file.
             detail = "\n".join(part.strip() for part in (result.stdout, result.stderr) if part.strip())
-            return [f"{backend}: native command produced no observation file: {detail}"], []
+            where = f"{shlex.join(command)} (cwd {cwd})"
+            if not detail:
+                # Exit 0 AND total silence is the signature of a backend whose
+                # toolchain was never prepared: `dotnet test --no-restore`
+                # against an unbuilt project prints nothing at all and still
+                # exits 0. Reporting only the absent file turned that into a
+                # phantom parity failure, so name the actual remedy.
+                hint = _SETUP_HINTS.get(backend, "build the backend first")
+                unbuilt = (
+                    f"{backend}: native command wrote no observations and printed nothing, "
+                    f"while exiting 0 — the backend is almost certainly not built. "
+                    f"Ran {where}. Prepare it with: {hint}"
+                )
+                return [unbuilt], []
+            return [f"{backend}: native command produced no observation file. Ran {where}: {detail}"], []
         try:
             observations = json.loads(output_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
