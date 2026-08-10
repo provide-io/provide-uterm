@@ -565,6 +565,11 @@ pytest_add_cli_args_test_selection = [
     "packages/provide-uterm-server/tests/server/test_routes_tunnels_connect_mutation_killing.py",
     "packages/provide-uterm-server/tests/server/test_routes_tunnels_create_mutation_killing.py",
     "packages/provide-uterm-server/tests/server/test_routes_tunnels_tokens_mutation_killing.py",
+    # routes/pam_events.py. The PAM relay derives its session id from the tty,
+    # so _tty_slug is identity-critical (a collision adopts another login's
+    # observer session), and the role check resolves admin through the service
+    # while matching any other role against the principal's own claims.
+    "packages/provide-uterm-server/tests/server/test_routes_pam_events_mutation_killing.py",
     # test_process.py (manager process supervisor) — REMOVED from pytest selection
     # (2026-06-02). It exercises process_impl.py, but process_impl.py is NOT in the
     # perimeter (and the listed manager/process.py + config.py are 0-mutant, see the

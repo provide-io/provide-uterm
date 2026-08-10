@@ -2,7 +2,26 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""FastAPI adapter for shared PAM event ingestion."""
+"""FastAPI adapter for shared PAM event ingestion.
+
+Mutation-enforced at killed==100 (217/217, no documented equivalents); bound
+suite: tests/server/test_routes_pam_events_mutation_killing.py. It measured
+6.91% until 2026-08-09: 9bc4dd0c moved ``ingest`` out of its ``@router.post``
+decorator into the undecorated factory below, and mutmut skips decorated
+functions, so every literal here became mutable at once behind tests that
+already had 100% line coverage.
+
+Two invariants the suite exists to protect:
+
+* ``_tty_slug`` is identity-critical. The session id is *derived*
+  (``pam-{username}-{slug}``), never supplied, so any change to the slug rules
+  can make two different ttys collide onto one id — one login's observer
+  session then adopts another's, and a ``close`` deletes the wrong one.
+* ``authorize_pam_event_roles`` resolves ``admin`` through the authorization
+  service but matches every other role against the principal's own claim set.
+  Those branches are not interchangeable: swapping them either asks the service
+  about a role it cannot answer, or accepts a self-asserted ``admin`` claim.
+"""
 
 from __future__ import annotations
 
