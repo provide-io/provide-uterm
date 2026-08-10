@@ -2,7 +2,16 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Mutation-enforced at killed==100 ([tool.mutmut]); bound suite: tests/server/test_routes_mutation_killing.py (router-endpoint extraction, mocked Request).
+# Mutation-enforced at killed==100 (281/281, no documented equivalents). Bound
+# suites: tests/server/test_routes_mutation_killing.py (decorated-era surface)
+# and tests/server/test_routes_webhooks_mutation_killing.py (the handlers).
+#
+# Measured 89.32% until 2026-08-10. A webhook makes the server issue outbound
+# HTTP on session activity, so this is an SSRF surface as much as a CRUD one:
+# the URL must go through manager.validate_url, the NORMALISED return value is
+# what gets registered (never the raw payload), and unregister verifies the
+# webhook belongs to THIS session -- without which any principal who may edit
+# their own session could delete another session's webhook by id.
 """Webhook CRUD routes for the hosted server app.
 
 Exposes:

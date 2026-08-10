@@ -583,6 +583,12 @@ pytest_add_cli_args_test_selection = [
     # behavioural test because the OUTCOME is unchanged (a nulled session id
     # still resolves through an AsyncMock).
     "packages/provide-uterm-server/tests/server/test_routes_sessions_argforward_mutation_killing.py",
+    # The last three routes/ files. route_defs.py is the shared binder every
+    # RouteDef family passes through, so its 422 path-grammar check and 403
+    # role guard cover the whole API surface at once.
+    "packages/provide-uterm-server/tests/server/test_route_defs_mutation_killing.py",
+    "packages/provide-uterm-server/tests/server/test_routes_profiles_mutation_killing.py",
+    "packages/provide-uterm-server/tests/server/test_routes_webhooks_mutation_killing.py",
     # test_process.py (manager process supervisor) — REMOVED from pytest selection
     # (2026-06-02). It exercises process_impl.py, but process_impl.py is NOT in the
     # perimeter (and the listed manager/process.py + config.py are 0-mutant, see the

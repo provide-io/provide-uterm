@@ -2,7 +2,18 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Mutation-enforced at killed==100 ([tool.mutmut]); bound suite: tests/server/test_routes_mutation_killing.py (router-endpoint extraction, mocked Request).
+# Mutation-enforced at killed==100 (386/409 killed, 23 documented equivalents in
+# mutation_equivalents.toml). Bound suites:
+# tests/server/test_routes_mutation_killing.py (decorated-era surface) and
+# tests/server/test_routes_profiles_mutation_killing.py (the handlers).
+#
+# Measured 88.26% until 2026-08-10. Connection profiles are saved connection
+# targets, so the load-bearing behaviour is: listing is scoped by ownership
+# unless the caller is an admin; create stamps the owner from the authenticated
+# principal rather than the payload; update applies an allowlist of eight fields
+# (which is what stops owner/profile_id/created_at being rewritten through an
+# ordinary edit); and connect requires BOTH the read grant on the profile and
+# the create grant on sessions.
 """REST API routes for connection profiles."""
 
 from __future__ import annotations

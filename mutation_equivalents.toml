@@ -925,3 +925,98 @@ reason = 'recording_download media_type -> None: Starlette guesses "application/
 [[equivalent]]
 mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_996"
 reason = "recording_download media_type argument dropped: same guess from the filename — identical response."
+
+# -------------------------------------------------------------------------
+# routes/route_defs.py — the shared binder. Two verified-equivalent pairs in
+# the 405 catch-all; everything else is killed by
+# tests/server/test_route_defs_mutation_killing.py.
+#
+# HttpMethod is a StrEnum, so sorting its members directly compares their
+# string values -- the same ordering the key lambda produces. Measured:
+# sorted(HttpMethod) == sorted(HttpMethod, key=lambda m: m.value).
+[[equivalent]]
+mutant = "provide.uterm.server.routes.route_defs.x_bind_api_routes__mutmut_45"
+reason = "sorted(..., key=None) over HttpMethod members -- StrEnum compares by value, so the Allow ordering is identical."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.route_defs.x_bind_api_routes__mutmut_47"
+reason = "sorted(...) with the key argument dropped -- same StrEnum value ordering, identical Allow header."
+# Starlette lowercases header NAMES when building raw_headers, so Allow,
+# allow and ALLOW emit byte-identical output (and RFC 9110 makes header
+# names case-insensitive regardless). The Allow VALUE is case-sensitive and
+# is asserted in test_the_catch_all_lists_every_bound_verb_sorted.
+[[equivalent]]
+mutant = "provide.uterm.server.routes.route_defs.x_bind_api_routes__mutmut_62"
+reason = "Allow header name lowercased -- Starlette lowercases header names, so raw_headers is byte-identical."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.route_defs.x_bind_api_routes__mutmut_63"
+reason = "Allow header name uppercased -- same, the name is lowercased before it reaches the wire."
+# -------------------------------------------------------------------------
+# routes/profiles.py -- four verified-equivalent families; everything else is
+# killed by tests/server/test_routes_profiles_mutation_killing.py.
+#
+# 1. typing.cast type arguments (12). cast(t, v) returns v untouched and
+#    never inspects t, which exists only for static checkers.
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_66"
+reason = "create_profile connector_type cast type arg nulled -- typing.cast is a runtime no-op."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_70"
+reason = "create_profile connector_type cast type arg padded -- typing.cast is a runtime no-op."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_71"
+reason = "create_profile connector_type cast type arg lowercased -- typing.cast is a runtime no-op."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_72"
+reason = "create_profile connector_type cast type arg uppercased -- typing.cast is a runtime no-op."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_83"
+reason = "create_profile input_mode cast type arg nulled -- typing.cast is a runtime no-op."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_87"
+reason = "create_profile input_mode cast type arg padded -- typing.cast is a runtime no-op."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_88"
+reason = "create_profile input_mode cast type arg lowercased -- typing.cast is a runtime no-op."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_89"
+reason = "create_profile input_mode cast type arg uppercased -- typing.cast is a runtime no-op."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_100"
+reason = "create_profile visibility cast type arg nulled -- typing.cast is a runtime no-op."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_104"
+reason = "create_profile visibility cast type arg padded -- typing.cast is a runtime no-op."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_105"
+reason = "create_profile visibility cast type arg lowercased -- typing.cast is a runtime no-op."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_106"
+reason = "create_profile visibility cast type arg uppercased -- typing.cast is a runtime no-op."
+# 2. The tags default. The next line guards with isinstance(tags_raw, list),
+#    so None and the empty list both yield the empty tag list.
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_57"
+reason = "create_profile tags default nulled -- the isinstance(list) guard maps it to an empty list either way."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_59"
+reason = "create_profile tags default dropped -- get returns None, and the isinstance(list) guard maps it to an empty list."
+# 3. bool(...) around the recording flag: bool(None) is False, which is the
+#    value the literal default supplies.
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_174"
+reason = "create_profile recording_enabled default nulled -- bool(None) is False, identical to the literal."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_176"
+reason = "create_profile recording_enabled default dropped -- bool(None) is False, identical to the literal."
+# 4. model_dump mode. Measured on ConnectionProfile: python mode, None, a
+#    mangled string and even json mode all produce byte-identical output,
+#    because every field is a primitive whose representations coincide.
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_182"
+reason = "create_profile model_dump mode nulled -- ConnectionProfile is all primitives, so every mode yields identical output."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_183"
+reason = "create_profile model_dump mode padded -- same, no field distinguishes the modes."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_184"
+reason = "create_profile model_dump mode uppercased -- same, no field distinguishes the modes."
