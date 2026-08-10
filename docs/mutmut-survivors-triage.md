@@ -513,7 +513,7 @@ were enumerated via mutmut's own AST machinery and kills/equivalences confirmed 
 edit-test-revert (the connector gate is Linux-only — it stalls under the macOS
 fork-loop — so CI is authoritative).
 
-## Wave 9 — `routes/` de-decoration regression (2026-07-23 … open)
+## Wave 9 — `routes/` de-decoration regression (2026-07-23 … closed 2026-08-10)
 
 `routes/` reached `killed==100` on 2026-06-02 over 459 mutants and the perimeter
 entry in `[tool.mutmut]` justified re-enabling it with "routes/ has NO async-hang
@@ -561,15 +561,43 @@ them in the `mutants/` tree.
 - `test_routes_pam_events_mutation_killing.py` (`4bcd9cab`) — `pam_events.py`
   6.91% → 100%.
 
-**Still short.** `profiles`, `webhooks`, `route_defs`, and `sessions`' handler
-bodies — query-param clamps, split parsing, `set_mode`'s 422, delete's span + audit
-+ token revocation, and the three handlers taking no `session_id`. Those need
-per-handler assertions; the shared-skeleton table is the wrong shape for them.
-`mutation-full` stays red until they are done.
+**Closed 2026-08-10.** Every `routes/` file is back at `killed==100`, over thirteen
+suites. The order they fell, and what each cost:
 
-`tunnels` and `pam_events` came off this list on 2026-08-09, which is also the
-pattern to expect: a file reaching 100% once does not keep it. `lease.py` was
-enabled at 100% on 2026-06-02, drifted to 77.71% under the `61647de9`
-lifecycle-fencing rework, and needed `06d2ef96` to restore it — the same
-enable-then-drift shape as `routes/`, just from a refactor rather than a
-de-decoration.
+| Closed | Files | Commit |
+|---|---|---|
+| 08-07 | `sse.py` 65.38% → 100; `sessions.py` ~5% → 46.12% | `4355d736` |
+| 08-09 | `tunnels.py` 4.98% → 100 (split three ways for the 777-LOC cap) | `1b03ea14` |
+| 08-09 | `pam_events.py` 6.91% → 100 | `4bcd9cab` |
+| 08-10 | `sessions.py` 46.12% → 100 | `6d7edc8b` |
+| 08-10 | `route_defs.py` 36.54% → 100; `profiles.py` 88.26% → 100; `webhooks.py` 89.32% → 100 | `d2004938` |
+
+`route_defs.py` was the lowest-scoring file in the whole perimeter and is the one
+worth remembering: nothing tested it directly. Every RouteDef family exercised the
+binder and its guard, but only implicitly — and implicit coverage executes code
+without discriminating anything. It is also where a mutation does the most damage,
+since `_route_guard` is the 422 path-grammar check and the 403 role gate for the
+entire shared API at once. Two of its mutants resisted the obvious test: binding
+the guard with a null authorizer leaves the dependency attached so the route still
+*looks* guarded from outside, and the 405 catch-all loop iterates a **set**, so
+`continue` vs `break` is observable only for a template pair whose real iteration
+order exposes it — a fixture assuming source order kills it by luck and flakes when
+the hash seed changes.
+
+### What this wave should change about how the perimeter is read
+
+Reaching 100% is not a terminal state. Two files drifted off it here from ordinary
+refactors, and neither announced itself:
+
+- `routes/` — `9bc4dd0c` de-decorated the handlers. Line coverage never moved.
+- `lease.py` — `61647de9`'s lifecycle-fencing rework took it to 77.71%; `06d2ef96`
+  restored it. Most of its damage was 138 mutants in mutmut's "no tests" state:
+  helpers that arrived with full line coverage and no bound test, so they never ran
+  yet still counted against the score.
+
+Both are invisible to coverage and visible only to the mutation gate — which had
+itself been red for nine straight weeks when the `routes/` regression landed, so a
+newly-red file was indistinguishable from the standing failure and went unread for
+five days. `9ce12f09` (later `c59cd4ac`) exists because of that: a red
+`mutation-full` run now names the failing paths rather than being one more red run.
+Do not read a red mutation job as the standing failure.

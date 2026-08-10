@@ -315,12 +315,17 @@ source_paths = [
     # its specific obstacle. A --changed-only run on a deferred file is then correctly
     # skipped (not a false pass). Re-add each once its obstacle is resolved.
     #
-    # routes/ — ENFORCED, currently RED. Reached killed==100 on 2026-06-02, then
-    #   regressed 2026-07-23 when 9bc4dd0c de-decorated the session handlers (mutmut
-    #   skips decorated functions, so ~2600 mutants went live at once). Six
-    #   test_routes_*_mutation_killing.py suites cover it, all wired into the pytest
-    #   selection below. Status, the revived async-hang caveat, and what is still
-    #   short: docs/mutmut-survivors-triage.md Wave 9.
+    # routes/ — ENFORCED at killed==100, reclosed 2026-08-10 (d2004938). It first
+    #   reached 100 on 2026-06-02, then regressed 2026-07-23 when 9bc4dd0c
+    #   de-decorated the session handlers: mutmut skips decorated functions, so
+    #   de-decorating put ~2600 mutants live in one commit, behind tests whose line
+    #   coverage never moved off 100. Closing it took a family of
+    #   test_route*_mutation_killing.py suites (note the odd one out,
+    #   test_route_defs_*, which does not share the test_routes_ prefix), all wired
+    #   into the pytest selection below — without that mutmut runs none of them in
+    #   the mutants tree. Keep new handlers covered there: the decorator no longer
+    #   hides them. Full history, per-file numbers, and the async-hang caveat the
+    #   de-decoration revived: docs/mutmut-survivors-triage.md Wave 9.
     "src/provide/uterm/server/routes/",
     #
     # webhooks.py — RE-ENABLED at killed==100 (2026-06-02). The deferral was a REAL
