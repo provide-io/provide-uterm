@@ -183,6 +183,7 @@ def _cmd_listen(args: argparse.Namespace) -> None:
             TelnetWsGateway,
             SshWsGateway,
             iac_negotiate=args.iac_negotiate,
+            text_encoding=args.text_encoding,
             authorized_keys=args.authorized_keys,
             require_resolver=args.require_resolver,
             allow_unauthenticated_ssh=args.allow_unauthenticated_ssh,
@@ -206,6 +207,7 @@ async def _run_listen(
     require_resolver: bool = False,
     allow_unauthenticated_ssh: bool = False,
     allow_unauthenticated_telnet: bool = False,
+    text_encoding: str = "latin-1",
 ) -> None:
     servers = []
 
@@ -215,6 +217,7 @@ async def _run_listen(
             color_mode=color_mode,
             iac_negotiate=iac_negotiate,
             allow_unauthenticated=allow_unauthenticated_telnet,
+            text_encoding=text_encoding,
         )
         srv = await gw.start(bind, telnet_port)
         servers.append(srv)
@@ -348,6 +351,19 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=["passthrough", "256", "16"],
         default="passthrough",
         help="ANSI color downgrade mode (default: passthrough)",
+    )
+    listen_p.add_argument(
+        "--text-encoding",
+        default="latin-1",
+        help=(
+            "Codec used to turn upstream WebSocket TEXT frames into bytes for "
+            "the telnet client. Default latin-1 suits a BYTE-TRANSPARENT "
+            "upstream, whose frames carry code points 0-255 that are really "
+            "byte values. Use cp437 (or the codec your client decodes with) "
+            "when the upstream sends real text: encoding characters above "
+            "U+00FF as latin-1 replaces every one with '?', which silently "
+            "destroys box drawing and ANSI art."
+        ),
     )
     listen_p.add_argument(
         "--no-iac-negotiate",

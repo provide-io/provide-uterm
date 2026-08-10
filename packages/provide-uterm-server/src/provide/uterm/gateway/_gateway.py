@@ -443,9 +443,42 @@ async def _ws_to_tcp(
     color_mode: ColorMode = "passthrough",
     token_file: Path | None = None,
     redirect_holder: list[str | None] | None = None,
+    text_encoding: str = "latin-1",
 ) -> None:
-    """Forward WebSocket messages → raw TCP bytes."""
+    """Forward WebSocket messages → raw TCP bytes.
+
+    ``text_encoding`` decides how a WebSocket TEXT frame becomes bytes, and the
+    right answer depends on what the upstream put in the frame:
+
+    * ``latin-1`` (default) — the upstream is BYTE-TRANSPARENT: it decoded raw
+      terminal bytes with latin-1, so the string holds code points 0-255 that
+      are really byte values, and latin-1 restores them exactly.
+    * ``cp437`` (or another terminal codec) — the upstream sent real TEXT, so
+      the string holds actual characters (``▀``, ``═``). Those must be encoded
+      to whatever the connected terminal decodes with, which for this project's
+      clients is CP437. Encoding real text as latin-1 replaces every character
+      above U+00FF with ``?`` — measured against a live uwarp worker on
+      2026-08-10, that destroyed 582 of 9138 characters, i.e. the entire ANSI
+      art and every box-drawing rule, and the client faithfully rendered the
+      question marks.
+    """
     decoder = ControlFrameDecoder()
+    # Frame/byte counters for the upstream→client hop. A server that provably
+    # sent output while the client observed none leaves exactly two
+    # possibilities, and they need opposite fixes: the frame never arrived
+    # here, or it arrived and stalled on the way to the socket. Only a count
+    # on THIS side separates them.
+    stats = {"frames": 0, "bytes": 0}
+
+    def _note(raw: bytes) -> None:
+        stats["frames"] += 1
+        stats["bytes"] += len(raw)
+        logger.info(
+            "gateway_ws_to_tcp frame=%d bytes=%d total_bytes=%d",
+            stats["frames"],
+            len(raw),
+            stats["bytes"],
+        )
 
     async def _write_fn(data: bytes) -> None:
         writer.write(data)
@@ -465,12 +498,13 @@ async def _ws_to_tcp(
                     if redirect_holder is not None and redirect_holder[0]:
                         return
                     continue
-                raw = event.data.encode("latin-1", errors="replace")
+                raw = event.data.encode(text_encoding, errors="replace")
                 raw = raw.replace(b"\x7f", b"\x08")  # DEL→BS
                 raw = _normalize_crlf(raw)
                 raw = apply_color_mode(raw, color_mode)
                 writer.write(raw)
                 await writer.drain()
+                _note(raw)
             continue
         raw = message
         raw = raw.replace(b"\x7f", b"\x08")  # DEL→BS
@@ -478,6 +512,7 @@ async def _ws_to_tcp(
         raw = apply_color_mode(raw, color_mode)
         writer.write(raw)
         await writer.drain()
+        _note(raw)
 
 
 async def _pipe_ws(
@@ -494,6 +529,7 @@ async def _pipe_ws(
     ws_ssl: _ssl.SSLContext | bool | None = None,
     redirect_holder: list[str | None] | None = None,
     advertise_redirect: bool = True,
+    text_encoding: str = "latin-1",
 ) -> int | None:
     """Open a WebSocket to *ws_url* and bidirectionally pipe with reader/writer.
 
@@ -580,6 +616,7 @@ async def _pipe_ws(
                 color_mode=color_mode,
                 token_file=token_file,
                 redirect_holder=redirect_holder,
+                text_encoding=text_encoding,
             )
         )
         _done, pending = await asyncio.wait([t1, t2], return_when=asyncio.FIRST_COMPLETED)
