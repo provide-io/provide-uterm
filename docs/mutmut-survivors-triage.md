@@ -538,8 +538,8 @@ now, so the deferral is live again in principle. In practice it has not reproduc
 `sse.py` was driven back to 100% with its async handler mutable and did not hang.
 The unproven surface is `sessions.py`'s async handler bodies.
 
-**Coverage split.** Both suites build routers with mocked app-state and call
-endpoints with a mocked `Request` (no TestClient / full-app lifespan), and both are
+**Coverage split.** Every suite builds routers with mocked app-state and calls
+endpoints with a mocked `Request` (no TestClient / full-app lifespan), and all are
 wired into `pytest_add_cli_args_test_selection` — without that, mutmut runs none of
 them in the `mutants/` tree.
 
@@ -555,8 +555,21 @@ them in the `mutants/` tree.
   (Starlette lowercases header names into `raw_headers`, so name-case mutants emit
   identical bytes; header *values* stay case-sensitive and are killed).
 
-**Still short.** `profiles`, `tunnels`, `webhooks`, `pam_events`, `route_defs`, and
-`sessions`' handler bodies — query-param clamps, split parsing, `set_mode`'s 422,
-delete's span + audit + token revocation, and the three handlers taking no
-`session_id`. Those need per-handler assertions; the shared-skeleton table is the
-wrong shape for them. `mutation-full` stays red until they are done.
+- `test_routes_tunnels_{create,connect,tokens}_mutation_killing.py` (`1b03ea14`) —
+  `tunnels.py` 4.98% → 100%. Split three ways for the 777-line cap; the perimeter
+  note in `[tool.mutmut]` records why each slice exists.
+- `test_routes_pam_events_mutation_killing.py` (`4bcd9cab`) — `pam_events.py`
+  6.91% → 100%.
+
+**Still short.** `profiles`, `webhooks`, `route_defs`, and `sessions`' handler
+bodies — query-param clamps, split parsing, `set_mode`'s 422, delete's span + audit
++ token revocation, and the three handlers taking no `session_id`. Those need
+per-handler assertions; the shared-skeleton table is the wrong shape for them.
+`mutation-full` stays red until they are done.
+
+`tunnels` and `pam_events` came off this list on 2026-08-09, which is also the
+pattern to expect: a file reaching 100% once does not keep it. `lease.py` was
+enabled at 100% on 2026-06-02, drifted to 77.71% under the `61647de9`
+lifecycle-fencing rework, and needed `06d2ef96` to restore it — the same
+enable-then-drift shape as `routes/`, just from a refactor rather than a
+de-decoration.
