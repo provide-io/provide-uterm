@@ -433,3 +433,23 @@ async def test_poll_messages_unknown_channel_loops() -> None:
         msgs = await conn.poll_messages()
         assert any(m.get("type") == "term" for m in msgs)
         await conn.stop()
+
+
+def test_snapshot_survives_the_hub_frame_builder() -> None:
+    """A snapshot the hub refuses is a hijacked terminal that never paints.
+
+    The builder validates the wire contract, and a frame it rejects is dropped
+    at debug level — so a shape error here is invisible in the logs and shows
+    up only as a blank browser terminal.
+    """
+
+    from provide.uterm.server.bridge.routes.websockets_worker import _build_worker_frame
+
+    connector = CaptureConnector("s", "d", {"socket_path": "/tmp/probe.sock"})
+    connector._buffer = "CHOOSE A DOOR"
+
+    frame = _build_worker_frame("snapshot", connector._snapshot())
+
+    assert frame["screen"] == "CHOOSE A DOOR"
+    assert frame["prompt_detected"] is None
+    assert frame["cursor"] == {"x": 0, "y": 0}
