@@ -39,6 +39,34 @@ if [[ "${running_python}" != "${GOLDENS_REFERENCE_PYTHON}" ]]; then
   exit 0
 fi
 
+# Throwaway trees that CONTAIN copies of real testdata directories and must not
+# be scanned. Stryker copies the whole package into .stryker-tmp/sandbox-XXXXXX
+# per run, and mutmut does the same into mutants/; an interrupted run leaves
+# those behind. A sandbox copy holding a stale corpus makes this check fail
+# against a path that is not in the repository, and the failure is
+# self-clearing — the run regenerates the sandbox's copy, so the next run
+# passes. That cost a confusing red `make quality-gate` on 2026-08-09 with the
+# tree clean (the sandboxes are gitignored, so `git status` showed nothing).
+_prune_temp_trees() {
+  find packages \
+    \( -name node_modules -o -name .stryker-tmp -o -name mutants -o -name .venv \) -prune \
+    -o "$@"
+}
+
+find_generators() {
+  _prune_temp_trees -type d -name testdata -print |
+    while IFS= read -r testdata_dir; do
+      find "$testdata_dir" -maxdepth 1 -name 'gen_*_golden.py'
+    done | sort
+}
+
+find_corpora() {
+  _prune_temp_trees -type d -name testdata -print |
+    while IFS= read -r testdata_dir; do
+      find "$testdata_dir" -maxdepth 1 -name '*_golden.json'
+    done | sort
+}
+
 stale=()
 checked=0
 
@@ -77,7 +105,7 @@ while IFS= read -r generator; do
     echo "  regenerate with: ${run[*]}"
     stale+=("$corpus")
   fi
-done < <(find packages -type d -name testdata -exec find {} -maxdepth 1 -name 'gen_*_golden.py' \; | sort)
+done < <(find_generators)
 
 if (( ${#stale[@]} > 0 )); then
   echo
@@ -97,7 +125,7 @@ while IFS= read -r corpus; do
   dir="$(dirname "$corpus")"
   name="$(basename "$corpus" .json)"
   [[ -f "$dir/gen_$name.py" ]] || ungenerated=$((ungenerated + 1))
-done < <(find packages -type d -name testdata -exec find {} -maxdepth 1 -name '*_golden.json' \; | sort)
+done < <(find_corpora)
 
 if (( ungenerated > 0 )); then
   echo "NOTE: $ungenerated committed corpus file(s) have no generator and cannot be drift-checked."
