@@ -10,7 +10,10 @@ import asyncio
 from collections import deque
 from unittest.mock import MagicMock
 
-from provide.uterm.cloudflare.cf_transport import (
+from provide.uterm.cf_ws_transport import (
+    MAX_MESSAGE_QUEUE_DEPTH,
+    MAX_READER_BUFFER_BYTES,
+    MAX_WRITER_PENDING_BYTES,
     CFWebSocketStreamReader,
     CFWebSocketStreamWriter,
 )
@@ -273,3 +276,185 @@ class TestCFWebSocketStreamWriter:
         sent_text = ws.send.call_args.args[0]
         assert "�" not in sent_text
         assert sent_text.encode("latin-1") == original
+
+
+# ---------------------------------------------------------------------------
+# Bounded growth
+# ---------------------------------------------------------------------------
+
+
+class TestBoundedGrowth:
+    """Caps that stop a runaway producer from ballooning Durable Object memory.
+
+    Each cap drops the OLDEST data, so the newest bytes — the ones a live
+    client is waiting on — always survive.
+    """
+
+    def test_queue_drops_oldest_message_at_cap(self) -> None:
+        """Queueing past the depth cap evicts the oldest message, not the newest."""
+        reader = CFWebSocketStreamReader()
+        for i in range(MAX_MESSAGE_QUEUE_DEPTH):
+            reader.queue_message(f"msg{i}")
+        assert len(reader._message_queue) == MAX_MESSAGE_QUEUE_DEPTH
+
+        reader.queue_message("newest")
+
+        assert len(reader._message_queue) == MAX_MESSAGE_QUEUE_DEPTH
+        assert reader._message_queue[0] == "msg1"  # "msg0" evicted
+        assert reader._message_queue[-1] == "newest"
+
+    async def test_reader_buffer_drops_oldest_bytes_at_cap(self) -> None:
+        """A message that would overflow the reader buffer evicts oldest bytes.
+
+        The cap lives on the FILL path, so the request has to be big enough to
+        keep the loop pulling: a read whose n is already satisfied by the
+        existing buffer returns without ever touching the queue.
+        """
+        reader = CFWebSocketStreamReader()
+        reader._buffer.extend(b"A" * (MAX_READER_BUFFER_BYTES - 2))
+        reader.queue_message("BBBB")
+
+        result = await reader.read(MAX_READER_BUFFER_BYTES)
+
+        # (cap - 2) + 4 queued = cap + 2, so the 2 oldest bytes were dropped
+        # and the newest 4 — the ones a live client is waiting on — survived.
+        assert len(result) == MAX_READER_BUFFER_BYTES
+        assert result.endswith(b"BBBB")
+
+    def test_writer_pending_drops_oldest_bytes_at_cap(self) -> None:
+        """A write that would overflow pending output evicts oldest bytes."""
+        writer = CFWebSocketStreamWriter(MagicMock())
+        writer.write(b"A" * MAX_WRITER_PENDING_BYTES)
+
+        writer.write(b"BBBB")
+
+        assert len(writer._pending) == MAX_WRITER_PENDING_BYTES
+        assert bytes(writer._pending[-4:]) == b"BBBB"
+
+    def test_writer_pending_oversized_single_write_clears_buffer(self) -> None:
+        """A single write larger than the whole cap discards all prior pending."""
+        writer = CFWebSocketStreamWriter(MagicMock())
+        writer.write(b"old")
+
+        writer.write(b"N" * (MAX_WRITER_PENDING_BYTES + 10))
+
+        # Overflow exceeded the pending length, so the buffer was cleared
+        # outright rather than sliced.
+        assert b"old" not in bytes(writer._pending)
+
+    def test_reader_close_releases_buffered_data(self) -> None:
+        """close() drops queued messages so a closed reader pins no memory."""
+        reader = CFWebSocketStreamReader()
+        reader.queue_message("queued")
+        reader._buffer.extend(b"buffered")
+
+        reader.close()
+
+        assert len(reader._message_queue) == 0
+        assert len(reader._buffer) == 0
+
+
+# ---------------------------------------------------------------------------
+# Delivery observability
+# ---------------------------------------------------------------------------
+
+
+class TestDeliveryObservability:
+    """A send that never happens must not look like one that did."""
+
+    async def test_send_seq_counts_only_real_sends(self) -> None:
+        """send_seq advances per ws.send() and stays put when drain is a no-op."""
+        ws = MagicMock()
+        writer = CFWebSocketStreamWriter(ws)
+
+        writer.write(b"one")
+        await writer.drain()
+        writer.write(b"two")
+        await writer.drain()
+        assert writer.send_seq == 2
+
+        # Nothing pending — drain must not count a send.
+        await writer.drain()
+        assert writer.send_seq == 2
+
+    async def test_drain_on_closed_writer_sends_nothing(self, caplog) -> None:
+        """Pending bytes on a closed writer are reported, not silently dropped."""
+        ws = MagicMock()
+        writer = CFWebSocketStreamWriter(ws)
+        writer.write(b"unsent")
+        writer._closed = True
+
+        with caplog.at_level("INFO"):
+            await writer.drain()
+
+        ws.send.assert_not_called()
+        assert writer.send_seq == 0
+        assert "cf_writer_drain_skipped" in caplog.text
+        assert "reason=closed" in caplog.text
+
+    async def test_drain_while_batching_reports_deferral(self, caplog) -> None:
+        """Batching defers the send and says so, distinguishing it from closed."""
+        writer = CFWebSocketStreamWriter(MagicMock())
+        writer.begin_batch()
+        writer.write(b"deferred")
+
+        with caplog.at_level("INFO"):
+            await writer.drain()
+
+        assert "reason=batching" in caplog.text
+
+    async def test_send_failure_marks_closed_and_logs(self, caplog) -> None:
+        """A failed ws.send() reports the error type and closes the writer."""
+        ws = MagicMock()
+        ws.send.side_effect = RuntimeError("bridge gone")
+        writer = CFWebSocketStreamWriter(ws)
+        writer.write(b"data")
+
+        with caplog.at_level("ERROR"):
+            await writer.drain()
+
+        assert writer._closed is True
+        assert writer.send_seq == 0
+        assert "cf_writer_send_failed" in caplog.text
+        assert "RuntimeError" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# Encoding
+# ---------------------------------------------------------------------------
+
+
+class TestEncoding:
+    """Consumers differ in what they put on the wire; encoding is per-consumer."""
+
+    async def test_writer_utf8_encoding_recovers_original_text(self) -> None:
+        """A consumer whose session encodes UTF-8 gets its text back intact."""
+        ws = MagicMock()
+        writer = CFWebSocketStreamWriter(ws, encoding="utf-8")
+        original = "┌─┐ WARP"
+
+        writer.write(original.encode("utf-8"))
+        await writer.drain()
+
+        # Decoded as UTF-8, so ws.send() receives the real characters rather
+        # than one latin-1 code point per UTF-8 byte.
+        assert ws.send.call_args.args[0] == original
+
+    async def test_writer_latin1_default_would_mangle_utf8_bytes(self) -> None:
+        """The default is byte-transparent, which is why UTF-8 consumers must opt in."""
+        ws = MagicMock()
+        writer = CFWebSocketStreamWriter(ws)  # latin-1 default
+
+        writer.write("┌".encode())  # 3 UTF-8 bytes
+
+        await writer.drain()
+        # Three separate code points, not one box-drawing character — correct
+        # for a byte-transparent consumer, wrong for a UTF-8 one.
+        assert len(ws.send.call_args.args[0]) == 3
+
+    async def test_reader_encoding_is_configurable(self) -> None:
+        """The reader decodes queued text with the consumer's encoding."""
+        reader = CFWebSocketStreamReader(encoding="utf-8")
+        reader.queue_message("┌")
+
+        assert await reader.read(3) == "┌".encode()
