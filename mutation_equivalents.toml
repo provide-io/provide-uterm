@@ -858,3 +858,70 @@ reason = 'payload.get("tags", None) — the isinstance(tags_raw, list) guard map
 [[equivalent]]
 mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_45"
 reason = 'payload.get("tags") with the default dropped — identical: get returns None, the isinstance guard yields [].'
+
+# ---------------------------------------------------------------------------
+# routes/sessions.py — mutmut names every mutant after the enclosing factory
+# (``x_session_capability_handlers__mutmut_N``); the 19 handlers are nested defs
+# inside it, so the ids below span several of them.
+#
+# Four families, each unkillable for a different reason. Verified individually,
+# not assumed: the sibling mutants on the same lines ARE killed by
+# test_routes_sessions_*_mutation_killing.py.
+#
+# 1. Query-parameter defaults that the whitelist immediately normalises away.
+#    `sort` is filtered through `sort if sort in {...} else "created_at"`, so a
+#    mangled DEFAULT is simply an invalid value and lands back on "created_at".
+[[equivalent]]
+mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_1"
+reason = 'list_sessions sort default -> "XXcreated_atXX": not in the whitelist, so sort_key falls back to "created_at" — identical ordering.'
+[[equivalent]]
+mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_2"
+reason = 'list_sessions sort default -> "CREATED_AT": same, the whitelist is case-sensitive so it falls back to "created_at".'
+[[equivalent]]
+mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_3"
+reason = 'list_sessions order default -> "XXdescXX": reverse is `order != "asc"`, true for any non-"asc" value — identical ordering.'
+[[equivalent]]
+mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_4"
+reason = 'list_sessions order default -> "DESC": same, `!= "asc"` is true either way.'
+# 2. The "created_at" MEMBER of the sort whitelist. Mangling it means
+#    sort="created_at" is no longer recognised — and the else-branch supplies
+#    exactly "created_at" anyway. The other two members are killable and are
+#    killed (see TestListSortWhitelistMembers).
+[[equivalent]]
+mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_80"
+reason = 'sort whitelist member "created_at" -> "XXcreated_atXX": unrecognised input falls back to the same key the member would have selected.'
+[[equivalent]]
+mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_81"
+reason = 'sort whitelist member "created_at" -> "CREATED_AT": same — the fallback is "created_at" either way.'
+# 3. set_mode's `payload.get("input_mode", <default>)`. Every mutated default
+#    ("XXXX", None, absent) is still outside {"open", "hijack"}, so the handler
+#    raises the same 422 with the same message. Only a default that WAS a valid
+#    mode would change behaviour.
+[[equivalent]]
+mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_562"
+reason = 'set_mode input_mode default -> None: str(None)="None", still outside {"open","hijack"} — same 422, same detail.'
+[[equivalent]]
+mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_564"
+reason = "set_mode input_mode default dropped: get returns None, str(None)=\"None\" — same 422."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_567"
+reason = 'set_mode input_mode default -> "XXXX": still not a valid mode — same 422, same detail.'
+# 4. typing.cast type-arg (runtime no-op) and FileResponse's media_type, which
+#    Starlette guesses from the filename when omitted. Verified empirically:
+#    FileResponse("x.json", filename="x.json", media_type=None).media_type ==
+#    "application/json", the same value the literal supplies.
+[[equivalent]]
+mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_421"
+reason = "cast(None, uterm_tunnel_tokens) in delete_session — typing.cast is a runtime no-op."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_425"
+reason = 'cast("XXdict[str, dict[str, object]]XX", uterm_tunnel_tokens) — runtime no-op.'
+[[equivalent]]
+mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_426"
+reason = 'cast("DICT[STR, DICT[STR, OBJECT]]", uterm_tunnel_tokens) — runtime no-op.'
+[[equivalent]]
+mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_993"
+reason = 'recording_download media_type -> None: Starlette guesses "application/json" from the .json filename, so the response header is byte-identical.'
+[[equivalent]]
+mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_996"
+reason = "recording_download media_type argument dropped: same guess from the filename — identical response."
