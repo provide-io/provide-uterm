@@ -226,15 +226,19 @@ static int uterm_connect(int sockfd, const struct sockaddr *addr, socklen_t addr
 
 #else  /* ── Linux LD_PRELOAD implementation ──────────────────────────────── */
 
-/* splice()/tee() are Linux-only, so these hooks have no macOS counterpart. */
+/* The kernel-space copy hooks are Linux-only — no macOS counterpart. */
 typedef ssize_t (*fn_splice)(int, loff_t *, int, loff_t *, size_t, unsigned int);
 typedef ssize_t (*fn_tee)(int, int, size_t, unsigned int);
+typedef ssize_t (*fn_sendfile)(int, int, off_t *, size_t);
+typedef ssize_t (*fn_copy_file_range)(int, loff_t *, int, loff_t *, size_t, unsigned int);
 
-static fn_write   orig_write;
-static fn_read    orig_read;
-static fn_connect orig_connect;
-static fn_splice  orig_splice;
-static fn_tee     orig_tee;
+static fn_write            orig_write;
+static fn_read             orig_read;
+static fn_connect          orig_connect;
+static fn_splice           orig_splice;
+static fn_tee              orig_tee;
+static fn_sendfile         orig_sendfile;
+static fn_copy_file_range  orig_copy_file_range;
 
 static ssize_t call_write(int fd, const void *buf, size_t count) {
     if (orig_write != NULL) {
@@ -272,6 +276,26 @@ static ssize_t call_tee(int fd_in, int fd_out, size_t len, unsigned int flags) {
     return (ssize_t)syscall(SYS_tee, fd_in, fd_out, len, flags);
 }
 
+static ssize_t call_sendfile(int out_fd, int in_fd, off_t *offset, size_t count) {
+    if (orig_sendfile != NULL) {
+        return orig_sendfile(out_fd, in_fd, offset, count);
+    }
+    return (ssize_t)syscall(SYS_sendfile, out_fd, in_fd, offset, count);
+}
+
+static ssize_t call_copy_file_range(int fd_in, loff_t *off_in, int fd_out,
+                                    loff_t *off_out, size_t len, unsigned int flags) {
+    if (orig_copy_file_range != NULL) {
+        return orig_copy_file_range(fd_in, off_in, fd_out, off_out, len, flags);
+    }
+#ifdef SYS_copy_file_range
+    return (ssize_t)syscall(SYS_copy_file_range, fd_in, off_in, fd_out, off_out, len, flags);
+#else
+    errno = ENOSYS;
+    return -1;
+#endif
+}
+
 __attribute__((constructor))
 static void uterm_capture_init(void) {
     orig_write   = (fn_write)  dlsym(RTLD_NEXT, "write");
@@ -279,6 +303,8 @@ static void uterm_capture_init(void) {
     orig_connect = (fn_connect)dlsym(RTLD_NEXT, "connect");
     orig_splice  = (fn_splice) dlsym(RTLD_NEXT, "splice");
     orig_tee     = (fn_tee)    dlsym(RTLD_NEXT, "tee");
+    orig_sendfile = (fn_sendfile)dlsym(RTLD_NEXT, "sendfile");
+    orig_copy_file_range = (fn_copy_file_range)dlsym(RTLD_NEXT, "copy_file_range");
 
     const char *path = getenv("UTERM_CAPTURE_SOCKET");
     if (!path || !*path) return;
@@ -374,6 +400,80 @@ UTERM_EXPORT ssize_t splice(int fd_in, loff_t *off_in, int fd_out, loff_t *off_o
 
     (void)close(peek[0]);
     (void)close(peek[1]);
+    errno = application_errno;
+    return ret;
+}
+
+/* Re-read a range a kernel-space copy just moved.  Unlike splice, the sources of
+ * sendfile()/copy_file_range() are regular files: the copy does not consume them,
+ * so the bytes are still on disk at `start` and pread() can recover them without
+ * disturbing the file position the caller relies on. */
+static void emit_from_file(int fd, off_t start, size_t len, int as_stdout) {
+    char buf[8192];
+    off_t at = start;
+    while (len > 0) {
+        size_t chunk = len < sizeof(buf) ? len : sizeof(buf);
+        ssize_t got = pread(fd, buf, chunk, at);
+        if (got <= 0) {
+            return;
+        }
+        if (as_stdout) {
+            send_frame(CHANNEL_STDOUT, buf, (size_t)got);
+        }
+        at += got;
+        len -= (size_t)got;
+    }
+}
+
+/* sendfile() copies a regular file straight to out_fd without a userspace buffer.
+ * When out_fd is stdout/stderr that is terminal output nobody would otherwise see.
+ * Record where the read will start — the explicit offset if given, else the file's
+ * current position — then recover exactly `ret` bytes from there afterwards. */
+static ssize_t sendfile_hook(int out_fd, int in_fd, off_t *offset, size_t count) {
+    const int as_stdout = (out_fd == STDOUT_FILENO || out_fd == STDERR_FILENO);
+
+    if (!as_stdout || !atomic_load_explicit(&g_writer_ready, memory_order_acquire)) {
+        return call_sendfile(out_fd, in_fd, offset, count);
+    }
+
+    const off_t start = offset ? *offset : lseek(in_fd, 0, SEEK_CUR);
+    ssize_t ret = call_sendfile(out_fd, in_fd, offset, count);
+    int application_errno = errno;
+
+    if (ret > 0 && start >= 0) {
+        emit_from_file(in_fd, start, (size_t)ret, as_stdout);
+    }
+    errno = application_errno;
+    return ret;
+}
+
+UTERM_EXPORT ssize_t sendfile(int out_fd, int in_fd, off_t *offset, size_t count) {
+    return sendfile_hook(out_fd, in_fd, offset, count);
+}
+
+/* glibc exposes the same call under both names; a caller built with
+ * _FILE_OFFSET_BITS=64 binds sendfile64, so hooking only sendfile would miss it. */
+UTERM_EXPORT ssize_t sendfile64(int out_fd, int in_fd, off_t *offset, size_t count) {
+    return sendfile_hook(out_fd, in_fd, offset, count);
+}
+
+/* copy_file_range() is file-to-file, so it only reaches a captured fd when the
+ * caller's stdout/stderr is redirected to a file.  Same recovery as sendfile. */
+UTERM_EXPORT ssize_t copy_file_range(int fd_in, loff_t *off_in, int fd_out,
+                                     loff_t *off_out, size_t len, unsigned int flags) {
+    const int as_stdout = (fd_out == STDOUT_FILENO || fd_out == STDERR_FILENO);
+
+    if (!as_stdout || !atomic_load_explicit(&g_writer_ready, memory_order_acquire)) {
+        return call_copy_file_range(fd_in, off_in, fd_out, off_out, len, flags);
+    }
+
+    const off_t start = off_in ? (off_t)*off_in : lseek(fd_in, 0, SEEK_CUR);
+    ssize_t ret = call_copy_file_range(fd_in, off_in, fd_out, off_out, len, flags);
+    int application_errno = errno;
+
+    if (ret > 0 && start >= 0) {
+        emit_from_file(fd_in, start, (size_t)ret, as_stdout);
+    }
     errno = application_errno;
     return ret;
 }

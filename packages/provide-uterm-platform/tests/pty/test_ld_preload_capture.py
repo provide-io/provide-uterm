@@ -13,9 +13,11 @@ Only runs on Linux (macOS SIP blocks DYLD_INSERT_LIBRARIES for system binaries,
 and the .dylib build is skipped on macOS in CI).
 
 Note: interception is PLT-based, so a command is only captured if it reaches libc
-through the dynamic symbol table. read(), write() and splice() are all hooked
-(splice via a tee() peek, since it moves bytes in kernel space and issues no
-read/write of its own).
+through the dynamic symbol table. Hooked: read(), write(), and the three
+kernel-space copies that issue no read/write of their own — splice() (captured by
+peeking with tee(), which duplicates pipe data without consuming it) plus
+sendfile() and copy_file_range() (captured by re-reading the moved range from
+their regular-file source, which the copy leaves intact).
 
 What is still NOT captured, by design: a caller that issues the syscall directly
 and never binds the libc symbol. Static-linked and vDSO-optimised binaries are the
@@ -273,3 +275,47 @@ def test_splice_is_captured_despite_moving_bytes_in_kernel_space() -> None:
     assert CHANNEL_STDOUT in channels, f"expected CHANNEL_STDOUT from splice; got: {channels}"
     stdin_data = b"".join(data for ch, data in frames if ch == CHANNEL_STDIN)
     assert b"spliced-payload" in stdin_data
+
+
+def test_sendfile_is_captured_by_re_reading_the_source() -> None:
+    """sendfile() copies a file straight to fd 1; the moved range is recovered."""
+    lib = _require_linux_and_lib()
+
+    child = (
+        "import os, tempfile\n"
+        "fd, path = tempfile.mkstemp()\n"
+        'os.write(fd, b"sendfile-payload\\n"); os.close(fd)\n'
+        "src = os.open(path, os.O_RDONLY)\n"
+        "os.sendfile(1, src, 0, 64)\n"
+    )
+    with tempfile.TemporaryDirectory() as td:
+        sock_path = str(Path(td) / "cap.sock")
+        frames = _run_with_capture([sys.executable, "-c", child], lib, sock_path)
+
+    channels = [ch for ch, _ in frames]
+    assert CHANNEL_STDOUT in channels, f"expected CHANNEL_STDOUT from sendfile; got: {channels}"
+    stdout_data = b"".join(data for ch, data in frames if ch == CHANNEL_STDOUT)
+    assert b"sendfile-payload" in stdout_data
+
+
+def test_copy_file_range_is_captured_when_stdout_is_a_file() -> None:
+    """copy_file_range() is file-to-file, so it only reaches fd 1 when redirected."""
+    lib = _require_linux_and_lib()
+
+    child = (
+        "import os, tempfile\n"
+        "fd, src_p = tempfile.mkstemp()\n"
+        'os.write(fd, b"cfr-payload\\n"); os.close(fd)\n'
+        "src = os.open(src_p, os.O_RDONLY)\n"
+        'dst = os.open(src_p + ".out", os.O_WRONLY | os.O_CREAT | os.O_TRUNC)\n'
+        "os.dup2(dst, 1)\n"  # fd 1 must be a regular file for copy_file_range
+        "os.copy_file_range(src, 1, 64)\n"
+    )
+    with tempfile.TemporaryDirectory() as td:
+        sock_path = str(Path(td) / "cap.sock")
+        frames = _run_with_capture([sys.executable, "-c", child], lib, sock_path)
+
+    channels = [ch for ch, _ in frames]
+    assert CHANNEL_STDOUT in channels, f"expected CHANNEL_STDOUT from copy_file_range; got: {channels}"
+    stdout_data = b"".join(data for ch, data in frames if ch == CHANNEL_STDOUT)
+    assert b"cfr-payload" in stdout_data
