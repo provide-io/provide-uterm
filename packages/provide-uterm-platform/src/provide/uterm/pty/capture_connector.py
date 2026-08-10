@@ -200,7 +200,9 @@ class CaptureConnector:
         return {
             "type": "snapshot",
             "screen": screen,
-            "cursor": {"row": 0, "col": 0},
+            # x/y, not row/col: that is what the snapshot frame contract and
+            # every other connector use, and what the terminal element reads.
+            "cursor": {"x": 0, "y": 0},
             "cols": self._cols,
             "rows": self._rows,
             # Non-cryptographic change-detection hash; `usedforsecurity=False`
@@ -210,7 +212,11 @@ class CaptureConnector:
             "screen_hash": hashlib.md5(screen.encode(), usedforsecurity=False).hexdigest(),
             "cursor_at_end": True,
             "has_trailing_space": False,
-            "prompt_detected": False,
+            # None, not False. The wire contract is a dict of detector output or
+            # nothing at all, so a bool fails validation in the hub's frame
+            # builder and the snapshot is dropped before any browser sees it —
+            # which left a hijacked terminal blank until something repainted it.
+            "prompt_detected": None,
             "ts": time.time(),
         }
 
