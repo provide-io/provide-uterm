@@ -96,10 +96,12 @@ class TelnetWsGateway:
         client_cert: Path | str | None = None,
         client_key: Path | str | None = None,
         allow_unauthenticated: bool = False,
+        text_encoding: str = "latin-1",
     ) -> None:
         _require_websockets()
         self._ws_url = ws_url
         self._color_mode = color_mode
+        self._text_encoding = text_encoding
         self._token_file = token_file
         # Telnet is plaintext + unauthenticated by nature; binding it to a
         # non-loopback address requires this explicit opt-in (mirrors the SSH
@@ -181,6 +183,7 @@ class TelnetWsGateway:
                 iac_negotiate=self._iac_negotiate,
                 iac_negotiate_timeout=self._iac_negotiate_timeout,
                 redirect_holder=redirect_holder,
+                text_encoding=self._text_encoding,
             )
 
         async def show_reconnecting() -> None:

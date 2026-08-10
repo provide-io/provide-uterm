@@ -558,3 +558,37 @@ class TestWsToSsh:
             redirect_holder=redirect_holder,
         )
         assert redirect_holder[0] == "/ws/x"
+
+
+class TestWsToTcpTextEncoding:
+    """The codec that turns a TEXT frame into bytes is the consumer's choice.
+
+    An upstream that sends real characters and a gateway that assumes
+    byte-transparency silently destroy every glyph above U+00FF — measured on a
+    live uwarp worker as 582 of 9138 characters, i.e. all box drawing, replaced
+    by '?' that the client then renders faithfully.
+    """
+
+    async def test_latin1_default_replaces_characters_above_u00ff(self) -> None:
+        writer = MagicMock(spec=asyncio.StreamWriter)
+        writer.drain = AsyncMock()
+        ws = _mock_ws([encode_terminal_data("▀█═")])
+
+        await _ws_to_tcp(ws, writer, token_holder=[None], color_mode="passthrough")
+
+        # Byte-transparent default: these are not representable, so they are
+        # lost. This is correct for a byte-transparent upstream and wrong for a
+        # text one — hence the parameter.
+        assert writer.write.call_args[0][0] == b"???"
+
+    async def test_cp437_preserves_box_drawing(self) -> None:
+        writer = MagicMock(spec=asyncio.StreamWriter)
+        writer.drain = AsyncMock()
+        ws = _mock_ws([encode_terminal_data("▀█═")])
+
+        await _ws_to_tcp(ws, writer, token_holder=[None], color_mode="passthrough", text_encoding="cp437")
+
+        written = writer.write.call_args[0][0]
+        assert b"?" not in written
+        # Round-trips through the codec the terminal emulator decodes with.
+        assert written.decode("cp437") == "▀█═"
