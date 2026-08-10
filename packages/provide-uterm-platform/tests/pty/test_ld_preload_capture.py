@@ -12,15 +12,17 @@ frames arrive on a Unix domain socket.
 Only runs on Linux (macOS SIP blocks DYLD_INSERT_LIBRARIES for system binaries,
 and the .dylib build is skipped on macOS in CI).
 
-Note: commands must call read()/write() through libc's PLT (e.g. the shell's read
-builtin and printf, Python sys.stdout). Two categories bypass interception by
-design, so neither is usable as a fixture here:
+Note: interception is PLT-based, so a command is only captured if it reaches libc
+through the dynamic symbol table. read(), write() and splice() are all hooked
+(splice via a tee() peek, since it moves bytes in kernel space and issues no
+read/write of its own).
 
-- Static-linked or vDSO-optimised executables, like /bin/echo on aarch64 glibc.
-- Anything that moves bytes in kernel space instead of via read/write. uutils
-  coreutils' cat splice()s pipe-to-pipe and produces NO frames at all; GNU cat
-  uses read/write and does. Do not reach for /bin/cat — which one is installed
-  decides whether the test passes.
+What is still NOT captured, by design: a caller that issues the syscall directly
+and never binds the libc symbol. Static-linked and vDSO-optimised binaries are the
+classic case — /bin/echo on aarch64 glibc — and uutils coreutils' cat is another:
+it splices pipe-to-pipe without going through the PLT, so it yields no frames even
+though splice is hooked. GNU cat uses read/write and is captured. Do not reach for
+/bin/cat as a fixture; which implementation is installed decides the outcome.
 """
 
 from __future__ import annotations
@@ -249,3 +251,25 @@ def test_library_does_not_intercept_non_stdio_fds() -> None:
         assert ch in (CHANNEL_STDOUT, CHANNEL_STDIN), (
             f"unexpected channel 0x{ch:02x} with data {data!r} — possible recursion bug"
         )
+
+
+def test_splice_is_captured_despite_moving_bytes_in_kernel_space() -> None:
+    """splice() issues no read()/write(); the tee() peek captures it anyway."""
+    lib = _require_linux_and_lib()
+
+    with tempfile.TemporaryDirectory() as td:
+        sock_path = str(Path(td) / "cap.sock")
+        # os.splice() reaches libc's splice through the PLT. Before the hook existed
+        # this produced zero frames — the bytes never touched userspace.
+        frames = _run_with_capture(
+            [sys.executable, "-c", "import os; os.splice(0, 1, 65536)"],
+            lib,
+            sock_path,
+            stdin=b"spliced-payload\n",
+        )
+
+    channels = [ch for ch, _ in frames]
+    assert CHANNEL_STDIN in channels, f"expected CHANNEL_STDIN from splice; got: {channels}"
+    assert CHANNEL_STDOUT in channels, f"expected CHANNEL_STDOUT from splice; got: {channels}"
+    stdin_data = b"".join(data for ch, data in frames if ch == CHANNEL_STDIN)
+    assert b"spliced-payload" in stdin_data

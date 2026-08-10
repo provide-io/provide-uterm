@@ -28,6 +28,7 @@
 #include <arpa/inet.h>
 #include <dlfcn.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -225,9 +226,15 @@ static int uterm_connect(int sockfd, const struct sockaddr *addr, socklen_t addr
 
 #else  /* ── Linux LD_PRELOAD implementation ──────────────────────────────── */
 
+/* splice()/tee() are Linux-only, so these hooks have no macOS counterpart. */
+typedef ssize_t (*fn_splice)(int, loff_t *, int, loff_t *, size_t, unsigned int);
+typedef ssize_t (*fn_tee)(int, int, size_t, unsigned int);
+
 static fn_write   orig_write;
 static fn_read    orig_read;
 static fn_connect orig_connect;
+static fn_splice  orig_splice;
+static fn_tee     orig_tee;
 
 static ssize_t call_write(int fd, const void *buf, size_t count) {
     if (orig_write != NULL) {
@@ -250,11 +257,28 @@ static int call_connect(int sockfd, const struct sockaddr *addr, socklen_t addrl
     return (int)syscall(SYS_connect, sockfd, addr, addrlen);
 }
 
+static ssize_t call_splice(int fd_in, loff_t *off_in, int fd_out, loff_t *off_out,
+                           size_t len, unsigned int flags) {
+    if (orig_splice != NULL) {
+        return orig_splice(fd_in, off_in, fd_out, off_out, len, flags);
+    }
+    return (ssize_t)syscall(SYS_splice, fd_in, off_in, fd_out, off_out, len, flags);
+}
+
+static ssize_t call_tee(int fd_in, int fd_out, size_t len, unsigned int flags) {
+    if (orig_tee != NULL) {
+        return orig_tee(fd_in, fd_out, len, flags);
+    }
+    return (ssize_t)syscall(SYS_tee, fd_in, fd_out, len, flags);
+}
+
 __attribute__((constructor))
 static void uterm_capture_init(void) {
     orig_write   = (fn_write)  dlsym(RTLD_NEXT, "write");
     orig_read    = (fn_read)   dlsym(RTLD_NEXT, "read");
     orig_connect = (fn_connect)dlsym(RTLD_NEXT, "connect");
+    orig_splice  = (fn_splice) dlsym(RTLD_NEXT, "splice");
+    orig_tee     = (fn_tee)    dlsym(RTLD_NEXT, "tee");
 
     const char *path = getenv("UTERM_CAPTURE_SOCKET");
     if (!path || !*path) return;
@@ -287,6 +311,70 @@ UTERM_EXPORT ssize_t read(int fd, void *buf, size_t count) {
     if (ret > 0 && fd == STDIN_FILENO) {
         send_frame(CHANNEL_STDIN, buf, (size_t)ret);
     }
+    return ret;
+}
+
+/* Emit up to `want` bytes read back from the peek pipe.  Chunked because a
+ * single splice can move far more than one frame's worth. */
+static void emit_peeked(int peek_fd, size_t want, int as_stdin, int as_stdout) {
+    char buf[8192];
+    while (want > 0) {
+        size_t chunk = want < sizeof(buf) ? want : sizeof(buf);
+        ssize_t got = call_read(peek_fd, buf, chunk);
+        if (got <= 0) {
+            return;
+        }
+        if (as_stdin) {
+            send_frame(CHANNEL_STDIN, buf, (size_t)got);
+        }
+        if (as_stdout) {
+            send_frame(CHANNEL_STDOUT, buf, (size_t)got);
+        }
+        want -= (size_t)got;
+    }
+}
+
+/* splice() moves bytes between fds in kernel space, so a captured process using
+ * it produces no read()/write() and would otherwise be invisible — uutils
+ * coreutils' cat copies pipe-to-pipe this way and emitted nothing at all.
+ *
+ * Capture without touching the data path: tee() duplicates pipe contents WITHOUT
+ * consuming them, so peek first, let the real splice run untouched, then read the
+ * duplicate back.  tee needs fd_in to be a pipe; when it is not (a file source,
+ * i.e. off_in != NULL) it fails and the splice is simply uncaptured, exactly as
+ * before.  The caller's SPLICE_F_NONBLOCK is forwarded so a non-blocking splice
+ * does not become a blocking tee. */
+UTERM_EXPORT ssize_t splice(int fd_in, loff_t *off_in, int fd_out, loff_t *off_out,
+                            size_t len, unsigned int flags) {
+    const int as_stdin  = (fd_in == STDIN_FILENO);
+    const int as_stdout = (fd_out == STDOUT_FILENO || fd_out == STDERR_FILENO);
+
+    if ((!as_stdin && !as_stdout) ||
+        !atomic_load_explicit(&g_writer_ready, memory_order_acquire)) {
+        return call_splice(fd_in, off_in, fd_out, off_out, len, flags);
+    }
+
+    int peek[2];
+    if (pipe2(peek, O_CLOEXEC) < 0) {
+        return call_splice(fd_in, off_in, fd_out, off_out, len, flags);
+    }
+
+    /* Peek BEFORE the splice — afterwards the bytes are gone. */
+    ssize_t peeked = call_tee(fd_in, peek[1], len, flags & SPLICE_F_NONBLOCK);
+    ssize_t ret = call_splice(fd_in, off_in, fd_out, off_out, len, flags);
+    int application_errno = errno;
+
+    if (ret > 0 && peeked > 0) {
+        /* The peek pipe holds at most its own capacity, and the splice may move a
+         * different count than tee duplicated; the shorter of the two is the
+         * prefix known to be identical. */
+        size_t want = (size_t)ret < (size_t)peeked ? (size_t)ret : (size_t)peeked;
+        emit_peeked(peek[0], want, as_stdin, as_stdout);
+    }
+
+    (void)close(peek[0]);
+    (void)close(peek[1]);
+    errno = application_errno;
     return ret;
 }
 
