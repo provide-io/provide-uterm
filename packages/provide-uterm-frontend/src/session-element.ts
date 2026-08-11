@@ -19,6 +19,7 @@ import {
 } from "./hijack-codec.js";
 import { type HijackHandlers, HijackState } from "./hijack-state.js";
 import { MOBILE_KEYS } from "./hijack-ui.js";
+import { safeLinkHandler } from "./terminal-links.js";
 import {
   clearHeartbeat,
   connectWs,
@@ -510,6 +511,9 @@ export class UtermSessionElement extends LitElement {
       allowTransparency: true,
       scrollback: 10000,
       scrollOnUserInput: true,
+      // Without this xterm follows any URI an OSC 8 sequence names, `javascript:`
+      // included, so the far end of the terminal chooses what the page runs.
+      linkHandler: safeLinkHandler(),
     });
     this._hijackState.term = term;
     term.open(termDiv);
