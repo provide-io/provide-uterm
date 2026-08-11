@@ -8,6 +8,7 @@ import { property } from "lit/decorators.js";
 import { buildSettingsPanelHtml, DEFAULTS, loadSettings, saveSettings, type TerminalConfig, type TerminalSettings } from "./terminal-settings.js";
 import { applyColors, applyThemeClasses, asThemeName, THEME_DEFAULTS, type ThemeName } from "./terminal-themes.js";
 import { ControlChannelDecoder, encodeWsFrame, utf8ByteLength } from "./hijack-codec.js";
+import { safeLinkHandler } from "./terminal-links.js";
 
 const ACK_THROTTLE_MS = 100;
 
@@ -344,6 +345,9 @@ export class TerminalElement extends LitElement {
       letterSpacing: 0,
       lineHeight: 1.2,
       allowTransparency: true,
+      // Without this xterm follows any URI an OSC 8 sequence names, `javascript:`
+      // included, so the far end of the terminal chooses what the page runs.
+      linkHandler: safeLinkHandler(),
     });
 
     const terminalDiv = this.q<HTMLElement>("terminalDiv");
