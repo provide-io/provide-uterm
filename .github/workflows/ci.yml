@@ -77,7 +77,21 @@ jobs:
       # bandit, xenon, vulture, pip-audit, licenses, the performance smoke,
       # the CF vendor tree, and package artifacts. Runs every check and reports
       # all failures (no fail-fast masking of later checks).
+      # GOLDENS_REGEN_DIR: where the goldens check writes a rejected corpus, so
+      # the upload step below can keep it. See .ci/check_goldens.sh.
       - run: bash ci/quality_checks.sh
+        env:
+          GOLDENS_REGEN_DIR: ${{ runner.temp }}/goldens-regen
+      # A stale-golden failure is only actionable if you can see what the
+      # generator produced, and the runner's filesystem goes away with the job.
+      # if-no-files-found: ignore — most quality failures are not golden drift,
+      # so the directory usually does not exist.
+      - if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: goldens-regenerated-py${{ matrix.python-version }}
+          path: ${{ runner.temp }}/goldens-regen
+          if-no-files-found: ignore
       # Core-package pytest gate, including the playwright browser suites (the
       # example-page and V8-coverage suites are now reliable and gated here too).
       - run: uv run python scripts/run_pytest_gate.py -q
