@@ -11,9 +11,28 @@
 # distinguish them. Such mutants survive forever and would pin an
 # otherwise-perfect file below 100%.
 #
-# Each [[equivalent]] entry is keyed by file + line + column + mutator
-# (exactly as Stryker reports them in its clear-text/HTML output). Rules
-# mirror the other two ports' gates:
+# Each [[equivalent]] entry is keyed by CONTENT, not by coordinates:
+#
+#   file        perimeter file, as Stryker's report names it
+#   mutator     Stryker's mutator name
+#   code        the source line, stripped -- also what makes an entry reviewable
+#   original    the exact span Stryker replaced
+#   replacement what it replaced the span with
+#   occurrence  1-based among mutants in that file identical in all of the above
+#               (omitted when 1)
+#
+# It was file + line + column + mutator until 2026-08-12. That key was neither
+# stable nor unique. Not stable: line numbers belong to everything ABOVE a
+# mutant, so an unrelated insertion invalidated every entry below it, and since
+# this file is a mutation support file, renumbering it forces a full-perimeter
+# run. Not unique: five coordinates here were each covering more than one
+# distinct mutant, so a single reason was excusing several -- and a NEW mutant
+# arriving at those coordinates would have been excused without anyone writing
+# a reason for it. Content keys are shift-invariant and one-per-mutant. Editing
+# the mutated line DOES invalidate its entry, which is the point: the
+# equivalence argument was about that code.
+#
+# Rules mirror the other two ports' gates:
 #   - `reason` MUST justify WHY the mutation is behaviorally equivalent. "I
 #     could not write a test" is NOT a reason -- that is a missing test, not
 #     equivalence.
@@ -21,11 +40,13 @@
 #     kill; every entry below was verified either by direct execution (e.g.
 #     checking JS's own string/number coercion semantics in a REPL) or by a
 #     structural proof about the surrounding code (documented in the reason).
-#   - A stale entry (its mutant was later killed, or moved by a source edit)
-#     is not automatically detected -- there is no TS-side gate script wired
-#     to cross-check this file yet (see the mutation-testing report for the
-#     current status). Treat this file as a manually-curated record until
-#     one exists.
+#   - A stale entry (its mutant was killed, or its line was edited) is reported
+#     as a WARNING by ci/mutation_gate.py -- never a failure, because a mutant
+#     that stopped surviving is good news. Prune them when they appear.
+#   - An entry whose reason begins "SPLIT 2026-08-12" came from the collision
+#     unpacking described above: the reason was written for a group of mutants
+#     and has NOT yet been confirmed to argue equivalence for its specific
+#     replacement. Re-check before trusting it.
 #
 # StrykerJS has its own first-class mutant-exclusion mechanism
 # (`stryker.config.mjs`'s `mutate` ranges, or per-mutant `// Stryker disable`
@@ -35,9 +56,10 @@
 
 [[equivalent]]
 file = "src/egress/egress.ts"
-line = 104
-column = 7
 mutator = "ConditionalExpression"
+code = "if (address.version !== 6) {"
+original = "address.version !== 6"
+replacement = "false"
 reason = """\
 decodeEmbeddedIPv4: `if (address.version !== 6) { return undefined; }` -> \
 `if (false) {}`. Removing this guard only matters if a v4-version address \
@@ -60,9 +82,10 @@ the specific values covered by this file's tests."""
 
 [[equivalent]]
 file = "src/egress/egress.ts"
-line = 104
-column = 30
 mutator = "BlockStatement"
+code = "if (address.version !== 6) {"
+original = "{\n    return undefined;\n  }"
+replacement = "{}"
 reason = """\
 Same location as the ConditionalExpression entry immediately above (removing \
 the `{ return undefined; }` block body has the identical effect to forcing \
@@ -71,9 +94,10 @@ reasoning."""
 
 [[equivalent]]
 file = "src/egress/egress.ts"
-line = 191
-column = 7
 mutator = "ConditionalExpression"
+code = "if (address.version !== 4) {"
+original = "address.version !== 4"
+replacement = "false"
 reason = """\
 isSharedAddressSpace: `if (address.version !== 4) { return false; }` -> \
 `if (false) {}`. This function is only ever reached from \
@@ -95,9 +119,10 @@ numeric check answers `false` regardless of the guard."""
 
 [[equivalent]]
 file = "src/egress/egress.ts"
-line = 191
-column = 30
 mutator = "BlockStatement"
+code = "if (address.version !== 4) {"
+original = "{\n    return false;\n  }"
+replacement = "{}"
 reason = """\
 Same location as the ConditionalExpression entry immediately above (removing \
 the `{ return false; }` block body has the identical effect to forcing the \
@@ -105,9 +130,10 @@ the `{ return false; }` block body has the identical effect to forcing the \
 
 [[equivalent]]
 file = "src/egress/webhook-url.ts"
-line = 394
-column = 47
 mutator = "StringLiteral"
+code = "timer = setTimeout(() => reject(new Error(`resolving webhook host '${host}' timed out`)), timeoutS * 1000);"
+original = "`resolving webhook host '${host}' timed out`"
+replacement = "``"
 reason = """\
 withDeadline: `reject(new Error('resolving webhook host ... timed out'))` -> \
 `reject(new Error(''))`. This Error is constructed only to make Promise.race \
@@ -121,9 +147,10 @@ which a test (or any caller) could ever observe this string's content."""
 
 [[equivalent]]
 file = "src/ratelimit/ratelimit.ts"
-line = 175
-column = 34
 mutator = "ConditionalExpression"
+code = "return new TokenBucket(rate, this.#now === undefined ? {} : { now: this.#now });"
+original = "this.#now === undefined"
+replacement = "false"
 reason = """\
 RateLimiter#mint: `this.#now === undefined ? {} : { now: this.#now }` -> \
 `false ? {} : { now: this.#now }` (always takes the `{ now: this.#now }` \
@@ -138,9 +165,10 @@ difference between the two option objects because only the resolved value of \
 
 [[equivalent]]
 file = "src/serverconfig/posture.ts"
-line = 89
-column = 48
 mutator = "StringLiteral"
+code = "if (text(config.auth.webhook_idp_on_failure, \"deny\") === \"viewer\") {"
+original = "\"deny\""
+replacement = "\"\""
 reason = """\
 computeSecurityPosture: `text(config.auth.webhook_idp_on_failure, "deny")` -> \
 `text(config.auth.webhook_idp_on_failure, "")`. The `fallback` parameter of \
@@ -154,9 +182,10 @@ to equal "viewer" (which it does not, either way)."""
 
 [[equivalent]]
 file = "src/serverconfig/posture.ts"
-line = 94
-column = 64
 mutator = "StringLiteral"
+code = "const identityProvider = text(config.auth.identity_provider, \"local\");"
+original = "\"local\""
+replacement = "\"\""
 reason = """\
 computeSecurityPosture: `text(config.auth.identity_provider, "local")` -> \
 `text(config.auth.identity_provider, "")`. Same shape as the entry above: the \
@@ -169,11 +198,33 @@ cannot be observed by any test that only exercises the public \
 
 [[equivalent]]
 file = "src/serverconfig/validators.ts"
-line = 68
-column = 54
 mutator = "Regex"
+code = "const host = parsed.hostname.toLowerCase().replace(/^\\[|\\]$/g, \"\");"
+original = "/^\\[|\\]$/g"
+replacement = "/\\[|\\]$/g"
 reason = """\
-requireSecureUrl: `parsed.hostname.toLowerCase().replace(/^\\[|\\]$/g, "")` \
+SPLIT 2026-08-12 — one coordinate-keyed entry was covering 2 distinct surviving mutants here; this reason was written for that group, so confirm it argues equivalence for THIS replacement specifically. requireSecureUrl: `parsed.hostname.toLowerCase().replace(/^\\[|\\]$/g, "")` \
+with either anchor dropped (`/\\[|\\]$/` or `/^\\[|\\]/`). `parsed.hostname` \
+comes from the WHATWG `URL` constructor, which guarantees a hostname is \
+either bracket-free entirely or exactly one literal IPv6 address wrapped in \
+a single opening `[` at position 0 and a single closing `]` at the very end \
+(any other bracket placement makes the URL invalid and throws before \
+`requireSecureUrl` ever sees a hostname). Dropping either anchor only widens \
+where that single, already-uniquely-positioned bracket may be matched -- \
+since there is exactly one `[` (always at the start) and exactly one `]` \
+(always at the end) in any string this line ever receives, matching "the \
+first `[` anywhere" or "the last `]` anywhere" removes the identical \
+character the anchored pattern would have removed. No hostname `URL` can \
+produce ever distinguishes the anchored and unanchored forms here."""
+
+[[equivalent]]
+file = "src/serverconfig/validators.ts"
+mutator = "Regex"
+code = "const host = parsed.hostname.toLowerCase().replace(/^\\[|\\]$/g, \"\");"
+original = "/^\\[|\\]$/g"
+replacement = "/^\\[|\\]/g"
+reason = """\
+SPLIT 2026-08-12 — one coordinate-keyed entry was covering 2 distinct surviving mutants here; this reason was written for that group, so confirm it argues equivalence for THIS replacement specifically. requireSecureUrl: `parsed.hostname.toLowerCase().replace(/^\\[|\\]$/g, "")` \
 with either anchor dropped (`/\\[|\\]$/` or `/^\\[|\\]/`). `parsed.hostname` \
 comes from the WHATWG `URL` constructor, which guarantees a hostname is \
 either bracket-free entirely or exactly one literal IPv6 address wrapped in \
@@ -189,9 +240,11 @@ produce ever distinguishes the anchored and unanchored forms here."""
 
 [[equivalent]]
 file = "src/serverconfig/schema.ts"
-line = 189
-column = 62
 mutator = "MethodExpression"
+code = "return /^[+-]?\\d+$/.test(value.trim()) ? { value: Number(value.trim()) } : { error: \"int_parsing\" };"
+original = "value.trim()"
+replacement = "value"
+occurrence = 2
 reason = """\
 coerceInt's success branch: `Number(value.trim())` -> `Number(value)` (the \
 `.trim()` on the *argument to Number* is dropped; the regex test on the \
@@ -209,9 +262,10 @@ coercions already strip identically."""
 
 [[equivalent]]
 file = "src/serverconfig/schema.ts"
-line = 246
-column = 7
 mutator = "LogicalOperator"
+code = "if (spec.kind === \"literal\" && error === \"literal_error\") {"
+original = "spec.kind === \"literal\" && error === \"literal_error\""
+replacement = "spec.kind === \"literal\" || error === \"literal_error\""
 reason = """\
 messageFor: `if (spec.kind === "literal" && error === "literal_error")` -> \
 `if (spec.kind === "literal" || error === "literal_error")`. messageFor is \
@@ -233,9 +287,10 @@ checkFields."""
 
 [[equivalent]]
 file = "src/serverconfig/schema.ts"
-line = 246
-column = 7
 mutator = "ConditionalExpression"
+code = "if (spec.kind === \"literal\" && error === \"literal_error\") {"
+original = "spec.kind === \"literal\""
+replacement = "true"
 reason = """\
 messageFor: `if (spec.kind === "literal" && error === "literal_error")` -> \
 `if (true && error === "literal_error")`. Same call-site invariant as the \
@@ -247,9 +302,10 @@ practice. See that entry's full reasoning."""
 
 [[equivalent]]
 file = "src/serverconfig/schema.ts"
-line = 246
-column = 34
 mutator = "ConditionalExpression"
+code = "if (spec.kind === \"literal\" && error === \"literal_error\") {"
+original = "error === \"literal_error\""
+replacement = "true"
 reason = """\
 messageFor: `if (spec.kind === "literal" && error === "literal_error")` -> \
 `if (spec.kind === "literal" && true)`. Same call-site invariant again: \

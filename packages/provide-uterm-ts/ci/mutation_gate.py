@@ -41,18 +41,103 @@ REPORT_FILE = MODULE_ROOT / "reports" / "mutation" / "mutation.json"
 SURVIVING_STATUSES = frozenset({"Survived", "NoCoverage"})
 
 
-def _key(file: str, line: int, column: int, mutator: str) -> tuple[str, int, int, str]:
-    return (file, int(line), int(column), str(mutator))
+# Allowlist key: CONTENT, not coordinates. Identical to the C# gate's
+# (packages/provide-uterm-csharp/ci/stryker_gate.py) — same reporter, same
+# problem, same fix, and the two are meant to stay recognisably the same.
+#
+# file/line/column/mutator failed in both directions at once. It was not stable:
+# inserting lines above a mutant moved every entry below it, and since this file
+# is a mutation support file, repairing the numbers itself triggers a full
+# perimeter run. It was also not unique: Stryker emits two Regex mutants at
+# validators.ts:68:54, so one entry silently excused both, and a future third
+# mutant at those coordinates would have been excused without a reason.
+#
+#   file        perimeter file, as the report names it
+#   mutator     Stryker's mutator name
+#   code        the source line, stripped — also what makes an entry reviewable
+#   original    the exact span Stryker replaced
+#   replacement what it replaced the span with
+#   occurrence  1-based among mutants in that file identical in all of the above
+#
+# The two Regex mutants differ in `replacement`, so they now key apart. Where
+# they genuinely do not differ, `occurrence` separates them and each needs its
+# own reason.
+AllowKey = tuple[str, str, str, str, str, int]
 
 
-def load_allowlist() -> dict[tuple[str, int, int, str], str]:
+def mutant_span(source: str, location: dict) -> str:
+    """The exact source text Stryker replaced (1-based, end-exclusive)."""
+    lines = source.splitlines(keepends=True)
+    start, end = location["start"], location["end"]
+    if start["line"] == end["line"]:
+        return lines[start["line"] - 1][start["column"] - 1 : end["column"] - 1]
+    body = [lines[start["line"] - 1][start["column"] - 1 :]]
+    body += lines[start["line"] : end["line"] - 1]
+    body.append(lines[end["line"] - 1][: end["column"] - 1])
+    return "".join(body)
+
+
+def source_line(source: str, location: dict) -> str:
+    """The stripped source line the mutant starts on."""
+    lines = source.splitlines()
+    index = location["start"]["line"] - 1
+    return lines[index].strip() if 0 <= index < len(lines) else ""
+
+
+def file_keys(path: str, file_entry: dict) -> dict[str, AllowKey]:
+    """Map every mutant id in one report file entry to its content key.
+
+    `occurrence` counts over EVERY mutant in the file, not just survivors, so a
+    mutant that starts or stops being killed cannot renumber its neighbours.
+    """
+    source = file_entry.get("source", "")
+    ordered = sorted(
+        file_entry.get("mutants", []),
+        key=lambda m: (
+            m["location"]["start"]["line"],
+            m["location"]["start"]["column"],
+            m["mutatorName"],
+            m.get("replacement", ""),
+        ),
+    )
+    counts: dict[tuple[str, str, str, str], int] = {}
+    out: dict[str, AllowKey] = {}
+    for mutant in ordered:
+        location = mutant["location"]
+        shape = (
+            mutant["mutatorName"],
+            source_line(source, location),
+            mutant_span(source, location),
+            mutant.get("replacement", ""),
+        )
+        counts[shape] = counts.get(shape, 0) + 1
+        out[str(mutant["id"])] = (path, *shape, counts[shape])
+    return out
+
+
+def load_allowlist() -> dict[AllowKey, str]:
     if not ALLOWLIST_FILE.exists():
         return {}
     data = tomllib.loads(ALLOWLIST_FILE.read_text())
-    out: dict[tuple[str, int, int, str], str] = {}
+    out: dict[AllowKey, str] = {}
     for entry in data.get("equivalent", []):
-        out[_key(entry["file"], entry["line"], entry["column"], entry["mutator"])] = entry["reason"]
+        key: AllowKey = (
+            entry["file"],
+            entry["mutator"],
+            entry["code"],
+            entry["original"],
+            entry["replacement"],
+            int(entry.get("occurrence", 1)),
+        )
+        out[key] = entry["reason"]
     return out
+
+
+def describe(key: AllowKey) -> str:
+    """One-line rendering of a key, for stale-entry warnings."""
+    file, mutator, code, original, replacement, occurrence = key
+    nth = f" #{occurrence}" if occurrence > 1 else ""
+    return f"{file} {mutator}{nth}: {original!r} -> {replacement!r} in {code!r}"
 
 
 def run_stryker() -> None:
@@ -73,15 +158,19 @@ def collect_survivors() -> list[dict[str, object]]:
     report = json.loads(REPORT_FILE.read_text())
     survivors: list[dict[str, object]] = []
     for path, entry in report.get("files", {}).items():
+        keys_by_id = file_keys(path, entry)
         for mutant in entry.get("mutants", []):
             if mutant.get("status") in SURVIVING_STATUSES:
                 survivors.append(
                     {
                         "file": path,
+                        # Coordinates are still the most useful thing to PRINT;
+                        # they are just no longer what an entry is matched on.
                         "line": mutant.get("location", {}).get("start", {}).get("line", 0),
                         "column": mutant.get("location", {}).get("start", {}).get("column", 0),
                         "mutator": mutant.get("mutatorName", ""),
                         "status": mutant.get("status"),
+                        "key": keys_by_id[str(mutant["id"])],
                     }
                 )
     return survivors
@@ -102,18 +191,14 @@ def main() -> int:
     allowlist = load_allowlist()
     survivors = collect_survivors()
 
-    keyed = [(s, _key(str(s["file"]), int(s["line"]), int(s["column"]), str(s["mutator"]))) for s in survivors]
+    keyed = [(s, s["key"]) for s in survivors]
     unexcused = [s for s, k in keyed if k not in allowlist]
     excused = [s for s, k in keyed if k in allowlist]
     stale = sorted(set(allowlist) - {k for _, k in keyed})
 
-    # Survivors are counted, not keys. file/line/column/mutator is NOT unique:
-    # Stryker can emit several mutants at one position (e.g. two Regex mutants at
-    # validators.ts:68:54), so one allowlist entry may excuse more than one
-    # survivor. That is the flip side worth knowing — a future mutant landing at
-    # the same coordinates with the same mutator would be excused without anyone
-    # writing a reason for it. Kept because Stryker's own mutant ids are not
-    # stable across runs, which would make an id-keyed allowlist churn constantly.
+    # Survivors are counted, not keys — but unlike the old coordinate key, one
+    # entry can no longer quietly cover several survivors: `occurrence` makes the
+    # key unique per mutant, so each excused survivor has a reason written for it.
     print(
         f"TypeScript mutation gate — {len(survivors)} survivor(s): {len(excused)} allowlisted-equivalent, {len(unexcused)} unexcused"
     )
@@ -122,8 +207,8 @@ def main() -> int:
     # news. They are printed so the allowlist can be pruned rather than rotting.
     if stale:
         print(f"\nStale allowlist entries ({len(stale)}) — mutant no longer survives, prune them:")
-        for file, line, column, mutator in stale:
-            print(f"  - {file}:{line}:{column} {mutator}")
+        for key in stale:
+            print(f"  - {describe(key)}")
 
     if unexcused:
         print(f"\nUnexcused survivors ({len(unexcused)}) — kill with a test, or document in mutation_equivalents.toml:")
