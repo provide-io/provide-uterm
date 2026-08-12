@@ -28,6 +28,8 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
+import time
 from collections import deque
 from copy import deepcopy
 from sys import getsizeof
@@ -75,6 +77,9 @@ def _terminal_frame_size(frame: TerminalFrame) -> int:
         + _retained_size(frame.snapshot, seen)
         + _retained_size(frame.transcript_delta, seen)
     )
+
+
+logger = logging.getLogger(__name__)
 
 
 class TerminalCapture:
@@ -134,6 +139,10 @@ class TransportSession:
         self._terminal_frame_closed = False
         self._connected = False
         self._change_seq: int = 0
+        # Raw ingest accounting for the reader loop: counts what came off the
+        # socket, independent of whether the emulator reflected it.
+        self._bytes_total: int = 0
+        self._last_ingest_log_mono: float = 0.0
         self._terminal_frames: deque[TerminalFrame] = deque(maxlen=TERMINAL_FRAME_HISTORY_MAX_COUNT)
         self._terminal_frame_sizes: deque[int] = deque(maxlen=TERMINAL_FRAME_HISTORY_MAX_COUNT)
         self._terminal_frame_bytes = 0
@@ -442,6 +451,8 @@ class TransportSession:
                         for cb in self._watchers:
                             with contextlib.suppress(Exception):
                                 cb({}, data)
+                    _t0 = time.monotonic()
+                    self._bytes_total += len(data)
                     self._emulator.process(data)
                     self._change_seq += 1
                     snapshot = deepcopy(self._emulator.get_snapshot())
@@ -454,6 +465,29 @@ class TransportSession:
                     )
                     self._notify_terminal_frame_waiters()
                     self._update_event.set()
+                    # This loop is the only consumer of the socket, and every
+                    # step above runs per CHUNK — including a deepcopy of the
+                    # whole screen snapshot. Upstreams deliver in bursts (a
+                    # gateway was measured emitting 8 frames inside 0.4ms), so
+                    # a slow step here stalls the reader and strands the bytes
+                    # behind it while a client's poll window expires. Report
+                    # the cases worth acting on rather than every chunk.
+                    _elapsed = time.monotonic() - _t0
+                    if _elapsed >= 0.25:
+                        logger.warning(
+                            "reader_chunk_slow elapsed_s=%.3f chunk_bytes=%d seq=%d",
+                            _elapsed,
+                            len(data),
+                            self._change_seq,
+                        )
+                    _now = time.monotonic()
+                    if _now - self._last_ingest_log_mono >= 0.5:
+                        self._last_ingest_log_mono = _now
+                        logger.info(
+                            "reader_ingest seq=%d bytes_total=%d",
+                            self._change_seq,
+                            self._bytes_total,
+                        )
         except (asyncio.CancelledError, ConnectionResetError, OSError, ConnectionError):
             pass
         finally:
