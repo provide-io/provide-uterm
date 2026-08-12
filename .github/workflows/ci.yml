@@ -141,7 +141,11 @@ jobs:
 
   csharp-quality-windows:
     runs-on: windows-latest
-    timeout-minutes: 45
+    # Covers build + conformance + test + cover + the changed-only mutation gate.
+    # Same 45 -> 120 raise, and for the same reason, as csharp-mutation-gate
+    # below: a support-file change makes the mutation step run the full perimeter,
+    # which does not fit in 45 minutes on a Windows runner.
+    timeout-minutes: 120
     defaults:
       run:
         # Git Bash so the Makefile (posix shell + make macros) runs unchanged.
@@ -549,7 +553,15 @@ jobs:
     # reports as "cancelled" rather than a timeout. The gate is changed-only now
     # (see ci/prepare_stryker_args.sh), so it usually skips outright; the budget
     # covers the runs that do mutate something.
-    timeout-minutes: 45
+    #
+    # Raised 45 -> 120 on 2026-08-11. 45 covered the narrowed runs but not the
+    # FULL perimeter, which ci/stryker_gate.py falls back to whenever a file in
+    # its SUPPORT_PATHS changes (mutation_equivalents.toml, stryker-config.json,
+    # the gate scripts). Renumbering the allowlist after a source edit shifts its
+    # line keys, so that fallback fires on ordinary work, and the first commit to
+    # trigger it died here at exactly 45m. A full run measures ~30 minutes of
+    # Stryker on an M-series laptop; a runner is slower and Windows slower again.
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
         with:
