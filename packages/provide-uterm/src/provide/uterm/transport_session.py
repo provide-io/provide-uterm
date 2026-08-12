@@ -475,7 +475,8 @@ class TransportSession:
                     _elapsed = time.monotonic() - _t0
                     if _elapsed >= 0.25:
                         logger.warning(
-                            "reader_chunk_slow elapsed_s=%.3f chunk_bytes=%d seq=%d",
+                            "reader_chunk_slow t=%.3f elapsed_s=%.3f chunk_bytes=%d seq=%d",
+                            time.time(),
                             _elapsed,
                             len(data),
                             self._change_seq,
@@ -483,8 +484,14 @@ class TransportSession:
                     _now = time.monotonic()
                     if _now - self._last_ingest_log_mono >= 0.5:
                         self._last_ingest_log_mono = _now
+                        # Wall clock is carried IN the message: consumers of this
+                        # log (a supervisor capturing worker stdout) may render
+                        # bare event+kwargs with no timestamp of their own, and a
+                        # stall shows up as MISSING heartbeats — invisible unless
+                        # each line says when it happened.
                         logger.info(
-                            "reader_ingest seq=%d bytes_total=%d",
+                            "reader_ingest t=%.3f seq=%d bytes_total=%d",
+                            time.time(),
                             self._change_seq,
                             self._bytes_total,
                         )
