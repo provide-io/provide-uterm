@@ -35,6 +35,11 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12", "3.13", "3.14"]
     timeout-minutes: 60
+    permissions:
+      contents: read
+      # Read-only, for the perimeter-status note below: it reads the last
+      # mutation-full run's conclusion. It writes no issues and no runs.
+      actions: read
     env:
       # Hypothesis settings profile (see hypothesis_profiles.py). Every CI run
       # uses `ci` (250 examples, ~+1.7s over the previous default of 100); the
@@ -43,6 +48,16 @@ jobs:
       HYPOTHESIS_PROFILE: ${{ github.event_name == 'schedule' && 'deep' || 'ci' }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      # Echo the last full-perimeter mutation result into this run's summary
+      # when it is RED, and print nothing when it is green. The weekly cron sat
+      # red for nine weeks unread because a scheduled run has no audience; this
+      # gives it one. Advisory only — it cannot fail this job. One matrix cell,
+      # so the note appears once rather than four times.
+      - if: matrix.python-version == '3.13'
+        name: Full-perimeter mutation status (advisory)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash ci/report_perimeter_status.sh
       - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
