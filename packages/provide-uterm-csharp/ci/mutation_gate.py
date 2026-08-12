@@ -75,17 +75,52 @@ class Mutant:
     source: str
 
 
-def load_allowlist() -> dict[tuple[str, str, int, str], str]:
+# Allowlist key: CONTENT, not coordinates — see the long note in
+# ci/stryker_gate.py. Same reasoning, smaller allowlist: a line number is a
+# property of everything above a mutant, so an unrelated edit silently moved
+# every entry below it, and this file is a mutation support file, so repairing
+# the numbers is itself a gate-triggering change.
+#
+# `code` (the stripped source line) plus the original/replacement pair the
+# mutator already tracks identifies the mutation itself; `occurrence` separates
+# repeats of the same flip on the same line — `a && b && c` yields two.
+AllowKey = tuple[str, str, str, str, str, int]
+
+
+def mutant_key(rel: str, mutant: Mutant, occurrence: int) -> AllowKey:
+    line = mutant.source.splitlines()[mutant.line - 1].strip()
+    return (rel, mutant.mutator, line, mutant.original, mutant.replacement, occurrence)
+
+
+def occurrences(mutants: list[Mutant]) -> dict[Mutant, int]:
+    """1-based index of each mutant among identical ones in the same file.
+
+    Counted over EVERY mutant found, not just survivors, so a mutant that starts
+    or stops being killed cannot renumber its neighbours.
+    """
+    counts: dict[tuple[Path, int, str, str, str], int] = {}
+    out: dict[Mutant, int] = {}
+    for mutant in sorted(mutants, key=lambda m: (str(m.path), m.line, m.col)):
+        line = mutant.source.splitlines()[mutant.line - 1].strip()
+        shape = (mutant.path, mutant.line, line, mutant.original, mutant.mutator)
+        counts[shape] = counts.get(shape, 0) + 1
+        out[mutant] = counts[shape]
+    return out
+
+
+def load_allowlist() -> dict[AllowKey, str]:
     if not ALLOWLIST_FILE.exists():
         return {}
     data = tomllib.loads(ALLOWLIST_FILE.read_text(encoding="utf-8"))
-    out: dict[tuple[str, str, int, str], str] = {}
+    out: dict[AllowKey, str] = {}
     for entry in data.get("equivalent", []):
-        key = (
-            entry["file"],
-            entry.get("package", "Provide.Uterm"),
-            int(entry["line"]),
+        key: AllowKey = (
+            entry["file"].replace("\\", "/"),
             entry["mutator"],
+            entry["code"],
+            entry["original"],
+            entry["replacement"],
+            int(entry.get("occurrence", 1)),
         )
         out[key] = entry["reason"]
     return out
@@ -226,6 +261,9 @@ def main() -> int:
             return 2
         all_mutants.extend(collect_mutants(path))
 
+    # Before any truncation, so --max-mutants cannot change what a key means.
+    mutant_occurrence = occurrences(all_mutants)
+
     if args.max_mutants > 0:
         all_mutants = all_mutants[: args.max_mutants]
 
@@ -250,7 +288,7 @@ def main() -> int:
 
     for i, m in enumerate(all_mutants, start=1):
         rel = str(m.path.relative_to(SRC))
-        key = (rel.replace("\\", "/"), "Provide.Uterm", m.line, m.mutator)
+        key = mutant_key(rel.replace("\\", "/"), m, mutant_occurrence[m])
         mutated = apply_mutant(m)
         backup = m.path.read_text(encoding="utf-8")
         try:

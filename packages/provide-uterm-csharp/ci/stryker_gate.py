@@ -83,8 +83,83 @@ SUPPORT_PATHS = (
 # mutant); Ignored is outside the `mutate` glob or coverage-excluded.
 OK_STATUSES = frozenset({"Killed", "CompileError", "Ignored"})
 
-# Stryker key: (file relative to src/Provide.Uterm, line, column, mutatorName).
-AllowKey = tuple[str, int, int, str]
+# Allowlist key: CONTENT, not coordinates.
+#
+# This used to be (file, line, column, mutatorName), which broke twice in one
+# afternoon. Line numbers are not a property of a mutant, they are a property of
+# everything above it: a 6-line fix in StartDelivery invalidated all sixteen
+# entries for Webhooks.Delivery.cs at once, and repairing them meant editing this
+# allowlist, which is a SUPPORT_PATH, which forces a full-perimeter run, which
+# then blew a CI timeout budgeted for the narrowed one. Coordinates also are not
+# unique — Stryker emits two Regex mutants at the same line:column in the TS
+# port, so one could be excused by the other's entry.
+#
+# The key is now what the mutation actually IS:
+#   file        the perimeter file, relative to src/Provide.Uterm
+#   mutator     Stryker's mutator name
+#   code        the source line, stripped — also what makes an entry reviewable
+#   original    the exact span Stryker replaced
+#   replacement what it replaced the span with
+#   occurrence  1-based among mutants in that file identical in all of the above
+#
+# Everything but `occurrence` is derived from the source text, so unrelated edits
+# elsewhere in the file cannot move an entry. Editing the mutated line itself
+# DOES invalidate it, which is the intended signal: the equivalence argument was
+# about that code, so it has to be re-made.
+#
+# `occurrence` is computed over EVERY mutant in the file, not just the surviving
+# ones, so a mutant that starts or stops being killed cannot renumber its
+# neighbours; and the mutant list for a file is a function of its source, not of
+# the --mutate glob, so a narrowed run and a full run agree.
+AllowKey = tuple[str, str, str, str, str, int]
+
+
+def mutant_span(source: str, location: dict) -> str:
+    """The exact source text Stryker replaced (1-based, end-exclusive)."""
+    lines = source.splitlines(keepends=True)
+    start, end = location["start"], location["end"]
+    if start["line"] == end["line"]:
+        return lines[start["line"] - 1][start["column"] - 1 : end["column"] - 1]
+    body = [lines[start["line"] - 1][start["column"] - 1 :]]
+    body += lines[start["line"] : end["line"] - 1]
+    body.append(lines[end["line"] - 1][: end["column"] - 1])
+    return "".join(body)
+
+
+def source_line(source: str, location: dict) -> str:
+    """The stripped source line the mutant starts on."""
+    lines = source.splitlines()
+    index = location["start"]["line"] - 1
+    return lines[index].strip() if 0 <= index < len(lines) else ""
+
+
+def file_keys(rel: str, file_entry: dict) -> dict[str, AllowKey]:
+    """Map every mutant id in one report file entry to its content key."""
+    source = file_entry.get("source", "")
+    mutants = file_entry.get("mutants", [])
+    # Deterministic order so `occurrence` does not depend on report ordering.
+    ordered = sorted(
+        mutants,
+        key=lambda m: (
+            m["location"]["start"]["line"],
+            m["location"]["start"]["column"],
+            m["mutatorName"],
+            m.get("replacement", ""),
+        ),
+    )
+    counts: dict[tuple[str, str, str, str], int] = {}
+    out: dict[str, AllowKey] = {}
+    for mutant in ordered:
+        location = mutant["location"]
+        shape = (
+            mutant["mutatorName"],
+            source_line(source, location),
+            mutant_span(source, location),
+            mutant.get("replacement", ""),
+        )
+        counts[shape] = counts.get(shape, 0) + 1
+        out[str(mutant["id"])] = (rel, *shape, counts[shape])
+    return out
 
 
 def load_allowlist() -> dict[AllowKey, str]:
@@ -93,14 +168,23 @@ def load_allowlist() -> dict[AllowKey, str]:
     data = tomllib.loads(ALLOWLIST_FILE.read_text(encoding="utf-8"))
     out: dict[AllowKey, str] = {}
     for entry in data.get("stryker_equivalent", []):
-        key = (
+        key: AllowKey = (
             entry["file"].replace("\\", "/"),
-            int(entry["line"]),
-            int(entry["column"]),
             entry["mutator"],
+            entry["code"],
+            entry["original"],
+            entry["replacement"],
+            int(entry.get("occurrence", 1)),
         )
         out[key] = entry["reason"]
     return out
+
+
+def describe(key: AllowKey) -> str:
+    """One-line rendering of a key, for stale-entry warnings."""
+    file, mutator, code, original, replacement, occurrence = key
+    nth = f" #{occurrence}" if occurrence > 1 else ""
+    return f"{file} {mutator}{nth}: {original!r} -> {replacement!r} in {code!r}"
 
 
 def perimeter_globs() -> list[str]:
@@ -242,6 +326,8 @@ def main() -> int:
             # ever names files inside it.
             continue
 
+        keys_by_id = file_keys(rel, file_entry)
+
         for mutant in file_entry.get("mutants", []):
             status = mutant["status"]
             if status != "Ignored":
@@ -252,7 +338,9 @@ def main() -> int:
                 continue
 
             loc = mutant["location"]["start"]
-            key: AllowKey = (rel, int(loc["line"]), int(loc["column"]), mutant["mutatorName"])
+            key = keys_by_id[str(mutant["id"])]
+            # Coordinates are still the most useful thing to PRINT — they are just
+            # no longer what the entry is matched on.
             where = f"{rel}:{loc['line']}:{loc['column']} {mutant['mutatorName']} [{status}]"
             if key in allowlist:
                 used.add(key)
@@ -265,7 +353,7 @@ def main() -> int:
     checked_files = seen_files if narrowed else None
     stale = sorted(key for key in set(allowlist) - used if checked_files is None or key[0] in checked_files)
     for key in stale:
-        print(f"[WARN] stale allowlist entry (no longer a survivor): {key[0]}:{key[1]}:{key[2]} {key[3]}")
+        print(f"[WARN] stale allowlist entry (no longer a survivor): {describe(key)}")
 
     print(f"\nStryker mutation gate — report: {report_path}")
     print(f"Totals: {killed} killed, {excused} allowlisted-equivalent, {len(failures)} unexcused")
