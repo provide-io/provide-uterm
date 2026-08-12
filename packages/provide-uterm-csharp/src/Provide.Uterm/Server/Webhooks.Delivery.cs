@@ -170,7 +170,13 @@ public sealed partial class WebhookManager : IAsyncDisposable
         var (sub, unsubscribe) = _eventBus.Watch(cfg.SessionId, cfg.EventTypes, cfg.Pattern);
         var cancel = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
         var worker = new DeliveryWorker(unsubscribe, cancel);
-        worker.Loop = Task.Run(() => DeliveryLoopAsync(cfg, sub, worker, cancel.Token));
+        // Read the token HERE, not inside the lambda. Inside, the read happens on
+        // a pool thread whenever the work item is picked up, which can be after
+        // DeliveryWorker.Release has disposed the source — and CancellationTokenSource
+        // .Token throws once disposed. A token read beforehand stays usable: shutdown
+        // cancels before it disposes, so the loop sees a cancelled token and exits.
+        var token = cancel.Token;
+        worker.Loop = Task.Run(() => DeliveryLoopAsync(cfg, sub, worker, token));
         return worker;
     }
 
