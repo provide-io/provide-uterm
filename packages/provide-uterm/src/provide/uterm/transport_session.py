@@ -142,7 +142,6 @@ class TransportSession:
         # Raw ingest accounting for the reader loop: counts what came off the
         # socket, independent of whether the emulator reflected it.
         self._bytes_total: int = 0
-        self._last_ingest_log_mono: float = 0.0
         self._terminal_frames: deque[TerminalFrame] = deque(maxlen=TERMINAL_FRAME_HISTORY_MAX_COUNT)
         self._terminal_frame_sizes: deque[int] = deque(maxlen=TERMINAL_FRAME_HISTORY_MAX_COUNT)
         self._terminal_frame_bytes = 0
@@ -481,20 +480,24 @@ class TransportSession:
                             len(data),
                             self._change_seq,
                         )
-                    _now = time.monotonic()
-                    if _now - self._last_ingest_log_mono >= 0.5:
-                        self._last_ingest_log_mono = _now
-                        # Wall clock is carried IN the message: consumers of this
-                        # log (a supervisor capturing worker stdout) may render
-                        # bare event+kwargs with no timestamp of their own, and a
-                        # stall shows up as MISSING heartbeats — invisible unless
-                        # each line says when it happened.
-                        logger.info(
-                            "reader_ingest t=%.3f seq=%d bytes_total=%d",
-                            time.time(),
-                            self._change_seq,
-                            self._bytes_total,
-                        )
+                    # One line per CHUNK, deliberately unthrottled. A throttled
+                    # heartbeat cannot distinguish "consumed immediately, then
+                    # idle" from "consumed N seconds late" — both produce the
+                    # same sparse log, which is exactly the ambiguity that made
+                    # an earlier reading of these logs wrong. A session handles
+                    # on the order of tens of chunks per interaction, so the
+                    # volume is trivial and the timing becomes unambiguous.
+                    #
+                    # Wall clock is carried IN the message: consumers of this
+                    # log (a supervisor capturing worker stdout) may render bare
+                    # text with no timestamp of their own.
+                    logger.info(
+                        "reader_chunk t=%.3f seq=%d chunk_bytes=%d bytes_total=%d",
+                        time.time(),
+                        self._change_seq,
+                        len(data),
+                        self._bytes_total,
+                    )
         except (asyncio.CancelledError, ConnectionResetError, OSError, ConnectionError):
             pass
         finally:
