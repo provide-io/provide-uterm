@@ -83,12 +83,12 @@ public sealed class SshWsGateway : IAsyncDisposable
 
     private void OnServiceRegistered(object? sender, SshService service)
     {
-        if (service is UserauthService auth)
+        if (service is UserAuthService auth)
         {
             // Loopback / explicitly allowed gateways accept any password or key
             // (matches Go's non-RequireResolver mode). Production deployments
             // should put this behind network policy or a key resolver follow-on.
-            auth.Userauth += (_, e) => { e.Result = true; };
+            auth.UserAuth += (_, e) => { e.Result = true; };
         }
         else if (service is ConnectionService conn)
         {
@@ -168,9 +168,14 @@ public sealed class SshWsGateway : IAsyncDisposable
             _cts = cts;
             channel.DataReceived += (_, data) =>
             {
-                if (data is { Length: > 0 })
+                if (data.Length > 0)
                 {
-                    _inbox.Enqueue(data);
+                    // ToArray, not a cast: FxSsh 1.4.0 hands the callback a
+                    // ReadOnlyMemory<byte> over ITS buffer, which it is free to
+                    // reuse once the handler returns. The queue outlives the
+                    // callback, so anything enqueued has to be our own copy —
+                    // this is a correctness requirement, not a type workaround.
+                    _inbox.Enqueue(data.ToArray());
                     try
                     {
                         _data.Release();
