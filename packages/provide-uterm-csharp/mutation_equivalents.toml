@@ -88,7 +88,7 @@ SynchronizationContext, and the xUnit console runner installs none either, so \
 `ConfigureAwait(true)` and `(false)` resume on the same thread-pool context \
 either way — no test in or out of process can observe a difference. Same \
 reasoning applies to every other ConfigureAwait boolean on this allowlist \
-(Webhooks.Delivery.cs:249,309,362,420,435)."""
+(Webhooks.Delivery.cs:255,315,368,426,441)."""
 
 [[stryker_equivalent]]
 file = "Server/WebhookEgress.cs"
@@ -132,21 +132,21 @@ reason = """\
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 249
+line = 255
 column = 77
 mutator = "Boolean mutation"
 reason = "ConfigureAwait boolean — see the WebhookEgress.cs:35 entry for the shared reasoning (no SynchronizationContext in this codebase's runtime or test host)."
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 309
+line = 315
 column = 37
 mutator = "Boolean mutation"
 reason = "ConfigureAwait boolean — see the WebhookEgress.cs:35 entry."
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 348
+line = 354
 column = 13
 mutator = "Logical mutation"
 reason = """\
@@ -161,28 +161,28 @@ break the always-paired symmetry and are correctly killed.)"""
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 321
+line = 327
 column = 91
 mutator = "Boolean mutation"
 reason = "ConfigureAwait boolean (the retry-ladder Task.Delay) — see the WebhookEgress.cs:35 entry."
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 362
+line = 368
 column = 33
 mutator = "Boolean mutation"
 reason = "ConfigureAwait boolean — see the WebhookEgress.cs:35 entry."
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 428
+line = 434
 column = 72
 mutator = "Boolean mutation"
 reason = "ConfigureAwait boolean (the Task.WhenAll awaiting every worker's Loop) — see the WebhookEgress.cs:35 entry."
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 416
+line = 422
 column = 13
 mutator = "Statement mutation"
 reason = """\
@@ -196,14 +196,14 @@ even re-invoking it via a stale entry is a silent no-op, not a crash."""
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 420
+line = 426
 column = 54
 mutator = "Boolean mutation"
 reason = "ConfigureAwait boolean — see the WebhookEgress.cs:35 entry."
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 423
+line = 429
 column = 13
 mutator = "Statement mutation"
 reason = """\
@@ -220,7 +220,7 @@ captured `workers` list."""
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 430
+line = 436
 column = 9
 mutator = "Statement mutation"
 reason = """\
@@ -233,7 +233,7 @@ externally observable effect through this type's public surface."""
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 431
+line = 437
 column = 9
 mutator = "Statement mutation"
 reason = """\
@@ -244,14 +244,14 @@ effect any test can observe."""
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 435
+line = 441
 column = 83
 mutator = "Boolean mutation"
 reason = "ConfigureAwait boolean (DisposeAsync's ShutdownAsync call) — see the WebhookEgress.cs:35 entry."
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 467
+line = 473
 column = 13
 mutator = "Statement mutation"
 reason = """\
@@ -267,7 +267,7 @@ effect a black-box test can assert on here."""
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 468
+line = 474
 column = 13
 mutator = "Statement mutation"
 reason = """\
@@ -285,7 +285,7 @@ counter, log, or return value differs on."""
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 469
+line = 475
 column = 13
 mutator = "Statement mutation"
 reason = """\
@@ -296,7 +296,7 @@ cancellation have already been requested has no effect any test can observe \
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 464
+line = 470
 column = 17
 mutator = "Statement mutation"
 reason = """\
