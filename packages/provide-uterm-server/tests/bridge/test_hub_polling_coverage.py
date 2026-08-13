@@ -13,9 +13,9 @@ import asyncio
 import logging
 import re
 import time
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
-from provide.uterm.server.bridge.hub import TermHub
+from provide.uterm.server.bridge.hub import TermHub, polling_service
 from provide.uterm.server.bridge.models import WorkerTermState
 
 from .control_channel_helpers import decode_control_payload
@@ -365,13 +365,19 @@ async def test_wait_for_snapshot_timestamp_exceeds_req() -> None:
     # Snapshot with ts slightly in future (> req_ts)
     hub.registry._workers["bot1"].last_snapshot = {"screen": "fresh", "ts": req_ts + 0.01}
 
-    start = time.time()
-    result = await hub.wait_for_snapshot("bot1", timeout_ms=500)
-    elapsed = time.time() - start
+    # "Returns immediately" is a claim about CONTROL FLOW — the fresh snapshot is
+    # taken on the first check — so assert that, not wall-clock. This used to be
+    # `elapsed < 0.2`, which failed on 2026-08-12 CI at 0.3959 and again inside
+    # mutmut's setup verification, where dozens of workers share the box: a
+    # loaded runner breaches a 0.2s budget while the code under test is behaving
+    # perfectly. The poll loop sleeps between attempts, so "never slept" is the
+    # exact, load-independent statement of the same property.
+    with patch.object(polling_service.asyncio, "sleep", new_callable=AsyncMock) as slept:
+        result = await hub.wait_for_snapshot("bot1", timeout_ms=500)
 
     assert result is not None
     assert result["screen"] == "fresh"
-    assert elapsed < 0.2  # Should return fast, not wait full timeout
+    slept.assert_not_awaited()
 
 
 async def test_wait_for_guard_min_timeout_50ms() -> None:
