@@ -41,7 +41,7 @@ from pathlib import Path
 import pytest
 
 from provide.uterm.pty._build import get_capture_lib_path
-from provide.uterm.pty.capture import CHANNEL_STDIN, CHANNEL_STDOUT
+from provide.uterm.pty.capture import CHANNEL_STATS, CHANNEL_STDIN, CHANNEL_STDOUT
 
 
 def _require_linux_and_lib() -> Path:
@@ -176,6 +176,40 @@ def test_all_three_words_arrive_in_stdout() -> None:
     assert b"first" in stdout_data
     assert b"second" in stdout_data
     assert b"third" in stdout_data
+
+
+def test_a_lossless_session_still_reports_its_counters() -> None:
+    """A healthy tap must say so, not just a lossy one.
+
+    Reporting only when a counter moves makes silence mean four different
+    things -- delivering everything, never loaded, writer never ready, disabled
+    -- which are exactly the states these counters exist to separate. Measured
+    against a live deck painting for 65s: the consumer sat on 'no report yet'
+    for the whole session while the tap was in fact delivering losslessly, so a
+    working capture path and a dead one read identically.
+
+    The baseline report is what makes ``ready=1 enabled=1`` observable.
+    """
+    lib = _require_linux_and_lib()
+
+    with tempfile.TemporaryDirectory() as td:
+        sock_path = str(Path(td) / "cap.sock")
+        # Comfortably past STATS_MIN_ATTEMPTS (64) so the rate limit is not
+        # what decides the outcome, and small enough not to provoke a drop.
+        frames = _run_with_capture(
+            ["/bin/sh", "-c", "i=0; while [ $i -lt 200 ]; do printf 'line-%s\\n' $i; i=$((i+1)); done"],
+            lib,
+            sock_path,
+            timeout=20,
+        )
+
+    stats = [data for ch, data in frames if ch == CHANNEL_STATS]
+    assert stats, f"no CHANNEL_STATS frame from a lossless run; channels: {sorted({ch for ch, _ in frames})}"
+    report = stats[-1].decode()
+    assert "ready=1" in report, report
+    assert "enabled=1" in report, report
+    # The run lost nothing, so the baseline is what got this frame sent.
+    assert "busy=0 wouldblock=0 invalid=0 disabled=0" in report, report
 
 
 def test_no_frames_without_env_var() -> None:

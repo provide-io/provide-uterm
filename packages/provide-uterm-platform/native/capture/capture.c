@@ -136,14 +136,23 @@ static int format_stats(char *buffer, size_t size) {
                     atomic_load_explicit(&g_writer_ready, memory_order_acquire));
 }
 
-/* Report the counters when a frame has failed to reach the consumer since the
- * last report. Rate-limited by frames sent, and guarded against reporting from
- * inside a report. */
+/* Report the counters: once as a baseline, and thereafter whenever a frame has
+ * failed to reach the consumer since the last report. Rate-limited by frames
+ * sent, and guarded against reporting from inside a report.
+ *
+ * The baseline is not decoration. Reporting only on loss makes silence
+ * ambiguous between a tap that is delivering everything, a tap that never
+ * loaded, one whose writer never became ready, and one that disabled itself --
+ * which are the states these counters exist to tell apart. A consumer that has
+ * never seen a stats frame cannot distinguish a healthy session from a dead
+ * one, so the first report goes out regardless of whether anything was lost:
+ * `sent=N ready=1 enabled=1` is the reading that says the path works. */
 static void maybe_send_stats(void) {
     static atomic_uint last_reported_losses = ATOMIC_VAR_INIT(0U);
     static atomic_uint attempts = ATOMIC_VAR_INIT(0U);
     static atomic_uint attempts_at_last_report = ATOMIC_VAR_INIT(0U);
     static atomic_flag reporting = ATOMIC_FLAG_INIT;
+    static atomic_int reported_once = ATOMIC_VAR_INIT(0);
     struct capture_writer_stats stats;
     unsigned losses;
     char line[160];
@@ -152,7 +161,8 @@ static void maybe_send_stats(void) {
     capture_writer_get_stats(&g_writer, &stats);
     losses = stats.dropped_busy + stats.dropped_would_block + stats.dropped_invalid +
              stats.disabled_errors;
-    if (losses == atomic_load_explicit(&last_reported_losses, memory_order_relaxed)) {
+    if (losses == atomic_load_explicit(&last_reported_losses, memory_order_relaxed) &&
+        atomic_load_explicit(&reported_once, memory_order_relaxed)) {
         return;
     }
     if (atomic_fetch_add_explicit(&attempts, 1U, memory_order_relaxed) + 1U <
@@ -162,6 +172,7 @@ static void maybe_send_stats(void) {
     if (atomic_flag_test_and_set_explicit(&reporting, memory_order_acquire)) {
         return;
     }
+    atomic_store_explicit(&reported_once, 1, memory_order_relaxed);
     atomic_store_explicit(&last_reported_losses, losses, memory_order_relaxed);
     atomic_store_explicit(&attempts_at_last_report,
                           atomic_load_explicit(&attempts, memory_order_relaxed),
