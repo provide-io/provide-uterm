@@ -142,6 +142,25 @@ async def test_stop_returns_while_a_producer_is_still_connected() -> None:
         writer.close()
 
 
+async def test_stop_skips_a_connection_that_is_already_closing() -> None:
+    """A producer that hung up first needs no closing, and must not be closed twice."""
+
+    with tempfile.TemporaryDirectory() as td:
+        path = str(Path(td) / "test.sock")
+        sock = CaptureSocket(path)
+        await sock.start()
+        _reader, writer = await asyncio.open_unix_connection(path)
+        writer.write(_make_frame(CHANNEL_STDOUT, b"bye"))
+        await writer.drain()
+        await asyncio.sleep(0.05)
+        for tracked in tuple(sock._connections):
+            tracked.close()  # already closing when stop() runs
+
+        await asyncio.wait_for(sock.stop(), timeout=5)
+        assert not Path(path).exists()
+        writer.close()
+
+
 async def test_stop_without_start_is_noop() -> None:
     with tempfile.TemporaryDirectory() as td:
         path = str(Path(td) / "test.sock")

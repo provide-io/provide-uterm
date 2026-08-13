@@ -11,7 +11,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from provide.uterm.pty.capture import CHANNEL_CONNECT, CHANNEL_STDIN, CHANNEL_STDOUT
+from provide.uterm.pty.capture import (
+    CHANNEL_CONNECT,
+    CHANNEL_STATS,
+    CHANNEL_STDIN,
+    CHANNEL_STDOUT,
+)
 from provide.uterm.pty.capture_connector import CaptureConnector
 
 
@@ -142,6 +147,26 @@ async def test_connect_frame_logs_address() -> None:
         await conn.poll_messages()
         analysis = await conn.get_analysis()
         assert "192.168.1.1:8080" in analysis
+        await conn.stop()
+
+
+async def test_stats_frame_is_reported_without_reaching_the_screen() -> None:
+    """The shim's own delivery counters, which are about capture and not output."""
+
+    with tempfile.TemporaryDirectory() as td:
+        conn = _make_connector(td)
+        await conn.start()
+        await _send_frames(
+            conn._socket_path,
+            [_make_frame(CHANNEL_STATS, b"sent=12 busy=0 wouldblock=7 invalid=0 disabled=0")],
+        )
+        await asyncio.sleep(0.05)
+
+        # Nothing to stream: a stats frame is not something the terminal drew.
+        assert await conn.poll_messages() == []
+        snapshot = await conn.get_snapshot()
+        assert snapshot["screen"] == ""
+        assert "wouldblock=7" in await conn.get_analysis()
         await conn.stop()
 
 
