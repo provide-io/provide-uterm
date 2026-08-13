@@ -68,29 +68,16 @@ updates:
           - "patch"
           - "minor"
 
-  # npm: frontend bundle in packages/provide-uterm-app.
-  - package-ecosystem: "npm"
-    directory: "/packages/provide-uterm-app"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "08:00"
-      timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "javascript"
-    commit-message:
-      prefix: "deps"
-      include: "scope"
-    groups:
-      transitive:
-        applies-to: version-updates
-        patterns:
-          - "*"
-        update-types:
-          - "patch"
-          - "minor"
+  # No entry for /packages/provide-uterm-app, /packages/provide-uterm-frontend
+  # or /packages/provide-uterm-ts: all three are npm workspace members resolved
+  # through the single root package-lock.json, so the root entry above already
+  # covers their direct dependencies. A second entry does not add coverage, it
+  # duplicates it -- the first run opened two PRs for jsdom 29.1.1 -> 30.0.1
+  # and two more for @testing-library/jest-dom -> 7.0.1, one from each scan of
+  # the same dependency.
+  #
+  # provide-uterm-cloudflare is not a workspace member and has no lockfile of
+  # its own, so it does need the entry below.
 
   # npm: Cloudflare Worker wrangler config.
   - package-ecosystem: "npm"
