@@ -75,7 +75,7 @@ COPY packages/provide-uterm-ts/ packages/provide-uterm-ts/
 RUN npm run build:frontend
 
 # ---- builder stage: resolve + install into a uv-managed venv ----------------
-FROM python:3.11-slim AS builder
+FROM python:3.14-slim AS builder
 
 ARG FRONTEND_DIR
 
@@ -170,7 +170,7 @@ RUN uv pip uninstall --python /app/.venv/bin/python \
              /app/.venv/bin/wheel*
 
 # ---- runtime stage ----------------------------------------------------------
-FROM python:3.11-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 ENV PYTHONUNBUFFERED=1 \
     PATH="/app/.venv/bin:$PATH"
