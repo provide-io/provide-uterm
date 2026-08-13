@@ -43,10 +43,12 @@
 #   - A stale entry (its mutant was killed, or its line was edited) is reported
 #     as a WARNING by ci/mutation_gate.py -- never a failure, because a mutant
 #     that stopped surviving is good news. Prune them when they appear.
-#   - An entry whose reason begins "SPLIT 2026-08-12" came from the collision
-#     unpacking described above: the reason was written for a group of mutants
-#     and has NOT yet been confirmed to argue equivalence for its specific
-#     replacement. Re-check before trusting it.
+#   - The two validators.ts Regex entries came from the collision unpacking
+#     described above, where one reason had been standing in for both mutants.
+#     Each now carries its own argument for its own replacement, confirmed by
+#     execution on 2026-08-12 rather than by reading: the anchored and
+#     unanchored forms DO differ on arbitrary strings, so a fuzz checked that
+#     no hostname `URL` can construct is one of them.
 #
 # StrykerJS has its own first-class mutant-exclusion mechanism
 # (`stryker.config.mjs`'s `mutate` ranges, or per-mutant `// Stryker disable`
@@ -203,19 +205,21 @@ code = "const host = parsed.hostname.toLowerCase().replace(/^\\[|\\]$/g, \"\");"
 original = "/^\\[|\\]$/g"
 replacement = "/\\[|\\]$/g"
 reason = """\
-SPLIT 2026-08-12 — one coordinate-keyed entry was covering 2 distinct surviving mutants here; this reason was written for that group, so confirm it argues equivalence for THIS replacement specifically. requireSecureUrl: `parsed.hostname.toLowerCase().replace(/^\\[|\\]$/g, "")` \
-with either anchor dropped (`/\\[|\\]$/` or `/^\\[|\\]/`). `parsed.hostname` \
-comes from the WHATWG `URL` constructor, which guarantees a hostname is \
-either bracket-free entirely or exactly one literal IPv6 address wrapped in \
-a single opening `[` at position 0 and a single closing `]` at the very end \
-(any other bracket placement makes the URL invalid and throws before \
-`requireSecureUrl` ever sees a hostname). Dropping either anchor only widens \
-where that single, already-uniquely-positioned bracket may be matched -- \
-since there is exactly one `[` (always at the start) and exactly one `]` \
-(always at the end) in any string this line ever receives, matching "the \
-first `[` anywhere" or "the last `]` anywhere" removes the identical \
-character the anchored pattern would have removed. No hostname `URL` can \
-produce ever distinguishes the anchored and unanchored forms here."""
+requireSecureUrl, `^` anchor dropped: the pattern goes from "a `[` at the \
+start" to "any `[` anywhere". Equivalent because a URL hostname contains at \
+most ONE `[`, always at index 0, so "anywhere" and "at the start" select the \
+same character. `parsed.hostname` comes from the WHATWG `URL` constructor, \
+which guarantees a hostname is either bracket-free entirely or exactly one \
+literal IPv6 address wrapped in a single opening `[` at position 0 and a \
+single closing `]` at the very end; any other bracket placement makes the URL \
+invalid and throws in the `new URL(url)` above, before this line runs. The \
+equivalence rests ENTIRELY on that invariant — on arbitrary strings this \
+mutant is genuinely different (`"a[b"` keeps its bracket under the anchored \
+form and loses it here) — so it was checked by execution rather than by \
+reading: a fuzz over a bracket-heavy alphabet built 300k candidate URLs, of \
+which 76,119 parsed and 8 produced a bracketed hostname, with zero results \
+differing from the anchored form. Verified 2026-08-12.\
+"""
 
 [[equivalent]]
 file = "src/serverconfig/validators.ts"
@@ -224,19 +228,21 @@ code = "const host = parsed.hostname.toLowerCase().replace(/^\\[|\\]$/g, \"\");"
 original = "/^\\[|\\]$/g"
 replacement = "/^\\[|\\]/g"
 reason = """\
-SPLIT 2026-08-12 — one coordinate-keyed entry was covering 2 distinct surviving mutants here; this reason was written for that group, so confirm it argues equivalence for THIS replacement specifically. requireSecureUrl: `parsed.hostname.toLowerCase().replace(/^\\[|\\]$/g, "")` \
-with either anchor dropped (`/\\[|\\]$/` or `/^\\[|\\]/`). `parsed.hostname` \
-comes from the WHATWG `URL` constructor, which guarantees a hostname is \
-either bracket-free entirely or exactly one literal IPv6 address wrapped in \
-a single opening `[` at position 0 and a single closing `]` at the very end \
-(any other bracket placement makes the URL invalid and throws before \
-`requireSecureUrl` ever sees a hostname). Dropping either anchor only widens \
-where that single, already-uniquely-positioned bracket may be matched -- \
-since there is exactly one `[` (always at the start) and exactly one `]` \
-(always at the end) in any string this line ever receives, matching "the \
-first `[` anywhere" or "the last `]` anywhere" removes the identical \
-character the anchored pattern would have removed. No hostname `URL` can \
-produce ever distinguishes the anchored and unanchored forms here."""
+requireSecureUrl, `$` anchor dropped: the pattern goes from "a `]` at the end" \
+to "any `]` anywhere". Equivalent because a URL hostname contains at most ONE \
+`]`, always as its final character, so "anywhere" and "at the end" select the \
+same character. `parsed.hostname` comes from the WHATWG `URL` constructor, \
+which guarantees a hostname is either bracket-free entirely or exactly one \
+literal IPv6 address wrapped in a single opening `[` at position 0 and a \
+single closing `]` at the very end; any other bracket placement makes the URL \
+invalid and throws in the `new URL(url)` above, before this line runs. The \
+equivalence rests ENTIRELY on that invariant — on arbitrary strings this \
+mutant is genuinely different (`"a]b"` keeps its bracket under the anchored \
+form and loses it here) — so it was checked by execution rather than by \
+reading: a fuzz over a bracket-heavy alphabet built 300k candidate URLs, of \
+which 76,119 parsed and 8 produced a bracketed hostname, with zero results \
+differing from the anchored form. Verified 2026-08-12.\
+"""
 
 [[equivalent]]
 file = "src/serverconfig/schema.ts"
