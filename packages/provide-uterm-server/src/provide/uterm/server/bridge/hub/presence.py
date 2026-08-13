@@ -138,7 +138,25 @@ class PresenceManager:
 
     async def request_snapshot(self, worker_id: str) -> None:
         """Send a ``snapshot_req`` control frame to the worker (no-op if no worker connected)."""
-        await self._hub.send_worker(worker_id, {"type": "snapshot_req", "req_id": str(uuid.uuid4()), "ts": time.time()})
+        delivered = await self._hub.send_worker(
+            worker_id, {"type": "snapshot_req", "req_id": str(uuid.uuid4()), "ts": time.time()}
+        )
+        if not delivered:
+            # send_worker returns False when the worker has no registered
+            # WebSocket, and this caller previously discarded that. The
+            # consequence is invisible and expensive: wait_for_snapshot still
+            # polls its deadline, still finds only the CACHED last_snapshot,
+            # and returns stale state to a client that has no way to tell it
+            # apart from a screen that genuinely did not change. A client was
+            # measured sitting on a stale hash for 17s across 23 polls with no
+            # record anywhere of why. Say it happened.
+            st = self._hub.registry.get(worker_id)
+            logger.warning(
+                "snapshot_req_undelivered",
+                worker_id=worker_id,
+                registered=st is not None,
+                worker_ws=st is not None and st.worker_ws is not None,
+            )
 
     async def request_analysis(self, worker_id: str) -> None:
         """Send an ``analyze_req`` control frame to the worker (no-op if no worker connected)."""

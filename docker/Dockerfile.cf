@@ -121,11 +121,11 @@ RUN mkdir -p /opt/wrangler \
     && ln -sf /opt/wrangler/node_modules/.bin/wrangler /usr/local/bin/wrangler \
     && wrangler --version
 
-# node:26-slim's bundled npm (11.17.0, already the latest) vendors its own copies
+# node:26-slim's bundled npm (11.19.0 as of this writing) vendors its own copies
 # of several packages that Trivy's HIGH/CRITICAL gate flags. npm is a build-time
 # tool here — the worker runtime never invokes it — but Trivy scans it anyway,
 # and an npm `overrides` entry cannot reach npm's *bundled* tree, so each one has
-# to be replaced in place. All three replacements are semver-compatible patches:
+# to be replaced in place. All four replacements are semver-compatible patches:
 #   undici           6.26.0 -> 6.27.0   CVE-2026-12151 HIGH     unbounded memory
 #   brace-expansion  5.0.6  -> 5.0.9    CVE-2026-13149 HIGH     exponential-time
 #                                       CVE-2026-14257 HIGH     (needs >= 5.0.8)
@@ -134,6 +134,14 @@ RUN mkdir -p /opt/wrangler \
 #                                       the 5.0.8 pin, with no commit of ours in
 #                                       between — Trivy's database updates daily,
 #                                       so a pinned image goes red on its own)
+#   ip-address       10.2.0 -> 10.5.0   CVE-2026-69192 HIGH     inconsistent
+#                                       parsing -> SSRF (needs >= 10.3.1; pinned
+#                                       to the current latest rather than the
+#                                       advisory floor, for the same
+#                                       daily-database reason as the 5.0.8 ->
+#                                       5.0.9 churn above). ip-address 10.x has
+#                                       no dependencies of its own, so the
+#                                       in-place swap pulls in no new tree.
 #   tar              7.5.16 -> 7.5.19   CVE-2026-59873 CRITICAL gzip-bomb DoS
 #                                       CVE-2026-59874 HIGH     malformed header
 # Every tarball is fetched BEFORE anything is replaced: `npm pack` itself runs on
@@ -144,15 +152,15 @@ RUN mkdir -p /opt/wrangler \
 RUN set -e \
     && NM=/usr/local/lib/node_modules/npm/node_modules \
     && t="$(mktemp -d)" && cd "$t" \
-    && npm pack undici@6.27.0 brace-expansion@5.0.9 tar@7.5.19 >/dev/null \
-    && for pkg in undici brace-expansion tar; do \
+    && npm pack undici@6.27.0 brace-expansion@5.0.9 ip-address@10.5.0 tar@7.5.19 >/dev/null \
+    && for pkg in undici brace-expansion ip-address tar; do \
          mkdir -p "unpack-$pkg" \
          && tar xzf "$pkg"-*.tgz -C "unpack-$pkg" \
          && rm -rf "${NM:?}/$pkg" \
          && mv "unpack-$pkg/package" "$NM/$pkg"; \
        done \
     && cd / && rm -rf "$t" \
-    && for pkg in undici brace-expansion tar; do \
+    && for pkg in undici brace-expansion ip-address tar; do \
          node -e "console.log('npm-bundled $pkg ->', require('$NM/$pkg/package.json').version)"; \
        done \
     && npm --version

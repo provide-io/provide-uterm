@@ -35,6 +35,11 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12", "3.13", "3.14"]
     timeout-minutes: 60
+    permissions:
+      contents: read
+      # Read-only, for the perimeter-status note below: it reads the last
+      # mutation-full run's conclusion. It writes no issues and no runs.
+      actions: read
     env:
       # Hypothesis settings profile (see hypothesis_profiles.py). Every CI run
       # uses `ci` (250 examples, ~+1.7s over the previous default of 100); the
@@ -43,6 +48,16 @@ jobs:
       HYPOTHESIS_PROFILE: ${{ github.event_name == 'schedule' && 'deep' || 'ci' }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      # Echo the last full-perimeter mutation result into this run's summary
+      # when it is RED, and print nothing when it is green. The weekly cron sat
+      # red for nine weeks unread because a scheduled run has no audience; this
+      # gives it one. Advisory only — it cannot fail this job. One matrix cell,
+      # so the note appears once rather than four times.
+      - if: matrix.python-version == '3.13'
+        name: Full-perimeter mutation status (advisory)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash ci/report_perimeter_status.sh
       - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
@@ -77,7 +92,21 @@ jobs:
       # bandit, xenon, vulture, pip-audit, licenses, the performance smoke,
       # the CF vendor tree, and package artifacts. Runs every check and reports
       # all failures (no fail-fast masking of later checks).
+      # GOLDENS_REGEN_DIR: where the goldens check writes a rejected corpus, so
+      # the upload step below can keep it. See .ci/check_goldens.sh.
       - run: bash ci/quality_checks.sh
+        env:
+          GOLDENS_REGEN_DIR: ${{ runner.temp }}/goldens-regen
+      # A stale-golden failure is only actionable if you can see what the
+      # generator produced, and the runner's filesystem goes away with the job.
+      # if-no-files-found: ignore — most quality failures are not golden drift,
+      # so the directory usually does not exist.
+      - if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: goldens-regenerated-py${{ matrix.python-version }}
+          path: ${{ runner.temp }}/goldens-regen
+          if-no-files-found: ignore
       # Core-package pytest gate, including the playwright browser suites (the
       # example-page and V8-coverage suites are now reliable and gated here too).
       - run: uv run python scripts/run_pytest_gate.py -q
@@ -127,7 +156,11 @@ jobs:
 
   csharp-quality-windows:
     runs-on: windows-latest
-    timeout-minutes: 45
+    # Covers build + conformance + test + cover + the changed-only mutation gate.
+    # Same 45 -> 120 raise, and for the same reason, as csharp-mutation-gate
+    # below: a support-file change makes the mutation step run the full perimeter,
+    # which does not fit in 45 minutes on a Windows runner.
+    timeout-minutes: 120
     defaults:
       run:
         # Git Bash so the Makefile (posix shell + make macros) runs unchanged.
@@ -535,7 +568,15 @@ jobs:
     # reports as "cancelled" rather than a timeout. The gate is changed-only now
     # (see ci/prepare_stryker_args.sh), so it usually skips outright; the budget
     # covers the runs that do mutate something.
-    timeout-minutes: 45
+    #
+    # Raised 45 -> 120 on 2026-08-11. 45 covered the narrowed runs but not the
+    # FULL perimeter, which ci/stryker_gate.py falls back to whenever a file in
+    # its SUPPORT_PATHS changes (mutation_equivalents.toml, stryker-config.json,
+    # the gate scripts). Renumbering the allowlist after a source edit shifts its
+    # line keys, so that fallback fires on ordinary work, and the first commit to
+    # trigger it died here at exactly 45m. A full run measures ~30 minutes of
+    # Stryker on an M-series laptop; a runner is slower and Windows slower again.
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
         with:

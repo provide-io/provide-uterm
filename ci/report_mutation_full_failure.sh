@@ -21,23 +21,57 @@ set -euo pipefail
 
 # The failing matrix legs name their perimeter file in the job name, e.g.
 # "mutation-gate-full (src/provide/uterm/server/routes/)".
-failing=$(gh run view "${GITHUB_RUN_ID}" --json jobs \
-  --jq '.jobs[] | select(.conclusion=="failure") | .name' | sed 's/^/- /')
+#
+# Split them by WHICH STEP failed. A leg that died in checkout or setup says
+# nothing about the perimeter, and calling it drift is how a reporter starts
+# crying wolf: on 2026-08-11 a runner TLS fault ("server certificate
+# verification failed") took out a leg during `actions/checkout`, and a
+# Stryker leg reported a mutant `Timeout` purely because the machine was
+# loaded. Only a failure in the gate step itself is evidence about mutants.
+jobs_json=$(gh run view "${GITHUB_RUN_ID}" --json jobs)
 
-# A run can fail for reasons other than a surviving mutant (a killed job, a
-# setup error). Report whatever failed rather than asserting a cause.
-if [ -z "${failing}" ]; then
-  failing="- (no failing job names reported; see the run)"
-fi
+drift=$(echo "${jobs_json}" | jq -r '
+  .jobs[]
+  | select(.conclusion=="failure")
+  | select([.steps[]? | select(.conclusion=="failure") | .name]
+           | any(startswith("Mutation gate")))
+  | "- \(.name)"')
+
+infra=$(echo "${jobs_json}" | jq -r '
+  .jobs[]
+  | select(.conclusion=="failure")
+  | select([.steps[]? | select(.conclusion=="failure") | .name]
+           | any(startswith("Mutation gate")) | not)
+  | "- \(.name) — failed in: \([.steps[]? | select(.conclusion=="failure") | .name] | join(", "))"')
 
 {
-  echo "## Mutation perimeter: drift detected"
-  echo
-  echo "Failing legs:"
-  echo
-  echo "${failing}"
-  echo
-  echo "Per-file obstacle notes live in \`[tool.mutmut]\` in the root \`pyproject.toml\`."
+  if [ -n "${drift}" ]; then
+    echo "## Mutation perimeter: drift detected"
+    echo
+    echo "These legs failed IN the gate step — a surviving mutant, or a mutant"
+    echo "the allowlist no longer matches:"
+    echo
+    echo "${drift}"
+    echo
+    echo "Per-file obstacle notes live in \`[tool.mutmut]\` in the root \`pyproject.toml\`."
+  fi
+
+  if [ -n "${infra}" ]; then
+    echo
+    echo "## Not drift: $(echo "${infra}" | wc -l | tr -d ' ') leg(s) failed before the gate ran"
+    echo
+    echo "Checkout/setup/runner failures. These say nothing about the perimeter;"
+    echo "re-run them before reading anything into this run."
+    echo
+    echo "${infra}"
+  fi
+
+  if [ -z "${drift}${infra}" ]; then
+    echo "## Mutation perimeter: run failed with no failing job named"
+    echo
+    echo "Nothing matched a failing job — the run itself was cancelled or timed out."
+  fi
 } >> "${GITHUB_STEP_SUMMARY}"
 
-echo "reported $(echo "${failing}" | wc -l | tr -d ' ') failing leg(s) to the run summary"
+echo "drift legs: $([ -n "${drift}" ] && echo "${drift}" | wc -l | tr -d ' ' || echo 0)"
+echo "infra legs: $([ -n "${infra}" ] && echo "${infra}" | wc -l | tr -d ' ' || echo 0)"

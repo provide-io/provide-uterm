@@ -29,7 +29,7 @@ public static class ConfigLoader
         }
 
         var text = File.ReadAllText(path);
-        var model = Toml.ToModel(text);
+        var model = TomlSerializer.Deserialize<TomlTable>(text);
         ApplyToml(cfg, model);
         cfg.Server.DerivePublicBaseUrl();
         return cfg;

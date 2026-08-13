@@ -670,4 +670,27 @@ public sealed partial class WebhookDeliveryTests
         Assert.Null(manager.GetWebhook(cfg.WebhookId));
     }
 
+    [Fact]
+    public async Task RegisterThenShutdownSurvivesTheWorkerStartingLate()
+    {
+        // StartDelivery used to read cancel.Token INSIDE the Task.Run lambda, so
+        // the read happened on a pool thread at an unpredictable time. Shutdown
+        // disposes that source (DeliveryWorker.Release), so whenever the pool was
+        // slow to pick the work item up, the lambda threw ObjectDisposedException,
+        // the loop task faulted, and ShutdownAsync rethrew it out of its
+        // Task.WhenAll. It surfaced as an intermittently red csharp-quality-windows
+        // on ShutdownClearsTheRegistrySoARetiredWebhookIsGone, whose body is this
+        // same register-then-shut-down sequence run once.
+        //
+        // Once is a coin flip, which is why the bug lived for weeks. Fifty
+        // register/shutdown cycles lose that flip reliably: pre-fix this failed on
+        // 5 of 5 local runs, each inside 25ms.
+        for (var i = 0; i < 50; i++)
+        {
+            var (manager, _, _, _) = BuildRegistry();
+            manager.Register("s1", "http://127.0.0.1:9/hook", null, null, null);
+            await manager.ShutdownAsync();
+        }
+    }
+
 }

@@ -120,6 +120,16 @@ class TermBridge:
         manager_url: Base URL of the Swarm Manager (``http://`` or ``https://``).
     """
 
+    # Snapshot-push state, declared at CLASS level so an instance built with
+    # ``TermBridge.__new__`` — which several tests do to exercise a loop without
+    # a real connection — still has working defaults instead of raising
+    # AttributeError from the watcher. ``__init__`` shadows all three per
+    # instance; every value here is immutable, so there is no shared-state risk.
+    _snapshot_debounce_s: float = TerminalDefaults.SNAPSHOT_PUSH_DEBOUNCE_S
+    _snapshot_push_task: asyncio.Task[None] | None = None
+    _screen_change_seq: int = 0
+    _snapshot_push_stopped: bool = False
+
     def __init__(
         self,
         worker: Any,
@@ -128,12 +138,24 @@ class TermBridge:
         *,
         max_ws_message_bytes: int = 1_048_576,
         encoding: str = "cp437",
+        snapshot_debounce_s: float = TerminalDefaults.SNAPSHOT_PUSH_DEBOUNCE_S,
     ) -> None:
         self._worker = worker
         self._worker_id = worker_id
         self._manager_url = manager_url
         self._max_ws_message_bytes = max(1024, int(max_ws_message_bytes))
         self._encoding = encoding
+        # Debounce state for change-driven snapshot pushes; see _watch.
+        self._snapshot_debounce_s = snapshot_debounce_s
+        self._snapshot_push_task: asyncio.Task[None] | None = None
+        # Bumped by every screen change the watcher reports. The push compares
+        # it across the send to tell "already covered by this snapshot" from
+        # "changed after we captured it" — see _debounced_snapshot_push.
+        self._screen_change_seq = 0
+        # Set by stop(); the re-arm below must not outlive teardown. NOT
+        # _running, which is False on a bridge that was never start()ed even
+        # though its watcher still publishes.
+        self._snapshot_push_stopped = False
         self._send_q: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=2000)
         self._latest_snapshot: dict[str, Any] | None = None
         self._running = False
@@ -182,6 +204,16 @@ class TermBridge:
                 self._send_q.put_nowait({"type": "term", "data": text, "ts": time.time()})
             except asyncio.QueueFull:
                 logger.debug("term_bridge_drop worker_id=%s queue_full", self._worker_id)
+            # Raw bytes stream on every chunk, but a SNAPSHOT — the only frame
+            # carrying screen_hash, which is how a client detects that the screen
+            # changed — used to go out solely in reply to a snapshot_req. That
+            # made a screen change invisible until some external party happened
+            # to ask. Measured gaps between requests were 4.4s, 17.2s, 17.9s and
+            # 18.7s; a client waiting 4s for a prompt times out inside any of
+            # them and reports a stall on a worker that is behaving perfectly.
+            #
+            # Publish our own state changes instead of depending on a poller.
+            self._schedule_snapshot_push()
 
         session.add_watch(_watch, interval_s=0.0)
 
@@ -192,9 +224,70 @@ class TermBridge:
         self._running = True
         self._task = asyncio.create_task(self._run())
 
+    def _schedule_snapshot_push(self) -> None:
+        """Arm a debounced snapshot push for the current screen.
+
+        Called from the session watcher, which runs synchronously inside the
+        reader loop — so this must neither block nor await. It only arms a task;
+        the debounce interval does the coalescing.
+
+        A push already pending covers any change arriving before it fires, so
+        re-arming would only add wire traffic for the same screen. A change
+        arriving after it captured the screen is NOT covered; the sequence
+        counter is how the push detects that and re-arms itself.
+        """
+        self._screen_change_seq += 1
+        task = self._snapshot_push_task
+        if task is not None and not task.done():
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # No running loop (a watcher firing during teardown, or a caller
+            # driving the bridge synchronously). Snapshot-on-request still works.
+            return
+        self._snapshot_push_task = loop.create_task(self._debounced_snapshot_push())
+
+    async def _debounced_snapshot_push(self) -> None:
+        """Wait out the debounce window, then publish one snapshot.
+
+        Re-arms itself if the screen changed again while the snapshot was in
+        flight. _send_snapshot reads the emulator once and then does a BLOCKING
+        put onto a bounded (maxsize=2000) queue, so a change landing during that
+        put is not in the frame being sent — and _schedule_snapshot_push skips
+        re-arming while this task is still running. Without the re-arm below
+        that change stays unpublished until some external party asks, which is
+        the exact failure this push exists to remove.
+        """
+        try:
+            await asyncio.sleep(self._snapshot_debounce_s)
+            seq_at_capture = self._screen_change_seq
+            await self._send_snapshot()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            # Publishing is best-effort: a failure here must not tear down the
+            # bridge or surface as an unretrieved task exception.
+            logger.warning("term_bridge_snapshot_push_failed worker_id=%s: %s", self._worker_id, exc)
+        else:
+            if not self._snapshot_push_stopped and self._screen_change_seq != seq_at_capture:
+                # Clear first: _schedule_snapshot_push refuses to arm while this
+                # task is still the current one, and it has not finished yet.
+                self._snapshot_push_task = None
+                self._schedule_snapshot_push()
+
     async def stop(self) -> None:
         """Stop the bridge and wait for it to clean up."""
         self._running = False
+        self._snapshot_push_stopped = True
+        # Cancel any debounced push still waiting to fire, or it outlives the
+        # bridge and publishes onto a queue nothing drains.
+        push_task = self._snapshot_push_task
+        if push_task is not None and not push_task.done():
+            push_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await push_task
+        self._snapshot_push_task = None
         if self._task is not None:
             self._task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
