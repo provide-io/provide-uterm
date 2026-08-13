@@ -299,6 +299,48 @@ class TestRun:
         assert rt._last_error == "unsupported connector"
         assert call_count[0] == 1  # one attempt, no retry
 
+    async def test_a_connected_connector_survives_a_worker_reconnect(self) -> None:
+        """A capture socket is a rendezvous the captured session joined once.
+
+        Rebinding it on every worker reconnect strands that session: it goes on
+        writing into a socket nobody holds and cannot reconnect.
+        """
+
+        rt = _make_runtime()
+        connector = _make_connector()
+        rt._connector = connector
+
+        with patch.object(rt, "_start_connector", AsyncMock(return_value=_make_connector())) as start:
+            await rt.start()
+            for _ in range(50):
+                await asyncio.sleep(0.02)
+                if rt._state == "running":
+                    break
+            await rt.stop()
+
+        assert rt._connector is None or rt._connector is connector
+        start.assert_not_called()
+
+    async def test_a_disconnected_connector_is_replaced(self) -> None:
+        """The one case that does warrant a rebuild."""
+
+        rt = _make_runtime()
+        dead = _make_connector()
+        dead.is_connected = MagicMock(return_value=False)
+        rt._connector = dead
+        replacement = _make_connector()
+
+        with patch.object(rt, "_start_connector", AsyncMock(return_value=replacement)) as start:
+            await rt.start()
+            for _ in range(50):
+                await asyncio.sleep(0.02)
+                if start.called:
+                    break
+            await rt.stop()
+
+        dead.stop.assert_awaited()
+        start.assert_called()
+
     async def test_value_error_logs_event(self) -> None:
         """ValueError is logged via _log_event with permanent=True."""
         rt = _make_runtime()

@@ -297,6 +297,7 @@ class TestStartConnectorRecording:
         connector = _make_connector()
         with patch("provide.uterm.server.runtime.build_connector", return_value=connector):
             await rt._start_connector()
+            await rt._start_recording()
 
         assert rt._logger is not None
         assert rt._recording_path is not None
@@ -323,6 +324,7 @@ class TestStartConnectorRecording:
         connector = _make_connector()
         with patch("provide.uterm.server.runtime.build_connector", return_value=connector):
             await rt._start_connector()
+            await rt._start_recording()
 
         assert rt._logger is not None
         assert rt._logger._control_channel_mode == "wire"
@@ -348,6 +350,7 @@ class TestStartConnectorRecording:
             logger_instance = AsyncMock()
             session_logger_cls.return_value = logger_instance
             await rt._start_connector()
+            await rt._start_recording()
 
         assert session_logger_cls.call_args is not None
         redactor = session_logger_cls.call_args.kwargs.get("redactor")
@@ -373,6 +376,7 @@ class TestStartConnectorRecording:
             logger_instance = AsyncMock()
             session_logger_cls.return_value = logger_instance
             await rt._start_connector()
+            await rt._start_recording()
 
         assert session_logger_cls.call_args is not None
         assert session_logger_cls.call_args.kwargs.get("redactor") is None

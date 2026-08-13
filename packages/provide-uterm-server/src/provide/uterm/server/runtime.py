@@ -275,13 +275,22 @@ class HostedSessionRuntime:
             self._logger = None
         self._recording_path = None
 
-    async def _stop_connector(self) -> None:
-        await self._stop_recording()
+    async def _discard_connector(self) -> None:
+        """Drop the connector alone, leaving the recording where it is.
+
+        Replacing a failed connector says nothing about the recording, which
+        belongs to the worker connection and is opened and closed around it.
+        """
+
         connector = self._connector
         self._connector = None
         if connector is not None:
             with contextlib.suppress(Exception):
                 await connector.stop()
+
+    async def _stop_connector(self) -> None:
+        await self._stop_recording()
+        await self._discard_connector()
 
     async def _log_snapshot(self, msg: dict[str, Any]) -> None:
         screen = str(msg.get("screen", ""))
@@ -453,8 +462,9 @@ class HostedSessionRuntime:
                 # no way to reconnect, and the terminal silently stops
                 # appearing anywhere. Only a connector that has actually failed
                 # is replaced.
-                if self._connector is None or not self._connector.is_connected():
-                    await self._stop_connector()
+                if self._connector is not None and not self._connector.is_connected():
+                    await self._discard_connector()
+                if self._connector is None:
                     self._connector = await self._start_connector()
                 await self._start_recording()
                 worker_url = self._ws_url() + f"/ws/worker/{self.definition.session_id}/term"
