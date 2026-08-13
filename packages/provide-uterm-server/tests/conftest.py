@@ -5,10 +5,39 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
+import pytest
+
 _HERE = Path(__file__).resolve().parent
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _no_ambient_ssh_agent() -> Iterator[None]:
+    """Hide the developer's SSH agent from the suite.
+
+    asyncssh's client offers every identity the agent holds before it reaches
+    the key a test configured. Against these stub servers that negotiation never
+    completes, so the connection sits in auth until the timeout fires. Nine
+    tests failed this way -- five in tests/e2e/test_ssh_gateway_start.py, four
+    across the two test_app modules -- taking five minutes a run on any machine
+    with gnome-keyring or ssh-agent running.
+
+    CI has no agent, so CI never saw it, and the failures read as a local
+    environment missing something when what it had was one thing too many.
+
+    Nothing here should consult an agent: every SSH test supplies its own key.
+    """
+
+    previous = os.environ.pop("SSH_AUTH_SOCK", None)
+    try:
+        yield
+    finally:
+        if previous is not None:
+            os.environ["SSH_AUTH_SOCK"] = previous
 
 
 def _load_part(name: str) -> None:
