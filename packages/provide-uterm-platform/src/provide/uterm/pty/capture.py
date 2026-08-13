@@ -62,6 +62,9 @@ class CaptureSocket:
         self._path = socket_path
         self._server: asyncio.Server | None = None
         self._queue: asyncio.Queue[CaptureFrame] = asyncio.Queue(maxsize=_QUEUE_MAXSIZE)
+        # Live producer connections. ``Server.close()`` stops accepting new ones
+        # and leaves these alone, so stop() has to close them itself — see there.
+        self._connections: set[asyncio.StreamWriter] = set()
 
     async def start(self) -> None:
         # Restrict the listening socket to the owner so other local users can't
@@ -86,7 +89,21 @@ class CaptureSocket:
         if self._server is None:
             return
         self._server.close()
+        # ``Server.close()`` only stops accepting; it leaves established
+        # connections running, and since 3.12 ``wait_closed()`` waits for every
+        # handler task to finish. A capture producer is a shim inside a live
+        # session that holds its connection open for as long as that session
+        # lasts, and the handler sits in ``readexactly`` waiting on it, so
+        # waiting here without closing them first never returns: stopping one
+        # session hung on a terminal that had done nothing wrong. Closing the
+        # transport ends the handler's read, which is the graceful path it
+        # already handles. ``close_clients()`` would do this, but it is 3.13+
+        # and this package supports 3.11.
+        for writer in tuple(self._connections):
+            if not writer.is_closing():
+                writer.close()
         await self._server.wait_closed()
+        self._connections.clear()
         self._server = None
         try:
             Path(self._path).unlink()
@@ -117,6 +134,7 @@ class CaptureSocket:
             logger.warning("capture_backpressure_drop_oldest", maxsize=self._queue.maxsize)
 
     async def _handle_connection(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        self._connections.add(writer)
         try:
             while True:
                 header_bytes = await reader.readexactly(_HEADER.size)
@@ -132,6 +150,7 @@ class CaptureSocket:
         except (asyncio.IncompleteReadError, ConnectionResetError):
             pass
         finally:
+            self._connections.discard(writer)
             writer.close()
             try:
                 await writer.wait_closed()
