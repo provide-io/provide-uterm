@@ -100,10 +100,16 @@ class TestNullablePreservingFrames:
             "has_trailing_space": True,
             "prompt_detected": None,
             "raw_tail": None,
+            # Ingest counters are absent here, and absent must stay explicitly
+            # null rather than 0 — a producer that cannot report them has to
+            # remain distinguishable from one that genuinely read nothing.
+            "chunks_read": None,
+            "bytes_read": None,
             "ts": 1.0,
         }
         # Belt-and-suspenders: round-trips through JSON without dropping the null.
         assert json.loads(json.dumps(out))["prompt_detected"] is None
+        assert json.loads(json.dumps(out))["chunks_read"] is None
 
     def test_snapshot_frame_with_prompt_detected_payload(self) -> None:
         out = make_snapshot_frame(

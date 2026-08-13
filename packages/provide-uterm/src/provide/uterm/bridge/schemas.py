@@ -82,6 +82,14 @@ class SnapshotFrame(_FrameBase):
     # within a single turn. Optional/backward-compatible.
     raw_tail: str | None = None
     ts: float | None = None
+    # Reader-loop ingest counters from the worker's own session, counted before
+    # any emulator work. They let a consumer tell "no bytes ever reached that
+    # process" apart from "bytes arrived and the emulator never reflected
+    # them" — two failures needing opposite fixes that look identical from the
+    # screen alone. Optional/backward-compatible: a worker predating them omits
+    # both, so consumers can report a sentinel rather than a wrong zero.
+    chunks_read: int | None = None
+    bytes_read: int | None = None
     # Manager-assigned causal sequence. Worker-originated snapshots omit it;
     # the server stamps it before storing and broadcasting the committed frame.
     event_seq: int | None = None

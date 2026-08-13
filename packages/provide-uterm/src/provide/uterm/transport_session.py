@@ -273,6 +273,21 @@ class TransportSession:
     # Alias used by some callers.
     update_seq = screen_change_seq
 
+    def reader_ingest_counts(self) -> tuple[int, int]:
+        """Return ``(chunks_read, bytes_read)`` as counted by the reader loop.
+
+        Both are incremented in :meth:`_reader_loop` the moment a non-empty
+        chunk comes off the socket, before any emulator work — so they answer
+        the one question a consumer watching a frozen screen cannot answer for
+        itself: did the bytes reach this process at all?
+
+        Rising while the screen hash stands still means they arrived and the
+        emulator never reflected them; frozen means the reader is not consuming
+        the socket. Those need opposite fixes and are indistinguishable from the
+        screen tail, which is why this is exported rather than kept private.
+        """
+        return self._change_seq, self._bytes_total
+
     async def wait_for_screen_change(self, *, timeout_ms: int = 5000, since: int | None = None) -> bool:
         """Wait until the screen updates beyond *since*, or timeout.
 

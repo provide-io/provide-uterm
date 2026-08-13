@@ -46,6 +46,8 @@ export type Ts1 = number | null;
 export type Type1 = "input";
 export type Ts2 = number | null;
 export type Type2 = "snapshot_req";
+export type BytesRead = number | null;
+export type ChunksRead = number | null;
 export type Cols = number | null;
 export type Cursor = {
   [k: string]: number;
@@ -218,6 +220,8 @@ export interface SnapshotReqFrame {
  * Worker-originated full-screen snapshot.
  */
 export interface SnapshotFrame {
+  bytes_read?: BytesRead;
+  chunks_read?: ChunksRead;
   cols?: Cols;
   cursor?: Cursor;
   cursor_at_end?: CursorAtEnd;

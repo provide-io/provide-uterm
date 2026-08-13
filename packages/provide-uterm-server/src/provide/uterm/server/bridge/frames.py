@@ -96,6 +96,8 @@ class SnapshotFrame(TypedDict):
     prompt_detected: dict[str, Any] | None
     raw_tail: str | None
     ts: float
+    chunks_read: NotRequired[int | None]
+    bytes_read: NotRequired[int | None]
     event_seq: NotRequired[int]
 
 
@@ -206,6 +208,8 @@ def make_snapshot_frame(
     prompt_detected: dict[str, Any] | None,
     ts: float,
     raw_tail: str | None = None,
+    chunks_read: int | None = None,
+    bytes_read: int | None = None,
     event_seq: int | None = None,
 ) -> SnapshotFrame:
     # Snapshot construction lives once in ``provide.uterm.frames``; this thin
@@ -225,6 +229,8 @@ def make_snapshot_frame(
             prompt_detected=prompt_detected,
             ts=ts,
             raw_tail=raw_tail,
+            chunks_read=chunks_read,
+            bytes_read=bytes_read,
             event_seq=event_seq,
         ),
     )

@@ -33,6 +33,8 @@ def make_snapshot_frame(
     prompt_detected: dict[str, Any] | None,
     ts: float | None = None,
     raw_tail: str | None = None,
+    chunks_read: int | None = None,
+    bytes_read: int | None = None,
     event_seq: int | None = None,
 ) -> dict[str, Any]:
     """Build a validated snapshot frame."""
@@ -47,6 +49,8 @@ def make_snapshot_frame(
         has_trailing_space=has_trailing_space,
         prompt_detected=prompt_detected,
         raw_tail=raw_tail,
+        chunks_read=chunks_read,
+        bytes_read=bytes_read,
         ts=time.time() if ts is None else ts,
         event_seq=event_seq,
     ).model_dump(exclude_none=False)
