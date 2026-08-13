@@ -384,12 +384,17 @@ jobs:
       # fresh resolution). Replaces a `uv venv && uv pip install -e` that
       # bypassed uv.lock entirely.
       - run: uv sync --frozen --package provide-uterm-platform --extra dev
+      # The capture library is interposed into a session and read by asyncio on
+      # the other end, so it is the interpreter's socket and subprocess
+      # semantics it meets, not just the C ABI. Those semantics move between
+      # versions: 3.12 changed `wait_closed()` to await handler tasks, which
+      # turned a working stop into one that blocked until the captured session
+      # ended. Pinning this to the minimum version tests the tap against one
+      # interpreter and ships it against four.
       - name: Build and self-test native capture library
-        if: matrix.python-version == '3.11'
         run: |
           make -C packages/provide-uterm-platform/native/capture clean test install
       - name: Run native capture LD_PRELOAD integration tests
-        if: matrix.python-version == '3.11'
         run: uv run pytest packages/provide-uterm-platform/tests/pty/test_ld_preload_capture.py packages/provide-uterm-platform/tests/pty/test_capture_frame_atomicity.py -q --no-cov --timeout=30 -o "addopts=--import-mode=importlib"
       - name: Run PTY unit tests (no PAM/root/native)
         run: uv run pytest packages/provide-uterm-platform/tests/pty/ -q --no-cov --timeout=10 --ignore=packages/provide-uterm-platform/tests/pty/e2e --ignore=packages/provide-uterm-platform/tests/pty/test_ld_preload_capture.py --ignore=packages/provide-uterm-platform/tests/pty/test_capture_frame_atomicity.py -o "addopts=--import-mode=importlib"
