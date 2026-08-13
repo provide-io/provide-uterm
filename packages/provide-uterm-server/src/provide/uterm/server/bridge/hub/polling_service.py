@@ -103,6 +103,15 @@ class PollingCoordinator:
         # client sees a stale screen that is indistinguishable from an idle
         # one. Record the staleness explicitly — a poll that silently returns
         # old state is exactly how a wedged worker looks like a quiet game.
+        #
+        # Narrowed since TermBridge began PUSHING snapshots on screen change:
+        # the loop above accepts any snapshot fresher than req_ts, so a push
+        # that happens to land inside the window releases the wait and this
+        # warning never fires — even if request_snapshot reached nobody. So a
+        # silent period here means "no fresh screen state arrived by any route",
+        # NOT "the request path works". A request path broken on a busy screen
+        # is now invisible to this diagnostic; only a quiet screen exposes it.
+        # test_unsolicited_snapshot_integration.py pins that behaviour.
         stale_age = None
         if snap is not None:
             with contextlib.suppress(TypeError, ValueError):
