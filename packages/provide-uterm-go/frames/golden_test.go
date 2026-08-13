@@ -32,7 +32,12 @@ import (
 // goldenGoFrames maps each golden case to the Go frame that must produce
 // semantically-equal wire JSON.
 func goldenGoFrames() map[string]Frame {
-	hello := MakeHelloFrame()
+	// WithDefaults, not the bare builder: spec/behavior.json pins go's
+	// hello_defaults at mcp_supported=true, vnc_supported=true, and a server
+	// hello is exactly what this golden represents. The bare MakeHelloFrame
+	// matched only because this corpus predates 5145daae (capability
+	// negotiation, 2026-07-19) and nothing regenerated it.
+	hello := MakeHelloFrameWithDefaults()
 	hello.WorkerID = Ptr("w1")
 	hello.CanHijack = Ptr(true)
 	hello.Hijacked = Ptr(false)

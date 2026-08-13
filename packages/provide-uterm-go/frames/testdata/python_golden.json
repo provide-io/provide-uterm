@@ -29,12 +29,14 @@
     "can_hijack": true,
     "hijacked": false,
     "input_mode": "raw",
+    "mcp_supported": true,
     "protocol": {
       "selected": 2,
       "server_max": 2,
       "server_min": 1
     },
     "type": "hello",
+    "vnc_supported": true,
     "worker_id": "w1",
     "worker_online": true
   },
