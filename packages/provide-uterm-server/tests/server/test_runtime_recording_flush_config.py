@@ -104,6 +104,7 @@ class TestRuntimeHonoursFlushConfig:
 
         with patch("provide.uterm.server.runtime.build_connector", return_value=_make_connector()):
             runtime._connector = await runtime._start_connector()
+            await runtime._start_recording()
         try:
             await runtime._log_event("first", {})
             await runtime._log_event("second", {})
@@ -127,6 +128,7 @@ class TestRuntimeHonoursFlushConfig:
 
         with patch("provide.uterm.server.runtime.build_connector", return_value=_make_connector()):
             runtime._connector = await runtime._start_connector()
+            await runtime._start_recording()
         try:
             await runtime._log_event("lonely", {})
 
@@ -173,6 +175,7 @@ class TestHostedConfigReachesLogger:
 
         with patch("provide.uterm.server.runtime.build_connector", return_value=_make_connector()):
             runtime._connector = await runtime._start_connector()
+            await runtime._start_recording()
         try:
             await runtime._log_event("first", {})
             await runtime._log_event("second", {})
