@@ -241,7 +241,17 @@ class HostedSessionRuntime:
         await connector.start()
         if connector.is_connected():
             self._connected = True
-        if self._recording_enabled():
+        return connector
+
+    async def _start_recording(self) -> None:
+        """Open a recording for one bridged connection.
+
+        Separate from the connector because the two have different lifetimes: a
+        recording spans one worker connection, and the connector spans the
+        session those connections attach to.
+        """
+
+        if self._logger is None and self._recording_enabled():
             self._logger = SessionLogger(
                 self._recording_store,
                 max_bytes=self._recording_cfg.max_bytes,
@@ -258,13 +268,15 @@ class HostedSessionRuntime:
             )
             await self._logger.start(self.definition.session_id)
             self._recording_path = await self._recording_store.get_path(self.definition.session_id)
-        return connector
 
-    async def _stop_connector(self) -> None:
+    async def _stop_recording(self) -> None:
         if self._logger is not None:
             await self._logger.stop()
             self._logger = None
         self._recording_path = None
+
+    async def _stop_connector(self) -> None:
+        await self._stop_recording()
         connector = self._connector
         self._connector = None
         if connector is not None:
@@ -434,7 +446,17 @@ class HostedSessionRuntime:
         while not self._stop.is_set():
             self._state = "starting"
             try:
-                self._connector = await self._start_connector()
+                # Kept across worker reconnects rather than rebuilt with each
+                # one. A capture connector's socket is a rendezvous point that
+                # a running session connected to once, at exec: rebinding it
+                # leaves that session writing into a socket nobody holds, with
+                # no way to reconnect, and the terminal silently stops
+                # appearing anywhere. Only a connector that has actually failed
+                # is replaced.
+                if self._connector is None or not self._connector.is_connected():
+                    await self._stop_connector()
+                    self._connector = await self._start_connector()
+                await self._start_recording()
                 worker_url = self._ws_url() + f"/ws/worker/{self.definition.session_id}/term"
                 headers = {"Authorization": f"Bearer {self._worker_bearer_token}"} if self._worker_bearer_token else {}
                 async with websockets.connect(worker_url, additional_headers=headers, open_timeout=10) as ws:
@@ -485,6 +507,9 @@ class HostedSessionRuntime:
                 await asyncio.sleep(delay)
             finally:
                 self._connected = False
-                await self._stop_connector()
+                # The recording belongs to the connection that just ended; the
+                # connector belongs to the session and outlives it.
+                await self._stop_recording()
+        await self._stop_connector()
         self._state = "stopped"
         self._stopped_at = time.time()
