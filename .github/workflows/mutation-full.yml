@@ -42,7 +42,7 @@ jobs:
     outputs:
       paths: ${{ steps.gen.outputs.paths }}
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       # tomllib needs Python >= 3.11.
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
@@ -65,7 +65,7 @@ jobs:
         path: ${{ fromJson(needs.perimeter-matrix.outputs.paths) }}
     steps:
       # Full history so mutmut/git operations have the complete tree.
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
       # uv drives the gate (uv run) and the workspace install.
@@ -107,7 +107,7 @@ jobs:
       contents: read
       actions: read
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       # Enumerate the failing perimeter files into the run summary.
       - name: Report perimeter drift
         env:
