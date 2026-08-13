@@ -163,6 +163,11 @@ updates:
     commit-message:
       prefix: "docker"
       include: "scope"
+    # Patch only, unlike every other group here. These tags track language
+    # runtimes, where Dependabot's "minor" is a whole new interpreter: grouping
+    # minor swept python:3.11-slim -> python:3.14-slim into a routine batch on
+    # the first run. A base-image change that moves the runtime three versions
+    # is a decision, not churn, so it arrives on its own.
     groups:
       base-images:
         applies-to: version-updates
@@ -170,7 +175,6 @@ updates:
           - "*"
         update-types:
           - "patch"
-          - "minor"
 
   # Go: the client/server implementation in packages/provide-uterm-go. This had
   # no entry at all, which meant Dependabot never scanned go.mod — not for
