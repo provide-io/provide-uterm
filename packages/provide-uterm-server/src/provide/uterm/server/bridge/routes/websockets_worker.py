@@ -115,6 +115,18 @@ async def _handle_worker_hello(hub: TermHub, websocket: WebSocket, worker_id: st
     return False
 
 
+def _opt_int(value: Any) -> int | None:
+    """Coerce to ``int`` but preserve absence as ``None``.
+
+    Deliberately NOT ``_safe_int``, which substitutes a default: a worker that
+    predates the ingest counters must stay distinguishable from one reporting a
+    genuine zero. Collapsing the two would make "nothing was ever read" and
+    "this build cannot tell you" the same value — which is the exact ambiguity
+    these counters exist to remove.
+    """
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
 def _build_worker_frame(mtype: str, msg: dict[str, Any]) -> dict[str, Any]:
     """Build the validated wire frame for a worker control frame.
 
@@ -137,6 +149,12 @@ def _build_worker_frame(mtype: str, msg: dict[str, Any]) -> dict[str, Any]:
                 has_trailing_space=bool(msg.get("has_trailing_space", False)),
                 prompt_detected=cast("dict[str, Any] | None", msg.get("prompt_detected")),
                 raw_tail=cast("str | None", msg.get("raw_tail")),
+                # This frame is REBUILT from an explicit field list, so anything
+                # not named here is silently dropped in transit. The ingest
+                # counters are only useful end-to-end — forwarding them is what
+                # makes a frozen-screen report decisive at the consumer.
+                chunks_read=_opt_int(msg.get("chunks_read")),
+                bytes_read=_opt_int(msg.get("bytes_read")),
                 ts=_safe_float(msg.get("ts"), time.time()),
             ),
         )

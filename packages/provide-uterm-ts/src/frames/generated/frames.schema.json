@@ -1273,6 +1273,30 @@
       "additionalProperties": false,
       "description": "Worker-originated full-screen snapshot.",
       "properties": {
+        "bytes_read": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bytes Read"
+        },
+        "chunks_read": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chunks Read"
+        },
         "cols": {
           "anyOf": [
             {
