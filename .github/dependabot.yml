@@ -1,16 +1,18 @@
-# Dependabot configuration — SECURITY UPDATES ONLY.
+# Dependabot configuration — weekly, batched.
 #
-# Routine version-update PRs are DISABLED via open-pull-requests-limit: 0 on
-# every ecosystem: the batched weekly bumps were too noisy. Dependabot SECURITY
-# updates are a separate feature with their own internal limit (10) and are
-# UNAFFECTED by the 0 limit, so advisory-driven PRs still land — keeping the
-# supply-chain gap in docs/security-considerations.md §1 closed without the
-# routine churn. Routine bumps are now applied manually (uv lock --upgrade for
-# Python; npm / docker as needed).
+# Every ecosystem lands on Monday morning, and patch/minor bumps are grouped so
+# a week's transitive churn arrives as one PR per ecosystem rather than one per
+# package. That batching is the whole point: the noise that made this
+# unbearable was volume and frequency, not currency. A daily cadence, or an
+# ungrouped one, produces a queue nobody reads and stale deps anyway.
 #
-# The per-ecosystem entries are kept (not deleted) so security updates still
-# know which directories/registries to scan. Raise a limit above 0 to
-# temporarily re-enable scheduled version updates for that ecosystem.
+# Security updates are a separate Dependabot feature with their own internal
+# limit (10) and ignore the limits below entirely, so advisory-driven PRs land
+# regardless of cadence — keeping the supply-chain gap in
+# docs/security-considerations.md §1 closed.
+#
+# Major bumps are deliberately left out of every group: they arrive as their
+# own PRs because they are the ones that need reading.
 
 version: 2
 updates:
@@ -22,7 +24,7 @@ updates:
       day: "monday"
       time: "08:00"
       timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 0  # security updates only
+    open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "python"
@@ -50,7 +52,7 @@ updates:
       day: "monday"
       time: "08:00"
       timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 0  # security updates only
+    open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "javascript"
@@ -74,7 +76,7 @@ updates:
       day: "monday"
       time: "08:00"
       timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 0  # security updates only
+    open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "javascript"
@@ -98,13 +100,21 @@ updates:
       day: "monday"
       time: "08:00"
       timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 0  # security updates only
+    open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "javascript"
     commit-message:
       prefix: "deps"
       include: "scope"
+    groups:
+      transitive:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+          - "minor"
 
   # GitHub Actions: keeps workflow action versions current. Closes the
   # "GHA workflow pinning" gap in docs/security-considerations.md §9.
@@ -115,13 +125,23 @@ updates:
       day: "monday"
       time: "08:00"
       timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 0  # security updates only
+    open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "ci"
     commit-message:
       prefix: "ci"
       include: "scope"
+    # Every workflow here pins actions by commit SHA, so an ungrouped run would
+    # open one PR per action per week.
+    groups:
+      actions:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+          - "minor"
 
   # Docker base-image (digest) bumps for the reference server image
   # (docker/Dockerfile.server) and the Cloudflare Worker image
@@ -136,10 +156,80 @@ updates:
       day: "monday"
       time: "08:00"
       timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 0  # security updates only
+    open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "docker"
     commit-message:
       prefix: "docker"
       include: "scope"
+    groups:
+      base-images:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+          - "minor"
+
+  # Go: the client/server implementation in packages/provide-uterm-go. This had
+  # no entry at all, which meant Dependabot never scanned go.mod — not for
+  # routine bumps and not for advisories either, since security updates only
+  # reach ecosystems listed here.
+  - package-ecosystem: "gomod"
+    directory: "/packages/provide-uterm-go"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/Los_Angeles"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "go"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    groups:
+      transitive:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+          - "minor"
+
+  # NuGet: the C# implementation. Same omission as Go — unscanned until now.
+  # Note the restore is not pinned: there is no packages.lock.json in any of the
+  # five .csproj projects, so a resolved graph is whatever the registry serves
+  # at restore time. Dependabot can raise a direct-dependency advisory here, but
+  # transitive pinning needs the lock files.
+  # There is no .sln at the package root, so the projects are named by glob
+  # rather than trusting recursive discovery from a bare directory — an entry
+  # that resolves to no project files fails silently, which is the failure this
+  # whole entry exists to avoid.
+  - package-ecosystem: "nuget"
+    directories:
+      - "/packages/provide-uterm-csharp/src/*"
+      - "/packages/provide-uterm-csharp/tests/*"
+      - "/packages/provide-uterm-csharp/cmd/*"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/Los_Angeles"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "csharp"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    groups:
+      transitive:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+          - "minor"
