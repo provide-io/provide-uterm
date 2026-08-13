@@ -130,11 +130,10 @@ packages/provide-uterm-csharp/**/bin/
 packages/provide-uterm-csharp/**/obj/
 packages/provide-uterm-csharp/coverage-out/
 
-# Beads / Dolt files (added by bd init)
-.dolt/
+# SQLite artifacts. Kept after the Beads removal: this project genuinely uses
+# SQLite (the control-plane token store, the C# port), so un-ignoring *.db
+# would start surfacing stray test databases as untracked noise.
 *.db
-.beads-credential-key
-.beads/proxieddb/
 
 # vitest coverage output. Globbed rather than listed per package: the frontend
 # and app configs also set reportsDirectory "./coverage", and only the ts port
