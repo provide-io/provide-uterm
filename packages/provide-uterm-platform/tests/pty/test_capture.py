@@ -116,6 +116,32 @@ async def test_stop_cleans_up_socket_file() -> None:
         assert not Path(path).exists()
 
 
+async def test_stop_returns_while_a_producer_is_still_connected() -> None:
+    """A shim holds its connection open for as long as the session it captures.
+
+    ``Server.close()`` leaves established connections running, and since 3.12
+    ``wait_closed()`` waits for every handler task, so stopping used to block
+    until the captured session itself ended. The session runtime stops its
+    connector inside a retry loop, so one stop that never returned took the
+    whole session with it — output stopped reaching the browser while the
+    session still reported itself running.
+    """
+
+    with tempfile.TemporaryDirectory() as td:
+        path = str(Path(td) / "test.sock")
+        sock = CaptureSocket(path)
+        await sock.start()
+        _reader, writer = await asyncio.open_unix_connection(path)
+        writer.write(_make_frame(CHANNEL_STDOUT, b"live"))
+        await writer.drain()
+        await asyncio.sleep(0.05)
+        assert sock.read_nowait() is not None
+
+        await asyncio.wait_for(sock.stop(), timeout=5)
+        assert not Path(path).exists()
+        writer.close()
+
+
 async def test_stop_without_start_is_noop() -> None:
     with tempfile.TemporaryDirectory() as td:
         path = str(Path(td) / "test.sock")
