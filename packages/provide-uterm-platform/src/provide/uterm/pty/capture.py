@@ -19,6 +19,10 @@ logger = get_logger(__name__)
 CHANNEL_STDOUT = 0x01
 CHANNEL_STDIN = 0x02
 CHANNEL_CONNECT = 0x03
+# The shim's own writer counters, as an ASCII key=value line. Every other
+# channel says what the terminal did; this one says what the capture path
+# failed to deliver, which is otherwise invisible from this side.
+CHANNEL_STATS = 0x04
 
 _HEADER = struct.Struct(">BI")  # channel (1B) + length (4B big-endian)
 

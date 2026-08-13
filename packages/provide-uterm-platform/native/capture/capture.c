@@ -42,6 +42,18 @@
 #define CHANNEL_STDOUT  0x01
 #define CHANNEL_STDIN   0x02
 #define CHANNEL_CONNECT 0x03
+/* Writer counters, as an ASCII key=value line. The writer already counts every
+ * way a frame can fail to reach the consumer, and nothing carried those numbers
+ * out of the captured process — so capture that had stopped delivering looked
+ * exactly like a terminal that had gone quiet. */
+#define CHANNEL_STATS   0x04
+
+/* Reported no more often than this many capture attempts, so a burst of drops
+ * cannot itself become a burst of frames. Counted in attempts rather than in
+ * frames delivered: a writer that is dropping everything delivers nothing, and
+ * gating on success would silence the report exactly when it is the only way
+ * to learn that anything is wrong. */
+#define STATS_MIN_ATTEMPTS 64U
 
 #if defined(__GNUC__)
 #define UTERM_EXPORT __attribute__((visibility("default")))
@@ -52,6 +64,10 @@
 static atomic_int g_capture_fd = ATOMIC_VAR_INIT(-1);
 static atomic_uint g_writer_ready = ATOMIC_VAR_INIT(0U);
 static struct capture_writer g_writer = CAPTURE_WRITER_INITIALIZER;
+/* Captured at load, not read at exit: a captured process may rebuild its own
+ * environment before it ends — Black Betty's session sanitizes itself down to
+ * an allowlist — and getenv() in a destructor would then find nothing. */
+static char g_stats_path[4096];
 
 _Static_assert(ATOMIC_INT_LOCK_FREE == 2,
                "capture hooks require lock-free integer atomics");
@@ -102,11 +118,69 @@ static int capture_writer_start(int fd) {
     return 0;
 }
 
+/* Render the writer's counters into *buffer*. Shared by the stats frame and the
+ * exit report, so both say the same thing in the same shape. */
+static int format_stats(char *buffer, size_t size) {
+    struct capture_writer_stats stats;
+
+    capture_writer_get_stats(&g_writer, &stats);
+    return snprintf(buffer, size,
+                    "sent=%llu busy=%llu wouldblock=%llu invalid=%llu disabled=%llu "
+                    "enabled=%d ready=%u",
+                    (unsigned long long)stats.frames_sent,
+                    (unsigned long long)stats.dropped_busy,
+                    (unsigned long long)stats.dropped_would_block,
+                    (unsigned long long)stats.dropped_invalid,
+                    (unsigned long long)stats.disabled_errors,
+                    capture_writer_is_enabled(&g_writer),
+                    atomic_load_explicit(&g_writer_ready, memory_order_acquire));
+}
+
+/* Report the counters when a frame has failed to reach the consumer since the
+ * last report. Rate-limited by frames sent, and guarded against reporting from
+ * inside a report. */
+static void maybe_send_stats(void) {
+    static atomic_uint last_reported_losses = ATOMIC_VAR_INIT(0U);
+    static atomic_uint attempts = ATOMIC_VAR_INIT(0U);
+    static atomic_uint attempts_at_last_report = ATOMIC_VAR_INIT(0U);
+    static atomic_flag reporting = ATOMIC_FLAG_INIT;
+    struct capture_writer_stats stats;
+    unsigned losses;
+    char line[160];
+    int written;
+
+    capture_writer_get_stats(&g_writer, &stats);
+    losses = stats.dropped_busy + stats.dropped_would_block + stats.dropped_invalid +
+             stats.disabled_errors;
+    if (losses == atomic_load_explicit(&last_reported_losses, memory_order_relaxed)) {
+        return;
+    }
+    if (atomic_fetch_add_explicit(&attempts, 1U, memory_order_relaxed) + 1U <
+        atomic_load_explicit(&attempts_at_last_report, memory_order_relaxed) + STATS_MIN_ATTEMPTS) {
+        return;
+    }
+    if (atomic_flag_test_and_set_explicit(&reporting, memory_order_acquire)) {
+        return;
+    }
+    atomic_store_explicit(&last_reported_losses, losses, memory_order_relaxed);
+    atomic_store_explicit(&attempts_at_last_report,
+                          atomic_load_explicit(&attempts, memory_order_relaxed),
+                          memory_order_relaxed);
+    written = format_stats(line, sizeof(line));
+    if (written > 0) {
+        (void)capture_writer_emit(&g_writer, CHANNEL_STATS, line, (size_t)written);
+    }
+    atomic_flag_clear_explicit(&reporting, memory_order_release);
+}
+
 static void send_frame(uint8_t channel, const void *data, size_t len) {
     if (!atomic_load_explicit(&g_writer_ready, memory_order_acquire)) {
         return;
     }
     (void)capture_writer_emit(&g_writer, channel, data, len);
+    if (channel != CHANNEL_STATS) {
+        maybe_send_stats();
+    }
 }
 
 #ifdef __APPLE__
@@ -151,6 +225,11 @@ static void uterm_capture_init(void) {
     g_real_write   = (fn_write)  _itp_write.original;
     g_real_read    = (fn_read)   _itp_read.original;
     g_real_connect = (fn_connect)_itp_connect.original;
+
+    const char *stats_path = getenv("UTERM_CAPTURE_STATS_PATH");
+    if (stats_path && *stats_path) {
+        strncpy(g_stats_path, stats_path, sizeof(g_stats_path) - 1);
+    }
 
     const char *path = getenv("UTERM_CAPTURE_SOCKET");
     if (!path || !*path) return;
@@ -305,6 +384,11 @@ static void uterm_capture_init(void) {
     orig_tee     = (fn_tee)    dlsym(RTLD_NEXT, "tee");
     orig_sendfile = (fn_sendfile)dlsym(RTLD_NEXT, "sendfile");
     orig_copy_file_range = (fn_copy_file_range)dlsym(RTLD_NEXT, "copy_file_range");
+
+    const char *stats_path = getenv("UTERM_CAPTURE_STATS_PATH");
+    if (stats_path && *stats_path) {
+        strncpy(g_stats_path, stats_path, sizeof(g_stats_path) - 1);
+    }
 
     const char *path = getenv("UTERM_CAPTURE_SOCKET");
     if (!path || !*path) return;
@@ -506,3 +590,41 @@ UTERM_EXPORT int connect(int sockfd, const struct sockaddr *addr, socklen_t addr
 }
 
 #endif
+
+/* The counters a stats frame cannot deliver.
+ *
+ * A writer that has stopped reaching its consumer cannot report that over the
+ * socket it has stopped reaching — the frame saying so is dropped by whatever
+ * dropped the rest. Appending them to a file at exit is the one path that
+ * survives the failure it describes, which is precisely the case worth
+ * diagnosing: capture that stops mid-session while both ends look healthy.
+ *
+ * Off unless UTERM_CAPTURE_STATS_PATH names somewhere to write, so a deployed
+ * session does nothing here. */
+__attribute__((destructor))
+static void uterm_capture_report_stats(void) {
+    const char *path;
+    char line[192];
+    int written;
+    int fd;
+
+    /* Reported even when the writer never became ready: "this process was
+     * captured and never connected" is exactly the answer worth having, and
+     * staying silent makes it indistinguishable from a process that was fine. */
+    path = g_stats_path;
+    if (!*path) {
+        return;
+    }
+    written = format_stats(line, sizeof(line) - 2);
+    if (written <= 0) {
+        return;
+    }
+    line[written] = '\n';
+    written++;
+    fd = open(path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0600);
+    if (fd < 0) {
+        return;
+    }
+    (void)!write(fd, line, (size_t)written);
+    (void)close(fd);
+}
