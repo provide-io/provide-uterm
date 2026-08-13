@@ -32,6 +32,7 @@ from typing import Any
 
 from provide.uterm.pty.capture import (
     CHANNEL_CONNECT,
+    CHANNEL_STATS,
     CHANNEL_STDIN,
     CHANNEL_STDOUT,
     CaptureSocket,
@@ -88,6 +89,7 @@ class CaptureConnector:
         self._pending = ""  # new bytes not yet streamed to the browser
         self._connect_log: list[str] = []
         self._stdin_count = 0
+        self._shim_stats = ""
         self._stdin_writer: asyncio.StreamWriter | None = None
 
     async def start(self) -> None:
@@ -131,6 +133,11 @@ class CaptureConnector:
                 self._connect_log.append(addr)
                 if len(self._connect_log) > 100:
                     self._connect_log = self._connect_log[-100:]
+            elif frame.channel == CHANNEL_STATS:
+                # What the shim could not deliver. Kept out of the screen buffer
+                # and out of `changed`: it is the capture path describing itself,
+                # not something the terminal drew.
+                self._shim_stats = frame.data.decode("utf-8", errors="replace")[:200]
         if changed and self._pending:
             data, self._pending = self._pending, ""
             return [{"type": "term", "data": data}]
@@ -191,7 +198,8 @@ class CaptureConnector:
             f"CaptureConnector socket={self._socket_path!r} "
             f"connected={self._connected} buffer_len={len(self._buffer)} "
             f"stdin_keystrokes={self._stdin_count} "
-            f"outbound_connections={len(self._connect_log)}"
+            f"outbound_connections={len(self._connect_log)} "
+            f"shim[{self._shim_stats or 'no report yet'}]"
             + (f" recent_connect={self._connect_log[-1]!r}" if self._connect_log else "")
         )
 

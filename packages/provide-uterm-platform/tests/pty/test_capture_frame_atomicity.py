@@ -35,7 +35,7 @@ from shutil import which
 import pytest
 
 from provide.uterm.pty._build import get_capture_lib_path
-from provide.uterm.pty.capture import CHANNEL_STDIN, CHANNEL_STDOUT
+from provide.uterm.pty.capture import CHANNEL_STATS, CHANNEL_STDIN, CHANNEL_STDOUT
 
 # Each emitted line is exactly LINE_LEN bytes including the trailing newline and
 # is self-describing ("Txx-yyyy-PPP...\n") so the parser can spot any tearing.
@@ -155,7 +155,11 @@ def _parse_strict(raw: bytes) -> tuple[list[tuple[int, bytes]], bool]:
     while i + 5 <= len(raw):
         channel = raw[i]
         (length,) = struct.unpack(">I", raw[i + 1 : i + 5])
-        if channel not in (CHANNEL_STDOUT, CHANNEL_STDIN) or i + 5 + length > len(raw) or length > (1 << 20):
+        if (
+            channel not in (CHANNEL_STDOUT, CHANNEL_STDIN, CHANNEL_STATS)
+            or i + 5 + length > len(raw)
+            or length > (1 << 20)
+        ):
             corrupt = True
             break
         frames.append((channel, raw[i + 5 : i + 5 + length]))
