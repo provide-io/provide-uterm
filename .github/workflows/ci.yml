@@ -387,8 +387,7 @@ jobs:
       - name: Build and self-test native capture library
         if: matrix.python-version == '3.11'
         run: |
-          make -C packages/provide-uterm-platform/native/capture clean test all
-          cp packages/provide-uterm-platform/native/capture/libuterm_capture.so packages/provide-uterm-platform/src/provide/uterm/pty/_native/
+          make -C packages/provide-uterm-platform/native/capture clean test install
       - name: Run native capture LD_PRELOAD integration tests
         if: matrix.python-version == '3.11'
         run: uv run pytest packages/provide-uterm-platform/tests/pty/test_ld_preload_capture.py packages/provide-uterm-platform/tests/pty/test_capture_frame_atomicity.py -q --no-cov --timeout=30 -o "addopts=--import-mode=importlib"

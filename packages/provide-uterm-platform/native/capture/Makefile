@@ -15,7 +15,7 @@ else
     LDFLAGS = -shared -ldl
 endif
 
-.PHONY: all clean test
+.PHONY: all clean test install
 
 all: $(TARGET)
 
@@ -35,6 +35,14 @@ test: $(TEST_TARGET) $(TARGET) $(EARLY_TEST)
 		UTERM_CAPTURE_SOCKET=/run/uterm-preinit-missing.sock \
 		LD_PRELOAD=./$(TARGET) ./$(EARLY_TEST); \
 	fi
+
+# Where every consumer loads the library from. It is a build artifact, ignored
+# by git, and copying it by hand is how a checkout ends up running a library
+# built from sources that have since changed.
+NATIVE_DIR = ../../src/provide/uterm/pty/_native
+
+install: $(TARGET)
+	cp $(TARGET) $(NATIVE_DIR)/
 
 clean:
 	rm -f $(TARGET) $(TEST_TARGET) test_preload_early
