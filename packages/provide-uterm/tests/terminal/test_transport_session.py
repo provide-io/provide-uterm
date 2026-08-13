@@ -12,10 +12,13 @@ hook records that it was invoked.
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import TYPE_CHECKING, Any
 
 import pytest
 from provide.uterm.transport_session import TransportSession
+
+from provide.uterm import transport_session
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -463,3 +466,66 @@ async def test_is_connected_reflects_lifecycle() -> None:
     assert session.is_connected() is True
     await session.close()
     assert session.is_connected() is False
+
+
+# ---------------------------------------------------------------------------
+# Slow-chunk warning
+# ---------------------------------------------------------------------------
+
+
+class _StepClock:
+    """Stand-in for the ``time`` module whose monotonic advances a fixed step.
+
+    The reader loop measures its per-chunk work with ``time.monotonic()``, so a
+    real clock cannot cross the slow threshold here without actually sleeping
+    that long. Stepping the clock a fixed amount per reading makes the measured
+    elapsed exact and the test instant.
+    """
+
+    def __init__(self, step: float) -> None:
+        self._step = step
+        self._now = 0.0
+
+    def monotonic(self) -> float:
+        self._now += self._step
+        return self._now
+
+    def time(self) -> float:
+        return 1_700_000_000.0
+
+
+async def test_reader_loop_warns_when_a_chunk_is_slow(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A chunk whose processing crosses the threshold reports itself."""
+    monkeypatch.setattr(transport_session, "time", _StepClock(0.3))
+    session = _ConcreteSession(_FakeTransport([b"slow-chunk", ConnectionResetError("done")]))
+    session._connected = True
+
+    with caplog.at_level(logging.WARNING):
+        await session._reader_loop()
+
+    slow = [r.getMessage() for r in caplog.records if "reader_chunk_slow" in r.getMessage()]
+    assert len(slow) == 1
+    # The measured elapsed and the chunk it belongs to both reach the log — a
+    # warning that says only "something was slow" is not actionable.
+    assert "elapsed_s=0.300" in slow[0]
+    assert f"chunk_bytes={len(b'slow-chunk')}" in slow[0]
+
+
+async def test_reader_loop_stays_quiet_for_a_fast_chunk(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Below the threshold nothing is logged.
+
+    Pairs with the test above deliberately: without it, a threshold that always
+    fired would pass just as well, and this warning exists to be rare.
+    """
+    monkeypatch.setattr(transport_session, "time", _StepClock(0.01))
+    session = _ConcreteSession(_FakeTransport([b"fast", ConnectionResetError("done")]))
+    session._connected = True
+
+    with caplog.at_level(logging.WARNING):
+        await session._reader_loop()
+
+    assert not [r for r in caplog.records if "reader_chunk_slow" in r.getMessage()]

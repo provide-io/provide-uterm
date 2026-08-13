@@ -70,6 +70,62 @@ find_corpora() {
 stale=()
 checked=0
 
+# Regeneration happens IN PLACE — a generator writes its corpus beside itself,
+# so the only way to know whether the committed bytes still match is to let it
+# overwrite them and compare hashes. That made a failure destroy its own
+# evidence: by the time anyone looked, the file on disk held the NEW content and
+# the committed content was gone (in CI, with the workspace, entirely). A
+# NON-deterministic generator turned that into a red that could not be
+# investigated at all — `provide-uterm-ts/testdata/serverhijack_golden.json`
+# intermittently records a null body for the `snapshot_before_hijack` probe, and
+# because the failing run left the regenerated file behind, the next run
+# compared against the bad recording and passed. Twice on 2026-08-09/10 the only
+# trace was a red `quality-gate` with a clean tree.
+#
+# So: keep the committed bytes, and put the difference somewhere that outlives
+# the run.
+#   - Every corpus is copied off before its generator runs, and restored from
+#     that copy on exit (including a mid-write abort, hence the trap rather than
+#     a restore at the bottom). The tree is left as it was found, so a rerun
+#     re-tests the same baseline instead of a rewritten one, and genuine drift
+#     stays red until someone re-records it on purpose.
+#   - What the generator actually produced is saved under GOLDENS_REGEN_DIR and
+#     diffed into the log, so a flake's output can be read after the fact.
+#
+# Re-recording is NOT done through this script — run the generator directly, as
+# the failure message says. That is why an unconditional restore is safe here.
+_restore_dir="$(mktemp -d)"
+_restore_manifest="$_restore_dir/manifest"
+: > "$_restore_manifest"
+
+# Where the regenerated (rejected) content is kept for inspection. Overridable
+# so CI can point it at a path it uploads as an artifact.
+GOLDENS_REGEN_DIR="${GOLDENS_REGEN_DIR:-}"
+
+# How much of each diff to print inline. The full file is always saved.
+GOLDENS_DIFF_LINES="${GOLDENS_DIFF_LINES:-80}"
+
+# A corpus path flattened into a single filename, so copies from different
+# testdata directories cannot collide.
+_flatten_path() {
+  printf '%s' "${1#./}" | tr '/' '_'
+}
+
+_restore_corpora() {
+  local saved corpus
+  while IFS=$'\t' read -r saved corpus; do
+    # `cmp` first: copying back an identical file still bumps its mtime, and on
+    # a passing run that is every corpus in the repository. Written as an `if`
+    # rather than an `&&` chain because this runs from an EXIT trap under
+    # `set -e`, where a chain evaluating false is an error.
+    if [[ -f "$saved" ]] && ! cmp -s "$saved" "$corpus"; then
+      cp "$saved" "$corpus"
+    fi
+  done < "$_restore_manifest"
+  rm -rf "$_restore_dir"
+}
+trap _restore_corpora EXIT
+
 # Every generator under any package's testdata directory. Sorted so the output
 # order is stable between runs and between machines.
 while IFS= read -r generator; do
@@ -95,6 +151,12 @@ while IFS= read -r generator; do
     run=(uv run python "$generator")
   fi
 
+  # Stash the committed bytes before handing the file to the generator; the
+  # EXIT trap puts them back whatever happens next.
+  saved="$_restore_dir/$(_flatten_path "$corpus")"
+  cp "$corpus" "$saved"
+  printf '%s\t%s\n' "$saved" "$corpus" >> "$_restore_manifest"
+
   before="$(shasum -a 256 "$corpus" | cut -d' ' -f1)"
   "${run[@]}" >/dev/null
   after="$(shasum -a 256 "$corpus" | cut -d' ' -f1)"
@@ -103,6 +165,23 @@ while IFS= read -r generator; do
   if [[ "$before" != "$after" ]]; then
     echo "stale golden corpus: $corpus"
     echo "  regenerate with: ${run[*]}"
+
+    # Created on first failure only, so a passing run leaves no stray directory.
+    if [[ -z "$GOLDENS_REGEN_DIR" ]]; then
+      GOLDENS_REGEN_DIR="$(mktemp -d)"
+    fi
+    mkdir -p "$GOLDENS_REGEN_DIR"
+    regenerated="$GOLDENS_REGEN_DIR/$(_flatten_path "$corpus")"
+    cp "$corpus" "$regenerated"
+    echo "  what the generator produced: $regenerated"
+
+    # -L twice so the header names the two SIDES rather than a temp path.
+    # `|| true` twice: diff exits 1 on a difference (which is the expected case
+    # here), and head closing the pipe early would trip pipefail.
+    echo "  committed (-) vs regenerated (+), first ${GOLDENS_DIFF_LINES} lines:"
+    { diff -u -L "committed:$corpus" -L "regenerated:$corpus" "$saved" "$corpus" || true; } |
+      head -n "$GOLDENS_DIFF_LINES" | sed 's/^/    /' || true
+
     stale+=("$corpus")
   fi
 done < <(find_generators)
@@ -110,6 +189,10 @@ done < <(find_generators)
 if (( ${#stale[@]} > 0 )); then
   echo
   echo "FAIL: ${#stale[@]} golden corpus file(s) do not match the CPython reference."
+  if [[ -n "$GOLDENS_REGEN_DIR" ]]; then
+    echo "      Rejected output kept in: $GOLDENS_REGEN_DIR"
+    echo "      The working tree is unchanged — the committed corpora were restored."
+  fi
   exit 1
 fi
 

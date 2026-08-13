@@ -36,6 +36,11 @@ class TerminalDefaults:
     RECONNECT_MAX_RETRIES: int = 5  # reconnect attempts before giving up
     RECONNECT_BASE_BACKOFF_S: float = 0.5  # initial reconnect backoff (seconds)
     RECONNECT_MAX_BACKOFF_S: float = 30.0  # ceiling for reconnect backoff (seconds)
+    # Window used to coalesce change-driven snapshot pushes. A burst of terminal
+    # output arrives as many chunks within milliseconds, and a snapshot per chunk
+    # would put a fully rendered screen on the wire for each one; this bounds how
+    # long a screen change can stay unpublished without paying that cost.
+    SNAPSHOT_PUSH_DEBOUNCE_S: float = 0.1
 
     @classmethod
     def token_file(cls) -> Path:

@@ -11,9 +11,26 @@
 # where both branches return the same result). Such mutants survive forever and
 # would pin an otherwise-perfect package below 100%.
 #
-# Each [[equivalent]] entry is keyed by package + file + line + column + mutator
-# (exactly as gremlins reports them in its JSON output). Rules mirror the Python
-# gate:
+# Each [[equivalent]] entry is keyed by CONTENT, not coordinates:
+#
+#   package/file  where it lives
+#   mutator       gremlins' mutation type
+#   code          the source line, stripped — also what makes an entry reviewable
+#   occurrence    1-based among identical mutants on that line (omitted when 1;
+#                 none of the current four need it)
+#
+# It was package + file + line + column + mutator until 2026-08-12. Line numbers
+# belong to everything ABOVE a mutant, so an unrelated insertion invalidated
+# every entry below it — and because this file is a mutation support file,
+# renumbering it is itself a change that widens the next run. The C# port hit
+# exactly that (sixteen entries moved by a 6-line fix, and repairing them blew a
+# CI timeout); see ci/stryker_gate.py there. gremlins reports no replacement
+# text, so unlike the Stryker gates the key cannot include one.
+#
+# Editing the mutated line DOES invalidate its entry. That is intended: the
+# equivalence argument was about that code, so it has to be re-made.
+#
+# Rules mirror the Python gate:
 #   - `reason` MUST justify WHY the mutation is behaviorally equivalent. "I could
 #     not write a test" is NOT a reason — that is a missing test, not equivalence.
 #   - A NOT_COVERED mutant is NEVER excusable (it is a coverage gap).
@@ -28,9 +45,8 @@
 [[equivalent]]
 package = "sanitizer"
 file = "sanitizer.go"
-line = 79
-column = 19
 mutator = "CONDITIONALS_BOUNDARY"
+code = "if len(filtered) <= maxBytes {"
 reason = """\
 SanitizeKeystrokes: `len(filtered) <= maxBytes` -> `len(filtered) < maxBytes`. \
 When len(filtered) == maxBytes the original returns filtered, and the mutant \
@@ -42,9 +58,8 @@ can distinguish the two, so the mutant is behaviorally equivalent."""
 [[equivalent]]
 package = "colors"
 file = "rgb.go"
-line = 44
-column = 7
 mutator = "CONDITIONALS_BOUNDARY"
+code = "if v < 0 {"
 reason = """\
 clamp8: `if v < 0` -> `if v <= 0`. The only differing input is v == 0: the \
 original skips the branch and returns v (0); the mutant enters the branch and \
@@ -55,9 +70,8 @@ them — behaviorally equivalent."""
 [[equivalent]]
 package = "colors"
 file = "rgb.go"
-line = 47
-column = 7
 mutator = "CONDITIONALS_BOUNDARY"
+code = "if v > 255 {"
 reason = """\
 clamp8: `if v > 255` -> `if v >= 255`. The only differing input is v == 255: \
 the original skips the branch and returns v (255); the mutant enters the branch \
@@ -67,9 +81,8 @@ for every input — behaviorally equivalent."""
 [[equivalent]]
 package = "frames"
 file = "extras.go"
-line = 19
-column = 40
 mutator = "ARITHMETIC_BASE"
+code = "out := make(map[string]any, len(known)+len(extra))"
 reason = """\
 marshalWithExtras: `make(map[string]any, len(known)+len(extra))` -> \
 `... len(known)-len(extra)`. The second argument to make(map, n) is only a \

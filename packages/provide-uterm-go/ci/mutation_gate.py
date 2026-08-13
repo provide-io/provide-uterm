@@ -144,22 +144,81 @@ ALLOWLIST_FILE = MODULE_ROOT / "mutation_equivalents.toml"
 OK_STATUSES = frozenset({"KILLED", "NOT_VIABLE", "SKIPPED"})
 
 
-def load_allowlist() -> dict[tuple[str, str, int, int, str], str]:
-    """Return {(package, file, line, column, mutator): reason} from the TOML."""
+# Allowlist key: CONTENT, not coordinates — the same change the C# and TS gates
+# took on 2026-08-12, for the same reason. A line number is a property of
+# everything ABOVE a mutant, so an unrelated insertion moved every entry below
+# it; and because this file is a mutation support file, renumbering it is itself
+# a change that widens the next run. See ci/stryker_gate.py in the C# port for
+# the incident.
+#
+#   package/file  where it lives
+#   mutator       gremlins' mutation type
+#   code          the source line, stripped — also what makes an entry reviewable
+#   occurrence    1-based among identical mutants on that line (omitted when 1)
+#
+# gremlins reports no replacement text, so unlike the Stryker gates the key
+# cannot include one; `code` plus `occurrence` carries the discrimination
+# instead. Two CONDITIONALS_BOUNDARY mutants on one `if a > 0 && b > 0` differ
+# only by occurrence.
+AllowKey = tuple[str, str, str, str, int]
+
+
+def source_line(package: str, file_name: str, line: int) -> str:
+    """The stripped source line a mutant sits on, read from the working tree."""
+    path = MODULE_ROOT / package / file_name
+    if not path.is_file():
+        return ""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    return lines[line - 1].strip() if 0 <= line - 1 < len(lines) else ""
+
+
+def file_keys(package: str, file_entry: dict) -> dict[int, AllowKey]:
+    """Map each mutation's index in one report file entry to its content key.
+
+    `occurrence` counts over EVERY mutation reported for the file, not just the
+    surviving ones, so a mutant that starts or stops being killed cannot
+    renumber its neighbours.
+    """
+    file_name = file_entry["file_name"]
+    mutations = file_entry.get("mutations", [])
+    order = sorted(
+        range(len(mutations)),
+        key=lambda i: (int(mutations[i]["line"]), int(mutations[i]["column"]), mutations[i]["type"]),
+    )
+    counts: dict[tuple[str, str], int] = {}
+    out: dict[int, AllowKey] = {}
+    for index in order:
+        mutation = mutations[index]
+        code = source_line(package, file_name, int(mutation["line"]))
+        shape = (mutation["type"], code)
+        counts[shape] = counts.get(shape, 0) + 1
+        out[index] = (package, file_name, mutation["type"], code, counts[shape])
+    return out
+
+
+def load_allowlist() -> dict[AllowKey, str]:
+    """Return {(package, file, mutator, code, occurrence): reason} from the TOML."""
     if not ALLOWLIST_FILE.exists():
         return {}
     data = tomllib.loads(ALLOWLIST_FILE.read_text(encoding="utf-8"))
-    out: dict[tuple[str, str, int, int, str], str] = {}
+    out: dict[AllowKey, str] = {}
     for entry in data.get("equivalent", []):
-        key = (
+        key: AllowKey = (
             entry["package"],
             entry["file"],
-            int(entry["line"]),
-            int(entry["column"]),
             entry["mutator"],
+            entry["code"],
+            int(entry.get("occurrence", 1)),
         )
         out[key] = entry["reason"]
     return out
+
+
+def describe(key: AllowKey) -> str:
+    """One-line rendering of a key, for stale-entry warnings."""
+    package, file_name, mutator, code, occurrence = key
+    nth = f" #{occurrence}" if occurrence > 1 else ""
+    return f"{package}/{file_name} {mutator}{nth} in {code!r}"
 
 
 def exclude_file_args(package: str, only_files: tuple[str, ...]) -> list[str]:
@@ -274,14 +333,17 @@ def check_package(
     failures: list[str] = []
     for file_entry in report.get("files", []):
         fname = file_entry["file_name"]
-        for mut in file_entry.get("mutations", []):
+        keys_by_index = file_keys(package, file_entry)
+        for index, mut in enumerate(file_entry.get("mutations", [])):
             status = mut["status"]
             if status == "KILLED":
                 killed += 1
                 continue
             if status in OK_STATUSES:
                 continue
-            key = (package, fname, int(mut["line"]), int(mut["column"]), mut["type"])
+            key = keys_by_index[index]
+            # Coordinates remain the most useful thing to PRINT — they are just
+            # no longer what an entry is matched on.
             loc = f"{package}/{fname}:{mut['line']}:{mut['column']} {mut['type']} [{status}]"
             if status == "LIVED" and key in allowlist:
                 used.add(key)
@@ -372,7 +434,7 @@ def main() -> int:
 
     stale = sorted(set(allowlist) - used)
     for key in stale:
-        print(f"  [WARN] stale allowlist entry (no longer a survivor): {key[0]}/{key[1]}:{key[2]}:{key[3]} {key[4]}")
+        print(f"  [WARN] stale allowlist entry (no longer a survivor): {describe(key)}")
 
     # Elapsed against the budget, so a run drifting toward the ceiling is
     # visible in a passing log rather than only in the failing one.

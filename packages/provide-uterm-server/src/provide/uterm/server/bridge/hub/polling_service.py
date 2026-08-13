@@ -33,10 +33,12 @@ contract.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import re
 import time
 from typing import TYPE_CHECKING, Any
 
+from provide.telemetry import get_logger
 from provide.uterm.server.bridge.rest_helpers import (
     PromptRegexError,
     compile_expect_regex,
@@ -48,6 +50,9 @@ from provide.uterm.server.bridge.rest_helpers import (
 if TYPE_CHECKING:
     from provide.uterm.server.bridge.hub.core import TermHub
     from provide.uterm.server.bridge.models import WorkerTermState
+
+
+logger = get_logger(__name__)
 
 
 class PollingCoordinator:
@@ -93,6 +98,31 @@ class PollingCoordinator:
             if snap is not None and snap.get("ts", 0) > req_ts:
                 return snap
             await asyncio.sleep(0.08)
+        # Timed out: no snapshot NEWER than this request arrived. The caller
+        # gets None and typically falls back to the cached last_snapshot, so a
+        # client sees a stale screen that is indistinguishable from an idle
+        # one. Record the staleness explicitly — a poll that silently returns
+        # old state is exactly how a wedged worker looks like a quiet game.
+        #
+        # Narrowed since TermBridge began PUSHING snapshots on screen change:
+        # the loop above accepts any snapshot fresher than req_ts, so a push
+        # that happens to land inside the window releases the wait and this
+        # warning never fires — even if request_snapshot reached nobody. So a
+        # silent period here means "no fresh screen state arrived by any route",
+        # NOT "the request path works". A request path broken on a busy screen
+        # is now invisible to this diagnostic; only a quiet screen exposes it.
+        # test_unsolicited_snapshot_integration.py pins that behaviour.
+        stale_age = None
+        if snap is not None:
+            with contextlib.suppress(TypeError, ValueError):
+                stale_age = round(req_ts - float(snap.get("ts", 0)), 3)
+        logger.warning(
+            "snapshot_wait_timeout",
+            worker_id=worker_id,
+            timeout_ms=timeout_ms,
+            had_cached=snap is not None,
+            cached_age_s=stale_age,
+        )
         return None
 
     @staticmethod

@@ -3,19 +3,37 @@
 #
 # Genuinely equivalent mutants for the C# mutation gate (ci/mutation_gate.py).
 # Format: file is path relative to src/Provide.Uterm/.
+#
+# Keyed by CONTENT, not coordinates, since 2026-08-12:
+#   file/package  where it lives
+#   mutator       this gate's mutator name (and_or / or_and)
+#   code          the source line, stripped — also what makes an entry reviewable
+#   original      the operator that was replaced
+#   replacement   what replaced it
+#   occurrence    1-based among identical flips on that line (omitted when 1)
+#
+# It used to be file + package + line + mutator. A line number is a property of
+# everything ABOVE a mutant, so an unrelated edit moved every entry below it —
+# and because this file is a mutation support file, repairing the numbers is
+# itself a change that forces a full-perimeter run. See the note at the top of
+# ci/stryker_gate.py for the incident that prompted this.
 
 [[equivalent]]
-package = "Provide.Uterm"
 file = "DeckMux/PresenceService.cs"
-line = 357
+package = "Provide.Uterm"
 mutator = "or_and"
+code = "if (!ok || user is null)"
+original = "||"
+replacement = "&&"
 reason = "JsonElement.ValueKind switch arms: True/False branches are exclusive; flipping || to && on ValueKind checks is observationally equivalent for valid JSON booleans (the default arm already covers other kinds)."
 
 [[equivalent]]
 file = "Auth/Auth.cs"
 package = "Provide.Uterm"
-line = 119
 mutator = "or_and"
+code = "if (line.Length == 0 || line.StartsWith('#'))"
+original = "||"
+replacement = "&&"
 reason = """\
 Empty-line / comment skip: (Length==0 || StartsWith('#')). Flipping to && never \
 skips a pure comment line the same way as ||, but both paths still end in \
@@ -26,8 +44,10 @@ returns null either way for comment-only files. \
 [[equivalent]]
 file = "Channels/Channels.cs"
 package = "Provide.Uterm"
-line = 125
 mutator = "or_and"
+code = "if (string.IsNullOrEmpty(raw) || !ControlChannelCodec.IsControlFrame(raw))"
+original = "||"
+replacement = "&&"
 reason = """\
 ParseChannelHello early exit: IsNullOrEmpty(raw) || !IsControlFrame(raw). \
 Flipping to && still returns null for empty and non-frame inputs because \
@@ -35,21 +55,34 @@ DecodeFrames yields no ControlChunk hello — observationally equivalent. \
 """
 
 # ---------------------------------------------------------------------------
-# Stryker.NET gate (ci/stryker_gate.py). Format differs from the [[equivalent]]
-# entries above (that allowlist belongs to the older hand-rolled &&/|| gate,
-# ci/mutation_gate.py, and keys on line + mutator name only): Stryker reports
-# a (line, column) pair per mutant because several mutants often share a line,
-# and its mutatorName strings ("Boolean mutation", "Statement mutation", …)
-# come from Stryker's own vocabulary, not ours. Keyed by
-# (file relative to src/Provide.Uterm/, line, column, mutatorName) exactly as
-# ci/stryker_gate.py reads them out of mutation-report.json.
+# Stryker.NET gate (ci/stryker_gate.py). Separate from the [[equivalent]]
+# entries above, which belong to the older hand-rolled &&/|| gate
+# (ci/mutation_gate.py); the two differ only in their mutator vocabulary —
+# Stryker's names ("Boolean mutation", "Statement mutation", …) come from
+# Stryker itself, not from us.
+#
+# Both sections use the same CONTENT key:
+#   (file, mutator, code, original, replacement, occurrence)
+#
+# where `code` is the stripped source line, `original`/`replacement` are the
+# exact span Stryker reports swapping, and `occurrence` (omitted when 1)
+# separates mutants in one file identical in all of the above. It is derived
+# entirely from source text, so it does not move when unrelated lines do.
+#
+# Until 2026-08-12 this keyed on (file, line, column, mutatorName). That failed
+# in both directions: a 6-line fix in Webhooks.Delivery.cs invalidated all
+# sixteen entries for that file at once, and coordinates were not unique either
+# (the TS port had five coordinates each covering more than one mutant, so one
+# reason silently excused several). Editing the mutated line still invalidates
+# its entry — that is intended, the equivalence argument was about that code.
 # ---------------------------------------------------------------------------
 
 [[stryker_equivalent]]
 file = "Server/EgressAddressPolicy.cs"
-line = 142
-column = 37
 mutator = "Null coalescing mutation (remove left)"
+code = "return IPAddress.IsLoopback(v4 ?? ip);"
+original = "v4 ?? ip"
+replacement = "ip"
 reason = """\
 IsLoopback: `IPAddress.IsLoopback(v4 ?? ip)`. .NET's own IPAddress.IsLoopback \
 already special-cases an IPv4-mapped IPv6 address internally (it maps to IPv4 \
@@ -63,9 +96,11 @@ this one call site's use of it is redundant."""
 
 [[stryker_equivalent]]
 file = "Server/EgressAddressPolicy.cs"
-line = 273
-column = 24
 mutator = "Boolean mutation"
+code = "return false;"
+original = "false"
+replacement = "true"
+occurrence = 4
 reason = """\
 Cidr.Contains: `if (address.Length != _network.Length) return false;`. `Cidr` \
 is a `private` nested struct (not `internal`), so it is unreachable from any \
@@ -78,9 +113,10 @@ missing test."""
 
 [[stryker_equivalent]]
 file = "Server/WebhookEgress.cs"
-line = 35
-column = 81
 mutator = "Boolean mutation"
+code = "await Dns.GetHostAddressesAsync(host, cancellationToken).ConfigureAwait(false);"
+original = "false"
+replacement = "true"
 reason = """\
 DnsHostResolver.ResolveAsync: `.ConfigureAwait(false)` on the one production \
 DNS call. ASP.NET Core (unlike ASP.NET Framework) installs no \
@@ -88,13 +124,14 @@ SynchronizationContext, and the xUnit console runner installs none either, so \
 `ConfigureAwait(true)` and `(false)` resume on the same thread-pool context \
 either way — no test in or out of process can observe a difference. Same \
 reasoning applies to every other ConfigureAwait boolean on this allowlist \
-(Webhooks.Delivery.cs:249,309,362,420,435)."""
+(Webhooks.Delivery.cs:255,315,368,426,441)."""
 
 [[stryker_equivalent]]
 file = "Server/WebhookEgress.cs"
-line = 241
-column = 61
 mutator = "Boolean mutation"
+code = "return new WebhookEgressDecision(false, true, ReasonLoopback);"
+original = "true"
+replacement = "false"
 reason = """\
 CheckAddresses' loopback refusal: `return new WebhookEgressDecision(false, \
 true, ReasonLoopback);` — the `Loopback` field on a *refused* decision. The \
@@ -108,9 +145,10 @@ other reader, `ValidateUrl`, reads `.Reason`, never `.Loopback`."""
 
 [[stryker_equivalent]]
 file = "Server/WebhookEgress.cs"
-line = 253
-column = 58
 mutator = "String mutation"
+code = "return new WebhookEgressDecision(true, loopback, \"\");"
+original = "\"\""
+replacement = "\"Stryker was here!\""
 reason = """\
 CheckAddresses' success path: `return new WebhookEgressDecision(true, \
 loopback, "");` — the empty `Reason` on an *allowed* decision. `.Reason` is \
@@ -121,9 +159,11 @@ codebase. `ClassifyDelivery` does not read `.Reason` at all."""
 
 [[stryker_equivalent]]
 file = "Server/WebhookEgress.cs"
-line = 256
-column = 78
 mutator = "Boolean mutation"
+code = "private static WebhookEgressDecision Refuse(string reason) => new(false, false, reason);"
+original = "false"
+replacement = "true"
+occurrence = 2
 reason = """\
 `Refuse(reason) => new(false, false, reason)` — same reasoning as line 241: \
 `Refuse` always pairs `Allowed = false` with this `Loopback` value, and \
@@ -132,23 +172,26 @@ reason = """\
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 249
-column = 77
 mutator = "Boolean mutation"
+code = "await PostAsync(cfg, evt, cancellationToken).ConfigureAwait(false);"
+original = "false"
+replacement = "true"
 reason = "ConfigureAwait boolean — see the WebhookEgress.cs:35 entry for the shared reasoning (no SynchronizationContext in this codebase's runtime or test host)."
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 309
-column = 37
 mutator = "Boolean mutation"
+code = ".ConfigureAwait(false))"
+original = "false"
+replacement = "true"
 reason = "ConfigureAwait boolean — see the WebhookEgress.cs:35 entry."
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 348
-column = 13
 mutator = "Logical mutation"
+code = "if (timestamp is not null && signature is not null)"
+original = "timestamp is not null && signature is not null"
+replacement = "timestamp is not null || signature is not null"
 reason = """\
 PostAsync's signing-header guard: `if (timestamp is not null && signature is \
 not null)`. The two locals are set together three lines earlier — `if \
@@ -161,30 +204,34 @@ break the always-paired symmetry and are correctly killed.)"""
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 321
-column = 91
 mutator = "Boolean mutation"
+code = "await Task.Delay(_retryDelays[attempt], cancellationToken).ConfigureAwait(false);"
+original = "false"
+replacement = "true"
 reason = "ConfigureAwait boolean (the retry-ladder Task.Delay) — see the WebhookEgress.cs:35 entry."
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 362
-column = 33
 mutator = "Boolean mutation"
+code = ".ConfigureAwait(false);"
+original = "false"
+replacement = "true"
 reason = "ConfigureAwait boolean — see the WebhookEgress.cs:35 entry."
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 428
-column = 72
 mutator = "Boolean mutation"
+code = "await Task.WhenAll(workers.Select(w => w.Loop)).ConfigureAwait(false);"
+original = "false"
+replacement = "true"
 reason = "ConfigureAwait boolean (the Task.WhenAll awaiting every worker's Loop) — see the WebhookEgress.cs:35 entry."
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 416
-column = 13
 mutator = "Statement mutation"
+code = "_workers.Clear();"
+original = "_workers.Clear();"
+replacement = ";"
 reason = """\
 ShutdownAsync: `_workers.Clear();`, one statement before `_webhooks.Clear();` \
 (itself real and killed — a dedicated test asserts GetWebhook returns null \
@@ -196,16 +243,18 @@ even re-invoking it via a stale entry is a silent no-op, not a crash."""
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 420
-column = 54
 mutator = "Boolean mutation"
+code = "await _shutdown.CancelAsync().ConfigureAwait(false);"
+original = "false"
+replacement = "true"
 reason = "ConfigureAwait boolean — see the WebhookEgress.cs:35 entry."
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 423
-column = 13
 mutator = "Statement mutation"
+code = "worker.Release();"
+original = "worker.Release();"
+replacement = ";"
 reason = """\
 ShutdownAsync's cleanup loop: `worker.Release();`. Proven redundant here (not \
 assumed): the *statement* mutant on the line above it — `await \
@@ -220,9 +269,10 @@ captured `workers` list."""
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 430
-column = 9
 mutator = "Statement mutation"
+code = "_http?.Dispose();"
+original = "_http?.Dispose();"
+replacement = ";"
 reason = """\
 ShutdownAsync: `_http?.Dispose();`. `_http` is a private field with no public \
 accessor and no caller that touches it after shutdown (the manager is done); \
@@ -233,9 +283,10 @@ externally observable effect through this type's public surface."""
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 431
-column = 9
 mutator = "Statement mutation"
+code = "_shutdown.Dispose();"
+original = "_shutdown.Dispose();"
+replacement = ";"
 reason = """\
 ShutdownAsync: `_shutdown.Dispose();`. Same reasoning as line 430: a private \
 CancellationTokenSource with no public accessor; disposing it after every \
@@ -244,16 +295,18 @@ effect any test can observe."""
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 435
-column = 83
 mutator = "Boolean mutation"
+code = "public async ValueTask DisposeAsync() => await ShutdownAsync().ConfigureAwait(false);"
+original = "false"
+replacement = "true"
 reason = "ConfigureAwait boolean (DisposeAsync's ShutdownAsync call) — see the WebhookEgress.cs:35 entry."
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 467
-column = 13
 mutator = "Statement mutation"
+code = "_unsubscribe();"
+original = "_unsubscribe();"
+replacement = ";"
 reason = """\
 DeliveryWorker.Release: `_unsubscribe();`. EventBus.Enqueue takes a snapshot \
 of a worker's subscriber list under its own lock at publish time \
@@ -267,9 +320,10 @@ effect a black-box test can assert on here."""
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 468
-column = 13
 mutator = "Statement mutation"
+code = "_cancel.Cancel();"
+original = "_cancel.Cancel();"
+replacement = ";"
 reason = """\
 DeliveryWorker.Release: `_cancel.Cancel()`. Its only externally-relevant \
 effect — unblocking the worker's own delivery-loop Task, which is otherwise \
@@ -285,9 +339,10 @@ counter, log, or return value differs on."""
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 469
-column = 13
 mutator = "Statement mutation"
+code = "_cancel.Dispose();"
+original = "_cancel.Dispose();"
+replacement = ";"
 reason = """\
 DeliveryWorker.Release: `_cancel.Dispose();`. A private CancellationTokenSource \
 with no accessor; disposing it after both this worker's and the parent's \
@@ -296,9 +351,11 @@ cancellation have already been requested has no effect any test can observe \
 
 [[stryker_equivalent]]
 file = "Server/Webhooks.Delivery.cs"
-line = 464
-column = 17
 mutator = "Statement mutation"
+code = "return;"
+original = "return;"
+replacement = ";"
+occurrence = 5
 reason = """\
 DeliveryWorker.Release's idempotency guard: `return;` inside \
 `if (Interlocked.Exchange(ref _released, 1) != 0)`. Removing it would only be \
@@ -319,9 +376,10 @@ discipline, this entry should be revisited."""
 
 [[stryker_equivalent]]
 file = "ServerConfig/Load.cs"
-line = 458
-column = 100
 mutator = "Null coalescing mutation (remove left)"
+code = "if (t.TryGetValue(\"max_sessions\", out var maxSessions)) s.MaxSessions = ToInt(maxSessions, s.MaxSessions ?? 0);"
+original = "s.MaxSessions ?? 0"
+replacement = "0"
 reason = """\
 ApplyServer: `s.MaxSessions = ToInt(maxSessions, s.MaxSessions ?? 0)` — the \
 fallback ToInt uses if the TOML value fails to parse as an int. `MaxSessions` \
@@ -341,9 +399,10 @@ survives."""
 
 [[stryker_equivalent]]
 file = "ServerConfig/Load.cs"
-line = 578
-column = 31
 mutator = "Statement mutation"
+code = "if (team.Length == 0) return;"
+original = "return;"
+replacement = ";"
 reason = """\
 ApplyCfAccessTeamDomain: `if (team.Length == 0) return;` on line 578, the \
 *first* of two identical empty-string guards (the second is line 591, after \

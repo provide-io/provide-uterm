@@ -103,7 +103,7 @@ The full service map (with one-line descriptions of each) is in the docstring of
 ## Testing
 
 - **100% branch+line coverage** enforced (`--cov-fail-under=100`)
-- **Mutation testing** enforced changed-only at `killed==100` (`--min-mutation-score 100`) on a curated `source_paths` perimeter (security-critical surfaces + refactor #16 hub services + frame schemas + `manager/process_impl`). CI runs `scripts/run_mutation_gate.py --changed-only`; source changes select the touched perimeter files, while mutation support-file changes (`mutation_equivalents.toml`, mutmut config, gate scripts, or mutation test files) no longer silently pass with zero mutants and instead force an explicit perimeter decision. The perimeter is **fully enabled — nothing deferred**, but it is **not currently green**. `registry.py`, `routes/`, `webhooks.py`, `config_schema.py`, `connection.py`, `lease.py`, `detector.py`, and `manager/process_impl.py` were all driven to `killed==100` by 2026-06-02 (the 2026-06-01 "measured infeasible" audit was superseded once the mutmut `os.wait()` child-reaping crash was root-caused — see `docs/mutmut-survivors-triage.md` Wave 7). `routes/` then **regressed on 2026-07-23**: `9bc4dd0c` moved the session handlers out of `@router.*` decorators into undecorated `*_capability_handlers` factories, and because mutmut skips decorated functions, ~2600 mutants went live at once behind tests whose line coverage was — and stayed — 100%. `test_routes_capability_mutation_killing.py` restores `sse.py` and lifts `sessions.py`'s shared handler skeleton; `profiles`, `tunnels`, `webhooks`, `pam_events`, `route_defs`, and `sessions`' handler bodies are still short, so the full-perimeter job stays red until those are done. Do not read a red `mutation-full` run as "the standing failure" — it had been red for nine weeks when the 2026-07-23 regression landed, which is why `.github/workflows/mutation-full.yml` now files and refreshes a tracking issue naming the exact failing paths. `manager/process.py`+`config.py` are NOT targets (0-mutant: a re-export shim + a Pydantic model). Genuinely-equivalent mutants are excused via the documented-equivalent allowlist `mutation_equivalents.toml` (a `timeout` is excusable ONLY for an allowlisted mutant) — e.g. `auth.py` is 100% after subtracting 11 such equivalents (94.02% raw). When a perimeter file is split for the 777-LOC limit, the extracted sibling module is added to `source_paths` so its mutants stay enforced. See `MUTATION_PATTERNS.md` for patterns and `[tool.mutmut]` in root `pyproject.toml` for the full path list + per-file obstacle notes.
+- **Mutation testing** enforced changed-only at `killed==100` (`--min-mutation-score 100`) on a curated `source_paths` perimeter (security-critical surfaces + refactor #16 hub services + frame schemas + `manager/process_impl`). CI runs `scripts/run_mutation_gate.py --changed-only`; source changes select the touched perimeter files, while mutation support-file changes (`mutation_equivalents.toml`, mutmut config, gate scripts, or mutation test files) no longer silently pass with zero mutants and instead force an explicit perimeter decision. The perimeter is **fully enabled — nothing deferred — and green**: all 37 legs of the full-perimeter run passed on 2026-08-11 (run `31518962002`, commit `98c462f4`), the first green since 2026-06-14. `registry.py`, `routes/`, `webhooks.py`, `config_schema.py`, `connection.py`, `lease.py`, `detector.py`, and `manager/process_impl.py` were all driven to `killed==100` by 2026-06-02 (the 2026-06-01 "measured infeasible" audit was superseded once the mutmut `os.wait()` child-reaping crash was root-caused — see `docs/mutmut-survivors-triage.md` Wave 7). `routes/` then **regressed on 2026-07-23** and was repaired over 2026-08-09..10: `9bc4dd0c` moved the session handlers out of `@router.*` decorators into undecorated `*_capability_handlers` factories, and because **mutmut skips decorated functions**, ~2600 mutants went live at once behind tests whose line coverage was — and stayed — 100%. Watch for that mechanism on any de-decorating refactor; line coverage will not warn you. All seven `routes/` files are now at zero survivors. Do not read a red `mutation-full` run as "the standing failure" — and do not read a red *leg* as a mutation failure without opening its log, since a runner/TLS fault during checkout also reports as a failing leg. The `report` job writes the failing leg names to the run summary (`ci/report_mutation_full_failure.sh`), split into **drift** (the leg failed inside its `Mutation gate:` step — a real surviving mutant) and **not drift** (it failed in checkout/setup, which says nothing about the perimeter); it deliberately does **not** file a GitHub issue, and because it is gated on `needs.mutation-gate-full.result != 'success'` it does not run at all on a green run. **The cron is advisory by decision, not by omission** (2026-08-12): a weekly post-merge run has nothing to block, and making it a required check would only hold `main` red until someone fixed it — which is exactly the state that let it sit red for nine weeks unread. Instead `ci.yml`'s `quality` job runs `ci/report_perimeter_status.sh`, which echoes the last full-perimeter result into *your* push's run summary when it is red and prints nothing when it is green. That gives the scheduled run the audience it never had, without gating anything or adding write permissions. `manager/process.py`+`config.py` are NOT targets (0-mutant: a re-export shim + a Pydantic model). Genuinely-equivalent mutants are excused via the documented-equivalent allowlist `mutation_equivalents.toml` (a `timeout` is excusable ONLY for an allowlisted mutant) — e.g. `auth.py` is 100% after subtracting 11 such equivalents (94.02% raw). When a perimeter file is split for the 777-LOC limit, the extracted sibling module is added to `source_paths` so its mutants stay enforced. **Allowlist keys:** the three port gates (Go, C#, TS) key their allowlists on mutation *content* — `(file, mutator, code, original, replacement, occurrence)`, where `code` is the stripped source line — so an unrelated insertion above an entry no longer invalidates it, and one entry can no longer excuse several mutants at the same coordinates. They were `file:line:column:mutator` until 2026-08-12; that key broke sixteen C# entries at once on a 6-line fix, and repairing an allowlist is itself a support-file change that forces a full-perimeter run. Python's root `mutation_equivalents.toml` is the exception: it keys on mutmut's `…__mutmut_<n>` ids, which are function-scoped (an edit elsewhere in the file does not shift them) but still renumber when the mutant count inside that function changes. mutmut exposes no per-mutant content in its results output, so the same fix does not port over as-is. See `MUTATION_PATTERNS.md` for patterns and `[tool.mutmut]` in root `pyproject.toml` for the full path list + per-file obstacle notes.
 - `asyncio_mode = "auto"` — async tests don't need `@pytest.mark.asyncio`
 - Test markers: `playwright`, `mutant`, `memray`, `slow`, `e2e`, `real_cf`
 - Default testpaths: `packages/provide-uterm/tests`, `packages/provide-uterm-cloudflare/tests`
@@ -145,59 +145,3 @@ To add a new frame type:
 3. Commit `schemas.py`, `frames.schema.json`, and `frames.ts` together.
 
 Pre-commit + CI run `scripts/codegen_frames.py --check` to catch drift.
-
-
-<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:6cd5cc61 -->
-## Beads Issue Tracker
-
-This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
-
-### Quick Reference
-
-```bash
-bd ready              # Find available work
-bd show <id>          # View issue details
-bd update <id> --claim  # Claim work
-bd close <id>         # Complete work
-```
-
-### Rules
-
-- Use `bd` for ALL task tracking — do NOT use TodoWrite, TaskCreate, or markdown TODO lists
-- Run `bd prime` for detailed command reference and session close protocol
-- Use `bd remember` for persistent knowledge — do NOT use MEMORY.md files
-
-**Architecture in one line:** issues live in a local Dolt DB; sync uses `refs/dolt/data` on your git remote; `.beads/issues.jsonl` is a passive export. See https://github.com/gastownhall/beads/blob/main/docs/SYNC_CONCEPTS.md for details and anti-patterns.
-
-## Agent Context Profiles
-
-The managed Beads block is task-tracking guidance, not permission to override repository, user, or orchestrator instructions.
-
-- **Conservative (default)**: Use `bd` for task tracking. Do not run git commits, git pushes, or Dolt remote sync unless explicitly asked. At handoff, report changed files, validation, and suggested next commands.
-- **Minimal**: Keep tool instruction files as pointers to `bd prime`; use the same conservative git policy unless active instructions say otherwise.
-- **Team-maintainer**: Only when the repository explicitly opts in, agents may close beads, run quality gates, commit, and push as part of session close. A current "do not commit" or "do not push" instruction still wins.
-
-## Session Completion
-
-This protocol applies when ending a Beads implementation workflow. It is subordinate to explicit user, repository, and orchestrator instructions.
-
-1. **File issues for remaining work** - Create beads for anything that needs follow-up
-2. **Run quality gates** (if code changed) - Tests, linters, builds
-3. **Update issue status** - Close finished work, update in-progress items
-4. **Handle git/sync by active profile**:
-   ```bash
-   # Conservative/minimal/default: report status and proposed commands; wait for approval.
-   git status
-
-   # Team-maintainer opt-in only, unless current instructions forbid it:
-   git pull --rebase
-   git push
-   git status
-   ```
-5. **Hand off** - Summarize changes, validation, issue status, and any blocked sync/commit/push step
-
-**Critical rules:**
-- Explicit user or orchestrator instructions override this Beads block.
-- Do not commit or push without clear authority from the active profile or the current user request.
-- If a required sync or push is blocked, stop and report the exact command and error.
-<!-- END BEADS INTEGRATION -->
