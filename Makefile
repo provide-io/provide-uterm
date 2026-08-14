@@ -1,4 +1,4 @@
-.PHONY: quality quality-gate lint typecheck test frontend-test frontend-build
+.PHONY: quality quality-gate sync lint typecheck test frontend-test frontend-build
 
 PY_PACKAGES := \
 	packages/provide-uterm/src \
@@ -34,6 +34,27 @@ quality: lint typecheck frontend-test test
 quality-gate:
 	bash ci/quality_checks.sh
 
+# Provision the environment the whole suite needs.
+#
+# `uv sync --group dev` is NOT enough, and it fails in a way that reads as a
+# broken dependency rather than a broken environment. It resolves the ROOT
+# project only, so workspace members' own dependencies are uninstalled --
+# verified with `--dry-run`, which reports:
+#
+#     Would uninstall 2 packages
+#      - provide-uterm-cloudflare==0.5.0
+#      - psutil==7.2.2
+#
+# psutil belongs to provide-uterm-platform, and losing it breaks COLLECTION of
+# packages/provide-uterm-platform/tests/pty/test_stability_stress.py with
+# ModuleNotFoundError, so the run aborts before a single test executes.
+#
+# CI does not hit this because its jobs are per-package: the pty job runs its
+# own `uv sync --frozen --package provide-uterm-platform --extra dev`. `make
+# test` runs every package's tests from ONE venv, so it needs every package.
+sync:
+	uv sync --all-packages --all-extras --group dev
+
 lint:
 	uv run ruff check .
 
@@ -41,7 +62,9 @@ typecheck:
 	uv run mypy $(PY_PACKAGES)
 	uv run ty check $(TY_PACKAGES)
 
-test:
+# Depends on `sync` so the suite provisions what it needs rather than trusting
+# whatever the last `uv` command happened to leave behind.
+test: sync
 	@for pkg in $(PY_TEST_PACKAGES); do \
 		pkg_dir=$$(dirname $$pkg); \
 		pkg_tests=$$(basename $$pkg); \

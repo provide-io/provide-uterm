@@ -259,7 +259,7 @@ class TestSnapshot:
 
         await _call("sessions.snapshot", req, _SID)
 
-        reg.last_snapshot.assert_awaited_once_with(_SID, recipient=req)
+        reg.last_snapshot.assert_awaited_once_with(_SID, recipient=req, wait_ms=0)
 
     async def test_the_snapshot_is_returned_verbatim(self) -> None:
         req = _request(registry=_registry())
@@ -271,6 +271,29 @@ class TestSnapshot:
         req = _request(registry=reg)
 
         assert await _call("sessions.snapshot", req, _SID) is None
+
+    async def test_reading_defaults_to_the_cache_and_never_polls_the_worker(self) -> None:
+        """``wait_ms`` defaults to 0, so the ordinary read stays a cache read.
+
+        A polling default would put a round trip to the worker behind every
+        dashboard refresh.
+        """
+        reg = _registry()
+        req = _request(registry=reg)
+
+        await _call("sessions.snapshot", req, _SID)
+
+        assert reg.last_snapshot.await_args.kwargs["wait_ms"] == 0
+
+    async def test_a_caller_can_ask_for_a_round_trip_to_the_worker(self) -> None:
+        """``wait_ms`` is forwarded rather than swallowed: it is the only way a
+        caller turns "the screen has not changed" into "the worker still answers"."""
+        reg = _registry()
+        req = _request(registry=reg)
+
+        await _call("sessions.snapshot", req, _SID, wait_ms=1500)
+
+        assert reg.last_snapshot.await_args.kwargs["wait_ms"] == 1500
 
 
 class TestEvents:
