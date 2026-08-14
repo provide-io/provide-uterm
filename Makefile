@@ -1,4 +1,4 @@
-.PHONY: quality quality-gate sync lint typecheck test frontend-test frontend-build
+.PHONY: quality quality-gate sync lint typecheck test test-native-capture frontend-test frontend-build
 
 PY_PACKAGES := \
 	packages/provide-uterm/src \
@@ -62,6 +62,26 @@ typecheck:
 	uv run mypy $(PY_PACKAGES)
 	uv run ty check $(TY_PACKAGES)
 
+# The capture library's LD_PRELOAD tests. CI never runs these in the same
+# process as the rest of the platform suite -- it has a dedicated step for them
+# and passes these same --ignore flags to the bulk pty step. Doing otherwise is
+# flaky: run inside the full 1400-test platform suite they intermittently fail
+# on a socket-collector timeout, and NOT always the same test
+# (test_library_does_not_intercept_non_stdio_fds one run,
+# test_copy_file_range_is_captured_when_stdout_is_a_file the next). Each passes
+# consistently on its own, with or without coverage. These tests fork a process
+# under the shim and wait on a Unix socket, so they are sensitive to whatever
+# else the interpreter is carrying; 1400 tests' worth of residue is enough.
+#
+# So `make test` runs them the way CI does, rather than inventing a combination
+# CI has never run and then treating its flakiness as a property of the code.
+NATIVE_CAPTURE_TESTS := \
+	tests/pty/test_ld_preload_capture.py \
+	tests/pty/test_capture_frame_atomicity.py
+NATIVE_CAPTURE_IGNORES := \
+	--ignore=tests/pty/test_ld_preload_capture.py \
+	--ignore=tests/pty/test_capture_frame_atomicity.py
+
 # Depends on `sync` so the suite provisions what it needs rather than trusting
 # whatever the last `uv` command happened to leave behind.
 test: sync
@@ -69,8 +89,21 @@ test: sync
 		pkg_dir=$$(dirname $$pkg); \
 		pkg_tests=$$(basename $$pkg); \
 		echo "==> pytest $$pkg (cwd=$$pkg_dir)"; \
-		( cd $$pkg_dir && uv run pytest $$pkg_tests ) || exit $$?; \
+		if [ "$$pkg_dir" = "packages/provide-uterm-platform" ]; then \
+			( cd $$pkg_dir && uv run pytest $$pkg_tests $(NATIVE_CAPTURE_IGNORES) ) || exit $$?; \
+		else \
+			( cd $$pkg_dir && uv run pytest $$pkg_tests ) || exit $$?; \
+		fi; \
 	done
+	@$(MAKE) --no-print-directory test-native-capture
+
+# Run separately, in their own interpreter, matching CI's dedicated step
+# (--no-cov, importlib import mode, 30s cap). Requires the built shim:
+#   make -C packages/provide-uterm-platform/native/capture clean test install
+test-native-capture:
+	@echo "==> pytest native capture (isolated, as CI runs it)"
+	cd packages/provide-uterm-platform && uv run pytest $(NATIVE_CAPTURE_TESTS) \
+		-q --no-cov --timeout=30 -o "addopts=--import-mode=importlib"
 
 frontend-test:
 	npm run typecheck:frontend
