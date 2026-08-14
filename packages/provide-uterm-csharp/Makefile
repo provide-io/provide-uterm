@@ -75,12 +75,16 @@ test:
 	$(call DOTNET_TEST_BATCH,3a cli,$(TEST_BATCH_3A))
 	$(call DOTNET_TEST_BATCH,3b embed/gui,$(TEST_BATCH_3B))
 	$(call DOTNET_TEST_BATCH,3c gateway/shell/tunnel,$(TEST_BATCH_3C))
-	@# Pty/LiveParity: native interop has crashed Ubuntu CI hosts (free()/malloc)
-	@# even in isolation. Skip on CI; still run locally for developer machines.
-	@if [ -z "$$CI" ] && uname -s 2>/dev/null | grep -Eqv 'MINGW|MSYS|CYGWIN|Windows'; then \
+	@# Pty/LiveParity used to be skipped on CI: native interop crashed the test
+	@# host with free()/malloc aborts "even in isolation". It was not a host
+	@# quirk -- SpawnOpaqueBytes in NativeUnixPty.cs allocated 256 bytes for a
+	@# posix_spawnattr_t that is 336 on glibc, so every native spawn ran 80 bytes
+	@# past the end of its buffer. The abort surfaced later and elsewhere, which
+	@# is why it read as a flaky host. Fixed; the batch runs everywhere Unix now.
+	@if uname -s 2>/dev/null | grep -Eqv 'MINGW|MSYS|CYGWIN|Windows'; then \
 	  $(MAKE) --no-print-directory _test_batch_3d; \
 	else \
-	  echo "=== test batch: 3d pty/live SKIPPED on CI/Windows (native host residual) ==="; \
+	  echo "=== test batch: 3d pty/live SKIPPED on Windows (no posix_spawn) ==="; \
 	fi
 	$(call DOTNET_TEST_BATCH,4 coverage-boost,$(TEST_BATCH_4))
 
