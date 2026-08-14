@@ -128,7 +128,9 @@
     "has_trailing_space": false,
     "prompt_detected": null,
     "raw_tail": null,
-    "ts": 1735689600.5
+    "ts": 1735689600.5,
+    "chunks_read": null,
+    "bytes_read": null
    }
   },
   {
@@ -162,7 +164,9 @@
     "has_trailing_space": false,
     "prompt_detected": null,
     "raw_tail": null,
-    "ts": 1735689600.5
+    "ts": 1735689600.5,
+    "chunks_read": null,
+    "bytes_read": null
    }
   },
   {
@@ -196,7 +200,9 @@
     "has_trailing_space": false,
     "prompt_detected": null,
     "raw_tail": "tail",
-    "ts": 1735689600.5
+    "ts": 1735689600.5,
+    "chunks_read": null,
+    "bytes_read": null
    }
   },
   {
@@ -235,7 +241,9 @@
      "confidence": 0.75
     },
     "raw_tail": null,
-    "ts": 1735689600.5
+    "ts": 1735689600.5,
+    "chunks_read": null,
+    "bytes_read": null
    }
   },
   {
@@ -268,7 +276,9 @@
     "has_trailing_space": false,
     "prompt_detected": null,
     "raw_tail": null,
-    "ts": 1735689600.5
+    "ts": 1735689600.5,
+    "chunks_read": null,
+    "bytes_read": null
    }
   },
   {
@@ -301,7 +311,9 @@
     "has_trailing_space": false,
     "prompt_detected": null,
     "raw_tail": null,
-    "ts": 1735689600.5
+    "ts": 1735689600.5,
+    "chunks_read": null,
+    "bytes_read": null
    }
   }
  ],

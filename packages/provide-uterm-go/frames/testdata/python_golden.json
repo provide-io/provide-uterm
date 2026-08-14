@@ -124,6 +124,8 @@
     "type": "session_token"
   },
   "snapshot_full": {
+    "bytes_read": null,
+    "chunks_read": null,
     "cols": 132,
     "cursor": {
       "x": 0,
@@ -143,6 +145,8 @@
     "type": "snapshot"
   },
   "snapshot_minimal": {
+    "bytes_read": null,
+    "chunks_read": null,
     "cols": 80,
     "cursor": {
       "x": 1,
