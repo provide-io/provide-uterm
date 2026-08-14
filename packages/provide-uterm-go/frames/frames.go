@@ -114,6 +114,22 @@ type SnapshotFrame struct {
 	// viewport within a single turn. Optional/backward-compatible.
 	RawTail *string  `json:"raw_tail,omitzero"`
 	TS      *float64 `json:"ts,omitzero"`
+	// ChunksRead/BytesRead are the reader-loop ingest counters from the worker's
+	// own session, counted before any emulator work. They let a consumer tell
+	// "no bytes ever reached that process" apart from "bytes arrived and the
+	// emulator never reflected them" -- two failures needing opposite fixes that
+	// look identical from the screen alone. Optional/backward-compatible: a
+	// worker predating them omits both, so a consumer reports a sentinel rather
+	// than a wrong zero.
+	//
+	// Mirrors chunks_read/bytes_read on the Pydantic SnapshotFrame, the source
+	// of truth. They were missing here, and decoding rejects unknown fields, so
+	// a real snapshot carrying them failed to decode outright. The Go suite did
+	// not notice because its golden corpus predated the fields -- a port passing
+	// against a stale recording of the old behaviour, which is the exact failure
+	// .ci/check_goldens.sh exists to prevent. Re-recording surfaced it.
+	ChunksRead *int `json:"chunks_read,omitzero"`
+	BytesRead  *int `json:"bytes_read,omitzero"`
 }
 
 // ---------------------------------------------------------------------------

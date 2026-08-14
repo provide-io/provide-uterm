@@ -14,6 +14,8 @@
       },
       "body": "<volatile>",
       "body_keys": [
+        "bytes_read",
+        "chunks_read",
         "cols",
         "cursor",
         "cursor_at_end",
@@ -24,6 +26,9 @@
         "rows",
         "screen",
         "screen_hash",
+        "snapshot_age_ms",
+        "snapshot_requested",
+        "snapshot_source",
         "ts",
         "type"
       ]
@@ -597,6 +602,8 @@
       },
       "body": "<volatile>",
       "body_keys": [
+        "bytes_read",
+        "chunks_read",
         "cols",
         "cursor",
         "cursor_at_end",
@@ -607,6 +614,9 @@
         "rows",
         "screen",
         "screen_hash",
+        "snapshot_age_ms",
+        "snapshot_requested",
+        "snapshot_source",
         "ts",
         "type"
       ]

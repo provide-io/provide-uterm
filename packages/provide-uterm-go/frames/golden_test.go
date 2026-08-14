@@ -121,7 +121,15 @@ func goldenGoFrames() map[string]Frame {
 // wantNullStripped lists, per golden case, the keys the Python builder emits
 // as explicit null (exclude_none=False) that the Go marshaler omits.
 var wantNullStripped = map[string][]string{
-	"snapshot_minimal":  {"prompt_detected", "raw_tail"},
+	// bytes_read/chunks_read arrive as explicit nulls from the Python builder
+	// (SnapshotFrame in bridge/schemas.py); the Go marshaler omits them, being
+	// nil pointers with omitzero -- the same treatment prompt_detected and
+	// raw_tail already get. Added when the corpus was re-recorded: it had been
+	// stale since 2a6e9dbb introduced the counters, and that staleness was ALSO
+	// hiding that SnapshotFrame carried no fields for them at all, so decoding a
+	// real snapshot failed outright on an unknown field.
+	"snapshot_minimal":  {"bytes_read", "chunks_read", "prompt_detected", "raw_tail"},
+	"snapshot_full":     {"bytes_read", "chunks_read"},
 	"analysis_null_raw": {"raw"},
 	"hijack_state_off":  {"lease_expires_at", "owner"},
 }
