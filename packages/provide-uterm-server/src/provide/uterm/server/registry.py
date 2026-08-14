@@ -378,9 +378,7 @@ class SessionRegistry:
         runtime = await self._locked_runtime(session_id)
         return await runtime.analyze()
 
-    async def last_snapshot(
-        self, session_id: str, recipient: Any = None, wait_ms: int = 0
-    ) -> dict[str, Any] | None:
+    async def last_snapshot(self, session_id: str, recipient: Any = None, wait_ms: int = 0) -> dict[str, Any] | None:
         # ``recipient`` (the requesting Request) lets the hub apply the same
         # role-scoped output redaction as the live broadcast path so the REST
         # /snapshot read does not bypass a configured policy (M5).
@@ -426,7 +424,14 @@ class SessionRegistry:
         """
         ts = snapshot.get("ts")
         age_ms: int | None = None
-        if isinstance(ts, int | float) and ts > 0:
+        # ``bool`` is excluded explicitly because it is a subclass of ``int``:
+        # a ``ts`` of ``True`` would otherwise date the snapshot to one second
+        # after the epoch and report it as ~57 years stale. ``ts > 0`` rejects
+        # the absent-timestamp default of 0 for the same reason.
+        if isinstance(ts, int | float) and not isinstance(ts, bool) and ts > 0:
+            # max(0, ...) clamps clock skew between the worker and this process.
+            # A negative age says nothing, and a consumer comparing it against a
+            # staleness threshold would sail straight past it.
             age_ms = max(0, int((time.time() - float(ts)) * 1000))
         snapshot["snapshot_age_ms"] = age_ms
         snapshot["snapshot_source"] = "fresh" if got_fresh else "cache"
