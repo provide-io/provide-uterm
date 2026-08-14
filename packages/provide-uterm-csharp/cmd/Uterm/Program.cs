@@ -4,5 +4,14 @@
 //
 
 using Provide.Uterm.Cli;
+using Provide.Telemetry;
 
-return Root.Execute(args);
+ProvideTelemetry.SetupTelemetry();
+try
+{
+    return Root.Execute(args);
+}
+finally
+{
+    ProvideTelemetry.ShutdownTelemetry();
+}

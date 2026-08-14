@@ -321,7 +321,8 @@ public static class ManagerProgram
         var manager = new AgentManager(cfg);
         await using var server = new ManagerServer(manager);
         await server.StartAsync().ConfigureAwait(false);
-        Console.WriteLine($"uterm-manager listening on {server.BaseAddress}");
+        var log = Provide.Telemetry.ProvideTelemetry.GetLogger("provide.uterm.manager");
+        log.Info("uterm-manager listening", new Dictionary<string, object?> { ["url"] = server.BaseAddress?.ToString() });
         // Interactive wait: production blocks on Ctrl-C; tests assign WaitForCancel.
         await Task.Run(WaitForCancel).ConfigureAwait(false);
         return 0;

@@ -34,6 +34,11 @@ class HijackSession:
     # path). Distinct from ``owner`` (a self-declared display label): used to
     # verify lease ownership at release. None for unauthenticated/legacy leases.
     acquired_by: str | None = None
+    # Highest snapshot ``event_seq`` handed to this lease. Freshness for a
+    # polling client means "newer than what I was last served"; comparing
+    # against the request's wall clock instead discards a frame that was pushed
+    # microseconds earlier, which is exactly the frame the caller wants.
+    last_served_event_seq: int = 0
 
 
 @dataclass(slots=True)

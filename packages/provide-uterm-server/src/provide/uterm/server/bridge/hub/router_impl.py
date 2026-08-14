@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING, Any, overload
 
 from provide.telemetry import get_logger
 from provide.uterm.server.bridge.frames import make_hijack_state_frame
+from provide.uterm.server.bridge.hub import snapshot_metrics
 from provide.uterm.server.bridge.hub.redaction import StreamRedactor
 from provide.uterm.server.bridge.hub.router_behavioral import (
     audit_all_browsers as _audit_all_browsers_impl,
@@ -261,6 +262,9 @@ class MessageRouter:
                 # because a poller reading ``last_snapshot`` sees the identical
                 # old screen in every case. Name the drop so a live run can tell
                 # them apart.
+                snapshot_metrics.snapshot_commit_dropped.add(
+                    1, {"worker_id": worker_id, "reason": "unregistered" if st is None else "superseded_connection"}
+                )
                 logger.warning(
                     "snapshot_commit_dropped",
                     worker_id=worker_id,

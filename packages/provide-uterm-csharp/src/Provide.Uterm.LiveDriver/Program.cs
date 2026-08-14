@@ -5,22 +5,31 @@
 
 using System.Runtime.InteropServices;
 using Provide.Uterm.Conformance;
+using Provide.Telemetry;
 
-// Signals are the harness's other way to stop a server driver; closing stdin is
-// the ordinary one. Both end up cancelling the same token.
-using var stopping = new CancellationTokenSource();
-using var sigterm = PosixSignalRegistration.Create(PosixSignal.SIGTERM, ctx =>
+ProvideTelemetry.SetupTelemetry();
+try
 {
-    ctx.Cancel = true;
-    stopping.Cancel();
-});
-using var sigint = PosixSignalRegistration.Create(PosixSignal.SIGINT, ctx =>
-{
-    ctx.Cancel = true;
-    stopping.Cancel();
-});
+    // Signals are the harness's other way to stop a server driver; closing stdin is
+    // the ordinary one. Both end up cancelling the same token.
+    using var stopping = new CancellationTokenSource();
+    using var sigterm = PosixSignalRegistration.Create(PosixSignal.SIGTERM, ctx =>
+    {
+        ctx.Cancel = true;
+        stopping.Cancel();
+    });
+    using var sigint = PosixSignalRegistration.Create(PosixSignal.SIGINT, ctx =>
+    {
+        ctx.Cancel = true;
+        stopping.Cancel();
+    });
 
-return await LiveDriver.ExecuteAsync(
-    args,
-    input: Console.OpenStandardInput(),
-    ct: stopping.Token).ConfigureAwait(false);
+    return await LiveDriver.ExecuteAsync(
+        args,
+        input: Console.OpenStandardInput(),
+        ct: stopping.Token).ConfigureAwait(false);
+}
+finally
+{
+    ProvideTelemetry.ShutdownTelemetry();
+}

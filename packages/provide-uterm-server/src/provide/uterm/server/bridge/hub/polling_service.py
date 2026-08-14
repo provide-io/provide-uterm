@@ -39,6 +39,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from provide.telemetry import get_logger
+from provide.uterm.server.bridge.hub import snapshot_metrics
 from provide.uterm.server.bridge.rest_helpers import (
     PromptRegexError,
     compile_expect_regex,
@@ -83,20 +84,70 @@ class PollingCoordinator:
 
     # -- Snapshot polling -----------------------------------------------
 
-    async def wait_for_snapshot(self, worker_id: str, timeout_ms: int = 1500) -> dict[str, Any] | None:
-        """Poll for a fresh snapshot from *worker_id*, waiting up to *timeout_ms* ms."""
+    @staticmethod
+    def _snapshot_is_fresh(
+        snapshot: dict[str, Any],
+        *,
+        req_ts: float,
+        after_event_seq: int | None,
+    ) -> bool:
+        """Return whether *snapshot* is newer than what the caller already has.
+
+        With ``after_event_seq`` the question is "newer than the frame this
+        caller was last served", answered by the monotonic per-worker
+        ``event_seq``. Without it the legacy wall-clock proxy applies.
+        """
+        if after_event_seq is not None:
+            seq = snapshot.get("event_seq")
+            return isinstance(seq, int) and not isinstance(seq, bool) and seq > after_event_seq
+        return bool(snapshot.get("ts", 0) > req_ts)
+
+    async def wait_for_snapshot(
+        self,
+        worker_id: str,
+        timeout_ms: int = 1500,
+        *,
+        after_event_seq: int | None = None,
+    ) -> dict[str, Any] | None:
+        """Poll for a fresh snapshot from *worker_id*, waiting up to *timeout_ms* ms.
+
+        ``after_event_seq`` expresses freshness as "newer than what this CALLER
+        was last served", via the monotonic per-worker ``event_seq``. Prefer it.
+
+        The wall-clock fallback — ``ts`` newer than the moment of the request —
+        was defensible while snapshots existed only in reply to a
+        ``snapshot_req``, because anything already stored answered an earlier
+        question. Once workers began PUSHING on screen change it became wrong in
+        the worst direction: the push lands the fresh screen microseconds BEFORE
+        the poller asks, so the one frame the caller needs is exactly the one the
+        comparison discards, and the caller waits out the full window for
+        nothing.
+
+        Measured 2026-08-14 over six wedges; the last, at one-second
+        resolution::
+
+            10:20:21  hash=f883f07765b0 chunks=51   <- published, once
+                      ... 23 seconds with no frames at all ...
+            10:20:44  hash=f883f07765b0 chunks=51   <- same frame, re-served
+
+        The client timed out four seconds into that gap still holding the
+        previous screen, against 229 ``snapshot_wait_timeout`` on the hub. The
+        frame was correct, stored, and never handed over.
+        """
         hub = self._hub
         req_ts = time.time()  # wall-clock — compared against worker snapshot ts
         end = time.monotonic() + timeout_ms / 1000.0
         await hub.request_snapshot(worker_id)
-        while time.monotonic() < end:
+        while True:
             async with hub._lock:
                 st: WorkerTermState | None = hub.registry.get(worker_id)
                 if st is None:
                     return None
                 snap = st.last_snapshot
-            if snap is not None and snap.get("ts", 0) > req_ts:
+            if snap is not None and self._snapshot_is_fresh(snap, req_ts=req_ts, after_event_seq=after_event_seq):
                 return snap
+            if time.monotonic() >= end:
+                break
             await asyncio.sleep(0.08)
         # Timed out: no snapshot NEWER than this request arrived. The caller
         # gets None and typically falls back to the cached last_snapshot, so a
@@ -116,6 +167,7 @@ class PollingCoordinator:
         if snap is not None:
             with contextlib.suppress(TypeError, ValueError):
                 stale_age = round(req_ts - float(snap.get("ts", 0)), 3)
+        snapshot_metrics.snapshot_wait_timeout.add(1, {"worker_id": worker_id})
         logger.warning(
             "snapshot_wait_timeout",
             worker_id=worker_id,
