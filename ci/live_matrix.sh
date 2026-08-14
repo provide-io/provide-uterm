@@ -21,9 +21,17 @@ cd "${REPO_ROOT}"
 
 export PYTHONPATH="${REPO_ROOT}/conformance/live${PYTHONPATH:+:${PYTHONPATH}}"
 
-echo "=== drivers ==="
-uv run python conformance/live/harness --list-drivers
-
-echo
-echo "=== matrix ==="
-uv run python conformance/live/harness "$@"
+server_impl="${SERVER_IMPL:-}"
+if [ -n "$server_impl" ]; then
+  echo "=== drivers ==="
+  uv run python conformance/live/harness --servers "$server_impl" --list-drivers
+  echo
+  echo "=== matrix ==="
+  uv run python conformance/live/harness --servers "$server_impl" "$@"
+else
+  echo "=== drivers ==="
+  uv run python conformance/live/harness --list-drivers
+  echo
+  echo "=== matrix ==="
+  uv run python conformance/live/harness "$@"
+fi

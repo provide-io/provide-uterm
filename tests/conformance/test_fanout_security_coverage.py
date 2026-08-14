@@ -9,6 +9,7 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -20,7 +21,10 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCENARIOS_PATH = REPO_ROOT / "spec/fanout_security_scenarios.json"
 RUNNER_PATH = REPO_ROOT / "scripts/run_fanout_security_scenarios.py"
-BACKENDS = {"python", "go", "csharp", "typescript"}
+
+server_impl = os.environ.get("SERVER_IMPL")
+BACKENDS = {server_impl} if server_impl else {"python", "go", "csharp", "typescript"}
+
 STATUSES = {"execute", "unsupported_fail_closed", "component_execute", "unserved"}
 REQUIRED_CATEGORIES = {
     "authentication refusal",
