@@ -26,6 +26,32 @@ public sealed class TerminalEmulator
     private Snapshot? _last;
     private string _rawTail = "";
 
+    /// <summary>
+    /// Guards every read and write of the screen below.
+    /// </summary>
+    /// <remarks>
+    /// A session's reader loop feeds this emulator from a background task while
+    /// callers read it — <c>TransportSession.ApplyData</c> calls
+    /// <see cref="Process(byte[])"/> and <see cref="GetSnapshot"/>, and anyone
+    /// holding <c>TransportSession.Emulator()</c> can call
+    /// <see cref="GetSnapshot"/> at the same moment. Without this, the reader
+    /// mutates the screen's collections while another thread walks them, which
+    /// .NET detects and throws on: "Operations that change non-concurrent
+    /// collections must have exclusive access."
+    ///
+    /// It lives here rather than in TransportSession on purpose. The session
+    /// hands the raw emulator out through <c>Emulator()</c>, so a lock held only
+    /// by the session would guard its own calls and leave every external caller
+    /// racing. Guarding the object itself is what makes it safe regardless of
+    /// who reached it.
+    ///
+    /// <c>lock</c> is reentrant, so an internal call between these methods is
+    /// fine. <see cref="Screen"/> still hands out the mutable screen directly
+    /// and is NOT protected by this — it is a pre-existing hole in the API,
+    /// narrower than the one being closed here.
+    /// </remarks>
+    private readonly object _gate = new();
+
     public TerminalEmulator(int cols = 0, int rows = 0, string term = "")
     {
         if (cols <= 0)
@@ -53,6 +79,14 @@ public sealed class TerminalEmulator
     public void Process(ReadOnlySpan<byte> data)
     {
         var text = Cp437.Decode(data);
+        lock (_gate)
+        {
+            ProcessLocked(text);
+        }
+    }
+
+    private void ProcessLocked(string text)
+    {
         _stream.Feed(text);
         if (text.Length > 0)
         {
@@ -127,6 +161,14 @@ public sealed class TerminalEmulator
 
     public Snapshot GetSnapshot()
     {
+        lock (_gate)
+        {
+            return GetSnapshotLocked();
+        }
+    }
+
+    private Snapshot GetSnapshotLocked()
+    {
         if (_last is null || _dirty)
         {
             var screenText = string.Join("\n", _screen.Display());
@@ -164,8 +206,13 @@ public sealed class TerminalEmulator
         };
     }
 
-    public string AnsiScreen() =>
-        string.Join("\n", RenderBuffer.RenderScreenLines(_screen, _cols, _rows));
+    public string AnsiScreen()
+    {
+        lock (_gate)
+        {
+            return string.Join("\n", RenderBuffer.RenderScreenLines(_screen, _cols, _rows));
+        }
+    }
 
     /// <summary>Go/spec-compatible alias (ANSI acronym capitalization).</summary>
     public string ANSIScreen() => AnsiScreen();
@@ -176,15 +223,21 @@ public sealed class TerminalEmulator
 
     public void Reset()
     {
-        _screen.Reset();
-        _dirty = true;
+        lock (_gate)
+        {
+            _screen.Reset();
+            _dirty = true;
+        }
     }
 
     public void Resize(int cols, int rows)
     {
-        _cols = cols;
-        _rows = rows;
-        _screen.Resize(rows, cols);
-        _dirty = true;
+        lock (_gate)
+        {
+            _cols = cols;
+            _rows = rows;
+            _screen.Resize(rows, cols);
+            _dirty = true;
+        }
     }
 }
