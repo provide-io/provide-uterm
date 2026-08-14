@@ -63,6 +63,7 @@ dev = [
     "fastmcp>=3.3.1",
     "pytest-textual-snapshot>=1.0.0",
     "respx>=0.23.1",
+    "pytest-pyodide>=0.59.2",
 ]
 
 [tool.uv]
