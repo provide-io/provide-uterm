@@ -254,6 +254,19 @@ class MessageRouter:
         async with hub._lock:
             st = hub.registry.get(worker_id)
             if expected_worker is not None and (st is None or st.worker_ws is not expected_worker):
+                # Refusing the frame is correct — it came from a connection this
+                # worker id no longer owns, so its screen is stale by definition.
+                # Doing it SILENTLY is not: from outside, a dropped publish, one
+                # that never arrived, and one that was stored all look the same,
+                # because a poller reading ``last_snapshot`` sees the identical
+                # old screen in every case. Name the drop so a live run can tell
+                # them apart.
+                logger.warning(
+                    "snapshot_commit_dropped",
+                    worker_id=worker_id,
+                    reason="unregistered" if st is None else "superseded_connection",
+                    screen_hash=raw_snapshot.get("screen_hash"),
+                )
                 return None
             if st is None:
                 return {**raw_snapshot, "event_seq": 0}
