@@ -27,6 +27,7 @@ import os
 import socket
 import struct
 import subprocess
+import sys
 import tempfile
 import threading
 from pathlib import Path
@@ -116,13 +117,29 @@ def _build_mt_writer(workdir: Path) -> Path:
     return out
 
 
-def _serve_once(sock_path: str, out: list[bytes], timeout: float = 10.0) -> None:
-    """Accept one connection on a Unix socket and collect all bytes into *out*."""
+def _serve_once(
+    sock_path: str,
+    out: list[bytes],
+    timeout: float = 10.0,
+    ready: threading.Event | None = None,
+) -> None:
+    """Accept one connection on a Unix socket and collect all bytes into *out*.
+
+    ``ready`` is set once the socket is listening, and the caller must wait on
+    it before starting the writer. Otherwise the writer can reach ``connect()``
+    before this thread reaches ``listen()``, find nothing there, and produce no
+    frames -- which the test below reads as "the capture library did not
+    intercept" and SKIPS. An atomicity test that quietly does not run is worse
+    than one that fails: nothing reports it. Observed on Linux with the shim
+    built, roughly one run in three.
+    """
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
         s.bind(sock_path)
         s.listen(1)
         s.settimeout(timeout)
+        if ready is not None:
+            ready.set()
         conn, _ = s.accept()
         conn.settimeout(timeout)
         chunks: list[bytes] = []
@@ -179,8 +196,11 @@ def test_concurrent_writes_keep_framing_atomic() -> None:
         sock_path = str(workdir / "cap.sock")
 
         out: list[bytes] = []
-        t = threading.Thread(target=_serve_once, args=(sock_path, out))
+        ready = threading.Event()
+        t = threading.Thread(target=_serve_once, args=(sock_path, out, 10.0, ready))
         t.start()
+        if not ready.wait(10):
+            pytest.fail("socket collector never started listening")
 
         proc = subprocess.run(
             [str(writer)],
@@ -193,6 +213,14 @@ def test_concurrent_writes_keep_framing_atomic() -> None:
 
     raw = out[0] if out else b""
     if not raw:
+        # On Linux this is a FAILURE, not a platform limitation. The library was
+        # found and built (_require_lib_and_cc), the writer was compiled here and
+        # is dynamically linked, and the collector was listening before it
+        # started -- so LD_PRELOAD interception not happening is the bug this
+        # file exists to catch. The skip stays for macOS, where SIP genuinely
+        # prevents DYLD_INSERT_LIBRARIES from reaching a protected binary.
+        if sys.platform.startswith("linux"):
+            pytest.fail("capture library did not intercept on Linux — no frames reached the socket")
         pytest.skip("capture library did not intercept (e.g. SIP / static binary) — nothing to assert")
 
     frames, corrupt = _parse_strict(raw)
