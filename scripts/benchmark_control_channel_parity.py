@@ -256,8 +256,8 @@ def run_typescript(args: argparse.Namespace) -> dict[str, Any]:
     return _parse_typescript_benchmark(result.stdout)
 
 
-def _print_result_table(results: list[dict[str, Any]]) -> None:
-    rows: list[tuple[str, str, float, float, int]] = []
+def _build_rows(results: list[dict[str, Any]]) -> list[tuple[str, str, float, float, int, float]]:
+    rows: list[tuple[str, str, float, float, int, float]] = []
     for item in results:
         if item["backend"] == "python":
             rows.append(
@@ -267,31 +267,68 @@ def _print_result_table(results: list[dict[str, Any]]) -> None:
                     item["baseline_seconds"],
                     item["before_mib_per_s"],
                     item["events"],
+                    0.0,
                 )
             )
             rows.append(
-                (item["backend"], item["after_label"], item["median_seconds"], item["mib_per_s"], item["events"])
+                (
+                    item["backend"],
+                    item["after_label"],
+                    item["median_seconds"],
+                    item["mib_per_s"],
+                    item["events"],
+                    0.0,
+                )
             )
             continue
-        rows.append((item["backend"], "single", item["median_seconds"], item["mib_per_s"], item["events"]))
+        rows.append((item["backend"], "single", item["median_seconds"], item["mib_per_s"], item["events"], 0.0))
 
-    print("Backend       Variant      Median (s)   MiB/s     Events")
-    print("--------      --------     ----------   -------   ------")
-    for backend, variant, median_s, mib, events in rows:
-        print(f"{backend:<12} {variant:<11} {median_s:<11.4f} {mib:<9.2f} {events:<8d}")
+    if not rows:
+        return rows
+
+    fastest_mib = max(row[3] for row in rows)
+    if fastest_mib <= 0.0:
+        return [(backend, variant, median_s, mib, events, 0.0) for backend, variant, median_s, mib, events, _ in rows]
+    return [
+        (backend, variant, median_s, mib, events, mib / fastest_mib)
+        for backend, variant, median_s, mib, events, _ in rows
+    ]
+
+
+def _print_result_table(results: list[dict[str, Any]]) -> dict[str, Any]:
+    rows = _build_rows(results)
+    print("Backend       Variant      Median (s)   MiB/s     x fastest  Events")
+    print("--------      --------     ----------   -------   ---------  ------")
+    for backend, variant, median_s, mib, events, normalized in rows:
+        print(f"{backend:<12} {variant:<11} {median_s:<11.4f} {mib:<9.2f} {normalized:<10.3f}x {events:<8d}")
 
     py = next((item for item in results if item["backend"] == "python"), None)
+    normalized_payload: dict[str, Any] = {"rows": []}
     if py:
         print(f"\nPython before/after speedup: {py['speedup_vs_before']:.2f}x")
         after = float(py["median_seconds"])
         go = next((item for item in results if item["backend"] == "go"), None)
         ts = next((item for item in results if item["backend"] == "typescript"), None)
         cs = next((item for item in results if item["backend"] == "csharp"), None)
-        for label, result in [("Go", go), ("TypeScript", ts), ("C#", cs)]:
+        for label, result in [("go", go), ("typescript", ts), ("csharp", cs)]:
             if result is None:
                 continue
             ratio = after / result["median_seconds"] if result["median_seconds"] else 0.0
-            print(f"Python/ {label} median ratio: {ratio:.2f}x")
+            normalized_payload[f"python_vs_{label}_median_ratio"] = ratio
+            print(f"Python/{label} median ratio: {ratio:.2f}x")
+
+    normalized_payload["rows"] = [
+        {
+            "backend": backend,
+            "variant": variant,
+            "median_seconds": median_s,
+            "mib_per_s": mib,
+            "normalized_to_fastest": normalized,
+            "events": events,
+        }
+        for backend, variant, median_s, mib, events, normalized in rows
+    ]
+    return normalized_payload
 
 
 def main() -> int:
@@ -316,6 +353,11 @@ def main() -> int:
         choices=["Debug", "Release"],
         help="Benchmark dotnet build configuration.",
     )
+    parser.add_argument(
+        "--output-json",
+        default=None,
+        help="Write benchmark JSON payload to this path for CI artifact collection.",
+    )
     args = parser.parse_args()
 
     results: list[dict[str, Any]] = []
@@ -333,7 +375,29 @@ def main() -> int:
         print("No benchmark backends selected.")
         return 1
 
-    _print_result_table(results)
+    table_summary = _print_result_table(results)
+    if args.output_json:
+        Path(args.output_json).write_text(
+            json.dumps(
+                {
+                    "backends": args.backends,
+                    "args": {
+                        "baseline_revision": args.baseline_revision,
+                        "frame_count": args.frame_count,
+                        "passes": args.passes,
+                        "chunk_size": args.chunk_size,
+                        "data_size": args.data_size,
+                        "control_size": args.control_size,
+                        "control_ratio": args.control_ratio,
+                        "seed": args.seed,
+                    },
+                    "results": results,
+                    "normalization": table_summary,
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
     return 0
 
 

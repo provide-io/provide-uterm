@@ -206,13 +206,18 @@ class ControlFrameDecoder:
 
     @staticmethod
     def _decode_data_parts(parts: list[memoryview | bytes]) -> str:
-        chunks: list[str] = []
-        for part in parts:
+        if not parts:
+            return ""
+        if len(parts) == 1:
+            part = parts[0]
             if isinstance(part, memoryview):
-                chunks.append(part.tobytes().decode("utf-8"))
-            else:
-                chunks.append(part.decode("utf-8"))
-        return "".join(chunks)
+                return part.tobytes().decode("utf-8")
+            return part.decode("utf-8")
+
+        merged = bytearray()
+        for part in parts:
+            merged.extend(part)
+        return merged.decode("utf-8")
 
     def feed(self, chunk: str) -> list[ControlFrameChunk]:
         """Decode all complete events from *chunk* and buffer the rest."""
@@ -270,17 +275,17 @@ class ControlFrameDecoder:
 
     def _payload_end_for_utf8_length(
         self, buf: bytes | bytearray | memoryview, start: int, payload_bytes: int
-    ) -> int | None:
+    ) -> tuple[int, str] | None:
         """Locate the payload end via the shared helper, firing the decoder's
         error hook when the declared byte length splits a Unicode code point."""
         if len(buf) < start + payload_bytes:
             return None
         payload = bytes(buf[start : start + payload_bytes])
         try:
-            payload.decode("utf-8")
+            payload_raw = payload.decode("utf-8")
         except UnicodeDecodeError as exc:
             raise self._report_error("invalid control payload length") from exc
-        return start + payload_bytes
+        return start + payload_bytes, payload_raw
 
     def _try_parse_frame(
         self, buf: bytes | bytearray | memoryview, idx: int, buf_len: int, *, final: bool
@@ -306,13 +311,12 @@ class ControlFrameDecoder:
             raise self._report_error("control payload too large")
 
         payload_start = idx + _HEADER_BYTES
-        frame_end = self._payload_end_for_utf8_length(buf, payload_start, payload_bytes)
-        if frame_end is None:
+        end_and_payload = self._payload_end_for_utf8_length(buf, payload_start, payload_bytes)
+        if end_and_payload is None:
             if final:
                 raise self._report_error("truncated control frame")
             return None
-
-        payload_raw = bytes(buf[payload_start:frame_end]).decode("utf-8")
+        frame_end, payload_raw = end_and_payload
         return ControlChunk(self._parse_frame_payload(payload_raw)), frame_end
 
     @staticmethod

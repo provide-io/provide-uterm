@@ -1,4 +1,4 @@
-.PHONY: quality quality-gate sync lint typecheck test test-native-capture frontend-test frontend-build
+.PHONY: quality quality-gate sync lint typecheck test test-native-capture frontend-test frontend-build benchmark-control-channel benchmark-control-channel-quick
 
 PY_PACKAGES := \
 	packages/provide-uterm/src \
@@ -113,3 +113,18 @@ frontend-test:
 
 frontend-build:
 	npm run build:frontend
+
+# Run cross-language control-frame decoder parity benchmarks for all backends.
+# Keep defaults CI-safe and deterministic for quick sanity checks.
+benchmark-control-channel:
+	uv sync --frozen --group dev
+	uv run python scripts/benchmark_control_channel_parity.py --output-json /tmp/control-channel-parity.json
+
+# Quick parity sweep for local development (smaller dataset / fewer passes).
+benchmark-control-channel-quick:
+	uv sync --frozen --group dev
+	uv run python scripts/benchmark_control_channel_parity.py \
+		--frame-count 20000 \
+		--passes 3 \
+		--chunk-size 2048 \
+		--output-json /tmp/control-channel-parity-quick.json
