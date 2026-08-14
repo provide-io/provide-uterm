@@ -510,11 +510,11 @@ class TransportSession:
                     # measured run. Decisive when a client sees a frozen screen,
                     # noise otherwise.
                     logger.trace(
-                        "reader_chunk t=%.3f seq=%d chunk_bytes=%d bytes_total=%d",
-                        time.time(),
-                        self._change_seq,
-                        len(data),
-                        self._bytes_total,
+                        "reader_chunk",
+                        t=round(time.time(), 3),
+                        seq=self._change_seq,
+                        chunk_bytes=len(data),
+                        bytes_total=self._bytes_total,
                     )
         except (asyncio.CancelledError, ConnectionResetError, OSError, ConnectionError):
             pass

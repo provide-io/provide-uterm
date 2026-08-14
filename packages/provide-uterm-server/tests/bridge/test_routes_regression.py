@@ -282,7 +282,7 @@ def test_snapshot_returns_fresh_lease_after_concurrent_heartbeat() -> None:
     original_expires = hub.registry._workers["bot1"].hijack_session.lease_expires_at  # type: ignore[union-attr]
     extended_expires = original_expires + 3600
 
-    async def _extend_and_return(bot_id: str, timeout_ms: int = 1500) -> dict:
+    async def _extend_and_return(bot_id: str, timeout_ms: int = 1500, **_kw: object) -> dict:
         # Simulate a concurrent heartbeat mutating the lease while we wait
         st = hub.registry._workers.get(bot_id)
         if st and st.hijack_session:
@@ -316,7 +316,7 @@ def test_snapshot_falls_back_to_original_lease_if_session_gone() -> None:
 
     original_expires = hub.registry._workers["bot1"].hijack_session.lease_expires_at  # type: ignore[union-attr]
 
-    async def _release_and_return(bot_id: str, timeout_ms: int = 1500) -> dict:
+    async def _release_and_return(bot_id: str, timeout_ms: int = 1500, **_kw: object) -> dict:
         # Simulate the session being released while waiting for a snapshot
         st = hub.registry._workers.get(bot_id)
         if st:

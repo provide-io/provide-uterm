@@ -477,10 +477,10 @@ async def _ws_to_tcp(
         # counters matter when a client sees no output and nowhere else, so this
         # costs nothing until somebody turns TRACE on to look.
         logger.trace(
-            "gateway_ws_to_tcp frame=%d bytes=%d total_bytes=%d",
-            stats["frames"],
-            len(raw),
-            stats["bytes"],
+            "gateway_ws_to_tcp",
+            frame=stats["frames"],
+            bytes=len(raw),
+            total_bytes=stats["bytes"],
         )
 
     async def _write_fn(data: bytes) -> None:
