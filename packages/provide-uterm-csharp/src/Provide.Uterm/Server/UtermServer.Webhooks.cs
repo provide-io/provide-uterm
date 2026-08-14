@@ -151,7 +151,7 @@ public sealed partial class UtermServer
             WebhookEgressPolicy.EffectiveAllowLoopbackDestinations(_deps.Config),
             tunnelShareActive: sessionId =>
                 EnsureTunnelStore().HasLiveShare(sessionId, _clock.Wall()),
-            onMetric: (name, value) => EnsureMetrics().Inc(name, value),
+            onMetric: (name, value) => Provide.Telemetry.Metrics.Counter(name).Add(value),
             delivery: new WebhookDeliveryOptions
             {
                 EventBus = _deps.Hub.EventBus,

@@ -265,3 +265,100 @@ class TestSnapshotWaitTimeout:
 async def test_asyncio_is_not_shadowed() -> None:
     """Guard for the patches above: they patch polling_service's own asyncio."""
     assert polling_service.asyncio is asyncio
+
+
+# ---------------------------------------------------------------------------
+# PollingCoordinator._snapshot_is_fresh — the event_seq freshness rewrite
+# ---------------------------------------------------------------------------
+
+
+class TestSnapshotIsFresh:
+    """Kills the freshness predicate added when wait_for_snapshot was rewritten.
+
+    Freshness moved from a wall-clock proxy to a monotonic per-worker event_seq
+    because the old comparison discarded the one frame the caller needed: a push
+    landing microseconds BEFORE the poll asked was, by ts, "not newer than the
+    request". The predicate is a static method with no I/O, so every arm is
+    reachable directly — and it is worth pinning hard, because a wrong answer
+    here is invisible (the caller just waits out its window and reports a stall
+    against a worker that published correctly).
+    """
+
+    @staticmethod
+    def _fresh(snapshot: dict[str, Any], *, req_ts: float = 100.0, after: int | None = None) -> bool:
+        return polling_service.PollingCoordinator._snapshot_is_fresh(snapshot, req_ts=req_ts, after_event_seq=after)
+
+    def test_event_seq_strictly_greater_is_fresh(self) -> None:
+        """Kills `>` -> `>=` on the seq comparison."""
+        assert self._fresh({"event_seq": 6}, after=5) is True
+        assert self._fresh({"event_seq": 5}, after=5) is False
+        assert self._fresh({"event_seq": 4}, after=5) is False
+
+    def test_a_bool_event_seq_is_not_a_sequence_number(self) -> None:
+        """Kills dropping `not isinstance(seq, bool)`.
+
+        bool subclasses int, so True would otherwise read as seq==1 and answer
+        "fresh" against after_event_seq=0 — a JSON `true` in that field would
+        silently release every waiter.
+        """
+        assert self._fresh({"event_seq": True}, after=0) is False
+        assert self._fresh({"event_seq": False}, after=-1) is False
+
+    def test_a_missing_or_non_integer_event_seq_is_not_fresh(self) -> None:
+        """Kills the isinstance(seq, int) guard."""
+        assert self._fresh({}, after=5) is False
+        assert self._fresh({"event_seq": None}, after=5) is False
+        assert self._fresh({"event_seq": "7"}, after=5) is False
+        assert self._fresh({"event_seq": 7.5}, after=5) is False
+
+    def test_after_event_seq_zero_still_uses_the_seq_path(self) -> None:
+        """Kills `if after_event_seq is not None` -> a truthiness test.
+
+        Zero is a legitimate "I have seen frame 0"; a falsy check would fall
+        through to the wall-clock branch and answer a different question.
+        """
+        assert self._fresh({"event_seq": 1, "ts": 0.0}, req_ts=100.0, after=0) is True
+        # ts is ancient, so the wall-clock branch would say False — proving the
+        # seq path is the one being taken.
+        assert self._fresh({"event_seq": 0, "ts": 0.0}, req_ts=100.0, after=0) is False
+
+    def test_without_after_event_seq_it_falls_back_to_wall_clock(self) -> None:
+        """Kills `>` -> `>=` and the get default on the ts branch."""
+        assert self._fresh({"ts": 100.5}, req_ts=100.0) is True
+        assert self._fresh({"ts": 100.0}, req_ts=100.0) is False
+        assert self._fresh({"ts": 99.5}, req_ts=100.0) is False
+        # No ts at all defaults to 0, which is never newer than a real req_ts.
+        assert self._fresh({}, req_ts=100.0) is False
+
+    def test_the_wall_clock_branch_ignores_event_seq(self) -> None:
+        """The two branches must not blend: no after_event_seq means ts decides."""
+        assert self._fresh({"event_seq": 999, "ts": 99.0}, req_ts=100.0) is False
+
+
+class TestWaitForSnapshotDeadline:
+    """Kills the loop restructure: freshness is checked BEFORE the deadline.
+
+    The rewrite moved from `while monotonic() < end` to `while True` with the
+    deadline break AFTER the freshness check, so an already-fresh snapshot is
+    returned even when the budget is already spent. A mutant that restores the
+    old order turns that into a timeout.
+    """
+
+    async def test_an_already_fresh_snapshot_wins_a_zero_budget(self) -> None:
+        hub = TermHub()
+        hub.request_snapshot = AsyncMock()  # type: ignore[method-assign]
+        state = WorkerTermState()
+        state.last_snapshot = {"screen": "fresh", "ts": _FROZEN_NOW + 1.0}
+        hub.registry._workers["bot1"] = state
+
+        with (
+            patch.object(polling_service.time, "time", return_value=_FROZEN_NOW),
+            patch.object(polling_service.asyncio, "sleep", new_callable=AsyncMock) as slept,
+            patch.object(polling_service, "logger", MagicMock()) as log,
+        ):
+            result = await hub.wait_for_snapshot("bot1", timeout_ms=0)
+
+        assert result is not None
+        assert result["screen"] == "fresh"
+        slept.assert_not_awaited()
+        assert _warnings(log, "snapshot_wait_timeout") == []

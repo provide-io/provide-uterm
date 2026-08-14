@@ -25,6 +25,7 @@ public interface ILeaseHub
     Task BroadcastHijackStateAsync(string workerId, CancellationToken ct = default);
     Task AppendEventAsync(string workerId, string eventType, CancellationToken ct = default);
     Task PruneIfIdleAsync(string workerId, CancellationToken ct = default);
+    void EmitTelemetry(string eventType, string workerId, string? principal = null, string? role = null, Dictionary<string, object?>? metadata = null);
 }
 
 /// <summary>Multi-worker hijack lease state machine.</summary>
@@ -255,6 +256,10 @@ public sealed partial class HijackLeaseManager
     public (bool Ok, string Reason) TryAcquireWs(string workerId, object ws)
     {
         var result = TryAcquireWsCore(workerId, ws);
+        if (result.Ok)
+        {
+            _hub.EmitTelemetry("hijack.acquired", workerId, metadata: new Dictionary<string, object?> { ["hijack_type"] = "dashboard", ["lease_s"] = _dashboardLeaseS });
+        }
         if (result.Publication is not null)
         {
             _hub.NotifyHijackChanged(result.Publication);
@@ -310,6 +315,10 @@ public sealed partial class HijackLeaseManager
     {
         var result = await TryAcquireWsCoreAsync(
             workerId, ws, ownershipVersion, ct).ConfigureAwait(false);
+        if (result.Ok)
+        {
+            _hub.EmitTelemetry("hijack.acquired", workerId, metadata: new Dictionary<string, object?> { ["hijack_type"] = "dashboard", ["lease_s"] = _dashboardLeaseS });
+        }
         if (result.Publication is not null)
         {
             _hub.NotifyHijackChanged(result.Publication);

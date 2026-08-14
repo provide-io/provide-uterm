@@ -55,6 +55,11 @@ public sealed partial class UtermServer
         if (!_deps.Hub.AllowRestAcquireFor(clientId))
         {
             _deps.Hub.Metric("rest_acquire_rate_limited_total", 1);
+            _deps.Hub.EmitTelemetry(
+                "rate_limit.triggered",
+                workerId,
+                metadata: new Dictionary<string, object?> { ["client_id"] = clientId, ["limit_type"] = "rest_acquire" }
+            );
             return BridgeError(429, "rate_limited");
         }
 
@@ -134,7 +139,7 @@ public sealed partial class UtermServer
         var (p, authError) = await RequireHubAuthz(ctx, workerId, "session.control.hijack").ConfigureAwait(false);
         if (authError is not null) return authError;
 
-        if (!AllowRestWrite(ctx, "rest_send_rate_limited_total", out var limited))
+        if (!AllowRestWrite(ctx, workerId, "rest_send", "rest_send_rate_limited_total", out var limited))
         {
             return limited!;
         }
@@ -168,7 +173,7 @@ public sealed partial class UtermServer
         // reference charges `allow_rest_send_for` from the step route
         // (bridge/routes/rest.py:429), as does Go (server/bridge_rest2.go:97).
         // The refusal is still counted under step's own name.
-        if (!AllowRestWrite(ctx, "rest_step_rate_limited_total", out var limited))
+        if (!AllowRestWrite(ctx, workerId, "rest_step", "rest_step_rate_limited_total", out var limited))
         {
             return limited!;
         }
@@ -222,6 +227,7 @@ public sealed partial class UtermServer
         {
             ["hijack_id"] = hijackId,
         });
+        _deps.Hub.EmitTelemetry("hijack.released", workerId, metadata: new Dictionary<string, object?> { ["hijack_type"] = "rest" });
         await _deps.Hub.BroadcastHijackStateAsync(workerId, ctx.RequestAborted).ConfigureAwait(false);
         return Results.Json(new { ok = true, worker_id = workerId, hijack_id = hijackId }, JsonOpts);
     }
@@ -353,6 +359,21 @@ public sealed partial class UtermServer
         return (p, null);
     }
 
+    private async Task<(Principal Principal, IResult? Error)> RequireMetricsAuth(HttpContext ctx)
+    {
+        if (!_deps.Config.Security.MetricsRequireAuth)
+        {
+            return (Principal.Anonymous(), null);
+        }
+        var p = await Authenticate(ctx).ConfigureAwait(false);
+        if (string.Equals(p.SubjectId, "anonymous", StringComparison.Ordinal) || !_deps.Authz.IsAdmin(p))
+        {
+            return (p, DetailError(401, "authentication required"));
+        }
+
+        return (p, null);
+    }
+
     /// <summary>
     /// The two gates every <c>/worker/{id}/...</c> route passes, in the order
     /// the reference mounts them: <c>_require_authenticated</c> first, then
@@ -396,6 +417,7 @@ public sealed partial class UtermServer
         {
             if (!_deps.Authz.CanReadSession(p, def))
             {
+                _deps.Hub.EmitTelemetry("auth.denied", workerId, principal: p.SubjectId, metadata: new Dictionary<string, object?> { ["status"] = 403, ["reason"] = "insufficient_privileges" });
                 error = DetailError(403, "insufficient privileges");
                 return false;
             }
@@ -403,6 +425,7 @@ public sealed partial class UtermServer
         else if (!_deps.Authz.CanMutateSession(p, def, capability))
         {
             // For hijack on public sessions owned by admin, also allow operators that own the session.
+            _deps.Hub.EmitTelemetry("auth.denied", workerId, principal: p.SubjectId, metadata: new Dictionary<string, object?> { ["status"] = 403, ["reason"] = "insufficient_privileges" });
             error = DetailError(403, "insufficient privileges");
             return false;
         }
@@ -495,7 +518,7 @@ public sealed partial class UtermServer
     /// request for a lease nobody holds answers 429, not 404, so a caller
     /// cannot enumerate lease ids on somebody else's budget.
     /// </summary>
-    private bool AllowRestWrite(HttpContext ctx, string metric, out IResult? error)
+    private bool AllowRestWrite(HttpContext ctx, string workerId, string limitType, string metric, out IResult? error)
     {
         var clientId = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
         if (_deps.Hub.AllowRestSendFor(clientId))
@@ -505,6 +528,11 @@ public sealed partial class UtermServer
         }
 
         _deps.Hub.Metric(metric, 1);
+        _deps.Hub.EmitTelemetry(
+            "rate_limit.triggered",
+            workerId,
+            metadata: new Dictionary<string, object?> { ["client_id"] = clientId, ["limit_type"] = limitType }
+        );
         error = BridgeError(429, "rate_limited");
         return false;
     }

@@ -64,7 +64,6 @@ public sealed class ServerIntegrationHostRestTests
             Registry = new InMemorySessionRegistry(cfg.Sessions),
             ApiKeys = apiKeys,
             Profiles = new InMemoryProfileStore(),
-            Metrics = new ServerMetrics(),
             Version = "host-rest",
         });
         server.Build(new[] { $"http://127.0.0.1:{port}" });
@@ -511,7 +510,7 @@ public sealed class ServerIntegrationHostRestTests
             Assert.Equal("ssh", (await ssh.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("connector_type").GetString());
         }
 
-        // Pure store/metrics coverage
+        // Pure store coverage
         var store = new InMemoryProfileStore();
         var p = store.CreateProfile(new ConnectionProfile
         {
@@ -524,14 +523,6 @@ public sealed class ServerIntegrationHostRestTests
         Assert.Equal("n2", store.GetProfile("p1")!.Name);
         Assert.True(store.DeleteProfile("p1"));
         Assert.False(store.DeleteProfile("p1"));
-
-        var m = new ServerMetrics();
-        m.Inc("a");
-        m.Inc("a");
-        m.Inc("b", 3);
-        Assert.Equal(2, m.Snapshot()["a"]);
-        Assert.Contains("uterm_a", m.Prometheus());
-        Assert.Contains("uterm_b", m.Prometheus());
 
         var pending = hub.Approvals.PendingApprovals();
         Assert.NotNull(pending);
@@ -573,8 +564,7 @@ public sealed class ServerIntegrationHostRestTests
         cfg.Auth.Mode = "dev_token";
         cfg.Environment = "development";
         cfg.Security.Mode = "standard";
-        var token = DevIdp.Setup(cfg.Auth, new DevIdp.Options
-        {
+        var token = DevIdp.Setup(cfg.Auth, new DevIdp.Options{
             TokenPath = Path.Combine(Path.GetTempPath(), "viewer-" + Guid.NewGuid().ToString("N")),
             Subject = "viewer1",
             Roles = new[] { "viewer" },
@@ -588,7 +578,6 @@ public sealed class ServerIntegrationHostRestTests
             Config = cfg,
             Registry = new InMemorySessionRegistry(cfg.Sessions),
             Profiles = new InMemoryProfileStore(),
-            Metrics = new ServerMetrics(),
             Version = "viewer",
         });
         server.Build(new[] { $"http://127.0.0.1:{port}" });
@@ -643,7 +632,6 @@ public sealed class ServerIntegrationHostRestTests
             Config = cfg,
             Registry = new InMemorySessionRegistry(cfg.Sessions),
             FrontendDir = fe,
-            Metrics = new ServerMetrics(),
             Profiles = new InMemoryProfileStore(),
             ApiKeys = new ApiKeyStore(),
             Version = "spa",

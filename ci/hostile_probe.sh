@@ -36,7 +36,18 @@ case "${1:?usage: hostile_probe.sh <start|wait-health|burst|oversized|slowloris|
     hostport="${HOSTILE_BASE_URL#*://}"
     host="${hostport%%:*}"
     port="${hostport##*:}"
-    nohup uv run uterm server --host "${host}" --port "${port}" >"${SERVER_LOG}" 2>&1 &
+    
+    server_impl="${SERVER_IMPL:-python}"
+    if [ "$server_impl" = "python" ]; then
+      nohup uv run uterm server --host "${host}" --port "${port}" >"${SERVER_LOG}" 2>&1 &
+    elif [ "$server_impl" = "go" ]; then
+      (cd packages/provide-uterm-go && nohup go run cmd/uterm/main.go server --host "${host}" --port "${port}" >"${SERVER_LOG}" 2>&1) &
+    elif [ "$server_impl" = "csharp" ]; then
+      (cd packages/provide-uterm-csharp/src/Provide.Uterm.Cli && nohup dotnet run -c Release -- server --host "${host}" --port "${port}" >"${SERVER_LOG}" 2>&1) &
+    else
+      echo "unknown SERVER_IMPL: $server_impl" >&2
+      exit 1
+    fi
     echo $! >"${SERVER_PID_FILE}"
     ;;
   wait-health)

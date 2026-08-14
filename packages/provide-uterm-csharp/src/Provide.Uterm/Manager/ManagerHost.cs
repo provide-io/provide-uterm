@@ -40,6 +40,9 @@ public static class ManagerHost
             }
         }
 
+        using var span = Provide.Telemetry.Tracing.GetTracer("provide.uterm.manager").StartSpan("Manager.Run");
+        span.SetAttribute("host", cfg.Host);
+        span.SetAttribute("port", cfg.Port);
         var mgr = new AgentManager(cfg);
         var log = Provide.Telemetry.ProvideTelemetry.GetLogger("provide.uterm.manager");
         log.Info("uterm-manager ready", new Dictionary<string, object?> { ["url"] = $"http://{cfg.Host}:{cfg.Port}" });

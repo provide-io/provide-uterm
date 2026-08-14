@@ -39,8 +39,6 @@ public sealed partial class UtermServer
         app.MapPost("/api/approvals/{requestId}/reject", (Delegate)HandleReject);
 
         // Metrics + posture
-        app.MapGet("/api/metrics", (Delegate)HandleMetricsJson);
-        app.MapGet("/api/metrics/prometheus", (Delegate)HandleMetricsPrometheus);
         app.MapGet("/api/security-posture", (Delegate)HandleSecurityPosture);
 
         // Session extras
@@ -56,10 +54,7 @@ public sealed partial class UtermServer
 
     private IProfileStore? _lazyProfiles;
 
-    private ServerMetrics EnsureMetrics() =>
-        _deps.Metrics ?? (_lazyMetrics ??= new ServerMetrics());
 
-    private ServerMetrics? _lazyMetrics;
 
     private ApiKeyStore EnsureApiKeys() =>
         _deps.ApiKeys ?? (_lazyApiKeys ??= new ApiKeyStore());
@@ -119,7 +114,7 @@ public sealed partial class UtermServer
         }
 
         var created = EnsureProfiles().CreateProfile(profile);
-        EnsureMetrics().Inc("profiles_created_total");
+        Provide.Telemetry.Metrics.Counter("profiles_created_total").Add(1);
         return Results.Json(ProfileDto(created), JsonOpts);
     }
 
@@ -211,7 +206,7 @@ public sealed partial class UtermServer
         };
         _deps.Registry.Upsert(def);
         var st = await ActivateSessionAsync(sid, def, ctx.RequestAborted).ConfigureAwait(false);
-        EnsureMetrics().Inc("profile_connect_total");
+        Provide.Telemetry.Metrics.Counter("profile_connect_total").Add(1);
         return Results.Json(new
         {
             ok = true,
@@ -393,35 +388,7 @@ public sealed partial class UtermServer
         return Results.Json(new { status = "rejected" }, JsonOpts);
     }
 
-    // ---- Metrics / posture -------------------------------------------------
 
-    private async Task<IResult> HandleMetricsJson(HttpContext ctx)
-    {
-        if (_deps.Config.Security.MetricsRequireAuth)
-        {
-            var p = await Authenticate(ctx).ConfigureAwait(false);
-            if (string.IsNullOrEmpty(p.SubjectId) || p.SubjectId == "anonymous")
-            {
-                return DetailError(401, "authentication required for /metrics");
-            }
-        }
-
-        return Results.Json(new { metrics = EnsureMetrics().Snapshot() }, JsonOpts);
-    }
-
-    private async Task<IResult> HandleMetricsPrometheus(HttpContext ctx)
-    {
-        if (_deps.Config.Security.MetricsRequireAuth)
-        {
-            var p = await Authenticate(ctx).ConfigureAwait(false);
-            if (string.IsNullOrEmpty(p.SubjectId) || p.SubjectId == "anonymous")
-            {
-                return DetailError(401, "authentication required for /metrics");
-            }
-        }
-
-        return Results.Text(EnsureMetrics().Prometheus(), "text/plain; version=0.0.4; charset=utf-8");
-    }
 
     private async Task<IResult> HandleSecurityPosture(HttpContext ctx)
     {
@@ -644,7 +611,7 @@ public sealed partial class UtermServer
         };
         _deps.Registry.Upsert(def);
         var st = await ActivateSessionAsync(sid, def, ctx.RequestAborted).ConfigureAwait(false);
-        EnsureMetrics().Inc("quick_connect_total");
+        Provide.Telemetry.Metrics.Counter("quick_connect_total").Add(1);
         return Results.Json(new
         {
             ok = true,

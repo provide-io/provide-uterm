@@ -312,6 +312,15 @@ public sealed partial class HijackLeaseManager
                 // Expiry publication is best-effort after lifecycle release.
             }
         }
+        if (browserExpired)
+        {
+            _hub.EmitTelemetry("hijack.expired", workerId, metadata: new Dictionary<string, object?> { ["hijack_type"] = "dashboard" });
+        }
+        if (restExpired)
+        {
+            _hub.EmitTelemetry("hijack.expired", workerId, metadata: new Dictionary<string, object?> { ["hijack_type"] = "rest" });
+        }
+
         return (browserExpired, restExpired);
     }
 
