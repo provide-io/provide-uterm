@@ -99,7 +99,13 @@ class PollingCoordinator:
         """
         if after_event_seq is not None:
             seq = snapshot.get("event_seq")
-            return isinstance(seq, int) and not isinstance(seq, bool) and seq > after_event_seq
+            if isinstance(seq, int) and not isinstance(seq, bool):
+                return seq > after_event_seq
+            # No usable event_seq on this snapshot. Treating that as "not fresh"
+            # would strand it permanently — the field never appears later, so the
+            # caller would time out on every poll forever after. Fall back to the
+            # wall-clock proxy, which is what this gate used before event_seq
+            # existed and is still the best signal available for such a frame.
         return bool(snapshot.get("ts", 0) > req_ts)
 
     async def wait_for_snapshot(
