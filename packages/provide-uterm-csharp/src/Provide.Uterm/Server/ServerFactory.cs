@@ -64,7 +64,7 @@ public static class ServerFactory
         // be created below, so there was nothing to hand the hub, and every
         // counter it emitted was dropped while the emitting code looked correct.
         var metrics = new ServerMetrics();
-        var log = logWriter ?? Console.Error;
+        var log = Provide.Telemetry.ProvideTelemetry.GetLogger("provide.uterm.server");
         var hub = new TermHub(new TermHubConfig
         {
             Clock = clock,
@@ -75,10 +75,13 @@ public static class ServerFactory
             RestAcquireRateLimitPerSec = cfg.RestAcquireRateLimitPerSec,
             RestSendRateLimitPerSec = cfg.RestSendRateLimitPerSec,
             OnMetric = (name, value) => metrics.Inc(name, value),
-            // stderr by default, matching the CLI's own convention: a hosted
-            // server with no sink configured should still say why it refused
-            // something, and a caller that wants the lines can pass a writer.
-            OnLog = (level, message) => log.WriteLine($"{level} {message}"),
+            OnLog = (level, message) =>
+            {
+                if (level == "debug") log.Debug(message);
+                else if (level == "warn" || level == "warning") log.Warn(message);
+                else if (level == "error") log.Error(message);
+                else log.Info(message);
+            },
         });
         var registry = new InMemorySessionRegistry(cfg.Sessions, cfg.Recording.EnabledByDefault);
         graphicalTargets ??= SeedGraphicalTargets(cfg);
@@ -108,7 +111,13 @@ public static class ServerFactory
                 // receiver's freshness window rejects deliveries for a reason
                 // that appears nowhere in either log.
                 Now = () => serverClock.Wall(),
-                OnLog = (level, message) => log.WriteLine($"{level} {message}"),
+                OnLog = (level, message) =>
+                {
+                    if (level == "debug") log.Debug(message);
+                    else if (level == "warn" || level == "warning") log.Warn(message);
+                    else if (level == "error") log.Error(message);
+                    else log.Info(message);
+                },
             });
         var profiles = new InMemoryProfileStore();
         // `api_keys_enabled` used to be forced on here whenever it was false,

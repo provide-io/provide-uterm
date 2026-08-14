@@ -473,7 +473,10 @@ async def _ws_to_tcp(
     def _note(raw: bytes) -> None:
         stats["frames"] += 1
         stats["bytes"] += len(raw)
-        logger.info(
+        # TRACE: one line per WS frame — 168,282 in a single measured run. The
+        # counters matter when a client sees no output and nowhere else, so this
+        # costs nothing until somebody turns TRACE on to look.
+        logger.trace(
             "gateway_ws_to_tcp frame=%d bytes=%d total_bytes=%d",
             stats["frames"],
             len(raw),

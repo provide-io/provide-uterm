@@ -506,7 +506,10 @@ class TransportSession:
                     # Wall clock is carried IN the message: consumers of this
                     # log (a supervisor capturing worker stdout) may render bare
                     # text with no timestamp of their own.
-                    logger.info(
+                    # TRACE: one line per socket read — 14,848 in a single
+                    # measured run. Decisive when a client sees a frozen screen,
+                    # noise otherwise.
+                    logger.trace(
                         "reader_chunk t=%.3f seq=%d chunk_bytes=%d bytes_total=%d",
                         time.time(),
                         self._change_seq,

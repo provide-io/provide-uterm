@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from provide.telemetry import get_logger
 from provide.uterm.server.bridge.frames import make_hijack_state_frame
+from provide.uterm.server.bridge.hub import snapshot_metrics
 from provide.uterm.server.bridge.hub.redaction import StreamRedactor
 from provide.uterm.server.bridge.hub.router_redaction import _redact_frame_fields
 from provide.uterm.tunnel.protocol import CHANNEL_HTTP, encode_frame
@@ -201,7 +202,14 @@ async def _broadcast_to_current_browsers(
     # is indistinguishable from an idle terminal. Terminal data streams
     # constantly with no viewer attached, so only snapshots are worth saying.
     if not browsers_with_roles and msg.get("type") == "snapshot":
-        logger.warning(
+        # TRACE, not warning: the hijack path registers no browsers at all, so
+        # this fires on essentially every snapshot — 9,881 times in one measured
+        # run, every one of them benign. At warning level it buried the two
+        # lines beside it that fire only on a real fault. ``trace`` is a no-op
+        # unless TRACE is explicitly enabled, so the line costs nothing until
+        # somebody goes looking for it.
+        snapshot_metrics.snapshot_broadcast_no_browsers.add(1, {"worker_id": worker_id})
+        logger.trace(
             "snapshot_broadcast_no_browsers",
             worker_id=worker_id,
             screen_hash=msg.get("screen_hash"),
@@ -267,6 +275,7 @@ async def _broadcast_to_current_browsers(
                 # reading the previous screen. Say it loudly for snapshots only;
                 # term frames fail often enough on a closing socket that raising
                 # them would bury this.
+                snapshot_metrics.snapshot_broadcast_send_failed.add(1, {"worker_id": worker_id})
                 logger.warning(
                     "snapshot_broadcast_send_failed",
                     worker_id=worker_id,

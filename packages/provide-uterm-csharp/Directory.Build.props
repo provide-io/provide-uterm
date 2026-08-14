@@ -14,4 +14,21 @@ SPDX-License-Identifier: AGPL-3.0-or-later
     <Copyright>Copyright (c) 2025-2026 provide.io llc. All rights reserved.</Copyright>
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
   </PropertyGroup>
+
+  <!-- provide-telemetry: Local source override with NuGet fallback -->
+  <PropertyGroup>
+    <ProvideTelemetryPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../provide-telemetry/csharp/src/Provide.Telemetry/Provide.Telemetry.csproj'))</ProvideTelemetryPath>
+    <UseTelemetrySource Condition="Exists('$(ProvideTelemetryPath)')">true</UseTelemetrySource>
+    <DefineConstants>$(DefineConstants);HAS_TELEMETRY</DefineConstants>
+  </PropertyGroup>
+
+  <!-- If submodule is checked out, use live source code -->
+  <ItemGroup Condition="'$(UseTelemetrySource)' == 'true'">
+    <ProjectReference Include="$(ProvideTelemetryPath)" />
+  </ItemGroup>
+
+  <!-- If submodule is NOT checked out, fallback to NuGet -->
+  <ItemGroup Condition="'$(UseTelemetrySource)' != 'true'">
+    <PackageReference Include="Provide.Telemetry" Version="*" />
+  </ItemGroup>
 </Project>

@@ -41,8 +41,9 @@ public static class ManagerHost
         }
 
         var mgr = new AgentManager(cfg);
-        Console.Out.WriteLine($"uterm-manager ready on http://{cfg.Host}:{cfg.Port}");
-        Console.Out.WriteLine($"swarm: {mgr.GetSwarmStatus()["agents"]} agents");
+        var log = Provide.Telemetry.ProvideTelemetry.GetLogger("provide.uterm.manager");
+        log.Info("uterm-manager ready", new Dictionary<string, object?> { ["url"] = $"http://{cfg.Host}:{cfg.Port}" });
+        log.Info("swarm status", new Dictionary<string, object?> { ["agents"] = mgr.GetSwarmStatus()["agents"] });
         // Keep process alive until Ctrl-C when launched interactively without --once.
         // Tests set ManagerProgram.WaitForCancel to a no-op.
         if (!args.Contains("--once"))
