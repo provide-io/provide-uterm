@@ -37,7 +37,7 @@ public sealed class ServerDeps
     /// <summary>Connection profiles store.</summary>
     public IProfileStore? Profiles { get; init; }
     /// <summary>Server metrics counters.</summary>
-    public ServerMetrics? Metrics { get; init; }
+    public ServerMetrics Metrics { get; init; } = new();
     /// <summary>API key registry (admin /api/keys).</summary>
     public ApiKeyStore? ApiKeys { get; init; }
     /// <summary>Optional path to built frontend assets (SPA hosting).</summary>
@@ -151,7 +151,6 @@ public sealed partial class UtermServer : IAsyncDisposable
     internal TermHub HubForTests => _deps.Hub;
 
     /// <summary>The metric sink this server was built with, for the same reason.</summary>
-    internal ServerMetrics MetricsForTests => _deps.Metrics;
 
     private void MapRoutes(WebApplication app)
     {
@@ -160,6 +159,29 @@ public sealed partial class UtermServer : IAsyncDisposable
         app.MapGet("/readyz", () => _ready
             ? Results.Json(new { status = "ready" })
             : Results.Json(new { status = "not_ready" }, statusCode: 503));
+
+        app.MapGet("/api/metrics", async (HttpContext ctx) =>
+        {
+            var (_, authError) = await RequireMetricsAuth(ctx).ConfigureAwait(false);
+            if (authError is not null) return authError;
+            return Results.Json(new { metrics = _deps.Metrics.GetSnapshot() }, JsonOpts);
+        });
+
+        app.MapGet("/api/metrics/prometheus", async (HttpContext ctx) =>
+        {
+            var (_, authError) = await RequireMetricsAuth(ctx).ConfigureAwait(false);
+            if (authError is not null) return authError;
+            
+            var lines = new List<string>();
+            var snap = _deps.Metrics.GetSnapshot();
+            foreach (var kv in snap.OrderBy(x => x.Key))
+            {
+                lines.Add($"# TYPE {kv.Key} counter");
+                lines.Add($"{kv.Key} {kv.Value}");
+            }
+            var body = string.Join("\n", lines) + (lines.Count > 0 ? "\n" : "");
+            return Results.Text(body, "text/plain; version=0.0.4; charset=utf-8");
+        });
 
         app.MapGet("/api/sessions", async (HttpContext ctx) =>
         {

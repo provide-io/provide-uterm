@@ -28,13 +28,13 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import logging
 import time
 from collections import deque
 from copy import deepcopy
 from sys import getsizeof
 from typing import TYPE_CHECKING, Any
 
+from provide.telemetry import get_logger
 from provide.uterm.terminal_frames import TerminalFrame, TerminalFrameDisconnectedError
 
 from provide.uterm.control_channel import ControlFrameDecoder, DataChunk
@@ -79,7 +79,14 @@ def _terminal_frame_size(frame: TerminalFrame) -> int:
     )
 
 
-logger = logging.getLogger(__name__)
+# provide.telemetry's logger, NOT logging.getLogger: the reader loop below calls
+# logger.trace(), which exists only on the telemetry wrapper. A stdlib logger
+# raises AttributeError there, and AttributeError is not in _reader_loop's except
+# tuple — so the loop dies on its FIRST chunk and the session goes permanently
+# blank. Measured 2026-08-14 against TWGS: the reader took the leading NUL, then
+# died before the IAC reply, so negotiation never completed and every bot login
+# timed out on an empty screen.
+logger = get_logger(__name__)
 
 
 class TerminalCapture:
@@ -489,11 +496,11 @@ class TransportSession:
                     _elapsed = time.monotonic() - _t0
                     if _elapsed >= 0.25:
                         logger.warning(
-                            "reader_chunk_slow t=%.3f elapsed_s=%.3f chunk_bytes=%d seq=%d",
-                            time.time(),
-                            _elapsed,
-                            len(data),
-                            self._change_seq,
+                            "reader_chunk_slow",
+                            t=round(time.time(), 3),
+                            elapsed_s=round(_elapsed, 3),
+                            chunk_bytes=len(data),
+                            seq=self._change_seq,
                         )
                     # One line per CHUNK, deliberately unthrottled. A throttled
                     # heartbeat cannot distinguish "consumed immediately, then

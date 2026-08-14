@@ -44,6 +44,7 @@ public sealed partial class UtermServer
 
         if (!_deps.Authz.CanMutateSession(p, def, cap))
         {
+            _deps.Hub.EmitTelemetry("auth.denied", sessionId, principal: p.SubjectId, metadata: new Dictionary<string, object?> { ["status"] = 403, ["reason"] = "insufficient_privileges" });
             return (null, null, DetailError(403, "insufficient privileges"));
         }
 
@@ -66,6 +67,7 @@ public sealed partial class UtermServer
 
         if (!_deps.Authz.CanReadSession(p, def))
         {
+            _deps.Hub.EmitTelemetry("auth.denied", sessionId, principal: p.SubjectId, metadata: new Dictionary<string, object?> { ["status"] = 403, ["reason"] = "insufficient_privileges" });
             return (null, DetailError(403, "insufficient privileges"));
         }
 
