@@ -16,13 +16,13 @@ public class FramePropertyTests
         
         try 
         {
-            ProvideFrame.Parse(randomJson);
+            FrameCodec.DecodeFrame(randomJson);
         }
         catch (JsonException)
         {
             // Invalid JSON is expected to fail safely with JsonException
         }
-        catch (InvalidOperationException)
+        catch (ArgumentException)
         {
             // Missing required fields like 'type'
         }

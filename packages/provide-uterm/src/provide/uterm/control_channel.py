@@ -41,12 +41,18 @@ except ImportError:
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
+
 DLE = "\x10"
 STX = "\x02"
+_DLE_BYTE = ord(DLE)
+_STX_BYTE = ord(STX)
 _HEADER_BYTES = 11  # DLE STX + 8 hex digits + ':'
 _MAX_CONTROL_PAYLOAD_BYTES = 1_048_576
 _DEFAULT_BUFFER_BYTES = 10_485_760
 _HEX_DIGITS = frozenset(hexdigits)
+_HEX_BYTE_DIGITS = frozenset(_byte.encode("ascii")[0] for _byte in hexdigits)
+_DLE_STX = bytes((_DLE_BYTE, _STX_BYTE))
+_DLE_STX_VIEW = memoryview(_DLE_STX)
 # Maximum JSON nesting depth in a control frame. The 1 MB frame size limit
 # bounds the *size* of a hostile payload, but a deeply nested structure
 # like `[[[…]]]` of depth ~500 fits in well under 1 MB and would burn
@@ -182,6 +188,7 @@ class ControlFrameDecoder:
         self._max_buffer_bytes = max(1, int(max_buffer_bytes))
         self._max_frame_depth = max(1, int(max_frame_depth))
         self._buffer = ""
+        self._buffer_bytes = bytearray()
         self._buffer_parts: list[str] = []
         self._on_error = on_error
 
@@ -190,40 +197,58 @@ class ControlFrameDecoder:
             self._on_error("control_frame_protocol_error")
         return ControlFrameProtocolError(message)
 
-    def feed(self, chunk: str) -> list[ControlFrameChunk]:
-        """Decode all complete events from *chunk* and buffer the rest."""
+    @staticmethod
+    def _coerce_input(chunk: str) -> memoryview:
+        """Return a byte view for parser operations."""
         if not isinstance(chunk, str):
             raise TypeError(f"control frame chunks must be str, got {type(chunk).__name__!r}")
-        self._buffer_parts.append(chunk)
-        total = sum(len(p.encode("utf-8")) for p in self._buffer_parts)
-        if total > self._max_buffer_bytes:
-            self._buffer_parts.clear()
+        return memoryview(chunk.encode("utf-8"))
+
+    @staticmethod
+    def _decode_data_parts(parts: list[memoryview | bytes]) -> str:
+        chunks: list[str] = []
+        for part in parts:
+            if isinstance(part, memoryview):
+                chunks.append(part.tobytes().decode("utf-8"))
+            else:
+                chunks.append(part.decode("utf-8"))
+        return "".join(chunks)
+
+    def feed(self, chunk: str) -> list[ControlFrameChunk]:
+        """Decode all complete events from *chunk* and buffer the rest."""
+        chunk_view = self._coerce_input(chunk)
+        self._buffer_bytes.extend(chunk_view)
+
+        if len(self._buffer_bytes) > self._max_buffer_bytes:
+            buffered_bytes = len(self._buffer_bytes)
             self._buffer = ""
-            raise self._report_error(f"control frame buffer overflow: {total} > {self._max_buffer_bytes}")
-        self._buffer = "".join(self._buffer_parts)
+            self._buffer_bytes = bytearray()
+            self._buffer_parts = []
+            raise self._report_error(f"control frame buffer overflow: {buffered_bytes} > {self._max_buffer_bytes}")
+
         try:
-            events = self._drain(final=False)  # pragma: no mutate
+            events = self._drain(final=False)
         except ControlFrameProtocolError:
-            self._buffer_parts.clear()
             self._buffer = ""
+            self._buffer_bytes = bytearray()
+            self._buffer_parts = []
             raise
-        # After _drain, self._buffer contains only unconsumed data.
-        # Rebuild _buffer_parts with the unconsumed portion.
-        self._buffer_parts = [self._buffer] if self._buffer else []
         return events
 
     def finish(self) -> list[ControlFrameChunk]:
         """Decode any remaining buffered data and reject truncated control frames."""
         try:
-            events = self._drain(final=True)  # pragma: no mutate
+            events = self._drain(final=True)
+            if self._buffer or self._buffer_bytes:
+                self._buffer = ""
+                self._buffer_parts = []
+                self._buffer_bytes = bytearray()
+                raise self._report_error("truncated control frame")
         except ControlFrameProtocolError:
-            self._buffer_parts.clear()
             self._buffer = ""
+            self._buffer_parts = []
+            self._buffer_bytes = bytearray()
             raise
-        if self._buffer:
-            self._buffer_parts.clear()
-            self._buffer = ""
-            raise self._report_error("truncated control frame")
         return events
 
     def _parse_frame_payload(self, payload_raw: str) -> dict[str, Any]:
@@ -243,15 +268,23 @@ class ControlFrameDecoder:
             raise self._report_error(str(exc)) from exc
         return payload
 
-    def _payload_end_for_utf8_length(self, buf: str, start: int, payload_bytes: int) -> int | None:
+    def _payload_end_for_utf8_length(
+        self, buf: bytes | bytearray | memoryview, start: int, payload_bytes: int
+    ) -> int | None:
         """Locate the payload end via the shared helper, firing the decoder's
         error hook when the declared byte length splits a Unicode code point."""
+        if len(buf) < start + payload_bytes:
+            return None
+        payload = bytes(buf[start : start + payload_bytes])
         try:
-            return _utf8_payload_end(buf, start, payload_bytes)
-        except ControlFrameProtocolError as exc:
-            raise self._report_error(str(exc)) from exc
+            payload.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise self._report_error("invalid control payload length") from exc
+        return start + payload_bytes
 
-    def _try_parse_frame(self, buf: str, idx: int, buf_len: int, *, final: bool) -> tuple[ControlChunk, int] | None:
+    def _try_parse_frame(
+        self, buf: bytes | bytearray | memoryview, idx: int, buf_len: int, *, final: bool
+    ) -> tuple[ControlChunk, int] | None:
         """Parse a control frame at buf[idx]. Returns (chunk, frame_end) or None if incomplete.
 
         Raises ControlFrameProtocolError on protocol violations.
@@ -261,28 +294,32 @@ class ControlFrameDecoder:
             if final:
                 raise self._report_error("truncated control frame")
             return None
-        length_hex = buf[idx + 2 : idx + 10]  # pragma: no mutate
+
+        length_hex = bytes(buf[idx + 2 : idx + 10])
         separator = buf[idx + 10]
-        if separator != ":" or any(char not in _HEX_DIGITS for char in length_hex):
+        if separator != ord(":") or any(byte not in _HEX_BYTE_DIGITS for byte in length_hex):
             raise self._report_error("invalid control header")
-        payload_bytes = int(length_hex, 16)
+        payload_bytes = int(length_hex.decode("ascii"), 16)
+
         # Bounding check: frames > 1MB are rejected immediately before allocation
         if payload_bytes > _MAX_CONTROL_PAYLOAD_BYTES or payload_bytes > self._max_control_payload_bytes:
             raise self._report_error("control payload too large")
+
         payload_start = idx + _HEADER_BYTES
         frame_end = self._payload_end_for_utf8_length(buf, payload_start, payload_bytes)
         if frame_end is None:
             if final:
                 raise self._report_error("truncated control frame")
             return None
-        payload_raw = buf[payload_start:frame_end]
+
+        payload_raw = bytes(buf[payload_start:frame_end]).decode("utf-8")
         return ControlChunk(self._parse_frame_payload(payload_raw)), frame_end
 
     @staticmethod
     def _emit_data_chunk(
         events: list[ControlFrameChunk],
-        data_parts: list[str],
-        buf: str,
+        data_parts: list[memoryview],
+        buf: bytes | bytearray | memoryview,
         data_start: int,
         idx: int,
     ) -> int:
@@ -290,38 +327,43 @@ class ControlFrameDecoder:
         if data_start < idx:
             data_parts.append(buf[data_start:idx])
         if data_parts:
-            events.append(DataChunk("".join(data_parts)))
+            events.append(DataChunk(ControlFrameDecoder._decode_data_parts(data_parts)))
             data_parts.clear()
         return idx
 
+    @staticmethod
     def _flush_remaining(
-        self,
-        buf: str,
+        buf: bytes | bytearray | memoryview,
         idx: int,
         data_start: int,
-        data_parts: list[str],
+        data_parts: list[memoryview],
         events: list[ControlFrameChunk],
-    ) -> None:
-        """Flush unconsumed buffer tail and any trailing plain data."""
-        if idx > 0:  # pragma: no mutate
-            self._buffer = buf[idx:]
+    ) -> int:
+        """Flush unconsumed buffer tail and any trailing plain data.
+
+        Returns the next parse offset.
+        """
         if data_start < idx:
             data_parts.append(buf[data_start:idx])
         if data_parts:
-            events.append(DataChunk("".join(data_parts)))
+            events.append(DataChunk(ControlFrameDecoder._decode_data_parts(data_parts)))
+        return idx
 
     def _drain(self, *, final: bool) -> list[ControlFrameChunk]:
         events: list[ControlFrameChunk] = []
-        buf = self._buffer
+        if not self._buffer_bytes:
+            return events
+
+        buf = memoryview(self._buffer_bytes)
         buf_len = len(buf)
         idx = 0
         # Accumulate plain data parts (slices + escaped DLEs) to join later.
-        data_parts: list[str] = []
+        data_parts: list[memoryview] = []
         data_start = 0  # start of current plain-data slice
 
         while idx < buf_len:
-            if buf[idx] != DLE:
-                idx += 1  # pragma: no mutate
+            if buf[idx] != _DLE_BYTE:
+                idx += 1
                 continue
 
             if idx + 1 >= buf_len:
@@ -329,26 +371,34 @@ class ControlFrameDecoder:
                     raise self._report_error("truncated control frame")
                 break
 
-            next_char = buf[idx + 1]
-            if next_char == DLE:
+            next_byte = buf[idx + 1]
+            if next_byte == _DLE_BYTE:
                 # Escaped DLE: save data slice before it, add literal DLE
-                if data_start < idx:  # pragma: no cover — edge case: DLE at buffer boundary  # pragma: no mutate
+                if data_start < idx:
                     data_parts.append(buf[data_start:idx])
-                data_parts.append(DLE)
-                idx += 2  # pragma: no mutate
+                data_parts.append(_DLE_STX_VIEW[0:1])  # one-byte literal DLE
+                idx += 2
                 data_start = idx
                 continue
-            if next_char != STX:
+            if next_byte != _STX_BYTE:
                 raise self._report_error("invalid control prefix")
 
             data_start = self._emit_data_chunk(events, data_parts, buf, data_start, idx)
 
-            result = self._try_parse_frame(buf, idx, buf_len, final=final)  # pragma: no mutate
+            result = self._try_parse_frame(buf, idx, buf_len, final=final)
             if result is None:
                 break
             chunk, idx = result
             data_start = idx
             events.append(chunk)
 
-        self._flush_remaining(buf, idx, data_start, data_parts, events)
+        next_offset = self._flush_remaining(buf, idx, data_start, data_parts, events)
+        if next_offset >= len(self._buffer_bytes):
+            self._buffer = ""
+            self._buffer_bytes = bytearray()
+            self._buffer_parts = []
+        else:
+            self._buffer_bytes = bytearray(buf[next_offset:])
+            self._buffer = self._buffer_bytes.decode("utf-8")
+            self._buffer_parts = [self._buffer]
         return events
