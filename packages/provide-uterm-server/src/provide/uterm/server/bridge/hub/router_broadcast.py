@@ -195,6 +195,19 @@ async def _broadcast_to_current_browsers(
             (ws, role) for ws, role in st.browsers.items() if ws not in hub._startup_pending_browsers
         ]
 
+    # A committed snapshot that reaches nobody is the failure this names. The
+    # commit succeeds, the fan-out below sends to an empty set and returns
+    # normally, and a polling client keeps reading the previous screen — which
+    # is indistinguishable from an idle terminal. Terminal data streams
+    # constantly with no viewer attached, so only snapshots are worth saying.
+    if not browsers_with_roles and msg.get("type") == "snapshot":
+        logger.warning(
+            "snapshot_broadcast_no_browsers",
+            worker_id=worker_id,
+            screen_hash=msg.get("screen_hash"),
+            registered=len(st.browsers),
+        )
+
     # Pre-encode for all browsers (except when redaction is needed).
     encoded_default = _encode_browser_frame(msg)
 
@@ -247,6 +260,19 @@ async def _broadcast_to_current_browsers(
     for (ws, _role), result in zip(browsers_with_roles, results, strict=True):
         if isinstance(result, Exception):
             logger.debug("broadcast_send_failed worker_id=%s: %s", worker_id, result)
+            if msg.get("type") == "snapshot":
+                # DEBUG is below the level a manager runs at, so a snapshot send
+                # that timed out left no production trace at all — the frame was
+                # committed, the fan-out "succeeded", and the client went on
+                # reading the previous screen. Say it loudly for snapshots only;
+                # term frames fail often enough on a closing socket that raising
+                # them would bury this.
+                logger.warning(
+                    "snapshot_broadcast_send_failed",
+                    worker_id=worker_id,
+                    screen_hash=msg.get("screen_hash"),
+                    error=str(result)[:200],
+                )
             dead.add(ws)
     if dead:
         changed = await hub.remove_dead_browsers(worker_id, dead)
