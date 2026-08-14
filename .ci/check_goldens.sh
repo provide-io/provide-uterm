@@ -34,9 +34,42 @@ cd "$repo_root"
 GOLDENS_REFERENCE_PYTHON="${GOLDENS_REFERENCE_PYTHON:-3.13}"
 running_python="$(uv run python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
 if [[ "${running_python}" != "${GOLDENS_REFERENCE_PYTHON}" ]]; then
-  echo "SKIP: goldens are recorded against Python ${GOLDENS_REFERENCE_PYTHON}, this is ${running_python}."
-  echo "      Re-run on ${GOLDENS_REFERENCE_PYTHON}, or set GOLDENS_REFERENCE_PYTHON to re-record against another."
-  exit 0
+  # This used to `echo SKIP; exit 0`, and the skip was worse than the drift it
+  # was avoiding. On a developer machine running anything other than the
+  # reference version — 3.14 is the current default — the check printed SKIP and
+  # exited 0, so `make quality-gate` was green while CI's `quality (3.13)` cell
+  # was red. Three corpora sat stale that way, and the staleness was hiding a
+  # real bug: the Go SnapshotFrame had no fields for chunks_read/bytes_read at
+  # all, so decoding a genuine snapshot failed outright, while the Go suite
+  # passed against a corpus recorded before those fields existed. Nobody was
+  # ignoring a warning; there was no warning to ignore.
+  #
+  # So instead of standing down, provision the reference interpreter and re-exec
+  # under it. uv can fetch 3.13 on demand, and pointing UV_PROJECT_ENVIRONMENT
+  # at a dedicated directory keeps the developer's own .venv untouched — a check
+  # must not repoint the environment of the tree it is checking.
+  #
+  # GOLDENS_ALREADY_REEXECED guards against a loop if the provisioned
+  # interpreter somehow still reports the wrong version.
+  if [[ -n "${GOLDENS_ALREADY_REEXECED:-}" ]]; then
+    echo "FAIL: asked for Python ${GOLDENS_REFERENCE_PYTHON} and got ${running_python}." >&2
+    echo "      The goldens record one interpreter's behaviour; checking them" >&2
+    echo "      against another proves nothing, so this is a failure, not a skip." >&2
+    exit 1
+  fi
+
+  echo "goldens: this is Python ${running_python}; re-running under the reference ${GOLDENS_REFERENCE_PYTHON}."
+  goldens_env="${GOLDENS_REFERENCE_ENV:-${repo_root}/.venv-goldens}"
+  if ! UV_PROJECT_ENVIRONMENT="${goldens_env}" \
+       uv sync --all-packages --all-extras --group dev \
+               --python "${GOLDENS_REFERENCE_PYTHON}" --quiet; then
+    echo "FAIL: could not provision Python ${GOLDENS_REFERENCE_PYTHON} to check the goldens against." >&2
+    echo "      Refusing to report success without having checked anything." >&2
+    exit 1
+  fi
+  exec env GOLDENS_ALREADY_REEXECED=1 \
+           UV_PROJECT_ENVIRONMENT="${goldens_env}" \
+           "${BASH_SOURCE[0]}" "$@"
 fi
 
 # Throwaway trees that CONTAIN copies of real testdata directories and must not
