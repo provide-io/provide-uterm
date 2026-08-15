@@ -17,7 +17,7 @@ pending human approval via Slack/webhook/REST.
 
 ### 2. Session Replay with AI Annotation (AGPL-3.0-or-later)
 Automatic summarization of terminal sessions using LLMs. Generates searchable "Chapters" and "Key Actions" for long audit logs.
-*   **Status:** **Pattern-Based Annotation Done (2026-04-08)** — JSONL recording, replay viewer, raw stream rebuilder, `PatternDetector` with 20 built-in detection rules (credentials, escalation, destructive commands, connections, lifecycle), `Annotation`/`AnnotationSpan` data models, REST endpoint (`POST /api/sessions/{id}/annotate`), and `session_annotate` MCP tool (tool 21 of 21) all implemented and tested.
+*   **Status:** **Pattern-Based Annotation Done (2026-04-08)** — JSONL recording, replay viewer, raw stream rebuilder, `PatternDetector` with 20 built-in detection rules (credentials, escalation, destructive commands, connections, lifecycle), `Annotation`/`AnnotationSpan` data models, REST endpoint (`POST /api/sessions/{id}/annotate`), and `session_annotate` MCP tool all implemented and tested. `session_annotate` is one of the 28 tools the MCP server registers — 28 `@mcp.tool` decorators under `packages/provide-uterm-client/src/provide/uterm/ai/` (10 hijack/control, 11 session/fan-out/annotation, 7 graphical), which is the count the root README states and `scripts/check_docs_accuracy.py` enforces.
 *   **Parked:** LLM-based summarization pipeline (auto-generated "Chapters" and "Key Actions") has no implementation or active development. The annotation system uses regex pattern detection only — no LLM integration exists in the annotation or recording modules.
 
 ### 3. Multi-Session Fan-Out (AGPL-3.0-or-later)

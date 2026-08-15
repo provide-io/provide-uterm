@@ -48,7 +48,7 @@ the TypeScript column describes the module, which no running server mounts.
 |---|:---:|:---:|:---:|:---:|
 | REST routes served by a running server | Y | Y | Y | N — unserved |
 | Global admin required for create/list/delete/send/grant | Y | Y | Y | Y — unserved |
-| Browser-WS fan-out send served | Y | Y | N | N |
+| Browser-WS fan-out send served | Y | Y | N — not implemented (REST only) | N — not implemented (REST module only) |
 | Unknown members rejected by default | Y | Y | Y | Y — unserved |
 | Dormant-member opt-in | `fanout_allow_unknown_members` | `fanout_allow_unknown_members` | `fanout_allow_unknown_members` | component option `allowUnknownMembers` — unserved |
 | Current session authz checked on every send | Y | Y | Y | Y — unserved |
@@ -57,6 +57,18 @@ the TypeScript column describes the module, which no running server mounts.
 | Configured policy may be silently bypassed | N | N | N | N |
 | Policy deny / hold / release surface | served | unsupported (501, no input) | unsupported (501, no input) | unserved |
 | Policy transport/error failure | fail closed | unsupported (501, no input) | unsupported (501, no input) | unserved — fails closed in module |
+
+The browser-WS row reads "not implemented" rather than `unserved` because
+nothing exists to mount. Python dispatches a `fanout_send` control message on
+the browser socket (`bridge/routes/websockets_browser.py`) and Go has
+`server/ws_browser_fanout.go`; C# mounts the five fan-out REST routes
+(`Server/UtermServer.Fanout.cs`) but its browser-socket dispatcher
+(`Server/UtermServer.BridgeWs.cs`) has no `fanout_send` case and the string
+appears nowhere in the C# tree. TypeScript's fan-out code is the REST
+controller module (`src/fanout/controller.ts`) and likewise has no browser-WS
+send path. Neither is `N/A` — both ports have a browser socket and a fan-out
+controller, they simply have not been wired together. See
+[`feature-roadmap.md`](./feature-roadmap.md) § Multi-Session Fan-Out.
 
 The dormant-member option changes creation only. A dormant ID that later
 registers is still resolved and authorized against the principal who performs
@@ -102,8 +114,24 @@ The source of truth is `spec/session_lifecycle_security_scenarios.json`, execute
 by `scripts/run_session_lifecycle_security_scenarios.py`. Served cells must emit
 normalized observations from native handlers. The `partial` TypeScript Node
 server advertises none of these surfaces, so every TypeScript cell is
-`unserved`. Cloudflare has no tunnel WebSocket route and does not silently
-simulate per-principal quotas or signed governance.
+`unserved`. Cloudflare does not silently simulate per-principal quotas or
+signed governance.
+
+Cloudflare's tunnel cell is about the multiplexed *transport*, not about the
+endpoint. The Worker does mount a tunnel agent WebSocket: `entry/registry.py`
+matches `/tunnel/{id}` and proxies it to the Durable Object, which upgrades it
+with the ordinary worker socket role (`do/session_runtime/fetch.py`). What is
+absent is the mux itself. No `is_tunnel_worker` state exists at the edge, so the
+browser-to-agent direction is never re-encoded into the binary channel framing,
+and on the inbound side `api/tunnel_routes.py` handles the control (`0x00`) and
+HTTP-inspect (`0x03`) channels but folds every remaining channel into the
+terminal channel, so TCP (`0x02`) is not demultiplexed. The transport the
+fragmentation scenario drives is therefore `unserved` there even though the
+agent endpoint is served — see
+[`protocol-matrix.md`](./protocol-matrix.md#tunnel-endpoints) for the endpoint
+side and row 11 of
+[`cloudflare-divergence-matrix.md`](./cloudflare-divergence-matrix.md) for the
+pinned divergence.
 
 ## Intentional de-scopes (not bugs)
 

@@ -66,7 +66,7 @@ Label definitions: [`docs/parity-labels.md`](./parity-labels.md).
 |---|:---:|:---:|:---:|:---:|
 | Fan-out REST surface served | Y | Y | Y | N — unserved |
 | Global admin required for create/list/delete/send/grant | Y | Y | Y | Y — unserved |
-| Browser-WS fan-out send served | Y | Y | N | N |
+| Browser-WS fan-out send served | Y | Y | N — not implemented (REST only) | N — not implemented (REST module only) |
 | Reject unknown members by default | Y | Y | Y | Y — unserved |
 | Explicit dormant-member opt-in | `fanout_allow_unknown_members` | `fanout_allow_unknown_members` | `fanout_allow_unknown_members` | component option `allowUnknownMembers` — unserved |
 | Reauthorize every member on send | Y (REST + browser WS) | Y (REST + browser WS) | Y (REST) | Y — unserved (route/controller module) |
@@ -75,6 +75,20 @@ Label definitions: [`docs/parity-labels.md`](./parity-labels.md).
 | Configured governance behavior | served — webhook deny/hold/release; errors fail closed | unsupported (501) — deterministic, no input | unsupported (501) — deterministic, no input | unserved — policy-gate module implemented, not mounted |
 | Parallel/sequential collection and divergence | Y | Y | Y | Y — unserved |
 | Live `fanout.rest.strict` server cell | Y | Y | Y | N — unsupported (not advertised) |
+
+The browser-WS row is the one place where "not implemented" is the honest
+answer rather than `unserved`. Python dispatches a `fanout_send` control message
+on the browser socket (`bridge/routes/websockets_browser.py`) and Go has
+`server/ws_browser_fanout.go`. C# mounts the five fan-out REST routes
+(`Server/UtermServer.Fanout.cs`) but its browser-socket dispatcher
+(`Server/UtermServer.BridgeWs.cs`) has no `fanout_send` case, and the string
+appears nowhere in the C# tree — there is no unmounted module to call
+`unserved`, and the surface plainly exists in that architecture, so it is not
+`N/A` either. TypeScript is in the same position for a different reason: its
+fan-out code is the REST controller module (`src/fanout/controller.ts`), which
+no server mounts, and no browser-WS send path was written at all. Both are
+roadmap gaps — see
+[`feature-roadmap.md`](./feature-roadmap.md) § Multi-Session Fan-Out.
 
 `conformance/live/scenarios/010_fanout_strict_admission.json` executes the
 strict-default REST contract across the served Python, Go, and C# backends
@@ -170,13 +184,27 @@ Flags: `0x00` = data, `0x01` = EOF (half-close).
 
 | Capability | FastAPI backend | Cloudflare backend |
 |---|---|---|
-| Agent endpoint | `WSS /tunnel/{worker_id}` | `WSS /tunnel/{tunnel_id}` (via DO) |
+| Agent endpoint | `WSS /tunnel/{worker_id}` — registers a *tunnel* worker | `WSS /tunnel/{tunnel_id}` (via DO) — registers an *ordinary* worker socket |
 | Browser endpoint | `WSS /ws/browser/{id}/term` | same |
 | `POST /api/tunnels` | served | served |
 | `DELETE /api/tunnels/{id}/tokens` | served (revocation) | served (revocation) |
 | `POST /api/tunnels/{id}/tokens/rotate` | served (rotation) | served (rotation) |
 | Share URL (`?invite=...`) | `/s/{id}` → set HttpOnly cookie, 302 clean redirect | `/s/{id}` → set HttpOnly cookie, 302 clean redirect |
 | Inspect view | `/app/inspect/{id}` | `/app/inspect/{id}` |
+
+The Cloudflare agent endpoint is mounted, but mounting it is not the same as
+serving the multiplexed transport above. `entry/registry.py` matches
+`/tunnel/{id}` and proxies it to the Durable Object, which upgrades it with the
+ordinary worker socket role (`do/session_runtime/fetch.py`). Inbound frames are
+decoded by `api/tunnel_routes.py`, which handles the control (`0x00`) and
+HTTP-inspect (`0x03`) channels and folds every remaining channel into the
+terminal channel — so TCP (`0x02`) is not demultiplexed — and because no
+`is_tunnel_worker` state exists at the edge the browser-to-agent direction is
+never re-encoded into channel framing. The tunnel-transport fragmentation
+scenario is `unserved` on Cloudflare for that reason, recorded in
+[`security-language-parity.md`](./security-language-parity.md#session-lifecycle-security)
+and pinned as row 11 of
+[`cloudflare-divergence-matrix.md`](./cloudflare-divergence-matrix.md).
 
 ### Tunnel auth
 
