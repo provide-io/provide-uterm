@@ -35,8 +35,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
     nuget.org, so the fallback's only possible outcome is NU1101 naming a
     package nobody can install. That is an unusually bad error to hand
     someone, because it points at NuGet and says nothing about the submodule
-    that is actually missing -- and it is the error every CI job hit, since
+    that is actually missing, and it is the error every CI job hit, since
     actions/checkout does not fetch submodules unless a workflow asks it to.
+
+    (No double hyphens anywhere in this comment: XML forbids them inside a
+    comment, and MSBuild reports that as MSB4024 "could not be loaded" against
+    every project at once, which looks like a broken build rather than a typo.)
 
     Restore the fallback only if Provide.Telemetry is genuinely published.
   -->
