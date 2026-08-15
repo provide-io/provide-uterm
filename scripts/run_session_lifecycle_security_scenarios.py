@@ -38,6 +38,11 @@ RESULT_FIELDS = {
     "policy_decision",
     "signed_request",
     "competing_owner_preserved",
+    "handoff_completed",
+    "stale_owner_refused",
+    "successor_owner_accepted",
+    "approval_expired",
+    "late_approval_refused",
 }
 OBSERVATION_FIELDS = {"id", "status", *RESULT_FIELDS}
 REQUIRED_CATEGORY_CARDINALITY = {
@@ -46,6 +51,8 @@ REQUIRED_CATEGORY_CARDINALITY = {
     "configured governance": 3,
     "resume ownership and replay": 2,
     "non-owner hijack-step refusal": 1,
+    "ownership handoff": 1,
+    "approval expiry": 1,
 }
 EXPECTED_SURFACES = {
     "python": {"surface": "server", "advertised": True},
@@ -76,6 +83,8 @@ def semantic_category(scenario: dict[str, Any]) -> str:
         "governed_input": "configured governance",
         "resume_ownership": "resume ownership and replay",
         "non_owner_hijack_step": "non-owner hijack-step refusal",
+        "owner_handoff": "ownership handoff",
+        "approval_expiry": "approval expiry",
     }
     return categories.get(operation, "unknown")
 
@@ -88,6 +97,13 @@ def semantic_status(scenario: dict[str, Any], backend: str) -> str:
         return "unserved"
     if backend == "cloudflare":
         if operation == "fragment_message" and input_data.get("transport") == "tunnel":
+            return "unserved"
+        # The Worker has no approvals surface at all -- no route, no store, no
+        # pending-command state -- so there is nothing to refuse and nothing to
+        # claim late. That is "unserved" (no route exists), not "unsupported"
+        # (a route exists and says no), which is the distinction the governance
+        # cells above turn on: those DO answer, with a 501.
+        if operation == "approval_expiry":
             return "unserved"
         if operation in {"browser_quota", "governed_input"}:
             return "unsupported"
