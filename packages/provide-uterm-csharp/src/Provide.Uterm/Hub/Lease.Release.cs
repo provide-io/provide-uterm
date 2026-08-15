@@ -395,7 +395,7 @@ public sealed partial class HijackLeaseManager
             await pendingCompletion!.WaitAsync(ct).ConfigureAwait(false);
         }
 
-        return await DeliverReservedInputAsync(workerId, pending!, payload, ct).ConfigureAwait(false)
+        return (await DeliverReservedInputsAsync(workerId, pending!, [payload], ct).ConfigureAwait(false)).Sent
             ? (true, "", pending!.RestLeaseExpiresAt)
             : (false, "send_failed", null);
     }

@@ -80,6 +80,7 @@ public sealed partial class UtermServer
     {
         BaseAddress = app.Urls.FirstOrDefault();
         MarkReady();
+        StartApprovalSweep();
         await StartAutoStartSessionsAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -159,6 +160,7 @@ public sealed partial class UtermServer
         // is still up, and stopping them first means nothing is mid-delivery
         // against a half-disposed server.
         await ShutdownWebhooksAsync().ConfigureAwait(false);
+        await StopApprovalSweepAsync().ConfigureAwait(false);
         if (_app is not null)
         {
             await _app.DisposeAsync().ConfigureAwait(false);

@@ -359,6 +359,18 @@ public sealed partial class UtermServer
         }), JsonOpts);
     }
 
+    /// <summary>
+    /// Approve a held command: claim it once, then inject it — and the
+    /// submitter's buffered keystrokes — to the worker at the exact ownership
+    /// generation it was held at.
+    /// </summary>
+    /// <remarks>
+    /// 409 is the case a claim alone cannot express: the request was pending and
+    /// the admin did decide, but the submitter's lease moved between the hold and
+    /// the injection, so nothing ran. Answering 200 there would tell an operator
+    /// a command executed when it never reached the worker. Port of Go
+    /// <c>handleApprove</c>.
+    /// </remarks>
     private async Task<IResult> HandleApprove(HttpContext ctx, string requestId)
     {
         var p = await Authenticate(ctx).ConfigureAwait(false);
@@ -366,21 +378,38 @@ public sealed partial class UtermServer
         var req = _deps.Hub.Approvals.Get(requestId);
         if (req is null) return DetailError(404, "Approval request not found");
         if (req.SubmitterId == p.SubjectId) return DetailError(403, "Cannot approve your own command");
-        if (!_deps.Hub.Approvals.Claim(requestId, Hub.ApprovalStatus.Approved))
+        var outcome = await _deps.Hub
+            .ResolveApprovalAsync(requestId, approve: true, reason: null, p.SubjectId, ctx.RequestAborted)
+            .ConfigureAwait(false);
+        return outcome switch
         {
-            return DetailError(400, "Approval request is not pending");
-        }
-
-        return Results.Json(new { status = "approved" }, JsonOpts);
+            Hub.ApprovalResolution.Refused => DetailError(409, "Approval input ownership is no longer valid"),
+            Hub.ApprovalResolution.NotPending => DetailError(400, "Approval request is not pending"),
+            _ => Results.Json(new { status = "approved" }, JsonOpts),
+        };
     }
 
+    /// <summary>
+    /// Reject a held command: claim it once, broadcast the red banner, and drop
+    /// the submitter's buffered keystrokes unreplayed. Port of Go
+    /// <c>handleReject</c>.
+    /// </summary>
     private async Task<IResult> HandleReject(HttpContext ctx, string requestId)
     {
         var p = await Authenticate(ctx).ConfigureAwait(false);
         if (!_deps.Authz.IsAdmin(p)) return DetailError(403, "Admin role required");
         var req = _deps.Hub.Approvals.Get(requestId);
         if (req is null) return DetailError(404, "Approval request not found");
-        if (!_deps.Hub.Approvals.Claim(requestId, Hub.ApprovalStatus.Rejected))
+        var reason = ctx.Request.Query["reason"].ToString();
+        var outcome = await _deps.Hub
+            .ResolveApprovalAsync(
+                requestId,
+                approve: false,
+                string.IsNullOrEmpty(reason) ? null : reason,
+                p.SubjectId,
+                ctx.RequestAborted)
+            .ConfigureAwait(false);
+        if (outcome == Hub.ApprovalResolution.NotPending)
         {
             return DetailError(400, "Approval request is not pending");
         }
