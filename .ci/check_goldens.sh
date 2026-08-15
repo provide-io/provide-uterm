@@ -80,23 +80,40 @@ fi
 # self-clearing — the run regenerates the sandbox's copy, so the next run
 # passes. That cost a confusing red `make quality-gate` on 2026-08-09 with the
 # tree clean (the sandboxes are gitignored, so `git status` showed nothing).
+#
+# bin/ and obj/ are pruned for the same reason: the C# test project copies its
+# whole testdata tree next to the built assembly, so `bin/Release/net10.0/
+# testdata/frames/python_golden.json` is a real corpus at a path that is not in
+# the repository. Ten of them exist after a build.
 _prune_temp_trees() {
   find packages \
-    \( -name node_modules -o -name .stryker-tmp -o -name mutants -o -name .venv \) -prune \
+    \( -name node_modules -o -name .stryker-tmp -o -name mutants -o -name .venv \
+       -o -name bin -o -name obj \) -prune \
     -o "$@"
 }
 
+# No -maxdepth: a testdata directory may hold its corpora in per-subject
+# subdirectories, as the C# test project does (testdata/frames/, testdata/
+# ctrlmsg/, …). Those five were invisible to this check, which is half of how
+# the C# copy of frames/python_golden.json drifted from Go's — it had lost
+# bytes_read/chunks_read while the port had no fields for them either, so the
+# corpus was asserting the port's own gap was correct. That is the same failure
+# recorded in this file's header for Go, surviving one port over.
+#
+# No generator is nested today (161 at depth 1, 161 at any depth), so widening
+# find_generators changes nothing now; it stops the next nested generator from
+# being silently skipped.
 find_generators() {
   _prune_temp_trees -type d -name testdata -print |
     while IFS= read -r testdata_dir; do
-      find "$testdata_dir" -maxdepth 1 -name 'gen_*_golden.py'
+      find "$testdata_dir" -name 'gen_*_golden.py'
     done | sort
 }
 
 find_corpora() {
   _prune_temp_trees -type d -name testdata -print |
     while IFS= read -r testdata_dir; do
-      find "$testdata_dir" -maxdepth 1 -name '*_golden.json'
+      find "$testdata_dir" -name '*_golden.json'
     done | sort
 }
 
@@ -236,13 +253,40 @@ echo "OK: $checked golden corpus file(s) match the CPython reference."
 # predate this check and writing eight generators is its own piece of work. The
 # count is printed so it is visible when it grows, which is the moment to write
 # the generator rather than years later.
+#
+# A corpus that is byte-identical to another committed corpus is a COPY, and a
+# copy is a different problem with a different guard: it is held to its source
+# by TWINNED_FIXTURES in scripts/check_protocol_drift.py, not by a generator.
+# Counting those as "cannot be drift-checked" would be untrue now that the C#
+# copies are visible here at all, and untrue in the direction that invites
+# someone to write a generator for a file that must simply equal another file.
+_corpus_hashes="$(
+  while IFS= read -r corpus; do
+    printf '%s\t%s\n' "$(shasum -a 256 "$corpus" | cut -d' ' -f1)" "$corpus"
+  done < <(find_corpora)
+)"
+
 ungenerated=0
+copies=0
 while IFS= read -r corpus; do
   dir="$(dirname "$corpus")"
   name="$(basename "$corpus" .json)"
-  [[ -f "$dir/gen_$name.py" ]] || ungenerated=$((ungenerated + 1))
+  if [[ -f "$dir/gen_$name.py" ]]; then
+    continue
+  fi
+
+  hash="$(printf '%s\n' "$_corpus_hashes" | awk -F'\t' -v c="$corpus" '$2 == c { print $1; exit }')"
+  same="$(printf '%s\n' "$_corpus_hashes" | awk -F'\t' -v h="$hash" '$1 == h' | wc -l | tr -d ' ')"
+  if (( same > 1 )); then
+    copies=$((copies + 1))
+  else
+    ungenerated=$((ungenerated + 1))
+  fi
 done < <(find_corpora)
 
 if (( ungenerated > 0 )); then
   echo "NOTE: $ungenerated committed corpus file(s) have no generator and cannot be drift-checked."
+fi
+if (( copies > 0 )); then
+  echo "NOTE: $copies committed corpus file(s) are copies of another corpus; scripts/check_protocol_drift.py holds them to it."
 fi
