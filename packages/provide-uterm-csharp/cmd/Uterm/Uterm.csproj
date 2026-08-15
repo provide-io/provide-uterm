@@ -9,8 +9,25 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <PublishAot>true</PublishAot>
-    <PublishTrimmed>true</PublishTrimmed>
+    <!--
+      Native AOT for the container image (docker/Dockerfile.csharp publishes
+      self-contained into distroless/cc, which is why that stage installs clang
+      and zlib). Conditioned on SelfContained because `make build-binaries`
+      publishes framework-dependent (the no-self-contained flag), and a newer
+      SDK rejects that combination outright:
+
+        error NETSDK1102: Optimizing assemblies for size is not supported for
+        the selected publish configuration.
+
+      An unconditional PublishAot therefore failed the C# quality gate at its
+      last stage, after the whole suite and the coverage floor had already run.
+
+      (No double hyphens anywhere in this comment: XML forbids them inside a
+      comment, and MSBuild reports that as MSB4025 against this project. The
+      same warning is on Directory.Build.props for the same reason.)
+    -->
+    <PublishAot Condition="'$(SelfContained)' != 'false'">true</PublishAot>
+    <PublishTrimmed Condition="'$(SelfContained)' != 'false'">true</PublishTrimmed>
     <!-- Ship as lowercase `uterm` (matches Go/Python CLI names). -->
     <AssemblyName>uterm</AssemblyName>
   </PropertyGroup>
