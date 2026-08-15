@@ -51,37 +51,113 @@ public sealed class InMemoryApprovalStore
         lock (_gate) return _requests.TryGetValue(requestId, out var r) ? r : null;
     }
 
+    /// <summary>
+    /// Move one overdue request to <see cref="ApprovalStatus.Timeout"/>, and say
+    /// whether it did. Caller must hold <see cref="_gate"/>, and must raise
+    /// <see cref="OnExpired"/> outside it.
+    ///
+    /// Every read and write path runs this first, because the port has no sweep:
+    /// <see cref="CleanupExpired"/> is the only thing that can retire a deadline
+    /// and nothing in production calls it (Go ticks it from StartSweeps, Python
+    /// from sweep_expired_approvals). Without the check here a request stayed
+    /// Pending forever, so `POST /api/approvals/{id}/approve` granted a command
+    /// whose deadline had passed arbitrarily long ago and answered 200. The
+    /// reference makes the same check inline for the same reason
+    /// (bridge/hub/approvals.py:109), and a sweep alone would still leave a
+    /// window one tick wide.
+    /// </summary>
+    private static bool ExpireIfOverdueLocked(ApprovalRequest req, double now)
+    {
+        if (req.Status != ApprovalStatus.Pending || req.ExpiresAt >= now)
+        {
+            return false;
+        }
+
+        req.Status = ApprovalStatus.Timeout;
+        return true;
+    }
+
     /// <summary>Pending approvals (admin list). Port of Go Approvals.PendingApprovals.</summary>
     public IReadOnlyList<ApprovalRequest> PendingApprovals()
     {
+        var expiredIds = new List<string>();
+        List<ApprovalRequest> pending;
         lock (_gate)
         {
-            return _requests.Values.Where(r => r.Status == ApprovalStatus.Pending).ToList();
+            var now = _clock.Wall();
+            foreach (var req in _requests.Values)
+            {
+                if (ExpireIfOverdueLocked(req, now))
+                {
+                    expiredIds.Add(req.Id);
+                }
+            }
+
+            pending = _requests.Values.Where(r => r.Status == ApprovalStatus.Pending).ToList();
         }
+
+        NotifyExpired(expiredIds);
+        return pending;
     }
 
     public void Resolve(string requestId, ApprovalStatus status)
     {
+        string? expiredId = null;
         lock (_gate)
         {
-            if (_requests.TryGetValue(requestId, out var req) && req.Status == ApprovalStatus.Pending)
+            if (_requests.TryGetValue(requestId, out var req))
             {
-                req.Status = status;
+                if (ExpireIfOverdueLocked(req, _clock.Wall()))
+                {
+                    expiredId = req.Id;
+                }
+                else if (req.Status == ApprovalStatus.Pending)
+                {
+                    req.Status = status;
+                }
             }
         }
+
+        NotifyExpired(expiredId);
     }
 
     public bool Claim(string requestId, ApprovalStatus status)
     {
+        string? expiredId = null;
+        var claimed = false;
         lock (_gate)
         {
-            if (!_requests.TryGetValue(requestId, out var req) || req.Status != ApprovalStatus.Pending)
+            if (_requests.TryGetValue(requestId, out var req))
             {
-                return false;
+                if (ExpireIfOverdueLocked(req, _clock.Wall()))
+                {
+                    expiredId = req.Id;
+                }
+                else if (req.Status == ApprovalStatus.Pending)
+                {
+                    req.Status = status;
+                    claimed = true;
+                }
             }
+        }
 
-            req.Status = status;
-            return true;
+        NotifyExpired(expiredId);
+        return claimed;
+    }
+
+    private void NotifyExpired(string? expiredId)
+    {
+        if (expiredId is not null)
+        {
+            OnExpired?.Invoke(expiredId);
+        }
+    }
+
+    private void NotifyExpired(IReadOnlyList<string> expiredIds)
+    {
+        foreach (var id in expiredIds)
+        {
+            OnExpired?.Invoke(id);
         }
     }
 
@@ -94,9 +170,8 @@ public sealed class InMemoryApprovalStore
             var toDelete = new List<string>();
             foreach (var (reqId, req) in _requests)
             {
-                if (req.Status == ApprovalStatus.Pending && req.ExpiresAt < now)
+                if (ExpireIfOverdueLocked(req, now))
                 {
-                    req.Status = ApprovalStatus.Timeout;
                     expiredIds.Add(req.Id);
                 }
                 else if (req.Status != ApprovalStatus.Pending && req.ExpiresAt + PruneTtl < now)
@@ -111,12 +186,6 @@ public sealed class InMemoryApprovalStore
             }
         }
 
-        if (OnExpired is not null)
-        {
-            foreach (var id in expiredIds)
-            {
-                OnExpired(id);
-            }
-        }
+        NotifyExpired(expiredIds);
     }
 }
