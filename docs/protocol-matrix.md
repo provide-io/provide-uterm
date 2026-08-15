@@ -2,6 +2,10 @@
 
 This matrix defines the backend capability contract consumed by `hijack.js`.
 
+**Label vocabulary** — `served`, `unserved`, `unsupported`, `partial`, `N/A`
+and the `Y`/`N` qualifiers are defined once in
+[`docs/parity-labels.md`](./parity-labels.md). Use those words as written.
+
 **Security controls that differ by language** (authz webhooks, CF Access, SPA SRI,
 human VNC relay) are documented in
 [`docs/security-language-parity.md`](./security-language-parity.md) — that doc is
@@ -9,11 +13,12 @@ the scope/de-scope source of truth for multi-language security parity.
 
 ## TypeScript runtime status
 
-`packages/provide-uterm-ts` is a high-coverage partial runtime port, not yet a
-third backend column for this matrix. Completed protocol, policy, hub,
-connector, gateway, authentication, and configuration libraries are tested as
-libraries; only these four shared HTTP capabilities are currently integrated
-into its running Node server:
+`packages/provide-uterm-ts` is a high-coverage `partial` runtime port, not a
+served backend and not yet a third backend column for this matrix. The served
+server backends are Python (FastAPI), Go, C#, and Cloudflare. Completed
+protocol, policy, hub, connector, gateway, authentication, and configuration
+libraries are tested as libraries; only these four shared HTTP capabilities
+are currently integrated into its running Node server:
 
 | Capability | TypeScript route |
 |---|---|
@@ -47,7 +52,7 @@ input or observer notification.
 The served Python, Go, and C# backends use the configuration key
 `fanout_allow_unknown_members`, which defaults to `false`. Setting it to `true`
 permits a global administrator to create a group containing dormant IDs, but
-it does not weaken send-time authorization. The unserved TypeScript route
+it does not weaken send-time authorization. The `unserved` TypeScript route
 component instead accepts the default-false `allowUnknownMembers` option; there
 is no mounted TypeScript server setting for this surface.
 
@@ -55,19 +60,21 @@ All five REST operations — create, list, delete, send, and grant — require a
 authenticated global administrator. Session-scoped admins are rejected before
 request parsing or group lookup.
 
+Label definitions: [`docs/parity-labels.md`](./parity-labels.md).
+
 | Capability | Python FastAPI | Go | C# | TypeScript |
 |---|:---:|:---:|:---:|:---:|
-| Fan-out REST surface served | Y | Y | Y | N (route module only) |
-| Global admin required for create/list/delete/send/grant | Y | Y | Y | Y (unserved module) |
+| Fan-out REST surface served | Y | Y | Y | N — unserved |
+| Global admin required for create/list/delete/send/grant | Y | Y | Y | Y — unserved |
 | Browser-WS fan-out send served | Y | Y | N | N |
-| Reject unknown members by default | Y | Y | Y | Y (module) |
-| Explicit dormant-member opt-in | `fanout_allow_unknown_members` | `fanout_allow_unknown_members` | `fanout_allow_unknown_members` | component option `allowUnknownMembers`; server integration N/A |
-| Reauthorize every member on send | Y (REST + browser WS) | Y (REST + browser WS) | Y (REST) | Y (route/controller module) |
-| Reauthorize approval release | Y | N/A (no fan-out approval store) | N/A (no fan-out approval store) | Y (controller module) |
-| Group grant cannot bypass session authz | Y | Y | Y | Y (module) |
-| Configured governance behavior | Served webhook deny/hold/release; errors fail closed | Explicitly unsupported: deterministic 501, no input | Explicitly unsupported: deterministic 501, no input | Policy-gate module implemented; unserved |
-| Parallel/sequential collection and divergence | Y | Y | Y | Y (module) |
-| Live `fanout.rest.strict` server cell | Y | Y | Y | unsupported/unadvertised |
+| Reject unknown members by default | Y | Y | Y | Y — unserved |
+| Explicit dormant-member opt-in | `fanout_allow_unknown_members` | `fanout_allow_unknown_members` | `fanout_allow_unknown_members` | component option `allowUnknownMembers` — unserved |
+| Reauthorize every member on send | Y (REST + browser WS) | Y (REST + browser WS) | Y (REST) | Y — unserved (route/controller module) |
+| Reauthorize approval release | Y | N/A (no fan-out approval store) | N/A (no fan-out approval store) | Y — unserved (controller module) |
+| Group grant cannot bypass session authz | Y | Y | Y | Y — unserved |
+| Configured governance behavior | served — webhook deny/hold/release; errors fail closed | unsupported (501) — deterministic, no input | unsupported (501) — deterministic, no input | unserved — policy-gate module implemented, not mounted |
+| Parallel/sequential collection and divergence | Y | Y | Y | Y — unserved |
+| Live `fanout.rest.strict` server cell | Y | Y | Y | N — unsupported (not advertised) |
 
 `conformance/live/scenarios/010_fanout_strict_admission.json` executes the
 strict-default REST contract across the served Python, Go, and C# backends
@@ -76,7 +83,7 @@ The harness requires the selected client's registered static capabilities and
 the running server's announcement to contain `fanout.rest.strict` before it
 launches the client. It validates the returned client capabilities again after
 the run. A manually selected TypeScript server therefore produces an explicit
-unsupported/unserved cell before any client process is launched.
+`unsupported` cell before any client process is launched.
 The richer cases that require mid-scenario authorization mutation, policy
 infrastructure, capture lifecycle checks, store concurrency, or deadline
 control are defined by `spec/fanout_security_scenarios.json` and executed by
@@ -85,23 +92,34 @@ advertise live fan-out until the Node server mounts the route module.
 
 ## Hijack control
 
+This table recorded a Cloudflare divergence that had stopped being true: it
+advertised `hijack_control=rest` and a `use_rest_hijack_api` refusal for the
+three WS hijack frames. The Worker emits `"ws"` from all three of its hello
+paths and serves all three frames, and that refusal code exists nowhere in the
+tree — the doc was its only occurrence. Pinned now by
+`packages/provide-uterm-cloudflare/tests/test_edge_divergence_matrix.py`, so the
+next drift fails a test rather than sitting here. `mcp_supported` and
+`vnc_supported` are *omitted* from the Worker's hello rather than sent as
+`false`; the frame schema defaults them to `false` for a consumer that reads
+them positionally.
+
 | Capability | FastAPI backend | Cloudflare backend |
 |---|---|---|
-| `hello.hijack_control` | `ws` | `rest` |
+| `hello.hijack_control` | `ws` | `ws` |
 | `hello.hijack_step_supported` | `true` | `true` |
-| `hello.mcp_supported` | `true` | `false` |
-| `hello.vnc_supported` | `true` | `false` |
-| Human VNC relay (browser RFB proxy) | `WS …/hijack/{id}/gui/vnc` (authz + RFB filter; upstream dial optional) | n/a |
-| WS frame `hijack_request` | supported | rejected (`use_rest_hijack_api`) |
-| WS frame `hijack_release` | supported | rejected (`use_rest_hijack_api`) |
-| WS frame `hijack_step` | supported | rejected (`use_rest_hijack_api`) |
-| REST `/hijack/acquire` | supported | supported |
-| REST `/hijack/{id}/heartbeat` | supported | supported |
-| REST `/hijack/{id}/release` | supported | supported |
-| REST `/hijack/{id}/step` | supported | supported |
-| REST `/hijack/{id}/send` | supported | supported |
-| REST `/hijack/{id}/snapshot` | supported | supported |
-| REST `/hijack/{id}/events` | supported | supported |
+| `hello.mcp_supported` | `true` | key omitted |
+| `hello.vnc_supported` | `true` | key omitted |
+| Human VNC relay (browser RFB proxy) | `WS …/hijack/{id}/gui/vnc` (authz + RFB filter; upstream dial optional) | N/A |
+| WS frame `hijack_request` | served | served |
+| WS frame `hijack_release` | served | served |
+| WS frame `hijack_step` | served | served |
+| REST `/hijack/acquire` | served | served |
+| REST `/hijack/{id}/heartbeat` | served | served |
+| REST `/hijack/{id}/release` | served | served |
+| REST `/hijack/{id}/step` | served | served |
+| REST `/hijack/{id}/send` | served | served |
+| REST `/hijack/{id}/snapshot` | served | served |
+| REST `/hijack/{id}/events` | served | served |
 
 ## Session resumption
 
@@ -112,7 +130,7 @@ Opt-in feature. Enabled on FastAPI by passing `resume_store` to `TermHub`; alway
 | `hello.resume_supported` | `true` when store configured, else absent | `true` always |
 | `hello.resume_token` | opaque token (256-bit, urlsafe) | opaque token (256-bit, urlsafe) |
 | `hello.resumed` | `true` on successful resume | `true` on successful resume |
-| WS frame `{"type":"resume","token":"…"}` | supported (first message after connect) | supported (any browser message) |
+| WS frame `{"type":"resume","token":"…"}` | served (first message after connect) | served (any browser message) |
 | Token TTL | configurable via `resume_ttl_s` (default 300s) | configurable via `resume_ttl_s` (default 300s) |
 | Token storage | `InMemoryResumeStore` (default) or pluggable | DO SQLite `resume_tokens` table |
 | Token lifetime after disconnect | preserved until TTL | preserved until TTL |
@@ -154,9 +172,9 @@ Flags: `0x00` = data, `0x01` = EOF (half-close).
 |---|---|---|
 | Agent endpoint | `WSS /tunnel/{worker_id}` | `WSS /tunnel/{tunnel_id}` (via DO) |
 | Browser endpoint | `WSS /ws/browser/{id}/term` | same |
-| `POST /api/tunnels` | supported | supported |
-| `DELETE /api/tunnels/{id}/tokens` | supported (revocation) | supported (revocation) |
-| `POST /api/tunnels/{id}/tokens/rotate` | supported (rotation) | supported (rotation) |
+| `POST /api/tunnels` | served | served |
+| `DELETE /api/tunnels/{id}/tokens` | served (revocation) | served (revocation) |
+| `POST /api/tunnels/{id}/tokens/rotate` | served (rotation) | served (rotation) |
 | Share URL (`?invite=...`) | `/s/{id}` → set HttpOnly cookie, 302 clean redirect | `/s/{id}` → set HttpOnly cookie, 302 clean redirect |
 | Inspect view | `/app/inspect/{id}` | `/app/inspect/{id}` |
 
@@ -192,13 +210,13 @@ Unauthenticated endpoints for load balancers, orchestrators, and monitoring.
 
 | Capability | FastAPI backend | Cloudflare backend |
 |---|---|---|
-| `GET /api/health` | supported (no auth) | supported (no auth) |
+| `GET /api/health` | served (no auth) | served (no auth) |
 | Response: `status` | `"ok"` or `"unavailable"` | `"ok"` (via `ok: true`) |
 | Response: `version` | package version string | not included |
 | Response: `uptime_s` | seconds since server start | not included |
 | Response: `active_sessions` | count from session registry | not included |
 | Response: `control_plane_backend` | `"memory"` or `"sqlite"` | not included |
-| `GET /healthz` | supported (minimal, no deps) | not supported |
+| `GET /healthz` | served (minimal, no deps) | unsupported |
 | Auth required | no | no |
 
 ## Security headers
