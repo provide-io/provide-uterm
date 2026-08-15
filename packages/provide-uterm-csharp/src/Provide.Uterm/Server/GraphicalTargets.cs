@@ -472,11 +472,29 @@ public sealed class InMemoryGraphicalTargetRegistry : IGraphicalTargetRegistry
         lock (_gate)
         {
             var clone = target.Clone();
-            clone.Validate();
+            // Wrapped exactly as CreateCore and UpdateCore wrap it. Seeding used
+            // to let a raw ArgumentException escape, so a bad target_id, protocol
+            // or size arrived at a caller as an unhandled exception rather than
+            // the INVALID refusal every other path produces.
+            try
+            {
+                clone.Validate();
+            }
+            catch (ArgumentException ex)
+            {
+                throw new GraphicalTargetException(GraphicalTargetErrorCode.Invalid, ex.Message);
+            }
+
             clone.IsSystem = true;
             if (_static.ContainsKey(clone.TargetId))
             {
-                throw new InvalidOperationException("duplicate graphical target_id");
+                // CONFLICT, not InvalidOperationException: the reference
+                // (graphical_targets.py:433) and Go both raise a coded refusal
+                // here, and the shared golden corpus records CONFLICT for
+                // "seeding the same identifier twice". C# was the only port
+                // throwing an uncoded exception, which reaches a REST caller as
+                // a 500 instead of the refusal the other three give.
+                throw new GraphicalTargetException(GraphicalTargetErrorCode.Conflict, "duplicate graphical target_id");
             }
 
             _static[clone.TargetId] = clone;
