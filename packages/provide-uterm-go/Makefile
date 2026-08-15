@@ -58,6 +58,12 @@ race:
 
 # Cover libraries only. Denominator filters:
 #   - cmd/ mains and demo programs (validated by build-binaries / manual demos)
+#   - benchmarks/ harnesses. The same class as cmd/: a main package a developer
+#     runs by hand to get a number, not library code anything depends on.
+#     Holding it to a statement cap would mean writing tests that assert a
+#     benchmark printed something, which measures nothing and prices every new
+#     benchmark at the cost of fake tests. It is still compiled, vetted and
+#     linted by the steps above, so it cannot rot unnoticed.
 #   - vnc/gen/ protoc output (vendored litevirt VNC stubs). Not hand-written, so
 #     a statement cap on it measures the generator, not this repo. `go test
 #     ./...` also attributes no coverage to a package with no test files of its
@@ -69,7 +75,7 @@ cover:
 	@$(GO) test -coverprofile=coverage.raw -covermode=atomic ./...
 	@test -s coverage.raw || { echo "cover: empty coverage.raw"; exit 1; }
 	@head -1 coverage.raw > coverage.out
-	@grep -E '^(mode:|.*\.go:)' coverage.raw | grep -vE '(/cmd/|/vnc/gen/)' | grep -v '^mode:' >> coverage.out || true
+	@grep -E '^(mode:|.*\.go:)' coverage.raw | grep -vE '(/cmd/|/vnc/gen/|/benchmarks/)' | grep -v '^mode:' >> coverage.out || true
 	@total=$$($(GO) tool cover -func=coverage.out | awk '/^total:/ {gsub("%","",$$3); print $$3}'); \
 	echo "total coverage: $${total:-0}% (threshold $(COVER_THRESHOLD)%)"; \
 	if [ -z "$$total" ]; then echo "cover: could not parse total"; exit 1; fi; \

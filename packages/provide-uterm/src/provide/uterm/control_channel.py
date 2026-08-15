@@ -39,7 +39,7 @@ except ImportError:
         _json_loads = json.loads
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable, Mapping, Sequence
 
 
 DLE = "\x10"
@@ -205,7 +205,12 @@ class ControlFrameDecoder:
         return memoryview(chunk.encode("utf-8"))
 
     @staticmethod
-    def _decode_data_parts(parts: list[memoryview | bytes]) -> str:
+    # Sequence rather than list: the callers hold a list[memoryview], and list
+    # is invariant, so a list[memoryview] is NOT a list[memoryview | bytes].
+    # This only ever reads its argument, so the covariant type is both the
+    # accurate one and the one that lets the call sites pass their list
+    # directly instead of copying it to widen the element type.
+    def _decode_data_parts(parts: Sequence[memoryview | bytes]) -> str:
         if not parts:
             return ""
         if len(parts) == 1:
@@ -323,11 +328,19 @@ class ControlFrameDecoder:
     def _emit_data_chunk(
         events: list[ControlFrameChunk],
         data_parts: list[memoryview],
-        buf: bytes | bytearray | memoryview,
+        buf: memoryview,
         data_start: int,
         idx: int,
     ) -> int:
-        """Emit accumulated plain data as a DataChunk. Returns new data_start (= idx)."""
+        """Emit accumulated plain data as a DataChunk. Returns new data_start (= idx).
+
+        ``buf`` is a memoryview, not the wider ``bytes | bytearray |
+        memoryview`` this used to declare. The sole caller builds it as
+        ``memoryview(self._buffer_bytes)``, so the wider type described a
+        caller that does not exist -- and it cost something real: slicing the
+        union yields a union, which cannot go into ``list[memoryview]``.
+        Zero-copy slicing is the reason the decoder holds a memoryview at all.
+        """
         if data_start < idx:
             data_parts.append(buf[data_start:idx])
         if data_parts:
@@ -337,7 +350,7 @@ class ControlFrameDecoder:
 
     @staticmethod
     def _flush_remaining(
-        buf: bytes | bytearray | memoryview,
+        buf: memoryview,
         idx: int,
         data_start: int,
         data_parts: list[memoryview],
@@ -345,7 +358,8 @@ class ControlFrameDecoder:
     ) -> int:
         """Flush unconsumed buffer tail and any trailing plain data.
 
-        Returns the next parse offset.
+        Returns the next parse offset. ``buf`` is narrowed to memoryview for
+        the same reason as ``_emit_data_chunk`` above.
         """
         if data_start < idx:
             data_parts.append(buf[data_start:idx])

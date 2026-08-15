@@ -19,9 +19,24 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "lcov"],
       include: ["src/**/*.ts", "src/**/*.tsx"],
-      // Barrels are pure re-exports and `testing/` is test-only scaffolding;
-      // everything else in `src/` is held at 100%.
-      exclude: ["src/**/*.test.ts", "src/**/*.test.tsx", "src/**/index.ts", "src/testing/**"],
+      // Barrels are pure re-exports, `testing/` is test-only scaffolding, and
+      // `benchmark.ts` files are harnesses a developer runs by hand to get a
+      // number rather than library code anything imports. Everything else in
+      // `src/` is held at 100%.
+      //
+      // The benchmark exclusion matches the Go package's, which drops
+      // `benchmarks/` from its coverage denominator for the same reason: at a
+      // 100% threshold, the alternative is tests asserting that a benchmark
+      // printed something, which measures nothing and prices every new
+      // benchmark at the cost of fake tests. They are still type-checked and
+      // linted, so they cannot rot unnoticed.
+      exclude: [
+        "src/**/*.test.ts",
+        "src/**/*.test.tsx",
+        "src/**/index.ts",
+        "src/testing/**",
+        "src/**/benchmark.ts",
+      ],
       thresholds: {
         lines: 100,
         branches: 100,

@@ -72,6 +72,7 @@ func parseArguments() arguments {
 	flag.IntVar(&args.controlSize, "control-size", args.controlSize, "Control payload size")
 	flag.IntVar(&args.seed, "seed", args.seed, "Deterministic stream seed")
 	flag.IntVar(&args.passes, "passes", args.passes, "Benchmark passes per variant")
+	flag.Usage = printUsage
 	flag.Parse()
 
 	if args.frameCount < 1 {
@@ -184,15 +185,20 @@ func benchmarkDecode(chunks []string, passes int) (float64, float64, float64, in
 	return median, mean, min, events
 }
 
+// printUsage is installed as flag.Usage, so -h and any flag error reach it.
+//
+// It prints only the worked example, then defers to flag.PrintDefaults for the
+// per-flag descriptions. It used to spell those out itself, which meant two
+// copies of every flag's help text and no mechanism keeping them equal -- they
+// had already drifted ("Number of frames to generate" against the flag's
+// "Number of frames to synthesize"). It was also never wired to anything, so
+// none of it was reachable; the linter noticing it was unused is what surfaced
+// the duplication.
 func printUsage() {
 	fmt.Println("Usage: go run ./benchmarks/controlchannel -- --frame-count 200000 --control-ratio 0.25 --chunk-size 4096 --data-size 256 --control-size 128 --passes 5")
-	fmt.Println("  --frame-count N      Number of frames to generate")
-	fmt.Println("  --control-ratio F    Control frame ratio in stream (0 < F < 1)")
-	fmt.Println("  --chunk-size N       Chunk size in bytes")
-	fmt.Println("  --data-size N        Terminal payload size")
-	fmt.Println("  --control-size N     Control payload size")
-	fmt.Println("  --seed N             PRNG seed")
-	fmt.Println("  --passes N           Repeat benchmark passes")
+	fmt.Println()
+	fmt.Println("Flags:")
+	flag.PrintDefaults()
 }
 
 func main() {

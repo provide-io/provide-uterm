@@ -67,6 +67,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          submodules: true
 
       # Build the server image locally (not pushed) so Trivy can scan it
       - name: Build server image
@@ -111,6 +113,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          submodules: true
 
       # Build the Cloudflare Worker image locally (not pushed) so Trivy can scan it
       - name: Build CF image
@@ -153,6 +157,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          submodules: true
       - name: Build Go server image
         run: ci/build_go_image.sh provide-uterm-server-go:scan
       - name: Trivy scan (SARIF)
@@ -186,6 +192,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          submodules: true
       - name: Build C# server image
         run: ci/build_csharp_image.sh provide-uterm-server-csharp:scan
       - name: Trivy scan (SARIF)
