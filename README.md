@@ -346,6 +346,35 @@ docker compose -f docker/docker-compose.yml up
 
 All Python packages at 100% branch+line coverage. 8760+ tests total.
 
+## Control-channel parity benchmarks
+
+Use these commands to run the new cross-runtime decoder parity benchmarks.
+
+```bash
+# Quick local check (smaller dataset, faster)
+make benchmark-control-channel-quick
+
+# Full local parity run (all backends) with JSON artifact
+make benchmark-control-channel
+
+# Equivalent direct script form
+uv run python scripts/benchmark_control_channel_parity.py \
+	--output-json /tmp/control-channel-parity.json
+```
+
+Optional tuning arguments: `--frame-count`, `--passes`, `--chunk-size`, `--data-size`,
+`--control-size`, `--control-ratio`, `--baseline-revision`, `--seed`, `--backends`.
+
+The script prints machine-independent normalized throughput (`x fastest`) and writes
+JSON suitable for CI artifact inspection (`backends`, raw `results`, and
+`normalization` payload).
+
+CI execution:
+
+- Dispatch the `🧪 CI` workflow (`workflow_dispatch`).
+- The `control-channel-parity-benchmark` job runs for `python`, `csharp`, `go`,
+  and `typescript`, writing `control-channel-parity.json` as a workflow artifact.
+
 ---
 
 ## Security & Quality

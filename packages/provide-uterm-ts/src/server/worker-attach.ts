@@ -68,6 +68,24 @@ export interface AttachOptions {
  * connector that sent nonsense for `cols` gets a usable number rather than
  * poisoning every client that renders the screen.
  */
+/**
+ * Coerce to an integer but preserve absence as `null`.
+ *
+ * Ports `_opt_int` from websockets_worker.py, and deliberately NOT `safeInt`,
+ * which substitutes a default: a worker predating the ingest counters has to
+ * stay distinguishable from one reporting a genuine zero. Collapsing the two
+ * would make "nothing was ever read" and "this build cannot tell you" the same
+ * value — the exact ambiguity these counters exist to remove.
+ *
+ * Non-integers are rejected rather than rounded, matching the reference's
+ * `isinstance(value, int)`. Booleans fall out for free here: `typeof true` is
+ * `"boolean"`, where Python needed an explicit `not isinstance(value, bool)`
+ * because bool subclasses int.
+ */
+function optionalInt(value: unknown): number | null {
+  return typeof value === "number" && Number.isInteger(value) ? value : null;
+}
+
 export function workerSnapshotFrame(message: WorkerMessage, now: number): Record<string, unknown> {
   return makeSnapshotFrame({
     screen: String(message.screen ?? ""),
@@ -79,6 +97,14 @@ export function workerSnapshotFrame(message: WorkerMessage, now: number): Record
     hasTrailingSpace: Boolean(message.has_trailing_space ?? false),
     promptDetected: (message.prompt_detected ?? null) as Record<string, unknown> | null,
     rawTail: (message.raw_tail ?? null) as string | null,
+    // Forwarded from the worker, never synthesised: these count what the
+    // worker's own reader loop ingested before any emulator work, so only it
+    // can know them. The reference forwards them the same way
+    // (`_opt_int(msg.get("chunks_read"))` in websockets_worker.py). A worker
+    // predating the counters omits both and they stay null, which reads as
+    // "unknown" rather than as a wrong zero.
+    chunksRead: optionalInt(message.chunks_read),
+    bytesRead: optionalInt(message.bytes_read),
     ts: safeFloat(message.ts, now),
   }) as unknown as Record<string, unknown>;
 }

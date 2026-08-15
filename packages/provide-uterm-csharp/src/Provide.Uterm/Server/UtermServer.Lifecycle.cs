@@ -46,6 +46,7 @@ public sealed partial class UtermServer
 
         builder.Services.AddSingleton(this);
         var app = builder.Build();
+        app.UseMiddleware<TelemetryMiddleware>();
         app.UseWebSockets();
         UseFrameworkRefusalBodies(app);
         MapRoutes(app);

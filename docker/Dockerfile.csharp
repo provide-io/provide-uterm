@@ -41,32 +41,29 @@ RUN npm run build:frontend
 # ---- build -----------------------------------------------------------------
 FROM ${SDK_IMAGE} AS build
 
+RUN apt-get update && apt-get install -y clang zlib1g-dev
+
 WORKDIR /src
 
-COPY packages/provide-uterm-csharp/ ./
-RUN dotnet publish cmd/Uterm/Uterm.csproj -c Release -o /app/publish \
+COPY packages/provide-telemetry/ packages/provide-telemetry/
+COPY packages/provide-uterm-csharp/ packages/provide-uterm-csharp/
+RUN dotnet publish packages/provide-uterm-csharp/cmd/Uterm/Uterm.csproj -c Release -o /app/publish \
     /p:UseAppHost=true
 
 # ---- runtime ---------------------------------------------------------------
-FROM ${RUNTIME_IMAGE} AS runtime
+FROM gcr.io/distroless/cc-debian12:nonroot AS runtime
 
 WORKDIR /app
 
-RUN groupadd --system uterm \
-    && useradd --system --gid uterm --home-dir /app --shell /usr/sbin/nologin uterm
-
-COPY --from=build /app/publish /app
+COPY --from=build /app/publish/uterm ./uterm
 # Baked SPA/static assets (hijack.html, terminal.html, assets/, vite-manifest.json)
 COPY --from=frontend-build \
     /src/packages/provide-uterm-server/src/provide/uterm/server/frontend/ \
     /app/frontend/
 COPY docker/server.toml /etc/uterm/server.toml
 
-RUN mkdir -p /etc/uterm \
-    && chown -R uterm:uterm /app /etc/uterm
-
 EXPOSE 27780
-USER uterm
+USER 65532:65532
 
 ENV ASPNETCORE_URLS=http://0.0.0.0:27780 \
     UTERM_FRONTEND_DIR=/app/frontend

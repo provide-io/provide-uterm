@@ -54,17 +54,33 @@ def _require_linux_and_lib() -> Path:
     return lib
 
 
-def _serve_once(sock_path: str, timeout: float = 3.0) -> bytes:
+def _serve_once(sock_path: str, timeout: float = 3.0, ready: threading.Event | None = None) -> bytes:
     """
     Listen on a Unix socket, accept one connection, read all data, return raw bytes.
 
     Runs synchronously in a thread so it doesn't interfere with the asyncio loop.
+
+    ``ready`` is set once the socket is listening, and the caller must wait on it
+    before starting the process being captured. Without that handshake the
+    captured process can reach its ``connect()`` before this thread reaches
+    ``listen()``: the shim finds nothing to connect to, writes no frames, and
+    exits -- after which ``accept()`` here waits out the whole timeout and the
+    test fails with "socket collector raised: timed out".
+
+    That race is why these tests failed intermittently, a DIFFERENT one each run
+    (test_all_three_words_arrive_in_stdout,
+    test_library_does_not_intercept_non_stdio_fds,
+    test_copy_file_range_is_captured_when_stdout_is_a_file), and more often on a
+    loaded machine where this thread is slower to be scheduled. Nothing was
+    wrong with the shim; the test never gave it a socket to find.
     """
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
         s.bind(sock_path)
         s.listen(1)
         s.settimeout(timeout)
+        if ready is not None:
+            ready.set()
         conn, _ = s.accept()
         conn.settimeout(timeout)
         chunks: list[bytes] = []
@@ -109,15 +125,23 @@ def _run_with_capture(
     """
     raw_holder: list[bytes] = []
     exc_holder: list[BaseException] = []
+    ready = threading.Event()
 
     def collect() -> None:
         try:
-            raw_holder.append(_serve_once(sock_path, timeout=timeout))
+            raw_holder.append(_serve_once(sock_path, timeout=timeout, ready=ready))
         except Exception as exc:
             exc_holder.append(exc)
+        finally:
+            # Also on the failure path, or a bind that raised would leave the
+            # main thread waiting below for the full timeout before reporting an
+            # error it already has.
+            ready.set()
 
     t = threading.Thread(target=collect)
     t.start()
+    if not ready.wait(timeout):
+        pytest.fail("socket collector never started listening")
 
     env = {**os.environ, "LD_PRELOAD": str(lib), "UTERM_CAPTURE_SOCKET": sock_path}
     proc = subprocess.run(
@@ -224,15 +248,24 @@ def test_no_frames_without_env_var() -> None:
 
         # Start server thread — expect no connection within 0.5s
         raw_holder: list[bytes] = []
+        ready = threading.Event()
 
         def collect() -> None:
             try:
-                raw_holder.append(_serve_once(sock_path, timeout=0.5))
+                raw_holder.append(_serve_once(sock_path, timeout=0.5, ready=ready))
             except OSError:
                 raw_holder.append(b"")
+            finally:
+                ready.set()
 
         t = threading.Thread(target=collect)
         t.start()
+        # Wait for the listen() before starting the process. This assertion is
+        # "nothing connected", and without the handshake it would also hold when
+        # nothing was ever LISTENING -- passing for the wrong reason, which is
+        # the failure mode a negative test has to be built against.
+        if not ready.wait(5):
+            pytest.fail("socket collector never started listening")
 
         subprocess.run(
             ["/bin/sh", "-c", "printf 'should-not-be-captured\\n'"],

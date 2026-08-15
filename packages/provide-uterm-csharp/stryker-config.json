@@ -1,0 +1,13 @@
+{
+  "stryker-config": {
+    "solution": "Provide.Uterm.slnx",
+    "test-projects": [
+      "tests/Provide.Uterm.Tests/Provide.Uterm.Tests.csproj"
+    ],
+    "reporters": [
+      "progress",
+      "html",
+      "cleartext"
+    ]
+  }
+}

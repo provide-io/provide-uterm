@@ -50,7 +50,7 @@ COPY packages/provide-uterm-go/ ./
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/uterm ./cmd/uterm
 
 # ---- runtime ---------------------------------------------------------------
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM scratch
 
 COPY --from=build /out/uterm /uterm
 COPY --from=frontend-build \
@@ -62,6 +62,6 @@ COPY --from=frontend-build \
 COPY docker/server.toml /etc/uterm/server.toml
 
 EXPOSE 27780
-USER nonroot:nonroot
+USER 65532:65532
 
 ENTRYPOINT ["/uterm", "server", "--config", "/etc/uterm/server.toml", "--frontend-dir", "/frontend", "--host", "0.0.0.0", "--port", "27780"]

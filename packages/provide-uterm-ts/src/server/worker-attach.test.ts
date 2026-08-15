@@ -140,6 +140,11 @@ describe("building the frame a worker's snapshot becomes", () => {
       has_trailing_space: false,
       prompt_detected: null,
       raw_tail: null,
+      // Null, not 0: a connector that reports no ingest counters is saying
+      // "this build cannot tell you", which must stay distinguishable from a
+      // worker reporting a genuine zero bytes read.
+      chunks_read: null,
+      bytes_read: null,
       ts: 42,
     });
   });
@@ -161,6 +166,8 @@ describe("building the frame a worker's snapshot becomes", () => {
         has_trailing_space: true,
         prompt_detected: { prompt_id: "p" },
         raw_tail: "t",
+        chunks_read: 3,
+        bytes_read: 4096,
         ts: 9,
       },
       0,
@@ -176,6 +183,10 @@ describe("building the frame a worker's snapshot becomes", () => {
       has_trailing_space: true,
       prompt_detected: { prompt_id: "p" },
       raw_tail: "t",
+      // Forwarded from the worker, not recomputed here: only the worker's own
+      // reader loop can count what it ingested before any emulator work.
+      chunks_read: 3,
+      bytes_read: 4096,
       ts: 9,
     });
   });

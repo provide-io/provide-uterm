@@ -21,6 +21,7 @@ SELF-CONTAINED and FULLY MOCKED so it is safe in mutmut's forked workers:
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -79,6 +80,7 @@ def _make_hub(*, event_bus: Any = None) -> MagicMock:
     hub.force_release_hijack = AsyncMock(return_value=True)
     hub.set_input_mode = AsyncMock(return_value=(True, None))
     hub.get_last_snapshot = AsyncMock(return_value={"snap": 1})
+    hub.wait_for_snapshot = AsyncMock(return_value=None)
     hub.get_recent_events = AsyncMock(return_value=[{"ev": 1}])
     hub.browser_count = AsyncMock(return_value=0)
     hub.event_bus = event_bus
@@ -595,8 +597,189 @@ class TestPassThroughReads:
         reg = _make_registry()
         sentinel = object()
         result = await reg.last_snapshot("a", recipient=sentinel)
-        assert result == {"snap": 1}
+        assert result is not None
+        assert result["snap"] == 1
         reg._hub.get_last_snapshot.assert_awaited_once_with("a", recipient=sentinel)
+
+    async def test_a_plain_read_does_not_poll_the_worker(self) -> None:
+        """No ``wait_ms`` means no round trip: the cheap read stays cheap."""
+        reg = _make_registry()
+        await reg.last_snapshot("a")
+        reg._hub.wait_for_snapshot.assert_not_awaited()
+
+    async def test_a_plain_read_says_it_came_from_cache(self) -> None:
+        """The whole point: a cached screen must announce itself as cached.
+
+        Without this the caller sees a screen and cannot tell an idle terminal
+        from a worker that stopped answering — the two are byte-identical.
+        """
+        reg = _make_registry()
+        result = await reg.last_snapshot("a")
+        assert result is not None
+        assert result["snapshot_source"] == "cache"
+        assert result["snapshot_requested"] is False
+
+    async def test_wait_ms_polls_the_worker_and_is_forwarded_as_a_timeout(self) -> None:
+        reg = _make_registry()
+        await reg.last_snapshot("a", wait_ms=900)
+        reg._hub.wait_for_snapshot.assert_awaited_once_with("a", timeout_ms=900)
+
+    async def test_a_poll_that_produced_a_new_snapshot_reports_fresh(self) -> None:
+        reg = _make_registry()
+        reg._hub.wait_for_snapshot = AsyncMock(return_value={"snap": 2})
+        result = await reg.last_snapshot("a", wait_ms=900)
+        assert result is not None
+        assert result["snapshot_source"] == "fresh"
+
+    async def test_a_poll_that_timed_out_still_reports_cache(self) -> None:
+        """A timed-out poll returns the cached screen, so it must say ``cache``.
+
+        Reporting ``fresh`` merely because freshness was *requested* would put
+        the endpoint back where it started: a stale screen wearing a live label.
+        """
+        reg = _make_registry()
+        reg._hub.wait_for_snapshot = AsyncMock(return_value=None)
+        result = await reg.last_snapshot("a", wait_ms=900)
+        assert result is not None
+        assert result["snapshot_source"] == "cache"
+        assert result["snapshot_requested"] is True
+
+    async def test_the_returned_payload_is_always_the_redacted_one(self) -> None:
+        """``wait_for_snapshot`` bypasses output redaction, so its result drives
+        freshness only — the body still comes from ``get_last_snapshot``.
+
+        Returning the polled snapshot directly would let ``?wait_ms=`` read a
+        screen the requester's role is not allowed to see.
+        """
+        reg = _make_registry()
+        reg._hub.wait_for_snapshot = AsyncMock(return_value={"snap": "UNREDACTED"})
+        result = await reg.last_snapshot("a", recipient=object(), wait_ms=900)
+        assert result is not None
+        assert result["snap"] == 1
+
+    async def test_the_age_is_measured_from_the_snapshot_timestamp(self) -> None:
+        reg = _make_registry()
+        reg._hub.get_last_snapshot = AsyncMock(return_value={"snap": 1, "ts": time.time() - 2.0})
+        result = await reg.last_snapshot("a")
+        assert result is not None
+        assert 1500 <= result["snapshot_age_ms"] <= 5000
+
+    async def test_a_snapshot_without_a_timestamp_reports_an_unknown_age(self) -> None:
+        """``None`` age, not ``0``: a snapshot with no ``ts`` is of unknown
+        vintage, and reporting zero would claim it had just arrived."""
+        reg = _make_registry()
+        result = await reg.last_snapshot("a")
+        assert result is not None
+        assert result["snapshot_age_ms"] is None
+
+    async def test_the_age_is_in_milliseconds_not_seconds(self) -> None:
+        """Pins the 1000x scale. An age reported in seconds reads as a snapshot
+        that just arrived, which is the exact confusion these fields exist to
+        remove."""
+        reg = _make_registry()
+        reg._hub.get_last_snapshot = AsyncMock(return_value={"snap": 1, "ts": time.time() - 30.0})
+        result = await reg.last_snapshot("a")
+        assert result is not None
+        assert 29_000 <= result["snapshot_age_ms"] <= 40_000
+
+    async def test_a_timestamp_from_the_future_clamps_to_zero(self) -> None:
+        """Clock skew between the worker and this process must not produce a
+        NEGATIVE age. Zero says "as fresh as it gets"; -4000 says nothing, and
+        any consumer comparing against a staleness threshold would sail past
+        it."""
+        reg = _make_registry()
+        reg._hub.get_last_snapshot = AsyncMock(return_value={"snap": 1, "ts": time.time() + 60.0})
+        result = await reg.last_snapshot("a")
+        assert result is not None
+        assert result["snapshot_age_ms"] == 0
+
+    async def test_a_zero_timestamp_is_unknown_not_ancient(self) -> None:
+        """``ts=0`` is the absent-timestamp default, not 1970. Treating it as a
+        real time would report an age of ~57 years and mark every such snapshot
+        catastrophically stale."""
+        reg = _make_registry()
+        reg._hub.get_last_snapshot = AsyncMock(return_value={"snap": 1, "ts": 0})
+        result = await reg.last_snapshot("a")
+        assert result is not None
+        assert result["snapshot_age_ms"] is None
+
+    @pytest.mark.parametrize("ts", ["1700000000", None, [], {"t": 1}])
+    async def test_a_non_numeric_timestamp_is_unknown_rather_than_an_error(self, ts: Any) -> None:
+        """A worker sending a malformed ``ts`` must not take down the read. The
+        snapshot is still served; only its age is unknown."""
+        reg = _make_registry()
+        reg._hub.get_last_snapshot = AsyncMock(return_value={"snap": 1, "ts": ts})
+        result = await reg.last_snapshot("a")
+        assert result is not None
+        assert result["snapshot_age_ms"] is None
+
+    async def test_a_boolean_timestamp_is_not_treated_as_a_number(self) -> None:
+        """``bool`` is a subclass of ``int``, so ``isinstance(ts, int | float)``
+        accepts ``True`` and would date the snapshot to 1970 plus one second."""
+        reg = _make_registry()
+        reg._hub.get_last_snapshot = AsyncMock(return_value={"snap": 1, "ts": True})
+        result = await reg.last_snapshot("a")
+        assert result is not None
+        assert result["snapshot_age_ms"] is None
+
+    async def test_the_smallest_positive_wait_still_polls(self) -> None:
+        """The poll threshold is "any positive wait", not some larger number."""
+        reg = _make_registry()
+        result = await reg.last_snapshot("a", wait_ms=1)
+        reg._hub.wait_for_snapshot.assert_awaited_once_with("a", timeout_ms=1)
+        # And it is REPORTED as requested. The flag and the poll are computed
+        # from the same threshold, so they have to agree: a read that polled but
+        # reported `snapshot_requested=False` would make a timed-out poll
+        # indistinguishable from a plain cache read, which is the whole
+        # distinction this field exists to draw.
+        assert result is not None
+        assert result["snapshot_requested"] is True
+
+    async def test_the_age_is_computed_exactly_not_approximately(self) -> None:
+        """Pinned against a frozen clock, so the arithmetic itself is asserted.
+
+        A tolerance-based bound cannot see a factor that is off by a fraction of
+        a percent -- 30s at x1001 instead of x1000 is 30030ms, inside any range
+        loose enough to survive a real clock. Freezing time is what makes the
+        conversion exact rather than plausible.
+        """
+        from types import SimpleNamespace
+
+        from provide.uterm.server import registry as registry_module
+
+        snapshot_ts = 1_700_000_000.0
+        reg = _make_registry()
+        reg._hub.get_last_snapshot = AsyncMock(return_value={"snap": 1, "ts": snapshot_ts})
+        frozen = SimpleNamespace(time=lambda: snapshot_ts + 12.5)
+        with patch.object(registry_module, "time", frozen):
+            result = await reg.last_snapshot("a")
+
+        assert result is not None
+        assert result["snapshot_age_ms"] == 12_500
+
+    async def test_any_positive_timestamp_dates_the_snapshot(self) -> None:
+        """The unknown-vintage cutoff is zero, not "some small number".
+
+        ``ts=1`` is 1970-01-01T00:00:01 -- absurd, but a real instant, and
+        reporting it as catastrophically stale is useful. Reporting it as
+        ``None`` would say "unknown", which is the one thing it is not.
+        """
+        reg = _make_registry()
+        reg._hub.get_last_snapshot = AsyncMock(return_value={"snap": 1, "ts": 1})
+        result = await reg.last_snapshot("a")
+        assert result is not None
+        assert result["snapshot_age_ms"] is not None
+        assert result["snapshot_age_ms"] > 1_000_000_000
+
+    async def test_a_negative_wait_does_not_poll(self) -> None:
+        reg = _make_registry()
+        await reg.last_snapshot("a", wait_ms=-1)
+        reg._hub.wait_for_snapshot.assert_not_awaited()
+
+    async def test_an_absent_snapshot_is_not_stamped(self) -> None:
+        reg = _make_registry()
+        reg._hub.get_last_snapshot = AsyncMock(return_value=None)
+        assert await reg.last_snapshot("a") is None
 
     async def test_events_delegates_with_limit(self) -> None:
         reg = _make_registry()

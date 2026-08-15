@@ -302,7 +302,16 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
         hs = await hub.get_rest_session(worker_id, hijack_id)
         if hs is None:
             return JSONResponse({"error": "Invalid or expired hijack session."}, status_code=404)
-        snapshot = await hub.wait_for_snapshot(worker_id, timeout_ms=wait_ms)
+        # Freshness is measured against what THIS lease was last served, not
+        # against the moment it asked. A worker pushing on screen change lands
+        # the new frame microseconds BEFORE the poll, and the wall-clock test
+        # then discarded exactly that frame — the caller timed out still holding
+        # an older screen. See PollingCoordinator.wait_for_snapshot.
+        snapshot = await hub.wait_for_snapshot(worker_id, timeout_ms=wait_ms, after_event_seq=hs.last_served_event_seq)
+        if snapshot is not None:
+            served = snapshot.get("event_seq")
+            if isinstance(served, int) and not isinstance(served, bool):
+                hs.last_served_event_seq = served
         # Re-read lease_expires_at under the lock: a concurrent heartbeat may
         # have extended it during the wait_for_snapshot poll loop.
         fresh_expires = await hub.get_fresh_hijack_expiry(worker_id, hijack_id, hs.lease_expires_at)

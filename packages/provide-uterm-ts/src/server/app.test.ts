@@ -23,7 +23,14 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { BAD_TOKEN } from "../conformance/transport.ts";
 import { encodeJwt } from "../serverauth/index.ts";
-import { createServerApp, parseListQuery, SERVED_ROUTES, UNAUTHENTICATED_DETAIL, unservedCapability } from "./app.ts";
+import {
+  createServerApp,
+  parseListQuery,
+  SERVED_ROUTES,
+  stampSnapshotFreshness,
+  UNAUTHENTICATED_DETAIL,
+  unservedCapability,
+} from "./app.ts";
 import { bootstrapServer, SERVER_BOOTSTRAP_HOST, SERVER_VERSION, ServerBootstrapError } from "./bootstrap.ts";
 import { SESSION_HUB_REST_ACQUIRE_RATE, SESSION_HUB_REST_SEND_RATE, SessionHub } from "./session-hub.ts";
 import { SessionRegistry } from "./session-registry.ts";
@@ -623,5 +630,53 @@ describe("bootstrapping", () => {
     await runtimes.startAutoStart();
     await runtimes.stopAll();
     expect(registry.status(registry.definitions()[0]?.session_id ?? "")?.stopped_at).toBe(424242);
+  });
+});
+
+describe("saying how old a snapshot is, and where it came from", () => {
+  // A cached screen is byte-identical to a live one, so an idle terminal and a
+  // worker that stopped answering an hour ago render exactly the same. These
+  // three fields are the only thing that tells them apart.
+
+  it("dates a snapshot from its timestamp, in milliseconds", () => {
+    const stamped = stampSnapshotFreshness({ ts: Date.now() / 1000 - 30 });
+    expect(stamped.snapshot_age_ms as number).toBeGreaterThanOrEqual(29_000);
+    expect(stamped.snapshot_age_ms as number).toBeLessThan(60_000);
+  });
+
+  it("clamps a timestamp from the future to zero", () => {
+    // Clock skew between the worker and this process. A negative age says
+    // nothing, and would sail past any staleness threshold a caller compares
+    // against.
+    expect(stampSnapshotFreshness({ ts: Date.now() / 1000 + 60 }).snapshot_age_ms).toBe(0);
+  });
+
+  it.each([
+    ["absent", undefined],
+    ["zero, the not-set default rather than 1970", 0],
+    ["negative", -1],
+    ["a string", "1700000000"],
+    ["null", null],
+    ["NaN", Number.NaN],
+    ["Infinity", Number.POSITIVE_INFINITY],
+  ])("reports an unknown age when the timestamp is %s", (_label, ts) => {
+    // Unknown, not zero: zero would claim the snapshot had just arrived.
+    expect(stampSnapshotFreshness({ ts }).snapshot_age_ms).toBeNull();
+  });
+
+  it("says the screen came from cache, and that nobody asked the worker", () => {
+    // This hub has no waitForSnapshot, so a caller cannot force a round trip.
+    // That matches what the reference answers for a read with no `wait_ms` —
+    // but `snapshot_requested` has to stay honest about it either way, or a
+    // timed-out poll becomes indistinguishable from a plain cache read.
+    const stamped = stampSnapshotFreshness({ ts: Date.now() / 1000 });
+    expect(stamped.snapshot_source).toBe("cache");
+    expect(stamped.snapshot_requested).toBe(false);
+  });
+
+  it("leaves the screen it was handed alone", () => {
+    const stamped = stampSnapshotFreshness({ type: "snapshot", screen: "hi", ts: 1 });
+    expect(stamped.type).toBe("snapshot");
+    expect(stamped.screen).toBe("hi");
   });
 });

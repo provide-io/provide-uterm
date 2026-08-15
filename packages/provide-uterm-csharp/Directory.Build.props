@@ -14,4 +14,38 @@ SPDX-License-Identifier: AGPL-3.0-or-later
     <Copyright>Copyright (c) 2025-2026 provide.io llc. All rights reserved.</Copyright>
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
   </PropertyGroup>
+
+  <!-- provide-telemetry: Local source override with NuGet fallback -->
+  <PropertyGroup>
+    <ProvideTelemetryPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../provide-telemetry/csharp/src/Provide.Telemetry/Provide.Telemetry.csproj'))</ProvideTelemetryPath>
+    <UseTelemetrySource Condition="Exists('$(ProvideTelemetryPath)')">true</UseTelemetrySource>
+    <DefineConstants>$(DefineConstants);HAS_TELEMETRY</DefineConstants>
+  </PropertyGroup>
+
+  <!-- If submodule is checked out, use live source code -->
+  <ItemGroup Condition="'$(UseTelemetrySource)' == 'true'">
+    <ProjectReference Include="$(ProvideTelemetryPath)" />
+  </ItemGroup>
+
+  <!--
+    If the submodule is NOT checked out, say so.
+
+    This used to fall back to `<PackageReference Include="Provide.Telemetry"
+    Version="*" />`, which cannot work: Provide.Telemetry is not published to
+    nuget.org, so the fallback's only possible outcome is NU1101 naming a
+    package nobody can install. That is an unusually bad error to hand
+    someone, because it points at NuGet and says nothing about the submodule
+    that is actually missing, and it is the error every CI job hit, since
+    actions/checkout does not fetch submodules unless a workflow asks it to.
+
+    (No double hyphens anywhere in this comment: XML forbids them inside a
+    comment, and MSBuild reports that as MSB4024 "could not be loaded" against
+    every project at once, which looks like a broken build rather than a typo.)
+
+    Restore the fallback only if Provide.Telemetry is genuinely published.
+  -->
+  <Target Name="RequireTelemetrySubmodule" BeforeTargets="CollectPackageReferences;Restore"
+          Condition="'$(UseTelemetrySource)' != 'true'">
+    <Error Text="provide-telemetry submodule is not checked out. Run: git submodule update --init packages/provide-telemetry (CI: set `submodules: true` on actions/checkout). Expected: $(ProvideTelemetryPath)" />
+  </Target>
 </Project>

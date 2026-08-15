@@ -44,7 +44,7 @@ Exposes:
   POST   /api/sessions/{session_id}/clear            -- clear
   POST   /api/sessions/{session_id}/annotate         -- annotate
   POST   /api/sessions/{session_id}/analyze          -- analyze
-  GET    /api/sessions/{session_id}/snapshot          -- snapshot
+  GET    /api/sessions/{session_id}/snapshot          -- snapshot (?wait_ms= polls the worker)
   GET    /api/sessions/{session_id}/events            -- events
   GET    /api/sessions/{session_id}/events/watch      -- watch events
   GET    /api/sessions/{session_id}/recording         -- recording meta
@@ -390,7 +390,11 @@ def session_capability_handlers() -> dict[str, Callable[..., object]]:
             raise sid_not_found(session_id) from None
         return {"session_id": session_id, "analysis": analysis}
 
-    async def snapshot(request: Request, session_id: SessionId) -> dict[str, Any] | None:
+    async def snapshot(
+        request: Request,
+        session_id: SessionId,
+        wait_ms: Annotated[int, Query(ge=0, le=10000)] = 0,
+    ) -> dict[str, Any] | None:
         p = principal(request)
         az = authz(request)
         definition = await session_definition(request, session_id)
@@ -399,7 +403,12 @@ def session_capability_handlers() -> dict[str, Callable[..., object]]:
         # Pass the Request as the redaction recipient so a configured output
         # policy redacts the snapshot to the requester's role (M5) — the same
         # treatment the live broadcast and WS initial-snapshot paths apply.
-        return await registry(request).last_snapshot(session_id, recipient=request)
+        #
+        # ``wait_ms`` > 0 asks the worker for a new snapshot and waits for it.
+        # The default stays 0: this route answers from cache unless asked
+        # otherwise, and now says so in ``snapshot_source``/``snapshot_age_ms``
+        # rather than leaving a stale screen indistinguishable from an idle one.
+        return await registry(request).last_snapshot(session_id, recipient=request, wait_ms=wait_ms)
 
     async def events(
         request: Request,

@@ -11,8 +11,13 @@ Key capabilities: session control (hijack leasing with viewer/operator/admin rol
 ## Build & Run Commands
 
 ```bash
-# Install dependencies
-uv sync --group dev
+# Install dependencies (or just `make sync`).
+# --all-packages --all-extras is load-bearing, not belt-and-braces: plain
+# `uv sync --group dev` resolves the ROOT project only and UNINSTALLS workspace
+# members' own dependencies (psutil, provide-uterm-cloudflare). That leaves an
+# env where test COLLECTION fails with ModuleNotFoundError, which reads as a
+# broken dependency rather than a half-provisioned venv.
+uv sync --all-packages --all-extras --group dev
 
 # Run the core + Cloudflare test suites (what root `pytest` covers — see
 # [tool.pytest.ini_options].testpaths). 100% branch coverage enforced.

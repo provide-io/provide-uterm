@@ -211,6 +211,26 @@ def _changed_mutation_support_paths(changed_paths: list[str]) -> list[str]:
     return sorted(set(support))
 
 
+def _mutation_environment() -> dict[str, str]:
+    """The environment mutmut runs under, with its own uv project environment.
+
+    ``uv run --python 3.11`` REBUILDS the project environment at that version,
+    and uv's default project environment is ``.venv``. So running this gate on a
+    checkout whose ``.venv`` is 3.14 silently repointed it at 3.11 and left it
+    there. Nothing said so, and everything run afterwards -- pytest above all --
+    then answered for an interpreter the developer had not chosen. That cost a
+    confusing "the server suite fails" on 2026-08-14 that was a tunnel test
+    hanging on 3.11, nothing to do with the change under test.
+
+    Pointing uv at a dedicated directory keeps the gate's interpreter entirely
+    out of the working checkout. An explicit UV_PROJECT_ENVIRONMENT is honoured
+    if the caller already set one.
+    """
+    env = dict(os.environ)
+    env.setdefault("UV_PROJECT_ENVIRONMENT", str(Path(".venv-mutmut").resolve()))
+    return env
+
+
 def _results_per_mutant(python_version: str | None, env: dict[str, str]) -> list[tuple[str, str]]:
     """Return ``(mutant_name, state)`` for every mutant from ``mutmut results``."""
     cmd = _uv_mutmut_cmd(python_version, "results", "--all", "true")
@@ -333,7 +353,7 @@ def run_mutation_gate(
 ) -> dict[str, int]:
     attempts = retries + 1
     last_stats: dict[str, int] = {}
-    mutation_env = dict(os.environ)
+    mutation_env = _mutation_environment()
     existing_pythonpath = mutation_env.get("PYTHONPATH")
     _prepend_mutant_source_roots(mutation_env, existing_pythonpath)
     equivalents = _load_equivalent_allowlist()

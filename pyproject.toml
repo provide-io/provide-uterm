@@ -12,7 +12,7 @@ dependencies = [
     "provide-uterm-annotation>=0.5.0",
     "provide-uterm-server[all]>=0.5.0",
     "provide-uterm-platform[all]>=0.5.0",
-    "provide-telemetry>=0.4.7",
+    "provide-telemetry>=0.6.0",
 ]
 
 [dependency-groups]
@@ -21,14 +21,14 @@ dev = [
     "bandit>=1.9.4",
     "codespell>=2.4.2",
     "detect-secrets>=1.5.0",
-    "fastapi>=0.136.1",
+    "fastapi>=0.141.1",
     "httpx>=0.27",
     "hypothesis>=6.165.2",
-    "memray>=1.19.3; sys_platform != 'win32'",
+    "memray>=1.20.0; sys_platform != 'win32'",
     "mutmut>=3.7.0",
     "Pillow>=12.3.0",
     "mypy>=2.3.0",
-    "pip-audit>=2.7.0",
+    "pip-audit>=2.10.1",
     "pip-licenses>=5.5.5",
     "pre-commit>=4.6.0",
     "pydantic>=2.0",
@@ -63,6 +63,7 @@ dev = [
     "fastmcp>=3.3.1",
     "pytest-textual-snapshot>=1.0.0",
     "respx>=0.23.1",
+    "pytest-pyodide>=0.59.2",
 ]
 
 [tool.uv]
@@ -667,6 +668,11 @@ pytest_add_cli_args_test_selection = [
     # gates the wall-clock suite cannot reach.
     "packages/provide-uterm-server/tests/bridge/test_hub_polling_coverage.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_polling_kill.py",
+    # snapshot_req_undelivered + snapshot_wait_timeout (2163d535). Pure
+    # observability: nothing downstream reads either warning, so every
+    # behavioural test passes with the blocks deleted and their mutants had
+    # no bound killer. Asserts the event name and every kwarg by value.
+    "packages/provide-uterm-server/tests/bridge/hub/test_snapshot_diagnostics_kill.py",
     # StateStore (hub/store.py) — line-buffer + lifecycle + role/policy helpers.
     # No dedicated suite was wired (file sat at ~14% under pytest selection, 196 mutants
     # with no bound test). test_store_kill.py covers buffer/shutdown/lifecycle/

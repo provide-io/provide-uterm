@@ -88,8 +88,14 @@ class TermHub:
     # Lease/router hooks dispatch via ``self._hub.<method>`` so monkey-patched hub names still intercept.
     snapshot_matches = staticmethod(PollingCoordinator.snapshot_matches)
 
-    async def wait_for_snapshot(self, worker_id: str, timeout_ms: int = 1500) -> dict[str, Any] | None:
-        return await self.polling.wait_for_snapshot(worker_id, timeout_ms)
+    async def wait_for_snapshot(
+        self,
+        worker_id: str,
+        timeout_ms: int = 1500,
+        *,
+        after_event_seq: int | None = None,
+    ) -> dict[str, Any] | None:
+        return await self.polling.wait_for_snapshot(worker_id, timeout_ms, after_event_seq=after_event_seq)
 
     async def wait_for_guard(
         self,

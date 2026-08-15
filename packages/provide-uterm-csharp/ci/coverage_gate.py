@@ -19,6 +19,14 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 EXCLUDE_SUBSTR = (
+    # The provide-telemetry submodule. It is consumed as a ProjectReference
+    # rather than a published package, so coverlet indexes its source next to
+    # ours and measures a library this repo neither owns nor tests -- it has
+    # its own repository, suite and floor. Counting it took the measured total
+    # from ~97% to 88.84% the moment the submodule was wired in, which reads
+    # as "uterm's coverage collapsed" when nothing about uterm's coverage
+    # changed at all.
+    "provide-telemetry/",
     "UnicodeNormTables",
     "UnicodeWidthTables",
     "CharsetTables",
