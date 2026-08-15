@@ -27,8 +27,21 @@ SPDX-License-Identifier: AGPL-3.0-or-later
     <ProjectReference Include="$(ProvideTelemetryPath)" />
   </ItemGroup>
 
-  <!-- If submodule is NOT checked out, fallback to NuGet -->
-  <ItemGroup Condition="'$(UseTelemetrySource)' != 'true'">
-    <PackageReference Include="Provide.Telemetry" Version="*" />
-  </ItemGroup>
+  <!--
+    If the submodule is NOT checked out, say so.
+
+    This used to fall back to `<PackageReference Include="Provide.Telemetry"
+    Version="*" />`, which cannot work: Provide.Telemetry is not published to
+    nuget.org, so the fallback's only possible outcome is NU1101 naming a
+    package nobody can install. That is an unusually bad error to hand
+    someone, because it points at NuGet and says nothing about the submodule
+    that is actually missing -- and it is the error every CI job hit, since
+    actions/checkout does not fetch submodules unless a workflow asks it to.
+
+    Restore the fallback only if Provide.Telemetry is genuinely published.
+  -->
+  <Target Name="RequireTelemetrySubmodule" BeforeTargets="CollectPackageReferences;Restore"
+          Condition="'$(UseTelemetrySource)' != 'true'">
+    <Error Text="provide-telemetry submodule is not checked out. Run: git submodule update --init packages/provide-telemetry (CI: set `submodules: true` on actions/checkout). Expected: $(ProvideTelemetryPath)" />
+  </Target>
 </Project>

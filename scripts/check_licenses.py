@@ -30,6 +30,13 @@ ALLOWED_LICENSES: frozenset[str] = frozenset(
         "3-Clause BSD License",
         "ISC",
         "ISC License",
+        # pip-licenses reports whatever the package declares, and for ISC that
+        # is three different strings depending on whether it comes from a
+        # License field or an OSI classifier. This is the classifier spelling
+        # (pexpect, ptyprocess, dnspython). Not a policy change -- ISC is
+        # already allowed twice above; this is the same licence under the name
+        # setuptools happens to emit.
+        "ISC License (ISCL)",
         "PSF-2.0",
         "Python Software Foundation License",
         "MPL-2.0",
