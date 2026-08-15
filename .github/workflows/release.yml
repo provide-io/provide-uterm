@@ -26,6 +26,18 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  # Deliberately inert, and explicit rather than absent so that "release.yml has
+  # no concurrency block" is never mistaken for an oversight worth fixing.
+  #
+  # A release publishes artefacts. Cancelling one part-way can leave a tag
+  # pushed with no wheel, or a wheel uploaded under a version whose governance
+  # checks never finished -- a half-published state that is worse than a slow
+  # queue. The run-id group guarantees no two release runs ever share a group,
+  # so nothing here can be cancelled or de-queued by a later run.
+  group: ${{ github.workflow }}-${{ github.run_id }}
+  cancel-in-progress: false
+
 jobs:
   # ── Build (all packages in parallel — uses workspace sources) ─────────
   build:
