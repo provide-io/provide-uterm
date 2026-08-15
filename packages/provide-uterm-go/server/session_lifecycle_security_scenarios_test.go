@@ -42,6 +42,9 @@ type lifecycleScenario struct {
 		FragmentCount  int    `json:"fragment_count"`
 		OversizedBytes int    `json:"oversized_bytes"`
 		Case           string `json:"case"`
+		OutgoingOwner  string `json:"outgoing_owner"`
+		IncomingOwner  string `json:"incoming_owner"`
+		Principal      string `json:"principal"`
 	} `json:"input"`
 	Expected map[string]any            `json:"expected"`
 	Backends map[string]lifecycleClaim `json:"backends"`
@@ -74,6 +77,11 @@ type lifecycleObservation struct {
 	PolicyDecision          *string  `json:"policy_decision"`
 	SignedRequest           bool     `json:"signed_request"`
 	CompetingOwnerPreserved bool     `json:"competing_owner_preserved"`
+	HandoffCompleted        bool     `json:"handoff_completed"`
+	StaleOwnerRefused       bool     `json:"stale_owner_refused"`
+	SuccessorOwnerAccepted  bool     `json:"successor_owner_accepted"`
+	ApprovalExpired         bool     `json:"approval_expired"`
+	LateApprovalRefused     bool     `json:"late_approval_refused"`
 }
 
 func emptyLifecycleObservation(s lifecycleScenario) lifecycleObservation {
@@ -152,6 +160,10 @@ func executeLifecycleScenario(t *testing.T, scenario lifecycleScenario) lifecycl
 		return executeLifecycleResume(t, scenario)
 	case "non_owner_hijack_step":
 		return executeLifecycleNonOwnerStep(t, scenario)
+	case "owner_handoff":
+		return executeLifecycleOwnerHandoff(t, scenario)
+	case "approval_expiry":
+		return executeLifecycleApprovalExpiry(t, scenario)
 	default:
 		t.Fatalf("unsupported lifecycle operation %q", scenario.Input.Operation)
 		return lifecycleObservation{}
@@ -372,12 +384,20 @@ func executeLifecycleUnsupportedGovernance(t *testing.T, scenario lifecycleScena
 
 func lifecycleHTTPRequest(t *testing.T, client *http.Client, method, url, body string) (int, []byte) {
 	t.Helper()
+	return lifecycleHTTPRequestAs(t, client, method, url, body, "admin1")
+}
+
+// lifecycleHTTPRequestAs is lifecycleHTTPRequest for a named admin principal,
+// so a scenario whose contract input names the acting subject drives the route
+// as that subject rather than the shared default.
+func lifecycleHTTPRequestAs(t *testing.T, client *http.Client, method, url, body, subject string) (int, []byte) {
+	t.Helper()
 	req, err := http.NewRequest(method, url, strings.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Subject", "admin1")
+	req.Header.Set("X-Subject", subject)
 	req.Header.Set("X-Role", "admin")
 	resp, err := client.Do(req)
 	if err != nil {
@@ -500,4 +520,196 @@ func executeLifecycleNonOwnerStep(t *testing.T, scenario lifecycleScenario) life
 	observation.StatusCode = http.StatusSwitchingProtocols
 	observation.NonOwnerRefused = refused
 	return observation
+}
+
+// executeLifecycleOwnerHandoff drives a real lease handoff over the public
+// browser WebSocket route: the outgoing owner releases, the successor acquires,
+// and only the successor's keystrokes reach the worker afterwards.
+func executeLifecycleOwnerHandoff(t *testing.T, scenario lifecycleScenario) lifecycleObservation {
+	t.Helper()
+	input := scenario.Input
+	ts := newTestServer(t, nil)
+	worker := ts.setupWorker(t, input.WorkerID)
+	base, closeFn := wsServer(t, ts)
+	defer closeFn()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	path := base + "/ws/browser/" + input.WorkerID + "/term"
+
+	outgoing := dialBrowser(t, ctx, path, input.OutgoingOwner, "admin")
+	defer func() { _ = outgoing.conn.Close(websocket.StatusNormalClosure, "") }()
+	outgoing.waitFrame(t, "hello", 5*time.Second)
+	outgoing.send(t, ctx, map[string]any{"type": "hijack_request"})
+	outgoing.waitFrameWhere(t, "hijack_state", 5*time.Second, func(frame map[string]any) bool {
+		return frame["owner"] == "me"
+	})
+	// The release is observed on the outgoing owner's own socket: a hijack_state
+	// that names no owner at all. Waiting on that frame (rather than on elapsed
+	// time) is what makes the handoff ordering deterministic.
+	outgoing.send(t, ctx, map[string]any{"type": "hijack_release"})
+	outgoing.waitFrameWhere(t, "hijack_state", 5*time.Second, func(frame map[string]any) bool {
+		return frame["hijacked"] == false && frame["owner"] == nil
+	})
+
+	incoming := dialBrowser(t, ctx, path, input.IncomingOwner, "admin")
+	defer func() { _ = incoming.conn.Close(websocket.StatusNormalClosure, "") }()
+	incoming.waitFrame(t, "hello", 5*time.Second)
+	incoming.send(t, ctx, map[string]any{"type": "hijack_request"})
+	successorView := incoming.waitFrameWhere(t, "hijack_state", 5*time.Second, func(frame map[string]any) bool {
+		return frame["owner"] == "me"
+	})
+	// The successor holding the lease is only a handoff if the outgoing owner
+	// now sees somebody else own it; "hijacked, owner=other" is that evidence.
+	outgoingView := outgoing.waitFrameWhere(t, "hijack_state", 5*time.Second, func(frame map[string]any) bool {
+		return frame["owner"] == "other"
+	})
+
+	observation := emptyLifecycleObservation(scenario)
+	observation.Route = "browser_websocket"
+	observation.StatusCode = http.StatusSwitchingProtocols
+	observation.HandoffCompleted = successorView["hijacked"] == true && outgoingView["hijacked"] == true
+
+	baseline := len(workerSent(worker))
+	stale := "stale-" + input.Payload
+	outgoing.send(t, ctx, map[string]any{"type": "input", "data": stale})
+	// A ping round-trip on the stale socket is a barrier, not a sleep: the
+	// server dispatches one browser frame at a time per connection, so the pong
+	// proves the stale input was already handled to completion — a later
+	// delivery cannot still be in flight when the worker log is read.
+	outgoing.send(t, ctx, map[string]any{"type": "ping"})
+	outgoing.waitFrame(t, "pong", 5*time.Second)
+
+	incoming.send(t, ctx, map[string]any{"type": "input", "data": input.Payload})
+	waitUntil(t, 5*time.Second, func() bool {
+		return lifecycleDelivered(workerSent(worker)[baseline:], input.Payload)
+	})
+
+	// An input frame reaches the worker as raw terminal bytes, so a delivered
+	// keystroke IS its payload string; unrelated control frames (snapshot
+	// requests, hijack notifications) are DLE-framed JSON and never match.
+	for _, sent := range workerSent(worker)[baseline:] {
+		if sent == stale || sent == input.Payload {
+			observation.DeliveredPayloads = append(observation.DeliveredPayloads, sent)
+		}
+	}
+	observation.StaleOwnerRefused = !lifecycleDelivered(workerSent(worker)[baseline:], stale)
+	observation.SuccessorOwnerAccepted = lifecycleDelivered(workerSent(worker)[baseline:], input.Payload)
+	return observation
+}
+
+// executeLifecycleApprovalExpiry holds a command for approval, lets its
+// deadline pass on the hub's injected clock, runs the server's own approval
+// sweep, and then drives the public approve route late. The hub gets a
+// ManualClock so the deadline passes by construction rather than by waiting.
+func executeLifecycleApprovalExpiry(t *testing.T, scenario lifecycleScenario) lifecycleObservation {
+	t.Helper()
+	input := scenario.Input
+	clock := hub.NewManualClock(float64(time.Now().UnixNano()) / 1e9)
+	ts := newTestServer(t, func(_ *serverconfig.UtermServerConfig, deps *Deps) {
+		deps.Hub = hub.NewTermHub(hub.TermHubConfig{
+			Clock: clock, PolicyGate: holdGate{}, OnMetric: deps.Metrics.Inc, Logger: deps.Logger,
+		})
+	})
+	worker := ts.setupWorker(t, input.WorkerID)
+	ts.srv.MarkReady()
+	httpSrv := httptest.NewServer(ts.srv.Handler())
+	defer httpSrv.Close()
+	client := httpSrv.Client()
+	wsBase := "ws" + strings.TrimPrefix(httpSrv.URL, "http")
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	submitter := dialBrowser(t, ctx, wsBase+"/ws/browser/"+input.WorkerID+"/term", "approval-submitter", "admin")
+	defer func() { _ = submitter.conn.Close(websocket.StatusNormalClosure, "") }()
+	submitter.waitFrame(t, "hello", 5*time.Second)
+	submitter.send(t, ctx, map[string]any{"type": "hijack_request"})
+	submitter.waitFrameWhere(t, "hijack_state", 5*time.Second, func(frame map[string]any) bool {
+		return frame["owner"] == "me"
+	})
+
+	baseline := len(workerSent(worker))
+	submitter.send(t, ctx, map[string]any{"type": "input", "data": input.Payload})
+	pending := submitter.waitFrame(t, "approval_pending", 5*time.Second)
+	requestID, _ := pending["request_id"].(string)
+	// Control frames decode with UseNumber, so the deadline arrives as a
+	// json.Number rather than a float64.
+	expires, _ := pending["expires_at"].(json.Number)
+	expiresAt, err := expires.Float64()
+	if requestID == "" || err != nil {
+		t.Fatalf("approval_pending frame: %v", pending)
+	}
+	if lifecycleDelivered(workerSent(worker)[baseline:], input.Payload) {
+		t.Fatal("held command reached the worker before any decision")
+	}
+	listed := lifecycleApprovalListed(t, client, httpSrv.URL, input.Principal, requestID)
+	if !listed {
+		t.Fatalf("held command %q is not pending on the public list route", requestID)
+	}
+
+	// Move the injected clock past the deadline, then run the server's own
+	// approval sweep (the exact function StartSweeps ticks) — no sleeping.
+	clock.SetWall(expiresAt + 1)
+	ts.srv.sweepApprovals(ctx)
+	expired := !lifecycleApprovalListed(t, client, httpSrv.URL, input.Principal, requestID)
+
+	code, body := lifecycleHTTPRequestAs(t, client, http.MethodPost,
+		httpSrv.URL+"/api/approvals/"+requestID+"/approve", "", input.Principal)
+	token := lifecycleApprovalErrorToken(body)
+
+	observation := emptyLifecycleObservation(scenario)
+	observation.Route = "http"
+	observation.StatusCode = code
+	observation.Error = lifecycleString(token)
+	observation.ApprovalExpired = expired
+	observation.LateApprovalRefused = code == http.StatusBadRequest && token == "approval_not_pending"
+	for _, sent := range workerSent(worker)[baseline:] {
+		if sent == input.Payload {
+			observation.DeliveredPayloads = append(observation.DeliveredPayloads, sent)
+		}
+	}
+	return observation
+}
+
+// lifecycleApprovalListed reports whether requestID is still pending according
+// to the public GET /api/approvals route (which lists pending requests only).
+func lifecycleApprovalListed(t *testing.T, client *http.Client, baseURL, principal, requestID string) bool {
+	t.Helper()
+	code, body := lifecycleHTTPRequestAs(t, client, http.MethodGet, baseURL+"/api/approvals", "", principal)
+	if code != http.StatusOK {
+		t.Fatalf("list approvals = %d: %s", code, body)
+	}
+	var listed []map[string]any
+	if err := json.Unmarshal(body, &listed); err != nil {
+		t.Fatal(err)
+	}
+	for _, req := range listed {
+		if req["id"] == requestID && req["status"] == "pending" {
+			return true
+		}
+	}
+	return false
+}
+
+// lifecycleApprovalErrorToken normalizes the Go approvals refusal detail to the
+// contract's error token. An unexpected detail is returned verbatim so a
+// divergence surfaces as a mismatch instead of being normalized away.
+func lifecycleApprovalErrorToken(body []byte) string {
+	var payload struct {
+		Detail string `json:"detail"`
+	}
+	_ = json.Unmarshal(body, &payload)
+	if payload.Detail == "Approval request is not pending" {
+		return "approval_not_pending"
+	}
+	return payload.Detail
+}
+
+// lifecycleDelivered reports whether payload reached the worker as a keystroke.
+func lifecycleDelivered(sent []string, payload string) bool {
+	for _, item := range sent {
+		if item == payload {
+			return true
+		}
+	}
+	return false
 }
