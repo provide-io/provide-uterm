@@ -175,6 +175,19 @@ public sealed class ServerIntegrationHostRestTests
         await using (server)
         using (http)
         {
+            // Approving now injects the held command, so the fixture needs the
+            // worker and the owning browser the request was held against —
+            // without them the route answers 409 (ownership no longer valid),
+            // which is a different assertion and has its own test.
+            var worker = new CapturingWorkerWs();
+            Assert.True(hub.Conn.RegisterWorker("demo", worker));
+            var owner = new CapturingWorkerWs();
+            hub.Conn.RegisterBrowser("demo", owner, "admin", principalSubjectId: "other-user");
+            hub.Conn.ActivateBrowserBroadcasts("demo", owner);
+            var (acquired, why) = hub.Lease.TryAcquireWs("demo", owner);
+            Assert.True(acquired, why);
+            var generation = hub.Registry.Get("demo")!.HijackOwnershipVersion;
+
             hub.Approvals.Add(new ApprovalRequest
             {
                 Id = "apr-1",
@@ -183,6 +196,8 @@ public sealed class ServerIntegrationHostRestTests
                 Command = "rm -rf /",
                 CreatedAt = 1,
                 ExpiresAt = FarFutureDeadline,
+                OriginBrowser = owner,
+                OriginGeneration = generation,
             });
             hub.Approvals.Add(new ApprovalRequest
             {
@@ -192,6 +207,8 @@ public sealed class ServerIntegrationHostRestTests
                 Command = "ls",
                 CreatedAt = 1,
                 ExpiresAt = FarFutureDeadline,
+                OriginBrowser = owner,
+                OriginGeneration = generation,
             });
 
             var list = await http.GetAsync("/api/approvals");
@@ -202,9 +219,30 @@ public sealed class ServerIntegrationHostRestTests
             ap.EnsureSuccessStatusCode();
             Assert.Equal("approved", (await ap.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetString());
 
-            var rj = await http.PostAsync("/api/approvals/apr-2/reject", null);
+            Assert.Equal(["rm -rf /"], worker.Sent);
+
+            var rj = await http.PostAsync("/api/approvals/apr-2/reject?reason=nope", null);
             rj.EnsureSuccessStatusCode();
             Assert.Equal("rejected", (await rj.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetString());
+            // A rejection is never injected, whatever else the worker was sent.
+            Assert.Equal(["rm -rf /"], worker.Sent);
+        }
+    }
+
+    /// <summary>Records what the hub forwarded — used as both a worker and a browser transport.</summary>
+    private sealed class CapturingWorkerWs : IWorkerWs
+    {
+        private readonly List<string> _sent = new();
+
+        public IReadOnlyList<string> Sent
+        {
+            get { lock (_sent) return _sent.ToArray(); }
+        }
+
+        public Task SendTextAsync(string payload, CancellationToken cancellationToken = default)
+        {
+            lock (_sent) _sent.Add(payload);
+            return Task.CompletedTask;
         }
     }
 

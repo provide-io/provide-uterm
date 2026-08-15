@@ -454,7 +454,7 @@ public sealed partial class UtermServer
             return;
         }
 
-        _ = await SendBrowserInputAsync(workerId, conn, text, ct).ConfigureAwait(false);
+        await HandleBrowserInputAsync(workerId, conn, text, ct).ConfigureAwait(false);
     }
 
     /// <summary>Authorize and deliver one raw browser-input frame.</summary>

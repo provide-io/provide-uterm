@@ -62,6 +62,14 @@ public sealed class TermHubConfig
     /// </summary>
     public Action<string, string, string?, string?, Dictionary<string, object?>?>? OnTelemetryEvent { get; set; }
 
+    /// <summary>
+    /// Input-interception policy gate. Null selects <see cref="NoOpPolicyGate"/>,
+    /// which is what every existing deployment gets: the browser input path then
+    /// forwards keystrokes straight to the worker with no approval machinery in
+    /// the way. Port of Go <c>TermHubConfig.PolicyGate</c>.
+    /// </summary>
+    public IInputPolicyGate? PolicyGate { get; set; }
+
     public IClock? Clock { get; set; }
 }
 
@@ -69,7 +77,7 @@ public sealed class TermHubConfig
 /// Composes registry, limiter, approvals, lease, state, router, connection, presence.
 /// Port of provide.uterm.server.bridge.hub TermHub.
 /// </summary>
-public sealed class TermHub : ILeaseHub
+public sealed partial class TermHub : ILeaseHub
 {
     public WorkerRegistry Registry { get; }
     public RateLimiter Limiter { get; }
@@ -101,6 +109,16 @@ public sealed class TermHub : ILeaseHub
 
     /// <summary>Maximum payload bytes accepted for one complete inbound WebSocket message.</summary>
     public int MaxWsMessageBytes { get; }
+
+    /// <summary>Per-input-frame character cap enforced on the policy-gated input path.</summary>
+    public int MaxInputChars { get; }
+
+    /// <summary>
+    /// Ceiling on a parked browser's hold buffer, clamped to at least
+    /// <see cref="MaxInputChars"/> so a single admissible keystroke can always
+    /// be buffered. Port of Go <c>maxBufferChars</c>.
+    /// </summary>
+    public int MaxBufferChars { get; }
 
     internal int MaxEventDataChars { get; }
     internal int MaxWorkers { get; }
@@ -142,12 +160,23 @@ public sealed class TermHub : ILeaseHub
             config.RestSendRateLimitPerSec <= 0 ? 20 : config.RestSendRateLimitPerSec,
             Clock);
 
+        PolicyGate = config.PolicyGate ?? new NoOpPolicyGate();
+        MaxInputChars = Math.Max(100, config.MaxInputChars <= 0 ? 10000 : config.MaxInputChars);
+        MaxBufferChars = Math.Max(
+            MaxInputChars,
+            Math.Max(100, config.MaxBufferChars <= 0 ? 40000 : config.MaxBufferChars));
+
         Approvals = new InMemoryApprovalStore(Clock);
+        // A timed-out request must let its parked browser type again. Nothing
+        // else ever unparks it: the browser is held until an approve, a reject,
+        // or this. The store retires deadlines inline on every read and write,
+        // so the release lands whether or not a sweep is running.
+        Approvals.OnExpired = ReleaseBrowserParkedFor;
         State = new StateStore(
             Registry,
             SharedLock,
             Clock,
-            Math.Max(100, config.MaxBufferChars <= 0 ? 40000 : config.MaxBufferChars),
+            MaxBufferChars,
             config.OnMetric,
             config.OnHijackChanged);
 

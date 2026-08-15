@@ -17,6 +17,46 @@ public sealed partial class HijackLeaseManager
         string text,
         CancellationToken ct = default)
     {
+        var pending = await ReserveBrowserInputAsync(workerId, browser, null, ct).ConfigureAwait(false);
+        if (pending is null) return false;
+        return (await DeliverReservedInputsAsync(workerId, pending, [text], ct).ConfigureAwait(false)).Sent;
+    }
+
+    /// <summary>
+    /// As <see cref="SendBrowserInputAsync"/>, but refuses unless dashboard
+    /// ownership is still at exactly <paramref name="generation"/> — the version
+    /// captured before a policy gate was awaited. Port of Go
+    /// <c>SendBrowserOwnedInputAtGeneration</c>.
+    /// </summary>
+    public async Task<bool> SendBrowserInputAtGenerationAsync(
+        string workerId,
+        object browser,
+        long generation,
+        string text,
+        CancellationToken ct = default)
+    {
+        var pending = await ReserveBrowserInputAsync(workerId, browser, generation, ct).ConfigureAwait(false);
+        if (pending is null) return false;
+        return (await DeliverReservedInputsAsync(workerId, pending, [text], ct).ConfigureAwait(false)).Sent;
+    }
+
+    /// <summary>
+    /// Reserve the worker for one browser's input, waiting out any in-flight
+    /// lifecycle transition. Null means the browser may not send: no worker, not
+    /// registered, no input capability, or — when
+    /// <paramref name="requiredOwnershipVersion"/> is supplied — the dashboard
+    /// lease has moved since it was captured.
+    /// </summary>
+    private async Task<PendingInputSend?> ReserveBrowserInputAsync(
+        string workerId,
+        object? browser,
+        long? requiredOwnershipVersion,
+        CancellationToken ct)
+    {
+        // A held command whose submitting browser is unknown (an approval seeded
+        // straight into the store, never parked) can never own the input path.
+        if (browser is null) return null;
+
         PendingInputSend? pending = null;
         double? expiration = null;
         while (true)
@@ -25,7 +65,7 @@ public sealed partial class HijackLeaseManager
             lock (_lock)
             {
                 var st = _registry.Get(workerId);
-                if (st is null) return false;
+                if (st is null) return null;
                 if (st.HijackPending is not null
                     && st.DisconnectResumeCompletion is { IsCompleted: false } lifecycleCompletion)
                 {
@@ -35,9 +75,10 @@ public sealed partial class HijackLeaseManager
                     || !st.Browsers.ContainsKey(browser)
                     || browser is IAbortableBrowserWs { IsActive: false }
                     || st.HijackPending is not null
+                    || (requiredOwnershipVersion is { } required && st.HijackOwnershipVersion != required)
                     || !_hub.CanSendInput(st, browser))
                 {
-                    return false;
+                    return null;
                 }
                 else if (st.InputSendPending is not null)
                 {
@@ -66,7 +107,40 @@ public sealed partial class HijackLeaseManager
         }
 
         if (expiration is not null) ArmExpiry(workerId, expiration.Value);
-        return await DeliverReservedInputAsync(workerId, pending!, text, ct).ConfigureAwait(false);
+        return pending;
+    }
+
+    /// <summary>
+    /// Deliver an approved command, and the submitter's buffered replay, under
+    /// one reservation — so fresh input from the same browser either joins the
+    /// replay or waits behind the batch, and cannot overtake it. Port of Go
+    /// <c>SendApprovedBrowserInputAtGeneration</c>.
+    /// </summary>
+    /// <param name="unpark">
+    /// Called once the worker is reserved, with true to take the browser's hold
+    /// buffer for replay and false to unpark it and discard. Taking the buffer
+    /// after the reservation is what closes the overtaking window.
+    /// </param>
+    public async Task<(int Delivered, int Total)> SendApprovedBrowserInputAtGenerationAsync(
+        string workerId,
+        object? browser,
+        long generation,
+        string command,
+        Func<bool, string> unpark,
+        CancellationToken ct = default)
+    {
+        var pending = await ReserveBrowserInputAsync(workerId, browser, generation, ct).ConfigureAwait(false);
+        if (pending is null)
+        {
+            unpark(false);
+            return (0, 1);
+        }
+
+        var replay = unpark(true);
+        string[] texts = replay.Length == 0 ? [command] : [command, replay];
+        var (delivered, _) = await DeliverReservedInputsAsync(workerId, pending, texts, ct)
+            .ConfigureAwait(false);
+        return (delivered, texts.Length);
     }
 
     private static PendingInputSend NewInputReservation(
@@ -86,13 +160,19 @@ public sealed partial class HijackLeaseManager
             Completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously),
         };
 
-    private async Task<bool> DeliverReservedInputAsync(
+    /// <summary>
+    /// Send every text of a reserved batch in order, stopping at the first
+    /// failure. Delivered counts what actually reached the worker; Sent is true
+    /// only when the whole batch did and the transport is still live.
+    /// </summary>
+    private async Task<(int Delivered, bool Sent)> DeliverReservedInputsAsync(
         string workerId,
         PendingInputSend pending,
-        string text,
+        IReadOnlyList<string> texts,
         CancellationToken ct)
     {
         var sent = false;
+        var delivered = 0;
         var reconcileWorker = false;
         Task? sendTask = null;
         using var bounded = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -101,9 +181,15 @@ public sealed partial class HijackLeaseManager
         {
             if (pending.Worker is not IAbortableBrowserWs { IsActive: false })
             {
-                sendTask = pending.Worker.SendTextAsync(text, bounded.Token);
-                await sendTask.WaitAsync(_hub.ResumeSendTimeout, ct).ConfigureAwait(false);
-                sent = pending.Worker is not IAbortableBrowserWs { IsActive: false };
+                foreach (var text in texts)
+                {
+                    sendTask = pending.Worker.SendTextAsync(text, bounded.Token);
+                    await sendTask.WaitAsync(_hub.ResumeSendTimeout, ct).ConfigureAwait(false);
+                    if (pending.Worker is IAbortableBrowserWs { IsActive: false }) break;
+                    delivered++;
+                }
+
+                sent = delivered == texts.Count;
             }
         }
         catch
@@ -155,7 +241,7 @@ public sealed partial class HijackLeaseManager
                 pending.Completion.TrySetResult();
             }
         }
-        return sent;
+        return (delivered, sent);
     }
 
     private static void ObserveEventualSendFault(Task? task)
