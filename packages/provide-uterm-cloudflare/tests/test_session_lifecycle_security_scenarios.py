@@ -25,15 +25,28 @@ import threading
 import time
 import urllib.error
 import urllib.request
-from collections.abc import AsyncIterator, Callable, Iterator
+from collections.abc import AsyncIterator, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-import websockets
 from cf_jwt_harness import AUDIENCE, ISSUER, build_keypair, mint
+from cf_lifecycle_ws import (
+    WORKER_TOKEN,
+    acquire,
+    collect_matching,
+    connect,
+    drain_browser_startup,
+    drain_worker_startup,
+    headers,
+    matching_count,
+    observation,
+    receive_matching,
+    send_control,
+    ws_url,
+)
 
-from provide.uterm.control_channel import ControlChunk, ControlFrameDecoder, DataChunk, encode_control_frame
+from provide.uterm.control_channel import encode_control_frame
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PACKAGE_ROOT.parents[1]
@@ -44,12 +57,7 @@ CONTRACT_PATH = Path(
     )
 )
 OUTPUT_PATH = os.environ.get("SESSION_LIFECYCLE_SCENARIO_OUTPUT")
-WORKER_TOKEN = "lifecycle-worker-token-padded-beyond-32-characters"
 HIBERNATION_IDLE_S = 40
-
-
-def _observation(scenario: dict[str, Any], defaults: dict[str, Any], **values: Any) -> dict[str, Any]:
-    return {"id": scenario["id"], "status": scenario["backends"]["cloudflare"]["status"], **defaults, **values}
 
 
 def _free_port() -> int:
@@ -255,74 +263,6 @@ def _worker_server(jwks_url: str, *, resume_enabled: bool = True) -> Iterator[st
                 process.wait(timeout=5)
 
 
-def _ws_url(base_url: str, path: str) -> str:
-    return base_url.replace("http://", "ws://", 1) + path
-
-
-def _decode(raw: str | bytes) -> list[dict[str, Any]]:
-    if not isinstance(raw, str):
-        return []
-    events: list[dict[str, Any]] = []
-    for event in ControlFrameDecoder().feed(raw):
-        if isinstance(event, ControlChunk):
-            events.append(event.control)
-        elif isinstance(event, DataChunk):
-            events.append({"type": "data", "data": event.data})
-    return events
-
-
-async def _receive_matching(
-    websocket: Any,
-    predicate: Callable[[dict[str, Any]], bool],
-    *,
-    timeout: float = 4,
-) -> dict[str, Any]:
-    deadline = asyncio.get_running_loop().time() + timeout
-    while asyncio.get_running_loop().time() < deadline:
-        raw = await asyncio.wait_for(websocket.recv(), timeout=max(0.01, deadline - asyncio.get_running_loop().time()))
-        for event in _decode(raw):
-            if predicate(event):
-                return event
-    raise TimeoutError("matching WebSocket frame was not observed")
-
-
-async def _matching_count(
-    websocket: Any,
-    predicate: Callable[[dict[str, Any]], bool],
-    *,
-    timeout: float = 0.2,
-) -> int:
-    count = 0
-    deadline = asyncio.get_running_loop().time() + timeout
-    while asyncio.get_running_loop().time() < deadline:
-        try:
-            raw = await asyncio.wait_for(websocket.recv(), timeout=deadline - asyncio.get_running_loop().time())
-        except TimeoutError:
-            break
-        count += sum(predicate(event) for event in _decode(raw))
-    return count
-
-
-async def _send_control(websocket: Any, frame: dict[str, Any]) -> None:
-    await websocket.send(encode_control_frame(frame))
-
-
-async def _drain_worker_startup(worker: Any) -> None:
-    # Registration is completed eagerly before the 101 response.  The CF
-    # protocol doesn't emit an unsolicited worker hello/snapshot request.
-    assert worker.state.name == "OPEN"
-
-
-async def _drain_browser_startup(browser: Any) -> dict[str, Any]:
-    return await _receive_matching(browser, lambda event: event.get("type") == "hello")
-
-
-async def _acquire(browser: Any, worker: Any) -> None:
-    await _send_control(browser, {"type": "hijack_request"})
-    await _receive_matching(worker, lambda event: event.get("type") == "control" and event.get("action") == "pause")
-    await _receive_matching(browser, lambda event: event.get("type") == "hijack_state" and event.get("owner") == "me")
-
-
 async def _fragments(
     payload: str,
     count: int,
@@ -345,25 +285,11 @@ async def _fragment_counts(sender: Any, payload: str, count: int, receiver: Any,
     finish = asyncio.Event()
     task = asyncio.create_task(sender.send(_fragments(payload, count, started, finish)))
     await asyncio.wait_for(started.wait(), timeout=2)
-    before = await _matching_count(receiver, predicate)
+    before = await matching_count(receiver, predicate)
     finish.set()
     await asyncio.wait_for(task, timeout=4)
-    await _receive_matching(receiver, predicate)
-    return before, 1 + await _matching_count(receiver, predicate)
-
-
-def _headers(token: str) -> dict[str, str]:
-    return {"Authorization": f"Bearer {token}"}
-
-
-def _connect(url: str, *, additional_headers: dict[str, str]) -> Any:
-    """Open a socket with bounded cleanup for workerd hibernation sockets."""
-    return websockets.connect(
-        url,
-        additional_headers=additional_headers,
-        close_timeout=0.2,
-        ping_interval=None,
-    )
+    await receive_matching(receiver, predicate)
+    return before, 1 + await matching_count(receiver, predicate)
 
 
 async def _fragmentation(base: str, token: str, scenario: dict[str, Any], defaults: dict[str, Any]) -> dict[str, Any]:
@@ -371,33 +297,33 @@ async def _fragmentation(base: str, token: str, scenario: dict[str, Any], defaul
     worker_id = data["worker_id"]
     payload = data["payload"]
     count = data["fragment_count"]
-    worker_url = _ws_url(base, f"/ws/worker/{worker_id}/term")
-    browser_url = _ws_url(base, f"/ws/browser/{worker_id}/term")
+    worker_url = ws_url(base, f"/ws/worker/{worker_id}/term")
+    browser_url = ws_url(base, f"/ws/browser/{worker_id}/term")
 
     def is_payload(event: dict[str, Any]) -> bool:
         return event.get("type") == "data" and event.get("data") == payload
 
     async with (
-        _connect(worker_url, additional_headers=_headers(WORKER_TOKEN)) as worker,
-        _connect(browser_url, additional_headers=_headers(token)) as browser,
+        connect(worker_url, additional_headers=headers(WORKER_TOKEN)) as worker,
+        connect(browser_url, additional_headers=headers(token)) as browser,
     ):
-        await _drain_worker_startup(worker)
-        await _drain_browser_startup(browser)
+        await drain_worker_startup(worker)
+        await drain_browser_startup(browser)
         if data["transport"] == "browser":
-            await _acquire(browser, worker)
+            await acquire(browser, worker)
             wire_payload = encode_control_frame({"type": "input", "data": payload})
             before, after = await _fragment_counts(browser, wire_payload, count, worker, is_payload)
-            await _send_control(browser, {"type": "input", "data": "X" * data["oversized_bytes"]})
-            error = await _receive_matching(browser, lambda event: event.get("type") == "error")
+            await send_control(browser, {"type": "input", "data": "X" * data["oversized_bytes"]})
+            error = await receive_matching(browser, lambda event: event.get("type") == "error")
             oversized_refused = "too large" in str(error.get("message"))
             route = "browser_websocket"
         else:
             before, after = await _fragment_counts(worker, payload, count, browser, is_payload)
             await worker.send("X" * data["oversized_bytes"])
-            error = await _receive_matching(worker, lambda event: event.get("type") == "error")
+            error = await receive_matching(worker, lambda event: event.get("type") == "error")
             oversized_refused = "too large" in str(error.get("message"))
             route = "worker_websocket"
-    return _observation(
+    return observation(
         scenario,
         defaults,
         route=route,
@@ -414,7 +340,7 @@ def _unsupported(base: str, token: str, scenario: dict[str, Any], defaults: dict
     operation = scenario["input"]["operation"]
     suffix = "browser-quota" if operation == "browser_quota" else "governance"
     request = urllib.request.Request(  # noqa: S310 - base is the locally created loopback server
-        f"{base}/api/lifecycle/{suffix}", headers=_headers(token)
+        f"{base}/api/lifecycle/{suffix}", headers=headers(token)
     )
     try:
         urllib.request.urlopen(request, timeout=5)  # noqa: S310
@@ -426,7 +352,7 @@ def _unsupported(base: str, token: str, scenario: dict[str, Any], defaults: dict
     values: dict[str, Any] = {"route": "http", "status_code": status, "error": body["error"]}
     if operation == "governed_input":
         values["policy_decision"] = "unsupported"
-    return _observation(scenario, defaults, **values)
+    return observation(scenario, defaults, **values)
 
 
 async def _resume(
@@ -434,48 +360,46 @@ async def _resume(
 ) -> dict[str, Any]:
     data = scenario["input"]
     worker_id = data["worker_id"]
-    worker_url = _ws_url(base, f"/ws/worker/{worker_id}/term")
-    browser_url = _ws_url(base, f"/ws/browser/{worker_id}/term")
+    worker_url = ws_url(base, f"/ws/worker/{worker_id}/term")
+    browser_url = ws_url(base, f"/ws/browser/{worker_id}/term")
     restored = replay_rejected = competing_preserved = False
-    async with _connect(worker_url, additional_headers=_headers(WORKER_TOKEN)) as worker:
-        await _drain_worker_startup(worker)
-        original = await _connect(browser_url, additional_headers=_headers(tokens[data["principal"]]))
-        hello = await _drain_browser_startup(original)
+    async with connect(worker_url, additional_headers=headers(WORKER_TOKEN)) as worker:
+        await drain_worker_startup(worker)
+        original = await connect(browser_url, additional_headers=headers(tokens[data["principal"]]))
+        hello = await drain_browser_startup(original)
         resume_token = hello["resume_token"]
-        await _acquire(original, worker)
+        await acquire(original, worker)
         await original.close()
-        await _receive_matching(
-            worker, lambda event: event.get("type") == "control" and event.get("action") == "resume"
-        )
+        await receive_matching(worker, lambda event: event.get("type") == "control" and event.get("action") == "resume")
         if data["case"] == "current_owner":
-            resumed = await _connect(browser_url, additional_headers=_headers(tokens[data["principal"]]))
-            await _drain_browser_startup(resumed)
-            await _send_control(resumed, {"type": "resume", "token": resume_token})
-            resumed_hello = await _receive_matching(
+            resumed = await connect(browser_url, additional_headers=headers(tokens[data["principal"]]))
+            await drain_browser_startup(resumed)
+            await send_control(resumed, {"type": "resume", "token": resume_token})
+            resumed_hello = await receive_matching(
                 resumed, lambda event: event.get("type") == "hello" and event.get("resumed") is True
             )
-            await _receive_matching(
+            await receive_matching(
                 worker, lambda event: event.get("type") == "control" and event.get("action") == "pause"
             )
-            await _send_control(resumed, {"type": "input", "data": "resume-proof"})
+            await send_control(resumed, {"type": "input", "data": "resume-proof"})
             restored = bool(resumed_hello["resumed"]) and bool(
-                await _receive_matching(
+                await receive_matching(
                     worker, lambda event: event.get("type") == "data" and event.get("data") == "resume-proof"
                 )
             )
-            replay = await _connect(browser_url, additional_headers=_headers(tokens[data["principal"]]))
-            await _drain_browser_startup(replay)
-            await _send_control(replay, {"type": "resume", "token": resume_token})
+            replay = await connect(browser_url, additional_headers=headers(tokens[data["principal"]]))
+            await drain_browser_startup(replay)
+            await send_control(replay, {"type": "resume", "token": resume_token})
             replay_rejected = (
-                await _matching_count(
+                await matching_count(
                     replay,
                     lambda event: event.get("type") == "hello" and event.get("resumed") is True,
                     timeout=0.4,
                 )
                 == 0
             )
-            await _send_control(resumed, {"type": "ping"})
-            warm_witness = await _receive_matching(
+            await send_control(resumed, {"type": "ping"})
+            warm_witness = await receive_matching(
                 resumed,
                 lambda event: event.get("type") == "heartbeat" and "runtime_activation_seq" in event,
             )
@@ -483,18 +407,18 @@ async def _resume(
             # the original edge-held browser and worker attachments must wake
             # the cold isolate and recover ownership/generation state.
             await asyncio.sleep(HIBERNATION_IDLE_S)
-            await _send_control(resumed, {"type": "ping"})
-            cold_witness = await _receive_matching(
+            await send_control(resumed, {"type": "ping"})
+            cold_witness = await receive_matching(
                 resumed,
                 lambda event: event.get("type") == "heartbeat" and "runtime_activation_seq" in event,
                 timeout=8,
             )
             assert cold_witness["runtime_activation_seq"] > warm_witness["runtime_activation_seq"]
             assert cold_witness["runtime_incarnation"] != warm_witness["runtime_incarnation"]
-            await _send_control(worker, {"type": "ping"})
-            await _receive_matching(resumed, lambda event: event.get("type") == "ping", timeout=8)
-            await _send_control(resumed, {"type": "input", "data": "post-hibernation-proof"})
-            post_wake = await _receive_matching(
+            await send_control(worker, {"type": "ping"})
+            await receive_matching(resumed, lambda event: event.get("type") == "ping", timeout=8)
+            await send_control(resumed, {"type": "input", "data": "post-hibernation-proof"})
+            post_wake = await receive_matching(
                 worker,
                 lambda event: event.get("type") == "data" and event.get("data") == "post-hibernation-proof",
                 timeout=8,
@@ -504,28 +428,28 @@ async def _resume(
             await resumed.close()
             succeeded = restored
         else:
-            competitor = await _connect(browser_url, additional_headers=_headers(tokens[data["competing_principal"]]))
-            await _drain_browser_startup(competitor)
-            await _acquire(competitor, worker)
-            stale = await _connect(browser_url, additional_headers=_headers(tokens[data["principal"]]))
-            await _drain_browser_startup(stale)
-            await _send_control(stale, {"type": "resume", "token": resume_token})
+            competitor = await connect(browser_url, additional_headers=headers(tokens[data["competing_principal"]]))
+            await drain_browser_startup(competitor)
+            await acquire(competitor, worker)
+            stale = await connect(browser_url, additional_headers=headers(tokens[data["principal"]]))
+            await drain_browser_startup(stale)
+            await send_control(stale, {"type": "resume", "token": resume_token})
             succeeded = (
-                await _matching_count(
+                await matching_count(
                     stale,
                     lambda event: event.get("type") == "hello" and event.get("resumed") is True,
                     timeout=0.4,
                 )
                 > 0
             )
-            await _send_control(competitor, {"type": "hijack_step"})
-            stepped = await _receive_matching(
+            await send_control(competitor, {"type": "hijack_step"})
+            stepped = await receive_matching(
                 worker, lambda event: event.get("type") == "control" and event.get("action") == "step"
             )
             competing_preserved = not succeeded and stepped.get("action") == "step"
             await stale.close()
             await competitor.close()
-    return _observation(
+    return observation(
         scenario,
         defaults,
         route="browser_websocket",
@@ -547,7 +471,7 @@ def _http_json(
     request = urllib.request.Request(  # noqa: S310 - base is the loopback workerd instance
         f"{base}{path}",
         data=payload,
-        headers={**_headers(token), "Content-Type": "application/json"},
+        headers={**headers(token), "Content-Type": "application/json"},
         method="POST",
     )
     try:
@@ -559,8 +483,8 @@ def _http_json(
 
 async def _public_rest_identity_proof(base: str, tokens: dict[str, str]) -> None:
     worker_id = "lifecycle-rest-identity"
-    worker_url = _ws_url(base, f"/ws/worker/{worker_id}/term")
-    async with _connect(worker_url, additional_headers=_headers(WORKER_TOKEN)) as worker:
+    worker_url = ws_url(base, f"/ws/worker/{worker_id}/term")
+    async with connect(worker_url, additional_headers=headers(WORKER_TOKEN)) as worker:
         status, acquired = await asyncio.to_thread(
             _http_json,
             base,
@@ -569,7 +493,7 @@ async def _public_rest_identity_proof(base: str, tokens: dict[str, str]) -> None
             {"owner": "display-label-not-subject", "lease_s": 30},
         )
         assert status == 200
-        await _receive_matching(worker, lambda event: event.get("action") == "pause")
+        await receive_matching(worker, lambda event: event.get("action") == "pause")
         hijack_id = acquired["hijack_id"]
         heartbeat_path = f"/worker/{worker_id}/hijack/{hijack_id}/heartbeat"
         status, _ = await asyncio.to_thread(_http_json, base, tokens["rest-subject"], heartbeat_path, {"lease_s": 45})
@@ -600,7 +524,7 @@ async def _public_rest_identity_proof(base: str, tokens: dict[str, str]) -> None
             )
             assert status == 400 and "expect_regex" in invalid["error"]
             assert (
-                await _matching_count(
+                await matching_count(
                     worker,
                     lambda event: event.get("type") == "data" and event.get("data") == "must-not-send",
                     timeout=0.3,
@@ -610,9 +534,9 @@ async def _public_rest_identity_proof(base: str, tokens: dict[str, str]) -> None
 
 
 async def _public_resume_disabled_proof(base: str, token: str) -> None:
-    browser_url = _ws_url(base, "/ws/browser/lifecycle-resume-disabled/term")
-    async with _connect(browser_url, additional_headers=_headers(token)) as browser:
-        hello = await _drain_browser_startup(browser)
+    browser_url = ws_url(base, "/ws/browser/lifecycle-resume-disabled/term")
+    async with connect(browser_url, additional_headers=headers(token)) as browser:
+        hello = await drain_browser_startup(browser)
         assert hello["resume_supported"] is False
         assert "resume_token" not in hello
 
@@ -622,35 +546,126 @@ async def _non_owner_step(
 ) -> dict[str, Any]:
     data = scenario["input"]
     worker_id = data["worker_id"]
-    worker_url = _ws_url(base, f"/ws/worker/{worker_id}/term")
-    browser_url = _ws_url(base, f"/ws/browser/{worker_id}/term")
+    worker_url = ws_url(base, f"/ws/worker/{worker_id}/term")
+    browser_url = ws_url(base, f"/ws/browser/{worker_id}/term")
     async with (
-        _connect(worker_url, additional_headers=_headers(WORKER_TOKEN)) as worker,
-        _connect(browser_url, additional_headers=_headers(tokens[data["owner"]])) as owner,
-        _connect(browser_url, additional_headers=_headers(tokens[data["non_owner"]])) as non_owner,
+        connect(worker_url, additional_headers=headers(WORKER_TOKEN)) as worker,
+        connect(browser_url, additional_headers=headers(tokens[data["owner"]])) as owner,
+        connect(browser_url, additional_headers=headers(tokens[data["non_owner"]])) as non_owner,
     ):
-        await _drain_worker_startup(worker)
-        await _drain_browser_startup(owner)
-        await _drain_browser_startup(non_owner)
-        await _acquire(owner, worker)
-        await _send_control(non_owner, {"type": "hijack_step"})
-        error = await _receive_matching(
+        await drain_worker_startup(worker)
+        await drain_browser_startup(owner)
+        await drain_browser_startup(non_owner)
+        await acquire(owner, worker)
+        await send_control(non_owner, {"type": "hijack_step"})
+        error = await receive_matching(
             non_owner, lambda event: event.get("type") == "error" and event.get("message") == "not_owner"
         )
         refused = (
             error.get("message") == "not_owner"
-            and await _matching_count(
+            and await matching_count(
                 worker, lambda event: event.get("type") == "control" and event.get("action") == "step"
             )
             == 0
         )
-    return _observation(
+    return observation(
         scenario,
         defaults,
         route="browser_websocket",
         status_code=101,
         error="not_owner",
         non_owner_refused=refused,
+    )
+
+
+async def _handoff_transfer(worker: Any, outgoing: Any, incoming: Any) -> bool:
+    """Release the lease from the current owner and hand it to the successor.
+
+    Every step is confirmed from an edge-emitted frame, never from a sleep:
+    the worker's ``resume``/``pause`` controls and the ``hijack_state``
+    broadcasts that reach *both* browsers.  The successor sees ``owner: "me"``
+    and — the part that actually matters for the refusal below — the outgoing
+    browser is told by the Worker that the live lease belongs to somebody else.
+    """
+    # Gate the whole transfer on the release: before it, the Worker refuses to
+    # hand the successor a lease at all, so the ownership it ends up holding
+    # cannot be a lease it quietly had all along.
+    await send_control(incoming, {"type": "hijack_request"})
+    contested = await receive_matching(
+        incoming, lambda event: event.get("type") == "error" and event.get("message") == "already_hijacked"
+    )
+    await send_control(outgoing, {"type": "hijack_release"})
+    released = await receive_matching(
+        worker, lambda event: event.get("type") == "control" and event.get("action") == "resume"
+    )
+    await receive_matching(
+        incoming, lambda event: event.get("type") == "hijack_state" and event.get("hijacked") is False
+    )
+    await send_control(incoming, {"type": "hijack_request"})
+    paused = await receive_matching(
+        worker, lambda event: event.get("type") == "control" and event.get("action") == "pause"
+    )
+    successor_view = await receive_matching(
+        incoming, lambda event: event.get("type") == "hijack_state" and event.get("owner") == "me"
+    )
+    stale_view = await receive_matching(
+        outgoing,
+        lambda event: (
+            event.get("type") == "hijack_state" and event.get("hijacked") is True and event.get("owner") == "other"
+        ),
+    )
+    return (
+        contested.get("message") == "already_hijacked"
+        and released.get("action") == "resume"
+        and paused.get("action") == "pause"
+        and successor_view.get("hijacked") is True
+        and stale_view.get("owner") == "other"
+    )
+
+
+async def _owner_handoff(
+    base: str, tokens: dict[str, str], scenario: dict[str, Any], defaults: dict[str, Any]
+) -> dict[str, Any]:
+    """Drive release-then-successor-acquire over the real public WS routes."""
+    data = scenario["input"]
+    worker_id = data["worker_id"]
+    payload = data["payload"]
+    stale_payload = f"stale-{payload}"
+    worker_url = ws_url(base, f"/ws/worker/{worker_id}/term")
+    browser_url = ws_url(base, f"/ws/browser/{worker_id}/term")
+    async with (
+        connect(worker_url, additional_headers=headers(WORKER_TOKEN)) as worker,
+        connect(browser_url, additional_headers=headers(tokens[data["outgoing_owner"]])) as outgoing,
+        connect(browser_url, additional_headers=headers(tokens[data["incoming_owner"]])) as incoming,
+    ):
+        await drain_worker_startup(worker)
+        await drain_browser_startup(outgoing)
+        await drain_browser_startup(incoming)
+        await acquire(outgoing, worker)
+        handoff_completed = await _handoff_transfer(worker, outgoing, incoming)
+
+        # The released owner sends input while the successor holds the lease.
+        # Waiting for the Worker's refusal before the successor sends means a
+        # leaked byte would have to reach the worker socket first, so the
+        # delivered list below orders any leak ahead of the legitimate payload
+        # instead of racing it.
+        await send_control(outgoing, {"type": "input", "data": stale_payload})
+        refusal = await receive_matching(
+            outgoing, lambda event: event.get("type") == "error" and event.get("message") == "not_owner"
+        )
+        await send_control(incoming, {"type": "input", "data": payload})
+        first = await receive_matching(worker, lambda event: event.get("type") == "data")
+        trailing = await collect_matching(worker, lambda event: event.get("type") == "data")
+        delivered = [str(first["data"]), *(str(event["data"]) for event in trailing)]
+    return observation(
+        scenario,
+        defaults,
+        route="browser_websocket",
+        status_code=101,
+        handoff_completed=handoff_completed,
+        stale_owner_refused=refusal.get("message") == "not_owner" and stale_payload not in delivered,
+        successor_owner_accepted=payload in delivered,
+        delivered_payloads=delivered,
     )
 
 
@@ -661,16 +676,18 @@ async def _execute(base: str, tokens: dict[str, str], contract: dict[str, Any]) 
             continue
         operation = scenario["input"]["operation"]
         if operation == "fragment_message":
-            observation = await _fragmentation(base, tokens["admin"], scenario, contract["result_defaults"])
+            observed = await _fragmentation(base, tokens["admin"], scenario, contract["result_defaults"])
         elif operation in {"browser_quota", "governed_input"}:
-            observation = _unsupported(base, tokens["admin"], scenario, contract["result_defaults"])
+            observed = _unsupported(base, tokens["admin"], scenario, contract["result_defaults"])
         elif operation == "resume_ownership":
-            observation = await _resume(base, tokens, scenario, contract["result_defaults"])
+            observed = await _resume(base, tokens, scenario, contract["result_defaults"])
         elif operation == "non_owner_hijack_step":
-            observation = await _non_owner_step(base, tokens, scenario, contract["result_defaults"])
+            observed = await _non_owner_step(base, tokens, scenario, contract["result_defaults"])
+        elif operation == "owner_handoff":
+            observed = await _owner_handoff(base, tokens, scenario, contract["result_defaults"])
         else:  # pragma: no cover - guarded by contract validation
             raise AssertionError(f"unknown Cloudflare lifecycle operation: {operation}")
-        observations.append(observation)
+        observations.append(observed)
     return observations
 
 
@@ -688,6 +705,8 @@ def test_cloudflare_public_route_session_lifecycle_scenarios() -> None:
         "new-owner",
         "owner-user",
         "other-user",
+        "handoff-owner-a",
+        "handoff-owner-b",
         "rest-subject",
         "rest-competitor",
     }
@@ -701,9 +720,9 @@ def test_cloudflare_public_route_session_lifecycle_scenarios() -> None:
     scenarios = [item for item in contract["scenarios"] if item["backends"]["cloudflare"]["status"] != "unserved"]
     assert {item["id"] for item in observations} == {item["id"] for item in scenarios}
     if OUTPUT_PATH is None:
-        for scenario, observation in zip(scenarios, observations, strict=True):
+        for scenario, observed in zip(scenarios, observations, strict=True):
             expected = _expected(contract, scenario)
-            assert observation["status"] == scenario["backends"]["cloudflare"]["status"]
-            assert {field: observation[field] for field in expected} == expected
+            assert observed["status"] == scenario["backends"]["cloudflare"]["status"]
+            assert {field: observed[field] for field in expected} == expected
     else:
         Path(OUTPUT_PATH).write_text(json.dumps(observations, indent=2) + "\n", encoding="utf-8")
