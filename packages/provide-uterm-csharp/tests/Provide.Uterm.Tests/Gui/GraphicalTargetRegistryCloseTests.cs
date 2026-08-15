@@ -59,9 +59,12 @@ public class GraphicalTargetRegistryCloseTests
         await reg.AddStaticAsync(Target("seed"));
 
         // The seed really landed: a duplicate identifier is what proves it,
-        // since every read path refuses once the registry is closed.
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        // since every read path refuses once the registry is closed. CONFLICT
+        // rather than InvalidOperationException, matching the reference and the
+        // shared golden corpus.
+        var duplicate = await Assert.ThrowsAsync<GraphicalTargetException>(
             async () => await reg.AddStaticAsync(Target("seed")));
+        Assert.Equal(GraphicalTargetErrorCode.Conflict, duplicate.Code);
     }
 
     [Fact]
