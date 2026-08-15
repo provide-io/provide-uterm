@@ -5,11 +5,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 # provide-uterm-ts
 
-A high-coverage partial runtime port of the provide-uterm terminal session
+A high-coverage `partial` runtime port of the provide-uterm terminal session
 platform. Its completed libraries are wire-compatible with the Python
 reference and are held to 100% line, branch, and function coverage. The
-integrated Node server is not yet a full backend. It runs on Node.js >= 22 and
-is built with TypeScript 7.
+integrated Node server is **not** a served backend — the served server
+backends are Python (FastAPI), Go, C#, and Cloudflare. It runs on
+Node.js >= 22 and is built with TypeScript 7.
+
+Label vocabulary (`served`, `unserved`, `unsupported`, `partial`, `N/A`):
+[`docs/parity-labels.md`](../../docs/parity-labels.md).
 
 It is distinct from the two browser packages:
 
@@ -17,7 +21,7 @@ It is distinct from the two browser packages:
 |---|---|
 | `provide-uterm-frontend` | Browser widgets (lit + xterm.js), shipped to the SPA |
 | `provide-uterm-app` | Browser SPA shell (React) |
-| **`provide-uterm-ts`** | **Partial runtime port: completed libraries plus an incomplete Node server, client, and CLI** |
+| **`provide-uterm-ts`** | **`partial` runtime port: completed libraries plus an incomplete Node server, client, and CLI** |
 
 ## Runtime maturity
 
@@ -56,6 +60,8 @@ Regenerate a corpus after a reference-implementation change:
 ```bash
 uv run python packages/provide-uterm-ts/testdata/gen_colors_golden.py
 ```
+
+Parity-label definitions: [`docs/parity-labels.md`](../../docs/parity-labels.md).
 
 | Module | Parity evidence |
 |---|---|
