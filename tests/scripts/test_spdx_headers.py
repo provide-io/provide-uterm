@@ -21,6 +21,7 @@ depended on the comment fails somewhere else entirely, or stops running.
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 from pathlib import Path
 
@@ -114,3 +115,60 @@ class TestTheRepositoryItself:
             if not spdx_headers.has_canonical_header(text):
                 continue
             assert spdx_headers.normalize_python_text(text) == text, f"{path} would be rewritten"
+
+
+class TestTheWalkSkipsWhatGitIgnores:
+    """The walk must not wander into a virtualenv.
+
+    Both callers use ``find_python_files``: one REPORTS what it finds, the
+    other REWRITES it. A local ``.venv-goldens`` -- provisioned on demand by
+    .ci/check_goldens.sh, ignored by git via ``.venv*/``, and matching neither
+    EXCLUDED_DIRS (which has the exact string ``.venv``) nor the checker's
+    skip globs (which have ``.venv-workers``) -- put 10,487 site-packages
+    files in front of both of them.
+    """
+
+    @staticmethod
+    def _repo(tmp_path: Path) -> Path:
+        subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+        (tmp_path / ".gitignore").write_text(".venv*/\n", encoding="utf-8")
+        (tmp_path / "real.py").write_text("x = 1\n", encoding="utf-8")
+        venv = tmp_path / ".venv-goldens" / "lib" / "site-packages"
+        venv.mkdir(parents=True)
+        (venv / "vendored.py").write_text("y = 2\n", encoding="utf-8")
+        return tmp_path
+
+    def test_an_ignored_virtualenv_is_not_walked(self, tmp_path: Path) -> None:
+        found = spdx_headers.find_python_files(self._repo(tmp_path))
+
+        assert [p.name for p in found] == ["real.py"]
+
+    def test_the_files_git_tracks_are_still_walked(self, tmp_path: Path) -> None:
+        """Skipping ignored paths must not become skipping untracked ones.
+
+        A brand-new file nobody has `git add`ed yet is exactly the file most
+        likely to be missing its header.
+        """
+        root = self._repo(tmp_path)
+        (root / "brand_new.py").write_text("z = 3\n", encoding="utf-8")
+
+        found = spdx_headers.find_python_files(root)
+
+        assert sorted(p.name for p in found) == ["brand_new.py", "real.py"]
+
+    def test_without_git_the_walk_reports_more_rather_than_less(self, tmp_path: Path) -> None:
+        """The fallback direction is the whole safety argument.
+
+        Outside a work tree git cannot answer, and the walk must then fall
+        back to considering everything. A checker that quietly stops checking
+        is worse than one that is noisy.
+        """
+        (tmp_path / "loose.py").write_text("x = 1\n", encoding="utf-8")
+
+        assert spdx_headers.git_ignored(tmp_path, [tmp_path / "loose.py"]) == set()
+        assert [p.name for p in spdx_headers.find_python_files(tmp_path)] == ["loose.py"]
+
+    def test_the_check_can_be_turned_off(self, tmp_path: Path) -> None:
+        found = spdx_headers.find_python_files(self._repo(tmp_path), respect_gitignore=False)
+
+        assert sorted(p.name for p in found) == ["real.py", "vendored.py"]
