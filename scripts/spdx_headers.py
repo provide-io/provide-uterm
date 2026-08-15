@@ -9,6 +9,8 @@ import subprocess
 from fnmatch import fnmatch
 from pathlib import Path
 
+from repo_paths import is_under, submodule_dirs
+
 SPDX_OPEN = "#\n"
 SPDX_COPYRIGHT = "# SPDX-FileCopyrightText" + ": Copyright (c) 2025-2026 provide.io llc. All rights reserved.\n"
 SPDX_LICENSE = "# SPDX-License-Identifier" + ": AGPL-3.0-or-later\n"
@@ -87,9 +89,19 @@ def find_python_files(root: Path, *, skip_globs: tuple[str, ...] = (), respect_g
     virtualenv there was not noise -- it was 10,487 rewritten files inside
     site-packages.
     """
+    submodules = submodule_dirs(root)
     files: list[Path] = []
     for path in root.rglob("*.py"):
         if any(part in EXCLUDED_DIRS for part in path.parts):
+            continue
+        # Submodules are another repository's files, with their own headers and
+        # their own checker. Dropping them here is also what keeps the git call
+        # below working at all: `git check-ignore` aborts the WHOLE batch with
+        # exit 128 the moment one path is inside a submodule ("fatal: Pathspec
+        # ... is in submodule"), so a single such path would take the answer
+        # for all fifteen thousand others down with it -- and the caller would
+        # fall back to reporting everything, virtualenvs included.
+        if is_under(path, submodules):
             continue
         path_str = str(path)
         if any(fnmatch(path_str, pattern) for pattern in skip_globs):
@@ -110,18 +122,43 @@ def split_shebang(text: str) -> tuple[str, str]:
     return "", text
 
 
-def _is_spdx_line(line: str) -> bool:
-    """Whether a line belongs to the header itself rather than to the author."""
-    stripped = line.strip()
-    return stripped == "#" or stripped.startswith(("# SPDX-FileCopyrightText", "# SPDX-License-Identifier"))
+def _is_spdx_text(line: str) -> bool:
+    """Whether a line is one of the two SPDX lines themselves."""
+    return line.strip().startswith(("# SPDX-FileCopyrightText", "# SPDX-License-Identifier"))
+
+
+def _header_line_indices(head: list[str]) -> set[int]:
+    """Indices in *head* that belong to the SPDX block rather than the author.
+
+    The two SPDX lines, plus the bare ``#`` delimiters IMMEDIATELY around them.
+
+    Adjacency is the whole point. This used to treat every bare ``#`` anywhere
+    in the leading comments as header material, which silently deleted the
+    paragraph breaks authors use inside a long file comment -- one bare ``#``
+    between two paragraphs of a mutation-perimeter note, gone on the next
+    normalize, with the file still carrying a valid header afterwards so
+    nothing looked wrong. That is the same silent-deletion failure this
+    module's tests were written for after it ate `# uv-package:` markers.
+    """
+    spdx = {index for index, line in enumerate(head) if _is_spdx_text(line)}
+    drop = set(spdx)
+    for index in spdx:
+        for step in (-1, 1):
+            cursor = index + step
+            while 0 <= cursor < len(head) and head[cursor].strip() == "#":
+                drop.add(cursor)
+                cursor += step
+    return drop
 
 
 def partition_leading_comments(text: str) -> tuple[list[str], str]:
     """Split the top of a file into the comments worth keeping, and the rest.
 
     Everything the header itself is made of — the two SPDX lines and the bare
-    ``#`` delimiters around them — is dropped, because a canonical block is
-    about to be written in its place. Every *other* leading comment is kept.
+    ``#`` delimiters IMMEDIATELY around them — is dropped, because a canonical
+    block is about to be written in its place. Every *other* leading comment is
+    kept, including a bare ``#`` an author used to break a long comment into
+    paragraphs further down (see ``_header_line_indices``).
 
     That distinction is the whole point. Two comments that live directly under
     the header are read by tooling: ``# uv-package: <name>`` tells the
@@ -143,7 +180,8 @@ def partition_leading_comments(text: str) -> tuple[list[str], str]:
     while head and head[-1].strip() == "":
         head.pop()
         idx -= 1
-    kept = [line for line in head if not _is_spdx_line(line) and line.strip() != ""]
+    header = _header_line_indices(head)
+    kept = [line for index, line in enumerate(head) if index not in header and line.strip() != ""]
     return kept, "".join(lines[idx:])
 
 

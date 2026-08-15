@@ -92,6 +92,31 @@ class TestItKeepsTheCommentsItWasNotAskedAbout:
         text = "# a note\n" + _CANONICAL + '"""Doc."""\n'
         assert spdx_headers.normalize_python_text(text) == _CANONICAL + "# a note\n" + '"""Doc."""\n'
 
+    def test_a_paragraph_break_inside_a_long_comment_survives(self) -> None:
+        """A bare ``#`` is only header material next to the SPDX lines.
+
+        Authors use one to separate paragraphs inside a long file comment.
+        This used to treat every bare ``#`` anywhere in the leading comments as
+        part of the block and delete it -- silently, because the file still had
+        a valid header afterwards. Found on
+        server/routes/profiles.py, whose mutation-perimeter note is two
+        paragraphs separated exactly this way.
+        """
+        text = _CANONICAL + "# first paragraph\n#\n# second paragraph\n" + "x = 1\n"
+
+        assert spdx_headers.normalize_python_text(text) == text
+
+    def test_the_blocks_own_delimiters_are_still_dropped(self) -> None:
+        """The other half of the rule.
+
+        The bare ``#`` directly above and below the SPDX lines DO belong to the
+        header. Keeping them would double the delimiters on every normalize.
+        """
+        rewritten = spdx_headers.normalize_python_text(_CANONICAL + "x = 1\n")
+
+        assert rewritten == _CANONICAL + "x = 1\n"
+        assert rewritten.count("# SPDX-License-Identifier") == 1
+
     def test_a_duplicated_header_collapses_to_one(self) -> None:
         assert spdx_headers.normalize_python_text(_CANONICAL + _CANONICAL + "x = 1\n") == _CANONICAL + "x = 1\n"
 

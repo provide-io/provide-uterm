@@ -8,32 +8,13 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from repo_paths import submodule_dirs
+
 DOC_PATHS = ("README.md", "docs")
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 LINK_RE = re.compile(r"\[[^\]]+\]\(([^)\s]+)\)")
 MUTATION_CMD_RE = re.compile(r"run_mutation_gate\.py\b")
 MIN_MUTATION_RE = re.compile(r"--min-mutation-score\s+100(?:\.0)?\b")
-
-
-def _submodule_dirs(root: Path) -> set[Path]:
-    """Resolved paths of every git submodule declared in .gitmodules.
-
-    Parsed from the file rather than shelled out to ``git submodule``, because
-    this has to give the same answer whether or not the submodules are
-    initialised -- CI checkouts and fresh clones start with them absent, and a
-    count that changed depending on that would be worse than no check.
-    """
-    gitmodules = root / ".gitmodules"
-    if not gitmodules.is_file():
-        return set()
-    paths: set[Path] = set()
-    for line in gitmodules.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if stripped.startswith("path"):
-            _, _, value = stripped.partition("=")
-            if value.strip():
-                paths.add((root / value.strip()).resolve())
-    return paths
 
 
 def _iter_markdown_files(root: Path) -> list[Path]:
@@ -256,7 +237,7 @@ def _structural_claim_violations(root: Path) -> list[str]:
     # hardcoding the name, so the next vendored submodule needs no edit here.
     claude_md = root / "CLAUDE.md"
     if claude_md.exists():
-        submodules = _submodule_dirs(root)
+        submodules = submodule_dirs(root)
         actual_pkg_count = sum(1 for p in (root / "packages").iterdir() if p.is_dir() and p.resolve() not in submodules)
         claude_text = claude_md.read_text(encoding="utf-8")
         pkg_count_match = re.search(r"(\d+)\s+packages?\s+under\s+[`']?packages/[`']?", claude_text)
