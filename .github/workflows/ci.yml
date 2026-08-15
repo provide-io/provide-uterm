@@ -40,12 +40,23 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           submodules: true
+          # fetch-depth: 0 so the protocol-drift step below has a base ref to
+          # diff against. The default shallow clone has no origin/<base>, and
+          # the diff would fail as "could not diff" rather than passing.
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@ae62891fec2bb8e7d6c99fc78c9fec3a63790f8d  # v10.0.0
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.11"
       - run: uv sync --frozen --group dev
       - run: uv run python scripts/check_docs_accuracy.py
+      # Pull requests only: a change to a wire-contract source must carry the
+      # protocol matrix with it. The unconditional half of this check (version
+      # agreement across the six declaration sites, twinned-fixture identity)
+      # runs in ci/quality_checks.sh; this needs a base ref to diff against,
+      # which only a PR event has.
+      - if: github.event_name == 'pull_request'
+        run: uv run python scripts/check_protocol_drift.py --changed-against origin/${{ github.base_ref }}
 
   quality:
     runs-on: ubuntu-latest
