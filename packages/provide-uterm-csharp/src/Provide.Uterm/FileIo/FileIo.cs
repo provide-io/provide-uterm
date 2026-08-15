@@ -15,17 +15,31 @@ namespace Provide.Uterm.FileIo;
 /// </summary>
 public static class FileIo
 {
+    /// <summary>
+    /// Apply POSIX permissions to <paramref name="path"/> where the platform has
+    /// them, and do nothing where it does not.
+    ///
+    /// <c>File.SetUnixFileMode</c> is annotated unsupported on Windows, so every
+    /// unguarded call site is a CA1416. The guard is an explicit OS test rather
+    /// than a caught <see cref="PlatformNotSupportedException"/> because the
+    /// analyzer cannot see through the catch, and because catching hides the
+    /// difference between "this platform has no POSIX modes" and "the mode could
+    /// not be applied" — only the first is benign.
+    /// </summary>
+    public static void TrySetUnixFileMode(string path, UnixFileMode mode)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        File.SetUnixFileMode(path, mode);
+    }
+
     private static void EnsureOwnerOnlyDir(string directory, UnixFileMode mode)
     {
         Directory.CreateDirectory(directory);
-        try
-        {
-            File.SetUnixFileMode(directory, mode);
-        }
-        catch (PlatformNotSupportedException)
-        {
-            // Windows: best-effort directory creation only.
-        }
+        TrySetUnixFileMode(directory, mode);
     }
 
     /// <summary>
@@ -59,14 +73,7 @@ public static class FileIo
         }
 
         var fs = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.Read);
-        try
-        {
-            File.SetUnixFileMode(path, mode);
-        }
-        catch (PlatformNotSupportedException)
-        {
-        }
-
+        TrySetUnixFileMode(path, mode);
         return fs;
     }
 

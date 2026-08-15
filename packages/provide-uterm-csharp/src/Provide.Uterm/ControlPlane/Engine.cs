@@ -224,21 +224,17 @@ public sealed class MemoryEngine : IEngine
     private readonly Dictionary<string, LeaseRecord> _leases = new();
     private readonly Dictionary<string, GraphicalTargetRecord> _graphicalTargets = new();
     private AuditHead? _auditHead;
-    private bool _open;
 
     public EngineCapabilities Capabilities() => new() { Durable = false, Sqlite = false, AuditChain = true };
 
-    public Task OpenAsync(CancellationToken ct = default)
-    {
-        _open = true;
-        return Task.CompletedTask;
-    }
+    // Open/Close are no-ops, as they are on the reference's MemoryEngine
+    // (provide/uterm/control/plane/memory/engine.py): an in-memory engine has
+    // no connection to establish and no handle to release. The port used to
+    // keep an `_open` flag here that nothing ever read, which advertised a
+    // closed-state guard that did not exist.
+    public Task OpenAsync(CancellationToken ct = default) => Task.CompletedTask;
 
-    public Task CloseAsync(CancellationToken ct = default)
-    {
-        _open = false;
-        return Task.CompletedTask;
-    }
+    public Task CloseAsync(CancellationToken ct = default) => Task.CompletedTask;
 
     public Task MigrateAsync(CancellationToken ct = default) => Task.CompletedTask;
 

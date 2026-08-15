@@ -262,6 +262,28 @@ public sealed class InMemoryGraphicalTargetRegistry : IGraphicalTargetRegistry
         }
     }
 
+    /// <summary>
+    /// Mark the registry closed; every subsequent scoped operation refuses with
+    /// <see cref="GraphicalTargetErrorCode.Closed"/>.
+    ///
+    /// The port carried the <c>_closed</c> field and the
+    /// <see cref="EnsureOpen"/> guard from the start but never the method that
+    /// sets it, so <see cref="GraphicalTargetErrorCode.Closed"/> was
+    /// unreachable here while the reference
+    /// (<c>provide/uterm/server/graphical_targets.py</c>) and the TypeScript
+    /// port (<c>src/graphical/targets.ts</c>) both expose <c>close()</c>.
+    ///
+    /// Seeding through <see cref="AddStaticAsync"/> deliberately stays open
+    /// after a close, matching both of those implementations.
+    /// </summary>
+    public void Close()
+    {
+        lock (_gate)
+        {
+            _closed = true;
+        }
+    }
+
     // The in-memory registry has no I/O, so each wrapper simply completes. The
     // async surface exists for the control-plane-backed implementation.
     public Task<GraphicalTargetDefinition?> GetAsync(

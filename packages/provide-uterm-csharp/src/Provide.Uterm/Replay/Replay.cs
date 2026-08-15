@@ -47,13 +47,8 @@ public static class Replay
         }
 
         await File.WriteAllBytesAsync(outPath, outBytes.ToArray());
-        try
-        {
-            File.SetUnixFileMode(outPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        }
-        catch (PlatformNotSupportedException)
-        {
-        }
+        Provide.Uterm.FileIo.FileIo.TrySetUnixFileMode(
+            outPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
     }
 
     public sealed class ReplayOptions

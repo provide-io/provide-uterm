@@ -152,14 +152,14 @@ public sealed class ApiKeyStore
         }
     }
 
-    private static string? CanonicalTenantId(string tenantId)
+    private static string? CanonicalTenantId(string? tenantId)
     {
-        tenantId = tenantId?.Trim();
-        if (string.IsNullOrEmpty(tenantId))
+        var trimmed = tenantId?.Trim();
+        if (string.IsNullOrEmpty(trimmed))
         {
             return null;
         }
 
-        return TenantPattern.IsMatch(tenantId) ? tenantId : null;
+        return TenantPattern.IsMatch(trimmed) ? trimmed : null;
     }
 }
