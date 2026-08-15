@@ -24,7 +24,12 @@
     "ownership_restored": false,
     "replay_rejected": false,
     "competing_owner_preserved": false,
-    "non_owner_refused": false
+    "non_owner_refused": false,
+    "handoff_completed": false,
+    "stale_owner_refused": false,
+    "successor_owner_accepted": false,
+    "approval_expired": false,
+    "late_approval_refused": false
   },
   "backends": {
     "python": {
@@ -548,6 +553,97 @@
           "status": "served",
           "expected": {
             "error": "not_owner"
+          }
+        }
+      }
+    },
+    {
+      "id": "owner_handoff_release_then_successor_acquire",
+      "input": {
+        "operation": "owner_handoff",
+        "case": "release_then_successor",
+        "route": "/ws/browser/{worker_id}/term",
+        "worker_id": "lifecycle-handoff-release",
+        "outgoing_owner": "handoff-owner-a",
+        "incoming_owner": "handoff-owner-b",
+        "payload": "handoff-input"
+      },
+      "expected": {
+        "route": "browser_websocket",
+        "status_code": 101,
+        "handoff_completed": true,
+        "stale_owner_refused": true,
+        "successor_owner_accepted": true,
+        "delivered_payloads": [
+          "handoff-input"
+        ]
+      },
+      "backends": {
+        "python": {
+          "status": "served",
+          "expected": {}
+        },
+        "go": {
+          "status": "served",
+          "expected": {}
+        },
+        "csharp": {
+          "status": "served",
+          "expected": {}
+        },
+        "typescript": {
+          "status": "unserved",
+          "expected": {
+            "error": "no_server_surface"
+          }
+        },
+        "cloudflare": {
+          "status": "served",
+          "expected": {}
+        }
+      }
+    },
+    {
+      "id": "approval_expiry_refuses_late_claim",
+      "input": {
+        "operation": "approval_expiry",
+        "case": "late_claim_after_timeout",
+        "route": "/api/approvals/{request_id}/approve",
+        "worker_id": "lifecycle-approval-expiry",
+        "principal": "approval-admin",
+        "payload": "expired-command"
+      },
+      "expected": {
+        "route": "http",
+        "status_code": 400,
+        "error": "approval_not_pending",
+        "approval_expired": true,
+        "late_approval_refused": true,
+        "delivered_payloads": []
+      },
+      "backends": {
+        "python": {
+          "status": "served",
+          "expected": {}
+        },
+        "go": {
+          "status": "served",
+          "expected": {}
+        },
+        "csharp": {
+          "status": "served",
+          "expected": {}
+        },
+        "typescript": {
+          "status": "unserved",
+          "expected": {
+            "error": "no_server_surface"
+          }
+        },
+        "cloudflare": {
+          "status": "unserved",
+          "expected": {
+            "error": "no_approval_route"
           }
         }
       }

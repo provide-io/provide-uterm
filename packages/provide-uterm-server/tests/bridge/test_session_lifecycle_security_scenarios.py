@@ -408,7 +408,11 @@ async def _execute_quota(scenario: dict[str, Any], defaults: dict[str, Any]) -> 
 
 
 @asynccontextmanager
-async def _policy_server(decision: str) -> AsyncIterator[tuple[str, list[tuple[bytes, dict[str, str]]]]]:
+async def _policy_server(
+    decision: str,
+    *,
+    timeout_s: int | None = None,
+) -> AsyncIterator[tuple[str, list[tuple[bytes, dict[str, str]]]]]:
     calls: list[tuple[bytes, dict[str, str]]] = []
     app = FastAPI()
 
@@ -417,7 +421,10 @@ async def _policy_server(decision: str) -> AsyncIterator[tuple[str, list[tuple[b
         calls.append((await request.body(), dict(request.headers)))
         if decision == "unavailable":
             return Response(status_code=503)
-        return JSONResponse({"action": decision, "reason": f"fixture_{decision}"})
+        body: dict[str, Any] = {"action": decision, "reason": f"fixture_{decision}"}
+        if timeout_s is not None:
+            body["timeout_s"] = timeout_s
+        return JSONResponse(body)
 
     async with _serve(app, f"python governance {decision}") as base_url:
         yield f"{base_url}/policy", calls
@@ -622,6 +629,15 @@ async def _execute_scenario(scenario: dict[str, Any], defaults: dict[str, Any]) 
         return await _execute_resume(scenario, defaults)
     if operation == "non_owner_hijack_step":
         return await _execute_non_owner_step(scenario, defaults)
+    if operation in {"owner_handoff", "approval_expiry"}:
+        # Deferred so the sibling module can import this module's fixtures at
+        # its own import time without a cycle. It holds the handoff/approval
+        # executors only because this file is at its LOC cap.
+        from .session_lifecycle_scenario_ops import execute_approval_expiry, execute_owner_handoff
+
+        if operation == "owner_handoff":
+            return await execute_owner_handoff(scenario, defaults)
+        return await execute_approval_expiry(scenario, defaults)
     raise AssertionError(f"unknown Python lifecycle operation: {operation}")
 
 
