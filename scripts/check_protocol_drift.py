@@ -101,10 +101,54 @@ VERSION_SITES: tuple[tuple[str, str, dict[str, str]], ...] = (
 )
 
 # Fixtures committed in more than one place that must stay byte-identical.
+#
+# Only the signature corpus was listed here at first, and the omission was not
+# theoretical: the C# copy of frames/python_golden.json had already drifted from
+# Go's, having lost `bytes_read`/`chunks_read` and `mcp_supported`/
+# `vnc_supported`. That mattered because C# had no snapshot counters at all, so
+# its private copy of the corpus was asserting that its own gap was correct --
+# the corpus had stopped being shared evidence and become a second opinion.
+#
+# `.ci/check_goldens.sh` cannot reach any of these either: its `find_corpora`
+# uses `-maxdepth 1` from each testdata/ directory and the C# copies live one
+# level deeper. Until that is fixed, this list is the only thing holding them
+# together.
 TWINNED_FIXTURES: tuple[tuple[str, ...], ...] = (
     (
         "packages/provide-uterm-go/ctrlmsg/testdata/signature_corpus.json",
         "packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/testdata/ctrlmsg/signature_corpus.json",
+    ),
+    (
+        "packages/provide-uterm-go/ctrlmsg/testdata/builder_golden.json",
+        "packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/testdata/ctrlmsg/builder_golden.json",
+    ),
+    (
+        "packages/provide-uterm-go/frames/testdata/python_golden.json",
+        "packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/testdata/frames/python_golden.json",
+    ),
+    (
+        "packages/provide-uterm-go/deckmux/testdata/python_golden.json",
+        "packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/testdata/deckmux/python_golden.json",
+    ),
+    (
+        "packages/provide-uterm-go/emulator/testdata/python_golden.json",
+        "packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/testdata/emulator/python_golden.json",
+    ),
+    (
+        "packages/provide-uterm-go/conformance/testdata/vectors.json",
+        "packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/testdata/conformance/vectors.json",
+    ),
+    (
+        "packages/provide-uterm-go/tunnel/testdata/token_hash_golden.json",
+        "packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/testdata/tunnel/token_hash_golden.json",
+    ),
+    # spec/ is the source here; the three ports each keep a copy next to the
+    # tests that replay it.
+    (
+        "spec/behavior_vectors.json",
+        "packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/testdata/behavior/behavior_vectors.json",
+        "packages/provide-uterm-go/policy/testdata/behavior_vectors.json",
+        "packages/provide-uterm-go/vnc/testdata/behavior_vectors.json",
     ),
 )
 

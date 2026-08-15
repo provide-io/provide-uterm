@@ -10,16 +10,43 @@ namespace Provide.Uterm.Tests.Frames;
 
 public class GoldenTests
 {
+    // Keys the reference emits as an explicit null and this port omits. Ordinal
+    // sort order, because the assertion compares the sequence.
     private static readonly Dictionary<string, string[]> WantNullStripped = new()
     {
-        ["snapshot_minimal"] = ["prompt_detected", "raw_tail"],
+        ["snapshot_full"] = ["bytes_read", "chunks_read"],
+        ["snapshot_minimal"] = ["bytes_read", "chunks_read", "prompt_detected", "raw_tail"],
         ["analysis_null_raw"] = ["raw"],
         ["hijack_state_off"] = ["lease_expires_at", "owner"],
     };
 
+    /// <summary>
+    /// Keys where this port deliberately advertises a different value from the
+    /// reference, per <c>spec/behavior.json</c> <c>hello_defaults.csharp</c>.
+    ///
+    /// Declared here rather than by deleting the key from our copy of the
+    /// corpus, which is what used to happen: the copy had drifted from Go's to
+    /// drop `mcp_supported`/`vnc_supported` entirely, and in doing so it also
+    /// dropped `bytes_read`/`chunks_read` and quietly asserted that this port's
+    /// missing snapshot counters were correct. The corpus is the reference's
+    /// output and is now byte-identical with Go's copy again; every difference
+    /// has to be stated, and a difference that stops being true fails.
+    /// </summary>
+    private static readonly Dictionary<string, Dictionary<string, bool>> SpecDivergence = new()
+    {
+        // MCP is not part of the C# port (operator de-scope).
+        ["hello"] = new() { ["mcp_supported"] = false },
+    };
+
     private static Dictionary<string, IFrame> GoldenGoFrames()
     {
-        var hello = FrameBuilders.MakeHelloFrame();
+        // WithDefaults, not the bare type stamp: the reference's golden hello
+        // carries mcp_supported/vnc_supported, and building ours without them
+        // is what made someone delete both keys from our copy of the corpus --
+        // which silently took bytes_read/chunks_read with them. This asserts
+        // the capabilities this port actually advertises (spec/behavior.json
+        // hello_defaults.csharp), with the one difference declared below.
+        var hello = FrameBuilders.MakeHelloFrameWithDefaults();
         hello.WorkerId = "w1";
         hello.CanHijack = true;
         hello.Hijacked = false;
@@ -216,8 +243,18 @@ public class GoldenTests
             var gotMap = gotDoc.RootElement.EnumerateObject().ToDictionary(p => p.Name, p => p.Value);
 
             Assert.Equal(wantFiltered.Keys.OrderBy(k => k), gotMap.Keys.OrderBy(k => k));
+            var divergent = SpecDivergence.GetValueOrDefault(name);
             foreach (var k in wantFiltered.Keys)
             {
+                if (divergent is not null && divergent.TryGetValue(k, out var ours))
+                {
+                    Assert.Equal(ours, gotMap[k].GetBoolean());
+                    // If the reference ever adopts our value the entry is stale
+                    // and must go, exactly like a stale warning-baseline entry.
+                    Assert.NotEqual(ours, wantFiltered[k].GetBoolean());
+                    continue;
+                }
+
                 Assert.True(JsonEqual(gotMap[k], wantFiltered[k]), $"{name}.{k}: got {gotMap[k]} want {wantFiltered[k]}");
             }
         }
