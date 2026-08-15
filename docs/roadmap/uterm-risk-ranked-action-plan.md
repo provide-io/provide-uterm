@@ -20,11 +20,18 @@ Purpose
 - `[~]` in progress
 - `[x]` completed
 
+## TS scope decision (committed)
+
+- **Decision (2026-08-15): keep TypeScript as **partial backend only**.**
+- **Reasoning:** TypeScript has strong protocol, client, and partial server libraries, but is not yet a parity replacement for Python/Go/C# in lifecycle + WS + full route coverage.
+- **Enforcement:** TypeScript is listed as `N`/unserved for unsupported protocol cells, and CI/live matrix jobs continue to run the served set as Python/Go/C# only.
+- **Impact:** We will not advertise TypeScript as a full served backend until this scope is closed.
+
 ## Risk-ranked action matrix
 
 | Rank | Area | Description | Owner | Dependencies | Evidence to capture | Acceptance criteria | Command(s) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| P0 | TS backend parity scope and contract | Decide whether TypeScript server is "full parity" or "partial" and enforce the choice in docs, exports, and CI. This removes incorrect assumptions across consumers. | ADR / product owner + TS core owner | `docs/protocol-matrix.md`, `docs/feature-roadmap.md`, package exports | Signed decision doc + matrix entry + CI assertion proving expected surface | Decision published and backed by CI checks; no unannounced parity surface claims remain | `npm run lint --workspace=packages/provide-uterm-ts`<br>`npm run build --workspace=packages/provide-uterm-ts` |
+| P0 | TS backend parity scope and contract | Enforce TypeScript as partial (no full backend parity claim): complete route/transport module coverage remains explicit and unserved. | ADR / product owner + TS core owner | `docs/protocol-matrix.md`, `docs/feature-roadmap.md`, package exports | Signed decision doc + matrix evidence (unsupported cells where expected) | TypeScript remains unserved for full parity cells with explicit unsupported status, and this is documented in matrix/docs and enforced in CI selector lists | `npm run lint --workspace=packages/provide-uterm-ts`<br>`npm run build --workspace=packages/provide-uterm-ts`<br>`python conformance/live/harness --list-drivers` |
 | P1 | Lifecycle/fanout race hardening | Expand lifecycle and fanout stress tests where ownership, resume, pause, and delivery races are most failure-prone. | Python + Go + C# test owners, with Cloudflare representative tests | Existing conformance scenario files and cross-language harness | New failing repro tests that now pass; improved coverage in timing/ordering edges | Red-team timing tests for attach/detach/reconnect and delivery races executed in CI and stable across languages | `GOWORK=off uv run pytest -q tests/conformance/live/test_matrix.py`<br>`cd packages/provide-uterm-go && GOWORK=off go test ./...`<br>`cd packages/provide-uterm-csharp && dotnet test --no-restore`<br>`cd packages/provide-uterm-cloudflare && uv run pytest -q tests/test_security.py::test_*` |
 | P1 | Protocol drift guardrails | Prevent behavior drift by enforcing protocol/spec + fixture + docs checks on any change touching wire contracts. | Platform/runtime owners + CI owner | `spec/`, `spec/*_corpus.json`, docs protocol matrix | Diff checks and a PR checklist for protocol changes | CI fails on stale matrix/docs when protocol changes; every protocol commit updates corpus/tests | `uv run python scripts/run_session_lifecycle_security_scenarios.py --validate-only`<br>`uv run python scripts/run_fanout_security_scenarios.py --validate-only` |
 | P1 | Cloudflare behavior parity boundaries | Codify and continuously test Cloudflare-specific intentional divergences from FastAPI/Go/C# behavior. | Cloudflare owner + architecture owner | `docs/operations/*.md`, ARD notes, conformance harness | Explicit doc matrix row for each divergence + tests that assert edge behavior | Any change to shared protocol touching edge-runtime behavior must update divergence table and edge tests | `cd packages/provide-uterm-cloudflare && uv run pytest -q tests/conformance` |
@@ -35,8 +42,8 @@ Purpose
 ## 90-day execution plan
 
 ### Week 1–2
-- Finalize TS parity scope with ownership signoff.
-- Add/lock CI checks that enforce the chosen TS scope.
+- Finalize TS parity scope with ownership signoff (completed).
+- Add/lock CI checks that enforce the chosen TS scope (already aligned: live matrix excludes TS from served server set).
 - Publish first revision of divergence matrix for Cloudflare.
 
 ### Week 2–5
@@ -68,7 +75,7 @@ Purpose
 
 ## Backlog of "ready next" tasks
 
-- [ ] TS-DECIDE-001: Publish parity decision and enforce via CI matrix/docs.
+- [x] TS-DECIDE-001: Publish parity decision and enforce via CI matrix/docs.
 - [ ] P1-LIFECYCLE-001: Add race matrix cases for owner handoff and stale approval expiry.
 - [ ] P1-PROTO-001: Add protocol version and fixture drift checks to CI.
 - [ ] P1-CF-001: Add/refresh Cloudflare divergence matrix and edge-only regression tests.
