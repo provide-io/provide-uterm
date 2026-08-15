@@ -10,6 +10,23 @@ on:
       - main
       - "rc/**"
 
+concurrency:
+  # Cancel superseded PR runs; never cancel anything else.
+  #
+  # The group is per-branch for a pull_request, so a new push to a PR
+  # supersedes the run still going for the previous commit -- only the latest
+  # commit on a PR carries any signal.
+  #
+  # For every other event the group is keyed on the RUN ID, which is unique, so
+  # the block is deliberately inert there. That is not laziness: with a shared
+  # group, GitHub cancels the previously PENDING run whenever a third arrives,
+  # even with cancel-in-progress false. Three commits landing on main in quick
+  # succession would leave the middle one with no run at all, and the next
+  # failure would need a local bisect to attribute. Queue length is worth less
+  # than knowing which commit broke it.
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   governance:
     runs-on: ubuntu-latest

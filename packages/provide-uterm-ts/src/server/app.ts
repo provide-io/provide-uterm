@@ -173,6 +173,42 @@ function boundedInteger(raw: string | null, fallback: number, low: number, high:
 }
 
 /**
+ * Annotate a snapshot with how old it is and where it came from.
+ *
+ * Ports `SessionRegistry._stamp_snapshot_freshness` from the Python reference.
+ * A snapshot carries a `ts` and nothing else about its provenance, so a client
+ * polling this endpoint sees a screen with no way to tell "the terminal is
+ * idle" from "the worker stopped answering an hour ago" — both render as the
+ * same unchanging screen.
+ *
+ * `snapshot_source` is always `"cache"` here, and `snapshot_requested` always
+ * `false`: this hub has no `waitForSnapshot`, so there is no way to ask the
+ * worker for a fresh screen. That is exactly what the reference reports for a
+ * read with no `wait_ms`, so the answers agree — but a caller cannot force a
+ * round trip against this implementation the way it can against the reference.
+ * Porting that needs a polling method on the hub, which is a larger change than
+ * this one and is deliberately not smuggled in here.
+ */
+export function stampSnapshotFreshness(
+  snapshot: Record<string, unknown>,
+): Record<string, unknown> {
+  const ts = snapshot.ts;
+  // `> 0` rejects the absent-timestamp default of 0, which is not 1970 but "not
+  // set" — dating it would report every such snapshot as decades stale.
+  // Number.isFinite also rejects NaN/Infinity, which JSON can carry in.
+  const usable = typeof ts === "number" && Number.isFinite(ts) && ts > 0;
+  snapshot.snapshot_age_ms = usable
+    ? // Clamped at zero: clock skew between the worker and this process must
+      // not produce a negative age, which says nothing and would sail past any
+      // staleness threshold a consumer compares against.
+      Math.max(0, Math.round(Date.now() - (ts as number) * 1000))
+    : null;
+  snapshot.snapshot_source = "cache";
+  snapshot.snapshot_requested = false;
+  return snapshot;
+}
+
+/**
  * Read the query a session list was asked for.
  *
  * `undefined` means the query itself is invalid, which is a 422 — the
@@ -278,7 +314,8 @@ export function createServerApp(options: ServerAppOptions): ServerApp {
       // A session whose worker has never sent a screen answers `null` with a
       // 200, not a 404: the session exists and has nothing to show yet, which
       // is a different thing from a session that does not exist.
-      return Response.json((await options.hub.getLastSnapshot(sessionId)) ?? null);
+      const snapshot = await options.hub.getLastSnapshot(sessionId);
+      return Response.json(snapshot === undefined ? null : stampSnapshotFreshness(snapshot));
     });
 
     map.set("sessions.set_mode", async (context) => {

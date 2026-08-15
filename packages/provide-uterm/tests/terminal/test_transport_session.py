@@ -509,7 +509,9 @@ async def test_reader_loop_warns_when_a_chunk_is_slow(
     assert len(slow) == 1
     # The measured elapsed and the chunk it belongs to both reach the log — a
     # warning that says only "something was slow" is not actionable.
-    assert "elapsed_s=0.300" in slow[0]
+    # Structured field, not a %-formatted string: the renderer emits the number
+    # as-is, so 0.300 renders as 0.3.
+    assert "elapsed_s=0.3" in slow[0]
     assert f"chunk_bytes={len(b'slow-chunk')}" in slow[0]
 
 

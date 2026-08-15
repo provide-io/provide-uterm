@@ -8,6 +8,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from repo_paths import submodule_dirs
+
 DOC_PATHS = ("README.md", "docs")
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 LINK_RE = re.compile(r"\[[^\]]+\]\(([^)\s]+)\)")
@@ -226,9 +228,17 @@ def _structural_claim_violations(root: Path) -> list[str]:
 
     # --- 3. Package count ---
     # Count packages/ subdirectories and compare to CLAUDE.md's "N packages under packages/" claim.
+    #
+    # Submodules under packages/ are NOT this repo's packages. provide-telemetry
+    # is vendored there as a git submodule -- a dependency that happens to live
+    # in the same directory -- and counting it made the doc "wrong" the moment
+    # the submodule was added, about a package the sentence was never claiming
+    # and the table beneath it does not list. Read .gitmodules rather than
+    # hardcoding the name, so the next vendored submodule needs no edit here.
     claude_md = root / "CLAUDE.md"
     if claude_md.exists():
-        actual_pkg_count = sum(1 for p in (root / "packages").iterdir() if p.is_dir())
+        submodules = submodule_dirs(root)
+        actual_pkg_count = sum(1 for p in (root / "packages").iterdir() if p.is_dir() and p.resolve() not in submodules)
         claude_text = claude_md.read_text(encoding="utf-8")
         pkg_count_match = re.search(r"(\d+)\s+packages?\s+under\s+[`']?packages/[`']?", claude_text)
         if pkg_count_match:

@@ -193,7 +193,7 @@ public sealed class ConformanceLiveDriverServerTests : IClassFixture<LiveDriverS
     public async Task A_body_no_parser_accepts_is_recorded_as_non_json()
     {
         var result = await RunAsync(
-            """{"id": "prom", "action": "http_get", "path": "/api/metrics/prometheus"}""",
+            """{"id": "prom", "action": "http_get", "path": "/app/index.html"}""",
             """{"id": "html", "action": "http_get", "path": "/app/"}""");
 
         // The bytes differ in every language; "no parser accepts this" does not.

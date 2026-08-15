@@ -22,9 +22,30 @@ internal static class NativeUnixPty
         public ushort ws_ypixel;
     }
 
-    // Opaque handles for posix_spawn file actions / attrs — use byte buffers
-    // large enough for Darwin/Linux implementations.
-    private const int SpawnOpaqueBytes = 256;
+    // Opaque handles for posix_spawn file actions / attrs.
+    //
+    // This was 256, which is SMALLER THAN THE REAL STRUCT on glibc and was
+    // corrupting the heap on every native spawn. Measured on x86_64 glibc 2.42:
+    //
+    //     sizeof(posix_spawn_file_actions_t) =  80
+    //     sizeof(posix_spawnattr_t)          = 336
+    //
+    // posix_spawnattr_t carries two sigset_t members (128 bytes each on glibc),
+    // so posix_spawnattr_init wrote 336 bytes into a 256-byte AllocHGlobal
+    // block and ran 80 bytes past the end of it. The damage lands in whatever
+    // glibc put next, so the process dies later and elsewhere -- the test host
+    // aborted with "malloc(): invalid size (unsorted)" and "corrupted
+    // double-linked list", never at the overflow itself.
+    //
+    // That is why the LiveParity/pty batch was skipped on CI as a "native host
+    // residual" rather than fixed: the crash never pointed at this line.
+    //
+    // 1024 is not a guess at a size, it is a refusal to guess: it is 3x the
+    // largest known layout, and these are two short-lived allocations per
+    // spawn, so the slack costs nothing. Darwin's are pointer-sized and musl's
+    // are far smaller; any future libc that exceeds this would have to more
+    // than triple glibc's.
+    private const int SpawnOpaqueBytes = 1024;
 
     [DllImport("libc", SetLastError = true)]
     private static extern int openpty(out int amaster, out int aslave, IntPtr name, IntPtr termp, ref Winsize winp);

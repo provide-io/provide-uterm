@@ -15,6 +15,7 @@ A harness nobody has watched fail is a harness nobody knows works.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -31,6 +32,14 @@ _REAL_DRIVER = REPO_ROOT / "conformance/live/drivers/python/driver.py"
 
 def _python() -> DriverSpec:
     return DriverSpec(language="python", command=(sys.executable, str(_REAL_DRIVER)), cwd=REPO_ROOT)
+
+
+def _server() -> DriverSpec:
+    server_impl = os.environ.get("SERVER_IMPL", "python")
+    found = available(REPO_ROOT, only=[server_impl])
+    if not found.servers:
+        pytest.fail(f"Server implementation '{server_impl}' not found in registry or unavailable.")
+    return found.servers[0]
 
 
 def _liar(tmp_path: Path, patch: str) -> DriverSpec:
@@ -60,7 +69,7 @@ def health_scenario() -> object:
 
 class TestAgainstTheRealServer:
     def test_the_reference_talks_to_itself(self, health_scenario: object) -> None:
-        report = run_matrix([health_scenario], servers=[_python()], clients=[_python()])
+        report = run_matrix([health_scenario], servers=[_server()], clients=[_python()])
         (cell,) = report.cells
         assert cell.status == "pass", cell.failures
         assert report.ok
@@ -68,7 +77,7 @@ class TestAgainstTheRealServer:
     def test_every_committed_scenario_holds(self) -> None:
         # The scenarios are the contract. If the reference itself does not
         # satisfy them, they are asserting something nobody implements.
-        report = run_matrix(load_scenarios(SCENARIO_DIR), servers=[_python()], clients=[_python()])
+        report = run_matrix(load_scenarios(SCENARIO_DIR), servers=[_server()], clients=[_python()])
         assert report.ok, [
             (cell.scenario_id, [failure.message for failure in cell.failures])
             for cell in report.cells
@@ -112,7 +121,7 @@ class TestARepeatedStep:
         # the bare `beat` — leaves the other expectations pointing at nothing
         # and the cell fails. That is the assertion; nothing needs to reach
         # inside the cell to make it.
-        report = run_matrix([self._scenario(tmp_path)], servers=[_python()], clients=[_python()])
+        report = run_matrix([self._scenario(tmp_path)], servers=[_server()], clients=[_python()])
         (cell,) = report.cells
         assert cell.status == "pass", cell.failures
 
@@ -121,7 +130,7 @@ class TestARepeatedStep:
         # Only the comparison against the reference cell can see it — and it
         # can only see it because each repetition kept its own observation.
         liar = _liar(tmp_path, "result['steps'][1]['fields']['body']['service'] = 'something-else'")
-        report = run_matrix([self._scenario(tmp_path)], servers=[_python()], clients=[_python(), liar])
+        report = run_matrix([self._scenario(tmp_path)], servers=[_server()], clients=[_python(), liar])
         divergent = next(cell for cell in report.cells if cell.client == "go")
         assert divergent.status == "fail"
         assert any(difference.path.startswith("beat.1") for difference in divergent.differences)
@@ -136,7 +145,7 @@ class TestItCatchesADivergence:
         # the reference cell catches it, which is the whole argument for
         # having one.
         liar = _liar(tmp_path, "result['steps'][0]['fields']['body']['service'] = 'something-else'")
-        report = run_matrix([health_scenario], servers=[_python()], clients=[_python(), liar])
+        report = run_matrix([health_scenario], servers=[_server()], clients=[_python(), liar])
         divergent = next(cell for cell in report.cells if cell.client == "go")
         assert divergent.status == "fail"
         assert any("service" in difference.path for difference in divergent.differences)
@@ -146,7 +155,7 @@ class TestItCatchesADivergence:
         # A dropped field is the quietest divergence there is: every
         # expectation about the fields that remain still holds.
         liar = _liar(tmp_path, "result['steps'][0]['fields']['body'].pop('control_plane_backend')")
-        report = run_matrix([health_scenario], servers=[_python()], clients=[_python(), liar])
+        report = run_matrix([health_scenario], servers=[_server()], clients=[_python(), liar])
         divergent = next(cell for cell in report.cells if cell.client == "go")
         assert divergent.status == "fail"
         assert not report.ok
@@ -155,13 +164,13 @@ class TestItCatchesADivergence:
         # uptime_s is declared volatile by the scenario, so a cell that saw a
         # different clock is not a cell that saw a different server.
         liar = _liar(tmp_path, "result['steps'][0]['fields']['body']['uptime_s'] = 999999.5")
-        report = run_matrix([health_scenario], servers=[_python()], clients=[_python(), liar])
+        report = run_matrix([health_scenario], servers=[_server()], clients=[_python(), liar])
         assert report.ok
 
     def test_a_status_code_that_differs_is_caught(self, tmp_path: Path) -> None:
         refusals = next(one for one in load_scenarios(SCENARIO_DIR) if one.id == "002_session_authz")
         liar = _liar(tmp_path, "result['steps'][0]['fields']['status'] = 403")
-        report = run_matrix([refusals], servers=[_python()], clients=[_python(), liar])
+        report = run_matrix([refusals], servers=[_server()], clients=[_python(), liar])
         divergent = next(cell for cell in report.cells if cell.client == "go")
         # This one the scenario *does* assert on, so it fails twice over —
         # once against the contract and once against the reference cell.

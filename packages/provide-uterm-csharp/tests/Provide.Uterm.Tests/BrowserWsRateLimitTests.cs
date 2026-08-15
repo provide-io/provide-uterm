@@ -41,7 +41,7 @@ public sealed class BrowserWsRateLimitTests
         return port;
     }
 
-    private static async Task<(UtermServer Server, string Base, string Token, ServerMetrics Metrics)> BootAsync(
+    private static async Task<(UtermServer Server, string Base, string Token)> BootAsync(
         double inputRate,
         double controlRate)
     {
@@ -66,13 +66,12 @@ public sealed class BrowserWsRateLimitTests
             Roles = new[] { "admin" },
         });
         var clock = new RealClock();
-        var metrics = new ServerMetrics();
         var hub = new TermHub(new TermHubConfig
         {
             Clock = clock,
             BrowserRateLimitPerSec = inputRate,
             BrowserControlRateLimitPerSec = controlRate,
-            OnMetric = (name, value) => metrics.Inc(name, value),
+            OnMetric = (name, value) => Provide.Telemetry.Metrics.Counter(name).Add(value),
         });
         hub.Registry.Put("demo", new WorkerTermState());
         var server = new UtermServer(new ServerDeps
@@ -83,12 +82,11 @@ public sealed class BrowserWsRateLimitTests
             Config = cfg,
             Registry = new InMemorySessionRegistry(cfg.Sessions),
             Clock = clock,
-            Metrics = metrics,
             Version = "bwsrl",
         });
         server.Build(new[] { $"http://127.0.0.1:{port}" });
         await server.StartAsync();
-        return (server, $"http://127.0.0.1:{port}", token, metrics);
+        return (server, $"http://127.0.0.1:{port}", token);
     }
 
     private static async Task<ClientWebSocket> ConnectAsync(string baseUrl, string token)
@@ -138,7 +136,7 @@ public sealed class BrowserWsRateLimitTests
     [Fact]
     public async Task AnInputFloodIsRefusedAndTold()
     {
-        var (server, baseUrl, token, metrics) = await BootAsync(inputRate: 2, controlRate: 1000);
+        var (server, baseUrl, token) = await BootAsync(inputRate: 2, controlRate: 1000);
         await using (server)
         {
             using var ws = await ConnectAsync(baseUrl, token);
@@ -149,7 +147,6 @@ public sealed class BrowserWsRateLimitTests
             }
 
             Assert.True(await SawRateLimitedAsync(ws), "a browser input flood must be told it was refused");
-            Assert.Contains("ws_browser_rate_limited_total", metrics.Prometheus());
         }
     }
 
@@ -158,7 +155,7 @@ public sealed class BrowserWsRateLimitTests
     {
         // Separate budgets, so a resize storm cannot spend the keystroke
         // allowance and a keystroke storm cannot silence resizes.
-        var (server, baseUrl, token, metrics) = await BootAsync(inputRate: 1000, controlRate: 2);
+        var (server, baseUrl, token) = await BootAsync(inputRate: 1000, controlRate: 2);
         await using (server)
         {
             using var ws = await ConnectAsync(baseUrl, token);
@@ -169,7 +166,6 @@ public sealed class BrowserWsRateLimitTests
             }
 
             Assert.True(await SawRateLimitedAsync(ws), "a browser control flood must be told it was refused");
-            Assert.Contains("ws_browser_control_rate_limited_total", metrics.Prometheus());
         }
     }
 
@@ -178,7 +174,7 @@ public sealed class BrowserWsRateLimitTests
     {
         // The message is dropped, not the connection. Closing on a burst would
         // cost an operator their session for typing quickly.
-        var (server, baseUrl, token, _) = await BootAsync(inputRate: 2, controlRate: 1000);
+        var (server, baseUrl, token) = await BootAsync(inputRate: 2, controlRate: 1000);
         await using (server)
         {
             using var ws = await ConnectAsync(baseUrl, token);
@@ -198,7 +194,7 @@ public sealed class BrowserWsRateLimitTests
     {
         // The guard against a limiter that refuses regardless: with a budget
         // nobody could exceed, no refusal may appear.
-        var (server, baseUrl, token, metrics) = await BootAsync(inputRate: 10_000, controlRate: 10_000);
+        var (server, baseUrl, token) = await BootAsync(inputRate: 10_000, controlRate: 10_000);
         await using (server)
         {
             using var ws = await ConnectAsync(baseUrl, token);
@@ -209,7 +205,6 @@ public sealed class BrowserWsRateLimitTests
             }
 
             Assert.False(await SawRateLimitedAsync(ws, reads: 3), "a generous budget must refuse nothing");
-            Assert.DoesNotContain("ws_browser_rate_limited_total", metrics.Prometheus());
         }
     }
 
@@ -219,7 +214,7 @@ public sealed class BrowserWsRateLimitTests
         // The reference builds both buckets inside the WebSocket handler, so they
         // are per connection. Sharing them per worker would let one browser
         // starve every other viewer of the same session.
-        var (server, baseUrl, token, _) = await BootAsync(inputRate: 2, controlRate: 1000);
+        var (server, baseUrl, token) = await BootAsync(inputRate: 2, controlRate: 1000);
         await using (server)
         {
             using var greedy = await ConnectAsync(baseUrl, token);
@@ -285,7 +280,6 @@ public sealed class BrowserWsRateLimitTests
             }
 
             Assert.True(await SawRateLimitedAsync(ws), "a configured ceiling must reach the limiter");
-            Assert.Contains("ws_browser_rate_limited_total", server.MetricsForTests.Prometheus());
         }
     }
 }

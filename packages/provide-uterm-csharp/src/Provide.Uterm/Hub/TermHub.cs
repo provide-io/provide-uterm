@@ -56,6 +56,11 @@ public sealed class TermHubConfig
     /// every existing embedder behaves as before.
     /// </summary>
     public Action<string, string>? OnLog { get; set; }
+    
+    /// <summary>
+    /// Lifecycle telemetry sink.
+    /// </summary>
+    public Action<string, string, string?, string?, Dictionary<string, object?>?>? OnTelemetryEvent { get; set; }
 
     public IClock? Clock { get; set; }
 }
@@ -78,6 +83,7 @@ public sealed class TermHub : ILeaseHub
     public EventBus EventBus { get; }
 
     private readonly Action<string, string>? _onLog;
+    private readonly Action<string, string, string?, string?, Dictionary<string, object?>?>? _onTelemetry;
 
     internal object SharedLock { get; } = new();
     internal IClock Clock { get; }
@@ -122,6 +128,7 @@ public sealed class TermHub : ILeaseHub
         MaxWsMessageBytes = Math.Max(1024, config.MaxWsMessageBytes <= 0 ? 1_048_576 : config.MaxWsMessageBytes);
         WorkerToken = config.WorkerToken;
         _onLog = config.OnLog;
+        _onTelemetry = config.OnTelemetryEvent;
         // Floored the way the reference floors them (`core_impl`: max(0.1, ...)),
         // so a hub constructed directly with a nonsense rate still admits
         // something. The operator-facing path is stricter: the config schema
@@ -180,6 +187,11 @@ public sealed class TermHub : ILeaseHub
         State.NotifyHijackChanged(workerId, enabled, owner);
     public bool NotifyHijackChanged(OwnershipPublicationToken token) =>
         State.NotifyHijackChanged(token);
+        
+    public void EmitTelemetry(string eventType, string workerId, string? principal = null, string? role = null, Dictionary<string, object?>? metadata = null)
+    {
+        _onTelemetry?.Invoke(eventType, workerId, principal, role, metadata);
+    }
 
     public Task<(bool Ok, Exception? Error)> SendWorkerAsync(string workerId, Dictionary<string, object?> msg, CancellationToken ct = default) =>
         Conn.SendWorkerAsync(workerId, msg, ct);

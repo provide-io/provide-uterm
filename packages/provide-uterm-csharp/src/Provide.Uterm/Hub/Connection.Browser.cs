@@ -68,6 +68,12 @@ public sealed partial class ConnectionManager
                 st.Browsers[ws] = string.IsNullOrWhiteSpace(role) ? "viewer" : role;
                 if (deferBroadcast) _hub.StartupPendingBrowsers.Add(ws);
                 st.LastActivityAt = _hub.Clock.Monotonic();
+                _hub.EmitTelemetry(
+                    "session.registered",
+                    workerId,
+                    role: st.Browsers[ws],
+                    metadata: new Dictionary<string, object?> { ["session_type"] = "browser" }
+                );
                 return new Dictionary<string, object?>
                 {
                     ["is_hijacked"] = _hub.State.IsHijacked(st),
@@ -203,6 +209,9 @@ public sealed partial class ConnectionManager
                 // can resume the worker and mark the matching resume token.
                 _hub.PendingBrowserOwnershipVersions[ws] = ownershipVersion.Value;
             }
+            
+            _hub.EmitTelemetry("session.disconnected", workerId, metadata: new Dictionary<string, object?> { ["session_type"] = "browser" });
+            
             return new(ownershipVersion, publication);
         }
     }

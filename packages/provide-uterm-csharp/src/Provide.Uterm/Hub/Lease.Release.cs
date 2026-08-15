@@ -211,6 +211,10 @@ public sealed partial class HijackLeaseManager
         CancellationToken ct = default)
     {
         var result = await TryReleaseWsCoreAsync(workerId, ws, ct).ConfigureAwait(false);
+        if (result.Released)
+        {
+            _hub.EmitTelemetry("hijack.released", workerId, metadata: new Dictionary<string, object?> { ["hijack_type"] = "dashboard" });
+        }
         if (result.Publication is not null)
         {
             _hub.NotifyHijackChanged(result.Publication);

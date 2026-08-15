@@ -89,6 +89,17 @@ export interface SnapshotFrameArgs {
   ts: number;
   /** Kept on the wire even when null, for the same reason. */
   rawTail?: string | null;
+  /**
+   * Reader-loop ingest counters from the worker's own session, counted before
+   * any emulator work. They separate "no bytes ever reached that process" from
+   * "bytes arrived and the emulator never reflected them" — two failures
+   * needing opposite fixes that look identical from the screen alone.
+   *
+   * Kept on the wire even when null: the Python builder emits them under
+   * `exclude_none=False`, and this builder is checked against its output.
+   */
+  chunksRead?: number | null;
+  bytesRead?: number | null;
   /** Manager-assigned causal sequence; absent on worker-originated snapshots. */
   eventSeq?: number;
 }
@@ -106,6 +117,8 @@ export function makeSnapshotFrame(args: SnapshotFrameArgs): SnapshotFrame {
     has_trailing_space: args.hasTrailingSpace,
     prompt_detected: args.promptDetected,
     raw_tail: args.rawTail ?? null,
+    chunks_read: args.chunksRead ?? null,
+    bytes_read: args.bytesRead ?? null,
     ts: args.ts,
     ...(args.eventSeq === undefined ? {} : { event_seq: args.eventSeq }),
   } as SnapshotFrame;

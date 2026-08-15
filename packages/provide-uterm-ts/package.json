@@ -15,6 +15,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "smoke:dist": "node scripts/smoke-dist.mjs",
+    "benchmark:control-channel": "npm run build && node dist/control-channel/benchmark.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",

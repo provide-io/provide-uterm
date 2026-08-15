@@ -378,11 +378,65 @@ class SessionRegistry:
         runtime = await self._locked_runtime(session_id)
         return await runtime.analyze()
 
-    async def last_snapshot(self, session_id: str, recipient: Any = None) -> dict[str, Any] | None:
+    async def last_snapshot(self, session_id: str, recipient: Any = None, wait_ms: int = 0) -> dict[str, Any] | None:
         # ``recipient`` (the requesting Request) lets the hub apply the same
         # role-scoped output redaction as the live broadcast path so the REST
         # /snapshot read does not bypass a configured policy (M5).
-        return await self._hub.get_last_snapshot(session_id, recipient=recipient)
+        #
+        # ``wait_ms`` asks the worker for a NEW snapshot and waits that long for
+        # one to arrive. Without it this method answers from ``last_snapshot``,
+        # a cache that is byte-identical whether the worker produced it a
+        # millisecond ago or died an hour ago. The freshness fields stamped
+        # below exist so the caller can tell those apart; ``wait_ms`` exists so
+        # the caller can do something about it.
+        fresh: dict[str, Any] | None = None
+        if wait_ms > 0:
+            # Drive a round trip for freshness, then re-read through
+            # get_last_snapshot: only that path applies output redaction, and a
+            # poll result must not be a way around the policy.
+            fresh = await self._hub.wait_for_snapshot(session_id, timeout_ms=wait_ms)
+        snapshot = await self._hub.get_last_snapshot(session_id, recipient=recipient)
+        if snapshot is None:
+            return None
+        return self._stamp_snapshot_freshness(snapshot, requested_fresh=wait_ms > 0, got_fresh=fresh is not None)
+
+    @staticmethod
+    def _stamp_snapshot_freshness(
+        snapshot: dict[str, Any], *, requested_fresh: bool, got_fresh: bool
+    ) -> dict[str, Any]:
+        """Annotate a snapshot with how old it is and where it came from.
+
+        A snapshot carries a ``ts`` and nothing else about its provenance, so a
+        client polling this endpoint sees a screen with no way to distinguish
+        "the terminal is idle" from "the worker stopped answering an hour ago".
+        Both render as the same unchanging screen. The three fields added here
+        are the whole difference:
+
+        * ``snapshot_age_ms``   -- how stale, or ``None`` if the snapshot has no
+          usable ``ts`` (an old worker, or a hand-built one in tests).
+        * ``snapshot_source``   -- ``"fresh"`` only when a round trip to the
+          worker was requested AND a newer snapshot came back. A request that
+          timed out reports ``"cache"``, because that is what the caller is
+          holding.
+        * ``snapshot_requested`` -- whether a round trip was even attempted, so
+          ``"cache"`` on a plain read is not misread as a worker that failed to
+          answer.
+        """
+        ts = snapshot.get("ts")
+        age_ms: int | None = None
+        # ``bool`` is excluded explicitly because it is a subclass of ``int``:
+        # a ``ts`` of ``True`` would otherwise date the snapshot to one second
+        # after the epoch and report it as ~57 years stale. ``ts > 0`` rejects
+        # the absent-timestamp default of 0 for the same reason.
+        if isinstance(ts, int | float) and not isinstance(ts, bool) and ts > 0:
+            # max(0, ...) clamps clock skew between the worker and this process.
+            # A negative age says nothing, and a consumer comparing it against a
+            # staleness threshold would sail straight past it.
+            age_ms = max(0, int((time.time() - float(ts)) * 1000))
+        snapshot["snapshot_age_ms"] = age_ms
+        snapshot["snapshot_source"] = "fresh" if got_fresh else "cache"
+        snapshot["snapshot_requested"] = requested_fresh
+        return snapshot
 
     async def events(self, session_id: str, limit: int = 100) -> list[dict[str, Any]]:
         return await self._hub.get_recent_events(session_id, limit)

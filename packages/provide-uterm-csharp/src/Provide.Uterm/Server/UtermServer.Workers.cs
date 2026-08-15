@@ -37,6 +37,10 @@ public sealed partial class UtermServer
     private async Task<SessionStatus?> ActivateSessionAsync(
         string sessionId, SessionDefinition def, CancellationToken cancellationToken = default)
     {
+        using var span = Provide.Telemetry.Tracing.GetTracer("provide.uterm.server").StartSpan("ActivateSession");
+        span.SetAttribute("session_id", sessionId);
+        span.SetAttribute("connector_type", def.ConnectorType);
+        
         var st = _deps.Registry.StartSession(sessionId);
         if (st is null) return null;
         st.ConnectorConfig = new Dictionary<string, object?>(def.ConnectorConfig);

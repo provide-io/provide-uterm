@@ -4,5 +4,14 @@
 //
 
 using Provide.Uterm.Manager;
+using Provide.Telemetry;
 
-return ManagerHost.Run(args);
+ProvideTelemetry.SetupTelemetry();
+try
+{
+    return ManagerHost.Run(args);
+}
+finally
+{
+    ProvideTelemetry.ShutdownTelemetry();
+}
