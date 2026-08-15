@@ -42,6 +42,13 @@ public sealed class ServerDeps
     public ApiKeyStore? ApiKeys { get; init; }
     /// <summary>Optional path to built frontend assets (SPA hosting).</summary>
     public string? FrontendDir { get; init; }
+    /// <summary>
+    /// Approval-sweep cadence. Null keeps Go's 30s; zero or less disables the
+    /// sweep. Internal because it exists to make the sweep observable in a test
+    /// rather than to be configured in production.
+    /// </summary>
+    internal TimeSpan? ApprovalSweepInterval { get; init; }
+
     /// <summary>Internal deterministic seam for post-registration setup-failure tests.</summary>
     internal Func<Task>? BrowserSetupHook { get; init; }
     /// <summary>Internal deterministic seam observing consumed WebSocket fragments.</summary>
