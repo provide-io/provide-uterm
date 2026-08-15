@@ -19,6 +19,17 @@ namespace Provide.Uterm.Tests;
 [Collection("UTERM_TEST_MODE")]
 public sealed class ServerIntegrationHostRestTests
 {
+    /// <summary>
+    /// A deadline that is actually in the future.
+    ///
+    /// These fixtures used the literal 9_999_999, which reads as "far away" but
+    /// is an epoch-seconds timestamp in April 1970. It went unnoticed for as
+    /// long as nothing consulted the deadline; once the approval store began
+    /// retiring overdue requests on read, an approval list that had always
+    /// returned two entries started returning none.
+    /// </summary>
+    private static double FarFutureDeadline => DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 3600;
+
     private static int FreePort()
     {
         var l = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
@@ -171,7 +182,7 @@ public sealed class ServerIntegrationHostRestTests
                 SubmitterId = "other-user",
                 Command = "rm -rf /",
                 CreatedAt = 1,
-                ExpiresAt = 9_999_999,
+                ExpiresAt = FarFutureDeadline,
             });
             hub.Approvals.Add(new ApprovalRequest
             {
@@ -180,7 +191,7 @@ public sealed class ServerIntegrationHostRestTests
                 SubmitterId = "other-user",
                 Command = "ls",
                 CreatedAt = 1,
-                ExpiresAt = 9_999_999,
+                ExpiresAt = FarFutureDeadline,
             });
 
             var list = await http.GetAsync("/api/approvals");
