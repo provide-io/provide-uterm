@@ -37,7 +37,7 @@ Purpose
 | P1 | Lifecycle/fanout race hardening | `[x]` | Expand lifecycle and fanout stress tests where ownership, resume, pause, and delivery races are most failure-prone. | Two new race categories in `spec/session_lifecycle_security_scenarios.json` (10 → 12 scenarios), executed natively by Python, Go, C#, and Cloudflare. Found a real defect: see LIFECYCLE FINDING below. | `uv run python scripts/run_session_lifecycle_security_scenarios.py` |
 | P1 | Protocol drift guardrails | `[x]` | Prevent behavior drift by enforcing protocol/spec + fixture + docs checks on any change touching wire contracts. | `scripts/check_protocol_drift.py` in the static gate; the two contract validations wired in beside it; `.github/pull_request_template.md` carries the protocol checklist; `tests/scripts/test_check_protocol_drift.py` proves the gate is not vacuous. | `bash ci/quality_checks.sh`<br>`uv run python scripts/check_protocol_drift.py --changed-against origin/main` |
 | P1 | Cloudflare behavior parity boundaries | `[x]` | Codify and continuously test Cloudflare-specific intentional divergences from FastAPI/Go/C# behavior. | `docs/cloudflare-divergence-matrix.md`: 11 rows, each with intent, `file:line` evidence, and a pinning test. 23 new offline tests in `tests/test_edge_divergence_matrix.py`. Found a stale doc claim: see DOC FINDING below. | `uv run --frozen --package provide-uterm-cloudflare --extra dev pytest -q packages/provide-uterm-cloudflare/tests` |
-| P2 | C# quality debt cleanup | `[x]` | Resolve high-volume analyzer warnings and low-signal anti-patterns to reduce future bug risk and review friction. | Eight warnings → zero, two of which were real defects (see C# FINDINGS below). `ci/warning_gate.py` + an empty `ci/warning-baseline.json` ratchet it, failing on both a new warning and a stale baseline entry. Coverage 97.44% → 97.48%. | `make -C packages/provide-uterm-csharp quality-gate` |
+| P2 | C# quality debt cleanup | `[x]` | Resolve high-volume analyzer warnings and low-signal anti-patterns to reduce future bug risk and review friction. | Eight compiler warnings → zero, two of which were real defects (see C# FINDINGS below), plus 28 xUnit analyzer warnings the gate had been unable to see at all. `ci/warning_gate.py` + `ci/warning-baseline.json` ratchet both, failing on a new warning and on a stale baseline entry alike. Coverage 97.44% → 97.53%. | `make -C packages/provide-uterm-csharp quality-gate` |
 | P2 | Benchmark reproducibility and comparability | `[x]` | Standardize benchmark commands, warmup, sample sizing, and environment constraints to avoid local-machine bias. | `Makefile.bench` declares every parameter once and exposes two profiles; `scripts/bench_env_fingerprint.py` writes the machine beside every result; `docs/benchmarks/README.md` states what makes two numbers comparable. | `make -f Makefile.bench bench-local`<br>`make -f Makefile.bench bench-ci` |
 | P3 | Documentation and review hygiene | `[x]` | Keep roadmap, remediation status, and implementation matrices in sync after each language/backend change. | `docs/parity-labels.md` is the single vocabulary; eight documents normalized onto it; the PR template makes the doc update a checklist item rather than a convention. | `uv run python scripts/check_docs_accuracy.py`<br>`rg -n "served\|parity\|unsupported" docs packages -S` |
 
@@ -95,12 +95,120 @@ the suite did.
 
 ### Opened by this pass
 
-- [ ] **CSHARP-APPROVAL-002 (P1): the C# approvals subsystem is unreachable from production traffic.** C# has no policy gate on the browser input path (Python's `_policy_gate.intercept_input` `hold` branch), so nothing but a test ever creates an approval request. `HandleApprove` also has no `ResolveApproval` equivalent: it claims the request and returns 200 without injecting the held command, so it can never answer the 409 that Python and Go return when delivery is refused. The expiry fix makes the store correct; it does not make the feature real. Decide whether C# implements the hold path or declares approvals explicitly unsupported.
-- [ ] **CSHARP-APPROVAL-003 (P2): no approval sweep.** Expiry is now checked on every read and write, which is what the contract needed, but without a background sweep an `OnExpired` notification only fires when someone touches the store. Harmless while approvals are REST-only (above); wire a sweep if the hold path lands.
-- [ ] **CSHARP-GOLDEN-001 (P2): C# does not consume the shared golden corpora.** `graphicaltargets_golden.json` has always contained the scenario "a closed registry does nothing at all", and Python and TypeScript both execute it. C# is the one port that does not, which is why its missing `Close()` survived. Wire the C# port into the golden corpora it has counterparts for.
-- [ ] **DOC-TUNNEL-001 (P2): contradictory Cloudflare tunnel claims.** `docs/security-language-parity.md` says Cloudflare has no tunnel WebSocket route (`unserved`); `docs/protocol-matrix.md` gives Cloudflare a `WSS /tunnel/{tunnel_id}` agent endpoint. One is wrong, and if the route genuinely does not exist the label should be `N/A`.
-- [ ] **DOC-COUNT-001 (P3): stale MCP tool counts.** `docs/feature-roadmap.md` says "tool 21 of 21"; there are 28 `@mcp.tool` decorators, which is what the README and `check_docs_accuracy.py` use. `docs/typescript-port-roadmap.md` names 28 reference tools and claims twenty-nine ported bodies.
-- [ ] **DOC-FANOUT-001 (P3): unqualified cell.** "Browser-WS fan-out send served" is a bare `N` for C#, which does not distinguish an unmounted module (`unserved`) from nothing implemented.
+Items are listed once, `[x]` or `[ ]`, in the order they were found. Several
+were opened and closed inside the same pass, which is why the section mixes
+both: wiring C# to the shared golden corpus paid for itself immediately, and
+`CSHARP-STATIC-001`, `CSHARP-FRAMES-001` and `CSHARP-GOLDEN-002` were all found
+by it or by the full test gate rather than by review.
+
+- [x] **CSHARP-GOLDEN-001 (P2): C# now executes a shared golden corpus.** 82
+  cases over all 22 scenarios of `graphicaltargets_golden.json`, read in place
+  from the TypeScript package rather than copied, so it cannot become another
+  twinned fixture to drift. This is the corpus whose "a closed registry does
+  nothing at all" scenario the missing `Close()` had been hiding from.
+- [x] **CSHARP-STATIC-001 (P1): seeding a duplicate returned an uncoded error.**
+  `AddStaticCore` threw a raw `InvalidOperationException` where the reference
+  (`graphical_targets.py:433`), Go, and the corpus all give
+  `CONFLICT`/"duplicate graphical target_id" — so a REST caller got an
+  unhandled 500 instead of a coded refusal. Its `Validate()` call was also
+  missing the `ArgumentException -> INVALID` wrapper that `CreateCore` and
+  `UpdateCore` both have, so a bad seeded `target_id`, protocol or size escaped
+  the same way. Found by the corpus on its first run.
+- [x] **CSHARP-FRAMES-001 (P1): the C# snapshot frame was missing two wire
+  fields, and its corpus copy hid that.** `SnapshotFrame` had no `bytes_read`
+  or `chunks_read` — neither string occurred anywhere in the C# tree — so the
+  port could not carry either ingest counter in or out. Its committed copy of
+  `python_golden.json` was missing exactly those two fields, so the corpus was
+  asserting the gap was correct. Both fields added to the frame and to the
+  mapper's encode and decode paths (omitted when null, as Go's `omitzero` does
+  and as the reference's "a worker predating them omits both" intends), and the
+  copy is byte-identical with Go's again.
+
+  The same copy had also dropped `mcp_supported`/`vnc_supported`. That one is
+  *not* a gap: `spec/behavior.json` `hello_defaults.csharp` deliberately sets
+  `mcp_supported: false` because MCP is de-scoped from the port. Deleting the
+  keys was the wrong way to say so, because it silently took the snapshot
+  counters with it. The divergence is now declared in the golden test and fails
+  if it ever stops being true.
+- [x] **CSHARP-GOLDEN-002 (P2): C#'s committed fixtures were outside every
+  drift check.** Two independent holes, both closed. All six of C#'s Go-twinned
+  corpora (plus the four-way `behavior_vectors.json` group) are now in
+  `TWINNED_FIXTURES` in `scripts/check_protocol_drift.py`, where only
+  `ctrlmsg/signature_corpus.json` had been; A/B'd by restoring the pre-fix
+  copy, which the gate now rejects. And `.ci/check_goldens.sh` no longer stops
+  at `-maxdepth 1`, so the five C# corpora that live in per-subject
+  subdirectories are visible to it at all.
+
+  Widening that find required pruning `bin/` and `obj/` in the same change: the
+  C# test project copies its whole testdata tree next to the built assembly, so
+  ten more "corpora" appear under `bin/Debug` and `bin/Release` after a build —
+  paths that are not in the repository, which is the exact failure mode the
+  script's prune list already existed for. The no-generator note also now
+  separates copies (held to their source by the drift gate) from corpora that
+  genuinely nothing can re-derive, because calling a copy "cannot be
+  drift-checked" invites someone to write a generator for a file whose only job
+  is to equal another file.
+
+  No generator was hidden by the old depth limit — 161 at depth 1, 161 at any
+  depth — so that half is a trap disarmed rather than a bug fixed.
+- [ ] **CSHARP-GOLDEN-003 (P2): 104 shared corpora have a C# counterpart and
+  none were consumed before this pass.** Highest value first: `pyjson`
+  (`CanonicalJson` must match `json.dumps(sort_keys=True,
+  separators=(",",":"))` byte for byte or every identity HMAC diverges),
+  `serverauthz`, `egress`, `pattern_safety`, `hub_lease`, `managerprocess`,
+  `serverauth`, `tunnelinvites`+`tokenhash`, `controlplane`.
+- [ ] **CSHARP-RFB-001 (P2): endpoint parsing diverges from the corpus in 27
+  cases.** `GraphicalTargetParsing` keeps the brackets on an IPv6 host
+  (`"[2001:db8::1]"` rather than `"2001:db8::1"` — and that string is what a
+  connection dials), reports the wrong message for a malformed port because
+  `Uri.TryCreate` rejects before any port is examined, and disagrees on
+  IPvFuture, zone ids and bracketed credentials.
+- [ ] **CSHARP-SECHEADERS-001 (P2): no security response-header resolver.**
+  `securityheaders_golden.json` has no C# counterpart and the tree has no hits
+  for CSP, HSTS or `X-Content-Type-Options`.
+- [ ] **CSHARP-XUNIT-001 (P2): 28 baselined xUnit analyzer warnings.** They
+  were invisible until `ci/warning_gate.py`'s code pattern was widened to
+  accept a lower-case analyzer prefix; the gate had been reporting
+  "0 warning(s)" over a build that had 28. Now baselined per file, so the
+  backlog can shrink but not grow. Mostly `xUnit1031` (blocking task operations
+  in a test method), fixed by making each call site async.
+- [x] **CSHARP-APPROVAL-002 (P1): the C# approvals subsystem was unreachable
+  from production traffic.** C# had no policy gate on the browser input path,
+  so nothing but a test ever created an approval request, and `HandleApprove`
+  had no `ResolveApproval` equivalent — it claimed the request and returned 200
+  without injecting the held command, so it could never answer the 409 Python
+  and Go return on refused delivery. The store fix made it correct; it did not
+  make the feature real.
+
+  Go's hold path is now ported: `IInputPolicyGate` with a no-op default (so an
+  ungated deployment is byte-for-byte unchanged), parked browsers with bounded
+  hold buffers, ownership re-validation on park, the `approval_pending`
+  broadcast, one-shot revision claim, buffer replay on approve and discard on
+  reject, and the refusal case where the owner loses the lease between decision
+  and injection — `outcome: "refused"` and REST 409, which C# previously could
+  not produce at all. The three frame types C# had defined and never sent are
+  now sent.
+
+  Non-vacuity: reverting only the input seam turns 7 of 10 integration tests
+  red. The 3 that stay green are the no-gate default and the two sweep tests,
+  which drive the hub directly.
+- [x] **CSHARP-APPROVAL-003 (P2): no approval sweep.** A 30-second
+  `CleanupExpired` sweep now runs with the server, and `OnExpired` releases the
+  parked browser rather than leaving it held with its input buffered.
+
+Closed in this pass, kept here only as pointers to where the answer landed:
+
+- [x] **DOC-TUNNEL-001 (P2)** — both documents were true about different
+  things. Cloudflare *does* mount `/tunnel/{worker_id}`; what it lacks is the
+  mux. `docs/security-language-parity.md`'s flat denial was the wrong half, and
+  row 11 of `docs/cloudflare-divergence-matrix.md` overstated it in the other
+  direction. The `unserved` label on the fragmentation row stands.
+- [x] **DOC-COUNT-001 (P3)** — 28 is the real count and the README already
+  enforced it; two independent off-by-ones elsewhere, one of them a doc
+  miscounting its own sub-list rather than a TS-only extra tool.
+- [x] **DOC-FANOUT-001 (P3)** — neither `unserved` nor `N/A`: the REST routes
+  are mounted and the browser socket has no `fanout_send` case at all, so the
+  honest label is the words `N — not implemented (REST only)`.
 
 ## Execution roles and cadence
 
