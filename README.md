@@ -297,6 +297,14 @@ pip install 'provide-uterm-client[all]'    # client + MCP tools
 
 ## Deployment
 
+**Served server backends** — Python (FastAPI), Go, C#, and Cloudflare
+Workers/Durable Objects. The TypeScript package `provide-uterm-ts` is a
+**partial** runtime port: its libraries are complete and differentially tested,
+but its Node server mounts only part of the shared HTTP contract, so it is not
+a served backend. `served`, `unserved`, `unsupported`, `partial`, and `N/A`
+mean one thing each across every parity table — see
+[Parity Labels](https://github.com/provide-io/provide-uterm/blob/main/docs/parity-labels.md).
+
 ```mermaid
 graph LR
     subgraph "Self-Hosted"
@@ -391,6 +399,8 @@ CI execution:
 
 - [HTTP Inspection & Interception](https://github.com/provide-io/provide-uterm/blob/main/docs/inspect.md)
 - [Protocol Matrix](https://github.com/provide-io/provide-uterm/blob/main/docs/protocol-matrix.md) — backend capability contract
+- [Parity Labels](https://github.com/provide-io/provide-uterm/blob/main/docs/parity-labels.md) — what `served` / `unserved` / `unsupported` / `partial` / `N/A` mean
+- [Security Language Parity](https://github.com/provide-io/provide-uterm/blob/main/docs/security-language-parity.md) — per-language security scope
 - [Testing Guide](https://github.com/provide-io/provide-uterm/blob/main/docs/TESTING.md)
 - [Operations Runbook](https://github.com/provide-io/provide-uterm/blob/main/docs/operations/runbook.md)
 - [Service SLOs](https://github.com/provide-io/provide-uterm/blob/main/docs/operations/slo.md)

@@ -15,6 +15,10 @@ Python remains the behavioral oracle. Wire formats and observable text
 transforms are proven with differential corpora (same goldens as Go under
 `tests/Provide.Uterm.Tests/testdata/`).
 
+C# is one of the four served server backends (Python, Go, C#, Cloudflare).
+Parity-label definitions — `served`, `unserved`, `unsupported`, `partial`,
+`N/A` — are in [`docs/parity-labels.md`](../../docs/parity-labels.md).
+
 | Area | Parity evidence |
 |---|---|
 | `ControlChannel` | DLE/STX encode/decode, DLE escaping, incremental feed |

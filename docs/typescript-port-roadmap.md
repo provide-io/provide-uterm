@@ -5,9 +5,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 # TypeScript port roadmap
 
-Tracks `packages/provide-uterm-ts`, a high-coverage partial runtime port of the
-platform, towards feature parity with the Python reference and the Go and C#
-ports. A completed library is not automatically an integrated server surface.
+Tracks `packages/provide-uterm-ts`, a high-coverage `partial` runtime port of
+the platform, towards feature parity with the Python reference and the Go and
+C# ports. A completed library is not automatically an integrated server
+surface, and this port is **not** one of the served server backends — those are
+Python (FastAPI), Go, C#, and Cloudflare.
+
+**Label vocabulary** — `served`, `unserved`, `unsupported`, `partial`, `N/A`
+are defined once in [`docs/parity-labels.md`](./parity-labels.md).
 
 Last updated: 2026-07-31.
 
@@ -409,8 +414,8 @@ learn about a fourth implementation:
 |---|---|---|
 | `spec/behavior_vectors.json` | `policy_cases` consumed directly by the TS suite | **done** |
 | `spec/behavior.json` | add a `typescript` entry to `hello_defaults` | todo — waits on the TS server, which has to *have* the capabilities before it can claim them |
-| `docs/security-language-parity.md` | add a TypeScript column | todo |
-| `docs/protocol-matrix.md` | add a TypeScript column | todo |
+| `docs/security-language-parity.md` | add a TypeScript column | **partial** — the fan-out and session-lifecycle tables carry one; the top security-controls table does not, because every cell would read `unserved` |
+| `docs/protocol-matrix.md` | add a TypeScript column | **partial** — the fan-out table carries one and there is a TypeScript runtime-status section; the hijack/resume/tunnel/health tables stay two-column until the Node server serves those surfaces |
 | `conformance/live` | run the live scenarios against the TS server | **partial** — TypeScript is registered in both roles and its client drives complete backends. Its server announces no named hijack capability, so capability-gated hijack scenarios are skipped rather than evidence of full backend parity; complete server cells wait on the WebSocket and lifecycle prerequisites above |
 | `scripts/check_max_loc.py` | 777-line cap covers `.ts` | **done** |
 | `ci/quality_checks.sh` | golden-corpus drift gate | **done** |
