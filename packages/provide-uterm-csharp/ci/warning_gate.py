@@ -38,8 +38,15 @@ from pathlib import Path
 # MSBuild normal verbosity: "<path>(line,col): warning CS0649: <text> [<proj>]".
 # The project suffix is dropped: the same warning is reported once per project
 # that references the assembly, and the location is what identifies it.
+#
+# The code is [A-Za-z]+[0-9]+, not [A-Z]+[0-9]+. Roslyn analyzer packages do not
+# all use an upper-case prefix: xUnit's are `xUnit1031`, `xUnit2012`. The
+# upper-case-only form this started with matched every compiler diagnostic and
+# silently skipped all 28 xUnit warnings in the test project, so the gate
+# reported "0 warning(s)" over a build that had plenty -- a gate that cannot see
+# a warning class is worse than no gate, because it is quoted as evidence.
 WARNING_RE = re.compile(
-    r"(?P<file>[^\s>]+\.cs)\((?P<line>\d+),(?P<col>\d+)\): warning (?P<code>[A-Z]+\d+): (?P<text>.*?)(?: \[[^\]]*\])?$"
+    r"(?P<file>[^\s>]+\.cs)\((?P<line>\d+),(?P<col>\d+)\): warning (?P<code>[A-Za-z]+[0-9]+): (?P<text>.*?)(?: \[[^\]]*\])?$"
 )
 
 DEFAULT_BASELINE = Path(__file__).resolve().parent / "warning-baseline.json"
