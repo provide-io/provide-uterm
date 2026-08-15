@@ -29,7 +29,10 @@ public static class ConfigLoader
         }
 
         var text = File.ReadAllText(path);
-        var model = TomlSerializer.Deserialize<TomlTable>(text);
+        // Tomlyn's Deserialize is typed as nullable. An empty file deserializes
+        // to an empty table rather than null, so the fallback is equivalent to
+        // "no keys set" and leaves every default in place.
+        var model = TomlSerializer.Deserialize<TomlTable>(text) ?? new TomlTable();
         ApplyToml(cfg, model);
         cfg.Server.DerivePublicBaseUrl();
         return cfg;

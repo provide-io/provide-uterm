@@ -1,0 +1,15 @@
+{
+  "_comment": [
+    "Deferred C# build warnings, keyed on (code, package-relative file).",
+    "An entry is a deferral with a written reason, not an exemption: the gate",
+    "fails on any warning that is not listed AND on any listed warning that no",
+    "longer fires, so this file cannot silently rot.",
+    "",
+    "It is empty, and that is the target state. Fix the warning; add an entry",
+    "only when the fix genuinely belongs to someone else (an SDK/analyzer",
+    "regression, or a dependency's generated source).",
+    "",
+    "Enforced by ci/warning_gate.py, run from the `build` Makefile target."
+  ],
+  "allowed": []
+}
