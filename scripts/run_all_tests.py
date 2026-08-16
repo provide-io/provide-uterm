@@ -13,9 +13,17 @@ remaining Python package suites. It then runs npm workspace typechecks/tests
 for ``provide-uterm-frontend`` and ``provide-uterm-app`` so contributors have
 one command that approximates CI scope across languages.
 
-Exits non-zero on the first package whose tests fail, surfacing the raw pytest
-output for that package. Pass through any extra args to every pytest invocation
-(for example ``--no-cov -k name``).
+Every leg runs, whatever the ones before it did, and a summary at the end names
+each leg's verdict. Stopping at the first failure meant one broken package hid
+every suite after it -- which is not a hypothetical: the last leg had never
+executed at all, and two real defects sat behind earlier failures. Exits
+non-zero if any leg failed, surfacing the raw output for each.
+
+Pass ``--fail-fast`` to stop at the first failure instead, for iterating on a
+single package without paying for the whole sweep; the summary then reports how
+many legs went unrun, so a short run is never mistaken for a clean one. Any
+other extra args pass through to every pytest invocation (for example
+``--no-cov -k name``).
 """
 
 from __future__ import annotations
@@ -44,8 +52,9 @@ _PYTEST_SUITES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
     # `uterm server` binary, so CI gives it a job of its own where the Go
     # toolchain is set up; running it here made a clean local tree look broken —
     # an untracked `go.work` naming an absent sibling module fails `go build`
-    # before the test can start, and the runner stops at the first failure, so
-    # every suite after this one silently never ran.
+    # before the test can start. That used to take every later suite down with
+    # it; legs are independent now, but the exclusion still belongs here,
+    # because a local failure this runner cannot act on is just noise.
     ("provide-uterm-client", (), ("packages/provide-uterm-client/tests/", "-m", "not go_interop")),
     (
         "provide-uterm-platform/manager",
@@ -74,41 +83,86 @@ _PYTEST_SUITES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
         (),
         ("tests/conformance/", "-o", "addopts=--import-mode=importlib"),
     ),
+    # Tests for the repo's own tooling. tests/scripts/ is outside the root
+    # testpaths and was named by no gate at all, so the suite in it had never
+    # run anywhere — the same way tests/conformance/ went unenforced in CI.
+    (
+        "scripts (repo tooling)",
+        (),
+        ("tests/scripts/", "-o", "addopts=--import-mode=importlib"),
+    ),
 )
+
+
+_NPM_SUITES: tuple[tuple[str, str], ...] = (
+    ("provide-uterm-frontend typecheck", "npm run typecheck:frontend"),
+    ("provide-uterm-app typecheck", "npm run typecheck:app"),
+    ("provide-uterm-frontend tests", "npm test --workspace=packages/provide-uterm-frontend"),
+    ("provide-uterm-app tests", "npm test --workspace=packages/provide-uterm-app"),
+    ("browser consumer contract", "npm run test:browser-consumer"),
+)
+
+_FAIL_FAST = "--fail-fast"
+
+
+def _finished(label: str, rc: int) -> int:
+    """Announce a leg's exit code next to its own output, and return it."""
+    if rc != 0:
+        print(f"FAILED: {label} (exit {rc})", file=sys.stderr)
+    return rc
 
 
 def _run(label: str, uv_args: tuple[str, ...], pytest_args: tuple[str, ...], passthrough: list[str]) -> int:
     print(f"\n=== {label} ===", flush=True)
     cmd = ["uv", "run", *uv_args, "pytest", "-q", *pytest_args, *passthrough]
-    return subprocess.call(cmd, cwd=str(_REPO_ROOT))
+    return _finished(label, subprocess.call(cmd, cwd=str(_REPO_ROOT)))
 
 
 def _run_npm(label: str, command: str) -> int:
     print(f"\n=== {label} ===", flush=True)
     cmd = shlex.split(command)
-    return subprocess.call(cmd, cwd=str(_REPO_ROOT))
+    return _finished(label, subprocess.call(cmd, cwd=str(_REPO_ROOT)))
+
+
+def _summarize(results: list[tuple[str, int]], total: int) -> int:
+    """Print every leg's verdict and return the process exit code.
+
+    A leg that never ran is listed too. Without that line a --fail-fast run
+    looks exactly like a full one in the scrollback, which is how the last leg
+    went unnoticed for so long.
+    """
+    print("\n=== summary ===", flush=True)
+    for label, rc in results:
+        print(f"  {'PASS' if rc == 0 else 'FAIL':<7} {label}" + ("" if rc == 0 else f" (exit {rc})"))
+    unrun = total - len(results)
+    if unrun:
+        print(f"  {'NOT RUN':<7} {unrun} leg(s), stopped early by {_FAIL_FAST}")
+    failed = [label for label, rc in results if rc != 0]
+    if failed or unrun:
+        print(f"\n{len(failed)} of {total} leg(s) FAILED: {', '.join(failed)}", file=sys.stderr)
+        return 1
+    print("\nAll package test suites passed.")
+    return 0
 
 
 def main() -> int:
-    passthrough = sys.argv[1:]
+    argv = sys.argv[1:]
+    fail_fast = _FAIL_FAST in argv
+    passthrough = [arg for arg in argv if arg != _FAIL_FAST]
+    total = len(_PYTEST_SUITES) + len(_NPM_SUITES)
+    results: list[tuple[str, int]] = []
+
     for label, uv_args, pytest_args in _PYTEST_SUITES:
-        rc = _run(label, uv_args, pytest_args, passthrough)
-        if rc != 0:
-            print(f"FAILED: {label} (exit {rc})", file=sys.stderr)
-            return rc
-    for label, command in (
-        ("provide-uterm-frontend typecheck", "npm run typecheck:frontend"),
-        ("provide-uterm-app typecheck", "npm run typecheck:app"),
-        ("provide-uterm-frontend tests", "npm test --workspace=packages/provide-uterm-frontend"),
-        ("provide-uterm-app tests", "npm test --workspace=packages/provide-uterm-app"),
-        ("browser consumer contract", "npm run test:browser-consumer"),
-    ):
-        rc = _run_npm(label, command)
-        if rc != 0:
-            print(f"FAILED: {label} (exit {rc})", file=sys.stderr)
-            return rc
-    print("\nAll package test suites passed.")
-    return 0
+        results.append((label, _run(label, uv_args, pytest_args, passthrough)))
+        if fail_fast and results[-1][1] != 0:
+            return _summarize(results, total)
+
+    for label, command in _NPM_SUITES:
+        results.append((label, _run_npm(label, command)))
+        if fail_fast and results[-1][1] != 0:
+            return _summarize(results, total)
+
+    return _summarize(results, total)
 
 
 if __name__ == "__main__":
