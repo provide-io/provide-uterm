@@ -27,8 +27,12 @@ class TestLogicalFrameDecoderFinish:
     def test_finish_with_data_chunk(self) -> None:
         """Covers lines 43-49: finish() loop with DataChunk event."""
         decoder = LogicalFrameDecoder(role="browser")
-        # Feed partial data so finish flushes it
-        decoder._decoder._buffer = "hello"
+        # Seed the byte buffer the decoder actually drains. This used to assign
+        # `_buffer`, the string buffer the decoder carried before it became
+        # byte-based; nothing has read that attribute since, so finish() saw an
+        # empty decoder, took the "truncated control frame" path, and these
+        # three tests have been failing rather than covering finish().
+        decoder._decoder._buffer_bytes.extend(b"hello")
         result = decoder.finish()
         # "hello" is plain data → DataChunk → mapped to term frame
         assert result == [{"type": "term", "data": "hello"}]
@@ -38,14 +42,14 @@ class TestLogicalFrameDecoderFinish:
         decoder = LogicalFrameDecoder(role="worker")
         # Put a complete control frame into the buffer
         encoded = encode_control_frame({"type": "done"})
-        decoder._decoder._buffer = encoded
+        decoder._decoder._buffer_bytes.extend(encoded.encode("utf-8"))
         result = decoder.finish()
         assert result == [{"type": "done"}]
 
     def test_finish_with_data_chunk_worker_role(self) -> None:
         """Covers line 48-49: DataChunk mapped to input for worker role."""
         decoder = LogicalFrameDecoder(role="worker")
-        decoder._decoder._buffer = "keystrokes"
+        decoder._decoder._buffer_bytes.extend(b"keystrokes")
         result = decoder.finish()
         assert result == [{"type": "input", "data": "keystrokes"}]
 
