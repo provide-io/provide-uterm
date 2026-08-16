@@ -57,7 +57,13 @@ def test_a_library_older_than_its_sources_names_them(built, monkeypatch, caplog)
 
     assert "capture_library_is_stale" in caplog.text
     assert "capture.c" in caplog.text
-    assert "make" in caplog.text
+    # The remedy must survive telemetry's secret scanner, which redacts a whole
+    # field value when part of it looks like a credential. tmp_path makes this
+    # the realistic case rather than a contrived one: macOS $TMPDIR contains a
+    # high-entropy segment, so interpolating the directory into this string
+    # turned the entire instruction into "***" and the warning stopped saying
+    # what to run. Asserting the command itself is what keeps them separate.
+    assert "make install" in caplog.text
 
 
 def test_an_installed_package_has_no_sources_to_be_behind(built, monkeypatch, caplog) -> None:
