@@ -187,35 +187,22 @@ reason = "Same as _rollback_browser_quota__mutmut_17 but in _update_lock_state's
 # Re-enabled at killed==100 via a fully network-mocked kill suite
 # (test_webhooks_mutation_killing.py): the real socket.getaddrinfo / httpx are
 # never driven in a mutmut-forked child, which removes the 307/406-mutant
-# segfault that deferred this file. Six residual equivalents:
+# segfault that deferred this file.
 #
-# (a) Four trampoline-masked default-arg mutations (the documented auth.py class):
-# the generated dispatcher keeps the ORIGINAL `allow_loopback_destinations=False`
-# signature, binds it, and forwards it EXPLICITLY to the variant, so the variant's
-# mutated `=True` default is dead code no caller reaches. (The real False default IS
-# regression-tested — e.g. localhost denied by default / _address_allowed("127.0.0.1")
-# is False.)
-[[equivalent]]
-mutant = "provide.uterm.server.webhooks.x_validate_webhook_url__mutmut_1"
-reason = "Trampoline-masked default-arg mutation allow_loopback_destinations=False->True; the dispatcher forwards the bound False default, so the variant default is never reached. Real default tested (localhost denied by default)."
-[[equivalent]]
-mutant = "provide.uterm.server.webhooks.xǁWebhookManagerǁ__init____mutmut_1"
-reason = "Trampoline-masked default-arg mutation allow_loopback_destinations=False->True in WebhookManager.__init__; dispatcher forwards the bound False. Real default tested (WebhookManager()._allow_loopback_destinations is False)."
-[[equivalent]]
-mutant = "provide.uterm.server.webhooks.x__delivery_url_allowed__mutmut_1"
-reason = "Trampoline-masked default-arg mutation allow_loopback_destinations=False->True in _delivery_url_allowed; dispatcher forwards the bound False. Real default tested (loopback denied without the flag)."
-[[equivalent]]
-mutant = "provide.uterm.server.webhooks.x__address_allowed__mutmut_1"
-reason = "Trampoline-masked default-arg mutation allow_loopback_destinations=False->True in _address_allowed; dispatcher forwards the bound False. Real default tested (_address_allowed('127.0.0.1') is False)."
-# (b) rstrip char-set mutation on an ALWAYS-lowercase value:
+# Four trampoline-masked `allow_loopback_destinations=False -> True` default-arg
+# entries used to live here and were removed on 2026-08-15: an audit replayed
+# every allowlisted id through `mutmut show` and found all four in state KILLED.
+# An equivalent mutant cannot be killed, so whatever masked them no longer does,
+# and the tests that pin the real default (localhost denied by default,
+# _address_allowed("127.0.0.1") is False) now reach the mutated signature. They
+# needed no excuse; carrying one only claimed an SSRF-relevant default was
+# unobservable when it demonstrably is not. If any resurfaces, the gate goes red
+# and it gets re-argued from fresh evidence rather than from this note.
+#
+# rstrip char-set mutation on an ALWAYS-lowercase value:
 [[equivalent]]
 mutant = "provide.uterm.server.webhooks.x_validate_webhook_url__mutmut_25"
 reason = "parsed.hostname.rstrip('.') -> rstrip('XX.XX'). urlparse always lowercases the hostname, so the extra uppercase 'X' chars in the mutated strip-set never match; both strip only trailing '.' — byte-identical result. Equivalent."
-# (c) dead OR-operand: an IP is never link-local-without-being-private:
-[[equivalent]]
-mutant = "provide.uterm.server.webhooks.x__address_allowed__mutmut_10"
-reason = "(is_loopback or is_link_local) -> (is_loopback and is_link_local) in the deny chain. is_loopback is always False here (the earlier `if ip.is_loopback: return` short-circuits), and EVERY link-local address also satisfies is_private (the first operand) — verified no ip has is_link_local and not is_private — so the mutated sub-expression can never change the chain's result. Equivalent."
-
 [[equivalent]]
 mutant = "provide.uterm.server.config_schema.x__require_secure_url__mutmut_14"
 reason = """\
@@ -431,41 +418,19 @@ mutant = "provide.uterm.server.routes.pages.x__is_secure_request__mutmut_10"
 reason = "forwarded_proto default mutation: the default is read only when the x-forwarded-proto header is absent, and its sole consumer (a substring-of-https test) treats empty / str-of-None / xxxx identically -- all fall through to the url.scheme check. Equivalent."
 
 # ---------------------------------------------------------------------------
-# manager/process_impl.py (AgentProcessManager) — 28 documented equivalents.
+# manager/process_impl.py (AgentProcessManager) — 12 documented equivalents.
+# Was 24 until 2026-08-15, when an audit replayed every allowlisted id through
+# `mutmut show` and found twelve in state KILLED: the __init__ log_dir default
+# and the spawn_swarm / start_spawn_swarm group_size, group_delay,
+# cancel_existing, name_style and name_base defaults. All twelve were
+# default-argument mutations excused as trampoline-masked; the suites now assert
+# those defaults and reach them, so an "equivalent" claim no longer holds.
 # Residual after the test_process_*.py + test_coverage_*.py suites + the dedicated
 # test_process_kill_part0*.py kill-suite (each <500 LOC). All NON-equivalent mutants
 # are killed (664/664). On CI exactly one of these equivalents may surface as a
 # wall-clock `timeout` rather than `survived` (excused either way — see the header
 # note above). See pyproject [tool.mutmut] note.
 # ---------------------------------------------------------------------------
-
-[[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁ__init____mutmut_1"
-reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
-
-[[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁstart_spawn_swarm__mutmut_1"
-reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
-
-[[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁstart_spawn_swarm__mutmut_2"
-reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
-
-[[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁstart_spawn_swarm__mutmut_3"
-reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
-
-[[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁstart_spawn_swarm__mutmut_4"
-reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
-
-[[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁstart_spawn_swarm__mutmut_5"
-reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
-
-[[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁstart_spawn_swarm__mutmut_6"
-reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
 
 [[equivalent]]
 mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁ_load_worker_type__mutmut_12"
@@ -510,26 +475,6 @@ reason = "contextlib.suppress(OSError, ProcessLookupError) -> (OSError,): Proces
 [[equivalent]]
 mutant = "provide.uterm.manager.process_impl_spawn.x__stop_process_tree__mutmut_71"
 reason = "contextlib.suppress(TimeoutError, OSError, RuntimeError) -> (OSError, RuntimeError): TimeoutError is a subclass of OSError (Python 3.10+), so it is still suppressed by OSError — behaviorally identical."
-
-[[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁspawn_swarm__mutmut_1"
-reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
-
-[[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁspawn_swarm__mutmut_2"
-reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
-
-[[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁspawn_swarm__mutmut_3"
-reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
-
-[[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁspawn_swarm__mutmut_4"
-reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
-
-[[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁspawn_swarm__mutmut_5"
-reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
 
 [[equivalent]]
 mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁkill_agent__mutmut_14"
@@ -623,12 +568,10 @@ reason = "action validation tuple 'forward'->'FORWARD'; redundant with the reset
 mutant = "provide.uterm.deckmux._service.xǁDeckMuxPresenceǁhandle_message__mutmut_40"
 reason = "except-ValueError fallback user = None -> ''; user is only consumed by the immediately-following `if user:` truthiness guard, and both None and '' are falsy → the broadcast is skipped identically — unobservable."
 # --- detection/engine.py (full-perimeter survivors) ---
-[[equivalent]]
-mutant = "provide.uterm.detection.engine.xǁDetectionEngineǁ__init____mutmut_1"
-reason = "Trampoline-masked default-arg DetectionEngine(buffer_size=50->51); mutmut's dispatcher forwards the bound 50 to the variant, so the mutated default is never reached. Real default tested (the existing __init__ default-value test)."
-[[equivalent]]
-mutant = "provide.uterm.detection.engine.xǁDetectionEngineǁ__init____mutmut_2"
-reason = "Trampoline-masked default-arg DetectionEngine(idle_threshold_s=2.0->3.0); dispatcher forwards the bound 2.0. Real default tested."
+# Two DetectionEngine.__init__ default-value entries (buffer_size=50->51,
+# idle_threshold_s=2.0->3.0) were removed here on 2026-08-15: both were found
+# in state KILLED by the allowlist audit, so the constructor defaults are now
+# asserted and need no excuse.
 [[equivalent]]
 mutant = "provide.uterm.detection.engine.xǁDetectionEngineǁ_sync_process_screen__mutmut_19"
 reason = "snapshot.get('screen', ''->None) default; the default is dead — extract_kv is only reached after a prompt matched, which required snapshot['screen'] to be present, so .get('screen', X) always returns the screen and never the default. Unobservable."
@@ -716,6 +659,11 @@ reason = """\
 errors=\"strict\" -> \"STRICT\". Error handler names are case-normalized / latin-1 never errors. \
 """
 
+# Dead OR-operand: an IP is never link-local-without-being-private. This label
+# sat on __mutmut_10 until the 2026-08-15 audit, which found _10 KILLED and its
+# written reason describing the operand pair that _12 now carries -- the chain
+# renumbered under the entry. _12 was re-verified against `mutmut show` and does
+# match this description.
 [[equivalent]]
 mutant = "provide.uterm.server.webhooks.x__address_allowed__mutmut_12"
 reason = """\
