@@ -250,9 +250,9 @@ class ControlFrameDecoder:
         try:
             events = self._drain(final=True)
             if self._buffer or self._buffer_bytes:
-                self._buffer = ""
-                self._buffer_parts = []
-                self._buffer_bytes = bytearray()
+                # No reset here: raising lands in the handler below, which
+                # performs the identical three assignments. Doing them twice
+                # left four mutants alive on statements nothing could observe.
                 raise self._report_error("truncated control frame")
         except ControlFrameProtocolError:
             self._buffer = ""

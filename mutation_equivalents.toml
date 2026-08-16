@@ -1032,3 +1032,74 @@ reason = "create_profile model_dump mode padded -- same, no field distinguishes 
 [[equivalent]]
 mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_184"
 reason = "create_profile model_dump mode uppercased -- same, no field distinguishes the modes."
+
+# ---------------------------------------------------------------------------
+# control_channel.py -- ControlFrameDecoder. This leg was the only red one of
+# the thirty-seven in the 2026-08-15 full-perimeter sweep (89.94%). Fifteen
+# mutants were killed by test_control_channel_decoder_kill.py and four more
+# were removed at the root by deleting a redundant reset block in finish().
+# The fifteen below are what remains, in three groups.
+#
+# 1. Codec-name case. Python's codec registry normalises lookups:
+#    codecs.lookup("UTF-8") is codecs.lookup("utf-8"), likewise ASCII/ascii.
+#    Every one of these decodes byte-identically; there is no input that can
+#    distinguish them.
+[[equivalent]]
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_coerce_input__mutmut_7"
+reason = 'chunk.encode("UTF-8") -- codec lookup is case-insensitive, identical encoder.'
+[[equivalent]]
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_decode_data_parts__mutmut_9"
+reason = 'single memoryview part decoded as "UTF-8" -- same codec as "utf-8".'
+[[equivalent]]
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_decode_data_parts__mutmut_12"
+reason = 'single bytes part decoded as "UTF-8" -- same codec as "utf-8".'
+[[equivalent]]
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_decode_data_parts__mutmut_17"
+reason = 'merged parts decoded as "UTF-8" -- same codec as "utf-8".'
+[[equivalent]]
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_drain__mutmut_88"
+reason = 'residual buffer decoded as "UTF-8" -- same codec as "utf-8".'
+[[equivalent]]
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_payload_end_for_utf8_length__mutmut_9"
+reason = 'payload decoded as "UTF-8" -- same codec, so the same UnicodeDecodeError on a split code point.'
+[[equivalent]]
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_try_parse_frame__mutmut_31"
+reason = 'length header decoded as "ASCII" -- same codec as "ascii".'
+
+# 2. Non-terminating. Each of these freezes or reverses the scan index, so
+#    _drain's `while idx < buf_len` never completes. They cannot be killed by
+#    an assertion because no assertion is ever reached; mutmut reports them as
+#    survived or timeout depending on scheduling, which is why they appear in
+#    both columns across runs. Confirmed by hand: replaying the decoder kill
+#    suite against mutmut_13's offset hangs until killed.
+[[equivalent]]
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_drain__mutmut_13"
+reason = "idx += 1 -> idx = 1 in the plain-data scan: the index stops advancing and the drain loop never exits."
+[[equivalent]]
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_drain__mutmut_34"
+reason = "idx += 2 -> idx -= 2 on the escaped-DLE branch: the index walks backwards and the drain loop never exits."
+[[equivalent]]
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_payload_end_for_utf8_length__mutmut_13"
+reason = "start + payload_bytes -> start - payload_bytes: the resume offset goes negative and the drain loop never exits."
+
+# 3. Verified equivalent by differential replay, not by argument. Each was run
+#    against all 192 decode cases in conformance/fuzz/control_channel_fuzz.json
+#    comparing emitted events, error text AND the on_error callback sequence;
+#    all 192 matched the pristine decoder. The same harness reports DIFFERS on
+#    19 and 33 cases for two deliberately-killable control mutations, so the
+#    verdicts are not an artefact of a harness that sees nothing.
+[[equivalent]]
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁfeed__mutmut_12"
+reason = "_drain(final=False) -> final=None: `final` is only ever read for truthiness, and None is falsy."
+[[equivalent]]
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁfinish__mutmut_2"
+reason = "_drain(final=True) -> final=None: an incomplete frame always leaves bytes buffered, so finish's own leftover check raises the same truncated-frame error with the same single on_error call."
+[[equivalent]]
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁfinish__mutmut_3"
+reason = "_drain(final=True) -> final=False: same as above -- the raise merely moves from _drain to finish's leftover check, with identical message and callbacks."
+[[equivalent]]
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_drain__mutmut_28"
+reason = "data_start < idx -> <= on the escaped-DLE branch: when equal it appends a zero-length slice, which contributes nothing to the merged decode."
+[[equivalent]]
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_drain__mutmut_57"
+reason = "_try_parse_frame(final=final) -> final=None: identical to the finish() cases -- the truncated-frame raise relocates to finish's leftover check."
