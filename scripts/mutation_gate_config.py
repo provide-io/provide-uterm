@@ -143,6 +143,45 @@ BRIDGE_HUB_MUTATION_TESTS: Final[tuple[str, ...]] = (
 )
 
 
+# Perimeter files that legitimately generate ZERO mutants, and why.
+#
+# A `--paths` run over a file with no mutable surface exits 0 with score 0.00.
+# That is correct for a re-export shim, but it means a perimeter entry can sit
+# in source_paths enforcing nothing while its leg reports success -- the file
+# reads as covered by the strongest gate in the repo when it is covered by
+# none of it. Blanket-accepting every empty target hides that; requiring the
+# file to be named here turns a silent hole into a stated decision.
+#
+# The gate FAILS on an undeclared zero-mutant target. If a file lands here,
+# check first whether it just became invisible: mutmut skips any decorated
+# CLASS outright (mutation/file_mutation.py -- "if isinstance(node,
+# cst.ClassDef) and len(node.decorators): return True"), so putting
+# @dataclass on a class removes every one of its methods from the gate
+# without changing a line of their logic.
+KNOWN_ZERO_MUTANT_PATHS: Final[dict[str, str]] = {
+    "src/provide/uterm/server/app/factory.py": "11-line re-export shim; no statements to mutate.",
+    "src/provide/uterm/server/bridge/hub/router.py": "11-line re-export shim; no statements to mutate.",
+    "src/provide/uterm/bridge/schemas.py": (
+        "35 Pydantic model declarations and no function bodies -- the same 0-mutant shape as "
+        "manager/config.py. Wire-format drift is caught by codegen_frames.py --check instead."
+    ),
+    "src/provide/uterm/control_channel_patterns.py": (
+        "Both classes are @dataclass, and mutmut skips decorated classes entirely, so all seven "
+        "methods are invisible to it -- including LinkPattern.__post_init__, which is the check "
+        "that stops a link pattern declaring an action outside _VALID_ACTIONS. NOT equivalent to "
+        "being safe: that logic is enforced by test_control_channel_patterns.py alone, with no "
+        "mutation backstop. Kept in the perimeter deliberately so this entry has to be read."
+    ),
+}
+
+
+def undeclared_zero_mutant_paths(source_paths: list[str] | None) -> list[str]:
+    """Return targets that produced no mutants without being declared above."""
+    if not source_paths:
+        return []
+    return [path for path in source_paths if path not in KNOWN_ZERO_MUTANT_PATHS]
+
+
 def uv_mutmut_cmd(python_version: str | None, *args: str) -> list[str]:
     base = ["uv", "run"]
     if python_version:
