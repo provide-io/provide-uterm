@@ -269,7 +269,11 @@ def test_adapter_timeout_is_a_hard_failure_without_partial_observations(
         timeout_s=1,
     )
 
-    assert errors == ["python: native command timed out after 1s"]
+    # The partial output is the point: a timeout that reports only its own
+    # deadline gives nobody anything to debug with.
+    assert len(errors) == 1
+    assert errors[0].startswith("python: native command timed out after 1s. Ran ")
+    assert 'Partial output — stdout: [{"id":"partial"}]; stderr: still running' in errors[0]
     assert observations == []
 
 
@@ -286,7 +290,35 @@ def test_adapter_timeout_defaults_to_120_seconds(monkeypatch: pytest.MonkeyPatch
 
     errors, observations = runner.collect_backend_observations(REPO_ROOT, contract_path, "python")
 
-    assert errors == ["python: native command timed out after 120s"]
+    # Silence before the kill is reported as silence, not as an empty tail.
+    assert len(errors) == 1
+    assert errors[0].startswith("python: native command timed out after 120s. Ran ")
+    assert errors[0].endswith("The adapter printed nothing before it was killed.")
+    assert observations == []
+
+
+def test_timeout_decodes_byte_streams_from_the_killed_adapter(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """A child killed without text=True hands back bytes, not str."""
+    runner = _runner()
+    contract_path = tmp_path / "contract.json"
+    contract_path.write_text(json.dumps(_contract()), encoding="utf-8")
+
+    def timeout(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise subprocess.TimeoutExpired(
+            ["adapter"],
+            timeout=120,
+            output=b"collected 1 item\xff",
+            stderr=b"   ",
+        )
+
+    monkeypatch.setattr(runner.subprocess, "run", timeout)
+
+    errors, observations = runner.collect_backend_observations(REPO_ROOT, contract_path, "python")
+
+    # Undecodable bytes are replaced rather than raising, and a whitespace-only
+    # stream is dropped instead of being reported as output.
+    assert "Partial output — stdout: collected 1 item�" in errors[0]
+    assert "stderr" not in errors[0]
     assert observations == []
 
 
