@@ -1,0 +1,109 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_io_golden.py",
+ "defaults": {
+  "prompt_timeout_ms": 10000,
+  "prompt_read_interval_ms": 250,
+  "prompt_require_idle": true,
+  "prompt_idle_grace_ratio": 0.8,
+  "input_type": "multi_key",
+  "wait_after_sec": 0.2
+ },
+ "sends": [
+  {
+   "name": "default type",
+   "keys": "hello",
+   "input_type": null,
+   "sent": [
+    "hello\r"
+   ]
+  },
+  {
+   "name": "multi key",
+   "keys": "hello",
+   "input_type": "multi_key",
+   "sent": [
+    "hello\r"
+   ]
+  },
+  {
+   "name": "single key",
+   "keys": "y",
+   "input_type": "single_key",
+   "sent": [
+    "y"
+   ]
+  },
+  {
+   "name": "any key",
+   "keys": "ignored",
+   "input_type": "any_key",
+   "sent": [
+    " "
+   ]
+  },
+  {
+   "name": "unknown type falls back to multi key",
+   "keys": "hello",
+   "input_type": "menu",
+   "sent": [
+    "hello\r"
+   ]
+  },
+  {
+   "name": "empty type falls back to multi key",
+   "keys": "hello",
+   "input_type": "",
+   "sent": [
+    "hello\r"
+   ]
+  },
+  {
+   "name": "empty keys, multi key",
+   "keys": "",
+   "input_type": "multi_key",
+   "sent": [
+    "\r"
+   ]
+  },
+  {
+   "name": "empty keys, single key",
+   "keys": "",
+   "input_type": "single_key",
+   "sent": [
+    ""
+   ]
+  },
+  {
+   "name": "empty keys, any key",
+   "keys": "",
+   "input_type": "any_key",
+   "sent": [
+    " "
+   ]
+  },
+  {
+   "name": "keys already ending in a return",
+   "keys": "hello\r",
+   "input_type": "multi_key",
+   "sent": [
+    "hello\r\r"
+   ]
+  },
+  {
+   "name": "keys containing a newline",
+   "keys": "a\nb",
+   "input_type": "multi_key",
+   "sent": [
+    "a\nb\r"
+   ]
+  },
+  {
+   "name": "single key with several characters",
+   "keys": "yes",
+   "input_type": "single_key",
+   "sent": [
+    "yes"
+   ]
+  }
+ ]
+}

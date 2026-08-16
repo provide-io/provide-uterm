@@ -1,0 +1,302 @@
+{
+  "base": {
+    "captured_at": 1760000000.0,
+    "screen": "Command [TL=00:00:00]:? ",
+    "screen_hash": "abcdef0123456789"
+  },
+  "behaviour": {
+    "count_after_clear": 0,
+    "count_after_three": 2,
+    "count_before_clear": 1,
+    "disabled": null,
+    "empty_namespace_tail": [
+      "shared",
+      "screens"
+    ],
+    "first_filename": "20251009-085320-abcdef01.txt",
+    "forced_again_filename": "20251009-085320-abcdef01-dup2.txt",
+    "forced_filename": "20251009-085320-abcdef01-dup1.txt",
+    "namespaced_dir_tail": [
+      "games",
+      "tw2002",
+      "screens"
+    ],
+    "namespaced_dir_tail_after_rename": [
+      "games",
+      "other",
+      "screens"
+    ],
+    "off_result": null,
+    "on_result_saved": true,
+    "other_filename": "20251009-085320-9999.txt",
+    "resaved_filename": "20251009-085320-abcdef01.txt",
+    "saved_twice": null,
+    "saves_again_after_clear": true,
+    "shared_dir_tail": [
+      "shared",
+      "screens"
+    ]
+  },
+  "captured_at": 1760000000.0,
+  "headers": [
+    {
+      "content": "================================================================================\nSCREEN CAPTURE\n================================================================================\nTimestamp: 2025-10-09 08:53:20\nHash: abcdef0123456789\nCursor: (0, 0)\nSize: 80x25\nTerminal: ANSI\n================================================================================\n\nCommand [TL=00:00:00]:? ",
+      "filename": "20251009-085320-abcdef01.txt",
+      "name": "the least a snapshot can carry",
+      "prompt_id": null,
+      "snapshot": {
+        "captured_at": 1760000000.0,
+        "screen": "Command [TL=00:00:00]:? ",
+        "screen_hash": "abcdef0123456789"
+      }
+    },
+    {
+      "content": "================================================================================\nSCREEN CAPTURE\n================================================================================\nTimestamp: 2025-10-09 08:53:20\nHash: abcdef0123456789\nCursor: (0, 0)\nSize: 80x25\nTerminal: ANSI\nPrompt ID: command\n================================================================================\n\nCommand [TL=00:00:00]:? ",
+      "filename": "20251009-085320-abcdef01-command.txt",
+      "name": "with a prompt id",
+      "prompt_id": "command",
+      "snapshot": {
+        "captured_at": 1760000000.0,
+        "screen": "Command [TL=00:00:00]:? ",
+        "screen_hash": "abcdef0123456789"
+      }
+    },
+    {
+      "content": "================================================================================\nSCREEN CAPTURE\n================================================================================\nTimestamp: 2025-10-09 08:53:20\nHash: abcdef0123456789\nCursor: (12, 3)\nSize: 80x25\nTerminal: ANSI\n================================================================================\n\nCommand [TL=00:00:00]:? ",
+      "filename": "20251009-085320-abcdef01.txt",
+      "name": "with a cursor",
+      "prompt_id": null,
+      "snapshot": {
+        "captured_at": 1760000000.0,
+        "cursor": {
+          "x": 12,
+          "y": 3
+        },
+        "screen": "Command [TL=00:00:00]:? ",
+        "screen_hash": "abcdef0123456789"
+      }
+    },
+    {
+      "content": "================================================================================\nSCREEN CAPTURE\n================================================================================\nTimestamp: 2025-10-09 08:53:20\nHash: abcdef0123456789\nCursor: (12, 0)\nSize: 80x25\nTerminal: ANSI\n================================================================================\n\nCommand [TL=00:00:00]:? ",
+      "filename": "20251009-085320-abcdef01.txt",
+      "name": "with a partial cursor",
+      "prompt_id": null,
+      "snapshot": {
+        "captured_at": 1760000000.0,
+        "cursor": {
+          "x": 12
+        },
+        "screen": "Command [TL=00:00:00]:? ",
+        "screen_hash": "abcdef0123456789"
+      }
+    },
+    {
+      "content": "================================================================================\nSCREEN CAPTURE\n================================================================================\nTimestamp: 2025-10-09 08:53:20\nHash: abcdef0123456789\nCursor: (0, 0)\nSize: 132x43\nTerminal: ANSI\n================================================================================\n\nCommand [TL=00:00:00]:? ",
+      "filename": "20251009-085320-abcdef01.txt",
+      "name": "with a size",
+      "prompt_id": null,
+      "snapshot": {
+        "captured_at": 1760000000.0,
+        "cols": 132,
+        "rows": 43,
+        "screen": "Command [TL=00:00:00]:? ",
+        "screen_hash": "abcdef0123456789"
+      }
+    },
+    {
+      "content": "================================================================================\nSCREEN CAPTURE\n================================================================================\nTimestamp: 2025-10-09 08:53:20\nHash: abcdef0123456789\nCursor: (0, 0)\nSize: 80x25\nTerminal: xterm-256color\n================================================================================\n\nCommand [TL=00:00:00]:? ",
+      "filename": "20251009-085320-abcdef01.txt",
+      "name": "with a terminal type",
+      "prompt_id": null,
+      "snapshot": {
+        "captured_at": 1760000000.0,
+        "screen": "Command [TL=00:00:00]:? ",
+        "screen_hash": "abcdef0123456789",
+        "term": "xterm-256color"
+      }
+    },
+    {
+      "content": "================================================================================\nSCREEN CAPTURE\n================================================================================\nTimestamp: 2025-10-09 08:53:20\nHash: abcdef0123456789\nCursor: (0, 0)\nSize: 80x25\nTerminal: ANSI\nPrompt ID: command\nInput Type: single_key\nIdle: True\n================================================================================\n\nCommand [TL=00:00:00]:? ",
+      "filename": "20251009-085320-abcdef01-command.txt",
+      "name": "with a detection",
+      "prompt_id": "command",
+      "snapshot": {
+        "captured_at": 1760000000.0,
+        "prompt_detected": {
+          "input_type": "single_key",
+          "is_idle": true
+        },
+        "screen": "Command [TL=00:00:00]:? ",
+        "screen_hash": "abcdef0123456789"
+      }
+    },
+    {
+      "content": "================================================================================\nSCREEN CAPTURE\n================================================================================\nTimestamp: 2025-10-09 08:53:20\nHash: abcdef0123456789\nCursor: (0, 0)\nSize: 80x25\nTerminal: ANSI\nInput Type: unknown\nIdle: False\n================================================================================\n\nCommand [TL=00:00:00]:? ",
+      "filename": "20251009-085320-abcdef01.txt",
+      "name": "with an empty detection",
+      "prompt_id": null,
+      "snapshot": {
+        "captured_at": 1760000000.0,
+        "prompt_detected": {},
+        "screen": "Command [TL=00:00:00]:? ",
+        "screen_hash": "abcdef0123456789"
+      }
+    },
+    {
+      "content": "================================================================================\nSCREEN CAPTURE\n================================================================================\nTimestamp: 2025-10-09 08:53:20\nHash: abcdef0123456789\nCursor: (0, 0)\nSize: 80x25\nTerminal: ANSI\nCursor at End: True\n================================================================================\n\nCommand [TL=00:00:00]:? ",
+      "filename": "20251009-085320-abcdef01.txt",
+      "name": "with the cursor at the end",
+      "prompt_id": null,
+      "snapshot": {
+        "captured_at": 1760000000.0,
+        "cursor_at_end": true,
+        "screen": "Command [TL=00:00:00]:? ",
+        "screen_hash": "abcdef0123456789"
+      }
+    },
+    {
+      "content": "================================================================================\nSCREEN CAPTURE\n================================================================================\nTimestamp: 2025-10-09 08:53:20\nHash: abcdef0123456789\nCursor: (0, 0)\nSize: 80x25\nTerminal: ANSI\nCursor at End: False\n================================================================================\n\nCommand [TL=00:00:00]:? ",
+      "filename": "20251009-085320-abcdef01.txt",
+      "name": "with the cursor not at the end",
+      "prompt_id": null,
+      "snapshot": {
+        "captured_at": 1760000000.0,
+        "cursor_at_end": false,
+        "screen": "Command [TL=00:00:00]:? ",
+        "screen_hash": "abcdef0123456789"
+      }
+    },
+    {
+      "content": "================================================================================\nSCREEN CAPTURE\n================================================================================\nTimestamp: 2025-10-09 08:53:20\nHash: abcdef0123456789\nCursor: (0, 0)\nSize: 80x25\nTerminal: ANSI\nTime Since Last Change: 1.50s\n================================================================================\n\nCommand [TL=00:00:00]:? ",
+      "filename": "20251009-085320-abcdef01.txt",
+      "name": "with a time since the last change",
+      "prompt_id": null,
+      "snapshot": {
+        "captured_at": 1760000000.0,
+        "screen": "Command [TL=00:00:00]:? ",
+        "screen_hash": "abcdef0123456789",
+        "time_since_last_change": 1.5
+      }
+    },
+    {
+      "content": "================================================================================\nSCREEN CAPTURE\n================================================================================\nTimestamp: 2025-10-09 08:53:20\nHash: abcdef0123456789\nCursor: (0, 0)\nSize: 80x25\nTerminal: ANSI\nTime Since Last Change: 1.23s\n================================================================================\n\nCommand [TL=00:00:00]:? ",
+      "filename": "20251009-085320-abcdef01.txt",
+      "name": "with a time that needs rounding",
+      "prompt_id": null,
+      "snapshot": {
+        "captured_at": 1760000000.0,
+        "screen": "Command [TL=00:00:00]:? ",
+        "screen_hash": "abcdef0123456789",
+        "time_since_last_change": 1.23456
+      }
+    },
+    {
+      "content": "================================================================================\nSCREEN CAPTURE\n================================================================================\nTimestamp: 2025-10-09 08:53:20\nHash: abcdef0123456789\nCursor: (0, 0)\nSize: 80x25\nTerminal: ANSI\nTime Since Last Change: 0.00s\n================================================================================\n\nCommand [TL=00:00:00]:? ",
+      "filename": "20251009-085320-abcdef01.txt",
+      "name": "with a zero time since the last change",
+      "prompt_id": null,
+      "snapshot": {
+        "captured_at": 1760000000.0,
+        "screen": "Command [TL=00:00:00]:? ",
+        "screen_hash": "abcdef0123456789",
+        "time_since_last_change": 0.0
+      }
+    },
+    {
+      "content": "================================================================================\nSCREEN CAPTURE\n================================================================================\nTimestamp: 2025-10-09 08:53:20\nHash: abcdef0123456789\nCursor: (1, 2)\nSize: 100x30\nTerminal: vt100\nPrompt ID: login\nInput Type: line\nIdle: False\nCursor at End: True\nTime Since Last Change: 2.00s\n================================================================================\n\nCommand [TL=00:00:00]:? ",
+      "filename": "20251009-085320-abcdef01-login.txt",
+      "name": "with everything at once",
+      "prompt_id": "login",
+      "snapshot": {
+        "captured_at": 1760000000.0,
+        "cols": 100,
+        "cursor": {
+          "x": 1,
+          "y": 2
+        },
+        "cursor_at_end": true,
+        "prompt_detected": {
+          "input_type": "line",
+          "is_idle": false
+        },
+        "rows": 30,
+        "screen": "Command [TL=00:00:00]:? ",
+        "screen_hash": "abcdef0123456789",
+        "term": "vt100",
+        "time_since_last_change": 2.0
+      }
+    },
+    {
+      "content": "================================================================================\nSCREEN CAPTURE\n================================================================================\nTimestamp: 2025-10-09 08:53:20\nHash: abcdef0123456789\nCursor: (0, 0)\nSize: 80x25\nTerminal: ANSI\n================================================================================\n\none\ntwo\nthree",
+      "filename": "20251009-085320-abcdef01.txt",
+      "name": "with a multi-line screen",
+      "prompt_id": null,
+      "snapshot": {
+        "captured_at": 1760000000.0,
+        "screen": "one\ntwo\nthree",
+        "screen_hash": "abcdef0123456789"
+      }
+    },
+    {
+      "content": "================================================================================\nSCREEN CAPTURE\n================================================================================\nTimestamp: 2025-10-10 00:00:00\nHash: abcdef0123456789\nCursor: (0, 0)\nSize: 80x25\nTerminal: ANSI\n================================================================================\n\nCommand [TL=00:00:00]:? ",
+      "filename": "20251010-000000-abcdef01.txt",
+      "name": "captured at midnight",
+      "prompt_id": null,
+      "snapshot": {
+        "captured_at": 1760054400.0,
+        "screen": "Command [TL=00:00:00]:? ",
+        "screen_hash": "abcdef0123456789"
+      }
+    },
+    {
+      "content": "================================================================================\nSCREEN CAPTURE\n================================================================================\nTimestamp: 2025-10-09 23:59:59\nHash: abcdef0123456789\nCursor: (0, 0)\nSize: 80x25\nTerminal: ANSI\n================================================================================\n\nCommand [TL=00:00:00]:? ",
+      "filename": "20251009-235959-abcdef01.txt",
+      "name": "captured one second before midnight",
+      "prompt_id": null,
+      "snapshot": {
+        "captured_at": 1760054399.0,
+        "screen": "Command [TL=00:00:00]:? ",
+        "screen_hash": "abcdef0123456789"
+      }
+    },
+    {
+      "content": "================================================================================\nSCREEN CAPTURE\n================================================================================\nTimestamp: 2025-10-09 08:53:20\nHash: abcdef0123456789\nCursor: (0, 0)\nSize: 80x25\nTerminal: ANSI\n================================================================================\n\nCommand [TL=00:00:00]:? ",
+      "filename": "20251009-085320-abcdef01.txt",
+      "name": "with an empty prompt id",
+      "prompt_id": "",
+      "snapshot": {
+        "captured_at": 1760000000.0,
+        "screen": "Command [TL=00:00:00]:? ",
+        "screen_hash": "abcdef0123456789"
+      }
+    }
+  ],
+  "no_captured_at_saves": true,
+  "refused": [
+    {
+      "name": "no screen",
+      "saved": false,
+      "snapshot": {
+        "captured_at": 1760000000.0,
+        "screen": "",
+        "screen_hash": "abc"
+      }
+    },
+    {
+      "name": "no hash",
+      "saved": false,
+      "snapshot": {
+        "captured_at": 1760000000.0,
+        "screen": "x",
+        "screen_hash": ""
+      }
+    },
+    {
+      "name": "neither",
+      "saved": false,
+      "snapshot": {
+        "captured_at": 1760000000.0
+      }
+    }
+  ]
+}

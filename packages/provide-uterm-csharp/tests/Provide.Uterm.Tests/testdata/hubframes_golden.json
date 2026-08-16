@@ -1,0 +1,171 @@
+{
+  "ts": 1700000000.5,
+  "frames": [
+    {
+      "name": "an error",
+      "frame": {
+        "type": "error",
+        "message": "something went wrong"
+      }
+    },
+    {
+      "name": "an error with no message",
+      "frame": {
+        "type": "error",
+        "message": ""
+      }
+    },
+    {
+      "name": "a pong",
+      "frame": {
+        "type": "pong",
+        "ts": 1700000000.5
+      }
+    },
+    {
+      "name": "a heartbeat ack",
+      "frame": {
+        "type": "heartbeat_ack",
+        "lease_expires_at": 1700000030.5,
+        "ts": 1700000000.5
+      }
+    },
+    {
+      "name": "a worker connected",
+      "frame": {
+        "type": "worker_connected",
+        "worker_id": "w1",
+        "ts": 1700000000.5
+      }
+    },
+    {
+      "name": "a worker disconnected",
+      "frame": {
+        "type": "worker_disconnected",
+        "worker_id": "w1",
+        "ts": 1700000000.5
+      }
+    },
+    {
+      "name": "terminal output",
+      "frame": {
+        "type": "term",
+        "data": "hello",
+        "ts": 1700000000.5
+      }
+    },
+    {
+      "name": "terminal output that is empty",
+      "frame": {
+        "type": "term",
+        "data": "",
+        "ts": 1700000000.5
+      }
+    },
+    {
+      "name": "an analysis",
+      "frame": {
+        "type": "analysis",
+        "formatted": "done",
+        "raw": {
+          "x": 1
+        },
+        "ts": 1700000000.5
+      }
+    },
+    {
+      "name": "an analysis with no raw",
+      "frame": {
+        "type": "analysis",
+        "formatted": "done",
+        "raw": null,
+        "ts": 1700000000.5
+      }
+    },
+    {
+      "name": "a hijack in progress",
+      "frame": {
+        "type": "hijack_state",
+        "hijacked": true,
+        "owner": "u1",
+        "lease_expires_at": 1700000060.5,
+        "input_mode": "hijack"
+      }
+    },
+    {
+      "name": "no hijack",
+      "frame": {
+        "type": "hijack_state",
+        "hijacked": false,
+        "owner": null,
+        "lease_expires_at": null,
+        "input_mode": "open"
+      }
+    },
+    {
+      "name": "a hello",
+      "frame": {
+        "type": "hello",
+        "worker_id": "w1",
+        "mcp_supported": true,
+        "vnc_supported": true
+      }
+    },
+    {
+      "name": "a hello with capabilities",
+      "frame": {
+        "type": "hello",
+        "worker_id": "w1",
+        "replay_supported": true,
+        "mcp_supported": true,
+        "vnc_supported": true
+      }
+    },
+    {
+      "name": "a hello overriding a default",
+      "frame": {
+        "type": "hello",
+        "mcp_supported": false,
+        "vnc_supported": true
+      }
+    },
+    {
+      "name": "a hello overriding its type",
+      "frame": {
+        "type": "not_hello",
+        "mcp_supported": true,
+        "vnc_supported": true
+      }
+    },
+    {
+      "name": "a worker status",
+      "frame": {
+        "state": "running",
+        "ts": 1700000000.5,
+        "type": "status"
+      }
+    },
+    {
+      "name": "a status with no type",
+      "frame": {
+        "state": "running",
+        "ts": 1700000000.5,
+        "type": "status"
+      }
+    },
+    {
+      "name": "a status naming its own type",
+      "frame": {
+        "type": "custom",
+        "ts": 1700000000.5
+      }
+    },
+    {
+      "name": "an empty status",
+      "frame": {
+        "type": "status",
+        "ts": 1700000000.5
+      }
+    }
+  ]
+}

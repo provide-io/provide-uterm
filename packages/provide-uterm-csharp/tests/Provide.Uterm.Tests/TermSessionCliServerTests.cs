@@ -138,7 +138,7 @@ public class TermSessionCliServerTests
     }
 
     [Fact]
-    public void Cli_EachSubcommand_Help()
+    public async Task Cli_EachSubcommand_Help()
     {
         foreach (var cmd in Root.Subcommands)
         {
@@ -198,7 +198,7 @@ public class TermSessionCliServerTests
             Assert.Equal(1, Root.Execute(new[] { "audit" }, sw, sw)); // needs verify PATH
         }
 
-        Assert.Equal(0, Root.ExecuteAsync(new[] { "--help" }).GetAwaiter().GetResult());
+        Assert.Equal(0, await Root.ExecuteAsync(new[] { "--help" }));
     }
 
     [Fact]

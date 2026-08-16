@@ -1,0 +1,289 @@
+{
+  "default_worker_id": "w-default",
+  "dev_mode_role": "admin",
+  "open_mode_role": "admin",
+  "roles": [
+    {
+      "attachment": {
+        "kind": "value",
+        "value": "browser:admin:w1"
+      },
+      "mode": "jwt",
+      "name": "an admin",
+      "result": "admin"
+    },
+    {
+      "attachment": {
+        "kind": "value",
+        "value": "browser:operator:w1"
+      },
+      "mode": "jwt",
+      "name": "an operator",
+      "result": "operator"
+    },
+    {
+      "attachment": {
+        "kind": "value",
+        "value": "browser:viewer:w1"
+      },
+      "mode": "jwt",
+      "name": "a viewer",
+      "result": "viewer"
+    },
+    {
+      "attachment": {
+        "kind": "value",
+        "value": "browser:admin"
+      },
+      "mode": "jwt",
+      "name": "a role with no session after it",
+      "result": "admin"
+    },
+    {
+      "attachment": {
+        "kind": "value",
+        "value": "browser:admin:w1:extra"
+      },
+      "mode": "jwt",
+      "name": "a session id containing a colon",
+      "result": "admin"
+    },
+    {
+      "attachment": {
+        "kind": "value",
+        "value": "browser:root:w1"
+      },
+      "mode": "jwt",
+      "name": "an unknown role",
+      "result": "viewer"
+    },
+    {
+      "attachment": {
+        "kind": "value",
+        "value": "browser::w1"
+      },
+      "mode": "jwt",
+      "name": "an empty role",
+      "result": "viewer"
+    },
+    {
+      "attachment": {
+        "kind": "value",
+        "value": "browser"
+      },
+      "mode": "jwt",
+      "name": "no role field at all",
+      "result": "viewer"
+    },
+    {
+      "attachment": {
+        "data": {
+          "role": "admin"
+        },
+        "kind": "mapping"
+      },
+      "mode": "jwt",
+      "name": "an attachment that is not a string",
+      "result": "viewer"
+    },
+    {
+      "attachment": {
+        "kind": "value",
+        "value": ""
+      },
+      "mode": "jwt",
+      "name": "nothing at all",
+      "result": "viewer"
+    },
+    {
+      "attachment": {
+        "kind": "value",
+        "value": null
+      },
+      "mode": "jwt",
+      "name": "nothing",
+      "result": "viewer"
+    }
+  ],
+  "types": [
+    {
+      "attachment": {
+        "kind": "value",
+        "value": "browser"
+      },
+      "name": "a plain type",
+      "result": "browser"
+    },
+    {
+      "attachment": {
+        "kind": "value",
+        "value": "worker"
+      },
+      "name": "a worker",
+      "result": "worker"
+    },
+    {
+      "attachment": {
+        "kind": "value",
+        "value": "raw"
+      },
+      "name": "a raw connection",
+      "result": "raw"
+    },
+    {
+      "attachment": {
+        "kind": "value",
+        "value": "worker:admin"
+      },
+      "name": "a type with a role after it",
+      "result": "worker"
+    },
+    {
+      "attachment": {
+        "kind": "value",
+        "value": "browser:operator:w1"
+      },
+      "name": "a type with a role and a session",
+      "result": "browser"
+    },
+    {
+      "attachment": {
+        "kind": "value",
+        "value": "nonsense"
+      },
+      "name": "an unknown type",
+      "result": "browser"
+    },
+    {
+      "attachment": {
+        "kind": "value",
+        "value": "nonsense:admin:w1"
+      },
+      "name": "an unknown type with fields",
+      "result": "browser"
+    },
+    {
+      "attachment": {
+        "kind": "value",
+        "value": ""
+      },
+      "name": "nothing at all",
+      "result": "browser"
+    },
+    {
+      "attachment": {
+        "data": {
+          "role": "worker"
+        },
+        "kind": "mapping"
+      },
+      "name": "a mapping",
+      "result": "worker"
+    },
+    {
+      "attachment": {
+        "data": {
+          "role": "nonsense"
+        },
+        "kind": "mapping"
+      },
+      "name": "a mapping with an unknown role",
+      "result": "browser"
+    },
+    {
+      "attachment": {
+        "data": {},
+        "kind": "mapping"
+      },
+      "name": "a mapping with no role",
+      "result": "browser"
+    },
+    {
+      "attachment": {
+        "kind": "object",
+        "role": "raw"
+      },
+      "name": "an object",
+      "result": "raw"
+    },
+    {
+      "attachment": {
+        "kind": "object",
+        "role": "nonsense"
+      },
+      "name": "an object with an unknown role",
+      "result": "browser"
+    },
+    {
+      "attachment": {
+        "kind": "value",
+        "value": 7
+      },
+      "name": "a number",
+      "result": "browser"
+    },
+    {
+      "attachment": {
+        "kind": "value",
+        "value": null
+      },
+      "name": "nothing",
+      "result": "browser"
+    }
+  ],
+  "unreadable_role": "viewer",
+  "unreadable_type": "browser",
+  "unreadable_worker_id": "w-default",
+  "worker_ids": [
+    {
+      "attachment": {
+        "kind": "value",
+        "value": "browser:admin:w1"
+      },
+      "name": "a session id",
+      "result": "w1"
+    },
+    {
+      "attachment": {
+        "kind": "value",
+        "value": "browser:admin:w1:extra"
+      },
+      "name": "a session id containing a colon",
+      "result": "w1:extra"
+    },
+    {
+      "attachment": {
+        "kind": "value",
+        "value": "browser:admin"
+      },
+      "name": "no session field",
+      "result": "w-default"
+    },
+    {
+      "attachment": {
+        "kind": "value",
+        "value": "browser:admin:"
+      },
+      "name": "an empty session field",
+      "result": "w-default"
+    },
+    {
+      "attachment": {
+        "data": {
+          "worker_id": "w9"
+        },
+        "kind": "mapping"
+      },
+      "name": "an attachment that is not a string",
+      "result": "w-default"
+    },
+    {
+      "attachment": {
+        "kind": "value",
+        "value": ""
+      },
+      "name": "nothing at all",
+      "result": "w-default"
+    }
+  ]
+}

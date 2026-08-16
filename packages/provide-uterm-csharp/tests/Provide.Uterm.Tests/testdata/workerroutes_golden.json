@@ -1,0 +1,510 @@
+{
+  "static_asset_pattern": "^/[a-zA-Z0-9._/-]+\\.(?:html|css|js)$",
+  "do_route_patterns": [
+    "^/ws/browser/(?P<worker_id>[a-zA-Z0-9_-]{1,64})/term$",
+    "^/ws/worker/(?P<worker_id>[a-zA-Z0-9_-]{1,64})/term$",
+    "^/ws/raw/(?P<worker_id>[a-zA-Z0-9_-]{1,64})/term$",
+    "^/tunnel/(?P<worker_id>[a-zA-Z0-9_-]{1,64})$",
+    "^/worker/(?P<worker_id>[a-zA-Z0-9_-]{1,64})/hijack(?:/.*)?$",
+    "^/worker/(?P<worker_id>[a-zA-Z0-9_-]{1,64})/(?:input_mode|disconnect_worker)$"
+  ],
+  "paths": [
+    {
+      "name": "the health check",
+      "path": "/api/health",
+      "health": true,
+      "asset": false,
+      "asset_name": null,
+      "static": false,
+      "static_name": null
+    },
+    {
+      "name": "an asset",
+      "path": "/assets/app.js",
+      "health": false,
+      "asset": true,
+      "asset_name": "app.js",
+      "static": true,
+      "static_name": "assets/app.js"
+    },
+    {
+      "name": "an asset in a folder",
+      "path": "/assets/vendor/xterm.css",
+      "health": false,
+      "asset": true,
+      "asset_name": "vendor/xterm.css",
+      "static": true,
+      "static_name": "assets/vendor/xterm.css"
+    },
+    {
+      "name": "an asset path and nothing else",
+      "path": "/assets/",
+      "health": false,
+      "asset": true,
+      "asset_name": "",
+      "static": false,
+      "static_name": null
+    },
+    {
+      "name": "a static page",
+      "path": "/index.html",
+      "health": false,
+      "asset": false,
+      "asset_name": null,
+      "static": true,
+      "static_name": "index.html"
+    },
+    {
+      "name": "a static stylesheet",
+      "path": "/theme.css",
+      "health": false,
+      "asset": false,
+      "asset_name": null,
+      "static": true,
+      "static_name": "theme.css"
+    },
+    {
+      "name": "a static script",
+      "path": "/bundle.js",
+      "health": false,
+      "asset": false,
+      "asset_name": null,
+      "static": true,
+      "static_name": "bundle.js"
+    },
+    {
+      "name": "a static file in a folder",
+      "path": "/static/app.js",
+      "health": false,
+      "asset": false,
+      "asset_name": null,
+      "static": true,
+      "static_name": "static/app.js"
+    },
+    {
+      "name": "a static file with a dash and an underscore",
+      "path": "/my-app_v2.js",
+      "health": false,
+      "asset": false,
+      "asset_name": null,
+      "static": true,
+      "static_name": "my-app_v2.js"
+    },
+    {
+      "name": "a file of a kind that is not served",
+      "path": "/config.json",
+      "health": false,
+      "asset": false,
+      "asset_name": null,
+      "static": false,
+      "static_name": null
+    },
+    {
+      "name": "a file with no extension",
+      "path": "/README",
+      "health": false,
+      "asset": false,
+      "asset_name": null,
+      "static": false,
+      "static_name": null
+    },
+    {
+      "name": "a path climbing out with dots",
+      "path": "/../etc/passwd",
+      "health": false,
+      "asset": false,
+      "asset_name": null,
+      "static": false,
+      "static_name": null
+    },
+    {
+      "name": "a path with an encoded slash",
+      "path": "/a%2Fb.js",
+      "health": false,
+      "asset": false,
+      "asset_name": null,
+      "static": false,
+      "static_name": null
+    },
+    {
+      "name": "a path with a space in it",
+      "path": "/my app.js",
+      "health": false,
+      "asset": false,
+      "asset_name": null,
+      "static": false,
+      "static_name": null
+    },
+    {
+      "name": "a path with a query on it",
+      "path": "/app.js?v=1",
+      "health": false,
+      "asset": false,
+      "asset_name": null,
+      "static": false,
+      "static_name": null
+    },
+    {
+      "name": "the root",
+      "path": "/",
+      "health": false,
+      "asset": false,
+      "asset_name": null,
+      "static": false,
+      "static_name": null
+    },
+    {
+      "name": "the app root",
+      "path": "/app",
+      "health": false,
+      "asset": false,
+      "asset_name": null,
+      "static": false,
+      "static_name": null
+    },
+    {
+      "name": "the app root with a slash",
+      "path": "/app/",
+      "health": false,
+      "asset": false,
+      "asset_name": null,
+      "static": false,
+      "static_name": null
+    },
+    {
+      "name": "the connect page",
+      "path": "/app/connect",
+      "health": false,
+      "asset": false,
+      "asset_name": null,
+      "static": false,
+      "static_name": null
+    },
+    {
+      "name": "the connect page with a slash",
+      "path": "/app/connect/",
+      "health": false,
+      "asset": false,
+      "asset_name": null,
+      "static": false,
+      "static_name": null
+    },
+    {
+      "name": "a share link",
+      "path": "/s/sess-1",
+      "health": false,
+      "asset": false,
+      "asset_name": null,
+      "static": false,
+      "static_name": null
+    },
+    {
+      "name": "a share link with a slash",
+      "path": "/s/sess-1/",
+      "health": false,
+      "asset": false,
+      "asset_name": null,
+      "static": false,
+      "static_name": null
+    },
+    {
+      "name": "a session page",
+      "path": "/app/session/sess-1",
+      "health": false,
+      "asset": false,
+      "asset_name": null,
+      "static": false,
+      "static_name": null
+    },
+    {
+      "name": "an inspect page",
+      "path": "/app/inspect/sess-1",
+      "health": false,
+      "asset": false,
+      "asset_name": null,
+      "static": false,
+      "static_name": null
+    },
+    {
+      "name": "a replay page",
+      "path": "/app/replay/sess-1",
+      "health": false,
+      "asset": false,
+      "asset_name": null,
+      "static": false,
+      "static_name": null
+    },
+    {
+      "name": "an operator page",
+      "path": "/app/operator/sess-1",
+      "health": false,
+      "asset": false,
+      "asset_name": null,
+      "static": false,
+      "static_name": null
+    },
+    {
+      "name": "a page kind nobody defined",
+      "path": "/app/hijack/sess-1",
+      "health": false,
+      "asset": false,
+      "asset_name": null,
+      "static": false,
+      "static_name": null
+    },
+    {
+      "name": "a browser socket",
+      "path": "/ws/browser/sess-1",
+      "health": false,
+      "asset": false,
+      "asset_name": null,
+      "static": false,
+      "static_name": null
+    },
+    {
+      "name": "a worker socket",
+      "path": "/ws/worker/sess-1",
+      "health": false,
+      "asset": false,
+      "asset_name": null,
+      "static": false,
+      "static_name": null
+    },
+    {
+      "name": "a tunnel",
+      "path": "/tunnel/sess-1",
+      "health": false,
+      "asset": false,
+      "asset_name": null,
+      "static": false,
+      "static_name": null
+    },
+    {
+      "name": "a session API route",
+      "path": "/api/sessions/sess-1",
+      "health": false,
+      "asset": false,
+      "asset_name": null,
+      "static": false,
+      "static_name": null
+    },
+    {
+      "name": "a path nobody routes",
+      "path": "/nowhere",
+      "health": false,
+      "asset": false,
+      "asset_name": null,
+      "static": false,
+      "static_name": null
+    }
+  ],
+  "spa": [
+    {
+      "path": "/",
+      "resolved": {
+        "kind": "dashboard",
+        "extra": {}
+      }
+    },
+    {
+      "path": "/app",
+      "resolved": {
+        "kind": "dashboard",
+        "extra": {}
+      }
+    },
+    {
+      "path": "/app/",
+      "resolved": {
+        "kind": "dashboard",
+        "extra": {}
+      }
+    },
+    {
+      "path": "/app/connect",
+      "resolved": {
+        "kind": "connect",
+        "extra": {}
+      }
+    },
+    {
+      "path": "/app/connect/",
+      "resolved": {
+        "kind": "connect",
+        "extra": {}
+      }
+    },
+    {
+      "path": "/app/connect/extra",
+      "resolved": null
+    },
+    {
+      "path": "/appconnect",
+      "resolved": null
+    },
+    {
+      "path": "/s/sess-1",
+      "resolved": {
+        "kind": "share",
+        "extra": {
+          "session_id": "sess-1",
+          "surface": "user"
+        }
+      }
+    },
+    {
+      "path": "/s/sess-1/",
+      "resolved": null
+    },
+    {
+      "path": "/s/",
+      "resolved": null
+    },
+    {
+      "path": "/s",
+      "resolved": null
+    },
+    {
+      "path": "/app/session/sess-1",
+      "resolved": {
+        "kind": "session",
+        "extra": {
+          "session_id": "sess-1",
+          "surface": "user"
+        }
+      }
+    },
+    {
+      "path": "/app/inspect/sess-1",
+      "resolved": {
+        "kind": "inspect",
+        "extra": {
+          "session_id": "sess-1",
+          "surface": "operator"
+        }
+      }
+    },
+    {
+      "path": "/app/replay/sess-1",
+      "resolved": {
+        "kind": "replay",
+        "extra": {
+          "session_id": "sess-1",
+          "surface": "operator"
+        }
+      }
+    },
+    {
+      "path": "/app/operator/sess-1",
+      "resolved": {
+        "kind": "operator",
+        "extra": {
+          "session_id": "sess-1",
+          "surface": "operator"
+        }
+      }
+    },
+    {
+      "path": "/app/hijack/sess-1",
+      "resolved": null
+    },
+    {
+      "path": "/app/session/",
+      "resolved": null
+    },
+    {
+      "path": "/app/session",
+      "resolved": null
+    },
+    {
+      "path": "/app/session/a/b",
+      "resolved": null
+    },
+    {
+      "path": "/nowhere",
+      "resolved": null
+    }
+  ],
+  "worker_ids": [
+    {
+      "path": "/ws/browser/sess-1/term",
+      "worker_id": "sess-1"
+    },
+    {
+      "path": "/ws/worker/sess-1/term",
+      "worker_id": "sess-1"
+    },
+    {
+      "path": "/ws/raw/sess-1/term",
+      "worker_id": "sess-1"
+    },
+    {
+      "path": "/ws/browser/sess-1",
+      "worker_id": null
+    },
+    {
+      "path": "/tunnel/sess-1",
+      "worker_id": "sess-1"
+    },
+    {
+      "path": "/tunnel/sess-1/extra",
+      "worker_id": null
+    },
+    {
+      "path": "/worker/sess-1/hijack",
+      "worker_id": "sess-1"
+    },
+    {
+      "path": "/worker/sess-1/hijack/release",
+      "worker_id": "sess-1"
+    },
+    {
+      "path": "/worker/sess-1/input_mode",
+      "worker_id": "sess-1"
+    },
+    {
+      "path": "/worker/sess-1/disconnect_worker",
+      "worker_id": "sess-1"
+    },
+    {
+      "path": "/worker/sess-1/anything_else",
+      "worker_id": null
+    },
+    {
+      "path": "/worker/sess-1",
+      "worker_id": null
+    },
+    {
+      "path": "/tunnel/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "worker_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "path": "/tunnel/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "worker_id": null
+    },
+    {
+      "path": "/tunnel/a.b",
+      "worker_id": null
+    },
+    {
+      "path": "/tunnel/a%2Fb",
+      "worker_id": null
+    },
+    {
+      "path": "/tunnel/",
+      "worker_id": null
+    },
+    {
+      "path": "/api/sessions/sess-1",
+      "worker_id": null
+    },
+    {
+      "path": "/nowhere",
+      "worker_id": null
+    },
+    {
+      "path": "/",
+      "worker_id": null
+    }
+  ]
+}

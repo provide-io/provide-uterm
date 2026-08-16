@@ -28,20 +28,20 @@ public class RfbInputFilterTests
     }
 
     [Fact]
-    public void Nil_CanInject_Drops_Key()
+    public async Task Nil_CanInject_Drops_Key()
     {
         using var src = new MemoryStream(Handshake().Concat(KeyEvent()).ToArray());
         using var dst = new MemoryStream();
-        RfbInputFilter.FilterClientInput(dst, src, null, "s", "l", "p", "operator");
+        await RfbInputFilter.FilterClientInputAsync(dst, src, null, "s", "l", "p", "operator");
         Assert.Equal(14, dst.Length);
     }
 
     [Fact]
-    public void Operator_With_Lease_Forwards_Key()
+    public async Task Operator_With_Lease_Forwards_Key()
     {
         using var src = new MemoryStream(Handshake().Concat(KeyEvent()).ToArray());
         using var dst = new MemoryStream();
-        RfbInputFilter.FilterClientInput(
+        await RfbInputFilter.FilterClientInputAsync(
             dst, src,
             (sid, lid, pid, role) => lid.Length > 0 && (role is "operator" or "admin"),
             "s", "lease-1", "bob", "operator");
@@ -49,19 +49,19 @@ public class RfbInputFilterTests
     }
 
     [Fact]
-    public void Bad_Security_Type_Throws()
+    public async Task Bad_Security_Type_Throws()
     {
         var raw = new byte[13];
         System.Text.Encoding.ASCII.GetBytes("RFB 003.008\n").CopyTo(raw, 0);
         raw[12] = 2;
         using var src = new MemoryStream(raw);
         using var dst = new MemoryStream();
-        Assert.Throws<InvalidOperationException>(() =>
-            RfbInputFilter.FilterClientInput(dst, src, null, "s", "", "", "viewer"));
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await RfbInputFilter.FilterClientInputAsync(dst, src, null, "s", "", "", "viewer"));
     }
 
     [Fact]
-    public void CutText_Too_Large_Throws()
+    public async Task CutText_Too_Large_Throws()
     {
         var body = new List<byte>();
         body.AddRange(Handshake());
@@ -74,12 +74,12 @@ public class RfbInputFilterTests
         body.AddRange(lenBuf);
         using var src = new MemoryStream(body.ToArray());
         using var dst = new MemoryStream();
-        Assert.Throws<InvalidOperationException>(() =>
-            RfbInputFilter.FilterClientInput(dst, src, static (_, _, _, _) => true, "s", "l", "p", "admin"));
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await RfbInputFilter.FilterClientInputAsync(dst, src, static (_, _, _, _) => true, "s", "l", "p", "admin"));
     }
 
     [Fact]
-    public void Non_Inject_Messages_Always_Pass()
+    public async Task Non_Inject_Messages_Always_Pass()
     {
         // SetPixelFormat (0) + 19 payload, SetEncodings (2) with 1 encoding, FBU request (3).
         var body = new List<byte>();
@@ -95,12 +95,12 @@ public class RfbInputFilterTests
         body.AddRange(new byte[9]);
         using var src = new MemoryStream(body.ToArray());
         using var dst = new MemoryStream();
-        RfbInputFilter.FilterClientInput(dst, src, null, "s", "", "p", "viewer");
+        await RfbInputFilter.FilterClientInputAsync(dst, src, null, "s", "", "p", "viewer");
         Assert.Equal(body.Count, dst.Length);
     }
 
     [Fact]
-    public void Pointer_And_CutText_Gated_By_CanInject()
+    public async Task Pointer_And_CutText_Gated_By_CanInject()
     {
         var body = new List<byte>();
         body.AddRange(Handshake());
@@ -114,27 +114,29 @@ public class RfbInputFilterTests
 
         using var deniedSrc = new MemoryStream(body.ToArray());
         using var deniedDst = new MemoryStream();
-        RfbInputFilter.FilterClientInput(deniedDst, deniedSrc, static (_, _, _, _) => false, "s", "l", "p", "viewer");
+        await RfbInputFilter.FilterClientInputAsync(
+            deniedDst, deniedSrc, static (_, _, _, _) => false, "s", "l", "p", "viewer");
         Assert.Equal(14, deniedDst.Length);
 
         using var allowedSrc = new MemoryStream(body.ToArray());
         using var allowedDst = new MemoryStream();
-        RfbInputFilter.FilterClientInput(allowedDst, allowedSrc, static (_, _, _, _) => true, "s", "l", "p", "admin");
+        await RfbInputFilter.FilterClientInputAsync(
+            allowedDst, allowedSrc, static (_, _, _, _) => true, "s", "l", "p", "admin");
         Assert.Equal(body.Count, allowedDst.Length);
     }
 
     [Fact]
-    public void Unknown_Message_Type_Throws()
+    public async Task Unknown_Message_Type_Throws()
     {
         var body = Handshake().Concat(new byte[] { 99 }).ToArray();
         using var src = new MemoryStream(body);
         using var dst = new MemoryStream();
-        Assert.Throws<InvalidOperationException>(() =>
-            RfbInputFilter.FilterClientInput(dst, src, null, "s", "l", "p", "admin"));
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await RfbInputFilter.FilterClientInputAsync(dst, src, null, "s", "l", "p", "admin"));
     }
 
     [Fact]
-    public void CutText_With_Payload_Forwarded_When_Allowed()
+    public async Task CutText_With_Payload_Forwarded_When_Allowed()
     {
         var payload = new byte[] { (byte)'h', (byte)'i' };
         var body = new List<byte>();
@@ -149,7 +151,7 @@ public class RfbInputFilterTests
         body.AddRange(payload);
         using var src = new MemoryStream(body.ToArray());
         using var dst = new MemoryStream();
-        RfbInputFilter.FilterClientInput(dst, src, static (_, _, _, _) => true, "s", "l", "p", "admin");
+        await RfbInputFilter.FilterClientInputAsync(dst, src, static (_, _, _, _) => true, "s", "l", "p", "admin");
         Assert.Equal(body.Count, dst.Length);
     }
 }

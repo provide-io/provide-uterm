@@ -1,0 +1,650 @@
+{
+  "calls": [
+    {
+      "name": "acquiring a hijack",
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/worker/w1/hijack/acquire",
+          "json": {
+            "owner": "operator",
+            "lease_s": 90
+          },
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "acquiring with an owner and a lease",
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/worker/w1/hijack/acquire",
+          "json": {
+            "owner": "ada",
+            "lease_s": 30
+          },
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "a heartbeat",
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/worker/w1/hijack/h1/heartbeat",
+          "json": {
+            "lease_s": 90
+          },
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "a heartbeat with a lease",
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/worker/w1/hijack/h1/heartbeat",
+          "json": {
+            "lease_s": 15
+          },
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "sending keys",
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/worker/w1/hijack/h1/send",
+          "json": {
+            "keys": "ls\n",
+            "timeout_ms": 2000,
+            "poll_interval_ms": 120
+          },
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "sending keys with an expected prompt",
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/worker/w1/hijack/h1/send",
+          "json": {
+            "keys": "ls\n",
+            "timeout_ms": 2000,
+            "poll_interval_ms": 120,
+            "expect_prompt_id": "p1"
+          },
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "sending keys with an expected pattern",
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/worker/w1/hijack/h1/send",
+          "json": {
+            "keys": "ls\n",
+            "timeout_ms": 2000,
+            "poll_interval_ms": 120,
+            "expect_regex": "^\\$ "
+          },
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "sending keys with both expectations and timings",
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/worker/w1/hijack/h1/send",
+          "json": {
+            "keys": "ls\n",
+            "timeout_ms": 50,
+            "poll_interval_ms": 5,
+            "expect_prompt_id": "p1",
+            "expect_regex": "x"
+          },
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "stepping",
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/worker/w1/hijack/h1/step",
+          "json": null,
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "releasing",
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/worker/w1/hijack/h1/release",
+          "json": null,
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "a snapshot",
+      "calls": [
+        {
+          "method": "GET",
+          "path": "/worker/w1/hijack/h1/snapshot",
+          "json": null,
+          "params": {
+            "wait_ms": 1500
+          }
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "a snapshot with a wait",
+      "calls": [
+        {
+          "method": "GET",
+          "path": "/worker/w1/hijack/h1/snapshot",
+          "json": null,
+          "params": {
+            "wait_ms": 10
+          }
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "events",
+      "calls": [
+        {
+          "method": "GET",
+          "path": "/worker/w1/hijack/h1/events",
+          "json": null,
+          "params": {
+            "after_seq": 0,
+            "limit": 200
+          }
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "events after a sequence",
+      "calls": [
+        {
+          "method": "GET",
+          "path": "/worker/w1/hijack/h1/events",
+          "json": null,
+          "params": {
+            "after_seq": 7,
+            "limit": 5
+          }
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "a screenshot",
+      "calls": [
+        {
+          "method": "GET",
+          "path": "/worker/w1/hijack/h1/gui/screenshot",
+          "json": null,
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "a click",
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/worker/w1/hijack/h1/gui/click",
+          "json": {
+            "x": 10,
+            "y": 20,
+            "button": "left"
+          },
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "a right click",
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/worker/w1/hijack/h1/gui/click",
+          "json": {
+            "x": 10,
+            "y": 20,
+            "button": "right"
+          },
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "typing",
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/worker/w1/hijack/h1/gui/type",
+          "json": {
+            "text": "hello"
+          },
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "a key",
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/worker/w1/hijack/h1/gui/key",
+          "json": {
+            "key_name": "Return"
+          },
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "a drag",
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/worker/w1/hijack/h1/gui/drag",
+          "json": {
+            "start_x": 1,
+            "start_y": 2,
+            "end_x": 3,
+            "end_y": 4
+          },
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "setting the input mode",
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/worker/w1/input_mode",
+          "json": {
+            "input_mode": "hijack"
+          },
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "disconnecting a worker",
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/worker/w1/disconnect_worker",
+          "json": null,
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "health",
+      "calls": [
+        {
+          "method": "GET",
+          "path": "/api/health",
+          "json": null,
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "listing sessions",
+      "calls": [
+        {
+          "method": "GET",
+          "path": "/api/sessions",
+          "json": null,
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "one session",
+      "calls": [
+        {
+          "method": "GET",
+          "path": "/api/sessions/sess-1",
+          "json": null,
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "a session snapshot",
+      "calls": [
+        {
+          "method": "GET",
+          "path": "/api/sessions/sess-1/snapshot",
+          "json": null,
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "a session's events",
+      "calls": [
+        {
+          "method": "GET",
+          "path": "/api/sessions/sess-1/events",
+          "json": null,
+          "params": {
+            "limit": 100
+          }
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "a session's events with a limit",
+      "calls": [
+        {
+          "method": "GET",
+          "path": "/api/sessions/sess-1/events",
+          "json": null,
+          "params": {
+            "limit": 5
+          }
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "setting a session's mode",
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/api/sessions/sess-1/mode",
+          "json": {
+            "input_mode": "hijack"
+          },
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "a refusal",
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/worker/w1/hijack/h1/step",
+          "json": null,
+          "params": null
+        }
+      ],
+      "ok": false,
+      "answer": {
+        "error": "held by somebody else"
+      },
+      "status": 409,
+      "no_json": false
+    },
+    {
+      "name": "a server fault",
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/worker/w1/hijack/h1/step",
+          "json": null,
+          "params": null
+        }
+      ],
+      "ok": false,
+      "answer": {
+        "error": "broken"
+      },
+      "status": 500,
+      "no_json": false
+    },
+    {
+      "name": "an answer that is not json",
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/worker/w1/hijack/h1/step",
+          "json": null,
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "raw": ""
+      },
+      "status": 200,
+      "no_json": true
+    },
+    {
+      "name": "a created answer",
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/worker/w1/hijack/acquire",
+          "json": {
+            "owner": "operator",
+            "lease_s": 90
+          },
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "hijack_id": "h1"
+      },
+      "status": 201,
+      "no_json": false
+    },
+    {
+      "name": "an answer with no content",
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/worker/w1/hijack/h1/release",
+          "json": null,
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "released": true
+      },
+      "status": 204,
+      "no_json": false
+    }
+  ]
+}

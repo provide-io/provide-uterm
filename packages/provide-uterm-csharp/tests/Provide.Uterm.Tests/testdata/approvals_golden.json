@@ -1,0 +1,170 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_approvals_golden.py",
+ "statuses": [
+  "pending",
+  "resolving",
+  "approved",
+  "rejected",
+  "refused",
+  "timeout"
+ ],
+ "cleanup": {
+  "now": 1000000.0,
+  "prune_ttl": 3600.0,
+  "outcomes": [
+   {
+    "name": "pending, long expired",
+    "initial_status": "pending",
+    "expires_at": 999940.0,
+    "present": true,
+    "status": "timeout"
+   },
+   {
+    "name": "pending, expired by an epsilon",
+    "initial_status": "pending",
+    "expires_at": 999999.999999,
+    "present": true,
+    "status": "timeout"
+   },
+   {
+    "name": "pending, expiring exactly now",
+    "initial_status": "pending",
+    "expires_at": 1000000.0,
+    "present": true,
+    "status": "pending"
+   },
+   {
+    "name": "pending, not yet expired",
+    "initial_status": "pending",
+    "expires_at": 1000060.0,
+    "present": true,
+    "status": "pending"
+   },
+   {
+    "name": "approved, inside the prune window",
+    "initial_status": "approved",
+    "expires_at": 999940.0,
+    "present": true,
+    "status": "approved"
+   },
+   {
+    "name": "approved, exactly at the prune edge",
+    "initial_status": "approved",
+    "expires_at": 996400.0,
+    "present": true,
+    "status": "approved"
+   },
+   {
+    "name": "approved, past the prune edge",
+    "initial_status": "approved",
+    "expires_at": 996399.999,
+    "present": false,
+    "status": null
+   },
+   {
+    "name": "rejected, past the prune edge",
+    "initial_status": "rejected",
+    "expires_at": 996340.0,
+    "present": false,
+    "status": null
+   },
+   {
+    "name": "timeout, past the prune edge",
+    "initial_status": "timeout",
+    "expires_at": 996340.0,
+    "present": false,
+    "status": null
+   },
+   {
+    "name": "approved, not yet expired",
+    "initial_status": "approved",
+    "expires_at": 1000060.0,
+    "present": true,
+    "status": "approved"
+   }
+  ],
+  "notified": [
+   "r0",
+   "r1"
+  ]
+ },
+ "claim": {
+  "first_claim": true,
+  "second_claim": false,
+  "unknown_claim": false,
+  "status_after_double_claim": "approved",
+  "status_after_resolve": "rejected",
+  "unknown_get_is_none": true
+ },
+ "two_phase": {
+  "claimed": {
+   "id": "r0",
+   "status": "resolving",
+   "revision": 1,
+   "command": "ls"
+  },
+  "claim_snapshot_is_a_copy": true,
+  "second_claim_request_is_none": true,
+  "unknown_claim_request_is_none": true,
+  "status_after_claim_request": "resolving",
+  "stale_revision_finalize": false,
+  "finalized": true,
+  "status_after_finalize": "approved",
+  "second_finalize": false,
+  "unknown_finalize": false,
+  "finalize_from_pending": false,
+  "status_after_finalize_from_pending": "pending",
+  "status_after_refuse": "refused",
+  "rejected_finalize_statuses": [
+   {
+    "status": "pending",
+    "message": "approval resolution must finalize as approved or refused"
+   },
+   {
+    "status": "resolving",
+    "message": "approval resolution must finalize as approved or refused"
+   },
+   {
+    "status": "rejected",
+    "message": "approval resolution must finalize as approved or refused"
+   },
+   {
+    "status": "timeout",
+    "message": "approval resolution must finalize as approved or refused"
+   }
+  ],
+  "expired_claim_request_is_none": true,
+  "status_after_expired_claim_request": "timeout"
+ },
+ "notify": {
+  "claim_succeeded": false,
+  "second_claim_succeeded": false,
+  "notified_during_decision": [],
+  "notified_after_notify_expired": [
+   {
+    "id": "r0",
+    "revision": 1,
+    "status": "timeout"
+   }
+  ],
+  "notified_after_second_notify": [
+   {
+    "id": "r0",
+    "revision": 1,
+    "status": "timeout"
+   }
+  ],
+  "notified_after_cleanup": [
+   {
+    "id": "r0",
+    "revision": 1,
+    "status": "timeout"
+   }
+  ],
+  "status": "timeout"
+ },
+ "replacement": {
+  "status": "pending",
+  "expires_at": 1000060.0
+ }
+}

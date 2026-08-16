@@ -1,0 +1,1120 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_ctrlmsg_golden.py",
+ "secret": "corpus-secret",
+ "identity": [
+  {
+   "name": "subject only",
+   "subject": "user:alice",
+   "claims": null,
+   "fingerprint": null,
+   "transport": null,
+   "secret": null,
+   "frame": {
+    "type": "identity",
+    "version": 1,
+    "subject": "user:alice",
+    "fingerprint": "",
+    "transport": "ssh"
+   }
+  },
+  {
+   "name": "explicit empty fingerprint",
+   "subject": "u",
+   "claims": null,
+   "fingerprint": "",
+   "transport": null,
+   "secret": null,
+   "frame": {
+    "type": "identity",
+    "version": 1,
+    "subject": "u",
+    "fingerprint": "",
+    "transport": "ssh"
+   }
+  },
+  {
+   "name": "fingerprint and transport",
+   "subject": "u",
+   "claims": null,
+   "fingerprint": "SHA256:abc",
+   "transport": "ssh",
+   "secret": null,
+   "frame": {
+    "type": "identity",
+    "version": 1,
+    "subject": "u",
+    "fingerprint": "SHA256:abc",
+    "transport": "ssh"
+   }
+  },
+  {
+   "name": "websocket transport",
+   "subject": "u",
+   "claims": null,
+   "fingerprint": null,
+   "transport": "websocket",
+   "secret": null,
+   "frame": {
+    "type": "identity",
+    "version": 1,
+    "subject": "u",
+    "fingerprint": "",
+    "transport": "websocket"
+   }
+  },
+  {
+   "name": "empty claims mapping is kept",
+   "subject": "u",
+   "claims": {},
+   "fingerprint": null,
+   "transport": null,
+   "secret": null,
+   "frame": {
+    "type": "identity",
+    "version": 1,
+    "subject": "u",
+    "fingerprint": "",
+    "transport": "ssh",
+    "claims": {}
+   }
+  },
+  {
+   "name": "string claims",
+   "subject": "u",
+   "claims": {
+    "role": "operator"
+   },
+   "fingerprint": null,
+   "transport": null,
+   "secret": null,
+   "frame": {
+    "type": "identity",
+    "version": 1,
+    "subject": "u",
+    "fingerprint": "",
+    "transport": "ssh",
+    "claims": {
+     "role": "operator"
+    }
+   }
+  },
+  {
+   "name": "multiple claims out of order",
+   "subject": "u",
+   "claims": {
+    "z": 1,
+    "a": 2,
+    "m": 3
+   },
+   "fingerprint": null,
+   "transport": null,
+   "secret": null,
+   "frame": {
+    "type": "identity",
+    "version": 1,
+    "subject": "u",
+    "fingerprint": "",
+    "transport": "ssh",
+    "claims": {
+     "z": 1,
+     "a": 2,
+     "m": 3
+    }
+   }
+  },
+  {
+   "name": "integer and boolean claims",
+   "subject": "u",
+   "claims": {
+    "exp": 1735689600,
+    "admin": true
+   },
+   "fingerprint": null,
+   "transport": null,
+   "secret": null,
+   "frame": {
+    "type": "identity",
+    "version": 1,
+    "subject": "u",
+    "fingerprint": "",
+    "transport": "ssh",
+    "claims": {
+     "exp": 1735689600,
+     "admin": true
+    }
+   }
+  },
+  {
+   "name": "nested claims",
+   "subject": "u",
+   "claims": {
+    "scopes": [
+     "read",
+     "write"
+    ],
+    "meta": {
+     "b": 1,
+     "a": 2
+    }
+   },
+   "fingerprint": null,
+   "transport": null,
+   "secret": null,
+   "frame": {
+    "type": "identity",
+    "version": 1,
+    "subject": "u",
+    "fingerprint": "",
+    "transport": "ssh",
+    "claims": {
+     "scopes": [
+      "read",
+      "write"
+     ],
+     "meta": {
+      "b": 1,
+      "a": 2
+     }
+    }
+   }
+  },
+  {
+   "name": "null claim",
+   "subject": "u",
+   "claims": {
+    "none": null
+   },
+   "fingerprint": null,
+   "transport": null,
+   "secret": null,
+   "frame": {
+    "type": "identity",
+    "version": 1,
+    "subject": "u",
+    "fingerprint": "",
+    "transport": "ssh",
+    "claims": {
+     "none": null
+    }
+   }
+  },
+  {
+   "name": "non-ascii claim",
+   "subject": "u",
+   "claims": {
+    "name": "José"
+   },
+   "fingerprint": null,
+   "transport": null,
+   "secret": null,
+   "frame": {
+    "type": "identity",
+    "version": 1,
+    "subject": "u",
+    "fingerprint": "",
+    "transport": "ssh",
+    "claims": {
+     "name": "José"
+    }
+   }
+  },
+  {
+   "name": "cjk claim",
+   "subject": "u",
+   "claims": {
+    "name": "你好"
+   },
+   "fingerprint": null,
+   "transport": null,
+   "secret": null,
+   "frame": {
+    "type": "identity",
+    "version": 1,
+    "subject": "u",
+    "fingerprint": "",
+    "transport": "ssh",
+    "claims": {
+     "name": "你好"
+    }
+   }
+  },
+  {
+   "name": "non-ascii subject",
+   "subject": "user:José",
+   "claims": null,
+   "fingerprint": null,
+   "transport": null,
+   "secret": null,
+   "frame": {
+    "type": "identity",
+    "version": 1,
+    "subject": "user:José",
+    "fingerprint": "",
+    "transport": "ssh"
+   }
+  },
+  {
+   "name": "signed, no claims",
+   "subject": "user:alice",
+   "claims": null,
+   "fingerprint": null,
+   "transport": null,
+   "secret": "corpus-secret",
+   "frame": {
+    "type": "identity",
+    "version": 1,
+    "subject": "user:alice",
+    "fingerprint": "",
+    "transport": "ssh",
+    "signature": "16625f66b0f52930c8d22a9dce84fa82725233b037ac2a183414c48979e67ea2"
+   }
+  },
+  {
+   "name": "signed, empty claims",
+   "subject": "u",
+   "claims": {},
+   "fingerprint": null,
+   "transport": null,
+   "secret": "corpus-secret",
+   "frame": {
+    "type": "identity",
+    "version": 1,
+    "subject": "u",
+    "fingerprint": "",
+    "transport": "ssh",
+    "claims": {},
+    "signature": "4193a12d159969147acf00bf30676f31759af73f51a11195ee564a1205828775"
+   }
+  },
+  {
+   "name": "signed, string claims",
+   "subject": "u",
+   "claims": {
+    "role": "operator"
+   },
+   "fingerprint": null,
+   "transport": null,
+   "secret": "corpus-secret",
+   "frame": {
+    "type": "identity",
+    "version": 1,
+    "subject": "u",
+    "fingerprint": "",
+    "transport": "ssh",
+    "claims": {
+     "role": "operator"
+    },
+    "signature": "38afde4f50978b580f1090741a98e88188f85b9f8d04a03e61e4a3ff92940011"
+   }
+  },
+  {
+   "name": "signed, claims out of order",
+   "subject": "u",
+   "claims": {
+    "z": 1,
+    "a": 2
+   },
+   "fingerprint": null,
+   "transport": null,
+   "secret": "corpus-secret",
+   "frame": {
+    "type": "identity",
+    "version": 1,
+    "subject": "u",
+    "fingerprint": "",
+    "transport": "ssh",
+    "claims": {
+     "z": 1,
+     "a": 2
+    },
+    "signature": "b28e88946dbddcdb16c30c44e1ff8f07117458c03c1038b9d3419f4c4b20abcf"
+   }
+  },
+  {
+   "name": "signed, nested claims",
+   "subject": "u",
+   "claims": {
+    "m": {
+     "b": 1,
+     "a": 2
+    }
+   },
+   "fingerprint": null,
+   "transport": null,
+   "secret": "corpus-secret",
+   "frame": {
+    "type": "identity",
+    "version": 1,
+    "subject": "u",
+    "fingerprint": "",
+    "transport": "ssh",
+    "claims": {
+     "m": {
+      "b": 1,
+      "a": 2
+     }
+    },
+    "signature": "e174a0c202c1ab8605342d129fda37b22c8e939cfdfbca601dc18655a072fe8a"
+   }
+  },
+  {
+   "name": "signed, non-ascii claim",
+   "subject": "u",
+   "claims": {
+    "name": "José"
+   },
+   "fingerprint": null,
+   "transport": null,
+   "secret": "corpus-secret",
+   "frame": {
+    "type": "identity",
+    "version": 1,
+    "subject": "u",
+    "fingerprint": "",
+    "transport": "ssh",
+    "claims": {
+     "name": "José"
+    },
+    "signature": "06e99f8f6cf7aeab4157fa99563a45f57d3db72607bcaa82e2b666ddf8996855"
+   }
+  },
+  {
+   "name": "signed, cjk claim",
+   "subject": "u",
+   "claims": {
+    "name": "你好"
+   },
+   "fingerprint": null,
+   "transport": null,
+   "secret": "corpus-secret",
+   "frame": {
+    "type": "identity",
+    "version": 1,
+    "subject": "u",
+    "fingerprint": "",
+    "transport": "ssh",
+    "claims": {
+     "name": "你好"
+    },
+    "signature": "4cb98b612cd6c7c952ce52c01e00beb0eedd5676d8c388ff9eb6fea985e4ddb2"
+   }
+  },
+  {
+   "name": "signed with fingerprint",
+   "subject": "u",
+   "claims": null,
+   "fingerprint": "SHA256:abc",
+   "transport": null,
+   "secret": "corpus-secret",
+   "frame": {
+    "type": "identity",
+    "version": 1,
+    "subject": "u",
+    "fingerprint": "SHA256:abc",
+    "transport": "ssh",
+    "signature": "910d3ceede60f65562458431340ac0cc301b05688fbcb9705d1c4a0cae97795f"
+   }
+  },
+  {
+   "name": "signed with transport",
+   "subject": "u",
+   "claims": null,
+   "fingerprint": null,
+   "transport": "websocket",
+   "secret": "corpus-secret",
+   "frame": {
+    "type": "identity",
+    "version": 1,
+    "subject": "u",
+    "fingerprint": "",
+    "transport": "websocket",
+    "signature": "720b15fb527e0ea6ead431a17bec8ba0bab4a18ac802e1cbd39218dae8d9e624"
+   }
+  },
+  {
+   "name": "signed with bytes secret",
+   "subject": "u",
+   "claims": null,
+   "fingerprint": null,
+   "transport": null,
+   "secret": "corpus-secret",
+   "frame": {
+    "type": "identity",
+    "version": 1,
+    "subject": "u",
+    "fingerprint": "",
+    "transport": "ssh",
+    "signature": "4193a12d159969147acf00bf30676f31759af73f51a11195ee564a1205828775"
+   }
+  },
+  {
+   "name": "empty secret leaves the frame unsigned",
+   "subject": "u",
+   "claims": null,
+   "fingerprint": null,
+   "transport": null,
+   "secret": "",
+   "frame": {
+    "type": "identity",
+    "version": 1,
+    "subject": "u",
+    "fingerprint": "",
+    "transport": "ssh"
+   }
+  }
+ ],
+ "session_token": [
+  {
+   "token": "t",
+   "player_id": null,
+   "frame": {
+    "type": "session_token",
+    "token": "t"
+   }
+  },
+  {
+   "token": "t",
+   "player_id": 7,
+   "frame": {
+    "type": "session_token",
+    "token": "t",
+    "player_id": 7
+   }
+  },
+  {
+   "token": "t",
+   "player_id": 0,
+   "frame": {
+    "type": "session_token",
+    "token": "t",
+    "player_id": 0
+   }
+  }
+ ],
+ "resume": [
+  {
+   "token": "t",
+   "player_id": null,
+   "frame": {
+    "type": "resume",
+    "token": "t"
+   }
+  },
+  {
+   "token": "t",
+   "player_id": 7,
+   "frame": {
+    "type": "resume",
+    "token": "t",
+    "player_id": 7
+   }
+  }
+ ],
+ "resume_ok": {
+  "type": "resume_ok"
+ },
+ "resume_failed": [
+  {
+   "reason": null,
+   "frame": {
+    "type": "resume_failed"
+   }
+  },
+  {
+   "reason": "expired",
+   "frame": {
+    "type": "resume_failed",
+    "reason": "expired"
+   }
+  },
+  {
+   "reason": "",
+   "frame": {
+    "type": "resume_failed",
+    "reason": ""
+   }
+  }
+ ],
+ "presence_update": [
+  {
+   "user_id": "u1",
+   "fields": {},
+   "frame": {
+    "type": "presence_update",
+    "user_id": "u1"
+   }
+  },
+  {
+   "user_id": "u1",
+   "fields": {
+    "scroll_line": 5
+   },
+   "frame": {
+    "type": "presence_update",
+    "user_id": "u1",
+    "scroll_line": 5
+   }
+  },
+  {
+   "user_id": "u1",
+   "fields": {
+    "cursor_row": 1,
+    "cursor_col": 2
+   },
+   "frame": {
+    "type": "presence_update",
+    "user_id": "u1",
+    "cursor_row": 1,
+    "cursor_col": 2
+   }
+  }
+ ],
+ "link_patterns": [
+  {
+   "name": "empty list",
+   "entries": [],
+   "frame": {
+    "type": "link_patterns",
+    "patterns": []
+   }
+  },
+  {
+   "name": "minimal entry",
+   "entries": [
+    {
+     "pattern": "\\((\\d+)\\)",
+     "action": "cmd"
+    }
+   ],
+   "frame": {
+    "type": "link_patterns",
+    "patterns": [
+     {
+      "pattern": "\\((\\d+)\\)",
+      "action": "cmd"
+     }
+    ]
+   }
+  },
+  {
+   "name": "every action",
+   "entries": [
+    {
+     "pattern": "a",
+     "action": "cmd"
+    },
+    {
+     "pattern": "a",
+     "action": "url"
+    },
+    {
+     "pattern": "a",
+     "action": "key"
+    },
+    {
+     "pattern": "a",
+     "action": "focus"
+    }
+   ],
+   "frame": {
+    "type": "link_patterns",
+    "patterns": [
+     {
+      "pattern": "a",
+      "action": "cmd"
+     },
+     {
+      "pattern": "a",
+      "action": "url"
+     },
+     {
+      "pattern": "a",
+      "action": "key"
+     },
+     {
+      "pattern": "a",
+      "action": "focus"
+     }
+    ]
+   }
+  },
+  {
+   "name": "all optional fields",
+   "entries": [
+    {
+     "pattern": "p",
+     "action": "cmd",
+     "id": "one",
+     "flags": "gi",
+     "group": 1,
+     "payload": "$1",
+     "hover": "go to $1",
+     "class": "sector-link"
+    }
+   ],
+   "frame": {
+    "type": "link_patterns",
+    "patterns": [
+     {
+      "pattern": "p",
+      "action": "cmd",
+      "id": "one",
+      "flags": "gi",
+      "group": 1,
+      "payload": "$1",
+      "hover": "go to $1",
+      "class": "sector-link"
+     }
+    ]
+   }
+  },
+  {
+   "name": "line_contains filter",
+   "entries": [
+    {
+     "pattern": "p",
+     "action": "cmd",
+     "line_contains": "Sector"
+    }
+   ],
+   "frame": {
+    "type": "link_patterns",
+    "patterns": [
+     {
+      "pattern": "p",
+      "action": "cmd",
+      "line_contains": "Sector"
+     }
+    ]
+   }
+  },
+  {
+   "name": "string group",
+   "entries": [
+    {
+     "pattern": "p",
+     "action": "cmd",
+     "group": "one"
+    }
+   ],
+   "frame": {
+    "type": "link_patterns",
+    "patterns": [
+     {
+      "pattern": "p",
+      "action": "cmd",
+      "group": "one"
+     }
+    ]
+   }
+  },
+  {
+   "name": "structured payload",
+   "entries": [
+    {
+     "pattern": "p",
+     "action": "cmd",
+     "payload": {
+      "a": [
+       1
+      ]
+     }
+    }
+   ],
+   "frame": {
+    "type": "link_patterns",
+    "patterns": [
+     {
+      "pattern": "p",
+      "action": "cmd",
+      "payload": {
+       "a": [
+        1
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "explicit null optionals",
+   "entries": [
+    {
+     "pattern": "p",
+     "action": "cmd",
+     "id": null,
+     "hover": null
+    }
+   ],
+   "frame": {
+    "type": "link_patterns",
+    "patterns": [
+     {
+      "pattern": "p",
+      "action": "cmd"
+     }
+    ]
+   }
+  },
+  {
+   "name": "explicit null payload",
+   "entries": [
+    {
+     "pattern": "p",
+     "action": "cmd",
+     "payload": null
+    }
+   ],
+   "frame": {
+    "type": "link_patterns",
+    "patterns": [
+     {
+      "pattern": "p",
+      "action": "cmd"
+     }
+    ]
+   }
+  },
+  {
+   "name": "two entries",
+   "entries": [
+    {
+     "pattern": "a",
+     "action": "cmd"
+    },
+    {
+     "pattern": "b",
+     "action": "url"
+    }
+   ],
+   "frame": {
+    "type": "link_patterns",
+    "patterns": [
+     {
+      "pattern": "a",
+      "action": "cmd"
+     },
+     {
+      "pattern": "b",
+      "action": "url"
+     }
+    ]
+   }
+  }
+ ],
+ "link_pattern_rejects": [
+  {
+   "name": "missing pattern",
+   "entries": [
+    {
+     "action": "cmd"
+    }
+   ],
+   "error_prefix": "make_link_patterns"
+  },
+  {
+   "name": "missing action",
+   "entries": [
+    {
+     "pattern": "p"
+    }
+   ],
+   "error_prefix": "make_link_patterns"
+  },
+  {
+   "name": "invalid action",
+   "entries": [
+    {
+     "pattern": "p",
+     "action": "nope"
+    }
+   ],
+   "error_prefix": "make_link_patterns"
+  },
+  {
+   "name": "unknown field",
+   "entries": [
+    {
+     "pattern": "p",
+     "action": "cmd",
+     "extra": 1
+    }
+   ],
+   "error_prefix": "make_link_patterns"
+  },
+  {
+   "name": "wrong type for pattern",
+   "entries": [
+    {
+     "pattern": 1,
+     "action": "cmd"
+    }
+   ],
+   "error_prefix": "make_link_patterns"
+  },
+  {
+   "name": "wrong type for group",
+   "entries": [
+    {
+     "pattern": "p",
+     "action": "cmd",
+     "group": []
+    }
+   ],
+   "error_prefix": "make_link_patterns"
+  },
+  {
+   "name": "wrong type for flags",
+   "entries": [
+    {
+     "pattern": "p",
+     "action": "cmd",
+     "flags": 1
+    }
+   ],
+   "error_prefix": "make_link_patterns"
+  },
+  {
+   "name": "second entry invalid",
+   "entries": [
+    {
+     "pattern": "a",
+     "action": "cmd"
+    },
+    {
+     "action": "cmd"
+    }
+   ],
+   "error_prefix": "make_link_patterns"
+  }
+ ],
+ "pattern_entries": [
+  {
+   "entry": {
+    "pattern": "p",
+    "action": "cmd"
+   }
+  },
+  {
+   "entry": {
+    "pattern": "p",
+    "action": "url",
+    "id": "x"
+   }
+  },
+  {
+   "entry": {
+    "pattern": "p",
+    "action": "cmd",
+    "flags": "gi"
+   }
+  },
+  {
+   "entry": {
+    "pattern": "p",
+    "action": "cmd"
+   }
+  },
+  {
+   "entry": {
+    "pattern": "p",
+    "action": "cmd",
+    "group": 2
+   }
+  },
+  {
+   "entry": {
+    "pattern": "p",
+    "action": "cmd"
+   }
+  },
+  {
+   "entry": {
+    "pattern": "p",
+    "action": "cmd",
+    "payload": "$1"
+   }
+  },
+  {
+   "entry": {
+    "pattern": "p",
+    "action": "cmd"
+   }
+  },
+  {
+   "entry": {
+    "pattern": "p",
+    "action": "cmd",
+    "hover": "h"
+   }
+  },
+  {
+   "entry": {
+    "pattern": "p",
+    "action": "cmd",
+    "class": "c"
+   }
+  },
+  {
+   "entry": {
+    "pattern": "p",
+    "action": "cmd",
+    "id": "x",
+    "flags": "i",
+    "group": 1,
+    "payload": "a",
+    "hover": "b",
+    "class": "c"
+   }
+  }
+ ],
+ "registry": {
+  "steps": [
+   {
+    "step": "empty",
+    "payload": {
+     "type": "link_patterns",
+     "patterns": []
+    }
+   },
+   {
+    "step": "one registered",
+    "payload": {
+     "type": "link_patterns",
+     "patterns": [
+      {
+       "pattern": "a",
+       "action": "cmd",
+       "id": "one"
+      }
+     ]
+    }
+   },
+   {
+    "step": "two registered",
+    "payload": {
+     "type": "link_patterns",
+     "patterns": [
+      {
+       "pattern": "a",
+       "action": "cmd",
+       "id": "one"
+      },
+      {
+       "pattern": "b",
+       "action": "url",
+       "id": "two"
+      }
+     ]
+    }
+   },
+   {
+    "step": "first replaced in place",
+    "payload": {
+     "type": "link_patterns",
+     "patterns": [
+      {
+       "pattern": "a2",
+       "action": "key",
+       "id": "one"
+      },
+      {
+       "pattern": "b",
+       "action": "url",
+       "id": "two"
+      }
+     ]
+    }
+   },
+   {
+    "step": "two anonymous appended",
+    "payload": {
+     "type": "link_patterns",
+     "patterns": [
+      {
+       "pattern": "a2",
+       "action": "key",
+       "id": "one"
+      },
+      {
+       "pattern": "b",
+       "action": "url",
+       "id": "two"
+      },
+      {
+       "pattern": "c",
+       "action": "focus"
+      },
+      {
+       "pattern": "d",
+       "action": "focus"
+      }
+     ]
+    }
+   },
+   {
+    "step": "known id removed",
+    "payload": {
+     "type": "link_patterns",
+     "patterns": [
+      {
+       "pattern": "a2",
+       "action": "key",
+       "id": "one"
+      },
+      {
+       "pattern": "c",
+       "action": "focus"
+      },
+      {
+       "pattern": "d",
+       "action": "focus"
+      }
+     ]
+    }
+   },
+   {
+    "step": "unknown id removal is a no-op",
+    "payload": {
+     "type": "link_patterns",
+     "patterns": [
+      {
+       "pattern": "a2",
+       "action": "key",
+       "id": "one"
+      },
+      {
+       "pattern": "c",
+       "action": "focus"
+      },
+      {
+       "pattern": "d",
+       "action": "focus"
+      }
+     ]
+    }
+   },
+   {
+    "step": "cleared",
+    "payload": {
+     "type": "link_patterns",
+     "patterns": []
+    }
+   },
+   {
+    "step": "registered after clear",
+    "payload": {
+     "type": "link_patterns",
+     "patterns": [
+      {
+       "pattern": "e",
+       "action": "cmd"
+      }
+     ]
+    }
+   }
+  ],
+  "removed_known": true,
+  "removed_unknown": false
+ }
+}

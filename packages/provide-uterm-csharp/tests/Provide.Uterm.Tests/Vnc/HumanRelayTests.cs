@@ -28,12 +28,12 @@ public class HumanRelayTests
     }
 
     [Fact]
-    public void Allow_Inject_Key_Reaches_Upstream_After_Handshake()
+    public async Task Allow_Inject_Key_Reaches_Upstream_After_Handshake()
     {
         using var src = new MemoryStream(Handshake().Concat(KeyEvent()).ToArray());
         using var dst = new MemoryStream();
         var policy = new StrictPolicyEngine();
-        HumanRelay.PumpClientToServer(
+        await HumanRelay.PumpClientToServer(
             dst,
             src,
             (sid, lid, pid, role) => policy.CanInject(sid, lid, role) is null,
@@ -45,13 +45,13 @@ public class HumanRelayTests
     }
 
     [Fact]
-    public void Deny_Inject_Only_Handshake_On_Upstream()
+    public async Task Deny_Inject_Only_Handshake_On_Upstream()
     {
         using var src = new MemoryStream(Handshake().Concat(KeyEvent()).ToArray());
         using var dst = new MemoryStream();
         var policy = new StrictPolicyEngine();
         // Empty lease → fail closed.
-        HumanRelay.PumpClientToServer(
+        await HumanRelay.PumpClientToServer(
             dst,
             src,
             (sid, lid, pid, role) => policy.CanInject(sid, lid, role) is null,
@@ -63,15 +63,15 @@ public class HumanRelayTests
     }
 
     [Fact]
-    public void Bad_Security_Type_Propagates_Error()
+    public async Task Bad_Security_Type_Propagates_Error()
     {
         var raw = new byte[13];
         System.Text.Encoding.ASCII.GetBytes("RFB 003.008\n").CopyTo(raw, 0);
         raw[12] = 2;
         using var src = new MemoryStream(raw);
         using var dst = new MemoryStream();
-        var ex = Assert.Throws<InvalidOperationException>(() =>
-            HumanRelay.PumpClientToServer(dst, src, null, "s", "l", "p", "admin"));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await HumanRelay.PumpClientToServer(dst, src, null, "s", "l", "p", "admin"));
         Assert.Contains("unsupported security type", ex.Message, StringComparison.Ordinal);
     }
 
@@ -94,19 +94,18 @@ public class HumanRelayTests
         using var upstreamDst = new MemoryStream();
         using var clientDst = new MemoryStream();
 
-        var relay = HumanRelay.RelayAsync(
-            clientSrc,
-            upstreamDst,
-            hang,
-            clientDst,
-            static (_, lid, _, role) => lid.Length > 0 && role is "operator" or "admin",
-            "s",
-            "lease-1",
-            "bob",
-            "operator");
-
         // Client filter hits EOF and cancels the hanging server pump.
-        await relay.WaitAsync(TimeSpan.FromSeconds(5));
+        await HumanRelay.RelayAsync(
+                clientSrc,
+                upstreamDst,
+                hang,
+                clientDst,
+                static (_, lid, _, role) => lid.Length > 0 && role is "operator" or "admin",
+                "s",
+                "lease-1",
+                "bob",
+                "operator")
+            .WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Equal(14 + 8, upstreamDst.Length);
     }
 
@@ -168,7 +167,7 @@ public class HumanRelayTests
         }
 
         public override int Read(byte[] buffer, int offset, int count) =>
-            ReadAsync(buffer.AsMemory(offset, count), CancellationToken.None).AsTask().GetAwaiter().GetResult();
+            throw new NotSupportedException("Use ReadAsync in this test stream.");
 
         public override async ValueTask<int> ReadAsync(
             Memory<byte> buffer, CancellationToken cancellationToken = default)

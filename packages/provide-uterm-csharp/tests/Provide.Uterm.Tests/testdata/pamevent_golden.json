@@ -1,0 +1,343 @@
+{
+  "max_line": 4096,
+  "socket_mode": 384,
+  "bind_umask": 127,
+  "lines": [
+    {
+      "name": "an ordinary login",
+      "line": "{\"event\":\"open\",\"username\":\"ada\",\"tty\":\"pts/3\",\"pid\":4242}",
+      "event": {
+        "event": "open",
+        "username": "ada",
+        "tty": "pts/3",
+        "pid": 4242,
+        "mode": "notify",
+        "capture_socket": null
+      }
+    },
+    {
+      "name": "an ordinary logout",
+      "line": "{\"event\":\"close\",\"username\":\"ada\",\"tty\":\"pts/3\",\"pid\":4242}",
+      "event": {
+        "event": "close",
+        "username": "ada",
+        "tty": "pts/3",
+        "pid": 4242,
+        "mode": "notify",
+        "capture_socket": null
+      }
+    },
+    {
+      "name": "a line with a trailing newline",
+      "line": "{\"event\":\"open\",\"username\":\"ada\"}\n",
+      "event": {
+        "event": "open",
+        "username": "ada",
+        "tty": "",
+        "pid": 0,
+        "mode": "notify",
+        "capture_socket": null
+      }
+    },
+    {
+      "name": "a line with spaces around it",
+      "line": "  {\"event\":\"open\",\"username\":\"ada\"}  \n",
+      "event": {
+        "event": "open",
+        "username": "ada",
+        "tty": "",
+        "pid": 0,
+        "mode": "notify",
+        "capture_socket": null
+      }
+    },
+    {
+      "name": "nothing at all",
+      "line": "",
+      "event": null
+    },
+    {
+      "name": "a line that is not JSON",
+      "line": "open ada pts/3",
+      "event": null
+    },
+    {
+      "name": "a line that is half JSON",
+      "line": "{\"event\":\"open\",\"username\":",
+      "event": null
+    },
+    {
+      "name": "a JSON list rather than an object",
+      "line": "[\"open\",\"ada\"]",
+      "event": null
+    },
+    {
+      "name": "a JSON string rather than an object",
+      "line": "\"open\"",
+      "event": null
+    },
+    {
+      "name": "a JSON null",
+      "line": "null",
+      "event": null
+    },
+    {
+      "name": "an event nobody defined",
+      "line": "{\"event\":\"hijack\",\"username\":\"ada\"}",
+      "event": null
+    },
+    {
+      "name": "no event at all",
+      "line": "{\"username\":\"ada\"}",
+      "event": null
+    },
+    {
+      "name": "an event that is not a string",
+      "line": "{\"event\":1,\"username\":\"ada\"}",
+      "event": null
+    },
+    {
+      "name": "no username",
+      "line": "{\"event\":\"open\"}",
+      "event": null
+    },
+    {
+      "name": "an empty username",
+      "line": "{\"event\":\"open\",\"username\":\"\"}",
+      "event": null
+    },
+    {
+      "name": "a username given null",
+      "line": "{\"event\":\"open\",\"username\":null}",
+      "event": null
+    },
+    {
+      "name": "a username that is a number",
+      "line": "{\"event\":\"open\",\"username\":1000}",
+      "event": {
+        "event": "open",
+        "username": "1000",
+        "tty": "",
+        "pid": 0,
+        "mode": "notify",
+        "capture_socket": null
+      }
+    },
+    {
+      "name": "no tty",
+      "line": "{\"event\":\"open\",\"username\":\"ada\"}",
+      "event": {
+        "event": "open",
+        "username": "ada",
+        "tty": "",
+        "pid": 0,
+        "mode": "notify",
+        "capture_socket": null
+      }
+    },
+    {
+      "name": "a tty given null",
+      "line": "{\"event\":\"open\",\"username\":\"ada\",\"tty\":null}",
+      "event": {
+        "event": "open",
+        "username": "ada",
+        "tty": "",
+        "pid": 0,
+        "mode": "notify",
+        "capture_socket": null
+      }
+    },
+    {
+      "name": "a pid given as a string",
+      "line": "{\"event\":\"open\",\"username\":\"ada\",\"pid\":\"4242\"}",
+      "event": {
+        "event": "open",
+        "username": "ada",
+        "tty": "",
+        "pid": 4242,
+        "mode": "notify",
+        "capture_socket": null
+      }
+    },
+    {
+      "name": "a pid that is not a number",
+      "line": "{\"event\":\"open\",\"username\":\"ada\",\"pid\":\"soon\"}",
+      "event": {
+        "event": "open",
+        "username": "ada",
+        "tty": "",
+        "pid": 0,
+        "mode": "notify",
+        "capture_socket": null
+      }
+    },
+    {
+      "name": "a pid given null",
+      "line": "{\"event\":\"open\",\"username\":\"ada\",\"pid\":null}",
+      "event": {
+        "event": "open",
+        "username": "ada",
+        "tty": "",
+        "pid": 0,
+        "mode": "notify",
+        "capture_socket": null
+      }
+    },
+    {
+      "name": "a pid given a list",
+      "line": "{\"event\":\"open\",\"username\":\"ada\",\"pid\":[1]}",
+      "event": {
+        "event": "open",
+        "username": "ada",
+        "tty": "",
+        "pid": 0,
+        "mode": "notify",
+        "capture_socket": null
+      }
+    },
+    {
+      "name": "a negative pid",
+      "line": "{\"event\":\"open\",\"username\":\"ada\",\"pid\":-1}",
+      "event": {
+        "event": "open",
+        "username": "ada",
+        "tty": "",
+        "pid": -1,
+        "mode": "notify",
+        "capture_socket": null
+      }
+    },
+    {
+      "name": "the capture mode",
+      "line": "{\"event\":\"open\",\"username\":\"ada\",\"mode\":\"capture\"}",
+      "event": {
+        "event": "open",
+        "username": "ada",
+        "tty": "",
+        "pid": 0,
+        "mode": "capture",
+        "capture_socket": null
+      }
+    },
+    {
+      "name": "a mode nobody defined",
+      "line": "{\"event\":\"open\",\"username\":\"ada\",\"mode\":\"record\"}",
+      "event": {
+        "event": "open",
+        "username": "ada",
+        "tty": "",
+        "pid": 0,
+        "mode": "notify",
+        "capture_socket": null
+      }
+    },
+    {
+      "name": "the capture mode in capitals",
+      "line": "{\"event\":\"open\",\"username\":\"ada\",\"mode\":\"CAPTURE\"}",
+      "event": {
+        "event": "open",
+        "username": "ada",
+        "tty": "",
+        "pid": 0,
+        "mode": "notify",
+        "capture_socket": null
+      }
+    },
+    {
+      "name": "a mode given null",
+      "line": "{\"event\":\"open\",\"username\":\"ada\",\"mode\":null}",
+      "event": {
+        "event": "open",
+        "username": "ada",
+        "tty": "",
+        "pid": 0,
+        "mode": "notify",
+        "capture_socket": null
+      }
+    },
+    {
+      "name": "a capture socket",
+      "line": "{\"event\":\"open\",\"username\":\"ada\",\"mode\":\"capture\",\"capture_socket\":\"/run/c.sock\"}",
+      "event": {
+        "event": "open",
+        "username": "ada",
+        "tty": "",
+        "pid": 0,
+        "mode": "capture",
+        "capture_socket": "/run/c.sock"
+      }
+    },
+    {
+      "name": "a capture socket that is empty",
+      "line": "{\"event\":\"open\",\"username\":\"ada\",\"capture_socket\":\"\"}",
+      "event": {
+        "event": "open",
+        "username": "ada",
+        "tty": "",
+        "pid": 0,
+        "mode": "notify",
+        "capture_socket": null
+      }
+    },
+    {
+      "name": "a capture socket given null",
+      "line": "{\"event\":\"open\",\"username\":\"ada\",\"capture_socket\":null}",
+      "event": {
+        "event": "open",
+        "username": "ada",
+        "tty": "",
+        "pid": 0,
+        "mode": "notify",
+        "capture_socket": null
+      }
+    },
+    {
+      "name": "a capture socket that is a number",
+      "line": "{\"event\":\"open\",\"username\":\"ada\",\"capture_socket\":5}",
+      "event": {
+        "event": "open",
+        "username": "ada",
+        "tty": "",
+        "pid": 0,
+        "mode": "notify",
+        "capture_socket": "5"
+      }
+    },
+    {
+      "name": "a username with a null byte in it",
+      "line": "{\"event\":\"open\",\"username\":\"ada\\u0000root\"}",
+      "event": {
+        "event": "open",
+        "username": "ada\u0000root",
+        "tty": "",
+        "pid": 0,
+        "mode": "notify",
+        "capture_socket": null
+      }
+    },
+    {
+      "name": "bytes that are not valid UTF-8",
+      "line": "{\"event\":\"open\",\"username\":\"adÿa\"}",
+      "event": {
+        "event": "open",
+        "username": "ad�a",
+        "tty": "",
+        "pid": 0,
+        "mode": "notify",
+        "capture_socket": null
+      }
+    },
+    {
+      "name": "a name nobody defined alongside the rest",
+      "line": "{\"event\":\"open\",\"username\":\"ada\",\"colour\":\"green\"}",
+      "event": {
+        "event": "open",
+        "username": "ada",
+        "tty": "",
+        "pid": 0,
+        "mode": "notify",
+        "capture_socket": null
+      }
+    }
+  ]
+}

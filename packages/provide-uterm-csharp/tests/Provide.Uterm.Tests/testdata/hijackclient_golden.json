@@ -1,0 +1,495 @@
+{
+  "ids": [
+    {
+      "name": "an ordinary id",
+      "id": "worker-1",
+      "ok": true,
+      "value": "worker-1"
+    },
+    {
+      "name": "digits",
+      "id": "12345",
+      "ok": true,
+      "value": "12345"
+    },
+    {
+      "name": "a dotted id",
+      "id": "worker.1",
+      "ok": true,
+      "value": "worker.1"
+    },
+    {
+      "name": "an underscored id",
+      "id": "worker_1",
+      "ok": true,
+      "value": "worker_1"
+    },
+    {
+      "name": "one character",
+      "id": "a",
+      "ok": true,
+      "value": "a"
+    },
+    {
+      "name": "a long id",
+      "id": "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+      "ok": true,
+      "value": "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww"
+    },
+    {
+      "name": "nothing at all",
+      "id": "",
+      "ok": false,
+      "error": "invalid worker_id: ''"
+    },
+    {
+      "name": "a dot",
+      "id": ".",
+      "ok": false,
+      "error": "invalid worker_id: '.'"
+    },
+    {
+      "name": "two dots",
+      "id": "..",
+      "ok": false,
+      "error": "invalid worker_id: '..'"
+    },
+    {
+      "name": "three dots",
+      "id": "...",
+      "ok": true,
+      "value": "..."
+    },
+    {
+      "name": "a slash",
+      "id": "a/b",
+      "ok": false,
+      "error": "invalid worker_id: 'a/b'"
+    },
+    {
+      "name": "a leading slash",
+      "id": "/a",
+      "ok": false,
+      "error": "invalid worker_id: '/a'"
+    },
+    {
+      "name": "a trailing slash",
+      "id": "a/",
+      "ok": false,
+      "error": "invalid worker_id: 'a/'"
+    },
+    {
+      "name": "an escaped slash",
+      "id": "a%2Fb",
+      "ok": false,
+      "error": "invalid worker_id: 'a%2Fb'"
+    },
+    {
+      "name": "a traversal",
+      "id": "../../etc/passwd",
+      "ok": false,
+      "error": "invalid worker_id: '../../etc/passwd'"
+    },
+    {
+      "name": "a query string",
+      "id": "a?x=1",
+      "ok": false,
+      "error": "invalid worker_id: 'a?x=1'"
+    },
+    {
+      "name": "a fragment",
+      "id": "a#b",
+      "ok": false,
+      "error": "invalid worker_id: 'a#b'"
+    },
+    {
+      "name": "a space",
+      "id": "a b",
+      "ok": false,
+      "error": "invalid worker_id: 'a b'"
+    },
+    {
+      "name": "a newline",
+      "id": "a\nb",
+      "ok": false,
+      "error": "invalid worker_id: 'a\\nb'"
+    },
+    {
+      "name": "a null byte",
+      "id": "a\u0000b",
+      "ok": false,
+      "error": "invalid worker_id: 'a\\x00b'"
+    },
+    {
+      "name": "a colon",
+      "id": "a:b",
+      "ok": false,
+      "error": "invalid worker_id: 'a:b'"
+    },
+    {
+      "name": "an at sign",
+      "id": "a@b",
+      "ok": false,
+      "error": "invalid worker_id: 'a@b'"
+    },
+    {
+      "name": "text outside ASCII",
+      "id": "wörker",
+      "ok": false,
+      "error": "invalid worker_id: 'wörker'"
+    },
+    {
+      "name": "a digit outside ASCII",
+      "id": "worker-١",
+      "ok": false,
+      "error": "invalid worker_id: 'worker-١'"
+    },
+    {
+      "name": "only spaces",
+      "id": "   ",
+      "ok": false,
+      "error": "invalid worker_id: '   '"
+    }
+  ],
+  "sanitized": [
+    {
+      "name": "nothing",
+      "value": null,
+      "sanitized": null
+    },
+    {
+      "name": "a number",
+      "value": 42,
+      "sanitized": 42
+    },
+    {
+      "name": "a short string",
+      "value": "hello",
+      "sanitized": "hello"
+    },
+    {
+      "name": "a long string",
+      "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "sanitized": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx..."
+    },
+    {
+      "name": "a string of exactly the limit",
+      "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "sanitized": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "name": "a string one past the limit",
+      "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "sanitized": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx..."
+    },
+    {
+      "name": "a token",
+      "value": {
+        "token": "s3cret"
+      },
+      "sanitized": {
+        "token": "***"
+      }
+    },
+    {
+      "name": "a token in capitals",
+      "value": {
+        "TOKEN": "s3cret"
+      },
+      "sanitized": {
+        "TOKEN": "***"
+      }
+    },
+    {
+      "name": "a name merely containing token",
+      "value": {
+        "my_token_thing": "s3cret"
+      },
+      "sanitized": {
+        "my_token_thing": "***"
+      }
+    },
+    {
+      "name": "a secret",
+      "value": {
+        "secret": "s3cret"
+      },
+      "sanitized": {
+        "secret": "***"
+      }
+    },
+    {
+      "name": "a password",
+      "value": {
+        "password": "hunter2"
+      },
+      "sanitized": {
+        "password": "***"
+      }
+    },
+    {
+      "name": "a key",
+      "value": {
+        "api_key": "s3cret"
+      },
+      "sanitized": {
+        "api_key": "***"
+      }
+    },
+    {
+      "name": "an authorization header",
+      "value": {
+        "authorization": "Bearer x"
+      },
+      "sanitized": {
+        "authorization": "***"
+      }
+    },
+    {
+      "name": "a session id",
+      "value": {
+        "session_id": "sess-1"
+      },
+      "sanitized": {
+        "session_id": "***"
+      }
+    },
+    {
+      "name": "something innocuous",
+      "value": {
+        "worker_id": "w1",
+        "count": 3
+      },
+      "sanitized": {
+        "worker_id": "w1",
+        "count": 3
+      }
+    },
+    {
+      "name": "a mixture",
+      "value": {
+        "worker_id": "w1",
+        "token": "s3cret",
+        "nested": {
+          "password": "x",
+          "n": 1
+        }
+      },
+      "sanitized": {
+        "worker_id": "w1",
+        "token": "***",
+        "nested": {
+          "password": "***",
+          "n": 1
+        }
+      }
+    },
+    {
+      "name": "a short list",
+      "value": [
+        1,
+        2,
+        3
+      ],
+      "sanitized": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "name": "a list of exactly ten",
+      "value": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "sanitized": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ]
+    },
+    {
+      "name": "a list of eleven",
+      "value": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "sanitized": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        "..."
+      ]
+    },
+    {
+      "name": "a long list",
+      "value": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49
+      ],
+      "sanitized": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        "..."
+      ]
+    },
+    {
+      "name": "a list of things to redact",
+      "value": [
+        {
+          "token": "a"
+        },
+        {
+          "token": "b"
+        }
+      ],
+      "sanitized": [
+        {
+          "token": "***"
+        },
+        {
+          "token": "***"
+        }
+      ]
+    },
+    {
+      "name": "a long string inside a list",
+      "value": [
+        "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+      ],
+      "sanitized": [
+        "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy..."
+      ]
+    },
+    {
+      "name": "a long string inside a mapping",
+      "value": {
+        "note": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+      },
+      "sanitized": {
+        "note": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy..."
+      }
+    },
+    {
+      "name": "something deeply nested",
+      "value": {
+        "a": {
+          "b": {
+            "c": {
+              "token": "s3cret",
+              "fine": 1
+            }
+          }
+        }
+      },
+      "sanitized": {
+        "a": {
+          "b": {
+            "c": {
+              "token": "***",
+              "fine": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "an empty mapping",
+      "value": {},
+      "sanitized": {}
+    },
+    {
+      "name": "an empty list",
+      "value": [],
+      "sanitized": []
+    }
+  ]
+}

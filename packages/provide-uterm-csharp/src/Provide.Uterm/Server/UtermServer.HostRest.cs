@@ -423,10 +423,14 @@ public sealed partial class UtermServer
     {
         var p = await Authenticate(ctx).ConfigureAwait(false);
         var secure = _deps.Config.Security.Mode == "strict";
+        var headers = SecurityHeaders.ResolveSecurityHeaders(_deps.Config.Security)
+            .Select(h => new[] { h.Header, h.Value })
+            .ToList();
         var posture = new Dictionary<string, object?>
         {
             ["environment"] = _deps.Config.Environment ?? "development",
             ["secure"] = secure,
+            ["headers"] = headers,
         };
         if (_deps.Authz.IsAdmin(p) || _deps.Authz.HasRole(p, "operator"))
         {

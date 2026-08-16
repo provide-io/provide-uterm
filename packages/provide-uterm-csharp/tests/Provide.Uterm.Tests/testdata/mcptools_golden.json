@@ -1,0 +1,608 @@
+{
+  "screen": "\u001b[1;35mhello\u001b[0m\nsecond\nthird\nfourth",
+  "configs": [
+    {
+      "name": "a shell",
+      "connector_type": "shell",
+      "url": null,
+      "port": null,
+      "host": null,
+      "rejection": null
+    },
+    {
+      "name": "a connector nobody allows",
+      "connector_type": "carrier-pigeon",
+      "url": null,
+      "port": null,
+      "host": null,
+      "rejection": {
+        "success": false,
+        "error": "invalid_connector_type",
+        "connector_type": "carrier-pigeon"
+      }
+    },
+    {
+      "name": "a connector in capitals",
+      "connector_type": "SHELL",
+      "url": null,
+      "port": null,
+      "host": null,
+      "rejection": {
+        "success": false,
+        "error": "invalid_connector_type",
+        "connector_type": "SHELL"
+      }
+    },
+    {
+      "name": "no connector at all",
+      "connector_type": "",
+      "url": null,
+      "port": null,
+      "host": null,
+      "rejection": {
+        "success": false,
+        "error": "invalid_connector_type",
+        "connector_type": ""
+      }
+    },
+    {
+      "name": "a port in range",
+      "connector_type": "ssh",
+      "url": null,
+      "port": 22,
+      "host": null,
+      "rejection": null
+    },
+    {
+      "name": "the lowest port",
+      "connector_type": "ssh",
+      "url": null,
+      "port": 1,
+      "host": null,
+      "rejection": null
+    },
+    {
+      "name": "the highest port",
+      "connector_type": "ssh",
+      "url": null,
+      "port": 65535,
+      "host": null,
+      "rejection": null
+    },
+    {
+      "name": "port zero",
+      "connector_type": "ssh",
+      "url": null,
+      "port": 0,
+      "host": null,
+      "rejection": {
+        "success": false,
+        "error": "invalid_port",
+        "port": 0
+      }
+    },
+    {
+      "name": "a port past the end",
+      "connector_type": "ssh",
+      "url": null,
+      "port": 65536,
+      "host": null,
+      "rejection": {
+        "success": false,
+        "error": "invalid_port",
+        "port": 65536
+      }
+    },
+    {
+      "name": "a negative port",
+      "connector_type": "ssh",
+      "url": null,
+      "port": -1,
+      "host": null,
+      "rejection": {
+        "success": false,
+        "error": "invalid_port",
+        "port": -1
+      }
+    },
+    {
+      "name": "no port at all",
+      "connector_type": "ssh",
+      "url": null,
+      "port": null,
+      "host": null,
+      "rejection": null
+    },
+    {
+      "name": "a websocket url",
+      "connector_type": "websocket",
+      "url": "wss://feed.example/s",
+      "port": null,
+      "host": null,
+      "rejection": null
+    },
+    {
+      "name": "a scheme in capitals",
+      "connector_type": "websocket",
+      "url": "WSS://feed.example/s",
+      "port": null,
+      "host": null,
+      "rejection": null
+    },
+    {
+      "name": "a scheme in mixed case",
+      "connector_type": "websocket",
+      "url": "WsS://feed.example/s",
+      "port": null,
+      "host": null,
+      "rejection": null
+    },
+    {
+      "name": "a cleartext websocket url",
+      "connector_type": "websocket",
+      "url": "ws://feed.example/s",
+      "port": null,
+      "host": null,
+      "rejection": null
+    },
+    {
+      "name": "an http url",
+      "connector_type": "websocket",
+      "url": "http://feed.example/s",
+      "port": null,
+      "host": null,
+      "rejection": null
+    },
+    {
+      "name": "a telnet url",
+      "connector_type": "telnet",
+      "url": "telnet://bbs.example",
+      "port": null,
+      "host": null,
+      "rejection": null
+    },
+    {
+      "name": "an ssh url",
+      "connector_type": "ssh",
+      "url": "ssh://shell.example",
+      "port": null,
+      "host": null,
+      "rejection": null
+    },
+    {
+      "name": "a file url",
+      "connector_type": "websocket",
+      "url": "file:///etc/passwd",
+      "port": null,
+      "host": null,
+      "rejection": {
+        "success": false,
+        "error": "invalid_url_scheme",
+        "scheme": "file"
+      }
+    },
+    {
+      "name": "a javascript url",
+      "connector_type": "websocket",
+      "url": "javascript:alert(1)",
+      "port": null,
+      "host": null,
+      "rejection": {
+        "success": false,
+        "error": "invalid_url_scheme",
+        "scheme": "<missing>"
+      }
+    },
+    {
+      "name": "a url with no scheme",
+      "connector_type": "websocket",
+      "url": "feed.example/s",
+      "port": null,
+      "host": null,
+      "rejection": {
+        "success": false,
+        "error": "invalid_url_scheme",
+        "scheme": "<missing>"
+      }
+    },
+    {
+      "name": "a url that is only a scheme",
+      "connector_type": "websocket",
+      "url": "gopher://",
+      "port": null,
+      "host": null,
+      "rejection": {
+        "success": false,
+        "error": "invalid_url_scheme",
+        "scheme": "gopher"
+      }
+    },
+    {
+      "name": "a url pointing at loopback",
+      "connector_type": "websocket",
+      "url": "ws://127.0.0.1/s",
+      "port": null,
+      "host": null,
+      "rejection": {
+        "success": false,
+        "error": "invalid_host",
+        "host": "127.0.0.1"
+      }
+    },
+    {
+      "name": "a url pointing at loopback by name",
+      "connector_type": "websocket",
+      "url": "ws://localhost/s",
+      "port": null,
+      "host": null,
+      "rejection": {
+        "success": false,
+        "error": "invalid_host",
+        "host": "localhost"
+      }
+    },
+    {
+      "name": "a url pointing at cloud metadata",
+      "connector_type": "websocket",
+      "url": "ws://169.254.169.254/",
+      "port": null,
+      "host": null,
+      "rejection": {
+        "success": false,
+        "error": "invalid_host",
+        "host": "169.254.169.254"
+      }
+    },
+    {
+      "name": "a url pointing at loopback in decimal",
+      "connector_type": "websocket",
+      "url": "ws://2130706433/",
+      "port": null,
+      "host": null,
+      "rejection": {
+        "success": false,
+        "error": "invalid_host",
+        "host": "2130706433"
+      }
+    },
+    {
+      "name": "a url pointing at a private address",
+      "connector_type": "websocket",
+      "url": "ws://10.0.0.5/s",
+      "port": null,
+      "host": null,
+      "rejection": {
+        "success": false,
+        "error": "invalid_host",
+        "host": "10.0.0.5"
+      }
+    },
+    {
+      "name": "a url pointing somewhere public",
+      "connector_type": "websocket",
+      "url": "wss://feed.example/s",
+      "port": null,
+      "host": null,
+      "rejection": null
+    },
+    {
+      "name": "a host beside the url",
+      "connector_type": "ssh",
+      "url": null,
+      "port": null,
+      "host": "shell.example",
+      "rejection": null
+    },
+    {
+      "name": "a loopback host",
+      "connector_type": "ssh",
+      "url": null,
+      "port": null,
+      "host": "127.0.0.1",
+      "rejection": {
+        "success": false,
+        "error": "invalid_host",
+        "host": "127.0.0.1"
+      }
+    },
+    {
+      "name": "a metadata host",
+      "connector_type": "ssh",
+      "url": null,
+      "port": null,
+      "host": "169.254.169.254",
+      "rejection": {
+        "success": false,
+        "error": "invalid_host",
+        "host": "169.254.169.254"
+      }
+    },
+    {
+      "name": "a private host",
+      "connector_type": "ssh",
+      "url": null,
+      "port": null,
+      "host": "10.0.0.5",
+      "rejection": {
+        "success": false,
+        "error": "invalid_host",
+        "host": "10.0.0.5"
+      }
+    },
+    {
+      "name": "a host in decimal",
+      "connector_type": "ssh",
+      "url": null,
+      "port": null,
+      "host": "2130706433",
+      "rejection": {
+        "success": false,
+        "error": "invalid_host",
+        "host": "2130706433"
+      }
+    },
+    {
+      "name": "everything at once, all fine",
+      "connector_type": "ssh",
+      "url": "ssh://shell.example",
+      "port": 22,
+      "host": "shell.example",
+      "rejection": null
+    },
+    {
+      "name": "a bad connector beats a bad port",
+      "connector_type": "carrier-pigeon",
+      "url": null,
+      "port": 0,
+      "host": null,
+      "rejection": {
+        "success": false,
+        "error": "invalid_connector_type",
+        "connector_type": "carrier-pigeon"
+      }
+    },
+    {
+      "name": "a bad port beats a bad url",
+      "connector_type": "ssh",
+      "url": "file:///etc/passwd",
+      "port": 0,
+      "host": null,
+      "rejection": {
+        "success": false,
+        "error": "invalid_port",
+        "port": 0
+      }
+    },
+    {
+      "name": "a bad url beats a bad host",
+      "connector_type": "ssh",
+      "url": "file:///x",
+      "port": null,
+      "host": "127.0.0.1",
+      "rejection": {
+        "success": false,
+        "error": "invalid_url_scheme",
+        "scheme": "file"
+      }
+    }
+  ],
+  "snapshots": [
+    {
+      "name": "raw, untouched",
+      "snapshot": {
+        "screen": "\u001b[1;35mhello\u001b[0m\nsecond\nthird\nfourth",
+        "cursor": {
+          "x": 1,
+          "y": 2
+        },
+        "cols": 80,
+        "rows": 25
+      },
+      "output": "raw",
+      "tail_lines": null,
+      "cleaned": {
+        "screen": "\u001b[1;35mhello\u001b[0m\nsecond\nthird\nfourth",
+        "cursor": {
+          "x": 1,
+          "y": 2
+        },
+        "cols": 80,
+        "rows": 25
+      }
+    },
+    {
+      "name": "raw, tail trimmed",
+      "snapshot": {
+        "screen": "\u001b[1;35mhello\u001b[0m\nsecond\nthird\nfourth",
+        "cursor": {
+          "x": 1,
+          "y": 2
+        },
+        "cols": 80,
+        "rows": 25
+      },
+      "output": "raw",
+      "tail_lines": 2,
+      "cleaned": {
+        "screen": "third\nfourth",
+        "cursor": {
+          "x": 1,
+          "y": 2
+        },
+        "cols": 80,
+        "rows": 25
+      }
+    },
+    {
+      "name": "text only",
+      "snapshot": {
+        "screen": "\u001b[1;35mhello\u001b[0m\nsecond\nthird\nfourth",
+        "cursor": {
+          "x": 1,
+          "y": 2
+        },
+        "cols": 80,
+        "rows": 25
+      },
+      "output": "text",
+      "tail_lines": null,
+      "cleaned": {
+        "screen": "hello\nsecond\nthird\nfourth"
+      }
+    },
+    {
+      "name": "text, tail trimmed",
+      "snapshot": {
+        "screen": "\u001b[1;35mhello\u001b[0m\nsecond\nthird\nfourth",
+        "cursor": {
+          "x": 1,
+          "y": 2
+        },
+        "cols": 80,
+        "rows": 25
+      },
+      "output": "text",
+      "tail_lines": 2,
+      "cleaned": {
+        "screen": "third\nfourth"
+      }
+    },
+    {
+      "name": "rendered",
+      "snapshot": {
+        "screen": "\u001b[1;35mhello\u001b[0m\nsecond\nthird\nfourth",
+        "cursor": {
+          "x": 1,
+          "y": 2
+        },
+        "cols": 80,
+        "rows": 25
+      },
+      "output": "rendered",
+      "tail_lines": null,
+      "cleaned": {
+        "screen": "hello\nsecond\nthird\nfourth",
+        "cursor": {
+          "x": 1,
+          "y": 2
+        },
+        "cols": 80,
+        "rows": 25
+      }
+    },
+    {
+      "name": "rendered with no layout to report",
+      "snapshot": {
+        "screen": "\u001b[1;35mhello\u001b[0m\nsecond\nthird\nfourth"
+      },
+      "output": "rendered",
+      "tail_lines": null,
+      "cleaned": {
+        "screen": "hello\nsecond\nthird\nfourth"
+      }
+    },
+    {
+      "name": "rendered, tail trimmed",
+      "snapshot": {
+        "screen": "\u001b[1;35mhello\u001b[0m\nsecond\nthird\nfourth",
+        "cols": 80
+      },
+      "output": "rendered",
+      "tail_lines": 1,
+      "cleaned": {
+        "screen": "fourth",
+        "cols": 80
+      }
+    },
+    {
+      "name": "a mode nobody defined",
+      "snapshot": {
+        "screen": "\u001b[1;35mhello\u001b[0m\nsecond\nthird\nfourth",
+        "cols": 80
+      },
+      "output": "elsewhere",
+      "tail_lines": null,
+      "cleaned": {
+        "screen": "hello\nsecond\nthird\nfourth",
+        "cols": 80
+      }
+    },
+    {
+      "name": "no screen at all",
+      "snapshot": {
+        "cols": 80
+      },
+      "output": "text",
+      "tail_lines": null,
+      "cleaned": {
+        "screen": ""
+      }
+    },
+    {
+      "name": "a tail longer than the screen",
+      "snapshot": {
+        "screen": "\u001b[1;35mhello\u001b[0m\nsecond\nthird\nfourth"
+      },
+      "output": "text",
+      "tail_lines": 99,
+      "cleaned": {
+        "screen": "hello\nsecond\nthird\nfourth"
+      }
+    },
+    {
+      "name": "a tail of zero",
+      "snapshot": {
+        "screen": "\u001b[1;35mhello\u001b[0m\nsecond\nthird\nfourth"
+      },
+      "output": "text",
+      "tail_lines": 0,
+      "cleaned": {
+        "screen": "hello\nsecond\nthird\nfourth"
+      }
+    },
+    {
+      "name": "a negative tail",
+      "snapshot": {
+        "screen": "\u001b[1;35mhello\u001b[0m\nsecond\nthird\nfourth"
+      },
+      "output": "text",
+      "tail_lines": -1,
+      "cleaned": {
+        "screen": "hello\nsecond\nthird\nfourth"
+      }
+    },
+    {
+      "name": "no tail at all",
+      "snapshot": {
+        "screen": "\u001b[1;35mhello\u001b[0m\nsecond\nthird\nfourth"
+      },
+      "output": "text",
+      "tail_lines": null,
+      "cleaned": {
+        "screen": "hello\nsecond\nthird\nfourth"
+      }
+    },
+    {
+      "name": "a screen that is only escapes",
+      "snapshot": {
+        "screen": "\u001b[2J\u001b[H"
+      },
+      "output": "text",
+      "tail_lines": null,
+      "cleaned": {
+        "screen": ""
+      }
+    },
+    {
+      "name": "a screen with a trailing newline",
+      "snapshot": {
+        "screen": "one\ntwo\n"
+      },
+      "output": "text",
+      "tail_lines": 1,
+      "cleaned": {
+        "screen": "two"
+      }
+    }
+  ]
+}

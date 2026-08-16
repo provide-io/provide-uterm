@@ -1,0 +1,473 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_frames_golden.py",
+ "ts": 1735689600.5,
+ "error": [
+  {
+   "message": "boom",
+   "frame": {
+    "type": "error",
+    "message": "boom"
+   }
+  },
+  {
+   "message": "",
+   "frame": {
+    "type": "error",
+    "message": ""
+   }
+  }
+ ],
+ "pong": [
+  {
+   "ts": 1735689600.5,
+   "frame": {
+    "type": "pong",
+    "ts": 1735689600.5
+   }
+  }
+ ],
+ "heartbeat_ack": [
+  {
+   "lease_expires_at": 1735689630.5,
+   "ts": 1735689600.5,
+   "frame": {
+    "type": "heartbeat_ack",
+    "lease_expires_at": 1735689630.5,
+    "ts": 1735689600.5
+   }
+  },
+  {
+   "lease_expires_at": 0.0,
+   "ts": 1735689600.5,
+   "frame": {
+    "type": "heartbeat_ack",
+    "lease_expires_at": 0.0,
+    "ts": 1735689600.5
+   }
+  }
+ ],
+ "worker_connected": [
+  {
+   "worker_id": "w1",
+   "ts": 1735689600.5,
+   "frame": {
+    "type": "worker_connected",
+    "worker_id": "w1",
+    "ts": 1735689600.5
+   }
+  }
+ ],
+ "worker_disconnected": [
+  {
+   "worker_id": "w1",
+   "ts": 1735689600.5,
+   "frame": {
+    "type": "worker_disconnected",
+    "worker_id": "w1",
+    "ts": 1735689600.5
+   }
+  }
+ ],
+ "term": [
+  {
+   "data": "hello",
+   "ts": 1735689600.5,
+   "frame": {
+    "type": "term",
+    "data": "hello",
+    "ts": 1735689600.5
+   }
+  },
+  {
+   "data": "",
+   "ts": 1735689600.5,
+   "frame": {
+    "type": "term",
+    "data": "",
+    "ts": 1735689600.5
+   }
+  },
+  {
+   "data": "ÿþ",
+   "ts": 1735689600.5,
+   "frame": {
+    "type": "term",
+    "data": "ÿþ",
+    "ts": 1735689600.5
+   }
+  }
+ ],
+ "snapshot": [
+  {
+   "name": "null prompt is kept on the wire",
+   "kwargs": {
+    "screen": "hello",
+    "cursor": {
+     "x": 1,
+     "y": 2
+    },
+    "cols": 80,
+    "rows": 24,
+    "screen_hash": "deadbeef",
+    "cursor_at_end": true,
+    "has_trailing_space": false,
+    "prompt_detected": null,
+    "ts": 1735689600.5
+   },
+   "frame": {
+    "type": "snapshot",
+    "screen": "hello",
+    "cursor": {
+     "x": 1,
+     "y": 2
+    },
+    "cols": 80,
+    "rows": 24,
+    "screen_hash": "deadbeef",
+    "cursor_at_end": true,
+    "has_trailing_space": false,
+    "prompt_detected": null,
+    "raw_tail": null,
+    "ts": 1735689600.5,
+    "chunks_read": null,
+    "bytes_read": null
+   }
+  },
+  {
+   "name": "absent raw_tail",
+   "kwargs": {
+    "screen": "hello",
+    "cursor": {
+     "x": 1,
+     "y": 2
+    },
+    "cols": 80,
+    "rows": 24,
+    "screen_hash": "deadbeef",
+    "cursor_at_end": true,
+    "has_trailing_space": false,
+    "prompt_detected": null,
+    "ts": 1735689600.5,
+    "raw_tail": null
+   },
+   "frame": {
+    "type": "snapshot",
+    "screen": "hello",
+    "cursor": {
+     "x": 1,
+     "y": 2
+    },
+    "cols": 80,
+    "rows": 24,
+    "screen_hash": "deadbeef",
+    "cursor_at_end": true,
+    "has_trailing_space": false,
+    "prompt_detected": null,
+    "raw_tail": null,
+    "ts": 1735689600.5,
+    "chunks_read": null,
+    "bytes_read": null
+   }
+  },
+  {
+   "name": "raw_tail present",
+   "kwargs": {
+    "screen": "hello",
+    "cursor": {
+     "x": 1,
+     "y": 2
+    },
+    "cols": 80,
+    "rows": 24,
+    "screen_hash": "deadbeef",
+    "cursor_at_end": true,
+    "has_trailing_space": false,
+    "prompt_detected": null,
+    "ts": 1735689600.5,
+    "raw_tail": "tail"
+   },
+   "frame": {
+    "type": "snapshot",
+    "screen": "hello",
+    "cursor": {
+     "x": 1,
+     "y": 2
+    },
+    "cols": 80,
+    "rows": 24,
+    "screen_hash": "deadbeef",
+    "cursor_at_end": true,
+    "has_trailing_space": false,
+    "prompt_detected": null,
+    "raw_tail": "tail",
+    "ts": 1735689600.5,
+    "chunks_read": null,
+    "bytes_read": null
+   }
+  },
+  {
+   "name": "prompt detected",
+   "kwargs": {
+    "screen": "hello",
+    "cursor": {
+     "x": 1,
+     "y": 2
+    },
+    "cols": 80,
+    "rows": 24,
+    "screen_hash": "deadbeef",
+    "cursor_at_end": true,
+    "has_trailing_space": false,
+    "prompt_detected": {
+     "kind": "command",
+     "confidence": 0.75
+    },
+    "ts": 1735689600.5
+   },
+   "frame": {
+    "type": "snapshot",
+    "screen": "hello",
+    "cursor": {
+     "x": 1,
+     "y": 2
+    },
+    "cols": 80,
+    "rows": 24,
+    "screen_hash": "deadbeef",
+    "cursor_at_end": true,
+    "has_trailing_space": false,
+    "prompt_detected": {
+     "kind": "command",
+     "confidence": 0.75
+    },
+    "raw_tail": null,
+    "ts": 1735689600.5,
+    "chunks_read": null,
+    "bytes_read": null
+   }
+  },
+  {
+   "name": "empty screen",
+   "kwargs": {
+    "screen": "",
+    "cursor": {
+     "x": 1,
+     "y": 2
+    },
+    "cols": 80,
+    "rows": 24,
+    "screen_hash": "deadbeef",
+    "cursor_at_end": true,
+    "has_trailing_space": false,
+    "prompt_detected": null,
+    "ts": 1735689600.5
+   },
+   "frame": {
+    "type": "snapshot",
+    "screen": "",
+    "cursor": {
+     "x": 1,
+     "y": 2
+    },
+    "cols": 80,
+    "rows": 24,
+    "screen_hash": "deadbeef",
+    "cursor_at_end": true,
+    "has_trailing_space": false,
+    "prompt_detected": null,
+    "raw_tail": null,
+    "ts": 1735689600.5,
+    "chunks_read": null,
+    "bytes_read": null
+   }
+  },
+  {
+   "name": "cursor at origin",
+   "kwargs": {
+    "screen": "hello",
+    "cursor": {
+     "x": 0,
+     "y": 0
+    },
+    "cols": 80,
+    "rows": 24,
+    "screen_hash": "deadbeef",
+    "cursor_at_end": true,
+    "has_trailing_space": false,
+    "prompt_detected": null,
+    "ts": 1735689600.5
+   },
+   "frame": {
+    "type": "snapshot",
+    "screen": "hello",
+    "cursor": {
+     "x": 0,
+     "y": 0
+    },
+    "cols": 80,
+    "rows": 24,
+    "screen_hash": "deadbeef",
+    "cursor_at_end": true,
+    "has_trailing_space": false,
+    "prompt_detected": null,
+    "raw_tail": null,
+    "ts": 1735689600.5,
+    "chunks_read": null,
+    "bytes_read": null
+   }
+  }
+ ],
+ "analysis": [
+  {
+   "formatted": "f",
+   "raw": null,
+   "ts": 1735689600.5,
+   "frame": {
+    "type": "analysis",
+    "formatted": "f",
+    "raw": null,
+    "ts": 1735689600.5
+   }
+  },
+  {
+   "formatted": "f",
+   "raw": {
+    "a": 1
+   },
+   "ts": 1735689600.5,
+   "frame": {
+    "type": "analysis",
+    "formatted": "f",
+    "raw": {
+     "a": 1
+    },
+    "ts": 1735689600.5
+   }
+  },
+  {
+   "formatted": "",
+   "raw": [],
+   "ts": 1735689600.5,
+   "frame": {
+    "type": "analysis",
+    "formatted": "",
+    "raw": [],
+    "ts": 1735689600.5
+   }
+  }
+ ],
+ "hijack_state": [
+  {
+   "hijacked": false,
+   "owner": null,
+   "lease_expires_at": null,
+   "input_mode": "read_only",
+   "frame": {
+    "type": "hijack_state",
+    "hijacked": false,
+    "owner": null,
+    "lease_expires_at": null,
+    "input_mode": "read_only"
+   }
+  },
+  {
+   "hijacked": true,
+   "owner": "user:alice",
+   "lease_expires_at": 1735689630.5,
+   "input_mode": "read_write",
+   "frame": {
+    "type": "hijack_state",
+    "hijacked": true,
+    "owner": "user:alice",
+    "lease_expires_at": 1735689630.5,
+    "input_mode": "read_write"
+   }
+  }
+ ],
+ "hello": [
+  {
+   "payload": {},
+   "frame": {
+    "type": "hello",
+    "mcp_supported": true,
+    "vnc_supported": true
+   }
+  },
+  {
+   "payload": {
+    "mcp_supported": false
+   },
+   "frame": {
+    "type": "hello",
+    "mcp_supported": false,
+    "vnc_supported": true
+   }
+  },
+  {
+   "payload": {
+    "vnc_supported": false
+   },
+   "frame": {
+    "type": "hello",
+    "vnc_supported": false,
+    "mcp_supported": true
+   }
+  },
+  {
+   "payload": {
+    "resume_supported": true
+   },
+   "frame": {
+    "type": "hello",
+    "resume_supported": true,
+    "mcp_supported": true,
+    "vnc_supported": true
+   }
+  },
+  {
+   "payload": {
+    "protocol": {
+     "min": 1,
+     "max": 3
+    }
+   },
+   "frame": {
+    "type": "hello",
+    "protocol": {
+     "min": 1,
+     "max": 3
+    },
+    "mcp_supported": true,
+    "vnc_supported": true
+   }
+  }
+ ],
+ "worker_status": [
+  {
+   "payload": {},
+   "frame": {
+    "ts": 1735689600.5,
+    "type": "status"
+   }
+  },
+  {
+   "payload": {
+    "type": "custom"
+   },
+   "frame": {
+    "type": "custom",
+    "ts": 1735689600.5
+   }
+  },
+  {
+   "payload": {
+    "state": "idle"
+   },
+   "frame": {
+    "state": "idle",
+    "ts": 1735689600.5,
+    "type": "status"
+   }
+  }
+ ]
+}

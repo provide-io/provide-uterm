@@ -105,6 +105,12 @@ public sealed class ControlPlaneConfig
 public sealed class SecurityConfig
 {
     public string Mode { get; set; } = "strict";
+    public string? Csp { get; set; }
+    public string? Hsts { get; set; }
+    public string? XFrameOptions { get; set; }
+    public string? XContentTypeOptions { get; set; }
+    public string? ReferrerPolicy { get; set; }
+    public string? PermissionsPolicy { get; set; }
     public bool DevModeAcknowledged { get; set; }
     public bool MetricsRequireAuth { get; set; }
     public bool BlockPrivateConnectorTargets { get; set; }

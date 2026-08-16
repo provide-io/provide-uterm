@@ -386,6 +386,12 @@ public static class ConfigLoader
         if (root.TryGetValue("security", out var secObj) && secObj is TomlTable sec)
         {
             if (sec.TryGetValue("mode", out var m) && m is string ms) cfg.Security.Mode = ms;
+            if (sec.TryGetValue("csp", out var csp) && csp is string cspv) cfg.Security.Csp = cspv;
+            if (sec.TryGetValue("hsts", out var hst) && hst is string hstv) cfg.Security.Hsts = hstv;
+            if (sec.TryGetValue("x_frame_options", out var xfo) && xfo is string xfov) cfg.Security.XFrameOptions = xfov;
+            if (sec.TryGetValue("x_content_type_options", out var xcto) && xcto is string xctov) cfg.Security.XContentTypeOptions = xctov;
+            if (sec.TryGetValue("referrer_policy", out var rp) && rp is string rpv) cfg.Security.ReferrerPolicy = rpv;
+            if (sec.TryGetValue("permissions_policy", out var pp) && pp is string ppv) cfg.Security.PermissionsPolicy = ppv;
             if (sec.TryGetValue("metrics_require_auth", out var mra) && mra is bool mrb) cfg.Security.MetricsRequireAuth = mrb;
             if (sec.TryGetValue("default_session_visibility", out var dsv) && dsv is string dss) cfg.Security.DefaultSessionVisibility = dss;
             if (sec.TryGetValue("dev_mode_acknowledged", out var dma) && dma is bool dmab) cfg.Security.DevModeAcknowledged = dmab;

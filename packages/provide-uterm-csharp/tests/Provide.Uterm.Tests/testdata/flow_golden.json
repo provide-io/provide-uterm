@@ -1,0 +1,1158 @@
+{
+  "cached_same_object": true,
+  "cases": [
+    {
+      "cursor": null,
+      "flow_id": "login",
+      "name": "at the first prompt",
+      "screen": "Enter your name: ",
+      "step": {
+        "current_prompt_id": "login_name",
+        "done": false,
+        "flow_id": "login",
+        "kv_data": {},
+        "next_action": "player\r"
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "login",
+      "name": "at the second prompt",
+      "screen": "Enter your name: player\nEnter your password: ",
+      "step": {
+        "current_prompt_id": "login_pass",
+        "done": false,
+        "flow_id": "login",
+        "kv_data": {},
+        "next_action": "secret\r"
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "login",
+      "name": "at the last prompt",
+      "screen": "Command [TL=00:00:00]:? ",
+      "step": {
+        "current_prompt_id": "command",
+        "done": true,
+        "flow_id": "login",
+        "kv_data": {},
+        "next_action": null
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "login",
+      "name": "a stale prompt above a live one",
+      "screen": "Enter your name: player\nwelcome back\nattempt 3\nCommand [TL=00:00:00]:? ",
+      "step": {
+        "current_prompt_id": "command",
+        "done": true,
+        "flow_id": "login",
+        "kv_data": {},
+        "next_action": null
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "login",
+      "name": "nothing matches",
+      "screen": "just some output",
+      "step": {
+        "current_prompt_id": null,
+        "done": false,
+        "flow_id": "login",
+        "kv_data": {},
+        "next_action": null
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "login",
+      "name": "an empty screen",
+      "screen": "",
+      "step": {
+        "current_prompt_id": null,
+        "done": false,
+        "flow_id": "login",
+        "kv_data": {},
+        "next_action": null
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "suffix_race",
+      "name": "two rules ending on the same line",
+      "screen": "Enter your password:",
+      "step": {
+        "current_prompt_id": "login_pass",
+        "done": false,
+        "flow_id": "suffix_race",
+        "kv_data": {},
+        "next_action": "a"
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "expects",
+      "name": "a step naming its expected prompt",
+      "screen": "Command [TL=00:00:00]:? ",
+      "step": {
+        "current_prompt_id": "command",
+        "done": false,
+        "flow_id": "expects",
+        "kv_data": {},
+        "next_action": "x"
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "both",
+      "name": "gates and an expectation together, the gate matching",
+      "screen": "Enter your name: ",
+      "step": {
+        "current_prompt_id": "login_name",
+        "done": false,
+        "flow_id": "both",
+        "kv_data": {},
+        "next_action": "x"
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "both",
+      "name": "gates and an expectation together, the expectation matching",
+      "screen": "Command [TL=00:00:00]:? ",
+      "step": {
+        "current_prompt_id": "command",
+        "done": false,
+        "flow_id": "both",
+        "kv_data": {},
+        "next_action": "x"
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "gateless",
+      "name": "a step with nothing to wait for",
+      "screen": "Enter your name: ",
+      "step": {
+        "current_prompt_id": null,
+        "done": false,
+        "flow_id": "gateless",
+        "kv_data": {},
+        "next_action": null
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "unknown_gate",
+      "name": "a step naming a prompt that does not exist",
+      "screen": "Enter your name: ",
+      "step": {
+        "current_prompt_id": null,
+        "done": false,
+        "flow_id": "unknown_gate",
+        "kv_data": {},
+        "next_action": null
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "last_without_keys",
+      "name": "a final step with nothing to send",
+      "screen": "Command [TL=00:00:00]:? ",
+      "step": {
+        "current_prompt_id": "command",
+        "done": true,
+        "flow_id": "last_without_keys",
+        "kv_data": {},
+        "next_action": null
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "middle_without_keys",
+      "name": "a middle step with nothing to send",
+      "screen": "Enter your name: ",
+      "step": {
+        "current_prompt_id": "login_name",
+        "done": false,
+        "flow_id": "middle_without_keys",
+        "kv_data": {},
+        "next_action": null
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "login",
+      "name": "a no-op step",
+      "screen": "Command [TL=00:00:00]:? ",
+      "step": {
+        "current_prompt_id": "command",
+        "done": true,
+        "flow_id": "login",
+        "kv_data": {},
+        "next_action": null
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "empty",
+      "name": "a flow with no steps",
+      "screen": "anything",
+      "step": {
+        "current_prompt_id": null,
+        "done": false,
+        "flow_id": "empty",
+        "kv_data": {},
+        "next_action": null
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "anchored_flow",
+      "name": "an end-anchored rule at the tail",
+      "screen": "Ready",
+      "step": {
+        "current_prompt_id": "anchored",
+        "done": false,
+        "flow_id": "anchored_flow",
+        "kv_data": {},
+        "next_action": "r"
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "login",
+      "name": "extracted values travel with the step",
+      "screen": "attempt 3\nEnter your name: ",
+      "step": {
+        "current_prompt_id": "login_name",
+        "done": false,
+        "flow_id": "login",
+        "kv_data": {
+          "_validation": {
+            "errors": [],
+            "valid": true
+          },
+          "attempt": 3
+        },
+        "next_action": "player\r"
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "login",
+      "name": "the last extracted value wins",
+      "screen": "attempt 1\nattempt 7\nEnter your name: ",
+      "step": {
+        "current_prompt_id": "login_name",
+        "done": false,
+        "flow_id": "login",
+        "kv_data": {
+          "_validation": {
+            "errors": [],
+            "valid": true
+          },
+          "attempt": 7
+        },
+        "next_action": "player\r"
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "login",
+      "name": "a prompt with nothing to extract",
+      "screen": "Command [TL=00:00:00]:? ",
+      "step": {
+        "current_prompt_id": "command",
+        "done": true,
+        "flow_id": "login",
+        "kv_data": {},
+        "next_action": null
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "reversed",
+      "name": "the earlier step's prompt is the lower one",
+      "screen": "Enter your name: x\nCommand [TL=00:00:00]:? ",
+      "step": {
+        "current_prompt_id": "command",
+        "done": false,
+        "flow_id": "reversed",
+        "kv_data": {},
+        "next_action": "L"
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "tied",
+      "name": "two steps tied on the same prompt",
+      "screen": "Enter your name: ",
+      "step": {
+        "current_prompt_id": "login_name",
+        "done": false,
+        "flow_id": "tied",
+        "kv_data": {},
+        "next_action": "1"
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "repeated",
+      "name": "a prompt appearing twice on one screen",
+      "screen": "marker one\nmarker two",
+      "step": {
+        "current_prompt_id": "twice",
+        "done": false,
+        "flow_id": "repeated",
+        "kv_data": {},
+        "next_action": "m"
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "line_anchored",
+      "name": "a rule anchored to a line start",
+      "screen": "first line\nChoice: ",
+      "step": {
+        "current_prompt_id": "line_start",
+        "done": false,
+        "flow_id": "line_anchored",
+        "kv_data": {},
+        "next_action": "c"
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "order_matters",
+      "name": "gate order deciding between two on one line",
+      "screen": "Enter your password:",
+      "step": {
+        "current_prompt_id": "pass_suffix",
+        "done": false,
+        "flow_id": "order_matters",
+        "kv_data": {},
+        "next_action": "o"
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "order_reversed",
+      "name": "the same two, the other way round",
+      "screen": "Enter your password:",
+      "step": {
+        "current_prompt_id": "login_pass",
+        "done": false,
+        "flow_id": "order_reversed",
+        "kv_data": {},
+        "next_action": "o"
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "noop_not_last",
+      "name": "a no-op that is not the last step",
+      "screen": "Enter your name: ",
+      "step": {
+        "current_prompt_id": "login_name",
+        "done": true,
+        "flow_id": "noop_not_last",
+        "kv_data": {},
+        "next_action": null
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "noop_with_keys",
+      "name": "a no-op that still carries keys",
+      "screen": "Enter your name: ",
+      "step": {
+        "current_prompt_id": "login_name",
+        "done": true,
+        "flow_id": "noop_with_keys",
+        "kv_data": {},
+        "next_action": null
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "wait_with_keys",
+      "name": "a middle wait step carrying keys",
+      "screen": "Enter your name: ",
+      "step": {
+        "current_prompt_id": "login_name",
+        "done": false,
+        "flow_id": "wait_with_keys",
+        "kv_data": {},
+        "next_action": null
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "anchored_trailing",
+      "name": "an end-anchored rule with trailing blank lines",
+      "screen": "Ready\n\n",
+      "step": {
+        "current_prompt_id": "anchored",
+        "done": false,
+        "flow_id": "anchored_trailing",
+        "kv_data": {},
+        "next_action": "r"
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "lowest_of_many",
+      "name": "one pattern matching twice, ranked by the lower",
+      "screen": "marker one\nmiddle\nmarker two",
+      "step": {
+        "current_prompt_id": "twice",
+        "done": false,
+        "flow_id": "lowest_of_many",
+        "kv_data": {},
+        "next_action": "R"
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "anchor_vs_earlier",
+      "name": "an end-anchored rule outranks one above it",
+      "screen": "above here\nReady\n\n",
+      "step": {
+        "current_prompt_id": "anchored",
+        "done": false,
+        "flow_id": "anchor_vs_earlier",
+        "kv_data": {},
+        "next_action": "A"
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "line_vs_earlier",
+      "name": "a line-anchored rule outranks one above it",
+      "screen": "above here\nChoice: ",
+      "step": {
+        "current_prompt_id": "line_start",
+        "done": false,
+        "flow_id": "line_vs_earlier",
+        "kv_data": {},
+        "next_action": "C"
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "case_vs_earlier",
+      "name": "a case-sensitive rule ranked without case folding",
+      "screen": "READY TO GO\nmiddle\nready to go",
+      "step": {
+        "current_prompt_id": "middle",
+        "done": false,
+        "flow_id": "case_vs_earlier",
+        "kv_data": {},
+        "next_action": "E"
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "two_line_anchored",
+      "name": "two line-anchored rules, neither on the first line",
+      "screen": "x\nAlpha: 1\nBeta: 2",
+      "step": {
+        "current_prompt_id": "alpha",
+        "done": false,
+        "flow_id": "two_line_anchored",
+        "kv_data": {},
+        "next_action": "A"
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "middle_send_no_keys",
+      "name": "a middle send step with nothing to send",
+      "screen": "Enter your name: ",
+      "step": {
+        "current_prompt_id": "login_name",
+        "done": false,
+        "flow_id": "middle_send_no_keys",
+        "kv_data": {},
+        "next_action": null
+      }
+    },
+    {
+      "cursor": null,
+      "flow_id": "terminal_send",
+      "name": "a last send step with nothing to send",
+      "screen": "Enter your name: ",
+      "step": {
+        "current_prompt_id": "login_name",
+        "done": true,
+        "flow_id": "terminal_send",
+        "kv_data": {},
+        "next_action": null
+      }
+    },
+    {
+      "cursor": [
+        5,
+        0
+      ],
+      "flow_id": "login",
+      "name": "an explicit cursor",
+      "screen": "Enter your name: ",
+      "step": {
+        "current_prompt_id": "login_name",
+        "done": false,
+        "flow_id": "login",
+        "kv_data": {},
+        "next_action": "player\r"
+      }
+    },
+    {
+      "cursor": [
+        0,
+        0
+      ],
+      "flow_id": "login",
+      "name": "a cursor above the prompt",
+      "screen": "one\ntwo\nEnter your name: ",
+      "step": {
+        "current_prompt_id": "login_name",
+        "done": false,
+        "flow_id": "login",
+        "kv_data": {},
+        "next_action": "player\r"
+      }
+    }
+  ],
+  "rules": {
+    "flows": [
+      {
+        "description": "log in",
+        "id": "login",
+        "steps": [
+          {
+            "gate_prompts": [
+              "login_name"
+            ],
+            "id": "send_name",
+            "keys": "player\r",
+            "kind": "send_keys"
+          },
+          {
+            "gate_prompts": [
+              "login_pass"
+            ],
+            "id": "send_pass",
+            "keys": "secret\r",
+            "kind": "send_keys"
+          },
+          {
+            "gate_prompts": [
+              "command"
+            ],
+            "id": "arrive",
+            "kind": "noop"
+          }
+        ]
+      },
+      {
+        "description": "the anchored rule and the vague one",
+        "id": "suffix_race",
+        "steps": [
+          {
+            "gate_prompts": [
+              "pass_suffix"
+            ],
+            "id": "vague",
+            "keys": "v",
+            "kind": "send_keys"
+          },
+          {
+            "gate_prompts": [
+              "login_pass"
+            ],
+            "id": "anchored_step",
+            "keys": "a",
+            "kind": "send_keys"
+          }
+        ]
+      },
+      {
+        "description": "a step naming the prompt it waits for",
+        "id": "expects",
+        "steps": [
+          {
+            "expects_prompt": "command",
+            "id": "wait",
+            "keys": "x",
+            "kind": "send_keys"
+          }
+        ]
+      },
+      {
+        "description": "gates and an expectation together",
+        "id": "both",
+        "steps": [
+          {
+            "expects_prompt": "command",
+            "gate_prompts": [
+              "login_name"
+            ],
+            "id": "wait",
+            "keys": "x",
+            "kind": "send_keys"
+          }
+        ]
+      },
+      {
+        "description": "a step with nothing to wait for",
+        "id": "gateless",
+        "steps": [
+          {
+            "id": "wait",
+            "keys": "x",
+            "kind": "send_keys"
+          }
+        ]
+      },
+      {
+        "description": "a step naming a prompt that does not exist",
+        "id": "unknown_gate",
+        "steps": [
+          {
+            "gate_prompts": [
+              "nonexistent"
+            ],
+            "id": "wait",
+            "keys": "x",
+            "kind": "send_keys"
+          }
+        ]
+      },
+      {
+        "description": "a final step with nothing to send",
+        "id": "last_without_keys",
+        "steps": [
+          {
+            "gate_prompts": [
+              "login_name"
+            ],
+            "id": "first",
+            "keys": "a",
+            "kind": "send_keys"
+          },
+          {
+            "gate_prompts": [
+              "command"
+            ],
+            "id": "final",
+            "kind": "wait"
+          }
+        ]
+      },
+      {
+        "description": "a middle step with nothing to send",
+        "id": "middle_without_keys",
+        "steps": [
+          {
+            "gate_prompts": [
+              "login_name"
+            ],
+            "id": "middle",
+            "kind": "wait"
+          },
+          {
+            "gate_prompts": [
+              "command"
+            ],
+            "id": "final",
+            "keys": "z",
+            "kind": "send_keys"
+          }
+        ]
+      },
+      {
+        "description": "an end-anchored rule",
+        "id": "anchored_flow",
+        "steps": [
+          {
+            "gate_prompts": [
+              "anchored"
+            ],
+            "id": "wait",
+            "keys": "r",
+            "kind": "send_keys"
+          }
+        ]
+      },
+      {
+        "description": "no steps at all",
+        "id": "empty",
+        "steps": []
+      },
+      {
+        "description": "the earlier step's prompt is the lower one",
+        "id": "reversed",
+        "steps": [
+          {
+            "gate_prompts": [
+              "command"
+            ],
+            "id": "lower",
+            "keys": "L",
+            "kind": "send_keys"
+          },
+          {
+            "gate_prompts": [
+              "login_name"
+            ],
+            "id": "upper",
+            "keys": "U",
+            "kind": "send_keys"
+          }
+        ]
+      },
+      {
+        "description": "two steps gated on the same prompt",
+        "id": "tied",
+        "steps": [
+          {
+            "gate_prompts": [
+              "login_name"
+            ],
+            "id": "first",
+            "keys": "1",
+            "kind": "send_keys"
+          },
+          {
+            "gate_prompts": [
+              "login_name"
+            ],
+            "id": "second",
+            "keys": "2",
+            "kind": "send_keys"
+          }
+        ]
+      },
+      {
+        "description": "a prompt appearing twice on one screen",
+        "id": "repeated",
+        "steps": [
+          {
+            "gate_prompts": [
+              "twice",
+              "command"
+            ],
+            "id": "only",
+            "keys": "m",
+            "kind": "send_keys"
+          }
+        ]
+      },
+      {
+        "description": "a rule anchored to a line start",
+        "id": "line_anchored",
+        "steps": [
+          {
+            "gate_prompts": [
+              "line_start"
+            ],
+            "id": "only",
+            "keys": "c",
+            "kind": "send_keys"
+          }
+        ]
+      },
+      {
+        "description": "two prompts on one line, gate order deciding",
+        "id": "order_matters",
+        "steps": [
+          {
+            "expects_prompt": "login_pass",
+            "gate_prompts": [
+              "pass_suffix"
+            ],
+            "id": "only",
+            "keys": "o",
+            "kind": "send_keys"
+          }
+        ]
+      },
+      {
+        "description": "the same two, the other way round",
+        "id": "order_reversed",
+        "steps": [
+          {
+            "expects_prompt": "pass_suffix",
+            "gate_prompts": [
+              "login_pass"
+            ],
+            "id": "only",
+            "keys": "o",
+            "kind": "send_keys"
+          }
+        ]
+      },
+      {
+        "description": "a no-op that is not the last step",
+        "id": "noop_not_last",
+        "steps": [
+          {
+            "gate_prompts": [
+              "login_name"
+            ],
+            "id": "stop",
+            "kind": "noop"
+          },
+          {
+            "gate_prompts": [
+              "command"
+            ],
+            "id": "after",
+            "keys": "a",
+            "kind": "send_keys"
+          }
+        ]
+      },
+      {
+        "description": "a no-op that still carries keys",
+        "id": "noop_with_keys",
+        "steps": [
+          {
+            "gate_prompts": [
+              "login_name"
+            ],
+            "id": "stop",
+            "keys": "never",
+            "kind": "noop"
+          }
+        ]
+      },
+      {
+        "description": "a middle wait step carrying keys",
+        "id": "wait_with_keys",
+        "steps": [
+          {
+            "gate_prompts": [
+              "login_name"
+            ],
+            "id": "waiting",
+            "keys": "unsent",
+            "kind": "wait"
+          },
+          {
+            "gate_prompts": [
+              "command"
+            ],
+            "id": "after",
+            "keys": "a",
+            "kind": "send_keys"
+          }
+        ]
+      },
+      {
+        "description": "one pattern matching twice, against a competitor between them",
+        "id": "lowest_of_many",
+        "steps": [
+          {
+            "gate_prompts": [
+              "twice"
+            ],
+            "id": "repeat",
+            "keys": "R",
+            "kind": "send_keys"
+          },
+          {
+            "gate_prompts": [
+              "middle"
+            ],
+            "id": "between",
+            "keys": "B",
+            "kind": "send_keys"
+          }
+        ]
+      },
+      {
+        "description": "an end-anchored rule against one that matches above it",
+        "id": "anchor_vs_earlier",
+        "steps": [
+          {
+            "gate_prompts": [
+              "anchored"
+            ],
+            "id": "anchor",
+            "keys": "A",
+            "kind": "send_keys"
+          },
+          {
+            "gate_prompts": [
+              "above"
+            ],
+            "id": "earlier",
+            "keys": "E",
+            "kind": "send_keys"
+          }
+        ]
+      },
+      {
+        "description": "a line-anchored rule against one that matches above it",
+        "id": "line_vs_earlier",
+        "steps": [
+          {
+            "gate_prompts": [
+              "line_start"
+            ],
+            "id": "choice",
+            "keys": "C",
+            "kind": "send_keys"
+          },
+          {
+            "gate_prompts": [
+              "above"
+            ],
+            "id": "earlier",
+            "keys": "E",
+            "kind": "send_keys"
+          }
+        ]
+      },
+      {
+        "description": "a case-sensitive rule against one that matches between its occurrences",
+        "id": "case_vs_earlier",
+        "steps": [
+          {
+            "gate_prompts": [
+              "shouty"
+            ],
+            "id": "shout",
+            "keys": "S",
+            "kind": "send_keys"
+          },
+          {
+            "gate_prompts": [
+              "middle"
+            ],
+            "id": "earlier",
+            "keys": "E",
+            "kind": "send_keys"
+          }
+        ]
+      },
+      {
+        "description": "two line-anchored rules below the first line",
+        "id": "two_line_anchored",
+        "steps": [
+          {
+            "gate_prompts": [
+              "alpha"
+            ],
+            "id": "a",
+            "keys": "A",
+            "kind": "send_keys"
+          },
+          {
+            "gate_prompts": [
+              "beta"
+            ],
+            "id": "b",
+            "keys": "B",
+            "kind": "send_keys"
+          }
+        ]
+      },
+      {
+        "description": "a middle send step with nothing to send",
+        "id": "middle_send_no_keys",
+        "steps": [
+          {
+            "gate_prompts": [
+              "login_name"
+            ],
+            "id": "empty_send",
+            "kind": "send_keys"
+          },
+          {
+            "gate_prompts": [
+              "command"
+            ],
+            "id": "after",
+            "keys": "a",
+            "kind": "send_keys"
+          }
+        ]
+      },
+      {
+        "description": "a last send step with nothing to send",
+        "id": "terminal_send",
+        "steps": [
+          {
+            "gate_prompts": [
+              "login_name"
+            ],
+            "id": "only",
+            "kind": "send_keys"
+          }
+        ]
+      },
+      {
+        "description": "an end-anchored rule with trailing content",
+        "id": "anchored_trailing",
+        "steps": [
+          {
+            "gate_prompts": [
+              "anchored"
+            ],
+            "id": "wait",
+            "keys": "r",
+            "kind": "send_keys"
+          }
+        ]
+      }
+    ],
+    "game": "tw2002",
+    "prompts": [
+      {
+        "id": "login_name",
+        "kv_extract": [
+          {
+            "field": "attempt",
+            "regex": "attempt (\\d+)",
+            "type": "int"
+          }
+        ],
+        "match": {
+          "pattern": "Enter your name:"
+        }
+      },
+      {
+        "id": "login_pass",
+        "match": {
+          "pattern": "Enter your password:"
+        }
+      },
+      {
+        "id": "pass_suffix",
+        "match": {
+          "pattern": "password[?:]\\s*$"
+        }
+      },
+      {
+        "id": "command",
+        "match": {
+          "pattern": "Command \\[TL=[\\d:]+\\]:"
+        }
+      },
+      {
+        "id": "pause",
+        "match": {
+          "pattern": "press any key"
+        }
+      },
+      {
+        "id": "line_start",
+        "match": {
+          "pattern": "^Choice:"
+        }
+      },
+      {
+        "id": "shouty",
+        "match": {
+          "pattern": "READY TO GO"
+        }
+      },
+      {
+        "id": "twice",
+        "match": {
+          "pattern": "marker"
+        }
+      },
+      {
+        "id": "middle",
+        "match": {
+          "pattern": "middle"
+        }
+      },
+      {
+        "id": "above",
+        "match": {
+          "pattern": "above"
+        }
+      },
+      {
+        "id": "alpha",
+        "match": {
+          "pattern": "^Alpha:"
+        }
+      },
+      {
+        "id": "beta",
+        "match": {
+          "pattern": "^Beta:"
+        }
+      },
+      {
+        "id": "anchored",
+        "match": {
+          "pattern": "Ready\\Z"
+        }
+      }
+    ]
+  },
+  "scrollback": "Enter your name: player\nwelcome back\nattempt 3\nCommand [TL=00:00:00]:? ",
+  "snapshot": {
+    "empty": {
+      "cursor": {
+        "x": 0,
+        "y": 0
+      },
+      "cursor_at_end": true,
+      "has_trailing_space": false,
+      "screen": "",
+      "screen_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "no_cursor": {
+      "cursor": {
+        "x": 0,
+        "y": 2
+      },
+      "cursor_at_end": true,
+      "has_trailing_space": false,
+      "screen": "one\ntwo\n",
+      "screen_hash": "c3f9c8c283a2b1f2f1896f27a01cbe3cddc0c9d93f752e4639035a0f5b36f6e8"
+    },
+    "no_trailing_space": {
+      "cursor": {
+        "x": 0,
+        "y": 0
+      },
+      "cursor_at_end": true,
+      "has_trailing_space": false,
+      "screen": "prompt:",
+      "screen_hash": "0f9cde8d8684fdfc61332b2ce793c1111c8b579b5fd6bf2842a4d54eaba1cdc7"
+    },
+    "trailing_space": {
+      "cursor": {
+        "x": 0,
+        "y": 0
+      },
+      "cursor_at_end": true,
+      "has_trailing_space": true,
+      "screen": "prompt: ",
+      "screen_hash": "f9e013cd0b18dbf2b4460077dacd8b48e4500970389df7c08865d3d0c7e2b0b9"
+    },
+    "with_cursor": {
+      "cursor": {
+        "x": 3,
+        "y": 1
+      },
+      "cursor_at_end": true,
+      "has_trailing_space": false,
+      "screen": "one\ntwo\n",
+      "screen_hash": "c3f9c8c283a2b1f2f1896f27a01cbe3cddc0c9d93f752e4639035a0f5b36f6e8"
+    }
+  },
+  "unknown_flow_error": "unknown flow: nonexistent"
+}
