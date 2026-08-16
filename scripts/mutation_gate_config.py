@@ -109,6 +109,19 @@ BRIDGE_HUB_SOURCE_PATHS: Final[frozenset[str]] = frozenset(
     }
 )
 
+# The test selection used when a run is SCOPED to the bridge-hub perimeter
+# (--paths / --changed-only). It is a deliberately narrow subset of the root
+# pyproject's ``pytest_add_cli_args_test_selection``, not a mirror of it.
+#
+# That makes it a trap worth stating plainly: wiring a hub kill suite into
+# pyproject.toml is NOT enough. A suite missing from this tuple still runs on a
+# full-perimeter run and is silently dropped on a scoped one, so its mutants
+# come back as phantom survivors on exactly the path a normal push takes. The
+# failure is closed, not open — the gate goes red for mutants that are in fact
+# covered — which reads as a regression in the source rather than a gap here.
+# Seen on 2026-08-15: test_snapshot_diagnostics_kill.py was wired in pyproject
+# only, and a scoped polling_service.py run reported 48 survivors against the
+# full run's 16.
 BRIDGE_HUB_MUTATION_TESTS: Final[tuple[str, ...]] = (
     "packages/provide-uterm/tests/deckmux/test_presence.py",
     "packages/provide-uterm/tests/deckmux/test_hub_mixin.py",
@@ -123,6 +136,10 @@ BRIDGE_HUB_MUTATION_TESTS: Final[tuple[str, ...]] = (
     "packages/provide-uterm-server/tests/bridge/hub/test_polling_kill.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_store_kill.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_store_policy_kill.py",
+    # Covers both halves of the 2163d535 diagnostics: presence.request_snapshot
+    # (snapshot_req_undelivered) and polling_service.wait_for_snapshot
+    # (snapshot_wait_timeout), so it is in scope for two of the source paths above.
+    "packages/provide-uterm-server/tests/bridge/hub/test_snapshot_diagnostics_kill.py",
 )
 
 
