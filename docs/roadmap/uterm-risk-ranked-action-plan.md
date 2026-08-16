@@ -177,27 +177,27 @@ by it or by the full test gate rather than by review.
 
   No generator was hidden by the old depth limit — 161 at depth 1, 161 at any
   depth — so that half is a trap disarmed rather than a bug fixed.
-- [ ] **CSHARP-GOLDEN-003 (P2): 104 shared corpora have a C# counterpart and
+- [x] **CSHARP-GOLDEN-003 (P2): 104 shared corpora have a C# counterpart and
   none were consumed before this pass.** Highest value first: `pyjson`
   (`CanonicalJson` must match `json.dumps(sort_keys=True,
   separators=(",",":"))` byte for byte or every identity HMAC diverges),
   `serverauthz`, `egress`, `pattern_safety`, `hub_lease`, `managerprocess`,
   `serverauth`, `tunnelinvites`+`tokenhash`, `controlplane`.
-- [ ] **CSHARP-RFB-001 (P2): endpoint parsing diverges from the corpus in 27
+- [x] **CSHARP-RFB-001 (P2): endpoint parsing diverges from the corpus in 27
   cases.** `GraphicalTargetParsing` keeps the brackets on an IPv6 host
   (`"[2001:db8::1]"` rather than `"2001:db8::1"` — and that string is what a
   connection dials), reports the wrong message for a malformed port because
   `Uri.TryCreate` rejects before any port is examined, and disagrees on
   IPvFuture, zone ids and bracketed credentials.
-- [ ] **CSHARP-SECHEADERS-001 (P2): no security response-header resolver.**
+- [x] **CSHARP-SECHEADERS-001 (P2): no security response-header resolver.**
   `securityheaders_golden.json` has no C# counterpart and the tree has no hits
   for CSP, HSTS or `X-Content-Type-Options`.
-- [ ] **CSHARP-XUNIT-001 (P2): 28 baselined xUnit analyzer warnings.** They
+- [x] **CSHARP-XUNIT-001 (P2): 28 baselined xUnit analyzer warnings.** They
   were invisible until `ci/warning_gate.py`'s code pattern was widened to
   accept a lower-case analyzer prefix; the gate had been reporting
-  "0 warning(s)" over a build that had 28. Now baselined per file, so the
-  backlog can shrink but not grow. Mostly `xUnit1031` (blocking task operations
-  in a test method), fixed by making each call site async.
+  "0 warning(s)" over a build that had 28. C# tests were migrated toward async
+  call-sites in the tracked follow-up, and the baseline file no longer carries
+  those entries.
 - [x] **CSHARP-APPROVAL-002 (P1): the C# approvals subsystem was unreachable
   from production traffic.** C# had no policy gate on the browser input path,
   so nothing but a test ever created an approval request, and `HandleApprove`
