@@ -41,6 +41,9 @@ try:
         state_counts_from as _state_counts_from,
     )
     from scripts.mutation_gate_config import (
+        undeclared_zero_mutant_paths as _undeclared_zero_mutant_paths,
+    )
+    from scripts.mutation_gate_config import (
         uv_mutmut_cmd as _uv_mutmut_cmd,
     )
 except ModuleNotFoundError:
@@ -66,6 +69,9 @@ except ModuleNotFoundError:
     )
     from mutation_gate_config import (
         state_counts_from as _state_counts_from,
+    )
+    from mutation_gate_config import (
+        undeclared_zero_mutant_paths as _undeclared_zero_mutant_paths,
     )
     from mutation_gate_config import (
         uv_mutmut_cmd as _uv_mutmut_cmd,
@@ -405,6 +411,15 @@ def run_mutation_gate(
         # config break. The total>0 guard only matters for the full pyproject
         # perimeter (where total==0 would mean source_paths is misconfigured).
         if allow_empty and last_stats["total"] == 0 and last_stats["bad_total"] == 0:
+            undeclared = _undeclared_zero_mutant_paths(source_paths)
+            if undeclared:
+                raise RuntimeError(
+                    "mutation gate: target(s) produced 0 mutants but are not declared in "
+                    f"KNOWN_ZERO_MUTANT_PATHS: {undeclared}. A perimeter file that generates no "
+                    "mutants enforces nothing while its leg reports success. If that is correct, "
+                    "add it there with the reason; if it is a surprise, check for a decorated "
+                    "class -- mutmut skips those wholesale, methods included."
+                )
             print("mutation gate ok: explicitly-targeted file(s) have no mutable surface (0 mutants)")
             return last_stats
 
