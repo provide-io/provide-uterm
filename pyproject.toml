@@ -474,6 +474,7 @@ pytest_add_cli_args_test_selection = [
     "packages/provide-uterm/tests/terminal/test_control_channel_codec.py",
     "packages/provide-uterm/tests/terminal/test_control_channel_coverage.py",
     "packages/provide-uterm/tests/terminal/test_control_channel_mutmut.py",
+    "packages/provide-uterm/tests/terminal/test_control_channel_decoder_kill.py",
     "packages/provide-uterm/tests/test_control_channel_builders.py",
     "packages/provide-uterm/tests/test_control_channel_ordering.py",
     "packages/provide-uterm/tests/test_control_channel_patterns.py",
