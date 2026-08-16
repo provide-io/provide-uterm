@@ -1,8 +1,17 @@
 # uterm Risk-Ranked Action Plan (Living)
 
-- Date: 2026-08-15
-- Branch: `main` (`origin/main`)
+- Date: 2026-08-16
+- Branch: `hardening/risk-ranked-action-plan`
+- Merged to `main`: **no** — see below
 - Owner of this document: Architecture + release owners
+
+**Where this work actually lives.** This document and every `[x]` in it are on
+`hardening/risk-ranked-action-plan`, which has no open PR and is not merged.
+`main` does not carry this file. Read against `main`, the matrix below describes
+a hardening cycle that `main` has not received, so treat every completed row as
+"done on the branch" until the merge lands. The branch fast-forwards from `main`
+cleanly (`main` is an ancestor of it), and its evidence is local command output:
+no full CI run has ever executed against the branch.
 
 Purpose
 
@@ -37,6 +46,7 @@ Purpose
 | P1 | Lifecycle/fanout race hardening | `[x]` | Expand lifecycle and fanout stress tests where ownership, resume, pause, and delivery races are most failure-prone. | Two new race categories in `spec/session_lifecycle_security_scenarios.json` (10 → 12 scenarios), executed natively by Python, Go, C#, and Cloudflare. Found a real defect: see LIFECYCLE FINDING below. | `uv run python scripts/run_session_lifecycle_security_scenarios.py` |
 | P1 | Protocol drift guardrails | `[x]` | Prevent behavior drift by enforcing protocol/spec + fixture + docs checks on any change touching wire contracts. | `scripts/check_protocol_drift.py` in the static gate; the two contract validations wired in beside it; `.github/pull_request_template.md` carries the protocol checklist; `tests/scripts/test_check_protocol_drift.py` proves the gate is not vacuous. | `bash ci/quality_checks.sh`<br>`uv run python scripts/check_protocol_drift.py --changed-against origin/main` |
 | P1 | Cloudflare behavior parity boundaries | `[x]` | Codify and continuously test Cloudflare-specific intentional divergences from FastAPI/Go/C# behavior. | `docs/cloudflare-divergence-matrix.md`: 11 rows, each with intent, `file:line` evidence, and a pinning test. 23 new offline tests in `tests/test_edge_divergence_matrix.py`. Found a stale doc claim: see DOC FINDING below. | `uv run --frozen --package provide-uterm-cloudflare --extra dev pytest -q packages/provide-uterm-cloudflare/tests` |
+| P1 | Mutation gate integrity | `[x]` | Keep the 100%-score perimeter meaningful: no file enforcing nothing, no excuse outliving the mutant it excused, and a scoped run that agrees with a full one. | `control_channel.py` was the only red leg of thirty-seven in the full-perimeter sweep — 89.94%, all 34 survivors inside the decoder — and now runs 319 killed, 15 excused, 100.00%. Nineteen stale allowlist entries dropped: every one named a mutant in state KILLED, which falsifies the equivalence claim it was making, and the twenty-seven survivors were each replayed through `mutmut show` and checked against their written reasons. A perimeter file that generates no mutants now fails unless declared with a reason — `control_channel_patterns.py` had been enforcing nothing, because mutmut skips decorated classes wholesale and both of its classes are `@dataclass`. Scoped runs were silently dropping `test_snapshot_diagnostics_kill.py`, since `BRIDGE_HUB_MUTATION_TESTS` is a second hand-maintained list rather than a mirror of the root selection: 48 phantom survivors at 69.43% became 157 killed at 100.00% on the identical command. See MUTATION FINDING below for the residual risk. | `uv run python scripts/run_mutation_gate.py --python-version 3.11 --retries 0 --min-mutation-score 100 --paths PATH`<br>`python3 ci/mutation_full_matrix.py` |
 | P2 | C# quality debt cleanup | `[x]` | Resolve high-volume analyzer warnings and low-signal anti-patterns to reduce future bug risk and review friction. | Eight compiler warnings → zero, two of which were real defects (see C# FINDINGS below), plus 28 xUnit analyzer warnings the gate had been unable to see at all. `ci/warning_gate.py` + `ci/warning-baseline.json` ratchet both, failing on a new warning and on a stale baseline entry alike. Coverage 97.44% → 97.53%. | `make -C packages/provide-uterm-csharp quality-gate` |
 | P2 | Benchmark reproducibility and comparability | `[x]` | Standardize benchmark commands, warmup, sample sizing, and environment constraints to avoid local-machine bias. | `Makefile.bench` declares every parameter once and exposes two profiles; `scripts/bench_env_fingerprint.py` writes the machine beside every result; `docs/benchmarks/README.md` states what makes two numbers comparable. | `make -f Makefile.bench bench-local`<br>`make -f Makefile.bench bench-ci` |
 | P3 | Documentation and review hygiene | `[x]` | Keep roadmap, remediation status, and implementation matrices in sync after each language/backend change. | `docs/parity-labels.md` is the single vocabulary; eight documents normalized onto it; the PR template makes the doc update a checklist item rather than a convention. | `uv run python scripts/check_docs_accuracy.py`<br>`rg -n "served\|parity\|unsupported" docs packages -S` |
@@ -82,6 +92,22 @@ stage failed with `NETSDK1102` after an SDK update, because `PublishAot` and
 `PublishTrimmed` cannot apply to the framework-dependent publish the Makefile
 performs — so the C# gate could not reach its final stage regardless of what
 the suite did.
+
+**MUTATION FINDING — an excuse can silently retarget, and the ported fix does
+not apply here.** The full-perimeter run reported a survivor at
+`x_session_capability_handlers__mutmut_999` alongside a stale-entry warning for
+`__mutmut_993`. Those are one fact, not two: the `recording_download` family
+shifted by three, the documented equivalents moved from 993/996 to 996/999, the
+old ids stopped excusing anything, and a genuinely-equivalent argument drop
+resurfaced at its new number as an unexplained survivor. mutmut numbers mutants
+sequentially within the enclosing function, and that factory carries roughly a
+thousand of them, so any edit earlier in the file renumbers everything after it
+and slides an excuse onto a different mutant. The warning and the survivor read
+as unrelated problems, which is what makes it expensive to diagnose twice. Go,
+C# and TS were moved to content-addressed keys for exactly this reason; mutmut's
+results output exposes no per-mutant content, so that fix cannot be ported
+as-is, and the Python allowlist stays exposed to it. Diagnosis and mechanism are
+recorded next to the entries; a durable fix is still open.
 
 ## Backlog of "ready next" tasks
 
