@@ -99,6 +99,11 @@ _NPM_SUITES: tuple[tuple[str, str], ...] = (
     ("provide-uterm-app typecheck", "npm run typecheck:app"),
     ("provide-uterm-frontend tests", "npm test --workspace=packages/provide-uterm-frontend"),
     ("provide-uterm-app tests", "npm test --workspace=packages/provide-uterm-app"),
+    # The TypeScript port. CI runs this (npm-quality's test:ts:coverage) but the
+    # local sweep never did, so a failure here — a release-consistency check
+    # that swept a submodule's VERSION into this repo's invariant — was only
+    # ever visible after a push.
+    ("provide-uterm-ts tests", "npm run test:ts:coverage"),
     ("browser consumer contract", "npm run test:browser-consumer"),
 )
 
