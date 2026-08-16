@@ -696,20 +696,19 @@ jobs:
       # the built frontend assets. They are gitignored build output, so a job
       # that only installs dependencies errors every cell in the matrix.
       - run: npm run build:frontend
-      # The harness's own unit tests: what an expectation means, how two cells
-      # are compared, and which drivers exist. A broken harness would agree
-      # with itself in every cell.
-      - run: uv run pytest -q tests/conformance/live/ -o addopts=--import-mode=importlib
       # The fan-out contract drives the C# adapter with `dotnet test
       # --no-restore`, which needs the project already restored. Nothing else
       # in this job restores it, and an unmatched filter exits 0 — so the
       # adapter silently produced no observations instead of failing loudly.
       - run: dotnet build packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Provide.Uterm.Tests.csproj
-      # Security-sensitive cross-language contracts execute their native
-      # adapters here. Keeping these outside the default Python testpaths must
-      # not let a missing scenario category or a backend observation drift
-      # pass CI unnoticed.
-      - run: uv run pytest -q tests/conformance/test_fanout_security_coverage.py -o addopts=--import-mode=importlib
+      # The WHOLE conformance directory, not a hand-picked subset. It sits
+      # outside the default Python testpaths, so anything not named here never
+      # runs on a push. This step used to list only live/ and the fan-out
+      # coverage file, which left the cross-language API-parity spec
+      # (test_api_conformance.py) unenforced -- splitting a C# file for the LOC
+      # cap dropped eight required symbols and CI stayed green. Every file here
+      # is a static or in-process parity check needing no credentials.
+      - run: uv run pytest -q tests/conformance/ -o addopts=--import-mode=importlib
       # Every client against every server. Prints every gap before it runs.
       - run: bash ci/live_matrix.sh
 
