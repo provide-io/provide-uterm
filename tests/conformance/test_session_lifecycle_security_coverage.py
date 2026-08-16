@@ -26,6 +26,10 @@ REQUIRED_CATEGORY_CARDINALITY = {
     "configured governance": 3,
     "resume ownership and replay": 2,
     "non-owner hijack-step refusal": 1,
+    # The owner-handoff and approval-expiry races from ead7567f. The runner
+    # already classifies both operations; only this map was left behind.
+    "ownership handoff": 1,
+    "approval expiry": 1,
 }
 EXPECTED_FIELDS = {
     "route",
@@ -47,6 +51,16 @@ EXPECTED_FIELDS = {
     "policy_decision",
     "signed_request",
     "competing_owner_preserved",
+    # Owner-handoff and approval-expiry races, added to the contract by
+    # ead7567f. The contract grew these five and this set did not, so the
+    # shape assertion below has been failing ever since -- the drift is
+    # one-way by design: the test pins the contract so an accidental field
+    # cannot appear unnoticed, which is exactly what it caught.
+    "approval_expired",
+    "handoff_completed",
+    "late_approval_refused",
+    "stale_owner_refused",
+    "successor_owner_accepted",
 }
 
 
