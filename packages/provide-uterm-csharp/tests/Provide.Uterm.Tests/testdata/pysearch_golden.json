@@ -1,0 +1,276 @@
+{
+  "cases": [
+    {
+      "ignore_case": false,
+      "matched": true,
+      "name": "a literal in the middle",
+      "pattern": "STARDOCK",
+      "second_start": 20,
+      "start": 20,
+      "subject": "Welcome to the game\nSTARDOCK is closed\nCommand [TL=00:00:00]:? ",
+      "text": "STARDOCK"
+    },
+    {
+      "ignore_case": false,
+      "matched": false,
+      "name": "the same literal, wrong case",
+      "pattern": "stardock",
+      "second_start": null,
+      "start": null,
+      "subject": "Welcome to the game\nSTARDOCK is closed\nCommand [TL=00:00:00]:? ",
+      "text": null
+    },
+    {
+      "ignore_case": true,
+      "matched": true,
+      "name": "the same literal, case insensitive",
+      "pattern": "stardock",
+      "second_start": 20,
+      "start": 20,
+      "subject": "Welcome to the game\nSTARDOCK is closed\nCommand [TL=00:00:00]:? ",
+      "text": "STARDOCK"
+    },
+    {
+      "ignore_case": false,
+      "matched": true,
+      "name": "anchored to a line start",
+      "pattern": "^Command",
+      "second_start": 39,
+      "start": 39,
+      "subject": "Welcome to the game\nSTARDOCK is closed\nCommand [TL=00:00:00]:? ",
+      "text": "Command"
+    },
+    {
+      "ignore_case": false,
+      "matched": true,
+      "name": "anchored to a line start, wrong line",
+      "pattern": "^STARDOCK",
+      "second_start": 20,
+      "start": 20,
+      "subject": "Welcome to the game\nSTARDOCK is closed\nCommand [TL=00:00:00]:? ",
+      "text": "STARDOCK"
+    },
+    {
+      "ignore_case": false,
+      "matched": true,
+      "name": "anchored to the string start only",
+      "pattern": "\\AWelcome",
+      "second_start": 0,
+      "start": 0,
+      "subject": "Welcome to the game\nSTARDOCK is closed\nCommand [TL=00:00:00]:? ",
+      "text": "Welcome"
+    },
+    {
+      "ignore_case": false,
+      "matched": true,
+      "name": "anchored to a line end",
+      "pattern": "closed$",
+      "second_start": 32,
+      "start": 32,
+      "subject": "Welcome to the game\nSTARDOCK is closed\nCommand [TL=00:00:00]:? ",
+      "text": "closed"
+    },
+    {
+      "ignore_case": false,
+      "matched": false,
+      "name": "a line end that is not one",
+      "pattern": "closed$",
+      "second_start": null,
+      "start": null,
+      "subject": "closed now",
+      "text": null
+    },
+    {
+      "ignore_case": false,
+      "matched": true,
+      "name": "a prompt with a colon",
+      "pattern": "Command \\[TL=[\\d:]+\\]:",
+      "second_start": 39,
+      "start": 39,
+      "subject": "Welcome to the game\nSTARDOCK is closed\nCommand [TL=00:00:00]:? ",
+      "text": "Command [TL=00:00:00]:"
+    },
+    {
+      "ignore_case": false,
+      "matched": true,
+      "name": "a character class",
+      "pattern": "[Ww]elcome",
+      "second_start": 0,
+      "start": 0,
+      "subject": "Welcome to the game\nSTARDOCK is closed\nCommand [TL=00:00:00]:? ",
+      "text": "Welcome"
+    },
+    {
+      "ignore_case": false,
+      "matched": false,
+      "name": "no match at all",
+      "pattern": "nothing here",
+      "second_start": null,
+      "start": null,
+      "subject": "Welcome to the game\nSTARDOCK is closed\nCommand [TL=00:00:00]:? ",
+      "text": null
+    },
+    {
+      "ignore_case": false,
+      "matched": true,
+      "name": "an empty pattern",
+      "pattern": "",
+      "second_start": 0,
+      "start": 0,
+      "subject": "Welcome to the game\nSTARDOCK is closed\nCommand [TL=00:00:00]:? ",
+      "text": ""
+    },
+    {
+      "ignore_case": false,
+      "matched": false,
+      "name": "an empty subject",
+      "pattern": "anything",
+      "second_start": null,
+      "start": null,
+      "subject": "",
+      "text": null
+    },
+    {
+      "ignore_case": false,
+      "matched": true,
+      "name": "both empty",
+      "pattern": "",
+      "second_start": 0,
+      "start": 0,
+      "subject": "",
+      "text": ""
+    },
+    {
+      "ignore_case": false,
+      "matched": false,
+      "name": "a dot does not cross a line",
+      "pattern": "game.STARDOCK",
+      "second_start": null,
+      "start": null,
+      "subject": "Welcome to the game\nSTARDOCK is closed\nCommand [TL=00:00:00]:? ",
+      "text": null
+    },
+    {
+      "ignore_case": false,
+      "matched": true,
+      "name": "an escaped literal",
+      "pattern": "\\[TL=00:00:00\\]:",
+      "second_start": 47,
+      "start": 47,
+      "subject": "Welcome to the game\nSTARDOCK is closed\nCommand [TL=00:00:00]:? ",
+      "text": "[TL=00:00:00]:"
+    },
+    {
+      "ignore_case": false,
+      "matched": true,
+      "name": "a leading inline flag",
+      "pattern": "(?i)stardock",
+      "second_start": 20,
+      "start": 20,
+      "subject": "Welcome to the game\nSTARDOCK is closed\nCommand [TL=00:00:00]:? ",
+      "text": "STARDOCK"
+    },
+    {
+      "ignore_case": true,
+      "matched": true,
+      "name": "case insensitive already",
+      "pattern": "(?i)stardock",
+      "second_start": 20,
+      "start": 20,
+      "subject": "Welcome to the game\nSTARDOCK is closed\nCommand [TL=00:00:00]:? ",
+      "text": "STARDOCK"
+    },
+    {
+      "ignore_case": false,
+      "matched": true,
+      "name": "a group",
+      "pattern": "(Command|Prompt) \\[",
+      "second_start": 39,
+      "start": 39,
+      "subject": "Welcome to the game\nSTARDOCK is closed\nCommand [TL=00:00:00]:? ",
+      "text": "Command ["
+    },
+    {
+      "ignore_case": false,
+      "matched": true,
+      "name": "a repeated search finds the same place",
+      "pattern": "o",
+      "second_start": 4,
+      "start": 4,
+      "subject": "Welcome to the game\nSTARDOCK is closed\nCommand [TL=00:00:00]:? ",
+      "text": "o"
+    },
+    {
+      "ignore_case": false,
+      "matched": false,
+      "name": "string start beats line start",
+      "pattern": "\\ASTARDOCK",
+      "second_start": null,
+      "start": null,
+      "subject": "Welcome to the game\nSTARDOCK is closed\nCommand [TL=00:00:00]:? ",
+      "text": null
+    },
+    {
+      "ignore_case": false,
+      "matched": true,
+      "name": "string end",
+      "pattern": "\\? \\Z",
+      "second_start": 61,
+      "start": 61,
+      "subject": "Welcome to the game\nSTARDOCK is closed\nCommand [TL=00:00:00]:? ",
+      "text": "? "
+    },
+    {
+      "ignore_case": false,
+      "matched": false,
+      "name": "string end on the wrong line",
+      "pattern": "closed\\Z",
+      "second_start": null,
+      "start": null,
+      "subject": "Welcome to the game\nSTARDOCK is closed\nCommand [TL=00:00:00]:? ",
+      "text": null
+    },
+    {
+      "ignore_case": false,
+      "matched": false,
+      "name": "string end after a newline",
+      "pattern": "closed\\Z",
+      "second_start": null,
+      "start": null,
+      "subject": "closed\n",
+      "text": null
+    },
+    {
+      "ignore_case": false,
+      "matched": true,
+      "name": "an escaped backslash then A",
+      "pattern": "\\\\A",
+      "second_start": 0,
+      "start": 0,
+      "subject": "\\A",
+      "text": "\\A"
+    },
+    {
+      "ignore_case": false,
+      "matched": true,
+      "name": "both anchors together",
+      "pattern": "\\AWelcome[\\s\\S]*\\? \\Z",
+      "second_start": 0,
+      "start": 0,
+      "subject": "Welcome to the game\nSTARDOCK is closed\nCommand [TL=00:00:00]:? ",
+      "text": "Welcome to the game\nSTARDOCK is closed\nCommand [TL=00:00:00]:? "
+    }
+  ],
+  "invalid": [
+    {
+      "error": "bad escape \\A at position 1",
+      "name": "an anchor inside a character class",
+      "pattern": "[\\A]"
+    },
+    {
+      "error": "bad escape \\Z at position 1",
+      "name": "an end anchor inside a character class",
+      "pattern": "[\\Z]"
+    }
+  ]
+}

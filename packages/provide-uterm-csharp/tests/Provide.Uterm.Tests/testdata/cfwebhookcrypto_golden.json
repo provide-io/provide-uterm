@@ -1,0 +1,114 @@
+{
+  "encrypt_empty_without_key": "",
+  "encrypt_without_key": "a-signing-secret",
+  "envelopes": [
+    {
+      "name": "an envelope",
+      "result": true,
+      "stored": "enc:v1:aXY=:Y3Q="
+    },
+    {
+      "name": "plaintext",
+      "result": false,
+      "stored": "a-signing-secret"
+    },
+    {
+      "name": "nothing",
+      "result": false,
+      "stored": ""
+    },
+    {
+      "name": "something that merely mentions it",
+      "result": false,
+      "stored": "not-enc:v1:x"
+    },
+    {
+      "name": "a later version",
+      "result": false,
+      "stored": "enc:v2:aXY=:Y3Q="
+    },
+    {
+      "name": "the prefix alone",
+      "result": true,
+      "stored": "enc:v1:"
+    }
+  ],
+  "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+  "keys": [
+    {
+      "binding": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+      "name": "a key",
+      "result": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
+    },
+    {
+      "binding": null,
+      "name": "no binding at all",
+      "result": null
+    },
+    {
+      "binding": "",
+      "name": "an empty binding",
+      "result": null
+    },
+    {
+      "binding": "   ",
+      "name": "a blank binding",
+      "result": null
+    },
+    {
+      "binding": 12345,
+      "name": "a binding that is not a string",
+      "result": "12345"
+    },
+    {
+      "binding": false,
+      "name": "a binding that is false",
+      "result": null
+    }
+  ],
+  "prefix": "enc:v1:",
+  "read_with_key": [
+    {
+      "name": "plaintext is still returned",
+      "result": "a-signing-secret",
+      "stored": "a-signing-secret"
+    },
+    {
+      "name": "an envelope with too few fields",
+      "result": null,
+      "stored": "enc:v1:only-one"
+    },
+    {
+      "name": "an envelope with nothing after the prefix",
+      "result": null,
+      "stored": "enc:v1:"
+    },
+    {
+      "name": "an envelope whose ciphertext is not base64",
+      "result": null,
+      "stored": "enc:v1:!!!:???"
+    },
+    {
+      "name": "an envelope that decrypts to nothing",
+      "result": null,
+      "stored": "enc:v1:aXY=:Y3Q="
+    }
+  ],
+  "read_without_key": [
+    {
+      "name": "plaintext is returned as it is",
+      "result": "a-signing-secret",
+      "stored": "a-signing-secret"
+    },
+    {
+      "name": "an envelope yields nothing",
+      "result": null,
+      "stored": "enc:v1:aXY=:Y3Q="
+    },
+    {
+      "name": "an empty value",
+      "result": "",
+      "stored": ""
+    }
+  ]
+}

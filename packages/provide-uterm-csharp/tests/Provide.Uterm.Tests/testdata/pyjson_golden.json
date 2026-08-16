@@ -1,0 +1,346 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_pyjson_golden.py",
+ "portable": [
+  {
+   "value": {},
+   "canonical": "{}",
+   "unsorted": "{}",
+   "unicode": "{}"
+  },
+  {
+   "value": [],
+   "canonical": "[]",
+   "unsorted": "[]",
+   "unicode": "[]"
+  },
+  {
+   "value": "",
+   "canonical": "\"\"",
+   "unsorted": "\"\"",
+   "unicode": "\"\""
+  },
+  {
+   "value": "plain",
+   "canonical": "\"plain\"",
+   "unsorted": "\"plain\"",
+   "unicode": "\"plain\""
+  },
+  {
+   "value": 0,
+   "canonical": "0",
+   "unsorted": "0",
+   "unicode": "0"
+  },
+  {
+   "value": 1,
+   "canonical": "1",
+   "unsorted": "1",
+   "unicode": "1"
+  },
+  {
+   "value": -1,
+   "canonical": "-1",
+   "unsorted": "-1",
+   "unicode": "-1"
+  },
+  {
+   "value": true,
+   "canonical": "true",
+   "unsorted": "true",
+   "unicode": "true"
+  },
+  {
+   "value": false,
+   "canonical": "false",
+   "unsorted": "false",
+   "unicode": "false"
+  },
+  {
+   "value": null,
+   "canonical": "null",
+   "unsorted": "null",
+   "unicode": "null"
+  },
+  {
+   "value": 1.5,
+   "canonical": "1.5",
+   "unsorted": "1.5",
+   "unicode": "1.5"
+  },
+  {
+   "value": -2.25,
+   "canonical": "-2.25",
+   "unsorted": "-2.25",
+   "unicode": "-2.25"
+  },
+  {
+   "value": 0.1,
+   "canonical": "0.1",
+   "unsorted": "0.1",
+   "unicode": "0.1"
+  },
+  {
+   "value": 0.30000000000000004,
+   "canonical": "0.30000000000000004",
+   "unsorted": "0.30000000000000004",
+   "unicode": "0.30000000000000004"
+  },
+  {
+   "value": 0.3333333333333333,
+   "canonical": "0.3333333333333333",
+   "unsorted": "0.3333333333333333",
+   "unicode": "0.3333333333333333"
+  },
+  {
+   "value": 9007199254740991,
+   "canonical": "9007199254740991",
+   "unsorted": "9007199254740991",
+   "unicode": "9007199254740991"
+  },
+  {
+   "value": -9007199254740991,
+   "canonical": "-9007199254740991",
+   "unsorted": "-9007199254740991",
+   "unicode": "-9007199254740991"
+  },
+  {
+   "value": {
+    "b": 1,
+    "a": 2
+   },
+   "canonical": "{\"a\":2,\"b\":1}",
+   "unsorted": "{\"b\":1,\"a\":2}",
+   "unicode": "{\"a\":2,\"b\":1}"
+  },
+  {
+   "value": {
+    "z": {
+     "y": {
+      "x": 1
+     }
+    }
+   },
+   "canonical": "{\"z\":{\"y\":{\"x\":1}}}",
+   "unsorted": "{\"z\":{\"y\":{\"x\":1}}}",
+   "unicode": "{\"z\":{\"y\":{\"x\":1}}}"
+  },
+  {
+   "value": {
+    "list": [
+     1,
+     "two",
+     null,
+     true
+    ]
+   },
+   "canonical": "{\"list\":[1,\"two\",null,true]}",
+   "unsorted": "{\"list\":[1,\"two\",null,true]}",
+   "unicode": "{\"list\":[1,\"two\",null,true]}"
+  },
+  {
+   "value": [
+    [
+     1,
+     [
+      2,
+      [
+       3
+      ]
+     ]
+    ]
+   ],
+   "canonical": "[[1,[2,[3]]]]",
+   "unsorted": "[[1,[2,[3]]]]",
+   "unicode": "[[1,[2,[3]]]]"
+  },
+  {
+   "value": {
+    "": "empty key"
+   },
+   "canonical": "{\"\":\"empty key\"}",
+   "unsorted": "{\"\":\"empty key\"}",
+   "unicode": "{\"\":\"empty key\"}"
+  },
+  {
+   "value": {
+    "quote": "\""
+   },
+   "canonical": "{\"quote\":\"\\\"\"}",
+   "unsorted": "{\"quote\":\"\\\"\"}",
+   "unicode": "{\"quote\":\"\\\"\"}"
+  },
+  {
+   "value": {
+    "backslash": "\\"
+   },
+   "canonical": "{\"backslash\":\"\\\\\"}",
+   "unsorted": "{\"backslash\":\"\\\\\"}",
+   "unicode": "{\"backslash\":\"\\\\\"}"
+  },
+  {
+   "value": {
+    "newline": "\n",
+    "tab": "\t",
+    "cr": "\r"
+   },
+   "canonical": "{\"cr\":\"\\r\",\"newline\":\"\\n\",\"tab\":\"\\t\"}",
+   "unsorted": "{\"newline\":\"\\n\",\"tab\":\"\\t\",\"cr\":\"\\r\"}",
+   "unicode": "{\"cr\":\"\\r\",\"newline\":\"\\n\",\"tab\":\"\\t\"}"
+  },
+  {
+   "value": {
+    "formfeed": "\f",
+    "backspace": "\b"
+   },
+   "canonical": "{\"backspace\":\"\\b\",\"formfeed\":\"\\f\"}",
+   "unsorted": "{\"formfeed\":\"\\f\",\"backspace\":\"\\b\"}",
+   "unicode": "{\"backspace\":\"\\b\",\"formfeed\":\"\\f\"}"
+  },
+  {
+   "value": {
+    "control": "\u0000\u0001\u001f"
+   },
+   "canonical": "{\"control\":\"\\u0000\\u0001\\u001f\"}",
+   "unsorted": "{\"control\":\"\\u0000\\u0001\\u001f\"}",
+   "unicode": "{\"control\":\"\\u0000\\u0001\\u001f\"}"
+  },
+  {
+   "value": {
+    "del": ""
+   },
+   "canonical": "{\"del\":\"\\u007f\"}",
+   "unsorted": "{\"del\":\"\\u007f\"}",
+   "unicode": "{\"del\":\"\"}"
+  },
+  {
+   "value": {
+    "latin": "é"
+   },
+   "canonical": "{\"latin\":\"\\u00e9\"}",
+   "unsorted": "{\"latin\":\"\\u00e9\"}",
+   "unicode": "{\"latin\":\"é\"}"
+  },
+  {
+   "value": {
+    "cjk": "你好"
+   },
+   "canonical": "{\"cjk\":\"\\u4f60\\u597d\"}",
+   "unsorted": "{\"cjk\":\"\\u4f60\\u597d\"}",
+   "unicode": "{\"cjk\":\"你好\"}"
+  },
+  {
+   "value": {
+    "astral": "𝄞"
+   },
+   "canonical": "{\"astral\":\"\\ud834\\udd1e\"}",
+   "unsorted": "{\"astral\":\"\\ud834\\udd1e\"}",
+   "unicode": "{\"astral\":\"𝄞\"}"
+  },
+  {
+   "value": {
+    "mixed": "aéb你c"
+   },
+   "canonical": "{\"mixed\":\"a\\u00e9b\\u4f60c\"}",
+   "unsorted": "{\"mixed\":\"a\\u00e9b\\u4f60c\"}",
+   "unicode": "{\"mixed\":\"aéb你c\"}"
+  },
+  {
+   "value": {
+    "solidus": "/"
+   },
+   "canonical": "{\"solidus\":\"/\"}",
+   "unsorted": "{\"solidus\":\"/\"}",
+   "unicode": "{\"solidus\":\"/\"}"
+  },
+  {
+   "value": {
+    "B": 1,
+    "a": 2,
+    "A": 3,
+    "b": 4
+   },
+   "canonical": "{\"A\":3,\"B\":1,\"a\":2,\"b\":4}",
+   "unsorted": "{\"B\":1,\"a\":2,\"A\":3,\"b\":4}",
+   "unicode": "{\"A\":3,\"B\":1,\"a\":2,\"b\":4}"
+  },
+  {
+   "value": {
+    "10": 1,
+    "9": 2,
+    "1": 3
+   },
+   "canonical": "{\"1\":3,\"10\":1,\"9\":2}",
+   "unsorted": "{\"10\":1,\"9\":2,\"1\":3}",
+   "unicode": "{\"1\":3,\"10\":1,\"9\":2}"
+  },
+  {
+   "value": {
+    "é": 1,
+    "e": 2
+   },
+   "canonical": "{\"e\":2,\"\\u00e9\":1}",
+   "unsorted": "{\"\\u00e9\":1,\"e\":2}",
+   "unicode": "{\"e\":2,\"é\":1}"
+  },
+  {
+   "value": {
+    "role": "operator",
+    "exp": 1735689600,
+    "scopes": [
+     "read",
+     "write"
+    ]
+   },
+   "canonical": "{\"exp\":1735689600,\"role\":\"operator\",\"scopes\":[\"read\",\"write\"]}",
+   "unsorted": "{\"role\":\"operator\",\"exp\":1735689600,\"scopes\":[\"read\",\"write\"]}",
+   "unicode": "{\"exp\":1735689600,\"role\":\"operator\",\"scopes\":[\"read\",\"write\"]}"
+  },
+  {
+   "value": {
+    "sub": "user:alice",
+    "admin": false
+   },
+   "canonical": "{\"admin\":false,\"sub\":\"user:alice\"}",
+   "unsorted": "{\"sub\":\"user:alice\",\"admin\":false}",
+   "unicode": "{\"admin\":false,\"sub\":\"user:alice\"}"
+  }
+ ],
+ "float_divergences": [
+  {
+   "repr": "0.0",
+   "canonical": "0.0"
+  },
+  {
+   "repr": "1.0",
+   "canonical": "1.0"
+  },
+  {
+   "repr": "-0.0",
+   "canonical": "-0.0"
+  },
+  {
+   "repr": "-1.0",
+   "canonical": "-1.0"
+  },
+  {
+   "repr": "1e+21",
+   "canonical": "1e+21"
+  },
+  {
+   "repr": "1e-07",
+   "canonical": "1e-07"
+  },
+  {
+   "repr": "1e+16",
+   "canonical": "1e+16"
+  },
+  {
+   "repr": "{'whole': 2.0}",
+   "canonical": "{\"whole\":2.0}"
+  },
+  {
+   "repr": "[1.0, 1.5]",
+   "canonical": "[1.0,1.5]"
+  }
+ ]
+}

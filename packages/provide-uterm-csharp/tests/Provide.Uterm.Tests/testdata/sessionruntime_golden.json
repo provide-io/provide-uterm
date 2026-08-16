@@ -1,0 +1,39 @@
+{
+  "generator": "packages/provide-uterm-ts/testdata/gen_sessionruntime_golden.py",
+  "lifecycles": [
+    "stopped",
+    "starting",
+    "running",
+    "error"
+  ],
+  "initial": {
+    "lifecycle_state": "stopped",
+    "connected": false,
+    "last_error": null,
+    "stopped_at_set": false
+  },
+  "starting": {
+    "lifecycle_state": "starting",
+    "connected": false,
+    "last_error": null,
+    "stopped_at_set": false
+  },
+  "started_twice": {
+    "lifecycle_state": "starting",
+    "connected": false,
+    "last_error": null,
+    "stopped_at_set": false
+  },
+  "stopped": {
+    "lifecycle_state": "stopped",
+    "connected": false,
+    "last_error": null,
+    "stopped_at_set": true
+  },
+  "unsupported_connector": {
+    "lifecycle_state": "stopped",
+    "connected": false,
+    "last_error": "unsupported connector_type: 'no-such-connector'",
+    "stopped_at_set": true
+  }
+}

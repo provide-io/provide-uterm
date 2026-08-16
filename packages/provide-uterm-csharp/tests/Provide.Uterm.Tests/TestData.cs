@@ -9,9 +9,10 @@ internal static class TestData
 {
     public static string PathTo(params string[] parts)
     {
+        var wantDirectory = parts.Length == 0;
         var baseDir = AppContext.BaseDirectory;
         var candidate = System.IO.Path.Combine(new[] { baseDir, "testdata" }.Concat(parts).ToArray());
-        if (File.Exists(candidate))
+        if ((wantDirectory && Directory.Exists(candidate)) || File.Exists(candidate))
         {
             return candidate;
         }
@@ -20,14 +21,14 @@ internal static class TestData
         while (dir is not null)
         {
             candidate = System.IO.Path.Combine(new[] { dir.FullName, "testdata" }.Concat(parts).ToArray());
-            if (File.Exists(candidate))
+            if ((wantDirectory && Directory.Exists(candidate)) || File.Exists(candidate))
             {
                 return candidate;
             }
 
             candidate = System.IO.Path.Combine(
                 new[] { dir.FullName, "tests", "Provide.Uterm.Tests", "testdata" }.Concat(parts).ToArray());
-            if (File.Exists(candidate))
+            if ((wantDirectory && Directory.Exists(candidate)) || File.Exists(candidate))
             {
                 return candidate;
             }
@@ -35,7 +36,7 @@ internal static class TestData
             candidate = System.IO.Path.Combine(
                 new[] { dir.FullName, "packages", "provide-uterm-csharp", "tests", "Provide.Uterm.Tests", "testdata" }
                     .Concat(parts).ToArray());
-            if (File.Exists(candidate))
+            if ((wantDirectory && Directory.Exists(candidate)) || File.Exists(candidate))
             {
                 return candidate;
             }

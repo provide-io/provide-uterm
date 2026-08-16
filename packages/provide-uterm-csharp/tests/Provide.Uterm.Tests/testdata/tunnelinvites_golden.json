@@ -1,0 +1,783 @@
+{
+  "invite_ttl_s": 300,
+  "now": 1700000000.0,
+  "hashed": [
+    {
+      "name": "an ordinary token",
+      "plain": "s3cret-token",
+      "hash": "d455c31f3f137d2d170e2e583eb9c0eee85800022865222fb3da35420867a64e"
+    },
+    {
+      "name": "an empty token",
+      "plain": "",
+      "hash": ""
+    },
+    {
+      "name": "a space",
+      "plain": " ",
+      "hash": "ae85d245a3d00bfde01f59f3c4fe0b4bfae1cb37e9cf91929eadcea4985711de"
+    },
+    {
+      "name": "text outside ASCII",
+      "plain": "héllo ☃",
+      "hash": "a7c96ff2f9dc225a4e3cbb11420cfab95a5ba50b71bb4d8bf6a3c66ac42ec69d"
+    },
+    {
+      "name": "a long token",
+      "plain": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "hash": "7ca37375f168964e0319ef8478b444475ea543ce287d45bb73efa6da3f83713a"
+    },
+    {
+      "name": "a token differing in one bit",
+      "plain": "s3cret-tokeo",
+      "hash": "d6cc4084bc3bc1bae7a5505c9e5528aee9239c4b3353cfa8258053dcd3aea9f7"
+    }
+  ],
+  "verified": [
+    {
+      "name": "the right token",
+      "plain": "s3cret-token",
+      "stored_hash": "d455c31f3f137d2d170e2e583eb9c0eee85800022865222fb3da35420867a64e",
+      "matches": true
+    },
+    {
+      "name": "the wrong token",
+      "plain": "other",
+      "stored_hash": "d455c31f3f137d2d170e2e583eb9c0eee85800022865222fb3da35420867a64e",
+      "matches": false
+    },
+    {
+      "name": "an empty token against a real hash",
+      "plain": "",
+      "stored_hash": "d455c31f3f137d2d170e2e583eb9c0eee85800022865222fb3da35420867a64e",
+      "matches": false
+    },
+    {
+      "name": "a real token against an empty hash",
+      "plain": "s3cret-token",
+      "stored_hash": "",
+      "matches": false
+    },
+    {
+      "name": "nothing against nothing",
+      "plain": "",
+      "stored_hash": "",
+      "matches": false
+    },
+    {
+      "name": "a hash of the hash",
+      "plain": "d455c31f3f137d2d170e2e583eb9c0eee85800022865222fb3da35420867a64e",
+      "stored_hash": "d455c31f3f137d2d170e2e583eb9c0eee85800022865222fb3da35420867a64e",
+      "matches": false
+    },
+    {
+      "name": "the right token in capitals",
+      "plain": "S3CRET-TOKEN",
+      "stored_hash": "d455c31f3f137d2d170e2e583eb9c0eee85800022865222fb3da35420867a64e",
+      "matches": false
+    },
+    {
+      "name": "a stored hash in capitals",
+      "plain": "s3cret-token",
+      "stored_hash": "D455C31F3F137D2D170E2E583EB9C0EEE85800022865222FB3DA35420867A64E",
+      "matches": false
+    }
+  ],
+  "issued": [
+    {
+      "name": "a tunnel outliving the invite window",
+      "tunnel_expires_at": 1700003600.0,
+      "invite_length": 43,
+      "invites_differ": true,
+      "keyed_by_hash": true,
+      "entries": [
+        {
+          "session_id": "sess-1",
+          "role": "operator",
+          "tunnel_token": "control-token",
+          "expires_at": 1700000300.0,
+          "issued_ip": "203.0.113.7"
+        },
+        {
+          "session_id": "sess-1",
+          "role": "viewer",
+          "tunnel_token": "share-token",
+          "expires_at": 1700000300.0,
+          "issued_ip": "203.0.113.7"
+        }
+      ]
+    },
+    {
+      "name": "a tunnel ending inside the invite window",
+      "tunnel_expires_at": 1700000030.0,
+      "invite_length": 43,
+      "invites_differ": true,
+      "keyed_by_hash": true,
+      "entries": [
+        {
+          "session_id": "sess-1",
+          "role": "operator",
+          "tunnel_token": "control-token",
+          "expires_at": 1700000030.0,
+          "issued_ip": "203.0.113.7"
+        },
+        {
+          "session_id": "sess-1",
+          "role": "viewer",
+          "tunnel_token": "share-token",
+          "expires_at": 1700000030.0,
+          "issued_ip": "203.0.113.7"
+        }
+      ]
+    },
+    {
+      "name": "a tunnel ending exactly at the window's edge",
+      "tunnel_expires_at": 1700000300.0,
+      "invite_length": 43,
+      "invites_differ": true,
+      "keyed_by_hash": true,
+      "entries": [
+        {
+          "session_id": "sess-1",
+          "role": "operator",
+          "tunnel_token": "control-token",
+          "expires_at": 1700000300.0,
+          "issued_ip": "203.0.113.7"
+        },
+        {
+          "session_id": "sess-1",
+          "role": "viewer",
+          "tunnel_token": "share-token",
+          "expires_at": 1700000300.0,
+          "issued_ip": "203.0.113.7"
+        }
+      ]
+    },
+    {
+      "name": "a tunnel that has already ended",
+      "tunnel_expires_at": 1699999999.0,
+      "invite_length": 43,
+      "invites_differ": true,
+      "keyed_by_hash": true,
+      "entries": [
+        {
+          "session_id": "sess-1",
+          "role": "operator",
+          "tunnel_token": "control-token",
+          "expires_at": 1699999999.0,
+          "issued_ip": "203.0.113.7"
+        },
+        {
+          "session_id": "sess-1",
+          "role": "viewer",
+          "tunnel_token": "share-token",
+          "expires_at": 1699999999.0,
+          "issued_ip": "203.0.113.7"
+        }
+      ]
+    }
+  ],
+  "consumed": [
+    {
+      "name": "a viewer invite",
+      "stored": {
+        "session_id": "sess-1",
+        "role": "viewer",
+        "tunnel_token": "share-token",
+        "expires_at": 1700000060.0,
+        "issued_ip": "203.0.113.7"
+      },
+      "offered": "invite-1",
+      "session_id": "sess-1",
+      "now": 1700000000.0,
+      "consumed": {
+        "session_id": "sess-1",
+        "role": "viewer",
+        "tunnel_token": "share-token",
+        "expires_at": 1700000060.0,
+        "issued_ip": "203.0.113.7"
+      },
+      "second_attempt_consumed": false,
+      "remaining_keys": [
+        "5edebd31956e573414a26de6454e4d497fbd13a7ae49ca1b73377efbe94ac5aa"
+      ]
+    },
+    {
+      "name": "an operator invite",
+      "stored": {
+        "session_id": "sess-1",
+        "role": "operator",
+        "tunnel_token": "control-token",
+        "expires_at": 1700000060.0,
+        "issued_ip": "203.0.113.7"
+      },
+      "offered": "invite-1",
+      "session_id": "sess-1",
+      "now": 1700000000.0,
+      "consumed": {
+        "session_id": "sess-1",
+        "role": "operator",
+        "tunnel_token": "control-token",
+        "expires_at": 1700000060.0,
+        "issued_ip": "203.0.113.7"
+      },
+      "second_attempt_consumed": false,
+      "remaining_keys": [
+        "5edebd31956e573414a26de6454e4d497fbd13a7ae49ca1b73377efbe94ac5aa"
+      ]
+    },
+    {
+      "name": "an invite nobody issued",
+      "stored": null,
+      "offered": "invite-1",
+      "session_id": "sess-1",
+      "now": 1700000000.0,
+      "consumed": null,
+      "second_attempt_consumed": false,
+      "remaining_keys": [
+        "5edebd31956e573414a26de6454e4d497fbd13a7ae49ca1b73377efbe94ac5aa"
+      ]
+    },
+    {
+      "name": "an empty invite",
+      "stored": {
+        "session_id": "sess-1",
+        "role": "viewer",
+        "tunnel_token": "share-token",
+        "expires_at": 1700000060.0,
+        "issued_ip": "203.0.113.7"
+      },
+      "offered": "",
+      "session_id": "sess-1",
+      "now": 1700000000.0,
+      "consumed": null,
+      "second_attempt_consumed": false,
+      "remaining_keys": [
+        "5edebd31956e573414a26de6454e4d497fbd13a7ae49ca1b73377efbe94ac5aa",
+        "5f526da2c981d64fa3f2924e6e52a66885d58106626a5edc693905a0e9676529"
+      ]
+    },
+    {
+      "name": "an invite that is only spaces",
+      "stored": {
+        "session_id": "sess-1",
+        "role": "viewer",
+        "tunnel_token": "share-token",
+        "expires_at": 1700000060.0,
+        "issued_ip": "203.0.113.7"
+      },
+      "offered": "   ",
+      "session_id": "sess-1",
+      "now": 1700000000.0,
+      "consumed": null,
+      "second_attempt_consumed": false,
+      "remaining_keys": [
+        "5edebd31956e573414a26de6454e4d497fbd13a7ae49ca1b73377efbe94ac5aa",
+        "5f526da2c981d64fa3f2924e6e52a66885d58106626a5edc693905a0e9676529"
+      ]
+    },
+    {
+      "name": "an invite with spaces around it",
+      "stored": {
+        "session_id": "sess-1",
+        "role": "viewer",
+        "tunnel_token": "share-token",
+        "expires_at": 1700000060.0,
+        "issued_ip": "203.0.113.7"
+      },
+      "offered": "  invite-1  ",
+      "session_id": "sess-1",
+      "now": 1700000000.0,
+      "consumed": {
+        "session_id": "sess-1",
+        "role": "viewer",
+        "tunnel_token": "share-token",
+        "expires_at": 1700000060.0,
+        "issued_ip": "203.0.113.7"
+      },
+      "second_attempt_consumed": false,
+      "remaining_keys": [
+        "5edebd31956e573414a26de6454e4d497fbd13a7ae49ca1b73377efbe94ac5aa"
+      ]
+    },
+    {
+      "name": "an invite at the instant it expires",
+      "stored": {
+        "session_id": "sess-1",
+        "role": "viewer",
+        "tunnel_token": "share-token",
+        "expires_at": 1700000060.0,
+        "issued_ip": "203.0.113.7"
+      },
+      "offered": "invite-1",
+      "session_id": "sess-1",
+      "now": 1700000060.0,
+      "consumed": {
+        "session_id": "sess-1",
+        "role": "viewer",
+        "tunnel_token": "share-token",
+        "expires_at": 1700000060.0,
+        "issued_ip": "203.0.113.7"
+      },
+      "second_attempt_consumed": false,
+      "remaining_keys": [
+        "5edebd31956e573414a26de6454e4d497fbd13a7ae49ca1b73377efbe94ac5aa"
+      ]
+    },
+    {
+      "name": "an invite a moment past expiry",
+      "stored": {
+        "session_id": "sess-1",
+        "role": "viewer",
+        "tunnel_token": "share-token",
+        "expires_at": 1700000060.0,
+        "issued_ip": "203.0.113.7"
+      },
+      "offered": "invite-1",
+      "session_id": "sess-1",
+      "now": 1700000060.001,
+      "consumed": null,
+      "second_attempt_consumed": false,
+      "remaining_keys": [
+        "5edebd31956e573414a26de6454e4d497fbd13a7ae49ca1b73377efbe94ac5aa"
+      ]
+    },
+    {
+      "name": "an invite whose expiry is missing",
+      "stored": {
+        "session_id": "sess-1",
+        "role": "viewer",
+        "tunnel_token": "share-token",
+        "expires_at": null,
+        "issued_ip": "203.0.113.7"
+      },
+      "offered": "invite-1",
+      "session_id": "sess-1",
+      "now": 1700000000.0,
+      "consumed": null,
+      "second_attempt_consumed": false,
+      "remaining_keys": [
+        "5edebd31956e573414a26de6454e4d497fbd13a7ae49ca1b73377efbe94ac5aa"
+      ]
+    },
+    {
+      "name": "an invite whose expiry is not a number",
+      "stored": {
+        "session_id": "sess-1",
+        "role": "viewer",
+        "tunnel_token": "share-token",
+        "expires_at": "soon",
+        "issued_ip": "203.0.113.7"
+      },
+      "offered": "invite-1",
+      "session_id": "sess-1",
+      "now": 1700000000.0,
+      "consumed": null,
+      "second_attempt_consumed": false,
+      "remaining_keys": [
+        "5edebd31956e573414a26de6454e4d497fbd13a7ae49ca1b73377efbe94ac5aa"
+      ]
+    },
+    {
+      "name": "an invite whose expiry is an integer",
+      "stored": {
+        "session_id": "sess-1",
+        "role": "viewer",
+        "tunnel_token": "share-token",
+        "expires_at": 1700000060,
+        "issued_ip": "203.0.113.7"
+      },
+      "offered": "invite-1",
+      "session_id": "sess-1",
+      "now": 1700000000.0,
+      "consumed": {
+        "session_id": "sess-1",
+        "role": "viewer",
+        "tunnel_token": "share-token",
+        "expires_at": 1700000060.0,
+        "issued_ip": "203.0.113.7"
+      },
+      "second_attempt_consumed": false,
+      "remaining_keys": [
+        "5edebd31956e573414a26de6454e4d497fbd13a7ae49ca1b73377efbe94ac5aa"
+      ]
+    },
+    {
+      "name": "an invite whose expiry is a boolean",
+      "stored": {
+        "session_id": "sess-1",
+        "role": "viewer",
+        "tunnel_token": "share-token",
+        "expires_at": true,
+        "issued_ip": "203.0.113.7"
+      },
+      "offered": "invite-1",
+      "session_id": "sess-1",
+      "now": 1700000000.0,
+      "consumed": null,
+      "second_attempt_consumed": false,
+      "remaining_keys": [
+        "5edebd31956e573414a26de6454e4d497fbd13a7ae49ca1b73377efbe94ac5aa"
+      ]
+    },
+    {
+      "name": "an invite for another session",
+      "stored": {
+        "session_id": "sess-1",
+        "role": "viewer",
+        "tunnel_token": "share-token",
+        "expires_at": 1700000060.0,
+        "issued_ip": "203.0.113.7"
+      },
+      "offered": "invite-1",
+      "session_id": "sess-2",
+      "now": 1700000000.0,
+      "consumed": null,
+      "second_attempt_consumed": false,
+      "remaining_keys": [
+        "5edebd31956e573414a26de6454e4d497fbd13a7ae49ca1b73377efbe94ac5aa"
+      ]
+    },
+    {
+      "name": "an invite naming no session",
+      "stored": {
+        "session_id": "",
+        "role": "viewer",
+        "tunnel_token": "share-token",
+        "expires_at": 1700000060.0,
+        "issued_ip": "203.0.113.7"
+      },
+      "offered": "invite-1",
+      "session_id": "sess-1",
+      "now": 1700000000.0,
+      "consumed": null,
+      "second_attempt_consumed": false,
+      "remaining_keys": [
+        "5edebd31956e573414a26de6454e4d497fbd13a7ae49ca1b73377efbe94ac5aa"
+      ]
+    },
+    {
+      "name": "an invite holding a role nobody defined",
+      "stored": {
+        "session_id": "sess-1",
+        "role": "admin",
+        "tunnel_token": "share-token",
+        "expires_at": 1700000060.0,
+        "issued_ip": "203.0.113.7"
+      },
+      "offered": "invite-1",
+      "session_id": "sess-1",
+      "now": 1700000000.0,
+      "consumed": null,
+      "second_attempt_consumed": false,
+      "remaining_keys": [
+        "5edebd31956e573414a26de6454e4d497fbd13a7ae49ca1b73377efbe94ac5aa"
+      ]
+    },
+    {
+      "name": "an invite holding a role in capitals",
+      "stored": {
+        "session_id": "sess-1",
+        "role": "Viewer",
+        "tunnel_token": "share-token",
+        "expires_at": 1700000060.0,
+        "issued_ip": "203.0.113.7"
+      },
+      "offered": "invite-1",
+      "session_id": "sess-1",
+      "now": 1700000000.0,
+      "consumed": null,
+      "second_attempt_consumed": false,
+      "remaining_keys": [
+        "5edebd31956e573414a26de6454e4d497fbd13a7ae49ca1b73377efbe94ac5aa"
+      ]
+    },
+    {
+      "name": "an invite holding no role",
+      "stored": {
+        "session_id": "sess-1",
+        "role": "",
+        "tunnel_token": "share-token",
+        "expires_at": 1700000060.0,
+        "issued_ip": "203.0.113.7"
+      },
+      "offered": "invite-1",
+      "session_id": "sess-1",
+      "now": 1700000000.0,
+      "consumed": null,
+      "second_attempt_consumed": false,
+      "remaining_keys": [
+        "5edebd31956e573414a26de6454e4d497fbd13a7ae49ca1b73377efbe94ac5aa"
+      ]
+    },
+    {
+      "name": "an invite holding no token",
+      "stored": {
+        "session_id": "sess-1",
+        "role": "viewer",
+        "tunnel_token": "",
+        "expires_at": 1700000060.0,
+        "issued_ip": "203.0.113.7"
+      },
+      "offered": "invite-1",
+      "session_id": "sess-1",
+      "now": 1700000000.0,
+      "consumed": null,
+      "second_attempt_consumed": false,
+      "remaining_keys": [
+        "5edebd31956e573414a26de6454e4d497fbd13a7ae49ca1b73377efbe94ac5aa"
+      ]
+    },
+    {
+      "name": "an invite whose token is only spaces",
+      "stored": {
+        "session_id": "sess-1",
+        "role": "viewer",
+        "tunnel_token": "   ",
+        "expires_at": 1700000060.0,
+        "issued_ip": "203.0.113.7"
+      },
+      "offered": "invite-1",
+      "session_id": "sess-1",
+      "now": 1700000000.0,
+      "consumed": null,
+      "second_attempt_consumed": false,
+      "remaining_keys": [
+        "5edebd31956e573414a26de6454e4d497fbd13a7ae49ca1b73377efbe94ac5aa"
+      ]
+    },
+    {
+      "name": "an invite whose token has spaces around it",
+      "stored": {
+        "session_id": "sess-1",
+        "role": "viewer",
+        "tunnel_token": " tok ",
+        "expires_at": 1700000060.0,
+        "issued_ip": "203.0.113.7"
+      },
+      "offered": "invite-1",
+      "session_id": "sess-1",
+      "now": 1700000000.0,
+      "consumed": {
+        "session_id": "sess-1",
+        "role": "viewer",
+        "tunnel_token": "tok",
+        "expires_at": 1700000060.0,
+        "issued_ip": "203.0.113.7"
+      },
+      "second_attempt_consumed": false,
+      "remaining_keys": [
+        "5edebd31956e573414a26de6454e4d497fbd13a7ae49ca1b73377efbe94ac5aa"
+      ]
+    },
+    {
+      "name": "an invite issued to nobody in particular",
+      "stored": {
+        "session_id": "sess-1",
+        "role": "viewer",
+        "tunnel_token": "share-token",
+        "expires_at": 1700000060.0,
+        "issued_ip": null
+      },
+      "offered": "invite-1",
+      "session_id": "sess-1",
+      "now": 1700000000.0,
+      "consumed": {
+        "session_id": "sess-1",
+        "role": "viewer",
+        "tunnel_token": "share-token",
+        "expires_at": 1700000060.0,
+        "issued_ip": null
+      },
+      "second_attempt_consumed": false,
+      "remaining_keys": [
+        "5edebd31956e573414a26de6454e4d497fbd13a7ae49ca1b73377efbe94ac5aa"
+      ]
+    },
+    {
+      "name": "an invite missing its session outright",
+      "stored": {
+        "role": "viewer",
+        "tunnel_token": "share-token",
+        "expires_at": 1700000060.0,
+        "issued_ip": "203.0.113.7"
+      },
+      "offered": "invite-1",
+      "session_id": "sess-1",
+      "now": 1700000000.0,
+      "consumed": null,
+      "second_attempt_consumed": false,
+      "remaining_keys": [
+        "5edebd31956e573414a26de6454e4d497fbd13a7ae49ca1b73377efbe94ac5aa"
+      ]
+    },
+    {
+      "name": "an invite missing its role outright",
+      "stored": {
+        "session_id": "sess-1",
+        "tunnel_token": "share-token",
+        "expires_at": 1700000060.0,
+        "issued_ip": "203.0.113.7"
+      },
+      "offered": "invite-1",
+      "session_id": "sess-1",
+      "now": 1700000000.0,
+      "consumed": null,
+      "second_attempt_consumed": false,
+      "remaining_keys": [
+        "5edebd31956e573414a26de6454e4d497fbd13a7ae49ca1b73377efbe94ac5aa"
+      ]
+    },
+    {
+      "name": "an invite missing its token outright",
+      "stored": {
+        "session_id": "sess-1",
+        "role": "viewer",
+        "expires_at": 1700000060.0,
+        "issued_ip": "203.0.113.7"
+      },
+      "offered": "invite-1",
+      "session_id": "sess-1",
+      "now": 1700000000.0,
+      "consumed": null,
+      "second_attempt_consumed": false,
+      "remaining_keys": [
+        "5edebd31956e573414a26de6454e4d497fbd13a7ae49ca1b73377efbe94ac5aa"
+      ]
+    },
+    {
+      "name": "an invite missing its expiry outright",
+      "stored": {
+        "session_id": "sess-1",
+        "role": "viewer",
+        "tunnel_token": "share-token",
+        "issued_ip": "203.0.113.7"
+      },
+      "offered": "invite-1",
+      "session_id": "sess-1",
+      "now": 1700000000.0,
+      "consumed": null,
+      "second_attempt_consumed": false,
+      "remaining_keys": [
+        "5edebd31956e573414a26de6454e4d497fbd13a7ae49ca1b73377efbe94ac5aa"
+      ]
+    },
+    {
+      "name": "an invite missing the address it was issued to",
+      "stored": {
+        "session_id": "sess-1",
+        "role": "viewer",
+        "tunnel_token": "share-token",
+        "expires_at": 1700000060.0
+      },
+      "offered": "invite-1",
+      "session_id": "sess-1",
+      "now": 1700000000.0,
+      "consumed": {
+        "session_id": "sess-1",
+        "role": "viewer",
+        "tunnel_token": "share-token",
+        "expires_at": 1700000060.0,
+        "issued_ip": null
+      },
+      "second_attempt_consumed": false,
+      "remaining_keys": [
+        "5edebd31956e573414a26de6454e4d497fbd13a7ae49ca1b73377efbe94ac5aa"
+      ]
+    },
+    {
+      "name": "an invite whose session is null",
+      "stored": {
+        "session_id": null,
+        "role": "viewer",
+        "tunnel_token": "share-token",
+        "expires_at": 1700000060.0,
+        "issued_ip": "203.0.113.7"
+      },
+      "offered": "invite-1",
+      "session_id": "sess-1",
+      "now": 1700000000.0,
+      "consumed": null,
+      "second_attempt_consumed": false,
+      "remaining_keys": [
+        "5edebd31956e573414a26de6454e4d497fbd13a7ae49ca1b73377efbe94ac5aa"
+      ]
+    },
+    {
+      "name": "an invite whose role is null",
+      "stored": {
+        "session_id": "sess-1",
+        "role": null,
+        "tunnel_token": "share-token",
+        "expires_at": 1700000060.0,
+        "issued_ip": "203.0.113.7"
+      },
+      "offered": "invite-1",
+      "session_id": "sess-1",
+      "now": 1700000000.0,
+      "consumed": null,
+      "second_attempt_consumed": false,
+      "remaining_keys": [
+        "5edebd31956e573414a26de6454e4d497fbd13a7ae49ca1b73377efbe94ac5aa"
+      ]
+    },
+    {
+      "name": "an invite whose token is null",
+      "stored": {
+        "session_id": "sess-1",
+        "role": "viewer",
+        "tunnel_token": null,
+        "expires_at": 1700000060.0,
+        "issued_ip": "203.0.113.7"
+      },
+      "offered": "invite-1",
+      "session_id": "sess-1",
+      "now": 1700000000.0,
+      "consumed": {
+        "session_id": "sess-1",
+        "role": "viewer",
+        "tunnel_token": "None",
+        "expires_at": 1700000060.0,
+        "issued_ip": "203.0.113.7"
+      },
+      "second_attempt_consumed": false,
+      "remaining_keys": [
+        "5edebd31956e573414a26de6454e4d497fbd13a7ae49ca1b73377efbe94ac5aa"
+      ]
+    }
+  ],
+  "swept": {
+    "remaining_keys": [
+      "at-the-instant",
+      "expiry-not-a-number",
+      "live",
+      "no-expiry"
+    ]
+  },
+  "discarded": {
+    "remaining_keys": [
+      "other",
+      "unnamed"
+    ]
+  },
+  "matches_token_hash": [
+    {
+      "name": "the tunnel's active token",
+      "tunnel_token": "share-token",
+      "token_hash": "63e61ffef8ec054fa73b9bda621de87f8e293527ed0b336594697ca9baec09a1",
+      "matches": true
+    },
+    {
+      "name": "a token the tunnel has rotated away from",
+      "tunnel_token": "share-token",
+      "token_hash": "817238a6777aee0f010cd7dbec1adceb7450b224d5ac008a816baf7ab46b7d79",
+      "matches": false
+    },
+    {
+      "name": "a tunnel with no token hash at all",
+      "tunnel_token": "share-token",
+      "token_hash": "",
+      "matches": false
+    }
+  ]
+}

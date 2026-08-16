@@ -1,0 +1,402 @@
+{
+  "retry_ms": 3000,
+  "max_events": 100,
+  "worker_id": "w-session",
+  "bodies": [
+    {
+      "name": "a batch of events",
+      "events": [
+        {
+          "seq": 42,
+          "ts": 1700000000.25,
+          "type": "snapshot",
+          "payload": {
+            "rows": 24
+          }
+        },
+        {
+          "seq": 43,
+          "ts": 1700000001.5,
+          "type": "input_send",
+          "payload": {
+            "data": "ls\r"
+          }
+        }
+      ],
+      "body": "id: 42\ndata: {\"seq\": 42, \"ts\": 1700000000.25, \"type\": \"snapshot\", \"payload\": {\"rows\": 24}}\n\nid: 43\ndata: {\"seq\": 43, \"ts\": 1700000001.5, \"type\": \"input_send\", \"payload\": {\"data\": \"ls\\r\"}}\n\nretry: 3000\n"
+    },
+    {
+      "name": "nothing to send",
+      "events": [],
+      "body": "retry: 3000\n"
+    },
+    {
+      "name": "one event",
+      "events": [
+        {
+          "seq": 42,
+          "ts": 1700000000.25,
+          "type": "snapshot",
+          "payload": {
+            "rows": 24
+          }
+        }
+      ],
+      "body": "id: 42\ndata: {\"seq\": 42, \"ts\": 1700000000.25, \"type\": \"snapshot\", \"payload\": {\"rows\": 24}}\n\nretry: 3000\n"
+    },
+    {
+      "name": "an event with no sequence",
+      "events": [
+        {
+          "type": "tick"
+        }
+      ],
+      "body": "id: \ndata: {\"type\": \"tick\"}\n\nretry: 3000\n"
+    },
+    {
+      "name": "a sequence that is not a number",
+      "events": [
+        {
+          "seq": "x",
+          "type": "tick"
+        }
+      ],
+      "body": "id: x\ndata: {\"seq\": \"x\", \"type\": \"tick\"}\n\nretry: 3000\n"
+    },
+    {
+      "name": "a payload containing a newline",
+      "events": [
+        {
+          "seq": 1,
+          "data": "a\nb"
+        }
+      ],
+      "body": "id: 1\ndata: {\"seq\": 1, \"data\": \"a\\nb\"}\n\nretry: 3000\n"
+    },
+    {
+      "name": "a payload containing non-ascii",
+      "events": [
+        {
+          "seq": 2,
+          "data": "héllo → ✓"
+        }
+      ],
+      "body": "id: 2\ndata: {\"seq\": 2, \"data\": \"h\\u00e9llo \\u2192 \\u2713\"}\n\nretry: 3000\n"
+    }
+  ],
+  "headers": {
+    "content-type": "text/event-stream; charset=utf-8",
+    "cache-control": "no-cache",
+    "x-accel-buffering": "no"
+  },
+  "status": 200,
+  "custom_retry_body": "retry: 500\n",
+  "positions": [
+    {
+      "name": "a query parameter",
+      "url": "https://h/api/sessions/w-session/events/stream?after_seq=41",
+      "headers": null,
+      "asked": {
+        "worker_id": "w-session",
+        "after_seq": 41,
+        "limit": 100
+      }
+    },
+    {
+      "name": "the first request",
+      "url": "https://h/api/sessions/w-session/events/stream?after_seq=0",
+      "headers": null,
+      "asked": {
+        "worker_id": "w-session",
+        "after_seq": 0,
+        "limit": 100
+      }
+    },
+    {
+      "name": "no position at all",
+      "url": "https://h/api/sessions/w-session/events/stream",
+      "headers": null,
+      "asked": {
+        "worker_id": "w-session",
+        "after_seq": 0,
+        "limit": 100
+      }
+    },
+    {
+      "name": "the reconnect header",
+      "url": "https://h/s",
+      "headers": {
+        "last-event-id": "17"
+      },
+      "asked": {
+        "worker_id": "w-session",
+        "after_seq": 17,
+        "limit": 100
+      }
+    },
+    {
+      "name": "both, the parameter winning",
+      "url": "https://h/s?after_seq=5",
+      "headers": {
+        "last-event-id": "17"
+      },
+      "asked": {
+        "worker_id": "w-session",
+        "after_seq": 5,
+        "limit": 100
+      }
+    },
+    {
+      "name": "an empty parameter falling back to the header",
+      "url": "https://h/s?after_seq=",
+      "headers": {
+        "last-event-id": "17"
+      },
+      "asked": {
+        "worker_id": "w-session",
+        "after_seq": 17,
+        "limit": 100
+      }
+    },
+    {
+      "name": "an empty parameter and no header",
+      "url": "https://h/s?after_seq=",
+      "headers": null,
+      "asked": {
+        "worker_id": "w-session",
+        "after_seq": 0,
+        "limit": 100
+      }
+    },
+    {
+      "name": "an empty header",
+      "url": "https://h/s",
+      "headers": {
+        "last-event-id": ""
+      },
+      "asked": {
+        "worker_id": "w-session",
+        "after_seq": 0,
+        "limit": 100
+      }
+    },
+    {
+      "name": "a request with no headers at all",
+      "url": "https://h/s",
+      "headers": null,
+      "asked": {
+        "worker_id": "w-session",
+        "after_seq": 0,
+        "limit": 100
+      }
+    },
+    {
+      "name": "a negative position",
+      "url": "https://h/s?after_seq=-5",
+      "headers": null,
+      "asked": {
+        "worker_id": "w-session",
+        "after_seq": 0,
+        "limit": 100
+      }
+    },
+    {
+      "name": "a position that is not a number",
+      "url": "https://h/s?after_seq=abc",
+      "headers": null,
+      "asked": {
+        "worker_id": "w-session",
+        "after_seq": 0,
+        "limit": 100
+      }
+    },
+    {
+      "name": "a fractional position",
+      "url": "https://h/s?after_seq=1.5",
+      "headers": null,
+      "asked": {
+        "worker_id": "w-session",
+        "after_seq": 0,
+        "limit": 100
+      }
+    },
+    {
+      "name": "a header that is not a number",
+      "url": "https://h/s",
+      "headers": {
+        "last-event-id": "abc"
+      },
+      "asked": {
+        "worker_id": "w-session",
+        "after_seq": 0,
+        "limit": 100
+      }
+    },
+    {
+      "name": "a negative header",
+      "url": "https://h/s",
+      "headers": {
+        "last-event-id": "-9"
+      },
+      "asked": {
+        "worker_id": "w-session",
+        "after_seq": 0,
+        "limit": 100
+      }
+    },
+    {
+      "name": "a position with spaces around it",
+      "url": "https://h/s?after_seq=%207%20",
+      "headers": null,
+      "asked": {
+        "worker_id": "w-session",
+        "after_seq": 7,
+        "limit": 100
+      }
+    },
+    {
+      "name": "a signed position",
+      "url": "https://h/s?after_seq=%2B7",
+      "headers": null,
+      "asked": {
+        "worker_id": "w-session",
+        "after_seq": 7,
+        "limit": 100
+      }
+    },
+    {
+      "name": "a position repeated",
+      "url": "https://h/s?after_seq=3&after_seq=9",
+      "headers": null,
+      "asked": {
+        "worker_id": "w-session",
+        "after_seq": 3,
+        "limit": 100
+      }
+    },
+    {
+      "name": "other parameters alongside",
+      "url": "https://h/s?foo=bar&after_seq=8&baz=1",
+      "headers": null,
+      "asked": {
+        "worker_id": "w-session",
+        "after_seq": 8,
+        "limit": 100
+      }
+    },
+    {
+      "name": "a position after a fragment marker",
+      "url": "https://h/s?after_seq=4#after_seq=99",
+      "headers": null,
+      "asked": {
+        "worker_id": "w-session",
+        "after_seq": 4,
+        "limit": 100
+      }
+    },
+    {
+      "name": "a query inside a fragment",
+      "url": "https://h/s#frag?after_seq=9",
+      "headers": null,
+      "asked": {
+        "worker_id": "w-session",
+        "after_seq": 0,
+        "limit": 100
+      }
+    },
+    {
+      "name": "a parameter whose name merely starts the same",
+      "url": "https://h/s?after_seqx=5&after_seq=9",
+      "headers": null,
+      "asked": {
+        "worker_id": "w-session",
+        "after_seq": 9,
+        "limit": 100
+      }
+    },
+    {
+      "name": "a second question mark",
+      "url": "https://h/s?a=1?after_seq=9",
+      "headers": null,
+      "asked": {
+        "worker_id": "w-session",
+        "after_seq": 0,
+        "limit": 100
+      }
+    },
+    {
+      "name": "a bare name that is nearly the parameter",
+      "url": "https://h/s?after_seqs&after_seq=9",
+      "headers": null,
+      "asked": {
+        "worker_id": "w-session",
+        "after_seq": 9,
+        "limit": 100
+      }
+    },
+    {
+      "name": "a value containing an equals sign",
+      "url": "https://h/s?after_seq=5=6&after_seq=9",
+      "headers": null,
+      "asked": {
+        "worker_id": "w-session",
+        "after_seq": 0,
+        "limit": 100
+      }
+    },
+    {
+      "name": "a trailing plus",
+      "url": "https://h/s?after_seq=7+",
+      "headers": null,
+      "asked": {
+        "worker_id": "w-session",
+        "after_seq": 7,
+        "limit": 100
+      }
+    },
+    {
+      "name": "a query on a relative url",
+      "url": "/api/sessions/x/events/stream?after_seq=6",
+      "headers": null,
+      "asked": {
+        "worker_id": "w-session",
+        "after_seq": 6,
+        "limit": 100
+      }
+    },
+    {
+      "name": "the largest position both runtimes hold exactly",
+      "url": "https://h/s?after_seq=9007199254740991",
+      "headers": null,
+      "asked": {
+        "worker_id": "w-session",
+        "after_seq": 9007199254740991,
+        "limit": 100
+      }
+    }
+  ],
+  "whole_float_event": {
+    "seq": 1,
+    "ts": 1700000000.0
+  },
+  "whole_float_body": "id: 1\ndata: {\"seq\": 1, \"ts\": 1700000000.0}\n\nretry: 3000\n",
+  "beyond_exact_url": "https://h/s?after_seq=99999999999999999999",
+  "beyond_exact_after_seq": "99999999999999999999",
+  "wrong_session": {
+    "status": 404,
+    "body": "{\"error\": \"not_found\"}",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "store_calls": 0
+  },
+  "matching_session": {
+    "status": 200,
+    "body": "id: 42\ndata: {\"seq\": 42, \"ts\": 1700000000.25, \"type\": \"snapshot\", \"payload\": {\"rows\": 24}}\n\nid: 43\ndata: {\"seq\": 43, \"ts\": 1700000001.5, \"type\": \"input_send\", \"payload\": {\"data\": \"ls\\r\"}}\n\nretry: 3000\n",
+    "asked": [
+      "w-session",
+      41,
+      100
+    ]
+  }
+}

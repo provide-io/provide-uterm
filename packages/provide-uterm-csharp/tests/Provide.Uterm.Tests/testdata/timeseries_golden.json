@@ -1,0 +1,746 @@
+{
+  "constants": {
+    "epoch_turn_drop_ratio": 0.2,
+    "epoch_turn_drop_min": 50
+  },
+  "epochs": [
+    {
+      "name": "nothing at all",
+      "rows": [],
+      "trimmed": []
+    },
+    {
+      "name": "one sample",
+      "rows": [
+        {
+          "total_turns": 10,
+          "total_agents": 2,
+          "tag": ""
+        }
+      ],
+      "trimmed": [
+        {
+          "total_turns": 10,
+          "total_agents": 2,
+          "tag": ""
+        }
+      ]
+    },
+    {
+      "name": "a steady run",
+      "rows": [
+        {
+          "total_turns": 10,
+          "total_agents": 2,
+          "tag": ""
+        },
+        {
+          "total_turns": 20,
+          "total_agents": 2,
+          "tag": ""
+        },
+        {
+          "total_turns": 30,
+          "total_agents": 2,
+          "tag": ""
+        }
+      ],
+      "trimmed": [
+        {
+          "total_turns": 10,
+          "total_agents": 2,
+          "tag": ""
+        },
+        {
+          "total_turns": 20,
+          "total_agents": 2,
+          "tag": ""
+        },
+        {
+          "total_turns": 30,
+          "total_agents": 2,
+          "tag": ""
+        }
+      ]
+    },
+    {
+      "name": "a run that grew",
+      "rows": [
+        {
+          "total_turns": 10,
+          "total_agents": 1,
+          "tag": ""
+        },
+        {
+          "total_turns": 200,
+          "total_agents": 4,
+          "tag": ""
+        },
+        {
+          "total_turns": 500,
+          "total_agents": 8,
+          "tag": ""
+        }
+      ],
+      "trimmed": [
+        {
+          "total_turns": 10,
+          "total_agents": 1,
+          "tag": ""
+        },
+        {
+          "total_turns": 200,
+          "total_agents": 4,
+          "tag": ""
+        },
+        {
+          "total_turns": 500,
+          "total_agents": 8,
+          "tag": ""
+        }
+      ]
+    },
+    {
+      "name": "a small dip",
+      "rows": [
+        {
+          "total_turns": 100,
+          "total_agents": 2,
+          "tag": ""
+        },
+        {
+          "total_turns": 90,
+          "total_agents": 2,
+          "tag": ""
+        },
+        {
+          "total_turns": 120,
+          "total_agents": 2,
+          "tag": ""
+        }
+      ],
+      "trimmed": [
+        {
+          "total_turns": 100,
+          "total_agents": 2,
+          "tag": ""
+        },
+        {
+          "total_turns": 90,
+          "total_agents": 2,
+          "tag": ""
+        },
+        {
+          "total_turns": 120,
+          "total_agents": 2,
+          "tag": ""
+        }
+      ]
+    },
+    {
+      "name": "a dip of exactly the floor",
+      "rows": [
+        {
+          "total_turns": 100,
+          "total_agents": 2,
+          "tag": ""
+        },
+        {
+          "total_turns": 50,
+          "total_agents": 2,
+          "tag": ""
+        },
+        {
+          "total_turns": 120,
+          "total_agents": 2,
+          "tag": ""
+        }
+      ],
+      "trimmed": [
+        {
+          "total_turns": 100,
+          "total_agents": 2,
+          "tag": ""
+        },
+        {
+          "total_turns": 50,
+          "total_agents": 2,
+          "tag": ""
+        },
+        {
+          "total_turns": 120,
+          "total_agents": 2,
+          "tag": ""
+        }
+      ]
+    },
+    {
+      "name": "a dip past the floor",
+      "rows": [
+        {
+          "total_turns": 100,
+          "total_agents": 2,
+          "tag": ""
+        },
+        {
+          "total_turns": 49,
+          "total_agents": 2,
+          "tag": ""
+        },
+        {
+          "total_turns": 120,
+          "total_agents": 2,
+          "tag": ""
+        }
+      ],
+      "trimmed": [
+        {
+          "total_turns": 49,
+          "total_agents": 2,
+          "tag": ""
+        },
+        {
+          "total_turns": 120,
+          "total_agents": 2,
+          "tag": ""
+        }
+      ]
+    },
+    {
+      "name": "a big drop",
+      "rows": [
+        {
+          "total_turns": 1000,
+          "total_agents": 4,
+          "tag": ""
+        },
+        {
+          "total_turns": 10,
+          "total_agents": 1,
+          "tag": ""
+        },
+        {
+          "total_turns": 20,
+          "total_agents": 1,
+          "tag": ""
+        }
+      ],
+      "trimmed": [
+        {
+          "total_turns": 10,
+          "total_agents": 1,
+          "tag": ""
+        },
+        {
+          "total_turns": 20,
+          "total_agents": 1,
+          "tag": ""
+        }
+      ]
+    },
+    {
+      "name": "a drop of exactly a fifth",
+      "rows": [
+        {
+          "total_turns": 1000,
+          "total_agents": 4,
+          "tag": ""
+        },
+        {
+          "total_turns": 800,
+          "total_agents": 4,
+          "tag": ""
+        },
+        {
+          "total_turns": 820,
+          "total_agents": 4,
+          "tag": ""
+        }
+      ],
+      "trimmed": [
+        {
+          "total_turns": 1000,
+          "total_agents": 4,
+          "tag": ""
+        },
+        {
+          "total_turns": 800,
+          "total_agents": 4,
+          "tag": ""
+        },
+        {
+          "total_turns": 820,
+          "total_agents": 4,
+          "tag": ""
+        }
+      ]
+    },
+    {
+      "name": "a drop past a fifth",
+      "rows": [
+        {
+          "total_turns": 1000,
+          "total_agents": 4,
+          "tag": ""
+        },
+        {
+          "total_turns": 700,
+          "total_agents": 4,
+          "tag": ""
+        },
+        {
+          "total_turns": 720,
+          "total_agents": 4,
+          "tag": ""
+        }
+      ],
+      "trimmed": [
+        {
+          "total_turns": 700,
+          "total_agents": 4,
+          "tag": ""
+        },
+        {
+          "total_turns": 720,
+          "total_agents": 4,
+          "tag": ""
+        }
+      ]
+    },
+    {
+      "name": "the agents going away",
+      "rows": [
+        {
+          "total_turns": 100,
+          "total_agents": 4,
+          "tag": ""
+        },
+        {
+          "total_turns": 110,
+          "total_agents": 0,
+          "tag": ""
+        },
+        {
+          "total_turns": 120,
+          "total_agents": 2,
+          "tag": ""
+        }
+      ],
+      "trimmed": [
+        {
+          "total_turns": 110,
+          "total_agents": 0,
+          "tag": ""
+        },
+        {
+          "total_turns": 120,
+          "total_agents": 2,
+          "tag": ""
+        }
+      ]
+    },
+    {
+      "name": "the agents never there",
+      "rows": [
+        {
+          "total_turns": 100,
+          "total_agents": 0,
+          "tag": ""
+        },
+        {
+          "total_turns": 110,
+          "total_agents": 0,
+          "tag": ""
+        },
+        {
+          "total_turns": 120,
+          "total_agents": 0,
+          "tag": ""
+        }
+      ],
+      "trimmed": [
+        {
+          "total_turns": 100,
+          "total_agents": 0,
+          "tag": ""
+        },
+        {
+          "total_turns": 110,
+          "total_agents": 0,
+          "tag": ""
+        },
+        {
+          "total_turns": 120,
+          "total_agents": 0,
+          "tag": ""
+        }
+      ]
+    },
+    {
+      "name": "the agents arriving",
+      "rows": [
+        {
+          "total_turns": 100,
+          "total_agents": 0,
+          "tag": ""
+        },
+        {
+          "total_turns": 110,
+          "total_agents": 4,
+          "tag": ""
+        },
+        {
+          "total_turns": 120,
+          "total_agents": 4,
+          "tag": ""
+        }
+      ],
+      "trimmed": [
+        {
+          "total_turns": 100,
+          "total_agents": 0,
+          "tag": ""
+        },
+        {
+          "total_turns": 110,
+          "total_agents": 4,
+          "tag": ""
+        },
+        {
+          "total_turns": 120,
+          "total_agents": 4,
+          "tag": ""
+        }
+      ]
+    },
+    {
+      "name": "two restarts",
+      "rows": [
+        {
+          "total_turns": 1000,
+          "total_agents": 4,
+          "tag": ""
+        },
+        {
+          "total_turns": 5,
+          "total_agents": 1,
+          "tag": ""
+        },
+        {
+          "total_turns": 900,
+          "total_agents": 4,
+          "tag": ""
+        },
+        {
+          "total_turns": 3,
+          "total_agents": 1,
+          "tag": ""
+        },
+        {
+          "total_turns": 50,
+          "total_agents": 2,
+          "tag": ""
+        }
+      ],
+      "trimmed": [
+        {
+          "total_turns": 3,
+          "total_agents": 1,
+          "tag": ""
+        },
+        {
+          "total_turns": 50,
+          "total_agents": 2,
+          "tag": ""
+        }
+      ]
+    },
+    {
+      "name": "a restart at the very end",
+      "rows": [
+        {
+          "total_turns": 1000,
+          "total_agents": 4,
+          "tag": ""
+        },
+        {
+          "total_turns": 1100,
+          "total_agents": 4,
+          "tag": ""
+        },
+        {
+          "total_turns": 2,
+          "total_agents": 1,
+          "tag": ""
+        }
+      ],
+      "trimmed": [
+        {
+          "total_turns": 2,
+          "total_agents": 1,
+          "tag": ""
+        }
+      ]
+    },
+    {
+      "name": "a row with nothing in it",
+      "rows": [
+        {},
+        {
+          "total_turns": 10,
+          "total_agents": 2,
+          "tag": ""
+        }
+      ],
+      "trimmed": [
+        {},
+        {
+          "total_turns": 10,
+          "total_agents": 2,
+          "tag": ""
+        }
+      ]
+    },
+    {
+      "name": "a row whose counts are null",
+      "rows": [
+        {
+          "total_turns": null,
+          "total_agents": null
+        },
+        {
+          "total_turns": 10,
+          "total_agents": 2,
+          "tag": ""
+        }
+      ],
+      "trimmed": [
+        {
+          "total_turns": null,
+          "total_agents": null
+        },
+        {
+          "total_turns": 10,
+          "total_agents": 2,
+          "tag": ""
+        }
+      ]
+    },
+    {
+      "name": "counts given as text",
+      "rows": [
+        {
+          "total_turns": "100",
+          "total_agents": "4"
+        },
+        {
+          "total_turns": 10,
+          "total_agents": 1,
+          "tag": ""
+        }
+      ],
+      "trimmed": [
+        {
+          "total_turns": 10,
+          "total_agents": 1,
+          "tag": ""
+        }
+      ]
+    }
+  ],
+  "tails": [
+    {
+      "name": "nothing at all",
+      "contents": "",
+      "limit": 10,
+      "rows": []
+    },
+    {
+      "name": "one row",
+      "contents": "{\"a\":1}\n",
+      "limit": 10,
+      "rows": [
+        {
+          "a": 1
+        }
+      ]
+    },
+    {
+      "name": "several rows",
+      "contents": "{\"a\":1}\n{\"a\":2}\n{\"a\":3}\n",
+      "limit": 10,
+      "rows": [
+        {
+          "a": 1
+        },
+        {
+          "a": 2
+        },
+        {
+          "a": 3
+        }
+      ]
+    },
+    {
+      "name": "more rows than asked for",
+      "contents": "{\"a\":0}\n{\"a\":1}\n{\"a\":2}\n{\"a\":3}\n{\"a\":4}\n{\"a\":5}\n{\"a\":6}\n{\"a\":7}\n{\"a\":8}\n{\"a\":9}\n",
+      "limit": 3,
+      "rows": [
+        {
+          "a": 7
+        },
+        {
+          "a": 8
+        },
+        {
+          "a": 9
+        }
+      ]
+    },
+    {
+      "name": "no trailing newline",
+      "contents": "{\"a\":1}\n{\"a\":2}",
+      "limit": 10,
+      "rows": [
+        {
+          "a": 1
+        },
+        {
+          "a": 2
+        }
+      ]
+    },
+    {
+      "name": "a blank line",
+      "contents": "{\"a\":1}\n\n{\"a\":2}\n",
+      "limit": 10,
+      "rows": [
+        {
+          "a": 1
+        },
+        {
+          "a": 2
+        }
+      ]
+    },
+    {
+      "name": "a line of spaces",
+      "contents": "{\"a\":1}\n   \n{\"a\":2}\n",
+      "limit": 10,
+      "rows": [
+        {
+          "a": 1
+        },
+        {
+          "a": 2
+        }
+      ]
+    },
+    {
+      "name": "a truncated last line",
+      "contents": "{\"a\":1}\n{\"a\":2",
+      "limit": 10,
+      "rows": [
+        {
+          "a": 1
+        }
+      ]
+    },
+    {
+      "name": "a line that is not json",
+      "contents": "{\"a\":1}\nnot json\n{\"a\":2}\n",
+      "limit": 10,
+      "rows": [
+        {
+          "a": 1
+        },
+        {
+          "a": 2
+        }
+      ]
+    },
+    {
+      "name": "a line that is a list",
+      "contents": "{\"a\":1}\n[1,2]\n{\"a\":2}\n",
+      "limit": 10,
+      "rows": [
+        {
+          "a": 1
+        },
+        {
+          "a": 2
+        }
+      ]
+    },
+    {
+      "name": "a line that is a number",
+      "contents": "{\"a\":1}\n42\n{\"a\":2}\n",
+      "limit": 10,
+      "rows": [
+        {
+          "a": 1
+        },
+        {
+          "a": 2
+        }
+      ]
+    },
+    {
+      "name": "a line that is a string",
+      "contents": "{\"a\":1}\n\"hello\"\n{\"a\":2}\n",
+      "limit": 10,
+      "rows": [
+        {
+          "a": 1
+        },
+        {
+          "a": 2
+        }
+      ]
+    },
+    {
+      "name": "a line that is null",
+      "contents": "{\"a\":1}\nnull\n{\"a\":2}\n",
+      "limit": 10,
+      "rows": [
+        {
+          "a": 1
+        },
+        {
+          "a": 2
+        }
+      ]
+    },
+    {
+      "name": "a limit of zero",
+      "contents": "{\"a\":1}\n{\"a\":2}\n",
+      "limit": 0,
+      "rows": [
+        {
+          "a": 2
+        }
+      ]
+    },
+    {
+      "name": "a negative limit",
+      "contents": "{\"a\":1}\n{\"a\":2}\n",
+      "limit": -5,
+      "rows": [
+        {
+          "a": 2
+        }
+      ]
+    },
+    {
+      "name": "text outside ASCII",
+      "contents": "{\"a\":\"h\\u00e9llo\"}\n",
+      "limit": 10,
+      "rows": [
+        {
+          "a": "héllo"
+        }
+      ]
+    }
+  ],
+  "missing_file": []
+}

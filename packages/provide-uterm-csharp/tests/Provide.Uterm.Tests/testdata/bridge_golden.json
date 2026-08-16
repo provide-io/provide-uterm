@@ -1,0 +1,1071 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_bridge_golden.py",
+ "now": 1000.0,
+ "role_ranks": {
+  "viewer": 0,
+  "operator": 1,
+  "admin": 2
+ },
+ "unknown_role_rank": -1,
+ "policy": [
+  {
+   "op": "input_inject",
+   "role": "viewer",
+   "lease_owned": true,
+   "session_active": true,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "input_inject",
+   "role": "viewer",
+   "lease_owned": true,
+   "session_active": false,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "input_inject",
+   "role": "viewer",
+   "lease_owned": false,
+   "session_active": true,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "input_inject",
+   "role": "viewer",
+   "lease_owned": false,
+   "session_active": false,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "input_inject",
+   "role": "operator",
+   "lease_owned": true,
+   "session_active": true,
+   "error": null
+  },
+  {
+   "op": "input_inject",
+   "role": "operator",
+   "lease_owned": true,
+   "session_active": false,
+   "error": null
+  },
+  {
+   "op": "input_inject",
+   "role": "operator",
+   "lease_owned": false,
+   "session_active": true,
+   "error": "forbidden: no active lease"
+  },
+  {
+   "op": "input_inject",
+   "role": "operator",
+   "lease_owned": false,
+   "session_active": false,
+   "error": "forbidden: no active lease"
+  },
+  {
+   "op": "input_inject",
+   "role": "admin",
+   "lease_owned": true,
+   "session_active": true,
+   "error": null
+  },
+  {
+   "op": "input_inject",
+   "role": "admin",
+   "lease_owned": true,
+   "session_active": false,
+   "error": null
+  },
+  {
+   "op": "input_inject",
+   "role": "admin",
+   "lease_owned": false,
+   "session_active": true,
+   "error": "forbidden: no active lease"
+  },
+  {
+   "op": "input_inject",
+   "role": "admin",
+   "lease_owned": false,
+   "session_active": false,
+   "error": "forbidden: no active lease"
+  },
+  {
+   "op": "input_inject",
+   "role": "root",
+   "lease_owned": true,
+   "session_active": true,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "input_inject",
+   "role": "root",
+   "lease_owned": true,
+   "session_active": false,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "input_inject",
+   "role": "root",
+   "lease_owned": false,
+   "session_active": true,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "input_inject",
+   "role": "root",
+   "lease_owned": false,
+   "session_active": false,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "input_inject",
+   "role": "",
+   "lease_owned": true,
+   "session_active": true,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "input_inject",
+   "role": "",
+   "lease_owned": true,
+   "session_active": false,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "input_inject",
+   "role": "",
+   "lease_owned": false,
+   "session_active": true,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "input_inject",
+   "role": "",
+   "lease_owned": false,
+   "session_active": false,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_step",
+   "role": "viewer",
+   "lease_owned": true,
+   "session_active": true,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_step",
+   "role": "viewer",
+   "lease_owned": true,
+   "session_active": false,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_step",
+   "role": "viewer",
+   "lease_owned": false,
+   "session_active": true,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_step",
+   "role": "viewer",
+   "lease_owned": false,
+   "session_active": false,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_step",
+   "role": "operator",
+   "lease_owned": true,
+   "session_active": true,
+   "error": null
+  },
+  {
+   "op": "hijack_step",
+   "role": "operator",
+   "lease_owned": true,
+   "session_active": false,
+   "error": "forbidden: session inactive"
+  },
+  {
+   "op": "hijack_step",
+   "role": "operator",
+   "lease_owned": false,
+   "session_active": true,
+   "error": "forbidden: no active lease"
+  },
+  {
+   "op": "hijack_step",
+   "role": "operator",
+   "lease_owned": false,
+   "session_active": false,
+   "error": "forbidden: no active lease"
+  },
+  {
+   "op": "hijack_step",
+   "role": "admin",
+   "lease_owned": true,
+   "session_active": true,
+   "error": null
+  },
+  {
+   "op": "hijack_step",
+   "role": "admin",
+   "lease_owned": true,
+   "session_active": false,
+   "error": "forbidden: session inactive"
+  },
+  {
+   "op": "hijack_step",
+   "role": "admin",
+   "lease_owned": false,
+   "session_active": true,
+   "error": "forbidden: no active lease"
+  },
+  {
+   "op": "hijack_step",
+   "role": "admin",
+   "lease_owned": false,
+   "session_active": false,
+   "error": "forbidden: no active lease"
+  },
+  {
+   "op": "hijack_step",
+   "role": "root",
+   "lease_owned": true,
+   "session_active": true,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_step",
+   "role": "root",
+   "lease_owned": true,
+   "session_active": false,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_step",
+   "role": "root",
+   "lease_owned": false,
+   "session_active": true,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_step",
+   "role": "root",
+   "lease_owned": false,
+   "session_active": false,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_step",
+   "role": "",
+   "lease_owned": true,
+   "session_active": true,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_step",
+   "role": "",
+   "lease_owned": true,
+   "session_active": false,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_step",
+   "role": "",
+   "lease_owned": false,
+   "session_active": true,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_step",
+   "role": "",
+   "lease_owned": false,
+   "session_active": false,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_release",
+   "role": "viewer",
+   "lease_owned": true,
+   "session_active": true,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_release",
+   "role": "viewer",
+   "lease_owned": true,
+   "session_active": false,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_release",
+   "role": "viewer",
+   "lease_owned": false,
+   "session_active": true,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_release",
+   "role": "viewer",
+   "lease_owned": false,
+   "session_active": false,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_release",
+   "role": "operator",
+   "lease_owned": true,
+   "session_active": true,
+   "error": null
+  },
+  {
+   "op": "hijack_release",
+   "role": "operator",
+   "lease_owned": true,
+   "session_active": false,
+   "error": null
+  },
+  {
+   "op": "hijack_release",
+   "role": "operator",
+   "lease_owned": false,
+   "session_active": true,
+   "error": null
+  },
+  {
+   "op": "hijack_release",
+   "role": "operator",
+   "lease_owned": false,
+   "session_active": false,
+   "error": null
+  },
+  {
+   "op": "hijack_release",
+   "role": "admin",
+   "lease_owned": true,
+   "session_active": true,
+   "error": null
+  },
+  {
+   "op": "hijack_release",
+   "role": "admin",
+   "lease_owned": true,
+   "session_active": false,
+   "error": null
+  },
+  {
+   "op": "hijack_release",
+   "role": "admin",
+   "lease_owned": false,
+   "session_active": true,
+   "error": null
+  },
+  {
+   "op": "hijack_release",
+   "role": "admin",
+   "lease_owned": false,
+   "session_active": false,
+   "error": null
+  },
+  {
+   "op": "hijack_release",
+   "role": "root",
+   "lease_owned": true,
+   "session_active": true,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_release",
+   "role": "root",
+   "lease_owned": true,
+   "session_active": false,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_release",
+   "role": "root",
+   "lease_owned": false,
+   "session_active": true,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_release",
+   "role": "root",
+   "lease_owned": false,
+   "session_active": false,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_release",
+   "role": "",
+   "lease_owned": true,
+   "session_active": true,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_release",
+   "role": "",
+   "lease_owned": true,
+   "session_active": false,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_release",
+   "role": "",
+   "lease_owned": false,
+   "session_active": true,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_release",
+   "role": "",
+   "lease_owned": false,
+   "session_active": false,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_acquire",
+   "role": "viewer",
+   "lease_owned": true,
+   "session_active": true,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_acquire",
+   "role": "viewer",
+   "lease_owned": true,
+   "session_active": false,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_acquire",
+   "role": "viewer",
+   "lease_owned": false,
+   "session_active": true,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_acquire",
+   "role": "viewer",
+   "lease_owned": false,
+   "session_active": false,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_acquire",
+   "role": "operator",
+   "lease_owned": true,
+   "session_active": true,
+   "error": null
+  },
+  {
+   "op": "hijack_acquire",
+   "role": "operator",
+   "lease_owned": true,
+   "session_active": false,
+   "error": "forbidden: session inactive"
+  },
+  {
+   "op": "hijack_acquire",
+   "role": "operator",
+   "lease_owned": false,
+   "session_active": true,
+   "error": null
+  },
+  {
+   "op": "hijack_acquire",
+   "role": "operator",
+   "lease_owned": false,
+   "session_active": false,
+   "error": "forbidden: session inactive"
+  },
+  {
+   "op": "hijack_acquire",
+   "role": "admin",
+   "lease_owned": true,
+   "session_active": true,
+   "error": null
+  },
+  {
+   "op": "hijack_acquire",
+   "role": "admin",
+   "lease_owned": true,
+   "session_active": false,
+   "error": "forbidden: session inactive"
+  },
+  {
+   "op": "hijack_acquire",
+   "role": "admin",
+   "lease_owned": false,
+   "session_active": true,
+   "error": null
+  },
+  {
+   "op": "hijack_acquire",
+   "role": "admin",
+   "lease_owned": false,
+   "session_active": false,
+   "error": "forbidden: session inactive"
+  },
+  {
+   "op": "hijack_acquire",
+   "role": "root",
+   "lease_owned": true,
+   "session_active": true,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_acquire",
+   "role": "root",
+   "lease_owned": true,
+   "session_active": false,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_acquire",
+   "role": "root",
+   "lease_owned": false,
+   "session_active": true,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_acquire",
+   "role": "root",
+   "lease_owned": false,
+   "session_active": false,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_acquire",
+   "role": "",
+   "lease_owned": true,
+   "session_active": true,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_acquire",
+   "role": "",
+   "lease_owned": true,
+   "session_active": false,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_acquire",
+   "role": "",
+   "lease_owned": false,
+   "session_active": true,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "hijack_acquire",
+   "role": "",
+   "lease_owned": false,
+   "session_active": false,
+   "error": "forbidden: insufficient role"
+  },
+  {
+   "op": "unknown_op",
+   "role": "viewer",
+   "lease_owned": true,
+   "session_active": true,
+   "error": "forbidden: unknown operation unknown_op"
+  },
+  {
+   "op": "unknown_op",
+   "role": "viewer",
+   "lease_owned": true,
+   "session_active": false,
+   "error": "forbidden: unknown operation unknown_op"
+  },
+  {
+   "op": "unknown_op",
+   "role": "viewer",
+   "lease_owned": false,
+   "session_active": true,
+   "error": "forbidden: unknown operation unknown_op"
+  },
+  {
+   "op": "unknown_op",
+   "role": "viewer",
+   "lease_owned": false,
+   "session_active": false,
+   "error": "forbidden: unknown operation unknown_op"
+  },
+  {
+   "op": "unknown_op",
+   "role": "operator",
+   "lease_owned": true,
+   "session_active": true,
+   "error": "forbidden: unknown operation unknown_op"
+  },
+  {
+   "op": "unknown_op",
+   "role": "operator",
+   "lease_owned": true,
+   "session_active": false,
+   "error": "forbidden: unknown operation unknown_op"
+  },
+  {
+   "op": "unknown_op",
+   "role": "operator",
+   "lease_owned": false,
+   "session_active": true,
+   "error": "forbidden: unknown operation unknown_op"
+  },
+  {
+   "op": "unknown_op",
+   "role": "operator",
+   "lease_owned": false,
+   "session_active": false,
+   "error": "forbidden: unknown operation unknown_op"
+  },
+  {
+   "op": "unknown_op",
+   "role": "admin",
+   "lease_owned": true,
+   "session_active": true,
+   "error": "forbidden: unknown operation unknown_op"
+  },
+  {
+   "op": "unknown_op",
+   "role": "admin",
+   "lease_owned": true,
+   "session_active": false,
+   "error": "forbidden: unknown operation unknown_op"
+  },
+  {
+   "op": "unknown_op",
+   "role": "admin",
+   "lease_owned": false,
+   "session_active": true,
+   "error": "forbidden: unknown operation unknown_op"
+  },
+  {
+   "op": "unknown_op",
+   "role": "admin",
+   "lease_owned": false,
+   "session_active": false,
+   "error": "forbidden: unknown operation unknown_op"
+  },
+  {
+   "op": "unknown_op",
+   "role": "root",
+   "lease_owned": true,
+   "session_active": true,
+   "error": "forbidden: unknown operation unknown_op"
+  },
+  {
+   "op": "unknown_op",
+   "role": "root",
+   "lease_owned": true,
+   "session_active": false,
+   "error": "forbidden: unknown operation unknown_op"
+  },
+  {
+   "op": "unknown_op",
+   "role": "root",
+   "lease_owned": false,
+   "session_active": true,
+   "error": "forbidden: unknown operation unknown_op"
+  },
+  {
+   "op": "unknown_op",
+   "role": "root",
+   "lease_owned": false,
+   "session_active": false,
+   "error": "forbidden: unknown operation unknown_op"
+  },
+  {
+   "op": "unknown_op",
+   "role": "",
+   "lease_owned": true,
+   "session_active": true,
+   "error": "forbidden: unknown operation unknown_op"
+  },
+  {
+   "op": "unknown_op",
+   "role": "",
+   "lease_owned": true,
+   "session_active": false,
+   "error": "forbidden: unknown operation unknown_op"
+  },
+  {
+   "op": "unknown_op",
+   "role": "",
+   "lease_owned": false,
+   "session_active": true,
+   "error": "forbidden: unknown operation unknown_op"
+  },
+  {
+   "op": "unknown_op",
+   "role": "",
+   "lease_owned": false,
+   "session_active": false,
+   "error": "forbidden: unknown operation unknown_op"
+  },
+  {
+   "op": "",
+   "role": "viewer",
+   "lease_owned": true,
+   "session_active": true,
+   "error": "forbidden: unknown operation "
+  },
+  {
+   "op": "",
+   "role": "viewer",
+   "lease_owned": true,
+   "session_active": false,
+   "error": "forbidden: unknown operation "
+  },
+  {
+   "op": "",
+   "role": "viewer",
+   "lease_owned": false,
+   "session_active": true,
+   "error": "forbidden: unknown operation "
+  },
+  {
+   "op": "",
+   "role": "viewer",
+   "lease_owned": false,
+   "session_active": false,
+   "error": "forbidden: unknown operation "
+  },
+  {
+   "op": "",
+   "role": "operator",
+   "lease_owned": true,
+   "session_active": true,
+   "error": "forbidden: unknown operation "
+  },
+  {
+   "op": "",
+   "role": "operator",
+   "lease_owned": true,
+   "session_active": false,
+   "error": "forbidden: unknown operation "
+  },
+  {
+   "op": "",
+   "role": "operator",
+   "lease_owned": false,
+   "session_active": true,
+   "error": "forbidden: unknown operation "
+  },
+  {
+   "op": "",
+   "role": "operator",
+   "lease_owned": false,
+   "session_active": false,
+   "error": "forbidden: unknown operation "
+  },
+  {
+   "op": "",
+   "role": "admin",
+   "lease_owned": true,
+   "session_active": true,
+   "error": "forbidden: unknown operation "
+  },
+  {
+   "op": "",
+   "role": "admin",
+   "lease_owned": true,
+   "session_active": false,
+   "error": "forbidden: unknown operation "
+  },
+  {
+   "op": "",
+   "role": "admin",
+   "lease_owned": false,
+   "session_active": true,
+   "error": "forbidden: unknown operation "
+  },
+  {
+   "op": "",
+   "role": "admin",
+   "lease_owned": false,
+   "session_active": false,
+   "error": "forbidden: unknown operation "
+  },
+  {
+   "op": "",
+   "role": "root",
+   "lease_owned": true,
+   "session_active": true,
+   "error": "forbidden: unknown operation "
+  },
+  {
+   "op": "",
+   "role": "root",
+   "lease_owned": true,
+   "session_active": false,
+   "error": "forbidden: unknown operation "
+  },
+  {
+   "op": "",
+   "role": "root",
+   "lease_owned": false,
+   "session_active": true,
+   "error": "forbidden: unknown operation "
+  },
+  {
+   "op": "",
+   "role": "root",
+   "lease_owned": false,
+   "session_active": false,
+   "error": "forbidden: unknown operation "
+  },
+  {
+   "op": "",
+   "role": "",
+   "lease_owned": true,
+   "session_active": true,
+   "error": "forbidden: unknown operation "
+  },
+  {
+   "op": "",
+   "role": "",
+   "lease_owned": true,
+   "session_active": false,
+   "error": "forbidden: unknown operation "
+  },
+  {
+   "op": "",
+   "role": "",
+   "lease_owned": false,
+   "session_active": true,
+   "error": "forbidden: unknown operation "
+  },
+  {
+   "op": "",
+   "role": "",
+   "lease_owned": false,
+   "session_active": false,
+   "error": "forbidden: unknown operation "
+  }
+ ],
+ "inject": [
+  {
+   "role": "viewer",
+   "lease_id": "lease-1",
+   "error": "forbidden: insufficient role",
+   "error_other_session": "forbidden: insufficient role"
+  },
+  {
+   "role": "viewer",
+   "lease_id": "",
+   "error": "forbidden: insufficient role",
+   "error_other_session": "forbidden: insufficient role"
+  },
+  {
+   "role": "operator",
+   "lease_id": "lease-1",
+   "error": null,
+   "error_other_session": null
+  },
+  {
+   "role": "operator",
+   "lease_id": "",
+   "error": "forbidden: no active lease",
+   "error_other_session": "forbidden: no active lease"
+  },
+  {
+   "role": "admin",
+   "lease_id": "lease-1",
+   "error": null,
+   "error_other_session": null
+  },
+  {
+   "role": "admin",
+   "lease_id": "",
+   "error": "forbidden: no active lease",
+   "error_other_session": "forbidden: no active lease"
+  },
+  {
+   "role": "root",
+   "lease_id": "lease-1",
+   "error": "forbidden: insufficient role",
+   "error_other_session": "forbidden: insufficient role"
+  },
+  {
+   "role": "root",
+   "lease_id": "",
+   "error": "forbidden: insufficient role",
+   "error_other_session": "forbidden: insufficient role"
+  },
+  {
+   "role": "",
+   "lease_id": "lease-1",
+   "error": "forbidden: insufficient role",
+   "error_other_session": "forbidden: insufficient role"
+  },
+  {
+   "role": "",
+   "lease_id": "",
+   "error": "forbidden: insufficient role",
+   "error_other_session": "forbidden: insufficient role"
+  }
+ ],
+ "coordinator": {
+  "first": {
+   "ok": true,
+   "error": null,
+   "is_renewal": false,
+   "has_session": true,
+   "owner": "alice",
+   "expires_at": 1090.0
+  },
+  "renewal": {
+   "ok": true,
+   "error": null,
+   "is_renewal": true,
+   "has_session": true,
+   "owner": "alice",
+   "expires_at": 1100.0
+  },
+  "renewal_mints_new_id": true,
+  "contested": {
+   "ok": false,
+   "error": "already_hijacked",
+   "is_renewal": false,
+   "has_session": true,
+   "owner": "alice",
+   "expires_at": 1100.0
+  },
+  "after_expiry": {
+   "ok": true,
+   "error": null,
+   "is_renewal": false,
+   "has_session": true,
+   "owner": "bob",
+   "expires_at": 1092.0
+  },
+  "good_beat": {
+   "ok": true,
+   "error": null,
+   "is_renewal": false,
+   "has_session": true,
+   "owner": "alice",
+   "expires_at": 1125.0
+  },
+  "wrong_id": {
+   "ok": false,
+   "error": "hijack_id_mismatch",
+   "is_renewal": false,
+   "has_session": true,
+   "owner": "alice",
+   "expires_at": 1125.0
+  },
+  "wrong_owner": {
+   "ok": false,
+   "error": "owner_mismatch",
+   "is_renewal": false,
+   "has_session": true,
+   "owner": "alice",
+   "expires_at": 1125.0
+  },
+  "right_owner": {
+   "ok": true,
+   "error": null,
+   "is_renewal": false,
+   "has_session": true,
+   "owner": "alice",
+   "expires_at": 1128.0
+  },
+  "beat_when_idle": {
+   "ok": false,
+   "error": "not_hijacked",
+   "is_renewal": false,
+   "has_session": false,
+   "owner": null,
+   "expires_at": null
+  },
+  "release_when_idle": {
+   "ok": false,
+   "error": "not_hijacked",
+   "is_renewal": false,
+   "has_session": false,
+   "owner": null,
+   "expires_at": null
+  },
+  "wrong_release": {
+   "ok": false,
+   "error": "hijack_id_mismatch",
+   "is_renewal": false,
+   "has_session": true,
+   "owner": "alice",
+   "expires_at": 1090.0
+  },
+  "good_release": {
+   "ok": true,
+   "error": null,
+   "is_renewal": false,
+   "has_session": false,
+   "owner": null,
+   "expires_at": null
+  },
+  "double_release": {
+   "ok": false,
+   "error": "not_hijacked",
+   "is_renewal": false,
+   "has_session": false,
+   "owner": null,
+   "expires_at": null
+  },
+  "stale_release": {
+   "ok": true,
+   "error": null,
+   "is_renewal": false,
+   "has_session": false,
+   "owner": null,
+   "expires_at": null
+  },
+  "can_send_with_id": true,
+  "can_send_wrong_id": false,
+  "can_send_no_id": false,
+  "can_send_when_idle": false,
+  "can_send_after_expiry": false
+ },
+ "lease_clamps": [
+  {
+   "name": "below the floor",
+   "requested": 0,
+   "granted_seconds": 1.0
+  },
+  {
+   "name": "negative",
+   "requested": -10,
+   "granted_seconds": 1.0
+  },
+  {
+   "name": "at the floor",
+   "requested": 1,
+   "granted_seconds": 1.0
+  },
+  {
+   "name": "typical",
+   "requested": 90,
+   "granted_seconds": 90.0
+  },
+  {
+   "name": "at the ceiling",
+   "requested": 3600,
+   "granted_seconds": 3600.0
+  },
+  {
+   "name": "above the ceiling",
+   "requested": 3601,
+   "granted_seconds": 3600.0
+  },
+  {
+   "name": "absurd",
+   "requested": 1000000000,
+   "granted_seconds": 3600.0
+  }
+ ]
+}

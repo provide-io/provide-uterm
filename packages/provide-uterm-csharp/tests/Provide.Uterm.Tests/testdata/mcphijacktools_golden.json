@@ -1,0 +1,1374 @@
+{
+  "max_keystroke_bytes": 4096,
+  "screen": "\u001b[31mred\u001b[0m\nplain\nlast",
+  "snapshot": {
+    "screen": "\u001b[31mred\u001b[0m\nplain\nlast",
+    "cursor": [
+      1,
+      2
+    ],
+    "cols": 80,
+    "rows": 24,
+    "extra": "kept"
+  },
+  "tools": [
+    "hijack_begin",
+    "hijack_heartbeat",
+    "hijack_read",
+    "hijack_send",
+    "hijack_step",
+    "hijack_release",
+    "server_health",
+    "session_set_mode",
+    "worker_input_mode",
+    "worker_disconnect"
+  ],
+  "cases": [
+    {
+      "name": "beginning a lease",
+      "tool": "hijack_begin",
+      "args": {
+        "worker_id": "w-1"
+      },
+      "ok": true,
+      "data": {
+        "hijack_id": "h-1"
+      },
+      "result": {
+        "success": true,
+        "hijack_id": "h-1"
+      },
+      "calls": [
+        {
+          "method": "acquire",
+          "worker_id": "w-1",
+          "owner": "operator",
+          "lease_s": 90
+        }
+      ]
+    },
+    {
+      "name": "beginning a lease on somebody's terms",
+      "tool": "hijack_begin",
+      "args": {
+        "worker_id": "w-1",
+        "lease_s": 5,
+        "owner": "ada"
+      },
+      "ok": true,
+      "data": {},
+      "result": {
+        "success": true
+      },
+      "calls": [
+        {
+          "method": "acquire",
+          "worker_id": "w-1",
+          "owner": "ada",
+          "lease_s": 5
+        }
+      ]
+    },
+    {
+      "name": "beginning a lease on a name that is a path",
+      "tool": "hijack_begin",
+      "args": {
+        "worker_id": "a/b"
+      },
+      "ok": true,
+      "data": {},
+      "result": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid worker_id: 'a/b'"
+      },
+      "calls": []
+    },
+    {
+      "name": "beginning a lease the server refuses",
+      "tool": "hijack_begin",
+      "args": {
+        "worker_id": "w-1"
+      },
+      "ok": false,
+      "data": {
+        "error": "busy"
+      },
+      "result": {
+        "success": false,
+        "error": "busy"
+      },
+      "calls": [
+        {
+          "method": "acquire",
+          "worker_id": "w-1",
+          "owner": "operator",
+          "lease_s": 90
+        }
+      ]
+    },
+    {
+      "name": "keeping a lease",
+      "tool": "hijack_heartbeat",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1"
+      },
+      "ok": true,
+      "data": {
+        "lease_s": 90
+      },
+      "result": {
+        "success": true,
+        "lease_s": 90
+      },
+      "calls": [
+        {
+          "method": "heartbeat",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "lease_s": 90
+        }
+      ]
+    },
+    {
+      "name": "keeping a lease for longer",
+      "tool": "hijack_heartbeat",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1",
+        "lease_s": 5
+      },
+      "ok": true,
+      "data": {},
+      "result": {
+        "success": true
+      },
+      "calls": [
+        {
+          "method": "heartbeat",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "lease_s": 5
+        }
+      ]
+    },
+    {
+      "name": "keeping a lease on a bad worker",
+      "tool": "hijack_heartbeat",
+      "args": {
+        "worker_id": "a/b",
+        "hijack_id": "h-1"
+      },
+      "ok": true,
+      "data": {},
+      "result": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid worker_id: 'a/b'"
+      },
+      "calls": []
+    },
+    {
+      "name": "keeping a lease with a bad hijack id",
+      "tool": "hijack_heartbeat",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "c/d"
+      },
+      "ok": true,
+      "data": {},
+      "result": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid hijack_id: 'c/d'"
+      },
+      "calls": []
+    },
+    {
+      "name": "keeping a lease where both are bad",
+      "tool": "hijack_heartbeat",
+      "args": {
+        "worker_id": "a/b",
+        "hijack_id": "c/d"
+      },
+      "ok": true,
+      "data": {},
+      "result": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid worker_id: 'a/b'"
+      },
+      "calls": []
+    },
+    {
+      "name": "reading a snapshot",
+      "tool": "hijack_read",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1"
+      },
+      "ok": true,
+      "data": {
+        "snapshot": {
+          "screen": "\u001b[31mred\u001b[0m\nplain\nlast",
+          "cursor": [
+            1,
+            2
+          ],
+          "cols": 80,
+          "rows": 24,
+          "extra": "kept"
+        }
+      },
+      "result": {
+        "success": true,
+        "snapshot": {
+          "screen": "red\nplain\nlast"
+        }
+      },
+      "calls": [
+        {
+          "method": "snapshot",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "wait_ms": 1500
+        }
+      ]
+    },
+    {
+      "name": "reading a snapshot as it stands",
+      "tool": "hijack_read",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1",
+        "output": "raw"
+      },
+      "ok": true,
+      "data": {
+        "snapshot": {
+          "screen": "\u001b[31mred\u001b[0m\nplain\nlast",
+          "cursor": [
+            1,
+            2
+          ],
+          "cols": 80,
+          "rows": 24,
+          "extra": "kept"
+        }
+      },
+      "result": {
+        "success": true,
+        "snapshot": {
+          "screen": "\u001b[31mred\u001b[0m\nplain\nlast",
+          "cursor": [
+            1,
+            2
+          ],
+          "cols": 80,
+          "rows": 24,
+          "extra": "kept"
+        }
+      },
+      "calls": [
+        {
+          "method": "snapshot",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "wait_ms": 1500
+        }
+      ]
+    },
+    {
+      "name": "reading a snapshot laid out",
+      "tool": "hijack_read",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1",
+        "output": "rendered"
+      },
+      "ok": true,
+      "data": {
+        "snapshot": {
+          "screen": "\u001b[31mred\u001b[0m\nplain\nlast",
+          "cursor": [
+            1,
+            2
+          ],
+          "cols": 80,
+          "rows": 24,
+          "extra": "kept"
+        }
+      },
+      "result": {
+        "success": true,
+        "snapshot": {
+          "screen": "red\nplain\nlast",
+          "cursor": [
+            1,
+            2
+          ],
+          "cols": 80,
+          "rows": 24
+        }
+      },
+      "calls": [
+        {
+          "method": "snapshot",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "wait_ms": 1500
+        }
+      ]
+    },
+    {
+      "name": "reading the last line only",
+      "tool": "hijack_read",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1",
+        "tail_lines": 1
+      },
+      "ok": true,
+      "data": {
+        "snapshot": {
+          "screen": "\u001b[31mred\u001b[0m\nplain\nlast",
+          "cursor": [
+            1,
+            2
+          ],
+          "cols": 80,
+          "rows": 24,
+          "extra": "kept"
+        }
+      },
+      "result": {
+        "success": true,
+        "snapshot": {
+          "screen": "last"
+        }
+      },
+      "calls": [
+        {
+          "method": "snapshot",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "wait_ms": 1500
+        }
+      ]
+    },
+    {
+      "name": "reading more lines than there are",
+      "tool": "hijack_read",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1",
+        "tail_lines": 99
+      },
+      "ok": true,
+      "data": {
+        "snapshot": {
+          "screen": "\u001b[31mred\u001b[0m\nplain\nlast",
+          "cursor": [
+            1,
+            2
+          ],
+          "cols": 80,
+          "rows": 24,
+          "extra": "kept"
+        }
+      },
+      "result": {
+        "success": true,
+        "snapshot": {
+          "screen": "red\nplain\nlast"
+        }
+      },
+      "calls": [
+        {
+          "method": "snapshot",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "wait_ms": 1500
+        }
+      ]
+    },
+    {
+      "name": "reading no lines at all",
+      "tool": "hijack_read",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1",
+        "tail_lines": 0
+      },
+      "ok": true,
+      "data": {
+        "snapshot": {
+          "screen": "\u001b[31mred\u001b[0m\nplain\nlast",
+          "cursor": [
+            1,
+            2
+          ],
+          "cols": 80,
+          "rows": 24,
+          "extra": "kept"
+        }
+      },
+      "result": {
+        "success": true,
+        "snapshot": {
+          "screen": "red\nplain\nlast"
+        }
+      },
+      "calls": [
+        {
+          "method": "snapshot",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "wait_ms": 1500
+        }
+      ]
+    },
+    {
+      "name": "reading events instead",
+      "tool": "hijack_read",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1",
+        "mode": "events"
+      },
+      "ok": true,
+      "data": {
+        "events": []
+      },
+      "result": {
+        "success": true,
+        "events": []
+      },
+      "calls": [
+        {
+          "method": "events",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "after_seq": 0,
+          "limit": 200
+        }
+      ]
+    },
+    {
+      "name": "reading events from a point",
+      "tool": "hijack_read",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1",
+        "mode": "events",
+        "after_seq": 7,
+        "limit": 3
+      },
+      "ok": true,
+      "data": {
+        "events": []
+      },
+      "result": {
+        "success": true,
+        "events": []
+      },
+      "calls": [
+        {
+          "method": "events",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "after_seq": 7,
+          "limit": 3
+        }
+      ]
+    },
+    {
+      "name": "reading events, which are never cleaned",
+      "tool": "hijack_read",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1",
+        "mode": "events"
+      },
+      "ok": true,
+      "data": {
+        "snapshot": {
+          "screen": "\u001b[31mred\u001b[0m\nplain\nlast",
+          "cursor": [
+            1,
+            2
+          ],
+          "cols": 80,
+          "rows": 24,
+          "extra": "kept"
+        }
+      },
+      "result": {
+        "success": true,
+        "snapshot": {
+          "screen": "\u001b[31mred\u001b[0m\nplain\nlast",
+          "cursor": [
+            1,
+            2
+          ],
+          "cols": 80,
+          "rows": 24,
+          "extra": "kept"
+        }
+      },
+      "calls": [
+        {
+          "method": "events",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "after_seq": 0,
+          "limit": 200
+        }
+      ]
+    },
+    {
+      "name": "reading a mode nobody named",
+      "tool": "hijack_read",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1",
+        "mode": "nonsense"
+      },
+      "ok": true,
+      "data": {
+        "snapshot": {
+          "screen": "\u001b[31mred\u001b[0m\nplain\nlast",
+          "cursor": [
+            1,
+            2
+          ],
+          "cols": 80,
+          "rows": 24,
+          "extra": "kept"
+        }
+      },
+      "result": {
+        "success": true,
+        "snapshot": {
+          "screen": "red\nplain\nlast"
+        }
+      },
+      "calls": [
+        {
+          "method": "snapshot",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "wait_ms": 1500
+        }
+      ]
+    },
+    {
+      "name": "reading when the server refused",
+      "tool": "hijack_read",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1"
+      },
+      "ok": false,
+      "data": {
+        "snapshot": {
+          "screen": "\u001b[31mred\u001b[0m\nplain\nlast",
+          "cursor": [
+            1,
+            2
+          ],
+          "cols": 80,
+          "rows": 24,
+          "extra": "kept"
+        }
+      },
+      "result": {
+        "success": false,
+        "snapshot": {
+          "screen": "\u001b[31mred\u001b[0m\nplain\nlast",
+          "cursor": [
+            1,
+            2
+          ],
+          "cols": 80,
+          "rows": 24,
+          "extra": "kept"
+        }
+      },
+      "calls": [
+        {
+          "method": "snapshot",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "wait_ms": 1500
+        }
+      ]
+    },
+    {
+      "name": "reading a snapshot with no screen in it",
+      "tool": "hijack_read",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1"
+      },
+      "ok": true,
+      "data": {
+        "snapshot": {
+          "cols": 80
+        }
+      },
+      "result": {
+        "success": true,
+        "snapshot": {
+          "screen": ""
+        }
+      },
+      "calls": [
+        {
+          "method": "snapshot",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "wait_ms": 1500
+        }
+      ]
+    },
+    {
+      "name": "reading a snapshot that says nothing at all",
+      "tool": "hijack_read",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1"
+      },
+      "ok": true,
+      "data": {
+        "snapshot": {}
+      },
+      "result": {
+        "success": true,
+        "snapshot": {}
+      },
+      "calls": [
+        {
+          "method": "snapshot",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "wait_ms": 1500
+        }
+      ]
+    },
+    {
+      "name": "reading a snapshot laid out with no metadata",
+      "tool": "hijack_read",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1",
+        "output": "rendered"
+      },
+      "ok": true,
+      "data": {
+        "snapshot": {
+          "screen": "\u001b[31mred\u001b[0m\nplain\nlast"
+        }
+      },
+      "result": {
+        "success": true,
+        "snapshot": {
+          "screen": "red\nplain\nlast"
+        }
+      },
+      "calls": [
+        {
+          "method": "snapshot",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "wait_ms": 1500
+        }
+      ]
+    },
+    {
+      "name": "reading it as it stands, trimmed to nothing to trim",
+      "tool": "hijack_read",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1",
+        "output": "raw",
+        "tail_lines": 99
+      },
+      "ok": true,
+      "data": {
+        "snapshot": {
+          "screen": "\u001b[31mred\u001b[0m\nplain\nlast",
+          "cursor": [
+            1,
+            2
+          ],
+          "cols": 80,
+          "rows": 24,
+          "extra": "kept"
+        }
+      },
+      "result": {
+        "success": true,
+        "snapshot": {
+          "screen": "\u001b[31mred\u001b[0m\nplain\nlast",
+          "cursor": [
+            1,
+            2
+          ],
+          "cols": 80,
+          "rows": 24,
+          "extra": "kept"
+        }
+      },
+      "calls": [
+        {
+          "method": "snapshot",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "wait_ms": 1500
+        }
+      ]
+    },
+    {
+      "name": "reading it as it stands, trimmed",
+      "tool": "hijack_read",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1",
+        "output": "raw",
+        "tail_lines": 1
+      },
+      "ok": true,
+      "data": {
+        "snapshot": {
+          "screen": "\u001b[31mred\u001b[0m\nplain\nlast",
+          "cursor": [
+            1,
+            2
+          ],
+          "cols": 80,
+          "rows": 24,
+          "extra": "kept"
+        }
+      },
+      "result": {
+        "success": true,
+        "snapshot": {
+          "screen": "last",
+          "cursor": [
+            1,
+            2
+          ],
+          "cols": 80,
+          "rows": 24,
+          "extra": "kept"
+        }
+      },
+      "calls": [
+        {
+          "method": "snapshot",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "wait_ms": 1500
+        }
+      ]
+    },
+    {
+      "name": "reading with no snapshot at all",
+      "tool": "hijack_read",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1"
+      },
+      "ok": true,
+      "data": {
+        "other": 1
+      },
+      "result": {
+        "success": true,
+        "other": 1
+      },
+      "calls": [
+        {
+          "method": "snapshot",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "wait_ms": 1500
+        }
+      ]
+    },
+    {
+      "name": "reading with a bad id",
+      "tool": "hijack_read",
+      "args": {
+        "worker_id": "a/b",
+        "hijack_id": "h-1"
+      },
+      "ok": true,
+      "data": {},
+      "result": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid worker_id: 'a/b'"
+      },
+      "calls": []
+    },
+    {
+      "name": "reading a longer wait",
+      "tool": "hijack_read",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1",
+        "wait_ms": 50
+      },
+      "ok": true,
+      "data": {},
+      "result": {
+        "success": true
+      },
+      "calls": [
+        {
+          "method": "snapshot",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "wait_ms": 50
+        }
+      ]
+    },
+    {
+      "name": "sending keys",
+      "tool": "hijack_send",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1",
+        "keys": "ls\n"
+      },
+      "ok": true,
+      "data": {
+        "sent": true
+      },
+      "result": {
+        "success": true,
+        "sent": true
+      },
+      "calls": [
+        {
+          "method": "send",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "keys": "ls\n",
+          "expect_prompt_id": null,
+          "expect_regex": null,
+          "timeout_ms": 2000,
+          "poll_interval_ms": 120
+        }
+      ]
+    },
+    {
+      "name": "sending keys guarded by a prompt",
+      "tool": "hijack_send",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1",
+        "keys": "y",
+        "expect_prompt_id": "p-1"
+      },
+      "ok": true,
+      "data": {},
+      "result": {
+        "success": true
+      },
+      "calls": [
+        {
+          "method": "send",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "keys": "y",
+          "expect_prompt_id": "p-1",
+          "expect_regex": null,
+          "timeout_ms": 2000,
+          "poll_interval_ms": 120
+        }
+      ]
+    },
+    {
+      "name": "sending keys guarded by a pattern",
+      "tool": "hijack_send",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1",
+        "keys": "y",
+        "expect_regex": "^ok$"
+      },
+      "ok": true,
+      "data": {},
+      "result": {
+        "success": true
+      },
+      "calls": [
+        {
+          "method": "send",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "keys": "y",
+          "expect_prompt_id": null,
+          "expect_regex": "^ok$",
+          "timeout_ms": 2000,
+          "poll_interval_ms": 120
+        }
+      ]
+    },
+    {
+      "name": "sending keys guarded by a pattern that could hang",
+      "tool": "hijack_send",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1",
+        "keys": "y",
+        "expect_regex": "(a+)+$"
+      },
+      "ok": true,
+      "data": {},
+      "result": {
+        "success": false,
+        "error": "invalid_pattern",
+        "detail": "pattern rejected: catastrophic-backtracking construct (nested quantifier or quantified backreference)"
+      },
+      "calls": []
+    },
+    {
+      "name": "sending keys guarded by an enormous pattern",
+      "tool": "hijack_send",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1",
+        "keys": "y",
+        "expect_regex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "ok": true,
+      "data": {},
+      "result": {
+        "success": false,
+        "error": "invalid_pattern",
+        "detail": "pattern too long (max 512 chars)"
+      },
+      "calls": []
+    },
+    {
+      "name": "sending keys with a bad id and a bad pattern",
+      "tool": "hijack_send",
+      "args": {
+        "worker_id": "a/b",
+        "hijack_id": "h-1",
+        "keys": "y",
+        "expect_regex": "(a+)+"
+      },
+      "ok": true,
+      "data": {},
+      "result": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid worker_id: 'a/b'"
+      },
+      "calls": []
+    },
+    {
+      "name": "sending more keys than a worker will take",
+      "tool": "hijack_send",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1",
+        "keys": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "ok": true,
+      "data": {},
+      "result": {
+        "success": true
+      },
+      "calls": [
+        {
+          "method": "send",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "keys": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "expect_prompt_id": null,
+          "expect_regex": null,
+          "timeout_ms": 2000,
+          "poll_interval_ms": 120
+        }
+      ]
+    },
+    {
+      "name": "sending keys with the timings changed",
+      "tool": "hijack_send",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1",
+        "keys": "a",
+        "timeout_ms": 10,
+        "poll_interval_ms": 1
+      },
+      "ok": true,
+      "data": {},
+      "result": {
+        "success": true
+      },
+      "calls": [
+        {
+          "method": "send",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "keys": "a",
+          "expect_prompt_id": null,
+          "expect_regex": null,
+          "timeout_ms": 10,
+          "poll_interval_ms": 1
+        }
+      ]
+    },
+    {
+      "name": "sending nothing at all",
+      "tool": "hijack_send",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1",
+        "keys": ""
+      },
+      "ok": true,
+      "data": {},
+      "result": {
+        "success": true
+      },
+      "calls": [
+        {
+          "method": "send",
+          "worker_id": "w-1",
+          "hijack_id": "h-1",
+          "keys": "",
+          "expect_prompt_id": null,
+          "expect_regex": null,
+          "timeout_ms": 2000,
+          "poll_interval_ms": 120
+        }
+      ]
+    },
+    {
+      "name": "stepping",
+      "tool": "hijack_step",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1"
+      },
+      "ok": true,
+      "data": {
+        "stepped": true
+      },
+      "result": {
+        "success": true,
+        "stepped": true
+      },
+      "calls": [
+        {
+          "method": "step",
+          "worker_id": "w-1",
+          "hijack_id": "h-1"
+        }
+      ]
+    },
+    {
+      "name": "stepping with a bad id",
+      "tool": "hijack_step",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "c/d"
+      },
+      "ok": true,
+      "data": {},
+      "result": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid hijack_id: 'c/d'"
+      },
+      "calls": []
+    },
+    {
+      "name": "letting go",
+      "tool": "hijack_release",
+      "args": {
+        "worker_id": "w-1",
+        "hijack_id": "h-1"
+      },
+      "ok": true,
+      "data": {
+        "released": true
+      },
+      "result": {
+        "success": true,
+        "released": true
+      },
+      "calls": [
+        {
+          "method": "release",
+          "worker_id": "w-1",
+          "hijack_id": "h-1"
+        }
+      ]
+    },
+    {
+      "name": "letting go with a bad id",
+      "tool": "hijack_release",
+      "args": {
+        "worker_id": "a/b",
+        "hijack_id": "h-1"
+      },
+      "ok": true,
+      "data": {},
+      "result": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid worker_id: 'a/b'"
+      },
+      "calls": []
+    },
+    {
+      "name": "asking whether the server is well",
+      "tool": "server_health",
+      "args": {},
+      "ok": true,
+      "data": {
+        "status": "ok"
+      },
+      "result": {
+        "success": true,
+        "status": "ok"
+      },
+      "calls": [
+        {
+          "method": "health"
+        }
+      ]
+    },
+    {
+      "name": "asking a server that is not",
+      "tool": "server_health",
+      "args": {},
+      "ok": false,
+      "data": {
+        "status": "down"
+      },
+      "result": {
+        "success": false,
+        "status": "down"
+      },
+      "calls": [
+        {
+          "method": "health"
+        }
+      ]
+    },
+    {
+      "name": "setting a session's mode",
+      "tool": "session_set_mode",
+      "args": {
+        "session_id": "s-1",
+        "mode": "hijack"
+      },
+      "ok": true,
+      "data": {
+        "mode": "hijack"
+      },
+      "result": {
+        "success": true,
+        "mode": "hijack"
+      },
+      "calls": [
+        {
+          "method": "set_session_mode",
+          "session_id": "s-1",
+          "mode": "hijack"
+        }
+      ]
+    },
+    {
+      "name": "setting the mode of a session that is a path",
+      "tool": "session_set_mode",
+      "args": {
+        "session_id": "a/b",
+        "mode": "open"
+      },
+      "ok": true,
+      "data": {},
+      "result": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid session_id: 'a/b'"
+      },
+      "calls": []
+    },
+    {
+      "name": "setting a worker's mode",
+      "tool": "worker_input_mode",
+      "args": {
+        "worker_id": "w-1",
+        "mode": "open"
+      },
+      "ok": true,
+      "data": {
+        "mode": "open"
+      },
+      "result": {
+        "success": true,
+        "mode": "open"
+      },
+      "calls": [
+        {
+          "method": "set_input_mode",
+          "worker_id": "w-1",
+          "mode": "open"
+        }
+      ]
+    },
+    {
+      "name": "setting the mode of a worker that is a path",
+      "tool": "worker_input_mode",
+      "args": {
+        "worker_id": "a/b",
+        "mode": "open"
+      },
+      "ok": true,
+      "data": {},
+      "result": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid worker_id: 'a/b'"
+      },
+      "calls": []
+    },
+    {
+      "name": "disconnecting a worker",
+      "tool": "worker_disconnect",
+      "args": {
+        "worker_id": "w-1"
+      },
+      "ok": true,
+      "data": {
+        "disconnected": true
+      },
+      "result": {
+        "success": true,
+        "disconnected": true
+      },
+      "calls": [
+        {
+          "method": "disconnect_worker",
+          "worker_id": "w-1"
+        }
+      ]
+    },
+    {
+      "name": "disconnecting a worker that is a path",
+      "tool": "worker_disconnect",
+      "args": {
+        "worker_id": "a/b"
+      },
+      "ok": true,
+      "data": {},
+      "result": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid worker_id: 'a/b'"
+      },
+      "calls": []
+    },
+    {
+      "name": "an answer that is a list",
+      "tool": "server_health",
+      "args": {},
+      "ok": true,
+      "data": [
+        1,
+        2
+      ],
+      "result": {
+        "success": true,
+        "data": [
+          1,
+          2
+        ]
+      },
+      "calls": [
+        {
+          "method": "health"
+        }
+      ]
+    },
+    {
+      "name": "an answer that is text",
+      "tool": "server_health",
+      "args": {},
+      "ok": true,
+      "data": "fine",
+      "result": {
+        "success": true,
+        "data": "fine"
+      },
+      "calls": [
+        {
+          "method": "health"
+        }
+      ]
+    },
+    {
+      "name": "an answer that is nothing",
+      "tool": "server_health",
+      "args": {},
+      "ok": true,
+      "data": null,
+      "result": {
+        "success": true,
+        "data": null
+      },
+      "calls": [
+        {
+          "method": "health"
+        }
+      ]
+    },
+    {
+      "name": "an answer that is a number",
+      "tool": "server_health",
+      "args": {},
+      "ok": true,
+      "data": 7,
+      "result": {
+        "success": true,
+        "data": 7
+      },
+      "calls": [
+        {
+          "method": "health"
+        }
+      ]
+    },
+    {
+      "name": "an answer already claiming success",
+      "tool": "server_health",
+      "args": {},
+      "ok": false,
+      "data": {
+        "success": true,
+        "status": "ok"
+      },
+      "result": {
+        "success": true,
+        "status": "ok"
+      },
+      "calls": [
+        {
+          "method": "health"
+        }
+      ]
+    }
+  ]
+}

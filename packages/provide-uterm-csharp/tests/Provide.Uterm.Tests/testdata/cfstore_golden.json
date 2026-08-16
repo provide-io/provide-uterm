@@ -1,0 +1,516 @@
+{
+  "columns": {
+    "resume_tokens": [
+      "token",
+      "worker_id",
+      "role",
+      "was_hijack_owner",
+      "created_at",
+      "expires_at"
+    ],
+    "runtime_activations": [
+      "worker_id",
+      "incarnation",
+      "activation_seq",
+      "activated_at"
+    ],
+    "session_events": [
+      "worker_id",
+      "seq",
+      "ts",
+      "event_type",
+      "payload_json"
+    ],
+    "session_meta": [
+      "worker_id",
+      "display_name",
+      "connector_type",
+      "created_at",
+      "tags_json",
+      "visibility",
+      "owner"
+    ],
+    "session_state": [
+      "worker_id",
+      "hijack_id",
+      "owner",
+      "lease_expires_at",
+      "last_snapshot_json",
+      "deleted_at",
+      "event_seq",
+      "updated_at",
+      "acquired_by",
+      "worker_generation",
+      "input_mode"
+    ],
+    "tunnel_invite_state": [
+      "worker_id",
+      "entry_json",
+      "updated_at"
+    ],
+    "webhooks": [
+      "webhook_id",
+      "session_id",
+      "url",
+      "event_types_json",
+      "pattern",
+      "secret"
+    ]
+  },
+  "events": {
+    "beyond": [],
+    "count": 3,
+    "empty_count": 0,
+    "empty_list": [],
+    "empty_min": 0,
+    "empty_seq": 0,
+    "first": {
+      "data": {
+        "text": "hello"
+      },
+      "seq": 1,
+      "type": "output"
+    },
+    "limited": [
+      1,
+      2
+    ],
+    "listed": [
+      {
+        "data": {
+          "text": "hello"
+        },
+        "seq": 1,
+        "type": "output"
+      },
+      {
+        "data": {
+          "text": "world"
+        },
+        "seq": 2,
+        "type": "output"
+      },
+      {
+        "data": {
+          "cols": 80,
+          "rows": 24
+        },
+        "seq": 3,
+        "type": "resize"
+      }
+    ],
+    "min": 1,
+    "other_session_first": {
+      "data": {
+        "text": "other"
+      },
+      "seq": 1,
+      "type": "output"
+    },
+    "other_survives": 1,
+    "rows_after_trim": 4,
+    "second": {
+      "data": {
+        "text": "world"
+      },
+      "seq": 2,
+      "type": "output"
+    },
+    "seq": 3,
+    "session_row_seq": 3,
+    "since_first": [
+      2,
+      3
+    ],
+    "since_last": [],
+    "third": {
+      "data": {
+        "cols": 80,
+        "rows": 24
+      },
+      "seq": 3,
+      "type": "resize"
+    },
+    "trimmed_count": 3,
+    "trimmed_kept": [
+      4,
+      5,
+      6
+    ],
+    "trimmed_min": 4,
+    "trimmed_seq": 6
+  },
+  "invite_state": {
+    "after_second_save": {
+      "share": "sha256:def"
+    },
+    "corrupt": null,
+    "first": {
+      "consumed_at": 12.0,
+      "share": "sha256:abc"
+    },
+    "missing": null,
+    "not_an_object": null,
+    "rows": 1
+  },
+  "meta": [
+    {
+      "created_at": 1234.5,
+      "loaded": {
+        "connector_type": "ssh",
+        "display_name": "Session One",
+        "owner": "alice",
+        "tags": [
+          "a",
+          "b"
+        ],
+        "visibility": "private"
+      },
+      "meta": {
+        "connector_type": "ssh",
+        "created_at": 1234.5,
+        "display_name": "Session One",
+        "owner": "alice",
+        "tags": [
+          "a",
+          "b"
+        ],
+        "visibility": "private"
+      },
+      "name": "everything supplied",
+      "rows": 1
+    },
+    {
+      "created_at": null,
+      "loaded": {
+        "connector_type": "unknown",
+        "display_name": "w1",
+        "owner": null,
+        "tags": [],
+        "visibility": "public"
+      },
+      "meta": {},
+      "name": "nothing supplied",
+      "rows": 1
+    },
+    {
+      "created_at": null,
+      "loaded": {
+        "connector_type": "unknown",
+        "display_name": "w1",
+        "owner": null,
+        "tags": [],
+        "visibility": "public"
+      },
+      "meta": {
+        "connector_type": "",
+        "display_name": "",
+        "tags": [],
+        "visibility": ""
+      },
+      "name": "empty strings",
+      "rows": 1
+    },
+    {
+      "created_at": null,
+      "loaded": {
+        "connector_type": "unknown",
+        "display_name": "x",
+        "owner": null,
+        "tags": [],
+        "visibility": "public"
+      },
+      "meta": {
+        "display_name": "x",
+        "owner": null
+      },
+      "name": "no owner",
+      "rows": 1
+    },
+    {
+      "created_at": null,
+      "loaded": {
+        "connector_type": "unknown",
+        "display_name": "w1",
+        "owner": null,
+        "tags": [],
+        "visibility": "public"
+      },
+      "meta": {
+        "created_at": 0
+      },
+      "name": "a created time of zero",
+      "rows": 1
+    },
+    {
+      "created_at": null,
+      "loaded": {
+        "connector_type": "unknown",
+        "display_name": "héllo → ✓",
+        "owner": null,
+        "tags": [],
+        "visibility": "public"
+      },
+      "meta": {
+        "display_name": "héllo → ✓"
+      },
+      "name": "unicode in the name",
+      "rows": 1
+    }
+  ],
+  "meta_upsert": {
+    "loaded": {
+      "connector_type": "unknown",
+      "created_at": 2.0,
+      "display_name": "second",
+      "owner": null,
+      "tags": [],
+      "visibility": "public"
+    },
+    "missing": null,
+    "rows": 2
+  },
+  "recording": {
+    "empty": [],
+    "filtered": [
+      0,
+      2,
+      4
+    ],
+    "filtered_tail": [
+      4
+    ],
+    "from_start": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "negative_offset": [
+      0,
+      1
+    ],
+    "offset_one": [
+      1,
+      2
+    ],
+    "over_limit": 5,
+    "shape": {
+      "data": {
+        "n": 0
+      },
+      "event": "output"
+    },
+    "tail": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "tail_limited": [
+      3,
+      4
+    ],
+    "under_limit": [
+      4
+    ]
+  },
+  "resume_tokens": {
+    "blank_role": "viewer",
+    "cleanup_kept_live": true,
+    "cleanup_leaves": 1,
+    "cleanup_returns": 0,
+    "disowned_flag": false,
+    "expired": null,
+    "expired_row_removed": true,
+    "live": {
+      "role": "operator",
+      "token": "t1",
+      "was_hijack_owner": false,
+      "worker_id": "w1"
+    },
+    "missing": null,
+    "owned_flag": true,
+    "revoked": null
+  },
+  "session_state": {
+    "after_clear": {
+      "acquired_by": null,
+      "event_seq": 0,
+      "hijack_id": null,
+      "input_mode": "observe",
+      "last_snapshot": {
+        "cols": 80,
+        "screen": "hello"
+      },
+      "lease_expires_at": null,
+      "owner": null,
+      "worker_generation": null,
+      "worker_id": "w1"
+    },
+    "after_delete_has_timestamp": true,
+    "after_delete_keeps_row": true,
+    "after_lease": {
+      "acquired_by": null,
+      "deleted_at": null,
+      "event_seq": 0,
+      "hijack_id": "h1",
+      "input_mode": "hijack",
+      "last_snapshot": null,
+      "lease_expires_at": 1760000060.0,
+      "owner": "alice",
+      "worker_generation": null,
+      "worker_id": "w1"
+    },
+    "after_mode": {
+      "acquired_by": null,
+      "deleted_at": null,
+      "event_seq": 0,
+      "hijack_id": "h1",
+      "input_mode": "observe",
+      "last_snapshot": {
+        "cols": 80,
+        "screen": "hello"
+      },
+      "lease_expires_at": 1760000060.0,
+      "owner": "alice",
+      "worker_generation": null,
+      "worker_id": "w1"
+    },
+    "after_snapshot": {
+      "acquired_by": null,
+      "deleted_at": null,
+      "event_seq": 0,
+      "hijack_id": "h1",
+      "input_mode": "hijack",
+      "last_snapshot": {
+        "cols": 80,
+        "screen": "hello"
+      },
+      "lease_expires_at": 1760000060.0,
+      "owner": "alice",
+      "worker_generation": null,
+      "worker_id": "w1"
+    },
+    "fresh_worker": {
+      "acquired_by": null,
+      "deleted_at": null,
+      "event_seq": 0,
+      "hijack_id": "h2",
+      "input_mode": "hijack",
+      "last_snapshot": null,
+      "lease_expires_at": 1760000030.0,
+      "owner": "bob",
+      "worker_generation": null,
+      "worker_id": "w2"
+    },
+    "missing": null,
+    "mode_only": {
+      "acquired_by": null,
+      "deleted_at": null,
+      "event_seq": 0,
+      "hijack_id": null,
+      "input_mode": "observe",
+      "last_snapshot": null,
+      "lease_expires_at": null,
+      "owner": null,
+      "worker_generation": null,
+      "worker_id": "w3"
+    },
+    "snapshot_only": {
+      "acquired_by": null,
+      "deleted_at": null,
+      "event_seq": 0,
+      "hijack_id": null,
+      "input_mode": "hijack",
+      "last_snapshot": {
+        "screen": "x"
+      },
+      "lease_expires_at": null,
+      "owner": null,
+      "worker_generation": null,
+      "worker_id": "w4"
+    }
+  },
+  "tables": [
+    "resume_tokens",
+    "runtime_activations",
+    "session_events",
+    "session_meta",
+    "session_state",
+    "tunnel_invite_state",
+    "webhooks"
+  ],
+  "webhooks": {
+    "after_update": [
+      {
+        "event_types": [],
+        "pattern": null,
+        "secret": null,
+        "session_id": "s1",
+        "url": "https://example/moved",
+        "webhook_id": "h1"
+      }
+    ],
+    "both": [
+      {
+        "event_types": null,
+        "pattern": null,
+        "secret": null,
+        "session_id": "s1",
+        "url": "https://example/hook",
+        "webhook_id": "h1"
+      },
+      {
+        "event_types": [
+          "output",
+          "exit"
+        ],
+        "pattern": "ERROR",
+        "secret": "sh",
+        "session_id": "s1",
+        "url": "https://example/other",
+        "webhook_id": "h2"
+      }
+    ],
+    "deleted": true,
+    "deleted_again": false,
+    "empty": [],
+    "minimal": [
+      {
+        "event_types": null,
+        "pattern": null,
+        "secret": null,
+        "session_id": "s1",
+        "url": "https://example/hook",
+        "webhook_id": "h1"
+      }
+    ],
+    "missing": false,
+    "other_session": [
+      {
+        "event_types": null,
+        "pattern": null,
+        "secret": null,
+        "session_id": "s2",
+        "url": "https://example/theirs",
+        "webhook_id": "h3"
+      }
+    ],
+    "remaining": [
+      {
+        "event_types": [
+          "output",
+          "exit"
+        ],
+        "pattern": "ERROR",
+        "secret": "sh",
+        "session_id": "s1",
+        "url": "https://example/other",
+        "webhook_id": "h2"
+      }
+    ]
+  }
+}

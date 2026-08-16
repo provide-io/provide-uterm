@@ -1,0 +1,320 @@
+{
+  "values": [
+    {
+      "name": "nothing at all",
+      "value": null,
+      "text": "None"
+    },
+    {
+      "name": "true",
+      "value": true,
+      "text": "True"
+    },
+    {
+      "name": "false",
+      "value": false,
+      "text": "False"
+    },
+    {
+      "name": "a word",
+      "value": "hello",
+      "text": "hello"
+    },
+    {
+      "name": "nothing written down",
+      "value": "",
+      "text": ""
+    },
+    {
+      "name": "a word that looks like nothing",
+      "value": "None",
+      "text": "None"
+    },
+    {
+      "name": "a word with a quote in it",
+      "value": "it's",
+      "text": "it's"
+    },
+    {
+      "name": "a whole number",
+      "value": 42,
+      "text": "42",
+      "int_text": "42"
+    },
+    {
+      "name": "zero",
+      "value": 0,
+      "text": "0",
+      "int_text": "0"
+    },
+    {
+      "name": "a negative number",
+      "value": -7,
+      "text": "-7",
+      "int_text": "-7"
+    },
+    {
+      "name": "a very large whole number",
+      "value": 9007199254740992,
+      "text": "9007199254740992",
+      "int_text": "9007199254740992"
+    },
+    {
+      "name": "a whole-valued float",
+      "value": 1.0,
+      "text": "1.0",
+      "int_text": "1"
+    },
+    {
+      "name": "zero as a float",
+      "value": 0.0,
+      "text": "0.0",
+      "int_text": "0"
+    },
+    {
+      "name": "a negative zero",
+      "value": -0.0,
+      "text": "-0.0"
+    },
+    {
+      "name": "a fraction",
+      "value": 0.5,
+      "text": "0.5"
+    },
+    {
+      "name": "a long fraction",
+      "value": 0.3333333333333333,
+      "text": "0.3333333333333333"
+    },
+    {
+      "name": "a number in exponent form",
+      "value": 1e+20,
+      "text": "1e+20",
+      "int_text": "100000000000000000000"
+    },
+    {
+      "name": "a small number in exponent form",
+      "value": 1e-07,
+      "text": "1e-07"
+    },
+    {
+      "name": "the largest whole float",
+      "value": 1e+16,
+      "text": "1e+16",
+      "int_text": "10000000000000000"
+    },
+    {
+      "name": "one below it",
+      "value": 1000000000000000.0,
+      "text": "1000000000000000.0",
+      "int_text": "1000000000000000"
+    },
+    {
+      "name": "infinity",
+      "value": "<inf>",
+      "text": "inf"
+    },
+    {
+      "name": "negative infinity",
+      "value": "<-inf>",
+      "text": "-inf"
+    },
+    {
+      "name": "not a number",
+      "value": "<nan>",
+      "text": "nan"
+    },
+    {
+      "name": "an empty list",
+      "value": [],
+      "text": "[]"
+    },
+    {
+      "name": "a list of numbers",
+      "value": [
+        1,
+        2
+      ],
+      "text": "[1, 2]"
+    },
+    {
+      "name": "a list of words",
+      "value": [
+        "a",
+        "b"
+      ],
+      "text": "['a', 'b']"
+    },
+    {
+      "name": "a list holding nothing",
+      "value": [
+        null,
+        true
+      ],
+      "text": "[None, True]"
+    },
+    {
+      "name": "a list of one",
+      "value": [
+        1
+      ],
+      "text": "[1]"
+    },
+    {
+      "name": "an empty mapping",
+      "value": {},
+      "text": "{}"
+    },
+    {
+      "name": "a mapping",
+      "value": {
+        "a": 1
+      },
+      "text": "{'a': 1}"
+    },
+    {
+      "name": "a mapping of words",
+      "value": {
+        "a": "b"
+      },
+      "text": "{'a': 'b'}"
+    },
+    {
+      "name": "a mapping of two",
+      "value": {
+        "a": 1,
+        "b": 2
+      },
+      "text": "{'a': 1, 'b': 2}"
+    },
+    {
+      "name": "a nested list",
+      "value": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "text": "[[1], [2]]"
+    },
+    {
+      "name": "a list holding a mapping",
+      "value": [
+        {
+          "a": 1
+        }
+      ],
+      "text": "[{'a': 1}]"
+    }
+  ],
+  "reprs": [
+    {
+      "name": "nothing written down",
+      "text": "",
+      "repr": "''"
+    },
+    {
+      "name": "a word",
+      "text": "hello",
+      "repr": "'hello'"
+    },
+    {
+      "name": "a backslash",
+      "text": "a\\b",
+      "repr": "'a\\\\b'"
+    },
+    {
+      "name": "a newline",
+      "text": "a\nb",
+      "repr": "'a\\nb'"
+    },
+    {
+      "name": "a carriage return",
+      "text": "a\rb",
+      "repr": "'a\\rb'"
+    },
+    {
+      "name": "a tab",
+      "text": "a\tb",
+      "repr": "'a\\tb'"
+    },
+    {
+      "name": "a null byte",
+      "text": "a\u0000b",
+      "repr": "'a\\x00b'"
+    },
+    {
+      "name": "the lowest control character there is",
+      "text": "\u0001",
+      "repr": "'\\x01'"
+    },
+    {
+      "name": "the highest control character below space",
+      "text": "\u001f",
+      "repr": "'\\x1f'"
+    },
+    {
+      "name": "a space, which is not a control character",
+      "text": "a b",
+      "repr": "'a b'"
+    },
+    {
+      "name": "the delete character",
+      "text": "a\u007fb",
+      "repr": "'a\\x7fb'"
+    },
+    {
+      "name": "one below delete",
+      "text": "a~b",
+      "repr": "'a~b'"
+    },
+    {
+      "name": "an apostrophe",
+      "text": "it's",
+      "repr": "\"it's\""
+    },
+    {
+      "name": "a double quote",
+      "text": "say \"hi\"",
+      "repr": "'say \"hi\"'"
+    },
+    {
+      "name": "both kinds of quote",
+      "text": "it's \"fine\"",
+      "repr": "'it\\'s \"fine\"'"
+    },
+    {
+      "name": "only quotes",
+      "text": "''",
+      "repr": "\"''\""
+    },
+    {
+      "name": "something not ascii",
+      "text": "caf\u00e9",
+      "repr": "'caf\u00e9'"
+    },
+    {
+      "name": "something well past ascii",
+      "text": "\u65e5\u672c",
+      "repr": "'\u65e5\u672c'"
+    },
+    {
+      "name": "an escape sequence",
+      "text": "\u001b[31m",
+      "repr": "'\\x1b[31m'"
+    },
+    {
+      "name": "a bell",
+      "text": "a\u0007b",
+      "repr": "'a\\x07b'"
+    }
+  ],
+  "special": {
+    "nan": "nan",
+    "inf": "inf",
+    "-inf": "-inf",
+    "-0.0": "-0.0"
+  }
+}

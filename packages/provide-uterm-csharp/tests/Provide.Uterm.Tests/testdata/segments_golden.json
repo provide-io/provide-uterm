@@ -1,0 +1,427 @@
+{
+  "ansi": [
+    {
+      "input": "hello",
+      "name": "plain text",
+      "segments": [
+        {
+          "bold": false,
+          "color": null,
+          "text": "hello"
+        }
+      ]
+    },
+    {
+      "input": "",
+      "name": "nothing at all",
+      "segments": []
+    },
+    {
+      "input": "\u001b[31mred\u001b[0m",
+      "name": "one colour",
+      "segments": [
+        {
+          "bold": false,
+          "color": "red",
+          "text": "red"
+        }
+      ]
+    },
+    {
+      "input": "\u001b[31mred",
+      "name": "colour with no reset",
+      "segments": [
+        {
+          "bold": false,
+          "color": "red",
+          "text": "red"
+        }
+      ]
+    },
+    {
+      "input": "\u001b[31mred\u001b[32mgreen\u001b[0m",
+      "name": "two colours",
+      "segments": [
+        {
+          "bold": false,
+          "color": "red",
+          "text": "red"
+        },
+        {
+          "bold": false,
+          "color": "green",
+          "text": "green"
+        }
+      ]
+    },
+    {
+      "input": "\u001b[1mbold\u001b[0m",
+      "name": "bold",
+      "segments": [
+        {
+          "bold": true,
+          "color": null,
+          "text": "bold"
+        }
+      ]
+    },
+    {
+      "input": "\u001b[1mbold\u001b[22mplain",
+      "name": "bold then not",
+      "segments": [
+        {
+          "bold": true,
+          "color": null,
+          "text": "bold"
+        },
+        {
+          "bold": false,
+          "color": null,
+          "text": "plain"
+        }
+      ]
+    },
+    {
+      "input": "\u001b[1;31mboth\u001b[0m",
+      "name": "colour and bold together",
+      "segments": [
+        {
+          "bold": true,
+          "color": "red",
+          "text": "both"
+        }
+      ]
+    },
+    {
+      "input": "\u001b[91mbright\u001b[0m",
+      "name": "a bright colour",
+      "segments": [
+        {
+          "bold": true,
+          "color": "red",
+          "text": "bright"
+        }
+      ]
+    },
+    {
+      "input": "\u001b[31mred\u001b[39mplain",
+      "name": "default colour",
+      "segments": [
+        {
+          "bold": false,
+          "color": "red",
+          "text": "red"
+        },
+        {
+          "bold": false,
+          "color": null,
+          "text": "plain"
+        }
+      ]
+    },
+    {
+      "input": "\u001b[30mblack\u001b[31mred\u001b[32mgreen\u001b[33myellow\u001b[34mblue\u001b[35mmagenta\u001b[36mcyan\u001b[37mwhite",
+      "name": "every base colour",
+      "segments": [
+        {
+          "bold": false,
+          "color": "black",
+          "text": "black"
+        },
+        {
+          "bold": false,
+          "color": "red",
+          "text": "red"
+        },
+        {
+          "bold": false,
+          "color": "green",
+          "text": "green"
+        },
+        {
+          "bold": false,
+          "color": "yellow",
+          "text": "yellow"
+        },
+        {
+          "bold": false,
+          "color": "blue",
+          "text": "blue"
+        },
+        {
+          "bold": false,
+          "color": "magenta",
+          "text": "magenta"
+        },
+        {
+          "bold": false,
+          "color": "cyan",
+          "text": "cyan"
+        },
+        {
+          "bold": false,
+          "color": "white",
+          "text": "white"
+        }
+      ]
+    },
+    {
+      "input": "\u001b[31m\u001b[32mgreen",
+      "name": "two escapes with no text between",
+      "segments": [
+        {
+          "bold": false,
+          "color": "green",
+          "text": "green"
+        }
+      ]
+    },
+    {
+      "input": "plain\u001b[0mmore",
+      "name": "a reset that changes nothing",
+      "segments": [
+        {
+          "bold": false,
+          "color": null,
+          "text": "plainmore"
+        }
+      ]
+    },
+    {
+      "input": "\u001b[31mred\u001b[31mmore",
+      "name": "the same colour twice",
+      "segments": [
+        {
+          "bold": false,
+          "color": "red",
+          "text": "redmore"
+        }
+      ]
+    },
+    {
+      "input": "text\u001b[0m",
+      "name": "text after a trailing escape",
+      "segments": [
+        {
+          "bold": false,
+          "color": null,
+          "text": "text"
+        }
+      ]
+    },
+    {
+      "input": "\u001b[38;5;196mtext\u001b[0m",
+      "name": "an extended 256 colour",
+      "segments": [
+        {
+          "bold": false,
+          "color": null,
+          "text": "text"
+        }
+      ]
+    },
+    {
+      "input": "\u001b[38;2;255;0;0mtext\u001b[0m",
+      "name": "an extended rgb colour",
+      "segments": [
+        {
+          "bold": false,
+          "color": null,
+          "text": "text"
+        }
+      ]
+    },
+    {
+      "input": "\u001b[38;5;196;1mtext",
+      "name": "an extended colour then another code",
+      "segments": [
+        {
+          "bold": true,
+          "color": null,
+          "text": "text"
+        }
+      ]
+    },
+    {
+      "input": "\u001b[48;5;196mtext",
+      "name": "an extended background",
+      "segments": [
+        {
+          "bold": false,
+          "color": null,
+          "text": "text"
+        }
+      ]
+    },
+    {
+      "input": "\u001b[38mtext",
+      "name": "an extended colour with no operands",
+      "segments": [
+        {
+          "bold": false,
+          "color": null,
+          "text": "text"
+        }
+      ]
+    },
+    {
+      "input": "\u001b[31m\u001b[38;5;196mtext",
+      "name": "an extended colour after a colour",
+      "segments": [
+        {
+          "bold": false,
+          "color": "red",
+          "text": "text"
+        }
+      ]
+    },
+    {
+      "input": "\u001b[2Jcleared",
+      "name": "a cursor move",
+      "segments": [
+        {
+          "bold": false,
+          "color": null,
+          "text": "cleared"
+        }
+      ]
+    },
+    {
+      "input": "\u001b[31mred\u001b[1;1Hmore",
+      "name": "a cursor move between colours",
+      "segments": [
+        {
+          "bold": false,
+          "color": "red",
+          "text": "redmore"
+        }
+      ]
+    },
+    {
+      "input": "\u001b",
+      "name": "a lone escape",
+      "segments": []
+    },
+    {
+      "input": "\u001btext",
+      "name": "a lone escape before text",
+      "segments": [
+        {
+          "bold": false,
+          "color": null,
+          "text": "ext"
+        }
+      ]
+    },
+    {
+      "input": "\u001b[mplain",
+      "name": "an escape with no parameters",
+      "segments": [
+        {
+          "bold": false,
+          "color": null,
+          "text": "plain"
+        }
+      ]
+    },
+    {
+      "input": "\u001b[;31mred",
+      "name": "empty parameters between semicolons",
+      "segments": [
+        {
+          "bold": false,
+          "color": "red",
+          "text": "red"
+        }
+      ]
+    },
+    {
+      "input": "\u001b[4munderlined",
+      "name": "an underline code",
+      "segments": [
+        {
+          "bold": false,
+          "color": null,
+          "text": "underlined"
+        }
+      ]
+    },
+    {
+      "input": "\u001b[41mtext",
+      "name": "a background colour",
+      "segments": [
+        {
+          "bold": false,
+          "color": null,
+          "text": "text"
+        }
+      ]
+    },
+    {
+      "input": "\u001b[99mtext",
+      "name": "a code nobody uses",
+      "segments": [
+        {
+          "bold": false,
+          "color": null,
+          "text": "text"
+        }
+      ]
+    }
+  ],
+  "color_names": [
+    "black",
+    "red",
+    "green",
+    "yellow",
+    "blue",
+    "magenta",
+    "cyan",
+    "white"
+  ],
+  "tokens": [
+    {
+      "input": "{+g}green{-x}",
+      "name": "a token colour",
+      "segments": [
+        {
+          "bold": true,
+          "color": "green",
+          "text": "green"
+        }
+      ]
+    },
+    {
+      "input": "no tokens here",
+      "name": "plain text",
+      "segments": [
+        {
+          "bold": false,
+          "color": null,
+          "text": "no tokens here"
+        }
+      ]
+    },
+    {
+      "input": "{+r}red{-x} and {{literal}}",
+      "name": "a token and a literal brace",
+      "segments": [
+        {
+          "bold": true,
+          "color": "red",
+          "text": "red"
+        },
+        {
+          "bold": false,
+          "color": null,
+          "text": " and {{literal}}"
+        }
+      ]
+    },
+    {
+      "input": "",
+      "name": "nothing at all",
+      "segments": []
+    }
+  ]
+}

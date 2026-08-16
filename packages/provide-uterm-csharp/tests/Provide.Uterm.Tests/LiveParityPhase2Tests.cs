@@ -268,10 +268,10 @@ public class LiveParityPhase2Tests
     }
 
     [Fact]
-    public void PtyTransport_PreferNative_False_UsesPipes()
+    public async Task PtyTransport_PreferNative_False_UsesPipes()
     {
         var pty = new PtyTransport("/bin/sh") { PreferNativePty = false };
-        pty.ConnectAsync("localhost", 0).GetAwaiter().GetResult();
+        await pty.ConnectAsync("localhost", 0);
         try
         {
             Assert.True(pty.IsConnected());
@@ -280,7 +280,7 @@ public class LiveParityPhase2Tests
         }
         finally
         {
-            pty.DisconnectAsync().GetAwaiter().GetResult();
+            await pty.DisconnectAsync();
         }
     }
 

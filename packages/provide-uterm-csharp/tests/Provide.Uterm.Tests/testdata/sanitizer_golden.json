@@ -1,0 +1,310 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_sanitizer_golden.py",
+ "prepare": [
+  {
+   "max_bytes": 4096,
+   "out": "",
+   "raw": ""
+  },
+  {
+   "max_bytes": 4096,
+   "out": "ls -la\r",
+   "raw": "ls -la\\r"
+  },
+  {
+   "max_bytes": 4096,
+   "out": "bell",
+   "raw": "\\x07bell"
+  },
+  {
+   "max_bytes": 4096,
+   "out": "\u001b[A",
+   "raw": "\\x1b[A"
+  },
+  {
+   "max_bytes": 4096,
+   "out": "\u0003",
+   "raw": "\\x03"
+  },
+  {
+   "max_bytes": 4096,
+   "out": "",
+   "raw": "\\u00e9"
+  },
+  {
+   "max_bytes": 4096,
+   "out": "",
+   "raw": "\\u4f60"
+  },
+  {
+   "max_bytes": 2,
+   "out": "AB",
+   "raw": "\\x41\\x42\\x43"
+  },
+  {
+   "max_bytes": 4,
+   "out": "abc\n",
+   "raw": "abc\\ndef"
+  },
+  {
+   "max_bytes": 4096,
+   "out": "\\n",
+   "raw": "\\\\n"
+  }
+ ],
+ "sanitize": [
+  {
+   "keys": "",
+   "max_bytes": 4096,
+   "out": ""
+  },
+  {
+   "keys": "hello world",
+   "max_bytes": 4096,
+   "out": "hello world"
+  },
+  {
+   "keys": "\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f",
+   "max_bytes": 4096,
+   "out": "\u0003\t\n\u000b\f\r\u001b"
+  },
+  {
+   "keys": "\u007f\u0080\u0081\u0082\u0083\u0084\u0085\u0086\u0087\u0088\u0089\u008a\u008b\u008c\u008d\u008e\u008f\u0090\u0091\u0092\u0093\u0094\u0095\u0096\u0097\u0098\u0099\u009a\u009b\u009c\u009d\u009e\u009f\u00a0",
+   "max_bytes": 4096,
+   "out": ""
+  },
+  {
+   "keys": " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~",
+   "max_bytes": 4096,
+   "out": " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
+  },
+  {
+   "keys": "caf\u00e9",
+   "max_bytes": 4096,
+   "out": "caf"
+  },
+  {
+   "keys": "\u4f60\u597d",
+   "max_bytes": 4096,
+   "out": ""
+  },
+  {
+   "keys": "a\u00e9b",
+   "max_bytes": 4096,
+   "out": "ab"
+  },
+  {
+   "keys": "a\rb\nc\td",
+   "max_bytes": 4096,
+   "out": "a\rb\nc\td"
+  },
+  {
+   "keys": "\u0003",
+   "max_bytes": 4096,
+   "out": "\u0003"
+  },
+  {
+   "keys": "\u001b[A",
+   "max_bytes": 4096,
+   "out": "\u001b[A"
+  },
+  {
+   "keys": "\u000b\f",
+   "max_bytes": 4096,
+   "out": "\u000b\f"
+  },
+  {
+   "keys": "abcdefghij",
+   "max_bytes": 10,
+   "out": "abcdefghij"
+  },
+  {
+   "keys": "abcdefghij",
+   "max_bytes": 9,
+   "out": "abcdefghi"
+  },
+  {
+   "keys": "abcdefghij",
+   "max_bytes": 11,
+   "out": "abcdefghij"
+  },
+  {
+   "keys": "abcdefghij",
+   "max_bytes": 0,
+   "out": ""
+  },
+  {
+   "keys": "abcdefghij",
+   "max_bytes": 1,
+   "out": "a"
+  },
+  {
+   "keys": "a\u00e9bcdefghijk",
+   "max_bytes": 5,
+   "out": "abcde"
+  },
+  {
+   "keys": "\u0000\u0000abcde",
+   "max_bytes": 3,
+   "out": "abc"
+  }
+ ],
+ "unescape": [
+  {
+   "out": "",
+   "raw": ""
+  },
+  {
+   "out": "plain",
+   "raw": "plain"
+  },
+  {
+   "out": "\n",
+   "raw": "\\n"
+  },
+  {
+   "out": "\r",
+   "raw": "\\r"
+  },
+  {
+   "out": "\t",
+   "raw": "\\t"
+  },
+  {
+   "out": "\u001b",
+   "raw": "\\e"
+  },
+  {
+   "out": "\u0000",
+   "raw": "\\0"
+  },
+  {
+   "out": "\\",
+   "raw": "\\\\"
+  },
+  {
+   "out": "'",
+   "raw": "\\'"
+  },
+  {
+   "out": "\"",
+   "raw": "\\\""
+  },
+  {
+   "out": "a\nb\rc\td\u001be\u0000f\\g",
+   "raw": "a\\nb\\rc\\td\\ee\\0f\\\\g"
+  },
+  {
+   "out": "\u001b",
+   "raw": "\\x1b"
+  },
+  {
+   "out": "\u001b",
+   "raw": "\\x1B"
+  },
+  {
+   "out": "\u0000",
+   "raw": "\\x00"
+  },
+  {
+   "out": "\u00ff",
+   "raw": "\\xff"
+  },
+  {
+   "out": "\u001b",
+   "raw": "\\u001b"
+  },
+  {
+   "out": "A",
+   "raw": "\\u0041"
+  },
+  {
+   "out": "\uffff",
+   "raw": "\\uFFFF"
+  },
+  {
+   "out": "\u00e9",
+   "raw": "\\u00e9"
+  },
+  {
+   "out": "\\x",
+   "raw": "\\x"
+  },
+  {
+   "out": "\\x1",
+   "raw": "\\x1"
+  },
+  {
+   "out": "\\xzz",
+   "raw": "\\xzz"
+  },
+  {
+   "out": "\\u",
+   "raw": "\\u"
+  },
+  {
+   "out": "\\u12",
+   "raw": "\\u12"
+  },
+  {
+   "out": "\\u123",
+   "raw": "\\u123"
+  },
+  {
+   "out": "\\uzzzz",
+   "raw": "\\uzzzz"
+  },
+  {
+   "out": "\\q",
+   "raw": "\\q"
+  },
+  {
+   "out": "\\1",
+   "raw": "\\1"
+  },
+  {
+   "out": "\\ ",
+   "raw": "\\ "
+  },
+  {
+   "out": "\\",
+   "raw": "\\"
+  },
+  {
+   "out": "abc\\",
+   "raw": "abc\\"
+  },
+  {
+   "out": "\\\n",
+   "raw": "\\\n"
+  },
+  {
+   "out": "\\n",
+   "raw": "\\\\n"
+  },
+  {
+   "out": "\\x41",
+   "raw": "\\\\x41"
+  },
+  {
+   "out": "ABC",
+   "raw": "\\x41\\x42\\x43"
+  },
+  {
+   "out": "\n\n\n",
+   "raw": "\\n\\n\\n"
+  },
+  {
+   "out": "ls -la\r",
+   "raw": "ls -la\\r"
+  },
+  {
+   "out": "echo \"quoted\"\r",
+   "raw": "echo \\\"quoted\\\"\\r"
+  },
+  {
+   "out": "caf\u00e9",
+   "raw": "caf\u00e9"
+  }
+ ]
+}

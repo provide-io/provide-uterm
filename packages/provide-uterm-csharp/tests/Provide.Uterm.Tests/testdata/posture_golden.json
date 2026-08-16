@@ -1,0 +1,732 @@
+{
+  "postures": [
+    {
+      "name": "the defaults",
+      "overrides": {},
+      "result": {
+        "audit_chain_enabled": false,
+        "auth_mode": "dev_token",
+        "bind_host": "127.0.0.1",
+        "dev_opt_outs": [
+          "auth.mode=dev_token",
+          "security.block_private_connector_targets=false (connectors may reach internal hosts)"
+        ],
+        "environment": "production",
+        "idp_response_replay_protected": true,
+        "idp_signing_required": true,
+        "is_loopback": true,
+        "secure": true,
+        "warnings": [
+          "dev_token auth on a non-loopback bind is refused at startup",
+          "audit log is not tamper-evident (audit.chain_enabled=false) — enable the WORM chain for compliance"
+        ]
+      }
+    },
+    {
+      "name": "nothing relaxed, on loopback",
+      "overrides": {
+        "auth__mode": "jwt",
+        "security__block_private_connector_targets": true
+      },
+      "result": {
+        "audit_chain_enabled": false,
+        "auth_mode": "jwt",
+        "bind_host": "127.0.0.1",
+        "dev_opt_outs": [],
+        "environment": "production",
+        "idp_response_replay_protected": true,
+        "idp_signing_required": true,
+        "is_loopback": true,
+        "secure": true,
+        "warnings": [
+          "audit log is not tamper-evident (audit.chain_enabled=false) — enable the WORM chain for compliance"
+        ]
+      }
+    },
+    {
+      "name": "nothing relaxed, on a routable bind",
+      "overrides": {
+        "auth__mode": "jwt",
+        "environment": "production",
+        "security__block_private_connector_targets": true,
+        "server__host": "0.0.0.0"
+      },
+      "result": {
+        "audit_chain_enabled": false,
+        "auth_mode": "jwt",
+        "bind_host": "0.0.0.0",
+        "dev_opt_outs": [],
+        "environment": "production",
+        "idp_response_replay_protected": true,
+        "idp_signing_required": true,
+        "is_loopback": false,
+        "secure": true,
+        "warnings": [
+          "audit log is not tamper-evident (audit.chain_enabled=false) — enable the WORM chain for compliance"
+        ]
+      }
+    },
+    {
+      "name": "one thing relaxed, on a routable bind",
+      "overrides": {
+        "auth__allow_adhoc_browser_observers": true,
+        "auth__mode": "jwt",
+        "environment": "production",
+        "security__block_private_connector_targets": true,
+        "server__host": "0.0.0.0"
+      },
+      "result": {
+        "audit_chain_enabled": false,
+        "auth_mode": "jwt",
+        "bind_host": "0.0.0.0",
+        "dev_opt_outs": [
+          "auth.allow_adhoc_browser_observers"
+        ],
+        "environment": "production",
+        "idp_response_replay_protected": true,
+        "idp_signing_required": true,
+        "is_loopback": false,
+        "secure": false,
+        "warnings": [
+          "non-admins may observe unregistered (ad-hoc) workers",
+          "audit log is not tamper-evident (audit.chain_enabled=false) — enable the WORM chain for compliance"
+        ]
+      }
+    },
+    {
+      "name": "a development environment",
+      "overrides": {
+        "auth__mode": "jwt",
+        "environment": "development",
+        "security__block_private_connector_targets": true
+      },
+      "result": {
+        "audit_chain_enabled": false,
+        "auth_mode": "jwt",
+        "bind_host": "127.0.0.1",
+        "dev_opt_outs": [],
+        "environment": "development",
+        "idp_response_replay_protected": true,
+        "idp_signing_required": true,
+        "is_loopback": true,
+        "secure": false,
+        "warnings": [
+          "audit log is not tamper-evident (audit.chain_enabled=false) — enable the WORM chain for compliance"
+        ]
+      }
+    },
+    {
+      "name": "production on loopback",
+      "overrides": {
+        "environment": "production"
+      },
+      "result": {
+        "audit_chain_enabled": false,
+        "auth_mode": "dev_token",
+        "bind_host": "127.0.0.1",
+        "dev_opt_outs": [
+          "auth.mode=dev_token",
+          "security.block_private_connector_targets=false (connectors may reach internal hosts)"
+        ],
+        "environment": "production",
+        "idp_response_replay_protected": true,
+        "idp_signing_required": true,
+        "is_loopback": true,
+        "secure": true,
+        "warnings": [
+          "dev_token auth on a non-loopback bind is refused at startup",
+          "audit log is not tamper-evident (audit.chain_enabled=false) — enable the WORM chain for compliance"
+        ]
+      }
+    },
+    {
+      "name": "production on a routable bind",
+      "overrides": {
+        "environment": "production",
+        "server__host": "0.0.0.0"
+      },
+      "result": {
+        "audit_chain_enabled": false,
+        "auth_mode": "dev_token",
+        "bind_host": "0.0.0.0",
+        "dev_opt_outs": [
+          "auth.mode=dev_token",
+          "security.block_private_connector_targets=false (connectors may reach internal hosts)"
+        ],
+        "environment": "production",
+        "idp_response_replay_protected": true,
+        "idp_signing_required": true,
+        "is_loopback": false,
+        "secure": false,
+        "warnings": [
+          "dev_token auth on a non-loopback bind is refused at startup",
+          "audit log is not tamper-evident (audit.chain_enabled=false) — enable the WORM chain for compliance"
+        ]
+      }
+    },
+    {
+      "name": "a bind with surrounding space",
+      "overrides": {
+        "server__host": " 127.0.0.1 "
+      },
+      "result": {
+        "audit_chain_enabled": false,
+        "auth_mode": "dev_token",
+        "bind_host": "127.0.0.1",
+        "dev_opt_outs": [
+          "auth.mode=dev_token",
+          "security.block_private_connector_targets=false (connectors may reach internal hosts)"
+        ],
+        "environment": "production",
+        "idp_response_replay_protected": true,
+        "idp_signing_required": true,
+        "is_loopback": true,
+        "secure": true,
+        "warnings": [
+          "dev_token auth on a non-loopback bind is refused at startup",
+          "audit log is not tamper-evident (audit.chain_enabled=false) — enable the WORM chain for compliance"
+        ]
+      }
+    },
+    {
+      "name": "a bind in capitals",
+      "overrides": {
+        "server__host": "LOCALHOST"
+      },
+      "result": {
+        "audit_chain_enabled": false,
+        "auth_mode": "dev_token",
+        "bind_host": "localhost",
+        "dev_opt_outs": [
+          "auth.mode=dev_token",
+          "security.block_private_connector_targets=false (connectors may reach internal hosts)"
+        ],
+        "environment": "production",
+        "idp_response_replay_protected": true,
+        "idp_signing_required": true,
+        "is_loopback": true,
+        "secure": true,
+        "warnings": [
+          "dev_token auth on a non-loopback bind is refused at startup",
+          "audit log is not tamper-evident (audit.chain_enabled=false) — enable the WORM chain for compliance"
+        ]
+      }
+    },
+    {
+      "name": "an IPv6 loopback",
+      "overrides": {
+        "server__host": "::1"
+      },
+      "result": {
+        "audit_chain_enabled": false,
+        "auth_mode": "dev_token",
+        "bind_host": "::1",
+        "dev_opt_outs": [
+          "auth.mode=dev_token",
+          "security.block_private_connector_targets=false (connectors may reach internal hosts)"
+        ],
+        "environment": "production",
+        "idp_response_replay_protected": true,
+        "idp_signing_required": true,
+        "is_loopback": true,
+        "secure": true,
+        "warnings": [
+          "dev_token auth on a non-loopback bind is refused at startup",
+          "audit log is not tamper-evident (audit.chain_enabled=false) — enable the WORM chain for compliance"
+        ]
+      }
+    },
+    {
+      "name": "a routable bind",
+      "overrides": {
+        "server__host": "10.0.0.5"
+      },
+      "result": {
+        "audit_chain_enabled": false,
+        "auth_mode": "dev_token",
+        "bind_host": "10.0.0.5",
+        "dev_opt_outs": [
+          "auth.mode=dev_token",
+          "security.block_private_connector_targets=false (connectors may reach internal hosts)"
+        ],
+        "environment": "production",
+        "idp_response_replay_protected": true,
+        "idp_signing_required": true,
+        "is_loopback": false,
+        "secure": false,
+        "warnings": [
+          "dev_token auth on a non-loopback bind is refused at startup",
+          "audit log is not tamper-evident (audit.chain_enabled=false) — enable the WORM chain for compliance"
+        ]
+      }
+    },
+    {
+      "name": "dev token auth",
+      "overrides": {
+        "auth__mode": "dev_token"
+      },
+      "result": {
+        "audit_chain_enabled": false,
+        "auth_mode": "dev_token",
+        "bind_host": "127.0.0.1",
+        "dev_opt_outs": [
+          "auth.mode=dev_token",
+          "security.block_private_connector_targets=false (connectors may reach internal hosts)"
+        ],
+        "environment": "production",
+        "idp_response_replay_protected": true,
+        "idp_signing_required": true,
+        "is_loopback": true,
+        "secure": true,
+        "warnings": [
+          "dev_token auth on a non-loopback bind is refused at startup",
+          "audit log is not tamper-evident (audit.chain_enabled=false) — enable the WORM chain for compliance"
+        ]
+      }
+    },
+    {
+      "name": "dev security headers",
+      "overrides": {
+        "security__mode": "dev"
+      },
+      "result": {
+        "audit_chain_enabled": false,
+        "auth_mode": "dev_token",
+        "bind_host": "127.0.0.1",
+        "dev_opt_outs": [
+          "auth.mode=dev_token",
+          "security.block_private_connector_targets=false (connectors may reach internal hosts)",
+          "security.mode=dev"
+        ],
+        "environment": "production",
+        "idp_response_replay_protected": true,
+        "idp_signing_required": true,
+        "is_loopback": true,
+        "secure": true,
+        "warnings": [
+          "dev_token auth on a non-loopback bind is refused at startup",
+          "security.mode=dev strips HSTS/CSP/X-Frame-Options",
+          "audit log is not tamper-evident (audit.chain_enabled=false) — enable the WORM chain for compliance"
+        ]
+      }
+    },
+    {
+      "name": "dev headers acknowledged",
+      "overrides": {
+        "security__dev_mode_acknowledged": true,
+        "security__mode": "dev"
+      },
+      "result": {
+        "audit_chain_enabled": false,
+        "auth_mode": "dev_token",
+        "bind_host": "127.0.0.1",
+        "dev_opt_outs": [
+          "auth.mode=dev_token",
+          "security.block_private_connector_targets=false (connectors may reach internal hosts)",
+          "security.dev_mode_acknowledged",
+          "security.mode=dev"
+        ],
+        "environment": "production",
+        "idp_response_replay_protected": true,
+        "idp_signing_required": true,
+        "is_loopback": true,
+        "secure": true,
+        "warnings": [
+          "dev_token auth on a non-loopback bind is refused at startup",
+          "security.mode=dev strips HSTS/CSP/X-Frame-Options",
+          "audit log is not tamper-evident (audit.chain_enabled=false) — enable the WORM chain for compliance"
+        ]
+      }
+    },
+    {
+      "name": "headers acknowledged without dev mode",
+      "overrides": {
+        "security__dev_mode_acknowledged": true
+      },
+      "result": {
+        "audit_chain_enabled": false,
+        "auth_mode": "dev_token",
+        "bind_host": "127.0.0.1",
+        "dev_opt_outs": [
+          "auth.mode=dev_token",
+          "security.block_private_connector_targets=false (connectors may reach internal hosts)"
+        ],
+        "environment": "production",
+        "idp_response_replay_protected": true,
+        "idp_signing_required": true,
+        "is_loopback": true,
+        "secure": true,
+        "warnings": [
+          "dev_token auth on a non-loopback bind is refused at startup",
+          "audit log is not tamper-evident (audit.chain_enabled=false) — enable the WORM chain for compliance"
+        ]
+      }
+    },
+    {
+      "name": "header auth acknowledged",
+      "overrides": {
+        "auth__header_mode_acknowledged": true,
+        "auth__mode": "header"
+      },
+      "result": {
+        "audit_chain_enabled": false,
+        "auth_mode": "header",
+        "bind_host": "127.0.0.1",
+        "dev_opt_outs": [
+          "auth.header_mode_acknowledged",
+          "security.block_private_connector_targets=false (connectors may reach internal hosts)"
+        ],
+        "environment": "production",
+        "idp_response_replay_protected": true,
+        "idp_signing_required": true,
+        "is_loopback": true,
+        "secure": true,
+        "warnings": [
+          "header auth trusts X-Uterm-Role headers from callers",
+          "audit log is not tamper-evident (audit.chain_enabled=false) — enable the WORM chain for compliance"
+        ]
+      }
+    },
+    {
+      "name": "header acknowledgement without header auth",
+      "overrides": {
+        "auth__header_mode_acknowledged": true
+      },
+      "result": {
+        "audit_chain_enabled": false,
+        "auth_mode": "dev_token",
+        "bind_host": "127.0.0.1",
+        "dev_opt_outs": [
+          "auth.mode=dev_token",
+          "security.block_private_connector_targets=false (connectors may reach internal hosts)"
+        ],
+        "environment": "production",
+        "idp_response_replay_protected": true,
+        "idp_signing_required": true,
+        "is_loopback": true,
+        "secure": true,
+        "warnings": [
+          "dev_token auth on a non-loopback bind is refused at startup",
+          "audit log is not tamper-evident (audit.chain_enabled=false) — enable the WORM chain for compliance"
+        ]
+      }
+    },
+    {
+      "name": "an anonymous viewer fallback",
+      "overrides": {
+        "auth__webhook_idp_on_failure": "viewer"
+      },
+      "result": {
+        "audit_chain_enabled": false,
+        "auth_mode": "dev_token",
+        "bind_host": "127.0.0.1",
+        "dev_opt_outs": [
+          "auth.mode=dev_token",
+          "auth.webhook_idp_on_failure=viewer",
+          "security.block_private_connector_targets=false (connectors may reach internal hosts)"
+        ],
+        "environment": "production",
+        "idp_response_replay_protected": true,
+        "idp_signing_required": true,
+        "is_loopback": true,
+        "secure": true,
+        "warnings": [
+          "dev_token auth on a non-loopback bind is refused at startup",
+          "anonymous-viewer IDP fallback is enabled (webhook_idp_on_failure=viewer)",
+          "audit log is not tamper-evident (audit.chain_enabled=false) — enable the WORM chain for compliance"
+        ]
+      }
+    },
+    {
+      "name": "ad-hoc observers",
+      "overrides": {
+        "auth__allow_adhoc_browser_observers": true
+      },
+      "result": {
+        "audit_chain_enabled": false,
+        "auth_mode": "dev_token",
+        "bind_host": "127.0.0.1",
+        "dev_opt_outs": [
+          "auth.allow_adhoc_browser_observers",
+          "auth.mode=dev_token",
+          "security.block_private_connector_targets=false (connectors may reach internal hosts)"
+        ],
+        "environment": "production",
+        "idp_response_replay_protected": true,
+        "idp_signing_required": true,
+        "is_loopback": true,
+        "secure": true,
+        "warnings": [
+          "dev_token auth on a non-loopback bind is refused at startup",
+          "non-admins may observe unregistered (ad-hoc) workers",
+          "audit log is not tamper-evident (audit.chain_enabled=false) — enable the WORM chain for compliance"
+        ]
+      }
+    },
+    {
+      "name": "connectors reaching internal hosts",
+      "overrides": {
+        "security__block_private_connector_targets": false
+      },
+      "result": {
+        "audit_chain_enabled": false,
+        "auth_mode": "dev_token",
+        "bind_host": "127.0.0.1",
+        "dev_opt_outs": [
+          "auth.mode=dev_token",
+          "security.block_private_connector_targets=false (connectors may reach internal hosts)"
+        ],
+        "environment": "production",
+        "idp_response_replay_protected": true,
+        "idp_signing_required": true,
+        "is_loopback": true,
+        "secure": true,
+        "warnings": [
+          "dev_token auth on a non-loopback bind is refused at startup",
+          "audit log is not tamper-evident (audit.chain_enabled=false) — enable the WORM chain for compliance"
+        ]
+      }
+    },
+    {
+      "name": "a webhook idp, signed",
+      "overrides": {
+        "auth__identity_provider": "webhook"
+      },
+      "result": {
+        "audit_chain_enabled": false,
+        "auth_mode": "dev_token",
+        "bind_host": "127.0.0.1",
+        "dev_opt_outs": [
+          "auth.mode=dev_token",
+          "security.block_private_connector_targets=false (connectors may reach internal hosts)"
+        ],
+        "environment": "production",
+        "idp_response_replay_protected": true,
+        "idp_signing_required": true,
+        "is_loopback": true,
+        "secure": true,
+        "warnings": [
+          "dev_token auth on a non-loopback bind is refused at startup",
+          "webhook IdP response replay is blocked only by a per-instance cache (not shared across nodes) — enable auth.webhook_idp_require_response_nonce for HA / strict request-binding",
+          "audit log is not tamper-evident (audit.chain_enabled=false) — enable the WORM chain for compliance"
+        ]
+      }
+    },
+    {
+      "name": "a webhook idp, unsigned",
+      "overrides": {
+        "auth__identity_provider": "webhook",
+        "auth__webhook_idp_require_signed_response": false
+      },
+      "result": {
+        "audit_chain_enabled": false,
+        "auth_mode": "dev_token",
+        "bind_host": "127.0.0.1",
+        "dev_opt_outs": [
+          "auth.mode=dev_token",
+          "auth.webhook_idp_require_signed_response=false",
+          "security.block_private_connector_targets=false (connectors may reach internal hosts)"
+        ],
+        "environment": "production",
+        "idp_response_replay_protected": true,
+        "idp_signing_required": false,
+        "is_loopback": true,
+        "secure": true,
+        "warnings": [
+          "dev_token auth on a non-loopback bind is refused at startup",
+          "webhook IdP responses are not signature-verified — a forged response can mint a principal",
+          "webhook IdP response replay is blocked only by a per-instance cache (not shared across nodes) — enable auth.webhook_idp_require_response_nonce for HA / strict request-binding",
+          "audit log is not tamper-evident (audit.chain_enabled=false) — enable the WORM chain for compliance"
+        ]
+      }
+    },
+    {
+      "name": "a webhook idp with nonce binding",
+      "overrides": {
+        "auth__identity_provider": "webhook",
+        "auth__webhook_idp_require_response_nonce": true
+      },
+      "result": {
+        "audit_chain_enabled": false,
+        "auth_mode": "dev_token",
+        "bind_host": "127.0.0.1",
+        "dev_opt_outs": [
+          "auth.mode=dev_token",
+          "security.block_private_connector_targets=false (connectors may reach internal hosts)"
+        ],
+        "environment": "production",
+        "idp_response_replay_protected": true,
+        "idp_signing_required": true,
+        "is_loopback": true,
+        "secure": true,
+        "warnings": [
+          "dev_token auth on a non-loopback bind is refused at startup",
+          "audit log is not tamper-evident (audit.chain_enabled=false) — enable the WORM chain for compliance"
+        ]
+      }
+    },
+    {
+      "name": "a local idp, unsigned",
+      "overrides": {
+        "auth__webhook_idp_require_signed_response": false
+      },
+      "result": {
+        "audit_chain_enabled": false,
+        "auth_mode": "dev_token",
+        "bind_host": "127.0.0.1",
+        "dev_opt_outs": [
+          "auth.mode=dev_token",
+          "security.block_private_connector_targets=false (connectors may reach internal hosts)"
+        ],
+        "environment": "production",
+        "idp_response_replay_protected": true,
+        "idp_signing_required": false,
+        "is_loopback": true,
+        "secure": true,
+        "warnings": [
+          "dev_token auth on a non-loopback bind is refused at startup",
+          "audit log is not tamper-evident (audit.chain_enabled=false) — enable the WORM chain for compliance"
+        ]
+      }
+    },
+    {
+      "name": "an audit chain",
+      "overrides": {
+        "audit__chain_enabled": true
+      },
+      "result": {
+        "audit_chain_enabled": true,
+        "auth_mode": "dev_token",
+        "bind_host": "127.0.0.1",
+        "dev_opt_outs": [
+          "auth.mode=dev_token",
+          "security.block_private_connector_targets=false (connectors may reach internal hosts)"
+        ],
+        "environment": "production",
+        "idp_response_replay_protected": true,
+        "idp_signing_required": true,
+        "is_loopback": true,
+        "secure": true,
+        "warnings": [
+          "dev_token auth on a non-loopback bind is refused at startup"
+        ]
+      }
+    },
+    {
+      "name": "production, routable, with an opt-out",
+      "overrides": {
+        "auth__allow_adhoc_browser_observers": true,
+        "environment": "production",
+        "server__host": "0.0.0.0"
+      },
+      "result": {
+        "audit_chain_enabled": false,
+        "auth_mode": "dev_token",
+        "bind_host": "0.0.0.0",
+        "dev_opt_outs": [
+          "auth.allow_adhoc_browser_observers",
+          "auth.mode=dev_token",
+          "security.block_private_connector_targets=false (connectors may reach internal hosts)"
+        ],
+        "environment": "production",
+        "idp_response_replay_protected": true,
+        "idp_signing_required": true,
+        "is_loopback": false,
+        "secure": false,
+        "warnings": [
+          "dev_token auth on a non-loopback bind is refused at startup",
+          "non-admins may observe unregistered (ad-hoc) workers",
+          "audit log is not tamper-evident (audit.chain_enabled=false) — enable the WORM chain for compliance"
+        ]
+      }
+    },
+    {
+      "name": "production, loopback, with an opt-out",
+      "overrides": {
+        "auth__allow_adhoc_browser_observers": true,
+        "environment": "production"
+      },
+      "result": {
+        "audit_chain_enabled": false,
+        "auth_mode": "dev_token",
+        "bind_host": "127.0.0.1",
+        "dev_opt_outs": [
+          "auth.allow_adhoc_browser_observers",
+          "auth.mode=dev_token",
+          "security.block_private_connector_targets=false (connectors may reach internal hosts)"
+        ],
+        "environment": "production",
+        "idp_response_replay_protected": true,
+        "idp_signing_required": true,
+        "is_loopback": true,
+        "secure": true,
+        "warnings": [
+          "dev_token auth on a non-loopback bind is refused at startup",
+          "non-admins may observe unregistered (ad-hoc) workers",
+          "audit log is not tamper-evident (audit.chain_enabled=false) — enable the WORM chain for compliance"
+        ]
+      }
+    },
+    {
+      "name": "production, routable, with only a warning",
+      "overrides": {
+        "audit__chain_enabled": true,
+        "environment": "production",
+        "server__host": "0.0.0.0"
+      },
+      "result": {
+        "audit_chain_enabled": true,
+        "auth_mode": "dev_token",
+        "bind_host": "0.0.0.0",
+        "dev_opt_outs": [
+          "auth.mode=dev_token",
+          "security.block_private_connector_targets=false (connectors may reach internal hosts)"
+        ],
+        "environment": "production",
+        "idp_response_replay_protected": true,
+        "idp_signing_required": true,
+        "is_loopback": false,
+        "secure": false,
+        "warnings": [
+          "dev_token auth on a non-loopback bind is refused at startup"
+        ]
+      }
+    },
+    {
+      "name": "everything relaxed at once",
+      "overrides": {
+        "auth__allow_adhoc_browser_observers": true,
+        "auth__mode": "dev_token",
+        "auth__webhook_idp_on_failure": "viewer",
+        "security__block_private_connector_targets": false,
+        "security__dev_mode_acknowledged": true,
+        "security__mode": "dev"
+      },
+      "result": {
+        "audit_chain_enabled": false,
+        "auth_mode": "dev_token",
+        "bind_host": "127.0.0.1",
+        "dev_opt_outs": [
+          "auth.allow_adhoc_browser_observers",
+          "auth.mode=dev_token",
+          "auth.webhook_idp_on_failure=viewer",
+          "security.block_private_connector_targets=false (connectors may reach internal hosts)",
+          "security.dev_mode_acknowledged",
+          "security.mode=dev"
+        ],
+        "environment": "production",
+        "idp_response_replay_protected": true,
+        "idp_signing_required": true,
+        "is_loopback": true,
+        "secure": true,
+        "warnings": [
+          "dev_token auth on a non-loopback bind is refused at startup",
+          "security.mode=dev strips HSTS/CSP/X-Frame-Options",
+          "anonymous-viewer IDP fallback is enabled (webhook_idp_on_failure=viewer)",
+          "non-admins may observe unregistered (ad-hoc) workers",
+          "audit log is not tamper-evident (audit.chain_enabled=false) — enable the WORM chain for compliance"
+        ]
+      }
+    }
+  ]
+}

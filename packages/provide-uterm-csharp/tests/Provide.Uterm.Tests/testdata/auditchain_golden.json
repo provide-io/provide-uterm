@@ -1,0 +1,1080 @@
+{
+  "genesis": "0000000000000000000000000000000000000000000000000000000000000000",
+  "chain": [
+    {
+      "seq": 1,
+      "ts": 1700000000.0,
+      "mono_ns": 1000,
+      "action": "session_create",
+      "principal": "ada",
+      "session_id": "sess-1",
+      "source_ip": "203.0.113.7",
+      "detail": {
+        "note": "record 1 — ☃",
+        "n": 0
+      },
+      "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "record_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3"
+    },
+    {
+      "seq": 2,
+      "ts": 1700000001.0,
+      "mono_ns": 2000,
+      "action": "hijack_begin",
+      "principal": "bob",
+      "session_id": "sess-2",
+      "source_ip": "203.0.113.7",
+      "detail": {
+        "note": "record 2 — ☃",
+        "n": 1
+      },
+      "prev_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3",
+      "record_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b"
+    },
+    {
+      "seq": 3,
+      "ts": 1700000002.0,
+      "mono_ns": 3000,
+      "action": "session_delete",
+      "principal": "ådæ ☃",
+      "session_id": "sess-3",
+      "source_ip": "203.0.113.7",
+      "detail": {
+        "note": "record 3 — ☃",
+        "n": 2
+      },
+      "prev_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b",
+      "record_hash": "d7e5deb59940311d00db0383c8f2e81362e1dbe8a4f3bf4bfb4ef364b285e000"
+    }
+  ],
+  "canonical": "{\"action\":\"session_create\",\"detail\":{\"a\":{\"nested\":true},\"z\":1},\"mono_ns\":1000,\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"principal\":\"ada\",\"seq\":1,\"session_id\":\"sess-1\",\"source_ip\":\"203.0.113.7\",\"ts\":1700000000.0}",
+  "verified": [
+    {
+      "name": "an empty log",
+      "records": [],
+      "expected_head": null,
+      "result": {
+        "ok": true,
+        "count": 0,
+        "head_seq": null,
+        "head_hash": null,
+        "first_bad_seq": null,
+        "reason": null
+      }
+    },
+    {
+      "name": "a good chain",
+      "records": [
+        {
+          "seq": 1,
+          "ts": 1700000000.0,
+          "mono_ns": 1000,
+          "action": "session_create",
+          "principal": "ada",
+          "session_id": "sess-1",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 1 — ☃",
+            "n": 0
+          },
+          "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "record_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3"
+        },
+        {
+          "seq": 2,
+          "ts": 1700000001.0,
+          "mono_ns": 2000,
+          "action": "hijack_begin",
+          "principal": "bob",
+          "session_id": "sess-2",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 2 — ☃",
+            "n": 1
+          },
+          "prev_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3",
+          "record_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b"
+        },
+        {
+          "seq": 3,
+          "ts": 1700000002.0,
+          "mono_ns": 3000,
+          "action": "session_delete",
+          "principal": "ådæ ☃",
+          "session_id": "sess-3",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 3 — ☃",
+            "n": 2
+          },
+          "prev_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b",
+          "record_hash": "d7e5deb59940311d00db0383c8f2e81362e1dbe8a4f3bf4bfb4ef364b285e000"
+        }
+      ],
+      "expected_head": null,
+      "result": {
+        "ok": true,
+        "count": 3,
+        "head_seq": 3,
+        "head_hash": "d7e5deb59940311d00db0383c8f2e81362e1dbe8a4f3bf4bfb4ef364b285e000",
+        "first_bad_seq": null,
+        "reason": null
+      }
+    },
+    {
+      "name": "a good chain with the head it should have",
+      "records": [
+        {
+          "seq": 1,
+          "ts": 1700000000.0,
+          "mono_ns": 1000,
+          "action": "session_create",
+          "principal": "ada",
+          "session_id": "sess-1",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 1 — ☃",
+            "n": 0
+          },
+          "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "record_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3"
+        },
+        {
+          "seq": 2,
+          "ts": 1700000001.0,
+          "mono_ns": 2000,
+          "action": "hijack_begin",
+          "principal": "bob",
+          "session_id": "sess-2",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 2 — ☃",
+            "n": 1
+          },
+          "prev_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3",
+          "record_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b"
+        },
+        {
+          "seq": 3,
+          "ts": 1700000002.0,
+          "mono_ns": 3000,
+          "action": "session_delete",
+          "principal": "ådæ ☃",
+          "session_id": "sess-3",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 3 — ☃",
+            "n": 2
+          },
+          "prev_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b",
+          "record_hash": "d7e5deb59940311d00db0383c8f2e81362e1dbe8a4f3bf4bfb4ef364b285e000"
+        }
+      ],
+      "expected_head": [
+        3,
+        "d7e5deb59940311d00db0383c8f2e81362e1dbe8a4f3bf4bfb4ef364b285e000"
+      ],
+      "result": {
+        "ok": true,
+        "count": 3,
+        "head_seq": 3,
+        "head_hash": "d7e5deb59940311d00db0383c8f2e81362e1dbe8a4f3bf4bfb4ef364b285e000",
+        "first_bad_seq": null,
+        "reason": null
+      }
+    },
+    {
+      "name": "a good chain with the wrong head sequence",
+      "records": [
+        {
+          "seq": 1,
+          "ts": 1700000000.0,
+          "mono_ns": 1000,
+          "action": "session_create",
+          "principal": "ada",
+          "session_id": "sess-1",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 1 — ☃",
+            "n": 0
+          },
+          "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "record_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3"
+        },
+        {
+          "seq": 2,
+          "ts": 1700000001.0,
+          "mono_ns": 2000,
+          "action": "hijack_begin",
+          "principal": "bob",
+          "session_id": "sess-2",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 2 — ☃",
+            "n": 1
+          },
+          "prev_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3",
+          "record_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b"
+        },
+        {
+          "seq": 3,
+          "ts": 1700000002.0,
+          "mono_ns": 3000,
+          "action": "session_delete",
+          "principal": "ådæ ☃",
+          "session_id": "sess-3",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 3 — ☃",
+            "n": 2
+          },
+          "prev_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b",
+          "record_hash": "d7e5deb59940311d00db0383c8f2e81362e1dbe8a4f3bf4bfb4ef364b285e000"
+        }
+      ],
+      "expected_head": [
+        99,
+        "d7e5deb59940311d00db0383c8f2e81362e1dbe8a4f3bf4bfb4ef364b285e000"
+      ],
+      "result": {
+        "ok": false,
+        "count": 3,
+        "head_seq": 3,
+        "head_hash": "d7e5deb59940311d00db0383c8f2e81362e1dbe8a4f3bf4bfb4ef364b285e000",
+        "first_bad_seq": 3,
+        "reason": "head mismatch — log truncated or rolled back"
+      }
+    },
+    {
+      "name": "a good chain with the wrong head hash",
+      "records": [
+        {
+          "seq": 1,
+          "ts": 1700000000.0,
+          "mono_ns": 1000,
+          "action": "session_create",
+          "principal": "ada",
+          "session_id": "sess-1",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 1 — ☃",
+            "n": 0
+          },
+          "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "record_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3"
+        },
+        {
+          "seq": 2,
+          "ts": 1700000001.0,
+          "mono_ns": 2000,
+          "action": "hijack_begin",
+          "principal": "bob",
+          "session_id": "sess-2",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 2 — ☃",
+            "n": 1
+          },
+          "prev_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3",
+          "record_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b"
+        },
+        {
+          "seq": 3,
+          "ts": 1700000002.0,
+          "mono_ns": 3000,
+          "action": "session_delete",
+          "principal": "ådæ ☃",
+          "session_id": "sess-3",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 3 — ☃",
+            "n": 2
+          },
+          "prev_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b",
+          "record_hash": "d7e5deb59940311d00db0383c8f2e81362e1dbe8a4f3bf4bfb4ef364b285e000"
+        }
+      ],
+      "expected_head": [
+        3,
+        "0000000000000000000000000000000000000000000000000000000000000000"
+      ],
+      "result": {
+        "ok": false,
+        "count": 3,
+        "head_seq": 3,
+        "head_hash": "d7e5deb59940311d00db0383c8f2e81362e1dbe8a4f3bf4bfb4ef364b285e000",
+        "first_bad_seq": 3,
+        "reason": "head mismatch — log truncated or rolled back"
+      }
+    },
+    {
+      "name": "the end cut off",
+      "records": [
+        {
+          "seq": 1,
+          "ts": 1700000000.0,
+          "mono_ns": 1000,
+          "action": "session_create",
+          "principal": "ada",
+          "session_id": "sess-1",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 1 — ☃",
+            "n": 0
+          },
+          "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "record_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3"
+        },
+        {
+          "seq": 2,
+          "ts": 1700000001.0,
+          "mono_ns": 2000,
+          "action": "hijack_begin",
+          "principal": "bob",
+          "session_id": "sess-2",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 2 — ☃",
+            "n": 1
+          },
+          "prev_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3",
+          "record_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b"
+        }
+      ],
+      "expected_head": [
+        3,
+        "d7e5deb59940311d00db0383c8f2e81362e1dbe8a4f3bf4bfb4ef364b285e000"
+      ],
+      "result": {
+        "ok": false,
+        "count": 2,
+        "head_seq": 2,
+        "head_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b",
+        "first_bad_seq": 2,
+        "reason": "head mismatch — log truncated or rolled back"
+      }
+    },
+    {
+      "name": "an empty log with a head expected",
+      "records": [],
+      "expected_head": [
+        3,
+        "d7e5deb59940311d00db0383c8f2e81362e1dbe8a4f3bf4bfb4ef364b285e000"
+      ],
+      "result": {
+        "ok": false,
+        "count": 0,
+        "head_seq": null,
+        "head_hash": null,
+        "first_bad_seq": null,
+        "reason": "head mismatch — log truncated or rolled back"
+      }
+    },
+    {
+      "name": "a record altered",
+      "records": [
+        {
+          "seq": 1,
+          "ts": 1700000000.0,
+          "mono_ns": 1000,
+          "action": "session_create",
+          "principal": "ada",
+          "session_id": "sess-1",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 1 — ☃",
+            "n": 0
+          },
+          "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "record_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3"
+        },
+        {
+          "seq": 2,
+          "ts": 1700000001.0,
+          "mono_ns": 2000,
+          "action": "something_else",
+          "principal": "bob",
+          "session_id": "sess-2",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 2 — ☃",
+            "n": 1
+          },
+          "prev_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3",
+          "record_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b"
+        },
+        {
+          "seq": 3,
+          "ts": 1700000002.0,
+          "mono_ns": 3000,
+          "action": "session_delete",
+          "principal": "ådæ ☃",
+          "session_id": "sess-3",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 3 — ☃",
+            "n": 2
+          },
+          "prev_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b",
+          "record_hash": "d7e5deb59940311d00db0383c8f2e81362e1dbe8a4f3bf4bfb4ef364b285e000"
+        }
+      ],
+      "expected_head": null,
+      "result": {
+        "ok": false,
+        "count": 2,
+        "head_seq": null,
+        "head_hash": null,
+        "first_bad_seq": 2,
+        "reason": "record hash mismatch — content altered"
+      }
+    },
+    {
+      "name": "a detail altered",
+      "records": [
+        {
+          "seq": 1,
+          "ts": 1700000000.0,
+          "mono_ns": 1000,
+          "action": "session_create",
+          "principal": "ada",
+          "session_id": "sess-1",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 1 — ☃",
+            "n": 0
+          },
+          "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "record_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3"
+        },
+        {
+          "seq": 2,
+          "ts": 1700000001.0,
+          "mono_ns": 2000,
+          "action": "hijack_begin",
+          "principal": "bob",
+          "session_id": "sess-2",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "edited",
+            "n": 1
+          },
+          "prev_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3",
+          "record_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b"
+        },
+        {
+          "seq": 3,
+          "ts": 1700000002.0,
+          "mono_ns": 3000,
+          "action": "session_delete",
+          "principal": "ådæ ☃",
+          "session_id": "sess-3",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 3 — ☃",
+            "n": 2
+          },
+          "prev_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b",
+          "record_hash": "d7e5deb59940311d00db0383c8f2e81362e1dbe8a4f3bf4bfb4ef364b285e000"
+        }
+      ],
+      "expected_head": null,
+      "result": {
+        "ok": false,
+        "count": 2,
+        "head_seq": null,
+        "head_hash": null,
+        "first_bad_seq": 2,
+        "reason": "record hash mismatch — content altered"
+      }
+    },
+    {
+      "name": "a record removed",
+      "records": [
+        {
+          "seq": 1,
+          "ts": 1700000000.0,
+          "mono_ns": 1000,
+          "action": "session_create",
+          "principal": "ada",
+          "session_id": "sess-1",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 1 — ☃",
+            "n": 0
+          },
+          "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "record_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3"
+        },
+        {
+          "seq": 3,
+          "ts": 1700000002.0,
+          "mono_ns": 3000,
+          "action": "session_delete",
+          "principal": "ådæ ☃",
+          "session_id": "sess-3",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 3 — ☃",
+            "n": 2
+          },
+          "prev_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b",
+          "record_hash": "d7e5deb59940311d00db0383c8f2e81362e1dbe8a4f3bf4bfb4ef364b285e000"
+        }
+      ],
+      "expected_head": null,
+      "result": {
+        "ok": false,
+        "count": 2,
+        "head_seq": null,
+        "head_hash": null,
+        "first_bad_seq": 3,
+        "reason": "non-contiguous sequence"
+      }
+    },
+    {
+      "name": "two records swapped",
+      "records": [
+        {
+          "seq": 1,
+          "ts": 1700000000.0,
+          "mono_ns": 1000,
+          "action": "session_create",
+          "principal": "ada",
+          "session_id": "sess-1",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 1 — ☃",
+            "n": 0
+          },
+          "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "record_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3"
+        },
+        {
+          "seq": 3,
+          "ts": 1700000002.0,
+          "mono_ns": 3000,
+          "action": "session_delete",
+          "principal": "ådæ ☃",
+          "session_id": "sess-3",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 3 — ☃",
+            "n": 2
+          },
+          "prev_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b",
+          "record_hash": "d7e5deb59940311d00db0383c8f2e81362e1dbe8a4f3bf4bfb4ef364b285e000"
+        },
+        {
+          "seq": 2,
+          "ts": 1700000001.0,
+          "mono_ns": 2000,
+          "action": "hijack_begin",
+          "principal": "bob",
+          "session_id": "sess-2",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 2 — ☃",
+            "n": 1
+          },
+          "prev_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3",
+          "record_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b"
+        }
+      ],
+      "expected_head": null,
+      "result": {
+        "ok": false,
+        "count": 2,
+        "head_seq": null,
+        "head_hash": null,
+        "first_bad_seq": 3,
+        "reason": "non-contiguous sequence"
+      }
+    },
+    {
+      "name": "a record repeated",
+      "records": [
+        {
+          "seq": 1,
+          "ts": 1700000000.0,
+          "mono_ns": 1000,
+          "action": "session_create",
+          "principal": "ada",
+          "session_id": "sess-1",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 1 — ☃",
+            "n": 0
+          },
+          "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "record_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3"
+        },
+        {
+          "seq": 2,
+          "ts": 1700000001.0,
+          "mono_ns": 2000,
+          "action": "hijack_begin",
+          "principal": "bob",
+          "session_id": "sess-2",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 2 — ☃",
+            "n": 1
+          },
+          "prev_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3",
+          "record_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b"
+        },
+        {
+          "seq": 2,
+          "ts": 1700000001.0,
+          "mono_ns": 2000,
+          "action": "hijack_begin",
+          "principal": "bob",
+          "session_id": "sess-2",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 2 — ☃",
+            "n": 1
+          },
+          "prev_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3",
+          "record_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b"
+        },
+        {
+          "seq": 3,
+          "ts": 1700000002.0,
+          "mono_ns": 3000,
+          "action": "session_delete",
+          "principal": "ådæ ☃",
+          "session_id": "sess-3",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 3 — ☃",
+            "n": 2
+          },
+          "prev_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b",
+          "record_hash": "d7e5deb59940311d00db0383c8f2e81362e1dbe8a4f3bf4bfb4ef364b285e000"
+        }
+      ],
+      "expected_head": null,
+      "result": {
+        "ok": false,
+        "count": 3,
+        "head_seq": null,
+        "head_hash": null,
+        "first_bad_seq": 2,
+        "reason": "non-contiguous sequence"
+      }
+    },
+    {
+      "name": "a link pointed elsewhere",
+      "records": [
+        {
+          "seq": 1,
+          "ts": 1700000000.0,
+          "mono_ns": 1000,
+          "action": "session_create",
+          "principal": "ada",
+          "session_id": "sess-1",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 1 — ☃",
+            "n": 0
+          },
+          "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "record_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3"
+        },
+        {
+          "seq": 2,
+          "ts": 1700000001.0,
+          "mono_ns": 2000,
+          "action": "hijack_begin",
+          "principal": "bob",
+          "session_id": "sess-2",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 2 — ☃",
+            "n": 1
+          },
+          "prev_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3",
+          "record_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b"
+        },
+        {
+          "seq": 3,
+          "ts": 1700000002.0,
+          "mono_ns": 3000,
+          "action": "session_delete",
+          "principal": "ådæ ☃",
+          "session_id": "sess-3",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 3 — ☃",
+            "n": 2
+          },
+          "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "record_hash": "d7e5deb59940311d00db0383c8f2e81362e1dbe8a4f3bf4bfb4ef364b285e000"
+        }
+      ],
+      "expected_head": null,
+      "result": {
+        "ok": false,
+        "count": 3,
+        "head_seq": null,
+        "head_hash": null,
+        "first_bad_seq": 3,
+        "reason": "broken hash link"
+      }
+    },
+    {
+      "name": "a hash replaced",
+      "records": [
+        {
+          "seq": 1,
+          "ts": 1700000000.0,
+          "mono_ns": 1000,
+          "action": "session_create",
+          "principal": "ada",
+          "session_id": "sess-1",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 1 — ☃",
+            "n": 0
+          },
+          "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "record_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3"
+        },
+        {
+          "seq": 2,
+          "ts": 1700000001.0,
+          "mono_ns": 2000,
+          "action": "hijack_begin",
+          "principal": "bob",
+          "session_id": "sess-2",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 2 — ☃",
+            "n": 1
+          },
+          "prev_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3",
+          "record_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        {
+          "seq": 3,
+          "ts": 1700000002.0,
+          "mono_ns": 3000,
+          "action": "session_delete",
+          "principal": "ådæ ☃",
+          "session_id": "sess-3",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 3 — ☃",
+            "n": 2
+          },
+          "prev_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b",
+          "record_hash": "d7e5deb59940311d00db0383c8f2e81362e1dbe8a4f3bf4bfb4ef364b285e000"
+        }
+      ],
+      "expected_head": null,
+      "result": {
+        "ok": false,
+        "count": 2,
+        "head_seq": null,
+        "head_hash": null,
+        "first_bad_seq": 2,
+        "reason": "record hash mismatch — content altered"
+      }
+    },
+    {
+      "name": "the beginning cut off",
+      "records": [
+        {
+          "seq": 2,
+          "ts": 1700000001.0,
+          "mono_ns": 2000,
+          "action": "hijack_begin",
+          "principal": "bob",
+          "session_id": "sess-2",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 2 — ☃",
+            "n": 1
+          },
+          "prev_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3",
+          "record_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b"
+        },
+        {
+          "seq": 3,
+          "ts": 1700000002.0,
+          "mono_ns": 3000,
+          "action": "session_delete",
+          "principal": "ådæ ☃",
+          "session_id": "sess-3",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 3 — ☃",
+            "n": 2
+          },
+          "prev_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b",
+          "record_hash": "d7e5deb59940311d00db0383c8f2e81362e1dbe8a4f3bf4bfb4ef364b285e000"
+        }
+      ],
+      "expected_head": null,
+      "result": {
+        "ok": false,
+        "count": 1,
+        "head_seq": null,
+        "head_hash": null,
+        "first_bad_seq": 2,
+        "reason": "broken hash link"
+      }
+    },
+    {
+      "name": "the first record unlinked",
+      "records": [
+        {
+          "seq": 1,
+          "ts": 1700000000.0,
+          "mono_ns": 1000,
+          "action": "session_create",
+          "principal": "ada",
+          "session_id": "sess-1",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 1 — ☃",
+            "n": 0
+          },
+          "prev_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "record_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3"
+        },
+        {
+          "seq": 2,
+          "ts": 1700000001.0,
+          "mono_ns": 2000,
+          "action": "hijack_begin",
+          "principal": "bob",
+          "session_id": "sess-2",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 2 — ☃",
+            "n": 1
+          },
+          "prev_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3",
+          "record_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b"
+        },
+        {
+          "seq": 3,
+          "ts": 1700000002.0,
+          "mono_ns": 3000,
+          "action": "session_delete",
+          "principal": "ådæ ☃",
+          "session_id": "sess-3",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 3 — ☃",
+            "n": 2
+          },
+          "prev_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b",
+          "record_hash": "d7e5deb59940311d00db0383c8f2e81362e1dbe8a4f3bf4bfb4ef364b285e000"
+        }
+      ],
+      "expected_head": null,
+      "result": {
+        "ok": false,
+        "count": 1,
+        "head_seq": null,
+        "head_hash": null,
+        "first_bad_seq": 1,
+        "reason": "broken hash link"
+      }
+    },
+    {
+      "name": "a field missing",
+      "records": [
+        {
+          "seq": 1,
+          "ts": 1700000000.0,
+          "mono_ns": 1000,
+          "action": "session_create",
+          "principal": "ada",
+          "session_id": "sess-1",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 1 — ☃",
+            "n": 0
+          },
+          "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "record_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3"
+        },
+        {
+          "seq": 2,
+          "ts": 1700000001.0,
+          "mono_ns": 2000,
+          "action": "hijack_begin",
+          "session_id": "sess-2",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 2 — ☃",
+            "n": 1
+          },
+          "prev_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3",
+          "record_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b"
+        }
+      ],
+      "expected_head": null,
+      "result": {
+        "ok": false,
+        "count": 2,
+        "head_seq": null,
+        "head_hash": null,
+        "first_bad_seq": 2,
+        "reason": "malformed record"
+      }
+    },
+    {
+      "name": "a sequence given as text",
+      "records": [
+        {
+          "seq": 1,
+          "ts": 1700000000.0,
+          "mono_ns": 1000,
+          "action": "session_create",
+          "principal": "ada",
+          "session_id": "sess-1",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 1 — ☃",
+            "n": 0
+          },
+          "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "record_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3"
+        },
+        {
+          "seq": "2",
+          "ts": 1700000001.0,
+          "mono_ns": 2000,
+          "action": "hijack_begin",
+          "principal": "bob",
+          "session_id": "sess-2",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 2 — ☃",
+            "n": 1
+          },
+          "prev_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3",
+          "record_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b"
+        }
+      ],
+      "expected_head": null,
+      "result": {
+        "ok": false,
+        "count": 2,
+        "head_seq": null,
+        "head_hash": null,
+        "first_bad_seq": null,
+        "reason": "malformed record"
+      }
+    },
+    {
+      "name": "a sequence given as a boolean",
+      "records": [
+        {
+          "seq": 1,
+          "ts": 1700000000.0,
+          "mono_ns": 1000,
+          "action": "session_create",
+          "principal": "ada",
+          "session_id": "sess-1",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 1 — ☃",
+            "n": 0
+          },
+          "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "record_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3"
+        },
+        {
+          "seq": true,
+          "ts": 1700000001.0,
+          "mono_ns": 2000,
+          "action": "hijack_begin",
+          "principal": "bob",
+          "session_id": "sess-2",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 2 — ☃",
+            "n": 1
+          },
+          "prev_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3",
+          "record_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b"
+        }
+      ],
+      "expected_head": null,
+      "result": {
+        "ok": false,
+        "count": 2,
+        "head_seq": null,
+        "head_hash": null,
+        "first_bad_seq": null,
+        "reason": "malformed record"
+      }
+    },
+    {
+      "name": "a gap in the sequence",
+      "records": [
+        {
+          "seq": 1,
+          "ts": 1700000000.0,
+          "mono_ns": 1000,
+          "action": "session_create",
+          "principal": "ada",
+          "session_id": "sess-1",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 1 — ☃",
+            "n": 0
+          },
+          "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "record_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3"
+        },
+        {
+          "seq": 2,
+          "ts": 1700000001.0,
+          "mono_ns": 2000,
+          "action": "hijack_begin",
+          "principal": "bob",
+          "session_id": "sess-2",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 2 — ☃",
+            "n": 1
+          },
+          "prev_hash": "fdf75664664467d20522abff79b0e143e4f90b9691a7568fa0b4874a33178cc3",
+          "record_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b"
+        },
+        {
+          "seq": 99,
+          "ts": 1700000002.0,
+          "mono_ns": 3000,
+          "action": "session_delete",
+          "principal": "ådæ ☃",
+          "session_id": "sess-3",
+          "source_ip": "203.0.113.7",
+          "detail": {
+            "note": "record 3 — ☃",
+            "n": 2
+          },
+          "prev_hash": "1a72ba742e8213be6fd15459923daf95f569835b700256a2c819aa1f7cc9280b",
+          "record_hash": "d7e5deb59940311d00db0383c8f2e81362e1dbe8a4f3bf4bfb4ef364b285e000"
+        }
+      ],
+      "expected_head": null,
+      "result": {
+        "ok": false,
+        "count": 3,
+        "head_seq": null,
+        "head_hash": null,
+        "first_bad_seq": 99,
+        "reason": "non-contiguous sequence"
+      }
+    }
+  ]
+}

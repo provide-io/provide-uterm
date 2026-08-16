@@ -250,6 +250,9 @@ public sealed class ServerIntegrationHostRestTests
     public async Task Metrics_Posture_SessionPatch_Bulk_Connect_Events_Spa()
     {
         using var testMode = new EnvironmentVariableScope("UTERM_TEST_MODE", "1");
+        var expectedHeaders = SecurityHeaders.ResolveSecurityHeaders(new SecurityConfig { Mode = "standard" })
+            .Select(h => (Header: h.Header, Value: h.Value))
+            .ToList();
         var (server, http, _, hub) = await StartAsync();
         await using (server)
         using (http)
@@ -268,6 +271,25 @@ public sealed class ServerIntegrationHostRestTests
             var pbody = await posture.Content.ReadFromJsonAsync<JsonElement>();
             Assert.True(pbody.TryGetProperty("secure", out _));
             Assert.True(pbody.TryGetProperty("auth_mode", out _)); // admin sees full
+            Assert.True(pbody.TryGetProperty("headers", out var postureHeaders));
+            var posturePairs = postureHeaders.EnumerateArray()
+                .Select(item => (Header: item[0].GetString()!, Value: item[1].GetString()!))
+                .ToList();
+            Assert.Equal(expectedHeaders, posturePairs);
+
+            var health = await http.GetAsync("/healthz");
+            health.EnsureSuccessStatusCode();
+            foreach (var (header, value) in expectedHeaders)
+            {
+                if (!health.Headers.TryGetValues(header, out var gotValues))
+                {
+                    Assert.True(
+                        health.Content.Headers.TryGetValues(header, out gotValues),
+                        $"header {header} not present on /healthz");
+                }
+
+                Assert.Contains(value, gotValues, StringComparer.Ordinal);
+            }
 
             var patch = await http.PatchAsync(
                 "/api/sessions/demo",

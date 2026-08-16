@@ -1,0 +1,1020 @@
+{
+  "allowed": [
+    {
+      "methods": [
+        "DELETE",
+        "GET",
+        "POST"
+      ],
+      "path": "/api/sessions"
+    },
+    {
+      "methods": [
+        "DELETE",
+        "GET",
+        "PATCH"
+      ],
+      "path": "/api/sessions/w1"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/sessions/w1/connect"
+    },
+    {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/sessions/w1/webhooks"
+    },
+    {
+      "methods": [
+        "DELETE"
+      ],
+      "path": "/api/sessions/w1/webhooks/wh1"
+    },
+    {
+      "methods": [
+        "DELETE"
+      ],
+      "path": "/api/tunnels/t1/tokens"
+    },
+    {
+      "methods": [
+        "DELETE",
+        "GET",
+        "PUT"
+      ],
+      "path": "/api/profiles/p1"
+    },
+    {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/profiles"
+    },
+    {
+      "methods": [],
+      "path": "/api/nope"
+    },
+    {
+      "methods": [],
+      "path": "/api/sessions/"
+    },
+    {
+      "methods": [],
+      "path": "/api/sessions/a.b"
+    }
+  ],
+  "blank_capability": {
+    "error": "ValueError",
+    "message": "route capability must be nonblank and normalized"
+  },
+  "blank_operation": {
+    "error": "ValueError",
+    "message": "route operation must be nonblank and normalized"
+  },
+  "capabilities": [
+    "pam_events.ingest",
+    "profiles.connect",
+    "profiles.create",
+    "profiles.delete",
+    "profiles.get",
+    "profiles.list",
+    "profiles.update",
+    "sessions.analyze",
+    "sessions.annotate",
+    "sessions.bulk_delete",
+    "sessions.clear",
+    "sessions.connect",
+    "sessions.create",
+    "sessions.delete",
+    "sessions.disconnect",
+    "sessions.events",
+    "sessions.events_stream",
+    "sessions.events_watch",
+    "sessions.get",
+    "sessions.list",
+    "sessions.recording",
+    "sessions.recording_download",
+    "sessions.recording_entries",
+    "sessions.restart",
+    "sessions.set_mode",
+    "sessions.snapshot",
+    "sessions.update",
+    "sessions.webhooks.create",
+    "sessions.webhooks.delete",
+    "sessions.webhooks.list",
+    "tunnels.connect",
+    "tunnels.create",
+    "tunnels.revoke_token",
+    "tunnels.rotate_token"
+  ],
+  "capabilities_all": {
+    "error": null,
+    "message": null
+  },
+  "capabilities_extra": {
+    "error": null,
+    "message": null
+  },
+  "capabilities_missing": {
+    "error": "ValueError",
+    "message": "missing route capabilities: pam_events.ingest, profiles.connect, profiles.create, profiles.delete, profiles.get, profiles.list, profiles.update, sessions.analyze, sessions.annotate, sessions.bulk_delete, sessions.clear, sessions.connect, sessions.create, sessions.delete, sessions.disconnect, sessions.events, sessions.events_stream, sessions.events_watch, sessions.get, sessions.recording, sessions.recording_download, sessions.recording_entries, sessions.restart, sessions.set_mode, sessions.snapshot, sessions.update, sessions.webhooks.create, sessions.webhooks.delete, sessions.webhooks.list, tunnels.connect, tunnels.create, tunnels.revoke_token, tunnels.rotate_token"
+  },
+  "capabilities_none": {
+    "error": "ValueError",
+    "message": "missing route capabilities: pam_events.ingest, profiles.connect, profiles.create, profiles.delete, profiles.get, profiles.list, profiles.update, sessions.analyze, sessions.annotate, sessions.bulk_delete, sessions.clear, sessions.connect, sessions.create, sessions.delete, sessions.disconnect, sessions.events, sessions.events_stream, sessions.events_watch, sessions.get, sessions.list, sessions.recording, sessions.recording_download, sessions.recording_entries, sessions.restart, sessions.set_mode, sessions.snapshot, sessions.update, sessions.webhooks.create, sessions.webhooks.delete, sessions.webhooks.list, tunnels.connect, tunnels.create, tunnels.revoke_token, tunnels.rotate_token"
+  },
+  "custom_matches": [
+    {
+      "operation": "r0",
+      "params": {},
+      "path": "/api/things.json"
+    },
+    {
+      "operation": null,
+      "params": null,
+      "path": "/api/thingsxjson"
+    },
+    {
+      "operation": "r3",
+      "params": {
+        "session_id": "json"
+      },
+      "path": "/api/things/json"
+    },
+    {
+      "operation": "r1",
+      "params": {},
+      "path": "/api/al~pha"
+    },
+    {
+      "operation": null,
+      "params": null,
+      "path": "/api/alxpha"
+    },
+    {
+      "operation": "r2",
+      "params": {},
+      "path": "/api/al-pha"
+    },
+    {
+      "operation": null,
+      "params": null,
+      "path": "/api/al_pha"
+    },
+    {
+      "operation": "r3",
+      "params": {
+        "session_id": "w1"
+      },
+      "path": "/api/things/w1"
+    }
+  ],
+  "custom_templates": [
+    "/api/things.json",
+    "/api/al~pha",
+    "/api/al-pha",
+    "/api/things/{session_id}"
+  ],
+  "duplicate": {
+    "error": "ValueError",
+    "message": "duplicate route: GET /api/things"
+  },
+  "empty_registry": {
+    "error": null,
+    "message": null
+  },
+  "intersections": [
+    {
+      "error": "ValueError",
+      "first": "/api/things/{session_id}",
+      "message": "intersecting route: GET /api/things/latest and /api/things/{session_id}",
+      "name": "a parameter against a plain segment",
+      "second": "/api/things/latest"
+    },
+    {
+      "error": "ValueError",
+      "first": "/api/things/{session_id}",
+      "message": "intersecting route: GET /api/things/{tunnel_id} and /api/things/{session_id}",
+      "name": "two parameters",
+      "second": "/api/things/{tunnel_id}"
+    },
+    {
+      "error": null,
+      "first": "/api/things/{session_id}",
+      "message": null,
+      "name": "different lengths",
+      "second": "/api/things"
+    },
+    {
+      "error": null,
+      "first": "/api/things",
+      "message": null,
+      "name": "different static segments",
+      "second": "/api/others"
+    },
+    {
+      "error": null,
+      "first": "/api/things/{session_id}",
+      "message": null,
+      "name": "a parameter against a dotted segment",
+      "second": "/api/things/all.json"
+    },
+    {
+      "error": null,
+      "first": "/api/things/{session_id}",
+      "message": null,
+      "name": "a parameter against a tilde segment",
+      "second": "/api/al~pha/x"
+    },
+    {
+      "error": "ValueError",
+      "first": "/api/{session_id}/x",
+      "message": "intersecting route: GET /api/things/x and /api/{session_id}/x",
+      "name": "a parameter in the middle",
+      "second": "/api/things/x"
+    },
+    {
+      "error": "ValueError",
+      "first": "/api/things/latest",
+      "message": "intersecting route: GET /api/things/{session_id} and /api/things/latest",
+      "name": "a plain segment declared before a parameter",
+      "second": "/api/things/{session_id}"
+    },
+    {
+      "error": null,
+      "first": "/api/things/all.json",
+      "message": null,
+      "name": "a dotted segment declared before a parameter",
+      "second": "/api/things/{session_id}"
+    },
+    {
+      "error": null,
+      "first": "/api/things/{session_id}",
+      "message": null,
+      "name": "a parameter against a longer static segment",
+      "second": "/api/things/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "error": "ValueError",
+      "first": "/api/things",
+      "message": "duplicate route: GET /api/things",
+      "name": "identical templates",
+      "second": "/api/things"
+    },
+    {
+      "error": null,
+      "first": "/api/Things",
+      "message": null,
+      "name": "static segments differing in case",
+      "second": "/api/things"
+    }
+  ],
+  "matches": [
+    {
+      "method": "GET",
+      "operation": "sessions.list",
+      "params": {},
+      "path": "/api/sessions"
+    },
+    {
+      "method": "POST",
+      "operation": "sessions.create",
+      "params": {},
+      "path": "/api/sessions"
+    },
+    {
+      "method": "DELETE",
+      "operation": "sessions.bulk_delete",
+      "params": {},
+      "path": "/api/sessions"
+    },
+    {
+      "method": "PATCH",
+      "operation": null,
+      "params": null,
+      "path": "/api/sessions"
+    },
+    {
+      "method": "GET",
+      "operation": "sessions.get",
+      "params": {
+        "session_id": "w1"
+      },
+      "path": "/api/sessions/w1"
+    },
+    {
+      "method": "PATCH",
+      "operation": "sessions.update",
+      "params": {
+        "session_id": "w1"
+      },
+      "path": "/api/sessions/w1"
+    },
+    {
+      "method": "DELETE",
+      "operation": "sessions.delete",
+      "params": {
+        "session_id": "w1"
+      },
+      "path": "/api/sessions/w1"
+    },
+    {
+      "method": "POST",
+      "operation": "sessions.connect",
+      "params": {
+        "session_id": "w1"
+      },
+      "path": "/api/sessions/w1/connect"
+    },
+    {
+      "method": "GET",
+      "operation": "sessions.events_stream",
+      "params": {
+        "session_id": "w1"
+      },
+      "path": "/api/sessions/w1/events/stream"
+    },
+    {
+      "method": "GET",
+      "operation": "sessions.recording_download",
+      "params": {
+        "session_id": "w1"
+      },
+      "path": "/api/sessions/w1/recording/download"
+    },
+    {
+      "method": "DELETE",
+      "operation": "sessions.webhooks.delete",
+      "params": {
+        "session_id": "w1",
+        "webhook_id": "wh1"
+      },
+      "path": "/api/sessions/w1/webhooks/wh1"
+    },
+    {
+      "method": "POST",
+      "operation": "tunnels.rotate_token",
+      "params": {
+        "tunnel_id": "t1"
+      },
+      "path": "/api/tunnels/t1/tokens/rotate"
+    },
+    {
+      "method": "GET",
+      "operation": "profiles.get",
+      "params": {
+        "profile_id": "p1"
+      },
+      "path": "/api/profiles/p1"
+    },
+    {
+      "method": "PUT",
+      "operation": "profiles.update",
+      "params": {
+        "profile_id": "p1"
+      },
+      "path": "/api/profiles/p1"
+    },
+    {
+      "method": "POST",
+      "operation": "pam_events.ingest",
+      "params": {},
+      "path": "/api/pam-events"
+    },
+    {
+      "method": "get",
+      "operation": "sessions.list",
+      "params": {},
+      "path": "/api/sessions"
+    },
+    {
+      "method": "GeT",
+      "operation": "sessions.list",
+      "params": {},
+      "path": "/api/sessions"
+    },
+    {
+      "method": "HEAD",
+      "operation": null,
+      "params": null,
+      "path": "/api/sessions"
+    },
+    {
+      "method": "OPTIONS",
+      "operation": null,
+      "params": null,
+      "path": "/api/sessions"
+    },
+    {
+      "method": "BREW",
+      "operation": null,
+      "params": null,
+      "path": "/api/sessions"
+    },
+    {
+      "method": "",
+      "operation": null,
+      "params": null,
+      "path": "/api/sessions"
+    },
+    {
+      "method": "GET",
+      "operation": null,
+      "params": null,
+      "path": "/api/sessions/"
+    },
+    {
+      "method": "GET",
+      "operation": null,
+      "params": null,
+      "path": "/api/sessions//events"
+    },
+    {
+      "method": "GET",
+      "operation": null,
+      "params": null,
+      "path": "/api/nope"
+    },
+    {
+      "method": "GET",
+      "operation": null,
+      "params": null,
+      "path": "/api"
+    },
+    {
+      "method": "GET",
+      "operation": null,
+      "params": null,
+      "path": "/"
+    },
+    {
+      "method": "GET",
+      "operation": null,
+      "params": null,
+      "path": ""
+    },
+    {
+      "method": "GET",
+      "operation": null,
+      "params": null,
+      "path": "api/sessions"
+    },
+    {
+      "method": "GET",
+      "operation": null,
+      "params": null,
+      "path": "/API/sessions"
+    },
+    {
+      "method": "GET",
+      "operation": null,
+      "params": null,
+      "path": "/api/sessions/w1/"
+    },
+    {
+      "method": "GET",
+      "operation": null,
+      "params": null,
+      "path": "/api/sessions/w1/nope"
+    },
+    {
+      "method": "GET",
+      "operation": null,
+      "params": null,
+      "path": "/api/sessions/a.b"
+    },
+    {
+      "method": "GET",
+      "operation": null,
+      "params": null,
+      "path": "/api/sessions/a~b"
+    },
+    {
+      "method": "GET",
+      "operation": null,
+      "params": null,
+      "path": "/api/sessions/a b"
+    },
+    {
+      "method": "GET",
+      "operation": null,
+      "params": null,
+      "path": "/api/sessions/a%2Fb"
+    },
+    {
+      "method": "GET",
+      "operation": null,
+      "params": null,
+      "path": "/api/sessions/a/b"
+    },
+    {
+      "method": "GET",
+      "operation": "sessions.get",
+      "params": {
+        "session_id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "path": "/api/sessions/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "method": "GET",
+      "operation": null,
+      "params": null,
+      "path": "/api/sessions/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "method": "GET",
+      "operation": "sessions.get",
+      "params": {
+        "session_id": "w-1_2"
+      },
+      "path": "/api/sessions/w-1_2"
+    },
+    {
+      "method": "GET",
+      "operation": null,
+      "params": null,
+      "path": "/api/sessions/w1\n"
+    },
+    {
+      "method": "GET",
+      "operation": null,
+      "params": null,
+      "path": "/api/sessions/w1\nx"
+    },
+    {
+      "method": "GET",
+      "operation": null,
+      "params": null,
+      "path": "\n/api/sessions/w1"
+    },
+    {
+      "method": "GET",
+      "operation": null,
+      "params": null,
+      "path": "/api/sessions/٣"
+    },
+    {
+      "method": "GET",
+      "operation": null,
+      "params": null,
+      "path": "/api/sessions/ｗ1"
+    }
+  ],
+  "methods": [
+    "DELETE",
+    "GET",
+    "HEAD",
+    "OPTIONS",
+    "PATCH",
+    "POST",
+    "PUT"
+  ],
+  "padded_capability": {
+    "error": "ValueError",
+    "message": "route capability must be nonblank and normalized"
+  },
+  "padded_operation": {
+    "error": "ValueError",
+    "message": "route operation must be nonblank and normalized"
+  },
+  "roles_from_frozenset": [
+    "admin"
+  ],
+  "roles_from_list": [
+    "admin",
+    "operator"
+  ],
+  "routes": [
+    {
+      "capability": "sessions.list",
+      "method": "GET",
+      "operation": "sessions.list",
+      "roles": [],
+      "scope": "global",
+      "template": "/api/sessions"
+    },
+    {
+      "capability": "sessions.create",
+      "method": "POST",
+      "operation": "sessions.create",
+      "roles": [],
+      "scope": "global",
+      "template": "/api/sessions"
+    },
+    {
+      "capability": "sessions.bulk_delete",
+      "method": "DELETE",
+      "operation": "sessions.bulk_delete",
+      "roles": [
+        "admin"
+      ],
+      "scope": "global",
+      "template": "/api/sessions"
+    },
+    {
+      "capability": "sessions.get",
+      "method": "GET",
+      "operation": "sessions.get",
+      "roles": [],
+      "scope": "session",
+      "template": "/api/sessions/{session_id}"
+    },
+    {
+      "capability": "sessions.update",
+      "method": "PATCH",
+      "operation": "sessions.update",
+      "roles": [],
+      "scope": "session",
+      "template": "/api/sessions/{session_id}"
+    },
+    {
+      "capability": "sessions.delete",
+      "method": "DELETE",
+      "operation": "sessions.delete",
+      "roles": [],
+      "scope": "session",
+      "template": "/api/sessions/{session_id}"
+    },
+    {
+      "capability": "sessions.connect",
+      "method": "POST",
+      "operation": "sessions.connect",
+      "roles": [],
+      "scope": "session",
+      "template": "/api/sessions/{session_id}/connect"
+    },
+    {
+      "capability": "sessions.disconnect",
+      "method": "POST",
+      "operation": "sessions.disconnect",
+      "roles": [],
+      "scope": "session",
+      "template": "/api/sessions/{session_id}/disconnect"
+    },
+    {
+      "capability": "sessions.restart",
+      "method": "POST",
+      "operation": "sessions.restart",
+      "roles": [],
+      "scope": "session",
+      "template": "/api/sessions/{session_id}/restart"
+    },
+    {
+      "capability": "sessions.set_mode",
+      "method": "POST",
+      "operation": "sessions.set_mode",
+      "roles": [],
+      "scope": "session",
+      "template": "/api/sessions/{session_id}/mode"
+    },
+    {
+      "capability": "sessions.clear",
+      "method": "POST",
+      "operation": "sessions.clear",
+      "roles": [],
+      "scope": "session",
+      "template": "/api/sessions/{session_id}/clear"
+    },
+    {
+      "capability": "sessions.annotate",
+      "method": "POST",
+      "operation": "sessions.annotate",
+      "roles": [],
+      "scope": "session",
+      "template": "/api/sessions/{session_id}/annotate"
+    },
+    {
+      "capability": "sessions.analyze",
+      "method": "POST",
+      "operation": "sessions.analyze",
+      "roles": [],
+      "scope": "session",
+      "template": "/api/sessions/{session_id}/analyze"
+    },
+    {
+      "capability": "sessions.snapshot",
+      "method": "GET",
+      "operation": "sessions.snapshot",
+      "roles": [],
+      "scope": "session",
+      "template": "/api/sessions/{session_id}/snapshot"
+    },
+    {
+      "capability": "sessions.events",
+      "method": "GET",
+      "operation": "sessions.events",
+      "roles": [],
+      "scope": "session",
+      "template": "/api/sessions/{session_id}/events"
+    },
+    {
+      "capability": "sessions.events_watch",
+      "method": "GET",
+      "operation": "sessions.events_watch",
+      "roles": [],
+      "scope": "session",
+      "template": "/api/sessions/{session_id}/events/watch"
+    },
+    {
+      "capability": "sessions.events_stream",
+      "method": "GET",
+      "operation": "sessions.events_stream",
+      "roles": [],
+      "scope": "session",
+      "template": "/api/sessions/{session_id}/events/stream"
+    },
+    {
+      "capability": "sessions.recording",
+      "method": "GET",
+      "operation": "sessions.recording",
+      "roles": [],
+      "scope": "session",
+      "template": "/api/sessions/{session_id}/recording"
+    },
+    {
+      "capability": "sessions.recording_entries",
+      "method": "GET",
+      "operation": "sessions.recording_entries",
+      "roles": [],
+      "scope": "session",
+      "template": "/api/sessions/{session_id}/recording/entries"
+    },
+    {
+      "capability": "sessions.recording_download",
+      "method": "GET",
+      "operation": "sessions.recording_download",
+      "roles": [],
+      "scope": "session",
+      "template": "/api/sessions/{session_id}/recording/download"
+    },
+    {
+      "capability": "sessions.webhooks.create",
+      "method": "POST",
+      "operation": "sessions.webhooks.create",
+      "roles": [],
+      "scope": "session",
+      "template": "/api/sessions/{session_id}/webhooks"
+    },
+    {
+      "capability": "sessions.webhooks.list",
+      "method": "GET",
+      "operation": "sessions.webhooks.list",
+      "roles": [],
+      "scope": "session",
+      "template": "/api/sessions/{session_id}/webhooks"
+    },
+    {
+      "capability": "sessions.webhooks.delete",
+      "method": "DELETE",
+      "operation": "sessions.webhooks.delete",
+      "roles": [],
+      "scope": "session",
+      "template": "/api/sessions/{session_id}/webhooks/{webhook_id}"
+    },
+    {
+      "capability": "tunnels.connect",
+      "method": "POST",
+      "operation": "tunnels.connect",
+      "roles": [],
+      "scope": "global",
+      "template": "/api/connect"
+    },
+    {
+      "capability": "tunnels.create",
+      "method": "POST",
+      "operation": "tunnels.create",
+      "roles": [],
+      "scope": "global",
+      "template": "/api/tunnels"
+    },
+    {
+      "capability": "tunnels.revoke_token",
+      "method": "DELETE",
+      "operation": "tunnels.revoke_token",
+      "roles": [],
+      "scope": "global",
+      "template": "/api/tunnels/{tunnel_id}/tokens"
+    },
+    {
+      "capability": "tunnels.rotate_token",
+      "method": "POST",
+      "operation": "tunnels.rotate_token",
+      "roles": [],
+      "scope": "global",
+      "template": "/api/tunnels/{tunnel_id}/tokens/rotate"
+    },
+    {
+      "capability": "pam_events.ingest",
+      "method": "POST",
+      "operation": "pam_events.ingest",
+      "roles": [
+        "operator",
+        "admin"
+      ],
+      "scope": "global",
+      "template": "/api/pam-events"
+    },
+    {
+      "capability": "profiles.list",
+      "method": "GET",
+      "operation": "profiles.list",
+      "roles": [],
+      "scope": "global",
+      "template": "/api/profiles"
+    },
+    {
+      "capability": "profiles.create",
+      "method": "POST",
+      "operation": "profiles.create",
+      "roles": [],
+      "scope": "global",
+      "template": "/api/profiles"
+    },
+    {
+      "capability": "profiles.get",
+      "method": "GET",
+      "operation": "profiles.get",
+      "roles": [],
+      "scope": "global",
+      "template": "/api/profiles/{profile_id}"
+    },
+    {
+      "capability": "profiles.update",
+      "method": "PUT",
+      "operation": "profiles.update",
+      "roles": [],
+      "scope": "global",
+      "template": "/api/profiles/{profile_id}"
+    },
+    {
+      "capability": "profiles.delete",
+      "method": "DELETE",
+      "operation": "profiles.delete",
+      "roles": [],
+      "scope": "global",
+      "template": "/api/profiles/{profile_id}"
+    },
+    {
+      "capability": "profiles.connect",
+      "method": "POST",
+      "operation": "profiles.connect",
+      "roles": [],
+      "scope": "global",
+      "template": "/api/profiles/{profile_id}/connect"
+    }
+  ],
+  "same_template_two_methods": {
+    "error": null,
+    "message": null
+  },
+  "scopes": [
+    "global",
+    "session"
+  ],
+  "session_with_parameter": {
+    "error": null,
+    "message": null
+  },
+  "session_with_wrong_parameter": {
+    "error": "ValueError",
+    "message": "session route template must include {session_id}"
+  },
+  "session_without_parameter": {
+    "error": "ValueError",
+    "message": "session route template must include {session_id}"
+  },
+  "templates": [
+    {
+      "error": null,
+      "message": null,
+      "name": "a valid template",
+      "template": "/api/things"
+    },
+    {
+      "error": null,
+      "message": null,
+      "name": "a valid parameter",
+      "template": "/api/things/{session_id}"
+    },
+    {
+      "error": "ValueError",
+      "message": "invalid route template",
+      "name": "no leading /api",
+      "template": "/things"
+    },
+    {
+      "error": "ValueError",
+      "message": "invalid route template",
+      "name": "a bare path",
+      "template": "/api"
+    },
+    {
+      "error": "ValueError",
+      "message": "invalid route template",
+      "name": "nothing at all",
+      "template": ""
+    },
+    {
+      "error": "ValueError",
+      "message": "invalid route template",
+      "name": "a trailing slash",
+      "template": "/api/things/"
+    },
+    {
+      "error": "ValueError",
+      "message": "invalid route template",
+      "name": "an empty segment",
+      "template": "/api//things"
+    },
+    {
+      "error": "ValueError",
+      "message": "invalid route template",
+      "name": "a query string",
+      "template": "/api/things?x=1"
+    },
+    {
+      "error": "ValueError",
+      "message": "invalid route template",
+      "name": "a fragment",
+      "template": "/api/things#x"
+    },
+    {
+      "error": "ValueError",
+      "message": "invalid route template parameter",
+      "name": "an unknown parameter name",
+      "template": "/api/things/{thing_id}"
+    },
+    {
+      "error": "ValueError",
+      "message": "invalid route template parameter",
+      "name": "a repeated parameter",
+      "template": "/api/{session_id}/{session_id}"
+    },
+    {
+      "error": "ValueError",
+      "message": "invalid route template",
+      "name": "a brace inside a segment",
+      "template": "/api/th{ing}s"
+    },
+    {
+      "error": "ValueError",
+      "message": "invalid route template",
+      "name": "an unclosed brace",
+      "template": "/api/{session_id"
+    },
+    {
+      "error": "ValueError",
+      "message": "invalid route template",
+      "name": "an unopened brace",
+      "template": "/api/session_id}"
+    },
+    {
+      "error": "ValueError",
+      "message": "invalid route template",
+      "name": "a static segment with a slash escape",
+      "template": "/api/th%2Fings"
+    },
+    {
+      "error": "ValueError",
+      "message": "invalid route template",
+      "name": "a static segment with a space",
+      "template": "/api/th ings"
+    },
+    {
+      "error": "ValueError",
+      "message": "invalid route template",
+      "name": "a static segment of punctuation",
+      "template": "/api/things!"
+    },
+    {
+      "error": null,
+      "message": null,
+      "name": "a static segment with a dot",
+      "template": "/api/things.json"
+    },
+    {
+      "error": null,
+      "message": null,
+      "name": "a static segment with a tilde",
+      "template": "/api/al~pha"
+    },
+    {
+      "error": null,
+      "message": null,
+      "name": "a static segment with a dash",
+      "template": "/api/al-pha"
+    },
+    {
+      "error": null,
+      "message": null,
+      "name": "a static segment with an underscore",
+      "template": "/api/al_pha"
+    }
+  ]
+}

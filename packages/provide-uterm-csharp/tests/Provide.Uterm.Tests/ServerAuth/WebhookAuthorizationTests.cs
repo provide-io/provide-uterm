@@ -16,14 +16,15 @@ public class WebhookAuthorizationTests
 
     private sealed class StubHandler : HttpMessageHandler
     {
-        public Func<HttpRequestMessage, HttpResponseMessage> Responder { get; set; } =
-            _ => new HttpResponseMessage(HttpStatusCode.OK)
+        public Func<HttpRequestMessage, Task<HttpResponseMessage>> Responder { get; set; } =
+            _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("""{"allow":true}""", Encoding.UTF8, "application/json"),
-            };
+            });
 
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
-            Task.FromResult(Responder(request));
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken) => Responder(request);
     }
 
     private static Principal AliceAdmin() => new()
@@ -68,10 +69,10 @@ public class WebhookAuthorizationTests
     {
         var handler = new StubHandler
         {
-            Responder = _ => new HttpResponseMessage(HttpStatusCode.OK)
+            Responder = _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("""{"allow":true}""", Encoding.UTF8, "application/json"),
-            },
+            }),
         };
         using var http = new HttpClient(handler) { BaseAddress = new Uri("http://authz.test/") };
         using var p = new WebhookAuthorizationProvider("http://authz.test/check", Secret, 2, http);
@@ -95,7 +96,7 @@ public class WebhookAuthorizationTests
                 resp.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
                 resp.Headers.TryAddWithoutValidation("X-Uterm-Timestamp", ts);
                 resp.Headers.TryAddWithoutValidation("X-Uterm-Signature", WebhookSigning.BuildWebhookSignature(Secret, body, ts));
-                return resp;
+                return Task.FromResult(resp);
             },
         };
         using var http = new HttpClient(handler) { BaseAddress = new Uri("http://authz.test/") };
@@ -119,10 +120,10 @@ public class WebhookAuthorizationTests
     {
         var handler = new StubHandler
         {
-            Responder = _ => new HttpResponseMessage(HttpStatusCode.OK)
+            Responder = _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("""{"allow":true}""", Encoding.UTF8, "application/json"),
-            },
+            }),
         };
         using var http = new HttpClient(handler) { BaseAddress = new Uri("http://authz.test/") };
         using var p = new WebhookAuthorizationProvider("http://authz.test/check", "", 2, http);
@@ -135,10 +136,10 @@ public class WebhookAuthorizationTests
     {
         var handler = new StubHandler
         {
-            Responder = _ => new HttpResponseMessage(HttpStatusCode.InternalServerError)
+            Responder = _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError)
             {
                 Content = new StringContent("""{"allow":true}""", Encoding.UTF8, "application/json"),
-            },
+            }),
         };
         using var http = new HttpClient(handler);
         using var p = new WebhookAuthorizationProvider("http://authz.test/check", "", 2, http);
@@ -150,10 +151,10 @@ public class WebhookAuthorizationTests
     {
         var handler = new StubHandler
         {
-            Responder = _ => new HttpResponseMessage(HttpStatusCode.OK)
+            Responder = _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("""{"capabilities":["session.read","session.control.create"]}""", Encoding.UTF8, "application/json"),
-            },
+            }),
         };
         using var http = new HttpClient(handler);
         using var p = new WebhookAuthorizationProvider("http://authz.test/check", "", 2, http);
@@ -168,10 +169,10 @@ public class WebhookAuthorizationTests
     {
         var handler = new StubHandler
         {
-            Responder = _ => new HttpResponseMessage(HttpStatusCode.OK)
+            Responder = _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("""{"role":"operator"}""", Encoding.UTF8, "application/json"),
-            },
+            }),
         };
         using var http = new HttpClient(handler);
         using var p = new WebhookAuthorizationProvider("http://authz.test/check", "", 2, http);
@@ -184,10 +185,10 @@ public class WebhookAuthorizationTests
     {
         var handler = new StubHandler
         {
-            Responder = _ => new HttpResponseMessage(HttpStatusCode.OK)
+            Responder = _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("""{"role":"superuser"}""", Encoding.UTF8, "application/json"),
-            },
+            }),
         };
         using var http = new HttpClient(handler);
         using var p = new WebhookAuthorizationProvider("http://authz.test/check", "", 2, http);
@@ -203,9 +204,9 @@ public class WebhookAuthorizationTests
         const double frozen = 1700000000.0;
         var handler = new StubHandler
         {
-            Responder = req =>
+            Responder = async req =>
             {
-                gotBody = req.Content!.ReadAsByteArrayAsync().GetAwaiter().GetResult();
+                gotBody = await req.Content!.ReadAsByteArrayAsync();
                 if (req.Headers.TryGetValues("X-Uterm-Signature", out var sigs)) gotSig = sigs.First();
                 if (req.Headers.TryGetValues("X-Uterm-Timestamp", out var tss)) gotTs = tss.First();
 
@@ -248,10 +249,10 @@ public class WebhookAuthorizationTests
     {
         var handler = new StubHandler
         {
-            Responder = _ => new HttpResponseMessage(HttpStatusCode.OK)
+            Responder = _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("""{"allow":false}""", Encoding.UTF8, "application/json"),
-            },
+            }),
         };
         // Build service with injected webhook provider (FromConfig creates its own HttpClient;
         // exercise FromConfig wiring + deny path via explicit provider).
@@ -277,10 +278,10 @@ public class WebhookAuthorizationTests
     {
         var handler = new StubHandler
         {
-            Responder = _ => new HttpResponseMessage(HttpStatusCode.OK)
+            Responder = _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("""{"allow":false}""", Encoding.UTF8, "application/json"),
-            },
+            }),
         };
         using var http = new HttpClient(handler);
         using var p = new WebhookAuthorizationProvider("http://authz.test/check", "", 2, http);
@@ -317,10 +318,10 @@ public class WebhookAuthorizationTests
     {
         var handler = new StubHandler
         {
-            Responder = _ => new HttpResponseMessage(HttpStatusCode.OK)
+            Responder = _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("not-json", Encoding.UTF8, "application/json"),
-            },
+            }),
         };
         using var http = new HttpClient(handler);
         using var bad = new WebhookAuthorizationProvider("http://authz.test/check", "", 2, http);

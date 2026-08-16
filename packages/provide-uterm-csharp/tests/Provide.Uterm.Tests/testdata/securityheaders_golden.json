@@ -1,0 +1,335 @@
+{
+  "default_mode": "strict",
+  "header_order": [
+    "Content-Security-Policy",
+    "Strict-Transport-Security",
+    "X-Frame-Options",
+    "X-Content-Type-Options",
+    "Referrer-Policy",
+    "Permissions-Policy"
+  ],
+  "resolved": [
+    {
+      "headers": [
+        [
+          "Content-Security-Policy",
+          "default-src 'self'; script-src 'self' cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net fonts.googleapis.com; font-src fonts.gstatic.com; connect-src 'self' ws: wss:; img-src 'self' data:"
+        ],
+        [
+          "Strict-Transport-Security",
+          "max-age=63072000; includeSubDomains"
+        ],
+        [
+          "X-Frame-Options",
+          "DENY"
+        ],
+        [
+          "X-Content-Type-Options",
+          "nosniff"
+        ],
+        [
+          "Referrer-Policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "Permissions-Policy",
+          "camera=(), microphone=(), geolocation=()"
+        ]
+      ],
+      "mode": "strict",
+      "name": "the strict default set",
+      "overrides": {}
+    },
+    {
+      "headers": [
+        [
+          "X-Content-Type-Options",
+          "nosniff"
+        ]
+      ],
+      "mode": "dev",
+      "name": "the dev set",
+      "overrides": {}
+    },
+    {
+      "headers": [
+        [
+          "X-Content-Type-Options",
+          "nosniff"
+        ]
+      ],
+      "mode": "nonsense",
+      "name": "a mode nobody defined",
+      "overrides": {}
+    },
+    {
+      "headers": [
+        [
+          "X-Content-Type-Options",
+          "nosniff"
+        ]
+      ],
+      "mode": "",
+      "name": "an empty mode",
+      "overrides": {}
+    },
+    {
+      "headers": [
+        [
+          "X-Content-Type-Options",
+          "nosniff"
+        ]
+      ],
+      "mode": "STRICT",
+      "name": "a mode in capitals",
+      "overrides": {}
+    },
+    {
+      "headers": [
+        [
+          "X-Content-Type-Options",
+          "nosniff"
+        ]
+      ],
+      "mode": " strict ",
+      "name": "a mode with space around it",
+      "overrides": {}
+    },
+    {
+      "headers": [
+        [
+          "Content-Security-Policy",
+          "default-src 'none'"
+        ],
+        [
+          "Strict-Transport-Security",
+          "max-age=63072000; includeSubDomains"
+        ],
+        [
+          "X-Frame-Options",
+          "DENY"
+        ],
+        [
+          "X-Content-Type-Options",
+          "nosniff"
+        ],
+        [
+          "Referrer-Policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "Permissions-Policy",
+          "camera=(), microphone=(), geolocation=()"
+        ]
+      ],
+      "mode": "strict",
+      "name": "a custom policy",
+      "overrides": {
+        "csp": "default-src 'none'"
+      }
+    },
+    {
+      "headers": [
+        [
+          "Content-Security-Policy",
+          "default-src 'none'"
+        ],
+        [
+          "X-Content-Type-Options",
+          "nosniff"
+        ]
+      ],
+      "mode": "dev",
+      "name": "a custom policy in dev mode",
+      "overrides": {
+        "csp": "default-src 'none'"
+      }
+    },
+    {
+      "headers": [
+        [
+          "Strict-Transport-Security",
+          "max-age=63072000; includeSubDomains"
+        ],
+        [
+          "X-Frame-Options",
+          "DENY"
+        ],
+        [
+          "X-Content-Type-Options",
+          "nosniff"
+        ],
+        [
+          "Referrer-Policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "Permissions-Policy",
+          "camera=(), microphone=(), geolocation=()"
+        ]
+      ],
+      "mode": "strict",
+      "name": "a suppressed policy",
+      "overrides": {
+        "csp": ""
+      }
+    },
+    {
+      "headers": [],
+      "mode": "dev",
+      "name": "a suppressed nosniff in dev mode",
+      "overrides": {
+        "x_content_type_options": ""
+      }
+    },
+    {
+      "headers": [],
+      "mode": "strict",
+      "name": "every header suppressed",
+      "overrides": {
+        "csp": "",
+        "hsts": "",
+        "permissions_policy": "",
+        "referrer_policy": "",
+        "x_content_type_options": "",
+        "x_frame_options": ""
+      }
+    },
+    {
+      "headers": [
+        [
+          "Strict-Transport-Security",
+          "max-age=1"
+        ],
+        [
+          "X-Content-Type-Options",
+          "nosniff"
+        ]
+      ],
+      "mode": "dev",
+      "name": "a policy added in dev mode",
+      "overrides": {
+        "hsts": "max-age=1"
+      }
+    },
+    {
+      "headers": [
+        [
+          "Strict-Transport-Security",
+          "max-age=1"
+        ],
+        [
+          "X-Frame-Options",
+          "SAMEORIGIN"
+        ],
+        [
+          "X-Content-Type-Options",
+          "nosniff"
+        ]
+      ],
+      "mode": "dev",
+      "name": "several added in dev mode",
+      "overrides": {
+        "hsts": "max-age=1",
+        "x_frame_options": "SAMEORIGIN"
+      }
+    },
+    {
+      "headers": [
+        [
+          "Content-Security-Policy",
+          "a"
+        ],
+        [
+          "Strict-Transport-Security",
+          "b"
+        ],
+        [
+          "X-Frame-Options",
+          "c"
+        ],
+        [
+          "X-Content-Type-Options",
+          "d"
+        ],
+        [
+          "Referrer-Policy",
+          "e"
+        ],
+        [
+          "Permissions-Policy",
+          "f"
+        ]
+      ],
+      "mode": "strict",
+      "name": "every header overridden",
+      "overrides": {
+        "csp": "a",
+        "hsts": "b",
+        "permissions_policy": "f",
+        "referrer_policy": "e",
+        "x_content_type_options": "d",
+        "x_frame_options": "c"
+      }
+    },
+    {
+      "headers": [
+        [
+          "Content-Security-Policy",
+          " "
+        ],
+        [
+          "Strict-Transport-Security",
+          "max-age=63072000; includeSubDomains"
+        ],
+        [
+          "X-Frame-Options",
+          "DENY"
+        ],
+        [
+          "X-Content-Type-Options",
+          "nosniff"
+        ],
+        [
+          "Referrer-Policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "Permissions-Policy",
+          "camera=(), microphone=(), geolocation=()"
+        ]
+      ],
+      "mode": "strict",
+      "name": "a policy of one space",
+      "overrides": {
+        "csp": " "
+      }
+    }
+  ],
+  "schema_default": [
+    [
+      "Content-Security-Policy",
+      "default-src 'self'; script-src 'self' cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net fonts.googleapis.com; font-src fonts.gstatic.com; connect-src 'self' ws: wss:; img-src 'self' data:"
+    ],
+    [
+      "Strict-Transport-Security",
+      "max-age=63072000; includeSubDomains"
+    ],
+    [
+      "X-Frame-Options",
+      "DENY"
+    ],
+    [
+      "X-Content-Type-Options",
+      "nosniff"
+    ],
+    [
+      "Referrer-Policy",
+      "strict-origin-when-cross-origin"
+    ],
+    [
+      "Permissions-Policy",
+      "camera=(), microphone=(), geolocation=()"
+    ]
+  ]
+}

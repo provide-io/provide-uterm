@@ -1,0 +1,1617 @@
+{
+  "addresses": [
+    {
+      "input": "0.0.0.0",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "0.0.0.0",
+      "packed": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "private": true,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": true,
+      "valid": true,
+      "version": 4
+    },
+    {
+      "input": "127.0.0.1",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": true,
+      "multicast": false,
+      "normalized": "127.0.0.1",
+      "packed": [
+        127,
+        0,
+        0,
+        1
+      ],
+      "private": true,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 4
+    },
+    {
+      "input": "127.0.0.2",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": true,
+      "multicast": false,
+      "normalized": "127.0.0.2",
+      "packed": [
+        127,
+        0,
+        0,
+        2
+      ],
+      "private": true,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 4
+    },
+    {
+      "input": "127.255.255.254",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": true,
+      "multicast": false,
+      "normalized": "127.255.255.254",
+      "packed": [
+        127,
+        255,
+        255,
+        254
+      ],
+      "private": true,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 4
+    },
+    {
+      "input": "126.255.255.255",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "126.255.255.255",
+      "packed": [
+        126,
+        255,
+        255,
+        255
+      ],
+      "private": false,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 4
+    },
+    {
+      "input": "128.0.0.1",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "128.0.0.1",
+      "packed": [
+        128,
+        0,
+        0,
+        1
+      ],
+      "private": false,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 4
+    },
+    {
+      "input": "10.0.0.1",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "10.0.0.1",
+      "packed": [
+        10,
+        0,
+        0,
+        1
+      ],
+      "private": true,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 4
+    },
+    {
+      "input": "172.15.255.255",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "172.15.255.255",
+      "packed": [
+        172,
+        15,
+        255,
+        255
+      ],
+      "private": false,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 4
+    },
+    {
+      "input": "172.16.0.1",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "172.16.0.1",
+      "packed": [
+        172,
+        16,
+        0,
+        1
+      ],
+      "private": true,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 4
+    },
+    {
+      "input": "172.31.255.255",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "172.31.255.255",
+      "packed": [
+        172,
+        31,
+        255,
+        255
+      ],
+      "private": true,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 4
+    },
+    {
+      "input": "172.32.0.1",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "172.32.0.1",
+      "packed": [
+        172,
+        32,
+        0,
+        1
+      ],
+      "private": false,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 4
+    },
+    {
+      "input": "192.168.1.10",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "192.168.1.10",
+      "packed": [
+        192,
+        168,
+        1,
+        10
+      ],
+      "private": true,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 4
+    },
+    {
+      "input": "192.167.255.255",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "192.167.255.255",
+      "packed": [
+        192,
+        167,
+        255,
+        255
+      ],
+      "private": false,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 4
+    },
+    {
+      "input": "169.254.169.254",
+      "ipv4_mapped": null,
+      "link_local": true,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "169.254.169.254",
+      "packed": [
+        169,
+        254,
+        169,
+        254
+      ],
+      "private": true,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 4
+    },
+    {
+      "input": "169.253.255.255",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "169.253.255.255",
+      "packed": [
+        169,
+        253,
+        255,
+        255
+      ],
+      "private": false,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 4
+    },
+    {
+      "input": "100.100.100.200",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "100.100.100.200",
+      "packed": [
+        100,
+        100,
+        100,
+        200
+      ],
+      "private": false,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 4
+    },
+    {
+      "input": "224.0.0.1",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": true,
+      "normalized": "224.0.0.1",
+      "packed": [
+        224,
+        0,
+        0,
+        1
+      ],
+      "private": false,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 4
+    },
+    {
+      "input": "239.255.255.255",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": true,
+      "normalized": "239.255.255.255",
+      "packed": [
+        239,
+        255,
+        255,
+        255
+      ],
+      "private": false,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 4
+    },
+    {
+      "input": "240.0.0.1",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "240.0.0.1",
+      "packed": [
+        240,
+        0,
+        0,
+        1
+      ],
+      "private": true,
+      "reserved": true,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 4
+    },
+    {
+      "input": "255.255.255.255",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "255.255.255.255",
+      "packed": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "private": true,
+      "reserved": true,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 4
+    },
+    {
+      "input": "8.8.8.8",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "8.8.8.8",
+      "packed": [
+        8,
+        8,
+        8,
+        8
+      ],
+      "private": false,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 4
+    },
+    {
+      "input": "0177.0.0.1",
+      "valid": false
+    },
+    {
+      "input": "010.0.0.1",
+      "valid": false
+    },
+    {
+      "input": "2130706433",
+      "valid": false
+    },
+    {
+      "input": "127.0.0.1.",
+      "valid": false
+    },
+    {
+      "input": ".127.0.0.1",
+      "valid": false
+    },
+    {
+      "input": "127.0.0",
+      "valid": false
+    },
+    {
+      "input": "127.0.0.1.1",
+      "valid": false
+    },
+    {
+      "input": "127.0.0.256",
+      "valid": false
+    },
+    {
+      "input": "127.0.0.-1",
+      "valid": false
+    },
+    {
+      "input": "127.0.0.1 ",
+      "valid": false
+    },
+    {
+      "input": " 127.0.0.1",
+      "valid": false
+    },
+    {
+      "input": "127.0.0.1/8",
+      "valid": false
+    },
+    {
+      "input": "12７.0.0.1",
+      "valid": false
+    },
+    {
+      "input": "127.0.0.٠",
+      "valid": false
+    },
+    {
+      "input": "::",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "::",
+      "packed": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "private": true,
+      "reserved": true,
+      "sixtofour": null,
+      "unspecified": true,
+      "valid": true,
+      "version": 6
+    },
+    {
+      "input": "::1",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": true,
+      "multicast": false,
+      "normalized": "::1",
+      "packed": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      "private": true,
+      "reserved": true,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 6
+    },
+    {
+      "input": "0:0:0:0:0:0:0:1",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": true,
+      "multicast": false,
+      "normalized": "::1",
+      "packed": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      "private": true,
+      "reserved": true,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 6
+    },
+    {
+      "input": "fe80::1",
+      "ipv4_mapped": null,
+      "link_local": true,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "fe80::1",
+      "packed": [
+        254,
+        128,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      "private": true,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 6
+    },
+    {
+      "input": "febf::1",
+      "ipv4_mapped": null,
+      "link_local": true,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "febf::1",
+      "packed": [
+        254,
+        191,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      "private": true,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 6
+    },
+    {
+      "input": "fec0::1",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "fec0::1",
+      "packed": [
+        254,
+        192,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      "private": false,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 6
+    },
+    {
+      "input": "fd00:ec2::254",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "fd00:ec2::254",
+      "packed": [
+        253,
+        0,
+        14,
+        194,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2,
+        84
+      ],
+      "private": true,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 6
+    },
+    {
+      "input": "fc00::1",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "fc00::1",
+      "packed": [
+        252,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      "private": true,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 6
+    },
+    {
+      "input": "fbff::1",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "fbff::1",
+      "packed": [
+        251,
+        255,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      "private": false,
+      "reserved": true,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 6
+    },
+    {
+      "input": "ff02::1",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": true,
+      "normalized": "ff02::1",
+      "packed": [
+        255,
+        2,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      "private": false,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 6
+    },
+    {
+      "input": "2001:db8::1",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "2001:db8::1",
+      "packed": [
+        32,
+        1,
+        13,
+        184,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      "private": true,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 6
+    },
+    {
+      "input": "64:ff9b::7f00:1",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "64:ff9b::7f00:1",
+      "packed": [
+        0,
+        100,
+        255,
+        155,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        127,
+        0,
+        0,
+        1
+      ],
+      "private": false,
+      "reserved": true,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 6
+    },
+    {
+      "input": "::ffff:127.0.0.1",
+      "ipv4_mapped": "127.0.0.1",
+      "link_local": false,
+      "loopback": true,
+      "multicast": false,
+      "normalized": "::ffff:127.0.0.1",
+      "packed": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        255,
+        255,
+        127,
+        0,
+        0,
+        1
+      ],
+      "private": true,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 6
+    },
+    {
+      "input": "::ffff:8.8.8.8",
+      "ipv4_mapped": "8.8.8.8",
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "::ffff:8.8.8.8",
+      "packed": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        255,
+        255,
+        8,
+        8,
+        8,
+        8
+      ],
+      "private": false,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 6
+    },
+    {
+      "input": "::ffff:0:127.0.0.1",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "::ffff:0:7f00:1",
+      "packed": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        255,
+        255,
+        0,
+        0,
+        127,
+        0,
+        0,
+        1
+      ],
+      "private": false,
+      "reserved": true,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 6
+    },
+    {
+      "input": "2002:a9fe:a9fe::1",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "2002:a9fe:a9fe::1",
+      "packed": [
+        32,
+        2,
+        169,
+        254,
+        169,
+        254,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      "private": true,
+      "reserved": false,
+      "sixtofour": "169.254.169.254",
+      "unspecified": false,
+      "valid": true,
+      "version": 6
+    },
+    {
+      "input": "2002:0102:0304::",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "2002:102:304::",
+      "packed": [
+        32,
+        2,
+        1,
+        2,
+        3,
+        4,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "private": true,
+      "reserved": false,
+      "sixtofour": "1.2.3.4",
+      "unspecified": false,
+      "valid": true,
+      "version": 6
+    },
+    {
+      "input": "::169.254.169.254",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "::a9fe:a9fe",
+      "packed": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        169,
+        254,
+        169,
+        254
+      ],
+      "private": false,
+      "reserved": true,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 6
+    },
+    {
+      "input": "::1.2.3.4",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "::102:304",
+      "packed": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "private": false,
+      "reserved": true,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 6
+    },
+    {
+      "input": "64:ff9b::169.254.169.254",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "64:ff9b::a9fe:a9fe",
+      "packed": [
+        0,
+        100,
+        255,
+        155,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        169,
+        254,
+        169,
+        254
+      ],
+      "private": false,
+      "reserved": true,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 6
+    },
+    {
+      "input": "192.0.0.8",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "192.0.0.8",
+      "packed": [
+        192,
+        0,
+        0,
+        8
+      ],
+      "private": true,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 4
+    },
+    {
+      "input": "192.0.0.9",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "192.0.0.9",
+      "packed": [
+        192,
+        0,
+        0,
+        9
+      ],
+      "private": false,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 4
+    },
+    {
+      "input": "192.0.0.10",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "192.0.0.10",
+      "packed": [
+        192,
+        0,
+        0,
+        10
+      ],
+      "private": false,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 4
+    },
+    {
+      "input": "192.0.0.11",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "192.0.0.11",
+      "packed": [
+        192,
+        0,
+        0,
+        11
+      ],
+      "private": true,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 4
+    },
+    {
+      "input": "2001:1::1",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "2001:1::1",
+      "packed": [
+        32,
+        1,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      "private": false,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 6
+    },
+    {
+      "input": "2001:1::2",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "2001:1::2",
+      "packed": [
+        32,
+        1,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2
+      ],
+      "private": false,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 6
+    },
+    {
+      "input": "2001:1::3",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "2001:1::3",
+      "packed": [
+        32,
+        1,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        3
+      ],
+      "private": true,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 6
+    },
+    {
+      "input": "1:2:3:4:5:6:0:8",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "1:2:3:4:5:6:0:8",
+      "packed": [
+        0,
+        1,
+        0,
+        2,
+        0,
+        3,
+        0,
+        4,
+        0,
+        5,
+        0,
+        6,
+        0,
+        0,
+        0,
+        8
+      ],
+      "private": false,
+      "reserved": true,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 6
+    },
+    {
+      "input": "1:0:0:2:0:0:3:4",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "1::2:0:0:3:4",
+      "packed": [
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2,
+        0,
+        0,
+        0,
+        0,
+        0,
+        3,
+        0,
+        4
+      ],
+      "private": false,
+      "reserved": true,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 6
+    },
+    {
+      "input": "0:0:0:0:0:0:0:0",
+      "ipv4_mapped": null,
+      "link_local": false,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "::",
+      "packed": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "private": true,
+      "reserved": true,
+      "sixtofour": null,
+      "unspecified": true,
+      "valid": true,
+      "version": 6
+    },
+    {
+      "input": "1:2:3:4:5:6:7::8",
+      "valid": false
+    },
+    {
+      "input": "1:2:3",
+      "valid": false
+    },
+    {
+      "input": "::127.0.0.1:ffff",
+      "valid": false
+    },
+    {
+      "input": "::1.2.3",
+      "valid": false
+    },
+    {
+      "input": "::256.0.0.1",
+      "valid": false
+    },
+    {
+      "input": "::0177.0.0.1",
+      "valid": false
+    },
+    {
+      "input": "fe80::1%",
+      "valid": false
+    },
+    {
+      "input": "[::1]",
+      "valid": false
+    },
+    {
+      "input": ":::1",
+      "valid": false
+    },
+    {
+      "input": "::1::",
+      "valid": false
+    },
+    {
+      "input": "12345::",
+      "valid": false
+    },
+    {
+      "input": "fe80::1%eth0",
+      "ipv4_mapped": null,
+      "link_local": true,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "fe80::1%eth0",
+      "packed": [
+        254,
+        128,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      "private": true,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 6
+    },
+    {
+      "input": "fe80::1%0",
+      "ipv4_mapped": null,
+      "link_local": true,
+      "loopback": false,
+      "multicast": false,
+      "normalized": "fe80::1%0",
+      "packed": [
+        254,
+        128,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      "private": true,
+      "reserved": false,
+      "sixtofour": null,
+      "unspecified": false,
+      "valid": true,
+      "version": 6
+    },
+    {
+      "input": "",
+      "valid": false
+    },
+    {
+      "input": "localhost",
+      "valid": false
+    },
+    {
+      "input": "example.org",
+      "valid": false
+    },
+    {
+      "input": "not an address",
+      "valid": false
+    }
+  ],
+  "networks": [
+    {
+      "members": [
+        {
+          "address": "64:ff9b::7f00:1",
+          "contains": true
+        },
+        {
+          "address": "64:ff9b::1",
+          "contains": true
+        },
+        {
+          "address": "64:ff9b:1::1",
+          "contains": false
+        },
+        {
+          "address": "2001:db8::1",
+          "contains": false
+        },
+        {
+          "address": "::1",
+          "contains": false
+        }
+      ],
+      "name": "the NAT64 well-known prefix",
+      "network": "64:ff9b::/96",
+      "normalized": "64:ff9b::/96"
+    },
+    {
+      "members": [
+        {
+          "address": "127.0.0.1",
+          "contains": true
+        },
+        {
+          "address": "127.0.0.2",
+          "contains": false
+        }
+      ],
+      "name": "a v4 host route",
+      "network": "127.0.0.1/32",
+      "normalized": "127.0.0.1/32"
+    },
+    {
+      "members": [
+        {
+          "address": "127.0.0.1",
+          "contains": true
+        },
+        {
+          "address": "127.255.255.254",
+          "contains": true
+        },
+        {
+          "address": "128.0.0.1",
+          "contains": false
+        }
+      ],
+      "name": "the v4 loopback block",
+      "network": "127.0.0.0/8",
+      "normalized": "127.0.0.0/8"
+    },
+    {
+      "members": [
+        {
+          "address": "10.1.2.3",
+          "contains": true
+        },
+        {
+          "address": "::1",
+          "contains": false
+        },
+        {
+          "address": "11.0.0.1",
+          "contains": false
+        }
+      ],
+      "name": "a v4 network across versions",
+      "network": "10.0.0.0/8",
+      "normalized": "10.0.0.0/8"
+    },
+    {
+      "members": [
+        {
+          "address": "0.0.0.1",
+          "contains": true
+        },
+        {
+          "address": "::",
+          "contains": false
+        },
+        {
+          "address": "::1",
+          "contains": false
+        }
+      ],
+      "name": "a v4 network against v6 members",
+      "network": "0.0.0.0/8",
+      "normalized": "0.0.0.0/8"
+    }
+  ]
+}

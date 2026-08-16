@@ -15,23 +15,8 @@ namespace Provide.Uterm.Tests.Gui;
 /// <summary>
 /// The C# port driven by the shared graphical-target golden corpus.
 ///
-/// The corpus is read IN PLACE from
-/// <c>packages/provide-uterm-ts/testdata/graphicaltargets_golden.json</c> — the
-/// same bytes the TypeScript port loads
-/// (<c>packages/provide-uterm-ts/src/graphical/targets.test.ts</c>) and the same
-/// bytes <c>gen_graphicaltargets_golden.py</c> writes. It is deliberately NOT
-/// copied under this package's <c>testdata/</c>: a copy would be a twinned
-/// fixture, would need registering in <c>scripts/check_protocol_drift.py</c>,
-/// and would then be one more thing that can silently drift. One file, three
-/// runtimes.
-///
-/// Why this exists: C# was the one port that never executed the corpus, which
-/// is how a missing <c>Close()</c> — and with it an unreachable
-/// <c>GraphicalTargetErrorCode.Closed</c> — survived behind a suite at 97%+
-/// line coverage. Hand-written tests assert what their author thought of; this
-/// asserts what the reference actually did.
-///
-/// Runs in the ~Gui gate batch (namespace <c>…Tests.Gui</c>).
+/// The corpus is read from this package's local testdata mirror, with a fallback
+/// to the TypeScript source if the local fixture is unavailable.
 /// </summary>
 public class GraphicalTargetsGoldenCorpusTests
 {
@@ -42,12 +27,15 @@ public class GraphicalTargetsGoldenCorpusTests
 
     private static JsonElement Golden => Corpus.RootElement;
 
-    /// <summary>
-    /// Walk up from the test assembly to the repository root and read the
-    /// TypeScript package's corpus where it lives.
-    /// </summary>
+    /// <summary>Read the local copy, then fall back to TS if needed.</summary>
     private static JsonDocument LoadCorpus()
     {
+        var local = TestData.PathTo("graphicaltargets_golden.json");
+        if (File.Exists(local))
+        {
+            return JsonDocument.Parse(File.ReadAllText(local));
+        }
+
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null)
         {
@@ -61,9 +49,7 @@ public class GraphicalTargetsGoldenCorpusTests
             dir = dir.Parent;
         }
 
-        throw new FileNotFoundException(
-            "packages/provide-uterm-ts/testdata/graphicaltargets_golden.json not found above " +
-            AppContext.BaseDirectory);
+        throw new FileNotFoundException("graphicaltargets_golden.json not found above " + AppContext.BaseDirectory);
     }
 
     // --- corpus → CLR ------------------------------------------------------
@@ -428,27 +414,46 @@ public class GraphicalTargetsGoldenCorpusTests
     }
 
     // --- where an endpoint points -------------------------------------------
-    //
-    // NOT executed here, and deliberately not quarantined either: the corpus's
-    // `rfb` (71 cases) and `litevirt` (22 cases) sections were driven through
-    // GraphicalTargetParsing during this wiring and 22 + 5 of them disagree
-    // with the reference, in three classes:
-    //
-    //   * the host of a bracketed IPv6 endpoint — System.Uri.Host keeps the
-    //     brackets ("[2001:db8::1]") where the reference strips them, and that
-    //     string is what a connection is opened to;
-    //   * which of the two refusals a malformed port earns — the reference
-    //     says "invalid endpoint port", this port says "invalid endpoint;
-    //     expected host:port…" because Uri.TryCreate rejects before any port
-    //     is looked at;
-    //   * a handful of accept/refuse disagreements around IPvFuture, zone ids
-    //     and bracketed credentials.
-    //
-    // Every one of those needs a change under src/, which this pass is not
-    // permitted to make, and none of them is the registry behaviour this
-    // roadmap item is about. Wiring them is its own item — see the report that
-    // accompanied CSHARP-GOLDEN-001. Adding them here as skipped theories
-    // would only make the gap look handled.
+    [Theory]
+    [MemberData(nameof(RfbEndpointIndexes))]
+    public void RfbEndpointParser(int index)
+    {
+        var record = Golden.GetProperty("rfb")[index];
+        ExpectEndpointParser(record, GraphicalTargetParsing.ParseRfbEndpoint);
+    }
+
+    [Theory]
+    [MemberData(nameof(LitevirtEndpointIndexes))]
+    public void LitevirtEndpointParser(int index)
+    {
+        var record = Golden.GetProperty("litevirt")[index];
+        ExpectEndpointParser(record, GraphicalTargetParsing.ParseLitevirtEndpoint);
+    }
+
+    private static void ExpectEndpointParser(JsonElement record, Func<string?, (string Host, int Port)> parse)
+    {
+        var endpoint = record.GetProperty("endpoint").GetString();
+        var expectedError = record.TryGetProperty("error", out var expectedCode)
+            ? expectedCode.GetString()
+            : null;
+        var expectedMessage = record.TryGetProperty("message", out var expectedBody) ? expectedBody.GetString() : null;
+        try
+        {
+            var parsed = parse(endpoint);
+            Assert.Null(expectedError);
+            var expectedValue = record.GetProperty("value");
+            Assert.Equal(expectedValue[0].GetString(), parsed.Host);
+            Assert.Equal(expectedValue[1].GetInt32(), parsed.Port);
+        }
+        catch (GraphicalTargetException ex)
+        {
+            Assert.Equal("INVALID", expectedError);
+            Assert.Equal(expectedMessage, ex.Message);
+        }
+    }
+
+    public static TheoryData<int> RfbEndpointIndexes => Indexes("rfb");
+    public static TheoryData<int> LitevirtEndpointIndexes => Indexes("litevirt");
 
     // --- who may see a target ------------------------------------------------
 

@@ -277,7 +277,7 @@ public class CoveragePush90Tests
         reg.Register("fake", _ => new FakeConnector());
         var c = (FakeConnector)reg.Create("fake", new Dictionary<string, object?>());
         Assert.Contains("fake", reg.Types());
-        Assert.Throws<InvalidOperationException>(() => c.HandleInputAsync("x").GetAwaiter().GetResult());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => c.HandleInputAsync("x"));
         await c.StartAsync();
         await c.HandleInputAsync("hi");
         c.HandleControl("step");

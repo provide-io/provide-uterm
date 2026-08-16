@@ -15,7 +15,7 @@ public static class HumanRelay
     /// Client→server RFB input filter. Null <paramref name="canInject"/> fails closed
     /// (drops Key/Pointer/CutText). Useful for unit tests without ASP.NET.
     /// </summary>
-    public static void PumpClientToServer(
+    public static Task PumpClientToServer(
         Stream serverDst,
         Stream clientSrc,
         RfbInputFilter.CanInject? canInject,
@@ -24,7 +24,7 @@ public static class HumanRelay
         string principalId,
         string principalRole,
         CancellationToken cancellationToken = default) =>
-        RfbInputFilter.FilterClientInput(
+        RfbInputFilter.FilterClientInputAsync(
             serverDst,
             clientSrc,
             canInject,
@@ -61,11 +61,11 @@ public static class HumanRelay
         var token = linked.Token;
 
         var clientPump = Task.Run(
-            () =>
+            async () =>
             {
                 try
                 {
-                    PumpClientToServer(
+                    await PumpClientToServer(
                         serverDst,
                         clientSrc,
                         canInject,
@@ -73,7 +73,7 @@ public static class HumanRelay
                         leaseId,
                         principalId,
                         principalRole,
-                        token);
+                        token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (token.IsCancellationRequested)
                 {

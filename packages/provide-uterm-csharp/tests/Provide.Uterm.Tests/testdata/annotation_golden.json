@@ -1,0 +1,865 @@
+{
+  "annotation_with_span": {
+    "description": "d",
+    "label": "l",
+    "principal": "p",
+    "severity": "s",
+    "source": "src",
+    "span": {
+      "from_seq": 1,
+      "to_seq": 2
+    }
+  },
+  "aws_key": "AKIAABCDEFGHIJKL",
+  "bounded_carry": {
+    "large_enough": [
+      {
+        "description": "AWS access key detected in read",
+        "label": "credential_exposure",
+        "principal": "system",
+        "severity": "high",
+        "source": "detector",
+        "span": {
+          "from_seq": 1,
+          "to_seq": 1
+        }
+      }
+    ],
+    "too_small_to_bridge": []
+  },
+  "carry": {
+    "a_reset_forgets_the_tail": [],
+    "an_empty_chunk_produces_nothing": [],
+    "default_max_carry": 512,
+    "without_a_reset_it_bridges": [
+      {
+        "description": "AWS access key detected in read",
+        "label": "credential_exposure",
+        "principal": "system",
+        "severity": "high",
+        "source": "detector",
+        "span": {
+          "from_seq": 1,
+          "to_seq": 1
+        }
+      }
+    ]
+  },
+  "categories_in_order": [
+    "credentials",
+    "escalation",
+    "destructive",
+    "connections",
+    "lifecycle"
+  ],
+  "empty_annotation": {
+    "description": "d",
+    "label": "l",
+    "principal": "p",
+    "severity": "s",
+    "source": "src",
+    "span": null
+  },
+  "rules": [
+    {
+      "category": "credentials",
+      "description_template": "AWS access key detected in {event_type}",
+      "event_types": [
+        "read",
+        "send"
+      ],
+      "label": "credential_exposure",
+      "pattern": "AKIA[0-9A-Z]{12}",
+      "rule_id": "cred.aws_access_key",
+      "severity": "high"
+    },
+    {
+      "category": "credentials",
+      "description_template": "GitHub token detected in {event_type}",
+      "event_types": [
+        "read",
+        "send"
+      ],
+      "label": "credential_exposure",
+      "pattern": "gh[psourx]_[A-Za-z0-9_]{8}",
+      "rule_id": "cred.github_token",
+      "severity": "high"
+    },
+    {
+      "category": "credentials",
+      "description_template": "Secret assignment detected in {event_type}",
+      "event_types": [
+        "read",
+        "send"
+      ],
+      "label": "credential_exposure",
+      "pattern": "(?i)(password|secret|token|api_key)\\s*[=:]",
+      "rule_id": "cred.generic_secret",
+      "severity": "high"
+    },
+    {
+      "category": "credentials",
+      "description_template": "Bearer token detected in {event_type}",
+      "event_types": [
+        "read",
+        "send"
+      ],
+      "label": "credential_exposure",
+      "pattern": "Bearer\\s+\\S{8}",
+      "rule_id": "cred.bearer_token",
+      "severity": "high"
+    },
+    {
+      "category": "credentials",
+      "description_template": "Private key header detected: {match}",
+      "event_types": [
+        "read",
+        "send"
+      ],
+      "label": "credential_exposure",
+      "pattern": "-----BEGIN\\s+(RSA|EC|OPENSSH)\\s+PRIVATE KEY-----",
+      "rule_id": "cred.private_key_header",
+      "severity": "high"
+    },
+    {
+      "category": "escalation",
+      "description_template": "sudo command detected: {match}",
+      "event_types": [
+        "read",
+        "send"
+      ],
+      "label": "privilege_escalation",
+      "pattern": "\\bsudo\\b",
+      "rule_id": "esc.sudo",
+      "severity": "high"
+    },
+    {
+      "category": "escalation",
+      "description_template": "su - (switch to root) detected: {match}",
+      "event_types": [
+        "read",
+        "send"
+      ],
+      "label": "privilege_escalation",
+      "pattern": "\\bsu\\s+-",
+      "rule_id": "esc.su_dash",
+      "severity": "high"
+    },
+    {
+      "category": "escalation",
+      "description_template": "pkexec privilege escalation detected: {match}",
+      "event_types": [
+        "read",
+        "send"
+      ],
+      "label": "privilege_escalation",
+      "pattern": "\\bpkexec\\b",
+      "rule_id": "esc.pkexec",
+      "severity": "high"
+    },
+    {
+      "category": "destructive",
+      "description_template": "Recursive force-remove detected: {match}",
+      "event_types": [
+        "read",
+        "send"
+      ],
+      "label": "destructive_command",
+      "pattern": "\\brm\\s+(-[rRf]{2,}|-[rR]\\s+-f|-f\\s+-[rR])",
+      "rule_id": "dest.rm_rf",
+      "severity": "critical"
+    },
+    {
+      "category": "destructive",
+      "description_template": "SQL DROP statement detected: {match}",
+      "event_types": [
+        "read",
+        "send"
+      ],
+      "label": "destructive_command",
+      "pattern": "(?i)\\bDROP\\s+(TABLE|DATABASE)\\b",
+      "rule_id": "dest.drop_table",
+      "severity": "critical"
+    },
+    {
+      "category": "destructive",
+      "description_template": "kubectl delete command detected: {match}",
+      "event_types": [
+        "read",
+        "send"
+      ],
+      "label": "destructive_command",
+      "pattern": "\\bkubectl\\s+delete\\b",
+      "rule_id": "dest.kubectl_delete",
+      "severity": "critical"
+    },
+    {
+      "category": "destructive",
+      "description_template": "dd disk-copy command detected: {match}",
+      "event_types": [
+        "read",
+        "send"
+      ],
+      "label": "destructive_command",
+      "pattern": "\\bdd\\s+if=",
+      "rule_id": "dest.dd_if",
+      "severity": "critical"
+    },
+    {
+      "category": "destructive",
+      "description_template": "mkfs (format filesystem) detected: {match}",
+      "event_types": [
+        "read",
+        "send"
+      ],
+      "label": "destructive_command",
+      "pattern": "\\bmkfs\\.",
+      "rule_id": "dest.mkfs",
+      "severity": "critical"
+    },
+    {
+      "category": "connections",
+      "description_template": "SSH connection detected: {match}",
+      "event_types": [
+        "read",
+        "send"
+      ],
+      "label": "outbound_connection",
+      "pattern": "\\bssh\\s+[\\w.\\-]+@",
+      "rule_id": "conn.ssh",
+      "severity": "info"
+    },
+    {
+      "category": "connections",
+      "description_template": "curl HTTP request detected: {match}",
+      "event_types": [
+        "read",
+        "send"
+      ],
+      "label": "outbound_connection",
+      "pattern": "\\bcurl\\b.*https?://",
+      "rule_id": "conn.curl",
+      "severity": "info"
+    },
+    {
+      "category": "connections",
+      "description_template": "wget HTTP request detected: {match}",
+      "event_types": [
+        "read",
+        "send"
+      ],
+      "label": "outbound_connection",
+      "pattern": "\\bwget\\b.*https?://",
+      "rule_id": "conn.wget",
+      "severity": "info"
+    },
+    {
+      "category": "connections",
+      "description_template": "scp file transfer detected: {match}",
+      "event_types": [
+        "read",
+        "send"
+      ],
+      "label": "outbound_connection",
+      "pattern": "\\bscp\\b",
+      "rule_id": "conn.scp",
+      "severity": "info"
+    },
+    {
+      "category": "lifecycle",
+      "description_template": "exit command detected: {match}",
+      "event_types": [
+        "read",
+        "send"
+      ],
+      "label": "session_lifecycle",
+      "pattern": "\\bexit\\b",
+      "rule_id": "life.exit",
+      "severity": "info"
+    },
+    {
+      "category": "lifecycle",
+      "description_template": "shutdown command detected: {match}",
+      "event_types": [
+        "read",
+        "send"
+      ],
+      "label": "session_lifecycle",
+      "pattern": "\\bshutdown\\b",
+      "rule_id": "life.shutdown",
+      "severity": "info"
+    },
+    {
+      "category": "lifecycle",
+      "description_template": "reboot command detected: {match}",
+      "event_types": [
+        "read",
+        "send"
+      ],
+      "label": "session_lifecycle",
+      "pattern": "\\breboot\\b",
+      "rule_id": "life.reboot",
+      "severity": "info"
+    }
+  ],
+  "scans": [
+    {
+      "annotations": [],
+      "detect_matches_scan": true,
+      "event_type": "read",
+      "match_end": 0,
+      "name": "nothing interesting",
+      "text": "total 24\ndrwxr-xr-x  4 alice staff"
+    },
+    {
+      "annotations": [],
+      "detect_matches_scan": true,
+      "event_type": "read",
+      "match_end": 0,
+      "name": "empty",
+      "text": ""
+    },
+    {
+      "annotations": [
+        {
+          "description": "AWS access key detected in read",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        }
+      ],
+      "detect_matches_scan": true,
+      "event_type": "read",
+      "match_end": 41,
+      "name": "an aws key",
+      "text": "export AWS_ACCESS_KEY_ID=AKIAABCDEFGHIJKL"
+    },
+    {
+      "annotations": [
+        {
+          "description": "GitHub token detected in read",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        }
+      ],
+      "detect_matches_scan": true,
+      "event_type": "read",
+      "match_end": 24,
+      "name": "a github token",
+      "text": "gh_p token: ghp_abcdefgh"
+    },
+    {
+      "annotations": [
+        {
+          "description": "Bearer token detected in read",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        }
+      ],
+      "detect_matches_scan": true,
+      "event_type": "read",
+      "match_end": 30,
+      "name": "a bearer token",
+      "text": "Authorization: Bearer abcdefghijkl"
+    },
+    {
+      "annotations": [
+        {
+          "description": "Private key header detected: -----BEGIN RSA PRIVATE KEY-----",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        }
+      ],
+      "detect_matches_scan": true,
+      "event_type": "read",
+      "match_end": 31,
+      "name": "a private key header",
+      "text": "-----BEGIN RSA PRIVATE KEY-----"
+    },
+    {
+      "annotations": [
+        {
+          "description": "Secret assignment detected in read",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        }
+      ],
+      "detect_matches_scan": true,
+      "event_type": "read",
+      "match_end": 10,
+      "name": "a secret assignment",
+      "text": "PASSWORD = hunter2"
+    },
+    {
+      "annotations": [
+        {
+          "description": "sudo command detected: sudo",
+          "label": "privilege_escalation",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        }
+      ],
+      "detect_matches_scan": true,
+      "event_type": "send",
+      "match_end": 4,
+      "name": "sudo",
+      "text": "sudo systemctl restart nginx"
+    },
+    {
+      "annotations": [
+        {
+          "description": "su - (switch to root) detected: su -",
+          "label": "privilege_escalation",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        }
+      ],
+      "detect_matches_scan": true,
+      "event_type": "send",
+      "match_end": 4,
+      "name": "su dash",
+      "text": "su - root"
+    },
+    {
+      "annotations": [
+        {
+          "description": "AWS access key detected in send",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        },
+        {
+          "description": "sudo command detected: sudo",
+          "label": "privilege_escalation",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        }
+      ],
+      "detect_matches_scan": true,
+      "event_type": "send",
+      "match_end": 26,
+      "name": "two categories at once",
+      "text": "sudo echo AKIAABCDEFGHIJKL"
+    },
+    {
+      "annotations": [
+        {
+          "description": "AWS access key detected in read",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        }
+      ],
+      "detect_matches_scan": true,
+      "event_type": "read",
+      "match_end": 16,
+      "name": "the same category twice",
+      "text": "AKIAABCDEFGHIJKL and ghp_abcdefgh"
+    },
+    {
+      "annotations": [
+        {
+          "description": "AWS access key detected in read",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        }
+      ],
+      "detect_matches_scan": true,
+      "event_type": "read",
+      "match_end": 16,
+      "name": "a match at the very start",
+      "text": "AKIAABCDEFGHIJKL"
+    },
+    {
+      "annotations": [
+        {
+          "description": "AWS access key detected in read",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        }
+      ],
+      "detect_matches_scan": true,
+      "event_type": "read",
+      "match_end": 25,
+      "name": "a match at the very end",
+      "text": "trailing AKIAABCDEFGHIJKL"
+    },
+    {
+      "annotations": [
+        {
+          "description": "AWS access key detected in send",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        },
+        {
+          "description": "sudo command detected: sudo",
+          "label": "privilege_escalation",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        },
+        {
+          "description": "reboot command detected: reboot",
+          "label": "session_lifecycle",
+          "principal": "system",
+          "severity": "info",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        }
+      ],
+      "detect_matches_scan": true,
+      "event_type": "send",
+      "match_end": 33,
+      "name": "a later rule matches further",
+      "text": "AKIAABCDEFGHIJKL then sudo reboot"
+    },
+    {
+      "annotations": [
+        {
+          "description": "Private key header detected: -----BEGIN OPENSSH PRIVATE KEY-----",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        }
+      ],
+      "detect_matches_scan": true,
+      "event_type": "read",
+      "match_end": 35,
+      "name": "a very long match",
+      "text": "-----BEGIN OPENSSH PRIVATE KEY-----xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "annotations": [],
+      "detect_matches_scan": true,
+      "event_type": "resize",
+      "match_end": 0,
+      "name": "an event type nothing applies to",
+      "text": "sudo AKIAABCDEFGHIJKL"
+    }
+  ],
+  "streams": [
+    {
+      "name": "a key split down the middle",
+      "steps": [
+        {
+          "annotations": [],
+          "chunk": "export KEY=AKIAABC"
+        },
+        {
+          "annotations": [
+            {
+              "description": "AWS access key detected in read",
+              "label": "credential_exposure",
+              "principal": "system",
+              "severity": "high",
+              "source": "detector",
+              "span": {
+                "from_seq": 1,
+                "to_seq": 1
+              }
+            }
+          ],
+          "chunk": "DEFGHIJKL and more"
+        }
+      ]
+    },
+    {
+      "name": "a key wholly inside one chunk",
+      "steps": [
+        {
+          "annotations": [
+            {
+              "description": "AWS access key detected in read",
+              "label": "credential_exposure",
+              "principal": "system",
+              "severity": "high",
+              "source": "detector",
+              "span": {
+                "from_seq": 0,
+                "to_seq": 0
+              }
+            }
+          ],
+          "chunk": "export KEY=AKIAABCDEFGHIJKL"
+        },
+        {
+          "annotations": [],
+          "chunk": " and more"
+        }
+      ]
+    },
+    {
+      "name": "nothing at all",
+      "steps": [
+        {
+          "annotations": [],
+          "chunk": "ls -la"
+        },
+        {
+          "annotations": [],
+          "chunk": "total 24"
+        }
+      ]
+    },
+    {
+      "name": "a second key right after the first",
+      "steps": [
+        {
+          "annotations": [
+            {
+              "description": "AWS access key detected in read",
+              "label": "credential_exposure",
+              "principal": "system",
+              "severity": "high",
+              "source": "detector",
+              "span": {
+                "from_seq": 0,
+                "to_seq": 0
+              }
+            }
+          ],
+          "chunk": "AKIAABCDEFGHIJKL AKIAZZZ"
+        },
+        {
+          "annotations": [
+            {
+              "description": "AWS access key detected in read",
+              "label": "credential_exposure",
+              "principal": "system",
+              "severity": "high",
+              "source": "detector",
+              "span": {
+                "from_seq": 1,
+                "to_seq": 1
+              }
+            }
+          ],
+          "chunk": "ZZZZZZZZZ"
+        }
+      ]
+    },
+    {
+      "name": "the same chunk twice",
+      "steps": [
+        {
+          "annotations": [
+            {
+              "description": "AWS access key detected in read",
+              "label": "credential_exposure",
+              "principal": "system",
+              "severity": "high",
+              "source": "detector",
+              "span": {
+                "from_seq": 0,
+                "to_seq": 0
+              }
+            }
+          ],
+          "chunk": "AKIAABCDEFGHIJKL"
+        },
+        {
+          "annotations": [
+            {
+              "description": "AWS access key detected in read",
+              "label": "credential_exposure",
+              "principal": "system",
+              "severity": "high",
+              "source": "detector",
+              "span": {
+                "from_seq": 1,
+                "to_seq": 1
+              }
+            }
+          ],
+          "chunk": "AKIAABCDEFGHIJKL"
+        }
+      ]
+    },
+    {
+      "name": "an empty chunk in the middle",
+      "steps": [
+        {
+          "annotations": [],
+          "chunk": "AKIAABC"
+        },
+        {
+          "annotations": [],
+          "chunk": ""
+        },
+        {
+          "annotations": [
+            {
+              "description": "AWS access key detected in read",
+              "label": "credential_exposure",
+              "principal": "system",
+              "severity": "high",
+              "source": "detector",
+              "span": {
+                "from_seq": 2,
+                "to_seq": 2
+              }
+            }
+          ],
+          "chunk": "DEFGHIJKL"
+        }
+      ]
+    },
+    {
+      "name": "a match that completes on the third",
+      "steps": [
+        {
+          "annotations": [],
+          "chunk": "AKIA"
+        },
+        {
+          "annotations": [],
+          "chunk": "ABCDEF"
+        },
+        {
+          "annotations": [
+            {
+              "description": "AWS access key detected in read",
+              "label": "credential_exposure",
+              "principal": "system",
+              "severity": "high",
+              "source": "detector",
+              "span": {
+                "from_seq": 2,
+                "to_seq": 2
+              }
+            }
+          ],
+          "chunk": "GHIJKL"
+        }
+      ]
+    },
+    {
+      "name": "a key then a partial key",
+      "steps": [
+        {
+          "annotations": [
+            {
+              "description": "AWS access key detected in read",
+              "label": "credential_exposure",
+              "principal": "system",
+              "severity": "high",
+              "source": "detector",
+              "span": {
+                "from_seq": 0,
+                "to_seq": 0
+              }
+            }
+          ],
+          "chunk": "AKIAABCDEFGHIJKL AKIAABCDEFGH"
+        },
+        {
+          "annotations": [
+            {
+              "description": "AWS access key detected in read",
+              "label": "credential_exposure",
+              "principal": "system",
+              "severity": "high",
+              "source": "detector",
+              "span": {
+                "from_seq": 1,
+                "to_seq": 1
+              }
+            }
+          ],
+          "chunk": "IJKL"
+        }
+      ]
+    }
+  ],
+  "templates": {
+    "a_good_template": "found secret-value in read",
+    "a_long_match_is_truncated": "found xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "a_missing_key": "test: <unavailable>",
+    "a_positional_field": "test: <unavailable>",
+    "truncate_at": 80
+  }
+}

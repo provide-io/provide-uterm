@@ -417,24 +417,24 @@ public class DeepCoverageTests
     }
 
     [Fact]
-    public void TermSession_Watchers_And_ControlFrames()
+    public async Task TermSession_Watchers_And_ControlFrames()
     {
         var t = new FakeTransport();
         var session = new TransportSession(t, ct => t.ConnectAsync("h", 1, null, ct),
             new TransportSessionOptions { ControlFrames = true, Cols = 20, Rows = 5 });
         var watched = 0;
         session.AddWatch((_, _) => Interlocked.Increment(ref watched));
-        session.ConnectAsync().GetAwaiter().GetResult();
+        await session.ConnectAsync();
         t.Enqueue("abc");
         for (var i = 0; i < 40 && watched == 0; i++)
         {
-            Thread.Sleep(20);
+            await Task.Delay(20);
         }
 
         Assert.True(session.UpdateSeq() >= 0);
         var snap = session.Snapshot();
         Assert.NotNull(snap.Screen);
-        session.CloseAsync().GetAwaiter().GetResult();
+        await session.CloseAsync();
     }
 
     [Fact]

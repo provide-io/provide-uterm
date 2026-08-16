@@ -1,0 +1,179 @@
+{
+  "clear_screen": "\u001b[2J\u001b[H",
+  "default_events": [
+    "read",
+    "screen"
+  ],
+  "hostile_lines": {
+    "a json array": {
+      "rebuild": "AttributeError",
+      "replay": "AttributeError"
+    },
+    "a json null": {
+      "rebuild": "AttributeError",
+      "replay": "AttributeError"
+    },
+    "a json string": {
+      "rebuild": "AttributeError",
+      "replay": "AttributeError"
+    },
+    "corrupt json": {
+      "rebuild": "JSONDecodeError",
+      "replay": null
+    },
+    "data is a list": {
+      "rebuild": "AttributeError",
+      "replay": "AttributeError"
+    },
+    "data is a string": {
+      "rebuild": null,
+      "replay": "AttributeError"
+    },
+    "data is a string on an unwanted event": {
+      "rebuild": null,
+      "replay": null
+    }
+  },
+  "log_lines": [
+    "",
+    "{\"event\": \"screen\", \"ts\": 100.0, \"data\": {\"screen\": \"first\"}}",
+    "{\"event\": \"screen\", \"data\": {\"screen\": \"no timestamp\"}}",
+    "   ",
+    "{\"event\": \"read\", \"ts\": 101.5, \"data\": {\"screen\": \"after a second and a half\", \"raw_bytes_b64\": \"aGVsbG8=\"}}",
+    "{\"event\": \"write\", \"ts\": 102.0, \"data\": {\"screen\": \"a write\"}}",
+    "{\"event\": \"read\", \"ts\": 102.5, \"data\": {\"raw_bytes_b64\": \"IHdvcmxk\"}}",
+    "{\"event\": \"screen\", \"ts\": 103.0, \"data\": {\"screen\": \"\"}}",
+    "{\"event\": \"screen\", \"ts\": 103.5}",
+    "{\"event\": \"screen\", \"ts\": 102.0, \"data\": {\"screen\": \"backwards\"}}",
+    "{\"event\": \"read\", \"ts\": 110.0, \"data\": {\"screen\": \"much later\", \"raw_bytes_b64\": \"\"}}"
+  ],
+  "playback": [
+    {
+      "name": "real time",
+      "output": "\u001b[2J\u001b[Hfirst\u001b[2J\u001b[Hno timestamp\u001b[2J\u001b[Hafter a second and a half\u001b[2J\u001b[H\u001b[2J\u001b[Hbackwards\u001b[2J\u001b[Hmuch later",
+      "prompts": [],
+      "slept": [
+        1.5,
+        1.5,
+        8.0
+      ]
+    },
+    {
+      "name": "double speed",
+      "output": "\u001b[2J\u001b[Hfirst\u001b[2J\u001b[Hno timestamp\u001b[2J\u001b[Hafter a second and a half\u001b[2J\u001b[H\u001b[2J\u001b[Hbackwards\u001b[2J\u001b[Hmuch later",
+      "prompts": [],
+      "slept": [
+        0.75,
+        0.75,
+        4.0
+      ]
+    },
+    {
+      "name": "half speed",
+      "output": "\u001b[2J\u001b[Hfirst\u001b[2J\u001b[Hno timestamp\u001b[2J\u001b[Hafter a second and a half\u001b[2J\u001b[H\u001b[2J\u001b[Hbackwards\u001b[2J\u001b[Hmuch later",
+      "prompts": [],
+      "slept": [
+        3.0,
+        3.0,
+        16.0
+      ]
+    },
+    {
+      "name": "faster than the ceiling",
+      "output": "\u001b[2J\u001b[Hfirst\u001b[2J\u001b[Hno timestamp\u001b[2J\u001b[Hafter a second and a half\u001b[2J\u001b[H\u001b[2J\u001b[Hbackwards\u001b[2J\u001b[Hmuch later",
+      "prompts": [],
+      "slept": [
+        0.015,
+        0.015,
+        0.08
+      ]
+    },
+    {
+      "name": "slower than the floor",
+      "output": "\u001b[2J\u001b[Hfirst\u001b[2J\u001b[Hno timestamp\u001b[2J\u001b[Hafter a second and a half\u001b[2J\u001b[H\u001b[2J\u001b[Hbackwards\u001b[2J\u001b[Hmuch later",
+      "prompts": [],
+      "slept": [
+        150.0,
+        150.0,
+        800.0
+      ]
+    },
+    {
+      "name": "zero",
+      "output": "\u001b[2J\u001b[Hfirst\u001b[2J\u001b[Hno timestamp\u001b[2J\u001b[Hafter a second and a half\u001b[2J\u001b[H\u001b[2J\u001b[Hbackwards\u001b[2J\u001b[Hmuch later",
+      "prompts": [],
+      "slept": [
+        150.0,
+        150.0,
+        800.0
+      ]
+    },
+    {
+      "name": "negative",
+      "output": "\u001b[2J\u001b[Hfirst\u001b[2J\u001b[Hno timestamp\u001b[2J\u001b[Hafter a second and a half\u001b[2J\u001b[H\u001b[2J\u001b[Hbackwards\u001b[2J\u001b[Hmuch later",
+      "prompts": [],
+      "slept": [
+        150.0,
+        150.0,
+        800.0
+      ]
+    },
+    {
+      "name": "stepping",
+      "output": "\u001b[2J\u001b[Hfirst\u001b[2J\u001b[Hno timestamp\u001b[2J\u001b[Hafter a second and a half\u001b[2J\u001b[H\u001b[2J\u001b[Hbackwards\u001b[2J\u001b[Hmuch later",
+      "prompts": [
+        "-- next --",
+        "-- next --",
+        "-- next --",
+        "-- next --",
+        "-- next --",
+        "-- next --"
+      ],
+      "slept": []
+    },
+    {
+      "name": "only reads",
+      "output": "\u001b[2J\u001b[Hafter a second and a half\u001b[2J\u001b[Hmuch later",
+      "prompts": [],
+      "slept": [
+        8.5
+      ]
+    },
+    {
+      "name": "an event that is not in the log",
+      "output": "",
+      "prompts": [],
+      "slept": []
+    },
+    {
+      "name": "every event named",
+      "output": "\u001b[2J\u001b[Hfirst\u001b[2J\u001b[Hno timestamp\u001b[2J\u001b[Hafter a second and a half\u001b[2J\u001b[Ha write\u001b[2J\u001b[H\u001b[2J\u001b[Hbackwards\u001b[2J\u001b[Hmuch later",
+      "prompts": [],
+      "slept": [
+        1.5,
+        0.5,
+        1.0,
+        8.0
+      ]
+    }
+  ],
+  "raw_stream": {
+    "bytes": [
+      104,
+      101,
+      108,
+      108,
+      111,
+      32,
+      119,
+      111,
+      114,
+      108,
+      100
+    ],
+    "empty_log_bytes": [],
+    "text": "aGVsbG8gd29ybGQ="
+  },
+  "speed_ceiling": 100.0,
+  "speed_floor": 0.01
+}

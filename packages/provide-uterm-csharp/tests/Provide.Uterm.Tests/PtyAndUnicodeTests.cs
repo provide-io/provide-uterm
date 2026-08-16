@@ -89,15 +89,14 @@ public class PtyAndUnicodeTests
     }
 
     [Fact]
-    public void TelnetTransport_ConnectRefused_ThrowsOrFails()
+    public async Task TelnetTransport_ConnectRefused_ThrowsOrFails()
     {
         // Connect to a free port that nothing listens on — should fail quickly.
         var t = new TelnetTransport();
         var failed = false;
         try
         {
-            t.ConnectAsync("127.0.0.1", 1, new ConnectOptions { Timeout = TimeSpan.FromMilliseconds(200) })
-                .GetAwaiter().GetResult();
+            await t.ConnectAsync("127.0.0.1", 1, new ConnectOptions { Timeout = TimeSpan.FromMilliseconds(200) });
         }
         catch
         {
@@ -105,21 +104,21 @@ public class PtyAndUnicodeTests
         }
 
         Assert.True(failed || !t.IsConnected());
-        t.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        await t.DisposeAsync();
     }
 
     [Fact]
-    public void WebSocketTransport_BadUrl_Fails()
+    public async Task WebSocketTransport_BadUrl_Fails()
     {
         var t = new WebSocketTransport();
         var failed = false;
         try
         {
-            t.ConnectAsync("", 0, new ConnectOptions
-            {
-                Timeout = TimeSpan.FromMilliseconds(200),
-                Ws = new WsOptions { Url = "ws://127.0.0.1:1/nope" },
-            }).GetAwaiter().GetResult();
+            await t.ConnectAsync("", 0, new ConnectOptions
+                {
+                    Timeout = TimeSpan.FromMilliseconds(200),
+                    Ws = new WsOptions { Url = "ws://127.0.0.1:1/nope" },
+                });
         }
         catch
         {
@@ -127,7 +126,7 @@ public class PtyAndUnicodeTests
         }
 
         Assert.True(failed || !t.IsConnected());
-        t.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        await t.DisposeAsync();
     }
 
     private sealed class AsyncDisposable : IAsyncDisposable

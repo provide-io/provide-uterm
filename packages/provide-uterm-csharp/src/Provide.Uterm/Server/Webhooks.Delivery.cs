@@ -168,7 +168,20 @@ public sealed partial class WebhookManager : IAsyncDisposable
         }
 
         var (sub, unsubscribe) = _eventBus.Watch(cfg.SessionId, cfg.EventTypes, cfg.Pattern);
-        var cancel = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
+        CancellationTokenSource cancel;
+        try
+        {
+            cancel = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
+        }
+        catch (ObjectDisposedException)
+        {
+            // If shutdown has already disposed the shared token source, the window for
+            // a late registration has already passed. Drop the subscription so nothing
+            // leaks, and keep registration semantics deterministic (no delivery worker).
+            unsubscribe();
+            return null;
+        }
+
         var worker = new DeliveryWorker(unsubscribe, cancel);
         // Read the token HERE, not inside the lambda. Inside, the read happens on
         // a pool thread whenever the work item is picked up, which can be after

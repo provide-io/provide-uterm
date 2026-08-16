@@ -162,7 +162,7 @@ public class RealCliTests
     }
 
     [Fact]
-    public void ProxyCommand_Build_ExposesHealth()
+    public async Task ProxyCommand_Build_ExposesHealth()
     {
         var port = FreePort();
         var opts = new ProxyCommand.Options
@@ -175,17 +175,17 @@ public class RealCliTests
             Transport = "telnet",
         };
         var app = ProxyCommand.Build(opts, new[] { $"http://127.0.0.1:{port}" });
-        app.StartAsync().GetAwaiter().GetResult();
+        await app.StartAsync();
         try
         {
             using var http = new HttpClient();
-            var body = http.GetStringAsync($"http://127.0.0.1:{port}/health").GetAwaiter().GetResult();
+            var body = await http.GetStringAsync($"http://127.0.0.1:{port}/health");
             Assert.Contains("uterm-proxy", body, StringComparison.Ordinal);
         }
         finally
         {
-            app.StopAsync().GetAwaiter().GetResult();
-            app.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            await app.StopAsync();
+            await app.DisposeAsync().AsTask();
         }
     }
 
