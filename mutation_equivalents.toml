@@ -868,6 +868,18 @@ reason = 'payload.get("tags") with the default dropped — identical: get return
 # not assumed: the sibling mutants on the same lines ARE killed by
 # test_routes_sessions_*_mutation_killing.py.
 #
+# These ids are FRAGILE and are not content-addressed. mutmut numbers mutants
+# sequentially within the enclosing function, so an edit anywhere earlier in
+# this 1000-mutant factory renumbers everything after it and silently moves an
+# excuse onto the wrong mutant. That happened on 2026-08-15: the whole
+# recording_download family shifted by three, the old ids went stale, and the
+# real ``media_type`` drop resurfaced as a survivor at a new number. The Go, C#
+# and TS gates key their allowlists on mutation CONTENT for exactly this
+# reason; mutmut's results output exposes no per-mutant content, so the same
+# fix does not port over. Read the stale-entry warnings — a stale id next to a
+# new survivor in the same function is a renumbering, not a regression, and
+# `mutmut show <id>` is the only way to confirm which is which.
+#
 # 1. Query-parameter defaults that the whitelist immediately normalises away.
 #    `sort` is filtered through `sort if sort in {...} else "created_at"`, so a
 #    mangled DEFAULT is simply an invalid value and lands back on "created_at".
@@ -920,11 +932,11 @@ reason = 'cast("XXdict[str, dict[str, object]]XX", uterm_tunnel_tokens) — runt
 mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_426"
 reason = 'cast("DICT[STR, DICT[STR, OBJECT]]", uterm_tunnel_tokens) — runtime no-op.'
 [[equivalent]]
-mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_993"
-reason = 'recording_download media_type -> None: Starlette guesses "application/json" from the .json filename, so the response header is byte-identical.'
-[[equivalent]]
 mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_996"
-reason = "recording_download media_type argument dropped: same guess from the filename — identical response."
+reason = 'recording_download media_type -> None: Starlette guesses "application/json" from the .json filename, so the response header is byte-identical. (Was _993 until the 2026-08-15 renumbering.)'
+[[equivalent]]
+mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_999"
+reason = "recording_download media_type argument dropped: same guess from the filename — identical response. (Was _996 until the 2026-08-15 renumbering.)"
 
 # -------------------------------------------------------------------------
 # routes/route_defs.py — the shared binder. Two verified-equivalent pairs in
