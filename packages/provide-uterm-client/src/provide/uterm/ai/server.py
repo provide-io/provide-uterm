@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from provide.uterm.ai.server_impl import (
     TOOL_COUNT,
@@ -19,7 +19,7 @@ from provide.uterm.ai.server_impl import (
 
 __all__ = [
     "TOOL_COUNT",
-    "FastMCP",
+    "MCPServer",
     "_clean_snapshot",
     "_trim_tail",
     "_unescape_keys",
