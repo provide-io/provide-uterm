@@ -90,7 +90,7 @@ dev = [
     "websockets>=16.0",
     "pyyaml>=6.0",
     "xenon>=0.9.3",
-    "fastmcp>=2.0",
+    "mcp>=2.0.0",
 ]
 
 [tool.pytest.ini_options]

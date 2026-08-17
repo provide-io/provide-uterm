@@ -12,9 +12,13 @@ a model can actually do:
 * **A principal holding several roles is judged on the best of them.** The
   check asks whether *any* role held meets the minimum, so an operator who is
   also an admin gets an admin's reach. A principal holding none meets nothing.
-* **Where the principal comes from.** Per-request state first — set by
-  whatever authenticated the caller — and the server's configured default only
-  when there is none. A context that fails to answer is treated as having said
+* **Where the principal comes from.** The transport's own authenticated
+  identity first — the (client, issuer, subject) triple the MCP SDK binds
+  when the transport actually authenticates the caller — and the server's
+  configured default only when there is none. There is no per-request state
+  bag and no header override at authorization time: headers can only shape
+  the *default* principal, at server construction, never a per-call
+  resolution. A context that fails to answer is treated as having said
   nothing rather than as an error, so a broken lookup cannot become a
   privilege.
 * **A refusal is a result, not an exception.** It has the same shape as every
@@ -37,10 +41,17 @@ from __future__ import annotations
 
 import asyncio
 import json
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
+from mcp.server.auth.middleware.auth_context import auth_context_var
+from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
+from mcp.server.auth.provider import AccessToken
 from provide.uterm.ai import auth as mcp_auth
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 OUT = Path(__file__).resolve().parent / "mcpauth_golden.json"
 
@@ -59,20 +70,26 @@ PRINCIPALS: list[tuple[str, str, list[str]]] = [
 TOOLS = ["session_list", "session_read", "session_connect", "hijack_begin", "session_create", "gui_key"]
 
 
-class StateContext:
-    """A request context that answers with whatever it was given."""
+class ContextStub:
+    """A request context whose ``request_context`` access succeeds.
 
-    def __init__(self, stored: Any) -> None:
-        self._stored = stored
+    ``authenticated_principal()`` (the SDK function ``resolve_principal`` now
+    delegates to) never reads its argument — it reads the authenticated
+    identity out of a contextvar the SDK's own auth middleware populates per
+    request. So this stub's only job is to make ``ctx.request_context``
+    return *something* without raising; what it returns is irrelevant to the
+    resolved principal. Whether that identity shows up is controlled instead
+    by :func:`_authenticated_as`, below.
+    """
 
-    async def get_state(self, key: str) -> Any:
-        return self._stored
+    request_context = "request-context-sentinel"
 
 
 class BrokenContext:
-    """A request context whose lookup fails."""
+    """A request context whose ``request_context`` access raises."""
 
-    async def get_state(self, key: str) -> Any:
+    @property
+    def request_context(self) -> Any:
         raise RuntimeError("state unavailable")
 
 
@@ -80,19 +97,48 @@ def _principal(subject: str, roles: list[str]) -> mcp_auth.McpPrincipal:
     return mcp_auth.McpPrincipal(subject_id=subject, roles=frozenset(roles))
 
 
+@contextmanager
+def _authenticated_as(client_id: str, subject: str | None) -> Iterator[None]:
+    """Bind the SDK's auth contextvar so ``authenticated_principal()`` sees an identity.
+
+    In a real deployment, ``AuthContextMiddleware`` does this once per HTTP
+    request after the transport verifies a bearer token. The generator has no
+    transport to drive, so it binds the same contextvar directly — this is
+    the only way to make ``authenticated_principal()`` return non-``None``,
+    since it ignores the ``ctx`` object entirely.
+    """
+    token = AccessToken(token="test-token", client_id=client_id, scopes=[], subject=subject)  # noqa: S106
+    reset_token = auth_context_var.set(AuthenticatedUser(token))
+    try:
+        yield
+    finally:
+        auth_context_var.reset(reset_token)
+
+
 async def _resolution() -> list[dict[str, Any]]:
-    """Where the principal comes from, in the order it is looked for."""
+    """Where the principal comes from, in the order it is looked for.
+
+    Only two things can make ``resolve_principal`` diverge from the default:
+    an unbound ``ctx`` (``None`` or one whose ``request_context`` raises),
+    and whether the transport actually authenticated a caller. There is no
+    longer a per-request state bag to fake independently of authentication,
+    so this corpus is honest about covering exactly those two axes rather
+    than a wider "arbitrary stored value" surface that no longer exists.
+    """
     default = _principal("configured", ["operator"])
-    stored = _principal("from-request", ["admin"])
     cases: list[dict[str, Any]] = []
-    for name, ctx in (
-        ("no context at all", None),
-        ("a context carrying a principal", StateContext(stored)),
-        ("a context carrying nothing", StateContext(None)),
-        ("a context carrying something else", StateContext({"subject_id": "x"})),
-        ("a context whose lookup fails", BrokenContext()),
+    for name, ctx, authenticated_as in (
+        ("no context at all", None, None),
+        ("an unauthenticated transport", ContextStub(), None),
+        ("an authenticated transport", ContextStub(), ("web-client", "alice")),
+        ("a context whose request_context access fails", BrokenContext(), None),
     ):
-        resolved = await mcp_auth.resolve_principal(ctx, default=default)
+        if authenticated_as is None:
+            resolved = await mcp_auth.resolve_principal(ctx, default=default)
+        else:
+            client_id, subject = authenticated_as
+            with _authenticated_as(client_id, subject):
+                resolved = await mcp_auth.resolve_principal(ctx, default=default)
         cases.append(
             {
                 "name": name,

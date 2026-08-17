@@ -2,11 +2,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Public exports for the split FastMCP server implementation."""
+"""Public exports for the split MCP 2.0 server implementation."""
 
 from __future__ import annotations
 
-from fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from provide.uterm.ai.server_impl import (
     TOOL_COUNT,
@@ -19,7 +19,7 @@ from provide.uterm.ai.server_impl import (
 
 __all__ = [
     "TOOL_COUNT",
-    "FastMCP",
+    "MCPServer",
     "_clean_snapshot",
     "_trim_tail",
     "_unescape_keys",

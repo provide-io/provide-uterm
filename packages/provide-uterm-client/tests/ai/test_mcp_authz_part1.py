@@ -20,10 +20,10 @@ required role.  These tests:
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock
 
 import pytest
-from fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
+from mcp.types import CallToolResult
 
 from provide.uterm.ai.auth import (
     McpPrincipal,
@@ -50,15 +50,20 @@ def _principal(role: str, subject: str = "tester") -> McpPrincipal:
     return McpPrincipal(subject_id=subject, roles=frozenset({role}))
 
 
-def _mcp(role: str) -> FastMCP:
-    """Construct a FastMCP app whose default principal has *role*."""
+def _mcp(role: str) -> MCPServer:
+    """Construct an MCP app whose default principal has *role*."""
     return create_mcp_app("http://test", default_principal=_principal(role))
 
 
-async def _call(mcp: FastMCP, tool: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _call(mcp: MCPServer, tool: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Call a tool by name and return its structured_content payload."""
     result = await mcp.call_tool(tool, args or {})
-    return result.structured_content  # type: ignore[return-value]
+    # MCPServer.call_tool() returns CallToolResult | InputRequiredResult; only
+    # the former carries structured_content. None of these tests exercise the
+    # elicitation path that produces InputRequiredResult, so a plain isinstance
+    # narrows the union for mypy without changing runtime behavior.
+    assert isinstance(result, CallToolResult)
+    return result.structured_content  # type: ignore[no-any-return]
 
 
 # ---------------------------------------------------------------------------
@@ -308,24 +313,11 @@ class TestPrincipalResolution:
 
         captured: dict[str, object] = {}
 
-        class _StubMCP:
-            def __init__(self, *a, **kw):
-                pass
-
-            def tool(self):
-                def _decorator(fn):
-                    return fn
-
-                return _decorator
-
         def _capture_auth_ctx(*, default_principal):
             captured["principal"] = default_principal
             return type("X", (), {"default_principal": default_principal})()
 
-        with (
-            patch("provide.uterm.ai.server.FastMCP", _StubMCP),
-            patch("provide.uterm.ai.server_impl.AuthorizationContext", _capture_auth_ctx),
-        ):
+        with patch("provide.uterm.ai.server_impl.AuthorizationContext", _capture_auth_ctx):
             _create("http://test")
         principal = captured["principal"]
         assert principal.roles == frozenset({"operator"}), "default role must be operator, not admin (Finding #2)"
@@ -338,24 +330,11 @@ class TestPrincipalResolution:
 
         captured: dict[str, object] = {}
 
-        class _StubMCP:
-            def __init__(self, *a, **kw):
-                pass
-
-            def tool(self):
-                def _decorator(fn):
-                    return fn
-
-                return _decorator
-
         def _capture_auth_ctx(*, default_principal):
             captured["principal"] = default_principal
             return type("X", (), {"default_principal": default_principal})()
 
-        with (
-            patch("provide.uterm.ai.server.FastMCP", _StubMCP),
-            patch("provide.uterm.ai.server_impl.AuthorizationContext", _capture_auth_ctx),
-        ):
+        with patch("provide.uterm.ai.server_impl.AuthorizationContext", _capture_auth_ctx):
             _create("http://test", default_role="admin")
         assert captured["principal"].roles == frozenset({"admin"})
 
@@ -394,26 +373,15 @@ class TestPrincipalResolution:
         resolved = await resolve_principal(None, default=default)
         assert resolved is default
 
-    async def test_resolve_principal_uses_request_state(self) -> None:
-        ctx = AsyncMock()
-        scoped = _principal("admin", subject="scoped")
-        ctx.get_state = AsyncMock(return_value=scoped)
-        resolved = await resolve_principal(ctx, default=_principal("viewer"))
-        assert resolved is scoped
-
-    async def test_resolve_principal_ignores_unrelated_state(self) -> None:
-        ctx = AsyncMock()
-        ctx.get_state = AsyncMock(return_value="not-a-principal")
-        default = _principal("operator")
-        resolved = await resolve_principal(ctx, default=default)
-        assert resolved is default
-
-    async def test_resolve_principal_swallows_get_state_errors(self) -> None:
-        ctx = AsyncMock()
-        ctx.get_state = AsyncMock(side_effect=RuntimeError("backend down"))
-        default = _principal("admin")
-        resolved = await resolve_principal(ctx, default=default)
-        assert resolved is default
+    # NOTE: MCP 2.0 has no Context.get_state, so resolve_principal no longer
+    # looks up a stored principal by key. The former get_state-based cases
+    # here (scoped-state override, unrelated-state, get_state exceptions)
+    # tested a mechanism that no longer exists in resolve_principal at all;
+    # the equivalent real coverage against authenticated_principal() now
+    # lives in test_mcp_authz_part2.py::TestAuthorizedDecorator
+    # (test_decorator_uses_authenticated_subject,
+    # test_decorator_falls_back_to_default_on_unauthenticated_transport,
+    # test_resolve_principal_survives_unbound_request_context).
 
 
 # ---------------------------------------------------------------------------

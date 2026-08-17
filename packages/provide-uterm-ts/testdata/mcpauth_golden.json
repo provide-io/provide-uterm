@@ -205,28 +205,21 @@
       ]
     },
     {
-      "name": "a context carrying a principal",
-      "subject_id": "from-request",
-      "roles": [
-        "admin"
-      ]
-    },
-    {
-      "name": "a context carrying nothing",
+      "name": "an unauthenticated transport",
       "subject_id": "configured",
       "roles": [
         "operator"
       ]
     },
     {
-      "name": "a context carrying something else",
-      "subject_id": "configured",
+      "name": "an authenticated transport",
+      "subject_id": "[\"web-client\",null,\"alice\"]",
       "roles": [
         "operator"
       ]
     },
     {
-      "name": "a context whose lookup fails",
+      "name": "a context whose request_context access fails",
       "subject_id": "configured",
       "roles": [
         "operator"
