@@ -43,7 +43,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-from fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from provide.uterm.ai.auth import (
     AuthorizationContext,
@@ -72,8 +72,8 @@ from provide.uterm.client.sanitizer import unescape_keys
 __all__ = [
     "TOOL_COUNT",
     "AuthorizationContext",
-    "FastMCP",
     "HijackClient",
+    "MCPServer",
     "McpPrincipal",
     "_clean_snapshot",
     "_compile_user_pattern",
@@ -101,7 +101,7 @@ def create_mcp_app(
     default_principal: McpPrincipal | None = None,
     default_role: str = "operator",
     **client_kwargs: Any,
-) -> FastMCP:
+) -> MCPServer:
     """Create a FastMCP app with all provide-uterm tools.
 
     Parameters
@@ -140,11 +140,11 @@ def create_mcp_app(
     auth_ctx = AuthorizationContext(default_principal=default_principal)
 
     @contextlib.asynccontextmanager
-    async def _lifespan(_app: FastMCP) -> AsyncIterator[None]:
+    async def _lifespan(_app: MCPServer) -> AsyncIterator[None]:
         yield
         await client.__aexit__(None, None, None)
 
-    mcp = FastMCP("uterm", lifespan=_lifespan)
+    mcp = MCPServer("uterm", lifespan=_lifespan)
 
     register_hijack_tools(mcp, client, auth_ctx)
     register_session_tools(mcp, client, auth_ctx)

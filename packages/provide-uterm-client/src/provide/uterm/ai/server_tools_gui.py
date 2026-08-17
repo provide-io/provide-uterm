@@ -12,21 +12,21 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from fastmcp import Context  # noqa: TC002
+from mcp.server.mcpserver import Context  # noqa: TC002
 
 from provide.uterm.ai.auth import authorized
 from provide.uterm.ai.server_validators import _reject_bad_id, _reject_bad_ids
 from provide.uterm.client.mcp_tools import _ok
 
 if TYPE_CHECKING:
-    from fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
 
     from provide.uterm.ai.auth import AuthorizationContext
     from provide.uterm.client.hijack import HijackClient
 
 
 def register_gui_tools(
-    mcp: FastMCP,
+    mcp: MCPServer,
     client: HijackClient,
     auth_ctx: AuthorizationContext,
 ) -> None:

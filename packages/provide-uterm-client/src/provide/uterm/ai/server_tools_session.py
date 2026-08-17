@@ -17,11 +17,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-# ``Context`` is annotation-only here, but FastMCP resolves tool signatures via
-# ``get_type_hints`` at decoration time (``from __future__ import annotations``
-# stringifies them), so it must be importable at runtime — keep it out of the
-# TYPE_CHECKING block.
-from fastmcp import Context  # noqa: TC002
+# ``Context`` is annotation-only here, but the MCP SDK resolves tool signatures
+# via ``get_type_hints`` at decoration time (``from __future__ import
+# annotations`` stringifies them), so it must be importable at runtime — keep
+# it out of the TYPE_CHECKING block.
+from mcp.server.mcpserver import Context  # noqa: TC002
 
 from provide.uterm.ai.auth import authorized
 from provide.uterm.ai.server_validators import (
@@ -34,14 +34,14 @@ from provide.uterm.ai.server_validators import (
 from provide.uterm.client.mcp_tools import _ok
 
 if TYPE_CHECKING:
-    from fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
 
     from provide.uterm.ai.auth import AuthorizationContext
     from provide.uterm.client.hijack import HijackClient
 
 
 def register_session_tools(
-    mcp: FastMCP,
+    mcp: MCPServer,
     client: HijackClient,
     auth_ctx: AuthorizationContext,
 ) -> None:
