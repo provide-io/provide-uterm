@@ -4,8 +4,8 @@
 #
 """GUI control MCP tool registrations.
 
-:func:`register_gui_tools` registers seven tools on a :class:`FastMCP`
-instance for GUI interactions.
+:func:`register_gui_tools` registers seven tools on an
+:class:`~mcp.server.mcpserver.MCPServer` instance for GUI interactions.
 """
 
 from __future__ import annotations

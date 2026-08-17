@@ -2370,7 +2370,7 @@ requires-dist = [
     { name = "websockets", marker = "extra == 'dev'", specifier = ">=16.0" },
     { name = "websockets", marker = "extra == 'websocket'", specifier = ">=16.0" },
 ]
-provides-extras = ["http", "websocket", "ssh", "mcp", "all", "dev"]
+provides-extras = ["http", "websocket", "ssh", "all", "dev"]
 
 [[package]]
 name = "provide-uterm-cloudflare"

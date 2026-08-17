@@ -124,13 +124,28 @@ def principal_from_headers(headers: dict[str, str] | None) -> McpPrincipal | Non
     )
 
 
-def _authenticated_subject(ctx: _ContextLike) -> str | None:
-    """Return the transport-authenticated subject id, or None.
+def _authenticated_identity(ctx: _ContextLike) -> str | None:
+    """Return the transport-authenticated identity, or None.
+
+    Not a bare subject id: :func:`mcp.server.mcpserver.authenticated_principal`
+    returns a JSON-serialized ``(client_id, issuer, subject)`` triple (see
+    ``mcp/server/request_state.py``), which becomes ``McpPrincipal.subject_id``
+    verbatim. That value is operator-visible — it surfaces in
+    :func:`deny_payload`'s ``"principal"`` field and in
+    :class:`AuthorizationDenied`'s exception message — so it must read as an
+    identity string, not be mistaken for a plain username.
 
     ``Context.request_context`` raises when no request is bound rather than
     returning None, so the access is guarded: an unbound context is a
     "no authenticated identity" answer, not an error worth propagating out of
     an authorization check.
+
+    The subsequent call to ``authenticated_principal(request_context)`` is
+    deliberately left unguarded: it only reads a contextvar via
+    ``get_access_token()`` (default ``None``) and never touches its ``ctx``
+    argument, so it cannot raise on a garbage or mock ``request_context`` —
+    unlike the property access above, there is nothing here for a bare
+    ``except`` to usefully catch.
     """
     try:
         request_context = ctx.request_context
@@ -148,7 +163,7 @@ async def resolve_principal(
 
     Lookup order:
 
-    1. The transport-authenticated subject, when the transport binds one
+    1. The transport-authenticated identity, when the transport binds one
        (:func:`mcp.server.mcpserver.authenticated_principal`). Roles come from
        the configured *default*, because that binding carries identity, not
        authorisation.
@@ -158,9 +173,9 @@ async def resolve_principal(
     :func:`authorized` and its tests need no change.
     """
     if ctx is not None:
-        subject = _authenticated_subject(ctx)
-        if subject is not None:
-            return McpPrincipal(subject_id=subject, roles=default.roles)
+        identity = _authenticated_identity(ctx)
+        if identity is not None:
+            return McpPrincipal(subject_id=identity, roles=default.roles)
     return default
 
 
