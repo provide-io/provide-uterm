@@ -9,7 +9,7 @@
 # not that hostile connections succeed. The base URL is defined once here so the
 # workflow never hardcodes a host/port.
 #
-# Usage: ci/hostile_probe.sh <start|wait-health|burst|oversized|slowloris|availability|stop>
+# Usage: ci/hostile_probe.sh <start|wait-health|burst|worker|oversized|slowloris|availability|stop>
 set -euo pipefail
 
 # Single source of truth for where the suite reaches the server. The default
@@ -31,7 +31,7 @@ probe() {
   uv run python scripts/hostile_profile.py --base-url "${HOSTILE_BASE_URL}" "$@"
 }
 
-case "${1:?usage: hostile_probe.sh <start|wait-health|burst|oversized|slowloris|availability|stop>}" in
+case "${1:?usage: hostile_probe.sh <start|wait-health|burst|worker|oversized|slowloris|availability|stop>}" in
   start)
     hostport="${HOSTILE_BASE_URL#*://}"
     host="${hostport%%:*}"
@@ -43,10 +43,6 @@ case "${1:?usage: hostile_probe.sh <start|wait-health|burst|oversized|slowloris|
     elif [ "$server_impl" = "go" ]; then
       (cd packages/provide-uterm-go && nohup go run cmd/uterm/main.go server --host "${host}" --port "${port}" >"${SERVER_LOG}" 2>&1) &
     elif [ "$server_impl" = "csharp" ]; then
-      # --project rather than `cd`: the CLI moved to cmd/Uterm, and a `cd` that
-      # fails inside `( ... ) &` takes the subshell down without failing this
-      # step — the start reported success and the breakage only surfaced as a
-      # health timeout sixty seconds later, in a different step.
       # --project rather than `cd`: the CLI moved to cmd/Uterm, and a `cd` that
       # fails inside `( ... ) &` takes the subshell down without failing this
       # step — the start reported success and the breakage only surfaced as a
@@ -78,6 +74,23 @@ case "${1:?usage: hostile_probe.sh <start|wait-health|burst|oversized|slowloris|
       --mode burst \
       --iterations 200 \
       --concurrency 40 \
+      --require-refused
+    ;;
+  worker)
+    # The WORKER side of the bridge, which nothing probed until now. It is the
+    # more privileged socket — a worker feeds terminal output to every viewer
+    # and drives session state — so an unauthenticated registration would be a
+    # worse bypass than the browser one.
+    #
+    # Sequential, and only three of them: a session has exactly ONE worker,
+    # so concurrent attempts collide over that slot and report as errors
+    # rather than as the auth answer being asked for. This is a correctness
+    # assertion about the gate, not a flood; the flood lanes are above.
+    probe \
+      --worker-id "${WORKER_ID}" \
+      --mode worker \
+      --iterations 3 \
+      --concurrency 1 \
       --require-refused
     ;;
   oversized)
