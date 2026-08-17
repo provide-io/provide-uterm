@@ -105,3 +105,48 @@ def test_cli_app_passed_to_uvicorn() -> None:
         mock_create.assert_called_once()
         app_arg = mock_run.call_args[0][0]
         assert app_arg is mock_create.return_value
+
+
+def test_cli_warns_when_test_mode_disables_websocket_auth(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """UTERM_TEST_MODE=1 mints an admin principal; a server must not do that silently."""
+    from provide.uterm.server import cli
+
+    monkeypatch.setenv(cli.TEST_MODE_ENV_VAR, "1")
+    with (
+        patch("provide.uterm.server.cli.create_server_app", return_value=MagicMock()),
+        patch("uvicorn.run"),
+        patch.object(cli, "logger") as mock_logger,
+    ):
+        cli.main([])
+
+    mock_logger.warning.assert_called_once_with(cli.TEST_MODE_WARNING)
+
+
+def test_cli_is_silent_when_test_mode_is_unset(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """The negative control: a warning on every start would train operators to ignore it."""
+    from provide.uterm.server import cli
+
+    monkeypatch.delenv(cli.TEST_MODE_ENV_VAR, raising=False)
+    with (
+        patch("provide.uterm.server.cli.create_server_app", return_value=MagicMock()),
+        patch("uvicorn.run"),
+        patch.object(cli, "logger") as mock_logger,
+    ):
+        cli.main([])
+
+    mock_logger.warning.assert_not_called()
+
+
+def test_cli_ignores_a_test_mode_value_that_is_not_one(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Only the exact "1" enables the bypass, so only "1" may warn about it."""
+    from provide.uterm.server import cli
+
+    monkeypatch.setenv(cli.TEST_MODE_ENV_VAR, "0")
+    with (
+        patch("provide.uterm.server.cli.create_server_app", return_value=MagicMock()),
+        patch("uvicorn.run"),
+        patch.object(cli, "logger") as mock_logger,
+    ):
+        cli.main([])
+
+    mock_logger.warning.assert_not_called()

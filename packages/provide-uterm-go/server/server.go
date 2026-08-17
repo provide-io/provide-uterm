@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -304,6 +305,13 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	errCh := make(chan error, 1)
 	go func() { errCh <- s.httpSrv.Serve(ln) }()
 	s.logger.Info("uterm_server_listening", "addr", ln.Addr().String())
+	// A server with the websocket auth gate switched off must say so. The
+	// variable mints an admin principal for browser sockets, and a server
+	// running that way was otherwise indistinguishable from a normal one —
+	// the only safeguard was a comment telling operators not to set it.
+	if os.Getenv(testModeEnvVar) == "1" {
+		s.logger.Warn(testModeWarning)
+	}
 
 	select {
 	case <-ctx.Done():
