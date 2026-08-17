@@ -98,6 +98,14 @@ jobs:
       - name: Burst probe
         run: ci/hostile_probe.sh burst
 
+      # Worker socket: the privileged side of the bridge, previously unprobed.
+      # An unauthenticated registration there is a worse bypass than the browser
+      # one — a worker feeds terminal output to every viewer and drives session
+      # state — and every port refuses it by a different mechanism, so only an
+      # executed probe says whether they all still do.
+      - name: Worker-socket auth probe
+        run: ci/hostile_probe.sh worker
+
       # Oversized-frame payload probe
       - name: Oversized-frame probe
         run: ci/hostile_probe.sh oversized
