@@ -46,7 +46,10 @@ func TestWSAcceptFailureNonUpgrade(t *testing.T) {
 	_ = ts.do("GET", "/ws/browser/noup/term", "", adminHeaders())
 }
 
-// TestBrowserWSAnonymousRejected covers the anonymous-principal 1008 close.
+// TestBrowserWSAnonymousRejected covers the anonymous-principal refusal, which
+// happens BEFORE the upgrade: the handshake itself fails with 401, so a client
+// never holds a socket. It used to accept and then close 1008, which looks like
+// success to anything that stops at Dial.
 func TestBrowserWSAnonymousRejected(t *testing.T) {
 	ts := newTestServer(t, nil)
 	ts.reg.add("anon", "admin1", "public")
@@ -55,14 +58,14 @@ func TestBrowserWSAnonymousRejected(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// No X-Subject header → anonymous → server accepts then closes 1008.
-	conn, _, err := websocket.Dial(ctx, base+"/ws/browser/anon/term", nil)
-	if err != nil {
-		t.Fatalf("dial: %v", err)
+	// No X-Subject header → anonymous → handshake refused with 401.
+	conn, resp, err := websocket.Dial(ctx, base+"/ws/browser/anon/term", nil)
+	if err == nil {
+		_ = conn.Close(websocket.StatusNormalClosure, "")
+		t.Fatal("expected the handshake to be refused for an anonymous browser")
 	}
-	defer func() { _ = conn.Close(websocket.StatusNormalClosure, "") }()
-	if _, _, rerr := conn.Read(ctx); rerr == nil {
-		t.Fatal("expected close for anonymous browser")
+	if resp == nil || resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 before the upgrade, got resp=%v err=%v", resp, err)
 	}
 	if ts.metrics.Snapshot()["auth_failures_ws_total"] < 1 {
 		t.Fatal("auth_failures_ws_total not counted")
@@ -79,15 +82,18 @@ func TestBrowserWSInsufficientRole(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	conn, _, err := websocket.Dial(ctx, base+"/ws/browser/priv/term", &websocket.DialOptions{
+	// Authenticated but not permitted → 403, and again before the upgrade, so
+	// the two refusals are distinguishable by status rather than both arriving
+	// as an identical 1008 close.
+	conn, resp, err := websocket.Dial(ctx, base+"/ws/browser/priv/term", &websocket.DialOptions{
 		HTTPHeader: http.Header{"X-Subject": {"view1"}, "X-Role": {"viewer"}},
 	})
-	if err != nil {
-		t.Fatalf("dial: %v", err)
+	if err == nil {
+		_ = conn.Close(websocket.StatusNormalClosure, "")
+		t.Fatal("expected the handshake to be refused for an insufficient role")
 	}
-	defer func() { _ = conn.Close(websocket.StatusNormalClosure, "") }()
-	if _, _, rerr := conn.Read(ctx); rerr == nil {
-		t.Fatal("expected close for insufficient role")
+	if resp == nil || resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403 before the upgrade, got resp=%v err=%v", resp, err)
 	}
 }
 

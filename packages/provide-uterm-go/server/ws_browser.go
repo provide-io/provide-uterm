@@ -49,11 +49,34 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	bg := context.Background()
+	// Authenticate and authorize BEFORE the upgrade. This used to accept the
+	// socket and then close 1008, which meant an unauthenticated client saw a
+	// SUCCESSFUL handshake followed by a close — indistinguishable, to anything
+	// that stops at connect(), from being let in. Refusing here costs no
+	// upgrade, leaves no half-open socket, and matches the C# port and this
+	// server's own HTTP paths, which already answer 401 "authentication
+	// required" (middleware.go, routes_api.go, bridge_rest_gui_vnc.go).
+	//
+	// Skipped under UTERM_TEST_MODE, which mints its own admin principal below.
+	var preRole string
+	if os.Getenv("UTERM_TEST_MODE") != "1" {
+		principal := s.resolvePrincipal(r)
+		if isAnonymous(principal) {
+			s.deps.Hub.Metric("auth_failures_ws_total", 1)
+			detailError(w, http.StatusUnauthorized, "authentication required")
+			return
+		}
+		preRole = s.resolveBrowserRole(bg, principal, workerID)
+		if preRole == "" {
+			detailError(w, http.StatusForbidden, "insufficient privileges")
+			return
+		}
+	}
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
 	if err != nil {
 		return
 	}
-	bg := context.Background()
 	// UTERM_TEST_MODE=1: multi-backend Playwright e2e — open admin browser for any worker_id.
 	// Never default-on; production servers must not set this env.
 	if os.Getenv("UTERM_TEST_MODE") == "1" {
@@ -82,17 +105,9 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 		s.browserCleanup(bg, workerID, bc, owned)
 		return
 	}
+	// Both decided above, before the upgrade.
 	principal := s.resolvePrincipal(r)
-	if isAnonymous(principal) {
-		s.deps.Hub.Metric("auth_failures_ws_total", 1)
-		_ = conn.Close(websocket.StatusPolicyViolation, "authentication required")
-		return
-	}
-	role := s.resolveBrowserRole(bg, principal, workerID)
-	if role == "" {
-		_ = conn.Close(websocket.StatusPolicyViolation, "insufficient privileges")
-		return
-	}
+	role := preRole
 	bc := &browserConn{wsBase: wsBase{conn: conn}, principal: principal}
 	canHijack := role == "admin"
 

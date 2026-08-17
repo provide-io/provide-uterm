@@ -41,13 +41,16 @@ func TestWorkerWSTokenAuth(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Without the token → server accepts then closes 1008; a read fails.
-	conn, _, err := websocket.Dial(ctx, wsBase+"/ws/worker/wx/term", nil)
-	if err != nil {
-		t.Fatalf("dial (no token): %v", err)
+	// Without the token → the handshake itself is refused with 401, before the
+	// upgrade. The worker socket is the privileged half of the bridge, so a
+	// caller must never be left holding a socket it was not entitled to open.
+	conn, resp, err := websocket.Dial(ctx, wsBase+"/ws/worker/wx/term", nil)
+	if err == nil {
+		_ = conn.Close(websocket.StatusNormalClosure, "")
+		t.Fatal("expected the handshake to be refused without a worker token")
 	}
-	if _, _, rerr := conn.Read(ctx); rerr == nil {
-		t.Fatal("expected close after missing token")
+	if resp == nil || resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 before the upgrade, got resp=%v err=%v", resp, err)
 	}
 
 	// With the correct token → the worker registers.

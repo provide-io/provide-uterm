@@ -31,19 +31,17 @@ func (s *Server) handleTunnelWS(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
-	if err != nil {
-		return
-	}
-	// Worker-token auth (same ordering as handleWorkerWS). In TEST_MODE allow
-	// missing token when hub has no worker token configured.
+	// Worker-token auth before the upgrade, same ordering as handleWorkerWS.
 	if tok := s.deps.Hub.WorkerToken(); tok != nil {
 		provided := bearerToken(r)
 		if subtle.ConstantTimeCompare([]byte(provided), []byte(*tok)) != 1 {
-			// Accept-then-close so code 1008 is delivered.
-			_ = conn.Close(websocket.StatusPolicyViolation, "authentication required")
+			detailError(w, http.StatusUnauthorized, "authentication required")
 			return
 		}
+	}
+	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+	if err != nil {
+		return
 	}
 	conn.SetReadLimit(int64(s.deps.Hub.MaxWSMessageBytes()))
 	wc := &tunnelWorkerConn{wsBase: wsBase{conn: conn}}
