@@ -2201,9 +2201,9 @@ dev = [
     { name = "codespell" },
     { name = "detect-secrets" },
     { name = "fastapi" },
-    { name = "fastmcp" },
     { name = "httpx" },
     { name = "hypothesis" },
+    { name = "mcp" },
     { name = "memray", marker = "sys_platform != 'win32'" },
     { name = "mutmut" },
     { name = "mypy" },
@@ -2252,9 +2252,9 @@ dev = [
     { name = "codespell", specifier = ">=2.4.1" },
     { name = "detect-secrets", specifier = ">=1.5.0" },
     { name = "fastapi", specifier = ">=0.110" },
-    { name = "fastmcp", specifier = ">=2.0" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "hypothesis", specifier = ">=6.151.9" },
+    { name = "mcp", specifier = ">=2.0.0" },
     { name = "memray", marker = "sys_platform != 'win32'", specifier = ">=1.0" },
     { name = "mutmut", specifier = ">=3.3.1" },
     { name = "mypy", specifier = ">=1.19" },
@@ -2326,13 +2326,11 @@ dependencies = [
 [package.optional-dependencies]
 all = [
     { name = "asyncssh" },
-    { name = "fastmcp" },
     { name = "httpx" },
     { name = "websockets" },
 ]
 dev = [
     { name = "asyncssh" },
-    { name = "fastmcp" },
     { name = "httpx" },
     { name = "mypy" },
     { name = "pytest" },
@@ -2344,9 +2342,6 @@ dev = [
 ]
 http = [
     { name = "httpx" },
-]
-mcp = [
-    { name = "fastmcp" },
 ]
 ssh = [
     { name = "asyncssh" },
@@ -2360,9 +2355,6 @@ requires-dist = [
     { name = "asyncssh", marker = "extra == 'all'", specifier = ">=2.22.0" },
     { name = "asyncssh", marker = "extra == 'dev'", specifier = ">=2.22.0" },
     { name = "asyncssh", marker = "extra == 'ssh'", specifier = ">=2.22.0" },
-    { name = "fastmcp", marker = "extra == 'all'", specifier = ">=2.0" },
-    { name = "fastmcp", marker = "extra == 'dev'", specifier = ">=2.0" },
-    { name = "fastmcp", marker = "extra == 'mcp'", specifier = ">=2.0" },
     { name = "httpx", marker = "extra == 'all'", specifier = ">=0.27" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
     { name = "httpx", marker = "extra == 'http'", specifier = ">=0.27" },
@@ -2429,6 +2421,7 @@ provides-extras = ["dev"]
 name = "provide-uterm-platform"
 source = { editable = "packages/provide-uterm-platform" }
 dependencies = [
+    { name = "fastmcp" },
     { name = "provide-uterm" },
 ]
 
@@ -2471,6 +2464,7 @@ requires-dist = [
     { name = "fastapi", marker = "extra == 'all'", specifier = ">=0.110" },
     { name = "fastapi", marker = "extra == 'dev'", specifier = ">=0.110" },
     { name = "fastapi", marker = "extra == 'manager'", specifier = ">=0.110" },
+    { name = "fastmcp", specifier = ">=2.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.19" },
     { name = "provide-uterm", editable = "packages/provide-uterm" },
     { name = "provide-uterm", marker = "extra == 'all'", editable = "packages/provide-uterm" },
@@ -2636,9 +2630,9 @@ dev = [
     { name = "codespell" },
     { name = "detect-secrets" },
     { name = "fastapi" },
-    { name = "fastmcp" },
     { name = "httpx" },
     { name = "hypothesis" },
+    { name = "mcp" },
     { name = "memray", marker = "sys_platform != 'win32'" },
     { name = "mutmut" },
     { name = "mypy" },
@@ -2687,9 +2681,9 @@ dev = [
     { name = "codespell", specifier = ">=2.4.2" },
     { name = "detect-secrets", specifier = ">=1.5.0" },
     { name = "fastapi", specifier = ">=0.141.1" },
-    { name = "fastmcp", specifier = ">=3.3.1" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "hypothesis", specifier = ">=6.165.2" },
+    { name = "mcp", specifier = ">=2.0.0" },
     { name = "memray", marker = "sys_platform != 'win32'", specifier = ">=1.20.0" },
     { name = "mutmut", specifier = ">=3.7.0" },
     { name = "mypy", specifier = ">=2.3.0" },

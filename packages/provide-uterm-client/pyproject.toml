@@ -17,8 +17,8 @@ dependencies = ["provide-uterm>=0.5.0", "mcp>=2.0.0"]
 http = ["httpx>=0.27"]
 websocket = ["websockets>=16.0"]
 ssh = ["asyncssh>=2.22.0"]
-mcp = ["fastmcp>=2.0"]
-all = ["httpx>=0.27", "websockets>=16.0", "asyncssh>=2.22.0", "fastmcp>=2.0"]
+mcp = []
+all = ["httpx>=0.27", "websockets>=16.0", "asyncssh>=2.22.0"]
 dev = [
     "pytest>=9.0",
     "pytest-asyncio>=1.3",
@@ -29,7 +29,6 @@ dev = [
     "httpx>=0.27",
     "websockets>=16.0",
     "asyncssh>=2.22.0",
-    "fastmcp>=2.0",
 ]
 
 [project.scripts]
