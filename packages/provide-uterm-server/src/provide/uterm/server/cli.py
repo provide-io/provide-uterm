@@ -14,9 +14,28 @@ handler.
 from __future__ import annotations
 
 import argparse
+import os
 
+from provide.telemetry import get_logger
 from provide.uterm.server import load_server_config
 from provide.uterm.server.app import create_server_app
+
+logger = get_logger(__name__)
+
+#: UTERM_TEST_MODE mints an admin principal for websockets, skipping
+#: authentication and authorization. It exists for the multi-backend Playwright
+#: suite, and the only thing standing between it and a production server was a
+#: comment saying not to set it — none of the three ports announced that the
+#: gate was open, so a server accidentally started with it looked exactly like
+#: one that was not.
+#:
+#: The wording matches the C# (Server/TestModeBanner.cs) and Go
+#: (server/testmode.go) ports so the string greps across logs from any backend.
+TEST_MODE_ENV_VAR = "UTERM_TEST_MODE"
+TEST_MODE_WARNING = (
+    "WARNING: UTERM_TEST_MODE=1 — websocket authentication is DISABLED and an admin "
+    "principal is minted for any session. For tests only; never run a production server this way."
+)
 
 
 def _add_server_arguments(parser: argparse.ArgumentParser) -> None:
@@ -43,6 +62,11 @@ def _cmd_server(args: argparse.Namespace) -> None:
     if args.host or args.port:
         scheme = "https" if config.server.public_base_url.startswith("https://") else "http"
         config.server.public_base_url = f"{scheme}://{config.server.host}:{config.server.port}"
+
+    # A server with the websocket auth gate switched off must say so, before it
+    # starts accepting connections.
+    if os.environ.get(TEST_MODE_ENV_VAR) == "1":
+        logger.warning(TEST_MODE_WARNING)
 
     app = create_server_app(config)
     uvicorn.run(app, host=config.server.host, port=config.server.port, log_level="info")
