@@ -22,14 +22,13 @@ from __future__ import annotations
 
 import contextvars
 import logging
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from starlette.responses import JSONResponse
 from starlette.status import HTTP_401_UNAUTHORIZED, WS_1008_POLICY_VIOLATION
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
-    from starlette.types import ExceptionHandler
     from starlette.websockets import WebSocket
 
 __all__ = ["WebSocketAuthDenied", "handle_ws_auth_denied", "install_ws_denial_support"]
@@ -38,6 +37,18 @@ __all__ = ["WebSocketAuthDenied", "handle_ws_auth_denied", "install_ws_denial_su
 # deliverable. uvicorn advertises it on every websocket implementation, and so
 # does Starlette's TestClient; a server that does not gets the 403 close below.
 _DENIAL_EXTENSION = "websocket.http.response"
+
+# The refusal body, matching this server's HTTP refusals and Go's detailError.
+_DETAIL_KEY = "detail"
+
+# RFC 7235: a 401 has to say how to authenticate. Module level, not inline:
+# mutmut only mutates inside functions, and Starlette lowercases header names
+# on the way out (responses.py init_headers), so an inline literal would spawn
+# two case-mutants that are byte-identical to this one and cannot be killed.
+_BEARER_CHALLENGE = {"WWW-Authenticate": "Bearer"}
+
+# The logger uvicorn reports a websocket protocol error on.
+_UVICORN_LOGGER = "uvicorn.error"
 
 # uvicorn's sansio websocket implementation logs this after a denial response
 # that was delivered correctly. Its completion check tests only
@@ -85,19 +96,21 @@ async def handle_ws_auth_denied(websocket: WebSocket, exc: WebSocketAuthDenied) 
         await websocket.close(code=WS_1008_POLICY_VIOLATION, reason=exc.detail)
         return
 
-    # RFC 7235: a 401 has to say how to authenticate.
-    headers = {"WWW-Authenticate": "Bearer"} if exc.status_code == HTTP_401_UNAUTHORIZED else None
-    response = JSONResponse({"detail": exc.detail}, status_code=exc.status_code, headers=headers)
+    headers = _BEARER_CHALLENGE if exc.status_code == HTTP_401_UNAUTHORIZED else None
+    response = JSONResponse({_DETAIL_KEY: exc.detail}, status_code=exc.status_code, headers=headers)
     await websocket.send_denial_response(response)
     _denial_sent.set(True)
 
 
 def install_ws_denial_support(app: FastAPI) -> None:
     """Wire the denial handler and silence uvicorn's spurious follow-on ERROR."""
-    app.add_exception_handler(WebSocketAuthDenied, cast("ExceptionHandler", handle_ws_auth_denied))
+    # Silenced with an ignore comment rather than typing.cast: cast discards its
+    # first argument at runtime, so mutating that string is a no-op no test can
+    # ever detect — an unkillable mutant for no benefit.
+    app.add_exception_handler(WebSocketAuthDenied, handle_ws_auth_denied)  # type: ignore[arg-type]
     # The uvicorn logger is process-global while an app is not: a test suite
     # builds hundreds of apps, and adding a filter per app would stack hundreds
     # of them on one logger.
-    uvicorn_logger = logging.getLogger("uvicorn.error")
+    uvicorn_logger = logging.getLogger(_UVICORN_LOGGER)
     if not any(isinstance(existing, _IncompleteHandshakeFilter) for existing in uvicorn_logger.filters):
         uvicorn_logger.addFilter(_IncompleteHandshakeFilter())
