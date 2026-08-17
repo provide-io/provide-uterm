@@ -47,16 +47,11 @@ case "${1:?usage: hostile_probe.sh <start|wait-health|burst|oversized|slowloris|
       # fails inside `( ... ) &` takes the subshell down without failing this
       # step — the start reported success and the breakage only surfaced as a
       # health timeout sixty seconds later, in a different step.
-      # -p:SelfContained=false for the same reason Dockerfile.csharp uses it: the
-      # csproj turns on PublishAot, and the SDK then stamps
-      #   "System.Text.Json.JsonSerializer.IsReflectionEnabledByDefault": false
-      # into uterm.runtimeconfig.json for an ORDINARY build, not just a publish.
-      # The server's routes return anonymous types through Results.Json, so with
-      # reflection off every JSON endpoint answers 500 with an empty body while
-      # the request log still records 200 — /api/health included, which is what
-      # this probe waits on.
+      # --project rather than `cd`: the CLI moved to cmd/Uterm, and a `cd` that
+      # fails inside `( ... ) &` takes the subshell down without failing this
+      # step — the start reported success and the breakage only surfaced as a
+      # health timeout sixty seconds later, in a different step.
       nohup dotnet run --project packages/provide-uterm-csharp/cmd/Uterm/Uterm.csproj -c Release \
-        -p:SelfContained=false \
         -- server --host "${host}" --port "${port}" >"${SERVER_LOG}" 2>&1 &
     else
       echo "unknown SERVER_IMPL: $server_impl" >&2

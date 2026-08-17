@@ -10,24 +10,35 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <!--
-      Native AOT for the container image (docker/Dockerfile.csharp publishes
-      self-contained into distroless/cc, which is why that stage installs clang
-      and zlib). Conditioned on SelfContained because `make build-binaries`
-      publishes framework-dependent (the no-self-contained flag), and a newer
-      SDK rejects that combination outright:
+      No PublishAot / PublishTrimmed here, deliberately.
 
-        error NETSDK1102: Optimizing assemblies for size is not supported for
-        the selected publish configuration.
+      They were added for the container image, and an AOT build of this server
+      cannot answer a single request. Routes return anonymous types through
+      Results.Json, and ASP.NET minimal APIs build their request delegates
+      reflectively; AOT has no runtime code generation, so endpoint
+      construction throws and every route answers 500 with an empty body:
 
-      An unconditional PublishAot therefore failed the C# quality gate at its
-      last stage, after the whole suite and the coverage floor had already run.
+        System.NotSupportedException: JsonTypeInfo metadata for type
+        'Task`1[IResult]' was not provided by TypeInfoResolver of type '[]'
 
-      (No double hyphens anywhere in this comment: XML forbids them inside a
-      comment, and MSBuild reports that as MSB4025 against this project. The
-      same warning is on Directory.Build.props for the same reason.)
+      Worse than useless, it was a trap. The SDK stamps
+
+        "System.Text.Json.JsonSerializer.IsReflectionEnabledByDefault": false
+
+      into uterm.runtimeconfig.json for an ORDINARY build once PublishAot is
+      declared, so a plain `dotnet run` produced a server that logged 200 and
+      returned 500. That disguised two CI failures as startup and health-check
+      problems. `make build-binaries` was unaffected only because it passes the
+      no-self-contained flag, which switched these off.
+
+      Reviving AOT is a project, not a flag: 47 anonymous-type responses become
+      declared records, all of them need JsonSerializable entries in a
+      JsonSerializerContext on the resolver chain, the host moves to
+      CreateSlimBuilder, and Shell/Commands.cs stops deserializing JsonElement.
+      For a process that starts once and runs for days, the startup win does
+      not pay for that. If short-lived CLI startup ever matters, split the CLI
+      out of the server assembly and AOT only that.
     -->
-    <PublishAot Condition="'$(SelfContained)' != 'false'">true</PublishAot>
-    <PublishTrimmed Condition="'$(SelfContained)' != 'false'">true</PublishTrimmed>
     <!-- Ship as lowercase `uterm` (matches Go/Python CLI names). -->
     <AssemblyName>uterm</AssemblyName>
   </PropertyGroup>

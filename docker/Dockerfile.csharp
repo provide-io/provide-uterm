@@ -41,26 +41,14 @@ RUN npm run build:frontend
 # ---- build -----------------------------------------------------------------
 FROM ${SDK_IMAGE} AS build
 
-RUN apt-get update && apt-get install -y clang zlib1g-dev
-
 WORKDIR /src
 
 COPY packages/provide-telemetry/ packages/provide-telemetry/
 COPY packages/provide-uterm-csharp/ packages/provide-uterm-csharp/
-# SelfContained=false, which the csproj uses to switch native AOT and trimming
-# OFF (see the PublishAot/PublishTrimmed conditions in Uterm.csproj).
-#
-# This image cannot be AOT-published. ASP.NET minimal APIs build their request
-# delegates through RequestDelegateFactory, which needs JSON metadata that AOT
-# trimming removes, so EVERY route — not just one — answered 500 with:
-#   System.NotSupportedException: JsonTypeInfo metadata for type
-#   'Task`1[IResult]' was not provided by TypeInfoResolver of type '[]'
-# thrown while constructing the endpoints. Making the container AOT-clean means
-# source-generating JSON contexts across the whole server surface; running
-# framework-dependent is the supported path and is what RUNTIME_IMAGE was
-# always declared for.
+# Framework-dependent, which is the only way this server runs: an AOT publish
+# cannot construct the minimal-API endpoints at all (see the note in
+# Uterm.csproj). AOT is no longer configured, so this needs no opt-out.
 RUN dotnet publish packages/provide-uterm-csharp/cmd/Uterm/Uterm.csproj -c Release -o /app/publish \
-    -p:SelfContained=false \
     /p:UseAppHost=true
 
 # ---- runtime ---------------------------------------------------------------
