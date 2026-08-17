@@ -354,7 +354,8 @@ class TestLifespan:
             mcp = create_mcp_app("http://test")
 
         # Simulate the MCP lifespan cycle
-        async with mcp._lifespan_manager():
+        assert mcp.settings.lifespan is not None
+        async with mcp.settings.lifespan(mcp):
             pass
 
         mock_instance.__aexit__.assert_awaited_once_with(None, None, None)

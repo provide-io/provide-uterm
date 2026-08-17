@@ -308,24 +308,11 @@ class TestPrincipalResolution:
 
         captured: dict[str, object] = {}
 
-        class _StubMCP:
-            def __init__(self, *a, **kw):
-                pass
-
-            def tool(self):
-                def _decorator(fn):
-                    return fn
-
-                return _decorator
-
         def _capture_auth_ctx(*, default_principal):
             captured["principal"] = default_principal
             return type("X", (), {"default_principal": default_principal})()
 
-        with (
-            patch("provide.uterm.ai.server.FastMCP", _StubMCP),
-            patch("provide.uterm.ai.server_impl.AuthorizationContext", _capture_auth_ctx),
-        ):
+        with patch("provide.uterm.ai.server_impl.AuthorizationContext", _capture_auth_ctx):
             _create("http://test")
         principal = captured["principal"]
         assert principal.roles == frozenset({"operator"}), "default role must be operator, not admin (Finding #2)"
@@ -338,24 +325,11 @@ class TestPrincipalResolution:
 
         captured: dict[str, object] = {}
 
-        class _StubMCP:
-            def __init__(self, *a, **kw):
-                pass
-
-            def tool(self):
-                def _decorator(fn):
-                    return fn
-
-                return _decorator
-
         def _capture_auth_ctx(*, default_principal):
             captured["principal"] = default_principal
             return type("X", (), {"default_principal": default_principal})()
 
-        with (
-            patch("provide.uterm.ai.server.FastMCP", _StubMCP),
-            patch("provide.uterm.ai.server_impl.AuthorizationContext", _capture_auth_ctx),
-        ):
+        with patch("provide.uterm.ai.server_impl.AuthorizationContext", _capture_auth_ctx):
             _create("http://test", default_role="admin")
         assert captured["principal"].roles == frozenset({"admin"})
 
