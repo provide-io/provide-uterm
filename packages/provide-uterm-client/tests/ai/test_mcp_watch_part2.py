@@ -11,8 +11,9 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 from fastapi import FastAPI
-from fastmcp import FastMCP
 from httpx import ASGITransport, AsyncClient
+from mcp.server.mcpserver import MCPServer
+from mcp.types import CallToolResult
 from provide.uterm.server.bridge.hub import EventBus, TermHub
 from provide.uterm.server.config import config_from_mapping
 
@@ -53,7 +54,7 @@ def _make_server_app_with_bus() -> tuple[FastAPI, TermHub, EventBus]:
     return app, bus
 
 
-def _mcp_for_server(app: FastAPI) -> FastMCP:
+def _mcp_for_server(app: FastAPI) -> MCPServer:
     return create_mcp_app(
         "http://test",
         transport=ASGITransport(app=app),
@@ -61,9 +62,14 @@ def _mcp_for_server(app: FastAPI) -> FastMCP:
     )
 
 
-async def _call(mcp: FastMCP, tool: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _call(mcp: MCPServer, tool: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
     result = await mcp.call_tool(tool, args or {})
-    return result.structured_content  # type: ignore[return-value]
+    # MCPServer.call_tool() returns CallToolResult | InputRequiredResult; only
+    # the former carries structured_content. None of these tests exercise the
+    # elicitation path that produces InputRequiredResult, so a plain isinstance
+    # narrows the union for mypy without changing runtime behavior.
+    assert isinstance(result, CallToolResult)
+    return result.structured_content  # type: ignore[no-any-return]
 
 
 # ---------------------------------------------------------------------------
