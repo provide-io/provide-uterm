@@ -19,8 +19,13 @@ def _uid() -> str:
 
 
 def _navigate(page: Page, base_url: str, worker_id: str) -> None:
+    # spinner_mock=True to match the fixture this test borrows. `spinner_server`
+    # exists for the reconnect harness in test_reconnect_spinner, which serves
+    # the mock-xterm page; pointing it at the real xterm page instead left the
+    # widget's socket never reaching OPEN, because nothing on the other end is
+    # the worker that page expects.
     if multi_backend_env():
-        install_multi_backend_routes(page)
+        install_multi_backend_routes(page, spinner_mock=True)
     page.goto(f"{base_url}/test-page/{worker_id}", wait_until="domcontentloaded")
 
 
@@ -46,9 +51,18 @@ class TestClientRecovery:
         wid = f"recover-{_uid()}"
         # We navigate and force init term
         _navigate(page, base_url, wid)
+        # Wait for the widget and a live socket, not for a status string.
+        # `__deepQuery` returns undefined before the widget exists, so the old
+        # wait — `__deepQuery('#statustext')?.textContent !== 'Connecting…'` —
+        # was satisfied by the widget being ABSENT: undefined?.textContent is
+        # undefined, and undefined !== 'Connecting…'. The test then reached
+        # _force_close_ws with window._widget still unset and died there on
+        # `Cannot read properties of undefined (reading '_hijackState')`.
+        # window._widget is assigned inside customElements.whenDefined().then(),
+        # so it is genuinely absent for a while after domcontentloaded.
         page.wait_for_function(
-            "window.__deepQuery('#statustext')?.textContent !== 'Connecting…'",
-            timeout=5000,
+            "() => window._widget?._hijackState?.ws?.readyState === 1",
+            timeout=10000,
         )
         page.evaluate("if (window._widget && window._widget._ensureTerm) window._widget._ensureTerm()")
 
