@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Public exports for the split FastMCP server implementation."""
+"""Public exports for the split MCP 2.0 server implementation."""
 
 from __future__ import annotations
 

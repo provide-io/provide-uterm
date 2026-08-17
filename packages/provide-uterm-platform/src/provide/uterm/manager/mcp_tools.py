@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""FastMCP tools for managing an agent swarm.
+"""MCP tools for managing an agent swarm.
 
 Supports two modes:
 
@@ -11,10 +11,14 @@ Supports two modes:
 
 Usage::
 
-    # In-process
-    mcp = create_manager_mcp_tools(manager=my_manager)
+    # Preferred: register onto an app the caller already owns (works against
+    # either a fastmcp.FastMCP or an mcp.server.mcpserver.MCPServer).
+    register_manager_tools(app, manager=my_manager)
+    register_manager_tools(app, base_url="http://localhost:2272")
 
-    # Out-of-process
+    # Deprecated: builds and returns its own FastMCP app. Kept only for
+    # existing callers; prefer register_manager_tools above.
+    mcp = create_manager_mcp_tools(manager=my_manager)
     mcp = create_manager_mcp_tools(base_url="http://localhost:2272")
 """
 

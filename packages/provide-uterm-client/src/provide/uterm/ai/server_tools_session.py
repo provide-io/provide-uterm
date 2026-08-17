@@ -4,8 +4,8 @@
 #
 """Session-management, event-subscription, fan-out, and annotation MCP tools.
 
-:func:`register_session_tools` registers eleven tools on a :class:`FastMCP`
-instance: session management (``session_list``/``status``/``read``/``connect``/
+:func:`register_session_tools` registers eleven tools on an
+:class:`~mcp.server.mcpserver.MCPServer` instance: session management (``session_list``/``status``/``read``/``connect``/
 ``disconnect``/``create``), real-time event subscription
 (``session_watch``/``session_subscribe``), fan-out (``fanout_group_create``/
 ``fanout_send``), and ``session_annotate``.  It is invoked by

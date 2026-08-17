@@ -4,8 +4,8 @@
 #
 """Hijack-lifecycle and server/worker-control MCP tool registrations.
 
-:func:`register_hijack_tools` registers ten tools on a :class:`FastMCP`
-instance: the six hijack-lease tools (``hijack_begin``/``heartbeat``/``read``/
+:func:`register_hijack_tools` registers ten tools on an
+:class:`~mcp.server.mcpserver.MCPServer` instance: the six hijack-lease tools (``hijack_begin``/``heartbeat``/``read``/
 ``send``/``step``/``release``) plus the four server/worker control tools
 (``server_health``, ``session_set_mode``, ``worker_input_mode``,
 ``worker_disconnect``).  It is invoked by

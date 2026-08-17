@@ -2,11 +2,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""FastMCP server exposing the full provide-uterm control plane.
+"""MCP 2.0 SDK server exposing the full provide-uterm control plane.
 
-Factory function ``create_mcp_app()`` returns a ready-to-run :class:`FastMCP`
-instance with 21 tools covering session management, hijack lifecycle, and
-worker control.
+Factory function ``create_mcp_app()`` returns a ready-to-run
+:class:`~mcp.server.mcpserver.MCPServer` instance with 21 tools covering
+session management, hijack lifecycle, and worker control.
 
 The tool handlers themselves live in two cohesive sibling modules so no single
 file grows unbounded:
@@ -102,7 +102,7 @@ def create_mcp_app(
     default_role: str = "operator",
     **client_kwargs: Any,
 ) -> MCPServer:
-    """Create a FastMCP app with all provide-uterm tools.
+    """Create an MCP 2.0 SDK app with all provide-uterm tools.
 
     Parameters
     ----------
