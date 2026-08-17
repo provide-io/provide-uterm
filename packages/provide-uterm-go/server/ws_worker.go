@@ -43,18 +43,25 @@ func (s *Server) handleWorkerWS(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
-	if err != nil {
-		return
-	}
-	// Worker-token auth: accept THEN close 1008 so the code is transmitted
-	// (matching the Python accept-before-close ordering).
+	// Worker-token auth BEFORE the upgrade. This used to accept first and then
+	// close 1008, on the stated grounds of "matching the Python
+	// accept-before-close ordering" — but Python does not do that: it raises
+	// its 1008 inside a dependency, and Starlette denies the handshake before
+	// accept, which is why an unauthenticated client measures 403 there and
+	// measured a completed-then-closed socket here. Refusing pre-upgrade costs
+	// no upgrade, leaves no half-open socket, and matches both the C# port and
+	// this server's own HTTP paths, which already answer 401 "authentication
+	// required" (middleware.go, routes_api.go, bridge_rest_gui_vnc.go).
 	if tok := s.deps.Hub.WorkerToken(); tok != nil {
 		provided := bearerToken(r)
 		if subtle.ConstantTimeCompare([]byte(provided), []byte(*tok)) != 1 {
-			_ = conn.Close(websocket.StatusPolicyViolation, "authentication required")
+			detailError(w, http.StatusUnauthorized, "authentication required")
 			return
 		}
+	}
+	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+	if err != nil {
+		return
 	}
 	conn.SetReadLimit(int64(s.deps.Hub.MaxWSMessageBytes()))
 	wc := &workerConn{wsBase{conn: conn}}
