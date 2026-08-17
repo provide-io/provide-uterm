@@ -42,6 +42,28 @@ public sealed partial class UtermServer
         else
         {
             p = await Authenticate(ctx).ConfigureAwait(false);
+
+            // Anonymous is refused here, before the session is even looked up —
+            // the same gate Python applies to every websocket
+            // (app/factory_impl.py: anonymous → WS 1008 "authentication
+            // required") and the worker socket below applies with its bearer.
+            //
+            // Without it this path fell through to CanReadSession, which returns
+            // true for a session whose visibility is "public" — and "public" is
+            // the shipped default (ServerConfig/Config.cs DefaultSessionVisibility),
+            // on a server that creates a session at startup. The hostile-client
+            // burst probe accepted 200 of 200 unauthenticated connects against
+            // C# while Python and Go refused all 200, and each of those sockets
+            // could send input frames into the terminal.
+            //
+            // Before the lookup, not after, so an unauthenticated caller cannot
+            // tell a session that exists (403) from one that does not (404).
+            if (string.Equals(p.SubjectId, "anonymous", StringComparison.Ordinal))
+            {
+                ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                return;
+            }
+
             role = "viewer";
             if (!_deps.Registry.TryGetDefinition(workerId, out var def))
             {
