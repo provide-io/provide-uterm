@@ -7,9 +7,9 @@
 All MCP tool handlers go through :func:`authorize` (applied via
 :func:`authorized` decorator) before their bodies execute.  The chokepoint:
 
-1. Resolves the calling :class:`McpPrincipal` from the ambient
-   :class:`~fastmcp.Context` (request-scoped state, then transport headers,
-   then the server's configured default principal).
+1. Resolves the calling :class:`McpPrincipal` via the transport's
+   authenticated identity (when available, from :func:`mcp.server.mcpserver.authenticated_principal`),
+   or falls back to the server's configured default principal.
 2. Looks up the tool's required role in
    :mod:`provide.uterm.ai.policy`.
 3. Rejects with a typed :class:`AuthorizationDenied` (returned as a
@@ -102,6 +102,14 @@ def principal_from_headers(headers: dict[str, str] | None) -> McpPrincipal | Non
 
     Returns ``None`` when neither header is present.  Header lookup is
     case-insensitive.
+
+    Security boundary: these headers are trusted only because they are
+    supplied locally by the operator launching the stdio server, via
+    ``client_kwargs["headers"]``. They are NOT a remote caller's assertion.
+    If an HTTP transport is ever enabled for this server, this path must be
+    removed or gated behind a verified token first — MCP 2.0's
+    ``Context.headers`` is explicit that client-supplied headers are never an
+    identity assertion.
     """
     if not headers:
         return None
@@ -193,11 +201,11 @@ class AuthorizationContext:
 def authorized(tool_name: str, auth_ctx: AuthorizationContext) -> Callable[[F], F]:
     """Return a decorator that gates *tool_name* on its required role.
 
-    Principal resolution prefers request-scoped context (when the tool
-    signature includes a ``fastmcp.Context`` parameter) and falls back to
-    ``auth_ctx.default_principal``. The decorator preserves the wrapped
-    function's signature via :func:`functools.wraps` so that fastmcp can
-    introspect parameter types as if no decoration were applied.
+    Principal resolution uses the transport-authenticated identity when
+    available (via :func:`mcp.server.mcpserver.authenticated_principal`), and
+    falls back to ``auth_ctx.default_principal``. The decorator preserves the
+    wrapped function's signature via :func:`functools.wraps` so that the MCP
+    server can introspect parameter types as if no decoration were applied.
     """
     minimum = required_role(tool_name)
 
