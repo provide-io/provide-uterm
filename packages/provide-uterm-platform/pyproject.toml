@@ -11,7 +11,12 @@ dynamic = ["version"]
 description = "Platform-specific deployment targets (PTY, PAM, External Management Tier) for provide-uterm"
 requires-python = ">=3.11"
 license = "AGPL-3.0-or-later"
-dependencies = ["provide-uterm>=0.5.0"]
+dependencies = [
+    "provide-uterm>=0.5.0",
+    # Only the deprecated create_manager_mcp_tools wrapper needs this. Removed
+    # once bbsbot moves to register_manager_tools.
+    "fastmcp>=2.0",
+]
 
 [project.optional-dependencies]
 pty = ["provide-uterm>=0.5.0"]
