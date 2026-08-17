@@ -28,6 +28,8 @@ from dataclasses import dataclass, field
 from functools import wraps
 from typing import Any, Protocol, TypeVar, cast
 
+from mcp.server.mcpserver import authenticated_principal
+
 from provide.uterm.ai.policy import Role, required_role, role_at_least
 
 F = TypeVar("F", bound=Callable[..., Awaitable[Any]])
@@ -60,9 +62,10 @@ class McpPrincipal:
 
 
 class _ContextLike(Protocol):
-    """Subset of fastmcp.Context the chokepoint uses (kept narrow for typing)."""
+    """Subset of the MCP ``Context`` the chokepoint uses (kept narrow for typing)."""
 
-    async def get_state(self, key: str) -> Any: ...
+    @property
+    def request_context(self) -> Any: ...
 
 
 class AuthorizationDenied(Exception):  # noqa: N818 — domain-modeling name; not all exceptions end in Error.
@@ -87,11 +90,11 @@ class AuthorizationDenied(Exception):  # noqa: N818 — domain-modeling name; no
 # Principal resolution.
 # ---------------------------------------------------------------------------
 
-# Key used to publish the configured default principal into per-request
-# context state.  The MCP server registers an on-init hook that calls
-# ``ctx.set_state(_PRINCIPAL_STATE_KEY, principal)`` so tool handlers can
-# look it up without re-reading transport headers.
-_PRINCIPAL_STATE_KEY = "uterm.mcp.principal"
+# MCP 2.0 removed fastmcp's per-request state bag (``ctx.get_state``), so the
+# principal is no longer looked up by key. The SDK's own binding —
+# ``authenticated_principal`` — supplies the authenticated (client, issuer,
+# subject) identity directly, and returns None on unauthenticated transports
+# such as stdio.
 
 
 def principal_from_headers(headers: dict[str, str] | None) -> McpPrincipal | None:
@@ -113,6 +116,21 @@ def principal_from_headers(headers: dict[str, str] | None) -> McpPrincipal | Non
     )
 
 
+def _authenticated_subject(ctx: _ContextLike) -> str | None:
+    """Return the transport-authenticated subject id, or None.
+
+    ``Context.request_context`` raises when no request is bound rather than
+    returning None, so the access is guarded: an unbound context is a
+    "no authenticated identity" answer, not an error worth propagating out of
+    an authorization check.
+    """
+    try:
+        request_context = ctx.request_context
+    except Exception:
+        return None
+    return authenticated_principal(request_context)
+
+
 async def resolve_principal(
     ctx: _ContextLike | None,
     *,
@@ -122,17 +140,19 @@ async def resolve_principal(
 
     Lookup order:
 
-    1. Per-request state under :data:`_PRINCIPAL_STATE_KEY` (e.g. set by
-       middleware that authenticated the caller).
+    1. The transport-authenticated subject, when the transport binds one
+       (:func:`mcp.server.mcpserver.authenticated_principal`). Roles come from
+       the configured *default*, because that binding carries identity, not
+       authorisation.
     2. Configured server *default* (passed in by ``create_mcp_app``).
+
+    Kept ``async`` despite no longer awaiting anything, so that
+    :func:`authorized` and its tests need no change.
     """
     if ctx is not None:
-        try:
-            stored = await ctx.get_state(_PRINCIPAL_STATE_KEY)
-        except Exception:
-            stored = None
-        if isinstance(stored, McpPrincipal):
-            return stored
+        subject = _authenticated_subject(ctx)
+        if subject is not None:
+            return McpPrincipal(subject_id=subject, roles=default.roles)
     return default
 
 

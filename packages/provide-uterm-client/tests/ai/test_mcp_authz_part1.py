@@ -20,7 +20,6 @@ required role.  These tests:
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock
 
 import pytest
 from mcp.server.mcpserver import MCPServer
@@ -374,26 +373,15 @@ class TestPrincipalResolution:
         resolved = await resolve_principal(None, default=default)
         assert resolved is default
 
-    async def test_resolve_principal_uses_request_state(self) -> None:
-        ctx = AsyncMock()
-        scoped = _principal("admin", subject="scoped")
-        ctx.get_state = AsyncMock(return_value=scoped)
-        resolved = await resolve_principal(ctx, default=_principal("viewer"))
-        assert resolved is scoped
-
-    async def test_resolve_principal_ignores_unrelated_state(self) -> None:
-        ctx = AsyncMock()
-        ctx.get_state = AsyncMock(return_value="not-a-principal")
-        default = _principal("operator")
-        resolved = await resolve_principal(ctx, default=default)
-        assert resolved is default
-
-    async def test_resolve_principal_swallows_get_state_errors(self) -> None:
-        ctx = AsyncMock()
-        ctx.get_state = AsyncMock(side_effect=RuntimeError("backend down"))
-        default = _principal("admin")
-        resolved = await resolve_principal(ctx, default=default)
-        assert resolved is default
+    # NOTE: MCP 2.0 has no Context.get_state, so resolve_principal no longer
+    # looks up a stored principal by key. The former get_state-based cases
+    # here (scoped-state override, unrelated-state, get_state exceptions)
+    # tested a mechanism that no longer exists in resolve_principal at all;
+    # the equivalent real coverage against authenticated_principal() now
+    # lives in test_mcp_authz_part2.py::TestAuthorizedDecorator
+    # (test_decorator_uses_authenticated_subject,
+    # test_decorator_falls_back_to_default_on_unauthenticated_transport,
+    # test_resolve_principal_survives_unbound_request_context).
 
 
 # ---------------------------------------------------------------------------
