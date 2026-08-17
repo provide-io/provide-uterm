@@ -40,7 +40,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from provide.uterm.ai.auth import AuthorizationContext, McpPrincipal
 from provide.uterm.ai.constants import MAX_KEYSTROKE_BYTES
 from provide.uterm.ai.server_tools_hijack import register_hijack_tools
@@ -340,9 +340,15 @@ CASES: list[tuple[str, str, dict[str, Any], bool, Any]] = [
 
 async def _run(tool_name: str, args: dict[str, Any], ok: bool, data: Any) -> dict[str, Any]:
     client = _Client(ok=ok, data=data)
-    mcp: Any = FastMCP("differential")
+    mcp = MCPServer("differential")
     register_hijack_tools(mcp, client, AuthorizationContext(McpPrincipal(subject_id="u1", roles=frozenset({"admin"}))))
-    tool = await mcp.get_tool(tool_name)
+    # MCPServer has no public get_tool(); the ToolManager it delegates to does
+    # (mcp._tool_manager.get_tool), matching the design doc's mapping of
+    # fastmcp's private _local_provider._components scrape onto the SDK's
+    # public ToolManager.get_tool. Synchronous, unlike fastmcp's awaited
+    # get_tool() this replaces.
+    tool = mcp._tool_manager.get_tool(tool_name)
+    assert tool is not None, f"tool {tool_name!r} was not registered"
     return {"result": await tool.fn(**args), "calls": client.calls}
 
 

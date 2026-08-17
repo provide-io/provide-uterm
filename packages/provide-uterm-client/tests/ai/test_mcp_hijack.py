@@ -11,8 +11,9 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 from fastapi import FastAPI
-from fastmcp import FastMCP
 from httpx import ASGITransport
+from mcp.server.mcpserver import MCPServer
+from mcp.types import CallToolResult
 from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.server.bridge.models import HijackSession, WorkerTermState
 
@@ -40,8 +41,8 @@ def _add_worker(hub: TermHub, worker_id: str = WID) -> AsyncMock:
     return mock_ws
 
 
-def _mcp_for(app: FastAPI, **kwargs: object) -> FastMCP:
-    """Return a FastMCP app backed by ASGI transport to *app*.
+def _mcp_for(app: FastAPI, **kwargs: object) -> MCPServer:
+    """Return an MCP app backed by ASGI transport to *app*.
 
     These tests exercise hijack/worker-control tools that require admin role,
     so the test factory explicitly opts in via ``default_role="admin"``.  The
@@ -55,13 +56,18 @@ def _mcp_for(app: FastAPI, **kwargs: object) -> FastMCP:
     )
 
 
-async def _call(mcp: FastMCP, tool: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _call(mcp: MCPServer, tool: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Call an MCP tool and return the structured_content dict."""
     result = await mcp.call_tool(tool, args or {})
-    return result.structured_content  # type: ignore[return-value]
+    # MCPServer.call_tool() returns CallToolResult | InputRequiredResult; only
+    # the former carries structured_content. None of these tests exercise the
+    # elicitation path that produces InputRequiredResult, so a plain isinstance
+    # narrows the union for mypy without changing runtime behavior.
+    assert isinstance(result, CallToolResult)
+    return result.structured_content  # type: ignore[no-any-return]
 
 
-async def _acquire(mcp: FastMCP, worker_id: str = WID, **kw: Any) -> str:
+async def _acquire(mcp: MCPServer, worker_id: str = WID, **kw: Any) -> str:
     """Acquire hijack and return hijack_id."""
     data = await _call(mcp, "hijack_begin", {"worker_id": worker_id, **kw})
     assert data["success"] is True
