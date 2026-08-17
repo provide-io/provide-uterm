@@ -65,81 +65,82 @@ Measured after the change, both sockets, all three ports:
 
 | port | unauthenticated | unauthorized |
 |---|---|---|
-| Python | 403 pre-upgrade | 403 pre-upgrade |
+| Python | 401 pre-upgrade | 403 pre-upgrade |
 | Go | 401 pre-upgrade | 403 pre-upgrade |
 | C# | 401 pre-upgrade | 403 pre-upgrade |
 
-The pre-upgrade rule now holds everywhere. One divergence remains, deliberately.
+The pre-upgrade rule and the 401/403 split now hold on every port.
 
-### Why Python answers 403 where the others answer 401
+### How Python emits 401, given that Starlette hardcodes 403
 
-Not a design choice — an upstream defect, and every way around it costs more than
-it buys.
+Starlette's unaided WebSocket refusal is `close()` before `accept()`, which every
+ASGI server reports as a hardcoded **403** — an authorization answer to an
+authentication failure. Emitting 401 needs the ASGI websocket-denial-response
+extension, which Starlette exposes as `WebSocket.send_denial_response`.
 
-Starlette denies a pre-accept WebSocket refusal with a hardcoded **403**.
-Emitting 401 requires the ASGI websocket-denial-response extension
-(`WebSocket.send_denial_response`). That was implemented and measured, not
-estimated: the client receives `401` with `WWW-Authenticate: Bearer` on both
-sockets, all four hostile-client probes pass, and the availability lane's ten
-authenticated sessions complete in 0.06s against 0.03–0.05s on the default
-implementation.
+`app/ws_denial.py` carries it: a `WebSocketAuthDenied` exception, an exception
+handler that answers with the chosen status, and a fallback to the old
+close-before-accept for any ASGI server that does not advertise the extension.
+The refusal body is `{"detail": ...}`, matching this server's own HTTP refusals
+and Go's `detailError`, and a 401 carries `WWW-Authenticate: Bearer` as RFC 7235
+requires. Measured against real uvicorn on the default implementation: both
+sockets answer 401, and a burst of 25 unauthenticated connects answers 401
+25 times.
 
-It was reverted because of how uvicorn handles the denial. The sansio
-implementation sets `initial_response` for a denial but never sets
-`handshake_complete`, and its `run_asgi` checks only the latter
-(`websockets_sansio_impl.py:416`), so **every refusal logs an ERROR and attempts
-a 500**. Two adjacent branches in the same file already get this right
-(`:425`, `:438` both test `initial_response`), as does `wsproto_impl.py:349` via
-`response_started`. Two hundred unauthenticated connects produce two hundred
-error lines and two hundred attempted 500s — log amplification on precisely the
-path a flood targets, which is a worse property to ship than an imperfect status
-code.
+The extension delivers the response correctly on every uvicorn implementation.
+What is not correct is what uvicorn does afterwards: the sansio implementation
+sets `initial_response` for a denial but never sets `handshake_complete`, and its
+`run_asgi` completion check tests only the latter
+(`websockets_sansio_impl.py:416`), so a **valid** refusal logs
+`ERROR: ASGI callable returned without completing handshake.` Two adjacent
+branches in the same file already test both (`:425`, `:438`), as does
+`wsproto_impl.py:349`.
 
-Which implementation is in use decides it, and the clean ones are the ones going
-away:
+The follow-on `send_500_response()` is a **no-op** — it returns early on
+`initial_response`, so no 500 ever reaches the client and nothing on the wire is
+affected. (An earlier revision of this document claimed a 500 was attempted;
+that was wrong, and it was the main reason the 401 was previously abandoned.)
+The whole defect is one spurious log line per refusal. That still matters,
+because on an authenticated endpoint refusal is the normal case, so a connection
+flood would amplify into an equal flood of ERROR records.
+
+`install_ws_denial_support` therefore installs a `logging.Filter` on
+`uvicorn.error` that drops exactly that message, and only for connections this
+server actually denied. The scoping is a ContextVar: uvicorn awaits the ASGI app
+and logs from the same task, so a value set inside the app is still visible to
+the filter. A genuine incomplete handshake — a real bug — still logs, because
+nothing set the flag for it. Both halves are measured: a denied connection
+observes `True`, a deliberately unfinished handshake observes `False`; and with
+the filter removed the same run emits 27 ERROR lines where the shipped code
+emits 0.
+
+This is why the fix is a filter and not `--ws wsproto`, which was the other
+candidate:
 
 | `--ws` | denial behaviour |
 |---|---|
-| `auto` (the default) | ERROR + attempted 500 |
-| `websockets-sansio` | ERROR + attempted 500 |
+| `auto` (the default) | 401 delivered; one spurious ERROR (filtered) |
+| `websockets-sansio` | 401 delivered; one spurious ERROR (filtered) |
 | `wsproto` | clean |
 | `websockets` (legacy) | clean, but **deprecated** — uvicorn warns it will point at the sansio implementation |
 
-So the working paths are a deprecated implementation and a non-default one. A
-standalone reproducer (pure Starlette + uvicorn, no application framework) and a
-proposed one-line patch are drafted at
-`../uvicorn-websocket-denial-response-issue.md`, outside this repo.
-
-What moving Python to 401 would actually involve, in full:
-
-1. ~40 lines in `app/factory_impl.py` — the denial helper, a sentinel exception
-   so the endpoint stops without Starlette re-closing a finished connection, and
-   a no-op handler for it. Written and working.
-2. Two tests, because this package enforces 100% branch coverage and the helper
-   has a fallback branch.
-3. `ws="wsproto"` at the `uvicorn.run` call site.
-4. Declaring `wsproto` as a dependency. It is currently **transitive only** —
-   zero mentions in any `pyproject.toml` — and pinning an undeclared package is
-   how a deployment that installs plain uvicorn dies at startup.
-5. Accepting `wsproto`, a pure-Python implementation, as the WebSocket transport
-   for every session this server carries. The measurement above covers ten
-   concurrent sessions; it says nothing about production load.
-
-Item 3 also does not hold where it matters most. The pin would live in `cli.py`,
+Pinning `wsproto` would mean declaring a dependency that is currently
+**transitive only** (zero mentions in any `pyproject.toml`), and adopting a
+different WebSocket transport for every session this server carries, to fix a log
+line. It would also not hold where it matters: the pin would live in `cli.py`,
 but the app is launched other ways — `uvicorn.Server(uvicorn.Config(app, ...))`
-in the TypeScript golden generators and in this package's own test conftest.
-Those keep the default implementation, so the status code would depend on how
-the server was started. One documented divergence is better than a conditional
-one.
+in the TypeScript golden generators and in this package's own test conftest —
+so the status code would have depended on how the server was started. The filter
+is installed by the application factory, so it holds on every launch path and on
+every implementation.
 
-The position is therefore conditional on the upstream fix, not on preference.
-When `websockets_sansio_impl.py:416` accounts for `initial_response`, Python
-moves to 401 with no dependency swap and no launch-path caveat, and the table
-above becomes uniform.
+A standalone reproducer and a proposed one-line patch are drafted at
+`../uvicorn-websocket-denial-response-issue.md`, outside this repo. When that
+lands, the filter becomes dead weight and can be deleted; nothing else changes.
 
-Consumers are unaffected by the difference: `runtime_helpers.py` classifies
-`401`, `403`, and `404` alike as permanent, so a worker that is refused does not
-retry against any port.
+Consumers are unaffected either way: `runtime_helpers.py` classifies `401`,
+`403`, and `404` alike as permanent, so a worker that is refused does not retry
+against any port.
 
 ## UTERM_TEST_MODE
 
@@ -202,6 +203,8 @@ happens to stay silent as a timeout.
 - Go's refusal no longer carries a reason string, since there is no socket on
   which to deliver a close reason. The status code carries the meaning instead,
   which is what the other two ports already did.
-- Python's 401 remains blocked on an upstream uvicorn fix, and the Python
-  test-mode bypass remains broader than the other ports'. Both are recorded
+- Python carries a log filter for an upstream uvicorn defect. It is scoped to
+  this server's own denials and deletable the moment uvicorn's completion check
+  accounts for `initial_response`.
+- The Python test-mode bypass remains broader than the other ports', recorded
   above rather than silently tolerated.

@@ -45,8 +45,9 @@ public sealed partial class UtermServer
 
             // Anonymous is refused here, before the session is even looked up —
             // the same gate Python applies to every websocket
-            // (app/factory_impl.py: anonymous → WS 1008 "authentication
-            // required") and the worker socket below applies with its bearer.
+            // (app/factory_impl.py raises WebSocketAuthDenied, answered as a 401
+            // by app/ws_denial.py) and the worker socket below applies with its
+            // bearer.
             //
             // Without it this path fell through to CanReadSession, which returns
             // true for a session whose visibility is "public" — and "public" is
