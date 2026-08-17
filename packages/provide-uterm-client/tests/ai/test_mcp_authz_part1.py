@@ -23,7 +23,8 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
+from mcp.types import CallToolResult
 
 from provide.uterm.ai.auth import (
     McpPrincipal,
@@ -50,15 +51,20 @@ def _principal(role: str, subject: str = "tester") -> McpPrincipal:
     return McpPrincipal(subject_id=subject, roles=frozenset({role}))
 
 
-def _mcp(role: str) -> FastMCP:
-    """Construct a FastMCP app whose default principal has *role*."""
+def _mcp(role: str) -> MCPServer:
+    """Construct an MCP app whose default principal has *role*."""
     return create_mcp_app("http://test", default_principal=_principal(role))
 
 
-async def _call(mcp: FastMCP, tool: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _call(mcp: MCPServer, tool: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Call a tool by name and return its structured_content payload."""
     result = await mcp.call_tool(tool, args or {})
-    return result.structured_content  # type: ignore[return-value]
+    # MCPServer.call_tool() returns CallToolResult | InputRequiredResult; only
+    # the former carries structured_content. None of these tests exercise the
+    # elicitation path that produces InputRequiredResult, so a plain isinstance
+    # narrows the union for mypy without changing runtime behavior.
+    assert isinstance(result, CallToolResult)
+    return result.structured_content  # type: ignore[no-any-return]
 
 
 # ---------------------------------------------------------------------------
