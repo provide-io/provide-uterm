@@ -45,13 +45,13 @@ func (s *Server) handleWorkerWS(w http.ResponseWriter, r *http.Request) {
 	}
 	// Worker-token auth BEFORE the upgrade. This used to accept first and then
 	// close 1008, on the stated grounds of "matching the Python
-	// accept-before-close ordering" — but Python does not do that: it raises
-	// its 1008 inside a dependency, and Starlette denies the handshake before
-	// accept, which is why an unauthenticated client measures 403 there and
-	// measured a completed-then-closed socket here. Refusing pre-upgrade costs
-	// no upgrade, leaves no half-open socket, and matches both the C# port and
-	// this server's own HTTP paths, which already answer 401 "authentication
-	// required" (middleware.go, routes_api.go, bridge_rest_gui_vnc.go).
+	// accept-before-close ordering" — but Python does not do that: it refuses
+	// the handshake before accept, and an unauthenticated client measures 401
+	// there while it measured a completed-then-closed socket here. Refusing
+	// pre-upgrade costs no upgrade, leaves no half-open socket, and matches both
+	// the C# port and this server's own HTTP paths, which already answer 401
+	// "authentication required" (middleware.go, routes_api.go,
+	// bridge_rest_gui_vnc.go).
 	if tok := s.deps.Hub.WorkerToken(); tok != nil {
 		provided := bearerToken(r)
 		if subtle.ConstantTimeCompare([]byte(provided), []byte(*tok)) != 1 {
