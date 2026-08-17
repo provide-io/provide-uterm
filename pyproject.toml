@@ -374,6 +374,22 @@ source_paths = [
     # unit tested via test_config.py (mutmut cannot reach them in any file).
     "src/provide/uterm/server/config_schema.py",
     "src/provide/uterm/server/app/factory.py",
+    # ws_denial.py — the websocket auth REFUSAL: it decides the status an
+    #   unauthenticated caller sees (401 vs a bare 403 close) and it owns the
+    #   log filter that keeps a refusal flood from amplifying into an ERROR
+    #   flood. Both are security-relevant and both are invisible to line
+    #   coverage, which is exactly the gap mutation testing exists to close.
+    #   ENFORCED at killed==100 with ZERO documented equivalents, by design: the
+    #   two literal families that WOULD have been unkillable were hoisted to
+    #   module constants instead of excused. Starlette lowercases header names
+    #   (responses.py init_headers), so an inline "WWW-Authenticate" spawns two
+    #   case-mutants byte-identical to the original; typing.cast discards its
+    #   first argument at runtime, so mutating that string is undetectable. The
+    #   constants + an ignore comment remove both families (55 mutants -> 38).
+    #   Bound by test_ws_denial_mutation_killing.py, wired into the pytest
+    #   selection below. test_ws_denial.py is the coverage suite and stays
+    #   UNWIRED.
+    "src/provide/uterm/server/app/ws_denial.py",
     # manager/process.py + config.py — NOT mutation targets: both have ZERO mutable
     #   surface (measured 2026-06-02 via mutmut.file_mutation.mutate_file_contents → 0
     #   mutants each). process.py is a pure RE-EXPORT SHIM (`from process_impl import
@@ -738,6 +754,9 @@ pytest_add_cli_args_test_selection = [
     # lease suites above) has already bound its coverage — so it can no longer
     # mass-report earlier targets as no_tests/not_checked. They remain the bound
     # suites for app/factory.py's mutants.
+    # Pure-unit kill suite, deliberately ahead of the two lifespan-driving
+    # suites below so a flake there cannot abort stats before it binds.
+    "packages/provide-uterm-server/tests/server/test_ws_denial_mutation_killing.py",
     "packages/provide-uterm-server/tests/server/test_config.py",
     "packages/provide-uterm-server/tests/server/test_app_coverage.py",
 ]
