@@ -20,19 +20,16 @@ required role.  These tests:
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock
-
-from fastmcp import FastMCP
+from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 from provide.uterm.ai.auth import (
-    _PRINCIPAL_STATE_KEY,
     AuthorizationContext,
     AuthorizationDenied,
     McpPrincipal,
     authorized,
     deny_payload,
+    resolve_principal,
 )
-from provide.uterm.ai.server import create_mcp_app
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -42,17 +39,6 @@ from provide.uterm.ai.server import create_mcp_app
 def _principal(role: str, subject: str = "tester") -> McpPrincipal:
     """Build a single-role principal for tests."""
     return McpPrincipal(subject_id=subject, roles=frozenset({role}))
-
-
-def _mcp(role: str) -> FastMCP:
-    """Construct a FastMCP app whose default principal has *role*."""
-    return create_mcp_app("http://test", default_principal=_principal(role))
-
-
-async def _call(mcp: FastMCP, tool: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Call a tool by name and return its structured_content payload."""
-    result = await mcp.call_tool(tool, args or {})
-    return result.structured_content  # type: ignore[return-value]
 
 
 # ---------------------------------------------------------------------------
@@ -143,31 +129,50 @@ class TestAuthorizedDecorator:
         assert result["tool"] == "session_create"
         assert result["required_role"] == "admin"
 
-    async def test_decorator_uses_request_scoped_principal(self) -> None:
-        auth_ctx = AuthorizationContext(default_principal=_principal("viewer", subject="default"))
+    async def test_decorator_uses_authenticated_subject(self) -> None:
+        """A transport-authenticated subject overrides the default's identity.
+
+        Roles still come from the configured default: authenticated_principal()
+        returns an identity string, not a role set.
+        """
+        auth_ctx = AuthorizationContext(default_principal=_principal("admin", subject="default"))
         body = AsyncMock(return_value={"success": True, "via": "body"})
-        req_ctx = AsyncMock()
-        req_ctx.get_state = AsyncMock(return_value=_principal("admin", subject="scoped"))
+        req_ctx = MagicMock()
 
         decorated = authorized("session_create", auth_ctx)(body)
-        result = await decorated(ctx=req_ctx)
+        with patch(
+            "provide.uterm.ai.auth.authenticated_principal",
+            return_value="alice@example.com",
+        ):
+            result = await decorated(ctx=req_ctx)
 
         assert result == {"success": True, "via": "body"}
         body.assert_awaited_once()
-        req_ctx.get_state.assert_awaited_once_with(_PRINCIPAL_STATE_KEY)
 
-    async def test_decorator_denies_when_request_scoped_principal_low_privilege(self) -> None:
-        auth_ctx = AuthorizationContext(default_principal=_principal("admin", subject="default"))
+    async def test_decorator_falls_back_to_default_on_unauthenticated_transport(self) -> None:
+        """stdio has no principal binding; the configured default applies."""
+        auth_ctx = AuthorizationContext(default_principal=_principal("viewer", subject="default"))
         body = AsyncMock(return_value={"success": True, "via": "body"})
-        req_ctx = AsyncMock()
-        req_ctx.get_state = AsyncMock(return_value=_principal("viewer", subject="scoped"))
+        req_ctx = MagicMock()
 
         decorated = authorized("session_create", auth_ctx)(body)
-        result = await decorated(ctx=req_ctx)
+        with patch("provide.uterm.ai.auth.authenticated_principal", return_value=None):
+            result = await decorated(ctx=req_ctx)
 
         body.assert_not_awaited()
         assert result["error"] == "authorization_denied"
-        assert result["principal"] == "scoped"
+        assert result["required_role"] == "admin"
+        assert result["principal"] == "default"
+
+    async def test_resolve_principal_survives_unbound_request_context(self) -> None:
+        """Context.request_context raises when unbound — it must not escape."""
+        default = _principal("operator", subject="default")
+        ctx = MagicMock()
+        type(ctx).request_context = PropertyMock(side_effect=ValueError("no active request"))
+
+        resolved = await resolve_principal(ctx, default=default)
+
+        assert resolved is default
 
 
 class TestAuthorizationDeniedShape:
