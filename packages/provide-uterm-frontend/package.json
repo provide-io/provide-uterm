@@ -23,7 +23,7 @@
     "lit": "^3.3.3"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.7",
+    "@biomejs/biome": "^2.5.8",
     "@vitest/coverage-v8": "^4.1.8",
     "jsdom": "^30.0.1",
     "typescript": "^7.0.2",

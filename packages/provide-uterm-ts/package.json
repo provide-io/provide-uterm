@@ -31,12 +31,12 @@
     "node-pty": "^1.1.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "smol-toml": "^1.7.1",
+    "smol-toml": "^1.8.0",
     "ssh2": "^1.17.0",
     "ws": "^8.21.1"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.7",
+    "@biomejs/biome": "^2.5.8",
     "@stryker-mutator/core": "^9.6.1",
     "@stryker-mutator/vitest-runner": "^9.6.1",
     "@testing-library/dom": "^10.4.1",
