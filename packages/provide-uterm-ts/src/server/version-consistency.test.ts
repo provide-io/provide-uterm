@@ -20,7 +20,7 @@ function readJson(path: string): Record<string, unknown> {
  * Directory names under packages/ that belong to another repository.
  *
  * packages/provide-telemetry is a git submodule, released on its own cadence —
- * it sits at 0.7.0 while this repo is at 0.5.0, and its VERSION is not ours to
+ * it is versioned independently of this repo, and its VERSION is not ours to
  * keep in step. scripts/repo_paths.py already carries this rule for the SPDX
  * walker and the docs-accuracy checker, both of which "got it wrong in the same
  * way" when the submodule landed; this check is the one that never got updated.
@@ -85,17 +85,31 @@ describe("release version consistency", () => {
     }
 
     expect(SERVER_VERSION).toBe(expected);
-    expect(readFileSync(join(repoRoot, "CHANGELOG.md"), "utf8")).toContain(`## [${expected}] — 2026-08-01`);
+    // Matched by version with the date left open. Pinning the literal date
+    // meant every bump edited this assertion, and an assertion edited to make
+    // it pass is not one that checks anything.
+    expect(readFileSync(join(repoRoot, "CHANGELOG.md"), "utf8")).toMatch(
+      new RegExp(`^## \\[${expected.replace(/\./g, "\\.")}\\] — \\d{4}-\\d{2}-\\d{2}$`, "m"),
+    );
   });
 
-  it("keeps pre-release hardening inside the dated release section", () => {
+  it("keeps the Unreleased section empty, with this version as the newest release", () => {
     const changelog = readFileSync(join(repoRoot, "CHANGELOG.md"), "utf8");
+    const rootProject = parseToml(readFileSync(join(repoRoot, "pyproject.toml"), "utf8")).project as Record<
+      string,
+      unknown
+    >;
     const unreleasedStart = changelog.indexOf("## [Unreleased]");
-    const releaseStart = changelog.indexOf("## [0.5.0] — 2026-08-01");
-
     expect(unreleasedStart).toBeGreaterThanOrEqual(0);
-    expect(releaseStart).toBeGreaterThan(unreleasedStart);
+
+    // The first dated release heading after [Unreleased] is the one being cut.
+    const dated = /^## \[(\d+\.\d+\.\d+)\] — (\d{4}-\d{2}-\d{2})$/m.exec(changelog.slice(unreleasedStart));
+    expect(dated, "no dated release heading follows [Unreleased]").not.toBeNull();
+    expect(dated?.[1], "newest dated release is not the current version").toBe(String(rootProject.version));
+
+    // Nothing may accumulate under [Unreleased]: notes written there are notes
+    // that ship in no release, which is how a version goes out undocumented.
+    const releaseStart = unreleasedStart + (dated?.index ?? 0);
     expect(changelog.slice(unreleasedStart + "## [Unreleased]".length, releaseStart).trim()).toBe("");
-    expect(changelog.indexOf("### Post-audit hardening", releaseStart)).toBeGreaterThan(releaseStart);
   });
 });

@@ -162,9 +162,15 @@ async def demo_session_api(http: httpx.AsyncClient) -> None:
 
 async def run_demo() -> None:
     """Run the full demo."""
-    print("\033[1;35m╔══════════════════════════════════════════╗\033[0m")
-    print("\033[1;35m║   provide-uterm v0.5.0 Feature Demo   ║\033[0m")
-    print("\033[1;35m╚══════════════════════════════════════════╝\033[0m")
+    # Read the version rather than spell it out: the literal here said 0.5.0
+    # while the package was being cut as 0.6.0, and a demo that announces the
+    # wrong version is worse than one that announces none.
+    from provide.uterm import __version__
+
+    banner = f"provide-uterm v{__version__} Feature Demo"
+    print(f"\033[1;35m╔═{'═' * len(banner)}═╗\033[0m")
+    print(f"\033[1;35m║ {banner} ║\033[0m")
+    print(f"\033[1;35m╚═{'═' * len(banner)}═╝\033[0m")
 
     base_url, server = _start_server()
     print(f"\n  Server running at {base_url}\n")

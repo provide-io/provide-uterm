@@ -4,6 +4,48 @@ All notable changes to provide-uterm are documented in this file.
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-08-16
+
+A cross-language hardening cycle. The C# port gained the capability work it was
+missing, and a run of gaps turned up where suites existed but nothing invoked
+them — several defects were sitting behind gates that had never executed.
+
+### Added
+
+- C# port: the browser-input approval hold path, the tenant-scoped
+  graphical-target registry, and snapshot ingest counters.
+- Wire-contract drift is now gated across the ports in CI, and the shared
+  graphical-targets corpus is executed rather than merely shipped.
+
+### Fixed
+
+- **Approval requests never expired in the C# port.** Nothing was aging them
+  out, so a hold could outlive its window.
+- C# builds: eight warnings cleared and ratcheted against regression; the
+  warning gate now sees analyzer warnings and not only compiler ones; native
+  AOT is kept off framework-dependent publishes.
+- The capture layer no longer folds a stale-library remedy into the redacted
+  value.
+- The control decoder is seeded through the buffer it actually drains, and the
+  redundant reset in `finish()` — four mutants on unobservable statements — is
+  gone.
+- Release-version consistency no longer sweeps a git submodule's `VERSION`
+  into this repository's invariant.
+- `localStorage` is provided to the app test suite when the runtime's own
+  global shadows the one jsdom installs (node >= 24).
+
+### Testing and CI
+
+- `tests/conformance/` and `tests/scripts/` are wired into CI and the local
+  sweep. Both sat outside the default testpaths and were named by no gate, so
+  the cross-language API-parity spec and the tooling suite had never run.
+- `run_all_tests.py` runs every leg and reports a per-leg summary instead of
+  returning on the first failure, which had been hiding every later suite.
+- The mutation gate fails on a perimeter file that generates no mutants,
+  nineteen allowlist entries for mutants that are in fact killed were dropped,
+  and the renumbered `sessions` entries were repaired.
+- A fan-out adapter that blows its deadline now reports where it hung.
+
 ## [0.5.0] — 2026-08-01
 
 A multi-wave security/compliance hardening pass landed during the
