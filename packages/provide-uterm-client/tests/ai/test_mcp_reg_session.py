@@ -14,8 +14,9 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 from fastapi import FastAPI
-from fastmcp import FastMCP
 from httpx import ASGITransport
+from mcp.server.mcpserver import MCPServer
+from mcp.types import CallToolResult
 from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.server.bridge.models import WorkerTermState
 
@@ -59,7 +60,7 @@ def _add_worker_with_snapshot(
     return ws
 
 
-def _mcp_for(app: FastAPI) -> FastMCP:
+def _mcp_for(app: FastAPI) -> MCPServer:
     # Tests in this file exercise admin-only tools; after Finding #2 the
     # default dropped to operator so we opt in explicitly here.
     return create_mcp_app("http://test", transport=ASGITransport(app=app), default_role="admin")
@@ -100,7 +101,7 @@ def _server_app(
     return create_server_app(cfg)
 
 
-def _mcp_for_server(app: FastAPI) -> FastMCP:
+def _mcp_for_server(app: FastAPI) -> MCPServer:
     return create_mcp_app(
         "http://test",
         transport=ASGITransport(app=app),
@@ -109,16 +110,21 @@ def _mcp_for_server(app: FastAPI) -> FastMCP:
 
 
 async def _call(
-    mcp: FastMCP,
+    mcp: MCPServer,
     tool: str,
     args: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     result = await mcp.call_tool(tool, args or {})
-    return result.structured_content  # type: ignore[return-value]
+    # MCPServer.call_tool() returns CallToolResult | InputRequiredResult; only
+    # the former carries structured_content. None of these tests exercise the
+    # elicitation path that produces InputRequiredResult, so a plain isinstance
+    # narrows the union for mypy without changing runtime behavior.
+    assert isinstance(result, CallToolResult)
+    return result.structured_content  # type: ignore[no-any-return]
 
 
 async def _acquire(
-    mcp: FastMCP,
+    mcp: MCPServer,
     worker_id: str,
     **kw: Any,
 ) -> str:

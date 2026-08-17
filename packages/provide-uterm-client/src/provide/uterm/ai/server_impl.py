@@ -2,11 +2,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""FastMCP server exposing the full provide-uterm control plane.
+"""MCP 2.0 SDK server exposing the full provide-uterm control plane.
 
-Factory function ``create_mcp_app()`` returns a ready-to-run :class:`FastMCP`
-instance with 21 tools covering session management, hijack lifecycle, and
-worker control.
+Factory function ``create_mcp_app()`` returns a ready-to-run
+:class:`~mcp.server.mcpserver.MCPServer` instance with 21 tools covering
+session management, hijack lifecycle, and worker control.
 
 The tool handlers themselves live in two cohesive sibling modules so no single
 file grows unbounded:
@@ -43,7 +43,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-from fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from provide.uterm.ai.auth import (
     AuthorizationContext,
@@ -72,8 +72,8 @@ from provide.uterm.client.sanitizer import unescape_keys
 __all__ = [
     "TOOL_COUNT",
     "AuthorizationContext",
-    "FastMCP",
     "HijackClient",
+    "MCPServer",
     "McpPrincipal",
     "_clean_snapshot",
     "_compile_user_pattern",
@@ -101,8 +101,8 @@ def create_mcp_app(
     default_principal: McpPrincipal | None = None,
     default_role: str = "operator",
     **client_kwargs: Any,
-) -> FastMCP:
-    """Create a FastMCP app with all provide-uterm tools.
+) -> MCPServer:
+    """Create an MCP 2.0 SDK app with all provide-uterm tools.
 
     Parameters
     ----------
@@ -140,11 +140,11 @@ def create_mcp_app(
     auth_ctx = AuthorizationContext(default_principal=default_principal)
 
     @contextlib.asynccontextmanager
-    async def _lifespan(_app: FastMCP) -> AsyncIterator[None]:
+    async def _lifespan(_app: MCPServer) -> AsyncIterator[None]:
         yield
         await client.__aexit__(None, None, None)
 
-    mcp = FastMCP("uterm", lifespan=_lifespan)
+    mcp = MCPServer("uterm", lifespan=_lifespan)
 
     register_hijack_tools(mcp, client, auth_ctx)
     register_session_tools(mcp, client, auth_ctx)

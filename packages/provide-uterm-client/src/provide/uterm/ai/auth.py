@@ -7,9 +7,9 @@
 All MCP tool handlers go through :func:`authorize` (applied via
 :func:`authorized` decorator) before their bodies execute.  The chokepoint:
 
-1. Resolves the calling :class:`McpPrincipal` from the ambient
-   :class:`~fastmcp.Context` (request-scoped state, then transport headers,
-   then the server's configured default principal).
+1. Resolves the calling :class:`McpPrincipal` via the transport's
+   authenticated identity (when available, from :func:`mcp.server.mcpserver.authenticated_principal`),
+   or falls back to the server's configured default principal.
 2. Looks up the tool's required role in
    :mod:`provide.uterm.ai.policy`.
 3. Rejects with a typed :class:`AuthorizationDenied` (returned as a
@@ -27,6 +27,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from functools import wraps
 from typing import Any, Protocol, TypeVar, cast
+
+from mcp.server.mcpserver import authenticated_principal
 
 from provide.uterm.ai.policy import Role, required_role, role_at_least
 
@@ -60,9 +62,10 @@ class McpPrincipal:
 
 
 class _ContextLike(Protocol):
-    """Subset of fastmcp.Context the chokepoint uses (kept narrow for typing)."""
+    """Subset of the MCP ``Context`` the chokepoint uses (kept narrow for typing)."""
 
-    async def get_state(self, key: str) -> Any: ...
+    @property
+    def request_context(self) -> Any: ...
 
 
 class AuthorizationDenied(Exception):  # noqa: N818 — domain-modeling name; not all exceptions end in Error.
@@ -87,11 +90,11 @@ class AuthorizationDenied(Exception):  # noqa: N818 — domain-modeling name; no
 # Principal resolution.
 # ---------------------------------------------------------------------------
 
-# Key used to publish the configured default principal into per-request
-# context state.  The MCP server registers an on-init hook that calls
-# ``ctx.set_state(_PRINCIPAL_STATE_KEY, principal)`` so tool handlers can
-# look it up without re-reading transport headers.
-_PRINCIPAL_STATE_KEY = "uterm.mcp.principal"
+# MCP 2.0 removed fastmcp's per-request state bag (``ctx.get_state``), so the
+# principal is no longer looked up by key. The SDK's own binding —
+# ``authenticated_principal`` — supplies the authenticated (client, issuer,
+# subject) identity directly, and returns None on unauthenticated transports
+# such as stdio.
 
 
 def principal_from_headers(headers: dict[str, str] | None) -> McpPrincipal | None:
@@ -99,6 +102,14 @@ def principal_from_headers(headers: dict[str, str] | None) -> McpPrincipal | Non
 
     Returns ``None`` when neither header is present.  Header lookup is
     case-insensitive.
+
+    Security boundary: these headers are trusted only because they are
+    supplied locally by the operator launching the stdio server, via
+    ``client_kwargs["headers"]``. They are NOT a remote caller's assertion.
+    If an HTTP transport is ever enabled for this server, this path must be
+    removed or gated behind a verified token first — MCP 2.0's
+    ``Context.headers`` is explicit that client-supplied headers are never an
+    identity assertion.
     """
     if not headers:
         return None
@@ -113,6 +124,36 @@ def principal_from_headers(headers: dict[str, str] | None) -> McpPrincipal | Non
     )
 
 
+def _authenticated_identity(ctx: _ContextLike) -> str | None:
+    """Return the transport-authenticated identity, or None.
+
+    Not a bare subject id: :func:`mcp.server.mcpserver.authenticated_principal`
+    returns a JSON-serialized ``(client_id, issuer, subject)`` triple (see
+    ``mcp/server/request_state.py``), which becomes ``McpPrincipal.subject_id``
+    verbatim. That value is operator-visible — it surfaces in
+    :func:`deny_payload`'s ``"principal"`` field and in
+    :class:`AuthorizationDenied`'s exception message — so it must read as an
+    identity string, not be mistaken for a plain username.
+
+    ``Context.request_context`` raises when no request is bound rather than
+    returning None, so the access is guarded: an unbound context is a
+    "no authenticated identity" answer, not an error worth propagating out of
+    an authorization check.
+
+    The subsequent call to ``authenticated_principal(request_context)`` is
+    deliberately left unguarded: it only reads a contextvar via
+    ``get_access_token()`` (default ``None``) and never touches its ``ctx``
+    argument, so it cannot raise on a garbage or mock ``request_context`` —
+    unlike the property access above, there is nothing here for a bare
+    ``except`` to usefully catch.
+    """
+    try:
+        request_context = ctx.request_context
+    except Exception:
+        return None
+    return authenticated_principal(request_context)
+
+
 async def resolve_principal(
     ctx: _ContextLike | None,
     *,
@@ -122,17 +163,19 @@ async def resolve_principal(
 
     Lookup order:
 
-    1. Per-request state under :data:`_PRINCIPAL_STATE_KEY` (e.g. set by
-       middleware that authenticated the caller).
+    1. The transport-authenticated identity, when the transport binds one
+       (:func:`mcp.server.mcpserver.authenticated_principal`). Roles come from
+       the configured *default*, because that binding carries identity, not
+       authorisation.
     2. Configured server *default* (passed in by ``create_mcp_app``).
+
+    Kept ``async`` despite no longer awaiting anything, so that
+    :func:`authorized` and its tests need no change.
     """
     if ctx is not None:
-        try:
-            stored = await ctx.get_state(_PRINCIPAL_STATE_KEY)
-        except Exception:
-            stored = None
-        if isinstance(stored, McpPrincipal):
-            return stored
+        identity = _authenticated_identity(ctx)
+        if identity is not None:
+            return McpPrincipal(subject_id=identity, roles=default.roles)
     return default
 
 
@@ -173,11 +216,11 @@ class AuthorizationContext:
 def authorized(tool_name: str, auth_ctx: AuthorizationContext) -> Callable[[F], F]:
     """Return a decorator that gates *tool_name* on its required role.
 
-    Principal resolution prefers request-scoped context (when the tool
-    signature includes a ``fastmcp.Context`` parameter) and falls back to
-    ``auth_ctx.default_principal``. The decorator preserves the wrapped
-    function's signature via :func:`functools.wraps` so that fastmcp can
-    introspect parameter types as if no decoration were applied.
+    Principal resolution uses the transport-authenticated identity when
+    available (via :func:`mcp.server.mcpserver.authenticated_principal`), and
+    falls back to ``auth_ctx.default_principal``. The decorator preserves the
+    wrapped function's signature via :func:`functools.wraps` so that the MCP
+    server can introspect parameter types as if no decoration were applied.
     """
     minimum = required_role(tool_name)
 

@@ -11,8 +11,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import FastAPI
-from fastmcp import FastMCP
 from httpx import ASGITransport
+from mcp.server.mcpserver import MCPServer
+from mcp.types import CallToolResult
 from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.server.bridge.models import WorkerTermState
 
@@ -40,8 +41,8 @@ def _add_worker(hub: TermHub, worker_id: str = WID) -> AsyncMock:
     return mock_ws
 
 
-def _mcp_for(app: FastAPI, **kwargs: object) -> FastMCP:
-    """Return a FastMCP app backed by ASGI transport to *app*.
+def _mcp_for(app: FastAPI, **kwargs: object) -> MCPServer:
+    """Return an MCP app backed by ASGI transport to *app*.
 
     Tests in this file exercise worker-control tools requiring admin role
     (worker_disconnect/worker_input_mode); after Finding #2 the default
@@ -80,7 +81,7 @@ def _make_server_app() -> FastAPI:
     return create_server_app(cfg)
 
 
-def _mcp_for_server(app: FastAPI) -> FastMCP:
+def _mcp_for_server(app: FastAPI) -> MCPServer:
     return create_mcp_app(
         "http://test",
         transport=ASGITransport(app=app),
@@ -88,10 +89,15 @@ def _mcp_for_server(app: FastAPI) -> FastMCP:
     )
 
 
-async def _call(mcp: FastMCP, tool: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _call(mcp: MCPServer, tool: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Call an MCP tool and return the structured_content dict."""
     result = await mcp.call_tool(tool, args or {})
-    return result.structured_content  # type: ignore[return-value]
+    # MCPServer.call_tool() returns CallToolResult | InputRequiredResult; only
+    # the former carries structured_content. None of these tests exercise the
+    # elicitation path that produces InputRequiredResult, so a plain isinstance
+    # narrows the union for mypy without changing runtime behavior.
+    assert isinstance(result, CallToolResult)
+    return result.structured_content  # type: ignore[no-any-return]
 
 
 # ---------------------------------------------------------------------------

@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""FastMCP tools for managing an agent swarm.
+"""MCP tools for managing an agent swarm.
 
 Supports two modes:
 
@@ -11,17 +11,21 @@ Supports two modes:
 
 Usage::
 
-    # In-process
-    mcp = create_manager_mcp_tools(manager=my_manager)
+    # Preferred: register onto an app the caller already owns (works against
+    # either a fastmcp.FastMCP or an mcp.server.mcpserver.MCPServer).
+    register_manager_tools(app, manager=my_manager)
+    register_manager_tools(app, base_url="http://localhost:2272")
 
-    # Out-of-process
+    # Deprecated: builds and returns its own FastMCP app. Kept only for
+    # existing callers; prefer register_manager_tools above.
+    mcp = create_manager_mcp_tools(manager=my_manager)
     mcp = create_manager_mcp_tools(base_url="http://localhost:2272")
 """
 
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable  # noqa: TC003
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -29,6 +33,19 @@ if TYPE_CHECKING:
     from provide.uterm.manager.core import AgentManager
 
 TOOL_COUNT = 15
+
+
+class _ToolRegistrar(Protocol):
+    """Structural type for an app exposing a tool() decorator factory.
+
+    Matches both fastmcp.FastMCP and mcp.server.mcpserver.MCPServer without
+    importing either directly, so this module works against either server
+    class during the transition. The permissive *args/**kwargs signature is
+    deliberate: it's what makes structural matching accept both concrete
+    classes' more specific tool() signatures.
+    """
+
+    def tool(self, *args: Any, **kwargs: Any) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
 
 
 async def _http_request(base_url: str, method: str, path: str, **kwargs: Any) -> tuple[bool, dict[str, Any]]:
@@ -46,16 +63,25 @@ async def _http_request(base_url: str, method: str, path: str, **kwargs: Any) ->
         return False, {"error": str(exc)}
 
 
-def create_manager_mcp_tools(
-    manager: AgentManager | None = None,
+def register_manager_tools(
+    app: _ToolRegistrar,
     *,
+    manager: AgentManager | None = None,
     base_url: str | None = None,
     on_first_http: Callable[[], Awaitable[None]] | None = None,
     agent_telemetry_fields: frozenset[str] | None = None,
-) -> FastMCP:
-    """Create a FastMCP app with generic swarm management tools.
+) -> int:
+    """Register the generic swarm-management tools onto *app*.
+
+    *app* is typed structurally via :class:`_ToolRegistrar`, not against a
+    concrete server class: this function must work against a ``FastMCP`` and
+    an ``mcp.server.mcpserver.MCPServer`` alike, so that consumers can
+    migrate to the MCP 2.0 SDK independently of this package. Only
+    ``app.tool()`` is used.
 
     Args:
+        app: Server app to register onto. Must expose a ``tool()`` decorator
+            factory.
         manager: AgentManager instance for direct in-process calls.
         base_url: HTTP base URL (e.g. ``"http://localhost:2272"``) for
             out-of-process calls.  Ignored when *manager* is provided.
@@ -63,8 +89,9 @@ def create_manager_mcp_tools(
             request.  Useful for auto-starting the manager process.
         agent_telemetry_fields: Set of per-agent field names to strip from
             ``swarm_status`` responses when ``include_telemetry=False``.
-            Pass application-specific field names here; defaults to no
-            stripping when ``None``.
+
+    Returns:
+        The number of tools registered (:data:`TOOL_COUNT`).
 
     Raises:
         ValueError: If neither *manager* nor *base_url* is provided.
@@ -72,9 +99,7 @@ def create_manager_mcp_tools(
     if manager is None and not base_url:
         raise ValueError("Provide either manager (in-process) or base_url (HTTP)")
 
-    from fastmcp import FastMCP as _FastMCP
-
-    mcp = _FastMCP("provide-uterm-platform")
+    mcp = app
 
     _http_initialized = False
 
@@ -327,4 +352,30 @@ def create_manager_mcp_tools(
         ok, data = await _http("GET", f"/agent/{agent_id}/events")
         return data if ok else {"error": data.get("error", f"Failed to get events for {agent_id}")}
 
+    return TOOL_COUNT
+
+
+def create_manager_mcp_tools(
+    manager: AgentManager | None = None,
+    *,
+    base_url: str | None = None,
+    on_first_http: Callable[[], Awaitable[None]] | None = None,
+    agent_telemetry_fields: frozenset[str] | None = None,
+) -> FastMCP:
+    """Create a FastMCP app carrying the swarm-management tools.
+
+    Deprecated: returning a server object forces every consumer onto this
+    package's server library. Prefer :func:`register_manager_tools`, which
+    registers into an app the caller owns. Removed once no consumer remains.
+    """
+    from fastmcp import FastMCP as _FastMCP
+
+    mcp = _FastMCP("provide-uterm-platform")
+    register_manager_tools(
+        mcp,
+        manager=manager,
+        base_url=base_url,
+        on_first_http=on_first_http,
+        agent_telemetry_fields=agent_telemetry_fields,
+    )
     return mcp

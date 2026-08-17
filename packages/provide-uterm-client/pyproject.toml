@@ -11,14 +11,24 @@ dynamic = ["version"]
 description = "Client libraries, transports, and AI/MCP integration for provide-uterm"
 requires-python = ">=3.11"
 license = "AGPL-3.0-or-later"
-dependencies = ["provide-uterm>=0.5.0"]
+dependencies = [
+    "provide-uterm>=0.5.0",
+    # Base dependency, not an extra: `uterm-mcp` (below, [project.scripts]) is
+    # an unconditional console script pointing at provide.uterm.ai, which
+    # imports mcp at module scope. Gating mcp behind an extra would let
+    # `pip install provide-uterm-client` install a console script whose own
+    # import fails until the caller separately opts into an extra it has no
+    # way to discover from the entry point alone -- a latent packaging bug
+    # that predates this port (the old fastmcp-extra arrangement had the same
+    # shape). Declaring mcp unconditionally is the fix, not an oversight.
+    "mcp>=2.0.0",
+]
 
 [project.optional-dependencies]
 http = ["httpx>=0.27"]
 websocket = ["websockets>=16.0"]
 ssh = ["asyncssh>=2.22.0"]
-mcp = ["fastmcp>=2.0"]
-all = ["httpx>=0.27", "websockets>=16.0", "asyncssh>=2.22.0", "fastmcp>=2.0"]
+all = ["httpx>=0.27", "websockets>=16.0", "asyncssh>=2.22.0"]
 dev = [
     "pytest>=9.0",
     "pytest-asyncio>=1.3",
@@ -29,7 +39,6 @@ dev = [
     "httpx>=0.27",
     "websockets>=16.0",
     "asyncssh>=2.22.0",
-    "fastmcp>=2.0",
 ]
 
 [project.scripts]
