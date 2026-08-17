@@ -66,6 +66,35 @@ public sealed class WebhookLateRegistrationTests
     }
 
     [Fact]
+    public async Task A_webhook_registered_during_shutdown_is_still_cancelled()
+    {
+        // ShutdownAsync snapshots the workers, then cancels the shared source,
+        // then releases each snapshotted worker. A webhook registered between
+        // the snapshot and the cancel is in none of those lists: nothing calls
+        // Release on it, and disposing the shared source does not cancel it.
+        // Cancelling it does, through the linked token every worker holds.
+        var bus = new EventBus();
+        var manager = ManagerOn(bus);
+        Task? lateLoop = null;
+
+        manager.ShutdownRaceHook = () =>
+        {
+            manager.Register(SessionId, "http://127.0.0.1:9/racing", null, null, null);
+            lateLoop = Assert.Single(manager.ActiveLoops);
+        };
+
+        await manager.ShutdownAsync();
+
+        // ShutdownAsync only awaits the snapshotted workers, so it returns
+        // whether or not this one was ever stopped — the loop has to be waited
+        // on separately. It is blocked in ReadAsync; cancellation is the only
+        // thing that ends it.
+        Assert.NotNull(lateLoop);
+        await lateLoop.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.True(lateLoop.IsCompletedSuccessfully);
+    }
+
+    [Fact]
     public async Task Registering_before_shutdown_still_takes_a_subscription()
     {
         // The negative control. If Register never subscribed at all, the test
