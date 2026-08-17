@@ -22,8 +22,18 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCENARIOS_PATH = REPO_ROOT / "spec/fanout_security_scenarios.json"
 RUNNER_PATH = REPO_ROOT / "scripts/run_fanout_security_scenarios.py"
 
+# What the contract FILE declares, which is a property of the document and not
+# of the runner. The live-matrix job fans out one cell per backend with
+# SERVER_IMPL set, and asserting the document's backend set equalled that single
+# cell's backend could never hold: the contract always names all four. That is
+# why every live-matrix cell was red.
+DECLARED_BACKENDS = {"python", "go", "csharp", "typescript"}
+
+# Which backends this run actually EXECUTES. A live-matrix cell exercises only
+# its own, so honouring SERVER_IMPL here keeps a cell from driving the other
+# three native adapters.
 server_impl = os.environ.get("SERVER_IMPL")
-BACKENDS = {server_impl} if server_impl else {"python", "go", "csharp", "typescript"}
+BACKENDS = {server_impl} if server_impl else set(DECLARED_BACKENDS)
 
 STATUSES = {"execute", "unsupported_fail_closed", "component_execute", "unserved"}
 REQUIRED_CATEGORIES = {
@@ -75,14 +85,14 @@ def test_contract_contains_semantic_inputs_expectations_and_exact_status_matrix(
     contract = _contract()
 
     assert contract["schema_version"] == 1
-    assert set(contract["backends"]) == BACKENDS  # type: ignore[arg-type]
+    assert set(contract["backends"]) == DECLARED_BACKENDS  # type: ignore[arg-type]
     scenarios = contract["scenarios"]
     assert isinstance(scenarios, list) and scenarios
     for scenario in scenarios:
         assert set(scenario) >= {"id", "input", "expected", "backends"}
         assert set(scenario["expected"]) == EXPECTED_FIELDS
-        assert set(scenario["backends"]) == BACKENDS
-        for backend in BACKENDS:
+        assert set(scenario["backends"]) == DECLARED_BACKENDS
+        for backend in DECLARED_BACKENDS:
             claim = scenario["backends"][backend]
             assert set(claim) == {"status", "expected"}
             assert claim["status"] in STATUSES

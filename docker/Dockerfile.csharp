@@ -47,15 +47,40 @@ WORKDIR /src
 
 COPY packages/provide-telemetry/ packages/provide-telemetry/
 COPY packages/provide-uterm-csharp/ packages/provide-uterm-csharp/
+# SelfContained=false, which the csproj uses to switch native AOT and trimming
+# OFF (see the PublishAot/PublishTrimmed conditions in Uterm.csproj).
+#
+# This image cannot be AOT-published. ASP.NET minimal APIs build their request
+# delegates through RequestDelegateFactory, which needs JSON metadata that AOT
+# trimming removes, so EVERY route — not just one — answered 500 with:
+#   System.NotSupportedException: JsonTypeInfo metadata for type
+#   'Task`1[IResult]' was not provided by TypeInfoResolver of type '[]'
+# thrown while constructing the endpoints. Making the container AOT-clean means
+# source-generating JSON contexts across the whole server surface; running
+# framework-dependent is the supported path and is what RUNTIME_IMAGE was
+# always declared for.
 RUN dotnet publish packages/provide-uterm-csharp/cmd/Uterm/Uterm.csproj -c Release -o /app/publish \
+    -p:SelfContained=false \
     /p:UseAppHost=true
 
 # ---- runtime ---------------------------------------------------------------
-FROM gcr.io/distroless/cc-debian12:nonroot AS runtime
+# aspnet:10.0 — the framework-dependent publish above needs the .NET runtime
+# present. Two earlier startup failures came from a distroless base, and the
+# second was hidden behind the first:
+#   1. glibc: an AOT binary links the BUILD image's glibc, and sdk:10.0 is
+#      Debian 13 (>= 2.38) while cc-debian12 ships 2.36 —
+#        ./uterm: /lib/x86_64-linux-gnu/libm.so.6: version `GLIBC_2.38' not found
+#   2. ICU: distroless/cc carries no libicu, and .NET fails fast without it —
+#        Process terminated. Couldn't find a valid ICU package installed
+# Both are moot now: this image tracks the SDK's distro and ships both.
+FROM ${RUNTIME_IMAGE} AS runtime
 
 WORKDIR /app
 
-COPY --from=build /app/publish/uterm ./uterm
+# The whole publish directory, not just the apphost: a framework-dependent
+# publish is the apphost PLUS its managed assemblies, and copying the single
+# file leaves an executable with nothing to run.
+COPY --from=build /app/publish/ ./
 # Baked SPA/static assets (hijack.html, terminal.html, assets/, vite-manifest.json)
 COPY --from=frontend-build \
     /src/packages/provide-uterm-server/src/provide/uterm/server/frontend/ \

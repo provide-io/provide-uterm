@@ -43,7 +43,12 @@ case "${1:?usage: hostile_probe.sh <start|wait-health|burst|oversized|slowloris|
     elif [ "$server_impl" = "go" ]; then
       (cd packages/provide-uterm-go && nohup go run cmd/uterm/main.go server --host "${host}" --port "${port}" >"${SERVER_LOG}" 2>&1) &
     elif [ "$server_impl" = "csharp" ]; then
-      (cd packages/provide-uterm-csharp/src/Provide.Uterm.Cli && nohup dotnet run -c Release -- server --host "${host}" --port "${port}" >"${SERVER_LOG}" 2>&1) &
+      # --project rather than `cd`: the CLI moved to cmd/Uterm, and a `cd` that
+      # fails inside `( ... ) &` takes the subshell down without failing this
+      # step — the start reported success and the breakage only surfaced as a
+      # health timeout sixty seconds later, in a different step.
+      nohup dotnet run --project packages/provide-uterm-csharp/cmd/Uterm/Uterm.csproj -c Release \
+        -- server --host "${host}" --port "${port}" >"${SERVER_LOG}" 2>&1 &
     else
       echo "unknown SERVER_IMPL: $server_impl" >&2
       exit 1
