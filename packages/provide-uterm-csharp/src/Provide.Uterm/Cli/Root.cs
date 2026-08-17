@@ -666,6 +666,15 @@ public static class Root
         var (server, devToken, engine) = await ServerFactory
             .CreateFromConfigAsync(config, Version).ConfigureAwait(false);
         o.WriteLine($"uterm server listening on http://{config.Server.Host}:{config.Server.Port}");
+        // A server with the websocket auth gate switched off must say so. The
+        // variable mints an admin principal for browser sockets, and until now
+        // a server running that way was indistinguishable in its output from a
+        // normal one — the only safeguard was a comment telling operators not
+        // to set it.
+        if (string.Equals(Environment.GetEnvironmentVariable("UTERM_TEST_MODE"), "1", StringComparison.Ordinal))
+        {
+            o.WriteLine(TestModeBanner.Warning);
+        }
         if (!string.IsNullOrEmpty(devToken))
         {
             o.WriteLine($"dev_token: {devToken}");
