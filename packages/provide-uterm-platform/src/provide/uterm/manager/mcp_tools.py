@@ -21,7 +21,7 @@ Usage::
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable  # noqa: TC003
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -29,6 +29,19 @@ if TYPE_CHECKING:
     from provide.uterm.manager.core import AgentManager
 
 TOOL_COUNT = 15
+
+
+class _ToolRegistrar(Protocol):
+    """Structural type for an app exposing a tool() decorator factory.
+
+    Matches both fastmcp.FastMCP and mcp.server.mcpserver.MCPServer without
+    importing either directly, so this module works against either server
+    class during the transition. The permissive *args/**kwargs signature is
+    deliberate: it's what makes structural matching accept both concrete
+    classes' more specific tool() signatures.
+    """
+
+    def tool(self, *args: Any, **kwargs: Any) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
 
 
 async def _http_request(base_url: str, method: str, path: str, **kwargs: Any) -> tuple[bool, dict[str, Any]]:
@@ -47,7 +60,7 @@ async def _http_request(base_url: str, method: str, path: str, **kwargs: Any) ->
 
 
 def register_manager_tools(
-    app: Any,
+    app: _ToolRegistrar,
     *,
     manager: AgentManager | None = None,
     base_url: str | None = None,
@@ -56,10 +69,11 @@ def register_manager_tools(
 ) -> int:
     """Register the generic swarm-management tools onto *app*.
 
-    *app* is intentionally untyped: this function must work against a
-    ``FastMCP`` and an ``mcp.server.mcpserver.MCPServer`` alike, so that
-    consumers can migrate to the MCP 2.0 SDK independently of this package.
-    Only ``app.tool()`` is used.
+    *app* is typed structurally via :class:`_ToolRegistrar`, not against a
+    concrete server class: this function must work against a ``FastMCP`` and
+    an ``mcp.server.mcpserver.MCPServer`` alike, so that consumers can
+    migrate to the MCP 2.0 SDK independently of this package. Only
+    ``app.tool()`` is used.
 
     Args:
         app: Server app to register onto. Must expose a ``tool()`` decorator
