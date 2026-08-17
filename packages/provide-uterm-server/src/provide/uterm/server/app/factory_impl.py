@@ -58,6 +58,7 @@ from provide.uterm.server.app.middleware import (
 )
 from provide.uterm.server.app.posture import compute_security_posture
 from provide.uterm.server.app.routes_wiring import install_routers, mount_frontend_assets
+from provide.uterm.server.app.ws_denial import WebSocketAuthDenied, install_ws_denial_support
 from provide.uterm.server.audit import audit_event, configure_audit_chain
 from provide.uterm.server.auth import (
     LocalIdentityProvider,
@@ -260,7 +261,12 @@ def create_server_app(
             if principal.subject_id == "anonymous":
                 _inc_metric("auth_failures_ws_total")
                 logger.info("authn_denied surface=websocket")
-                raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="authentication required")
+                # 401 before the upgrade, matching this server's own HTTP answer
+                # below and the Go and C# ports. Starlette's unaided refusal is a
+                # pre-accept close, which every ASGI server reports as 403 — an
+                # authorization answer to an authentication failure. See
+                # app/ws_denial.py.
+                raise WebSocketAuthDenied(status.HTTP_401_UNAUTHORIZED, "authentication required")
             return
         principal = await _resolve_configured_principal(connection)
         connection.state.uterm_principal = principal
@@ -561,6 +567,7 @@ def create_server_app(
             await control_plane.close()
 
     app = FastAPI(title=config.server.title, lifespan=_lifespan)
+    install_ws_denial_support(app)
     app.state.uterm_config = config
     app.state.uterm_policy = policy
     app.state.uterm_authz = authz

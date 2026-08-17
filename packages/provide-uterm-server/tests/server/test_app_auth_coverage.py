@@ -284,7 +284,7 @@ class TestAuthDependencyBranches:
         await dep(conn_worker)
         assert conn_worker.state.uterm_principal.subject_id == "worker"
 
-        from fastapi import WebSocketException
+        from provide.uterm.server.app.ws_denial import WebSocketAuthDenied
 
         conn_browser = HTTPConnection(
             {
@@ -302,9 +302,12 @@ class TestAuthDependencyBranches:
                 "provide.uterm.server.app.factory_impl.resolve_ws_principal",
                 AsyncMock(return_value=Principal(subject_id="anonymous", roles=frozenset({"viewer"}))),
             ),
-            pytest.raises(WebSocketException),
+            pytest.raises(WebSocketAuthDenied) as denied,
         ):
             await dep(conn_browser)
+
+        # 401, not the 403 a bare pre-accept close would produce.
+        assert denied.value.status_code == 401
 
 
 class TestFactoryClosures:
