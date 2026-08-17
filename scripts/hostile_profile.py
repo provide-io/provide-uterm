@@ -66,10 +66,16 @@ async def _health(base_url: str, timeout_s: float) -> bool:
         return False
 
 
-def _ws_url(base_url: str, worker_id: str) -> str:
+def _ws_url(base_url: str, worker_id: str, surface: str = "browser") -> str:
+    """URL for one side of the bridge: ``browser`` (viewers) or ``worker``.
+
+    The worker socket is the more privileged of the two — it feeds terminal
+    output to every viewer and drives session state — and until the ``worker``
+    mode below it was probed by nothing.
+    """
     proto = "wss://" if base_url.startswith("https://") else "ws://"
     host = base_url.removeprefix("https://").removeprefix("http://").rstrip("/")
-    return f"{proto}{host}/ws/browser/{worker_id}/term"
+    return f"{proto}{host}/ws/{surface}/{worker_id}/term"
 
 
 def _classify_ws_failure(exc: BaseException) -> str:
@@ -152,6 +158,33 @@ async def _burst_ws_once(ws_url: str, timeout_s: float) -> str:
             await ws.send(encode_control_frame({"type": "input", "data": "echo burst\n"}))
             with contextlib.suppress(Exception):
                 await asyncio.wait_for(ws.recv(), timeout=1.0)
+            return COMPLETED
+    except Exception as exc:
+        return _classify_ws_failure(exc)
+
+
+async def _worker_ws_once(ws_url: str, timeout_s: float) -> str:
+    """One unauthenticated attempt to register as a WORKER.
+
+    Deliberately not modelled on _burst_ws_once. That one returns COMPLETED as
+    soon as the handshake succeeds, which is sound for the browser socket
+    because every port refuses it before the upgrade — but the worker socket in
+    the Go port refuses *after* it, closing 1008 so the code reaches the client
+    ("accept THEN close" in server/ws_worker.go). Stopping at connect() there
+    reports a refusal as an auth bypass; this waits for the close instead.
+
+    Staying open past the grace period is the acceptance signal, so a silent
+    socket counts as COMPLETED rather than HUNG: the server let an
+    unauthenticated peer register as a worker, which is the thing being tested.
+    """
+    grace = min(2.0, timeout_s)
+    try:
+        async with websockets.connect(ws_url, open_timeout=timeout_s, close_timeout=timeout_s) as ws:
+            try:
+                await asyncio.wait_for(ws.recv(), timeout=grace)
+            except TimeoutError:
+                return COMPLETED
+            # The server spoke to us as a worker rather than closing.
             return COMPLETED
     except Exception as exc:
         return _classify_ws_failure(exc)
@@ -307,6 +340,9 @@ async def run(args: argparse.Namespace) -> int:
         ]
     elif args.mode == "oversized":
         coros = [_oversized_ws_frame_once(ws_url, args.payload_bytes, args.timeout_s) for _ in range(args.iterations)]
+    elif args.mode == "worker":
+        worker_url = _ws_url(args.base_url, args.worker_id, surface="worker")
+        coros = [_worker_ws_once(worker_url, args.timeout_s) for _ in range(args.iterations)]
     else:
         coros = [_burst_ws_once(ws_url, args.timeout_s) for _ in range(args.iterations)]
 
@@ -346,7 +382,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Hostile-client survival probe for the uterm server.")
     parser.add_argument("--base-url", required=True, help="Server base URL, e.g. http://127.0.0.1:8780")
     parser.add_argument("--worker-id", default="provide-shell", help="Session/worker ID")
-    parser.add_argument("--mode", choices=("slowloris", "oversized", "burst", "availability"), default="burst")
+    parser.add_argument(
+        "--mode", choices=("slowloris", "oversized", "burst", "worker", "availability"), default="burst"
+    )
     parser.add_argument("--iterations", type=int, default=100)
     parser.add_argument("--concurrency", type=int, default=25)
     parser.add_argument("--timeout-s", type=float, default=5.0)
