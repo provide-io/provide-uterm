@@ -356,12 +356,12 @@ class TestWorkerBearerTokenScope:
 
     def test_wrong_worker_token_on_worker_ws_falls_through(self) -> None:
         """Wrong bearer token on /ws/worker/ must fall through to JWT auth (and fail)."""
-        from starlette.websockets import WebSocketDisconnect
+        from starlette.testclient import WebSocketDenialResponse
 
         app, _auth = self._make_jwt_app()
         with TestClient(app) as client:
             with (
-                pytest.raises(WebSocketDisconnect) as exc_info,
+                pytest.raises(WebSocketDenialResponse) as exc_info,
                 connect_test_ws(
                     client,
                     "/ws/worker/test-worker/term",
@@ -369,7 +369,9 @@ class TestWorkerBearerTokenScope:
                 ),
             ):
                 pass
-            assert exc_info.value.code == 1008
+            # Refused before the upgrade with the same 401 the REST route above
+            # answers, not a completed handshake closed after the fact.
+            assert exc_info.value.status_code == 401
 
     def test_header_mode_logs_startup_warning(self, caplog: pytest.LogCaptureFixture) -> None:
         """Header auth mode must log a warning about trusting proxy headers."""
@@ -389,12 +391,12 @@ class TestWorkerBearerTokenScope:
 
     def test_worker_bearer_token_rejected_on_browser_ws(self) -> None:
         """Worker bearer token on a browser WS route must NOT grant admin — it's worker-route-scoped."""
-        from starlette.websockets import WebSocketDisconnect
+        from starlette.testclient import WebSocketDenialResponse
 
         app, auth = self._make_jwt_app()
         with TestClient(app) as client:
             with (
-                pytest.raises(WebSocketDisconnect) as exc_info,
+                pytest.raises(WebSocketDenialResponse) as exc_info,
                 connect_test_ws(
                     client,
                     "/ws/browser/test-worker/term",
@@ -402,5 +404,6 @@ class TestWorkerBearerTokenScope:
                 ),
             ):
                 pass
-            # WS 1008 = policy violation (auth required), not 1000 (normal close)
-            assert exc_info.value.code == 1008
+            # 401 "authenticate", not a completed upgrade and not the 403 a bare
+            # pre-accept close would report.
+            assert exc_info.value.status_code == 401
