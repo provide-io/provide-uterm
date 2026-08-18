@@ -48,6 +48,41 @@ func sendToBrowser(ctx context.Context, ws BrowserConn, payload string) error {
 	return sender.SendText(sctx, payload)
 }
 
+// A browser inside its startup window is not yet in the broadcast set, so
+// whatever is broadcast meanwhile would be lost. That is deliberate for most
+// frames and wrong for some, and the difference is whether the startup
+// sequence already carries the same information.
+//
+// A term chunk is covered by the initial_snapshot the hello hands over, so
+// replaying it would print the screen twice; hijack_state and presence are
+// sent to the browser directly during startup; a newer snapshot supersedes
+// itself on the next one. All of those are correctly dropped.
+//
+// The inspect channel has no such replay. Its frames are append-only entries
+// in a list the browser builds from nothing, and the store appends without
+// dedupe, so one dropped http_req is a row missing for the life of the
+// session with nothing to reconcile it against.
+func survivesStartupWindow(msg map[string]any) bool {
+	return str(msg["_channel"]) == "http"
+}
+
+// startupBufferMaxFrames bounds what a browser that never finishes its startup
+// sequence can accumulate. At the cap the queue refuses rather than evicting
+// its oldest: dropping the newest loses the tail of a session, dropping the
+// oldest loses its beginning AND renumbers everything the user already saw.
+const startupBufferMaxFrames = 256
+
+// bufferStartupFrame holds msg for a browser still inside its startup window.
+// Caller holds hub.lock.
+func (h *TermHub) bufferStartupFrame(ws BrowserConn, msg map[string]any, workerID string) {
+	queued := h.startupPendingFrames[ws]
+	if len(queued) >= startupBufferMaxFrames {
+		h.logger.Warn("startup_frame_buffer_full", "worker_id", workerID, "cap", startupBufferMaxFrames)
+		return
+	}
+	h.startupPendingFrames[ws] = append(queued, msg)
+}
+
 // Broadcast sends msg to all browsers registered for workerID. Port of
 // router_broadcast.broadcast. Sends fan out concurrently for 2+ browsers so one
 // slow viewer only consumes its own deadline; dead sockets are pruned and, if
@@ -61,9 +96,14 @@ func (r *MessageRouter) Broadcast(ctx context.Context, workerID string, msg map[
 		return nil
 	}
 	var browsers []browserRole
+	buffer := survivesStartupWindow(msg)
 	for ws, role := range st.Browsers {
 		if !hub.startupPendingBrowsers[ws] {
 			browsers = append(browsers, browserRole{ws, role})
+			continue
+		}
+		if buffer {
+			hub.bufferStartupFrame(ws, msg, workerID)
 		}
 	}
 	hub.lock.Unlock()
