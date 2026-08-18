@@ -91,12 +91,51 @@ public sealed partial class ConnectionManager
         }
     }
 
-    public void ActivateBrowserBroadcasts(string workerId, object ws)
+    /// <summary>
+    /// Releases a browser from its startup window, delivering what it missed
+    /// first. The socket stays pending until its queue is empty, so a frame
+    /// broadcast while the flush is in flight is buffered behind the ones
+    /// already waiting instead of overtaking them.
+    /// </summary>
+    public async Task ActivateBrowserBroadcastsAsync(
+        string workerId, object ws, CancellationToken ct = default)
     {
-        lock (_hub.SharedLock)
+        while (true)
         {
-            var st = _hub.Registry.Get(workerId);
-            if (st?.Browsers.ContainsKey(ws) is true) _hub.StartupPendingBrowsers.Remove(ws);
+            List<Dictionary<string, object?>> batch;
+            lock (_hub.SharedLock)
+            {
+                if (!_hub.StartupPendingFrames.TryGetValue(ws, out var queued) || queued.Count == 0)
+                {
+                    _hub.StartupPendingFrames.Remove(ws);
+                    var st = _hub.Registry.Get(workerId);
+                    // Guard preserved from before this buffered: a browser that
+                    // disconnected mid-startup is left pending on purpose.
+                    if (st?.Browsers.ContainsKey(ws) is true) _hub.StartupPendingBrowsers.Remove(ws);
+                    return;
+                }
+
+                batch = new List<Dictionary<string, object?>>(queued);
+                queued.Clear();
+            }
+
+            foreach (var buffered in batch)
+            {
+                var encoded = ControlChannelCodec.EncodeControlFrame(buffered);
+                var outcome = await SendBrowserBoundedAsync(ws, encoded, ct).ConfigureAwait(false);
+                if (outcome == BrowserSendOutcome.Sent) continue;
+
+                // A socket that cannot take its own backlog is gone. Drop the
+                // backlog, but leave it PENDING: pending means the broadcast
+                // path skips it, which is what you want for a socket that just
+                // failed a write. The disconnect path removes it from both.
+                lock (_hub.SharedLock)
+                {
+                    _hub.StartupPendingFrames.Remove(ws);
+                }
+
+                return;
+            }
         }
     }
 
@@ -201,6 +240,8 @@ public sealed partial class ConnectionManager
             }
 
             _hub.StartupPendingBrowsers.Remove(ws);
+            // Nothing will ever flush this socket's backlog now.
+            _hub.StartupPendingFrames.Remove(ws);
             RollbackBrowserQuota(ws);
             if (retainOwnershipVersion && ownershipVersion is not null)
             {
@@ -476,6 +517,48 @@ public sealed partial class ConnectionManager
         }
     }
 
+    // A browser inside its startup window is not yet in the broadcast set, so
+    // whatever is broadcast meanwhile would be lost. That is deliberate for
+    // most frames and wrong for some, and the difference is whether the startup
+    // sequence already carries the same information.
+    //
+    // A term chunk is covered by the initial_snapshot the hello hands over, so
+    // replaying it would print the screen twice; hijack_state and presence are
+    // sent to the browser directly during startup; a newer snapshot supersedes
+    // itself on the next one. All of those are correctly dropped.
+    //
+    // The inspect channel has no such replay. Its frames are append-only
+    // entries in a list the browser builds from nothing, and the store appends
+    // without dedupe, so one dropped http_req is a row missing for the life of
+    // the session with nothing to reconcile it against.
+    private static bool SurvivesStartupWindow(Dictionary<string, object?> msg) =>
+        msg.TryGetValue("_channel", out var channel) &&
+        string.Equals(channel as string, "http", StringComparison.Ordinal);
+
+    // Bounds what a browser that never finishes its startup sequence can
+    // accumulate. At the cap the queue refuses rather than evicting its oldest:
+    // dropping the newest loses the tail of a session, dropping the oldest
+    // loses its beginning AND renumbers everything the user already saw.
+    internal const int StartupBufferMaxFrames = 256;
+
+    /// <summary>Holds one frame for a browser still inside its startup window. Caller holds SharedLock.</summary>
+    private void BufferStartupFrame(object ws, Dictionary<string, object?> msg, string workerId)
+    {
+        if (!_hub.StartupPendingFrames.TryGetValue(ws, out var queued))
+        {
+            queued = new List<Dictionary<string, object?>>();
+            _hub.StartupPendingFrames[ws] = queued;
+        }
+
+        if (queued.Count >= StartupBufferMaxFrames)
+        {
+            _hub.Log("warning", $"startup_frame_buffer_full worker_id={workerId} cap={StartupBufferMaxFrames}");
+            return;
+        }
+
+        queued.Add(msg);
+    }
+
     /// <summary>Fan-out one control payload to every browser on the worker (worker_connected etc.).</summary>
     public async Task BroadcastToBrowsersAsync(
         string workerId, Dictionary<string, object?> msg, CancellationToken ct = default)
@@ -486,6 +569,13 @@ public sealed partial class ConnectionManager
             var st = _hub.Registry.Get(workerId);
             if (st is null) return;
             browsers.AddRange(st.Browsers.Keys.Where(ws => !_hub.StartupPendingBrowsers.Contains(ws)));
+            if (SurvivesStartupWindow(msg))
+            {
+                foreach (var pending in st.Browsers.Keys.Where(_hub.StartupPendingBrowsers.Contains))
+                {
+                    BufferStartupFrame(pending, msg, workerId);
+                }
+            }
         }
 
         var encoded = ControlChannelCodec.EncodeControlFrame(msg);

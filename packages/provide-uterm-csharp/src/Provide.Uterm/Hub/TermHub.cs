@@ -126,6 +126,10 @@ public sealed partial class TermHub : ILeaseHub
     internal Dictionary<string, int> PrincipalBrowserCounts { get; } = new(StringComparer.Ordinal);
     internal Dictionary<object, string> BrowserPrincipals { get; } = new();
     internal HashSet<object> StartupPendingBrowsers { get; } = new();
+    // Frames that arrived while a browser was still inside its startup
+    // window, in arrival order. See SurvivesStartupWindow for which frames
+    // are held and why the rest are still dropped.
+    internal Dictionary<object, List<Dictionary<string, object?>>> StartupPendingFrames { get; } = new();
     internal Dictionary<object, long> PendingBrowserOwnershipVersions { get; } = new();
     internal TimeSpan BrowserSendTimeout { get; }
 

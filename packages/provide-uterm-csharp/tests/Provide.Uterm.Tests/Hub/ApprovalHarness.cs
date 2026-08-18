@@ -171,7 +171,10 @@ internal sealed class ApprovalHarness
         Assert.True(hub.Conn.RegisterWorker(WorkerId, workerWs));
         var browser = new RecordingBrowser();
         hub.Conn.RegisterBrowser(WorkerId, browser, "admin", principalSubjectId: "submitter");
-        hub.Conn.ActivateBrowserBroadcasts(WorkerId, browser);
+        // Sync harness factory. The browser above registers without
+        // deferBroadcast, so there is no backlog to flush and this only
+        // takes the lock — blocking here cannot wait on real I/O.
+        hub.Conn.ActivateBrowserBroadcastsAsync(WorkerId, browser).GetAwaiter().GetResult();
         var (acquired, reason) = hub.Lease.TryAcquireWs(WorkerId, browser);
         Assert.True(acquired, reason);
         return new ApprovalHarness
