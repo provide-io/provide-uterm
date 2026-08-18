@@ -25,84 +25,19 @@ instance is exposed as ``window._widget``; the onData callback as
 
 from __future__ import annotations
 
-import importlib.resources
-import threading
 import time
 import uuid
-from typing import TYPE_CHECKING
 
 import pytest
-import uvicorn
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
 from playwright.sync_api import Page
 
 from provide.uterm.server.bridge.hub import TermHub
 
-from .backend_server import stop_uvicorn_thread
-from .ui_routes import install_multi_backend_routes, multi_backend_env, spinner_mock_page_html
-
-if TYPE_CHECKING:
-    from collections.abc import Generator
+from .ui_routes import install_multi_backend_routes, multi_backend_env
 
 
 def _uid() -> str:
     return uuid.uuid4().hex[:8]
-
-
-# ---------------------------------------------------------------------------
-# Session-scoped server with mock-Terminal page (dual-mode)
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture(scope="session")
-def spinner_server() -> Generator[tuple[str, TermHub | None], None, None]:
-    """Session-scoped server whose test page injects a mock xterm Terminal.
-
-    Dual-mode (same contract as hijack_server):
-    * default python → in-process TermHub + /test-page
-    * UTERM_MULTI_BACKEND / go / csharp → real subprocess; mock page via page.route
-    """
-    import os
-
-    if multi_backend_env():
-        backend = os.environ.get("UTERM_TEST_BACKEND", "python").strip().lower() or "python"
-        os.environ["UTERM_TEST_BACKEND"] = backend if backend in ("python", "go", "csharp") else "python"
-        from .backend_server import WORKER_BEARER, spawn_backend_server
-
-        os.environ["UTERM_TEST_WORKER_BEARER"] = WORKER_BEARER
-        with spawn_backend_server() as srv:
-            yield srv.base_url, None
-        return
-
-    from starlette.staticfiles import StaticFiles
-
-    hub = TermHub(resolve_browser_role=lambda _ws, _worker_id: "admin")
-    app = FastAPI()
-    app.include_router(hub.create_router())
-
-    frontend_path = importlib.resources.files("provide.uterm.server") / "frontend"
-    app.mount("/ui", StaticFiles(directory=str(frontend_path), html=True), name="ui")
-
-    @app.get("/test-page/{worker_id}", response_class=HTMLResponse)
-    async def test_page(worker_id: str) -> str:
-        return spinner_mock_page_html(worker_id)
-
-    config = uvicorn.Config(app, host="127.0.0.1", port=0, log_level="critical")
-    server = uvicorn.Server(config)
-    thread = threading.Thread(target=server.run, daemon=True)
-    thread.start()
-
-    deadline = time.monotonic() + 10.0
-    while not server.started:
-        if time.monotonic() > deadline:
-            raise RuntimeError("spinner_server: uvicorn failed to start within 10 s")
-        time.sleep(0.05)
-
-    port: int = server.servers[0].sockets[0].getsockname()[1]
-    yield f"http://127.0.0.1:{port}", hub
-
-    stop_uvicorn_thread(server, thread)
 
 
 # ---------------------------------------------------------------------------
