@@ -149,6 +149,14 @@ describe("who is calling", () => {
       }),
       "a context whose request_context access fails": brokenContext(),
     };
+    // `contexts[record.name]` would silently yield `undefined` on a miss —
+    // which is also what an unauthenticated/no-context case legitimately
+    // maps to — so a golden case renamed out from under this table would
+    // pass as if it asserted something. Presence, not the looked-up value,
+    // is what proves every golden case still has a context mapped to it.
+    if (!Object.hasOwn(contexts, record.name)) {
+      throw new Error(`golden resolution case "${record.name}" has no context mapped`);
+    }
     const resolved = await resolvePrincipal(contexts[record.name], fallback);
     expect({ subject_id: resolved.subjectId, roles: [...resolved.roles].sort() }).toEqual({
       subject_id: record.subject_id,
@@ -203,6 +211,33 @@ describe("who is calling", () => {
       fallback,
     );
     expect(resolved.subjectId).toBe(JSON.stringify(["web-client", "https://idp.example", "alice"]));
+  });
+
+  it("treats a non-string issuer as absent rather than inventing an identity from it", async () => {
+    // A verifier's `extra` is a `Record<string, unknown>`, not a contract
+    // that `iss` is a string. Reading a number, an object, or anything else
+    // as one would either fabricate an identity or, for values `JSON.stringify`
+    // cannot serialize, throw past the doc-commented "never an error" promise.
+    const fallback: McpPrincipal = { subjectId: "configured", roles: ["viewer"] };
+    const resolved = await resolvePrincipal(
+      authenticatedContext({ token: "t", clientId: "web-client", scopes: [], extra: { iss: 42, sub: "alice" } }),
+      fallback,
+    );
+    expect(resolved.subjectId).toBe(JSON.stringify(["web-client", null, "alice"]));
+  });
+
+  it("treats a non-string subject as absent rather than inventing an identity from it", async () => {
+    const fallback: McpPrincipal = { subjectId: "configured", roles: ["viewer"] };
+    const resolved = await resolvePrincipal(
+      authenticatedContext({
+        token: "t",
+        clientId: "web-client",
+        scopes: [],
+        extra: { iss: "https://idp.example", sub: { nested: true } },
+      }),
+      fallback,
+    );
+    expect(resolved.subjectId).toBe(JSON.stringify(["web-client", "https://idp.example", null]));
   });
 });
 
@@ -270,7 +305,7 @@ describe("running a tool through the chokepoint", () => {
   });
 
   it("hands the tool the principal it resolved", async () => {
-    const fallback: McpPrincipal = { subjectId: "anonymous", roles: ["admin"] };
+    const fallback: McpPrincipal = { subjectId: "configured", roles: ["admin"] };
     const outcome = await authorized(
       "session_create",
       authenticatedContext({ token: "t", clientId: "web-client", scopes: [], extra: { sub: "alice" } }),
@@ -278,6 +313,19 @@ describe("running a tool through the chokepoint", () => {
       fallback,
     );
     expect(outcome).toEqual({ allowed: true, result: JSON.stringify(["web-client", null, "alice"]) });
+  });
+
+  it("does not let an authenticated caller borrow the fallback's roles", async () => {
+    // Authentication identifies; it does not authorize. An authenticated
+    // caller is still refused when the configured default holds too little,
+    // because roles come from `fallback`, never from the transport.
+    const outcome = await authorized(
+      "hijack_begin",
+      authenticatedContext({ token: "t", clientId: "web-client", scopes: [], extra: { sub: "alice" } }),
+      async () => "took over",
+      { subjectId: "configured", roles: ["viewer"] },
+    );
+    expect(outcome.allowed).toBe(false);
   });
 
   it("refuses a tool with no policy rather than running it", async () => {
