@@ -62,6 +62,25 @@ def _liar(tmp_path: Path, patch: str) -> DriverSpec:
     return DriverSpec(language="go", command=(sys.executable, str(script)), cwd=REPO_ROOT)
 
 
+def _why(report: object) -> list[tuple[str, str, str | None, list[str]]]:
+    """Explain a failed run in terms of the cells that actually failed it.
+
+    Two things this must not do, both of which it used to. It must not report a
+    cell whose capability was unsupported: those are printed by the harness and
+    deliberately do NOT count against a run, so listing them here implicates an
+    innocent cell and sends the reader after a capability gap that is not the
+    problem. And it must not describe a cell by its failures alone — an
+    ``error`` cell has none, because it never got far enough to compare
+    anything, so the whole message rendered as ``[]`` and said nothing at all.
+    The status and the harness's own ``detail`` are the only record of why.
+    """
+    return [
+        (cell.scenario_id, cell.status, cell.detail, [failure.message for failure in cell.failures])
+        for cell in report.cells
+        if cell.counts_against_the_run
+    ]
+
+
 @pytest.fixture(scope="module")
 def health_scenario() -> object:
     return next(one for one in load_scenarios(SCENARIO_DIR) if one.id == "001_health")
@@ -71,25 +90,21 @@ class TestAgainstTheRealServer:
     def test_the_reference_talks_to_itself(self, health_scenario: object) -> None:
         report = run_matrix([health_scenario], servers=[_server()], clients=[_python()])
         (cell,) = report.cells
-        assert cell.status == "pass", cell.failures
-        assert report.ok
+        assert cell.status == "pass", (cell.status, cell.detail, cell.failures)
+        assert report.ok, _why(report)
 
     def test_every_committed_scenario_holds(self) -> None:
         # The scenarios are the contract. If the reference itself does not
         # satisfy them, they are asserting something nobody implements.
         report = run_matrix(load_scenarios(SCENARIO_DIR), servers=[_server()], clients=[_python()])
-        assert report.ok, [
-            (cell.scenario_id, [failure.message for failure in cell.failures])
-            for cell in report.cells
-            if cell.status != "pass"
-        ]
+        assert report.ok, _why(report)
 
     def test_the_registry_can_start_what_it_advertises(self, health_scenario: object) -> None:
         # A registry entry that points at nothing would report a language as
         # available and then error every cell in its row.
         found = available(REPO_ROOT, only=["python"])
         report = run_matrix([health_scenario], servers=found.servers, clients=found.clients)
-        assert report.ok
+        assert report.ok, _why(report)
 
 
 class TestARepeatedStep:
