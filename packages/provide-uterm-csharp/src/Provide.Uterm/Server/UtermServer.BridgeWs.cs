@@ -148,7 +148,8 @@ public sealed partial class UtermServer
             await conn.SendTextAsync(
                 ControlChannelCodec.EncodeControlFrame(presenceSync),
                 ctx.RequestAborted).ConfigureAwait(false);
-            _deps.Hub.Conn.ActivateBrowserBroadcasts(workerId, conn);
+            await _deps.Hub.Conn.ActivateBrowserBroadcastsAsync(workerId, conn, ctx.RequestAborted)
+                .ConfigureAwait(false);
 
             // One budget per connection, built here rather than on the hub: the
             // reference builds both buckets inside its WebSocket handler, and sharing
