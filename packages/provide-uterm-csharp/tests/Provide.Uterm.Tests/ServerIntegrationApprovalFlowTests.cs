@@ -419,7 +419,7 @@ public sealed class ServerIntegrationApprovalFlowTests
         await using var fx = await StartAsync(
             sweepInterval: TimeSpan.FromMilliseconds(25), existingHub: hub);
         hub.Conn.RegisterBrowser(WorkerId, browser, "admin", principalSubjectId: "submitter");
-        hub.Conn.ActivateBrowserBroadcasts(WorkerId, browser);
+        await hub.Conn.ActivateBrowserBroadcastsAsync(WorkerId, browser);
         Assert.True(hub.Lease.TryAcquireWs(WorkerId, browser).Ok);
         var parked = await hub.ParkBrowserForApprovalAsync(
             WorkerId, browser, "cmd\n", new PolicyDecision { Action = PolicyActions.Hold, TimeoutS = 0 });
@@ -445,7 +445,7 @@ public sealed class ServerIntegrationApprovalFlowTests
         var browser = new RecordingWorkerWs();
         await using var fx = await StartAsync(sweepInterval: TimeSpan.Zero, existingHub: hub);
         hub.Conn.RegisterBrowser(WorkerId, browser, "admin", principalSubjectId: "submitter");
-        hub.Conn.ActivateBrowserBroadcasts(WorkerId, browser);
+        await hub.Conn.ActivateBrowserBroadcastsAsync(WorkerId, browser);
         Assert.True(hub.Lease.TryAcquireWs(WorkerId, browser).Ok);
         await hub.ParkBrowserForApprovalAsync(
             WorkerId, browser, "cmd\n", new PolicyDecision { Action = PolicyActions.Hold, TimeoutS = 0 });

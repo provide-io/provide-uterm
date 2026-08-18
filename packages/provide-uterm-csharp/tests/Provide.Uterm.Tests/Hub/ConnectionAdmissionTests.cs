@@ -55,7 +55,7 @@ public sealed class ConnectionAdmissionTests
         Assert.Empty(pending.Messages);
         Assert.Single(active.Messages);
 
-        hub.Conn.ActivateBrowserBroadcasts("w", pending);
+        await hub.Conn.ActivateBrowserBroadcastsAsync("w", pending);
         await hub.Conn.BroadcastToBrowsersAsync(
             "w", new Dictionary<string, object?> { ["type"] = "worker_connected" });
         Assert.Single(pending.Messages);

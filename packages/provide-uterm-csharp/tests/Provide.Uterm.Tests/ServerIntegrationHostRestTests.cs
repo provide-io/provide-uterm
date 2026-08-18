@@ -183,7 +183,7 @@ public sealed class ServerIntegrationHostRestTests
             Assert.True(hub.Conn.RegisterWorker("demo", worker));
             var owner = new CapturingWorkerWs();
             hub.Conn.RegisterBrowser("demo", owner, "admin", principalSubjectId: "other-user");
-            hub.Conn.ActivateBrowserBroadcasts("demo", owner);
+            await hub.Conn.ActivateBrowserBroadcastsAsync("demo", owner);
             var (acquired, why) = hub.Lease.TryAcquireWs("demo", owner);
             Assert.True(acquired, why);
             var generation = hub.Registry.Get("demo")!.HijackOwnershipVersion;
