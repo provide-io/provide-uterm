@@ -65,6 +65,7 @@ async def remove_dead_browsers(hub: TermHub, worker_id: str, dead: set[WebSocket
         hub._input_buffers.pop(ws, None)
         hub._hold_buffers.pop(ws, None)
         hub._startup_pending_browsers.discard(ws)
+        hub._startup_pending_frames.pop(ws, None)
         hub._paused_browsers.discard(ws)
     return await hub.lease.remove_dead_browsers(worker_id, dead)
 

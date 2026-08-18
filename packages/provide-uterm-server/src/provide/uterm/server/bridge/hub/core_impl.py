@@ -660,6 +660,11 @@ class TermHub:
         # disconnect bookkeeping (see _bind_resume_token_locked).
         self._resume_token_detached: dict[str, asyncio.Event] = {}
         self._startup_pending_browsers: set[WebSocket] = set()
+        # Frames that arrived while a browser was still inside its startup
+        # window, in arrival order, keyed by that browser's socket. Filled
+        # and drained by router_broadcast; see _survives_startup_window for
+        # which frames are kept and why the rest are still dropped.
+        self._startup_pending_frames: dict[WebSocket, list[dict[str, Any]]] = {}
         self._background_tasks: set[asyncio.Task[Any]] = set()
         self._event_bus = event_bus
         # Raw terminal content is available only to server-owned supervised

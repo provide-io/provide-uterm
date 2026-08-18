@@ -404,14 +404,15 @@ class ConnectionManager:
             return initial_state
 
     async def activate_browser_broadcasts(self, worker_id: str, ws: WebSocket) -> None:
-        """Allow broadcasts to a browser after its startup frames have been sent."""
-        hub = self._hub
-        async with hub._lock:
-            st = hub.registry.get(worker_id)
-            if (
-                st is not None and ws in st.browsers
-            ):  # pragma: no branch — race window during browser disconnect; defensive
-                hub._startup_pending_browsers.discard(ws)
+        """Allow broadcasts to a browser after its startup frames have been sent.
+
+        Delegated whole: releasing the socket is inseparable from delivering
+        what it missed while it was held, and the buffering half already lives
+        in ``router_broadcast`` next to the broadcast that fills it.
+        """
+        from provide.uterm.server.bridge.hub.router_broadcast import activate_browser_broadcasts
+
+        await activate_browser_broadcasts(self._hub, worker_id, ws)
 
     def _rollback_browser_quota(self, ws: Any) -> None:
         """Undo the per-principal quota increment for *ws* (M6 atomicity).
@@ -549,6 +550,8 @@ class ConnectionManager:
                 async with hub._lock:
                     await self._release_resume_token(ws, mark_owner=owned_hijack)
             hub._startup_pending_browsers.discard(ws)
+            # Nothing will ever flush this socket's backlog now.
+            hub._startup_pending_frames.pop(ws, None)
 
             # Fire empty-browser callback outside the lock when the last browser left.
             on_empty = getattr(hub, "on_worker_empty", None)
