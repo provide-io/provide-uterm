@@ -135,15 +135,21 @@ def _install_httpx_dev_principal_autoauth() -> None:
     Per-request headers override the defaults, so tests that want to
     exercise unauthenticated or non-admin paths still can by passing their
     own ``X-Uterm-Principal``/``X-Uterm-Role`` explicitly.
+
+    BOTH httpx and httpx2 are patched, and that is load-bearing rather than
+    belt-and-braces. ``starlette.testclient.TestClient`` subclasses
+    ``httpx2.Client``, not ``httpx.Client`` -- they are unrelated classes from
+    two separately-installed distributions (httpx 0.28 and httpx2 2.x, the
+    latter pulled in by ``mcp``). Patching only httpx left every TestClient
+    without the admin headers, so header-mode auth resolved ``anonymous`` and
+    323 server tests failed with 401. Either module may legitimately be absent
+    from a given environment, hence the per-module import guard.
     """
-    import httpx
-
-    if getattr(httpx.Client, "_uterm_devprincipal_patched", False):
-        return
-
     _defaults = {"X-Uterm-Principal": "admin", "X-Uterm-Role": "admin"}
 
     def _patch(cls: type) -> None:
+        if getattr(cls, "_uterm_devprincipal_patched", False):
+            return
         _orig_init = cls.__init__
 
         def _patched_init(self: Any, *args: Any, **kwargs: Any) -> None:
@@ -155,8 +161,13 @@ def _install_httpx_dev_principal_autoauth() -> None:
         cls.__init__ = _patched_init  # type: ignore[method-assign]
         cls._uterm_devprincipal_patched = True  # type: ignore[attr-defined]
 
-    _patch(httpx.Client)
-    _patch(httpx.AsyncClient)
+    for module_name in ("httpx", "httpx2"):
+        try:
+            module = importlib.import_module(module_name)
+        except ImportError:  # pragma: no cover — module absent in this env
+            continue
+        _patch(module.Client)
+        _patch(module.AsyncClient)
 
 
 _install_httpx_dev_principal_autoauth()
