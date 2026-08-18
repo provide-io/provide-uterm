@@ -252,6 +252,7 @@ func (h *TermHub) RemoveDeadBrowsers(ctx context.Context, workerID string, dead 
 	for _, ws := range dead {
 		delete(h.holdBuffers, ws)
 		delete(h.startupPendingBrowsers, ws)
+		delete(h.startupPendingFrames, ws)
 		delete(h.pausedBrowsers, ws)
 	}
 	h.lock.Unlock()

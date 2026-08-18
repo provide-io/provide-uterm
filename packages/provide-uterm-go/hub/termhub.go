@@ -122,6 +122,10 @@ type TermHub struct {
 	wsToResumeToken        map[BrowserConn]string
 	resumeTokenDetached    map[string]chan struct{}
 	startupPendingBrowsers map[BrowserConn]bool
+	// Frames that arrived while a browser was still inside its startup
+	// window, in arrival order. See survivesStartupWindow for which frames
+	// are held and why the rest are still dropped.
+	startupPendingFrames   map[BrowserConn][]map[string]any
 	pausedBrowsers         map[BrowserConn]bool
 	holdBuffers            map[BrowserConn]string
 	principalBrowserCounts map[string]int
@@ -228,6 +232,7 @@ func NewTermHub(cfg TermHubConfig) *TermHub {
 		wsToResumeToken:        map[BrowserConn]string{},
 		resumeTokenDetached:    map[string]chan struct{}{},
 		startupPendingBrowsers: map[BrowserConn]bool{},
+		startupPendingFrames:   map[BrowserConn][]map[string]any{},
 		pausedBrowsers:         map[BrowserConn]bool{},
 		holdBuffers:            map[BrowserConn]string{},
 		principalBrowserCounts: map[string]int{},

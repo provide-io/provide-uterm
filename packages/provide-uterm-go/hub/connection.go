@@ -238,16 +238,50 @@ func browserPrincipalSubjectID(ws BrowserConn) *string {
 	return strp(pr.SubjectID)
 }
 
-// ActivateBrowserBroadcasts allows broadcasts to a browser after its startup
-// frames have been sent. Port of activate_browser_broadcasts.
-func (c *ConnectionManager) ActivateBrowserBroadcasts(_ context.Context, workerID string, ws BrowserConn) {
+// ActivateBrowserBroadcasts releases a browser from its startup window,
+// delivering what it missed first. Port of activate_browser_broadcasts.
+//
+// The socket stays pending until its queue is empty, so a frame broadcast
+// while the flush is in flight is buffered behind the ones already waiting
+// instead of overtaking them. Only when nothing is left does the browser join
+// the normal broadcast set.
+func (c *ConnectionManager) ActivateBrowserBroadcasts(ctx context.Context, workerID string, ws BrowserConn) {
 	hub := c.hub
-	hub.lock.Lock()
-	defer hub.lock.Unlock()
-	st := hub.registry.Get(workerID)
-	if st != nil {
-		if _, ok := st.Browsers[ws]; ok {
-			delete(hub.startupPendingBrowsers, ws)
+	for {
+		hub.lock.Lock()
+		batch := hub.startupPendingFrames[ws]
+		if len(batch) == 0 {
+			delete(hub.startupPendingFrames, ws)
+			st := hub.registry.Get(workerID)
+			// Guard preserved from before this buffered: a browser that
+			// disconnected mid-startup is left pending on purpose.
+			if st != nil {
+				if _, ok := st.Browsers[ws]; ok {
+					delete(hub.startupPendingBrowsers, ws)
+				}
+			}
+			hub.lock.Unlock()
+			return
+		}
+		hub.startupPendingFrames[ws] = nil
+		hub.lock.Unlock()
+
+		for _, buffered := range batch {
+			payload, err := encodeBrowserFrame(buffered)
+			if err == nil {
+				err = sendToBrowser(ctx, ws, payload)
+			}
+			if err != nil {
+				// A socket that cannot take its own backlog is gone. Drop the
+				// backlog, but leave it PENDING: pending means the broadcast
+				// path skips it, which is what you want for a socket that just
+				// failed a write. The disconnect path removes it from both.
+				hub.logger.Warn("startup_frame_flush_failed", "worker_id", workerID, "error", err)
+				hub.lock.Lock()
+				delete(hub.startupPendingFrames, ws)
+				hub.lock.Unlock()
+				return
+			}
 		}
 	}
 }
