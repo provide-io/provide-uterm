@@ -143,3 +143,10 @@ packages/*/coverage/
 # TypeScript port: StrykerJS mutation-testing output and sandbox scratch dir
 packages/provide-uterm-ts/reports/
 packages/provide-uterm-ts/.stryker-tmp/
+
+# Local benchmark run output. docs/benchmarks/ is the roadmap's intended home
+# for benchmark reports, but the results themselves are per-host measurements
+# (env.json records the machine, toolchain versions and the working revision),
+# so they are regenerated, never reviewed. Ignoring only results/ keeps the
+# directory free for committed report templates.
+docs/benchmarks/results/
