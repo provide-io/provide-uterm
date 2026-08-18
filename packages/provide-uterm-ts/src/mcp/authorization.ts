@@ -98,7 +98,16 @@ export function denyPayload(tool: string, principal: McpPrincipal, required: Rol
   };
 }
 
-/** The transport's authenticated-request data, if any. */
+/**
+ * The transport's authenticated-request data, if any.
+ *
+ * An accessor rather than a plain field — unlike the SDK's own
+ * `RequestHandlerExtra.authInfo?: AuthInfo`, which cannot throw. This is
+ * this package's own interface, not the SDK's: a real call site supplies an
+ * adapter closure over `extra.authInfo`, and a non-trivial adapter can
+ * throw. Collapsing this to a field would be simplifying away a failure
+ * mode the SDK itself does not have but an adapter can.
+ */
 export interface RequestContext {
   /**
    * The SDK's per-call auth info, or nothing on an unauthenticated
@@ -106,6 +115,14 @@ export interface RequestContext {
    * context answers "no identity", not an error.
    */
   getAuthInfo(): AuthInfo | undefined;
+}
+
+/** An identity component the verifier supplied, or nothing. Only a string is
+ *  one: a non-string `extra.iss`/`extra.sub` is not an identity, and reading
+ *  it as one would either invent one or fail to serialize (a BigInt, a
+ *  circular object, or a throwing `toJSON` all break `JSON.stringify`). */
+function stringComponent(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
 }
 
 /**
@@ -125,6 +142,10 @@ export async function resolvePrincipal(
   context: RequestContext | undefined,
   fallback: McpPrincipal = DEFAULT_PRINCIPAL,
 ): Promise<McpPrincipal> {
+  // Stated rather than left to the catch below, which would also return the
+  // fallback — via a `TypeError` on the missing method. No test can tell the
+  // two apart; the difference is that "nobody was passed" is an answer here
+  // and an accident there.
   if (context === undefined) {
     return fallback;
   }
@@ -137,8 +158,8 @@ export async function resolvePrincipal(
   if (authInfo === undefined) {
     return fallback;
   }
-  const issuer = (authInfo.extra?.iss as string | undefined) ?? null;
-  const subject = (authInfo.extra?.sub as string | undefined) ?? null;
+  const issuer = stringComponent(authInfo.extra?.iss);
+  const subject = stringComponent(authInfo.extra?.sub);
   return { subjectId: JSON.stringify([authInfo.clientId, issuer, subject]), roles: fallback.roles };
 }
 
