@@ -7,13 +7,13 @@
 This is the dedicated mutmut-binding suite for webhooks.py (wired into
 [tool.mutmut].pytest_add_cli_args_test_selection). Its defining property: it NEVER performs real network
 I/O. An autouse fixture replaces ``socket.getaddrinfo`` with a MagicMock and every
-delivery test patches the httpx client + ``asyncio.sleep``. That matters twice:
+delivery test patches the httpx2 client + ``asyncio.sleep``. That matters twice:
 
 1. Correctness under mutation: mutmut forks a worker per mutant. The 7
    ``test_webhooks_part*.py`` coverage suites call the REAL resolver at
    registration time (``register("...example.com...")`` → ``_resolve_hostname_sync``
    → ``socket.getaddrinfo``); a mutant that perturbs the resolver/delivery args then
-   drives the C resolver (or real httpx + real sleeps) in a forked child, which
+   drives the C resolver (or real httpx2 + real sleeps) in a forked child, which
    segfaults/times out the worker (the measured 307/406-mutant crash that deferred
    this file). Keeping all egress mocked keeps the real C resolver out of the child.
 2. Killability: with getaddrinfo a MagicMock and the logger/guard/client patched we
@@ -80,14 +80,14 @@ def mock_httpx_default() -> Any:
     """No test in this module may perform real HTTP. A mutant that defeats the SSRF
     guard (``if not await _delivery_url_allowed`` → ``if await``) or the delivery-loop
     sentinel (``if item is None`` → ``is not None``) would otherwise fall through to a
-    real ``httpx.AsyncClient.post`` — and a real socket connect in a mutmut-forked
+    real ``httpx2.AsyncClient.post`` — and a real socket connect in a mutmut-forked
     child segfaults the worker. This blanket default keeps every such path mocked; the
     ``denv`` fixture re-patches it with a controllable client where delivery is asserted."""
     client = MagicMock(name="AsyncClient-default")
     client.__aenter__ = AsyncMock(return_value=client)
     client.__aexit__ = AsyncMock(return_value=False)
     client.post = AsyncMock(return_value=_resp(success=True))
-    with patch("httpx.AsyncClient", MagicMock(return_value=client)):
+    with patch("httpx2.AsyncClient", MagicMock(return_value=client)):
         yield
 
 
@@ -794,7 +794,7 @@ def denv() -> Any:
         patch("provide.uterm.server.webhooks.asyncio.sleep", env.sleep),
         patch("provide.uterm.server.webhooks.logger", env.log),
         patch("provide.uterm.server.webhooks.inject_trace_context", env.inject),
-        patch("httpx.AsyncClient", env.client_cls),
+        patch("httpx2.AsyncClient", env.client_cls),
     ):
         yield env
 
@@ -951,7 +951,7 @@ class TestDeliver:
 
     async def test_block_threshold_triggers_auto_unregister(self) -> None:
         # NB: deliberately does NOT use the `denv` fixture — the block path makes no
-        # httpx call and no _deliver-internal sleep, and we need the REAL asyncio.sleep
+        # httpx2 call and no _deliver-internal sleep, and we need the REAL asyncio.sleep
         # to flush the unregister task's done-callback below.
         metric = MagicMock()
         mgr = _make_manager(on_metric=metric)

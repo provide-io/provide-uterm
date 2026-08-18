@@ -37,7 +37,7 @@ import contextlib
 import socket
 from typing import Any
 
-import httpx
+import httpx2
 import pytest
 import uvicorn
 import websockets
@@ -251,7 +251,7 @@ async def wait_for_session_connected(base_url: str, session_id: str, timeout: fl
     Must be called before connecting a browser WS to ensure ``last_snapshot``
     is populated — otherwise the browser may never receive an initial snapshot.
     """
-    async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=5.0) as http:
+    async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=5.0) as http:
         deadline = asyncio.get_running_loop().time() + timeout
         while asyncio.get_running_loop().time() < deadline:
             resp = await http.get(f"/api/sessions/{session_id}")

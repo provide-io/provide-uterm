@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-import httpx
+import httpx2
 from provide.uterm.client import connect_async_ws
 
 from .conftest import (
@@ -39,7 +39,7 @@ async def test_instructor_student_alternating_control(single_session_server: Any
         await worker.recv()  # snapshot_req
 
         # Switch to open mode first
-        async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
+        async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
             resp = await http.post("/worker/s1/input_mode", json={"input_mode": "open"})
             assert resp.status_code == 200, f"Mode switch failed: {resp.status_code}: {resp.text}"
 
@@ -54,7 +54,7 @@ async def test_instructor_student_alternating_control(single_session_server: Any
                 await asyncio.sleep(0.3)
 
                 # Switch to hijack mode
-                async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
+                async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
                     resp = await http.post("/worker/s1/input_mode", json={"input_mode": "hijack"})
                     assert resp.status_code == 200
                 await asyncio.sleep(0.3)
@@ -80,7 +80,7 @@ async def test_instructor_student_alternating_control(single_session_server: Any
                 await drain_all(worker)
 
                 # Switch back to open
-                async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
+                async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
                     resp = await http.post("/worker/s1/input_mode", json={"input_mode": "open"})
                     assert resp.status_code == 200
                 await asyncio.sleep(0.3)
@@ -135,7 +135,7 @@ async def test_viewer_escalation_denied(single_session_server: Any) -> None:
             assert snapshot_received, "Viewer should receive snapshots"
 
             # Switch to open mode
-            async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
+            async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
                 await http.post("/worker/s1/input_mode", json={"input_mode": "open"})
             await asyncio.sleep(0.3)
             await drain_all(viewer)
@@ -170,7 +170,7 @@ async def test_long_idle_rest_heartbeat_keeps_lease(live_hub: Any) -> None:
     async with connect_async_ws(ws_url(base_url, "/ws/worker/w1/term")) as worker:
         await worker.recv()  # snapshot_req
 
-        async with httpx.AsyncClient(base_url=base_url, timeout=10.0) as http:
+        async with httpx2.AsyncClient(base_url=base_url, timeout=10.0) as http:
             # Acquire with 5s lease
             r = await http.post("/worker/w1/hijack/acquire", json={"owner": "idle-sre", "lease_s": 5})
             assert r.status_code == 200, f"Acquire failed: {r.status_code}: {r.text}"

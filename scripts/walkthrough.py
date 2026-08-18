@@ -24,7 +24,7 @@ import time
 import webbrowser
 from typing import Any
 
-import httpx
+import httpx2
 import uvicorn
 from provide.uterm.client import HijackClient
 
@@ -129,7 +129,7 @@ async def _wait_healthy(c: HijackClient, *, timeout: float = 15.0) -> None:
             ok, data = await c.health()
             if ok and data.get("ready"):
                 return
-        except httpx.ConnectError:
+        except httpx2.ConnectError:
             pass
         await asyncio.sleep(0.3)
     raise TimeoutError("server did not become healthy")

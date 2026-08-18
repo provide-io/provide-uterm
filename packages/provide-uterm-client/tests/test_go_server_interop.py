@@ -53,7 +53,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-import httpx
+import httpx2
 import pytest
 
 from provide.uterm.client.control_ws import connect_async_ws
@@ -144,14 +144,14 @@ def _tail(path: Path) -> str:
 def _wait_healthy(proc: subprocess.Popen[bytes], base_url: str, log_path: Path) -> None:
     """Poll /api/health until ok, or the process dies (skip on a dep-gap exit)."""
     deadline = time.monotonic() + 45.0
-    with httpx.Client(timeout=3.0) as probe:
+    with httpx2.Client(timeout=3.0) as probe:
         while time.monotonic() < deadline:
             if proc.poll() is not None:
                 log = _tail(log_path)
                 if _looks_like_missing_deps(log):
                     pytest.skip(f"Go server deps unavailable (exit {proc.returncode}); skipping:\n{log}")
                 pytest.fail(f"Go server exited before healthy (exit {proc.returncode}):\n{log}")
-            with contextlib.suppress(httpx.HTTPError):
+            with contextlib.suppress(httpx2.HTTPError):
                 resp = probe.get(f"{base_url}/api/health")
                 if resp.status_code == 200 and resp.json().get("ok") is True:
                     return

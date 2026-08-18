@@ -14,7 +14,7 @@ import time
 from typing import TYPE_CHECKING, Any
 from weakref import WeakKeyDictionary
 
-import httpx
+import httpx2
 import pytest
 import uvicorn
 
@@ -84,7 +84,7 @@ async def _drain_snapshot_containing(ws: Any, text: str, timeout: float = 10.0) 
 
 async def _delete_session(base_url: str, session_id: str) -> None:
     async def _delete() -> None:
-        async with httpx.AsyncClient(base_url=base_url, timeout=5.0) as http:
+        async with httpx2.AsyncClient(base_url=base_url, timeout=5.0) as http:
             await http.delete(f"/api/sessions/{session_id}")
 
     with contextlib.suppress(Exception):

@@ -16,7 +16,7 @@ knowable at delivery time — it cannot be folded into the load-time default.
 Section A drives the real ``create_server_app`` factory: the share is created
 through the real ``POST /api/tunnels`` route and the webhook through the real
 registration route, so the wiring from live tunnel-token state to the delivery
-guard is under test.  Only the final network hop is stubbed (``httpx``): the
+guard is under test.  Only the final network hop is stubbed (``httpx2``): the
 EventBus -> ``_deliver`` hand-off is covered elsewhere and exercises no part of
 this guard, whereas a real HTTP receiver would add timing flake for no extra
 coverage.
@@ -83,7 +83,7 @@ def _config(*, host: str = "127.0.0.1", allow_loopback: bool | None = None) -> A
 
 
 def _post_mock() -> tuple[MagicMock, AsyncMock]:
-    """Return (stub ``httpx.AsyncClient`` class, its ``post`` AsyncMock)."""
+    """Return (stub ``httpx2.AsyncClient`` class, its ``post`` AsyncMock)."""
     response = MagicMock(name="response")
     response.is_success = True
     response.status_code = 200
@@ -127,7 +127,7 @@ class _Harness:
         """
         client_cls, post = _post_mock()
         with contextlib.ExitStack() as stack:
-            stack.enter_context(patch("httpx.AsyncClient", client_cls))
+            stack.enter_context(patch("httpx2.AsyncClient", client_cls))
             stack.enter_context(patch("provide.uterm.server.webhooks.asyncio.sleep", AsyncMock()))
             if resolved is not None:
                 stack.enter_context(patch.object(self.manager, "_resolver", lambda _host: resolved))
@@ -281,7 +281,7 @@ def _bare_cfg(url: str = LOOPBACK_URL) -> WebhookConfig:
 
 async def _run(mgr: WebhookManager, cfg: WebhookConfig) -> AsyncMock:
     client_cls, post = _post_mock()
-    with patch("httpx.AsyncClient", client_cls), patch("provide.uterm.server.webhooks.asyncio.sleep", AsyncMock()):
+    with patch("httpx2.AsyncClient", client_cls), patch("provide.uterm.server.webhooks.asyncio.sleep", AsyncMock()):
         await mgr._deliver(cfg, {"type": "snapshot"})
     return post
 

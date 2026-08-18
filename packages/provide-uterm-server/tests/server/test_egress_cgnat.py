@@ -146,7 +146,7 @@ def test_cgnat_hostname_refused_at_registration() -> None:
 
 
 def _post_mock() -> tuple[MagicMock, AsyncMock]:
-    """Return (stub ``httpx.AsyncClient`` class, its ``post`` AsyncMock)."""
+    """Return (stub ``httpx2.AsyncClient`` class, its ``post`` AsyncMock)."""
     response = MagicMock(name="response")
     response.is_success = True
     response.status_code = 200
@@ -178,7 +178,7 @@ def test_cgnat_rebind_refused_at_delivery(resolved: str, delivers: bool) -> None
 
         client_cls, post = _post_mock()
         with (
-            patch("httpx.AsyncClient", client_cls),
+            patch("httpx2.AsyncClient", client_cls),
             patch.object(manager, "_resolver", lambda _host: (resolved,)),
         ):
             asyncio.run(manager._deliver(cfg, {"type": "snapshot"}))

@@ -18,7 +18,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-import httpx
+import httpx2
 import pytest
 
 from provide.uterm.client import connect_async_ws
@@ -54,7 +54,7 @@ async def test_hijack_acquired_event_in_long_poll(live_server: Any) -> None:
 
     async with (
         connect_async_ws(ws_url(base_url, "/ws/worker/h1/term")) as worker,
-        httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http,
+        httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http,
     ):
         await worker.recv()  # snapshot_req
 
@@ -91,7 +91,7 @@ async def test_hijack_released_event_in_long_poll(live_server: Any) -> None:
 
     async with (
         connect_async_ws(ws_url(base_url, "/ws/worker/h1/term")) as worker,
-        httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http,
+        httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http,
     ):
         await worker.recv()  # snapshot_req
 
@@ -132,7 +132,7 @@ async def test_worker_disconnect_terminates_long_poll(live_server: Any) -> None:
     """Worker WS closes; long-poll returns before its timeout via sentinel."""
     hub, base_url = live_server
 
-    async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http:
+    async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http:
         async with connect_async_ws(ws_url(base_url, "/ws/worker/h1/term")):
             poll_task = asyncio.create_task(
                 http.get(

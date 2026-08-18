@@ -4,7 +4,7 @@
 #
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
+import httpx2
 import pytest
 
 from provide.uterm.client.hijack import HijackClient
@@ -16,7 +16,7 @@ async def test_request_sanitization_on_http_error():
         client = HijackClient("http://test")
 
         # Mock a response with sensitive data
-        mock_response = MagicMock(spec=httpx.Response)
+        mock_response = MagicMock(spec=httpx2.Response)
         mock_response.status_code = 403
         mock_response.is_success = False
         sensitive_data = {"error": "Forbidden", "token": "secret-123", "secret": "shh", "password": "password123"}
@@ -24,10 +24,10 @@ async def test_request_sanitization_on_http_error():
         mock_response.text = str(sensitive_data)
 
         # Raise HTTPStatusError (which is an HTTPError)
-        exc = httpx.HTTPStatusError("Forbidden", request=MagicMock(), response=mock_response)
+        exc = httpx2.HTTPStatusError("Forbidden", request=MagicMock(), response=mock_response)
 
         with patch.object(client, "_get_client") as mock_get_client:
-            mock_httpx_client = MagicMock(spec=httpx.AsyncClient)
+            mock_httpx_client = MagicMock(spec=httpx2.AsyncClient)
             mock_httpx_client.request = AsyncMock(side_effect=exc)
             mock_get_client.return_value = mock_httpx_client
 
@@ -50,8 +50,8 @@ async def test_request_sanitization_on_failure_response():
     with patch("provide.uterm.client.hijack.log") as mock_log:
         client = HijackClient("http://test")
 
-        # Mock a response with sensitive data, but no exception raised by httpx
-        mock_response = MagicMock(spec=httpx.Response)
+        # Mock a response with sensitive data, but no exception raised by httpx2
+        mock_response = MagicMock(spec=httpx2.Response)
         mock_response.status_code = 401
         mock_response.is_success = False
         sensitive_data = {"error": "Unauthorized", "token": "hidden-token"}
@@ -59,7 +59,7 @@ async def test_request_sanitization_on_failure_response():
         mock_response.text = str(sensitive_data)
 
         with patch.object(client, "_get_client") as mock_get_client:
-            mock_httpx_client = MagicMock(spec=httpx.AsyncClient)
+            mock_httpx_client = MagicMock(spec=httpx2.AsyncClient)
             mock_httpx_client.request = AsyncMock(return_value=mock_response)
             mock_get_client.return_value = mock_httpx_client
 

@@ -11,7 +11,7 @@ import json
 import time
 from typing import Any
 
-import httpx
+import httpx2
 import pytest
 
 from tests.e2e._live_server import live_server_with_bus
@@ -73,5 +73,5 @@ async def watch_events(
     params: dict[str, Any] = {"timeout_ms": timeout_ms, "max_events": max_events}
     if event_types:
         params["event_types"] = event_types
-    async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http:
+    async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http:
         return await http.get(f"/api/sessions/{session_id}/events/watch", params=params)

@@ -211,7 +211,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     # Retry up to 3 times with 1s delay to handle race conditions on startup.
     hijack_ids: dict[str, str] = {}
     try:
-        import httpx as _httpx
+        import httpx2 as _httpx
 
         with _httpx.Client(base_url=base_url, timeout=15.0, headers=dev_bearer_headers()) as http:
             for attempt in range(3):
@@ -271,7 +271,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
 
     def _send_animations(page: object) -> None:
         """Send looping GIF render to all 9 terminals via hijack endpoints."""
-        import httpx as _h
+        import httpx2 as _h
 
         with _h.Client(base_url=base_url, timeout=10.0, headers=dev_bearer_headers()) as http:
             for sid, hid in hijack_ids.items():
@@ -293,7 +293,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
 
     # Release all hijack leases
     try:
-        import httpx as _h
+        import httpx2 as _h
 
         with _h.Client(base_url=base_url, timeout=10.0, headers=dev_bearer_headers()) as http:
             for sid, hid in hijack_ids.items():

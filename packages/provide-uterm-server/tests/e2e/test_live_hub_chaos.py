@@ -10,7 +10,7 @@ import asyncio
 import json
 from typing import Any
 
-import httpx
+import httpx2
 
 from provide.uterm.client import connect_async_ws
 
@@ -26,7 +26,7 @@ class TestWorkerDropsMidHijack:
         """Worker drops while REST hijack is active; second acquire succeeds."""
         _, base_url = live_hub
 
-        async with httpx.AsyncClient(base_url=base_url) as http:
+        async with httpx2.AsyncClient(base_url=base_url) as http:
             async with connect_async_ws(_ws_url(base_url, "/ws/worker/chaos1/term")) as worker:
                 await worker.recv()  # snapshot_req
 
@@ -148,7 +148,7 @@ class TestRapidConnectDisconnect:
             await asyncio.sleep(0.02)
 
         # Hub should not have leaked workers
-        async with httpx.AsyncClient(base_url=base_url) as http:
+        async with httpx2.AsyncClient(base_url=base_url) as http:
             # POST acquire to a fresh worker to confirm hub is still functional
             async with connect_async_ws(_ws_url(base_url, "/ws/worker/chaos5/term")) as worker:
                 await worker.recv()
@@ -189,7 +189,7 @@ class TestRapidConnectDisconnect:
             await asyncio.gather(*[_connect_and_disconnect(i) for i in range(8)])
 
             # Worker should still be reachable
-            async with httpx.AsyncClient(base_url=base_url) as http:
+            async with httpx2.AsyncClient(base_url=base_url) as http:
                 r = await http.post("/worker/chaos7/hijack/acquire", json={"owner": "final", "lease_s": 10})
                 assert r.status_code == 200, (
                     f"Hub should be functional after concurrent connects, got {r.status_code}: {r.text}"

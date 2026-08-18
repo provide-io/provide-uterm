@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-import httpx
+import httpx2
 from provide.uterm.client import connect_async_ws
 
 from .conftest import (
@@ -39,7 +39,7 @@ async def test_role_based_access_open_mode(single_session_server: Any) -> None:
         await worker.recv()  # snapshot_req
 
         # Switch to open mode
-        async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
+        async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
             resp = await http.post("/worker/s1/input_mode", json={"input_mode": "open"})
             assert resp.status_code == 200
 
@@ -125,7 +125,7 @@ async def test_mode_switch_mid_session(single_session_server: Any) -> None:
             await drain_all(operator)
 
             # Switch to open
-            async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
+            async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
                 resp = await http.post("/worker/s1/input_mode", json={"input_mode": "open"})
                 assert resp.status_code == 200
             await asyncio.sleep(0.3)
@@ -141,7 +141,7 @@ async def test_mode_switch_mid_session(single_session_server: Any) -> None:
             await asyncio.sleep(0.2)
 
             # Switch back to hijack
-            async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
+            async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
                 resp = await http.post("/worker/s1/input_mode", json={"input_mode": "hijack"})
                 assert resp.status_code == 200
             await asyncio.sleep(0.3)

@@ -14,13 +14,13 @@ from scripts.demos.output import clean_terminal_output
 
 def wait_connected(base_url: str, session_id: str, timeout: float = 15.0) -> bool:
     """Poll until the session reports connected=True."""
-    import httpx
+    import httpx2
 
     deadline = time.monotonic() + timeout
     auth = _dev_auth_headers_or_empty()
     while time.monotonic() < deadline:
         try:
-            r = httpx.get(f"{base_url}/api/sessions/{session_id}", timeout=5.0, headers=auth)
+            r = httpx2.get(f"{base_url}/api/sessions/{session_id}", timeout=5.0, headers=auth)
             if r.status_code == 200 and r.json().get("connected"):
                 return True
         except Exception:
@@ -40,7 +40,7 @@ def send_to_session(
     Switches the session to hijack mode, sends the given keystrokes, waits for
     output to settle, then releases and restores open mode. Returns True on success.
     """
-    import httpx as _httpx
+    import httpx2 as _httpx
 
     try:
         with _httpx.Client(base_url=base_url, timeout=30.0, headers=_dev_auth_headers_or_empty()) as http:
@@ -71,7 +71,7 @@ def fanout_send(
     wait_s: float = 2.5,
 ) -> bool:
     """Broadcast a command to all workers in a fanout group and wait for responses."""
-    import httpx as _httpx
+    import httpx2 as _httpx
 
     try:
         with _httpx.Client(base_url=base_url, timeout=30.0, headers=_dev_auth_headers_or_empty()) as http:
@@ -98,7 +98,7 @@ def fanout_send_results(
     Returns list of {worker_id, output} dicts. output has ANSI stripped and
     only the last meaningful non-prompt line is kept.
     """
-    import httpx as _httpx
+    import httpx2 as _httpx
 
     try:
         with _httpx.Client(base_url=base_url, timeout=30.0, headers=_dev_auth_headers_or_empty()) as http:

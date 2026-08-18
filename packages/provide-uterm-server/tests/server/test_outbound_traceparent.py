@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Fix 3c — outbound httpx calls propagate the W3C ``traceparent`` header.
+"""Fix 3c — outbound httpx2 calls propagate the W3C ``traceparent`` header.
 
 Webhooks, governance gates, and the delegated IDP all build an outbound
 ``headers`` dict before POSTing. When a span is active, ``inject_trace_context``
@@ -22,7 +22,7 @@ from collections.abc import Iterator
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
+import httpx2
 import pytest
 
 from provide.telemetry import set_trace_context
@@ -30,7 +30,7 @@ from provide.uterm.server.auth import WebhookIdentityProvider
 from provide.uterm.server.bridge.hub.ext import _build_webhook_headers
 from provide.uterm.server.tracing import inject_trace_context
 from provide.uterm.server.webhooks import WebhookManager
-from tests.helpers import http_mock as respx
+from tests.helpers import http_mock
 
 # Known fixed trace/span ids (W3C hex) so the emitted traceparent is deterministic.
 _TRACE_ID = "1234567890abcdef1234567890abcdef"
@@ -124,7 +124,7 @@ async def test_webhook_delivery_includes_traceparent_end_to_end() -> None:
         resp.is_success = True
         return resp
 
-    with patch("httpx.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)), _active_span():
+    with patch("httpx2.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)), _active_span():
         await manager._deliver(cfg, {"type": "snapshot", "data": {"screen": "$ traced"}})
 
     assert captured_headers
@@ -141,7 +141,7 @@ async def test_webhook_delivery_includes_traceparent_end_to_end() -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_idp_includes_traceparent() -> None:
     url = "https://auth.example.com/resolve"
     idp = WebhookIdentityProvider(
@@ -150,7 +150,9 @@ async def test_webhook_idp_includes_traceparent() -> None:
         require_signed_response=False,  # this test asserts outbound traceparent, not response signing
     )
 
-    route = respx.post(url).mock(return_value=httpx.Response(200, json={"subject_id": "user-123", "roles": ["viewer"]}))
+    route = http_mock.post(url).mock(
+        return_value=httpx2.Response(200, json={"subject_id": "user-123", "roles": ["viewer"]})
+    )
 
     class MockConnection:
         headers = {"Authorization": "Bearer some-token"}

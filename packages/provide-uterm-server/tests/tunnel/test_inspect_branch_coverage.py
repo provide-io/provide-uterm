@@ -13,7 +13,7 @@ import socket
 from contextlib import suppress
 from typing import Any
 
-import httpx
+import httpx2
 import pytest
 import uvicorn
 import websockets.server
@@ -179,7 +179,7 @@ class TestInspectBranchCoverage:
         task = await _start_inspect(target_server, tunnel_ws.port, proxy_port)
         await tunnel_ws.wait_ready()
         # Large body — uvicorn/ASGI may deliver in multiple chunks
-        async with httpx.AsyncClient() as client:
+        async with httpx2.AsyncClient() as client:
             resp = await asyncio.wait_for(
                 client.post(f"http://127.0.0.1:{proxy_port}/chunked", content=b"x" * 65536),
                 timeout=5.0,
@@ -196,8 +196,8 @@ class TestInspectBranchCoverage:
         await tunnel_ws.wait_ready()
         await tunnel_ws.wait_for_frame("http_intercept_state")
 
-        async def _do_request() -> httpx.Response:
-            async with httpx.AsyncClient() as client:
+        async def _do_request() -> httpx2.Response:
+            async with httpx2.AsyncClient() as client:
                 return await client.get(f"http://127.0.0.1:{proxy_port}/body-mod")
 
         req_task = asyncio.create_task(_do_request())

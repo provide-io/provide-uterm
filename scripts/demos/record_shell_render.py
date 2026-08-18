@@ -13,7 +13,7 @@ import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import TYPE_CHECKING
 
-import httpx
+import httpx2
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -194,7 +194,7 @@ async def run_terminal_demo() -> None:
 
     banner(DESCRIPTION)
 
-    async with httpx.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as http:
+    async with httpx2.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as http:
         info("Starting image server (rainbow PNG + animated GIFs)...")
         ok(f"  PNG: {png_url}")
         ok(f"  GIF: {gif_url}")
@@ -289,7 +289,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     # directly instead of showing the "Shared input" transcript view.
     hijack_id = ""
     try:
-        import httpx as _httpx
+        import httpx2 as _httpx
 
         with _httpx.Client(base_url=base_url, timeout=10.0, headers=dev_bearer_headers()) as http:
             http.patch("/api/sessions/provide-shell", json={"input_mode": "hijack"})
@@ -356,7 +356,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     def _send_render(page: object) -> None:
         if not hijack_id:
             return
-        import httpx as _h
+        import httpx2 as _h
 
         with _h.Client(base_url=base_url, timeout=10.0, headers=dev_bearer_headers()) as http:
             http.post(f"/worker/provide-shell/hijack/{hijack_id}/send", json={"keys": f"render {png_url}\r"})
@@ -364,7 +364,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     def _send_animated(page: object) -> None:
         if not hijack_id:
             return
-        import httpx as _h
+        import httpx2 as _h
 
         with _h.Client(base_url=base_url, timeout=10.0, headers=dev_bearer_headers()) as http:
             http.post(f"/worker/provide-shell/hijack/{hijack_id}/send", json={"keys": f"render --loop {gif_url}\r"})
@@ -372,7 +372,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     def _send_cat(page: object) -> None:
         if not hijack_id:
             return
-        import httpx as _h
+        import httpx2 as _h
 
         with _h.Client(base_url=base_url, timeout=10.0, headers=dev_bearer_headers()) as http:
             http.post(f"/worker/provide-shell/hijack/{hijack_id}/send", json={"keys": f"render --loop {cat_gif_url}\r"})
@@ -380,7 +380,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     def _send_remote_gif(page: object) -> None:
         if not hijack_id:
             return
-        import httpx as _h
+        import httpx2 as _h
 
         with _h.Client(base_url=base_url, timeout=10.0, headers=dev_bearer_headers()) as http:
             http.post(
@@ -407,7 +407,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     # Release hijack lease now that recording is done
     if hijack_id:
         try:
-            import httpx as _h
+            import httpx2 as _h
 
             with _h.Client(base_url=base_url, timeout=10.0, headers=dev_bearer_headers()) as http:
                 http.post(f"/worker/provide-shell/hijack/{hijack_id}/release")

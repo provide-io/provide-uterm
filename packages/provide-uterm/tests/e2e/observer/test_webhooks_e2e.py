@@ -21,7 +21,7 @@ import json
 import time
 from typing import Any
 
-import httpx
+import httpx2
 import pytest
 import uvicorn
 from fastapi import FastAPI, Request
@@ -129,7 +129,7 @@ async def test_webhook_snapshot_delivered(shell_server: Any) -> None:
     hub, base_url = shell_server
 
     async with webhook_receiver() as (hook_url, received):
-        async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H) as http:
+        async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H) as http:
             resp = await http.post("/api/sessions/wh1/webhooks", json={"url": hook_url})
             assert resp.status_code == 200
 
@@ -156,7 +156,7 @@ async def test_webhook_event_types_filter(shell_server: Any) -> None:
     hub, base_url = shell_server
 
     async with webhook_receiver() as (hook_url, received):
-        async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H) as http:
+        async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H) as http:
             resp = await http.post(
                 "/api/sessions/wh1/webhooks",
                 json={"url": hook_url, "event_types": ["hijack_acquired"]},
@@ -194,7 +194,7 @@ async def test_webhook_unregister_stops_delivery(shell_server: Any) -> None:
     hub, base_url = shell_server
 
     async with webhook_receiver() as (hook_url, received):
-        async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H) as http:
+        async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H) as http:
             reg_resp = await http.post("/api/sessions/wh1/webhooks", json={"url": hook_url})
             assert reg_resp.status_code == 200
             webhook_id = reg_resp.json()["webhook_id"]
@@ -247,7 +247,7 @@ async def test_webhook_hmac_signature_header(shell_server: Any) -> None:
     hook_url = f"http://127.0.0.1:{port}/signed"
 
     try:
-        async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H) as http:
+        async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H) as http:
             resp = await http.post(
                 "/api/sessions/wh1/webhooks",
                 json={"url": hook_url, "secret": secret},
@@ -289,7 +289,7 @@ async def test_webhook_loop_stops_on_worker_disconnect(shell_server: Any) -> Non
     hub, base_url = shell_server
 
     async with webhook_receiver() as (hook_url, received):
-        async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H) as http:
+        async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H) as http:
             resp = await http.post("/api/sessions/wh1/webhooks", json={"url": hook_url})
             assert resp.status_code == 200
 
@@ -321,7 +321,7 @@ async def test_webhook_loop_stops_on_worker_disconnect(shell_server: Any) -> Non
 async def test_webhook_list_via_api(shell_server: Any) -> None:
     hub, base_url = shell_server
 
-    async with webhook_receiver() as (hook_url, _), httpx.AsyncClient(base_url=base_url, headers=ADMIN_H) as http:
+    async with webhook_receiver() as (hook_url, _), httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H) as http:
         # Register two webhooks
         await http.post("/api/sessions/wh1/webhooks", json={"url": hook_url})
         await http.post("/api/sessions/wh1/webhooks", json={"url": hook_url + "2"})

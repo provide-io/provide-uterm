@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import FastAPI
-from httpx import ASGITransport
+from httpx2 import ASGITransport
 from mcp.server.mcpserver import MCPServer
 from mcp.types import CallToolResult
 from provide.uterm.server.bridge.hub import EventBus, TermHub
@@ -306,20 +306,20 @@ class TestHijackClientWatchEvents:
         assert "pattern" not in recorded["params"]
 
     async def test_request_with_timeout_sets_httpx_timeout(self) -> None:
-        """Cover hijack.py:120 — _request sets httpx.Timeout when timeout kwarg is provided."""
+        """Cover hijack.py:120 — _request sets httpx2.Timeout when timeout kwarg is provided."""
         from unittest.mock import MagicMock
 
-        import httpx
+        import httpx2
 
         from provide.uterm.client.hijack import HijackClient
 
-        mock_response = MagicMock(spec=httpx.Response)
+        mock_response = MagicMock(spec=httpx2.Response)
         mock_response.is_success = True
         mock_response.json.return_value = {"ok": True}
 
         client = HijackClient("http://test")
 
-        with patch("httpx.AsyncClient.request", new=AsyncMock(return_value=mock_response)):
+        with patch("httpx2.AsyncClient.request", new=AsyncMock(return_value=mock_response)):
             ok, body = await client._request("GET", "/api/health", timeout=5.0)
 
         assert ok is True

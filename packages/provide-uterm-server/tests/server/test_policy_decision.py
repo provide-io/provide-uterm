@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import pytest
-from httpx import Response
+from httpx2 import Response
 
 from provide.uterm.server.bridge.hub.ext import (
     NoOpPolicyGate,
@@ -13,7 +13,7 @@ from provide.uterm.server.bridge.hub.ext import (
     PolicyDecision,
     WebhookPolicyGate,
 )
-from tests.helpers import http_mock as respx
+from tests.helpers import http_mock
 
 
 def test_policy_decision_model() -> None:
@@ -46,24 +46,24 @@ async def test_noop_policy_gate_returns_decision() -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_policy_gate_returns_decision() -> None:
     url = "https://fleet.example.com/policy"
     gate = WebhookPolicyGate(url=url)
 
     # Mock allow response
-    respx.post(url).mock(return_value=Response(200, json={"allow": True}))
+    http_mock.post(url).mock(return_value=Response(200, json={"allow": True}))
     ctx = PolicyContext(worker_id="w1")
     result = await gate.intercept_input("ls", ctx)
     assert result.action == "allow"
 
     # Mock deny response
-    respx.post(url).mock(return_value=Response(200, json={"allow": False}))
+    http_mock.post(url).mock(return_value=Response(200, json={"allow": False}))
     result = await gate.intercept_input("rm", ctx)
     assert result.action == "deny"
 
     # Mock hold response
-    respx.post(url).mock(
+    http_mock.post(url).mock(
         return_value=Response(
             200, json={"action": "hold", "request_id": "r1", "timeout_s": 120, "reason": "Wait for admin"}
         )

@@ -22,13 +22,24 @@ from provide.uterm.client.control_ws import (
 
 
 class TestLogicalFrameDecoderFinish:
-    """Cover finish() paths (lines 43-49) including DataChunk and ControlChunk."""
+    """Cover finish() paths (lines 43-49) including DataChunk and ControlChunk.
+
+    These seed the decoder's internal buffer directly, which is deliberate:
+    ``feed()`` drains eagerly, so it emits a plain-data chunk immediately and
+    leaves ``finish()`` with nothing to map. Pre-loading the buffer is the only
+    way to reach finish()'s event loop.
+
+    The field is ``_buffer_bytes``. It was ``_buffer`` (a str) until the decoder
+    moved to a bytes-based buffer; ``_buffer`` still exists but is only ever
+    reset to "", so seeding it left the real buffer empty and finish() raised
+    ``truncated control frame``.
+    """
 
     def test_finish_with_data_chunk(self) -> None:
         """Covers lines 43-49: finish() loop with DataChunk event."""
         decoder = LogicalFrameDecoder(role="browser")
         # Feed partial data so finish flushes it
-        decoder._decoder._buffer = "hello"
+        decoder._decoder._buffer_bytes = bytearray(b"hello")
         result = decoder.finish()
         # "hello" is plain data → DataChunk → mapped to term frame
         assert result == [{"type": "term", "data": "hello"}]
@@ -38,14 +49,14 @@ class TestLogicalFrameDecoderFinish:
         decoder = LogicalFrameDecoder(role="worker")
         # Put a complete control frame into the buffer
         encoded = encode_control_frame({"type": "done"})
-        decoder._decoder._buffer = encoded
+        decoder._decoder._buffer_bytes = bytearray(encoded.encode())
         result = decoder.finish()
         assert result == [{"type": "done"}]
 
     def test_finish_with_data_chunk_worker_role(self) -> None:
         """Covers line 48-49: DataChunk mapped to input for worker role."""
         decoder = LogicalFrameDecoder(role="worker")
-        decoder._decoder._buffer = "keystrokes"
+        decoder._decoder._buffer_bytes = bytearray(b"keystrokes")
         result = decoder.finish()
         assert result == [{"type": "input", "data": "keystrokes"}]
 

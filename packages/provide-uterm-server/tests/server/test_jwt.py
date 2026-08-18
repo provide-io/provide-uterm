@@ -13,7 +13,7 @@ import time
 from typing import TYPE_CHECKING, Any
 from weakref import WeakKeyDictionary
 
-import httpx
+import httpx2
 import jwt
 import pytest
 import uvicorn
@@ -157,7 +157,7 @@ def live_reference_server_jwt() -> Generator[str, None, None]:
 
 class TestReferenceServerJwtE2E:
     async def _wait_for_connected(self, base_url: str, session_id: str, headers: dict[str, str]) -> None:
-        async with httpx.AsyncClient(base_url=base_url) as http:
+        async with httpx2.AsyncClient(base_url=base_url) as http:
             deadline = time.monotonic() + 8.0
             while time.monotonic() < deadline:
                 resp = await http.get(f"/api/sessions/{session_id}", headers=headers)
@@ -170,7 +170,7 @@ class TestReferenceServerJwtE2E:
         operator_headers = _auth_headers("op-1", ["operator"])
         admin_headers = _auth_headers("admin-1", ["admin"])
 
-        async with httpx.AsyncClient(base_url=live_reference_server_jwt) as http:
+        async with httpx2.AsyncClient(base_url=live_reference_server_jwt) as http:
             created = await http.post(
                 "/api/sessions",
                 headers=operator_headers,

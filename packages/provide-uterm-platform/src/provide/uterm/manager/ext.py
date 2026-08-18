@@ -9,7 +9,7 @@ import hmac
 import json
 from typing import Any, Protocol, runtime_checkable
 
-import httpx
+import httpx2
 from provide.telemetry import event
 
 # Standardized DAS Events for Agent Lifecycle
@@ -59,7 +59,7 @@ class WebhookAgentSpawnPolicyGate(AgentSpawnPolicyGate):
             digest = hmac.new(self.secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
             headers["X-Signature"] = f"sha256={digest}"
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async with httpx2.AsyncClient(timeout=self.timeout) as client:
                 resp = await client.post(self.url, content=body, headers=headers)
                 if resp.status_code == 200:
                     return bool(resp.json().get("allow", False))

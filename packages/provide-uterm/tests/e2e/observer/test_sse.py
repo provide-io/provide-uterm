@@ -20,7 +20,7 @@ import json
 import time
 from typing import Any
 
-import httpx
+import httpx2
 import pytest
 from provide.uterm.client import connect_async_ws
 
@@ -89,7 +89,7 @@ async def collect_sse_events(
 
     events: list[dict[str, Any]] = []
     async with (
-        httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=timeout_s + 2) as http,
+        httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=timeout_s + 2) as http,
         http.stream("GET", f"/api/sessions/{session_id}/events/stream", params=params) as resp,
     ):
         assert resp.status_code == 200
@@ -180,7 +180,7 @@ async def test_sse_worker_disconnect_closes_stream(shell_server: Any) -> None:
 
         async def _stream() -> None:
             async with (
-                httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=12) as http,
+                httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=12) as http,
                 http.stream("GET", "/api/sessions/sse1/events/stream") as resp,
             ):
                 ready.set()

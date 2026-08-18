@@ -10,7 +10,7 @@ import asyncio
 from typing import Any
 from weakref import WeakKeyDictionary
 
-import httpx
+import httpx2
 import websockets
 
 from provide.uterm.control_channel import (
@@ -107,7 +107,7 @@ class TestDemoServerWs:
             assert hello["input_mode"] == "hijack"
 
     async def test_input_after_hijack_updates_snapshot(self, example_server: str) -> None:
-        async with httpx.AsyncClient(base_url=example_server) as http:
+        async with httpx2.AsyncClient(base_url=example_server) as http:
             await http.post("/demo/session/provide-shell/reset")
         async with websockets.connect(_ws_url(example_server, "/ws/browser/provide-shell/term")) as browser:
             await _drain_until(browser, "hello")
@@ -124,14 +124,14 @@ class TestDemoServerWs:
             assert "session: received" in snapshot["screen"]
 
     async def test_http_mode_switch_updates_browser_to_open_mode(self, example_server: str) -> None:
-        async with httpx.AsyncClient(base_url=example_server) as http:
+        async with httpx2.AsyncClient(base_url=example_server) as http:
             await http.post("/demo/session/provide-shell/reset")
         async with websockets.connect(_ws_url(example_server, "/ws/browser/provide-shell/term")) as browser:
             await _drain_until(browser, "hello")
             await _drain_until(browser, "hijack_state")
             await _drain_until(browser, "snapshot")
 
-            async with httpx.AsyncClient(base_url=example_server) as http:
+            async with httpx2.AsyncClient(base_url=example_server) as http:
                 resp = await http.post("/demo/session/provide-shell/mode", json={"input_mode": "open"})
                 assert resp.status_code == 200
 
@@ -140,7 +140,7 @@ class TestDemoServerWs:
             assert "Shared input" in snapshot["screen"]
 
     async def test_switching_to_open_releases_active_hijack_immediately(self, example_server: str) -> None:
-        async with httpx.AsyncClient(base_url=example_server) as http:
+        async with httpx2.AsyncClient(base_url=example_server) as http:
             await http.post("/demo/session/provide-shell/reset")
             await http.post("/demo/session/provide-shell/mode", json={"input_mode": "hijack"})
         async with (
@@ -158,7 +158,7 @@ class TestDemoServerWs:
             assert owner_state is not None and owner_state["owner"] == "me"
             assert other_state is not None and other_state["owner"] == "other"
 
-            async with httpx.AsyncClient(base_url=example_server) as http:
+            async with httpx2.AsyncClient(base_url=example_server) as http:
                 resp = await http.post("/demo/session/provide-shell/mode", json={"input_mode": "open"})
                 assert resp.status_code == 200
 
@@ -170,7 +170,7 @@ class TestDemoServerWs:
             assert b2_after["input_mode"] == "open"
 
     async def test_two_browsers_can_both_type_in_open_mode(self, example_server: str) -> None:
-        async with httpx.AsyncClient(base_url=example_server) as http:
+        async with httpx2.AsyncClient(base_url=example_server) as http:
             await http.post("/demo/session/provide-shell/reset")
             await http.post("/demo/session/provide-shell/mode", json={"input_mode": "open"})
 
@@ -194,7 +194,7 @@ class TestDemoServerWs:
             assert "from-two" in snap2["screen"]
 
     async def test_hijack_handoff_still_works_in_exclusive_mode(self, example_server: str) -> None:
-        async with httpx.AsyncClient(base_url=example_server) as http:
+        async with httpx2.AsyncClient(base_url=example_server) as http:
             await http.post("/demo/session/provide-shell/reset")
             await http.post("/demo/session/provide-shell/mode", json={"input_mode": "hijack"})
 

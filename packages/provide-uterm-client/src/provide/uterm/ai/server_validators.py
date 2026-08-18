@@ -46,7 +46,7 @@ _BLOCKED_HOST_NAMES: frozenset[str] = frozenset(
 
 def _numeric_ipv4(candidate: str) -> ipaddress.IPv4Address | None:
     """Resolve the non-canonical numeric IPv4 forms that :mod:`ipaddress` rejects
-    but the C resolver (``inet_aton``, used by sockets / httpx / curl) accepts:
+    but the C resolver (``inet_aton``, used by sockets / httpx2 / curl) accepts:
     decimal (``2130706433``), octal (``0177.0.0.1``), hex (``0x7f.1``), and the
     shortened ``127.1`` forms. A blocklist that only understands the canonical
     dotted-quad is trivially bypassed by these (``http://2130706433`` reaches

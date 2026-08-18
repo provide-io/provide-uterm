@@ -41,7 +41,7 @@ class TestHttpRequest:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.request = AsyncMock(return_value=mock_response)
 
-        with patch("httpx.AsyncClient", return_value=mock_client):
+        with patch("httpx2.AsyncClient", return_value=mock_client):
             ok, data = await _http_request("http://x", "GET", "/path")
         assert ok is True
         assert data == {"ok": True}
@@ -59,7 +59,7 @@ class TestHttpRequest:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.request = AsyncMock(return_value=mock_response)
 
-        with patch("httpx.AsyncClient", return_value=mock_client):
+        with patch("httpx2.AsyncClient", return_value=mock_client):
             ok, data = await _http_request("http://x", "GET", "/path")
         assert ok is True
         assert data == {"value": ["a", "b"]}
@@ -77,7 +77,7 @@ class TestHttpRequest:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.request = AsyncMock(return_value=mock_response)
 
-        with patch("httpx.AsyncClient", return_value=mock_client):
+        with patch("httpx2.AsyncClient", return_value=mock_client):
             ok, data = await _http_request("http://x", "GET", "/path")
         assert ok is False
         assert data == {"error": "not found"}
@@ -95,7 +95,7 @@ class TestHttpRequest:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.request = AsyncMock(return_value=mock_response)
 
-        with patch("httpx.AsyncClient", return_value=mock_client):
+        with patch("httpx2.AsyncClient", return_value=mock_client):
             ok, data = await _http_request("http://x", "GET", "/path")
         assert ok is False
         assert "error" in data
@@ -109,7 +109,7 @@ class TestHttpRequest:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.request = AsyncMock(side_effect=ConnectionError("refused"))
 
-        with patch("httpx.AsyncClient", return_value=mock_client):
+        with patch("httpx2.AsyncClient", return_value=mock_client):
             ok, data = await _http_request("http://x", "GET", "/path")
         assert ok is False
         assert "refused" in data["error"]

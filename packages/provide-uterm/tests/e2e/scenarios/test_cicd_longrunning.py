@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-import httpx
+import httpx2
 from provide.uterm.client import connect_async_ws
 
 from .conftest import (
@@ -35,7 +35,7 @@ async def test_build_output_event_polling(live_hub: Any) -> None:
     async with connect_async_ws(ws_url(base_url, "/ws/worker/build1/term")) as worker:
         await worker.recv()  # snapshot_req
 
-        async with httpx.AsyncClient(base_url=base_url, timeout=10.0) as http:
+        async with httpx2.AsyncClient(base_url=base_url, timeout=10.0) as http:
             # Acquire hijack for REST event access
             r = await http.post("/worker/build1/hijack/acquire", json={"owner": "ci-monitor", "lease_s": 120})
             assert r.status_code == 200, f"Acquire failed: {r.status_code}: {r.text}"

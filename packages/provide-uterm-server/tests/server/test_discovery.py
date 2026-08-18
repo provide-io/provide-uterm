@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-import httpx
+import httpx2
 import pytest
 
 from provide.uterm.server.discovery import (
@@ -14,7 +14,7 @@ from provide.uterm.server.discovery import (
     NoOpDiscoveryProvider,
     WebhookDiscoveryProvider,
 )
-from tests.helpers import http_mock as respx
+from tests.helpers import http_mock
 
 
 def _status() -> NodeStatus:
@@ -34,8 +34,8 @@ async def test_webhook_discovery_announce_posts_status() -> None:
     secret = "uterm-discovery-secret-32-byte-minimum-x"  # pragma: allowlist secret
     provider = WebhookDiscoveryProvider(url, secret=secret)
 
-    async with respx.mock:
-        route = respx.post(url).mock(return_value=httpx.Response(200))
+    async with http_mock.mock:
+        route = http_mock.post(url).mock(return_value=httpx2.Response(200))
         await provider.announce(_status())
         assert route.called
         request = route.calls.last.request
@@ -48,8 +48,8 @@ async def test_webhook_discovery_announce_swallows_http_error() -> None:
     url = "https://registry.example.com/announce"
     provider = WebhookDiscoveryProvider(url)
 
-    async with respx.mock:
-        respx.post(url).mock(side_effect=httpx.ConnectError("refused"))
+    async with http_mock.mock:
+        http_mock.post(url).mock(side_effect=httpx2.ConnectError("refused"))
         # Must not raise.
         await provider.announce(_status())
 
@@ -66,7 +66,7 @@ async def test_webhook_discovery_announce_metadata_url_not_sent() -> None:
     url = "http://169.254.169.254/announce"
     provider = WebhookDiscoveryProvider(url)
 
-    async with respx.mock:
-        route = respx.post(url).mock(return_value=httpx.Response(200))
+    async with http_mock.mock:
+        route = http_mock.post(url).mock(return_value=httpx2.Response(200))
         await provider.announce(_status())
         assert not route.called

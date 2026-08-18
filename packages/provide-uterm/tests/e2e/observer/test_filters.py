@@ -18,7 +18,7 @@ import asyncio
 import time
 from typing import Any
 
-import httpx
+import httpx2
 import pytest
 from provide.uterm.client import connect_async_ws
 
@@ -71,7 +71,7 @@ async def test_three_subscribers_different_event_filters(live_server: Any) -> No
 
     async with (
         connect_async_ws(ws_url(base_url, "/ws/worker/flt1/term")) as worker,
-        httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=20.0) as http,
+        httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=20.0) as http,
     ):
         await worker.recv()  # snapshot_req
 

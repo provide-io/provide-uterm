@@ -8,7 +8,7 @@ import statistics
 import time
 from dataclasses import dataclass
 
-import httpx
+import httpx2
 import websockets
 
 
@@ -114,7 +114,7 @@ async def _probe_ws(
 
 async def _health_check(base_url: str, timeout_s: float, headers: dict[str, str] | None = None) -> bool:
     try:
-        async with httpx.AsyncClient(base_url=base_url, timeout=timeout_s, headers=headers) as client:
+        async with httpx2.AsyncClient(base_url=base_url, timeout=timeout_s, headers=headers) as client:
             resp = await client.get("/api/health")
             return resp.status_code == 200
     except Exception:

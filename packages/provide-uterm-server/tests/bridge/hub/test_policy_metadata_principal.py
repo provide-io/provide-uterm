@@ -88,7 +88,7 @@ async def test_policy_context_metadata_is_json_serializable() -> None:
 
 
 @pytest.mark.asyncio
-async def test_webhook_gate_post_body_serializes_with_principal(respx_mock) -> None:
+async def test_webhook_gate_post_body_serializes_with_principal(http_mock_router) -> None:
     """End-to-end: the WebhookPolicyGate POST body is JSON-serializable with a Principal present.
 
     Before the fix this gate path raised TypeError inside json.dumps and the
@@ -96,15 +96,15 @@ async def test_webhook_gate_post_body_serializes_with_principal(respx_mock) -> N
     try/except catches transport errors but the encode happens *before* the
     try, so a serialization TypeError was uncaught.
     """
-    import httpx
+    import httpx2
 
     captured: dict[str, bytes] = {}
 
-    def _record(request: httpx.Request) -> httpx.Response:
+    def _record(request: httpx2.Request) -> httpx2.Response:
         captured["body"] = request.content
-        return httpx.Response(200, json={"action": "allow"})
+        return httpx2.Response(200, json={"action": "allow"})
 
-    respx_mock.post("https://gov.example/policy").mock(side_effect=_record)
+    http_mock_router.post("https://gov.example/policy").mock(side_effect=_record)
 
     principal = Principal(
         subject_id="op-1",

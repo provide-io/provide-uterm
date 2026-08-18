@@ -11,7 +11,7 @@ import sys
 import time
 from typing import TYPE_CHECKING
 
-import httpx
+import httpx2
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -48,7 +48,7 @@ async def run_terminal_demo() -> None:
     base_url, server = start_server()
     time.sleep(1.5)
 
-    async with httpx.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as client:
+    async with httpx2.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as client:
         banner(DESCRIPTION)
 
         # Check recording status
@@ -122,7 +122,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     )
 
     # Wait for ushell to establish its WebSocket connection to the hub
-    import httpx as _httpx
+    import httpx2 as _httpx
 
     wait_connected(base_url, "provide-shell", timeout=15.0)
     time.sleep(1.0)

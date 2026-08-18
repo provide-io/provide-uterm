@@ -11,7 +11,7 @@ import sys
 import time
 from typing import TYPE_CHECKING
 
-import httpx
+import httpx2
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -48,7 +48,7 @@ async def run_terminal_demo() -> None:
     base_url, server = start_server()
     time.sleep(1.5)
 
-    async with httpx.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as client:
+    async with httpx2.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as client:
         banner(DESCRIPTION)
 
         # Get the default provide-shell session info

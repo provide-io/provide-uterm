@@ -122,7 +122,7 @@ def build_identity_provider(config: ServerConfig, api_key_store: ApiKeyStore) ->
     if config.auth.identity_provider == "webhook" and config.auth.webhook_idp_url:
         # 1d: curate the request headers/cookies forwarded to the external IdP —
         # the always-needed auth credentials plus any operator extensions. Header
-        # keys are lower-cased (Starlette/httpx lower-case them); cookies match
+        # keys are lower-cased (Starlette/httpx2 lower-case them); cookies match
         # by exact name.
         forward_headers = {
             "authorization",

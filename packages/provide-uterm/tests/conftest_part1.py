@@ -54,10 +54,10 @@ if TYPE_CHECKING:
 
 
 def _install_httpx_dev_principal_autoauth() -> None:
-    """Attach admin header-mode credentials to test httpx clients."""
-    import httpx
+    """Attach admin header-mode credentials to test httpx2 clients."""
+    import httpx2
 
-    if getattr(httpx.Client, "_uterm_devprincipal_patched", False):
+    if getattr(httpx2.Client, "_uterm_devprincipal_patched", False):
         return
 
     _defaults = {"X-Uterm-Principal": "admin", "X-Uterm-Role": "admin"}
@@ -74,8 +74,8 @@ def _install_httpx_dev_principal_autoauth() -> None:
         cls.__init__ = _patched_init  # type: ignore[method-assign]
         cls._uterm_devprincipal_patched = True  # type: ignore[attr-defined]
 
-    _patch(httpx.Client)
-    _patch(httpx.AsyncClient)
+    _patch(httpx2.Client)
+    _patch(httpx2.AsyncClient)
 
 
 def _install_websockets_dev_principal_autoauth() -> None:

@@ -11,7 +11,7 @@ import sys
 import time
 from typing import TYPE_CHECKING
 
-import httpx
+import httpx2
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -49,7 +49,7 @@ async def run_terminal_demo() -> None:
 
     banner(DESCRIPTION)
 
-    async with httpx.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as client:
+    async with httpx2.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as client:
         # Post 10 annotations to generate recording activity
         info("Posting 10 timeline annotations (step_00..step_09)...")
         for i in range(10):
@@ -106,7 +106,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     send_to_session(base_url, "provide-shell", "uptime\r", wait_s=0.8)
 
     try:
-        import httpx as _httpx
+        import httpx2 as _httpx
 
         with _httpx.Client(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as client:
             for i in range(5):

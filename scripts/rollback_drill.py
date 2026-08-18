@@ -23,7 +23,7 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
-import httpx
+import httpx2
 
 
 def _auth_headers(principal: str | None, role: str | None) -> dict[str, str] | None:
@@ -43,7 +43,7 @@ def _auth_headers(principal: str | None, role: str | None) -> dict[str, str] | N
     return headers
 
 
-async def _wait_connected(client: httpx.AsyncClient, session_id: str, timeout_s: float) -> float:
+async def _wait_connected(client: httpx2.AsyncClient, session_id: str, timeout_s: float) -> float:
     start = time.perf_counter()
     deadline = start + timeout_s
     while time.perf_counter() < deadline:
@@ -77,7 +77,7 @@ async def run(
         status = "PASS" if result == "pass" else "FAIL"
         print(f"[{status}] {name}" + (f": {detail}" if detail else ""))
 
-    async with httpx.AsyncClient(base_url=base_url, timeout=timeout_s, headers=headers) as client:
+    async with httpx2.AsyncClient(base_url=base_url, timeout=timeout_s, headers=headers) as client:
         # --- Pre-flight ---
         health = await client.get("/api/health")
         if health.status_code != 200:

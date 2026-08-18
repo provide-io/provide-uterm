@@ -4,7 +4,7 @@
 #
 """Async REST client for the provide-uterm hijack control plane.
 
-Wraps :mod:`httpx.AsyncClient` to provide typed methods for every hijack
+Wraps :mod:`httpx2.AsyncClient` to provide typed methods for every hijack
 and session endpoint.  Returns ``tuple[bool, dict]`` from each call —
 matching the agent ``_manager_request()`` convention for zero-effort
 migration.
@@ -22,7 +22,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any
 
-import httpx
+import httpx2
 from provide.telemetry import get_logger
 
 if TYPE_CHECKING:
@@ -32,7 +32,7 @@ log = get_logger(__name__)
 
 # A single safe URL path segment: no ``/`` (route forging) and no ``.``/``..``
 # dot-segments (path traversal). Caller/LLM-supplied ids are interpolated into
-# request paths, so an unvalidated id like ``../../api/keys`` would let httpx
+# request paths, so an unvalidated id like ``../../api/keys`` would let httpx2
 # resolve the URL to a *different* server route, escaping the per-method authz
 # model. Allow dotted ids (e.g. ``session.1``) but reject the bare traversal
 # segments.
@@ -92,27 +92,27 @@ class HijackClient:
         entity_prefix: str = "/worker",
         timeout: float = 20.0,
         headers: dict[str, str] | None = None,
-        transport: httpx.AsyncBaseTransport | None = None,
+        transport: httpx2.AsyncBaseTransport | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._entity_prefix = entity_prefix.rstrip("/")
         self._timeout = timeout
         self._extra_headers = headers or {}
         self._transport = transport
-        self._client: httpx.AsyncClient | None = None
+        self._client: httpx2.AsyncClient | None = None
         self._owns_client = True
 
     # -- context manager -----------------------------------------------------
 
-    def _make_client(self) -> httpx.AsyncClient:
+    def _make_client(self) -> httpx2.AsyncClient:
         kw: dict[str, Any] = {
             "base_url": self._base_url,
             "headers": self._extra_headers,
-            "timeout": httpx.Timeout(self._timeout),
+            "timeout": httpx2.Timeout(self._timeout),
         }
         if self._transport is not None:
             kw["transport"] = self._transport
-        return httpx.AsyncClient(**kw)
+        return httpx2.AsyncClient(**kw)
 
     async def __aenter__(self) -> HijackClient:
         self._client = self._make_client()
@@ -131,7 +131,7 @@ class HijackClient:
 
     # -- internal transport ---------------------------------------------------
 
-    def _get_client(self) -> httpx.AsyncClient:
+    def _get_client(self) -> httpx2.AsyncClient:
         if self._client is not None:
             return self._client
         # Lazy single-request client (caller did not use ``async with``).
@@ -152,12 +152,14 @@ class HijackClient:
         client = self._get_client()
         kw: dict[str, Any] = {"json": json, "params": params}
         if timeout is not None:
-            kw["timeout"] = httpx.Timeout(timeout)
+            kw["timeout"] = httpx2.Timeout(timeout)
         try:
             r = await client.request(method, path, **kw)
-        except httpx.HTTPError as exc:
+        except httpx2.HTTPError as exc:
             msg = str(exc)
-            if isinstance(exc, httpx.HTTPStatusError):  # pragma: no cover — defensive; we don't call raise_for_status()
+            if isinstance(
+                exc, httpx2.HTTPStatusError
+            ):  # pragma: no cover — defensive; we don't call raise_for_status()
                 try:
                     body = exc.response.json()
                     msg += f" - body: {_sanitize(body)}"

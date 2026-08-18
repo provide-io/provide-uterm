@@ -271,7 +271,7 @@ class TestParseActionMessageHeaderDenylist:
         assert r["headers"] == {}
 
     def test_content_length_dropped(self) -> None:
-        # httpx computes Content-Length from the body. Operator-reflected
+        # httpx2 computes Content-Length from the body. Operator-reflected
         # values enable request smuggling against the upstream.
         r = parse_action_message({"action": "modify", "headers": {"Content-Length": "9999"}})
         assert r["headers"] == {}

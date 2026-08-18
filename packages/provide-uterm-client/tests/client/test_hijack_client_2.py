@@ -10,7 +10,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 from fastapi import FastAPI
-from httpx import ASGITransport
+from httpx2 import ASGITransport
 from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.server.bridge.models import WorkerTermState
 
@@ -357,7 +357,7 @@ class TestTransportErrors:
 
 class TestCustomTimeout:
     async def test_request_with_custom_timeout(self) -> None:
-        """hijack.py:120 — timeout kwarg passed to httpx."""
+        """hijack.py:120 — timeout kwarg passed to httpx2."""
         from provide.uterm.client.hijack import HijackClient
 
         async with HijackClient("http://127.0.0.1:1") as c:

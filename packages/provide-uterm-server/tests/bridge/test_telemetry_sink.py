@@ -30,7 +30,7 @@ from __future__ import annotations
 import time
 from unittest.mock import AsyncMock, patch
 
-import httpx
+import httpx2
 import pytest
 
 from provide.uterm.server.bridge.hub.ext import (
@@ -107,16 +107,16 @@ async def test_noop_telemetry_sink_emit_returns_none() -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_webhook_telemetry_sink_posts_on_emit(respx_mock) -> None:
-    route = respx_mock.post("https://telemetry.example/ingest").mock(return_value=httpx.Response(200))
+async def test_webhook_telemetry_sink_posts_on_emit(http_mock_router) -> None:
+    route = http_mock_router.post("https://telemetry.example/ingest").mock(return_value=httpx2.Response(200))
     sink = WebhookTelemetrySink(url="https://telemetry.example/ingest")
     evt = TelemetryEvent(event_type="session.registered", worker_id="w1", timestamp=time.time())
     await sink.emit(evt)
     assert route.called
 
 
-async def test_webhook_telemetry_sink_posts_with_secret(respx_mock) -> None:
-    route = respx_mock.post("https://telemetry.example/ingest").mock(return_value=httpx.Response(200))
+async def test_webhook_telemetry_sink_posts_with_secret(http_mock_router) -> None:
+    route = http_mock_router.post("https://telemetry.example/ingest").mock(return_value=httpx2.Response(200))
     sink = WebhookTelemetrySink(url="https://telemetry.example/ingest", secret="s3cr3t")
     evt = TelemetryEvent(event_type="hijack.acquired", worker_id="w1", timestamp=time.time())
     await sink.emit(evt)
@@ -125,8 +125,8 @@ async def test_webhook_telemetry_sink_posts_with_secret(respx_mock) -> None:
     assert req.headers.get("X-Uterm-Signature")
 
 
-async def test_webhook_telemetry_sink_non_200_does_not_raise(respx_mock) -> None:
-    respx_mock.post("https://telemetry.example/ingest").mock(return_value=httpx.Response(500))
+async def test_webhook_telemetry_sink_non_200_does_not_raise(http_mock_router) -> None:
+    http_mock_router.post("https://telemetry.example/ingest").mock(return_value=httpx2.Response(500))
     sink = WebhookTelemetrySink(url="https://telemetry.example/ingest")
     evt = TelemetryEvent(event_type="x", worker_id="w", timestamp=0.0)
     # Must not raise even on server error

@@ -14,7 +14,7 @@ settings, and any future retry/egress policy are set here instead of being
 re-derived at a dozen call sites.
 
 **Tests get a seam.** Client construction used to happen inside the methods
-under test (``async with httpx.AsyncClient(...)`` in the middle of
+under test (``async with httpx2.AsyncClient(...)`` in the middle of
 ``resolve_principal``), which left no way to substitute a transport. That is
 why the suite reached for respx, which patches the HTTP stack process-wide.
 Routing through this factory lets a test swap in a mock transport by patching
@@ -28,19 +28,19 @@ from __future__ import annotations
 
 from typing import Any
 
-import httpx
+import httpx2
 
 __all__ = ["AsyncClient", "HTTPError", "Response", "async_client"]
 
 # Re-exported so call sites can annotate and catch without importing the HTTP
 # library themselves. Keeping the import in one module is what makes swapping
 # the implementation a single-file change rather than a repo-wide rename.
-AsyncClient = httpx.AsyncClient
-Response = httpx.Response
-HTTPError = httpx.HTTPError
+AsyncClient = httpx2.AsyncClient
+Response = httpx2.Response
+HTTPError = httpx2.HTTPError
 
 
-def async_client(*, timeout: float | None = None, **kwargs: Any) -> httpx.AsyncClient:
+def async_client(*, timeout: float | None = None, **kwargs: Any) -> httpx2.AsyncClient:
     """Build the package's outbound async HTTP client.
 
     Args:
@@ -59,4 +59,4 @@ def async_client(*, timeout: float | None = None, **kwargs: Any) -> httpx.AsyncC
     """
     if timeout is not None:
         kwargs["timeout"] = timeout
-    return httpx.AsyncClient(**kwargs)
+    return httpx2.AsyncClient(**kwargs)

@@ -20,7 +20,7 @@ import asyncio
 import time
 from typing import Any
 
-import httpx
+import httpx2
 from provide.uterm.client import connect_async_ws
 
 from .conftest import (
@@ -96,7 +96,7 @@ async def test_operator_open_mode_input_eventbus_delivers(live_server: Any) -> N
             await drain_until(op_ws, "hijack_state", timeout=2.0)
 
             # Subscribe to input_send events
-            async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http:
+            async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http:
                 poll_task = asyncio.create_task(
                     http.get(
                         "/api/sessions/s1/events/watch",
@@ -132,7 +132,7 @@ async def test_admin_hijack_eventbus_delivers_hijack_acquired(live_server: Any) 
         async with connect_browser(base_url, "s1", role="admin") as admin_ws:
             await drain_all(admin_ws)
 
-            async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http:
+            async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http:
                 poll_task = asyncio.create_task(
                     http.get(
                         "/api/sessions/s1/events/watch",

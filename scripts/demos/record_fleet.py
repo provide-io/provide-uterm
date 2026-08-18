@@ -13,7 +13,7 @@ import sys
 import time
 from typing import TYPE_CHECKING
 
-import httpx
+import httpx2
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -105,7 +105,7 @@ async def run_terminal_demo() -> None:
     base_url, server = start_server()
     time.sleep(1.5)
 
-    async with httpx.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as client:
+    async with httpx2.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as client:
         info(f"Starting {len(SESSION_IDS)} fleet PTY worker sessions...")
         for sid in SESSION_IDS:
             r = await client.post(
@@ -167,7 +167,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     group_id = ""
     session_groups: dict[str, str] = {}  # sid → single-session fanout group_id
     try:
-        with httpx.Client(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as client:
+        with httpx2.Client(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as client:
             for sid in SESSION_IDS:
                 client.post(
                     "/api/sessions",

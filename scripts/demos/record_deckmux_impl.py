@@ -436,7 +436,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
 
 async def run_terminal_demo() -> None:
     """Run the DeckMux presence demo (terminal-only, for asciinema)."""
-    import httpx
+    import httpx2
 
     from scripts.demos import banner, info, kv, ok
 
@@ -457,7 +457,7 @@ async def run_terminal_demo() -> None:
 
     banner(DESCRIPTION)
 
-    async with httpx.AsyncClient(base_url=base_url, timeout=30.0, headers=header_admin_headers()) as http:
+    async with httpx2.AsyncClient(base_url=base_url, timeout=30.0, headers=header_admin_headers()) as http:
         info("Fetching session info...")
         r = await http.get("/api/sessions/provide-shell")
         r.raise_for_status()

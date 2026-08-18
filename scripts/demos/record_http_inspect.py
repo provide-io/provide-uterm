@@ -12,7 +12,7 @@ import threading
 import time
 from typing import TYPE_CHECKING, Any
 
-import httpx
+import httpx2
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -82,7 +82,7 @@ async def run_terminal_demo() -> None:
 
     base_url, server = start_server()
 
-    async with httpx.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as client:
+    async with httpx2.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as client:
         # Create an HTTP inspect tunnel
         info("Creating HTTP inspect tunnel via /api/tunnels...")
         r = await client.post(
@@ -133,7 +133,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
 
     # Attempt to create a tunnel for browser screenshots
     try:
-        import httpx as _httpx
+        import httpx2 as _httpx
 
         with _httpx.Client(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as client:
             client.post(

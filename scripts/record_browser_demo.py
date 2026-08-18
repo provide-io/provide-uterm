@@ -20,7 +20,7 @@ import threading
 import time
 from pathlib import Path
 
-import httpx
+import httpx2
 import uvicorn
 from playwright.sync_api import sync_playwright
 
@@ -58,7 +58,7 @@ def _start_server() -> tuple[str, object]:
 
 def _setup_demo_data(base_url: str) -> str:
     """Create sessions and fan-out group, return group_id."""
-    with httpx.Client(base_url=base_url, timeout=30.0) as http:
+    with httpx2.Client(base_url=base_url, timeout=30.0) as http:
         # Create fleet sessions
         for i in range(3):
             http.post(

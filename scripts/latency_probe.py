@@ -6,7 +6,7 @@ import asyncio
 import statistics
 import time
 
-import httpx
+import httpx2
 
 
 def _percentile(values: list[float], p: float) -> float:
@@ -25,7 +25,7 @@ def _summary(name: str, values: list[float]) -> str:
     )
 
 
-async def _wait_connected(client: httpx.AsyncClient, session_id: str, timeout_s: float) -> None:
+async def _wait_connected(client: httpx2.AsyncClient, session_id: str, timeout_s: float) -> None:
     deadline = time.perf_counter() + timeout_s
     while time.perf_counter() < deadline:
         status = await client.get(f"/api/sessions/{session_id}")
@@ -38,7 +38,7 @@ async def _wait_connected(client: httpx.AsyncClient, session_id: str, timeout_s:
 async def run(base_url: str, worker_id: str, rounds: int, timeout_s: float) -> int:
     send_latencies: list[float] = []
     snapshot_latencies: list[float] = []
-    async with httpx.AsyncClient(base_url=base_url, timeout=timeout_s) as client:
+    async with httpx2.AsyncClient(base_url=base_url, timeout=timeout_s) as client:
         health = await client.get("/api/health")
         if health.status_code != 200:
             raise RuntimeError("health check failed")

@@ -124,7 +124,7 @@ class TestWebhookIdpOnFailure:
 
         idp = WebhookIdentityProvider("https://example.com/auth")
         conn = SimpleNamespace(headers={}, cookies={})
-        with patch("httpx.AsyncClient") as mock_client_cls:
+        with patch("httpx2.AsyncClient") as mock_client_cls:
             instance = AsyncMock()
             instance.__aenter__.return_value = instance
             instance.post = AsyncMock(side_effect=RuntimeError("network down"))
@@ -141,7 +141,7 @@ class TestWebhookIdpOnFailure:
 
         idp = WebhookIdentityProvider("https://example.com/auth", on_failure="viewer")
         conn = SimpleNamespace(headers={}, cookies={})
-        with patch("httpx.AsyncClient") as mock_client_cls:
+        with patch("httpx2.AsyncClient") as mock_client_cls:
             instance = AsyncMock()
             instance.__aenter__.return_value = instance
             instance.post = AsyncMock(side_effect=RuntimeError("network down"))
@@ -184,10 +184,10 @@ class TestWebhookAuthzIsAdmin:
             def json(self):
                 return {"allow": False}
 
-        # The provider now builds ONE httpx.AsyncClient in __init__ and reuses
+        # The provider now builds ONE httpx2.AsyncClient in __init__ and reuses
         # it via ``self._client.post(...)`` — patch the constructor so that
         # shared client is the mock, then drive it through the service.
-        with patch("httpx.AsyncClient") as mock_client_cls:
+        with patch("httpx2.AsyncClient") as mock_client_cls:
             instance = AsyncMock()
             instance.post = AsyncMock(return_value=_Resp())
             mock_client_cls.return_value = instance
@@ -228,10 +228,10 @@ class TestWebhookAuthzResolveBrowserRoleFiltered:
             def json(self):
                 return {"role": returned_role}
 
-        # The provider reuses one httpx.AsyncClient created in __init__; build
+        # The provider reuses one httpx2.AsyncClient created in __init__; build
         # it under the patch so ``self._client`` is the mock whose ``.post``
         # returns the stubbed response.
-        with patch("httpx.AsyncClient") as mock_client_cls:
+        with patch("httpx2.AsyncClient") as mock_client_cls:
             instance = AsyncMock()
             instance.post = AsyncMock(return_value=_Resp())
             mock_client_cls.return_value = instance

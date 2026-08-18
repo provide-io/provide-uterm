@@ -20,7 +20,7 @@ import asyncio
 import contextlib
 from typing import Any
 
-import httpx
+import httpx2
 from provide.uterm.client import connect_async_ws
 
 from .._live_server import live_server_with_bus  # noqa: TID252
@@ -119,7 +119,7 @@ async def test_ephemeral_session_reconnect_during_grace_period() -> None:
     ]
     async with live_server_with_bus(sessions, label="ephemeral_reconnect") as (hub, base_url):
         # Wait for the shell worker to auto-connect (poll /api/sessions until eph1 is running)
-        async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
+        async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
             deadline = asyncio.get_running_loop().time() + 10.0
             while asyncio.get_running_loop().time() < deadline:
                 resp = await http.get("/api/sessions")
@@ -150,7 +150,7 @@ async def test_ephemeral_session_reconnect_during_grace_period() -> None:
             await asyncio.sleep(5.0)
 
             # Verify session still exists via REST
-            async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
+            async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
                 resp = await http.get("/api/sessions/eph1")
                 # Session should still be accessible (200 or similar)
                 assert resp.status_code == 200, f"Session eph1 disappeared after reconnect: status={resp.status_code}"

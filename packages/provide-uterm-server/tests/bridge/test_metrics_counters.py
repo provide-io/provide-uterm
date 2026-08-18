@@ -247,12 +247,12 @@ class TestWebhookManagerOnMetric:
         )
         cfg = await mgr.register("s1", "https://example.com/hook")
 
-        import httpx
+        import httpx2
 
-        from tests.helpers import http_mock as respx
+        from tests.helpers import http_mock
 
-        with respx.mock:
-            respx.post("https://example.com/hook").mock(return_value=httpx.Response(500))
+        with http_mock.mock:
+            http_mock.post("https://example.com/hook").mock(return_value=httpx2.Response(500))
             # Only one attempt by limiting retries — deliver will fail then give up
             with patch("provide.uterm.server.webhooks._RETRY_DELAYS", ()):
                 await mgr._deliver(cfg, {"type": "snapshot"})
@@ -274,12 +274,12 @@ class TestWebhookManagerOnMetric:
         )
         cfg = await mgr.register("s1", "https://example.com/hook")
 
-        import httpx
+        import httpx2
 
-        from tests.helpers import http_mock as respx
+        from tests.helpers import http_mock
 
-        with respx.mock:
-            respx.post("https://example.com/hook").mock(return_value=httpx.Response(500))
+        with http_mock.mock:
+            http_mock.post("https://example.com/hook").mock(return_value=httpx2.Response(500))
             with patch("provide.uterm.server.webhooks._RETRY_DELAYS", ()):
                 await mgr._deliver(cfg, {"type": "snapshot"})
 

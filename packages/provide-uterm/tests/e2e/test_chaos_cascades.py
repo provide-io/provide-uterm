@@ -10,7 +10,7 @@ import asyncio
 import time
 from typing import Any
 
-import httpx
+import httpx2
 from provide.uterm.client import connect_async_ws
 
 from .conftest import _drain_all, _drain_until, _snapshot_msg, _ws_url
@@ -26,7 +26,7 @@ class TestHijackLeaseExpiryDuringConcurrentAcquireRace:
         _, base_url = live_hub
 
         async with (
-            httpx.AsyncClient(base_url=base_url) as http,
+            httpx2.AsyncClient(base_url=base_url) as http,
             connect_async_ws(_ws_url(base_url, "/ws/worker/race1/term")) as worker,
         ):
             await worker.recv()  # snapshot_req
@@ -40,7 +40,7 @@ class TestHijackLeaseExpiryDuringConcurrentAcquireRace:
             await asyncio.sleep(2.2)
 
             # Three concurrent REST acquires race for the now-expired slot
-            async def rest_acquire(owner: str) -> httpx.Response:
+            async def rest_acquire(owner: str) -> httpx2.Response:
                 return await http.post("/worker/race1/hijack/acquire", json={"owner": owner, "lease_s": 60})
 
             r1, r2, r3 = await asyncio.gather(
@@ -71,7 +71,7 @@ class TestWorkerReconnectClearsStaleHijack:
         hub, base_url = live_hub
 
         async with (
-            httpx.AsyncClient(base_url=base_url) as http,
+            httpx2.AsyncClient(base_url=base_url) as http,
             connect_async_ws(_ws_url(base_url, "/ws/worker/reconn1/term")) as w1,
         ):
             await w1.recv()  # snapshot_req

@@ -18,7 +18,7 @@ import threading
 import uuid
 from pathlib import Path
 
-import httpx
+import httpx2
 import pytest
 from playwright.sync_api import Page
 
@@ -67,11 +67,11 @@ def test_backend_accepts_tcp(multi_backend: BackendServer) -> None:
 def test_health_or_root_reachable(multi_backend: BackendServer) -> None:
     paths = ("/api/health", "/health", "/readyz", "/healthz", "/")
     last_status = None
-    with httpx.Client(base_url=multi_backend.base_url, timeout=5.0) as client:
+    with httpx2.Client(base_url=multi_backend.base_url, timeout=5.0) as client:
         for path in paths:
             try:
                 r = client.get(path)
-            except httpx.HTTPError:
+            except httpx2.HTTPError:
                 continue
             last_status = r.status_code
             if r.status_code < 500:

@@ -40,7 +40,7 @@ class TestClassifyRunError:
         assert _classify_run_error(exc) == "retry"
 
     def test_response_status_code_attribute_path(self) -> None:
-        """httpx-style exceptions hang the status on response.status_code."""
+        """httpx2-style exceptions hang the status on response.status_code."""
         exc = RuntimeError("auth failed")
         exc.response = SimpleNamespace(status_code=403)  # type: ignore[attr-defined]
         assert _classify_run_error(exc) == "permanent"

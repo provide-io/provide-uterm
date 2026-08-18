@@ -4,7 +4,7 @@
 #
 from __future__ import annotations
 
-import httpx
+import httpx2
 
 from provide.uterm.server.bridge.hub.ext import (
     BehavioralThresholds,
@@ -30,8 +30,8 @@ async def test_behavioral_gate_fail_open_opt_out_allows_on_error() -> None:
     assert decision.action == "allow"
 
 
-async def test_behavioral_gate_denies_on_non_200(respx_mock) -> None:
-    respx_mock.post("https://gov.example/audit").mock(return_value=httpx.Response(500))
+async def test_behavioral_gate_denies_on_non_200(http_mock_router) -> None:
+    http_mock_router.post("https://gov.example/audit").mock(return_value=httpx2.Response(500))
     gate = WebhookBehavioralAuditGate(url="https://gov.example/audit")
     decision = await gate.audit_connection(_H, _CTX, _T)
     assert decision.action == "deny"

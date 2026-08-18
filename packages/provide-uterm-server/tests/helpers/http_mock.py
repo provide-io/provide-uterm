@@ -41,7 +41,7 @@ from typing import TYPE_CHECKING, Any
 from unittest import mock as _umock
 from urllib.parse import parse_qsl, urlsplit, urlunsplit
 
-import httpx
+import httpx2
 
 from provide.uterm.server import _http
 
@@ -267,7 +267,7 @@ def _current() -> Router:
 def _build_client(router: Router, **kwargs: Any) -> Any:
     """An async client whose transport is the router, bypassing the network."""
     kwargs.pop("transport", None)
-    return httpx.AsyncClient(transport=httpx.MockTransport(router.handler), **kwargs)
+    return httpx2.AsyncClient(transport=httpx2.MockTransport(router.handler), **kwargs)
 
 
 mock = _MockContext()

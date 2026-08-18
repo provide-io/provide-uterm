@@ -19,12 +19,12 @@ from __future__ import annotations
 
 import json
 
-import httpx
+import httpx2
 import pytest
 
 from provide.uterm.server.auth import WebhookIdentityProvider, _BoundedReplayCache
 from provide.uterm.server.webhook_signing import build_webhook_signature
-from tests.helpers import http_mock as respx
+from tests.helpers import http_mock
 
 _SECRET = "uterm-test-secret-32-byte-minimum-key"  # pragma: allowlist secret
 _URL = "https://auth.example.com/resolve"
@@ -40,7 +40,7 @@ def _signed_response(
     now: float,
     body_obj: dict | None = None,
     nonce: str | None = None,
-) -> httpx.Response:
+) -> httpx2.Response:
     """Build a signed IdP response. If ``nonce`` is set, echo it in the body."""
     data: dict = {"subject_id": "user-1", "roles": ["viewer"]}
     if body_obj is not None:
@@ -50,7 +50,7 @@ def _signed_response(
     body = json.dumps(data, separators=(",", ":")).encode()
     ts = str(now)
     sig = build_webhook_signature(_SECRET, body, ts)
-    return httpx.Response(
+    return httpx2.Response(
         200,
         content=body,
         headers={"X-Uterm-Signature": sig, "X-Uterm-Timestamp": ts},
@@ -63,7 +63,7 @@ def _signed_response(
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_replayed_response_within_window_rejected(monkeypatch) -> None:
     """RED: a captured signed response replayed verbatim within the freshness
     window must be rejected the second time (lands in on_failure → None)."""
@@ -75,7 +75,7 @@ async def test_replayed_response_within_window_rejected(monkeypatch) -> None:
     idp = WebhookIdentityProvider(url=_URL, secret=_SECRET, require_signed_response=True)
 
     resp = _signed_response(now=frozen)
-    respx.post(_URL).mock(return_value=resp)
+    http_mock.post(_URL).mock(return_value=resp)
 
     # First delivery is accepted.
     first = await idp.resolve_principal(_Conn())
@@ -88,7 +88,7 @@ async def test_replayed_response_within_window_rejected(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_distinct_fresh_signatures_not_blocked(monkeypatch) -> None:
     """A legitimate IdP signs each response with a fresh timestamp → distinct
     signature → no false replay hit."""
@@ -99,7 +99,7 @@ async def test_distinct_fresh_signatures_not_blocked(monkeypatch) -> None:
 
     idp = WebhookIdentityProvider(url=_URL, secret=_SECRET, require_signed_response=True)
 
-    route = respx.post(_URL)
+    route = http_mock.post(_URL)
     route.mock(return_value=_signed_response(now=frozen["t"]))
     first = await idp.resolve_principal(_Conn())
     assert first is not None
@@ -146,7 +146,7 @@ def test_replay_cache_eviction_purges_stale_on_insert() -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_request_carries_nonce_header_and_payload(monkeypatch) -> None:
     """RED: the outgoing request carries X-Uterm-Nonce AND payload['nonce']
     (so the request signature covers it), and they match."""
@@ -156,7 +156,7 @@ async def test_request_carries_nonce_header_and_payload(monkeypatch) -> None:
     monkeypatch.setattr(auth_mod.time, "time", lambda: frozen)
 
     idp = WebhookIdentityProvider(url=_URL, secret=_SECRET, require_signed_response=True)
-    route = respx.post(_URL).mock(return_value=_signed_response(now=frozen))
+    route = http_mock.post(_URL).mock(return_value=_signed_response(now=frozen))
 
     await idp.resolve_principal(_Conn())
 
@@ -168,7 +168,7 @@ async def test_request_carries_nonce_header_and_payload(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_nonce_echo_matches_accepted(monkeypatch) -> None:
     """A response that echoes the sent nonce (matching) is accepted."""
     import provide.uterm.server.auth as auth_mod
@@ -180,12 +180,12 @@ async def test_nonce_echo_matches_accepted(monkeypatch) -> None:
 
     sent: dict[str, str] = {}
 
-    def _responder(request: httpx.Request) -> httpx.Response:
+    def _responder(request: httpx2.Request) -> httpx2.Response:
         nonce = request.headers["X-Uterm-Nonce"]
         sent["nonce"] = nonce
         return _signed_response(now=frozen, nonce=nonce)
 
-    respx.post(_URL).mock(side_effect=_responder)
+    http_mock.post(_URL).mock(side_effect=_responder)
 
     principal = await idp.resolve_principal(_Conn())
     assert principal is not None
@@ -193,7 +193,7 @@ async def test_nonce_echo_matches_accepted(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_nonce_echo_mismatch_rejected(monkeypatch) -> None:
     """A present-but-WRONG echoed nonce is an attack → rejected even when the
     enforce flag is off."""
@@ -204,17 +204,17 @@ async def test_nonce_echo_mismatch_rejected(monkeypatch) -> None:
 
     idp = WebhookIdentityProvider(url=_URL, secret=_SECRET, require_signed_response=True)
 
-    def _responder(request: httpx.Request) -> httpx.Response:
+    def _responder(request: httpx2.Request) -> httpx2.Response:
         return _signed_response(now=frozen, nonce="not-the-sent-nonce")
 
-    respx.post(_URL).mock(side_effect=_responder)
+    http_mock.post(_URL).mock(side_effect=_responder)
 
     principal = await idp.resolve_principal(_Conn())
     assert principal is None
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_nonce_absent_accepted_when_not_required(monkeypatch) -> None:
     """When require_response_nonce=False (default), a response that omits the
     nonce still works (replay cache is the defense)."""
@@ -224,14 +224,14 @@ async def test_nonce_absent_accepted_when_not_required(monkeypatch) -> None:
     monkeypatch.setattr(auth_mod.time, "time", lambda: frozen)
 
     idp = WebhookIdentityProvider(url=_URL, secret=_SECRET, require_signed_response=True)
-    respx.post(_URL).mock(return_value=_signed_response(now=frozen))
+    http_mock.post(_URL).mock(return_value=_signed_response(now=frozen))
 
     principal = await idp.resolve_principal(_Conn())
     assert principal is not None
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_nonce_required_missing_echo_rejected(monkeypatch) -> None:
     """require_response_nonce=True: a response that does NOT echo the nonce is
     rejected."""
@@ -246,14 +246,14 @@ async def test_nonce_required_missing_echo_rejected(monkeypatch) -> None:
         require_signed_response=True,
         require_response_nonce=True,
     )
-    respx.post(_URL).mock(return_value=_signed_response(now=frozen))
+    http_mock.post(_URL).mock(return_value=_signed_response(now=frozen))
 
     principal = await idp.resolve_principal(_Conn())
     assert principal is None
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_nonce_required_correct_echo_accepted(monkeypatch) -> None:
     """require_response_nonce=True: a correct echo is accepted."""
     import provide.uterm.server.auth as auth_mod
@@ -268,10 +268,10 @@ async def test_nonce_required_correct_echo_accepted(monkeypatch) -> None:
         require_response_nonce=True,
     )
 
-    def _responder(request: httpx.Request) -> httpx.Response:
+    def _responder(request: httpx2.Request) -> httpx2.Response:
         return _signed_response(now=frozen, nonce=request.headers["X-Uterm-Nonce"])
 
-    respx.post(_URL).mock(side_effect=_responder)
+    http_mock.post(_URL).mock(side_effect=_responder)
 
     principal = await idp.resolve_principal(_Conn())
     assert principal is not None
@@ -279,7 +279,7 @@ async def test_nonce_required_correct_echo_accepted(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_nonce_required_wrong_echo_rejected(monkeypatch) -> None:
     """require_response_nonce=True: a present-but-wrong echo is rejected."""
     import provide.uterm.server.auth as auth_mod
@@ -293,7 +293,7 @@ async def test_nonce_required_wrong_echo_rejected(monkeypatch) -> None:
         require_signed_response=True,
         require_response_nonce=True,
     )
-    respx.post(_URL).mock(return_value=_signed_response(now=frozen, nonce="wrong"))
+    http_mock.post(_URL).mock(return_value=_signed_response(now=frozen, nonce="wrong"))
 
     principal = await idp.resolve_principal(_Conn())
     assert principal is None
