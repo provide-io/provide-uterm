@@ -45,19 +45,44 @@ def test_a_library_newer_than_its_sources_says_nothing(built, monkeypatch, caplo
     assert "capture_library_is_stale" not in caplog.text
 
 
-def test_a_library_older_than_its_sources_names_them(built, monkeypatch, caplog) -> None:
-    """The warning has to say which sources moved, and what fixes it."""
+def test_a_library_older_than_its_sources_names_them(built, monkeypatch) -> None:
+    """The warning has to say which sources moved, and what fixes it.
+
+    Asserts on the structured event rather than the rendered log line. The
+    values here are filesystem paths, and provide-telemetry redacts values
+    carrying a high-entropy segment: on macOS ``$TMPDIR`` looks like
+    ``/var/folders/sg/wy47gw996f78fznt898m8x540000gn/T/``, so ``library`` and
+    ``remedy`` both render as ``***`` and an assertion on ``caplog.text`` fails.
+    Linux CI's ``/tmp/pytest-of-runner/pytest-0/`` has no such segment, so this
+    passed there and failed for every macOS developer. What the test is
+    actually about is the content of the warning, which the kwargs carry
+    verbatim.
+    """
 
     lib, source_dir = built
     monkeypatch.setattr(_build, "_source_dir", lambda: source_dir)
     os.utime(source_dir / "capture.c", None)  # edited after the build
 
-    with caplog.at_level("WARNING"):
-        _build._warn_if_stale(lib)
+    events: list[tuple[str, dict[str, object]]] = []
 
-    assert "capture_library_is_stale" in caplog.text
-    assert "capture.c" in caplog.text
-    assert "make" in caplog.text
+    class _Recorder:
+        """Stands in for the module logger; its instance uses __slots__."""
+
+        @staticmethod
+        def warning(event: str, **kwargs: object) -> None:
+            events.append((event, kwargs))
+
+    monkeypatch.setattr(_build, "logger", _Recorder)
+
+    _build._warn_if_stale(lib)
+
+    assert len(events) == 1
+    event, fields = events[0]
+    assert event == "capture_library_is_stale"
+    assert fields["newer_sources"] == ["capture.c"]
+    assert "make" in str(fields["remedy"])
+    assert str(source_dir) in str(fields["remedy"])
+    assert str(lib) == fields["library"]
 
 
 def test_an_installed_package_has_no_sources_to_be_behind(built, monkeypatch, caplog) -> None:
