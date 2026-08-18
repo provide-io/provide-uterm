@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed — the defect is measured, the fix is not written.
+Accepted — implemented in all three ports.
 
 ## Problem
 
@@ -97,21 +97,57 @@ Not reproducible locally against a real C# server (5 passed, 18s against CI's
    "broadcasts are now active" to wait on, which is the same missing guarantee
    from the other side.
 
-## Recommendation
+## Decision
 
-Option 1, in its own change: the reference first, then Go and C#, with a
-conformance scenario that connects a browser and sends traffic inside the
-window. It is a behavioural change to a hot path in three ports, so it does
-not belong folded into an unrelated PR.
+Option 1, reference first, then Go and C#.
 
-Until then the flake stands, and `multi-backend-playwright (csharp)` should be
-read as this defect rather than as an infrastructure wobble.
+Frames the startup sequence does not already carry — decided by
+`_survives_startup_window` / `survivesStartupWindow` / `SurvivesStartupWindow`,
+which today means the http channel — are held per socket and delivered on
+activation in arrival order. Terminal output is still dropped, deliberately:
+`initial_snapshot` covers it and replaying would print the screen twice.
+
+Three properties the implementations share, each chosen against an
+alternative that looked simpler:
+
+- **The socket stays pending until its queue drains.** Releasing it first and
+  then flushing would let a frame broadcast mid-flush overtake the ones
+  already waiting, which reorders the very list this exists to keep intact.
+- **The queue refuses at its cap rather than evicting.** Dropping the newest
+  loses the tail of a session; dropping the oldest loses its beginning *and*
+  renumbers everything the user already saw.
+- **A socket whose flush fails is left pending.** Pending means the broadcast
+  path skips it, which is the right resting state for a connection that just
+  failed a write; the disconnect handler clears both. Releasing it would send
+  every subsequent broadcast into a dead socket.
+
+The defensive guard in activate — a browser that disconnected mid-startup is
+left pending on purpose — is preserved verbatim in all three.
+
+C# also had to change shape: `ActivateBrowserBroadcasts` became
+`ActivateBrowserBroadcastsAsync`, because delivering a backlog is I/O and
+doing it under `SharedLock` would hold the hub's lock across a socket write.
+
+Each port carries a mirrored regression suite (seven cases) that goes red on
+its own pre-fix code — Python 4 of 7, Go and C# 3 of 7, the difference being
+that the backlog-cleanup cases pass trivially when there is no backlog to
+clean. A live conformance scenario driving a real browser into the window was
+considered and not written: the per-port suites pin the same behaviour at the
+hub boundary, where the defect actually lives, without a socket-level harness
+whose own timing would be the thing under test.
 
 ## Consequences
 
 - A dropped inspect row is invisible: nothing logs it, nothing retries it, and
   the UI cannot tell a session with no requests from one whose requests it
   missed.
-- The terminal path is unaffected either way, because `initial_snapshot`
-  already covers it. Any fix should keep that true rather than start
+- The terminal path is unaffected, because `initial_snapshot` already covers
+  it and the fix deliberately keeps dropping `term` rather than start
   double-delivering screen state.
+- The rule is one predicate per port rather than a frame-type allowlist, so a
+  future channel that is also append-only — anything the browser accumulates
+  rather than replaces — is one line to include, and the reasoning for why it
+  belongs is written down next to it.
+- `multi-backend-playwright (csharp)` should stop flaking. If it does not, the
+  remaining cause is not this: the row now survives the window by
+  construction, and the per-port suites would have to be wrong together.
