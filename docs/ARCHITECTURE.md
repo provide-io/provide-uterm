@@ -45,7 +45,7 @@ sequenceDiagram
 | **`provide-uterm`** (Core) | Shared terminal primitives and ANSI processing. | Python 3.11+, `pyte`, `aiosqlite`. | The **"Brain"**. Implements screen state, ANSI decoding, and the `DeckMux` collaboration logic. |
 | **`provide-uterm-server`** | The orchestration hub (**TermHub**). | FastAPI, `uvicorn`, `websockets`. | The **Reference Hub**. Orchestrates sessions, manages RBAC/Leases, and provides the reference self-hosted backend. |
 | **`provide-uterm-cloudflare`** | Serverless Edge backend. | Cloudflare Workers, Durable Objects (DO). | The **Edge Hub**. Provides a distributed version of TermHub with each session isolated in a Durable Object. |
-| **`provide-uterm-client`** | Programmatic access and AI tools. | `httpx`, `fastmcp`. | The **Interface Layer**. Provides the Python SDK and MCP tools for AI agents. |
+| **`provide-uterm-client`** | Programmatic access and AI tools. | `httpx`, `mcp`. | The **Interface Layer**. Provides the Python SDK and MCP tools for AI agents. |
 | **`provide-uterm-platform`** | Host-side interaction (PTY/Agent). | Local PTYs, PAM auth. | The **Agent Tier**. Manages local process lifecycle and bridges real PTYs to the virtual control plane. |
 | **`provide-uterm-frontend`** | Browser-based terminal UI. | TypeScript, `xterm.js`, Vanilla CSS. | The **User Interface**. Implements the `DeckMux` UI and terminal rendering. |
 | **`provide-uterm-annotation`** | Streaming secret detection + redaction. | Python, regex pattern sets. | The **Redaction Tier**. Detects and redacts credentials/secrets in terminal streams (boundary-aware streaming), enforced at 100% coverage with its own CI job. |
@@ -100,7 +100,7 @@ The `provide-uterm-cloudflare` package allows the control plane to run entirely 
 
 ## 8. AI Agent Integration: Model Context Protocol (MCP)
 AI models (like Claude) can securely participate in terminal sessions using the **Model Context Protocol (MCP)**.
-- **FastMCP Server**: Exposes tools for session discovery, hijack control, snapshot capture, and collaboration.
+- **MCP Server**: Exposes tools for session discovery, hijack control, snapshot capture, and collaboration.
 - **Collaborative AI**: An agent can not just "read" the terminal, but also place visual **annotations** on the screen or participate in the **DeckMux chat** to coordinate with human operators.
 
 ---

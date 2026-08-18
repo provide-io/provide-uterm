@@ -92,7 +92,6 @@ repos:
           - asyncssh>=2.22.0
           - pyte>=0.8.2
           - pyjwt>=2.9
-          - fastmcp>=2.0
           - provide-telemetry>=0.3
           - structlog>=24.0
           - textual>=0.50
@@ -117,7 +116,6 @@ repos:
           - asyncssh>=2.22.0
           - pyte>=0.8.2
           - pyjwt>=2.9
-          - fastmcp>=2.0
           - provide-telemetry>=0.3
           - textual>=0.50
           - structlog>=24.0
