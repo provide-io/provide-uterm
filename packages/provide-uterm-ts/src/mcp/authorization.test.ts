@@ -4,6 +4,7 @@
 //
 
 import { describe, expect, it } from "vitest";
+import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { loadGolden } from "../testing/golden.ts";
 import {
   authorized,
@@ -11,7 +12,6 @@ import {
   denyPayload,
   hasAtLeast,
   type McpPrincipal,
-  PRINCIPAL_STATE_KEY,
   primaryRole,
   type RequestContext,
   type Role,
@@ -38,9 +38,23 @@ function principalOf(record: { subject_id: string; roles: string[] }): McpPrinci
   return { subjectId: record.subject_id, roles: record.roles };
 }
 
-/** A context answering with whatever it was given. */
-function contextOf(stored: unknown): RequestContext {
-  return { getState: async () => stored };
+/** A context whose transport authenticated nobody. */
+function unauthenticatedContext(): RequestContext {
+  return { getAuthInfo: () => undefined };
+}
+
+/** A context carrying the SDK's real per-call auth info. */
+function authenticatedContext(authInfo: AuthInfo): RequestContext {
+  return { getAuthInfo: () => authInfo };
+}
+
+/** A context whose accessor fails, as an unbound one does in the Python port. */
+function brokenContext(): RequestContext {
+  return {
+    getAuthInfo: () => {
+      throw new Error("state unavailable");
+    },
+  };
 }
 
 describe("what a principal may do", () => {
@@ -124,17 +138,16 @@ describe("what a principal may do", () => {
 describe("who is calling", () => {
   it.each(golden.resolution)("$name", async (record) => {
     const fallback: McpPrincipal = { subjectId: "configured", roles: ["operator"] };
-    const stored: McpPrincipal = { subjectId: "from-request", roles: ["admin"] };
     const contexts: Record<string, RequestContext | undefined> = {
       "no context at all": undefined,
-      "a context carrying a principal": contextOf(stored),
-      "a context carrying nothing": contextOf(null),
-      "a context carrying something else": contextOf({ subject_id: "x" }),
-      "a context whose lookup fails": {
-        getState: async () => {
-          throw new Error("state unavailable");
-        },
-      },
+      "an unauthenticated transport": unauthenticatedContext(),
+      "an authenticated transport": authenticatedContext({
+        token: "test-token",
+        clientId: "web-client",
+        scopes: [],
+        extra: { sub: "alice" },
+      }),
+      "a context whose request_context access fails": brokenContext(),
     };
     const resolved = await resolvePrincipal(contexts[record.name], fallback);
     expect({ subject_id: resolved.subjectId, roles: [...resolved.roles].sort() }).toEqual({
@@ -143,36 +156,53 @@ describe("who is calling", () => {
     });
   });
 
-  it("prefers the request's own principal over the configured one", () => {
-    expect(PRINCIPAL_STATE_KEY).toBe("uterm.principal");
-  });
-
   it("treats a broken lookup as having said nothing", async () => {
     // A lookup that fails must not become a privilege — nor an error that
     // takes the call down.
     const fallback: McpPrincipal = { subjectId: "configured", roles: ["viewer"] };
-    const resolved = await resolvePrincipal(
-      {
-        getState: async () => {
-          throw new Error("gone");
-        },
-      },
-      fallback,
-    );
+    const resolved = await resolvePrincipal(brokenContext(), fallback);
     expect(resolved).toEqual(fallback);
   });
 
-  it("ignores something merely shaped like a principal", async () => {
-    // A stored value with the wrong field names is not a principal, and
-    // reading it as one would invent an identity.
-    for (const stored of [{ subject_id: "x", roles: ["admin"] }, { subjectId: "x" }, "admin", 42, null]) {
-      expect(await resolvePrincipal(contextOf(stored), DEFAULT_PRINCIPAL)).toEqual(DEFAULT_PRINCIPAL);
-    }
+  it("falls back to the configured default when the transport authenticated nobody", async () => {
+    const fallback: McpPrincipal = { subjectId: "configured", roles: ["viewer"] };
+    expect(await resolvePrincipal(unauthenticatedContext(), fallback)).toEqual(fallback);
   });
 
-  it("takes a stored principal that is one", async () => {
-    const stored: McpPrincipal = { subjectId: "ada", roles: ["admin"] };
-    expect(await resolvePrincipal(contextOf(stored), DEFAULT_PRINCIPAL)).toEqual(stored);
+  it("takes roles from the fallback even when the transport authenticated somebody", async () => {
+    // Identity != authorization: an authenticated caller's roles still come
+    // from the server's configured default, never from the token.
+    const fallback: McpPrincipal = { subjectId: "configured", roles: ["admin"] };
+    const resolved = await resolvePrincipal(
+      authenticatedContext({ token: "t", clientId: "ada", scopes: [], extra: { sub: "ada" } }),
+      fallback,
+    );
+    expect([...resolved.roles].sort()).toEqual(["admin"]);
+  });
+
+  it("degrades a missing issuer and subject to null, not to absence", async () => {
+    const fallback: McpPrincipal = { subjectId: "configured", roles: ["viewer"] };
+    const resolved = await resolvePrincipal(
+      authenticatedContext({ token: "t", clientId: "web-client", scopes: [] }),
+      fallback,
+    );
+    expect(resolved.subjectId).toBe(JSON.stringify(["web-client", null, null]));
+  });
+
+  it("carries the issuer when the verifier supplied one", async () => {
+    // Pins the three-component identity order against the Python port's
+    // principal_components(): client, issuer, subject.
+    const fallback: McpPrincipal = { subjectId: "configured", roles: ["viewer"] };
+    const resolved = await resolvePrincipal(
+      authenticatedContext({
+        token: "t",
+        clientId: "web-client",
+        scopes: [],
+        extra: { iss: "https://idp.example", sub: "alice" },
+      }),
+      fallback,
+    );
+    expect(resolved.subjectId).toBe(JSON.stringify(["web-client", "https://idp.example", "alice"]));
   });
 });
 
@@ -240,14 +270,14 @@ describe("running a tool through the chokepoint", () => {
   });
 
   it("hands the tool the principal it resolved", async () => {
-    const stored: McpPrincipal = { subjectId: "ada", roles: ["admin"] };
+    const fallback: McpPrincipal = { subjectId: "anonymous", roles: ["admin"] };
     const outcome = await authorized(
       "session_create",
-      contextOf(stored),
+      authenticatedContext({ token: "t", clientId: "web-client", scopes: [], extra: { sub: "alice" } }),
       async (principal) => principal.subjectId,
-      DEFAULT_PRINCIPAL,
+      fallback,
     );
-    expect(outcome).toEqual({ allowed: true, result: "ada" });
+    expect(outcome).toEqual({ allowed: true, result: JSON.stringify(["web-client", null, "alice"]) });
   });
 
   it("refuses a tool with no policy rather than running it", async () => {
@@ -258,7 +288,7 @@ describe("running a tool through the chokepoint", () => {
       authorized(
         "session_delete",
         {
-          getState: async () => {
+          getAuthInfo: () => {
             asked = true;
             return undefined;
           },
@@ -269,20 +299,8 @@ describe("running a tool through the chokepoint", () => {
     expect(asked).toBe(false);
   });
 
-  it("uses the request's principal over the configured one", async () => {
-    // A viewer configured as the default does not stop an admin who
-    // authenticated.
-    const outcome = await authorized(
-      "hijack_begin",
-      contextOf({ subjectId: "ada", roles: ["admin"] }),
-      async () => "took over",
-      { subjectId: "anonymous", roles: ["viewer"] },
-    );
-    expect(outcome).toEqual({ allowed: true, result: "took over" });
-  });
-
   it("falls back to the default when the request carries nobody", async () => {
-    const outcome = await authorized("hijack_begin", contextOf(null), async () => "took over", {
+    const outcome = await authorized("hijack_begin", unauthenticatedContext(), async () => "took over", {
       subjectId: "anonymous",
       roles: ["viewer"],
     });

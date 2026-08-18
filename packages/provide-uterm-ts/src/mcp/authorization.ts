@@ -21,6 +21,7 @@
  * operator needs in order to fix the grant.
  */
 
+import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { type Role, requiredRole, roleAtLeast, roleRank } from "./policy.ts";
 
 /** Who is calling a tool. */
@@ -97,50 +98,48 @@ export function denyPayload(tool: string, principal: McpPrincipal, required: Rol
   };
 }
 
-/** Where a per-request principal is kept. */
+/** The transport's authenticated-request data, if any. */
 export interface RequestContext {
-  /** The stored principal, or nothing. May fail, which is treated as nothing. */
-  getState(key: string): Promise<unknown>;
-}
-
-/** The key the principal is stored under. */
-export const PRINCIPAL_STATE_KEY = "uterm.principal";
-
-/** Whether a stored value is a principal rather than something shaped like one. */
-function isPrincipal(value: unknown): value is McpPrincipal {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    typeof (value as McpPrincipal).subjectId === "string" &&
-    Array.isArray((value as McpPrincipal).roles)
-  );
+  /**
+   * The SDK's per-call auth info, or nothing on an unauthenticated
+   * transport. May throw, which is treated as nothing — an unbound
+   * context answers "no identity", not an error.
+   */
+  getAuthInfo(): AuthInfo | undefined;
 }
 
 /**
- * Who is calling: the request's own principal, or the server's default.
+ * Who is calling: the transport's authenticated identity, or the server's
+ * default.
  *
- * A context that fails to answer is treated as having said nothing rather than
- * as an error — a broken lookup falls back to the default and cannot become a
- * privilege. So does a context holding something that is not a principal.
+ * A context that fails to answer is treated as having said nothing rather
+ * than as an error — a broken lookup falls back to the default and cannot
+ * become a privilege. Roles always come from `fallback`: the transport
+ * binds identity, never authorization. `AuthInfo` has no first-class
+ * issuer/subject; a token verifier that supplies them stashes them in
+ * `extra.iss` / `extra.sub`. A component the verifier does not supply
+ * degrades to `null`, mirroring the Python port's
+ * `principal_components()`.
  */
 export async function resolvePrincipal(
   context: RequestContext | undefined,
   fallback: McpPrincipal = DEFAULT_PRINCIPAL,
 ): Promise<McpPrincipal> {
-  // Stated rather than left to the catch below, which would also return the
-  // fallback — via a `TypeError` on the missing method. No test can tell the
-  // two apart; the difference is that "nobody was passed" is an answer here
-  // and an accident there.
   if (context === undefined) {
     return fallback;
   }
-  let stored: unknown;
+  let authInfo: AuthInfo | undefined;
   try {
-    stored = await context.getState(PRINCIPAL_STATE_KEY);
+    authInfo = context.getAuthInfo();
   } catch {
     return fallback;
   }
-  return isPrincipal(stored) ? stored : fallback;
+  if (authInfo === undefined) {
+    return fallback;
+  }
+  const issuer = (authInfo.extra?.iss as string | undefined) ?? null;
+  const subject = (authInfo.extra?.sub as string | undefined) ?? null;
+  return { subjectId: JSON.stringify([authInfo.clientId, issuer, subject]), roles: fallback.roles };
 }
 
 /** What a guarded call produced: the tool's answer, or the refusal. */
