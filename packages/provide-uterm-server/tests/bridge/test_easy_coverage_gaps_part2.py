@@ -219,16 +219,16 @@ async def test_noop_fanout_audit_output_gates_allow_by_default() -> None:
 
 async def test_webhook_fanout_gate_handles_200_non_200_and_exception() -> None:
     import httpx
-    import respx
 
     from provide.uterm.server.bridge.hub.ext import PolicyContext, WebhookFanOutPolicyGate
     from provide.uterm.server.webhook_signing import verify_webhook_signature
+    from tests.helpers import http_mock as respx
 
     ctx = PolicyContext(worker_id="w", client_id="c", role="admin", metadata={"k": "v"})
-    gate = WebhookFanOutPolicyGate(url="http://hook.test/fanout", secret="s", timeout_s=1.0)
 
     # 200 -> decision propagated
     with respx.mock(assert_all_called=False) as r:
+        gate = WebhookFanOutPolicyGate(url="http://hook.test/fanout", secret="s", timeout_s=1.0)
         route = r.post("http://hook.test/fanout").mock(
             return_value=httpx.Response(200, json={"action": "deny", "reason": "policy"})
         )
@@ -244,11 +244,13 @@ async def test_webhook_fanout_gate_handles_200_non_200_and_exception() -> None:
 
     # Non-200 -> deny
     with respx.mock(assert_all_called=False) as r:
+        gate = WebhookFanOutPolicyGate(url="http://hook.test/fanout", secret="s", timeout_s=1.0)
         r.post("http://hook.test/fanout").mock(return_value=httpx.Response(500))
         assert (await gate.intercept_fanout("ls", ctx)).action == "deny"
 
     # Network exception -> deny (catch-all branch)
     with respx.mock(assert_all_called=False) as r:
+        gate = WebhookFanOutPolicyGate(url="http://hook.test/fanout", secret="s", timeout_s=1.0)
         r.post("http://hook.test/fanout").mock(side_effect=httpx.ConnectError("network down"))
         assert (await gate.intercept_fanout("ls", ctx)).action == "deny"
 
@@ -257,7 +259,6 @@ async def test_webhook_behavioral_gate_fails_closed_on_error() -> None:
     import time as _time
 
     import httpx
-    import respx
 
     from provide.uterm.server.bridge.hub.ext import (
         BehavioralThresholds,
@@ -266,14 +267,15 @@ async def test_webhook_behavioral_gate_fails_closed_on_error() -> None:
         WebhookBehavioralAuditGate,
     )
     from provide.uterm.server.webhook_signing import verify_webhook_signature
+    from tests.helpers import http_mock as respx
 
     ctx = PolicyContext(worker_id="w", client_id="c", role="admin", metadata={})
     heur = ConnectionHeuristics(cps=0.0, jitter=0.0, timestamp=_time.time())
     thr = BehavioralThresholds()
-    gate = WebhookBehavioralAuditGate(url="http://hook.test/audit", secret="s", timeout_s=1.0)
 
     # 200 -> decision propagated
     with respx.mock(assert_all_called=False) as r:
+        gate = WebhookBehavioralAuditGate(url="http://hook.test/audit", secret="s", timeout_s=1.0)
         route = r.post("http://hook.test/audit").mock(return_value=httpx.Response(200, json={"action": "deny"}))
         assert (await gate.audit_connection(heur, ctx, thr)).action == "deny"
     # X-Webhook-Secret must be absent; timestamped HMAC must be present and valid.
@@ -285,29 +287,31 @@ async def test_webhook_behavioral_gate_fails_closed_on_error() -> None:
 
     # Non-200 -> deny (fail closed by default)
     with respx.mock(assert_all_called=False) as r:
+        gate = WebhookBehavioralAuditGate(url="http://hook.test/audit", secret="s", timeout_s=1.0)
         r.post("http://hook.test/audit").mock(return_value=httpx.Response(503))
         assert (await gate.audit_connection(heur, ctx, thr)).action == "deny"
 
     # Exception -> deny (fail closed by default)
     with respx.mock(assert_all_called=False) as r:
+        gate = WebhookBehavioralAuditGate(url="http://hook.test/audit", secret="s", timeout_s=1.0)
         r.post("http://hook.test/audit").mock(side_effect=httpx.ConnectError("network down"))
         assert (await gate.audit_connection(heur, ctx, thr)).action == "deny"
 
 
 async def test_webhook_output_policy_gate_returns_rules_and_handles_failures() -> None:
     import httpx
-    import respx
 
     from provide.uterm.server.bridge.hub.ext import PolicyContext, WebhookOutputPolicyGate
     from provide.uterm.server.bridge.hub.redaction_defaults import default_rules
     from provide.uterm.server.webhook_signing import verify_webhook_signature
+    from tests.helpers import http_mock as respx
 
     ctx = PolicyContext(worker_id="w", client_id="c", role="admin", metadata={})
-    gate = WebhookOutputPolicyGate(url="http://hook.test/output", secret="s", timeout_s=1.0)
 
     # 200 -> rules parsed
     payload = {"rules": [{"pattern": r"\d+", "replacement": "###"}]}
     with respx.mock(assert_all_called=False) as r:
+        gate = WebhookOutputPolicyGate(url="http://hook.test/output", secret="s", timeout_s=1.0)
         route = r.post("http://hook.test/output").mock(return_value=httpx.Response(200, json=payload))
         rules = await gate.get_redaction_rules(ctx)
     assert len(rules) == 1
@@ -322,11 +326,13 @@ async def test_webhook_output_policy_gate_returns_rules_and_handles_failures() -
 
     # Non-200 -> fail CLOSED to built-in default_rules() (Fix 1b)
     with respx.mock(assert_all_called=False) as r:
+        gate = WebhookOutputPolicyGate(url="http://hook.test/output", secret="s", timeout_s=1.0)
         r.post("http://hook.test/output").mock(return_value=httpx.Response(503))
         assert await gate.get_redaction_rules(ctx) == default_rules()
 
     # Exception -> fail CLOSED to built-in default_rules() (Fix 1b)
     with respx.mock(assert_all_called=False) as r:
+        gate = WebhookOutputPolicyGate(url="http://hook.test/output", secret="s", timeout_s=1.0)
         r.post("http://hook.test/output").mock(side_effect=httpx.ConnectError("network down"))
         assert await gate.get_redaction_rules(ctx) == default_rules()
 

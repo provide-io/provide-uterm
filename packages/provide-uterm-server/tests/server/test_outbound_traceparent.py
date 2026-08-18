@@ -24,13 +24,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
-import respx
 
 from provide.telemetry import set_trace_context
 from provide.uterm.server.auth import WebhookIdentityProvider
 from provide.uterm.server.bridge.hub.ext import _build_webhook_headers
 from provide.uterm.server.tracing import inject_trace_context
 from provide.uterm.server.webhooks import WebhookManager
+from tests.helpers import http_mock as respx
 
 # Known fixed trace/span ids (W3C hex) so the emitted traceparent is deterministic.
 _TRACE_ID = "1234567890abcdef1234567890abcdef"

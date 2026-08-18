@@ -10,13 +10,13 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 import pytest
-import respx
 from httpx import Response
 
 # Capture the real _resolve_cached at import time, before any fixture can replace it.
 # Tests that need to exercise the real caching logic restore the module attribute to
 # this reference before running.
 import provide.uterm.server.egress as _egress_mod_for_capture
+from tests.helpers import http_mock as respx
 
 _REAL_RESOLVE_CACHED = _egress_mod_for_capture._resolve_cached
 

@@ -4,10 +4,10 @@
 #
 import httpx
 import pytest
-import respx
 
 from provide.uterm.server.auth import WebhookIdentityProvider, _filter_known_roles
 from provide.uterm.server.webhook_signing import verify_webhook_signature
+from tests.helpers import http_mock as respx
 
 
 @pytest.mark.parametrize(

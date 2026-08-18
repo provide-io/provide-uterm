@@ -248,7 +248,8 @@ class TestWebhookManagerOnMetric:
         cfg = await mgr.register("s1", "https://example.com/hook")
 
         import httpx
-        import respx
+
+        from tests.helpers import http_mock as respx
 
         with respx.mock:
             respx.post("https://example.com/hook").mock(return_value=httpx.Response(500))
@@ -274,7 +275,8 @@ class TestWebhookManagerOnMetric:
         cfg = await mgr.register("s1", "https://example.com/hook")
 
         import httpx
-        import respx
+
+        from tests.helpers import http_mock as respx
 
         with respx.mock:
             respx.post("https://example.com/hook").mock(return_value=httpx.Response(500))

@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-import respx
 from httpx import Response
 from starlette.testclient import TestClient
 
@@ -10,6 +9,7 @@ from provide.uterm.server.app import create_server_app
 from provide.uterm.server.auth import LocalIdentityProvider, WebhookIdentityProvider
 from provide.uterm.server.bridge.identity import Principal
 from provide.uterm.server.models import AuthConfig, ServerConfig
+from tests.helpers import http_mock as respx
 from tests.helpers.fastapi_routes import find_effective_api_route
 
 
