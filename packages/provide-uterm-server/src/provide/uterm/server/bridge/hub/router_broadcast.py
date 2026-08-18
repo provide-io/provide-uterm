@@ -45,6 +45,96 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+
+# A browser inside its startup window is not yet in the broadcast set, so
+# whatever is broadcast meanwhile would be lost. That is deliberate for most
+# frames and wrong for some, and the difference is whether the startup
+# sequence already carries the same information.
+#
+# A ``term`` chunk is covered by the ``initial_snapshot`` the hello hands over,
+# so replaying it would print the screen twice; ``hijack_state`` and presence
+# are sent to the browser directly during startup; a newer ``snapshot``
+# supersedes itself on the next one. All of those are correctly dropped.
+#
+# The inspect channel has no such replay. Its frames are append-only entries in
+# a list the browser builds from nothing, and the store appends without dedupe
+# (stores/inspectStore.ts), so one dropped ``http_req`` is a row missing for the
+# life of the session with nothing to reconcile it against.
+def _survives_startup_window(msg: dict[str, Any]) -> bool:
+    """Whether *msg* must be held for browsers still in their startup window."""
+    return msg.get("_channel") == "http"
+
+
+# A browser that never finishes its startup sequence must not be able to grow
+# this without limit. At the cap the queue stops accepting rather than evicting
+# its oldest: dropping the newest loses the tail of a session, dropping the
+# oldest loses its beginning AND renumbers everything the user already saw.
+_STARTUP_BUFFER_MAX_FRAMES = 256
+
+
+def _buffer_for_startup_browsers(hub: Any, st: Any, msg: dict[str, Any], worker_id: str) -> None:
+    """Hold *msg* for every browser of *st* still inside its startup window.
+
+    Caller must hold ``hub._lock``.
+    """
+    for ws in st.browsers:
+        if ws not in hub._startup_pending_browsers:
+            continue
+        queued = hub._startup_pending_frames.setdefault(ws, [])
+        if len(queued) >= _STARTUP_BUFFER_MAX_FRAMES:
+            logger.warning(
+                "startup_frame_buffer_full",
+                worker_id=worker_id,
+                cap=_STARTUP_BUFFER_MAX_FRAMES,
+            )
+            continue
+        queued.append(msg)
+
+
+async def activate_browser_broadcasts(hub: Any, worker_id: str, ws: WebSocket) -> None:
+    """Release *ws* from its startup window, delivering what it missed first.
+
+    The socket stays pending until its queue is empty, so a frame broadcast
+    while the flush is in flight is buffered behind the ones already waiting
+    instead of overtaking them. Only when nothing is left does the browser
+    join the normal broadcast set — after which ``_broadcast_to_current_browsers``
+    reaches it directly and this loop has nothing more to do.
+    """
+    from provide.uterm.server.bridge.hub import router_impl
+    from provide.uterm.server.bridge.hub.core import _encode_browser_frame
+
+    while True:
+        async with hub._lock:
+            queued = hub._startup_pending_frames.get(ws)
+            if not queued:
+                hub._startup_pending_frames.pop(ws, None)
+                st = hub.registry.get(worker_id)
+                # Guard preserved verbatim from before this buffered: a browser
+                # that disconnected mid-startup is left pending on purpose.
+                if st is not None and ws in st.browsers:
+                    hub._startup_pending_browsers.discard(ws)
+                return
+            batch = list(queued)
+            queued.clear()
+
+        for buffered in batch:
+            try:
+                await asyncio.wait_for(
+                    ws.send_text(_encode_browser_frame(buffered)),
+                    timeout=router_impl._BROADCAST_SEND_TIMEOUT_S,
+                )
+            except Exception:
+                # A socket that cannot take its own backlog is gone. Drop the
+                # backlog, but leave it PENDING: pending means the broadcast
+                # path skips it, which is what you want for a socket that just
+                # failed a write. The route's disconnect handler removes it
+                # from both.
+                logger.warning("startup_frame_flush_failed", worker_id=worker_id)
+                async with hub._lock:
+                    hub._startup_pending_frames.pop(ws, None)
+                return
+
+
 _HTTP_INSPECT_CONTROL_TYPES = frozenset(
     {
         "http_action",
@@ -195,6 +285,8 @@ async def _broadcast_to_current_browsers(
         browsers_with_roles = [
             (ws, role) for ws, role in st.browsers.items() if ws not in hub._startup_pending_browsers
         ]
+        if _survives_startup_window(msg):
+            _buffer_for_startup_browsers(hub, st, msg, worker_id)
 
     # A committed snapshot that reaches nobody is the failure this names. The
     # commit succeeds, the fan-out below sends to an empty set and returns

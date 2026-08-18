@@ -696,6 +696,29 @@ class TestCleanupBrowserDisconnect:
         await hub.cleanup_browser_disconnect("w1", ws, False)
         assert ws not in hub._startup_pending_browsers
 
+    async def test_drops_the_startup_frame_backlog_for_that_ws(self) -> None:
+        """This ws's buffered frames go, and only this ws's.
+
+        Nothing will ever flush a disconnected socket's backlog, so holding it
+        is a leak. Keyed on the socket: popping anything else leaves the entry
+        behind, which is the mutant this pins.
+        """
+        hub = TermHub()
+        ws = _ws()
+        other = _ws()
+        st = WorkerTermState()
+        st.worker_ws = _ws()
+        st.browsers[ws] = "viewer"
+        st.browsers[other] = "viewer"
+        await _put(hub, "w1", st)
+        hub._startup_pending_frames[ws] = [{"type": "http_req", "_channel": "http"}]
+        hub._startup_pending_frames[other] = [{"type": "http_req", "_channel": "http"}]
+
+        await hub.cleanup_browser_disconnect("w1", ws, False)
+
+        assert ws not in hub._startup_pending_frames
+        assert other in hub._startup_pending_frames
+
     # -- on_worker_empty callback ------------------------------------------
 
     async def test_fires_on_worker_empty_when_last_browser(self) -> None:
