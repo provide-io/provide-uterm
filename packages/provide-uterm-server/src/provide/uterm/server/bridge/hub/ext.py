@@ -9,10 +9,10 @@ import time
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
-import httpx
 from pydantic import BaseModel, Field
 
 from provide.telemetry import event, get_logger
+from provide.uterm.server import _http
 from provide.uterm.server.tracing import inject_trace_context
 from provide.uterm.server.webhook_signing import build_webhook_signature
 
@@ -77,7 +77,7 @@ class WebhookPolicyGate:
         self.timeout = timeout_s
         # Reuse one client across calls so HTTP keep-alive / connection pooling
         # avoids a fresh TLS handshake per keystroke (intercept_input is hot).
-        self._client = httpx.AsyncClient(timeout=timeout_s)
+        self._client = _http.async_client(timeout=timeout_s)
 
     async def aclose(self) -> None:
         """Release the pooled client's connection pool (lifecycle cleanup)."""
@@ -132,7 +132,7 @@ class WebhookFanOutPolicyGate:
         self.url = url
         self.secret = secret
         self.timeout = timeout_s
-        self._client = httpx.AsyncClient(timeout=timeout_s)
+        self._client = _http.async_client(timeout=timeout_s)
 
     async def aclose(self) -> None:
         """Release the pooled client's connection pool (lifecycle cleanup)."""
@@ -234,7 +234,7 @@ class WebhookBehavioralAuditGate:
         self.secret = secret
         self.timeout = timeout_s
         self.fail_open = fail_open
-        self._client = httpx.AsyncClient(timeout=timeout_s)
+        self._client = _http.async_client(timeout=timeout_s)
 
     async def aclose(self) -> None:
         """Release the pooled client's connection pool (lifecycle cleanup)."""
@@ -308,7 +308,7 @@ class WebhookTelemetrySink:
         self.url = url
         self.secret = secret
         self.timeout = timeout_s
-        self._client = httpx.AsyncClient(timeout=timeout_s)
+        self._client = _http.async_client(timeout=timeout_s)
 
     async def aclose(self) -> None:
         """Release the pooled client's connection pool (lifecycle cleanup)."""
@@ -350,7 +350,7 @@ class WebhookOutputPolicyGate:
         self.url = url
         self.secret = secret
         self.timeout = timeout_s
-        self._client = httpx.AsyncClient(timeout=timeout_s)
+        self._client = _http.async_client(timeout=timeout_s)
 
     async def aclose(self) -> None:
         """Release the pooled client's connection pool (lifecycle cleanup)."""

@@ -53,9 +53,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
-import httpx
-
 from provide.telemetry import get_logger
+from provide.uterm.server import _http
 from provide.uterm.server._net import _CGNAT_V4, _METADATA_IPS, _resolve_host
 from provide.uterm.server.tracing import inject_trace_context
 
@@ -467,7 +466,7 @@ class WebhookManager:
 
         for attempt, delay in enumerate((*_RETRY_DELAYS, None)):
             try:
-                async with httpx.AsyncClient(timeout=_DELIVER_TIMEOUT_S) as http:
+                async with _http.async_client(timeout=_DELIVER_TIMEOUT_S) as http:
                     resp = await http.post(cfg.url, content=body, headers=headers)
                 if resp.is_success:
                     return

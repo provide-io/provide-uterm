@@ -11,8 +11,7 @@ import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, cast, runtime_checkable
 
-import httpx
-
+from provide.uterm.server import _http
 from provide.uterm.server.egress import assert_webhook_target_allowed
 from provide.uterm.server.webhook_signing import build_webhook_signature, verify_webhook_signature
 
@@ -212,8 +211,8 @@ class WebhookAuthorizationProvider:
         self.require_signed_response = require_signed_response and bool((secret or "").strip())
         # Reuse one client across calls so HTTP keep-alive / connection pooling
         # survives between authorization checks. Constructing it here opens no
-        # sockets — httpx.AsyncClient connects lazily on the first request.
-        self._client = httpx.AsyncClient(timeout=timeout_s)
+        # sockets — the async client connects lazily on the first request.
+        self._client = _http.async_client(timeout=timeout_s)
 
     async def aclose(self) -> None:
         """Release the shared client's connection pool (lifecycle cleanup)."""
@@ -227,7 +226,7 @@ class WebhookAuthorizationProvider:
             headers["X-Uterm-Signature"] = build_webhook_signature(self.secret, body, ts)
         return headers
 
-    def _response_signature_ok(self, resp: httpx.Response) -> bool:
+    def _response_signature_ok(self, resp: _http.Response) -> bool:
         if not self.require_signed_response:
             return True
         return verify_webhook_signature(

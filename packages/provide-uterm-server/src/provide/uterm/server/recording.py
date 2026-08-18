@@ -6,9 +6,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import httpx
-
 from provide.uterm.recording import RecordingStore
+from provide.uterm.server import _http
 from provide.uterm.server.egress import assert_webhook_target_allowed
 
 if TYPE_CHECKING:
@@ -57,7 +56,7 @@ class WebhookRecordingStore(RecordingStore):
             # SSRF guard: an EgressBlockedError (a ValueError) is caught by the
             # except below, so a blocked target degrades to a best-effort no-op.
             await assert_webhook_target_allowed(self.url)
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async with _http.async_client(timeout=self.timeout) as client:
                 headers = {"Authorization": f"Bearer {self.secret}"} if self.secret else {}
                 await client.post(self.url, json=data, headers=headers)
         except Exception:
@@ -69,7 +68,7 @@ class WebhookRecordingStore(RecordingStore):
             # SSRF guard on the configured base URL; a block returns None below
             # (the except path), which callers already treat as "not found".
             await assert_webhook_target_allowed(self.url)
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async with _http.async_client(timeout=self.timeout) as client:
                 headers = {"Authorization": f"Bearer {self.secret}"} if self.secret else {}
                 resp = await client.get(url, params=params, headers=headers)
                 if resp.status_code == 200:
