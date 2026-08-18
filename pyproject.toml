@@ -57,7 +57,7 @@ dev = [
     # versions import from rich.console and support 3.11 again, so no rich pin
     # is needed. Its pywrangler also requires wrangler >=4.109, which is why
     # that npm tool is a pinned devDependency rather than whatever npx cached.
-    "workers-py>=1.11",
+    "workers-py>=1.16.4",
     "pyyaml>=6.0",
     "xenon>=0.9.3",
     "mcp>=2.0.0",
