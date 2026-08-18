@@ -152,9 +152,10 @@ async def _run_inspect(
     import time
 
     try:
-        import httpx
         import uvicorn
         import websockets
+
+        from provide.uterm.server import _http
     except ImportError as exc:  # pragma: no cover — can't test without uninstalling deps
         print(
             f"error: missing dependency — {exc}\ninstall the cli extra: pip install 'provide-uterm[cli]'",
@@ -279,7 +280,7 @@ async def _run_inspect(
         # Forward to target
         t0 = time.monotonic()
         try:
-            async with httpx.AsyncClient() as client:
+            async with _http.async_client() as client:
                 upstream = await client.request(method, target_url, headers=fwd_headers, content=fwd_body)
                 resp_body = upstream.content
                 duration_ms = (time.monotonic() - t0) * 1000

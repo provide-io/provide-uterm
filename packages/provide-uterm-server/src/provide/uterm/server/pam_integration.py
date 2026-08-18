@@ -49,8 +49,7 @@ async def _forward_to_relay(event_json: dict[str, object], relay_url: str, relay
     """POST PAM event to relay service /api/pam-events. Best-effort — never raises."""
     url = relay_url.rstrip("/") + "/api/pam-events"
     try:
-        import httpx
-
+        from provide.uterm.server import _http
         from provide.uterm.server.egress import assert_webhook_target_allowed
 
         # L11: guard the outbound POST against SSRF/exfiltration before sending —
@@ -60,7 +59,7 @@ async def _forward_to_relay(event_json: dict[str, object], relay_url: str, relay
         # already swallows (log + skip the POST), so the PAM loop never crashes.
         await assert_webhook_target_allowed(relay_url)
 
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with _http.async_client(timeout=5.0) as client:
             await client.post(
                 url,
                 json=event_json,
@@ -76,8 +75,7 @@ async def _create_relay_tunnel(
     """POST /api/tunnels → (worker_token, ws_endpoint). Returns None on failure."""
     url = relay_url.rstrip("/") + "/api/tunnels"
     try:
-        import httpx
-
+        from provide.uterm.server import _http
         from provide.uterm.server.egress import assert_webhook_target_allowed
 
         # L11: same egress guard as _forward_to_relay — refuse to POST tunnel
@@ -86,7 +84,7 @@ async def _create_relay_tunnel(
         # which logs and returns None — the existing failure path for this call.
         await assert_webhook_target_allowed(relay_url)
 
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with _http.async_client(timeout=5.0) as client:
             resp = await client.post(
                 url,
                 json={

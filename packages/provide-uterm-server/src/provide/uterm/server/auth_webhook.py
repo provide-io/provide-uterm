@@ -156,8 +156,7 @@ class WebhookIdentityProvider(IdentityProvider):
     async def resolve_principal(self, connection: Request | WebSocket) -> Principal | None:
         import json
 
-        import httpx
-
+        from provide.uterm.server import _http
         from provide.uterm.server.webhook_signing import build_webhook_signature, verify_webhook_signature
 
         all_headers = dict(getattr(connection, "headers", {}))
@@ -199,7 +198,7 @@ class WebhookIdentityProvider(IdentityProvider):
             from provide.uterm.server.egress import assert_webhook_target_allowed
 
             await assert_webhook_target_allowed(self.url)
-            async with httpx.AsyncClient(timeout=self.timeout_s) as client:
+            async with _http.async_client(timeout=self.timeout_s) as client:
                 resp = await client.post(self.url, content=body, headers=req_headers)
                 resp.raise_for_status()
 
