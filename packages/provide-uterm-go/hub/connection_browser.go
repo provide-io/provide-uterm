@@ -146,6 +146,8 @@ func (c *ConnectionManager) CleanupBrowserDisconnect(
 			hub.detachResumeTokenLocked(token)
 		}
 		delete(hub.startupPendingBrowsers, ws)
+		// Nothing will ever flush this socket's backlog now.
+		delete(hub.startupPendingFrames, ws)
 		hub.lock.Unlock()
 		break
 	}
