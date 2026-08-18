@@ -365,7 +365,15 @@ class TestInspectE2E:
         worker.send_http_req("r1", "GET", "/api/test", intercepted=True)
         time.sleep(0.5)
 
-        page.get_by_text("/api/test").click()
+        # Wait for the row before clicking it, as every other test here does.
+        # click() auto-waits too, but only reports "Locator.click: Timeout
+        # 30000ms exceeded" when it gives up — which cannot distinguish a row
+        # that never arrived (a dropped broadcast) from one that arrived and
+        # was not clickable. This names which of the two happened.
+        request_row = page.get_by_text("/api/test")
+        expect(request_row).to_be_visible(timeout=8000)
+
+        request_row.click()
         time.sleep(0.3)
 
         expect(page.get_by_role("button", name="Forward", exact=True)).to_be_visible(timeout=5000)
