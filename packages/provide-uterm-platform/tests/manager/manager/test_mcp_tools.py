@@ -84,26 +84,24 @@ async def _call(mcp_app, tool_name: str, args: dict | None = None) -> dict:
 # ---------------------------------------------------------------------------
 
 
-class TestFactory:
-    def test_registers_into_supplied_app(self, mcp_app):
-        assert isinstance(mcp_app, MCPServer)
-
+class TestRegistration:
     @pytest.mark.asyncio
-    async def test_tool_count(self, mcp_app):
-        tools = await mcp_app.list_tools()
+    async def test_registers_into_supplied_app(self, manager, pm):
+        """The tools land on the caller's own app, and the count is returned."""
+        app = MCPServer("test-manager-tools")
+        assert register_manager_tools(app, manager=manager) == TOOL_COUNT
+        tools = await app.list_tools()
         assert len(tools) == TOOL_COUNT, f"Expected {TOOL_COUNT} tools, got {len(tools)}: {[t.name for t in tools]}"
 
     def test_raises_without_manager_or_base_url(self):
+        """The argument guard runs before *app* is touched, so a stub suffices."""
         with pytest.raises(ValueError, match="Provide either"):
-            _build_app()
-
-    def test_creates_with_base_url(self):
-        app = _build_app(base_url="http://localhost:9999")
-        assert isinstance(app, MCPServer)
+            register_manager_tools(MagicMock())
 
     @pytest.mark.asyncio
     async def test_base_url_tool_count(self):
         app = _build_app(base_url="http://localhost:9999")
+        assert isinstance(app, MCPServer)
         tools = await app.list_tools()
         assert len(tools) == TOOL_COUNT
 
