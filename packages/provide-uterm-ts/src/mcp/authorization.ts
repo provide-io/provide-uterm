@@ -21,6 +21,7 @@
  * operator needs in order to fix the grant.
  */
 
+import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { type Role, requiredRole, roleAtLeast, roleRank } from "./policy.ts";
 
 /** Who is calling a tool. */
@@ -97,31 +98,45 @@ export function denyPayload(tool: string, principal: McpPrincipal, required: Rol
   };
 }
 
-/** Where a per-request principal is kept. */
+/**
+ * The transport's authenticated-request data, if any.
+ *
+ * An accessor rather than a plain field — unlike the SDK's own
+ * `RequestHandlerExtra.authInfo?: AuthInfo`, which cannot throw. This is
+ * this package's own interface, not the SDK's: a real call site supplies an
+ * adapter closure over `extra.authInfo`, and a non-trivial adapter can
+ * throw. Collapsing this to a field would be simplifying away a failure
+ * mode the SDK itself does not have but an adapter can.
+ */
 export interface RequestContext {
-  /** The stored principal, or nothing. May fail, which is treated as nothing. */
-  getState(key: string): Promise<unknown>;
+  /**
+   * The SDK's per-call auth info, or nothing on an unauthenticated
+   * transport. May throw, which is treated as nothing — an unbound
+   * context answers "no identity", not an error.
+   */
+  getAuthInfo(): AuthInfo | undefined;
 }
 
-/** The key the principal is stored under. */
-export const PRINCIPAL_STATE_KEY = "uterm.principal";
-
-/** Whether a stored value is a principal rather than something shaped like one. */
-function isPrincipal(value: unknown): value is McpPrincipal {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    typeof (value as McpPrincipal).subjectId === "string" &&
-    Array.isArray((value as McpPrincipal).roles)
-  );
+/** An identity component the verifier supplied, or nothing. Only a string is
+ *  one: a non-string `extra.iss`/`extra.sub` is not an identity, and reading
+ *  it as one would either invent one or fail to serialize (a BigInt, a
+ *  circular object, or a throwing `toJSON` all break `JSON.stringify`). */
+function stringComponent(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
 }
 
 /**
- * Who is calling: the request's own principal, or the server's default.
+ * Who is calling: the transport's authenticated identity, or the server's
+ * default.
  *
- * A context that fails to answer is treated as having said nothing rather than
- * as an error — a broken lookup falls back to the default and cannot become a
- * privilege. So does a context holding something that is not a principal.
+ * A context that fails to answer is treated as having said nothing rather
+ * than as an error — a broken lookup falls back to the default and cannot
+ * become a privilege. Roles always come from `fallback`: the transport
+ * binds identity, never authorization. `AuthInfo` has no first-class
+ * issuer/subject; a token verifier that supplies them stashes them in
+ * `extra.iss` / `extra.sub`. A component the verifier does not supply
+ * degrades to `null`, mirroring the Python port's
+ * `principal_components()`.
  */
 export async function resolvePrincipal(
   context: RequestContext | undefined,
@@ -134,13 +149,18 @@ export async function resolvePrincipal(
   if (context === undefined) {
     return fallback;
   }
-  let stored: unknown;
+  let authInfo: AuthInfo | undefined;
   try {
-    stored = await context.getState(PRINCIPAL_STATE_KEY);
+    authInfo = context.getAuthInfo();
   } catch {
     return fallback;
   }
-  return isPrincipal(stored) ? stored : fallback;
+  if (authInfo === undefined) {
+    return fallback;
+  }
+  const issuer = stringComponent(authInfo.extra?.iss);
+  const subject = stringComponent(authInfo.extra?.sub);
+  return { subjectId: JSON.stringify([authInfo.clientId, issuer, subject]), roles: fallback.roles };
 }
 
 /** What a guarded call produced: the tool's answer, or the refusal. */
