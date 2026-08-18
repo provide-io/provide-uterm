@@ -2,19 +2,28 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for the generic manager MCP tools (create_manager_mcp_tools)."""
+"""Tests for the generic manager MCP tools (register_manager_tools)."""
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from mcp.server.mcpserver import MCPServer
 
 from provide.uterm.manager.config import ManagerConfig
 from provide.uterm.manager.core import AgentManager
-from provide.uterm.manager.mcp_tools import TOOL_COUNT, create_manager_mcp_tools
+from provide.uterm.manager.mcp_tools import TOOL_COUNT, register_manager_tools
 from provide.uterm.manager.models import AgentStatusBase
 from provide.uterm.manager.process import AgentProcessManager
+
+
+def _build_app(manager: AgentManager | None = None, **kwargs: Any) -> MCPServer:
+    """Build an MCPServer with the generic manager tools registered onto it."""
+    app = MCPServer("test-manager-tools")
+    register_manager_tools(app, manager=manager, **kwargs)
+    return app
 
 
 class FakeWorkerPlugin:
@@ -61,25 +70,23 @@ def pm(manager, tmp_path):
 
 @pytest.fixture
 def mcp_app(manager, pm):
-    return create_manager_mcp_tools(manager)
+    return _build_app(manager)
 
 
 async def _call(mcp_app, tool_name: str, args: dict | None = None) -> dict:
-    """Call a tool on the FastMCP app and return structured_content."""
+    """Call a tool on the MCP app and return structured_content."""
     result = await mcp_app.call_tool(tool_name, args or {})
     return result.structured_content
 
 
 # ---------------------------------------------------------------------------
-# Factory smoke test
+# Registration smoke test
 # ---------------------------------------------------------------------------
 
 
 class TestFactory:
-    def test_creates_fastmcp_app(self, mcp_app):
-        from fastmcp import FastMCP
-
-        assert isinstance(mcp_app, FastMCP)
+    def test_registers_into_supplied_app(self, mcp_app):
+        assert isinstance(mcp_app, MCPServer)
 
     @pytest.mark.asyncio
     async def test_tool_count(self, mcp_app):
@@ -88,17 +95,15 @@ class TestFactory:
 
     def test_raises_without_manager_or_base_url(self):
         with pytest.raises(ValueError, match="Provide either"):
-            create_manager_mcp_tools()
+            _build_app()
 
     def test_creates_with_base_url(self):
-        from fastmcp import FastMCP
-
-        app = create_manager_mcp_tools(base_url="http://localhost:9999")
-        assert isinstance(app, FastMCP)
+        app = _build_app(base_url="http://localhost:9999")
+        assert isinstance(app, MCPServer)
 
     @pytest.mark.asyncio
     async def test_base_url_tool_count(self):
-        app = create_manager_mcp_tools(base_url="http://localhost:9999")
+        app = _build_app(base_url="http://localhost:9999")
         tools = await app.list_tools()
         assert len(tools) == TOOL_COUNT
 
@@ -116,7 +121,7 @@ class TestFactory:
                 {"total_agents": 0, "running_agents": 0, "error_agents": 0, "paused": False},
             )
 
-            app = create_manager_mcp_tools(base_url="http://localhost:9999", on_first_http=callback_mock)
+            app = _build_app(base_url="http://localhost:9999", on_first_http=callback_mock)
 
             # Call a tool that makes an HTTP request
             result = await _call(app, "swarm_status")
@@ -145,7 +150,7 @@ class TestSwarmStatus:
     @pytest.mark.asyncio
     async def test_telemetry_fields_stripped_by_default(self, manager, pm):
         manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
-        app = create_manager_mcp_tools(manager, agent_telemetry_fields=frozenset({"custom_telemetry", "extra_data"}))
+        app = _build_app(manager, agent_telemetry_fields=frozenset({"custom_telemetry", "extra_data"}))
         # Inject extra fields into the dumped agent data via model
         import unittest.mock as _mock
 
@@ -164,7 +169,7 @@ class TestSwarmStatus:
 
     @pytest.mark.asyncio
     async def test_telemetry_fields_preserved_when_include_true(self, manager, pm):
-        app = create_manager_mcp_tools(manager, agent_telemetry_fields=frozenset({"custom_telemetry"}))
+        app = _build_app(manager, agent_telemetry_fields=frozenset({"custom_telemetry"}))
         import unittest.mock as _mock
 
         with _mock.patch.object(manager, "get_swarm_status") as mock_status:
@@ -178,7 +183,7 @@ class TestSwarmStatus:
 
     @pytest.mark.asyncio
     async def test_no_stripping_when_telemetry_fields_none(self, manager, pm):
-        app = create_manager_mcp_tools(manager)  # agent_telemetry_fields=None (default)
+        app = _build_app(manager)  # agent_telemetry_fields=None (default)
         import unittest.mock as _mock
 
         with _mock.patch.object(manager, "get_swarm_status") as mock_status:

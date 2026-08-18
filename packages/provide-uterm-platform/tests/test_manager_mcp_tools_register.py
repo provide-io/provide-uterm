@@ -16,9 +16,9 @@ from provide.uterm.manager.mcp_tools import TOOL_COUNT, register_manager_tools
 class _RecordingApp:
     """Minimal stand-in for a server app.
 
-    Deliberately not a real MCPServer or FastMCP: register_manager_tools must
-    work against either, so the test pins only the surface it is allowed to
-    use — a `tool()` decorator factory.
+    Deliberately not a real MCPServer: register_manager_tools must work
+    against any app with a `tool()` decorator factory, so the test pins only
+    that structural surface.
     """
 
     def __init__(self) -> None:

@@ -11,15 +11,10 @@ Supports two modes:
 
 Usage::
 
-    # Preferred: register onto an app the caller already owns (works against
-    # either a fastmcp.FastMCP or an mcp.server.mcpserver.MCPServer).
+    # Register onto an app the caller already owns, e.g. an
+    # mcp.server.mcpserver.MCPServer.
     register_manager_tools(app, manager=my_manager)
     register_manager_tools(app, base_url="http://localhost:2272")
-
-    # Deprecated: builds and returns its own FastMCP app. Kept only for
-    # existing callers; prefer register_manager_tools above.
-    mcp = create_manager_mcp_tools(manager=my_manager)
-    mcp = create_manager_mcp_tools(base_url="http://localhost:2272")
 """
 
 from __future__ import annotations
@@ -28,8 +23,6 @@ from collections.abc import Awaitable, Callable  # noqa: TC003
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
-    from fastmcp import FastMCP
-
     from provide.uterm.manager.core import AgentManager
 
 TOOL_COUNT = 15
@@ -38,11 +31,11 @@ TOOL_COUNT = 15
 class _ToolRegistrar(Protocol):
     """Structural type for an app exposing a tool() decorator factory.
 
-    Matches both fastmcp.FastMCP and mcp.server.mcpserver.MCPServer without
-    importing either directly, so this module works against either server
-    class during the transition. The permissive *args/**kwargs signature is
-    deliberate: it's what makes structural matching accept both concrete
-    classes' more specific tool() signatures.
+    Matches any app that exposes a tool() decorator factory (e.g.
+    mcp.server.mcpserver.MCPServer) without importing a concrete server class
+    directly. The permissive *args/**kwargs signature is deliberate: it's
+    what makes structural matching accept a concrete class's more specific
+    tool() signature.
     """
 
     def tool(self, *args: Any, **kwargs: Any) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
@@ -74,10 +67,9 @@ def register_manager_tools(
     """Register the generic swarm-management tools onto *app*.
 
     *app* is typed structurally via :class:`_ToolRegistrar`, not against a
-    concrete server class: this function must work against a ``FastMCP`` and
-    an ``mcp.server.mcpserver.MCPServer`` alike, so that consumers can
-    migrate to the MCP 2.0 SDK independently of this package. Only
-    ``app.tool()`` is used.
+    concrete server class: this function works against any app exposing a
+    ``tool()`` decorator factory (e.g. ``mcp.server.mcpserver.MCPServer``).
+    Only ``app.tool()`` is used.
 
     Args:
         app: Server app to register onto. Must expose a ``tool()`` decorator
@@ -353,29 +345,3 @@ def register_manager_tools(
         return data if ok else {"error": data.get("error", f"Failed to get events for {agent_id}")}
 
     return TOOL_COUNT
-
-
-def create_manager_mcp_tools(
-    manager: AgentManager | None = None,
-    *,
-    base_url: str | None = None,
-    on_first_http: Callable[[], Awaitable[None]] | None = None,
-    agent_telemetry_fields: frozenset[str] | None = None,
-) -> FastMCP:
-    """Create a FastMCP app carrying the swarm-management tools.
-
-    Deprecated: returning a server object forces every consumer onto this
-    package's server library. Prefer :func:`register_manager_tools`, which
-    registers into an app the caller owns. Removed once no consumer remains.
-    """
-    from fastmcp import FastMCP as _FastMCP
-
-    mcp = _FastMCP("provide-uterm-platform")
-    register_manager_tools(
-        mcp,
-        manager=manager,
-        base_url=base_url,
-        on_first_http=on_first_http,
-        agent_telemetry_fields=agent_telemetry_fields,
-    )
-    return mcp
