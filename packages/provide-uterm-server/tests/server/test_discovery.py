@@ -8,13 +8,13 @@ from __future__ import annotations
 
 import httpx
 import pytest
-import respx
 
 from provide.uterm.server.discovery import (
     NodeStatus,
     NoOpDiscoveryProvider,
     WebhookDiscoveryProvider,
 )
+from tests.helpers import http_mock as respx
 
 
 def _status() -> NodeStatus:

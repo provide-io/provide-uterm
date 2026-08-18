@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import pytest
-import respx
 from httpx import Response
 
 from provide.uterm.server.bridge.hub.ext import (
@@ -14,6 +13,7 @@ from provide.uterm.server.bridge.hub.ext import (
     PolicyDecision,
     WebhookPolicyGate,
 )
+from tests.helpers import http_mock as respx
 
 
 def test_policy_decision_model() -> None:

@@ -19,12 +19,12 @@ import json
 
 import httpx
 import pytest
-import respx
 from pydantic import ValidationError
 
 from provide.uterm.server.auth import WebhookIdentityProvider
 from provide.uterm.server.models import AuthConfig, ServerConfig
 from provide.uterm.server.webhook_signing import build_webhook_signature, verify_webhook_signature
+from tests.helpers import http_mock as respx
 
 _SECRET = "uterm-test-secret-32-byte-minimum-key"  # pragma: allowlist secret
 _URL = "https://auth.example.com/resolve"

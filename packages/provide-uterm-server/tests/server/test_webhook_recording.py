@@ -6,9 +6,9 @@ import json
 
 import httpx
 import pytest
-import respx
 
 from provide.uterm.server.recording import WebhookRecordingStore
+from tests.helpers import http_mock as respx
 
 
 @pytest.mark.asyncio

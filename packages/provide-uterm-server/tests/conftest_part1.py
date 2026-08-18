@@ -45,7 +45,7 @@ if not _os.environ.get("MUTANT_UNDER_TEST"):
 from provide.uterm.server.bridge.hub import TermHub
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Generator
+    from collections.abc import AsyncGenerator, Generator, Iterator
 
 
 # ---------------------------------------------------------------------------
@@ -122,6 +122,20 @@ def _install_testclient_dev_token_autoauth() -> None:
 
 
 _install_testclient_dev_token_autoauth()
+
+
+@pytest.fixture
+def respx_mock() -> Iterator[Any]:
+    """Drop-in for respx's fixture of the same name, backed by tests.helpers.http_mock.
+
+    respx is being removed (it is pinned to httpx and cannot mock httpx2), but
+    its fixture name is load-bearing in three test signatures. Keeping the name
+    means those tests convert without touching their bodies.
+    """
+    from tests.helpers import http_mock
+
+    with http_mock.mock as router:
+        yield router
 
 
 def _install_httpx_dev_principal_autoauth() -> None:

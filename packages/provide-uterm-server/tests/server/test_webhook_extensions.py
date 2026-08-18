@@ -9,7 +9,6 @@ import json
 from unittest.mock import MagicMock
 
 import pytest
-import respx
 from httpx import Response
 from starlette.testclient import TestClient
 
@@ -23,6 +22,7 @@ from provide.uterm.server.bridge.hub.ext import (
     WebhookTelemetrySink,
 )
 from provide.uterm.server.webhook_signing import verify_webhook_signature
+from tests.helpers import http_mock as respx
 
 
 @pytest.mark.asyncio
